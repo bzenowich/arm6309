@@ -1,0 +1,15 @@
+build/
+build-*/
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+compile_commands.json
+.cache/
+
+# Reference PDFs (service manuals, datasheets). Kept out of history: they are
+# ~26 MB of scans and are freely available from colorcomputerarchive.com.
+# docs/plan.md cites them by name and page where it relies on them.
+docs/*.pdf
