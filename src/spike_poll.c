@@ -31,27 +31,59 @@ __hot void spike_run_poll(uint32_t n_cycles, spike_result_t *out)
 
     uint32_t s_prev = GPIOA->IDR;
     uint32_t s_cur  = s_prev;
+    uint16_t slack_min = 0xFFFFU;
+    uint32_t slack_late = 0;
 
     /* Drop any stale capture / overcapture state, then sync to a falling edge
      * of E so the first measured cycle is a whole one. */
     (void)TIM1->CCR1;
+    (void)TIM1->CCR2;
     TIM1->SR = 0;
     while (!(GPIOA->IDR & MASK_E)) { }
     while (GPIOA->IDR & MASK_E) { }
     uint16_t t_edge_prev = (uint16_t)TIM1->CCR1;
+    TIM1->SR = ~(uint32_t)TIM_SR_CC2IF;   /* arm the first Q-fall wait */
 
     for (uint32_t i = 0; i < n_cycles; i++) {
-        /* Wait out the E-low half of the cycle. */
-        while (!(GPIOA->IDR & MASK_E)) { }
-
-        /* E is high. Sample continuously, keeping the previous sample.
+        /* ---- Wait for Q to fall, not for E to rise. ----
          *
-         * When this loop exits, s_cur is the read that saw E low — taken
-         * 0..1 iterations AFTER the edge, i.e. possibly past the guaranteed
-         * data hold window. s_prev is the read before it, taken while E was
-         * still high, inside the setup window. s_prev is therefore the
-         * defensible sample. See README, "The data sampling problem" — this
-         * is an assumption the spike is meant to test, not a settled fact. */
+         * Q falls at 0.75 of the bus cycle and E at 1.0, so a Q-fall capture
+         * means "one quarter period to the edge". Everything before this point
+         * -- the bookkeeping at the bottom of the previous iteration, and in
+         * the real core the microcode step -- ran in that freed 0.75.
+         *
+         * The earlier structure spun on the E pin for the whole E-high phase
+         * (41 core cycles at 1.79 MHz) and none of it was usable. Waiting on
+         * the capture FLAG instead means work happens first and the spin only
+         * absorbs whatever is left over.
+         *
+         * Anchoring on a real hardware event rather than a predicted time is
+         * what makes this safe across the live 0.895 <-> 1.79 MHz switch
+         * (docs/plan.md §2.1): if the clock speeds up, Q simply falls sooner
+         * and the flag is already set. */
+        uint32_t late = (TIM1->SR & TIM_SR_CC2IF) ? 1U : 0U;
+        uint16_t t_work_done = (uint16_t)TIM1->CNT;
+        while (!(TIM1->SR & TIM_SR_CC2IF)) { }
+
+        if (late) {
+            /* Work overran the budget: Q had already fallen before we looked,
+             * so the sampling window was entered late. */
+            slack_late++;
+        } else {
+            uint16_t slack = (uint16_t)((uint16_t)TIM1->CCR2 - t_work_done);
+            if (slack < slack_min) {
+                slack_min = slack;
+            }
+        }
+
+        /* E is guaranteed high here: it rises at 0.56 of the cycle and Q falls
+         * at 0.75. No separate wait-for-E-high is needed.
+         *
+         * Sample continuously, keeping the previous value. On exit s_cur is
+         * the read that saw E low -- 0..1 iterations after the edge, possibly
+         * past the 10 ns hold -- while s_prev was taken while E was still
+         * high, inside the 40 ns setup window. s_prev is the defensible one,
+         * provided T_iter <= 6 core cycles (see spike.h). */
         do { s_prev = s_cur; s_cur = GPIOA->IDR; } while (s_cur & MASK_E);
 
         /* ==================== critical path begins ==================== */
@@ -66,6 +98,11 @@ __hot void spike_run_poll(uint32_t n_cycles, spike_result_t *out)
         uint16_t lat    = (uint16_t)(t_done - t_edge);
         uint16_t period = (uint16_t)(t_edge - t_edge_prev);
         t_edge_prev = t_edge;
+
+        /* Clear this cycle's Q-fall flag so the next iteration's wait sees
+         * only the next one. Safe here: we are past E-fall, and the next Q
+         * fall is three quarters of a cycle away. */
+        TIM1->SR = ~(uint32_t)TIM_SR_CC2IF;
 
         /* Overcapture means a second E fall arrived before we read CCR1:
          * a whole bus cycle went by unserviced. */
@@ -108,6 +145,8 @@ __hot void spike_run_poll(uint32_t n_cycles, spike_result_t *out)
     out->lat_jitter      = (uint16_t)(lat_worst - lat_best);
     out->period_min      = per_min;
     out->period_max      = per_max;
+    out->slack_min       = slack_min;
+    out->slack_late      = slack_late;
     for (uint32_t i = 0; i < SPIKE_HIST_BINS; i++) {
         out->hist[i] = s_hist[i];
     }

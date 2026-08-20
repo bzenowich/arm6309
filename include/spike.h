@@ -69,6 +69,22 @@ typedef struct {
     uint16_t period_min;      /* observed E period, core cycles               */
     uint16_t period_max;      /* min != max means the host switched speed     */
 
+    /* Emulator budget, measured from E-fall to Q-fall (0.75 of the bus cycle).
+     * The loops do their bookkeeping there and only then enter tight sampling,
+     * so this is the room a real microcode step would have.
+     *
+     * slack_min  worst-case spare core cycles after bookkeeping finished.
+     *            Size the microcode step against THIS, not against the period.
+     * slack_late number of cycles where the work overran the budget and Q had
+     *            already fallen. Must be 0. Non-zero means the emulator step
+     *            does not fit and the sampling window was entered late.
+     *
+     * Reported by variant 1 only; the assembly variant keeps its slack path
+     * lean. Variant 1's bookkeeping is heavier, so its slack_min is a
+     * conservative lower bound. */
+    uint16_t slack_min;
+    uint32_t slack_late;
+
     uint32_t hist[SPIKE_HIST_BINS];
 } spike_result_t;
 

@@ -99,9 +99,19 @@ void tim1_capture_init(void)
      * would add its own latency to the very edge we are trying to timestamp. */
     TIM1->CCMR1 = TIM_CCMR1_CC1S_TI1 | TIM_CCMR1_CC2S_TI2;
 
-    /* CC1P=1 -> capture E on the FALLING edge, the bus-cycle boundary.
-     * CC2P=0 -> capture Q on the rising edge, the address deadline. */
-    TIM1->CCER = TIM_CCER_CC1E | TIM_CCER_CC1P | TIM_CCER_CC2E;
+    /* Both channels capture FALLING edges (CC1P/CC2P = 1).
+     *
+     * CC1 = E: the bus-cycle boundary, and the reference all latency is
+     * measured against.
+     *
+     * CC2 = Q: Q falls at 0.75 of the bus cycle, E at 1.0, so a Q-fall
+     * capture says "one quarter period until the next E fall". That is the
+     * last hardware anchor before the edge, and the spike loops use its
+     * capture FLAG to decide when to stop doing useful work and enter the
+     * tight sampling loop. Without it the CPU has to spin through the whole
+     * E-high phase and that time is unavailable to the emulator. */
+    TIM1->CCER = TIM_CCER_CC1E | TIM_CCER_CC1P
+               | TIM_CCER_CC2E | TIM_CCER_CC2P;
 
     TIM1->EGR = TIM_EGR_UG;    /* load PSC/ARR */
     TIM1->SR  = 0;

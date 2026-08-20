@@ -364,9 +364,55 @@ makes measuring `T_iter` a first-class Phase 1 objective. `spike_result_t.lat_ji
 (`lat_worst − lat_best`) estimates it directly, since where the edge lands in the poll
 loop is the only term that varies between cycles.
 
-**Average throughput** is the second constraint. A microcoded core step costs ~15–30 core
-cycles typical, ~50–60 worst case. At 1.79 MHz there are 95 core cycles per bus cycle —
-**~3–6× headroom**. At 5 MHz there are 34, leaving no slack even on average.
+**(d) Average throughput — and not all of the cycle is usable.**
+
+> **Correction.** Earlier revisions said "at 1.79 MHz there are 95 core cycles per bus
+> cycle, ~3–6× headroom", treating the whole period as available to the emulator. It is
+> not. The CPU has to be *in* the tight sampling loop when E falls, and any work
+> interleaved between samples would breach `T_iter`. So every cycle spent waiting for the
+> edge is dead time.
+
+Timeline of one bus cycle at 1.79 MHz (period 559 ns = 95 core cycles), from the service
+manual's Figure 5-3 — note E is not a 50% duty cycle, it is 315 ns low / 244 ns high:
+
+| Event | Time | Core cycles |
+|---|---|---|
+| E falls — drive address | 0 ns | 0 |
+| E rises | 315 ns | 53.5 |
+| **Q falls** | 419 ns | **71.3** |
+| E falls | 559 ns | 95.0 |
+
+**Waiting on the E pin costs the whole E-high phase.** The obvious loop structure spins
+for E to rise, then samples until it falls — so the emulator only gets the E-low phase,
+**53.5 cycles**, and the 41.5-cycle E-high phase is burned watching a pin.
+
+**Waiting on Q's falling-edge capture instead recovers most of it.** Q falls at 0.75 of
+the cycle, so its capture flag says "one quarter period to the edge". The loop does its
+work first and only then enters tight sampling, which now needs to cover just the last
+quarter period:
+
+| | Usable by the emulator | Spent sampling |
+|---|---|---|
+| Spin on the E pin | 53.5 cycles (56%) | 41.5 |
+| **Spin on the Q-fall flag** | **71.3 cycles (75%)** | **23.8** |
+
+**+33% usable budget**, at both CoCo 3 clock speeds, and it costs one flag test. Implemented
+in both polling variants; `slack_min` and `slack_late` in `spike_result_t` measure what is
+actually left over.
+
+Crucially this stays anchored on a *hardware event*, not a predicted time, so it survives
+the live 0.895 ↔ 1.79 MHz switch (§2.1): a faster clock just means Q falls sooner and the
+flag is already set.
+
+Against a microcode step of ~15–30 cycles typical plus ~10 for drive and bookkeeping, the
+throughput ceiling moves from **~2.4 MHz to ~3.2 MHz**. At 5 MHz the usable budget is
+25 cycles and the answer is still no.
+
+*Possible further refinement, not implemented:* data is only guaranteed valid for the last
+40 ns, so in principle only ~46 ns of sampling is needed, which would free ~87 of the 95
+cycles. Reaching that means predicting the edge from `CCR2 + P/4 − margin` rather than
+waiting for the flag — which reintroduces a prediction that the speed switch can
+invalidate. The remaining 16 cycles are probably not worth that.
 
 ### 3.4 Ways to buy headroom (mostly insurance at 1.79 MHz)
 

@@ -70,6 +70,28 @@ TIM1 runs at 170 MHz with no prescaler, so **one timer tick = one core cycle**.
 
 ---
 
+## Where the emulator's time comes from
+
+The CPU has to be *inside* the tight sampling loop when E falls, and work interleaved
+between samples would breach `T_iter`. So every cycle spent waiting for the edge is dead
+time, and **which signal you wait on decides how much of the bus cycle the emulator gets.**
+
+At 1.79 MHz (period 559 ns = 95 core cycles; E is 315 ns low / 244 ns high):
+
+| Wait on | Usable by the emulator | Spent sampling |
+|---|---|---|
+| the **E pin** — spin for it to rise, then sample | 53.5 cycles (56%) | 41.5 |
+| the **Q-fall capture flag** (`TIM1_CH2`) | **71.3 cycles (75%)** | **23.8** |
+
+Q falls at 0.75 of the cycle, so its capture flag means "one quarter period to the edge".
+The loop does its work first and only then enters tight sampling. **+33% usable budget for
+one flag test**, and because it anchors on a hardware event rather than a predicted time,
+it survives the live 0.895 ↔ 1.79 MHz switch — a faster clock just means Q falls sooner
+and the flag is already set.
+
+`slack_min` reports what is actually left over; `slack_late` counts cycles where the work
+overran and Q had already fallen.
+
 ## The data sampling problem
 
 Worth understanding before trusting any result, and the reason
@@ -222,6 +244,8 @@ Key fields in `g_result`:
 | `lat_worst` | worst-case core cycles, hardware E-fall → address stored. **The number.** |
 | `lat_jitter` | `lat_worst − lat_best` ≈ `T_iter`. **Must be ≤ 6** (see above). |
 | `period_min`/`period_max` | differ ⇒ the host switched speed mid-run (that's the point) |
+| `slack_min` | worst-case spare cycles for the emulator. **Size the microcode step against this.** |
+| `slack_late` | work overran the budget and Q had already fallen. Must be 0. |
 | `hist[]` | latency distribution, 1 core cycle per bin |
 
 Two independent gates: **`lat_worst` ≤ 18** (the address arrives in time) and

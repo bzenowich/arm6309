@@ -74,6 +74,8 @@
     .equ TIM_CNT,   0x24
     .equ TIM_CCR1,  0x34            /* hardware timestamp of the E fall      */
     .equ E_MASK,    0x100           /* PA8                                   */
+    .equ CC1IF,     0x002           /* TIM1_SR: E fall captured              */
+    .equ CC2IF,     0x004           /* TIM1_SR: Q fall captured              */
     .equ CC1OF,     0x200           /* TIM1_SR overcapture                   */
     .equ HIST_MAX,  63              /* SPIKE_HIST_BINS - 1                   */
 
@@ -105,17 +107,32 @@ spike_run_poll_asm_raw:
     bne     1b
     ldr     r8, [r3, #TIM_CCR1]
     uxth    r8, r8                  /* t_edge_prev                        */
+    mvn     r7, #CC2IF              /* arm the first Q-fall wait          */
+    str     r7, [r3, #TIM_SR]
 
 /* ---------------------------------------------------------------- cycle -- */
     .p2align 3
 .Lcycle:
-    /* Wait out the E-low half. Leaves a valid E-high sample in r7 so the
-     * poll loop below starts with both alternates primed. */
-2:  ldr     r7, [r0]
-    tst     r7, #E_MASK
+    /* Wait for Q to FALL, not for E to rise.
+     *
+     * Q falls at 0.75 of the bus cycle and E at 1.0, so this flag means "one
+     * quarter period to the edge". Everything before it -- the bookkeeping at
+     * the bottom of the loop, and in the real core the microcode step -- runs
+     * in that freed 0.75 of the cycle. Spinning on the E pin instead would
+     * burn the whole E-high phase (41 core cycles at 1.79 MHz) for nothing.
+     *
+     * Anchored on a hardware capture rather than a predicted time, so it
+     * survives the live 0.895 <-> 1.79 MHz switch: a faster clock just means
+     * Q falls sooner and the flag is already set. */
+2:  ldr     r7, [r3, #TIM_SR]
+    tst     r7, #CC2IF
     beq     2b
 
-    /* ============ E is high. Sampling window opens here. ============ */
+    /* Prime the alternating sample registers. E is guaranteed high here: it
+     * rises at 0.56 of the cycle, Q falls at 0.75. */
+    ldr     r7, [r0]
+
+    /* ============ Sampling window opens here. ============ */
     .p2align 2
 .Lpoll:
     ldr     r6, [r0]                /* 2  sample A                        */
@@ -155,6 +172,13 @@ spike_run_poll_asm_raw:
     sub     lr, r6, r8
     uxth    lr, lr                  /* E period, core cycles               */
     uxth    r8, r6                  /* t_edge_prev = t_edge                */
+
+    /* Clear this cycle's Q-fall flag so the wait at the top of the next
+     * iteration sees only the next one. Safe here -- we are past E-fall and
+     * the next Q fall is three quarters of a cycle away. Writing 0 clears;
+     * the 1s leave every other flag alone. */
+    mvn     r7, #CC2IF
+    str     r7, [r3, #TIM_SR]
 
     /* Overcapture: a second E fall arrived before we read CCR1, so a whole
      * bus cycle went unserviced. */
