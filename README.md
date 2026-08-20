@@ -184,8 +184,8 @@ Variant 1 is expected to **fail** the `lat_jitter` ≤ 6 gate — that is the me
 not a defect. Variant 2 is the one that should pass both gates.
 
 For variant 3, **check `dma_timeouts` before reading anything else**: non-zero means the
-DMA never fired, and the cause is almost certainly one of the constants marked `VERIFY`
-in `include/stm32g431.h` (written without RM0440 to hand).
+DMA never fired. The register constants are verified against RM0440 Rev 9, so a timeout
+points at wiring or a clock enable rather than a wrong bit position.
 
 ### What variant 3 does and does not buy
 
@@ -261,8 +261,7 @@ tools/stimulus/           requirements for the E/Q generator
 - [x] Variant 1 — polling loop in C (predicted ceiling ~2 MHz)
 - [x] Variant 2 — hand-written assembly (`src/spike_poll_asm.S`), `T_iter` 4/6 cycles
 - [x] Variant 3 — DMA-driven address (`src/spike_dma.c`)
-- [ ] **Verify the DMAMUX constants against RM0440** — flagged `VERIFY` in
-      `include/stm32g431.h`; a non-zero `dma_timeouts` means one of them is wrong
+- [x] Verify the DMAMUX/EXTI constants against RM0440 Rev 9 — all confirmed correct
 - [x] Confirm the CoCo 3 pin budget against the service manual (§2.6 — six signals freed)
 - [x] Verify `t_DSR` / `t_DHR` against the datasheet — 40 ns / 10 ns; deadline corrected
       from the quarter cycle to `t_AD` = 110 ns

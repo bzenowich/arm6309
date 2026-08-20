@@ -52,9 +52,11 @@
 #include "spike.h"
 
 /* Trigger source. Default is TIM1_CH1's capture event: it is the same E
- * falling edge, routed through hardware we already configure for timestamping
- * (gpio.c), and it needs one uncertain constant instead of four. Define
- * SPIKE_DMA_TRIGGER_EXTI to use the EXTI path instead. */
+ * falling edge, routed through hardware gpio.c already configures for
+ * timestamping, so it needs one peripheral fewer than the EXTI path. Define
+ * SPIKE_DMA_TRIGGER_EXTI to use EXTI + the DMAMUX request generator instead.
+ * Both paths are verified against RM0440; worth measuring both once, since a
+ * latency difference between them is itself informative. */
 #ifndef SPIKE_DMA_TRIGGER_EXTI
 #define SPIKE_DMA_TRIGGER_EXTI 0
 #endif
@@ -69,8 +71,10 @@ static __ccmbss volatile uint32_t s_dma_addr;
 #define ADDR_B 0x5AA5U
 
 /* Outer guard iterations; each does 8 unrolled readback checks. If the address
- * has not appeared by then, something is misconfigured -- almost certainly one
- * of the VERIFY constants in stm32g431.h. Bail rather than hang. */
+ * has not appeared by then the DMA is not firing -- bail rather than hang.
+ * The register constants are verified against RM0440 (see stm32g431.h), so a
+ * timeout most likely means a wiring or clock-enable problem rather than a
+ * wrong bit position. */
 #define DMA_SPIN_LIMIT 2500U
 
 void spike_dma_init(void)
@@ -103,24 +107,22 @@ void spike_dma_init(void)
     /* EXTI8 -> port A. EXTICR[2] holds lines 8..11; nibble 0, value 0 = PA. */
     SYSCFG_EXTICR(2) &= ~0xFU;
 
+    /* RM0440 §15.3.5 "Hardware event selection": set the mask bit in EXTI_EMR
+     * and the trigger selection in EXTI_RTSR/FTSR. EMR rather than IMR -- the
+     * event path drives the DMAMUX trigger without raising an interrupt. */
     EXTI_RTSR1 &= ~MASK_E;
     EXTI_FTSR1 |=  MASK_E;      /* falling edge only */
     EXTI_PR1    =  MASK_E;      /* clear stale pending */
-    /* VERIFY (RM0440): whether the DMAMUX trigger needs IMR1 or EMR1 set for
-     * the line to propagate. EMR1 is used here because it does not raise an
-     * interrupt. If variant 3 times out, try IMR1 instead. */
     EXTI_EMR1  |=  MASK_E;
 
-    /* VERIFY (RM0440 DMAMUX_RGxCR): SIG_ID for EXTI8 is assumed to be 8,
-     * i.e. trigger inputs 0..15 map to EXTI0..EXTI15. */
-    DMAMUX_RGCR(0) = (8U << DMAMUX_RGCR_SIG_ID_Pos)
+    DMAMUX_RGCR(0) = (DMAMUX_TRIG_EXTI(PIN_E) << DMAMUX_RGCR_SIG_ID_Pos)
                    | DMAMUX_RGCR_GPOL_FALL
-                   | DMAMUX_RGCR_GE;
+                   | DMAMUX_RGCR_GE;       /* GNBREQ = 0 -> one request */
     DMAMUX_CCR(0)  = DMAMUX_REQ_GEN0;
 #else
     /* TIM1 CC1 (the E falling-edge capture set up in gpio.c) as the request. */
     TIM1->DIER |= TIM_DIER_CC1DE;
-    DMAMUX_CCR(0) = DMAMUX_REQ_TIM1_CH1;   /* VERIFY the request ID */
+    DMAMUX_CCR(0) = DMAMUX_REQ_TIM1_CH1;
 #endif
 
     DMA1_CH(1)->CCR |= DMA_CCR_EN;

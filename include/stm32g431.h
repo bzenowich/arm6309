@@ -168,12 +168,12 @@ typedef struct {
 /* -------------------------------------------------- DMA / DMAMUX / EXTI -- */
 /* Used only by variant 3 (src/spike_dma.c).
  *
- * WARNING: the bit positions and request-ID constants below were written
- * without RM0440 to hand -- only DS12589 is in docs/. The peripheral base
- * addresses and the DMA_CCR layout are standard across the family and are
- * safe; the DMAMUX request IDs and request-generator field positions are the
- * ones to check first if variant 3 reports dma_timeouts. Each is flagged at
- * its definition. */
+ * All values below verified against RM0440 Rev 9 (docs/stm32g4-refman.pdf).
+ * Section and table references are given where a value is not obvious.
+ *
+ * The STM32G431 is a Category 2 device (32 KB SRAM, RM0440 Table 1), which
+ * fixes the DMAMUX channel mapping used here: DMAMUX channels 0-5 are wired to
+ * DMA1 channels 1-6, so DMAMUX_CCR(0) configures DMA1 channel 1. */
 
 typedef struct {
     __IO uint32_t CCR;      /* 0x00 */
@@ -183,7 +183,8 @@ typedef struct {
     uint32_t      RESERVED; /* 0x10 */
 } DMA_Channel_TypeDef;
 
-/* DMA1 channel n (1-based) sits at 0x08 + 0x14*(n-1). */
+/* DMA1 channel n (1-based) at 0x08 + 0x14*(n-1) -- RM0440 §12.6.3.
+ * DMA1 base 0x4002 0000, DMAMUX base 0x4002 0800 (RM0440 memory map). */
 #define DMA1_CH(n) ((DMA_Channel_TypeDef *)(0x40020000UL + 0x08UL + 0x14UL * ((n) - 1U)))
 #define DMA1_ISR  (*(__IO uint32_t *)0x40020000UL)
 #define DMA1_IFCR (*(__IO uint32_t *)0x40020004UL)
@@ -201,15 +202,19 @@ typedef struct {
 #define DMAMUX_CCR(x)  (*(__IO uint32_t *)(0x40020800UL + 4UL * (x)))
 #define DMAMUX_RGCR(x) (*(__IO uint32_t *)(0x40020800UL + 0x100UL + 4UL * (x)))
 
-/* VERIFY (RM0440 "DMAMUX: assignment of multiplexer inputs"): request IDs.
- * req_gen0..3 are the low IDs; TIM1_CH1 is the one variant 3 uses by default. */
-#define DMAMUX_REQ_GEN0    1U
-#define DMAMUX_REQ_TIM1_CH1 42U       /* VERIFY */
+/* Request line IDs -- RM0440 Table 93, "DMAMUX: assignment of multiplexer
+ * inputs to resources". DMAMUX_CxCR.DMAREQ_ID is bits 6:0. */
+#define DMAMUX_REQ_GEN0     1U        /* DMAMUX_Req G0 */
+#define DMAMUX_REQ_TIM1_CH1 42U       /* TIM1_CH1 (43 = CH2, 44 = CH3) */
 
-/* VERIFY (RM0440 DMAMUX_RGxCR): field positions. */
-#define DMAMUX_RGCR_SIG_ID_Pos  0
+/* Request generator config -- RM0440 §13.6.4, DMAMUX_RGxCR.
+ * GPOL encoding: 00 none, 01 rising, 10 falling, 11 both. */
+#define DMAMUX_RGCR_SIG_ID_Pos  0     /* SIG_ID[4:0]  */
 #define DMAMUX_RGCR_GE          (1U << 16)
-#define DMAMUX_RGCR_GPOL_FALL   (2U << 17)
+#define DMAMUX_RGCR_GPOL_FALL   (2U << 17)   /* GPOL[1:0] at 18:17 */
+
+/* Trigger signal IDs -- RM0440 Table 94. Inputs 0..15 are EXTI LINE0..15. */
+#define DMAMUX_TRIG_EXTI(n) ((uint32_t)(n))
 
 #define RCC_AHB1ENR_DMA1EN    (1U << 0)
 #define RCC_AHB1ENR_DMAMUX1EN (1U << 2)
