@@ -213,7 +213,10 @@ tools/stimulus/           requirements for the E/Q generator
 - [x] Verify `t_DSR` / `t_DHR` against the datasheet — 40 ns / 10 ns; deadline corrected
       from the quarter cycle to `t_AD` = 110 ns
 - [x] Firmware compiles (`arm-none-eabi-gcc` 13.2.1); hot loop confirmed at `0x10000000`
-- [ ] Decide direct-drive vs buffers — needs 5 V tolerance per pin, and the GIME's `V_IH`
+- [x] Decide direct-drive vs buffers — **buffers, mandatory**: `PA0..PA7`, `PB0..PB2`
+      and `PB10` are `TT_a` (3.6 V), and the CoCo drives 5 V TTL at the data bus on
+      every read
+- [ ] Confirm the GIME accepts 3.3 V `V_OH` — buffers output 3.3 V, not 5 V
 - [ ] Debug console on `USART3` (`PC10`/`PC11`), so results don't need a debugger
 - [ ] Variant 2 — hand-written assembly (predicted ~2.5 MHz)
 - [ ] Variant 3 — EXTI + DMAMUX + DMA precomputed store (predicted ~3–3.5 MHz)

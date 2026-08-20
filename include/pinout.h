@@ -30,6 +30,13 @@
  *   PF1         --                  spare
  *   PG10        NRST
  *
+ * EXTERNAL BUFFERS ARE MANDATORY, not a preference. DS12589 Table 12 lists
+ * PA0..PA7 -- the whole data bus -- plus PB0..PB2 and PB10 as TT_a, rated
+ * 3.6 V. The CoCo 3's 74LS245 drives 5 V TTL at us on every read, and the
+ * board's 4.7K pull-ups take the address bus to 5 V whenever we tri-state.
+ * Behind 3.3 V-powered 74LVC buffers the MCU never sees more than 3.3 V.
+ * Wire this part straight to the socket and it dies. See docs/plan.md §3.5.
+ *
  * E and Q sit on PA8/PA9 deliberately: one LDR of GPIOA->IDR yields the data
  * bus in bits 0-7 and the clock state in bits 8-9, saving a load on the
  * critical path. They are configured as AF6 (TIM1_CH1/CH2) so the timer can

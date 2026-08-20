@@ -389,8 +389,11 @@ cycles typical, ~50–60 worst case. At 1.79 MHz there are 95 core cycles per bu
 
 ### 3.5 Electrical
 
-- The CoCo 3 is 5 V; the G4 is 3.3 V. **Verify FT/FT_a tolerance per pin in DS12589 before
-  the PCB** — not all G4 pins are 5 V-tolerant.
+- The CoCo 3 is 5 V; the G4 is 3.3 V, and **most pins this design needs are not
+  5 V-tolerant.** `PA0..PA7` (the entire data bus), `PB0..PB2` and `PB10` are `TT_a` —
+  rated **3.6 V** (DS12589 Table 12, pp.52–53). Behind 3.3 V-powered buffers this is
+  fine; the MCU never sees more than 3.3 V. **Without buffers it is destructive on every
+  read cycle.** This is what makes buffers mandatory rather than optional.
 - Driving 5 V logic from 3.3 V: fine for LS/ALS/HCT (V_IH = 2.0 V), **not** plain HC
   (V_IH = 3.5 V). Check what the CoCo 3 actually uses on each bus.
 - **74LVC245** on the data bus (`DIR` ← buffered `R/W`), **74LVC541 ×2** on the address bus,
@@ -423,10 +426,47 @@ adding them.
 
 **Open-drain is ruled out on timing, not on levels.**
 
-#### Direct push-pull with no buffers? Plausible — and attractive.
+#### Direct push-pull with no buffers? **No — ruled out on 5 V tolerance.**
 
-The other reading of the question: skip the buffers and let the STM32 drive the bus
-directly, push-pull, at 3.3 V.
+> **Correction.** An earlier revision of this section recommended building v1 direct-drive
+> and treating 5 V tolerance as an open question. The datasheet answers it, and the answer
+> is no.
+
+**DS12589 Table 12 (`docs/stm32g431kb.pdf` pp.52–53) lists `PA0`–`PA7` as `TT_a`, every
+one of them.** `TT` means **3.6 V tolerant I/O** — not 5 V. `PB0`, `PB1`, `PB2` and `PB10`
+are `TT_a` as well.
+
+That is fatal in the most direct way possible:
+
+- The CoCo 3's 74LS245 (IC3) drives **5 V TTL into the data bus on every read cycle**.
+  Straight into `TT_a` pins rated 3.6 V. Not marginal — over-stressed on every read.
+- `A0`, `A1`, `A2` sit on `TT_a` pins that the board's 4.7 K pull-ups would take to 5 V
+  every time we tri-state for `/HALT`.
+
+Nor can this be dodged by reassigning pins. The G431 is an analog-heavy part and its
+`TT_a` pins are exactly the ADC/op-amp-capable ones, which are scattered through `PA` and
+the low end of `PB`. **There is no way to form a contiguous 8-bit data port or a
+contiguous 16-bit address port entirely from 5 V-tolerant pins** — and the contiguity is
+what makes the single-store address write and single-load data read possible in the first
+place (§3.2).
+
+**Buffers are therefore architecturally required, not a design preference.** They are
+doing two jobs, and the second one is the non-negotiable one: level shifting, and
+protecting 3.6 V pins from a 5 V bus.
+
+The pinout in §3.2 needs no change — behind 3.3 V-powered buffers, the MCU never sees
+more than 3.3 V, so `TT_a` is fine. `BUS_OE` stays.
+
+<details>
+<summary>What the direct-drive option would have bought, had it been available</summary>
+
+Recorded because it is the right answer on a 5 V-tolerant MCU, and worth revisiting if
+the part ever changes: it would have freed `BUS_OE` (tri-stating becomes one
+`GPIOB->MODER` write), saved ~1.7 core cycles per direction of buffer propagation against
+an 18.7-cycle deadline, and cut parts and board area under the RF shield. Driving high,
+the STM32's ~10–25 Ω output dominates the 4.7 K pull-up and the line would have sat near
+3.3 V, comfortably above the 2.0 V `V_IH` of the LS parts downstream.
+</details>
 
 - Driving high, the STM32's ~10–25 Ω output easily dominates the 4.7 K pull-up; the line
   sits near 3.3 V, comfortably above the 2.0 V `V_IH` of the LS parts downstream.
@@ -439,26 +479,15 @@ directly, push-pull, at 3.3 V.
 - Drive strength is a non-issue: the original 68B09E is HMOS with weak drive, and the
   STM32 is stronger.
 
-**Three conditions, all unverified, and the first two are gating:**
+One risk survives the switch to buffers and is worth stating separately:
 
-1. **Every bus pin must be 5 V-tolerant.** When we tri-state under `/HALT` the pull-ups
-   take the address lines to 5 V, and the 74LS245 drives 5 V TTL into `PA0..PA7` on every
-   read. **Must be checked per pin in DS12589** — and note that many STM32G4 pins are
-   `FT_a`, meaning 5 V-tolerant *except in analog mode*; `PA0..PA7` are ADC-capable, so
-   this needs care rather than assumption.
-2. **3.3 V `V_OH` must satisfy every downstream `V_IH`.** LS/LSTTL wants 2.0 V and is
-   fine. **The GIME is the unknown** — it is a custom gate array, and if its inputs are
-   CMOS-level (`0.7 x V_DD` = 3.5 V) then 3.3 V is marginal. This is the main risk and
-   is only really answerable by measurement on real hardware.
-3. **Exposure.** Buffers are sacrificial; direct drive puts the MCU straight onto a
-   40-year-old bus with a user-accessible cartridge port. Defensible for a hobby module,
-   but a real trade.
+**3.3 V `V_OH` must satisfy every downstream `V_IH`.** The buffers output 3.3 V, not 5 V.
+LS/LSTTL wants 2.0 V and is fine. **The GIME is the unknown** — it is a custom gate array,
+and if its inputs are CMOS-level (`0.7 × V_DD` = 3.5 V) then 3.3 V is marginal. Buffers
+do not fix this; only a 5 V-powered translator would. Probably only answerable by
+measurement on real hardware, and it stays open (§10.3b).
 
-**Recommendation: build v1 direct-drive.** It is simpler, faster, smaller, and frees a
-pin — and if the GIME turns out fussy, a v2 with buffers is a cheap respin. Consider
-33 Ω series resistors on the address lines to damp ringing into the cartridge port.
-
-#### If buffers are used
+#### Buffer selection
 
 - **74LVC specifically, not 74HC/74AHC.** §2.6 found 4.7 K pull-ups to 5 V on all 16
   address lines and 47 K on `R/W`. When we tri-state under `/HALT`, those pull-ups drag
@@ -703,10 +732,12 @@ contribute upstream.
 3. ~~What are `t_DSR` and `t_DHR`?~~ **Answered** — 40 ns and 10 ns for the MC68B09E
    (`docs/MC6809E.pdf` p.3, items 17 and 18). See §3.3, which also corrects the address
    deadline from the quarter cycle to `t_AD` = 110 ns.
-3a. **Are all bus pins 5 V-tolerant on the G431CB, including `PA0..PA7` in digital
-   mode?** Gates the direct-drive decision in §3.5. Needs DS12589.
-3b. **What is the GIME's input `V_IH`?** If CMOS-level, 3.3 V direct drive is marginal
-   and buffers come back. Probably only answerable by measurement.
+3a. ~~Are all bus pins 5 V-tolerant?~~ **Answered — no.** `PA0..PA7`, `PB0..PB2` and
+   `PB10` are `TT_a`, 3.6 V only (DS12589 Table 12, pp.52–53). Buffers are mandatory;
+   direct drive is ruled out. See §3.5.
+3b. **What is the GIME's input `V_IH`?** Our buffers output 3.3 V. If the GIME wants
+   CMOS levels (~3.5 V) that is marginal, and only a 5 V-powered translator fixes it.
+   **Still open**, and probably only answerable by measurement on real hardware.
 4. **Which CoCo 3 board revision**, and is the CPU socketed?
 5. **Height available under the RF shield?**
 6. **NitrOS-9 build** — Curtis Boyle's "Ease of Use" distribution, or a stock upstream
