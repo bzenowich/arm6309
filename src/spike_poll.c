@@ -20,7 +20,7 @@ static __ccmbss uint32_t s_hist[SPIKE_HIST_BINS];
 
 __hot void spike_run_poll(uint32_t n_cycles, spike_result_t *out)
 {
-    uint32_t misses = 0, overruns = 0;
+    uint32_t misses = 0, holdviol = 0, overruns = 0;
     uint16_t lat_worst = 0, lat_best = 0xFFFFU;
     uint16_t per_min = 0xFFFFU, per_max = 0;
     uint64_t lat_sum = 0;
@@ -74,11 +74,16 @@ __hot void spike_run_poll(uint32_t n_cycles, spike_result_t *out)
             TIM1->SR = ~(uint32_t)TIM_SR_CC1OF;
         }
 
-        /* The deadline is a quarter period, recomputed every cycle so a live
-         * 0.895 <-> 1.79 MHz switch (docs/plan.md §2.1) is handled without
-         * any calibration. */
-        if (lat > (uint16_t)(period >> 2)) {
+        /* t_AD is an ABSOLUTE 110 ns, not a fraction of the E period, so the
+         * deadline is the same constant at 0.895 and 1.79 MHz -- a live speed
+         * switch (docs/plan.md §2.1) does not relax it. t_AH is the floor:
+         * driving the new address too early violates the hold time on the
+         * outgoing one. See spike.h for the datasheet references. */
+        if (lat > SPIKE_TAD_CYCLES) {
             misses++;
+        }
+        if (lat < SPIKE_TAH_CYCLES) {
+            holdviol++;
         }
 
         if (lat > lat_worst) lat_worst = lat;
@@ -92,10 +97,15 @@ __hot void spike_run_poll(uint32_t n_cycles, spike_result_t *out)
 
     out->cycles_run      = n_cycles;
     out->deadline_misses = misses;
+    out->hold_violations = holdviol;
     out->overruns        = overruns;
     out->lat_worst       = lat_worst;
     out->lat_best        = lat_best;
     out->lat_sum         = lat_sum;
+    /* Approximates the polling loop iteration period. Must be <= 6 core cycles
+     * (t_DSR = 40 ns at 170 MHz) or the s_prev sample is not provably inside
+     * the 6809E read-data window -- see spike.h. */
+    out->lat_jitter      = (uint16_t)(lat_worst - lat_best);
     out->period_min      = per_min;
     out->period_max      = per_max;
     for (uint32_t i = 0; i < SPIKE_HIST_BINS; i++) {

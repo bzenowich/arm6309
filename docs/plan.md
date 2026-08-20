@@ -280,20 +280,48 @@ driven before E rises.
 
 At 170 MHz (5.882 ns per core cycle):
 
-**Confirmed against Tandy's own numbers.** Service manual Figure 5-3, "MC68B09E
-Read/Write Timing at 0.89 MHz" (parenthesised values are for 1.78 MHz), gives E period
-**1117 ns (559 ns)** and **E-fall to Q-rise 279 ns (140 ns)**. That E-fall-to-Q-rise
-figure *is* the address deadline, and 140 ns at 170 MHz is **23.8 core cycles** — the
-estimate below was 23.7. The budget is right.
+> **Correction.** Earlier revisions of this document used the quarter cycle (E-fall to
+> Q-rise, 140 ns at 1.79 MHz) as the address deadline. **That was wrong.** Q's rise is
+> not the requirement — `t_AD` is. The MC6809E datasheet, "BUS TIMING CHARACTERISTICS"
+> (`docs/MC6809E.pdf` p.3), item 11, gives *Address Delay Time from E Low* as **110 ns
+> max for the MC68B09E**, which is what the CoCo 3 clocks. The real deadline is
+> therefore **18.7 core cycles, not 23.8** — about 20% tighter than assumed.
 
-| E rate | Period | Core cycles/bus cycle | **Quarter cycle (the deadline)** | Verdict |
+**Datasheet timing, MC68B09E (2 MHz) column.** One core cycle at 170 MHz = 5.882 ns.
+
+| # | Parameter | Symbol | Value | Core cycles |
 |---|---|---|---|---|
-| **0.895 MHz** (CoCo 3 boot) | 1118 ns | 190.0 | **47.5** | very comfortable |
-| **1.79 MHz** (CoCo 3 fast) | 559 ns | 95.0 | **23.7** | **target — fits with margin** |
-| 2.0 MHz (68B09E max) | 500 ns | 85.0 | 21.3 | fits |
-| 3.0 MHz (63C09E max) | 333 ns | 56.7 | 14.2 | marginal |
-| 4.0 MHz | 250 ns | 42.5 | 10.6 | unlikely |
-| 5.0 MHz (stretch probe) | 200 ns | 34.0 | **8.5** | **below the floor** |
+| 11 | Address delay from E low (also `BA`, `BS`, `R/W`) | `t_AD` | **≤ 110 ns** | **18.7** |
+| 9 | Address hold time | `t_AH` | **≥ 20 ns** | **3.4** |
+| 17 | Read data setup | `t_DSR` | **≥ 40 ns** | 6.8 |
+| 18 | Read data hold | `t_DHR` | **≥ 10 ns** | 1.7 |
+| 20 | Data delay from Q (write) | `t_DDQ` | ≤ 110 ns | 18.7 |
+| 21 | Write data hold | `t_DHW` | ≥ 30 ns | 5.1 |
+| 29 | Usable access time (for the memory) | `t_ACC` | 330 ns | — |
+| 30 | Control delay | `t_CD` | ≤ 200 ns | 34.0 |
+| — | Interrupt / `HALT` / `RESET` / `TSC` setup | `t_PCS` | ≥ 110 ns | 18.7 |
+
+**These are absolute times, not fractions of the E period.** The CoCo 3 clocks a 68B09E,
+so the same 110 ns applies at 0.895 MHz and at 1.79 MHz — **the deadline does not relax
+in slow mode.** That is a materially different (and less forgiving) model than the
+period-relative one used earlier.
+
+**The address must be driven in the window [3.4, 18.7] core cycles after E falls.**
+Both ends bind: driving too *early* violates `t_AH`, the hold time on the outgoing
+address. Against an estimated 9–14 cycle floor for the critical path (below), the margin
+is **5–10 cycles, not 10–15**.
+
+| E rate | Period | Core cycles/bus cycle | Deadline `t_AD` | Verdict |
+|---|---|---|---|---|
+| **0.895 MHz** (CoCo 3 boot) | 1118 ns | 190.0 | **18.7** | throughput easy, deadline same |
+| **1.79 MHz** (CoCo 3 fast) | 559 ns | 95.0 | **18.7** | **target — fits, ~5–10 cycles spare** |
+| 2.0 MHz (68B09E max) | 500 ns | 85.0 | 18.7 | same deadline; throughput still fine |
+| 3.0 MHz (63C09E max) | 333 ns | 56.7 | 18.7 † | throughput becomes the limit |
+| 5.0 MHz (stretch probe) | 200 ns | 34.0 | 18.7 † | throughput fails first |
+
+† Above 2 MHz there is no `t_AD` spec — the part is out of its rated range, so the
+deadline would have to be derived from whatever the host's memory system needs.
+Beyond 2 MHz the binding constraint shifts from the deadline to average throughput.
 
 **The binding constraint is the post-read critical path.** From "read data valid at E-fall"
 to "next address stored", in hand-written assembly with pointers preloaded:
@@ -313,9 +341,28 @@ need a second store to `GPIOC->ODR`, but they are updated in the *slack* portion
 cycle, not inside the quarter-cycle deadline. They cost average throughput, not margin.
 Same for the data-bus direction change, which happens during the address-drive step.
 
-- **At 1.79 MHz: 23.7 available vs 9–14 needed → ~10–15 cycles of margin.** Workable.
-- **At 5 MHz: 8.5 available vs 9–14 needed → misses outright.** Polling jitter alone
-  (4–6 cycles) eats more than half the budget.
+- **18.7 available (`t_AD`) vs 9–14 needed → 5–10 cycles of margin.** Workable, but
+  tighter than the earlier period-relative model suggested, and the same at both CoCo 3
+  clock speeds.
+- Polling jitter alone is 4–6 cycles of that budget. It is the single largest term and
+  the main argument for the hand-written assembly variant.
+
+**(c) Read-data sampling — now provable.** The datasheet guarantees read data valid over
+`[E_fall − t_DSR, E_fall + t_DHR]` = **`[−40 ns, +10 ns]`, a 50 ns window**. `t_DHR` is
+only 10 ns (1.7 core cycles), so no polling loop can reliably sample *after* the edge.
+
+The `s_prev` trick in `spike_poll.c` samples continuously while E is high and keeps the
+**last sample taken before E fell**. If the polling loop's iteration period is `T_iter`,
+that sample lands in `[E_fall − T_iter, E_fall)`. So:
+
+> **`T_iter ≤ t_DSR` = 40 ns = 6.8 core cycles ⟹ the sample is provably inside the
+> guaranteed valid window.**
+
+A tight M4 poll (`LDR` / `MOV` / `TST` / `BNE`) is ~5–6 cycles, so it fits — but only
+just. This converts the sampling question from a worry into a checkable inequality, and
+makes measuring `T_iter` a first-class Phase 1 objective. `spike_result_t.lat_jitter`
+(`lat_worst − lat_best`) estimates it directly, since where the edge lands in the poll
+loop is the only term that varies between cycles.
 
 **Average throughput** is the second constraint. A microcoded core step costs ~15–30 core
 cycles typical, ~50–60 worst case. At 1.79 MHz there are 95 core cycles per bus cycle —
@@ -349,6 +396,70 @@ cycles typical, ~50–60 worst case. At 1.79 MHz there are 95 core cycles per bu
 - **74LVC245** on the data bus (`DIR` ← buffered `R/W`), **74LVC541 ×2** on the address bus,
   plus a buffer for `R/W` — all with `OE` ← `BUS_OE` for `/HALT` tri-stating. ~5 ns each,
   already in the §3.3 budget.
+#### Open-drain instead of buffers? No.
+
+Tempting, given the CoCo 3 already has 4.7 K pull-ups on all 16 address lines: drive the
+STM32 pins open-drain, sink only, and let the existing pull-ups do the rising edge. No
+level shifting, no buffers, and tri-stating for `/HALT` is free.
+
+**The rising edge is far too slow.** The MC6809E datasheet's own bus-timing test load
+(Figure 3, p.4) uses **90 pF for A0–A15**. With the CoCo's 4.7 K pull-up:
+
+```
+tau  = 4.7 kOhm x 90 pF                    = 423 ns
+rise to V_IH 2.0 V from a 5 V rail:
+t    = -tau x ln(1 - 2.0/5.0) = 423 x 0.51 = 216 ns
+```
+
+Against a `t_AD` budget of **110 ns**, the passive rise alone is **~2x over** — before
+any emulator work happens at all. Real CoCo bus capacitance with a cartridge or Multi-Pak
+attached is higher than 90 pF, making it worse.
+
+Getting there passively would need ~1 K pull-ups (tau ≈ 90 ns, rise ≈ 46 ns), which means
+adding 16 resistors and sinking 5 mA per line — **80 mA** with the bus all-low, plus the
+ground bounce that implies. Not worth it. And the data bus has **no** pull-ups on the
+CoCo 3 (D0–D7 go straight to IC3), so open-drain there would not work at all without
+adding them.
+
+**Open-drain is ruled out on timing, not on levels.**
+
+#### Direct push-pull with no buffers? Plausible — and attractive.
+
+The other reading of the question: skip the buffers and let the STM32 drive the bus
+directly, push-pull, at 3.3 V.
+
+- Driving high, the STM32's ~10–25 Ω output easily dominates the 4.7 K pull-up; the line
+  sits near 3.3 V, comfortably above the 2.0 V `V_IH` of the LS parts downstream.
+- Driving low, it sinks ~1.1 mA per line from the pull-up. Trivial.
+- **`BUS_OE` disappears.** Tri-stating for `/HALT` becomes one write to `GPIOB->MODER` —
+  off the per-cycle critical path, and it frees a pin.
+- **Saves ~5 ns each way** of buffer propagation ≈ 1.7 core cycles per direction. Against
+  an 18.7-cycle deadline that is real money.
+- Fewer parts and less board area, which matters under the RF shield (§2.7).
+- Drive strength is a non-issue: the original 68B09E is HMOS with weak drive, and the
+  STM32 is stronger.
+
+**Three conditions, all unverified, and the first two are gating:**
+
+1. **Every bus pin must be 5 V-tolerant.** When we tri-state under `/HALT` the pull-ups
+   take the address lines to 5 V, and the 74LS245 drives 5 V TTL into `PA0..PA7` on every
+   read. **Must be checked per pin in DS12589** — and note that many STM32G4 pins are
+   `FT_a`, meaning 5 V-tolerant *except in analog mode*; `PA0..PA7` are ADC-capable, so
+   this needs care rather than assumption.
+2. **3.3 V `V_OH` must satisfy every downstream `V_IH`.** LS/LSTTL wants 2.0 V and is
+   fine. **The GIME is the unknown** — it is a custom gate array, and if its inputs are
+   CMOS-level (`0.7 x V_DD` = 3.5 V) then 3.3 V is marginal. This is the main risk and
+   is only really answerable by measurement on real hardware.
+3. **Exposure.** Buffers are sacrificial; direct drive puts the MCU straight onto a
+   40-year-old bus with a user-accessible cartridge port. Defensible for a hobby module,
+   but a real trade.
+
+**Recommendation: build v1 direct-drive.** It is simpler, faster, smaller, and frees a
+pin — and if the GIME turns out fussy, a v2 with buffers is a cheap respin. Consider
+33 Ω series resistors on the address lines to damp ringing into the cartridge port.
+
+#### If buffers are used
+
 - **74LVC specifically, not 74HC/74AHC.** §2.6 found 4.7 K pull-ups to 5 V on all 16
   address lines and 47 K on `R/W`. When we tri-state under `/HALT`, those pull-ups drag
   the lines to 5 V while our buffer outputs are high-Z — which is only safe on a family
@@ -589,11 +700,13 @@ contribute upstream.
 1. ~~Does the CoCo 3 connect `TSC`/`/LIC`/`AVMA`/`BUSY`/`BA`/`BS`?~~ **Answered** — see
    §2.6. All five outputs NC, `TSC` grounded.
 2. ~~LQFP48 or LQFP64?~~ **Answered** — LQFP48, with 4 pins to spare.
-3. **What are `t_DSR` and `t_DHR` for the 68B09E / HD63C09E?** The read-data setup and
-   hold window around E's fall. The service manual's Figure 5-3 shows the shape but not
-   the numbers; they come from the Motorola/Hitachi datasheet. This is the **most
-   important open item** — the entire data-sampling strategy depends on it. See the
-   README's "data sampling problem".
+3. ~~What are `t_DSR` and `t_DHR`?~~ **Answered** — 40 ns and 10 ns for the MC68B09E
+   (`docs/MC6809E.pdf` p.3, items 17 and 18). See §3.3, which also corrects the address
+   deadline from the quarter cycle to `t_AD` = 110 ns.
+3a. **Are all bus pins 5 V-tolerant on the G431CB, including `PA0..PA7` in digital
+   mode?** Gates the direct-drive decision in §3.5. Needs DS12589.
+3b. **What is the GIME's input `V_IH`?** If CMOS-level, 3.3 V direct drive is marginal
+   and buffers come back. Probably only answerable by measurement.
 4. **Which CoCo 3 board revision**, and is the CPU socketed?
 5. **Height available under the RF shield?**
 6. **NitrOS-9 build** — Curtis Boyle's "Ease of Use" distribution, or a stock upstream

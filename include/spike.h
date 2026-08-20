@@ -23,14 +23,47 @@
 
 #define SPIKE_HIST_BINS 64U   /* latency histogram, 1 core cycle per bin */
 
+/* MC68B09E bus timing, from the Motorola MC6809E datasheet "BUS TIMING
+ * CHARACTERISTICS" table, 2 MHz column (docs/MC6809E.pdf p.3). One TIM1 tick
+ * is one core cycle at 170 MHz, so ns -> ticks is ns / 5.882.
+ *
+ * These are ABSOLUTE times, not fractions of the E period. The CoCo 3 clocks a
+ * 68B09E, so the same numbers apply at both 0.895 and 1.79 MHz — the deadline
+ * does NOT relax when the machine drops to slow mode.
+ *
+ *   #11 t_AD  address delay from E low, MAX 110 ns  -> 18.7 cycles  (ceiling)
+ *   #9  t_AH  address hold time,        MIN  20 ns  ->  3.4 cycles  (floor)
+ *   #17 t_DSR read data setup,          MIN  40 ns  ->  6.8 cycles
+ *   #18 t_DHR read data hold,           MIN  10 ns  ->  1.7 cycles
+ *
+ * So the next address must be driven in the window [3.4, 18.7] core cycles
+ * after the E falling edge. Both ends are real: driving too EARLY violates the
+ * hold time on the outgoing address. */
+#define SPIKE_TAD_CYCLES  18U   /* 110 ns ceiling, rounded down (conservative) */
+#define SPIKE_TAH_CYCLES   4U   /*  20 ns floor,   rounded up  (conservative) */
+#define SPIKE_TDSR_CYCLES  6U   /*  40 ns, the polling-iteration bound         */
+
 typedef struct {
     uint32_t cycles_run;      /* bus cycles observed                          */
-    uint32_t deadline_misses; /* latency > quarter period                     */
+    uint32_t deadline_misses; /* latency > t_AD (110 ns). MUST be 0.          */
+    uint32_t hold_violations; /* latency < t_AH  (20 ns). MUST be 0.          */
     uint32_t overruns;        /* TIM1 overcapture: a whole E cycle was missed */
 
     uint16_t lat_worst;       /* core cycles, E-fall (hardware) -> addr stored */
     uint16_t lat_best;
     uint64_t lat_sum;         /* for the mean                                 */
+
+    /* lat_worst - lat_best. The only variable term between cycles is WHERE in
+     * the polling loop the E edge landed, so this approximates the loop
+     * iteration period T_iter.
+     *
+     * CORRECTNESS GATE: T_iter must be <= t_DSR = 40 ns = 6 core cycles at
+     * 170 MHz. The s_prev sample is taken at most one iteration before E fell,
+     * so it lands in [E_fall - T_iter, E_fall). The 6809E guarantees read data
+     * valid over [E_fall - 40 ns, E_fall + 10 ns]. T_iter <= 40 ns therefore
+     * PROVES s_prev is inside the valid window; above it, sampling is
+     * unsound no matter how good the latency looks. See README. */
+    uint16_t lat_jitter;
 
     uint16_t period_min;      /* observed E period, core cycles               */
     uint16_t period_max;      /* min != max means the host switched speed     */
