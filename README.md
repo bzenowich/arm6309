@@ -176,11 +176,41 @@ target extended-remote localhost:3333
 print/x g_run_complete          # expect 0x6309c0de
 print g_result_c                # variant 1, C
 print g_result_asm              # variant 2, assembly
+print g_result_dma              # variant 3, DMA-driven
 print g_data_window
 ```
 
 Variant 1 is expected to **fail** the `lat_jitter` ≤ 6 gate — that is the measurement,
 not a defect. Variant 2 is the one that should pass both gates.
+
+For variant 3, **check `dma_timeouts` before reading anything else**: non-zero means the
+DMA never fired, and the cause is almost certainly one of the constants marked `VERIFY`
+in `include/stm32g431.h` (written without RM0440 to hand).
+
+### What variant 3 does and does not buy
+
+It offloads the **address drive** to hardware — no CPU in the path at all. It does **not**
+help with **data sampling**, which is the constraint people expect DMA to solve: a DMA
+read triggered by the E edge lands past `t_DHR` (10 ns), and one triggered by Q's fall
+lands before `t_DSR` (40 ns). Neither is sound, so variant 3 still needs a polling loop
+for data and **`T_iter` ≤ 6 still applies**.
+
+It also requires the address to be known a **full bus cycle ahead**. That holds for
+instruction-fetch runs, VMA cycles and stack operations, but never for genuinely
+data-dependent cycles. So it measures a floor for part of the workload, not a replacement
+for variant 2.
+
+The number it produces decides whether the pipelined architecture (`docs/plan.md` §4.2)
+is worth building. If DMA latency lands well under variant 2's ~13 cycles, pipelineable
+cycles can be driven by hardware and the CPU spends its whole slack on emulation. **If it
+lands near or above 13 — which is entirely plausible, since triggered DMA on STM32 is
+often 10–25 cycles — the complexity buys nothing and variant 2 is the answer.**
+
+Measurement caveat: the readback spin samples every 4 core cycles, so the result is
+quantised to 4 and biased high by roughly another 3 for the exit branch. Good enough to
+separate 13 from 18; not good enough to trust the last cycle. For a precise figure,
+jumper an address line to a spare timer capture input and difference two hardware
+timestamps.
 
 Key fields in `g_result`:
 
@@ -217,6 +247,7 @@ src/gpio.c                pinout config, TIM1 input capture on E and Q
 src/stub_core.c           256-entry stub state table
 src/spike_poll.c          variant 1: polling loop in C, plus the variant 2 wrapper
 src/spike_poll_asm.S      variant 2: hand-written Thumb-2 polling loop
+src/spike_dma.c           variant 3: DMA drives the address, no CPU in the path
 src/main.c                entry point; results land in globals for gdb
 linker/stm32g431cb.ld     128K flash / 22K SRAM / 10K CCM, with the .ccmram section
 test/test_stub_core.c     host unit test for the stub table
@@ -229,6 +260,9 @@ tools/stimulus/           requirements for the E/Q generator
 
 - [x] Variant 1 — polling loop in C (predicted ceiling ~2 MHz)
 - [x] Variant 2 — hand-written assembly (`src/spike_poll_asm.S`), `T_iter` 4/6 cycles
+- [x] Variant 3 — DMA-driven address (`src/spike_dma.c`)
+- [ ] **Verify the DMAMUX constants against RM0440** — flagged `VERIFY` in
+      `include/stm32g431.h`; a non-zero `dma_timeouts` means one of them is wrong
 - [x] Confirm the CoCo 3 pin budget against the service manual (§2.6 — six signals freed)
 - [x] Verify `t_DSR` / `t_DHR` against the datasheet — 40 ns / 10 ns; deadline corrected
       from the quarter cycle to `t_AD` = 110 ns

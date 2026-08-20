@@ -48,6 +48,7 @@ typedef struct {
     uint32_t deadline_misses; /* latency > t_AD (110 ns). MUST be 0.          */
     uint32_t hold_violations; /* latency < t_AH  (20 ns). MUST be 0.          */
     uint32_t overruns;        /* TIM1 overcapture: a whole E cycle was missed */
+    uint32_t dma_timeouts;    /* variant 3 only: the DMA never fired.        */
 
     uint16_t lat_worst;       /* core cycles, E-fall (hardware) -> addr stored */
     uint16_t lat_best;
@@ -88,10 +89,24 @@ void spike_run_poll(uint32_t n_cycles, spike_result_t *out);
  * Same contract as spike_run_poll(). Call with interrupts disabled. */
 void spike_run_poll_asm(uint32_t n_cycles, spike_result_t *out);
 
-/* Variant 3: EXTI + DMAMUX + DMA store of a precomputed address, removing
- * polling jitter from cycles whose address does not depend on the preceding
- * read. Predicted ~3-3.5 MHz.
- * TODO(phase1): implement after variants 1-2. */
+/* Variant 3: the address is driven by DMA on the E edge, with no CPU in the
+ * drive path at all (src/spike_dma.c).
+ *
+ * IMPORTANT: this does NOT relax the sampling bound. DMA offloads the address
+ * drive, not the data read -- a DMA read triggered by the E edge lands past
+ * t_DHR, and one triggered by Q's fall lands before t_DSR. Variant 3 still
+ * needs a polling loop for data, so T_iter <= 6 cycles still applies.
+ *
+ * It also requires the address to be known a full bus cycle ahead, which is
+ * true for instruction fetch runs, VMA cycles and stack operations but never
+ * for genuinely data-dependent cycles. So it measures a floor for part of the
+ * workload, not a replacement for variant 2.
+ *
+ * Call spike_dma_init() once before spike_run_dma(). Check dma_timeouts in the
+ * result before trusting anything else: a non-zero count means the DMA never
+ * fired, almost certainly one of the VERIFY constants in stm32g431.h. */
+void spike_dma_init(void);
+void spike_run_dma(uint32_t n_cycles, spike_result_t *out);
 
 /* Characterise the host's actual data-bus valid window (see README, "The data
  * sampling problem"). Samples GPIOA->IDR at a sweep of fixed offsets either

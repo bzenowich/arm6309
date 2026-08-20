@@ -11,6 +11,7 @@ set(ARM6309_SOURCES
     src/gpio.c
     src/stub_core.c
     src/spike_poll.c
+    src/spike_dma.c
     src/main.c)
 
 set(ARM6309_WARNINGS -Wall -Wextra -Wshadow -Wundef -Wconversion)

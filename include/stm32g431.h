@@ -165,6 +165,67 @@ typedef struct {
 #define TIM_CCMR1_CC1S_TI1 (1U << 0)
 #define TIM_CCMR1_CC2S_TI2 (1U << 8)
 
+/* -------------------------------------------------- DMA / DMAMUX / EXTI -- */
+/* Used only by variant 3 (src/spike_dma.c).
+ *
+ * WARNING: the bit positions and request-ID constants below were written
+ * without RM0440 to hand -- only DS12589 is in docs/. The peripheral base
+ * addresses and the DMA_CCR layout are standard across the family and are
+ * safe; the DMAMUX request IDs and request-generator field positions are the
+ * ones to check first if variant 3 reports dma_timeouts. Each is flagged at
+ * its definition. */
+
+typedef struct {
+    __IO uint32_t CCR;      /* 0x00 */
+    __IO uint32_t CNDTR;    /* 0x04 */
+    __IO uint32_t CPAR;     /* 0x08 */
+    __IO uint32_t CMAR;     /* 0x0C */
+    uint32_t      RESERVED; /* 0x10 */
+} DMA_Channel_TypeDef;
+
+/* DMA1 channel n (1-based) sits at 0x08 + 0x14*(n-1). */
+#define DMA1_CH(n) ((DMA_Channel_TypeDef *)(0x40020000UL + 0x08UL + 0x14UL * ((n) - 1U)))
+#define DMA1_ISR  (*(__IO uint32_t *)0x40020000UL)
+#define DMA1_IFCR (*(__IO uint32_t *)0x40020004UL)
+
+#define DMA_CCR_EN        (1U << 0)
+#define DMA_CCR_DIR_M2P   (1U << 4)   /* 1 = read from memory */
+#define DMA_CCR_CIRC      (1U << 5)
+#define DMA_CCR_PINC      (1U << 6)
+#define DMA_CCR_MINC      (1U << 7)
+#define DMA_CCR_PSIZE_32  (2U << 8)
+#define DMA_CCR_MSIZE_32  (2U << 10)
+#define DMA_CCR_PL_VHIGH  (3U << 12)
+
+/* DMAMUX1: channel config at +0x00, request generators at +0x100. */
+#define DMAMUX_CCR(x)  (*(__IO uint32_t *)(0x40020800UL + 4UL * (x)))
+#define DMAMUX_RGCR(x) (*(__IO uint32_t *)(0x40020800UL + 0x100UL + 4UL * (x)))
+
+/* VERIFY (RM0440 "DMAMUX: assignment of multiplexer inputs"): request IDs.
+ * req_gen0..3 are the low IDs; TIM1_CH1 is the one variant 3 uses by default. */
+#define DMAMUX_REQ_GEN0    1U
+#define DMAMUX_REQ_TIM1_CH1 42U       /* VERIFY */
+
+/* VERIFY (RM0440 DMAMUX_RGxCR): field positions. */
+#define DMAMUX_RGCR_SIG_ID_Pos  0
+#define DMAMUX_RGCR_GE          (1U << 16)
+#define DMAMUX_RGCR_GPOL_FALL   (2U << 17)
+
+#define RCC_AHB1ENR_DMA1EN    (1U << 0)
+#define RCC_AHB1ENR_DMAMUX1EN (1U << 2)
+#define RCC_APB2ENR_SYSCFGEN  (1U << 0)
+
+#define TIM_DIER_CC1DE (1U << 9)   /* CC1 event generates a DMA request */
+
+#define SYSCFG_EXTICR(i) (*(__IO uint32_t *)(0x40010000UL + 0x08UL + 4UL * (i)))
+
+#define EXTI_BASE  0x40010400UL
+#define EXTI_IMR1  (*(__IO uint32_t *)(EXTI_BASE + 0x00))
+#define EXTI_EMR1  (*(__IO uint32_t *)(EXTI_BASE + 0x04))
+#define EXTI_RTSR1 (*(__IO uint32_t *)(EXTI_BASE + 0x08))
+#define EXTI_FTSR1 (*(__IO uint32_t *)(EXTI_BASE + 0x0C))
+#define EXTI_PR1   (*(__IO uint32_t *)(EXTI_BASE + 0x14))
+
 /* ------------------------------------------------------------- DWT / SCB -- */
 
 #define DEMCR      (*(__IO uint32_t *)0xE000EDFCUL)

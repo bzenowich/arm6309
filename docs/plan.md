@@ -377,11 +377,23 @@ cycles typical, ~50–60 worst case. At 1.79 MHz there are 95 core cycles per bu
    it needs settling time, notably in indexed addressing. Where a VMA cycle sits between
    the last operand byte and the data access, the emulator inherits a full extra cycle.
    Quantify in Phase 3 rather than assuming.
-3. **Hardware-assisted edge response.** STM32G4's DMAMUX can trigger DMA from an EXTI line:
-   E-fall → EXTI → DMA writes a *precomputed* word to `GPIOB->ODR`, removing polling
-   jitter. Helps every cycle whose address does not depend on the immediately preceding
-   read. Does not rescue the data-dependent cycles that set the ceiling — so it is a
-   route to 3 MHz, not to 5.
+3. **Hardware-assisted address drive** (implemented as spike variant 3,
+   `src/spike_dma.c`). The E falling edge triggers a DMA transfer of a *precomputed*
+   word to `GPIOB->ODR`, with no CPU in the drive path.
+
+   Two limits, both important:
+
+   - **It does not help data sampling.** A DMA read triggered by the E edge lands past
+     `t_DHR` (10 ns); one triggered by Q's fall lands before `t_DSR` (40 ns). Neither is
+     sound, so a polling loop is still required for data and the `T_iter ≤ 6` bound
+     stands unchanged.
+   - **It needs the address a full bus cycle ahead.** True for instruction-fetch runs,
+     VMA cycles and stack operations; never for genuinely data-dependent cycles, which
+     must fall back to variant 2.
+
+   Whether this is worth building is an empirical question, and variant 3 exists to
+   answer it: triggered DMA on STM32 is commonly 10–25 core cycles, so it may well come
+   in **worse** than variant 2's ~13. That would be a useful negative result.
 4. **Overclock the G4.** Rated 170 MHz; many parts run 180–200. Buys ~15%. Not something
    to design around, and not needed for the CoCo 3.
 5. **Escape hatch: a faster MCU.** The core is portable C11 (§4.4), so an STM32H723 at
