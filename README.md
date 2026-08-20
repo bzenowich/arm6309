@@ -95,9 +95,23 @@ If the loop's iteration period is `T_iter`, then `s_prev` lands in
 > **`T_iter ≤ t_DSR` = 40 ns = 6.8 core cycles ⟹ `s_prev` is provably inside the
 > guaranteed valid window.**
 
-A tight M4 poll (`LDR`/`MOV`/`TST`/`BNE`) is ~5–6 cycles, so it fits — but only just.
-That makes measuring `T_iter` a first-class objective, not a nicety.
-**`g_result.lat_jitter`** (`lat_worst − lat_best`) estimates it directly: where the edge
+**This is why variant 2 exists.** The natural C loop needs a register copy to retain the
+previous sample, which costs 7 cycles per iteration — **over budget**, making its
+sampling unsound no matter how good its latency looks:
+
+```
+mov r7, r6      1     prev = cur
+ldr r6, [r0]    2     cur  = IDR
+tst r6, #E      1
+bne .-          3     taken branch, pipeline refill      = 7
+```
+
+`src/spike_poll_asm.S` unrolls by two and alternates destination registers, removing the
+copy and paying the taken branch once per two samples. Verified against the actual
+disassembly: **sample gaps of 4 and 6 cycles**, so `T_iter` worst case is 6 = 35.3 ns,
+inside the 40 ns bound with ~5 ns spare.
+
+**`lat_jitter`** (`lat_worst − lat_best`) measures `T_iter` on hardware: where the edge
 lands within the poll loop is the only term that varies between bus cycles.
 
 `spike_characterise_data_window()` remains useful as a cross-check — it measures how
@@ -160,9 +174,13 @@ Produces `build-arm/spike.elf`, `.bin`, `.hex` and a link map.
 ```gdb
 target extended-remote localhost:3333
 print/x g_run_complete          # expect 0x6309c0de
-print g_result
+print g_result_c                # variant 1, C
+print g_result_asm              # variant 2, assembly
 print g_data_window
 ```
+
+Variant 1 is expected to **fail** the `lat_jitter` ≤ 6 gate — that is the measurement,
+not a defect. Variant 2 is the one that should pass both gates.
 
 Key fields in `g_result`:
 
@@ -197,7 +215,8 @@ src/startup.c             vector table, .data/.ccmram copy, .bss zero
 src/clock.c               170 MHz via HSI16+PLL, incl. boost mode + AHB/2 gotchas
 src/gpio.c                pinout config, TIM1 input capture on E and Q
 src/stub_core.c           256-entry stub state table
-src/spike_poll.c          variant 1: polling loop (the measurement)
+src/spike_poll.c          variant 1: polling loop in C, plus the variant 2 wrapper
+src/spike_poll_asm.S      variant 2: hand-written Thumb-2 polling loop
 src/main.c                entry point; results land in globals for gdb
 linker/stm32g431cb.ld     128K flash / 22K SRAM / 10K CCM, with the .ccmram section
 test/test_stub_core.c     host unit test for the stub table
@@ -209,6 +228,7 @@ tools/stimulus/           requirements for the E/Q generator
 ## Phase 1 TODO
 
 - [x] Variant 1 — polling loop in C (predicted ceiling ~2 MHz)
+- [x] Variant 2 — hand-written assembly (`src/spike_poll_asm.S`), `T_iter` 4/6 cycles
 - [x] Confirm the CoCo 3 pin budget against the service manual (§2.6 — six signals freed)
 - [x] Verify `t_DSR` / `t_DHR` against the datasheet — 40 ns / 10 ns; deadline corrected
       from the quarter cycle to `t_AD` = 110 ns

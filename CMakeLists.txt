@@ -17,7 +17,9 @@ set(ARM6309_WARNINGS -Wall -Wextra -Wshadow -Wundef -Wconversion)
 
 if(CMAKE_CROSSCOMPILING)
     # ---------------------------------------------------------- firmware --
-    add_executable(spike ${ARM6309_SOURCES})
+    # The assembly variant is target-only; the host build syntax-checks the C
+    # sources and cannot assemble Thumb-2.
+    add_executable(spike ${ARM6309_SOURCES} src/spike_poll_asm.S)
     target_include_directories(spike PRIVATE include)
 
     target_compile_options(spike PRIVATE

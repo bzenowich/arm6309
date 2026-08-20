@@ -113,6 +113,62 @@ __hot void spike_run_poll(uint32_t n_cycles, spike_result_t *out)
     }
 }
 
+/* ------------------------------------------------------------ variant 2 -- */
+/* Wrapper around the hand-written assembly loop in spike_poll_asm.S.
+ *
+ * The assembly keeps only what it must maintain per bus cycle -- the latency
+ * histogram, the overcapture count and the E period range. Everything else is
+ * derivable from the histogram, so it is computed here where it is legible
+ * rather than in assembly where it would cost slack cycles and clarity. */
+
+#if defined(__arm__)
+
+uint32_t spike_run_poll_asm_raw(uint32_t n_cycles,
+                                uint32_t *hist,
+                                uint16_t *period_out);
+
+static __ccmbss uint32_t s_hist_asm[SPIKE_HIST_BINS];
+
+void spike_run_poll_asm(uint32_t n_cycles, spike_result_t *out)
+{
+    uint16_t period[2] = { 0xFFFFU, 0U };
+
+    for (uint32_t i = 0; i < SPIKE_HIST_BINS; i++) {
+        s_hist_asm[i] = 0;
+    }
+
+    out->overruns = spike_run_poll_asm_raw(n_cycles, s_hist_asm, period);
+
+    out->cycles_run      = n_cycles;
+    out->period_min      = period[0];
+    out->period_max      = period[1];
+    out->deadline_misses = 0;
+    out->hold_violations = 0;
+    out->lat_sum         = 0;
+    out->lat_best        = 0xFFFFU;
+    out->lat_worst       = 0;
+
+    for (uint32_t bin = 0; bin < SPIKE_HIST_BINS; bin++) {
+        uint32_t n = s_hist_asm[bin];
+        out->hist[bin] = n;
+        if (n == 0U) {
+            continue;
+        }
+        if (bin > SPIKE_TAD_CYCLES) out->deadline_misses += n;
+        if (bin < SPIKE_TAH_CYCLES) out->hold_violations += n;
+        out->lat_sum += (uint64_t)n * bin;
+        if (bin < out->lat_best)  out->lat_best  = (uint16_t)bin;
+        if (bin > out->lat_worst) out->lat_worst = (uint16_t)bin;
+    }
+
+    /* The top bin saturates, so a non-zero count there means "at least 63",
+     * not exactly 63. That is far past any deadline, so it is a failure
+     * either way -- but do not read lat_worst as exact in that case. */
+    out->lat_jitter = (uint16_t)(out->lat_worst - out->lat_best);
+}
+
+#endif /* __arm__ */
+
 /* Map how long the data bus stays valid after E falls.
  *
  * Reference sample is taken mid-E-high, where data is valid on any sane host.

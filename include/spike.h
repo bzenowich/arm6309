@@ -76,8 +76,17 @@ typedef struct {
  * Call with interrupts disabled; any ISR taken mid-loop lands in the latency. */
 void spike_run_poll(uint32_t n_cycles, spike_result_t *out);
 
-/* Variant 2: same loop hand-written in assembly. Predicted ~2.5 MHz.
- * TODO(phase1): implement once variant 1 has a measured baseline to beat. */
+/* Variant 2: the same loop hand-written in assembly (src/spike_poll_asm.S).
+ *
+ * Not merely an optimisation. The C loop needs a register copy to keep the
+ * previous sample, which pushes its iteration to ~7 core cycles -- over the
+ * 6.8-cycle t_DSR bound, making its data sampling unsound however good its
+ * latency looks. The assembly unrolls by two and alternates destination
+ * registers, giving sample gaps of 4 and 6 cycles. Variant 1 is the baseline;
+ * this is the one expected to be correct.
+ *
+ * Same contract as spike_run_poll(). Call with interrupts disabled. */
+void spike_run_poll_asm(uint32_t n_cycles, spike_result_t *out);
 
 /* Variant 3: EXTI + DMAMUX + DMA store of a precomputed address, removing
  * polling jitter from cycles whose address does not depend on the preceding

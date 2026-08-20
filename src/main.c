@@ -16,7 +16,8 @@ void stub_core_init(void);
 #define SPIKE_CYCLES 1000000U
 
 /* Read these from gdb. Volatile so the optimiser cannot discard the stores. */
-volatile spike_result_t g_result;
+volatile spike_result_t g_result_c;    /* variant 1: polling loop in C       */
+volatile spike_result_t g_result_asm;  /* variant 2: hand-written assembly   */
 volatile uint32_t       g_data_window[SPIKE_HIST_BINS];
 volatile uint32_t       g_run_complete;
 
@@ -37,9 +38,18 @@ int main(void)
     spike_characterise_data_window(1000U, (uint32_t *)g_data_window);
 
     spike_result_t r;
-    spike_run_poll(SPIKE_CYCLES, &r);
 
-    g_result       = r;
+    /* Variant 1: the C baseline. Expected to FAIL the t_DSR bound
+     * (lat_jitter > 6) because its loop needs a register copy -- that is the
+     * result, not a bug. */
+    spike_run_poll(SPIKE_CYCLES, &r);
+    g_result_c = r;
+
+    /* Variant 2: hand-written assembly. This is the one that should pass
+     * both gates -- lat_worst <= 18 and lat_jitter <= 6. */
+    spike_run_poll_asm(SPIKE_CYCLES, &r);
+    g_result_asm = r;
+
     g_run_complete = 0x6309C0DEU;
 
     __asm__ volatile("cpsie i" ::: "memory");
