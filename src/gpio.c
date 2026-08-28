@@ -84,7 +84,7 @@ void gpio_init(void)
 }
 
 /* TIM1 as the measurement timebase: 170 MHz, free-running 16-bit, with input
- * capture on E (CH1, falling) and Q (CH2, rising). One tick == one core cycle,
+ * capture on E (CH1, falling) and Q (CH2, falling). One tick == one core cycle,
  * so latencies read directly in core cycles. */
 void tim1_capture_init(void)
 {
