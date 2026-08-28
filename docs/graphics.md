@@ -401,6 +401,174 @@ above is the reason to prefer the in-CPU version.
 
 ---
 
+### 6.4 Tile and character modes — nearly free, because of three accidents
+
+Neither colormin document has a tile mode, and §7 argues against a hardware
+character generator on cost grounds. That argument was about a *bitmap-only* card.
+Once the question is asked directly, three things already on this card — each built
+for another reason — turn out to be most of a tile fetcher:
+
+1. **The palette LUT is 32K×8 ×2 and uses 256 entries.** §14 buys 65,536 bytes to
+   hold a 256 × 16-bit palette. **127/128 of the address space is dead**, with the
+   high pins tied off.
+2. **The geometry is all powers of two.** The no-adder property that §7.2 works to
+   preserve is exactly what makes a tile address free.
+3. **GAL22V10 outputs are individually tri-stateable**, and the scan address
+   generators (§14) are already loadable counters in GALs.
+
+#### 6.4.1 The tile address is concatenation, not arithmetic
+
+A tile lookup is `base + code × size + row`. With an aligned tile set every term
+lands on its own address bits, so **there is no adder** — the same property
+minimal256.md §3 establishes for the scan path and §7.2 protects for `WADV`:
+
+```
+8bpp tiles, 8x8 (64 B each), 256 tiles = 16 KB, aligned to 16 KB:
+
+  A18..A14   TILEBASE     (register)
+  A13..A6    code[7:0]    <- the map byte just fetched
+  A5..A3     row[2:0]     <- scan line within the cell
+  A2..A0     col[2:0]     <- pixel within the row
+
+1bpp glyphs, 8 B each, 256 glyphs = 2 KB, aligned to 2 KB:
+
+  A18..A11   FONTBASE
+  A10..A3    code[7:0]
+  A2..A0     row[2:0]
+```
+
+The only new element in the datapath is **getting the map byte from the pixel bus
+onto the VRAM address bus** — one 3-state `'574`, or **zero packages** if it can be
+absorbed into the scan-address GAL as registered macrocells. Each address bit is
+then a two-product-term mode mux, so product terms are not the constraint; **spare
+GAL pins are**. Settle that at fit time (§19 item 15).
+
+Both variants below need the map fetch **pipelined one cell ahead** of the tile
+fetch — a serial dependency, and the same shape of pipelining the card already runs
+for index → LUT → output.
+
+#### 6.4.2 Variant A — 8bpp tilemap
+
+Per cell: fetch the map byte, then the 8 tile bytes for this row. **The pixel path
+downstream is unchanged** — the bytes flow through the `'153` mux, the index latch,
+the LUT and the output latch exactly as bitmap bytes do.
+
+| | Bitmap | **8bpp tilemap** |
+|---|---|---|
+| Screen memory | 128,000 B | **2,000 B** + 16 KB tile set |
+| CPU writes to change one cell | 64 | **1** |
+| Display fetch per 8 dots | 8 accesses | 9 accesses |
+| Per-chip load per cell (4.4 available) | 2.0 | **2.25** ⚠ |
+| Colours | 256, per pixel | **256, per pixel — no attribute clash** |
+
+It costs the same display bandwidth as the bitmap and buys **64:1 write
+compression**, which is the right trade on a machine whose documented bottleneck is
+the CPU and not bandwidth (§2.1). It also costs the span writer and blitter a little
+of their spare-slot budget: 2.25 accesses per chip per cell against 2.0, so the
+free-access figure in §2.1 falls by roughly an eighth in this mode.
+
+**A chunky 8bpp tilemap with no per-cell colour limit is not a mode any period
+machine had** — the GIME's and VIC-II's tile/character modes are both 1bpp with
+cell attributes. This one is strictly a superset.
+
+**Cost: +1 IC, possibly 0.**
+
+#### 6.4.3 Variant B — 1bpp character generator, and what the dead LUT space buys
+
+Per cell: fetch code, attribute, and one font row — **3 accesses per 8 dots against
+the bitmap's 8**. The font byte goes to a serialiser; its output bit plus the
+attribute chooses the colour.
+
+Here the unused 127/128 of the LUT pays for the whole colour path. Address it as
+`{page, attr[7:0], glyph_bit}` — 10 bits, well inside the 15 available:
+
+```
+graphics :  LUT[ 0 | 0000000 | pixel[7:0] ]        -> RGB565
+text     :  LUT[ 1 | 000000  | attr[7:0] | bit ]   -> RGB565
+```
+
+The attribute byte rides the existing pixel bus into the existing index latch; the
+glyph bit goes straight to a spare LUT address pin. The page select is one `CTRL`
+bit (b5 is reserved in §13). **No comparator, no fg/bg mux, no second colour path.**
+
+What that yields, against the chip this card is replacing:
+
+| | GIME text | **Variant B** |
+|---|---|---|
+| Attribute combinations | 8 fg × 8 bg | **256, freely defined** |
+| Colour space per attribute | 64 | **65,536** |
+| Foreground and background | palette entries 0–7 | **any RGB565 pair** |
+| Blink / underline | in hardware | in the attribute table, or not at all |
+| Bandwidth per line | 160 B | **240 accesses** (code + attr + font) |
+
+240 accesses per line against the bitmap's 640 hands roughly **400 accesses per
+line — ~160,000 per frame ⚠** back to the span writer and the blitter.
+
+**Cost: +1 IC (the serialiser) — or 0, see below.**
+
+#### 6.4.4 The span-mask serialiser is shareable
+
+The card already carries a `74HC165` to serialise span masks (§14). **The span
+writer is idle in character mode** — software writes code and attribute bytes
+directly, and a span-mask write into a tilemap is meaningless — so the two uses are
+mutually exclusive by mode and the part can be shared, with a mode input choosing
+its load source and clock.
+
+**One requirement:** glyph duty shifts at the 25.175 MHz dot rate, so the part must
+be **`74AHC165`**, not `'HC`. That is a grade change on a part already in the BOM.
+
+#### 6.4.5 What it costs, and what it defers
+
+The ICs are not the price. The price is programmable logic, in the two places §19
+item 8 already flags:
+
+- The **sequencer pair** gains a second fetch cadence with a serial dependency.
+- The **scan-address pair** must switch between a linear scan address and the
+  concatenated tile address, and tri-state its low outputs during the tile fetch.
+
+**Budget +1 to +2 GAL22V10** — 38–40 packages against Rev A's 36 — and fit both
+pairs before committing. This is the item most likely to fail (§19 item 15).
+
+Against that, two things get cheaper:
+
+- **The blit datapath's 14 ICs become much easier to defer** (§10.3). A tilemap
+  redraws itself from the map every frame at zero CPU and zero blit cost, so
+  scrolling playfields, backgrounds and status bars stop being blitter work. What
+  is left for the blitter is *moving objects*, which is what §10.3 says it is for.
+- **Text stops being the span writer's problem.** §7.3's figures, recomputed at
+  2 writes per cell (⚠ same 5-cycles-per-store assumption as §7.3, §19 item 1):
+
+| Text operation | Span writer (§7.3) | Character mode |
+|---|---|---|
+| One cell | 13 writes, ~31 µs | **2 writes, ~4.8 µs** |
+| Scroll one line | ~2.5 ms | **~0.4 ms** |
+| Full 80×25 redraw, per-cell colour | ~62 ms | **~9.5 ms** |
+
+#### 6.4.6 Three limits, stated plainly
+
+1. **The mode is global** — cells or pixels, not both in one region. But `CTRL` is a
+   register, so a list-engine `MOVE` at a scanline boundary switches mid-frame: a
+   text status bar over a bitmap playfield, from the display list, with no CPU
+   involvement (§10.3). The copper earns its keep again.
+2. **Fine horizontal scroll must start the tile fetch mid-tile** — a 3-bit offset
+   into the tile row, which is new logic in the address concatenation rather than
+   the free `HSCROLL` of §8.
+3. **Variant B lands on the tightest path in the card.** §6.1 gives the
+   index → LUT → output chain 11.7 ns of margin at 39.7 ns; the serialiser's
+   clock-to-Q goes into that chain. It belongs on the bench list beside the
+   pixel-bus turnaround (§19 items 2, 3, 17).
+
+**Register space:** `TILEBASE` / `FONTBASE` and the map base fit in `+$17`–`+$19`,
+reserved in §13.
+
+#### 6.4.7 Recommendation
+
+**Build Variant A.** +1 IC and 1–2 GALs, every pixel independently coloured, 64:1
+write compression on exactly the workload the CPU is worst at, and no change to the
+pixel path at all. Variant B is a further +0–1 IC and is worth it for a genuinely
+cheap 80×25 console — but note that it reintroduces per-cell colour limits, which is
+the one thing this card currently does not have and both period chips do.
+
 ## 7. 80×25 text — software glyphs, and a correction to colormin's cost
 
 There is no hardware text mode in either design, and there should not be one here
@@ -765,7 +933,7 @@ tables are shared between both projects.
 | `+$14` | `WADV` | b1..0 | pointer advance: 00 continue, **01 next row same column** (§7.2), 10 vertical (advance by stride) | **new** |
 | `+$15` | `VDATA` | b7..0 | **read or write** VRAM byte at `WPTR`, post-increment | **new** (§11) |
 | `+$16` | `BORDER` | b7..0 | border/overscan palette index | **new** |
-| `+$17`–`$1F` | — | | reserved (`WPTR` column shadow, §7.2, is written implicitly) | |
+| `+$17`–`$1F` | — | | reserved (`TILEBASE`/`FONTBASE` and map base, §6.4; `WPTR` column shadow, §7.2, is written implicitly) | |
 
 **`BANK` is gone** (§6.3). **`MODE` is gone** — there is no stock mode to select;
 `VMODE` chooses among native modes only. Reset forces `CTRL = 0`: display
@@ -959,7 +1127,7 @@ unchanged from minimal256.md §11 and are not restated in full.
 8. **GAL fit**, now heavier in two places: the sequencer pair carries static slot
    assignment, raster compare and register-file addressing; the `WPTR` pair carries
    the `WADV` modes of §7.2. **carried, and heavier.** Fit both pairs before
-   committing to 8 GALs.
+   committing to 8 GALs — and see item 15 before committing to 8 at all.
 9. **`74HC593` availability** (§9). **carried.**
 10. **Measure card current** with seven SRAMs and eight GALs, and price the
     low-power GAL family (§10.1). **carried.**
@@ -976,6 +1144,21 @@ unchanged from minimal256.md §11 and are not restated in full.
     retargeted to an 8bpp chunky bitmap with a span writer, versus rewritten? This
     is the largest unestimated piece of work in the whole project and it is
     software, not hardware.
+15. **Tile-mode GAL fit — the gating item for §6.4.** Three questions, in order of
+    risk: (a) are there **spare input pins** on the scan-address pair to take the
+    map byte, or does it cost a `'574`; (b) can those GALs tri-state their low
+    outputs during the tile fetch and switch between linear and concatenated
+    addressing; (c) does the sequencer pair hold a second fetch cadence on top of
+    what item 8 already lists. Product terms are not expected to be the constraint
+    — pins and macrocell count are. **Fit this before freezing the BOM at 8 GALs.**
+16. **Decide the tile fetch's fine-scroll behaviour** (§6.4.6). Sub-cell horizontal
+    scroll needs a 3-bit offset applied to the tile-row address, which is new logic
+    rather than the free `HSCROLL` of §8. Either implement it or document tile mode
+    as cell-granular horizontally.
+17. **Bench the serialiser in the LUT address path** if Variant B is built (§6.4.3).
+    The glyph bit reaches a LUT address pin through a `74AHC165` clock-to-Q, inside
+    the 11.7 ns margin item 3 is already measuring. `'HC` grade will not shift at
+    25.175 MHz; confirm `'AHC` does, in circuit.
 
 ---
 
