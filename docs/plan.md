@@ -177,6 +177,54 @@ Three further facts from the same source, all load-bearing:
   by the ACVC chip so that the addresses are available to the memory only during the
   active E time. This presents no problem as long as the memory is sufficiently fast."
 
+### 2.6.1 The Dragon 64 leaves the same six signals unused — second LQFP48 target
+
+Read off `docs/Dragon64-schematic.tiff`, sheet 1 of 3, "C.P.U. 64K (PAL)", drawing
+CD 4180S, IC38 `6809EP`:
+
+| Pin | Signal | Dragon 64 connection |
+|---|---|---|
+| 5 | `BS` | **NC** — bare stub, no net label |
+| 6 | `BA` | **NC** |
+| 33 | `BUSY` | **NC** |
+| 36 | `AVMA` | **NC** |
+| 38 | `/LIC` | **NC** |
+| 39 | `TSC` | **tied to 0V** |
+
+**That is the same six-signal set as the CoCo 3, exactly.** The five outputs are drawn as
+short unterminated stubs grouped on the left edge of the symbol; `TSC` runs to an explicit
+ground symbol.
+
+Everything else is wired as §3.2 budgets it:
+
+| Pin | Signal | Connection |
+|---|---|---|
+| 34, 35 | `E`, `Q` | from IC39, a **`74LS783` SAM** — the CoCo 1/2 arrangement, not a GIME |
+| 37 | `/RESET` | `RESET` net via the D19 `1N914` / D20 `1N3592` network |
+| 2, 3, 4, 40 | `/NMI`, `/IRQ`, `/FIRQ`, `/HALT` | all four are labelled buses reaching the PIAs and the cartridge port |
+| 32 | `R/W` | bus |
+| 8–23 | `A0..A15` | bus |
+| 24–31 | `D7..D0` | bus |
+
+**Consequence: the Dragon 64 needs the same 33 pins as the CoCo 3, so the LQFP48 part
+covers both targets with no change to the pin budget or the pinout.** `BUS_OE` still earns
+its pin — `/HALT` is a bus here too, reaching the cartridge port, so the DMA-release path
+of §2.2 applies unchanged.
+
+Three items to close before calling the Dragon 64 supported. None of them is pin count:
+
+- **`t_AD` comes from the `74LS783`, not a GIME.** The 110 ns figure used throughout §3.3
+  is a CoCo 3 number. The Dragon's address-setup requirement is set by the SAM's DRAM
+  multiplexer at a nominal ~0.89 MHz with no CoCo 3-style 1.79 MHz mode, so the deadline
+  should be *looser* — but take the number off the `74LS783` datasheet rather than
+  assuming it.
+- **Data-bus buffering not traced.** The CoCo 3 gives us IC3, a `74LS245`, between the
+  socket and the machine (§2.6), which is what puts 3.3 V drive in spec. The Dragon sheet
+  has a `74LS244` at IC25, but that is an address buffer; whether anything buffers the CPU
+  data bus is unresolved. Until it is, assume **unbuffered** and re-run the §3.5 drive
+  analysis against whatever the data bus actually loads.
+- **Socketed or soldered** — the schematic cannot say. Same §2.7 caveat as the CoCo 3.
+
 ### 2.7 Mechanical
 
 - 40-pin DIP footprint, socket-compatible.

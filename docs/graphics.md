@@ -378,7 +378,7 @@ Why in the CPU rather than as three chips on the motherboard:
 **Two consequences to plan for:**
 
 1. **Use the LQFP64 part for the homebrew CPU card.** plan.md §3.2 closes LQFP48
-   at 38 of 39 pins for the CoCo 3 — there is no room for A16–A19 plus an HSYNC
+   at 35 of 39 pins for the CoCo 3 — there is no room for A16–A19 plus an HSYNC
    input (§12). The homebrew module is not a 40-pin DIP, so the package
    constraint does not apply: **STM32G431RB / G474RE, LQFP64, same core, same
    170 MHz, same source.** Keep the LQFP48 build for the CoCo 3 drop-in.

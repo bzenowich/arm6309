@@ -13,3 +13,6 @@ compile_commands.json
 # ~26 MB of scans and are freely available from colorcomputerarchive.com.
 # docs/plan.md cites them by name and page where it relies on them.
 docs/*.pdf
+
+# Reference schematics (scans). Same policy as the PDFs above.
+docs/*.tiff
