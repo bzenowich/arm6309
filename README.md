@@ -6,6 +6,16 @@ native mode.
 
 Full analysis, pinout rationale, timing budgets and phase plan: **[`docs/plan.md`](docs/plan.md)**.
 
+> ⚠ **This README's timing numbers are superseded (2026-08-27).** They were derived from
+> `docs/MC6809E.pdf`, whose columns stop at the 2 MHz MC68B09E. The real
+> HD63B09E/HD63C09E figures are now in `docs/HD6309E_datasheet.pdf` and analysed in
+> [`docs/plan.md`](docs/plan.md) §3.3. Two things changed that matter here:
+> **`t_AD` is 110 ns at *both* speed grades** (the address deadline does not tighten at
+> 3 MHz), and **`t_DSR` halves to 20 ns at 3 MHz** (3.4 core cycles), which puts read-data
+> sampling below the floor for *any* software polling loop on this part. The fix is an
+> external 74LVC574 latch — `plan.md` §3.6. Sections below that quote `t_DSR` = 40 ns,
+> `t_DHR` = 10 ns or a `T_iter ≤ 6` gate are correct **only for the 1.79 MHz target**.
+
 **Current state: Phase 1 — the timing spike.** No 6309 emulation exists yet, by design.
 Phase 1 answers the one question that can invalidate the project before any core is
 written: *after the host drops E, can we get the next address onto the bus inside a
@@ -161,7 +171,7 @@ ctest --test-dir build-host --output-on-failure
 
 ### Firmware
 
-Needs `arm-none-eabi-gcc` (**not currently installed in this environment**):
+Needs `arm-none-eabi-gcc` (13.2.1 verified; `build-arm/spike.elf` links at 3,968 B text):
 
 ```sh
 # Debian/Ubuntu
@@ -297,7 +307,11 @@ tools/stimulus/           requirements for the E/Q generator
 - [ ] Debug console on `USART3` (`PC10`/`PC11`), so results don't need a debugger
 - [ ] Variant 2 — hand-written assembly (predicted ~2.5 MHz)
 - [ ] Variant 3 — EXTI + DMAMUX + DMA precomputed store (predicted ~3–3.5 MHz)
-- [ ] Variant 4 — overclock to 180–200 MHz
+- [x] ~~Variant 4 — overclock to 180–200 MHz~~ — **dropped.** Core clock committed at
+      170 MHz, in spec; see `docs/plan.md` §3.4(4). It moved no gate from fail to pass,
+      and 344 MHz is the PLL VCO ceiling (any SYSCLK > 172 MHz overclocks the PLL too).
+- [ ] Variant 5 — straight-line unrolled poll, uniform `T_iter` = 4 (`plan.md` §3.3(c))
+- [ ] Variant 6 — external 74LVC574 read-data latch (`plan.md` §3.6) — decides 3 MHz
 - [ ] Build the stimulus generator
 - [ ] First silicon measurement; record actuals against predictions in `docs/plan.md` §5
 
