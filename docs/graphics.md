@@ -1048,30 +1048,57 @@ any other 6809 homebrew.
 ## 17. Backplane and the sound card
 
 Brief, because it is not the video question — but the backplane spec has to be
-frozen before the video card is laid out, and the DOC card is the other consumer.
+frozen before the video card is laid out, and the sound card is the other consumer.
 
-- **Adopt backplane.md's slot model**, retargeted: geographic `/IOSEL` per slot
-  decoded from the `$FF60`–`$FF7F` region, `/WAIT` open-drain (now meaning "stretch
-  E"), `/IRQ` **and** `/FIRQ` open-drain (backplane.md reserves only `/IRQ`;
-  NitrOS-9 uses both, and the DOC wants one of its own), `/NMI`, `/RESET`.
+> **The sound card now has its own document: [`audio.md`](audio.md)** — a
+> 4-channel PCM card modelled on the Amiga's Paula, ~35 ICs, whose acceptance
+> test is playing existing OCS tracker modules unmodified. **It supersedes this
+> section's Ensoniq 5503 DOC assumption**; the bullets below are updated to what
+> that design actually asks of the backplane.
+
+- **Adopt backplane.md's slot model**, retargeted: geographic `/IOSEL` per slot,
+  `/WAIT` open-drain (now meaning "stretch E"), `/IRQ` **and** `/FIRQ` open-drain
+  (backplane.md reserves only `/IRQ`; NitrOS-9 uses both, and audio wants one of
+  its own), `/NMI`, `/RESET`.
+- **The geographic decode spans `$FF40`–`$FF7F`, not just `$FF60`–`$FF7F`.**
+  Video takes `$FF60`–`$FF7F` (§13); [`audio.md`](audio.md) §9.1 proposes
+  `$FF40`–`$FF4F`, leaving `$FF50`–`$FF5F` for a disk controller. Widen the window
+  now — it is a decode term today and a board respin later.
+- **`/FIRQ` belongs to audio, and to audio alone.** [`audio.md`](audio.md) §8.1
+  takes it as the sole source, so there is no polling chain: video's VBL and
+  raster compare stay on `/IRQ` (§12), and a replayer tick gets the cheap
+  6809 interrupt it should have. Record the ownership in the backplane spec
+  rather than leaving it to first-come.
 - **Carry E, Q, `R/W` and the 25.175 MHz master** rather than `16M`/`8M`/`/MRD`/`/MWR`.
   Cards derive their own strobes; the master lets any card phase-lock to video.
 - **Carry physical A0–A18 plus A19**, not just logical A0–A15 — the video card
-  needs them (§6.3), and so will any future memory card.
-- **Audio: make it stereo.** backplane.md has one mono `AUDIO` summing node. The
-  5503 DOC is a stereo part in every machine that mattered (the IIgs's stereo
-  cards demultiplexed its 8 oscillator outputs); mono would be a permanent
-  regret for one extra pin and one extra ground.
-- **The DOC card is an MCU card, and that is fine.** A 5503 emulation is 32
-  oscillators at ~26 kHz output = ~840,000 oscillator updates/s, which is ~200
-  core cycles per update on a 170 MHz G4 — comfortable. A G474RE has 128 KB of
-  SRAM, enough to hold the DOC's 64 KB wave RAM internally, so **the card needs no
-  bus bandwidth at all**: the host writes through an address/data register pair,
-  exactly as the real part works. Its bus footprint is a 16-byte I/O window, an
-  IRQ line, and two audio pins.
-- **Do not put the DOC's wave RAM in the video card's VRAM.** It is tempting
-  (512 KB is a lot of memory) and it would couple two subsystems that have no
-  reason to be coupled, on the one bus resource that is already scheduled.
+  needs them (§6.3), and so will any future memory card. The sound card does not:
+  its whole bus footprint is a 16-byte I/O window and `/FIRQ`.
+- **Audio: make it stereo, and the reason is now load-bearing rather than
+  aesthetic.** backplane.md has one mono `AUDIO` summing node. Paula's channels
+  are **hard-panned — 0 and 3 left, 1 and 2 right — and modules are mixed for it**
+  ([`audio.md`](audio.md) §1, requirement 5). Summing them to mono does not make a
+  mod quieter, it makes it *wrong*. Two pins and two grounds.
+- **§5's one-master-clock rule has exactly one exception, and it is this card.**
+  Video arbitration needs phase-locking; audio shares memory with nothing, so it
+  carries its own **28.37516 MHz** can — the Amiga PAL master, from which the
+  period reference every module is tuned against divides exactly.
+  25.175 MHz has no integral relationship to it ([`audio.md`](audio.md) §4.1), and
+  no amount of wanting one will produce it.
+- **The sound card needs no `/WAIT`.** Its reads are prefetched on the index write
+  ([`audio.md`](audio.md) §9.3, copying §11's `VDATA` trick), and its posted-write
+  path retires at 3.55 M/s against a `TFM`-paced 700 k/s. It is the only card in
+  the machine that never stalls the CPU.
+- **Do not put sample data in the video card's VRAM.** It is tempting (512 KB is a
+  lot of memory) and it would couple two subsystems that have no reason to be
+  coupled, on the one bus resource that is already scheduled. This bullet survives
+  the change of sound chip unchanged, and [`audio.md`](audio.md) §5 cites it.
+- **The MCU sound card is not dead, it is demoted to a bring-up vehicle.** An
+  STM32G431 carrying [`audio.md`](audio.md) §9's register map does the whole job in
+  ~6–8 ICs, and building it *first* lets the loader, replayer and converter be
+  written and the acceptance test run before a single GAL is fitted — the same A/B
+  lever §16.1 gives for the video card. It is the reference the discrete card must
+  match, not the product ([`audio.md`](audio.md) §12.5).
 
 ---
 
@@ -1082,7 +1109,7 @@ measured before anything depends on them.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | **Freeze the machine spec** — bus signals, `$FF` map, MMU register set, E/Q divider | one document; §19's items 1–4 answered |
+| 0 | **Freeze the machine spec** — bus signals, `$FF` map (video `$FF60`–`$FF7F`, audio `$FF40`–`$FF4F`), `/FIRQ` ownership, MMU register set, E/Q divider | one document; §19's items 1–4 answered |
 | 1 | **Bench the dot path on a breadboard**: 4-way fetch → pixel mux → index latch → LUT → ladders at 25.175 MHz, driven by counters, no CPU | stable 640×400@70 colour bars on the target monitor; DNL measured across all 64 green codes |
 | 2 | **Sync + scan address GALs**; fit the sequencer pair **first** (minimal256.md §11 item 11) | equations fit with the raster-compare and static-slot terms in place |
 | 3 | **Card rev A**, driven by the STM32 bus exerciser (§16.1) — no 6309 core needed | registers read back; palette loads; framebuffer scans; `VSCROLL`/`HSCROLL` smooth in both axes |
