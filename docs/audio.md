@@ -43,11 +43,11 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 | **What is the period reference clock?** | **3.546895 MHz — the Amiga PAL colour clock**, from a 28.37516 MHz crystal ÷8. Non-negotiable. | §4.1 |
 | **How is volume applied?** | **A 32K×8 lookup table**, `{curve, VOL[5:0], SAMP[7:0]} → 12-bit signed`. Same trick as the palette LUT. | §6.1 |
 | **How are channels summed?** | **Combinatorially, asynchronously** — exactly as Paula sums four analogue currents. No output sample rate, no resampling, no jitter. | §6.2 |
-| **What DAC?** | **2 × AD7545** (12-bit parallel MDAC with input latches, 1983). Not a serial audio DAC — §6.3. | §6.3 |
+| **What DAC?** | **2 × LTC7545A** — 12-bit parallel MDAC with an input latch, the current-production `AD7545A` pin-compatible. Not a serial audio DAC — §6.3. | §6.3 |
 | **Do we need the Amiga filter?** | **Yes, and not for nostalgia.** It is the reconstruction filter for channels running below ~16 kHz. Both filters, switchable. | §7 |
-| **Where does mod tempo come from?** | **An on-card 16-bit timer clocked at colourclock/2**, so `Fxx` BPM values are CIA-B-identical. Costs one slot, zero ICs. | §8.2 |
+| **Where does mod tempo come from?** | **An on-card 16-bit timer clocked at colourclock/5 = 709.379 kHz — the Amiga's CIA clock exactly**, so `Fxx` BPM values are CIA-B-identical. Costs one slot, zero ICs. | §8.2 |
 | **Which interrupt line?** | **`/FIRQ`.** Video's VBL owns `/IRQ`. A 6809 `FIRQ` is what a replayer tick should be. | §8.1 |
-| **What does mod playback cost the 6309?** | **~3% of a 2.098 MHz CPU** for the replayer; **~187 ms once** to upload 128 KB of samples via `TFM X+,Y`. | §13 |
+| **What does mod playback cost the 6309?** | **~2.7 % of a 2.098 MHz CPU** for the replayer, with a 19× worst-case margin; **~187 ms once** to upload 128 KB of samples via `TFM X+,Y`. | §13, [`modplayer.md`](modplayer.md) §7 |
 | **What does this card do that Paula cannot?** | No minimum period; per-channel panning (+2 ICs); 8 channels at half period resolution; a programmable volume curve. | §11 |
 
 **Net: 35 ICs**, against the video card's 36. One oscillator, one clock domain,
@@ -76,7 +76,7 @@ is that *all nine* are load-bearing.
 | 6 | **`DMACON` set/clear semantics with the restart delay** | Enabling a channel reloads the pointer from `LC` and the counter from `LEN`, and the first fetch lands one sample period later. Note retriggering depends on it. | sequencer terms |
 | 7 | **Per-channel end-of-buffer interrupt** | Not used by classic ProTracker (which relies on #3), but used by later players and by anything doing streaming. | §8.1 |
 | 8 | **Direct `AUDxDAT` writes** (CPU-fed, no DMA) | The one-shot idiom in several players, and the only way to do software mixing. | one state-file byte |
-| 9 | **`Fxx` tempo mapping identical to CIA-B timer A** | `Fxx` ≥ `$20` sets BPM; the Amiga computes a CIA reload from a 1.7734475 MHz clock. Ticking at the wrong rate makes every song play at the wrong speed. | §8.2 |
+| 9 | **`Fxx` tempo mapping identical to CIA-B timer A** | `Fxx` ≥ `$20` sets BPM; the replayer loads a CIA reload of `1773447 / BPM` against a **709,379 Hz** clock. Ticking at the wrong rate makes every song play at the wrong speed. | §8.2 |
 
 **What is *not* required, and this is the useful half of the specification:**
 
@@ -135,7 +135,7 @@ One 28.37516 MHz oscillator (the Amiga PAL master crystal) drives everything:
 28.37516 MHz  ──┬──► slot clock, 8 slots per colour clock, 35.24 ns each
                 │
                 └──► ÷8 ──► 3.546895 MHz colour clock   (the period reference)
-                     ÷16 ─► 1.773448 MHz                (the CIA-B tempo reference)
+                     ÷40 ─► 709.379 kHz                 (the CIA-B tempo reference)
 ```
 
 Each colour clock is one **frame** of 8 slots:
@@ -410,8 +410,8 @@ to, because it can do what Paula does:
 ```
   4 x 12-bit scaled values, held in the accumulators (slots 0-3)
         |
-        +--> L = ch0 + ch3   (13 bits)  --> AD7545 --> I/V --> filter --> line out L
-        +--> R = ch1 + ch2   (13 bits)  --> AD7545 --> I/V --> filter --> line out R
+        +--> L = ch0 + ch3   (13 bits)  --> LTC7545A --> I/V --> filter --> line out L
+        +--> R = ch1 + ch2   (13 bits)  --> LTC7545A --> I/V --> filter --> line out R
 ```
 
 The accumulator latches update at the end of each colour-clock frame, so the DAC
@@ -445,12 +445,22 @@ against a 31.9 µs sample period: **16 % jitter on individual sample boundaries.
 That is audible as a change in timbre on the high notes, and it is exactly the
 artefact that separates a good mod player from a great one.
 
-**Use a parallel multiplying DAC with input latches: `AD7545` (Analog Devices,
-1983, 12-bit, on-chip data latch, ~1 µs settling with a fast op-amp).** Two of
-them, one per side. The latch replaces the output `'574`s, so the parallel part
+**Use a parallel multiplying DAC with an input latch: `LTC7545A`** — 12-bit,
+on-chip data latch, current output, four-quadrant multiplying, ~1 µs settling with
+a fast op-amp. Two of them, one per side.
+
+> **Sourcing note.** The period part here is the **`AD7545A` (Analog Devices,
+> 1983)**, and the design is written against it. It is effectively out of
+> production and now trades at **~\$50**. The **`LTC7545A` is the pin-compatible,
+> current-production improvement on it at ~\$9** — tighter DNL/INL over
+> temperature, same 20-pin footprint, same interface. **Specify the `LTC7545A` and
+> build with it**; the `AD7545A` stays in §17's period audit as the part the
+> design would have used in 1989, and either drops into the same socket. This is
+> the same posture [`graphics.md`](graphics.md) §10.1 takes for `ATF22V10C` versus
+> a classic `GAL22V10`: period-honest design, current-production BOM. The latch replaces the output `'574`s, so the parallel part
 is not even more packages:
 
-| | Serial (`PCM56` / `TDA1541A`) | **Parallel (`AD7545`)** |
+| | Serial (`PCM56` / `TDA1541A`) | **Parallel (`LTC7545A`)** |
 |---|---|---|
 | Packages | 2 DAC + 4 `'165` shifters + clock divider ≈ 7 | **2** |
 | Output sample rate | fixed, 192 kHz ceiling | **none — event-driven** |
@@ -461,7 +471,7 @@ is not even more packages:
 12 bits against a source that is 8 bits of sample × 6 bits of volume is not the
 limiting factor; the jitter is. Take the parallel part.
 
-`AD7545` is a current-output multiplying DAC, so each side needs an I/V stage and
+`LTC7545A` is a current-output multiplying DAC, so each side needs an I/V stage and
 a bipolar-offset arrangement — one `TL072` handles both sides. Standard, and the
 `Vref` input is a free master-volume/mute point.
 
@@ -530,18 +540,42 @@ in `AINTREQ`:
 
 ProTracker's `Fxx` command sets ticks-per-row for `xx` ≤ `$1F` and **BPM** for
 `xx` ≥ `$20`. On an Amiga the BPM case reprograms **CIA-B timer A**, clocked at
-the E-clock — 1/10 of the CPU clock, itself derived from the colour clock. The
-replayer's reload value is a number computed against **1.7734475 MHz** on PAL.
+the E-clock — 1/10 of the CPU clock, which is itself twice the colour clock:
 
-So: **clock a 16-bit timer at colourclock ÷ 2 = 1.7734475 MHz and the `Fxx`
-arithmetic in every existing replayer transfers unchanged.** No rescaling, no
-divide, no table.
+```
+  CIA clock = colourclock x 2 / 10 = colourclock / 5 = 709,379 Hz   (PAL)
+                                                    = 715,909 Hz   (NTSC)
+```
 
-Implementation: it is a fifth entry in the compare structure of §4.2 — a `NEXT`
-value in the state file, compared in **slot 4**, reloaded by the shared adder in
-a deferred slot. **Zero additional packages.** The only nuance is that it counts
-at half the channel rate, so slot 4's comparison uses the free-running counter's
-bits `[16:1]` — one mux term in the sequencer GAL.
+The replayer's reload is `N = 1773447 / BPM` on PAL (`1789773 / BPM` on NTSC),
+because the tick rate wanted is `BPM x 2/5` Hz and `1773447 = colourclock / 2`
+is the numerator that falls out of `N = f_cia x 2.5 / BPM`. **The constant in the
+replayer source is colourclock/2; the clock the counter runs at is
+colourclock/5.** Those are different numbers and confusing them detunes the tempo
+by exactly 2.5×.
+
+So: **clock the timer at colourclock ÷ 5 = 709,379 Hz — the Amiga's CIA clock,
+not an approximation of it — and the `Fxx` arithmetic in every existing replayer
+transfers unchanged.** No rescaling, no divide, no table. The ÷5 is the same on
+both standards, so the NTSC oscillator option of §4.1 carries the tempo reference
+with it for free.
+
+| BPM | `N = 1773447 / BPM` | Tick rate at 709,379 Hz | Wanted (`BPM × 2/5`) |
+|---|---|---|---|
+| 32 (slowest useful) | 55,420 | 12.800 Hz | 12.80 |
+| **125 (the default)** | **14,187** | **50.002 Hz** | **50.00** |
+| 255 (fastest) | 6,954 | 102.010 Hz | 102.00 |
+
+16 bits reaches down to BPM 28, below anything a module uses.
+
+Implementation: it is a fifth entry in the compare structure of §4.2, serviced in
+**slot 4**. The nuance is that it counts at 1/5 the colour clock, so it cannot
+share the free-running counter — instead the timer's *own* 16-bit count lives
+beside its `NEXT` in one 32-bit state word, `{CIACNT[15:0], CIANEXT[15:0]}`, and
+the shared adder increments it in a deferred slot every 5 colour clocks. That is
+709,379 increments/s against 7.1 M deferred slots/s — **10 % of the deferred
+budget, and zero additional packages.** The ÷5 prescale is three macrocells in the
+sequencer GAL.
 
 Expose it as a plain 16-bit reload register (`TIMER`, §9) with an enable bit, so
 it is equally usable as a general-purpose periodic interrupt for anything else
@@ -578,7 +612,7 @@ Decode is geographic, from the backplane's per-slot `/IOSEL`
 | `+$6`–`$8` | `SPTR` | W | sample-RAM pointer, 19 bits, auto-increment |
 | `+$9` | `SDATA` | R/W | sample-RAM byte at `SPTR`, **post-increment** |
 | `+$A` | `ASTAT` | R | b3..0 channel DMA active, b4 timer running, b6 write FIFO full, b7 prefetch valid |
-| `+$B`–`+$C` | `TIMER` | W | tempo-timer reload, 16 bits, clocked at 1.7734475 MHz (§8.2) |
+| `+$B`–`+$C` | `TIMER` | W | tempo-timer reload, 16 bits, clocked at **709,379 Hz** — load `1773447 / BPM` (§8.2) |
 | `+$D`–`+$F` | — | | reserved — pan registers land here if §11.1 is built |
 
 `ADMACON` / `AINTENA` / `AINTREQ` keep **Paula's set/clear bit-7 convention**
@@ -634,7 +668,7 @@ that does not.
 | 4 | 74HC283 | shared 16-bit adder — `NEXT`+`PER`, `PTR`+1, `CNT`−1 (slots 6–7) |
 | 3 | 74HC574 | pipeline latches, stages A/B/C (§3.2) |
 | 4 | 74HC574 | L and R accumulators, 13 bits each (§6.2) |
-| 2 | **AD7545** | 12-bit parallel MDAC with input latch, L and R (§6.3) |
+| 2 | **LTC7545A** | 12-bit parallel MDAC with input latch, L and R (§6.3) |
 | 3 | TL072 | I/V ×2, filter poles ×4 (§7) |
 | 1 | 74HC4066 | filter select / bypass (§7) |
 | 1 | 74HC574 | posted-write data latch (host → sample RAM) |
@@ -663,7 +697,7 @@ Video card, for comparison: **36** (32 if the tri-state pixel bus closes).
 **Power.** Seven SRAMs, three GALs, ~15 HC packages, four op-amp channels:
 estimate **250–350 mA** — roughly *half* the video card, because there are three
 GALs instead of eight and nothing switches at 25 MHz. Analogue and digital
-grounds must meet at exactly one point, and the `AD7545` reference should not
+grounds must meet at exactly one point, and the `LTC7545A` reference should not
 share a rail with the SRAMs. That is the only layout constraint on this card that
 the video card does not also have, and it is the one that decides whether it
 sounds clean.
@@ -838,6 +872,12 @@ implementation is a choice, and the machine should be able to hold both.**
 
 ## 13. Software
 
+> **The loader and replayer now have their own document:
+> [`modplayer.md`](modplayer.md)** — the `.mod` format, what the loader must and
+> must not transform, the tick engine, the full effect command set, the
+> position-advance ordering, and the ProTracker behaviours that are load-bearing.
+> This section is the summary and the cost model; that one is the specification.
+
 ### 13.1 What the replayer costs
 
 A ProTracker replayer does two different amounts of work. On **tick 0 of a row**
@@ -952,7 +992,7 @@ Paula in any way that matters to the acceptance test, and that is deliberate.
 | # | Step | Exit criterion |
 |---|---|---|
 | 0 | **Freeze §9's register map** and the backplane's `/FIRQ` and I/O-window assignment | one document; §16 items 4–6 answered |
-| 1 | **Build the MCU card** (§12.5): STM32G431 + `AD7545` pair + §7's filters | plays a known module correctly through the §9 register map |
+| 1 | **Build the MCU card** (§12.5): STM32G431 + `LTC7545A` pair + §7's filters | plays a known module correctly through the §9 register map |
 | 2 | **Write the loader, replayer and converter** against the MCU card | acceptance test: 20 varied modules, A/B against a real Amiga or a reference emulator, by ear and by capture |
 | 3 | **Bench the §3.2 stage-B path** at 35 ns on a breadboard — LUT SRAM at 15 ns, driven by counters | closes with margin, or the §3.2 fallback latch is adopted |
 | 4 | **Fit the sequencer GAL** with all eight slots, the shadow reload and the deferred queue | equations fit in 3 × GAL22V10; §16 item 7 answered before the 8-channel mode is promised |
@@ -1001,9 +1041,9 @@ specification that has not been tested.
 9. **Measure the analogue noise floor with the digital section running.** Seven
    SRAMs and a 28 MHz slot clock on the same board as a 12-bit DAC is the one
    genuinely new risk this card carries that the video card does not. Single-point
-   ground, separate `AD7545` reference rail, and physical separation — then
+   ground, separate `LTC7545A` reference rail, and physical separation — then
    measure.
-10. **`AD7545` settling with the chosen op-amp.** 1 µs against a 7.9 µs worst-case
+10. **`LTC7545A` settling with the chosen op-amp.** 1 µs against a 7.9 µs worst-case
     event spacing (§6.3) is a 8× margin on paper; confirm with the actual I/V
     stage, since the margin is what allows the parallel DAC to replace the serial
     one.
@@ -1013,7 +1053,16 @@ specification that has not been tested.
 12. **Decide whether the NTSC oscillator ships** (§4.1). It is one part and one
     mux term, and the answer depends entirely on how much NTSC-timed material you
     care about.
-13. **Emulator model.** Whatever host-side emulator the project runs must model the
+13. **Guarantee the `DMACON`-enable latch within 4 colour clocks.** The replayer
+    writes `LC`/`LEN` for the loop point *immediately after* enabling the channel,
+    in the same tick ([`modplayer.md`](modplayer.md) §5.3). That is only safe if
+    the sequencer has already copied `LC → PTR` and `LEN → CNT`. A deferred slot
+    normally does it within one or two colour clocks, but the queue can hold four
+    channels. **Specify a bounded latch — enable-triggered work jumps the deferred
+    queue, ≤4 colour clocks (1.13 µs)** — rather than leaving the replayer to
+    insert ProTracker's 68000-era delay loop. It is a priority term in the
+    sequencer GAL, and it removes a whole class of intermittent bug.
+14. **Emulator model.** Whatever host-side emulator the project runs must model the
     state file, the compare timing, the shadow reload and the `FIRQ` sources — or
     software will be written against a card that does not exist. Same requirement
     as [`graphics.md`](graphics.md) §19 item 13, and the MCU card of §12.5 is a
@@ -1027,7 +1076,7 @@ specification that has not been tested.
 |---|---|---|
 | Paula (MOS 8364) as the model | **1985** | the design premise |
 | 28.37516 MHz crystal | 1985 (Amiga PAL master) | period-exact, and still purchasable |
-| `AD7545` 12-bit buffered MDAC | **1983** | period |
+| `AD7545A` 12-bit buffered MDAC | **1983** | period — **built as `LTC7545A`**, its pin-compatible current-production replacement (§6.3) |
 | `TL072` / `NE5532` | 1978 / 1979 | period |
 | `74HC` logic | 1982 | period |
 | `74HC688` 8-bit comparator | 1984 | period |
