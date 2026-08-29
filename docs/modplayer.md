@@ -442,10 +442,28 @@ ProTracker's table is **16 finetune rows × 36 periods** (C-1…B-3), 2 bytes ea
 ```
 
 The other 15 rows are the same notes at ±1…±8/8 semitone. **Copy the table from a
-known-good source; do not compute it.** ProTracker's values are hand-rounded and a
-computed table differs from them by ±1 on several entries — which is inaudible on
-its own and *very* audible when a tone portamento (§5.5, `3xx`) walks toward a
-target period that does not exist in the table and therefore never arrives.
+known-good source; do not compute it** — and the cost of ignoring that is larger
+than it looks. Measured against the real table:
+
+| | Computing it from row 0 |
+|---|---|
+| Entries that come out wrong | **229 of 576 — 40 %** |
+| Worst error | **16 cents**, at finetune +7 B-3 (108 vs 107) |
+| Wrong targets absent from their own row | **all 229** |
+
+The last row is the serious one. A tone portamento (§5.5, `3xx`) slides toward a
+target period and stops when it arrives; if the target is not an entry in that
+finetune's row, **it never arrives** and the note slides until the next one
+triggers. The same fact shows up a third way: **86 of the 384 octave relations in
+the real table are not `floor(x/2)`**, because ProTracker rounded each octave
+independently.
+
+**The table is now in [`tools/refplayer/period_table.c`](../tools/refplayer/period_table.c)**,
+taken from `pt2-clone`'s `periodTable` (a faithful C reimplementation of
+ProTracker 2.3D), with the finetune-0 row confirmed byte-for-byte against
+`libopenmpt` and `libmodplug`. That file's header records the provenance and the
+four structural invariants the table was validated against; `test_refplayer.c`
+re-checks all four so an edit cannot silently corrupt it.
 
 The table is used for exactly three things:
 
@@ -650,7 +668,7 @@ software existing first.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | ~~**Write a host-side reference player** in C against the §9 register model~~ — **done, [`tools/refplayer/`](../tools/refplayer/)** | builds warning-clean, `ctest` green; pitch within **0.01 cents** of `3546895/PER`, shadow reload, panning, tempo and filters all verified. Remaining: install the authoritative period table (§11 item 4), then A/B the corpus against an Amiga emulator |
+| 0 | ~~**Write a host-side reference player** in C against the §9 register model~~ — **done, [`tools/refplayer/`](../tools/refplayer/)** | builds warning-clean, `ctest` green; pitch within **0.01 cents** of `3546895/PER`, shadow reload, panning, tempo, filters and the real ProTracker period table all verified. Remaining: A/B the corpus against an Amiga emulator |
 | 1 | **Loader on the MCU card** ([`audio.md`](audio.md) §12.5) | a module's samples land in card RAM byte-for-byte identical to the reference |
 | 2 | **Replayer, tick engine and note trigger only** — no effects | a module plays recognisably; §5.3's shadow write verified on a looped instrument |
 | 3 | **Effects, in order of corpus frequency**: `Cxx`, `Fxx`, `Axy`, `Dxx`, `1xx`/`2xx`, `3xx`, `4xy`, `0xy`, then the `E` set | each effect A/B'd against the reference on a targeted test module |
@@ -753,12 +771,13 @@ and "fixing" any of them makes real songs sound wrong.
    or document as ignored — but decide, because "silently does nothing" and
    "documented as ignored" are different things to a user comparing against an
    Amiga.
-4. **Source the period table from a known-good ProTracker build** (§5.4) and
-   diff it against a computed one, so the hand-rounded entries are a deliberate
-   choice rather than an accident. **This is now the gating item.** The reference
-   player computes rows 1–15 and prints a warning saying so; no A/B result
-   involving finetune or tone portamento means anything until the real table is
-   installed through `mod_set_period_table()`.
+4. ~~**Source the period table from a known-good ProTracker build**~~ — **closed.**
+   The real 16 × 36 table is in
+   [`period_table.c`](../tools/refplayer/period_table.c) with its provenance and
+   four validated invariants (§5.4). Diffing it against a computed one is what
+   produced the 40 % / 16-cent / never-terminating figures now in §5.4, and it
+   confirmed that the hand-rounding is real and unavoidable rather than an
+   artefact of one source.
 5. **Choose the tempo strategy**: 448-byte table or a runtime divide (§5.7). The
    table is recommended; confirm the RAM is there.
 6. **Decide whether 6-channel and 8-channel modules are in scope.** §2.3 rejects

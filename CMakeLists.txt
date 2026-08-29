@@ -67,6 +67,7 @@ else()
         tools/refplayer/card.c
         tools/refplayer/mod_load.c
         tools/refplayer/mod_replay.c
+        tools/refplayer/period_table.c
         tools/refplayer/render.c)
 
     add_executable(refplayer ${REFPLAYER_SOURCES} tools/refplayer/main.c)

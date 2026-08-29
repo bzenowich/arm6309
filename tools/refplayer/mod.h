@@ -127,10 +127,10 @@ void mod_set_advance(mod_player *p, void (*fn)(void *, unsigned), void *ctx,
 void mod_start(mod_player *p, mod_song *s, card_t *c);
 void mod_tick(mod_player *p);     /* one /FIRQ; the whole replayer          */
 
-/* docs/modplayer.md §11 item 4: rows 1..15 of the period table are computed
- * unless the authoritative ProTracker table is installed here. Any A/B result
- * involving finetune or tone portamento is provisional until it is. */
+/* The authoritative ProTracker table, 16 finetunes x 36 notes — period_table.c.
+ * Installed by mod_start(); mod_set_period_table() overrides it, which is only
+ * useful for testing a variant tuning. */
+extern const uint16_t mod_protracker_period_table[16][36];
 void mod_set_period_table(const uint16_t *table_16x36);
-int  mod_period_table_is_authoritative(void);
 
 #endif /* ARM6309_MOD_H */

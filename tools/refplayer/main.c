@@ -107,11 +107,6 @@ int main(int argc, char **argv)
            (unsigned long)song.sample_bytes, ramkb,
            song.truncated ? "  (file was truncated; clamped, §4.6)" : "");
     printf("%-14s %ld Hz (%s)\n", "colour clock:", cc, ntsc ? "NTSC" : "PAL");
-    if (!mod_period_table_is_authoritative()) {
-        printf("%-14s period table rows 1-15 are COMPUTED, not the ProTracker\n"
-               "%-14s table. Finetune and 3xx results are provisional --\n"
-               "%-14s docs/modplayer.md §11 item 4.\n", "warning:", "", "");
-    }
     if (info_only) { rc = 0; goto out_song; }
 
     if (render_open(&render, wavpath, rate, cc) != 0) {

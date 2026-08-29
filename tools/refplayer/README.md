@@ -85,14 +85,29 @@ Verified by `test_refplayer.c` and by measurement:
 | Volume law | `SAMP × min(VOL,64) / 4`, and volume 64 is reachable |
 | Filters | monotonic; fixed pole measures −2.60 dB at 4 kHz, as a 4421 Hz pole should |
 | Loader | rejects bad magic, 8-channel, zero song length; **accepts** truncated files |
+| Period table | the **real** ProTracker 16 × 36 table (`period_table.c`), four invariants re-checked by the test suite |
+
+### The period table
+
+`period_table.c` carries the real ProTracker table, copied — never computed.
+Deriving it from row 0 gets **229 of 576 entries wrong (40 %)**, worst case
+**16 cents**, and every one of those 229 is a period that does not exist in its
+own finetune row, so a `3xx` tone portamento slides toward a target it can never
+land on and never terminates. (The same fact from another angle: **86 of the 384
+octave relations are not `floor(x/2)`** — ProTracker rounded each octave
+independently.)
+
+Provenance and validation are in that file's header. In short: taken from
+`pt2-clone`'s `periodTable`, with the finetune-0 row confirmed byte-for-byte
+against `libopenmpt` 0.4.4 and `libmodplug` 1.0.0 — two implementations
+independent of it and of each other — then checked for strict monotonicity, for
+every entry lying within 1.5 of `856 / 2^(ft/96) / 2^(note/12)`, and for the
+structural identity that finetune −8 is exactly one semitone below finetune 0.
+`test_refplayer.c` re-runs all four, so an edit to the table cannot silently
+corrupt it.
 
 **Not verified, and load-bearing:**
 
-- **The period table.** Rows 1–15 are *computed*. The authoritative ProTracker
-  16 × 36 table must be installed via `mod_set_period_table()` before any A/B
-  result involving finetune or tone portamento means anything
-  ([`modplayer.md`](../../docs/modplayer.md) §11 item 4). The player prints a
-  warning until it is.
 - **The ten ProTracker behaviours** of [`modplayer.md`](../../docs/modplayer.md)
   §10 and the position-advance ordering of §5.8 are implemented from the
   documented semantics. Published descriptions disagree with each other in

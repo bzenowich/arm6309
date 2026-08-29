@@ -406,11 +406,69 @@ static void test_filters(void)
     }
 }
 
+static void test_period_table(void)
+{
+    /* docs/modplayer.md §5.4 / §11 item 4. The table is copied, not computed,
+     * so the risk is not arithmetic -- it is transcription. These are the same
+     * checks the table was validated against when it was installed, kept here
+     * so an edit to period_table.c cannot silently corrupt it. */
+    const uint16_t (*t)[36] = mod_protracker_period_table;
+    double worst = 0.0;
+    int notfloor = 0;
+
+    /* 1. Every row strictly decreasing. Catches a swapped or duplicated pair. */
+    for (unsigned r = 0; r < 16u; r++) {
+        int ok = 1;
+        for (unsigned i = 0; i + 1 < 36u; i++) { if (t[r][i] <= t[r][i + 1]) { ok = 0; } }
+        if (!ok) { printf("FAIL: period table row %u is not strictly decreasing\n", r); failures++; }
+    }
+
+    /* 2. Every entry within 1.5 of 856 / 2^(ft/96) / 2^(note/12). ProTracker's
+     *    roundings are inconsistent but they are still roundings; a mistyped
+     *    digit lands far outside this and a transposition always does. */
+    for (unsigned r = 0; r < 16u; r++) {
+        int ft = (r < 8u) ? (int)r : (int)r - 16;
+        for (unsigned i = 0; i < 36u; i++) {
+            double th = 856.0 / pow(2.0, (double)ft / 96.0) / pow(2.0, (double)i / 12.0);
+            double d = fabs((double)t[r][i] - th);
+            if (d > worst) { worst = d; }
+        }
+    }
+    check(worst < 1.5, "period table: every entry is within 1.5 of theory");
+
+    /* 3. Finetune -8 is one whole semitone flat, so its row must be [907]
+     *    followed by the finetune-0 row less its last entry. A structural
+     *    identity that no plausible typo survives. */
+    {
+        int ok = (t[8][0] == 907u);
+        for (unsigned i = 0; i < 35u; i++) { if (t[8][i + 1] != t[0][i]) { ok = 0; } }
+        check(ok, "period table: ft-8 row == [907] + ft0[0..34]");
+    }
+
+    /* 4. Known anchors, independently confirmed against libopenmpt and
+     *    libmodplug when the table was installed. */
+    check_eq(t[0][0],  856, "period table: ft0 C-1 is 856");
+    check_eq(t[0][35], 113, "period table: ft0 B-3 is 113");
+    check_eq(t[7][35], 108, "period table: ft+7 B-3 is 108");
+    check_eq(t[15][0], 862, "period table: ft-1 C-1 is 862");
+
+    /* 5. And the reason it cannot be derived: most octave relations are NOT a
+     *    halving. If this ever came out as 0, someone replaced the table with a
+     *    computed one. */
+    for (unsigned r = 0; r < 16u; r++) {
+        for (unsigned i = 0; i < 24u; i++) {
+            if (t[r][i + 12] != t[r][i] / 2u) { notfloor++; }
+        }
+    }
+    check_eq(notfloor, 86, "period table: 86 of 384 octaves are not floor(x/2)");
+}
+
 int main(void)
 {
     sram = calloc(CARD_SRAM_BYTES, 1);
     if (!sram) { return 1; }
 
+    test_period_table();
     test_volume_lut();
     test_period_is_the_colour_clock();
     test_shadow_reload();

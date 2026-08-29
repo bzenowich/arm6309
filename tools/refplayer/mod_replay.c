@@ -9,54 +9,29 @@
  */
 
 #include <string.h>
-#include <math.h>
 #include "mod.h"
 
 /* ------------------------------------------------------------- tables ----- */
 
-/* ProTracker's finetune-0 row. These values are hand-rounded, not computed;
- * docs/modplayer.md §5.4 explains why that matters (a computed table differs by
- * +/-1 on several entries, and a tone portamento then walks toward a target
- * that is not in the table and never arrives). */
-static const uint16_t period_row0[36] = {
-    856, 808, 762, 720, 678, 640, 604, 570, 538, 508, 480, 453,
-    428, 404, 381, 360, 339, 320, 302, 285, 269, 254, 240, 226,
-    214, 202, 190, 180, 170, 160, 151, 143, 135, 127, 120, 113
-};
-
-/* WARNING — rows 1..15 are COMPUTED here, and they should not be.
- *
- * The authoritative 16 x 36 table belongs to ProTracker and must be copied from
- * a known-good build (docs/modplayer.md §11 item 4). Computing it is close but
- * not identical, and the failure mode is subtle: finetuned instruments drift by
- * a period unit, and 3xx slides toward targets that are off by one. Use
- * mod_set_period_table() to install the real table before trusting any A/B
- * result that involves finetune or tone portamento. */
+/* The real ProTracker table, from period_table.c. It is copied, not computed —
+ * see that file's header for why, for its provenance, and for what happens if
+ * you try to derive it (40 % of the entries come out wrong and every tone
+ * portamento in a finetuned instrument fails to terminate). */
 static uint16_t ptab[16][36];
-static int      ptab_is_authoritative;
 
 void mod_set_period_table(const uint16_t *t)
 {
     memcpy(ptab, t, sizeof ptab);
-    ptab_is_authoritative = 1;
 }
-
-int mod_period_table_is_authoritative(void) { return ptab_is_authoritative; }
 
 static void ptab_init(void)
 {
-    if (ptab_is_authoritative) { return; }
-    for (unsigned ft = 0; ft < 16u; ft++) {
-        /* Rows 0..7 are finetune 0..+7, rows 8..15 are -8..-1: the file's low
-         * nibble is already the row index in two's complement order, which is
-         * why docs/modplayer.md §3 says to copy it and not sign-extend it. */
-        int f = (ft < 8u) ? (int)ft : (int)ft - 16;
-        for (unsigned i = 0; i < 36u; i++) {
-            double v = (double)period_row0[i] / pow(2.0, (double)f / 96.0);
-            ptab[ft][i] = (uint16_t)(v + 0.5);
-        }
-    }
+    memcpy(ptab, mod_protracker_period_table, sizeof ptab);
 }
+
+/* Row 0 of whatever table is installed. The pattern stores finetune-0 periods,
+ * so this is what a note is looked up in before the finetune row is applied. */
+#define period_row0 (ptab[0])
 
 /* ProTracker's vibrato/tremolo table: a half period in 32 steps, 0..255. */
 static const uint8_t vib_sine[32] = {
