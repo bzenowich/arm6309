@@ -650,7 +650,7 @@ software existing first.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | **Write a host-side reference player** in C against the §9 register model | plays the test corpus to a `.wav`, A/B against a known-good Amiga emulator |
+| 0 | ~~**Write a host-side reference player** in C against the §9 register model~~ — **done, [`tools/refplayer/`](../tools/refplayer/)** | builds warning-clean, `ctest` green; pitch within **0.01 cents** of `3546895/PER`, shadow reload, panning, tempo and filters all verified. Remaining: install the authoritative period table (§11 item 4), then A/B the corpus against an Amiga emulator |
 | 1 | **Loader on the MCU card** ([`audio.md`](audio.md) §12.5) | a module's samples land in card RAM byte-for-byte identical to the reference |
 | 2 | **Replayer, tick engine and note trigger only** — no effects | a module plays recognisably; §5.3's shadow write verified on a looped instrument |
 | 3 | **Effects, in order of corpus frequency**: `Cxx`, `Fxx`, `Axy`, `Dxx`, `1xx`/`2xx`, `3xx`, `4xy`, `0xy`, then the `E` set | each effect A/B'd against the reference on a targeted test module |
@@ -661,6 +661,19 @@ software existing first.
 **Step 0 is not optional.** Without a reference implementation there is nothing to
 A/B against, and "it sounds about right" is not an acceptance test for a system
 whose entire premise is bit-exact compatibility.
+
+**It paid for itself before playing a note.** Building the model found four
+things these documents had wrong: the volume LUT was one address bit short of
+Paula's 0–64 range ([`audio.md`](audio.md) §6.1); the tempo clock was out by
+2.5× ([`audio.md`](audio.md) §8.2); a reference that runs the replayer in zero
+card time *hides* the §5.3 race instead of testing it, so the model charges each
+register store its real cost; and the LED filter model had a passband bump, which
+a filter cannot have. Three of those would otherwise have reached a GAL.
+
+**The register trace is the contract, not the audio.** `refplayer --trace` emits
+the register-write stream timestamped by tick, and a correct 6309 replayer
+produces a byte-identical one. When it does not, the diff names the register, the
+tick and the channel; comparing waveforms only tells you that something is wrong.
 
 ---
 
@@ -742,7 +755,10 @@ and "fixing" any of them makes real songs sound wrong.
    Amiga.
 4. **Source the period table from a known-good ProTracker build** (§5.4) and
    diff it against a computed one, so the hand-rounded entries are a deliberate
-   choice rather than an accident.
+   choice rather than an accident. **This is now the gating item.** The reference
+   player computes rows 1–15 and prints a warning saying so; no A/B result
+   involving finetune or tone portamento means anything until the real table is
+   installed through `mod_set_period_table()`.
 5. **Choose the tempo strategy**: 448-byte table or a runtime divide (§5.7). The
    table is recommended; confirm the RAM is there.
 6. **Decide whether 6-channel and 8-channel modules are in scope.** §2.3 rejects

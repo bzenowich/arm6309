@@ -41,7 +41,7 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 | **How are the four channels implemented?** | **One time-multiplexed datapath**, 8 slots per colour clock, state in a 32-bit-wide SRAM file. | §3 |
 | **How is per-channel pitch generated?** | **Compare-against-a-free-running-counter**, not four down-counters. Kills 12+ ICs. | §4.2 |
 | **What is the period reference clock?** | **3.546895 MHz — the Amiga PAL colour clock**, from a 28.37516 MHz crystal ÷8. Non-negotiable. | §4.1 |
-| **How is volume applied?** | **A 32K×8 lookup table**, `{curve, VOL[5:0], SAMP[7:0]} → 12-bit signed`. Same trick as the palette LUT. | §6.1 |
+| **How is volume applied?** | **A host-loadable 32K×8 lookup table**, `{VOL[6:0], SAMP[7:0]} → 12-bit signed`. Same trick as the palette LUT; the volume curve is table content, not hardware. | §6.1 |
 | **How are channels summed?** | **Combinatorially, asynchronously** — exactly as Paula sums four analogue currents. No output sample rate, no resampling, no jitter. | §6.2 |
 | **What DAC?** | **2 × LTC7545A** — 12-bit parallel MDAC with an input latch, the current-production `AD7545A` pin-compatible. Not a serial audio DAC — §6.3. | §6.3 |
 | **Do we need the Amiga filter?** | **Yes, and not for nostalgia.** It is the reconstruction filter for channels running below ~16 kHz. Both filters, switchable. | §7 |
@@ -369,15 +369,26 @@ Paula applies a 6-bit volume to an 8-bit signed sample. In 1989 logic that is
 either an 8×6 parallel multiplier (a `TRW TDC1008`-class part — expensive, hot,
 and absurd at 126 kHz) or a table.
 
-**Table.** Address a 32K×8 SRAM with `{curve, VOL[5:0], SAMP[7:0]}` — 15 bits,
-which is exactly the part:
+**Table.** Address a 32K×8 pair with `{VOL[6:0], SAMP[7:0]}` — 15 bits, which is
+exactly the part:
 
 ```
-  A14      curve select     (one ACTRL bit)
-  A13..A8  VOL[5:0]         0..64
+  A14..A8  VOL[6:0]         0..64, Paula's range
   A7..A0   SAMP[7:0]        signed
   D11..D0  scaled sample, 12-bit signed     <- 2 x 32K x 8, 15 ns
 ```
+
+> **Corrected (build step 0).** This section first addressed the table with
+> `{curve, VOL[5:0], SAMP[7:0]}`. That is one bit short: **Paula's volume is
+> 0–64, which needs seven bits**, and a 6-bit field silently pins every channel
+> at 63/64 of its intended level — uniform, so not detuning, but a real 0.14 dB
+> of headroom thrown away and a divergence from the acceptance test for no
+> reason. Writing the model in `tools/refplayer/` is what found it.
+>
+> The fix costs nothing and is strictly better. Give the volume its seventh bit,
+> and make the table **host-loadable** through a `LIDX`/`LDATA` pointer/data pair
+> (§9.2) instead of selecting a curve with an address line. Entries for VOL
+> 65–127 are unreachable in Paula-compatible use and simply repeat VOL 64.
 
 This is the **same move** the video card makes twice: the palette LUT
 ([`graphics.md`](graphics.md) §9), and §6.4.3's use of the LUT's dead 127/128 to
@@ -386,10 +397,15 @@ the spare `A14` buys the curve bit for free.
 
 What the curve bit is worth:
 
-| `curve` | Table contents | Use |
-|---|---|---|
-| 0 | `round(SAMP × VOL / 64)` — **exact Paula linear law** | mod playback, the acceptance test |
-| 1 | anything you like: logarithmic (dB-linear) volume, a soft-clip, a de-emphasis curve, a per-channel trim | native software, and §11.4 |
+| Table contents | Use |
+|---|---|
+| `SAMP × min(VOL,64) / 4` — **exact Paula linear law** | mod playback, the acceptance test |
+| anything else: logarithmic (dB-linear) volume, a soft-clip, a de-emphasis curve, a per-machine calibration | native software, and §11.4 |
+
+**The curve stops being a hardware feature and becomes table content**, which is
+strictly more capable than the address-line version and costs one `TFM` burst —
+65,536 bytes, ~94 ms at 2.098 MHz — once at boot. `ACTRL` bit 7 keeps the card
+quiet until it is done, which is why reset forces `ACTRL = 0`.
 
 **12-bit output, not 8.** At `VOL` = 1, an 8-bit output would reduce the sample to
 ±2 — two bits of resolution, and volume fades would be audibly stepped. Paula's
@@ -410,8 +426,8 @@ to, because it can do what Paula does:
 ```
   4 x 12-bit scaled values, held in the accumulators (slots 0-3)
         |
-        +--> L = ch0 + ch3   (13 bits)  --> LTC7545A --> I/V --> filter --> line out L
-        +--> R = ch1 + ch2   (13 bits)  --> LTC7545A --> I/V --> filter --> line out R
+        +--> L = ch0 + ch3   (13 bits) >>1 --> LTC7545A --> I/V --> filter --> out L
+        +--> R = ch1 + ch2   (13 bits) >>1 --> LTC7545A --> I/V --> filter --> out R
 ```
 
 The accumulator latches update at the end of each colour-clock frame, so the DAC
@@ -419,6 +435,12 @@ input changes **at the exact colour clock on which a channel's sample changed** 
 which is the same instant Paula's ladder current would change. There is no
 resampling, no interpolation, no jitter, and no aliasing introduced by the mixer,
 because there is no mixer sample rate to alias against.
+
+The sum of two 12-bit signed values is 13 bits and the DAC is 12, so **the
+bottom bit is dropped once, at the converter** — a wire, not a stage. A single
+channel therefore reaches 11 bits of the DAC and two channels at full scale
+reach all 12, which is the same headroom split Paula's four current-output
+ladders make.
 
 **The one artefact is adder settling** — a ~20 ns glitch on the DAC input at each
 channel transition, ≤126,000 times a second. Those are 20 ns impulses arriving at
@@ -608,12 +630,13 @@ Decode is geographic, from the backplane's per-slot `/IOSEL`
 | `+$2` | `ADMACON` | W | b3..0 channel DMA enable. **b7 = set/clear**, Paula's `DMACON` convention |
 | `+$3` | `AINTENA` | W | b5..0 interrupt enables (§8.1). Same b7 set/clear convention |
 | `+$4` | `AINTREQ` | R/W | read: pending flags. write: b7=0 clears the bits set in b5..0 |
-| `+$5` | `ACTRL` | W | b0 LED filter, b1 filter bypass, b2 NTSC clock, b3 volume curve, b4 8-channel mode (§11.2), b5 pan enable (§11.1), b7 master enable |
+| `+$5` | `ACTRL` | W | b0 LED filter, b1 filter bypass, b2 NTSC clock, b3 reserved (was the volume curve — now table content, §6.1), b4 8-channel mode (§11.2), b5 pan enable (§11.1), b7 master enable |
 | `+$6`–`$8` | `SPTR` | W | sample-RAM pointer, 19 bits, auto-increment |
 | `+$9` | `SDATA` | R/W | sample-RAM byte at `SPTR`, **post-increment** |
 | `+$A` | `ASTAT` | R | b3..0 channel DMA active, b4 timer running, b6 write FIFO full, b7 prefetch valid |
 | `+$B`–`+$C` | `TIMER` | W | tempo-timer reload, 16 bits, clocked at **709,379 Hz** — load `1773447 / BPM` (§8.2) |
-| `+$D`–`+$F` | — | | reserved — pan registers land here if §11.1 is built |
+| `+$D`–`+$E` | `LIDX` | W | volume-LUT load index, 16 bits, auto-increment (§6.1) |
+| `+$F` | `LDATA` | R/W | volume-LUT byte at `LIDX`, **post-increment** |
 
 `ADMACON` / `AINTENA` / `AINTREQ` keep **Paula's set/clear bit-7 convention**
 deliberately: a replayer ported from 68000 writes the same constants, and the
@@ -872,9 +895,11 @@ implementation is a choice, and the machine should be able to hold both.**
 
 ## 13. Software
 
-> **The loader and replayer now have their own document:
-> [`modplayer.md`](modplayer.md)** — the `.mod` format, what the loader must and
-> must not transform, the tick engine, the full effect command set, the
+> **The loader and replayer now have their own document,
+> [`modplayer.md`](modplayer.md), and a working reference implementation in
+> [`tools/refplayer/`](../tools/refplayer/)** — which is what found the volume-LUT
+> and tempo-clock errors corrected in §6.1 and §8.2. The document covers the
+> `.mod` format, what the loader must and must not transform, the tick engine, the full effect command set, the
 > position-advance ordering, and the ProTracker behaviours that are load-bearing.
 > This section is the summary and the cost model; that one is the specification.
 

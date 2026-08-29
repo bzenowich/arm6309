@@ -59,6 +59,27 @@ else()
 
     enable_testing()
 
+    # ---------------------------------------------------- reference player --
+    # docs/modplayer.md §8 build step 0. Host-only by construction: it models
+    # the sound card and runs the replayer that will be transliterated into
+    # 6309 assembly, so that the 6309 port has something to be diffed against.
+    set(REFPLAYER_SOURCES
+        tools/refplayer/card.c
+        tools/refplayer/mod_load.c
+        tools/refplayer/mod_replay.c
+        tools/refplayer/render.c)
+
+    add_executable(refplayer ${REFPLAYER_SOURCES} tools/refplayer/main.c)
+    target_include_directories(refplayer PRIVATE tools/refplayer)
+    target_compile_options(refplayer PRIVATE ${ARM6309_WARNINGS})
+    target_link_libraries(refplayer PRIVATE m)
+
+    add_executable(test_refplayer test/test_refplayer.c ${REFPLAYER_SOURCES})
+    target_include_directories(test_refplayer PRIVATE tools/refplayer)
+    target_compile_options(test_refplayer PRIVATE ${ARM6309_WARNINGS})
+    target_link_libraries(test_refplayer PRIVATE m)
+    add_test(NAME refplayer COMMAND test_refplayer)
+
     add_executable(test_stub_core test/test_stub_core.c src/stub_core.c)
     target_include_directories(test_stub_core PRIVATE include)
     target_compile_options(test_stub_core PRIVATE ${ARM6309_WARNINGS})
