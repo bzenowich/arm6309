@@ -461,7 +461,17 @@ static void advance(mod_player *p)
     if (p->position >= p->song->songlength) {
         /* §10.9: the restart byte at offset 951 is unreliable. Loop to 0. */
         p->position = 0;
-        p->ended = 1;
+    }
+
+    /* "The song has played once" is not "the position counter wrapped". Most
+     * modules end with a Bxx jump back into themselves, so the counter never
+     * reaches songlength -- ode2ptk.mod is one, and it rendered forever until
+     * this was added. The standard test is arriving at a position already
+     * entered at row 0. Pattern loops (E6x) revisit rows, not positions, so
+     * they do not trip it. */
+    if (p->row == 0u) {
+        if (p->visited[p->position & 0x7Fu]) { p->ended = 1; }
+        p->visited[p->position & 0x7Fu] = 1;
     }
 }
 
@@ -492,6 +502,7 @@ void mod_start(mod_player *p, mod_song *s, card_t *c)
     p->tick  = 0;
     p->position = 0;
     p->row = 0;
+    p->visited[0] = 1;
 
     ptab_init();
 
@@ -515,11 +526,28 @@ void mod_start(mod_player *p, mod_song *s, card_t *c)
     set_tempo(p);
     p->actrl = ACTRL_ENABLE;
     w(p, A_ACTRL, p->actrl);
+
+    /* Play row 0 now rather than waiting for the timer's first expiry. Arming
+     * the timer schedules the NEXT tick, so without this the song begins one
+     * whole tick late -- 20 ms at the default tempo, which is silence before
+     * the first note and a constant offset against every other player. Found by
+     * A/B: our output tracked libopenmpt's exactly, shifted 20 ms right. */
+    mod_tick(p);
 }
 
 void mod_tick(mod_player *p)
 {
     p->ticks++;
+
+    /* The path through the song -- order, pattern, row, speed, tempo -- is a
+     * far sharper comparison against another implementation than the audio is.
+     * §5.8's ordering either matches or it does not, and a diff says on which
+     * row it stopped matching. */
+    if (p->rowtrace) {
+        fprintf(p->rowtrace, "%lu %u %u %u %u %u %u\n",
+                (unsigned long)p->ticks, p->position,
+                p->song->order[p->position], p->row, p->tick, p->speed, p->bpm);
+    }
 
     /* Sole /FIRQ source, so no polling chain: it was us (docs/audio.md §8.1). */
     w(p, A_AINTREQ, AINT_TIMER);

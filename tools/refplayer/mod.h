@@ -94,13 +94,15 @@ typedef struct {
     uint8_t  break_pending, break_row;
     uint8_t  jump_pending, jump_pos;
     uint8_t  loop_pending, loop_target;
-    uint8_t  ended;               /* wrapped past the end at least once     */
+    uint8_t  ended;               /* one full pass played -- see advance()  */
+    uint8_t  visited[128];        /* positions already entered at row 0     */
     uint8_t  actrl;               /* shadow of ACTRL; the card cannot be read*/
 
     uint32_t ticks;               /* ticks since start, for the trace       */
     mod_chan ch[MOD_CHANNELS];
 
     FILE    *trace;               /* register-write trace, or NULL          */
+    FILE    *rowtrace;            /* order/pattern/row per tick, or NULL    */
 
     /* THE REPLAYER IS NOT INSTANTANEOUS, and modelling it as if it were hides
      * the one race docs/modplayer.md §5.3 exists to rule out: with zero elapsed

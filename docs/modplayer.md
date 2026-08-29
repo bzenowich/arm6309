@@ -668,7 +668,7 @@ software existing first.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | ~~**Write a host-side reference player** in C against the §9 register model~~ — **done, [`tools/refplayer/`](../tools/refplayer/)** | builds warning-clean, `ctest` green; pitch within **0.01 cents** of `3546895/PER`, shadow reload, panning, tempo, filters and the real ProTracker period table all verified. Remaining: A/B the corpus against an Amiga emulator |
+| 0 | ~~**Write a host-side reference player** in C against the §9 register model~~ — **done, [`tools/refplayer/`](../tools/refplayer/)**, A/B'd in [`tools/modcompare/`](../tools/modcompare/) | **closed.** 15/15 single-effect probes and `ode2ptk.mod` agree with libopenmpt's Paula emulation: +0.0 cents tuning, ≤0.3 dB gain, spectral correlation at or above the calibration ceiling — and the whole 1112-row path through `ode2ptk.mod` is identical |
 | 1 | **Loader on the MCU card** ([`audio.md`](audio.md) §12.5) | a module's samples land in card RAM byte-for-byte identical to the reference |
 | 2 | **Replayer, tick engine and note trigger only** — no effects | a module plays recognisably; §5.3's shadow write verified on a looped instrument |
 | 3 | **Effects, in order of corpus frequency**: `Cxx`, `Fxx`, `Axy`, `Dxx`, `1xx`/`2xx`, `3xx`, `4xy`, `0xy`, then the `E` set | each effect A/B'd against the reference on a targeted test module |
@@ -680,18 +680,36 @@ software existing first.
 A/B against, and "it sounds about right" is not an acceptance test for a system
 whose entire premise is bit-exact compatibility.
 
-**It paid for itself before playing a note.** Building the model found four
-things these documents had wrong: the volume LUT was one address bit short of
+**It paid for itself twice.** Building the model found four things these
+documents had wrong: the volume LUT was one address bit short of
 Paula's 0–64 range ([`audio.md`](audio.md) §6.1); the tempo clock was out by
 2.5× ([`audio.md`](audio.md) §8.2); a reference that runs the replayer in zero
 card time *hides* the §5.3 race instead of testing it, so the model charges each
 register store its real cost; and the LED filter model had a passband bump, which
 a filter cannot have. Three of those would otherwise have reached a GAL.
 
+And A/B'ing it against libopenmpt found a fifth, in the replayer itself:
+**`mod_start()` armed the tempo timer and then waited for it**, so row 0 played
+one whole tick — 20 ms — late. Audibly that is a beat of silence before the
+music; for measurement it is worse, because a constant offset skews every RMS
+comparison. Real driver code has the same obligation: play row 0, then let the
+timer drive ticks 1..n.
+
+**Climb the ladder in order.** That A/B was first attempted directly against
+`ode2ptk.mod`, which is *built* to break players — it walks backwards through its
+own pattern and rewrites the tempo on almost every row. Every disagreement it
+produced was ambiguous. The 20 ms bug only became visible on a synthetic probe
+playing one note with one effect, where nothing else could be responsible.
+Single-effect probes first, ordinary modules second, antagonistic modules last;
+[`tools/modcompare/`](../tools/modcompare/) is built around that order.
+
 **The register trace is the contract, not the audio.** `refplayer --trace` emits
 the register-write stream timestamped by tick, and a correct 6309 replayer
 produces a byte-identical one. When it does not, the diff names the register, the
 tick and the channel; comparing waveforms only tells you that something is wrong.
+`--rowtrace` is the same idea one level up, and comparing it against another
+player's order/pattern/row is the sharpest single check available — it is what
+confirmed §5.8's ordering over 1112 rows.
 
 ---
 

@@ -19,6 +19,7 @@
 #include <string.h>
 #include "mod.h"
 #include "render.h"
+#include <math.h>
 
 /* Advancing the card from inside the replayer keeps the audio continuous while
  * the CPU is busy, and — the reason it exists — makes the enable latch of
@@ -43,6 +44,8 @@ static void usage(void)
       "usage: refplayer [options] file.mod\n"
       "  --wav FILE        write stereo PCM (default: none)\n"
       "  --trace FILE      write the register-write trace ('-' for stdout)\n"
+      "  --rowtrace FILE   write order/pattern/row/tick/speed/bpm per tick\n"
+      "  --vu FILE         write per-channel output RMS every 10 ms\n"
       "  --rate HZ         output sample rate (default 48000)\n"
       "  --seconds N       stop after N seconds (default: one pass of the song)\n"
       "  --ntsc            use the 3.579545 MHz colour clock (audio.md §4.1)\n"
@@ -54,7 +57,7 @@ static void usage(void)
 
 int main(int argc, char **argv)
 {
-    const char *path = NULL, *wavpath = NULL, *tracepath = NULL;
+    const char *path = NULL, *wavpath = NULL, *tracepath = NULL, *rowpath = NULL, *vupath = NULL;
     int rate = 48000, ntsc = 0, led = 0, bypass = 0, info_only = 0;
     double seconds = 0.0;
     unsigned long ramkb = 128;
@@ -67,12 +70,17 @@ int main(int argc, char **argv)
     char err[160] = { 0 };
     long cc;
     uint64_t cc_limit = 0;
+    FILE *vu = NULL;
+    double vu_acc[4] = { 0, 0, 0, 0 };
+    long vu_n = 0;
     int rc = 1;
 
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         if      (!strcmp(a, "--wav")     && i + 1 < argc) { wavpath = argv[++i]; }
         else if (!strcmp(a, "--trace")   && i + 1 < argc) { tracepath = argv[++i]; }
+        else if (!strcmp(a, "--rowtrace")&& i + 1 < argc) { rowpath = argv[++i]; }
+        else if (!strcmp(a, "--vu")      && i + 1 < argc) { vupath = argv[++i]; }
         else if (!strcmp(a, "--rate")    && i + 1 < argc) { rate = atoi(argv[++i]); }
         else if (!strcmp(a, "--seconds") && i + 1 < argc) { seconds = atof(argv[++i]); }
         else if (!strcmp(a, "--ram")     && i + 1 < argc) { ramkb = strtoul(argv[++i], NULL, 10); }
@@ -132,6 +140,19 @@ int main(int argc, char **argv)
         }
     }
 
+    if (rowpath) {
+        player.rowtrace = fopen(rowpath, "w");
+        if (!player.rowtrace) {
+            fprintf(stderr, "refplayer: cannot write %s\n", rowpath);
+            goto out_render;
+        }
+    }
+
+    if (vupath) {
+        vu = fopen(vupath, "w");
+        if (!vu) { fprintf(stderr, "refplayer: cannot write %s\n", vupath); goto out_render; }
+    }
+
     if (seconds > 0.0) { cc_limit = (uint64_t)(seconds * (double)cc); }
 
     /* The main loop is the machine: step the card one colour clock at a time
@@ -146,6 +167,26 @@ int main(int argc, char **argv)
         card_step(&card);
         card_dac(&card, &l, &r);
         render_push(&render, l, r);
+
+        if (vu) {
+            /* Per-channel post-volume output, the same quantity libopenmpt's
+             * VU meters report -- so the two can be compared channel by
+             * channel instead of only as a stereo mix. */
+            for (unsigned n = 0; n < 4u; n++) {
+                unsigned v = card.ch[n].vol & 0x7Fu;
+                double x = (double)card.lut[(v << 8) | (unsigned)(uint8_t)card.ch[n].samp];
+                vu_acc[n] += x * x;
+            }
+            if (++vu_n >= cc / 100) {
+                fprintf(vu, "%.4f", (double)card.cc / (double)cc);
+                for (unsigned n = 0; n < 4u; n++) {
+                    fprintf(vu, " %.1f", sqrt(vu_acc[n] / (double)vu_n));
+                    vu_acc[n] = 0.0;
+                }
+                fputc('\n', vu);
+                vu_n = 0;
+            }
+        }
 
         /* Track the filter setting the module itself may have changed via E0x. */
         render_set_filter(&render,
@@ -178,6 +219,8 @@ int main(int argc, char **argv)
     }
 
     if (player.trace && player.trace != stdout) { fclose(player.trace); }
+    if (player.rowtrace) { fclose(player.rowtrace); }
+    if (vu) { fclose(vu); }
 
 out_render:
     if (render_close(&render) != 0) {
