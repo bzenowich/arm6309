@@ -1,107 +1,41 @@
 cmake_minimum_required(VERSION 3.20)
 project(arm6309 C ASM)
 
+# The machine, not just the CPU. Each subsystem owns its own CMakeLists:
+#
+#   cpu/    the HD6309E module -- STM32G431 firmware, plus its host checks
+#   audio/  the Paula-class PCM card -- host reference model only
+#   video/  spec only, nothing to build yet
+#   io/     spec only, nothing to build yet
+#
+# Two configurations, and they build disjoint sets of targets:
+#
+#   cmake -B build-host -G Ninja
+#   cmake -B build-arm  -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(ARM6309_SOURCES
-    src/startup.c
-    src/clock.c
-    src/gpio.c
-    src/stub_core.c
-    src/spike_poll.c
-    src/spike_dma.c
-    src/main.c)
+# Subsystems live in subdirectories; their artefacts do not. Keeping every
+# binary at the top of the build tree is what lets the documented commands
+# stay `build-host/refplayer` and `build-arm/spike.elf`.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 set(ARM6309_WARNINGS -Wall -Wextra -Wshadow -Wundef -Wconversion)
 
 if(CMAKE_CROSSCOMPILING)
-    # ---------------------------------------------------------- firmware --
-    # The assembly variant is target-only; the host build syntax-checks the C
-    # sources and cannot assemble Thumb-2.
-    add_executable(spike ${ARM6309_SOURCES} src/spike_poll_asm.S)
-    target_include_directories(spike PRIVATE include)
-
-    target_compile_options(spike PRIVATE
-        -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-        # -O2, not -Os: the bus loop is the product. Revisit only with a
-        # measurement in hand -- see docs/plan.md §5.
-        -O2
-        -ffreestanding -fno-common
-        -ffunction-sections -fdata-sections
-        -g3
-        ${ARM6309_WARNINGS})
-
-    target_link_options(spike PRIVATE
-        -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-        -T${CMAKE_CURRENT_SOURCE_DIR}/linker/stm32g431cb.ld
-        -nostartfiles
-        --specs=nosys.specs
-        -Wl,--gc-sections
-        -Wl,--print-memory-usage
-        -Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/spike.map)
-
-    set_target_properties(spike PROPERTIES SUFFIX ".elf")
-
-    add_custom_command(TARGET spike POST_BUILD
-        COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:spike> spike.bin
-        COMMAND ${CMAKE_OBJCOPY} -O ihex   $<TARGET_FILE:spike> spike.hex
-        COMMAND ${CMAKE_SIZE} $<TARGET_FILE:spike>
-        COMMENT "Generating spike.bin / spike.hex")
+    message(STATUS "Firmware build: cpu/ only.")
 else()
-    # ------------------------------------------------------- host checks --
-    # No cross toolchain needed. Catches syntax and type errors in the target
-    # sources and unit-tests the parts that are pure logic.
-    message(STATUS "Host build: syntax checks and logic tests only.")
+    message(STATUS "Host build: syntax checks, logic tests and host tools.")
     message(STATUS "For firmware: cmake -B build-arm "
                    "-DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake")
-
     enable_testing()
+endif()
 
-    # ---------------------------------------------------- reference player --
-    # docs/modplayer.md §8 build step 0. Host-only by construction: it models
-    # the sound card and runs the replayer that will be transliterated into
-    # 6309 assembly, so that the 6309 port has something to be diffed against.
-    set(REFPLAYER_SOURCES
-        tools/refplayer/card.c
-        tools/refplayer/mod_load.c
-        tools/refplayer/mod_replay.c
-        tools/refplayer/period_table.c
-        tools/refplayer/render.c)
+add_subdirectory(cpu)
 
-    add_executable(refplayer ${REFPLAYER_SOURCES} tools/refplayer/main.c)
-    target_include_directories(refplayer PRIVATE tools/refplayer)
-    target_compile_options(refplayer PRIVATE ${ARM6309_WARNINGS})
-    target_link_libraries(refplayer PRIVATE m)
-
-    add_executable(test_refplayer test/test_refplayer.c ${REFPLAYER_SOURCES})
-    target_include_directories(test_refplayer PRIVATE tools/refplayer)
-    target_compile_options(test_refplayer PRIVATE ${ARM6309_WARNINGS})
-    target_link_libraries(test_refplayer PRIVATE m)
-    add_test(NAME refplayer COMMAND test_refplayer)
-
-    add_executable(test_stub_core test/test_stub_core.c src/stub_core.c)
-    target_include_directories(test_stub_core PRIVATE include)
-    target_compile_options(test_stub_core PRIVATE ${ARM6309_WARNINGS})
-    add_test(NAME stub_core COMMAND test_stub_core)
-
-    # Syntax-check every target source with the host compiler. clock.c, gpio.c
-    # and spike_poll.c cannot RUN here (they dereference absolute peripheral
-    # addresses) but they must still compile cleanly.
-    set(SYNTAX_STAMPS "")
-    foreach(src ${ARM6309_SOURCES})
-        string(REPLACE "/" "_" stamp "${src}.stamp")
-        add_custom_command(
-            OUTPUT ${stamp}
-            COMMAND ${CMAKE_C_COMPILER} -fsyntax-only -std=c11
-                    ${ARM6309_WARNINGS}
-                    -I${CMAKE_CURRENT_SOURCE_DIR}/include
-                    ${CMAKE_CURRENT_SOURCE_DIR}/${src}
-            COMMAND ${CMAKE_COMMAND} -E touch ${stamp}
-            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${src}
-            COMMENT "Syntax-checking ${src}")
-        list(APPEND SYNTAX_STAMPS ${stamp})
-    endforeach()
-    add_custom_target(syntax ALL DEPENDS ${SYNTAX_STAMPS})
+if(NOT CMAKE_CROSSCOMPILING)
+    # Host-only by construction -- see audio/CMakeLists.txt.
+    add_subdirectory(audio)
 endif()

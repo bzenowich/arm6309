@@ -8,13 +8,14 @@ build-*/
 *.lst
 compile_commands.json
 .cache/
-
-# Reference PDFs (service manuals, datasheets). Kept out of history: they are
-# ~26 MB of scans and are freely available from colorcomputerarchive.com.
-# docs/plan.md cites them by name and page where it relies on them.
-docs/*.pdf
-
-# Reference schematics (scans). Same policy as the PDFs above.
-docs/*.tiff
 __pycache__/
 *.pyc
+
+# Reference scans (datasheets, service manuals, schematics). Kept out of
+# history: they are ~93 MB and are freely available from the vendors and from
+# colorcomputerarchive.com. Each reference/ subdirectory has a README listing
+# the expected files and what cites them, so a fresh clone can be refilled.
+# The READMEs themselves, and the small tracked binaries in reference/68k/,
+# are deliberately not covered by these patterns.
+reference/**/*.pdf
+reference/**/*.tiff

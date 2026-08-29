@@ -7,7 +7,7 @@ to the CPU's bus, and when?"** — and on that question the two machines differ
 fundamentally.
 
 **Date:** 2026-08-21
-**Companion:** [`docs/plan.md`](plan.md) §2 (CoCo 3 host requirements), §3.3 (timing budget)
+**Companion:** [`cpu/docs/plan.md`](../cpu/docs/plan.md) §2 (CoCo 3 host requirements), §3.3 (timing budget)
 
 ---
 
@@ -34,7 +34,7 @@ spent its on a multitasking-OS machine that doesn't.
 
 | Claim class | Source | Confidence |
 |---|---|---|
-| GIME registers, MMU, palette, video modes | *Color Computer 3 Service Manual* (Cat. 26-3334), pp. 10–20 — in this repo as [`coco3_ServiceManual.pdf`](coco3_ServiceManual.pdf) | **verified against the PDF** |
+| GIME registers, MMU, palette, video modes | *Color Computer 3 Service Manual* (Cat. 26-3334), pp. 10–20 — in this repo as [`coco3_ServiceManual.pdf`](../reference/manuals/coco3_ServiceManual.pdf) | **verified against the PDF** |
 | GIME clocking, DRAM arbitration | Same, §5.2 (p. 33) and §5.3 (p. 35) | **verified against the PDF** |
 | CoCo 3 DRAM part/organisation | Same, §5.2 and parts list (`M5M4464P-15`) | **verified against the PDF** |
 | VIC-II cycle behaviour, registers, timing | Christian Bauer, *The MOS 6567/6569 video controller (VIC-II) and its application in the Commodore 64* (1996); *C64 Programmer's Reference Guide* | recalled, widely corroborated — **not** verified against a document in this repo |
