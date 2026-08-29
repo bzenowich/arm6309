@@ -16,3 +16,5 @@ docs/*.pdf
 
 # Reference schematics (scans). Same policy as the PDFs above.
 docs/*.tiff
+__pycache__/
+*.pyc
