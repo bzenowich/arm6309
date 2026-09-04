@@ -10,3 +10,10 @@
 | `stm32g431kb.pdf` | ST STM32G431 datasheet | `cpu/docs/plan.md` §3.2 — pin budget, and the `TT_a` 3.6 V pins that made buffers mandatory |
 | `sn74hc574.pdf` | TI SN74HC574 octal D flip-flop | `cpu/docs/plan.md` §3.6 — the read-data latch (the design calls for the LVC part; this is the family datasheet) |
 | `ATSAMD51G19A.pdf` | Microchip SAMD51 | `cpu/docs/plan.md` §3.7 — the MCU review, i.e. the part that was *not* chosen |
+| `LTC7545A.pdf` | Linear Technology LTC7545A, 12-bit parallel multiplying DAC | `audio/docs/audio.md` §6.3 — **the specified DAC.** Pinout, `tWR`, glitch impulse |
+| `AD7545.pdf` | Analog Devices AD7545, the original | `audio/docs/audio.md` §6.3 — the pin-compatibility and timing comparison. **Note this is the plain `AD7545`, not the `AD7545A`** the design names as its period part; §6.3 explains why the difference matters |
+
+**Missing, and wanted:** the `AD7545A` datasheet. `audio/docs/audio.md` §6.3 names it as the
+period part and §17's audit rests on it, but the file here is the plain `AD7545`. Its
+`tWR` figure is the one number that decides whether the period part would actually have
+worked — see §6.3.

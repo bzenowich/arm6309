@@ -471,15 +471,71 @@ artefact that separates a good mod player from a great one.
 on-chip data latch, current output, four-quadrant multiplying, ~1 µs settling with
 a fast op-amp. Two of them, one per side.
 
-> **Sourcing note.** The period part here is the **`AD7545A` (Analog Devices,
-> 1983)**, and the design is written against it. It is effectively out of
-> production and now trades at **~\$50**. The **`LTC7545A` is the pin-compatible,
-> current-production improvement on it at ~\$9** — tighter DNL/INL over
-> temperature, same 20-pin footprint, same interface. **Specify the `LTC7545A` and
-> build with it**; the `AD7545A` stays in §17's period audit as the part the
-> design would have used in 1989, and either drops into the same socket. This is
-> the same posture [`graphics.md`](../../video/docs/graphics.md) §10.1 takes for `ATF22V10C` versus
-> a classic `GAL22V10`: period-honest design, current-production BOM. The latch replaces the output `'574`s, so the parallel part
+> **Sourcing note — now verified against the datasheets in `reference/datasheets/`.**
+> The period part here is the **`AD7545A` (Analog Devices, 1983)**, and the design is
+> written against it. It is effectively out of production and now trades at **~\$50**.
+> The **`LTC7545A` is the pin-compatible, current-production improvement on it at
+> ~\$9**. "Pin-compatible" is exact: **all twenty pins match**, `OUT1`/`AGND`/`DGND`,
+> `DB11`–`DB0` on 4–15, `CS` 16, `WR` 17, `VDD` 18, `VREF` 19, `RFB` 20. **Specify the
+> `LTC7545A` and build with it**; the `AD7545A` stays in §17's period audit as the part
+> the design would have used in 1989. This is the same posture
+> [`graphics.md`](../../video/docs/graphics.md) §10.1 takes for `ATF22V10C` versus a
+> classic `GAL22V10`: period-honest design, current-production BOM.
+>
+> **Specify the `L` or `C` grade** — ±0.5 LSB DNL *and* INL over the full temperature
+> range. The `K`/`B` grade is ±1 LSB DNL, which is monotonic but gives back half the
+> reason for choosing this part.
+
+> ### ⚠ The plain `AD7545` is **not** a substitute, and the part numbers differ by one letter
+>
+> This is the trap, and it is worth a heading because the wrong part is the one you are
+> more likely to be offered.
+>
+> §6.2 pulses the DAC's `WR` **once per colour-clock frame — every 281.9 ns**. Against
+> that budget, at `VDD` = +5 V:
+>
+> | | `AD7545` | `AD7545A` | `LTC7545A` |
+> |---|---|---|---|
+> | `tWR` write pulse width, min | **250 ns** @25 °C, **400 ns** over temperature | 100 ns | **100 ns** |
+> | Verdict against a 281.9 ns frame | **does not close** | closes | closes, 2.8× |
+>
+> The `AD7545A` cut `tWR` to 100 ns precisely so the part could talk to faster
+> processors, and the `LTC7545A` keeps that. **The plain `AD7545` cannot be clocked fast
+> enough for this card at 5 V.** Raising `VDD` to +15 V would fix the timing (`tWR` 160 /
+> 240 ns) but demands `VIH` = **13.5 V**, i.e. level shifters on all fourteen digital
+> inputs — not an option on a 5 V card. So: the design's named period part is correct,
+> and the near-identical part number silently is not.
+
+> ### The `LTC7545A`'s real advantage here is glitch, not linearity
+>
+> The argument above this note is about DNL and INL over temperature, and that argument
+> is fine but it is not the one that matters for **audio**:
+>
+> | at `VDD` = +5 V | `AD7545` | `LTC7545A` |
+> |---|---|---|
+> | Digital-to-analog glitch impulse | 400 nV·s typ | **5 nV·s typ** |
+> | Output current settling | 2 µs max (to ½ LSB) | **1 µs** (to 0.01 %) |
+> | Propagation delay | 300 ns max | **150 ns** |
+> | Multiplying feedthrough, 10 kHz | 5 mV p-p | 5 mV p-p |
+>
+> **80× less glitch energy per code transition.** §6.2 budgets for ~20 ns adder-settling
+> glitches at up to 126,000 per second and argues the §7 filter plus "the DAC's own
+> settling" absorb them. The converter's own code-transition glitch is the *other* half
+> of that budget, arriving on the same event grid, and on the `AD7545` it is the larger
+> half. The `LTC7545A` very nearly deletes it. Settling and propagation delay are
+> comfortable on either part against the 7.9 µs worst-case event spacing.
+
+> ### The on-chip latch is transparent, not edge-triggered
+>
+> A design note rather than a comparison, because both parts behave the same way and it
+> is not what a `'574` does. Write mode is **`CS` *and* `WR` both low — the DAC follows
+> the data bus**; hold is either one high, capturing whatever was present at that edge.
+> So the accumulator must present stable data *across* the latching edge:
+> **`tDS` = 100 ns setup, `tDH` = 5 ns hold** on the `LTC7545A`. Comfortable inside a
+> 281.9 ns frame, but it is a requirement an edge-triggered `'574` would not have
+> imposed, and it constrains when in the frame the adder is allowed to settle.
+
+The latch replaces the output `'574`s, so the parallel part
 is not even more packages:
 
 | | Serial (`PCM56` / `TDA1541A`) | **Parallel (`LTC7545A`)** |
@@ -1092,6 +1148,17 @@ specification that has not been tested.
     software will be written against a card that does not exist. Same requirement
     as [`graphics.md`](../../video/docs/graphics.md) §19 item 13, and the MCU card of §12.5 is a
     better reference than any model.
+15. **The `AD7545A` datasheet is not in `reference/datasheets/`** — the plain
+    `AD7545` and the `LTC7545A` are. §6.3's `tWR` = 100 ns figure for the `AD7545A`,
+    which is the whole reason the period part is viable at all, is second-hand.
+    **§17's period audit rests on it**, so verify it against the real datasheet
+    before that audit is taken as settled — and note that the plain `AD7545`, which
+    *is* in the repo, would not have worked in 1989 either.
+16. **The `LTC7545A`'s production status is unverified.** §6.3 calls it
+    "current-production" and prices it at ~\$9; neither figure has been checked
+    against a distributor or against Analog Devices' lifecycle page. If it has gone
+    NRND the argument does not collapse — the `AD7545A` still drops into the same
+    socket — but the BOM note does.
 
 ---
 
