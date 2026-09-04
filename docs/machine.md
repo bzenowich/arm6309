@@ -33,6 +33,7 @@ whose interrupt lines and I/O window are both already spoken for.
 | **Video** | 640×200 × 256 colours, VGA out, ~33 ICs ([`video/`](../video/)) |
 | **Audio** | 4-channel 8-bit PCM, Paula-exact, 35 ICs ([`audio/`](../audio/)) |
 | **I/O** | PS/2 keyboard + mouse, 9 ICs ([`io/ps2/`](../io/ps2/)); RS-232 serial, 3 ICs ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified**. |
+| **Storage** | SD card over SPI, 7 ICs, 537 KB/s — **specified** ([`storage/`](../storage/)). ⚠ The machine's one period exception. |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -105,16 +106,20 @@ later).
 | `$FF40`–`$FF4F` | 16 B | **audio** | *proposed* — `audio.md` §9.1 |
 | `$FF50`–`$FF53` | 4 B | **PS/2 keyboard + mouse** | *proposed* — `io/ps2/docs/ps2.md` §3.2 |
 | `$FF54`–`$FF57` | 4 B | **RS-232 serial** | *proposed* — `io/serial/docs/serial.md` §7.1 |
-| `$FF58`–`$FF5F` | 8 B | disk controller | *reserved, unclaimed* — `graphics.md` §17, less the 8 bytes above |
+| `$FF58`–`$FF5B` | 4 B | **SD card storage** | *proposed* — `storage/docs/sdcard.md` §6.1 |
+| `$FF5C`–`$FF5F` | 4 B | **free** | the machine's only unallocated I/O — half the disk reservation, **handed back** |
 | `$FF60`–`$FF7F` | 32 B | **video** | *taken* — `graphics.md` §13 |
 | `$FFA0`–`$FFAF` | 16 B | **MMU**, GIME-compatible | in the CPU module — `graphics.md` §6.2 |
 
-### ⚠ The map is now full. Zero bytes remain.
+### ⚠ The map has four bytes left, and that is all.
 
-16 + 4 + 4 + 8 + 32 = **64 of 64**. After the serial card there is no window for a second
-serial port, a third PS/2 port, a network interface, a SCSI controller, or anything else
-anyone thinks of later — and the disk controller's eight bytes are a guess made on its
-behalf by three cards that took theirs first.
+16 + 4 + 4 + 4 + 4 free + 32 = **64**. The disk-controller reservation was sized for a
+WD1773 — five registers plus a latch — and `storage/docs/sdcard.md` §6.1 needs three, so
+**four bytes came back**. That is the only movement this map has ever made in the
+expanding direction, and it is one small card's worth, once.
+
+There is still no window for a second serial port, a third PS/2 port, a network interface,
+or a floppy controller alongside the SD card.
 
 `graphics.md` §17 said *"widen the window now — it is a decode term today and a board
 respin later."* **That has stopped being prudent advice and become blocking.** See §5
@@ -146,11 +151,17 @@ what the line is for**, and that is where PS/2 goes. See §5.
 
 These are not deferred details; each one blocks a board.
 
-1. **⚠ THE I/O WINDOW IS FULL — and this is now the machine's blocking decision.**
-   `$FF40`–`$FF7F` is 64 bytes. Audio takes 16, PS/2 4, serial 4, the disk controller's
-   reservation 8, video 32. **That is all of it.** The next card of any kind has nowhere
-   to live, and the disk controller's share was set by three cards that allocated
-   themselves first.
+1. **⚠ THE I/O WINDOW IS ALL BUT FULL — and this is now the machine's blocking decision.**
+   `$FF40`–`$FF7F` is 64 bytes. Audio takes 16, PS/2 4, serial 4, storage 4, video 32.
+   **Four bytes remain**, returned by the storage card (§3), and they are the machine's
+   entire margin.
+
+   > **It now costs throughput, not just expandability.**
+   > [`storage/docs/sdcard.md`](../storage/docs/sdcard.md) §11.1 shows that a 512-byte
+   > memory-mapped block buffer would delete that card's `TFM` hazard outright and buy
+   > 27 % more transfer rate — and it is rejected purely because neither the 64-byte `$FF`
+   > window nor the 1 MB physical map (`graphics.md` §6.2 fixes both halves) has room for
+   > it. **This is the strongest argument the machine has produced for widening the map.**
 
    The options are unchanged and only one of them is cheap **now**: widen the geographic
    decode below `$FF40`, page the window, or accept that the machine is closed to further
@@ -234,3 +245,5 @@ a cross-card dependency.
 | io | **Measure NitrOS-9's interrupt dispatch cost** — it decides whether the FIFO comes back | `ps2.md` §14 item 3, §13 step 8 |
 | io | Source an `R6551A` or `G65SC51` — the in-production `W65C51N` is defective for this use | `serial.md` §3.3, §13 item 5 |
 | io | Confirm whether NitrOS-9's `sc6551` exists; it is the card's entire software cost | `serial.md` §13 item 2 |
+| **cpu** | **⚠ Settle `TFM`'s interrupt/resume behaviour from silicon.** `plan.md` §7 already listed it; the storage card's correctness now depends on it too | `sdcard.md` §4, §13 item 1 |
+| storage | A NitrOS-9 `RBF` driver — larger than the card. Evaluate matching CoCoSDC's map to inherit one | `sdcard.md` §13 item 4 |

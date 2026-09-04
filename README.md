@@ -23,6 +23,7 @@ one can be taken.
 | [`video/`](video/) | 640×200 × 256 colours, 80×25 text, smooth scroll, span writer. ~33 ICs. | **Specified, not built** | [`video/docs/graphics.md`](video/docs/graphics.md) |
 | [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula. 35 ICs. Host reference model **builds and passes**. | **Specified; reference player validated against libopenmpt** | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
 | [`io/`](io/) | PS/2 keyboard and mouse — 9 ICs of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does. | **Both specified** | [`io/README.md`](io/README.md), [`io/ps2/docs/ps2.md`](io/ps2/docs/ps2.md), [`io/serial/docs/serial.md`](io/serial/docs/serial.md) |
+| [`storage/`](storage/) | SD card interface — 7 ICs, 537 KB/s, an SPI burst started by the bus read strobe. | **Specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |
 | [`software/`](software/) | 6809/6309 code that runs *on* the machine. | Third-party monitor and FORTH, imported | [`software/README.md`](software/README.md) |
 
 Machine-level material that belongs to no single card — the system map, and the

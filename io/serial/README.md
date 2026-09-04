@@ -44,12 +44,18 @@ PS/2 card's FIFO comes back. One measurement settles both. §5.
 That is also why a non-standard 2× crystal is a trap: 38,400 baud at 73 % of the CPU. The
 baud generator was never the limit.
 
-## This card closes the `$FF` map
+## This card closed the `$FF` map
 
-`$FF54`–`$FF57`, four bytes — and with them the `$FF40`–`$FF7F` geographic decode is
-**exactly full, zero bytes left**. `graphics.md` §17's "widen the window now" has stopped
-being prudent advice and become blocking; see [`../../docs/machine.md`](../../docs/machine.md)
-§5 item 1.
+`$FF54`–`$FF57`, four bytes — and with them the `$FF40`–`$FF7F` geographic decode was
+**exactly full**. [`../../storage/`](../../storage/) has since returned four, needing only
+half the disk-controller reservation, so the machine's entire I/O margin is now
+`$FF5C`–`$FF5F`.
+
+`graphics.md` §17's "widen the window now" has stopped being prudent advice and become
+blocking; see [`../../docs/machine.md`](../../docs/machine.md) §5 item 1, which now also
+records that the squeeze costs *throughput* — `sdcard.md` §11.1's 512-byte block buffer
+would delete a hazard and buy 27 % more transfer rate, and is rejected only for want of
+address space.
 
 ## Status
 

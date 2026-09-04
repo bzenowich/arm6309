@@ -44,7 +44,7 @@ nobody has measured yet. §5.
 | **Baud rates** | 50–19,200 from the standard crystal. A 2× crystal doubles them and **buys nothing usable** — see below. | §5 |
 | **What actually limits throughput?** | **No FIFO ⇒ one interrupt per byte.** At 19,200 baud that is 1,920 interrupts/s — 9 % of the CPU optimistically, 37 % pessimistically. | §5 |
 | **Practical ceiling** | **4800–19,200 baud**, pinned by the same unmeasured NitrOS-9 dispatch cost as `ps2.md` §14 item 3. One measurement settles both. | §5 |
-| **Where in the `$FF` map?** | **`$FF54`–`$FF57`, four bytes** — and **this closes the map exactly, with zero bytes left.** | §7.1 |
+| **Where in the `$FF` map?** | **`$FF54`–`$FF57`, four bytes** — and **this closed the map.** The storage card has since returned four. | §7.1 |
 | **IC count** | **3** — ACIA, `MAX232`, decode GAL. Plus a crystal and a DE-9. | §9 |
 
 **Net: 3 ICs**, against video's 33, audio's 35 and PS/2's 9.
@@ -286,11 +286,16 @@ jumper like every other card's.
 | `$FF40`–`$FF4F` | 16 | audio — `audio.md` §9.1 |
 | `$FF50`–`$FF53` | 4 | PS/2 — `ps2.md` §3.2 |
 | **`$FF54`–`$FF57`** | **4** | **serial — this document** |
-| `$FF58`–`$FF5F` | 8 | disk controller, reserved |
+| `$FF58`–`$FF5B` | 4 | storage — `storage/docs/sdcard.md` §6.1, added after this document |
+| `$FF5C`–`$FF5F` | 4 | **free** — the storage card returned half the disk reservation |
 | `$FF60`–`$FF7F` | 32 | video — `graphics.md` §13 |
 | | **64** | **of 64 in the `$FF40`–`$FF7F` geographic decode** |
 
-> ### ⚠ This allocation closes the I/O map exactly. There are **zero** bytes left.
+> ### ⚠ This allocation closed the I/O map. Four bytes have since come back.
+>
+> **Updated:** `storage/docs/sdcard.md` §6.1 needed only half the disk reservation, so
+> `$FF5C`–`$FF5F` is free. The paragraph below stands otherwise — four bytes is one small
+> card, once.
 >
 > `graphics.md` §17 already said *"widen the window now — it is a decode term today and a
 > board respin later."* That advice has stopped being prudent and become **blocking**:

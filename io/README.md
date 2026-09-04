@@ -30,10 +30,11 @@ either adopt those answers or argue with them, not rediscover the problem:
   purpose. Polling a keyboard from the VBL tick is a genuine option at 50–70 Hz, but it
   should be chosen rather than defaulted into.
 
-**And the `$FF` map is now full.** Serial's four bytes at `$FF54`–`$FF57` close the
-`$FF40`–`$FF7F` geographic decode exactly — audio 16, PS/2 4, serial 4, disk 8, video 32.
-There is no room for a third I/O card of any kind. `serial/docs/serial.md` §7.1 escalates
-`graphics.md` §17's "widen the window now" from advice to a blocker.
+**And the `$FF` map has four bytes left.** Audio 16, PS/2 4, serial 4, storage 4, video 32
+— of 64. [`../storage/`](../storage/) returned half the old disk-controller reservation,
+and `$FF5C`–`$FF5F` is the machine's entire I/O margin. `serial/docs/serial.md` §7.1
+escalates `graphics.md` §17's "widen the window now" from advice to a blocker, and
+`sdcard.md` §11.1 shows it now costs throughput as well as expandability.
 
 `ps2/docs/ps2.md` §3.1 takes **`/IRQ` as a third source** — it is open-drain, already
 carries VBL and raster compare, and only `/FIRQ` is exclusive — and §3.2 takes
