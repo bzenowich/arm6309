@@ -1,38 +1,64 @@
-# `io/serial/` — serial
+# `io/serial/` — RS-232 serial
 
-**Not started.** Placeholder — but two things are already known, and both come from the
-same place [`../ps2/docs/ps2.md`](../ps2/docs/ps2.md) §4.1 got its design.
+One port, **3 ICs**: a 6551 ACIA, a `MAX232`, and a decode GAL.
 
-## What the Minimal 64x4 shows
+Paths below are relative to this directory.
 
-Slu4's machine does **full-duplex serial in five packages**: a `74HC165` transmit
-shifter, a `74HC595` receive shift-and-store, a `74HC161` and a `74HC193` for bit timing,
-and one `74HC00` of glue. Same shape as the PS/2 receiver, same `'595` storage-register
-trick, and `UART_RTS` for flow control.
+| | |
+|---|---|
+| [`docs/serial.md`](docs/serial.md) | the card — part choice, the alternatives, the throughput ceiling, register map |
 
-**It is five packages because the rate is fixed.** The sheet says so plainly: *"UART
-bitrate 500 kbps, 1 start bit, 7 data bits, 2 stop bits, new line LF, transmit line delay
-~10 ms."* One rate, seven data bits, no divisor register, and the inter-line delay in
-software. It is a fast link to a host PC for loading programs — not an RS-232 port.
+## Don't build this one out of logic
 
-**A programmable-baud card costs roughly three times that.** colormin's
-`~/code/colormin/docs/backplane.md` §5 prices the same circuit plus a proper baud
-generator — a 1.8432 MHz oscillator, a `'393`/`'161` divider tree, a `'151` selecting the
-bit clock from a `RATE[2:0]` field, and a `'74` resynchroniser because the oscillator is
-asynchronous to the bus — at **~14 ICs**, plus level shifting.
+Every other card in this machine is discrete because no period chip does what it needs.
+Serial is the exception: the **6551 ACIA (1977)** has four registers, an on-chip
+programmable baud generator that needs nothing but a 1.8432 MHz crystal, full modem
+control and an interrupt output. It is *older* than most of the 74HC parts around it, and
+the period rules bar CPLDs and FPGAs, not LSI.
 
-So the first design decision for this card is not a circuit, it is a question: **is this a
-period RS-232 port, or a fast link to a modern host?** They are 14 ICs and 5 ICs and they
-are not the same card.
+**And it shipped on this bus.** The Tandy Deluxe RS-232 Program Pak (26-2226, 1983) is a
+6551 with a 1.8432 MHz crystal decoding four ports on a CoCo — a 6809 machine, where `E`
+*is* `φ2`. This is the only card in the project with a commercial precedent.
 
-## Read before specifying it
+> **An earlier version of this README framed the first decision as "a period RS-232 port
+> (~14 ICs) or a fast host link (~5)".** That was a false choice, reached by looking only
+> at the Minimal 64x4 and colormin's `backplane.md` §5 — both of which build UARTs out of
+> logic because their machines reach serial through microcode strobes and so have no I/O
+> window to spend. This machine has 64 bytes of window and no shortage of board area.
+> `docs/serial.md` §4 rejects both, and the discrete alternative loses on package count
+> anyway: 14 and 5 against 3.
 
-[`../../docs/machine.md`](../../docs/machine.md) §5 items 1 and 2. `../ps2/docs/ps2.md`
-§3 answers both — `/IRQ` as a shared source, and a small window carved from
-`$FF50`–`$FF5F` — and a serial card should either adopt those answers or argue with them,
-not rediscover the problem. Note that PS/2 took `$FF50`–`$FF53` and the disk controller
-still has a claim on the rest.
+## The two things worth knowing
 
-Note also that the CPU module already has a debug UART on `USART3` (`PC10`/`PC11`) — see
+**⚠ Not the `W65C51N`.** The one still in production has two documented defects — `TDRE`
+never reads empty, and accessing the chip mid-transmission stops the transmission — which
+between them remove every way of knowing when to send the next byte. Specify an `R6551A`
+or a CMOS `G65SC51`. §3.3.
+
+**The FIFO is what's missing, not the baud rate.** The 6551 buffers one byte each way, so
+every received byte costs an interrupt. At 19,200 baud that is 1,920/s — 9 % of the CPU
+optimistically, 37 % pessimistically. The practical ceiling is **4800–19,200 baud**, and
+which end depends on the same unmeasured NitrOS-9 dispatch cost that decides whether the
+PS/2 card's FIFO comes back. One measurement settles both. §5.
+
+That is also why a non-standard 2× crystal is a trap: 38,400 baud at 73 % of the CPU. The
+baud generator was never the limit.
+
+## This card closes the `$FF` map
+
+`$FF54`–`$FF57`, four bytes — and with them the `$FF40`–`$FF7F` geographic decode is
+**exactly full, zero bytes left**. `graphics.md` §17's "widen the window now" has stopped
+being prudent advice and become blocking; see [`../../docs/machine.md`](../../docs/machine.md)
+§5 item 1.
+
+## Status
+
+**Specified, nothing built.** The deliverable is the document.
+
+`docs/serial.md` §12 gives the build order. Step 0 is the `$FF` map. Step 1 is getting a
+datasheet — §7.2's register layouts are recalled, and there is no 6551 datasheet in
+`reference/`. Step 2 is the shared interrupt-cost measurement.
+
+Note that the CPU module already has a debug UART on `USART3` (`PC10`/`PC11`) — see
 [`../../cpu/README.md`](../../cpu/README.md). That is a bring-up console for the emulator,
 not the machine's serial port, and the two should not be confused.

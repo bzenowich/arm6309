@@ -32,7 +32,7 @@ whose interrupt lines and I/O window are both already spoken for.
 | **OS target** | NitrOS-9 Level 2 |
 | **Video** | 640×200 × 256 colours, VGA out, ~33 ICs ([`video/`](../video/)) |
 | **Audio** | 4-channel 8-bit PCM, Paula-exact, 35 ICs ([`audio/`](../audio/)) |
-| **I/O** | PS/2 keyboard + mouse, 9 ICs, on `/IRQ` — **specified** ([`io/ps2/`](../io/ps2/)). Serial not started. |
+| **I/O** | PS/2 keyboard + mouse, 9 ICs ([`io/ps2/`](../io/ps2/)); RS-232 serial, 3 ICs ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified**. |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -104,11 +104,21 @@ later).
 |---|---|---|---|
 | `$FF40`–`$FF4F` | 16 B | **audio** | *proposed* — `audio.md` §9.1 |
 | `$FF50`–`$FF53` | 4 B | **PS/2 keyboard + mouse** | *proposed* — `io/ps2/docs/ps2.md` §3.2 |
-| `$FF54`–`$FF5F` | 12 B | disk controller | *reserved, unclaimed* — `graphics.md` §17, less the 4 bytes above |
+| `$FF54`–`$FF57` | 4 B | **RS-232 serial** | *proposed* — `io/serial/docs/serial.md` §7.1 |
+| `$FF58`–`$FF5F` | 8 B | disk controller | *reserved, unclaimed* — `graphics.md` §17, less the 8 bytes above |
 | `$FF60`–`$FF7F` | 32 B | **video** | *taken* — `graphics.md` §13 |
 | `$FFA0`–`$FFAF` | 16 B | **MMU**, GIME-compatible | in the CPU module — `graphics.md` §6.2 |
 
-**PS/2 now has a proposed window; serial still has none.** See §5.
+### ⚠ The map is now full. Zero bytes remain.
+
+16 + 4 + 4 + 8 + 32 = **64 of 64**. After the serial card there is no window for a second
+serial port, a third PS/2 port, a network interface, a SCSI controller, or anything else
+anyone thinks of later — and the disk controller's eight bytes are a guess made on its
+behalf by three cards that took theirs first.
+
+`graphics.md` §17 said *"widen the window now — it is a decode term today and a board
+respin later."* **That has stopped being prudent advice and become blocking.** See §5
+item 1, which is now the highest-priority open item in the machine.
 
 ---
 
@@ -136,12 +146,21 @@ what the line is for**, and that is where PS/2 goes. See §5.
 
 These are not deferred details; each one blocks a board.
 
-1. **No I/O window for PS/2 or serial.** §3's map has `$FF50`–`$FF5F` pencilled in for a
-   disk controller and nothing else free inside the `$FF40`–`$FF7F` geographic decode.
-   Either widen the decode again, subdivide `$FF50`–`$FF5F`, or put the I/O card
-   somewhere else entirely. Decide before the backplane is laid out, not after.
+1. **⚠ THE I/O WINDOW IS FULL — and this is now the machine's blocking decision.**
+   `$FF40`–`$FF7F` is 64 bytes. Audio takes 16, PS/2 4, serial 4, the disk controller's
+   reservation 8, video 32. **That is all of it.** The next card of any kind has nowhere
+   to live, and the disk controller's share was set by three cards that allocated
+   themselves first.
 
-   > **A proposal is on the table.** [`io/ps2/docs/ps2.md`](../io/ps2/docs/ps2.md) §3.2
+   The options are unchanged and only one of them is cheap **now**: widen the geographic
+   decode below `$FF40`, page the window, or accept that the machine is closed to further
+   cards. `graphics.md` §17 warned that this is "a decode term today and a board respin
+   later" — **decide it before the backplane is laid out.**
+
+   > **Two proposals are on the table, and together they are what filled it.**
+   > [`io/serial/docs/serial.md`](../io/serial/docs/serial.md) §7.1 asks for
+   > `$FF54`–`$FF57` — four bytes, because a 6551 ACIA decodes exactly four registers.
+   > [`io/ps2/docs/ps2.md`](../io/ps2/docs/ps2.md) §3.2
    > asks for **`$FF50`–`$FF53`** — four bytes — leaving `$FF54`–`$FF5F`, twelve bytes,
    > for the disk controller. Four suffices because the card has four registers: two data
    > ports, one status, one control. It had asked for eight before the design lost its
@@ -170,6 +189,13 @@ These are not deferred details; each one blocks a board.
    > `/NMI` is confirmed wrong, for a different reason than expected: being non-maskable,
    > a keypress would pre-empt the replayer tick that §4's `/FIRQ` ownership exists to
    > protect.
+   >
+   > **Serial follows the same call** — `serial.md` §6 puts the 6551's open-drain `/IRQ`
+   > on the same line, making it the fourth source after VBL, raster compare and PS/2. Its
+   > §5 shows the cost is what bounds serial throughput: no FIFO means one interrupt per
+   > byte, so 19,200 baud is 9 % of the CPU at 100 cycles of dispatch and **37 % at 400**.
+   > The practical ceiling is 4800–19,200 baud, and **the same single measurement decides
+   > that and whether PS/2's FIFO comes back.**
 
 3. **The MMU register set is not written down.** `graphics.md` §6.2 says
    "GIME-register-compatible, `$FFA0`–`$FFAF`, 8 blocks, two task registers, 6-bit block
@@ -206,4 +232,5 @@ a cross-card dependency.
 | audio | The MCU bring-up card, which is what proves the register map | `audio.md` §12.5 |
 | io | Measure the PS/2 protocol on a scope; add a reference document to `reference/` | `ps2.md` §13 step 1, §14 item 1 |
 | io | **Measure NitrOS-9's interrupt dispatch cost** — it decides whether the FIFO comes back | `ps2.md` §14 item 3, §13 step 8 |
-| io | Decide whether serial is a period RS-232 port (~14 ICs) or a fast host link (~5) | `io/serial/README.md` |
+| io | Source an `R6551A` or `G65SC51` — the in-production `W65C51N` is defective for this use | `serial.md` §3.3, §13 item 5 |
+| io | Confirm whether NitrOS-9's `sc6551` exists; it is the card's entire software cost | `serial.md` §13 item 2 |

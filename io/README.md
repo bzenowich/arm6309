@@ -6,7 +6,14 @@ deliberate instead of at the root.
 | | | |
 |---|---|---|
 | [`ps2/`](ps2/) | PS/2 keyboard and mouse | **specified** — [`ps2/docs/ps2.md`](ps2/docs/ps2.md), 9 ICs |
-| [`serial/`](serial/) | serial | not started — [`serial/README.md`](serial/README.md) has the prior art |
+| [`serial/`](serial/) | RS-232 serial | **specified** — [`serial/docs/serial.md`](serial/docs/serial.md), 3 ICs |
+
+**The two cards answer the "discrete or a chip?" question differently, and both are
+right.** PS/2 is nine packages of 74-series logic because no period chip decodes PS/2 —
+`ps2.md` §4.5 evaluates the closest thing, a 6522 per port, and rejects it on I/O space.
+Serial is three packages because the 6551 (1977) does the whole job in one, costs four
+addresses, and shipped inside a CoCo. The house rule bars CPLDs and FPGAs, not LSI; what
+decides each case is whether a period part exists that fits the I/O budget.
 
 ## Read this before specifying another one
 
@@ -22,6 +29,11 @@ either adopt those answers or argue with them, not rediscover the problem:
   NitrOS-9's system tick — and `audio.md` §8.1 takes `/FIRQ` as the *sole* source on
   purpose. Polling a keyboard from the VBL tick is a genuine option at 50–70 Hz, but it
   should be chosen rather than defaulted into.
+
+**And the `$FF` map is now full.** Serial's four bytes at `$FF54`–`$FF57` close the
+`$FF40`–`$FF7F` geographic decode exactly — audio 16, PS/2 4, serial 4, disk 8, video 32.
+There is no room for a third I/O card of any kind. `serial/docs/serial.md` §7.1 escalates
+`graphics.md` §17's "widen the window now" from advice to a blocker.
 
 `ps2/docs/ps2.md` §3.1 takes **`/IRQ` as a third source** — it is open-drain, already
 carries VBL and raster compare, and only `/FIRQ` is exclusive — and §3.2 takes
