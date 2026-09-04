@@ -9,6 +9,7 @@ wherever a claim rests on it.
 | [`datasheets/`](datasheets/) | chip documentation — the 6809/6309 and the STM32 |
 | [`manuals/`](manuals/) | machine and OS documentation |
 | [`schematics/`](schematics/) | scanned schematics |
+| [`articles/`](articles/) | prior art and design history — narratives, not schematics |
 | [`68k/`](68k/) | 68000-era material, kept for reading |
 
 ## The big scans are not in git
