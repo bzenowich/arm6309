@@ -116,7 +116,7 @@ machines.
 **Two things follow.** First, the electrical risk on this card is close to zero, which is
 not true of anything else in this project. Second, if NitrOS-9's CoCo `sc6551` driver
 exists (⚠ §13 item 2) it should work against §7's register map with a base-address change
-and nothing else — the same posture as `graphics.md` §6.2's GIME-compatible MMU, for once
+and nothing else — the same posture as `graphics.md` §6.3's MMU, for once
 obtained without designing for it.
 
 ### 3.3 Which 6551 — and the trap in the current-production part

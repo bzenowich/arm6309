@@ -331,6 +331,36 @@ Totals: 20 outputs (`A0-15`, `R/W`, `BUS_OE`, `BA`, `BS`), 8 bidirectional (`D0-
 does not connect them. Adding them later costs the UART and the LED, which is the wrong
 trade for this target.
 
+#### The same package covers the homebrew machine, and that decided its MMU
+
+This document is written against the CoCo 3 drop-in, but the pin budget above is what
+settled the *other* target's architecture, so record the arithmetic here where it lives.
+
+[`docs/machine.md`](../../docs/machine.md) §5 item 6 asks the homebrew machine to give up
+`BA`/`BS` and spend the pins differently:
+
+| | CoCo 3 drop-in | homebrew, **MMU in the CPU** | homebrew, **MMU on the motherboard** |
+|---|---|---|---|
+| `A0..A15`, `D0..D7`, `R/W`, `E`, `Q` | 27 | 27 | 27 |
+| `A16..A19` | — | **4** | 0 |
+| `/RESET`, `/NMI`, `/IRQ`, `/FIRQ`, `/HALT` | 5 | 5 | 5 |
+| `BUS_OE` | 1 | 1 | 1 |
+| `BA`, `BS` | 2 | — | — |
+| HSYNC in — `graphics.md` §12.2 | — | 1 | 1 |
+| UART ×2, LED | 3 | 1 — LED only, no room for the UART | 3 |
+| **of 39** | **38**, one spare | **39**, none spare | **37**, two spare |
+
+An in-CPU MMU costs the debug UART on a board that has never been brought up. Moving it
+to 3 ICs on the motherboard ([`graphics.md`](../../video/docs/graphics.md) §6.3.1) returns
+A16–A19, and **one STM32G431CBT6 then serves the CoCo 3, the Dragon 64 (§2.6.1) and the
+homebrew machine** — one pinout, one board-support file, one firmware. That, plus the
+48-pin part being cheaper and better stocked, is why the machine took the external MMU
+rather than the LQFP64.
+
+The homebrew column changes nothing above it: the bus loop, the §3.6 read latch and the
+§3.3 budget are identical, and E/Q remain inputs there too (`graphics.md` §5.3 keeps
+`arm6309` clock-slaved on both targets).
+
 Design notes:
 
 - **E and Q on `PA8`/`PA9`** — one `LDR` of `GPIOA->IDR` yields the data bus in bits 0–7
@@ -1289,7 +1319,9 @@ contribute upstream.
 
 1. ~~Does the CoCo 3 connect `TSC`/`/LIC`/`AVMA`/`BUSY`/`BA`/`BS`?~~ **Answered** — see
    §2.6. All five outputs NC, `TSC` grounded.
-2. ~~LQFP48 or LQFP64?~~ **Answered** — LQFP48, with 4 pins to spare.
+2. ~~LQFP48 or LQFP64?~~ **Answered** — LQFP48, with 4 pins to spare. **And it now
+   answers for the homebrew machine too**, which is what moved that machine's MMU onto
+   the motherboard rather than into the CPU: see §3.2 and `docs/machine.md` §5 item 6.
 3. ~~What are `t_DSR` and `t_DHR`?~~ **Answered, twice.** First from `reference/datasheets/MC6809E.pdf`
    p.3 (40 ns / 10 ns, MC68B09E), then properly from `reference/datasheets/HD6309E_datasheet.pdf` p.3,
    which carries **HD63B09E and HD63C09E columns side by side**: `t_DSR` 40 → **20 ns**

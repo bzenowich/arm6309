@@ -278,7 +278,9 @@ The one thing that genuinely changes is that **`t_AD` stops being a datasheet
 constant and becomes a number you specify.** In the CoCo 3 you must meet 110 ns
 because the GIME says so. In your machine the address-valid deadline is whatever
 your memory system needs — at 476.7 ns per cycle with a 72 ns SRAM access, 160 ns
-is comfortable. That slack is what pays for §6.2's in-CPU MMU.
+is comfortable. That slack is what pays for §6.3's MMU — for the in-CPU version's
+translation cycles, or, in the version the machine took, for §6.3.1's 15 ns of
+external map propagation.
 
 ---
 
@@ -353,7 +355,9 @@ machine has an MMU, because NitrOS-9 Level 2 requires one.** Once the MMU exists
 `BANK` is a second, worse banking mechanism sitting on top of it.
 
 **Recommendation: put the MMU inside `arm6309`, GIME-register-compatible, and map
-VRAM flat into the physical address space.**
+VRAM flat into the physical address space.** ⚠ **The first half of this was not taken —
+see §6.3.1.** The flat physical map stands; the location and the register compatibility
+did not survive the single-SKU argument.
 
 ```
 physical A19..A13  <-- MMU block map, 8 blocks x 8 KB, per task
@@ -377,11 +381,14 @@ Why in the CPU rather than as three chips on the motherboard:
 
 **Two consequences to plan for:**
 
-1. **Use the LQFP64 part for the homebrew CPU card.** plan.md §3.2 closes LQFP48
-   at 35 of 39 pins for the CoCo 3 — there is no room for A16–A19 plus an HSYNC
-   input (§12). The homebrew module is not a 40-pin DIP, so the package
-   constraint does not apply: **STM32G431RB / G474RE, LQFP64, same core, same
-   170 MHz, same source.** Keep the LQFP48 build for the CoCo 3 drop-in.
+1. ~~**Use the LQFP64 part for the homebrew CPU card.**~~ **Superseded by §6.3.1 —
+   the machine took the external MMU and the LQFP48 stands for both targets.** The
+   arithmetic that led here is still correct and is why the in-CPU version needs the
+   larger package: plan.md §3.2 closes LQFP48 at 35 of 39 pins for the CoCo 3, and
+   an in-CPU MMU adds A16–A19 plus an HSYNC input (§12) on top of that. The
+   homebrew module is not a 40-pin DIP, so the package constraint does not apply to
+   it — **STM32G431RB / G474RE, LQFP64, same core, same 170 MHz, same source** —
+   but the *project* has a reason to want one SKU, and §6.3.1 is how it gets one.
 2. **The video card now decodes physical A0–A18 plus a chip select**, not a 16 KB
    window. Any of the eight MMU blocks can be pointed at VRAM, so up to 64 KB of
    framebuffer is directly addressable at once — strictly better than a 16 KB
@@ -392,12 +399,117 @@ span writer's address source; the MMU is the random-access path. Two paths on
 purpose, exactly as colormin argues — just with the MMU doing the job `BANK` used
 to do badly.
 
-**Alternative if you want the MMU outside the CPU** (period-honest, and what a
-1990 machine would really have done): a 15 ns 2K×8 SRAM addressed by
-`{TASK, A15..A13}` outputting physical A13..A19, plus a `'574` for task/enable and
-write decode — **3 ICs on the motherboard**, the SAM/GIME/DAT arrangement. It
-costs parts and keeps the CPU module simple. The register-compatibility argument
-above is the reason to prefer the in-CPU version.
+### 6.3.1 The MMU goes on the motherboard — 3 ICs, and one LQFP48 SKU serves both machines
+
+**Decided.** The recommendation above stands as *analysis* — an in-CPU MMU really is
+free in parts, and it really is the easier route to GIME register compatibility — but
+the machine took the other option, for a reason that is about the project rather than
+the address path, and it then decided it did not want the compatibility either. Recorded
+in [`machine.md`](../../docs/machine.md) §5 item 6.
+
+> **The deciding argument is one SKU, not one board.** `cpu/docs/plan.md` is written
+> against a CoCo 3 drop-in that must be an LQFP48 in a 40-pin DIP footprint (§2.7).
+> An in-CPU MMU pushes *this* machine's module to LQFP64. That is two different parts,
+> two pinouts, two board files and two bring-up paths for what is otherwise the same
+> firmware. Putting the MMU outside buys back the four A16–A19 pins and the LQFP48
+> covers both targets. The 48-pin part is also the cheaper and the more available of
+> the two — which matters for a board that gets built in ones and twos.
+
+**The three ICs** (period-honest, and what a 1990 machine would really have done — the
+SAM/GIME/DAT arrangement):
+
+| Qty | Part | Role |
+|---|---|---|
+| 1 | 2K×8 SRAM, **15 ns** | the block map, addressed by `{TASK, A15..A13}`, outputting physical A13..A19 |
+| 1 | `74HC574` | task select and MMU enable — two bits, at addresses this machine picks (see below), not the GIME's `$FF90`/`$FF91` |
+| 1 | GAL (or `'138` + gate) | write decode: steer CPU writes into the map SRAM, and generate the I/O-page override |
+
+Sixteen of the SRAM's 2048 locations are used. A 2K×8 is specified anyway because a
+15 ns one is a stocked commodity part and a 16×8 is not.
+
+**Pin budget, this machine, both ways.** From plan.md §3.2's 39 usable pins:
+
+| | in-CPU MMU | external 3-IC MMU |
+|---|---|---|
+| `A0..A15` | 16 | 16 |
+| `A16..A19` | **4** | 0 — the map SRAM emits A13..A19 |
+| `D0..D7` | 8 | 8 |
+| `R/W`, `E`, `Q` | 3 | 3 |
+| `/RESET`, `/NMI`, `/IRQ`, `/FIRQ`, `/HALT` | 5 | 5 |
+| `BUS_OE` | 1 | 1 |
+| HSYNC in, for §12.2's raster compare | 1 | 1 |
+| **Used, of 39** | **38** | **34** |
+| Spare | 1 | **5** — debug UART, status LED, and one left |
+
+plan.md §3.2 now carries the same arithmetic with the UART and LED counted as line items
+rather than as spares; the two tables agree at 39 either way.
+
+Nothing else in the machine asks the CPU module for a pin. Audio, PS/2, serial and
+storage are all bus cards behind geographic `/IOSEL`, and their interrupts wire-OR onto
+`/IRQ` and `/FIRQ`, which are in the count already ([`machine.md`](../../docs/machine.md)
+§2, §4). The only pin the CPU has acquired since this section was first written is
+§12.2's HSYNC input, and it is in both columns.
+
+**The timing argument reverses too, mildly.** The bullet above prices the in-CPU MMU at
+~3–4 core cycles on the post-read path plus a second `STR` for A16–A19 — ~18–24 ns
+inside `t_AD`. The external map spends 15 ns of SRAM propagation *after* `t_AD`, on the
+motherboard, where §5.3's self-specified deadline has slack for it. So the external
+version is a small win in absolute time and a real one on the CPU's most deadline-critical
+instruction, rather than the cost the "Alternative" framing implied.
+
+**Two details that only exist in this version.** Both are now carried in
+[`machine.md`](../../docs/machine.md) §2 and §3; they are stated here because they are
+consequences of *this* choice, not of the backplane:
+
+1. **The I/O-page decode must be taken from *logical* A13–A15.** `$FF00`–`$FFFF` has to
+   override translation, exactly as it does on a CoCo 3. With the MMU outside, logical
+   A13–A15 are on the motherboard — they are the map SRAM's address inputs — but they
+   are deliberately **not** on the backplane, which carries physical A0–A18 + A19
+   ([`machine.md`](../../docs/machine.md) §2). A0–A12 are untranslated, so the decode is
+   `(logical A15..A13 = 111) AND (A12..A8 = 11111)`, and it is the same term that
+   already generates `/IOSEL`. Free, but it has to be *drawn* that way.
+2. **The enable and task-select bits need a home, and the `$FF` map does not allocate
+   one.** A GIME keeps MMU enable in `$FF90` bit 6 and task select in `$FF91` bit 0,
+   neither of which is inside the `$FF40`–`$FF7F` geographic window, and
+   [`machine.md`](../../docs/machine.md) §3 lists only `$FFA0`–`$FFAF` against the MMU.
+   In-CPU those are emulator state and cost nothing; outside they are the `'574`'s two
+   bits and need a decode term. **See below — they do not have to be at the GIME's
+   addresses**, and putting them in the MMU's own window costs one term instead of two.
+
+**A third detail, common to both:** GIME block numbers are **6 bits**, which reaches
+512 KB. This machine's physical map is 1 MB and the block map emits A13..A19 —
+**7 bits**. Either implementation needs a seventh bit that a real GIME does not have.
+
+#### GIME register compatibility is not a constraint on this machine
+
+**Owner's call, and it changes what §6.3.1 costs.** Patching NitrOS-9 Level 2's memory
+manager to talk to whatever register set this machine actually has is an hour of work,
+not a port. So the argument in §6.3's bullets — that faithful `$FFA0`–`$FFAF` emulation
+is the difference between porting the memory manager and configuring it — **is priced
+and paid**, not deferred as a risk. It is the strongest argument for the in-CPU MMU and
+it is the one being spent.
+
+Three things follow, and they are simplifications rather than costs:
+
+- **Detail 2 collapses.** Enable and task select go in the MMU's own window next to the
+  block registers. One contiguous decode, no `$FF90`/`$FF91`, and none of it touches the
+  machine's four remaining geographic bytes ([`machine.md`](../../docs/machine.md) §5
+  item 1) — the MMU is on the motherboard and decodes directly.
+- **The third detail stops being an extension.** Define the block registers as 7 bits
+  and be done; there is no 6-bit register to stay bug-compatible with.
+- **[`machine.md`](../../docs/machine.md) §5 item 3 changes character.** "The MMU
+  register set is not written down" was blocked on how faithfully to copy the GIME. It
+  is now an ordinary design task with a free hand — and it is the deliverable that
+  gates the motherboard's write-decode GAL.
+
+⚠ **What is not free** is the rest of NitrOS-9's CoCo 3 dependence. This machine already
+diverges from the GIME at the video registers, the interrupt block, and now the MMU; the
+hour is per-subsystem, and nothing here says the *sum* is an hour. It does say the MMU is
+not the reason to choose a package.
+
+**What it costs, then.** Three ICs and their board area, a write-decode GAL that is
+harder to change than firmware, and a NitrOS-9 memory-manager patch the owner has
+priced.
 
 ---
 
@@ -885,7 +997,8 @@ emulator then knows the beam line with no card hardware at all, and:
   inside the bus loop. plan.md §4.1 rule 3 already folds control-line sampling
   into the per-cycle budget; a timer read at instruction boundaries is cheaper
   still, and a hardware ISR is **forbidden** here (it would blow `t_AD`).
-- Cost: **one GPIO pin and a timer.** Both available on the LQFP64 part of §6.3.
+- Cost: **one GPIO pin and a timer.** Both available on the LQFP48, once §6.3.1
+  moves the MMU off the CPU and gives the four A16–A19 pins back.
 
 That is a genuinely better raster-interrupt implementation than the GIME's, in a
 machine that is otherwise less capable than a CoCo 3 — and it costs nothing.
@@ -976,7 +1089,8 @@ written, and boot code writes the whole map once.
 
 Off-card, on the motherboard: **1 GAL** (or a `'163` + `'74`) dividing 25.175 MHz
 by 12 or 8 to make E and Q with Q leading by 3 dots. That is the whole clock
-system.
+system — plus **§6.3.1's 3 ICs for the MMU**, which is the other thing the
+motherboard now carries.
 
 **Power.** Seven SRAMs and eight GALs, GAL-dominated as before — estimate
 450–650 mA, and it is still the first thing worth measuring at bring-up
@@ -1034,8 +1148,11 @@ any other 6809 homebrew.
 4. **The CPU clock is a software parameter.** §5.1's ÷12 / ÷8 choice is not
    limited by 6309E speed-grade availability, only by emulator throughput — which
    you can improve later without touching hardware.
-5. **The MMU costs nothing** (§6.3) and can be made GIME-register-compatible,
-   which is worth real weeks of NitrOS-9 porting.
+5. ~~**The MMU costs nothing** (§6.3) and can be made GIME-register-compatible,
+   which is worth real weeks of NitrOS-9 porting.~~ **Both halves spent — §6.3.1.**
+   The MMU went outside to keep one LQFP48 SKU across both machines, so it costs
+   3 ICs, and GIME register compatibility was priced at an hour of NitrOS-9 patching
+   rather than weeks. This is the one item on this list the machine chose not to take.
 6. **Raster interrupts cost one pin** (§12.2), and are more flexible than the
    hardware they replace.
 7. **`TFM` exists** (§10.2).
@@ -1140,9 +1257,11 @@ unchanged from minimal256.md §11 and are not restated in full.
 3. **Bench the LUT stage at 39.7 ns** with 15 ns SRAM (§6.1). If it does not
    close, fall back to fixed RGB332 ladders — §9 makes that software-invisible,
    but confirm the identity-palette equivalence bit-for-bit first.
-4. **Decide the MMU's location** (§6.3): in `arm6309` (0 ICs, GIME-compatible,
-   +3–4 core cycles on the address path) or 3 ICs on the motherboard. This gates
-   the CPU module's package choice and the backplane's address width.
+4. ~~**Decide the MMU's location**~~ **Closed — §6.3.1: 3 ICs on the motherboard.**
+   The deciding argument was one LQFP48 SKU across the CoCo 3 drop-in and this
+   machine, not the address path. What it leaves open is the register set itself
+   (`machine.md` §5 item 3), which is now a free design with no GIME to copy, and
+   which is what the write-decode GAL needs before it can be fitted.
 5. **Confirm E/Q phase stability across the ÷12 ↔ ÷8 switch** (§5.2), and gate the
    change to vertical blank.
 6. **Confirm the static slot assignment is actually static** — that the CPU's

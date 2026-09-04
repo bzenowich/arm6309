@@ -444,7 +444,7 @@ non-side-effecting, `TFM X+,Y+` walks it at 3 cycles/byte, and **§4's hazard di
 entirely** — no chunking, no masking, 680 KB/s, and a simpler driver.
 
 **Rejected on address space, not on merit.** The `$FF40`–`$FF7F` geographic window is 64
-bytes total (§6.1). The 1 MB physical map has no room either: `graphics.md` §6.2 fixes
+bytes total (§6.1). The 1 MB physical map has no room either: `graphics.md` §6.3 fixes
 `A19 = 0` as 512 KB of system RAM and `A19 = 1` as the video card's 512 KB ring, with
 nothing spare.
 
@@ -556,7 +556,7 @@ mitigation actually works.
 | [`plan.md`](../../cpu/docs/plan.md) | §4.3 `TFM` as "the hard one"; §7's risk table, which §13 item 1 escalates |
 | [`modplayer.md`](../../audio/docs/modplayer.md) | §4.4 the mirror-image `TFM X+,Y`, and why it is safe where §4's is not |
 | [`machine.md`](../../docs/machine.md) | §2 the 25.175 MHz master this card divides; §3 the `$FF` map; §5 item 1, which §11.1 reinforces |
-| [`graphics.md`](../../video/docs/graphics.md) | §6.2 the physical map with no room for §11.1's buffer; §16.1 the bus exerciser; §17 the disk-controller reservation this card claims half of |
+| [`graphics.md`](../../video/docs/graphics.md) | §6.3 the physical map with no room for §11.1's buffer; §16.1 the bus exerciser; §17 the disk-controller reservation this card claims half of |
 | [`ps2.md`](../../io/ps2/docs/ps2.md) | §4.1 the `'595` storage-register pattern; §4.2 the `HC`-versus-`HCT` lesson §7 repeats |
 | [`serial.md`](../../io/serial/docs/serial.md) | §7.1 the full `$FF` map §6.1 gives back to; §4.4 the bit-banging argument §11.5 distinguishes itself from |
 | HD63B09EP Technical Reference Guide; *A Memo on the Secret Features of 6309* | §4.1's `TFM` behaviour. ⚠ Neither is in `reference/` |

@@ -78,7 +78,7 @@ quantisation.
 | Off-screen working space | **384 spare columns + 312 spare rows** in one 1024×512 torus | whatever RAM you spare | inside the same 16 KB window |
 | Holes in the video window | none | none | **character ROM shadow** in banks 0 and 2 |
 | Colour storage | in the pixel byte | in the pixel bits | **separate 1024×4 static colour RAM** off the video bus |
-| CPU memory management | **MMU inside `arm6309`**, GIME-register-compatible | **8-page MMU, 2 task banks** | none — PLA + 6510 port `$01` |
+| CPU memory management | **MMU on the motherboard, 3 ICs** — 8 blocks, 2 task registers, its own register set (`graphics.md` §6.3.1) | **8-page MMU, 2 task banks** | none — PLA + 6510 port `$01` |
 
 ---
 
@@ -192,7 +192,7 @@ microcontroller that knows the beam position.
 |---|---|---|---|
 | Packages | **36 ICs** (32 if the tri-state pixel bus closes) | **1 custom ASIC** (TCC1014, large DIP) | **1 custom ASIC** (40-pin DIP) |
 | Also provides | video only | **MMU, interrupt controller, timer, DRAM control, device-select decode, CPU clock** | master oscillator, ϕ0, DRAM control + refresh, light pen |
-| What the system needs alongside it | MMU and raster compare **inside `arm6309`** | very little — it absorbed the SAM and the VDG | **PLA for banking, 2× CIA for timers and interrupts** |
+| What the system needs alongside it | raster compare **inside `arm6309`**; MMU **on the motherboard**, 3 ICs | very little — it absorbed the SAM and the VDG | **PLA for banking, 2× CIA for timers and interrupts** |
 | Programmable logic | 8 × GAL22V10 | none — mask ROM | none |
 | Power | 450–650 mA ⚠ estimate, GAL-dominated | one chip | one chip, famously hot |
 | Area | ~140 cm² on a 160 cm² Eurocard | a socket | a socket |

@@ -25,7 +25,7 @@ whose interrupt lines and I/O window are both already spoken for.
 | | |
 |---|---|
 | **CPU** | HD6309E in native mode, synthesised on an STM32G431 ([`cpu/`](../cpu/)) |
-| **MMU** | inside the CPU module, GIME-register-compatible — `graphics.md` §6.2 |
+| **MMU** | **on the motherboard: 3 ICs, the SAM/GIME/DAT arrangement** — `graphics.md` §6.3.1. Register set is a free design, not GIME-compatible (§5 item 6) |
 | **Address space** | 64 KB logical, MMU-mapped; 1 MB physical (A0–A19) |
 | **System master clock** | one 25.175 MHz oscillator, on the motherboard — `graphics.md` §5 |
 | **E rate** | 25.175 / 12 = **2.0979 MHz**, software-selectable to ÷8 = 3.1469 MHz |
@@ -43,7 +43,7 @@ Note the two CPU targets, which are different machines and are easy to confuse:
 | E | 0.895 / 1.79 MHz, from the GIME | 2.0979 / 3.1469 MHz, from the ÷12/÷8 divider |
 | `t_AD` deadline | **110 ns, fixed by the datasheet** | ~160 ns, self-specified (`graphics.md` §5.3) |
 | Video / audio | GIME | the cards in this repo |
-| MMU | GIME's, emulated | the CPU module's own |
+| MMU | GIME's, emulated | 3 ICs on the motherboard — `graphics.md` §6.3.1 |
 
 `cpu/docs/plan.md` is written against the first. `graphics.md` and `audio.md` are
 written against the second. Both are live.
@@ -91,7 +91,17 @@ From `graphics.md` §17, which retargets colormin's slot model:
 | `D0–D7` | |
 
 `A19` is the system-RAM / VRAM selector: `A19 = 0` is 512 KB of system RAM, `A19 = 1`
-is the video card's 512 KB ring (`graphics.md` §6.2).
+is the video card's 512 KB ring (`graphics.md` §6.3).
+
+**Physical A13–A19 come from the motherboard's MMU, not from the CPU** (§5 item 6,
+`graphics.md` §6.3.1). Two consequences for whoever draws the backplane:
+
+- **Logical A13–A15 stay on the motherboard and do not appear on a slot.** They are the
+  map SRAM's address inputs. Nothing on a card has any business seeing them.
+- **The `$FF00`–`$FFFF` I/O-page decode is taken from those logical lines**, so that the
+  I/O page overrides translation exactly as it does on a CoCo 3. A0–A12 are untranslated,
+  making the term `(logical A15..A13 = 111) AND (A12..A8 = 11111)` — the same term that
+  already gates `/IOSEL`, so it costs nothing, but it has to be drawn that way.
 
 ---
 
@@ -109,7 +119,7 @@ later).
 | `$FF58`–`$FF5B` | 4 B | **SD card storage** | *proposed* — `storage/docs/sdcard.md` §6.1 |
 | `$FF5C`–`$FF5F` | 4 B | **free** | the machine's only unallocated I/O — half the disk reservation, **handed back** |
 | `$FF60`–`$FF7F` | 32 B | **video** | *taken* — `graphics.md` §13 |
-| `$FFA0`–`$FFAF` | 16 B | **MMU**, GIME-compatible | in the CPU module — `graphics.md` §6.2 |
+| `$FFA0`–`$FFAF` | 16 B | **MMU** | on the motherboard, decoded directly — `graphics.md` §6.3.1. **Not** GIME-compatible, and not in the geographic window, so it does not touch the four free bytes. Enable and task select live here too, not at `$FF90`/`$FF91` |
 
 ### ⚠ The map has four bytes left, and that is all.
 
@@ -160,7 +170,7 @@ These are not deferred details; each one blocks a board.
    > [`storage/docs/sdcard.md`](../storage/docs/sdcard.md) §11.1 shows that a 512-byte
    > memory-mapped block buffer would delete that card's `TFM` hazard outright and buy
    > 27 % more transfer rate — and it is rejected purely because neither the 64-byte `$FF`
-   > window nor the 1 MB physical map (`graphics.md` §6.2 fixes both halves) has room for
+   > window nor the 1 MB physical map (`graphics.md` §6.3 fixes both halves) has room for
    > it. **This is the strongest argument the machine has produced for widening the map.**
 
    The options are unchanged and only one of them is cheap **now**: widen the geographic
@@ -208,10 +218,22 @@ These are not deferred details; each one blocks a board.
    > The practical ceiling is 4800–19,200 baud, and **the same single measurement decides
    > that and whether PS/2's FIFO comes back.**
 
-3. **The MMU register set is not written down.** `graphics.md` §6.2 says
+3. **The MMU register set is not written down.** `graphics.md` §6.3 said
    "GIME-register-compatible, `$FFA0`–`$FFAF`, 8 blocks, two task registers, 6-bit block
-   numbers" and stops there. `graphics.md` §18 step 0 lists it as an exit criterion.
+   numbers" and stopped there. `graphics.md` §18 step 0 lists it as an exit criterion.
    Nothing in `cpu/` implements it yet — Phase 1 is the timing spike and has no MMU.
+
+   > **Still open, but its character changed with item 6.** Two things moved. The MMU is
+   > now **hardware** — a write-decode GAL on the motherboard (`graphics.md` §6.3.1) —
+   > so the register set is a fitting constraint, not a firmware detail, and it is what
+   > that GAL needs before it can be fitted. And **GIME compatibility is no longer a
+   > requirement**, so this is a free design: the 6-bit block number becomes 7 bits
+   > because the physical map is 1 MB, and enable and task select move into the same
+   > contiguous window instead of sitting at the GIME's `$FF90`/`$FF91`.
+   >
+   > **This is now the most blocking of the CPU-side items**, because two boards wait on
+   > it: the motherboard's GAL and whatever the NitrOS-9 patch of item 6 is written
+   > against.
 
 4. **The E/Q divider ratio is assumed, not frozen.** Every cost estimate in `audio.md`
    and `modplayer.md` is quoted against 2.098 MHz, i.e. ÷12. `graphics.md` §11 shows VRAM
@@ -222,10 +244,56 @@ These are not deferred details; each one blocks a board.
    nothing states how many slots, what the connector is, or whether the CPU module is a
    card or the motherboard.
 
-6. **LQFP48 vs LQFP64 for the CPU module.** `graphics.md` §6.2 recommends the LQFP64 part
+6. **LQFP48 vs LQFP64 for the CPU module.** `graphics.md` §6.3 recommends the LQFP64 part
    for the homebrew card, because the MMU needs a second store for A16–A19.
    `cpu/docs/plan.md` §3.2 closes the pin budget on the LQFP48 — but for the *CoCo 3*
    drop-in, which has no MMU of its own to emulate at that width.
+
+   > **Decided: LQFP48, with the MMU moved off the CPU — `graphics.md` §6.3.1.**
+   > `graphics.md` §6.3's own closing paragraph always carried the alternative — a 15 ns
+   > 2K×8 SRAM addressed by `{TASK, A15..A13}`, a `'574` for task and enable, and a write
+   > decode, **3 ICs on the motherboard** — but recorded it as a thing you might want
+   > rather than as the answer, and this document did not carry it at all. It is the
+   > answer.
+   >
+   > **The deciding argument is one SKU, not one board.** An in-CPU MMU makes the CoCo 3
+   > drop-in an LQFP48 and this machine an LQFP64: two parts, two pinouts, two board
+   > files, two bring-up paths, one firmware. Moving the MMU out returns the four
+   > A16–A19 pins and **one STM32G431CBT6 covers both machines**. The 48-pin part is also
+   > cheaper and better stocked, which is what a board built in ones and twos actually
+   > runs into.
+   >
+   > **The pin budget is not close.** Against `plan.md` §3.2's 39 usable pins, this
+   > machine needs 34 with the external MMU and 38 with the in-CPU one — 5 spare against
+   > 1. Nothing else in the machine asks the CPU for a pin: audio, PS/2, serial and
+   > storage are all bus cards behind geographic `/IOSEL` with their interrupts
+   > wire-ORed onto `/IRQ` and `/FIRQ` (§2, §4). The only pin the CPU module has gained
+   > since `graphics.md` §6.3 was written is `graphics.md` §12.2's HSYNC input for the
+   > raster-compare timer, and it is needed either way. The 5 spare pins are what buy
+   > back `plan.md` §3.2's debug UART and status LED.
+   >
+   > **Timing is a wash, or slightly better.** The in-CPU version spends ~3–4 core cycles
+   > plus a second `STR` *inside* `t_AD`; the external map spends 15 ns of SRAM
+   > propagation *after* it, on the motherboard, where `graphics.md` §5.3's
+   > self-specified ~160 ns has room.
+   >
+   > **What is given up, and it was priced rather than deferred.** `graphics.md` §6.3's
+   > case for the in-CPU MMU is that faithful `$FFA0`–`$FFAF` emulation is "the
+   > difference between porting the memory manager and configuring it". **The owner's
+   > call is that patching NitrOS-9 Level 2's memory manager for this machine's own
+   > register set is about an hour of work, not a port**, so the register set is now a
+   > free design — see item 3, which is where the work actually lands.
+   >
+   > ⚠ **The hour is per-subsystem, and this machine has several.** It already diverges
+   > from the GIME at the video registers (`graphics.md` §13), at the interrupt block,
+   > and now at the MMU. Nothing here claims the sum is an hour — only that the MMU is
+   > no longer a reason to pick a package. **Whoever is counting NitrOS-9 divergence
+   > should count it in one place, and nobody is.**
+   >
+   > **Two wiring consequences**, both now recorded in §2 and §3: the I/O-page decode
+   > comes off logical A13–A15, which stay on the motherboard and never reach a slot;
+   > and MMU enable and task select move into the MMU's own window rather than needing
+   > `$FF90`/`$FF91` decoded.
 
 ---
 
@@ -236,6 +304,8 @@ a cross-card dependency.
 
 | Owner | Item | Where |
 |---|---|---|
+| **machine** | **⚠ Write the MMU register set.** It is now hardware, and two things wait on it: the motherboard's write-decode GAL and the NitrOS-9 patch | §5 item 3, `graphics.md` §6.3.1 |
+| **machine** | **Keep a NitrOS-9 divergence ledger** — video registers, interrupt block, MMU. Each is priced individually and nothing sums them | §5 item 6 |
 | cpu | Confirm the GIME accepts a 3.3 V `V_OH` from the level buffers | `cpu/README.md` TODO |
 | cpu | First silicon measurement, against the recorded predictions | `cpu/docs/plan.md` §5 |
 | video | Bench the dot path and fit the sequencer GALs *before* layout | `graphics.md` §18 steps 1–2 |

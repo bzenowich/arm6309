@@ -2,8 +2,11 @@
 
 A cycle-accurate **HD6309E** implemented on an **STM32G431CBT6**, packaged as a 40-pin
 drop-in module for the **Tandy CoCo 3**, targeting a **NitrOS-9 Level 2** boot in 6309
-native mode. In the machine of [`docs/machine.md`](../docs/machine.md) this is the CPU,
-and it carries the MMU.
+native mode. In the machine of [`docs/machine.md`](../docs/machine.md) this is the CPU —
+and **it does not carry the MMU**: that sits on the motherboard as 3 ICs, which is what
+lets one LQFP48 part serve both machines. See `docs/machine.md` §5 item 6 and
+[`video/docs/graphics.md`](../video/docs/graphics.md) §6.3.1, and `docs/plan.md` §3.2 for
+the pin budget that decided it.
 
 Full analysis, pinout rationale, timing budgets and phase plan: **[`docs/plan.md`](docs/plan.md)**.
 

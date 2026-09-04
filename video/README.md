@@ -28,5 +28,5 @@ breadboard, then fit the sync and scan-address GALs — **come before laying out
 anything**, because they contain both of the design's real unknowns.
 
 `graphics.md` also carries the machine-level material the other cards depend on: the
-one-oscillator clock tree (§5), the in-CPU MMU recommendation (§6.2), and the backplane
+one-oscillator clock tree (§5), the MMU (§6.3, and §6.3.1 for where it landed), and the backplane
 signal list (§17). Those have been lifted into [`../docs/machine.md`](../docs/machine.md).

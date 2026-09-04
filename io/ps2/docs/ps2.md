@@ -645,7 +645,7 @@ through a 6-bit DAC and a comparator. If this card answered at `$FF00`–`$FF03`
 synthesised matrix, **NitrOS-9's stock CoCo keyboard and joystick drivers would work
 unmodified.**
 
-That is the reasoning behind the **GIME-compatible MMU** (`graphics.md` §6.2 — "the
+That is the reasoning behind the **GIME-compatible MMU** (`graphics.md` §6.3 — "the
 difference between porting the memory manager and configuring it") and the sound card's
 **Paula-exact** period reference (`audio.md` §4.1 — every module transfers verbatim). The
 pattern is real and has earned its place twice.
