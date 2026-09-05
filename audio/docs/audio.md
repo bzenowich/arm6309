@@ -36,24 +36,49 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 
 | Question | Answer | § |
 |---|---|---|
-| **Discrete card, real Paula, a period sound chip, or an MCU?** | **Discrete card.** 35 ICs, same envelope as the video card. | §12 |
+| **Discrete card, real Paula, a period sound chip, or an MCU?** | **Discrete card.** **57 ICs** (§10, re-tallied), one Eurocard plus a physically separate analogue section. | §12 |
 | **Where does the sample data live?** | **Card-local SRAM, 128 KB** (footprint for 512 KB). The card never touches the bus for audio. | §5 |
 | **How are the four channels implemented?** | **One time-multiplexed datapath**, 8 slots per colour clock, state in a 32-bit-wide SRAM file. | §3 |
 | **How is per-channel pitch generated?** | **Compare-against-a-free-running-counter**, not four down-counters. Kills 12+ ICs. | §4.2 |
 | **What is the period reference clock?** | **3.546895 MHz — the Amiga PAL colour clock**, from a 28.37516 MHz crystal ÷8. Non-negotiable. | §4.1 |
 | **How is volume applied?** | **A host-loadable 32K×8 lookup table**, `{VOL[6:0], SAMP[7:0]} → 12-bit signed`. Same trick as the palette LUT; the volume curve is table content, not hardware. | §6.1 |
-| **How are channels summed?** | **Combinatorially, asynchronously** — exactly as Paula sums four analogue currents. No output sample rate, no resampling, no jitter. | §6.2 |
-| **What DAC?** | **2 × LTC7545A** — 12-bit parallel MDAC with an input latch, the current-production `AD7545A` pin-compatible. Not a serial audio DAC — §6.3. | §6.3 |
+| **How are channels summed?** | **Sequentially, into two latched accumulators**, one channel per slot, presented to the DACs once per colour clock. No output sample rate, no resampling, no jitter — the DAC input still changes on the exact colour clock a channel's sample changed on. | §6.2 |
+| **What DAC?** | **2 × LTC7545A** — 12-bit parallel MDAC with an input latch, the current-production `AD7545A` pin-compatible. Not a serial audio DAC — §6.3. **Coded offset binary, not two's complement** — §6.3. | §6.3 |
 | **Do we need the Amiga filter?** | **Yes, and not for nostalgia.** It is the reconstruction filter for channels running below ~16 kHz. Both filters, switchable. | §7 |
 | **Where does mod tempo come from?** | **An on-card 16-bit timer clocked at colourclock/5 = 709.379 kHz — the Amiga's CIA clock exactly**, so `Fxx` BPM values are CIA-B-identical. Costs one slot, zero ICs. | §8.2 |
 | **Which interrupt line?** | **`/FIRQ`.** Video's VBL owns `/IRQ`. A 6809 `FIRQ` is what a replayer tick should be. | §8.1 |
 | **What does mod playback cost the 6309?** | **~2.7 % of a 2.098 MHz CPU** for the replayer, with a 19× worst-case margin; **~187 ms once** to upload 128 KB of samples via `TFM X+,Y`. | §13, [`modplayer.md`](modplayer.md) §7 |
 | **What does this card do that Paula cannot?** | No minimum period; per-channel panning (+2 ICs); 8 channels at half period resolution; a programmable volume curve. | §11 |
 
-**Net: 35 ICs**, against the video card's 36. One oscillator, one clock domain,
-no bus mastering, no `/WAIT`, and the only tight path in the design is a 35 ns
-pipeline stage that is directly analogous to — and 5 ns *looser* than — the video
-card's 39.7 ns dot path.
+**Net: 57 ICs**, against the video card's 36. One oscillator, **one internal clock
+domain and an asynchronous host port** (§9.4), no bus mastering, no `/WAIT`, and the
+only tight path in the design is a 35 ns pipeline stage that is directly analogous
+to — and 5 ns *looser* than — the video card's 39.7 ns dot path.
+
+> ⚠ **"35 ICs" and "one clock domain" are both superseded (design review — Aud-M2,
+> Aud-M3, Aud-M5, and decision D9).** The old tally counted the datapath and left out
+> four things that are not optional: the L/R sum path (§6.2 — ten packages the old
+> §10 never listed), the host-visible counters `SPTR`/`LIDX`/`AIDX` (41 flops of
+> counter — §9.5), the host-boundary synchroniser and multi-byte commit staging
+> (§9.4), and the open-collector stage `/FIRQ` needs and a GAL output cannot provide
+> (§8.1). "One clock domain" was true of everything downstream of the crystal and
+> false at the register port, which is where the failures of §9.4 live. §10 now
+> tallies **57**, itemised, with a delta table showing where the twenty-two came
+> from. Every count elsewhere in *this* document has been corrected; the "35" quoted
+> in [`machine.md`](../../docs/machine.md) and in
+> [`graphics.md`](../../video/docs/graphics.md)'s comparison tables has not, and needs to be.
+
+**E-rate compatibility.** The card is **unaffected by the machine's E rate**. Every
+audio-timing figure in this document is referred to the card's own 28.37516 MHz
+crystal, not to E; the register port is asynchronous to E by construction (§9.4);
+and §9.3's prefetch means there is no `/WAIT` path to close at any rate. The machine
+is specified at **E = 25.175/12 = 2.0979 MHz and only that rate**
+([`machine.md`](../../docs/machine.md)). The divide-by-8 **fast-E** rate (3.1469 MHz) is
+experimental and not guaranteed elsewhere in the machine, but nothing on this card
+breaks at it and the two figures that move both move the right way: §13.2's 128 KB
+upload falls from 187 ms to 125 ms, and §9.4's register-tearing windows shrink by a
+third (~8 colour clocks per host store becomes ~5.4). The card neither requires
+fast-E nor objects to it.
 
 ---
 
@@ -123,6 +148,13 @@ This is also why Paula itself is a small part of the Amiga chipset while Agnus
 and Denise are large ones. The design is telling you the same thing Commodore's
 did.
 
+**What §2 prices is bandwidth, and bandwidth is not what this card costs.** The
+argument above is sound and survives review unchanged — 126,000 accesses per second
+against 18 M/s is not a memory system. What it does *not* price is **state**: the
+per-channel pointers, the host-visible counters, the sum path and the host-boundary
+staging, which is where §10's honest package count actually goes. A card can be
+enormously oversupplied in time and still cost 57 packages, and this one does.
+
 ---
 
 ## 3. Architecture — one slot-walked datapath
@@ -159,12 +191,19 @@ Each slot is three pipeline stages, one slot deep each, exactly the shape of the
 video card's `index latch → LUT → output latch`:
 
 ```
-  stage A (35 ns) : state-file read  -> {NEXT[15:0], VOL[5:0], SAMP[7:0], DMAEN, ATT}
-  stage B (35 ns) : compare NEXT vs the free-running counter
-                    LUT read  {curve, VOL, SAMP} -> 12-bit signed scaled sample
-  stage C (35 ns) : accumulate into the L or R sum; on a compare hit, queue
-                    the channel for slots 6-7
+  stage A  (35 ns) : state-file read  -> {NEXT[15:0], VOL[6:0], SAMP[7:0], DMAEN}
+  stage B  (35 ns) : compare NEXT vs the free-running counter
+                     LUT read  {VOL, SAMP} -> 12-bit OFFSET-BINARY scaled sample
+  stage C  (35 ns) : latch the scaled sample into this side's hold latch;
+                     on a compare hit, queue the channel for slots 6-7
+  stage D  (35-70) : add the held sample into this side's accumulator (§6.2)
 ```
+
+**The pipeline is four stages, not three**, because the 12-bit sum of §6.2 does not
+close in one slot: three `74HC283` ripple in ≈62 ns against a 35.24 ns slot, so the
+add gets two slots and the sample it is adding has to be held across them. That is a
+latency change, not a throughput change — the walk still retires one channel per slot
+— and it is the same shape as the fallback below.
 
 **Stage B is the tight path**, and it is the card's only one:
 
@@ -195,7 +234,7 @@ Per channel, in the 32-bit-wide state file:
 | `LC` | 19 | **host** | shadow location — where the *next* buffer starts |
 | `LEN` | 16 | **host** | shadow length, **in words**, Paula-identical |
 | `PER` | 16 | **host** | period, in colour clocks |
-| `VOL` | 6 | **host** | 0–64 |
+| `VOL` | 7 | **host** | 0–64 — **seven bits**, per §6.1's correction |
 | `PTR` | 19 | sequencer | current byte pointer |
 | `CNT` | 17 | sequencer | bytes remaining in the current buffer |
 | `NEXT` | 16 | sequencer | colour-clock count at which this channel next ticks |
@@ -203,8 +242,16 @@ Per channel, in the 32-bit-wide state file:
 | flags | 4 | both | DMA enable, attach-period, attach-volume, IRQ pending |
 
 **The packing is not arbitrary.** Word 0 of each channel holds exactly
-`{NEXT[15:0], VOL[5:0], SAMP[7:0], DMAEN, ATT}` = **32 bits**, which is why stage A
-of §3.2 needs one access and not two. Everything the per-colour-clock walk touches
+`{NEXT[15:0], VOL[6:0], SAMP[7:0], DMAEN}` = **32 bits**, which is why stage A
+of §3.2 needs one access and not two.
+
+> ⚠ **Corrected — the packing was one bit over, not one bit under.** This word was
+> first written as `{NEXT[15:0], VOL[5:0], SAMP[7:0], DMAEN, ATT}`. §6.1's correction
+> then gave `VOL` its seventh bit (0–64 is 65 levels), which makes
+> `16 + 7 + 8 + 1 + 1 = 33` — one bit past the state file's 32-bit width, and the
+> whole reason stage A is a single access. **`ATT` moves to word 1.** It is consulted
+> only on a compare hit, which is a deferred slot that reads words 1–3 anyway, so
+> moving it costs nothing and restores the exact 32. Everything the per-colour-clock walk touches
 is in that word; `LC`, `LEN`, `PER`, `PTR` and `CNT` live in words 1–3 and are only
 read in the deferred slots. Freeze this layout with the register map (§9.3) — it is
 the reason the state file is 32 bits wide rather than 16, and the reason the design
@@ -227,16 +274,32 @@ line in the sequencer GAL.
 
 ### 3.4 What is deliberately *not* in the datapath
 
-- **No adder in the audio path.** Volume is a table lookup (§6.1), not a multiply.
+- **No multiplier anywhere.** Volume is a table lookup (§6.1), not an 8×6 multiply.
+  There *is* an adder in the audio path — the L/R channel sum of §6.2 — but it adds
+  two 12-bit numbers twice per colour clock, which is not the same kind of object.
 - **No divider anywhere.** Period is a divisor applied by comparison (§4.2), never
   computed.
 - **No FIFO, no buffering, no DMA arbitration.** Sample memory is card-local and
   200× oversupplied (§2), so there is nothing to arbitrate.
 - **No output sample rate.** §6.2.
 
-The video card's "no adder anywhere" property (minimal256.md §3) survives here in
-spirit: **the only adder on the card is the shared 16-bit `'283` chain in slots
-6–7**, running at 126 kHz, doing work no one is waiting for.
+> ⚠ **Superseded (design review, Aud-M2).** This section used to claim that
+> **"the only adder on the card is the shared 16-bit `'283` chain in slots 6–7"**,
+> while §0 and §6.2 simultaneously claimed the four channels were summed
+> "combinatorially, asynchronously". Both cannot be true, and neither was costed:
+> the combinatorial sum needs six `'283` and eight `'574` that appear nowhere in the
+> old §10, and the sequential sum needs an adder the shared chain cannot supply
+> without an operand mux that was equally unbudgeted. §6.2 now resolves it in favour
+> of latched accumulation with **dedicated** 12-bit adders, and the sentence below
+> replaces the false one.
+
+The video card's "no adder anywhere" property (minimal256.md §3) survives here only
+in the narrow form that matters: **there are two adders on this card and neither is
+in a critical loop.** The shared 16-bit `'283` chain in slots 6–7 does `NEXT`+`PER`,
+`PTR`+1 and `CNT`−1 at 126 kHz, work no one is waiting for; the two 12-bit `'283`
+adders of §6.2 do the L and R channel sums at 3.55 MHz, with the whole of the
+following colour clock to settle before the DAC looks at them. Neither one is ever
+in the sample-fetch path, and there is still no multiplier and no divider.
 
 ---
 
@@ -245,8 +308,13 @@ spirit: **the only adder on the card is the shared 16-bit `'283` chain in slots
 ### 4.1 The clock is not negotiable, and it is a stock crystal
 
 A ProTracker note is a `PER` value; the resulting sample rate is
-`3546895 / PER` Hz. Note C-2 is `PER` = 428 → 8286 Hz. If the card's reference is
-anything else, every module is transposed by the ratio.
+`3546895 / PER` Hz. Note C-2 is `PER` = 428 → `3,546,895 / 428` = **8287.1 Hz**. If
+the card's reference is anything else, every module is transposed by the ratio.
+
+> ⚠ **Corrected (design review, Audio NOTE).** This example previously read
+> **8286 Hz**. `3,546,895 / 428 = 8287.14`; the reference model's unit test asserts
+> 8287. One digit, in the document's own headline example of the number the whole
+> card exists to reproduce.
 
 | Reference | Source | Error vs PAL Amiga |
 |---|---|---|
@@ -375,7 +443,7 @@ exactly the part:
 ```
   A14..A8  VOL[6:0]         0..64, Paula's range
   A7..A0   SAMP[7:0]        signed
-  D11..D0  scaled sample, 12-bit signed     <- 2 x 32K x 8, 15 ns
+  D11..D0  scaled sample, 12-bit OFFSET BINARY  <- 2 x 32K x 8, 15 ns  (§6.3)
 ```
 
 > **Corrected (build step 0).** This section first addressed the table with
@@ -407,47 +475,155 @@ strictly more capable than the address-line version and costs one `TFM` burst �
 65,536 bytes, ~94 ms at 2.098 MHz — once at boot. `ACTRL` bit 7 keeps the card
 quiet until it is done, which is why reset forces `ACTRL = 0`.
 
+**And the table is where the DAC's coding is fixed, too.** The `LTC7545A` takes
+unsigned data, so the entries hold the scaled sample **already biased into 12-bit
+offset binary** — `entry = SAMP × min(VOL,64) / 4 + 2048`, silence = `$800`. §6.3
+derives that and shows why it makes the two-term sum of §6.2 come out right with no
+correction term. It is the second time in this section that something a discrete
+design would have spent a package on is deleted by being table content instead.
+
 **12-bit output, not 8.** At `VOL` = 1, an 8-bit output would reduce the sample to
 ±2 — two bits of resolution, and volume fades would be audibly stepped. Paula's
 internal product is ~14 bits. 12 bits costs one extra SRAM and matches the DAC
 (§6.3); the two low bits Paula has beyond that are below the noise floor of any
 realistic analogue stage.
 
-### 6.2 The sum is combinatorial, and that is the design's best property
+### 6.2 The sum is latched, not resampled — and that is still the design's best property
 
 Paula produces four independent current-output DACs and sums them at an analogue
 node. There is **no output sample rate** anywhere in an Amiga's audio path — each
 channel is a zero-order hold at its own rate, and the sum is continuous-time.
 
 Every software mod player resamples to a fixed output rate and spends real effort
-(band-limited synthesis, oversampling) hiding the damage. This card does not have
-to, because it can do what Paula does:
+(band-limited synthesis, oversampling) hiding the damage. This card does not have to,
+and — this is the correction — it does not need a *continuous-time* sum in order not
+to. What it needs is for the DAC input to change **on the exact colour clock on which
+a channel's sample changed**, because that is the only instant at which anything in
+Paula's audio path changes either. A latched sum delivers that; a combinational one
+delivers it and a package count the card cannot pay.
+
+> ⚠ **Superseded (design review, Aud-M2).** This section previously specified the
+> sum as **"combinatorial, asynchronous"**, and §0 said the same. It was never
+> costed. A continuously live 12-bit + 12-bit sum on each side has to be fed from
+> four channel-value latches, because the LUT output is one channel wide and changes
+> every slot: that is **6 × `'283` + 8 × `'574` = 14 packages**, against the four
+> `'574` the old §10 listed for "accumulators". It also contradicted §3.4's "the only
+> adder on the card is the shared `'283` chain in slots 6–7", which was the other
+> half of the same finding. **The latched version below is what the card is.** It
+> costs the *same* fourteen packages as the combinational one — the saving is not why
+> it is chosen — and it is strictly better behaved: it keeps the colour-clock event
+> grid intact, it presents the DAC static data instead of a settling adder output
+> (which is what the transparent input latch of §6.3 requires and what deletes the
+> glitch story below), and it makes §3.4 true again.
+
+**Sequential accumulation, one channel per slot, into two latched accumulators.**
+The channel walk is unchanged (`ch0..ch3` in slots 0–3); what changes is what stage D
+does with each scaled sample as it falls out of the pipeline:
 
 ```
-  4 x 12-bit scaled values, held in the accumulators (slots 0-3)
-        |
-        +--> L = ch0 + ch3   (13 bits) >>1 --> LTC7545A --> I/V --> filter --> out L
-        +--> R = ch1 + ch2   (13 bits) >>1 --> LTC7545A --> I/V --> filter --> out R
+  per frame, in order, one channel per slot:
+
+    L_ACC <- 0     + scaled(ch0)      ; a LOAD:  A = 0, no carry to propagate
+    R_ACC <- 0     + scaled(ch1)      ; a LOAD
+    R_ACC <- R_ACC + scaled(ch2)      ; an ADD:  full 12-bit ripple
+    L_ACC <- L_ACC + scaled(ch3)      ; an ADD
+
+  one colour clock later:
+    DAC /WR pulse latches L_ACC[12:1] and R_ACC[12:1]
+    each accumulator is cleared AFTER that edge, before its next LOAD
 ```
 
-The accumulator latches update at the end of each colour-clock frame, so the DAC
-input changes **at the exact colour clock on which a channel's sample changed** —
-which is the same instant Paula's ladder current would change. There is no
-resampling, no interpolation, no jitter, and no aliasing introduced by the mixer,
-because there is no mixer sample rate to alias against.
+The accumulators are cleared once per frame, so the *first* channel of each side is a
+**load** and not an add (`0 + x`), which is why no zero-forcing mux is needed on the
+adder's `A` port and why the accumulators are `'273` rather than `'574` — the
+asynchronous clear is the whole mechanism, and it is three packages cheaper than the
+`'157` mux that would otherwise force the zero. The pairing is Paula's:
+`ch0`+`ch3` → L, `ch1`+`ch2` → R.
 
-The sum of two 12-bit signed values is 13 bits and the DAC is 12, so **the
-bottom bit is dropped once, at the converter** — a wire, not a stage. A single
-channel therefore reaches 11 bits of the DAC and two channels at full scale
-reach all 12, which is the same headroom split Paula's four current-output
-ladders make.
+**The DAC input therefore changes once per colour clock, on the colour clock.** There
+is no resampling, no interpolation, no jitter, and no aliasing introduced by the
+mixer, because there is still no mixer sample rate to alias against. The cost is a
+uniform **one-to-two-colour-clock (282–564 ns) pipeline delay**, common-mode between
+the two sides, which is at most 1/56 of the shortest sample period ProTracker can ask
+for and identical on every channel. Nothing in §1's nine requirements can see it — a
+constant delay is not jitter, and it is not even audible as delay.
 
-**The one artefact is adder settling** — a ~20 ns glitch on the DAC input at each
-channel transition, ≤126,000 times a second. Those are 20 ns impulses arriving at
-audio rates; the 4.4 kHz filter of §7 attenuates them by roughly 60 dB and the
-DAC's own settling swallows most of what is left. If the bench disagrees, the fix
-is one `'574` deglitch latch clocked at the colour clock — **+2 ICs, and it does
-not change the timing model**, because the colour clock *is* the event grid.
+**Why the sum does not time-share the `'283` chain in slots 6–7.** It could, and it
+is *more* expensive that way. That chain is 16 bits wide and its operands come off
+the state-file read bus; giving it a second job needs a 2:1 select on both 16-bit
+operand ports — **8 × `74HC157`** — on top of the hold latch below. A dedicated
+12-bit adder per side is **6 × `74HC283`** and needs no operand select at all. Two
+packages cheaper, no shared-timing risk between the audio path and the pointer path,
+and §3.4 gets an honest sentence instead of a false one.
+
+**Why the add is two slots deep.** A 12-bit ripple through three `74HC283` is
+`t_pd(A→C4) + t_pd(Cin→Cout) + t_pd(Cin→Σ)` ≈ 20 + 17 + 25 = **62 ns** worst case at
+`74HC`, against a 35.24 ns slot. The load step has no carry to propagate and closes in
+≈25 ns; the add step does not. So the scaled sample is held in a per-side latch
+(`L_HOLD`/`R_HOLD`) and the adder gets **two slots — 70.5 ns** — to settle before the
+accumulator clocks. One hold latch per side and not one shared latch, because the two
+sides' add windows overlap by one slot (ch2's runs slots 5–6, ch3's runs 6–7).
+
+Packages, itemised so §10 has something to add up:
+
+| Qty | Part | Role |
+|---|---|---|
+| 4 | `74HC574` | `L_HOLD` / `R_HOLD` — 12 bits per side, holding the scaled sample across the add |
+| 6 | `74HC283` | two 12-bit adders, one per side; Σ plus carry-out is the 13-bit result |
+| 4 | `74HC273` | `L_ACC` / `R_ACC`, 13 bits each, **clearable** — `'273` and not `'574` precisely because the frame boundary needs an asynchronous clear |
+| 0 | — | output register: **the `LTC7545A`'s own input latch** (§6.3), which is why there is no `'574` here |
+
+**DAC latch timing, against the transparent-latch constraint of §6.3.** The
+`LTC7545A`'s latch is transparent while `CS` and `WR` are both low and captures on
+whichever rises first, so it needs `tDS` = **100 ns** of stable data before that edge
+and `tDH` = **5 ns** after it — a constraint an edge-triggered `'574` would not have
+imposed (§6.3), and the reason the sum has to be latched at all. Three ordering
+constraints follow, and they are stated as constraints because the exact slot
+placement is a sequencer-fit detail (§16 item 7) rather than something to freeze here:
+
+| Constraint | Requirement | Available |
+|---|---|---|
+| **Load** path `0 + x` → accumulator | ≈25 ns (`A` = 0, no carry ripple) | **1 slot, 35.2 ns** |
+| **Add** path `ACC + x` → accumulator | ≈62 ns (full 12-bit ripple) | **2 slots, 70.5 ns** |
+| Accumulator static before the `/WR` edge | **100 ns → ≥ 3 slots** | the `/WR` edge sits ~3 slots into the following frame |
+| Accumulator undisturbed after the `/WR` edge | 5 ns | **the clear follows the edge by a full slot, 35.2 ns** |
+
+The third row is the one that orders the frame: **the clear must come after the DAC
+latches, not before it**, and the accumulate schedule may need shifting a slot or two
+into the following frame to open that window. The cost of any such shift is
+**latency only** — a uniform one-to-two-colour-clock (282–564 ns) delay, common-mode
+between the two sides — and **the invariant it must not break is that the DAC input
+changes exactly once per colour clock, on the colour clock.** That invariant is the
+whole of §6.2's claim; everything above it is scheduling.
+
+The sum of two 12-bit **offset-binary** values is 13 bits and the DAC is 12, so
+**the bottom bit is dropped once, at the converter** — bits 12..1, a wire, not a
+stage. §6.3 shows why that shift is also exactly the re-biasing the offset-binary
+encoding needs. A single channel therefore reaches 11 bits of the DAC and two
+channels at full scale reach all 12, which is the same headroom split Paula's four
+current-output ladders make.
+
+> ⚠ **The "~20 ns adder settling glitch on the DAC input" is withdrawn (Aud-M2).**
+> That artefact — and the `'574` deglitch latch the old §10 held in reserve against
+> it — was a consequence of the combinational sum. The DAC is now driven from static
+> latch outputs by a `/WR` pulse placed 141 ns after they settle, so no adder
+> transient reaches the converter at all. What remains is the converter's *own*
+> code-transition glitch, 5 nV·s on the `LTC7545A` against 400 nV·s on an `AD7545`,
+> which is the half of that budget worth keeping (see the sourcing note in §6.3).
+> **§16 item 8 is retired.**
+
+> **Recorded alternative — four DACs and an analogue sum.** Paula does not add
+> anything: it runs four current-output ladders into summing nodes. Doing the same
+> here — 4 × `LTC7545A`, `ch0`+`ch3` into the left I/V virtual ground, `ch1`+`ch2`
+> into the right — deletes both hold latches, both adders and both accumulators
+> (**−14 packages**) for **+2 DACs**, keeps all 12 bits per channel instead of
+> spending one on the `>>1`, and updates each converter on its *own* channel event
+> rather than on the frame. It is the more Paula-exact answer and it is twelve
+> packages cheaper net (**−14 digital, +2 converters**). It is **not** adopted here only because it puts four mid-scale
+> pedestals and four ladders onto two summing nodes, which is an analogue design
+> problem — offset injection ×4, resistor matching, and `RFB` tracking across four
+> parts — that this document has not done. **Revisit it before the analogue section
+> is laid out**; §16 item 17.
 
 **Hard panning is free.** ch0,3 → L and ch1,2 → R is a wire, not a register. §11.1
 buys real panning for +2 ICs if you want it; the default must stay hard-panned or
@@ -549,9 +725,97 @@ is not even more packages:
 12 bits against a source that is 8 bits of sample × 6 bits of volume is not the
 limiting factor; the jitter is. Take the parallel part.
 
-`LTC7545A` is a current-output multiplying DAC, so each side needs an I/V stage and
-a bipolar-offset arrangement — one `TL072` handles both sides. Standard, and the
-`Vref` input is a free master-volume/mute point.
+#### The converter is coded unsigned; the accumulator is not — and the LUT reconciles them
+
+**This is the one place the design had it flatly wrong, and it was fatal.** The
+`AD7545` / `AD7545A` / `LTC7545A` transfer function is
+`I_OUT1 = V_REF × D / 4096` for **unsigned** `D`. The parts have no signed mode; the
+datasheet's own bipolar application circuit obtains four-quadrant operation by
+**inverting the MSB**, which is to say by presenting **offset binary**. Fed the
+accumulator's two's complement instead, every zero crossing is a full-scale output
+jump — sample `−1` = `$FFF` sits at positive full scale and sample `0` = `$000` at
+negative full scale — so a quiet sine leaves the card as a square wave at twice the
+frequency.
+
+> ⚠ **Superseded (design review, Aud-M1).** §6.2 and this section previously handed
+> the accumulator's two's-complement value straight to the `LTC7545A`. The conversion
+> below is not optional, and it is not free-standing arithmetic: it is a property of
+> the table contents *and* of the width of the sum, and getting the second half wrong
+> is as audible as omitting the first.
+
+**The conversion costs nothing, because the LUT is content.** §6.1's volume table is
+host-loaded, so it stores the scaled sample **already biased into 12-bit offset
+binary**:
+
+```
+  entry = SAMP x min(VOL,64) / 4  +  2048        ; SAMP signed, entry 0..4095
+  silence (VOL = 0)                          ->  $800
+```
+
+No GAL term, no MSB inverter, no extra package: the inversion the datasheet draws in
+discrete logic is folded into the 32,768 bytes the loader writes at boot anyway. This
+is the third time §6.1's "make it table content" move pays. **A channel that is not
+enabled must present `$800`, not `$000`**, and the sequencer gets that for free by
+forcing the LUT address to `VOL` = 0 for a channel with `DMAEN` = 0 — a single term,
+and the one place where forgetting it would put a DC step on the output at every
+`DMACON` change.
+
+**The doubled offset is not an error to correct — it is exactly the bias the 13-bit
+sum needs.** Adding two 12-bit offset-binary values gives
+
+```
+  (A + 2048) + (B + 2048)  =  (A + B) + 4096
+```
+
+and `4096 = 2^12` is precisely the bias of a **13-bit** offset-binary number. So the
+13-bit accumulator output *is* the offset-binary encoding of `A + B`, with no
+correction term anywhere. §6.2's `>>1` — wiring accumulator bits 12..1 to the DAC —
+then lands on the 12-bit offset-binary encoding of the half-sum:
+
+```
+  floor( ((A + B) + 4096) / 2 )  =  floor((A + B)/2) + 2048
+```
+
+Both steps have to be right together. Subtract 2048 once "to fix the double offset"
+and the output is biased by half full scale; take bits 11..0 instead of 12..1 and the
+sum wraps at every loud passage. The arithmetic is three lines and it is written out
+here because the alternative is discovering it on a bench with an oscilloscope.
+
+#### The analogue side then owes a half-scale pedestal
+
+Code `$800` is mid-scale ladder current, not zero, so the I/V output sits at half of
+full scale when the card is silent. The datasheet's bipolar circuit removes that with
+a **second amplifier per side** — I/V converter, then an offset subtractor referenced
+through `RFB` and a matched resistor pair — and §7 allots **one** amplifier per side.
+That circuit does not fit the budget as drawn, and the choice has to be made
+explicitly rather than inherited from a figure.
+
+**Decision: inject the offset as a current at the I/V summing node.** One resistor per
+side from `V_REF` to the amplifier's virtual ground, sized for half of full-scale
+ladder current — `R = 2 × R_FB`, i.e. ≈22 kΩ against the part's nominal 11 kΩ ladder,
+a 0.1 % metal-film part. One amplifier per side, no second stage, and §7's op-amp
+count goes *down* rather than up.
+
+**What that costs, stated plainly.** The injected current flows through a discrete
+resistor while the signal current flows through the on-chip R-2R ladder, so **the
+offset does not track the ladder over temperature.** That tracking is exactly what
+`RFB` exists for, and it is why the datasheet spends a second amplifier. A 25 ppm/°C
+mismatch against the ladder's ~50 ppm/°C is ≈0.03 % of full scale over a 20 °C
+excursion — about **1.2 LSB of DC wander** at the I/V output.
+
+**It is inaudible, and for a structural reason rather than a lucky one:** §7's output
+is DC-blocked, so the pedestal and every slow drift of it are removed by the output
+capacitor before the line stage. What the drift actually costs is a little of the I/V
+amplifier's headroom, not accuracy, and the *signal* gain still tracks through `RFB`
+because the signal path is unchanged. If a future revision wants a DC-coupled output
+— a subwoofer feed, a modular rack — the offset subtractor goes back in at **+1
+`TL072`** and `RFB` does the tracking properly. Recorded so the trade is visible
+rather than silently made.
+
+The `V_REF` input remains a free master-volume/mute point, with the caveat that
+`V_REF` now also sets the pedestal: pulling it to zero mutes cleanly, but *varying*
+it moves signal and offset together, which is what you want, and moves the injected
+offset only to the extent the resistor tracks — which is the same 0.03 % as above.
 
 ---
 
@@ -568,7 +832,7 @@ Build both of the Amiga's filters, switchable, plus a bypass:
 | Stage | Circuit | Cutoff | `ACTRL` |
 |---|---|---|---|
 | **Fixed** | 1-pole RC, 360 Ω + 0.1 µF, as an A500 | **≈4.4 kHz, 6 dB/oct** | always in, unless bypassed |
-| **"LED"** | 5-pole Butterworth: two Sallen-Key stages + the fixed pole | **≈3.3 kHz** | `ACTRL.0` |
+| **"LED"** | **one 2-pole Butterworth Sallen-Key stage**, in series with the fixed pole | **3275 Hz, 12 dB/oct** | `ACTRL.0` |
 | **Bypass** | `74HC4066` shorting both | flat to the DAC's own ZOH | `ACTRL.1` |
 
 - **Fixed only** is the A500 default and the right setting for the acceptance test.
@@ -579,11 +843,55 @@ Build both of the Amiga's filters, switchable, plus a bypass:
   pole is pure loss. **Bypass is the wrong setting for mods** and the register bit
   should be documented that way.
 
-Parts: **3 × `TL072`** (two I/V, four filter poles) + **1 × `74HC4066`** + passives.
+> ⚠ **Superseded (design review, Aud-M4; decision D7).** This table previously
+> specified the LED filter as **"5-pole Butterworth: two Sallen-Key stages + the
+> fixed pole"** at ≈3.3 kHz. **The A500's LED filter is second-order.** The chain on
+> a real A500 is a fixed 1-pole RC at ≈4.4 kHz — which the row above has right — plus
+> a *switchable* **2nd-order** Butterworth Sallen-Key at ≈3.2–3.3 kHz, and every
+> faithful model implements it that way: `pt2-clone` and libopenmpt's `a500` filter
+> are both two-pole, and the 3275 Hz corner already used by this project's reference
+> renderer *is* `pt2-clone`'s two-pole corner, transplanted under four poles it never
+> had.
+>
+> **The error is two whole poles.** The old table's LED path was five poles end to end
+> (two Sallen-Key stages plus the fixed one); the real one is three (one Sallen-Key
+> stage plus the fixed one). That is **12 dB/octave of roll-off the A500 does not
+> have**, and as asymptotes above the 3275 Hz corner:
+>
+> | Above cutoff | Correct (3-pole) | As specified (5-pole) | Error |
+> |---|---|---|---|
+> | 6.55 kHz — one octave | ≈18 dB down | ≈30 dB down | **12 dB too dark** |
+> | 13.1 kHz — two octaves | ≈36 dB down | ≈60 dB down | **24 dB too dark** |
+>
+> LED-on material would have lost most of its top two octaves. That is not a subtlety;
+> it is a direct violation of the "Paula-exact" acceptance test of §1, on the one path
+> in the analogue chain that a module can switch at will with `E0x`
+> ([`modplayer.md`](modplayer.md) §5.6).
+>
+> **Nothing caught it** because the A/B ladder has no probe that toggles `E0x`, so
+> the filter was only ever compared in its fixed-pole state. See §16 item 18.
+
+Parts: **2 × `TL072`** + **1 × `74HC4066`** + passives — **four amplifier channels,
+not six**:
+
+| Amplifier channels | Was | Now |
+|---|---|---|
+| I/V converter, one per side | 2 | 2 |
+| Bipolar offset subtractor, one per side | (unbudgeted — §6.3) | **0**, offset injected at the summing node |
+| LED Sallen-Key stages | 4 (two per side) | **2** (one per side) |
+| **Total** | **6 = 3 × `TL072`** | **4 = 2 × `TL072`** |
+
+Both corrections push the same way: the LED filter is one stage per side (Aud-M4) and
+§6.3's bipolar offset is a current injected at the I/V summing node rather than a
+second amplifier. **−1 `TL072`** against the old §10, which is the only line in this
+document's re-tally that goes down.
 An `NE5532` is the better op-amp and equally period; `TL072` is specified here for
 supply-rail simplicity.
 
-**Line output**, not a speaker amp: ~2 V p-p, DC-blocked, 100 Ω series. Whatever
+**Line output**, not a speaker amp: ~2 V p-p, **DC-blocked**, 100 Ω series. The
+blocking capacitor is now load-bearing rather than good manners: it is what removes
+§6.3's half-scale pedestal and its drift. Size it against the following load —
+10 µF into 100 kΩ is 0.16 Hz, four decades below anything a module contains. Whatever
 drives the machine's speakers is a separate concern and should not be on a card
 carrying seven digital SRAMs.
 
@@ -612,7 +920,32 @@ in `AINTREQ`:
 |---|---|
 | 0–3 | channel 0–3 buffer exhausted (Paula's `INTREQ` bits 7–10) |
 | 4 | **tempo timer expired** |
-| 5 | sample-RAM posted-write FIFO drained (for `TFM`-paced upload, §13.2) |
+| 5 | **sample-RAM posted-write overrun** — a write to `SDATA` arrived while the previous one had not retired, and the byte was lost. Sticky; write-1-to-clear like the rest of `AINTREQ` |
+
+> ⚠ **Bit 5 restated (design review, Audio NOTE).** It used to read *"sample-RAM
+> posted-write FIFO drained (for `TFM`-paced upload)"*, and that motivation does not
+> survive its own document. §13.2 proves the depth-1 posted-write path retires at
+> **3.55 M/s against `TFM`'s 700 k/s** — a 5× margin — so a *drain* interrupt can
+> never fire, has no consumer, and could not pace anything if it did: `TFM` is a
+> single interruptible instruction that resumes where it left off, not a loop that
+> waits on a flag. What is actually worth an interrupt is the **failure** that margin
+> is protecting against, because without `/WAIT` (§9.3) an overrun loses the byte
+> **silently** and a silently corrupted sample upload is exactly §4.6's nightmare
+> case one level down. So the bit is inverted in meaning: it is now a sticky error
+> flag with a real consumer — the loader, which checks it once after each `TFM`
+> burst. On a 2.098 MHz 6309 it can never set; on the §12.5 MCU card, or on any
+> future host that can outrun 3.55 M/s, it can.
+
+**`/FIRQ` needs an open-collector stage, and a GAL cannot provide one.** The
+backplane's `/FIRQ` is a wire-OR
+([`graphics.md`](../../video/docs/graphics.md) §17): every source pulls low and a single
+pull-up defines the high level. A `GAL22V10`'s outputs are **totem-pole** — driving a
+shared line from one is a bus fight with whatever else is asserting it, not a
+wire-OR. The six sources above are OR-ed inside the interrupt GAL, and the resulting
+single term is then buffered by **one `74HC07`** (hex open-drain buffer, `V_OL` ≤
+0.33 V at 4 mA, tolerant of the line being held low by another card) before it
+reaches the backplane. **+1 IC**, decision D9, and it is the kind of omission that is
+invisible on paper and immediate on a bench.
 
 ### 8.2 The tempo timer is CIA-B, and it costs nothing
 
@@ -655,9 +988,40 @@ the shared adder increments it in a deferred slot every 5 colour clocks. That is
 budget, and zero additional packages.** The ÷5 prescale is three macrocells in the
 sequencer GAL.
 
-Expose it as a plain 16-bit reload register (`TIMER`, §9) with an enable bit, so
+Expose it as a plain 16-bit reload register (`TIMER`, §9.2) with an enable bit, so
 it is equally usable as a general-purpose periodic interrupt for anything else
 the machine wants at a rate `/IRQ`'s 70.09 Hz cannot give it.
+
+**The enable bit is `ACTRL` b6** (decision D7). It was promised here and never
+allocated in §9.2, which left the map with a timer that could be started and never
+stopped: once `TIMER` holds a non-zero reload the compare in slot 4 fires forever,
+`AINTENA` b4 can mask the interrupt but not the timer, and there is no clean "stop
+the music" path at all — not for a replayer shutting down, not for `ACTRL` b7's
+master enable, and not for a NitrOS-9 process being killed. `ACTRL` b6 = 0 holds the
+timer's count in reset and inhibits the slot-4 compare; b6 = 1 loads `TIMER` and
+runs. Writing `TIMER` while b6 = 0 is the ordinary way to arm it, and the
+double-buffered commit of §9.4 means the two-byte write is atomic either way.
+
+**The reload is one count short of a real 8520, and the claim is "CIA-B-identical",
+so it has to be stated.** A real 8520 in continuous mode counts down to zero and
+reloads on the *following* cycle, so the period is **latch + 1** counts; this card's
+compare structure (§4.2) gives period = **latch** exactly. At the default `N` = 14,187:
+
+| | Counts per period | Tick rate at 709,379 Hz |
+|---|---|---|
+| **This card** | 14,187 | **50.00204 Hz** |
+| Real CIA-B timer A | 14,188 | 49.99852 Hz |
+| Difference | 1 count | **0.0070 %** |
+
+That is 42 ms of drift over a ten-minute module played alongside an Amiga — below
+anything a listener can hear and far below the tolerance of the `Fxx` mapping itself
+(BPM 125 wants 50.000 Hz; both numbers are nearer than the BPM quantisation).
+**It changes nothing musically and it is not left implicit**, because "CIA-B-identical"
+is the load-bearing claim of §1 requirement 9 and a reader porting a replayer is
+entitled to know which of the two arithmetics the card implements. Adding the +1 is a
+single term in the sequencer GAL if exactness is preferred to the simpler compare;
+**decide it with the GAL fit, §16 item 20**, and note that existing replayer constants
+transfer unchanged either way because the reload value is the same number.
 
 ---
 
@@ -685,11 +1049,11 @@ Decode is geographic, from the backplane's per-slot `/IOSEL`
 | `+$1` | `ADATA` | R/W | state-file byte at `AIDX`, **post-increment** |
 | `+$2` | `ADMACON` | W | b3..0 channel DMA enable. **b7 = set/clear**, Paula's `DMACON` convention |
 | `+$3` | `AINTENA` | W | b5..0 interrupt enables (§8.1). Same b7 set/clear convention |
-| `+$4` | `AINTREQ` | R/W | read: pending flags. write: b7=0 clears the bits set in b5..0 |
-| `+$5` | `ACTRL` | W | b0 LED filter, b1 filter bypass, b2 NTSC clock, b3 reserved (was the volume curve — now table content, §6.1), b4 8-channel mode (§11.2), b5 pan enable (§11.1), b7 master enable |
+| `+$4` | `AINTREQ` | R/W | read: pending flags. write: **b7 = 0 clears** the bits set in b5..0; **b7 = 1 sets** them, Paula's `INTREQ` convention |
+| `+$5` | `ACTRL` | W | b0 LED filter, b1 filter bypass, b2 NTSC clock, b3 reserved (was the volume curve — now table content, §6.1), **b4 8-channel mode** (§11.2), b5 pan enable (§11.1), **b6 tempo-timer enable** (§8.2), b7 master enable |
 | `+$6`–`$8` | `SPTR` | W | sample-RAM pointer, 19 bits, auto-increment |
-| `+$9` | `SDATA` | R/W | sample-RAM byte at `SPTR`, **post-increment** |
-| `+$A` | `ASTAT` | R | b3..0 channel DMA active, b4 timer running, b6 write FIFO full, b7 prefetch valid |
+| `+$9` | `SDATA` | R/W | sample-RAM byte at `SPTR`, **post-increment** — a **side-effecting port**, see the `TFM` note below |
+| `+$A` | `ASTAT` | R | b3..0 channel DMA active, b4 timer running, b5 reserved (reads 0), **b6 posted-write busy**, **b7 prefetch valid** — b6/b7 defined below |
 | `+$B`–`+$C` | `TIMER` | W | tempo-timer reload, 16 bits, clocked at **709,379 Hz** — load `1773447 / BPM` (§8.2) |
 | `+$D`–`+$E` | `LIDX` | W | volume-LUT load index, 16 bits, auto-increment (§6.1) |
 | `+$F` | `LDATA` | R/W | volume-LUT byte at `LIDX`, **post-increment** |
@@ -697,7 +1061,37 @@ Decode is geographic, from the backplane's per-slot `/IOSEL`
 `ADMACON` / `AINTENA` / `AINTREQ` keep **Paula's set/clear bit-7 convention**
 deliberately: a replayer ported from 68000 writes the same constants, and the
 one-line translation from `$DFF096` to `$FF42` is the whole port for that
-register.
+register. **`AINTREQ`'s set form is part of that convention and is normative**, not
+an accident of one implementation: writing `$80 | mask` raises the selected request
+bits exactly as a 68000 write to `$DFF09C` does. It is the only way to test the
+`/FIRQ` path and the `AINTENA` mask without waiting for a real buffer exhaust, it is
+what the §12.5 MCU card's self-test uses, and a frozen map with an undocumented write
+behaviour in it is not frozen. Software that is not testing the interrupt path should
+never issue it.
+
+> ⚠ **`SDATA` and `ADATA` are ports whose access has a side effect, and §13.2 streams
+> `TFM` into one of them.** The post-increment is what makes `TFM X+,Y` the right
+> instruction (§13.2) and it is also what makes the transfer sensitive to the 6309's
+> unsettled `TFM` interrupt/resume behaviour: a resumed `TFM` that re-executes its
+> **destination write** stores one byte twice, advances `SPTR` one step too far, and
+> shifts every remaining byte of the upload by one address —
+> **silent sample corruption, intermittent, dependent on where an interrupt lands.**
+> This is the same exposure [`sdcard.md`](../../storage/docs/sdcard.md) §4 analyses for
+> its own data port, and question **(b)** of that document's §12 step 1 silicon capture
+> answers it for both cards at once. The mitigation is the storage card's — chunk the
+> `TFM`, mask across each chunk — costed for this card in
+> [`modplayer.md`](modplayer.md) §4.4, where it is nearly free because the upload is on
+> no latency-critical path. [`sdcard.md`](../../storage/docs/sdcard.md) §11.6 records a
+> third option that would delete the hazard for both cards by specifying `TFM`'s resume
+> behaviour in the CPU firmware; **that is a machine-level decision, not this card's.**
+
+**The three bits the map freeze has to settle, settled.**
+
+| Bit | Definition | Why this and not something else |
+|---|---|---|
+| `ACTRL` b4 | **8-channel mode** (§11.2) | **b4, unambiguously.** The reference header defined it at b3; b3 is the *reserved* bit vacated when the volume curve became table content (§6.1), and reusing a vacated bit for a new mode is how a map acquires two meanings for one position. Decision D7 fixes b4 and `card.h` follows the document, not the other way round — §9.2 is the deliverable. |
+| `ASTAT` b6 | **posted-write busy** — 1 while the depth-1 sample-RAM posted write of §5 has not yet retired in slot 5. A further `SDATA` write while b6 = 1 is lost and sets `AINTREQ` b5 (§8.1). | It was a placeholder called "write FIFO full", which named a FIFO the card does not have. The path is depth 1, so "busy" is the honest word. It can only ever read 1 to a host faster than 3.55 M/s: a 6309 store takes ~5 E cycles = 2.38 µs, and the retire takes 281.9 ns, so on this machine b6 reads 0 every time it is polled. It exists for the MCU card and for bring-up. |
+| `ASTAT` b7 | **prefetch valid** — 1 when the `ADATA`/`SDATA` prefetch latch (§9.3) holds the byte for the *current* index. Cleared by a write to `AIDX`/`SPTR` and by the post-increment; set when slot 5 retires the prefetch. | Also a placeholder. Same arithmetic as b6 from the other side: the prefetch completes within one colour clock (281.9 ns) and the soonest a 6309 can look is 2.38 µs later, so **b7 reads 1 every time this machine polls it** and §9.3's "reads never stall" holds. It is not a handshake the 6309 has to honour; it is the observability that makes that claim checkable on a logic analyser, and it is a real handshake for any host fast enough to need one. |
 
 ### 9.3 The state file — index/data, and why that is not a cost
 
@@ -710,7 +1104,7 @@ Per channel, `AIDX` = `channel × 16 + offset`:
 | 5–6 | `PER` | 2 | `AUDxPER` | colour clocks |
 | 7 | `VOL` | 1 | `AUDxVOL` | 0–64 |
 | 8 | `DAT` | 1 | `AUDxDAT` | direct sample write, CPU-fed mode (§1 req. 8) |
-| 9 | `ATT` | 1 | `ADKCON` bits | b0 attach-period, b1 attach-volume (§11.3) |
+| 9 | `ATT` | 1 | `ADKCON` bits | b0 attach-period, b1 attach-volume (§11.3). **Channel 3's bits are ignored** — there is no channel 4 and no wrap to channel 0 |
 | 10 | `PAN` | 1 | — | §11.1, ignored unless `ACTRL.5` |
 | 11–15 | `PTR`/`CNT` | 5 | — | **read-only**, current pointer and remaining count |
 
@@ -733,6 +1127,204 @@ This is exactly [`graphics.md`](../../video/docs/graphics.md) §11's `VDATA` pre
 it means the card needs **no `/WAIT` path at all** — the only card in the machine
 that does not.
 
+**That latch is a package, and it was not in the budget.** The prefetch holds one byte
+of state-file or sample-RAM data for the host to read at its leisure: **1 × `74HC574`**
+(§10). The `'574` the old §10 *did* list is the posted-write **data** latch on the
+opposite path, host → sample RAM; they are two different registers on two different
+buses and the argument for the read one was made without ever costing it (Aud-M5).
+The `74HC245` read-back buffer is also not a substitute — it is a transceiver, not
+storage, and something has to hold the byte across the 2.38 µs between the prefetch
+and the host's read.
+
+### 9.4 Crossing the host boundary — the part §0 said did not exist
+
+> ⚠ **Superseded (design review, Aud-M3).** §0 claimed **"one oscillator, one clock
+> domain."** The first half is true and the second half is true of everything
+> downstream of the crystal — and false exactly where it matters. **Host writes arrive
+> a byte at a time from an asynchronous 2.098 MHz E bus**, and Paula's registers do
+> not: a 68000 writes `AUD0PER` in one bus cycle, atomically, which is why no Amiga
+> document has this section and why this one did not either. §0 now reads "one
+> internal clock domain, asynchronous host port", and the rest of this section is the
+> content that claim was standing in for.
+
+**The scale of the problem, in colour clocks.** A 6309 store to an I/O address takes
+~5 core cycles at 2.0979 MHz = **2.383 µs**, and a colour clock is 281.9 ns, so
+consecutive bytes of a multi-byte register arrive **≈8.45 colour clocks apart**. The
+card runs 8 slots per colour clock and services every channel every colour clock, so
+between two bytes of one host register write the sequencer has walked all four
+channels **eight times**. Anything that is half-written is live, and live for a long
+time by this card's standards.
+
+#### 9.4.1 A torn `PER` is an out-of-range period, not a rounding error
+
+`PER` is two bytes at state-file offsets 5–6. Consider the commonest write in a
+module — a note change from C-2 to B-3, `PER` 353 → 113:
+
+```
+  live value   $0161 = 353
+  high byte    $01 -> $00     ; now live: $0061 =  97   <-- for ~8.45 colour clocks
+  low  byte    $61 -> $71     ; now live: $0071 = 113
+```
+
+**97 is below Paula's ~114 DMA floor and below anything ProTracker can emit.** It is
+inside this card's extended range (§4.3), so nothing clamps it. A channel whose
+compare fires inside that ~8-colour-clock window schedules its next tick as
+`NEXT + 97` instead of `NEXT + 113`: that sample plays **16 % short**, 3.6× shorter
+than the note that was actually sounding. One sample at the wrong length is a click.
+On a sustained lead under vibrato — where `PER` is rewritten on **every tick** — it is
+a click 50 times a second on that channel.
+
+**The general bound is worse than the example.** A torn two-byte field takes the
+high byte of one value and the low byte of the other, so the transient period is
+`(new & $FF00) | (old & $00FF)`, which for a large interval can land anywhere in the
+16-bit range regardless of how close the two endpoints are. The direction depends only
+on byte order and the magnitude only on which nibble changed; neither is controllable
+from software, and neither is visible in a register trace, which records the two
+stores and not the value that was live between them.
+
+#### 9.4.2 The 5-byte loop shadow is the one that fetches arbitrary RAM
+
+§3.3's one-shot→loop idiom is requirement #3 of §1, and it is written as five
+consecutive stores through `AIDX`/`ADATA`: `LC` (3 bytes) then `LEN` (2). That is
+**~40 colour clocks, 11.3 µs, of exposure per channel per note** during which `LC` and
+`LEN` are a mixture of the old buffer's values and the new one's.
+
+The sequencer copies `LC → PTR` and `LEN×2 → CNT` **at the instant `CNT` reaches
+zero** — that instant is not synchronised to anything the host is doing. If the first
+(one-shot) pass exhausts inside those 11.3 µs, the channel reloads a **torn pointer**:
+one byte of the new repeat address and two of the old, which on a 19-bit pointer is a
+jump of up to 64 KB into whatever else is in card RAM, played at the note's rate until
+the torn `CNT` runs out. Audibly: a burst of another instrument, or of unwritten SRAM.
+
+**How often:** ProTracker writes the shadow on tick 1, 20 ms after the trigger, so the
+window is 11.3 µs out of 20 ms — **0.06 % of note triggers** land in it. At four
+channels and 125 BPM that is on the order of **once a minute** of ordinary music, with
+nothing in the trace to distinguish the bad note from the 3,000 good ones. It is
+exactly the bug class §16 item 13 already kills for the `DMACON`-enable path, left
+alive on the path that runs 50 times as often.
+
+#### 9.4.3 The rule: multi-byte host fields are double-buffered and commit on the low byte
+
+**Normative.** Every host-written multi-byte field is staged and lands in the state
+file in **one deferred-slot write**, on the arrival of its **last (low) byte**:
+
+| Field | Bytes | Offsets | Commits on |
+|---|---|---|---|
+| `LC` | 3 | 0,1,2 (big-endian, `LC[18:16]` first) | offset 2 |
+| `LEN` | 2 | 3,4 | offset 4 |
+| `PER` | 2 | 5,6 | offset 6 |
+| `TIMER` | 2 | `+$B`,`+$C` | `+$C` |
+
+Nothing else needs it: `VOL`, `DAT`, `ATT` and `PAN` are one byte each and are
+therefore atomic already, and `SPTR`/`LIDX` are pointers into a linear write stream
+where a torn value can only mis-place the *next* byte, not a live playing pointer —
+they commit on their own low byte anyway because they are counters (§9.5) and the
+load is one operation.
+
+**The natural write order already satisfies this**, which is what makes the rule
+cheap. `ADATA` post-increments, so a replayer writing `LC` then `LEN` then `PER`
+issues offsets 0,1,2,3,4,5,6 in ascending order, and each field's low byte is its last
+— the same big-endian order the `.mod` format and the 6309 both use. **The card does
+not need the host's cooperation to be safe, but it gets a free ride from it.**
+
+**The model already does exactly this for `TIMER`**, and for exactly this reason:
+tearing broke the tempo when the reference player wrote the two bytes separately, so
+`TIMER` was given commit-on-low-byte semantics. The finding here is that `PER`, `LC`
+and `LEN` needed the same rule and never got it — the fix is to generalise a rule the
+design had already discovered once.
+
+**Cost: 2 × `74HC574` of staging** (§10). The widest field is `LC` at 3 bytes, of which
+2 are staged and the third is the committing byte, arriving on the existing posted-write
+data path; 16 bits of staging covers every field in the table.
+
+#### 9.4.4 The synchroniser, which is the only defence the card has
+
+§9.3's "no `/WAIT` path at all" is a real property and it has a consequence: **the card
+cannot ask the host to wait while it makes up its mind.** Every host access must be
+captured on the first attempt, which makes the metastability margin of the input
+synchroniser the whole of the boundary discipline.
+
+`/IOSEL`, `E` and `R/W` are asynchronous to the 28.37516 MHz slot clock. They are
+qualified into a single access strobe and passed through a **two-flop synchroniser with
+a full slot between the stages**:
+
+```
+  async strobe --> FF1 (slot clock) --> FF2 (slot clock) --> sequencer, slot 5
+                   ^ resolution window = 1 slot = 35.24 ns
+```
+
+The arithmetic that decides the stage count, at `74HC`'s ~2 ns metastability time
+constant and a worst-case 400 k accesses/s:
+
+| Resolution window | `exp(t/τ)` | MTBF |
+|---|---|---|
+| ½ slot (17.6 ns) | 6.6 × 10³ | **~10 minutes — unusable** |
+| 1 slot (35.2 ns) | 4.4 × 10⁷ | ~40 days |
+| **2 slots (70.5 ns)** | **1.9 × 10¹⁵** | **~10¹¹ years** |
+
+**Specify two slots** — one flop clocked at the slot rate, a second a slot later, the
+access retired in slot 5 of the following colour clock. The latency is ≤2 colour
+clocks (564 ns) against a host that cannot return for 2.38 µs, so it is free.
+**1 × `74HC174`** (hex D flip-flop) carries three such synchronisers — write strobe,
+read strobe, and `E` itself for edge detection — with none spare.
+
+#### 9.4.5 Reads of registers the slot logic is writing
+
+Two registers change underneath the host: `AINTREQ` (slot logic sets request bits) and
+`ADATA` (slot 5 refills the prefetch latch).
+
+- **`AINTREQ`.** A set event arriving during a host read must neither be lost nor
+  produce a half-updated byte. Request bits are set into a 6-bit **pending** register by
+  the slot logic and merged into `AINTREQ` on the colour clock *after* the synchronised
+  read strobe deasserts; a write-to-clear in the same window clears only the bits the
+  host named, and any set that arrived meanwhile survives the clear. This is Paula's
+  behaviour and it is the only ordering under which "read `AINTREQ`, then clear what you
+  saw" is race-free.
+- **`ADATA`.** The prefetch latch is written only in slot 5 and read only through the
+  `'245`; the state file itself is written only in deferred slots. The host therefore
+  reads a byte-atomic snapshot, and `ASTAT` b7 says whether it is the snapshot for the
+  current index (§9.2). Multi-byte *reads* — `PTR`/`CNT` at offsets 11–15 — are **not**
+  atomic across bytes and are documented as advisory: they are a debugging window, and a
+  host that needs a coherent pointer should stop the channel first.
+
+### 9.5 Where every host-visible counter bit lives
+
+> ⚠ **Added (design review, Aud-M5).** The old §10 tallied 35 packages with **three**
+> `GAL22V10` = 30 macrocells total, and asked those 30 macrocells to hold the entire
+> slot sequencer *and* 41 flops of host-visible counter. They do not fit, and the
+> document never said where they were. This section says.
+
+| State | Bits | Lives in | Packages |
+|---|---|---|---|
+| `SPTR` — sample-RAM pointer, 19-bit auto-increment | 19 | `74HC593` ×3 (8-bit binary counter with input register, 3-state) | **3** |
+| `LIDX` — volume-LUT load index, 16-bit auto-increment | 16 | `74HC593` ×2 | **2** |
+| `AIDX` — state-file index, 6-bit auto-increment | 6 | `74HC593` ×1 | **1** |
+| `INTENA` | 6 | GAL 4 | — |
+| `INTREQ` (+ 6-bit pending register, §9.4.5) | 12 | GAL 5 | — |
+| `DMAEN` | 4 | GAL 3 | — |
+| Tempo ÷5 prescale + timer enable | 4 | GAL 3 | — |
+| Slot counter | 3 | GAL 1 | — |
+| Deferred-work queue + enable-priority term (§16 item 13) | ~6 | GAL 1 / GAL 5 | — |
+| Sequencer state machine, stage control | ~8 | GAL 1 | — |
+| Address mux, decode, host synchroniser control | — | GAL 2 | — |
+| | | **`GAL22V10` ×5** | **5** |
+
+**Why `'593` and not `'161`.** A `74HC161` is 4 bits, so `SPTR` alone would be five
+packages and the three counters together **ten**. The `74HC593` is an 8-bit binary
+counter with a parallel input register and three-state outputs — host-loadable in the
+two-step way a byte-at-a-time port wants anyway, and directly capable of driving the
+sample-RAM and LUT address buses. **41 counter bits in 6 packages instead of 11.**
+
+**Why five GALs and not three.** `INTENA`(6) + `INTREQ`(12) + `DMAEN`(4) = 22
+registered bits with feedback, before a single term of sequencer. A `GAL22V10` has ten
+macrocells. Three of them cannot hold the interrupt block, let alone the block *and*
+the slot walk *and* the deferred queue. Five is 50 macrocells and the table above uses
+essentially all of them — **which is a fit that has to be proven, not asserted**
+(§16 item 7, now the sharper question). The video card runs 8 GALs and argues 18 is
+where "why not a CPLD" bites, so five is comfortably inside the house rule; the risk
+is not the count, it is that the sequencer GAL is doing the most interesting work on
+the card with no spare macrocells.
+
 ---
 
 ## 10. Chip budget
@@ -741,29 +1333,56 @@ that does not.
 |---|---|---|
 | 1 | AS6C1008-55 (128K×8) | sample RAM (footprint for 4 → 512 KB, §5) |
 | 4 | CY7C128A-15 (2K×8, 15 ns) | channel state file, **32 bits wide** (§3.1) |
-| 2 | 32K×8, 15 ns | volume LUT, `{curve,VOL,SAMP}` → 12-bit (§6.1) |
+| 2 | 32K×8, 15 ns | volume LUT, `{VOL[6:0],SAMP[7:0]}` → 12-bit **offset binary** (§6.1, §6.3) |
 | 2 | 74HC590 | free-running 16-bit colour-clock counter (§4.2) |
 | 2 | 74HC688 | 16-bit event comparator (§4.2) |
 | 4 | 74HC283 | shared 16-bit adder — `NEXT`+`PER`, `PTR`+1, `CNT`−1 (slots 6–7) |
+| **6** | **74HC283** | **L and R sum adders, 12 bits each (§6.2)** |
 | 3 | 74HC574 | pipeline latches, stages A/B/C (§3.2) |
-| 4 | 74HC574 | L and R accumulators, 13 bits each (§6.2) |
+| **4** | **74HC574** | **`L_HOLD` / `R_HOLD`, 12 bits each — hold the scaled sample across the two-slot add (§6.2)** |
+| 4 | 74HC273 | `L_ACC` / `R_ACC`, 13 bits each — **`'273`, not `'574`: the frame boundary needs an asynchronous clear** (§6.2) |
 | 2 | **LTC7545A** | 12-bit parallel MDAC with input latch, L and R (§6.3) |
-| 3 | TL072 | I/V ×2, filter poles ×4 (§7) |
+| **2** | **TL072** | **I/V ×2 + one LED Sallen-Key per side (§7) — down one, see below** |
 | 1 | 74HC4066 | filter select / bypass (§7) |
 | 1 | 74HC574 | posted-write data latch (host → sample RAM) |
+| **2** | **74HC574** | **multi-byte commit staging — `LC`/`LEN`/`PER`/`TIMER` (§9.4.3)** |
+| **1** | **74HC574** | **`ADATA`/`SDATA` read-prefetch latch (§9.3)** |
+| **6** | **74HC593** | **`SPTR` ×3, `LIDX` ×2, `AIDX` ×1 — the host-visible counters (§9.5)** |
+| **1** | **74HC174** | **two-flop host-port synchronisers ×3 (§9.4.4)** |
 | 1 | 74HC245 | register / state-file read-back |
 | 1 | 74HC273 | `ACTRL`, master reset |
-| 3 | GAL22V10-15 | sequencer + slot control; address mux + decode; interrupt/timer/`DMACON` |
+| **1** | **74HC07** | **open-drain buffer for the wire-OR `/FIRQ` (§8.1, decision D9)** |
+| **5** | **GAL22V10-15** | **sequencer/queue; address mux + decode; `DMACON`/timer; `INTENA`; `INTREQ`+pending (§9.5)** |
 | 1 | 28.37516 MHz osc | PAL Amiga master (§4.1) |
 | (1) | (28.63636 MHz osc) | (NTSC, socketed option, §4.1) |
-| — | 3 × R-2R / passives | filter networks, output stage |
-| **35** | | **(38 with the NTSC can and the §6.2 deglitch latch)** |
+| — | R-2R / passives | filter networks, offset-injection resistors (§6.3), output stage |
+| **57** | | **(58 with the NTSC can)** |
 
-Video card, for comparison: **36** (32 if the tri-state pixel bus closes).
+Video card, for comparison: **36** (32 if the tri-state pixel bus closes). **This card
+is no longer the small one**, and the honest statement of that is the point of the
+table below.
+
+> ⚠ **The old total of 35 is superseded (design review — Aud-M1, Aud-M2, Aud-M3,
+> Aud-M4, Aud-M5, decision D9).** The addition was never wrong: the list summed to 35
+> exactly as printed. What was wrong is what the list left out, and it left out
+> whole functions rather than spare gates.
+
+| Where the 22 packages came from | Δ | § |
+|---|---|---|
+| The L/R sum path — 4 hold latches + 6 adders. The old list had four `'574` labelled "accumulators" and no adder at all, while §6.2 claimed a combinational sum and §3.4 claimed the only adder was elsewhere. | **+10** | §6.2 |
+| Host-visible counters. `SPTR`(19) + `LIDX`(16) + `AIDX`(6) = **41 flops of counter** with nowhere to live; three GALs are 30 macrocells and were already holding the sequencer. | **+6** | §9.5 |
+| Host-boundary hardware: 2 staging latches for the commit-on-low-byte rule, 1 hex flip-flop for the two-flop synchronisers. | **+3** | §9.4 |
+| `ADATA` read-prefetch latch — argued for in §9.3, never costed; the `'574` that *was* listed is the posted-**write** latch on the other path. | **+1** | §9.3 |
+| `74HC07` open-collector stage for the wire-OR `/FIRQ`; a `GAL22V10` output is totem-pole and cannot do it. | **+1** | §8.1 |
+| Two more `GAL22V10`. | **+2** | §9.5 |
+| One fewer `TL072`: the LED filter is one Sallen-Key stage per side, not two, and §6.3's bipolar offset is injected rather than subtracted. | **−1** | §7 |
+| **Net** | **+22 → 57** | |
 
 **Where it could shrink:**
-- **−2** if the §6.2 combinatorial sum is done in the accumulator instead of
-  separate L/R latches (it can be; costed conservatively here).
+- **−12** if §6.2's recorded alternative is taken: four `LTC7545A` summing as currents
+  at the two I/V nodes, deleting both hold latches, both adders and both accumulators
+  for +2 DACs. It is cheaper *and* more Paula-exact; it is not adopted only because
+  the analogue design has not been done (§16 item 17).
 - **−1** if the volume LUT's 12-bit output is cut to 8 (do not — §6.1).
 - **−2** if the state file is 16 bits wide instead of 32, at the price of two
   accesses per slot and a 17.5 ns SRAM. Not available in 1989.
@@ -772,18 +1391,26 @@ Video card, for comparison: **36** (32 if the tri-state pixel bus closes).
 - **+3** for 512 KB of sample RAM.
 - **+2** for per-channel panning (§11.1).
 - **+1** if the §3.2 stage-B path does not close and needs the extra latch.
+- **+1 `TL072`** if a DC-coupled output is ever wanted and §6.3's injected offset has
+  to become a proper `RFB`-referenced subtractor.
 
-**Power.** Seven SRAMs, three GALs, ~15 HC packages, four op-amp channels:
-estimate **250–350 mA** — roughly *half* the video card, because there are three
-GALs instead of eight and nothing switches at 25 MHz. Analogue and digital
-grounds must meet at exactly one point, and the `LTC7545A` reference should not
-share a rail with the SRAMs. That is the only layout constraint on this card that
-the video card does not also have, and it is the one that decides whether it
+**Power.** Seven SRAMs, five GALs, ~30 HC packages, four op-amp channels: estimate
+**400–500 mA**. The old figure of 250–350 mA and its "roughly half the video card"
+gloss went with the old package count; this card is now **comparable to** the video
+card rather than half of it, even though nothing on it switches at 25 MHz. Analogue
+and digital grounds must meet at exactly one point, and the `LTC7545A` reference
+should not share a rail with the SRAMs. That is the only layout constraint on this
+card that the video card does not also have, and it is the one that decides whether it
 sounds clean.
 
-**Area.** 35 ICs with one DIP-32, four DIP-24 and two DIP-28 fits the same
-Eurocard envelope as the video card, with room for the analogue section to be
-kept physically separate — which it must be.
+**Area, and this is now an open question rather than a reassurance.** 57 packages —
+one DIP-32, four DIP-24, two DIP-28, six DIP-16 counters, five DIP-24 GALs — **does
+not obviously fit the video card's single-Eurocard envelope while keeping the analogue
+section physically separate**, which §16 item 9 says is non-negotiable for the noise
+floor. The old text asserted the fit at 35 and that assertion does not carry to 57.
+Either the card goes double-height, or the analogue section becomes a small mezzanine,
+or §6.2's four-DAC alternative buys back twelve packages and the question goes away.
+**Decide before layout — §16 item 19.**
 
 ---
 
@@ -834,6 +1461,13 @@ promising it (§16 item 7).**
 - **Attach modulation** (`ADKCON`'s period/volume attach: channel *n* modulates
   *n+1*). Rarely used, but some modules and several demos need it, and it is a
   couple of sequencer terms plus the `ATT` byte already reserved in §9.3. **Build it.**
+  **Channel 3 modulates nothing.** On Paula the attach chain is 0→1, 1→2, 2→3 and
+  stops: `AUD3DAT` has no consumer, so setting channel 3's attach bits does nothing at
+  all. **This card does the same, explicitly: no wrap to channel 0.** It is stated here
+  because a wrap is the natural thing to write when the channel index is three bits of
+  a slot counter and `+1` costs nothing — and because a card and a model that disagree
+  about a rarely-exercised corner is exactly how a divergence survives to a GAL. The
+  sequencer term is `attach_target_valid = (ch != 3)`.
 - **Extended period range** (§4.3) — already free.
 - **Programmable volume curve** (§6.1) — already free.
 
@@ -886,7 +1520,11 @@ Three problems, in increasing order of seriousness:
    datasheet from the manufacturer. Same failure mode as §12.1, one step less severe.
 
 Problem 1 alone would be acceptable. Problem 3 is what rules it out — and the
-discrete card is only ~25 ICs more for a part you can buy forever.
+discrete card is ~47 ICs more (§10's honest 57 against a ~10-IC `RF5C68` card) for
+parts you can buy forever. That gap was quoted as ~25 when §10 said 35; it is the one
+place in this document where the re-tally makes a rejected alternative look
+meaningfully better, and it is recorded rather than glossed. Availability still
+decides it.
 
 ### 12.3 Ensoniq 5503 DOC — the right chip for the wrong job
 
@@ -937,7 +1575,7 @@ But it is worth building **first**, and for the same reason
 [`graphics.md`](../../video/docs/graphics.md) §16 gives for the bus exerciser: it decouples the
 software from the hardware. With the MCU card on the bench you can write the
 loader, the replayer and the `.mod` converter, run the acceptance test, and find
-out which of §1's nine requirements you got wrong — **before three GALs have been
+out which of §1's nine requirements you got wrong — **before five GALs have been
 fitted.** Then the discrete card is a drop-in replacement that has to match a
 known-good reference, and any disagreement is a bug with a bisector attached.
 
@@ -1006,10 +1644,27 @@ fixed** — streams a block to a fixed I/O port at **3 cycles/byte**, which is
 | `LDA ,X+` / `STA SDATA` loop | ~10/byte | 625 ms for 128 KB |
 | **`TFM X+,Y`** | **3/byte** | **187 ms for 128 KB** |
 
-`W` is 16 bits, so 128 KB is three `TFM` instructions and a pointer fix-up. The
+`W` is 16 bits and `TFM` treats `W` = 0 as 65,536 nowhere — it stops — so 128 KB is
+**three** `TFM` instructions and a pointer fix-up: `65,535 + 65,535 + 2 = 131,072`.
+([`modplayer.md`](modplayer.md) §4.4 states the same arithmetic; they agree.) The
 card's posted-write path retires one byte per colour clock in slot 5 —
 **3.55 M/s against `TFM`'s 700 k/s**, a 5× margin, so **no `/WAIT`, no FIFO
-stall, no lost writes** (§9.3).
+stall, no lost writes** (§9.3). At the experimental fast-E rate the numbers become
+1.05 M/s against 3.55 M/s, still 3.4×, and the upload falls to 125 ms.
+
+**The margin is not the only thing that can go wrong with this transfer.** `SDATA` is
+a side-effecting port and `TFM`'s interrupt/resume behaviour is unsettled, which is a
+silent-corruption hazard rather than a throughput one; §9.2 states it and
+[`modplayer.md`](modplayer.md) §4.4 costs the mitigation (chunk at 32 bytes, mask
+across each chunk: 187 ms becomes 238 ms).
+
+**The margin is checkable, which is the point of `ASTAT` b6 and `AINTREQ` b5.** The
+card has no `/WAIT`, so an overrun would lose the byte silently and produce a sample
+upload that is wrong in one place — the worst possible failure for a loader. The
+loader reads `AINTREQ` once after each `TFM` burst; bit 5 sticky-set means a byte was
+dropped and the upload must be redone. On this machine it can never set. That is the
+right relationship between a proof and an assertion: the arithmetic says it cannot
+happen, and the hardware says so too if it ever does.
 
 This is the second concrete payoff for `TFM` in the machine, after
 [`graphics.md`](../../video/docs/graphics.md) §10.2's bulk RAM movement, and both of them exist
@@ -1072,11 +1727,11 @@ Paula in any way that matters to the acceptance test, and that is deliberate.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | **Freeze §9's register map** and the backplane's `/FIRQ` and I/O-window assignment | one document; §16 items 4–6 answered |
+| 0 | **Freeze §9's register map** and the backplane's `/FIRQ` and I/O-window assignment | one document; §16 items 4–6 answered; and the four bits the review found open are now decided in §9.2 — `ACTRL` b4 = 8-channel, `ACTRL` b6 = timer enable, `AINTREQ`'s set form documented, `ASTAT` b6/b7 defined |
 | 1 | **Build the MCU card** (§12.5): STM32G431 + `LTC7545A` pair + §7's filters | plays a known module correctly through the §9 register map |
 | 2 | **Write the loader, replayer and converter** against the MCU card | acceptance test: 20 varied modules, A/B against a real Amiga or a reference emulator, by ear and by capture |
 | 3 | **Bench the §3.2 stage-B path** at 35 ns on a breadboard — LUT SRAM at 15 ns, driven by counters | closes with margin, or the §3.2 fallback latch is adopted |
-| 4 | **Fit the sequencer GAL** with all eight slots, the shadow reload and the deferred queue | equations fit in 3 × GAL22V10; §16 item 7 answered before the 8-channel mode is promised |
+| 4 | **Fit the sequencer GALs** with all eight slots, the shadow reload, the deferred queue and the interrupt block | equations fit in **5 × GAL22V10** as allocated in §9.5, with the host-visible counters in `'593`s and not in macrocells; §16 item 7 answered before the 8-channel mode is promised |
 | 5 | **Discrete card rev A**, driven by the STM32 bus exerciser ([`graphics.md`](../../video/docs/graphics.md) §16.1) — no 6309 core needed | state file reads back; a single channel plays a sine from card RAM at a known `PER` |
 | 6 | **All four channels + the shadow reload** | the step-2 module set plays **identically** to the MCU card, sample-for-sample where captured |
 | 7 | **Analogue bring-up**: I/V, both filters, bypass, grounding | THD and noise floor measured; no digital hash from the SRAMs in the output |
@@ -1112,13 +1767,20 @@ specification that has not been tested.
    no polling chain, needs to be stated in the backplane spec, not assumed.
 7. **GAL fit, and the 8-channel question** (§11.2). The sequencer carries the
    8-slot walk, the compare, the shadow reload, the deferred queue, `DMACON`
-   set/clear and the interrupt latches. **Fit it at 3 × GAL22V10 before committing
-   to the budget**, and fit the 8-channel slot allocation before promising the
-   mode. Same posture as [`graphics.md`](../../video/docs/graphics.md) §19 item 15.
-8. **Verify the §6.2 glitch argument on the bench.** A 20 ns adder glitch at
-   126 kHz *should* be inaudible after the 4.4 kHz pole. Measure it; the fallback
-   is +2 ICs and no timing change, but find out before laying out the analogue
-   section.
+   set/clear and the interrupt latches. §9.5 now allocates **5 × GAL22V10 = 50
+   macrocells and uses essentially all of them**, having moved 41 bits of
+   host-visible counter out into `74HC593`s where they belong. **Fit it at five
+   before committing to the budget** — the question is no longer "do the counters
+   fit" (they do not, and they are gone) but whether the sequencer and the interrupt
+   block fit with no spare macrocells, which is a worse place to be. Fit the
+   8-channel slot allocation before promising the mode. Same posture as
+   [`graphics.md`](../../video/docs/graphics.md) §19 item 15.
+8. ~~**Verify the §6.2 glitch argument on the bench.**~~ — **retired.** It was a
+   consequence of the combinational sum, which §6.2 no longer specifies. The DAC is
+   driven from static latch outputs 141 ns after they settle, so there is no adder
+   transient on the converter input to measure and no deglitch latch to hold in
+   reserve. What is still worth measuring is the converter's own code-transition
+   glitch (5 nV·s) against the analogue noise floor, which is item 9's job.
 9. **Measure the analogue noise floor with the digital section running.** Seven
    SRAMs and a 28 MHz slot clock on the same board as a 12-bit DAC is the one
    genuinely new risk this card carries that the video card does not. Single-point
@@ -1145,8 +1807,14 @@ specification that has not been tested.
     sequencer GAL, and it removes a whole class of intermittent bug.
 14. **Emulator model.** Whatever host-side emulator the project runs must model the
     state file, the compare timing, the shadow reload and the `FIRQ` sources — or
-    software will be written against a card that does not exist. Same requirement
-    as [`graphics.md`](../../video/docs/graphics.md) §19 item 13, and the MCU card of §12.5 is a
+    software will be written against a card that does not exist. **It must also model
+    the host boundary of §9.4**: the byte-serial arrival of multi-byte fields at ~8.45
+    colour clocks apart, and the commit-on-low-byte rule that makes them atomic. A
+    model that applies a two-byte `PER` write instantly is *hiding* the class of bug
+    §9.4.1 describes rather than testing it — the same failure mode
+    [`modplayer.md`](modplayer.md) §8 already records for a model that runs the replayer
+    in zero card time. Same requirement as
+    [`graphics.md`](../../video/docs/graphics.md) §19 item 13, and the MCU card of §12.5 is a
     better reference than any model.
 15. **The `AD7545A` datasheet is not in `reference/datasheets/`** — the plain
     `AD7545` and the `LTC7545A` are. §6.3's `tWR` = 100 ns figure for the `AD7545A`,
@@ -1159,6 +1827,52 @@ specification that has not been tested.
     against a distributor or against Analog Devices' lifecycle page. If it has gone
     NRND the argument does not collapse — the `AD7545A` still drops into the same
     socket — but the BOM note does.
+17. **Decide §6.2's four-DAC analogue sum before the analogue section is laid out.**
+    4 × `LTC7545A` summing as currents at the two I/V virtual grounds is **twelve
+    packages cheaper** than the latched digital sum, keeps all 12 bits per channel
+    instead of spending one on the `>>1`, updates each converter on its own channel
+    event, and is what Paula actually does. What it needs and this document has not
+    done is the analogue work: four mid-scale offset injections onto two summing
+    nodes, resistor matching, and `RFB` tracking across four parts. **It is the single
+    largest lever on §10's count**, and it has to be pulled before layout or not at
+    all.
+18. **Probe the LED filter against libopenmpt's `a500` behaviour.** Aud-M4 — the
+    filter was specified, modelled and unit-tested as 5-pole for as long as it was,
+    because **no probe in the A/B ladder ever issues `E0x`**, so every comparison ran
+    with the filter in one state. Add a single-note probe that toggles `E0x` mid-note
+    and compare the transition against libopenmpt's `a500` LED path. The pass condition
+    is the three-pole chain of §7 — the fixed ≈4.4 kHz pole plus a **12 dB/octave**
+    Sallen-Key at 3275 Hz — and the failure it exists to catch is the old five-pole
+    specification's extra 12 dB/octave, which shows up as 24 dB of missing level two
+    octaves above the corner. Until that probe exists, "both Amiga
+    filters, switchable" is an unverified claim about the half of §7 the acceptance
+    test can hear.
+19. **Confirm the card fits its envelope at 57 packages** (§10). The old text asserted
+    a single-Eurocard fit at 35 with the analogue section kept physically separate;
+    that assertion does not carry. Double-height card, analogue mezzanine, or item 17.
+20. **Decide the CIA `latch + 1`** (§8.2). A real 8520 in continuous mode takes
+    `latch + 1` counts per period; the compare structure of §4.2 takes `latch`. The
+    difference is 0.0070 % — 42 ms over a ten-minute module — and it is one term in
+    the sequencer GAL. Decide it *with* the fit, because "CIA-B-identical" is §1
+    requirement 9 and the document should say which of the two it means.
+21. **Scope the DAC output across a zero crossing** before anything else in the
+    analogue bring-up (§6.3). Aud-M1 was a full-scale error that no amount of listening
+    to the digital side would have found: play a slow full-amplitude sine at a long
+    `PER`, trigger on the accumulator's `$800` code, and confirm the output is
+    continuous there. It is a five-minute measurement that discriminates
+    offset-binary-correct from two's-complement-wrong, and it should be step 0 of
+    build step 7.
+22. **Fix the tuning measurement before quoting a tuning result.** The A/B harness's
+    spectral check runs at 24 bins/octave — **50 cents per step** — and then thresholds
+    at ±12 cents, so it can only ever return an integer multiple of 50 and can only
+    pass at exactly 0. Every error this document's §4.1 is about is smaller than one
+    step: the NTSC-clock mistake is **+16 cents**, the worst period-table
+    transcription error **16 cents**, one finetune step **12.5 cents**. The instrument
+    cannot see any of them. Parabolic interpolation of the correlation peak, or FFT
+    peak interpolation on a single-note probe, resolves ~1 cent and costs a few lines;
+    until then the "+0.0 cents" figure quoted in
+    [`modplayer.md`](modplayer.md) §8 and [`../README.md`](../README.md) means "within
+    the quantisation of an instrument too coarse to test the claim."
 
 ---
 
@@ -1172,6 +1886,8 @@ specification that has not been tested.
 | `TL072` / `NE5532` | 1978 / 1979 | period |
 | `74HC` logic | 1982 | period |
 | `74HC688` 8-bit comparator | 1984 | period |
+| `74HC593` 8-bit counter with input register | 1984 | period — the six host-visible counter packages of §9.5 |
+| `74HC07` open-drain hex buffer | 1982 (the bipolar `7407` is 1965) | period — the `/FIRQ` stage of §8.1 |
 | `GAL22V10` | 1986 | period (the video card already uses 8) |
 | `CY7C128A` 2K×8, 15 ns | 1985 | period |
 | 32K×8 SRAM, 15 ns | ~1988 | period |
@@ -1213,7 +1929,10 @@ the sound card too. That is a decision to make deliberately, not to inherit.
   re-verified against real hardware or a cycle-accurate emulator in build step 2**
   (§16 item 3). The reload semantics of §3.3 are the ones to check first and
   hardest — the entire acceptance test rests on them.
-- A500 filter values (360 Ω / 0.1 µF fixed pole; the 5-pole LED filter) are from
-  the schematic and should be confirmed against the board revision you want to
+- A500 filter values (360 Ω / 0.1 µF fixed pole; the **2-pole** LED Sallen-Key at
+  3275 Hz) are from the schematic and from the two implementations that are checked
+  against real hardware — `pt2-clone` and libopenmpt's `a500` filter, both of which
+  model LED as second-order. Confirm against the board revision you want to
   match — A500 and A1200 differ substantially, and the A1200's fixed pole is
-  effectively absent.
+  effectively absent. ⚠ The earlier "5-pole LED filter" reading of the schematic was
+  wrong (§7, Aud-M4).

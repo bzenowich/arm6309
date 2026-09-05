@@ -14,7 +14,7 @@
  *   (3.546895 MHz)     (loses nothing: the input is piecewise constant)
  *                                |
  *                     fixed 4.4 kHz 1-pole RC  (A500, always in)   <- CARD
- *                     + 5-pole ~3.3 kHz LED filter, if enabled     <- CARD
+ *                     + 2-pole 3275 Hz LED filter, if enabled      <- CARD
  *                                |
  *                     4th-order Butterworth at 0.45 Fout           <- RENDER
  *                                |
@@ -41,7 +41,7 @@ typedef struct {
     double acc_l, acc_r, acc_n;
 
     double rc_l, rc_r, rc_k;         /* fixed 4.4 kHz pole                 */
-    biquad led_l[2], led_r[2];       /* LED filter, 4 of its 5 poles       */
+    biquad led_l, led_r;             /* LED filter, one Sallen-Key stage   */
     biquad aa_l[2], aa_r[2];         /* rendering anti-alias               */
 
     int    phase;                    /* 0..RENDER_OVERSAMPLE-1             */

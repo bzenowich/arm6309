@@ -38,7 +38,7 @@ enum {
     A_ADATA   = 0x1,  /* state-file data, post-increment                     */
     A_ADMACON = 0x2,  /* b3..0 channel DMA enable; b7 = set/clear            */
     A_AINTENA = 0x3,  /* b5..0 interrupt enable;   b7 = set/clear            */
-    A_AINTREQ = 0x4,  /* read pending; write b7=0 clears the named bits      */
+    A_AINTREQ = 0x4,  /* read pending; b7=1 sets, b7=0 clears named bits     */
     A_ACTRL   = 0x5,
     A_SPTR2   = 0x6,  /* sample pointer, bits 18..16                         */
     A_SPTR1   = 0x7,  /* bits 15..8                                          */
@@ -72,11 +72,12 @@ enum {
  */
 
 enum {
-    ACTRL_LED     = 0x01,  /* + 5-pole LED filter (audio.md §7)   */
+    ACTRL_LED     = 0x01,  /* + 2-pole LED filter (audio.md §7)   */
     ACTRL_BYPASS  = 0x02,  /* bypass all filtering                */
     ACTRL_NTSC    = 0x04,  /* NTSC colour clock                   */
-    ACTRL_8CHAN   = 0x08,  /* audio.md §11.2 — not modelled       */
+    ACTRL_8CHAN   = 0x10,  /* audio.md §11.2 — not modelled       */
     ACTRL_PAN     = 0x20,  /* audio.md §11.1 — not modelled       */
+    ACTRL_TIMER   = 0x40,  /* tempo timer runs; 0 stops it        */
     ACTRL_ENABLE  = 0x80   /* master enable; 0 at reset           */
 };
 

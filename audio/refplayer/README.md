@@ -39,10 +39,29 @@ The trace is the contract. Comparing audio tells you *something* is wrong;
 comparing traces tells you which register write, on which tick, in which
 channel. A correct 6309 replayer produces a byte-identical trace.
 
+It starts at tick 0 — `mod_start()`'s reset and configuration — and row 0 is
+tick 1, because `mod_start()` plays row 0 rather than waiting out the timer's
+first expiry. That means the trace files have to be installed in the player
+**before** `mod_start()`; opening them after it silently drops the whole of row
+0, which is the tick a port is most likely to get wrong.
+
 ```
-000001 ADATA   40
-000001 ADMACON 0F      <- stop, then start, one write for all four channels
-000001 ADMACON 8F
+000000 AINTENA 90
+000000 ACTRL   C0      <- enable + timer run; ORed with --ntsc/--led/--bypass
+000000 TIMER1  37      <- 1773447 / 125 = 14187
+000000 TIMER0  6B
+000001 AINTREQ 10      <- row 0 starts here
+000001 AIDX    00
+000001 ADATA   00
+000001 ADATA   00
+000001 ADATA   02      <- LC = 0x000002, the first sample after the null block
+000001 ADATA   00
+000001 ADATA   20      <- LEN = 32 words
+000001 ADATA   01
+000001 ADATA   AC      <- PER = 428
+000001 ADATA   40      <- VOL = 64
+000001 ADMACON 01      <- stop, then start, one write for all channels triggering
+000001 ADMACON 81
 000001 AIDX    00      <- and the loop pointer immediately after (§5.3)
 000001 ADATA   00
 ```
@@ -67,9 +86,13 @@ came out of it, all now fixed in the documents:
    wrong place. The replayer therefore charges each register store its real cost
    (`MOD_STORE_CC_DEFAULT`, 8 colour clocks ≈ 5 core cycles at 2.098 MHz), which
    makes the ordering **testable** instead of assumed.
-4. **The LED filter model had a +0.6 dB passband bump** — 5th-order Butterworth
-   Qs used where the real pole is the separate 4.4 kHz RC. A filter cannot add
-   energy; `test_refplayer.c` now guards it at seven frequencies.
+4. **The LED filter was four poles too many.** `audio.md` §7 specified, and this
+   modelled, two cascaded Sallen-Key stages — five poles with the fixed RC. A
+   real A500 has **one** 2nd-order section there, and every faithful model
+   (`pt2-clone`, `libopenmpt a500`) implements it that way; as built, LED-on
+   material came out ~24 dB/oct darker than the machine being modelled. It is
+   now a single 2nd-order Butterworth at 3275 Hz, measured against libopenmpt's
+   own `a500` LED behaviour by the `15_ledfilter` probe.
 
 ## What is verified, and what is not
 
@@ -84,7 +107,9 @@ Verified by `test_refplayer.c` and by measurement:
 | Panning | ch 0,3 → L and ch 1,2 → R, with **complete** isolation |
 | Volume law | `SAMP × min(VOL,64) / 4`, and volume 64 is reachable |
 | Filters | monotonic; fixed pole measures −2.60 dB at 4 kHz, as a 4421 Hz pole should |
-| Loader | rejects bad magic, 8-channel, zero song length; **accepts** truncated files |
+| LED filter | **two** poles: −3.01 dB at its 3275 Hz corner, −12 dB/octave, −15.7 dB at 8 kHz. libopenmpt's `a500` measures −15.9 dB at the same point |
+| Loader | rejects bad magic, 8-channel, zero song length, and modules larger than the **populated** RAM (`modplayer.md` §4.7); **accepts** truncated files |
+| 15-sample modules | repeat offset read as **bytes**, not words, and names are not required to be printable |
 | Period table | the **real** ProTracker 16 × 36 table (`period_table.c`), four invariants re-checked by the test suite |
 
 ### The period table
@@ -111,18 +136,29 @@ corrupt it.
 - **The ten ProTracker behaviours** of [`modplayer.md`](../../audio/docs/modplayer.md)
   §10 and the position-advance ordering of §5.8 are implemented from the
   documented semantics. Published descriptions disagree with each other in
-  exactly these places; only a real A/B settles them.
+  exactly these places; only a real A/B settles them — and the 22-probe ladder
+  in [`../tools/modcompare/`](../tools/modcompare/) now reaches the tick-0 `EC0`
+  and `E9x` corners, `9xx` memory, `EDx`×`EEx`, `E0x` and `E6x`×`Dxx`. It is
+  still libopenmpt, not hardware.
 - **Attach modulation** (`ADKCON`) is a byte-oriented adaptation of a
   word-oriented behaviour, and no test module exercises it.
 - **`E3x` glissando** is implemented; **`EFx` invert loop** is not, by decision
   ([`modplayer.md`](../../audio/docs/modplayer.md) §10.8).
-- **The A500 filter component values.** The topology is modelled, not measured.
+- **The A500 filter component values.** The topology is modelled, not measured —
+  the pole *count* is now settled against libopenmpt, the corner frequency is
+  still `pt2-clone`'s number rather than a measurement.
+- **`E6x` sharing a row with `Bxx`/`Dxx`.** The loop wins the row outright and
+  clears both flags. ProTracker reaches the same place by a messier route
+  (`E6x` and `Dxx` share one break-row register), and the two readings can
+  differ on a row that carries both.
 
 ## Options
 
 ```
 --wav FILE      stereo PCM out
 --trace FILE    register-write trace ('-' for stdout)
+--rowtrace FILE order/pattern/row/tick/speed/bpm, one line per tick
+--vu FILE       per-channel output RMS every 10 ms
 --rate HZ       output sample rate (default 48000)
 --seconds N     stop after N seconds (default: one pass of the song)
 --ntsc          3.579545 MHz colour clock (audio.md §4.1)

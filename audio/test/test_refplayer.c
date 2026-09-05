@@ -16,6 +16,7 @@
 #include "card.h"
 #include "render.h"
 #include <math.h>
+#include <unistd.h>
 
 static int failures;
 
@@ -93,10 +94,18 @@ static size_t build_mod(uint8_t **out, unsigned period, unsigned effect, unsigne
     return total;
 }
 
+/* Probe modules go to a temp directory, never to the working directory: ctest
+ * runs from the build tree and two concurrent builds would collide on the
+ * name. */
 static const char *write_tmp(const uint8_t *f, size_t n, char *buf, size_t buflen)
 {
+    const char *dir = getenv("TMPDIR");
     FILE *fp;
-    snprintf(buf, buflen, "reftest_%u.mod", (unsigned)n);
+    static unsigned serial;
+
+    if (!dir || !*dir) { dir = "/tmp"; }
+    snprintf(buf, buflen, "%s/reftest_%lu_%u_%u.mod", dir,
+             (unsigned long)getpid(), (unsigned)n, serial++);
     fp = fopen(buf, "wb");
     if (!fp) { return NULL; }
     if (fwrite(f, 1, n, fp) != n) { fclose(fp); return NULL; }
@@ -235,6 +244,7 @@ static void test_tempo(void)
     unsigned fires = 0;
 
     card_reset(&c, sram, 128u * 1024u);
+    card_write(&c, A_ACTRL, (uint8_t)(ACTRL_ENABLE | ACTRL_TIMER));
     card_write(&c, A_TIMER1, (uint8_t)(n >> 8));
     card_write(&c, A_TIMER0, (uint8_t)(n & 0xFFu));
     card_write(&c, A_AINTENA, (uint8_t)(0x80u | AINT_TIMER));
@@ -245,6 +255,13 @@ static void test_tempo(void)
     }
     check_eq(n, 14187, "tempo: BPM 125 reload is 14187");
     check(fires == 50u, "tempo: BPM 125 fires 50 times a second");
+
+    /* ACTRL b6 is the run bit. Without it an armed timer can never be stopped
+     * and there is no clean "stop the music" path. */
+    card_write(&c, A_ACTRL, ACTRL_ENABLE);
+    card_write(&c, A_AINTREQ, AINT_TIMER);
+    for (long i = 0; i < CARD_CC_PAL; i++) { card_step(&c); }
+    check(!(c.intreq & AINT_TIMER), "tempo: clearing ACTRL b6 stops the timer");
 }
 
 static void test_loader_and_playback(void)
@@ -254,7 +271,7 @@ static void test_loader_and_playback(void)
     mod_player p;
     uint8_t *f;
     size_t n = build_mod(&f, 428, 0, 0);
-    char namebuf[64];
+    char namebuf[256];
     const char *path = write_tmp(f, n, namebuf, sizeof namebuf);
     char err[128];
 
@@ -315,7 +332,7 @@ static void test_loader_rejects(void)
     mod_song s;
     uint8_t *f;
     size_t n = build_mod(&f, 428, 0, 0);
-    char namebuf[64], err[128];
+    char namebuf[256], err[128];
     const char *path;
 
     /* §4.6: an unknown magic must be rejected, not guessed at. */
@@ -399,10 +416,33 @@ static void test_filters(void)
         double db = 20.0 * log10(f4 / b4);
         check(db < -2.4 && db > -2.8, "filter: fixed pole is 4421 Hz (-2.6 dB at 4 kHz)");
     }
-    /* Five poles must fall far faster than one. */
+    /* The LED stage is ONE 2nd-order Sallen-Key at 3275 Hz, not a cascade: a
+     * real A500 has a single section there. Three independent measurements pin
+     * both the order and the corner, and each of them rules out the 4-pole
+     * model this replaced. Everything is measured as LED minus fixed, so the
+     * always-in 4421 Hz pole cancels out.
+     *
+     *   at the corner       2nd-order Butterworth is -3.01 dB, by definition
+     *   6 -> 12 kHz         two poles are -12.0 dB/octave (four would be -24)
+     *   at 8 kHz            1/sqrt(1 + (8000/3275)^4) = -15.64 dB */
+    {
+        double fc = 20.0 * log10(filter_rms(3275, 1, 0) / filter_rms(3275, 0, 0));
+        double f6 = 20.0 * log10(filter_rms(6000, 1, 0) / filter_rms(6000, 0, 0));
+        double f12 = 20.0 * log10(filter_rms(12000, 1, 0) / filter_rms(12000, 0, 0));
+        double f8 = 20.0 * log10(filter_rms(8000, 1, 0) / filter_rms(8000, 0, 0));
+
+        check(fc < -2.7 && fc > -3.3, "filter: LED stage is -3 dB at its 3275 Hz corner");
+        check(f12 - f6 < -10.5 && f12 - f6 > -13.5,
+              "filter: LED stage rolls off 12 dB/octave -- two poles, not four");
+        check(f8 < -15.0 && f8 > -16.3, "filter: LED stage is -15.6 dB at 8 kHz");
+    }
+    /* And the whole chain, LED on, against no filtering at all: the fixed pole
+     * and two switched poles together. Four switched poles would put this near
+     * -37 dB. */
     {
         double b8 = filter_rms(8000, 0, 1), l8 = filter_rms(8000, 1, 0);
-        check(20.0 * log10(l8 / b8) < -25.0, "filter: LED is 5 poles, not 1");
+        double db = 20.0 * log10(l8 / b8);
+        check(db < -20.5 && db > -23.5, "filter: LED chain is -22 dB at 8 kHz (3 poles)");
     }
 }
 
@@ -463,6 +503,395 @@ static void test_period_table(void)
     check_eq(notfloor, 86, "period table: 86 of 384 octaves are not floor(x/2)");
 }
 
+
+/* ------------------------------------------------- capacity and formats --- */
+
+/* Two samples totalling `bytes`, so the figure can be aimed at a RAM size.
+ * Two, because a single sample's length field is 16 bits of WORDS and cannot
+ * express more than 131070 bytes. */
+static size_t build_big_mod(uint8_t **out, uint32_t bytes)
+{
+    size_t total = 1084u + 1024u + bytes;
+    uint8_t *f = calloc(total, 1);
+    uint8_t *h = f + 20;
+    uint32_t half = (bytes / 4u) * 2u;
+
+    memcpy(f, "big", 3);
+    memcpy(h, "big1", 4);
+    be16w(h + 22, (unsigned)(half / 2u));
+    h[25] = 64;
+    be16w(h + 28, 1);
+    h += 30;
+    memcpy(h, "big2", 4);
+    be16w(h + 22, (unsigned)((bytes - half) / 2u));
+    h[25] = 64;
+    be16w(h + 28, 1);
+    f[950] = 1;
+    f[952] = 0;
+    memcpy(f + 1080, "M.K.", 4);
+    {
+        uint8_t *c0 = f + 1084;
+        c0[0] = 0x11; c0[1] = 0xAC;                   /* sample 1, period 428 */
+    }
+    for (uint32_t i = 0; i < bytes; i++) { f[1084u + 1024u + i] = (uint8_t)i; }
+    *out = f;
+    return total;
+}
+
+static void test_loader_capacity(void)
+{
+    /* modplayer.md §4.7: "Reject with a clear message. The default." The bound
+     * is the RAM that is POPULATED. Checking the 512 KB of footprints instead
+     * accepts a module the card cannot hold and leaves a channel fetching
+     * unwritten SRAM at 28 kHz -- §4.6's nightmare case, and silent. */
+    card_t c;
+    mod_song s;
+    uint8_t *f;
+    size_t n = build_big_mod(&f, 180000u);
+    char namebuf[256], err[160];
+    const char *path = write_tmp(f, n, namebuf, sizeof namebuf);
+
+    check(path != NULL, "capacity: temp file written");
+    if (!path) { free(f); return; }
+
+    memset(err, 0, sizeof err);
+    card_reset(&c, sram, 128u * 1024u);
+    check(mod_load(&s, &c, path, err, sizeof err) != 0,
+          "capacity: 180 KB of samples is rejected at 128 KB populated");
+    check(strstr(err, "128 KB") != NULL, "capacity: and the message names the populated size");
+
+    /* The same module fits once the other SRAMs are populated (§4.7 option 3),
+     * so the check is a bound and not a blanket refusal. */
+    card_reset(&c, sram, 512u * 1024u);
+    check_eq(mod_load(&s, &c, path, err, sizeof err), 0,
+             "capacity: and accepted at 512 KB populated");
+    mod_free(&s);
+
+    /* A NULL err must not be a null dereference: the loader is called that way
+     * by anything that only wants the return code. */
+    card_reset(&c, sram, 128u * 1024u);
+    check(mod_load(&s, &c, path, NULL, 0) != 0, "capacity: rejects with err == NULL too");
+
+    remove(path);
+    free(f);
+}
+
+static void test_loader_15_sample(void)
+{
+    /* modplayer.md §2.2. Two things about the 15-sample format are traps: the
+     * repeat offset is in BYTES, not words -- the only field that is -- and the
+     * files themselves carry junk in the unused tail of a name, so a
+     * printable-names heuristic bounces genuine modules. */
+    card_t c;
+    mod_song s;
+    char namebuf[256], err[160];
+    const char *path;
+    size_t total = 600u + 1024u + 64u;
+    uint8_t *f = calloc(total, 1);
+    uint8_t *h = f + 20;
+
+    memcpy(f, "soundtracker", 12);
+    memcpy(h, "st-sample", 9);
+    h[12] = 0xFFu;                                    /* junk in the name tail */
+    h[13] = 0x8Au;
+    be16w(h + 22, 32);                                /* 64 bytes             */
+    h[25] = 64;
+    be16w(h + 26, 32);                                /* repeat offset, BYTES */
+    be16w(h + 28, 16);                                /* repeat length, words */
+    f[470] = 1;                                       /* song length          */
+    f[472] = 0;
+    {
+        uint8_t *c0 = f + 600;
+        c0[0] = 0x11; c0[1] = 0xAC;
+    }
+    for (unsigned i = 0; i < 64u; i++) { f[600u + 1024u + i] = (uint8_t)i; }
+
+    path = write_tmp(f, total, namebuf, sizeof namebuf);
+    check(path != NULL, "15-sample: temp file written");
+    if (!path) { free(f); return; }
+
+    card_reset(&c, sram, 128u * 1024u);
+    check_eq(mod_load(&s, &c, path, err, sizeof err), 0,
+             "15-sample: accepted despite non-printable bytes in a sample name");
+    check_eq((long)s.sample_addr[1], MOD_SAMPLE_BASE, "15-sample: sample 1 relocated");
+    check_eq((long)s.sample_rep[1], MOD_SAMPLE_BASE + 32,
+             "15-sample: repeat offset read as BYTES, not words");
+    check_eq(s.sample_replen[1], 16, "15-sample: repeat length is still words");
+    mod_free(&s);
+    remove(path);
+    free(f);
+}
+
+/* ------------------------------------------------------------- effects ---- */
+
+/* A one-pattern module whose 64 rows the caller fills, and one 1024-byte
+ * looping sample -- long enough that a 9xx offset lands inside it. */
+typedef struct { uint8_t smp; uint16_t per; uint8_t eff; uint8_t par; } cellspec;
+
+#define E_LEN 1024u
+
+static size_t build_effect_mod(uint8_t **out, const cellspec rows[MOD_ROWS][MOD_CHANNELS])
+{
+    size_t total = 1084u + 1024u + E_LEN;
+    uint8_t *f = calloc(total, 1);
+    uint8_t *h = f + 20;
+
+    memcpy(f, "effects", 7);
+    memcpy(h, "saw", 3);
+    be16w(h + 22, E_LEN / 2u);
+    h[25] = 64;
+    be16w(h + 26, E_LEN / 4u);                        /* loop the second half */
+    be16w(h + 28, E_LEN / 4u);
+    f[950] = 1;
+    f[952] = 0;
+    memcpy(f + 1080, "M.K.", 4);
+
+    for (unsigned r = 0; r < MOD_ROWS; r++) {
+        for (unsigned ci = 0; ci < MOD_CHANNELS; ci++) {
+            const cellspec *cs = &rows[r][ci];
+            uint8_t *b = f + 1084u + r * 16u + ci * 4u;
+            b[0] = (uint8_t)((cs->smp & 0xF0u) | ((cs->per >> 8) & 0x0Fu));
+            b[1] = (uint8_t)(cs->per & 0xFFu);
+            b[2] = (uint8_t)(((cs->smp & 0x0Fu) << 4) | (cs->eff & 0x0Fu));
+            b[3] = cs->par;
+        }
+    }
+    for (unsigned i = 0; i < E_LEN; i++) { f[1084u + 1024u + i] = (uint8_t)(i * 3u); }
+    *out = f;
+    return total;
+}
+
+/* Count register writes in a trace, restricted to one tick when tick >= 0. */
+static int trace_count(FILE *t, long tick, const char *reg)
+{
+    char line[80];
+    int n = 0;
+
+    rewind(t);
+    while (fgets(line, sizeof line, t)) {
+        long tk; char name[16]; unsigned v;
+        if (sscanf(line, "%ld %15s %x", &tk, name, &v) != 3) { continue; }
+        if (tick >= 0 && tk != tick) { continue; }
+        if (strcmp(name, reg) == 0) { n++; }
+    }
+    return n;
+}
+
+/* Load `rows` and run `ticks` replayer ticks after mod_start's row-0 tick.
+ * The card is stepped for the store charge but nothing is rendered. */
+static void run_effect_mod(const cellspec rows[MOD_ROWS][MOD_CHANNELS],
+                           card_t *c, mod_song *s, mod_player *p,
+                           unsigned ticks, FILE *trace)
+{
+    uint8_t *f;
+    size_t n = build_effect_mod(&f, rows);
+    char namebuf[256], err[160];
+    const char *path = write_tmp(f, n, namebuf, sizeof namebuf);
+
+    card_reset(c, sram, 128u * 1024u);
+    if (mod_load(s, c, path, err, sizeof err) != 0) {
+        printf("FAIL: effect module did not load: %s\n", err); failures++;
+        free(f); return;
+    }
+    memset(p, 0, sizeof *p);
+    mod_set_advance(p, advance_only, c, MOD_STORE_CC_DEFAULT);
+    p->trace = trace;
+    mod_start(p, s, c);
+    for (unsigned i = 0; i < ticks; i++) { mod_tick(p); }
+    remove(path);
+    free(f);
+}
+
+/* Tick numbers are 1-based and mod_start plays row 0 tick 0 as tick 1. */
+#define TICK_OF(row, t) ((long)((row) * 6u + (t) + 1u))
+
+static void test_effect_toneporta_speed(void)
+{
+    /* ProTracker's mt_TonePortamento takes a new speed from a non-zero
+     * parameter on every tick it runs -- note or not. Modules accelerate a
+     * slide with note-less 305 / 310 / 320 rows, and a player that only reads
+     * the parameter on a row that carries a note slides at the first speed
+     * forever. */
+    static cellspec rows[MOD_ROWS][MOD_CHANNELS];
+    card_t c; mod_song s; mod_player p;
+    uint16_t before, after;
+    unsigned guard = 0;
+
+    memset(rows, 0, sizeof rows);
+    rows[0][0].smp = 1; rows[0][0].per = 214;              /* two octaves up  */
+    rows[8][0].per = 428; rows[8][0].eff = 3; rows[8][0].par = 0x01;
+    for (unsigned r = 9; r < 16u; r++) { rows[r][0].eff = 3; }
+    for (unsigned r = 16; r < 24u; r++) { rows[r][0].eff = 3; rows[r][0].par = 0x10; }
+
+    run_effect_mod(rows, &c, &s, &p, 0, NULL);
+
+    /* Rows 9..15 slide at 1 period unit a tick; row 16 changes the parameter
+     * with no note in the cell. */
+    while ((p.row != 16u || p.tick != 1u) && guard++ < 1000u) { mod_tick(&p); }
+    check(p.row == 16u, "3xx: probe reached row 16");
+    before = p.ch[0].period;
+    mod_tick(&p);
+    after = p.ch[0].period;
+    check_eq((long)after - (long)before, 16,
+             "3xx: a note-less parameter change sets the new slide speed");
+    mod_free(&s);
+}
+
+static void test_effect_vibrato_row_snap(void)
+{
+    /* A continuing 4xy writes the BASE period at tick 0 of every row, so the
+     * pitch snaps back for one tick at each row boundary. This looks like a
+     * bug and is not: ProTracker's mt_CheckMoreEffects falls through to
+     * mt_PerNop for every command outside {9,B,D,E,F,C}, and mt_PerNop writes
+     * n_period -- which vibrato never touches, because vibrato modulates the
+     * hardware register only.
+     *
+     * Measured, not assumed. Rendering 06_vibrato through libopenmpt's a500
+     * Paula emulation and reading the fundamental back with autocorrelation
+     * gives 183.5 Hz at tick 0 of rows 2, 3 and 4 -- the un-modulated base --
+     * against 174.9 / 187.3 / 190.5 Hz for a player that holds the modulated
+     * value. Removing this write drops the probe's spectral agreement with
+     * libopenmpt from 0.996 to 0.969. It is pinned here because it is exactly
+     * the kind of thing a later reader tidies away. */
+    static cellspec rows[MOD_ROWS][MOD_CHANNELS];
+    card_t c; mod_song s; mod_player p;
+
+    memset(rows, 0, sizeof rows);
+    rows[0][0].smp = 1; rows[0][0].per = 428;
+    rows[0][0].eff = 4; rows[0][0].par = 0x48;
+    for (unsigned r = 1; r < 8u; r++) { rows[r][0].eff = 4; rows[r][0].par = 0x48; }
+
+    run_effect_mod(rows, &c, &s, &p, 5, NULL);             /* row 0, ticks 0..5 */
+    check(p.ch[0].out_period != 428, "4xy: vibrato displaced the period during row 0");
+
+    mod_tick(&p);                                          /* row 1, tick 0     */
+    check_eq(p.ch[0].out_period, 428,
+             "4xy: tick 0 of the next row writes the base period back (mt_PerNop)");
+    mod_free(&s);
+}
+
+static void test_effect_e_commands(void)
+{
+    /* Three ProTracker tick-0 behaviours the E dispatcher used to drop. */
+    static cellspec rows[MOD_ROWS][MOD_CHANNELS];
+    card_t c; mod_song s; mod_player p;
+    FILE *t = tmpfile();
+
+    if (!t) { printf("FAIL: tmpfile() for the trace\n"); failures++; return; }
+
+    memset(rows, 0, sizeof rows);
+    rows[0][0].smp = 1; rows[0][0].per = 428;              /* plain note       */
+    rows[1][0].eff = 0xE; rows[1][0].par = 0x93;           /* E9x, no note     */
+    rows[2][0].eff = 0xE; rows[2][0].par = 0xC0;           /* EC0, cut at t=0  */
+
+    run_effect_mod(rows, &c, &s, &p, 18, t);
+
+    check_eq(trace_count(t, 1, "ADMACON"), 2,
+             "trace: row 0's DMACON stop/start pair is at tick 1");
+    check_eq(trace_count(t, TICK_OF(1, 0), "ADMACON"), 2,
+             "E9x: retriggers at tick 0 of a row that carries no note");
+    {
+        /* EC0 at tick 0: e_per_tick never sees tick 0, so without the tick-0
+         * case the cut simply never happens. */
+        int found = 0;
+        char line[80];
+        rewind(t);
+        while (fgets(line, sizeof line, t)) {
+            long tk; char name[16]; unsigned v;
+            if (sscanf(line, "%ld %15s %x", &tk, name, &v) != 3) { continue; }
+            if (tk == TICK_OF(2, 0) && strcmp(name, "ADATA") == 0 && v == 0) { found = 1; }
+        }
+        check(found, "EC0: cuts the volume at tick 0, not never");
+    }
+    fclose(t);
+    mod_free(&s);
+}
+
+static void test_effect_note_delay_repeat(void)
+{
+    /* modplayer.md §10.10: EDx x EEx -- the delayed note triggers once per
+     * REPEAT of the row, not once per row. The repeat never re-reads the row,
+     * so the delay has to be re-armed from what the row left behind. */
+    static cellspec rows[MOD_ROWS][MOD_CHANNELS];
+    card_t c; mod_song s; mod_player p;
+    FILE *t = tmpfile();
+
+    if (!t) { printf("FAIL: tmpfile() for the trace\n"); failures++; return; }
+
+    memset(rows, 0, sizeof rows);
+    rows[0][0].smp = 1; rows[0][0].per = 428;
+    rows[0][0].eff = 0xE; rows[0][0].par = 0xD3;           /* delay 3 ticks    */
+    rows[0][1].eff = 0xE; rows[0][1].par = 0xE1;           /* repeat the row 1x */
+
+    run_effect_mod(rows, &c, &s, &p, 18, t);
+
+    check_eq(trace_count(t, TICK_OF(0, 3), "ADMACON"), 2,
+             "EDx: the delayed note triggers on tick 3 of the row");
+    check_eq(trace_count(t, TICK_OF(1, 3), "ADMACON"), 2,
+             "EDx x EEx: and again on tick 3 of the pattern-delay repeat");
+    fclose(t);
+    mod_free(&s);
+}
+
+static void test_effect_offset(void)
+{
+    /* 9xx: ProTracker's mt_SampleOffset takes the parameter into memory
+     * whenever the command is seen, and an E9x retrigger restarts from the
+     * offset start it left in n_start -- not from the sample's base address. */
+    static cellspec rows[MOD_ROWS][MOD_CHANNELS];
+    card_t c; mod_song s; mod_player p;
+
+    memset(rows, 0, sizeof rows);
+    rows[0][0].eff = 9; rows[0][0].par = 0x01;             /* seen, no note    */
+    rows[1][0].smp = 1; rows[1][0].per = 428; rows[1][0].eff = 9;  /* param 0  */
+    rows[2][0].eff = 0xE; rows[2][0].par = 0x93;           /* E9x retrigger    */
+
+    run_effect_mod(rows, &c, &s, &p, 0, NULL);
+    check_eq(p.ch[0].offset_mem, 0x01,
+             "9xx: the parameter enters memory on a row with no note");
+
+    for (unsigned i = 0; i < 6u; i++) { mod_tick(&p); }    /* into row 1        */
+    check_eq((long)p.ch[0].start_lc, (long)s.sample_addr[1] + 256,
+             "9xx: a zero parameter replays the remembered offset");
+    check_eq(p.ch[0].start_len, (E_LEN - 256u) / 2u, "9xx: and shortens the length");
+
+    for (unsigned i = 0; i < 6u; i++) { mod_tick(&p); }    /* into row 2        */
+    check_eq((long)p.ch[0].trig_lc, (long)s.sample_addr[1] + 256,
+             "E9x: the retrigger keeps the 9xx offset");
+    mod_free(&s);
+}
+
+static void test_effect_loop_and_break(void)
+{
+    /* modplayer.md §5.8: an E6x loop-back wins the row. A Dxx sharing that row
+     * has already been read, so it must not survive to fire one row AFTER the
+     * loop -- a teleport ProTracker does not do. */
+    static cellspec rows[MOD_ROWS][MOD_CHANNELS];
+    card_t c; mod_song s; mod_player p;
+    uint8_t seen_row[8], seen_pos[8];
+    unsigned k = 0;
+
+    memset(rows, 0, sizeof rows);
+    rows[0][0].eff = 0xE; rows[0][0].par = 0x60;           /* loop point       */
+    rows[2][0].eff = 0xE; rows[2][0].par = 0x61;           /* loop once        */
+    rows[2][1].eff = 0xD; rows[2][1].par = 0x20;           /* break to row 20  */
+
+    run_effect_mod(rows, &c, &s, &p, 0, NULL);
+    seen_row[k] = p.row; seen_pos[k] = p.position; k++;
+    while (k < 6u) {
+        mod_tick(&p);
+        if (p.tick == 0u && (p.row != seen_row[k - 1] || p.position != seen_pos[k - 1])) {
+            seen_row[k] = p.row; seen_pos[k] = p.position; k++;
+        }
+    }
+    check_eq(seen_row[1], 1, "E6x: row 1 follows row 0");
+    check_eq(seen_row[2], 2, "E6x: row 2 follows row 1");
+    check_eq(seen_row[3], 0, "E6x: the loop wins the row it shares with Dxx");
+    check_eq(seen_row[4], 1, "E6x: and the Dxx does not fire a row later");
+    check_eq(seen_pos[4], 0, "E6x: nor does it advance the position");
+    mod_free(&s);
+}
+
 int main(void)
 {
     sram = calloc(CARD_SRAM_BYTES, 1);
@@ -475,7 +904,15 @@ int main(void)
     test_tempo();
     test_loader_and_playback();
     test_loader_rejects();
+    test_loader_capacity();
+    test_loader_15_sample();
     test_filters();
+    test_effect_toneporta_speed();
+    test_effect_vibrato_row_snap();
+    test_effect_e_commands();
+    test_effect_note_delay_repeat();
+    test_effect_offset();
+    test_effect_loop_and_break();
 
     free(sram);
     if (failures) { printf("%d failure(s)\n", failures); return 1; }

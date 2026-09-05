@@ -103,12 +103,30 @@ Note the asymmetry that [`audio.md`](audio.md) §9.3 froze: **`LEN` stays in wor
 | `M!K!` | 31 samples, >64 patterns | **play** — identical otherwise |
 | `4CHN`, `FLT4` | 31 samples, 4 channels, other trackers | **play** |
 | `M&K!`, `N.T.` | NoiseTracker variants | **play**, they are `M.K.`-compatible |
-| *(none)* | 15-sample Soundtracker: 470-byte header table, order at 470, patterns at 600 | **play** — a second header parser, ~40 lines |
+| *(none)* | 15-sample Soundtracker: **songlength at 470, restart at 471, order table at 472, patterns at 600** | **play** — a second header parser, ~40 lines |
 | `6CHN`, `8CHN`, `CD81`, `OKTA` | 6 or 8 channels | **reject for now** — [`audio.md`](audio.md) §11.2's 8-channel mode is unbuilt and unfitted |
 
 **Detect by magic, not by file size.** A 15-sample module has no magic, so the
 test is: read bytes 1080–1083; if they match a known 31-sample tag, use the
 1084-byte layout; otherwise fall back to the 600-byte layout and validate (§4.6).
+
+> ⚠ **Corrected (design review, Audio NOTE).** The row above previously read
+> *"order at 470"*. The 15-sample header is 20 bytes of title plus 15 × 30-byte
+> sample headers = **470**, and offset 470 is where the *songlength* byte sits:
+>
+> ```
+>   0   .. 19    title
+>   20  .. 469   15 sample headers, 30 bytes each     (20 + 450 = 470)
+>   470          songlength, 1..128
+>   471          restart position                     (ignore it - §10.9)
+>   472 .. 599   order table, 128 bytes
+>   600 ..       pattern data, 64 rows x 4 ch x 4 bytes
+> ```
+>
+> Reading the order table from 470 shifts it two bytes and plays the wrong patterns
+> from the first position — the 15-sample analogue of the pattern-count bug §2.1
+> warns about, and with the same signature: a module that loads without complaint and
+> is simply not the song. The loader has this right; the table did not.
 
 ### 2.4 The pattern cell — 4 bytes per channel
 
@@ -253,14 +271,64 @@ on the card side ([`audio.md`](audio.md) §13.2):
 | `LDA ,X+` / `STA SDATA` loop | ~10 | 625 ms |
 | **`TFM X+,Y`** | **3** | **187 ms** |
 
-`W` is 16 bits, so a >64 KB sample is two `TFM`s. In the streaming loader of §4.1
-the block size is the disk buffer, so `TFM` is issued per sector and `W` never
-approaches its limit.
+`W` is 16 bits, so a >64 KB sample is two `TFM`s and **a full 128 KB card image is
+three**: `65,535 + 65,535 + 2 = 131,072`. ([`audio.md`](audio.md) §13.2 gives the same
+count; they agree.) In the streaming loader of §4.1 the block size is the disk
+buffer, so `TFM` is issued per sector and `W` never approaches its limit — the
+three-instruction figure is the cost of a single bulk upload, not of the loader as
+written here.
 
 **No `/WAIT`, no FIFO stall.** `TFM` sustains ~700 k writes/s against the card's
 3.55 M/s posted-write retire rate — a 5× margin ([`audio.md`](audio.md) §9.3).
 The card is the only one in the machine that never stalls the CPU, and this is
 where that shows up.
+
+> ⚠ **`TFM` into `SDATA` is exposed to the same interrupt/resume hazard the storage
+> card analyses, and this document did not say so.** `SDATA` is a port whose **write**
+> has a side effect — it post-increments `SPTR` ([`audio.md`](audio.md) §9.2) — which
+> is exactly the property that makes `TFM` unsafe across an interrupt.
+> [`sdcard.md`](../../storage/docs/sdcard.md) §4 establishes that the 6309's `TFM`
+> keeps a one-byte internal cache and re-reads its **source** on resume; whether it can
+> also re-execute the **destination write** is the open half of the same question, and
+> it is [`sdcard.md`](../../storage/docs/sdcard.md) §12 step 1 question **(b)** — the
+> silicon capture that answers it answers it for both cards at once.
+>
+> **If a resumed `TFM` can write the destination twice, this upload corrupts sample
+> data silently.** The byte is stored twice, `SPTR` advances one step too far, and
+> **every remaining byte of the transfer is shifted by one address** — an instrument
+> that is offset by one sample from the point the interrupt landed, and everything
+> after it in card RAM likewise. There is no checksum, no length check that catches it
+> (§4.6 validates the *file*, not the upload), and nothing audible until the sample is
+> played, at which point it is a click or a wrong loop point in one instrument. It is
+> intermittent by construction: it depends on where an interrupt falls inside a
+> 187 ms transfer.
+>
+> **The mitigation is the storage card's, and it is cheaper here.** Chunk the `TFM`
+> and mask `/IRQ`+`/FIRQ` across each chunk — `ORCC #$50` … `ANDCC #$AF` — exactly as
+> [`sdcard.md`](../../storage/docs/sdcard.md) §4.4 specifies:
+>
+> | Chunk | cyc/byte | 128 KB @ 2.0979 MHz | Masked window |
+> |---|---|---|---|
+> | unchunked | 3.01 | **187 ms** | 62 ms — unusable |
+> | 64 B | 3.41 | 213 ms | 94 µs |
+> | **32 B** | **3.81** | **238 ms** | **49 µs** |
+>
+> **Take 32 and keep one number in the machine.** The cost is +51 ms on a once-per-song
+> operation that is already I/O-bound behind the disk read (§4.1), and **the upload is
+> on no latency-critical path at all**: it runs with the song stopped, the tempo timer
+> disabled (`ACTRL` b6, §5.7) and no channel playing, so the 49 µs of added interrupt
+> latency is spent against a machine that is not asking the audio card for anything.
+> The storage card pays this cost inside its throughput budget; this card pays it out
+> of slack.
+>
+> **And there is a third answer that deletes the hazard for both cards.**
+> [`sdcard.md`](../../storage/docs/sdcard.md) §11.6 records it: this machine's 6309 is
+> the project's own C11 firmware, not a part on a reel, so `TFM`'s resume behaviour can
+> be *specified* — complete the current byte, take the interrupt, resume with nothing
+> cached — at zero firmware cost, after which neither the chunking nor the masking is
+> needed anywhere. That is a **machine-level fidelity decision with a divergence-ledger
+> entry attached, and it is not the audio card's to make.** What this document owes is
+> the statement that the audio upload is one of the two paths it would fix.
 
 ### 4.5 An optional loader pass that pays for itself
 
@@ -308,6 +376,21 @@ player did, and it is the difference between playing 98 % of a corpus and 90 %.
 There is no fourth option: sample data cannot live in system RAM, because the card
 has no bus-master path to it ([`audio.md`](audio.md) §5), and it cannot live in
 VRAM ([`graphics.md`](../../video/docs/graphics.md) §17).
+
+**The rejection rule is normative, and the bound is `populated` RAM, not the
+footprint.** The comparison is against the SRAM actually fitted — 128 KB with one
+part, 512 KB with four (`audio.md` §5) — and *not* against the 512 KB the board has
+footprints for. Getting that wrong is not a cosmetic error: a module that "loads
+successfully" into RAM that is not there leaves the card fetching **unwritten SRAM at
+28 kHz**, which is §4.6's nightmare case arriving through the one path in the loader
+that exists to prevent it, and it does so silently because the error message can
+still be printing the right number while the comparison uses the wrong one.
+
+**And it must be tested.** §9's corpus row for card-RAM limits is a listening test;
+this is an arithmetic rule with an off-by-one-variable failure mode, and it needs a
+unit test that loads an oversized module against a small configured RAM size and
+asserts the rejection — not a corpus entry that someone remembers to try. It is the
+only rule in §4.6's table with no test behind it, and it is the one that was wrong.
 
 ---
 
@@ -430,6 +513,17 @@ once and then loops the sustain, forever, with no further CPU involvement.
 what makes a retrigger restart from the beginning; without it, retriggering a
 still-playing channel does nothing until its current buffer ends.
 
+**Write each multi-byte field high byte first, low byte last** — which is what the
+listing above already does, because `ADATA` post-increments and the state file is
+laid out big-endian. That order is now load-bearing rather than incidental:
+[`audio.md`](audio.md) §9.4.3 makes `LC`, `LEN`, `PER` and `TIMER` **double-buffered,
+committing on their low byte**, so a five-byte loop-shadow write lands in the state
+file as one atomic update instead of leaving a torn pointer live for 11.3 µs. Written
+in the natural ascending order the replayer gets that for free; written out of order —
+`PER` low byte then high byte, say, through two separate `AIDX` writes — the commit
+fires on the *first* store and the field tears exactly as it did before. **Never
+address the low byte of a multi-byte field except as the last store to that field.**
+
 ### 5.4 The period table
 
 ProTracker's table is **16 finetune rows × 36 periods** (C-1…B-3), 2 bytes each —
@@ -529,6 +623,15 @@ is 6 bits with the top bit selecting sign. 32 bytes.
 > has the filter. It is a one-byte write to `ACTRL` and it is the only effect in
 > the entire command set that reaches hardware other than a channel register.
 >
+> **The filter it switches is second-order**, one Sallen-Key stage at 3275 Hz in
+> series with the fixed ~4.4 kHz pole ([`audio.md`](audio.md) §7, corrected — it was
+> specified as 5-pole). That matters to this document because `E0x` is the only way a
+> *module* can reach it, and because **no probe in the A/B ladder issues `E0x`**,
+> which is why the wrong order survived in the spec, the model and the unit test at
+> the same time. §9's corpus row is not enough: add a single-note probe that toggles
+> `E0x` mid-note and compare it against libopenmpt's `a500` LED behaviour
+> ([`audio.md`](audio.md) §16 item 18).
+>
 > **Do not honour `E0x` when the user has selected filter bypass.** Bypass is for
 > native software using the extended period range ([`audio.md`](audio.md) §4.3);
 > a module toggling the filter underneath that setting is fighting the user.
@@ -550,6 +653,23 @@ At BPM 125 the reload is 14,187 and the tick rate is 50.002 Hz
 ([`audio.md`](audio.md) §8.2), which is the PAL vblank rate to within 0.004 % —
 so modules written for vblank timing and modules written for CIA timing both play
 at the right speed with no special case.
+
+**One difference from a real CIA-B, recorded so it is not rediscovered as a bug.** An
+8520 in continuous mode reloads on the cycle *after* terminal count, so its period is
+`latch + 1`; the card's compare gives period = `latch`. At the default reload that is
+50.00204 Hz here against 49.99852 Hz on an Amiga — **0.0070 %, or 42 ms of drift over
+a ten-minute module**. It is inaudible and it changes nothing in this document: the
+reload value the replayer computes is the same number either way. It is stated
+because "CIA-B-identical" is the claim ([`audio.md`](audio.md) §1 requirement 9), and
+because a trace diff against an Amiga capture over thousands of ticks will eventually
+show the one-tick slip. Whether the card adds the `+1` is
+[`audio.md`](audio.md) §16 item 20.
+
+**Stopping the timer is `ACTRL` b6** ([`audio.md`](audio.md) §9.2, §8.2). Before this
+bit existed there was no way to stop a started timer at all, which made "end of song",
+"unload the module" and "kill the process" all impossible to do cleanly. Clear b6, then
+clear `ADMACON` for all four channels, in that order — the reverse leaves one more
+tick's worth of writes going to channels that are already stopped.
 
 `Fxx` with `xx = 0` is "stop the song" in some trackers and "ignore" in others.
 **Ignore it** — treating it as a stop breaks more modules than it fixes.
@@ -602,8 +722,11 @@ things worth spending deliberately:
 **Under NitrOS-9:** own `/FIRQ` outright rather than going through the kernel's
 interrupt polling, which is `IRQ`-oriented. The handler touches nothing the kernel
 owns — the card's registers, the pattern buffer, and its own state — so it needs
-no synchronisation beyond making the loader mask the timer while it rebuilds the
-song image. Document it as a hard owner; it is the correct design *and* it is only
+no synchronisation beyond making the loader **stop** the timer while it rebuilds the
+song image — `ACTRL` b6 = 0, which is a real stop and not merely an interrupt mask
+([`audio.md`](audio.md) §8.2); masking `AINTENA` b4 alone leaves the timer running and
+its request bit setting, and the first thing that re-enables the interrupt takes a tick
+against a half-built song image. Document it as a hard owner; it is the correct design *and* it is only
 correct as long as nothing else is put on `/FIRQ` later.
 
 ---
@@ -614,6 +737,14 @@ Against a **2.098 MHz 6309 in native mode**, at the same assumed ~5 core cycles
 per store that [`graphics.md`](../../video/docs/graphics.md) §7.3 and [`audio.md`](audio.md) §13.1
 use — and with the same warning, that **every figure here scales on that
 assumption** (§11 item 1).
+
+**E = 25.175/12 = 2.0979 MHz is the machine's only specified rate**
+([`machine.md`](../../docs/machine.md)); the divide-by-8 **fast-E** rate (3.1469 MHz) is
+experimental and not guaranteed. The replayer is indifferent to which is running —
+the *tick rate* comes from the card's own crystal, not from E ([`audio.md`](audio.md)
+§8.2), so fast-E buys 50 % more cycles inside an unchanged tick budget and changes
+none of the arithmetic below. Every percentage in this section is quoted against
+2.0979 MHz and is therefore the conservative one.
 
 **Plain tick** (no new row), per channel:
 
@@ -668,7 +799,7 @@ software existing first.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | ~~**Write a host-side reference player** in C against the §9 register model~~ — **done, [`audio/refplayer/`](../refplayer/)**, A/B'd in [`audio/tools/modcompare/`](../tools/modcompare/) | **closed.** 15/15 single-effect probes and `ode2ptk.mod` agree with libopenmpt's Paula emulation: +0.0 cents tuning, ≤0.3 dB gain, spectral correlation at or above the calibration ceiling — and the whole 1112-row path through `ode2ptk.mod` is identical |
+| 0 | ~~**Write a host-side reference player** in C against the §9 register model~~ — **done, [`audio/refplayer/`](../refplayer/)**, A/B'd in [`audio/tools/modcompare/`](../tools/modcompare/) | **closed for structure, open for tuning.** 15/15 single-effect probes and the whole 1112-row path through `ode2ptk.mod` agree with libopenmpt's Paula emulation: identical row/pattern traversal, ≤0.3 dB gain, spectral correlation at or above the calibration ceiling. **The tuning result is not yet an exit criterion** — see below |
 | 1 | **Loader on the MCU card** ([`audio.md`](audio.md) §12.5) | a module's samples land in card RAM byte-for-byte identical to the reference |
 | 2 | **Replayer, tick engine and note trigger only** — no effects | a module plays recognisably; §5.3's shadow write verified on a looped instrument |
 | 3 | **Effects, in order of corpus frequency**: `Cxx`, `Fxx`, `Axy`, `Dxx`, `1xx`/`2xx`, `3xx`, `4xy`, `0xy`, then the `E` set | each effect A/B'd against the reference on a targeted test module |
@@ -679,6 +810,44 @@ software existing first.
 **Step 0 is not optional.** Without a reference implementation there is nothing to
 A/B against, and "it sounds about right" is not an acceptance test for a system
 whose entire premise is bit-exact compatibility.
+
+> ⚠ **"+0.0 cents tuning" is withdrawn as an exit criterion (design review,
+> Aud-M9).** The figure was real; the instrument that produced it cannot support the
+> claim. The A/B harness's spectral check runs its cross-correlation at
+> **24 bins/octave = 50 cents per step**, and then thresholds the result at
+> ±12 cents. An integer number of 50-cent steps can only fall inside ±12 cents at
+> **exactly zero**, so the test has two outcomes — "0.0" and "catastrophic" — and no
+> resolution in between.
+>
+> That range is where the entire tuning argument of [`audio.md`](audio.md) §4.1 lives:
+>
+> | Error the design brief is about | Size | Visible at 50 cents/step? |
+> |---|---|---|
+> | Wrong master crystal (NTSC 28.63636 instead of PAL 28.37516) | **+16 cents** | no |
+> | Worst period-table transcription error (§5.4, finetune +7 B-3) | **16 cents** | no |
+> | One finetune step | **12.5 cents** | no |
+> | One semitone | 100 cents | yes — but nothing plausible is off by a semitone |
+>
+> **The corrected method**, and it is a few lines rather than a redesign: interpolate
+> the peak instead of quantising to it. Either **parabolic interpolation of the
+> correlation peak** — fit `y(-1), y(0), y(+1)` around the argmax bin and take the
+> vertex, `δ = ½(y₋₁ − y₊₁)/(y₋₁ − 2y₀ + y₊₁)` — or, better for this purpose, **FFT
+> peak interpolation on a single-note probe**, where one sustained note against a
+> long window gives a frequency estimate good to ~1 cent directly. Either resolves the
+> 12–16 cent band the table above is made of; the second also reports the error as a
+> frequency ratio, which is the form §4.1's argument is stated in.
+>
+> Until the harness measures at ~1 cent, the honest statement of what step 0 closed is
+> **"no tuning error larger than the instrument's 50-cent step"** — which excludes a
+> wrong period table and a wrong note, and does not exclude a wrong crystal.
+
+**What the ladder did *not* find is as instructive as what it did.** Four of the
+review's findings sat inside code that this A/B passed: the LED filter's order
+(no probe issues `E0x`, §5.6), the tuning resolution above, the torn multi-byte
+writes ([`audio.md`](audio.md) §9.4 — a model that applies a `PER` write instantly
+cannot show them), and §4.7's capacity bound (no unit test). The common factor is
+that **each one is invisible to the specific comparison being run**, which is the
+argument for adding probes deliberately rather than adding modules.
 
 **It paid for itself twice.** Building the model found four things these
 documents had wrong: the volume LUT was one address bit short of
@@ -728,9 +897,11 @@ each one fails loudly if a specific thing is wrong.
 | **Tempo (§5.7)** | changes `Fxx` BPM mid-song. Fails as a speed step |
 | **Position logic (§5.8)** | uses `Bxx`, `Dxx` on the same row, and `E6x` loops |
 | **`9xx` sample offset** | uses offset for vocal or breakbeat slicing |
-| **The filter (§5.6)** | uses `E0x`. Fails as no audible timbre change |
+| **The filter (§5.6)** | uses `E0x`. Fails as no audible timbre change — **and pair it with a synthetic `E0x` probe A/B'd against libopenmpt's `a500`**, because "audible change" passes at both 2 poles and 5 |
 | **Loader robustness (§4.6)** | is truncated, and one that is a 15-sample Soundtracker file |
-| **Card RAM limits (§4.7)** | exceeds 128 KB of samples. Must reject cleanly, not corrupt |
+| **Card RAM limits (§4.7)** | exceeds 128 KB of samples. Must reject cleanly, not corrupt — **and back it with a unit test**, §4.7: this is the one row that is an arithmetic rule rather than a listening test |
+| **Torn register writes ([`audio.md`](audio.md) §9.4)** | rewrites `PER` on every tick under vibrato, and retriggers short one-shots. Fails as intermittent clicks and, roughly once a minute, a burst of the wrong sample |
+| **Tuning ([`audio.md`](audio.md) §4.1)** | is a single sustained note. Not a module at all — the finetune and crystal errors are 12–16 cents and only a 1-cent instrument can see them (§8) |
 
 **A dozen modules chosen this way is worth more than a thousand chosen at random**,
 and the list doubles as the regression suite for the discrete card in build step 5.
@@ -813,6 +984,22 @@ and "fixing" any of them makes real songs sound wrong.
    sectors into a small buffer on demand. Confirm against whatever NitrOS-9 device
    driver the machine ends up with; if it cannot, the loader falls back to
    buffering and §4.1's memory argument needs revisiting.
+9. **Give the A/B harness ~1-cent tuning resolution** (§8). Parabolic interpolation
+   of the correlation peak, or FFT peak interpolation on a single-note probe. Until
+   then no tuning claim in this document, in [`audio.md`](audio.md), or in
+   [`../README.md`](../README.md) is measured — it is only *not contradicted* at
+   50-cent granularity. This is [`audio.md`](audio.md) §16 item 22 seen from the
+   software side, and it is the cheapest of the outstanding items.
+10. **Add the probes the ladder is missing.** In order of what they protect: an
+   `E0x` filter probe against libopenmpt's `a500` (§5.6 — the LED filter was
+   specified, modelled and unit-tested at the wrong order simultaneously because
+   nothing toggled it), a single-note tuning probe (item 9), a torn-write probe
+   once the model has a host-boundary model ([`audio.md`](audio.md) §16 item 14),
+   and a `3xx` probe that varies the parameter on note-less rows. Every one of these
+   is a probe that *would have failed*, which is the only kind worth adding first.
+11. **Unit-test §4.7's rejection rule.** The bound is populated card RAM, the rule is
+   normative, and it is currently the only entry in §4.6's validation table with no
+   test behind it.
 
 ---
 
@@ -820,9 +1007,12 @@ and "fixing" any of them makes real songs sound wrong.
 
 - [`audio.md`](audio.md) — §1 (the nine fidelity requirements this document
   implements), §3.3 (the shadow reload behind §5.3), §4.1 (the period reference
-  that makes §4.3 a copy), §7 (the filter `E0x` reaches), §8 (the `/FIRQ` and
-  tempo model), §9 (the register map every code fragment here writes to),
-  §13 (`TFM` upload), §16 item 13 (the latch bound §5.3 depends on).
+  that makes §4.3 a copy), §7 (the filter `E0x` reaches, **2-pole**), §8 (the `/FIRQ`
+  and tempo model, and `ACTRL` b6), §9.2 (the register map every code fragment here
+  writes to), **§9.4 (the host boundary: why §5.3's write order is normative)**,
+  §13 (`TFM` upload), §16 item 13 (the latch bound §5.3 depends on), §16 items 18/20/22
+  (the `E0x` probe, the CIA `+1`, and the tuning instrument this document's §8 depends
+  on).
 - [`graphics.md`](../../video/docs/graphics.md) — §7.3 (the store-rate assumption §7 shares),
   §17 (`/FIRQ` ownership, and why sample data is not in VRAM).
 - [`plan.md`](../../cpu/docs/plan.md) — §4.3 (`TFM`, including the fixed-destination mode §4.4

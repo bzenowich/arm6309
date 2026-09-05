@@ -74,8 +74,15 @@ typedef struct {
     uint8_t  loop_row, loop_cnt;
     uint8_t  glissando;
 
-    /* Deferred by EDx until tick == note_delay. */
-    uint8_t  note_delay, nd_sample;
+    /* Where this channel's note actually starts, 9xx offset already applied.
+     * ProTracker keeps it in n_start/n_length and an E9x retrigger restarts
+     * from there, not from the sample's base address. */
+    uint32_t start_lc;
+    uint16_t start_len;
+
+    /* Deferred by EDx until tick == note_delay. nd_armed is separate because
+     * ED0 is a real delay of zero ticks, not an absent one. */
+    uint8_t  note_delay, nd_armed, nd_sample;
     uint16_t nd_period;
 
     /* Queued at tick 0, consumed by the single DMACON write of §5.2. */
@@ -126,6 +133,11 @@ typedef struct {
  * BEFORE mod_start(), which preserves the setting across its reset. */
 void mod_set_advance(mod_player *p, void (*fn)(void *, unsigned), void *ctx,
                      unsigned store_cc);
+
+/* mod_start() plays row 0, so trace, rowtrace and any ACTRL bits the caller
+ * wants (NTSC, LED, BYPASS) must be in place BEFORE it is called or the whole
+ * of row 0 is missing from the contract. Those four fields are the only ones it
+ * carries across its reset, along with the advance callback. */
 void mod_start(mod_player *p, mod_song *s, card_t *c);
 void mod_tick(mod_player *p);     /* one /FIRQ; the whole replayer          */
 

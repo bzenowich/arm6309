@@ -123,15 +123,19 @@ int main(int argc, char **argv)
     }
     render_set_filter(&render, led, bypass);
 
+    memset(&player, 0, sizeof player);
     {
         static tick_ctx tc;
         tc.card = &card; tc.render = &render;
         mod_set_advance(&player, advance_cb, &tc, MOD_STORE_CC_DEFAULT);
     }
-    mod_start(&player, &song, &card);
-    if (led)    { card_write(&card, A_ACTRL, (uint8_t)(ACTRL_ENABLE | ACTRL_LED | (ntsc ? ACTRL_NTSC : 0))); }
-    if (bypass) { card_write(&card, A_ACTRL, (uint8_t)(ACTRL_ENABLE | ACTRL_BYPASS | (ntsc ? ACTRL_NTSC : 0))); }
 
+    /* Everything the player needs goes in BEFORE mod_start(), because
+     * mod_start() plays row 0. Opening the traces after it loses row 0's
+     * LC/LEN/PER/VOL and its ADMACON stop/start pair -- the one tick a 6309
+     * port is most likely to get wrong, and the one the trace is the contract
+     * for. The command-line ACTRL bits ride the same shadow, so they survive
+     * the enable write and appear in the trace like every other store. */
     if (tracepath) {
         player.trace = strcmp(tracepath, "-") ? fopen(tracepath, "w") : stdout;
         if (!player.trace) {
@@ -152,6 +156,11 @@ int main(int argc, char **argv)
         vu = fopen(vupath, "w");
         if (!vu) { fprintf(stderr, "refplayer: cannot write %s\n", vupath); goto out_render; }
     }
+
+    player.actrl = (uint8_t)((ntsc ? ACTRL_NTSC : 0)
+                           | (led ? ACTRL_LED : 0)
+                           | (bypass ? ACTRL_BYPASS : 0));
+    mod_start(&player, &song, &card);
 
     if (seconds > 0.0) { cc_limit = (uint64_t)(seconds * (double)cc); }
 

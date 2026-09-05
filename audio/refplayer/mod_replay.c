@@ -157,14 +157,12 @@ static void queue_trigger(mod_player *p, unsigned n, uint16_t per)
     ch->period = per;
 
     if (ch->cmd == 0x9) {                          /* 9xx sample offset */
-        uint32_t off;
-        if (ch->param) { ch->offset_mem = ch->param; }
-        off = (uint32_t)ch->offset_mem * 256u;
+        uint32_t off = (uint32_t)ch->offset_mem * 256u;
         if (off >= bytes) {
-            /* Past the end. ProTracker lands in the loop immediately; with the
-             * null-loop block of §4.2 that is silence, which is the same
-             * audible result and cannot read unwritten RAM. */
-            lc = MOD_NULL_LOOP; bytes = 2u;
+            /* mt_SampleOffset past the end sets the length to one word and
+             * leaves the start alone, so the channel plays two bytes of the
+             * sample and falls straight into the loop. */
+            bytes = 2u;
         } else {
             lc += off; bytes -= off;
         }
@@ -173,9 +171,24 @@ static void queue_trigger(mod_player *p, unsigned n, uint16_t per)
     if (!(ch->wave_ctrl & 0x04u)) { ch->vib_pos = 0; }
     if (!(ch->wave_ctrl & 0x40u)) { ch->trem_pos = 0; }
 
+    ch->start_lc  = lc;
+    ch->start_len = (uint16_t)(bytes / 2u ? bytes / 2u : 1u);
     ch->trigger  = 1;
-    ch->trig_lc  = lc;
-    ch->trig_len = (uint16_t)(bytes / 2u ? bytes / 2u : 1u);
+    ch->trig_lc  = ch->start_lc;
+    ch->trig_len = ch->start_len;
+}
+
+/* mt_DoRetrg — E9x restarts DMA from n_start/n_length, which already carry any
+ * 9xx offset this note was given. Nothing about the note itself changes. */
+static void queue_retrigger(mod_player *p, unsigned n)
+{
+    mod_chan *ch = &p->ch[n];
+
+    /* No vibrato/tremolo reset: mt_DoRetrg restarts DMA and touches nothing
+     * else. Only mt_SetPeriod, on a row that carries a note, rewinds them. */
+    ch->trigger  = 1;
+    ch->trig_lc  = ch->start_lc;
+    ch->trig_len = ch->start_len;
 }
 
 /* audio/docs/modplayer.md §5.3 — the one sequence that must be exactly right. */
@@ -273,8 +286,9 @@ static void tone_porta(mod_chan *ch)
     }
 }
 
-/* E commands evaluated once, at tick 0. */
-static void e_tick0(mod_player *p, unsigned n)
+/* E commands evaluated once, at tick 0. `note` is the row's period word, zero
+ * when the row carries no note — mt_RetrigNote needs it. */
+static void e_tick0(mod_player *p, unsigned n, uint16_t note)
 {
     mod_chan *ch = &p->ch[n];
     unsigned sub = ch->param >> 4, x = ch->param & 0x0Fu;
@@ -311,8 +325,19 @@ static void e_tick0(mod_player *p, unsigned n)
         }
         break;
     case 0x7: ch->wave_ctrl = (uint8_t)((ch->wave_ctrl & 0x0Fu) | (x << 4)); break;
+    case 0x9:
+        /* mt_RetrigNote runs at tick 0 too, and tick 0 divides by x with
+         * remainder 0 — so a row carrying E9x and no note retriggers at once.
+         * A row that does carry a note has already triggered it. */
+        if (x && !note) { queue_retrigger(p, n); }
+        break;
     case 0xA: ch->volume = clamp_vol((int)ch->volume + (int)x); break;
     case 0xB: ch->volume = clamp_vol((int)ch->volume - (int)x); break;
+    case 0xC:
+        /* EC0 cuts at tick 0, from mt_CheckMoreEffects; e_per_tick never sees
+         * tick 0 and would drop it. */
+        if (x == 0u) { ch->volume = 0; }
+        break;
     case 0xE: p->pattern_delay = (uint8_t)x; break;
     case 0xF:
         /* EFx invert loop ("funk repeat") modifies sample data in place. It is
@@ -321,7 +346,7 @@ static void e_tick0(mod_player *p, unsigned n)
          * Unimplemented by decision, not by omission — audio/docs/modplayer.md §10.8
          * and §11 item 3. */
         break;
-    default: break;                                    /* E8x, E9x, ECx, EDx */
+    default: break;                                    /* E8x, EDx */
     }
 }
 
@@ -333,14 +358,14 @@ static void e_per_tick(mod_player *p, unsigned n)
 
     switch (sub) {
     case 0x9:                                          /* retrigger */
-        if (x && (p->tick % x) == 0u) { queue_trigger(p, n, ch->period); }
+        if (x && (p->tick % x) == 0u) { queue_retrigger(p, n); }
         break;
     case 0xC:                                          /* note cut */
         if (p->tick == x) { ch->volume = 0; }
         break;
     case 0xD:                                          /* note delay */
-        if (p->tick == x && ch->note_delay) {
-            ch->note_delay = 0;
+        if (ch->nd_armed && p->tick == ch->note_delay) {
+            ch->nd_armed = 0;
             ch->sample = ch->nd_sample;
             queue_trigger(p, n, ch->nd_period);
         }
@@ -359,6 +384,15 @@ static void row_channel(mod_player *p, unsigned n, const uint8_t *cell)
 
     ch->cmd   = cell[2] & 0x0Fu;
     ch->param = cell[3];
+
+    /* A note delay lives for exactly its own row. */
+    ch->nd_armed = 0;
+    ch->nd_period = 0;
+
+    /* mt_SampleOffset takes the parameter into memory whenever the command is
+     * seen, note or not — and it does so before the note is set up, so the
+     * memory this row leaves behind is the one this row's note uses. */
+    if (ch->cmd == 0x9u && ch->param) { ch->offset_mem = ch->param; }
 
     if (sm) {
         /* §10.1: a sample number selects the instrument and sets the volume.
@@ -386,7 +420,8 @@ static void row_channel(mod_player *p, unsigned n, const uint8_t *cell)
             ch->note_delay = (uint8_t)(ch->param & 0x0Fu);
             ch->nd_sample  = ch->sample;
             ch->nd_period  = fp;
-            if (ch->note_delay == 0u) { queue_trigger(p, n, fp); }
+            ch->nd_armed   = 1;
+            if (ch->note_delay == 0u) { ch->nd_armed = 0; queue_trigger(p, n, fp); }
         } else {
             ch->target_period = 0;
             queue_trigger(p, n, fp);
@@ -416,7 +451,7 @@ static void row_channel(mod_player *p, unsigned n, const uint8_t *cell)
         break;
     }
     case 0xE:
-        e_tick0(p, n);
+        e_tick0(p, n, per);
         break;
     case 0xF:
         /* §5.7: Fxx=0 is "stop" in some trackers and "ignore" in others.
@@ -438,6 +473,11 @@ static void advance(mod_player *p)
     if (p->loop_pending) {
         p->loop_pending = 0;
         p->row = p->loop_target;
+        /* A Dxx or Bxx sharing this row has already been read. ProTracker acts
+         * on the row's position effects in this tick or not at all, so they
+         * must not survive to fire one row after the loop-back. */
+        p->break_pending = 0;
+        p->jump_pending = 0;
         return;                                        /* loop beats advance */
     }
 
@@ -490,11 +530,17 @@ void mod_start(mod_player *p, mod_song *s, card_t *c)
     void (*keep_fn)(void *, unsigned) = p->advance;
     void *keep_ctx = p->ctx;
     unsigned keep_cc = p->store_cc;
+    FILE *keep_trace = p->trace;
+    FILE *keep_rowtrace = p->rowtrace;
+    uint8_t keep_actrl = p->actrl;
 
     memset(p, 0, sizeof *p);
     p->advance  = keep_fn;
     p->ctx      = keep_ctx;
     p->store_cc = keep_cc ? keep_cc : MOD_STORE_CC_DEFAULT;
+    p->trace    = keep_trace;
+    p->rowtrace = keep_rowtrace;
+    p->actrl    = keep_actrl;
     p->song = s;
     p->card = c;
     p->speed = 6;
@@ -510,6 +556,10 @@ void mod_start(mod_player *p, mod_song *s, card_t *c)
         p->ch[n].sample     = 0;
         p->ch[n].out_period = 0xFFFFu;                 /* force the first write */
         p->ch[n].out_volume = 0xFFu;
+        p->ch[n].start_lc   = MOD_NULL_LOOP;
+        /* Never 0: LEN = 0 means 65536 words to the card, so an E9x on a
+         * channel that has never had a note would run away through RAM. */
+        p->ch[n].start_len  = 1;
     }
 
     card_load_linear_lut(c);
@@ -523,9 +573,16 @@ void mod_start(mod_player *p, mod_song *s, card_t *c)
     w(p, A_ADMACON, 0x0Fu);                            /* all channels off */
     w(p, A_AINTREQ, 0x3Fu);                            /* clear all pending */
     w(p, A_AINTENA, (uint8_t)(0x80u | AINT_TIMER));
-    set_tempo(p);
-    p->actrl = ACTRL_ENABLE;
+
+    /* Whatever the caller asked for -- NTSC, LED, BYPASS -- rides in the same
+     * shadow, so the card and the shadow can never disagree and every later
+     * E0x is computed from what the card actually holds. ACTRL goes down
+     * BEFORE the tempo: the reload set_tempo computes depends on which colour
+     * clock ACTRL_NTSC selected, and DMA is already off, so enabling here is
+     * still silent. */
+    p->actrl = (uint8_t)(p->actrl | ACTRL_ENABLE | ACTRL_TIMER);
     w(p, A_ACTRL, p->actrl);
+    set_tempo(p);
 
     /* Play row 0 now rather than waiting for the timer's first expiry. Arming
      * the timer schedules the NEXT tick, so without this the song begins one
@@ -537,6 +594,13 @@ void mod_start(mod_player *p, mod_song *s, card_t *c)
 
 void mod_tick(mod_player *p)
 {
+    /* Three tick kinds, not two: a fresh row, an EEx repeat of it, and an
+     * ordinary tick. The repeat runs the per-tick effect path exactly as
+     * ProTracker's mt_NoNewAllChannels does, which is what makes a delayed note
+     * fire once per repeat (audio/docs/modplayer.md §10.10) -- but it does not
+     * re-read the row, so the tick-0-only effects do not run again. */
+    int newrow = (p->tick == 0u && p->pattern_delay == 0u);
+
     p->ticks++;
 
     /* The path through the song -- order, pattern, row, speed, tempo -- is a
@@ -552,20 +616,26 @@ void mod_tick(mod_player *p)
     /* Sole /FIRQ source, so no polling chain: it was us (audio/docs/audio.md §8.1). */
     w(p, A_AINTREQ, AINT_TIMER);
 
-    if (p->tick == 0u) {
-        if (p->pattern_delay) {
-            /* EEx repeats the row; effects keep running but the row is not
-             * re-read and notes are not retriggered. */
-            p->pattern_delay--;
-        } else {
-            const uint8_t *pat = p->song->patterns
-                               + (size_t)p->song->order[p->position] * 1024u
-                               + (size_t)p->row * 16u;
-            for (unsigned n = 0; n < MOD_CHANNELS; n++) {
-                row_channel(p, n, pat + n * 4u);
-            }
+    if (newrow) {
+        const uint8_t *pat = p->song->patterns
+                           + (size_t)p->song->order[p->position] * 1024u
+                           + (size_t)p->row * 16u;
+        for (unsigned n = 0; n < MOD_CHANNELS; n++) {
+            row_channel(p, n, pat + n * 4u);
         }
     } else {
+        if (p->tick == 0u) {
+            p->pattern_delay--;
+            /* mt_NoteDelay re-reads the row's note word on every repeat, so the
+             * delay re-arms. ED0 has to arm too, and fires on this very tick. */
+            for (unsigned n = 0; n < MOD_CHANNELS; n++) {
+                mod_chan *ch = &p->ch[n];
+                if (ch->cmd == 0xEu && (ch->param >> 4) == 0xDu && ch->nd_period) {
+                    ch->note_delay = (uint8_t)(ch->param & 0x0Fu);
+                    ch->nd_armed = 1;
+                }
+            }
+        }
         for (unsigned n = 0; n < MOD_CHANNELS; n++) {
             mod_chan *ch = &p->ch[n];
             uint16_t per = ch->period;
@@ -590,6 +660,11 @@ void mod_tick(mod_player *p)
                 per = ch->period;
                 break;
             case 0x3:
+                /* mt_TonePortamento takes a new speed from a non-zero parameter
+                 * every time it runs, note or not -- 305 / 310 / 320 on
+                 * note-less rows is how modules accelerate a slide. 5xx's
+                 * parameter is a volume slide and must never land here. */
+                if (ch->param) { ch->porta_speed = ch->param; }
                 tone_porta(ch); per = ch->period;
                 break;
             case 0x4:
@@ -631,10 +706,16 @@ void mod_tick(mod_player *p)
 
     commit_triggers(p);
 
-    if (p->tick == 0u) {
+    if (newrow) {
         /* Tick 0 writes PER/VOL after the trigger commit so the dirty-flag
          * shadows are already up to date and nothing is written twice. */
         for (unsigned n = 0; n < MOD_CHANNELS; n++) {
+            /* Unconditional, including for a channel in the middle of a
+             * vibrato: mt_CheckMoreEffects falls through to mt_PerNop for every
+             * command outside {9,B,D,E,F,C}, so ProTracker writes the BASE
+             * period at tick 0 and the pitch really does snap back for one tick
+             * at every row boundary. Suppressing it is audible and wrong --
+             * see test_effect_vibrato_row_snap. */
             set_per(p, n, p->ch[n].period);
             set_vol(p, n, p->ch[n].volume);
         }

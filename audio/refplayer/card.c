@@ -157,6 +157,10 @@ void card_write(card_t *c, uint8_t reg, uint8_t val)
         break;
 
     case A_AINTREQ:
+        /* b7 = 1 SETS the named request bits, Paula-style. It is not a
+         * write-back of a read value: software raises a request to make the
+         * card interrupt itself, which is how a driver hands work to its own
+         * /FIRQ handler. audio.md §9.2 specifies both directions. */
         if (val & 0x80u) { c->intreq |= (val & 0x3Fu); }
         else             { c->intreq = (uint8_t)(c->intreq & ~(val & 0x3Fu)); }
         break;
@@ -316,8 +320,10 @@ void card_step(card_t *c)
     }
 
     /* Tempo timer, slot 4. Prescaled by 5 off the colour clock so the counter
-     * runs at the Amiga's CIA rate — audio/docs/audio.md §8.2. */
-    if (++c->pre5 >= CARD_CIA_DIV) {
+     * runs at the Amiga's CIA rate — audio/docs/audio.md §8.2. ACTRL b6 is the
+     * run bit: clearing it is the only way to stop a timer that has been armed,
+     * so it is what "stop the music" writes. */
+    if ((c->ctrl & ACTRL_TIMER) && ++c->pre5 >= CARD_CIA_DIV) {
         c->pre5 = 0;
         c->ciacnt = (uint16_t)(c->ciacnt + 1u);
         if (c->ciacnt == c->cianext) {

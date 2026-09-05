@@ -50,23 +50,18 @@ int render_open(render_t *r, const char *path, int out_rate, long cc_rate)
      * (audio/docs/audio.md §7). */
     r->rc_k = 1.0 - exp(-2.0 * M_PI * 4421.0 / fs);
 
-    /* The switchable "LED" filter: the two Sallen-Key stages, ~3.3 kHz, on top
-     * of the fixed pole — five poles in total.
+    /* The switchable "LED" filter: ONE Sallen-Key stage at 3275 Hz, on top of
+     * the fixed pole — two poles switched in, three in the chain.
      *
-     * The Sallen-Key pair is a 4th-order BUTTERWORTH (Q = 0.5412 and 1.3066),
-     * not the 0.618/1.618 pair of a 5th-order design. Using the 5th-order Qs
-     * here assumes the real pole sits at 3275 Hz, and it does not — it is the
-     * separate 4421 Hz RC — which leaves a +0.6 dB passband bump around 2 kHz.
-     * A filter cannot add energy, so that was measurably wrong; see
-     * test_refplayer.c's monotonicity check, which now guards it.
+     * The A500 has a single 2nd-order Sallen-Key section here, so the stage is
+     * a 2nd-order Butterworth (Q = 1/sqrt2) and nothing else. Cascading two of
+     * them made LED-on material ~24 dB/oct darker than the machine being
+     * modelled, which no amount of corner-frequency tuning can compensate.
      *
      * This is still a MODEL. The component-derived response of a real A500
      * should be measured before any A/B verdict rests on the LED setting. */
-    for (int i = 0; i < 2; i++) {
-        double q = (i == 0) ? 0.5412 : 1.3066;
-        bq_lowpass(&r->led_l[i], 3275.0, fs, q);
-        bq_lowpass(&r->led_r[i], 3275.0, fs, q);
-    }
+    bq_lowpass(&r->led_l, 3275.0, fs, 0.7071067811865476);
+    bq_lowpass(&r->led_r, 3275.0, fs, 0.7071067811865476);
 
     /* RENDERING ONLY — not part of the card. Without it, content between
      * 0.5 Fout and Fout folds back into the file. */
@@ -99,8 +94,8 @@ static void emit(render_t *r, double l, double u)
         l = r->rc_l;
         u = r->rc_r;
         if (r->led_on) {
-            l = bq(&r->led_l[1], bq(&r->led_l[0], l));
-            u = bq(&r->led_r[1], bq(&r->led_r[0], u));
+            l = bq(&r->led_l, l);
+            u = bq(&r->led_r, u);
         }
     }
 

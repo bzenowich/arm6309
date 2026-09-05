@@ -11,7 +11,7 @@ import os, subprocess, sys, tempfile
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import omptrender
-from abcompare import read_wav, envelope, logspec, RATE
+from abcompare import read_wav, envelope, logspec, tuning_cents, RATE
 
 
 def score(ref, ours):
@@ -50,17 +50,11 @@ def score(ref, ours):
         frame_rms = np.sqrt(np.convolve(r ** 2, np.ones(1024) / 1024, "valid")[::1024][:len(fc)])
         audible = frame_rms > frame_rms.max() * 0.05
         if audible.sum() >= 4: fc = fc[audible]
-        # tuning offset, searched only over +/- 1 semitone: we are looking for
-        # detune, not for octave errors, and an unbounded search finds nonsense
-        bpo = 24
-        pr = sr.mean(0) - sr.mean(); po = so.mean(0) - so.mean()
-        lim = bpo // 6
-        best, bestv = 0, -9
-        for sh in range(-lim, lim + 1):
-            x = np.roll(po, sh)
-            v = float(np.dot(pr[lim:-lim], x[lim:-lim]))
-            if v > bestv: bestv, best = v, sh
-        out.append((disagree, float(np.median(fc)), best * 1200.0 / bpo, gain_db))
+        # Tuning offset, searched only over +/- 100 cents: we are looking for
+        # detune, not for octave errors, and an unbounded search finds nonsense.
+        # See abcompare.tuning_cents for why this is not the 24-bin spectrogram
+        # above -- that one cannot resolve anything finer than 50 cents.
+        out.append((disagree, float(np.median(fc)), tuning_cents(r, o), gain_db))
     return out
 
 
@@ -98,8 +92,8 @@ def main():
         ok = (worst_dis < 0.02 and worst_spec > 0.85
               and abs(lc) < 12 and (np.isnan(rc) or abs(rc) < 12))
         if not ok: bad.append(m)
-        print(f"{m[:-4]:16s} {ld:7.4f} {ls:7.3f} {lc:+6.1f} {lg:+6.2f}dB | "
-              f"{rd:7.4f} {rs:7.3f} {rc:+6.1f}  {'ok' if ok else '<-- DIVERGES'}")
+        print(f"{m[:-4]:16s} {ld:7.4f} {ls:7.3f} {lc:+6.2f} {lg:+6.2f}dB | "
+              f"{rd:7.4f} {rs:7.3f} {rc:+6.2f}  {'ok' if ok else '<-- DIVERGES'}")
     print()
     print(f"{len(mods)-len(bad)}/{len(mods)} probes agree" +
           (f"; chase: {', '.join(b[:-4] for b in bad)}" if bad else ""))

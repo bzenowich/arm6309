@@ -40,19 +40,30 @@ static int is_31_sample(const uint8_t *magic, int *chans)
 
 /* A 15-sample Soundtracker module has no magic at all, so it can only be
  * identified by ruling everything else out and then finding that the header
- * makes sense. Be strict: names must be printable and lengths plausible. */
+ * makes sense.
+ *
+ * The names are NOT tested for printability. Genuine Soundtracker files carry
+ * junk in the unused tail of a name field -- editor leftovers, high-bit
+ * characters from a non-ASCII keymap -- and a printable-only rule sends real
+ * 15-sample modules to "unrecognised format". The structure has to carry the
+ * whole decision instead: volumes in range, a usable song length, an order
+ * table of real pattern numbers, and enough file behind them to hold the
+ * patterns those numbers name. */
 static int plausible_15(const uint8_t *f, size_t len)
 {
+    unsigned maxpat = 0;
+
     if (len < HDR15) { return 0; }
     for (unsigned i = 0; i < 15u; i++) {
         const uint8_t *h = f + 20u + i * 30u;
-        for (unsigned j = 0; j < 22u; j++) {
-            uint8_t ch = h[j];
-            if (ch != 0 && (ch < 0x20u || ch > 0x7Eu)) { return 0; }
-        }
         if (h[25] > 64u) { return 0; }          /* volume                   */
     }
     if (f[470] == 0 || f[470] > 128u) { return 0; }  /* song length         */
+    for (unsigned i = 0; i < 128u; i++) {
+        if (f[472u + i] > 127u) { return 0; }
+        if (f[472u + i] > maxpat) { maxpat = f[472u + i]; }
+    }
+    if (HDR15 + (size_t)(maxpat + 1u) * 1024u > len) { return 0; }
     return 1;
 }
 
@@ -160,11 +171,17 @@ int mod_load(mod_song *s, card_t *c, const char *path, char *err, size_t errlen)
             avail = (src < (size_t)fsize) ? (uint32_t)((size_t)fsize - src) : 0u;
             if (bytes > avail) { bytes = avail; s->truncated = 1; }
 
-            if (dst + bytes > CARD_SRAM_BYTES) {
-                snprintf(err, errlen,
-                         "sample data needs %lu KB, card has %lu KB (audio.md §5)",
-                         (unsigned long)((dst + bytes) / 1024u),
-                         (unsigned long)(c->sram_bytes / 1024u));
+            /* §4.7: the bound is the RAM that is POPULATED, not the 512 KB of
+             * footprints. Checking the footprint accepts a module the card
+             * cannot hold and leaves the channel fetching unwritten SRAM at
+             * 28 kHz. Reject, loudly. */
+            if (dst + bytes > c->sram_bytes) {
+                if (err && errlen) {
+                    snprintf(err, errlen,
+                             "sample data needs %lu KB, card has %lu KB (modplayer.md §4.7)",
+                             (unsigned long)((dst + bytes + 1023u) / 1024u),
+                             (unsigned long)(c->sram_bytes / 1024u));
+                }
                 goto done;
             }
 
@@ -181,11 +198,18 @@ int mod_load(mod_song *s, card_t *c, const char *path, char *err, size_t errlen)
             /* §4.2: replen <= 1 word means "no loop", and the idiom is to point
              * the loop at the silent word rather than to stop the channel —
              * because Paula has no stop, and neither does this card. */
-            if (replen <= 1u || repoff * 2u >= bytes) {
+            /* §2.2: the original 15-sample Soundtracker stores the repeat
+             * OFFSET in bytes -- the one field in the format that is not in
+             * words. Doubling it puts the loop past the end of most samples,
+             * where the branch below then silences them outright. Every
+             * 31-sample descendant stores words, and is unambiguous. */
+            repoff = (nsamples == 15u) ? (repoff & ~1u) : repoff * 2u;
+
+            if (replen <= 1u || repoff >= bytes) {
                 s->sample_rep[n] = MOD_NULL_LOOP;
                 s->sample_replen[n] = 1;
             } else {
-                uint32_t rb = repoff * 2u;
+                uint32_t rb = repoff;
                 if (rb + replen * 2u > bytes) { replen = (bytes - rb) / 2u; }
                 s->sample_rep[n] = dst + rb;
                 s->sample_replen[n] = (uint16_t)(replen ? replen : 1u);

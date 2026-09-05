@@ -49,6 +49,71 @@ def best_lag(a, b, hop, max_ms=200):
     return (int(np.argmax(w)) - k) * hop
 
 
+# The tuning axis is measured at 6.25 cents a bin and then interpolated, which
+# is a different instrument from the 24-bins-per-octave spectrogram used for
+# spectral agreement. It has to be: at 24 bins per octave one step is 50 cents,
+# so an integer-bin argmax can only ever report a multiple of 50 -- and every
+# error this project is about is smaller than that. The NTSC-clock mistake is
+# +16 cents, the worst period-table transcription error 16 cents, one finetune
+# step 12.5 cents. All three read as "0.0 cents" on a 50-cent ruler.
+TUNE_BPO = 192
+TUNE_NFFT = 16384
+
+
+def logprofile(x, nfft=TUNE_NFFT, bpo=TUNE_BPO, f0=110.0, f1=11000.0):
+    """Mean log-magnitude spectrum resampled onto a log-frequency axis.
+
+    A uniform detune is a pure TRANSLATION along that axis -- that is the whole
+    reason the axis is logarithmic -- so the position of a cross-correlation
+    peak against a reference measures it, and the peak is over every partial of
+    every note at once rather than over one chosen tone.
+    """
+    hop = nfft // 2
+    if len(x) < nfft:
+        return None
+    nf = 1 + (len(x) - nfft) // hop
+    win = np.hanning(nfft)
+    acc = np.zeros(nfft // 2 + 1)
+    for i in range(nf):
+        acc += np.abs(np.fft.rfft(x[i * hop: i * hop + nfft] * win))
+    acc /= nf
+    fft_f = np.fft.rfftfreq(nfft, 1.0 / RATE)
+    nb = int(np.log2(f1 / f0) * bpo)
+    lf = f0 * 2.0 ** (np.arange(nb) / bpo)
+    return np.log10(np.interp(lf, fft_f, acc) + 1e-6)
+
+
+def tuning_cents(ref, ours, max_cents=100.0):
+    """Global tuning offset of `ours` against `ref`, positive = sharp.
+
+    Parabolic interpolation of the correlation peak is what takes this from
+    bin-quantised to continuous: the peak of a smooth correlation is a parabola
+    near its maximum, and fitting the three samples around the argmax resolves
+    it to well inside one bin. Measured against renders detuned by a known
+    amount (0, 1, 2, 3, 5, 8, 12.5, +/-16, 25, -40, 50 cents) the worst residual
+    is 1.1 cents and the mean is 0.5. Wider fits and finer axes were tried and
+    are worse: above ~200 bins per octave the log axis oversamples the FFT, the
+    correlation peak goes flat, and the argmax stops meaning anything.
+    """
+    a, b = logprofile(ref), logprofile(ours)
+    if a is None or b is None:
+        return float("nan")
+    a, b = a - a.mean(), b - b.mean()
+    k = max(2, int(round(max_cents * TUNE_BPO / 1200.0)))
+    lags = np.arange(-k, k + 1)
+    c = np.array([float(np.dot(a[k:-k], np.roll(b, int(s))[k:-k])) for s in lags])
+    i = int(np.argmax(c))
+    frac = 0.0
+    if 0 < i < len(c) - 1:
+        d = c[i - 1] - 2.0 * c[i] + c[i + 1]
+        if d != 0.0:
+            frac = 0.5 * (c[i - 1] - c[i + 1]) / d
+            frac = max(-1.0, min(1.0, frac))
+    # A positive roll shifts `ours` UP the log axis to meet `ref`, so `ours`
+    # was flat by that much; the reported sign is "ours relative to ref".
+    return -(float(lags[i]) + frac) * 1200.0 / TUNE_BPO
+
+
 def logspec(x, nfft=4096, hop=1024, bins_per_oct=24, f0=55.0, f1=16000.0):
     win = np.hanning(nfft)
     nf = 1 + (len(x) - nfft) // hop
@@ -119,13 +184,7 @@ def main():
         so, _ = logspec(np.ascontiguousarray(o2))
         nf = min(len(sr), len(so)); sr, so = sr[:nf], so[:nf]
 
-        # global tuning offset: shift the log-frequency axis for best match
-        bpo = 24
-        prof_r = sr.mean(axis=0) - sr.mean()
-        prof_o = so.mean(axis=0) - so.mean()
-        cc = np.correlate(prof_r, prof_o, mode="full")
-        shift = int(np.argmax(cc)) - (len(prof_o) - 1)
-        cents = shift * 1200.0 / bpo
+        cents = tuning_cents(r2, o2)
 
         # per-frame spectral agreement
         a = sr - sr.mean(axis=1, keepdims=True)
@@ -139,7 +198,7 @@ def main():
         print(f"{cname}")
         print(f"  alignment lag        {lag/RATE*1000:+8.1f} ms")
         print(f"  envelope correlation {env_c:8.4f}")
-        print(f"  global tuning offset {cents:+8.1f} cents  "
+        print(f"  global tuning offset {cents:+8.2f} cents  "
               f"({'OK' if abs(cents) < 12 else '*** PITCH MISMATCH ***'})")
         print(f"  spectral corr        median {np.median(fc):.4f}   "
               f"5th pct {np.percentile(fc,5):.4f}")
