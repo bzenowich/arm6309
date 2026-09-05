@@ -24,6 +24,18 @@ void clock_init_170mhz(void)
     RCC->APB1ENR1 |= RCC_APB1ENR1_PWREN;
     (void)RCC->APB1ENR1;
 
+    /* UCPD1 dead-battery pull-downs OFF, before anything drives the bus.
+     *
+     * They are ENABLED out of reset (RM0440 §25.4.3) and they land on PB4 and
+     * PB6 -- A4 and A6 in this pinout. Each is a ~5.1 kOhm pull-down that
+     * activates when the paired CC pin's alternate signal goes high: PA9 (Q,
+     * toggling at the bus rate) arms PB6, PA10 (R/W) arms PB4. Our push-pull
+     * drivers win against 5.1 kOhm, so levels survive -- but it is a
+     * bus-rate-modulated load on two address lines, i.e. free edge jitter,
+     * and ST's own guidance is to clear it in any application that is not a
+     * USB-C sink. One write. */
+    PWR_CR3 |= PWR_CR3_UCPD1_DBDIS;
+
     /* Voltage scaling Range 1. */
     PWR_CR1 = (PWR_CR1 & ~PWR_CR1_VOS_Msk) | PWR_CR1_VOS_RANGE1;
     while (PWR_SR2 & PWR_SR2_VOSF) { }

@@ -90,6 +90,12 @@ __hot void spike_run_poll(uint32_t n_cycles, spike_result_t *out)
         GPIOB->ODR = stub_next_addr[s_prev & MASK_DATA];
         DSB();                       /* ensure the store has actually landed */
         uint16_t t_done = (uint16_t)TIM1->CNT;
+        /* t_done is when the store RETIRED, not when the pin moved, and t_edge
+         * below is a synchronised capture, not the physical edge. Net bias is
+         * ~3-5 cycles OPTIMISTIC, which is why SPIKE_TAD_CYCLES is 14 and not
+         * the raw 18. The DSB is worth its couple of cycles anyway -- without
+         * it the store could still be in the write buffer -- but it does not
+         * make the measurement conservative. See spike.h. */
         /* ===================== critical path ends ===================== */
 
         /* t_edge is the HARDWARE timestamp of the E falling edge, so lat
@@ -136,6 +142,8 @@ __hot void spike_run_poll(uint32_t n_cycles, spike_result_t *out)
     out->deadline_misses = misses;
     out->hold_violations = holdviol;
     out->overruns        = overruns;
+    out->dma_timeouts    = 0;
+    out->dma_errors      = 0;
     out->lat_worst       = lat_worst;
     out->lat_best        = lat_best;
     out->lat_sum         = lat_sum;
@@ -183,6 +191,15 @@ void spike_run_poll_asm(uint32_t n_cycles, spike_result_t *out)
     out->period_max      = period[1];
     out->deadline_misses = 0;
     out->hold_violations = 0;
+    out->dma_timeouts    = 0;
+    out->dma_errors      = 0;
+
+    /* The assembly loop has no overrun-of-slack detection -- see the
+     * LIMITATION note at the head of spike_poll_asm.S. Report that as
+     * unmeasured rather than as zero; a zero here would claim the loop
+     * entered every sampling window on time, which it cannot know. */
+    out->slack_min       = SPIKE_SLACK_UNMEASURED;
+    out->slack_late      = SPIKE_LATE_UNMEASURED;
     out->lat_sum         = 0;
     out->lat_best        = 0xFFFFU;
     out->lat_worst       = 0;

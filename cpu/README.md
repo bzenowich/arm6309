@@ -1,12 +1,28 @@
 # `cpu/` — the HD6309E module
 
-A cycle-accurate **HD6309E** implemented on an **STM32G431CBT6**, packaged as a 40-pin
-drop-in module for the **Tandy CoCo 3**, targeting a **NitrOS-9 Level 2** boot in 6309
-native mode. In the machine of [`docs/machine.md`](../docs/machine.md) this is the CPU —
-and **it does not carry the MMU**: that sits on the motherboard as 3 ICs, which is what
-lets one LQFP48 part serve both machines. See `docs/machine.md` §5 item 6 and
+A cycle-accurate **HD6309E** implemented on an **STM32G431CBU6 (UFQFPN48)**, packaged as a
+40-pin drop-in module for the **Tandy CoCo 3**, targeting a **NitrOS-9 Level 2** boot in
+6309 native mode. In the machine of [`docs/machine.md`](../docs/machine.md) this is the
+CPU — and **it does not carry the MMU**: that sits on the motherboard, which is what lets
+one 48-pin part serve both machines. See `docs/machine.md` §5 item 6 and
 [`video/docs/graphics.md`](../video/docs/graphics.md) §6.3.1, and `docs/plan.md` §3.2 for
 the pin budget that decided it.
+
+> ⚠ **The package changed on 2026-09-04, and the old one could not have worked.** This
+> README and the plan committed to the **STM32G431CB*T*6, LQFP48** and to "42 GPIO" on it.
+> DS12589 Table 2 gives **38 GPIO in LQFP48, 42 in UFQFPN48**, and the four missing pads
+> are exactly `PC4`, `PC6`, `PC10`, `PC11` — `BA`, `BS`, `UART_TX`, `UART_RX` in
+> [`include/pinout.h`](include/pinout.h). Usable pins: **42 − SWD(2) − NRST(1) = 39 on the
+> UFQFPN48**, against **38 − 2 − 1 = 35 on the LQFP48**, where the 33 mandatory CoCo 3
+> signals fit but nothing else does. The `CBU6` is the same die in a QFN package, so the
+> pinout, this firmware and every timing number are unchanged; QFN soldering is the whole
+> cost. **The external-MMU decision survives untouched** — an in-CPU MMU wants all 39 pins
+> and is further out of reach on 35, not closer. Found in review (`docs/design-review.md`
+> Cpu-C1) before a board was drawn.
+
+> ⚠ **`PB8` is `A8` and it is also `BOOT0`.** Every module must have its option bytes
+> programmed — `nSWBOOT0` = 0, `nBOOT0` = 1 — **before it goes into a socket**. See
+> [Provisioning](#provisioning--before-a-module-goes-into-a-socket) below.
 
 Full analysis, pinout rationale, timing budgets and phase plan: **[`docs/plan.md`](docs/plan.md)**.
 
@@ -22,8 +38,9 @@ Full analysis, pinout rationale, timing budgets and phase plan: **[`docs/plan.md
 
 **Current state: Phase 1 — the timing spike.** No 6309 emulation exists yet, by design.
 Phase 1 answers the one question that can invalidate the project before any core is
-written: *after the host drops E, can we get the next address onto the bus inside a
-quarter cycle?*
+written: *after the host drops E, can we get the next address onto the bus inside
+`t_AD` = 110 ns?* (Earlier revisions asked it as "inside a quarter cycle"; that framing is
+retired — see the marked table below.)
 
 ---
 
@@ -143,9 +160,15 @@ bne .-          3     taken branch, pipeline refill      = 7
 ```
 
 `cpu/src/spike_poll_asm.S` unrolls by two and alternates destination registers, removing the
-copy and paying the taken branch once per two samples. Verified against the actual
-disassembly: **sample gaps of 4 and 6 cycles**, so `T_iter` worst case is 6 = 35.3 ns,
-inside the 40 ns bound with ~5 ns spare.
+copy and paying the taken branch once per two samples. By instruction timing that gives
+**sample gaps of 4 and 6 cycles**, so `T_iter` worst case is 6 = 35.3 ns, inside the 40 ns
+bound with ~5 ns spare.
+
+**Read 4/6 as the hypothesis, not as a verified fact.** The disassembly establishes the
+instruction *sequence*; it cannot establish what the bus does. An AHB2 GPIO `LDR` can cost
+3+ core cycles rather than the 2 it is costed at, which would make the gaps 5 and 7 =
+41.2 ns — over the 40 ns bound, and the sampling unsound however good the latency looked.
+That is precisely what `lat_jitter` is on hardware for.
 
 **`lat_jitter`** (`lat_worst − lat_best`) measures `T_iter` on hardware: where the edge
 lands within the poll loop is the only term that varies between bus cycles.
@@ -158,6 +181,59 @@ long the *actual* host holds data past E's fall, which is typically far longer t
 `GPIOA->IDR` triggered by EXTI on E's fall, giving a deterministic offset instead of
 polling jitter. `PA9` is `TIM1_CH2`, so Q is already captured in hardware for exactly
 this.
+
+---
+
+## Provisioning — before a module goes into a socket
+
+**`BOOT0` lives on `PB8`, and `PB8` is address line `A8`.** With the factory-default
+option byte `nSWBOOT0` = 1 the pad is sampled *throughout* the reset phase (RM0440 §2.6),
+so the part reads whatever the address bus happens to be doing at reset and boots the
+**system bootloader** on a random subset of resets. It is the classic failure that works
+on the bench with a debugger attached and fails in the socket — and no document in this
+repository mentioned it before 2026-09-04 (`docs/design-review.md` Cpu-M2).
+
+Program once per part, and read the bytes back — the write goes through a separate flash
+sequence and a failed one is silent:
+
+| Option bit | Value | Effect |
+|---|---|---|
+| `nSWBOOT0` | **0** | `BOOT0` comes from the option bit; `PB8` is a plain GPIO |
+| `nBOOT0` | **1** | that option bit selects main flash |
+
+```sh
+# STM32CubeProgrammer CLI, ST-Link
+STM32_Programmer_CLI -c port=SWD -ob nSWBOOT0=0 nBOOT0=1
+STM32_Programmer_CLI -c port=SWD -ob displ            # verify, do not skip
+```
+
+**Alternative:** a pulldown on `PB8`. It works, but it forms a divider against the host's
+4.7 K address pull-up — strong enough to hold `PB8` low at reset means ~1 K, which then
+loads `A8` differently from the other fifteen address lines for the life of the board.
+Two option bits cost nothing at runtime and nothing on the BOM. Also set at this point:
+the `PF1` machine strap that gates the shadow boot ROM (see below).
+
+---
+
+## Serving the boot ROM (homebrew machine only)
+
+Specified in [`docs/plan.md`](docs/plan.md) §4.5, **not implemented** — Phase 1 is a timing
+spike and has no shadow ROM.
+
+The homebrew machine of [`docs/machine.md`](../docs/machine.md) has no boot ROM anywhere in
+its 1 MB physical map, and its reset vector at `$FFFE` lands inside the I/O page, which
+overrides MMU translation by design. The machine-wide resolution puts the ROM **here**:
+this module serves logical `$E000`–`$FEFF` and `$FFC0`–`$FFEF` from **~8 KB of its own
+128 KB flash** with no bus cycle, keeps `$FF00`–`$FFBF` decoding normally so the boot code
+can reach the MMU and the cards, and serves `$FFF0`–`$FFFF` from a 16-byte internal vector
+RAM that is writable through the MMU window. A bit in the MMU window retires the shadow
+ROM once the OS is up, freeing that logical space for RAM; vector service stays on.
+
+**For the CoCo 3 and the Dragon 64 the whole mechanism is off** — those machines answer
+`$E000`–`$FFFF` from their own ROM, and a drop-in that served something else would not be
+a drop-in. Mode comes from a strap on `PF1`, the pinout's last spare pin, read once at
+reset. Consequence worth stating plainly: with this mechanism in the CPU, a real HD63C09E
+is no longer a drop-in *for the homebrew machine* — see plan §4.5.
 
 ---
 
@@ -175,7 +251,7 @@ ctest --test-dir build-host --output-on-failure
 
 ### Firmware
 
-Needs `arm-none-eabi-gcc` (13.2.1 verified; `build-arm/spike.elf` links at 3,968 B text):
+Needs `arm-none-eabi-gcc` (13.2.1 verified; `spike.elf` links at 4,088 B text):
 
 ```sh
 # Debian/Ubuntu
@@ -190,7 +266,7 @@ cmake --build build-arm
 
 Produces `build-arm/spike.elf`, `.bin`, `.hex` and a link map.
 
-> Verified with `arm-none-eabi-gcc` 13.2.1: links clean at **3,968 B** text, 3,740 B bss,
+> Verified with `arm-none-eabi-gcc` 13.2.1: links clean at **4,088 B** text, 3,760 B bss,
 > with the hot loop in CCM SRAM. What has *not* happened is silicon — no board has run it.
 
 ---
@@ -218,9 +294,26 @@ print g_data_window
 Variant 1 is expected to **fail** the `lat_jitter` ≤ 6 gate — that is the measurement,
 not a defect. Variant 2 is the one that should pass both gates.
 
-For variant 3, **check `dma_timeouts` before reading anything else**: non-zero means the
-DMA never fired. The register constants are verified against RM0440 Rev 9, so a timeout
-points at wiring or a clock enable rather than a wrong bit position.
+For variant 3, **check `dma_timeouts` and `dma_errors` before reading anything else.** A
+timeout on its own only says the address never appeared, and two different faults produce
+that:
+
+| `dma_timeouts` | `dma_errors` | Diagnosis |
+|---|---|---|
+| 0 | 0 | the measurement is real |
+| > 0 | **> 0** | the transfer was attempted and **bus-errored** (`TEIF`) — the channel configuration is wrong, typically a source address the DMA cannot reach |
+| > 0 | 0 | the **trigger** never arrived — wiring, a clock enable, or the request-line ID |
+
+> ⚠ **This README used to say a timeout "points at wiring or a clock enable rather than a
+> wrong bit position", and that advice would have sent you the wrong way.** The register
+> constants *are* verified against RM0440 Rev 9, but that was never the only way to get a
+> timeout: until 2026-09-04 `s_dma_addr` was declared `__ccmbss`, i.e. linked at
+> `0x1000xxxx`, and **RM0440 §2.4 says CCM SRAM can be accessed by DMA only through its
+> alias** (`0x2000 5800` on a category-2 part). Every transfer would have bus-errored,
+> `dma_timeouts` would have equalled `n_cycles`, and the project's own documentation
+> would have pointed the bench at the wiring. The variable is in ordinary SRAM now, and
+> `dma_errors` exists so the two failures can never be confused again
+> (`docs/design-review.md` Cpu-M1).
 
 ### What variant 3 does and does not buy
 
@@ -251,23 +344,64 @@ Key fields in `g_result`:
 
 | Field | Meaning |
 |---|---|
-| `deadline_misses` | latency > `t_AD` (18 cycles). **Must be 0.** |
+| `deadline_misses` | latency > the pass gate (`SPIKE_TAD_CYCLES` = **14**, see below). **Must be 0.** |
 | `hold_violations` | latency < `t_AH` (4 cycles) — drove the address too early. Must be 0. |
 | `overruns` | TIM1 overcapture — a whole E cycle went unserviced. Must be 0. |
 | `lat_worst` | worst-case core cycles, hardware E-fall → address stored. **The number.** |
 | `lat_jitter` | `lat_worst − lat_best` ≈ `T_iter`. **Must be ≤ 6** (see above). |
 | `period_min`/`period_max` | differ ⇒ the host switched speed mid-run (that's the point) |
-| `slack_min` | worst-case spare cycles for the emulator. **Size the microcode step against this.** |
-| `slack_late` | work overran the budget and Q had already fallen. Must be 0. |
+| `slack_min` | worst-case spare cycles for the emulator. **Size the microcode step against this.** Variant 1 only; variants 2 and 3 report `SPIKE_SLACK_UNMEASURED`. |
+| `slack_late` | work overran the budget and Q had already fallen. Must be 0. Variant 1 only — `SPIKE_LATE_UNMEASURED` elsewhere, and that is a real limitation, not a formatting one (below). |
+| `dma_timeouts` / `dma_errors` | variant 3 only; read them together, see the table above |
 | `hist[]` | latency distribution, 1 core cycle per bin |
 
-Two independent gates: **`lat_worst` ≤ 18** (the address arrives in time) and
+Two independent gates: **`lat_worst` ≤ 14** (the address arrives in time) and
 **`lat_jitter` ≤ 6** (the data sample is provably valid). Both are worst-case, not
 average — an emulator that misses one deadline in 10⁴ is simply wrong.
 
-The measurement is slightly **conservative**: a `DSB` before the timestamp ensures the
-GPIO store has actually landed, which costs a couple of cycles. That errs in the safe
-direction.
+### Why the latency gate is 14 and not 18
+
+> ⚠ **This README used to call the measurement "slightly conservative", on the grounds
+> that the `DSB` before the timestamp costs a couple of cycles in the safe direction. It
+> is not. Net, it is optimistic by roughly 3–5 core cycles** — against a claimed margin
+> of 5.7 (`docs/plan.md` §3.3), which is most of the margin. Three terms, all one-way,
+> all outside the number:
+>
+> 1. **TIM1's capture path resynchronises `TI1`** to the timer clock even with the input
+>    filter off (`ICF` = 0), so `CCR1` is latched **~2–3 core cycles after the physical
+>    edge**. Latency is measured from that late timestamp, so every cycle of lag is
+>    subtracted from the result.
+> 2. **`t_done` is read when the store retires, not when the pad moves** — ~3.3 ns
+>    (~0.6 cycles) of slew at `VERY_HIGH` follows it.
+> 3. **Phase 1 runs unbuffered on the bench** (`tools/stimulus/README.md`), so the `'541`
+>    propagation outbound and the inbound `E` buffer — ~0.9 cycles each — are absent from
+>    the measurement and present in the module.
+>
+> A spike reporting 17 can be a socket-referred 21, and the old 18-cycle gate would have
+> passed it. (`docs/design-review.md` Cpu-M4.)
+
+The `t_AD` ceiling is unchanged at 110 ns = **18.7** core cycles; what changed is what we
+are willing to call a pass. **18 − 4 = 14**, and the constant lives in
+[`include/spike.h`](include/spike.h) as `SPIKE_TAD_CYCLES`, with the raw ceiling kept
+beside it as `SPIKE_TAD_RAW_CYCLES`. The failure mode of a gate that is too tight is a
+rerun; of one that is too loose, a PCB.
+
+**The better fix, once the bench allows it:** jumper an address line to a spare timer
+capture input (`PA11` is `TIM1_CH4` and carries `/RESET`, so it can be borrowed) and
+difference two timestamps taken *through the same capture path*. The synchroniser delay
+then cancels instead of being estimated, and the gate can go back to 18 with evidence
+behind it.
+
+### What variant 2 does not measure
+
+The assembly loop has **no overrun-of-slack detection**. Its per-cycle bookkeeping is
+~35–40 core cycles, and the window from Q-fall to E-fall is 23.8 cycles at 1.79 MHz,
+20.3 at 2.0979 MHz and 13.5 at fast-E 3.1469 MHz — so at the higher rates the bookkeeping
+can still be running when Q falls. The loop then enters the sampling window late and folds
+that cycle into `lat_worst` with nothing marking it. Variant 1 counts exactly this case in
+`slack_late`, which is why **variant 2's numbers at a given rate are only trustworthy
+while variant 1 reports `slack_late` = 0 at that same rate.** Variant 2 reports
+`SPIKE_LATE_UNMEASURED` rather than a zero that would read as "none happened".
 
 ---
 
@@ -309,9 +443,15 @@ and it lives in [`../software/`](../software/).
 - [x] Verify `t_DSR` / `t_DHR` against the datasheet — 40 ns / 10 ns; deadline corrected
       from the quarter cycle to `t_AD` = 110 ns
 - [x] Firmware compiles (`arm-none-eabi-gcc` 13.2.1); hot loop confirmed at `0x10000000`
-- [x] Decide direct-drive vs buffers — **buffers, mandatory**: `PA0..PA7`, `PB0..PB2`
-      and `PB10` are `TT_a` (3.6 V), and the CoCo drives 5 V TTL at the data bus on
-      every read
+- [x] Decide direct-drive vs buffers — **buffers, mandatory**: `PA0..PA7`, `PB0`, `PB1`,
+      `PB2`, `PB10`, `PB13`, `PB14` (and `PC5`) are `TT_a` (3.6 V), and the CoCo drives
+      5 V TTL at the data bus on every read. No 5 V control input may reach an `FT` pin
+      directly either — DS12589 Table 14 caps `FT` input voltage at
+      min(V_DD, V_DDA) + 4.0 V, which 5 V violates while the LDO is still ramping
+- [x] Correct the package — **`STM32G431CBU6`, UFQFPN48**; the LQFP48 has 38 GPIO and
+      does not bring out `PC4`/`PC6`/`PC10`/`PC11` (`plan.md` §3.2)
+- [ ] Program `nSWBOOT0` = 0 / `nBOOT0` = 1 on every module and verify by read-back —
+      `BOOT0` is `PB8` is `A8` (see Provisioning above). Blocks any socket test
 - [ ] Confirm the GIME accepts 3.3 V `V_OH` — buffers output 3.3 V, not 5 V
 - [ ] Debug console on `USART3` (`PC10`/`PC11`), so results don't need a debugger
 - [ ] Variant 2 — hand-written assembly (predicted ~2.5 MHz)
@@ -321,7 +461,13 @@ and it lives in [`../software/`](../software/).
       and 344 MHz is the PLL VCO ceiling (any SYSCLK > 172 MHz overclocks the PLL too).
 - [ ] Variant 5 — straight-line unrolled poll, uniform `T_iter` = 4 (`plan.md` §3.3(c))
 - [ ] Variant 6 — external 74LVC574 read-data latch (`plan.md` §3.6) — decides 3 MHz
-- [ ] Build the stimulus generator
+- [ ] Build the stimulus generator — with a '574 fitted from the start (`plan.md` §7)
+- [ ] Calibrate the TIM1 capture-path offset out (jumper an address line to `TIM1_CH4`),
+      which is what would justify relaxing the pass gate from 14 back towards 18
 - [ ] First silicon measurement; record actuals against predictions in `cpu/docs/plan.md` §5
+
+Beyond Phase 1, and specified rather than built: the **shadow boot ROM and vector page**
+of `plan.md` §4.5 — see "Serving the boot ROM" above. It is Phase 6b, and it is what makes
+the homebrew machine boot at all.
 
 Predictions are recorded deliberately. A wrong one is informative.

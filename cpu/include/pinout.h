@@ -1,9 +1,37 @@
 /* Pin assignment for the HD6309E drop-in — single source of truth.
  * Mirrors cpu/docs/plan.md §3.2. Change both together.
  *
- * STM32G431CBT6, LQFP48: 42 GPIO, minus PA13/PA14 (SWD) and PG10 (NRST) = 39.
- * The CoCo 3 needs 33; we wire 35 (adding BA/BS) and spend the rest on a debug
- * console and an LED, leaving one spare.
+ * STM32G431CBU6, UFQFPN48: 42 GPIO, minus PA13/PA14 (SWD) and PG10 (NRST)
+ * = 39. The CoCo 3 needs 33; we wire 35 (adding BA/BS) and spend the rest on a
+ * debug console, an LED and the plan.md 4.5 machine-mode strap. Nothing spare.
+ *
+ *   > !! SUPERSEDED (2026-09-04): this header used to name the STM32G431CBT6,
+ *   > LQFP48. The map below does not exist on that package. DS12589 Table 2
+ *   > gives GPIOs as "38 in LQFP48, 42 in UFQFPN48", and the four extra pins
+ *   > are exactly PC4, PC6, PC10 and PC11 — BA, BS, UART_TX and UART_RX here.
+ *   > On LQFP48 the usable count is 38 - 2 (SWD) - 1 (NRST) = 35, the 33
+ *   > mandatory CoCo 3 signals fit with only PF0/PF1 left over, and gpio_init()
+ *   > would be configuring registers for pins that are not bonded out. Caught
+ *   > in the 2026-09-04 design review (Cpu-C1). The CBU6 is the same die in a
+ *   > QFN package, so this pinout, this header and the firmware are unchanged;
+ *   > QFN soldering is the whole cost.
+ *
+ * !! BOOT0 IS PB8 — WHICH IS A8. PROGRAM THE OPTION BYTES BEFORE FITTING.
+ *
+ * On the STM32G431 BOOT0 shares PB8, and with the factory-default option byte
+ * nSWBOOT0 = 1 the pad is sampled throughout the reset phase (RM0440 §2.6).
+ * PB8 here is address line A8, tied to a '541 input whose level at reset is
+ * whatever the bus happens to be doing, so the part boots into the system
+ * bootloader on a random subset of resets. It is the classic failure that
+ * works on the bench with a debugger attached and fails in the socket.
+ *
+ * PROVISIONING STEP, mandatory, once per module before it goes in a socket:
+ *     nSWBOOT0 = 0   (BOOT0 comes from the option bit, PB8 is pure GPIO)
+ *     nBOOT0   = 1   (that option bit selects main flash)
+ * See cpu/docs/plan.md §7, Phase 6. The alternative — a pulldown on PB8 —
+ * costs a resistor, fights the CoCo's 4.7K address pull-up (a divider, so it
+ * has to be strong enough to win at reset and weak enough not to load A8), and
+ * is strictly worse than two option bits that cost nothing at runtime.
  *
  * BUSY, /LIC, AVMA and TSC are deliberately ABSENT. The Color Computer 3
  * Service Manual (Cat. 26-3334) schematic marks BA, BS, BUSY, /LIC and AVMA all
@@ -27,13 +55,15 @@
  *   PC14        /IRQ         in
  *   PC15        /FIRQ        in
  *   PF0         LED          out    status
- *   PF1         --                  spare
+ *   PF1         STRAP        in     machine-mode strap, plan.md §4.5 - the last pin
  *   PG10        NRST
  *
  * EXTERNAL BUFFERS ARE MANDATORY, not a preference. DS12589 Table 12 lists
- * PA0..PA7 -- the whole data bus -- plus PB0..PB2 and PB10 as TT_a, rated
- * 3.6 V. The CoCo 3's 74LS245 drives 5 V TTL at us on every read, and the
- * board's 4.7K pull-ups take the address bus to 5 V whenever we tri-state.
+ * PA0..PA7 -- the whole data bus -- plus PB0, PB1, PB2, PB10, PB13, PB14 and
+ * PC5 as TT_a, rated 3.6 V. Six of the sixteen address lines are therefore
+ * 3.6 V pins, not four (PC5 carries nothing here, but it is on the list).
+ * The CoCo 3's 74LS245 drives 5 V TTL at us on every read, and the board's
+ * 4.7K pull-ups take the address bus to 5 V whenever we tri-state.
  * Behind 3.3 V-powered 74LVC buffers the MCU never sees more than 3.3 V.
  * Wire this part straight to the socket and it dies. See cpu/docs/plan.md §3.5.
  *
@@ -86,7 +116,12 @@
 /* ---- GPIOF ---- */
 #define PIN_LED      0U
 #define MASK_LED    (1U << PIN_LED)
-/* PF1 spare */
+/* PF1: plan.md §4.5 machine-mode strap. Read once at reset; selects whether the
+ * shadow boot ROM and vector page are served (homebrew) or not (CoCo 3 drop-in).
+ * This was the pinout's last spare pin; the budget is now exactly full on both
+ * targets - plan.md §3.2. */
+#define PIN_STRAP    1U
+#define MASK_STRAP  (1U << PIN_STRAP)
 
 /* AF numbers, verified against the STM32G431 alternate-function table. */
 #define AF_TIM1      6U   /* PA8 = TIM1_CH1, PA9 = TIM1_CH2   */

@@ -25,9 +25,15 @@ equipment, not part of the product.
 3. **Runtime speed switching**, 0.895 ↔ 1.79 MHz, changing between one cycle and the
    next with no gap or notification. This reproduces the GIME behaviour described in
    `cpu/docs/plan.md` §2.1 — software on a CoCo 3 flips speed by poking `$FFD9`, and the bus
-   loop must handle it without any calibration. The spike recomputes the deadline from
-   the measured period every cycle specifically to survive this; **it needs testing, not
-   assuming.**
+   loop must handle it without any calibration. **The spike does not recompute anything
+   per cycle** — an earlier version of this file claimed it recomputed the deadline from
+   the measured period every cycle, and it does not. The deadline is a fixed constant
+   (`SPIKE_TAD_CYCLES` in `cpu/include/spike.h`), which is correct precisely *because*
+   `t_AD` is an absolute 110 ns rather than a fraction of the E period, so a speed switch
+   does not move it. What has to survive the switch is the *anchoring*: the loop waits on
+   TIM1's Q-fall capture flag, a hardware event, so a faster clock simply means the flag
+   is already set. `period_min` ≠ `period_max` in the result is how you confirm the
+   generator actually switched. **It needs testing, not assuming.**
 
 4. **Data must vary per cycle.** A constant byte makes the stub table lookup hit the
    same entry every time, which is friendly to the branch predictor and the memory
@@ -57,5 +63,14 @@ carrier PCB against a 5 V CoCo 3. Keep the bench rig simple; do not let level sh
 become a variable while establishing the timing baseline.
 
 Note that this means Phase 1 measures the MCU's timing **without** the ~5 ns each-way
-buffer propagation delay that the real module will have. Budget for it: at 1.79 MHz it
-is ~1.7 core cycles each way out of 23.7, minor; at 5 MHz out of 8.5, material.
+buffer propagation delay that the real module will have. Budget for it: ~0.9 core cycles
+each way against the `t_AD` ceiling of 18.7 core cycles (110 ns, absolute at every E rate
+— `plan.md` §3.3). Both ways land *outside* the measured number and *inside* the real
+one, which is one of the three terms that make the spike optimistic rather than
+conservative, and one of the reasons the pass gate is 14 and not 18. See
+`cpu/include/spike.h`.
+
+Also worth stating for the same reason: the deadline is **not** the quarter cycle. Earlier
+versions of this file and of the top-level README framed it that way ("23.7 core cycles at
+1.79 MHz, 8.5 at 5 MHz"); requirement 1 above still needs Q at exactly 90°, because Q's
+fall is the slack anchor, but nothing about the deadline is period-relative.

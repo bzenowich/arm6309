@@ -1,4 +1,4 @@
-# The HD6309E module: STM32G431CBT6 firmware.
+# The HD6309E module: STM32G431CBU6 (UFQFPN48) firmware.
 #
 # Cross-compiled, it builds the Phase 1 timing spike. On the host it cannot
 # run -- the sources dereference absolute peripheral addresses -- so the host

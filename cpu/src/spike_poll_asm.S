@@ -31,9 +31,17 @@
  *       tst r7,#E    1  |
  *       bne poll     3  | taken -> next A at t=12
  *
- * Sample gaps are 4 (A->B) and 6 (B->A'), so T_iter worst case is 6 cycles
- * = 35.3 ns, inside the 40 ns bound with ~5 ns to spare. Tight, and the
- * reason this variant exists.
+ * Sample gaps are 4 (A->B) and 6 (B->A') BY INSTRUCTION TIMING, so T_iter
+ * worst case is 6 cycles = 35.3 ns, inside the 40 ns bound with ~5 ns to
+ * spare. Tight, and the reason this variant exists.
+ *
+ * Those two numbers are the PREDICTION, not a verified fact, and a listing
+ * cannot promote them. The M4 reference timings say LDR is 2 cycles; an AHB2
+ * GPIO load is not an SRAM load and can cost 3 or more, which would make the
+ * gaps 5 and 7 -- 41.2 ns, over the 40 ns bound, and the sampling unsound
+ * however good the latency looked. Reading the disassembly proves the
+ * instruction SEQUENCE, and nothing about the bus. lat_jitter on hardware is
+ * the measurement that settles it, and 4/6 is the hypothesis it tests.
  *
  * Which register holds the pre-edge sample depends on where the edge landed,
  * so there are two exit paths. The drive sequence is duplicated rather than
@@ -50,6 +58,21 @@
  * does not affect the measured latency. Statistics are derived in C from the
  * histogram; this only maintains the histogram, the overcapture count and the
  * observed E period range.
+ *
+ * LIMITATION — NO OVERRUN-OF-SLACK DETECTION. The bookkeeping below runs
+ * between E-fall and the next Q-fall and costs ~35-40 cycles. From Q-fall to
+ * E-fall there are 23.8 core cycles at 1.79 MHz, 20.3 at 2.0979 MHz and 13.5
+ * at fast-E 3.1469 MHz (plan.md §3.3(d)), so at the higher rates the
+ * bookkeeping can still be running when Q falls. The wait at .Lcycle then
+ * finds the flag ALREADY SET, the sampling window is entered late, and the
+ * cycle's latency is folded into the histogram with nothing marking it.
+ * Variant 1 counts exactly this case (slack_late in spike_result_t) because
+ * its slack path is in C where the extra cycles are affordable; this loop
+ * deliberately does not, and its result struct reports SPIKE_LATE_UNMEASURED
+ * rather than a zero that would read as "none happened". Read variant 2's
+ * numbers at a given rate only while variant 1 reports slack_late = 0 at that
+ * same rate. Adding the check here costs ~4 cycles of the slack it is
+ * measuring, which is why it is a documented limitation rather than a fix.
  *
  * uint32_t spike_run_poll_asm_raw(uint32_t n_cycles,      // r0
  *                                 uint32_t *hist,         // r1, 64 words, pre-cleared
@@ -142,13 +165,15 @@ spike_run_poll_asm_raw:
     tst     r7, #E_MASK             /* 1                                  */
     bne     .Lpoll                  /* 3 taken                            */
 
-    /* E fell between sample B and the next sample A: pre-edge value is r6. */
+    /* Reached when sample A (r6) still saw E high and sample B (r7) saw it
+     * low: E fell between A and B, so the pre-edge value is r6. */
     ubfx    r12, r6, #0, #8         /* 1  data byte                       */
     ldr     r12, [r2, r12, lsl #2]  /* 2  next address                    */
     str     r12, [r1]               /* 1  DRIVE                           */
     b       .Lmeasure
 
-    /* E fell between sample A and sample B: pre-edge value is r7. */
+    /* Reached when sample A (r6) already saw E low: E fell between the
+     * PREVIOUS sample B and this A, so the pre-edge value is r7. */
 .Ledge_prev_r7:
     ubfx    r12, r7, #0, #8         /* 1                                  */
     ldr     r12, [r2, r12, lsl #2]  /* 2                                  */

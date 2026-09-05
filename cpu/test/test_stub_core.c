@@ -24,12 +24,23 @@ int main(void)
     memset(stub_next_addr, 0, sizeof stub_next_addr);
     stub_core_init();
 
-    /* Every entry must be a valid 16-bit address. */
-    int in_range = 1;
+    /* Every entry must exercise the whole 16-bit address bus.
+     *
+     * "Fits in 16 bits" is not worth asserting -- stub_core_init() masks with
+     * 0xFFFF, so the check could never fail and proved nothing. What actually
+     * matters to the measurement is that all sixteen lines TOGGLE: the drive
+     * step is one store to GPIOB->ODR, and a table whose upper bits never
+     * changed would leave A8..A15 static across the run, sparing the pads the
+     * slew the real thing pays for and flattering the latency figure. So
+     * require every bit position to appear both set and clear. */
+    uint32_t bits_set = 0, bits_clear = 0;
     for (int i = 0; i < 256; i++) {
-        if (stub_next_addr[i] > 0xFFFFu) { in_range = 0; }
+        bits_set   |=  stub_next_addr[i];
+        bits_clear |= ~stub_next_addr[i];
     }
-    check(in_range, "all entries fit in 16 bits");
+    check((bits_set & 0xFFFFu) == 0xFFFFu, "every address line is driven high somewhere");
+    check((bits_clear & 0xFFFFu) == 0xFFFFu, "every address line is driven low somewhere");
+    check((bits_set & ~0xFFFFu) == 0, "no entry sets a bit above A15");
 
     /* Not sequential, not constant: a degenerate table would let the branch
      * predictor and the compiler make the lookup look cheaper than it is. */

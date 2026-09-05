@@ -1,8 +1,10 @@
 /* GPIO and TIM1 setup for the HD6309E pinout.  See cpu/include/pinout.h.
  *
- * Everything on the bus is set to VERY_HIGH output speed: at 1.79 MHz the
- * quarter-cycle deadline is 23.7 core cycles and slew rate is not somewhere to
- * give away nanoseconds.
+ * Everything on the bus is set to VERY_HIGH output speed. The deadline is
+ * t_AD = 110 ns = 18.7 core cycles at 170 MHz (cpu/docs/plan.md §3.3 — an
+ * absolute figure, NOT the quarter cycle, and not period-relative), against a
+ * measured path of ~13. Pad slew is ~3.3 ns of that budget on its own, so it
+ * is not somewhere to give away nanoseconds.
  */
 
 #include "stm32g431.h"
@@ -26,11 +28,18 @@ void gpio_init(void)
                   | RCC_AHB2ENR_GPIOCEN | RCC_AHB2ENR_GPIOFEN;
     (void)RCC->AHB2ENR;
 
-    /* ---- GPIOB: A0..A15, all outputs, max slew ---- */
-    GPIOB->MODER   = 0x55555555U;   /* every pin = output */
+    /* ---- GPIOB: A0..A15, all outputs, max slew ----
+     *
+     * ODR is written BEFORE MODER. Out of reset the port is input, so ODR
+     * holds 0; switching MODER first would drive $0000 onto the address bus
+     * for the handful of cycles until the ODR write landed. On the homebrew
+     * machine $0000 is a legal RAM address and the module would emit a
+     * spurious cycle at power-on. Write the dead-cycle address first, then
+     * enable the drivers. */
+    GPIOB->ODR     = 0xFFFFU;       /* $FFFF, the 6809 dead-cycle address */
     GPIOB->OSPEEDR = 0xFFFFFFFFU;   /* every pin = very high speed */
     GPIOB->OTYPER  = 0x00000000U;   /* push-pull */
-    GPIOB->ODR     = 0xFFFFU;       /* $FFFF, the 6809 dead-cycle address */
+    GPIOB->MODER   = 0x55555555U;   /* every pin = output */
 
     /* ---- GPIOA ----
      * PA0..PA7  D0..D7      input for now (direction follows R/W later)
@@ -42,6 +51,12 @@ void gpio_init(void)
      *
      * MODER is built by hand rather than with moder_set() per pin so that
      * PA13/PA14 are provably untouched — clobbering them costs the debugger. */
+    /* Same rule as GPIOB: define the levels before enabling the drivers.
+     * BUS_OE is active low and its reset ODR value is 0, so making it an
+     * output first would enable every bus buffer for the interval until the
+     * ODR write landed. */
+    GPIOA->BSRR = MASK_RW | MASK_BUS_OE;   /* R/W = read, buffers tri-stated */
+
     {
         uint32_t m = GPIOA->MODER;
         m &= ~0x03FFFFFFU;          /* clear pins 0..12  (bits 0..25)  */
@@ -52,8 +67,15 @@ void gpio_init(void)
         m |= (GPIO_MODE_OUTPUT << (PIN_BUS_OE * 2U));
         GPIOA->MODER = m;
     }
-    GPIOA->OSPEEDR = 0xFFFFFFFFU;
-    GPIOA->PUPDR   = 0x00000000U;   /* external buffers define the levels */
+    /* OSPEEDR and PUPDR are masked exactly like MODER, and for the same
+     * reason. A flat write to either one clobbers PA13/PA14: their reset
+     * state is PA13 pull-up + very-high speed and PA14 pull-down (RM0440
+     * §9.4.4/§9.4.3), and those pulls are what keep SWD alive when the probe
+     * is not driving. The comment above promised to leave SWD as reset left
+     * it; a `PUPDR = 0` does not. Bits 26..29 cover pins 13 and 14 in both
+     * registers. */
+    GPIOA->OSPEEDR |= ~0x3C000000U;   /* very high everywhere but PA13/PA14 */
+    GPIOA->PUPDR   &=  0x3C000000U;   /* external buffers define the levels */
     af_set(GPIOA, PIN_E, AF_TIM1);
     af_set(GPIOA, PIN_Q, AF_TIM1);
 

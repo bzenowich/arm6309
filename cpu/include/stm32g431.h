@@ -104,6 +104,7 @@ typedef struct {
 
 #define PWR_BASE 0x40007000UL
 #define PWR_CR1 (*(__IO uint32_t *)(PWR_BASE + 0x00))
+#define PWR_CR3 (*(__IO uint32_t *)(PWR_BASE + 0x08))
 #define PWR_SR2 (*(__IO uint32_t *)(PWR_BASE + 0x14))
 #define PWR_CR5 (*(__IO uint32_t *)(PWR_BASE + 0x80))
 
@@ -111,6 +112,11 @@ typedef struct {
 #define PWR_CR1_VOS_RANGE1  (1U << 9)
 #define PWR_SR2_VOSF        (1U << 10)
 #define PWR_CR5_R1MODE      (1U << 8)   /* 0 = boost mode (needed above 150 MHz) */
+
+/* RM0440 §6.4.3, PWR_CR3 bit 14. The UCPD1 dead-battery pull-downs come up
+ * ENABLED out of reset and sit on PB4 and PB6 -- A4 and A6 here. Writing this
+ * bit disables them. See clock_init_170mhz(). */
+#define PWR_CR3_UCPD1_DBDIS (1U << 14)
 
 /* ----------------------------------------------------------------- FLASH -- */
 
@@ -188,6 +194,16 @@ typedef struct {
 #define DMA1_CH(n) ((DMA_Channel_TypeDef *)(0x40020000UL + 0x08UL + 0x14UL * ((n) - 1U)))
 #define DMA1_ISR  (*(__IO uint32_t *)0x40020000UL)
 #define DMA1_IFCR (*(__IO uint32_t *)0x40020004UL)
+
+/* DMA_ISR / DMA_IFCR, four flags per channel, channel 1 in bits 3:0 --
+ * RM0440 §12.6.1/§12.6.2. TEIF is the one that matters here: a transfer error
+ * (an unreachable source address, for instance) disables the channel and
+ * leaves it disabled, so the symptom is identical to "the trigger never
+ * arrived" unless the flag is read. */
+#define DMA_ISR_GIF1  (1U << 0)
+#define DMA_ISR_TCIF1 (1U << 1)
+#define DMA_ISR_HTIF1 (1U << 2)
+#define DMA_ISR_TEIF1 (1U << 3)
 
 #define DMA_CCR_EN        (1U << 0)
 #define DMA_CCR_DIR_M2P   (1U << 4)   /* 1 = read from memory */

@@ -19,10 +19,17 @@ From `plan.md` §3.3(d), at 170 MHz with the §3.6 latch:
 
 | E rate | Cycles/bus cycle | Available for emulator work |
 |---|---|---|
-| 1.79 MHz | 95.0 | ~48 |
-| 3.0 MHz | 56.7 | ~34 |
+| 1.79 MHz (CoCo 3 fast) | 95.0 | ~48 |
+| 2.0979 MHz (homebrew, **the specified rate**) | 81.0 | ~58 |
+| 3.0 MHz (HD63C09E rated max) | 56.7 | ~34 |
+| 3.1469 MHz (homebrew **fast-E**, experimental) | **54.0** | **~31** |
 
 Both already exclude the ~13-cycle address-drive path.
+
+The bottom row is the binding one and it is tighter than the 3.0 MHz row it is easy to
+mistake it for: the homebrew machine divides 25.175 MHz by 8, not by an even 3 MHz, so a
+bus cycle is 54.0 core cycles and the budget is ~31. Against it, the 25-cycle `TFM`
+figure below keeps **~6 cycles, not 9** (`plan.md` §3.3(e)).
 
 ## Result
 
@@ -80,6 +87,16 @@ as the data bus**, so sampling it costs one `AND` rather than a second load. Tha
   measurement.
 - **Functions containing branches are counted as if every instruction executes** — an
   over-estimate, i.e. the safe direction.
+- **The `TFM` fragment is not `TFM`-shaped, so 25 cycles is a FLOOR for `TFM`, not a
+  worst case.** Two specific divergences, both found in the 2026-09-04 design review.
+  **(1)** `r9` is double-booked: it serves as the `ctrl_a` control-line accumulator and as
+  the pinned `W` counter, so the measured body does less register pressure than the real
+  step, which needs both live at once. **(2)** It decodes **2-bit** register-select
+  fields, where a real `TFM` postbyte carries **two 4-bit fields** and an invalid encoding
+  must take the illegal-instruction trap — so the real decode is wider and has a branch
+  the fragment does not. Both push the same way. Treat the `~6 cycles spare` at fast-E
+  above as an upper bound on the margin, and re-measure once the real `TFM` step exists
+  in Phase 4.
 - **This is a sample, not a survey.** The states measured are the ones expected to be
   expensive. Not covered: the interrupt stacking sequence, `DIVQ`/`DIVD`, indexed-indirect
   modes, and the `/HALT` entry/exit path. Any of those could be worse.

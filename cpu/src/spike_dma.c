@@ -61,9 +61,18 @@
 #define SPIKE_DMA_TRIGGER_EXTI 0
 #endif
 
-/* The word the DMA copies to GPIOB->ODR on every trigger. In CCM so the CPU's
- * update in the slack half of the cycle cannot contend with anything. */
-static __ccmbss volatile uint32_t s_dma_addr;
+/* The word the DMA copies to GPIOB->ODR on every trigger.
+ *
+ * ORDINARY SRAM, NOT CCM. This is not a preference: RM0440 §2.4 states that
+ * CCM SRAM "can be accessed by DMA only by the aliased address", 0x2000 5800
+ * on a category-2 device. The __ccmbss attribute links at 0x1000 xxxx, the one
+ * window the DMA cannot reach, and a channel pointed there bus-errors on its
+ * first transfer, sets TEIF, and disables itself -- so every bus cycle would
+ * fall out of the readback guard and dma_timeouts would come back equal to
+ * n_cycles. The variable is one word written once per bus cycle in the slack
+ * half, so SRAM1 costs nothing measurable; the alias would work too, but a
+ * hand-computed alias address is a footgun for no gain. */
+static volatile uint32_t s_dma_addr;
 
 /* Two arbitrary, distinct 16-bit addresses. Alternating them guarantees the
  * readback spin always sees a transition. */
@@ -72,9 +81,15 @@ static __ccmbss volatile uint32_t s_dma_addr;
 
 /* Outer guard iterations; each does 8 unrolled readback checks. If the address
  * has not appeared by then the DMA is not firing -- bail rather than hang.
- * The register constants are verified against RM0440 (see stm32g431.h), so a
- * timeout most likely means a wiring or clock-enable problem rather than a
- * wrong bit position. */
+ *
+ * A timeout on its own says nothing about WHY. Two failures produce it and
+ * they want opposite fixes: the trigger never arrived (wiring, a clock enable,
+ * a request-line ID), or the transfer was attempted and bus-errored (an
+ * address the DMA cannot reach -- see s_dma_addr above). The second sets TEIF
+ * and disables the channel, so the timeout path reads DMA1_ISR and reports
+ * dma_errors separately from dma_timeouts. Diagnose in that order: non-zero
+ * dma_errors means the channel configuration is wrong; timeouts with zero
+ * errors means the trigger path is. */
 #define DMA_SPIN_LIMIT 2500U
 
 void spike_dma_init(void)
@@ -133,7 +148,7 @@ void spike_dma_init(void)
  * quantisation would be several times coarser than the thing being measured. */
 __hot void spike_run_dma(uint32_t n_cycles, spike_result_t *out)
 {
-    uint32_t timeouts = 0, overruns = 0;
+    uint32_t timeouts = 0, dma_errors = 0, overruns = 0;
     uint16_t lat_worst = 0, lat_best = 0xFFFFU;
     uint16_t per_min = 0xFFFFU, per_max = 0;
     uint64_t lat_sum = 0;
@@ -176,8 +191,19 @@ __hot void spike_run_dma(uint32_t n_cycles, spike_result_t *out)
         }
 #undef SPIN_CHECK
 
-        /* Fell out of the guard: the DMA never drove the bus. */
+        /* Fell out of the guard: the DMA never drove the bus. Separate the two
+         * causes here rather than on the bench. TEIF1 set means the transfer
+         * was attempted and bus-errored -- the channel is now disabled, so
+         * clear the flag and re-enable it, otherwise the first error silently
+         * turns every later cycle into a plain timeout. */
         timeouts++;
+        if (DMA1_ISR & DMA_ISR_TEIF1) {
+            dma_errors++;
+            DMA1_IFCR = DMA_ISR_TEIF1 | DMA_ISR_GIF1;
+            DMA1_CH(1)->CCR &= ~DMA_CCR_EN;
+            DMA1_CH(1)->CNDTR = 1U;
+            DMA1_CH(1)->CCR |= DMA_CCR_EN;
+        }
         t_edge_prev = (uint16_t)TIM1->CCR1;
         nxt = (nxt == ADDR_A) ? ADDR_B : ADDR_A;
         continue;
@@ -208,6 +234,7 @@ __hot void spike_run_dma(uint32_t n_cycles, spike_result_t *out)
     out->cycles_run      = n_cycles;
     out->overruns        = overruns;
     out->dma_timeouts    = timeouts;
+    out->dma_errors      = dma_errors;
     out->lat_worst       = lat_worst;
     out->lat_best        = lat_best;
     out->lat_sum         = lat_sum;
@@ -221,6 +248,13 @@ __hot void spike_run_dma(uint32_t n_cycles, spike_result_t *out)
      * path. */
     out->deadline_misses = 0;
     out->hold_violations = 0;
+
+    /* This variant does not run the Q-fall slack path at all. Say so with the
+     * sentinels rather than leaving whatever the caller's struct held from the
+     * previous variant -- main.c reuses one spike_result_t for all three. */
+    out->slack_min       = SPIKE_SLACK_UNMEASURED;
+    out->slack_late      = SPIKE_LATE_UNMEASURED;
+
     for (uint32_t bin = 0; bin < SPIKE_HIST_BINS; bin++) {
         out->hist[bin] = hist[bin];
         if (bin > SPIKE_TAD_CYCLES) {
