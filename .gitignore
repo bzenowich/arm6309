@@ -15,7 +15,13 @@ __pycache__/
 # history: they are ~93 MB and are freely available from the vendors and from
 # colorcomputerarchive.com. Each reference/ subdirectory has a README listing
 # the expected files and what cites them, so a fresh clone can be refilled.
-# The READMEs themselves, and the small tracked binaries in reference/68k/,
-# are deliberately not covered by these patterns.
+# The READMEs themselves are deliberately not covered by these patterns.
 reference/**/*.pdf
 reference/**/*.tiff
+
+# Third-party binaries and source archives that this project has no right to
+# redistribute (Apple ROM images, the CHM QuickDraw/MacPaint releases). Tracked
+# until 2026-09-04; see reference/68k/README.md and docs/design-review.md Sys-M6.
+reference/**/*.ROM
+reference/**/*.rom
+reference/**/*.zip
