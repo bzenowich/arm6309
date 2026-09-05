@@ -5,11 +5,11 @@ deliberate instead of at the root.
 
 | | | |
 |---|---|---|
-| [`ps2/`](ps2/) | PS/2 keyboard and mouse | **specified** — [`ps2/docs/ps2.md`](ps2/docs/ps2.md), 9 ICs |
+| [`ps2/`](ps2/) | PS/2 keyboard and mouse | **specified** — [`ps2/docs/ps2.md`](ps2/docs/ps2.md), 11 ICs |
 | [`serial/`](serial/) | RS-232 serial | **specified** — [`serial/docs/serial.md`](serial/docs/serial.md), 3 ICs |
 
 **The two cards answer the "discrete or a chip?" question differently, and both are
-right.** PS/2 is nine packages of 74-series logic because no period chip decodes PS/2 —
+right.** PS/2 is eleven packages of 74-series logic because no period chip decodes PS/2 —
 `ps2.md` §4.5 evaluates the closest thing, a 6522 per port, and rejects it on I/O space.
 Serial is three packages because the 6551 (1977) does the whole job in one, costs four
 addresses, and shipped inside a CoCo. The house rule bars CPLDs and FPGAs, not LSI; what
@@ -40,6 +40,20 @@ escalates `graphics.md` §17's "widen the window now" from advice to a blocker, 
 carries VBL and raster compare, and only `/FIRQ` is exclusive — and §3.2 takes
 `$FF50`–`$FF53`. Both are still **proposals** until `docs/machine.md` records them as
 taken.
+
+**A shared line has an order, and it is not free to choose.** `docs/machine.md` §4 records
+it: **video `VSTAT`, then PS/2 `IOSTAT`, then serial `STATUS` last.** The reason belongs to
+the serial card — reading the 6551's `STATUS` *clears* the interrupt and returns the error
+bits in the same read (`serial/docs/serial.md` §7.3), so its handler cannot probe cheaply
+and defer; it must consume what it finds. PS/2's `IOSTAT` read has no side effects at all
+(`ps2/docs/ps2.md` §8.1), which is what lets it sit in the middle. Any third I/O card
+joining `/IRQ` inherits this constraint.
+
+> ⚠ **The PS/2 card was 9 ICs until the 2026-09-04 design review.** Its central claim —
+> that the `74HC595`'s storage register gives a byte of buffering for free — was false:
+> `RCLK` is the bit counter's `Q0`, which fires on every edge of every frame, so the next
+> frame's **start bit** overwrites the byte. A `74HC574` per port, clocked at end-of-frame,
+> is what makes the buffer real. **9 → 11.** `ps2/docs/ps2.md` §5.
 
 ## The prior art is worth reading before you design anything here
 
