@@ -29,13 +29,13 @@ protect MinOS and can be deleted outright.**
 | colormin feature | Verdict for an arm6309 machine | § |
 |---|---|---|
 | **Chunky 8bpp, 4-way SRAM interleave** | **Keep.** The bandwidth argument is unchanged and still wins. | §2.1 |
-| **Posted-write capture on the write strobe** | **Keep**, retargeted to E-fall + `R/W` low. Direct analogue. | §3.1 |
+| **Posted-write capture on the write strobe** | **Keep**, retargeted to E-fall + `R/W` low — but ⚠ **not a direct analogue**: colormin's VRAM is write-only through a pointer, this card's is flat-mapped, so the *address* has to be captured too. +3 `'574`. | §3.1, §3.1.1 |
 | **Span writer (mask / solid, `WFG`/`WBG`)** | **Keep — and it matters more here.** The 6309 writes ~2.4× slower than the 64x4 CPU. | §7 |
 | **Separate scroll counters, sync untouched** | **Keep verbatim.** Still the right way to scroll. | §8 |
 | **SRAM register file + `/245` read-back** | **Keep.** Cheaper here — a 6809 bus read window is 2–3× wider. | §3.2 |
-| **256 × 16 b palette LUT** | **Keep, with an RGB332 identity palette at boot.** §9 argues this satisfies your RGB332 constraint at no cost in software. | §9 |
-| **Blitter + display-list engine** | **List engine yes; blit datapath defer.** The 6309's `TFM` plus the span writer cover most of the gap, and 18 GALs is where "no CPLD" starts to hurt. | §10 |
-| **Arbitration priority rule / preemption** | **Keep the rule, delete the mechanism.** Phase-locking makes CPU arbitration static. | §5 |
+| **256 × 16 b palette LUT** | **Keep, with an RGB332 identity palette at boot.** §9 argues this satisfies your RGB332 constraint at no cost in software. ⚠ The analog stage behind it needs a real buffer, and blanking has to act after the LUT. | §9, §9.1, §9.2 |
+| **Blitter + display-list engine** | **List engine yes; blit datapath defer.** The 6309's `TFM` plus the span writer cover most of the gap, and 18 GALs is where "no CPLD" starts to hurt — a wall the card now reaches one package sooner (§14). | §10 |
+| **Arbitration priority rule / preemption** | **Keep the rule, delete most of the mechanism.** Phase-locking makes CPU arbitration static **in time** — ⚠ but not in space: which chip the CPU hits is `address[1:0]`, so a small arbiter survives. +1 GAL. | §5, §5.2.1 |
 | **MODE=0 bit-exact stock 1bpp path** | **Delete.** −4 ICs, −1 clock domain, −2 open items. Pure win. | §4 |
 | **`$4000–$7FFF` broadcast window + RAM shadow write** | **Delete.** An artefact of MinOS compatibility. | §4 |
 | **`BANK` register** | **Delete.** The machine has an MMU; that *is* the banking mechanism. | §6 |
@@ -44,10 +44,25 @@ protect MinOS and can be deleted outright.**
 | **480×200, 6×8 cells, 512 B stride** | **Replace** with 640×200, 8×8 cells, 1024 B stride. | §6 |
 | **No interrupt source** | **Add VBL + raster-compare interrupts.** NitrOS-9 needs a tick; you want raster splits. | §12 |
 
-**Net: ~33 ICs (37 with the `'153` pixel mux), against colormin's 35 (39).**
-Higher resolution, readable VRAM, raster interrupts, one clock domain — and
-fewer packages, because deleting the stock-compatibility path pays for all of it.
-Budget in §14.
+> ⚠ **Superseded — the headline was wrong twice over.** ~~**Net: ~33 ICs (37 with
+> the `'153` pixel mux), against colormin's 35 (39).**~~ It disagreed with §14's own
+> table, which summed to **36** with the mux and 32 without and made the mux the
+> default (§6.1) — so the parenthesis was inverted as well as the number. And §14
+> was itself short of four things the bus interface actually needs: the posted-write
+> **address** latches (§3.1), the spare-access **arbiter** (§5.2), a tri-state driver
+> for `VSTAT`'s live bits (§12.1), and an **analog buffer stage** (§9.1); while it
+> carried a master oscillator that belongs on the motherboard, not on a card you can
+> pull (§14). None of that is a change of design. It is the same card, counted.
+
+**Net: 40 ICs (36 if the tri-state pixel bus closes at 39.7 ns and the `'153` mux is
+not needed), against colormin's 39 (35)** — plus 3 buffer transistors and 3 R-2R SIP
+ladders, which are not ICs and are counted on their own line. **9 GALs, not 8.**
+Higher resolution, readable VRAM, raster interrupts, one clock domain; deleting the
+stock-compatibility path still pays for most of the addition, and the honest bus
+interface eats the rest.
+Budget and the line-by-line arithmetic in §14; power in §14 as well, and it is
+**~1.1–1.7 A**, not the 450–650 mA this document used to claim — which was less than
+the GAL row of its own arithmetic.
 
 ---
 
@@ -60,7 +75,7 @@ Budget in §14.
 | Address space | 64 KB flat, banked at `$8000` | 64 KB logical, **MMU-mapped**, ≥512 KB physical |
 | Existing OS to protect | **MinOS, bit-exact 1bpp video** | **none** — NitrOS-9 is ported, not preserved |
 | Bus read path | awkward (`/INH` race, 125 ns phase) | **native** — `t_ACC` 330 ns at 2 MHz |
-| Bus stall mechanism | `/WAIT` clock gating, exercised but bolted on | E stretching — **free**, the emulator is edge-driven |
+| Bus stall mechanism | `/WAIT` clock gating, exercised but bolted on | `/WAIT` **wait states** — **free**, the emulator is edge-driven |
 | Clock relationship | mainboard 16 MHz **fixed**, card asynchronous | **you choose one master crystal for the whole machine** |
 | Block move | none | **`TFM`**, ~3 cycles/byte, in the instruction set |
 
@@ -93,16 +108,30 @@ AS6C1008-45 grade takes the access to 62 ns and the slack to 96.9 ns.
 
 Free accesses for the span writer and blitter, at 70 Hz:
 
+> ⚠ **The blanking rows were charged at the wrong cadence.** The original
+> arithmetic divided the blanking intervals by the raw 72 ns access time —
+> ~~`6.36 us / 72 ns` = 88.3 accesses per chip per line, `483,000/frame`,
+> `≈ 34 M accesses/s`~~ — as if accesses were free-running. They are not: every
+> access is granted on the **158.9 ns fetch-slot grid** (§5.2), and a chip takes at
+> most **two** accesses per slot (2 × 72 = 144 ns ≤ 158.9 ns). Charging the slot grid
+> costs ~9 % on both blanking rows. The conclusion is untouched — the headroom is
+> 77×, not 80× — but the table is quoted downstream (`docs/video-comparison.md` §4),
+> so it is corrected rather than rounded away.
+
 ```
-active display : 160 slots/line x 1 spare x 4 chips x 400 lines  = 256,000
-hblank         : 6.36 us / 72 ns x 4 chips x 400 lines           = 141,000
-vblank         : 49 lines x 31.78 us / 72 ns x 4 chips           =  86,000
-                                                          total  ~ 483,000/frame
+active display : 160 slots/line x 1 spare  x 4 chips x 400 lines  = 256,000
+hblank         : 6.36 us / 158.9 ns = 40.0 slots/line
+                 40.0 x 2 spare x 4 chips x 400 lines             = 128,000
+vblank         : 31.78 us / 158.9 ns = 200 slots/line
+                 200 x 2 spare x 4 chips x 49 lines               =  78,400
+                                                           total  ~ 462,000/frame
 ```
 
-≈ **34 M accesses/s**, against a CPU that can issue ~420,000 writes/s. The card
-has ~80× more memory bandwidth than the CPU can consume. Bandwidth is not the
-constraint on this machine — **the CPU is** — which is the single most important
+During active display one of the slot's two per-chip accesses is the display fetch,
+so one is spare; during hblank and vblank the display fetches nothing and both are
+spare. ≈ **32.4 M accesses/s**, against a CPU that can issue ~420,000 writes/s. The
+card has **~77×** more memory bandwidth than the CPU can consume. Bandwidth is not
+the constraint on this machine — **the CPU is** — which is the single most important
 number for deciding what to build.
 
 ### 2.2 The rest of the transferable core
@@ -136,11 +165,60 @@ The 6809E/6309E bus gives you the same thing under different names:
 | `/MRD` asserted | **E high, `R/W` high** | Card must drive D0–D7 by `t_DSR` before E falls |
 | `16M` / `8M` | **E and Q** | Q leads E by 90° |
 | `/IOSEL` per slot | mainboard `'138` on the I/O page | Keep the geographic-slot idea — it is a good one |
-| `/WAIT` (clock gating) | **stretch E** | §3.3 |
+| `/WAIT` (clock gating) | **`/WAIT`: E held low for whole E periods** | §3.3 |
 | `/INH` | not needed | the MMU decides what answers |
 
-**One capture register, one edge, same discipline.** The posted-write path is a
-rename, not a redesign.
+> ⚠ **Superseded — it is four capture registers, and the redesign is real.**
+> ~~**One capture register, one edge, same discipline.** The posted-write path is a
+> rename, not a redesign.~~ The "one register" figure was inherited from colormin,
+> where **VRAM is write-only through `WPTR`** — the address always came from the
+> card's own counter, so the CPU write contributed nothing but a data byte. §6.3 makes
+> this card's VRAM **flat-mapped**: a direct CPU write arrives carrying an arbitrary
+> **19-bit physical address** that exists nowhere else on the card, and it has to be
+> captured on the same edge as the data. The edge count is unchanged; the register
+> count is not. See §3.1.1.
+
+### 3.1.1 The posted-write path needs its address, not just its data
+
+The write is *posted*, not live: the CPU's cycle ends when E falls, and the write is
+retired into a free VRAM slot some time afterwards. The two clocks that matter:
+
+| Quantity | Value | Source |
+|---|---|---|
+| 6809E/6309E address hold after E-fall (`t_AH`) | ~20–30 ns | `reference/datasheets/HD6309E_datasheet.pdf` p.3 |
+| 6809E/6309E write-data hold after E-fall (`t_DHW`) | ≥ 30 ns | same |
+| Worst-case wait for a granted retire slot | **158.9 ns** (one full fetch slot) | §2.1, §5.2 |
+
+`158.9 ns > 30 ns`, so **a live-retire scheme — driving the VRAM address and data
+pins from the bus itself at retire time — does not work at any divisor.** By the time
+the granted slot arrives, the CPU has moved on: at ÷12 the next bus cycle's address is
+already going valid at `t_AD` = 160 ns, and at ÷8 the whole next cycle is 317.8 ns
+long, so the address on the bus during the retire is the *next* instruction's fetch
+address. There is no ordering of the arbitration that avoids this, because the write
+cannot be retired inside its own bus cycle without stalling the CPU, which is the one
+thing §5.2 exists to prevent.
+
+So everything the retire needs is latched at E-fall:
+
+```
+  physical A18..A0        19 bits   <- must be captured
+  VRAM select (qualified by /IOPAGE, §6.3)   1 bit
+  R/W                                        1 bit
+  WMODE[1:0] at capture time (§13)           2 bits
+  ------------------------------------------------
+                                            23 bits  ->  3 x '574
+  D7..D0                                     8 bits  ->  1 x '574  (the one §14 had)
+```
+
+**Four `74HC574`, not one** — three of them new, and §14 carries them. All four clock
+on the same inverted E; the "one edge" half of the original claim survives intact, and
+it is the only half that does.
+
+A depth-1 posted-write path is still the right shape: §2.1 gives one spare access per
+chip per slot, so the retire always finds a slot within 158.9 ns, and the CPU cannot
+issue a second write inside that window (the fastest 6309 store is 5 core cycles ≈
+2.4 µs at ÷12 — §7.3). The `SPANBUSY`/`/WAIT` backstop of §3.3 covers the case where
+the span writer holds the chip.
 
 **Reads are dramatically easier than on the 64x4.** backplane.md §4 gives the
 card 60 ns to drive data after `/MRD`·`/IOSEL`; minimal256.md §11 item 10 flags
@@ -158,20 +236,38 @@ open item.**
 
 ### 3.3 `/WAIT` becomes free, because the emulator is edge-driven
 
+*Naming, machine-wide:* **`/WAIT` asserts a wait state** — the motherboard's E/Q
+divider holds E low for one or more further E periods. This document previously called
+that "stretching E"; `docs/machine.md` uses "stretch" for the ÷8 clock rate, which is
+a different thing entirely, so the word is retired here. The ÷8 rate is **fast-E
+mode** (§5.1).
+
 plan.md §2.1 makes the emulator **purely edge-driven — no calibrated delays, no
 assumed E period, every action keyed off an observed transition.** That was
 written to survive the CoCo 3's runtime 0.895 ↔ 1.79 MHz switch. It has a second
 consequence in a machine you design:
 
-> **A stretched E cycle is transparent to `arm6309`.** The card can assert
-> `/WAIT`, the motherboard's E/Q generator holds E low for another few dots, and
-> the emulator simply observes a longer cycle. No emulator change, no new state.
+> **A `/WAIT`-extended E cycle is transparent to `arm6309`.** The card can assert
+> `/WAIT`, the motherboard's E/Q generator holds E low for **an integral number of
+> further E periods**, and the emulator simply observes a longer cycle. No emulator
+> change, no new state.
+
+**The granularity is not free, and §5.2 is why.** The static slot assignment works
+because E is derived from the dot clock by an integer divisor, so the CPU's access
+always lands in the same sub-slot phase. A wait state that extends E by an arbitrary
+number of dots destroys that phase and the CPU's access lands somewhere the sequencer
+has not reserved. **`/WAIT` must therefore extend E by an integral number of fetch
+slots, and the divider should implement it as an integral number of whole E periods**
+(3 slots at ÷12, 2 at ÷8), which is both stricter and simpler to build. Stated here
+because it is a requirement on the *motherboard's* divider, not on this card, and
+`docs/machine.md` is where it has to land.
 
 So colormin's `SPANBUSY` + `/WAIT` backstop (§4.2.1) transfers directly and is
 *less* exotic here than it was there — and it also becomes the fallback for VRAM
 reads at the higher clock (§11). A real HD63C09E would tolerate the same
-stretching, so this does not compromise the "drop a real 6309 in and it still
-works" property.
+wait states, so this does not compromise the "drop a real 6309 in and it still
+works" property. (⚠ That property is now qualified for a different reason — see §16
+item 8.)
 
 ---
 
@@ -212,14 +308,37 @@ Posted-write commits therefore cross domains through a 2-stage `'74`
 synchroniser, and the sequencer has to *search* for a free slot.
 
 You have no such constraint. **Put one 25.175 MHz oscillator in the machine and
-derive E and Q from it by division.**
+derive E and Q from it by division.** The oscillator lives **on the motherboard**,
+next to the divider — not on this card. `docs/machine.md` §0/§1 has always said so;
+§14 of this document used to list the same can inside the card's own budget, which
+would have meant that **pulling the video card kills E and stops the CPU**. Every
+bring-up ordering in §18 runs the bus before the video card exists (§16 item 1), so
+the oscillator cannot be a passenger on the card it is used to debug. The card
+receives the 25.175 MHz master from the backplane, which §17 already carries.
 
 ```
-25.175 MHz ──┬──► dot clock (video card)
-             │
-             └──► ÷12 ──► E at 2.0979 MHz   (Q = same divider, 3 dots early)
-                  ÷8  ──► E at 3.1469 MHz   (stretch mode, software-selectable)
+25.175 MHz  (motherboard)
+   │
+   ├──► backplane: master clock ──► dot clock (video card)
+   │
+   └──► ÷12 ──► E at 2.0979 MHz   (Q leads E by 90° = 3 dots)
+        ÷8  ──► E at 3.1469 MHz   (fast-E mode — experimental, §11)
 ```
+
+> ⚠ **"Q = same divider, 3 dots early" was stated unconditionally, and it is only
+> true at ÷12.** Q leads E by **90° of the E period**, and the E period is a
+> different number of dots at each divisor:
+>
+> | Divisor | E period | 90° | Q lead |
+> |---|---|---|---|
+> | ÷12 | 12 dots, 476.7 ns | 3 dots | **3 dots, 119.2 ns** |
+> | ÷8 | 8 dots, 317.8 ns | 2 dots | **2 dots, 79.4 ns** |
+>
+> A divider that emits a fixed 3-dot lead in both modes puts Q at 135° in fast-E
+> mode — a 45° phase error, which a real HD63C09E in the socket samples against
+> (`t_AVS`/`t_CSR` are referenced to Q, not to E). The divider's Q tap is therefore
+> **a function of the divisor**, one more product term in the motherboard's divider
+> GAL, and `docs/machine.md` must say so. §14's off-card line is corrected to match.
 
 Both divisors are integral in **fetch slots** (4 dots), which is the property
 that matters:
@@ -231,10 +350,21 @@ that matters:
 
 Against plan.md §3.3's measured numbers — post-read path ~13 core cycles, the
 §4.1 microcode step 14 typical / 25 worst — **dot ÷ 12 is comfortable and
-dot ÷ 8 is the same budget as the CoCo 3's 3 MHz stretch case** (56.7 cycles),
+dot ÷ 8 is the same budget as the CoCo 3's 3 MHz case** (56.7 cycles),
 which plan.md already declares reachable with the §3.6 read latch. Make the
 divisor a register bit and you have a CoCo-3-style runtime speed switch, which
 the emulator already has to tolerate.
+
+> ⚠ **÷12 is the specified rate; ÷8 is experimental.** `docs/machine.md` §5 records
+> the machine-wide decision: **E = 2.0979 MHz is the default AND the only rate the
+> machine is specified at.** Fast-E mode (÷8, 3.1469 MHz) is not guaranteed, because
+> three independent things break at it and only one of them is on this card:
+> flat VRAM read-back does not close (§11); a 2 MHz R6551A is 57 % over rating
+> (`io/serial/docs/serial.md`); and 317.8 ns is below the real HD63C09E's **333 ns
+> `t_cyc` minimum**, so the drop-in silicon A/B reference cannot be captured at that
+> rate with a rated part. The divider still builds both — the hardware cost of
+> keeping ÷8 available is one product term — but nothing in this document may assume
+> it, and the ÷8 column below is retained as analysis, not as specification.
 
 ### 5.2 What phase-locking buys
 
@@ -242,13 +372,96 @@ Because E is *derived from* the dot clock, the CPU's bus cycle sits at a **fixed
 phase relative to every video fetch**. That converts arbitration from a search
 into an assignment:
 
-- The CPU's access lands in a known slot, on the chip selected by
-  `address[1:0]`. The sequencer **reserves** it rather than hunting for it.
-- The other three chips' spare accesses in that slot go to the span writer or the
-  blitter, by a wire, not a state machine.
+- The CPU's access lands in a known slot, **in a known sub-slot phase** (see
+  below), on the chip selected by `address[1:0]`. The sequencer **reserves** the
+  phase rather than hunting for it.
+- ~~The other three chips' spare accesses in that slot go to the span writer or the
+  blitter, by a wire, not a state machine.~~ ⚠ **Wrong — see §5.2.1.** *Which* chip
+  the CPU takes is dynamic, so "the other three" is a per-access computation.
 - **The `'74` synchroniser disappears.** There is no domain to cross.
 - minimal256.md §8's "commit: sync (2 stages) + slot arbitration ≥ 200 ns" row
   vanishes from the timing table.
+
+#### 5.2.1 "The other three chips" is a compare, not a wire
+
+Phase-locking fixes **when** the CPU's access happens. It says nothing about **which
+of the four chips it lands on**, and it does not even say **whether it happens** —
+the overwhelming majority of bus cycles are instruction fetches and system-RAM
+accesses that never assert the card's VRAM select at all. Three facts, none of them
+static:
+
+1. The CPU's chip is `physical address[1:0]` — a new value on every bus cycle.
+2. The span writer's current chip is *its* pointer's `[1:0]`, advancing every access.
+3. The CPU's access may be absent, in which case all four chips are spare and the
+   span writer should get the extra one rather than idling a slot.
+
+So the span writer may use a chip only after a **live compare** of the CPU's low
+address bits against its own. That is a small combinational arbiter, and it has to be
+budgeted:
+
+```
+  VREQ     = VRAMSEL . /IOPAGE          (§6.3 — the CPU wants VRAM this cycle)
+  CPUCHIP  = phys A[1:0]
+  SPNCHIP  = WPTR[1:0]                  (span writer / list engine pointer)
+
+  for chip n in 0..3:
+      GRANT_CPU[n]  = VREQ . (CPUCHIP == n)
+      GRANT_SPAN[n] = SPNREQ . (SPNCHIP == n) . /GRANT_CPU[n]
+      SRCSEL[n]     = GRANT_CPU[n]      (mux the chip's address/data source)
+```
+
+Eight product terms of the form *(2-bit compare)·(request)* plus four inversions —
+comfortably inside one GAL22V10's product-term budget, but it needs **eight outputs
+plus the four `SRCSEL` lines = 12 macrocells**, and the sequencer pair (§14) is
+already carrying static slot assignment, span control, register-file addressing and
+mux phasing. **Budget one more `GAL22V10` for the spare-access arbiter** — the card
+goes from 8 GALs to **9** — rather than pretending it fits in a pair that §19 item 8
+already flags as the tightest fit on the board.
+
+The arbitration *priority rule* is unchanged; what changes is the honest admission
+that the CPU tier is static in **time** and dynamic in **space**, and only the first
+half of that was ever a wire.
+
+#### 5.2.2 Sub-slot ordering: the spare access goes **first**
+
+This is a specification sentence, and §11's read budget does not close without it.
+
+Within a 158.9 ns fetch slot a chip has room for exactly two 72 ns accesses
+(2 × 72 = 144 ns ≤ 158.9 ns), and their order is a free choice for the sequencer.
+**The choice is made here: the CPU/spare access occupies the FRONT half of the slot,
+the display fetch the back half.**
+
+| Ordering | CPU access window in the slot | §11 read completes at | Deadline | Verdict |
+|---|---|---|---|---|
+| **Spare first** (specified) | 0 → 72 ns | **409.8 ns** | 456.7 ns | **+46.9 ns** ✓ |
+| Video first | 72 → 144 ns | 481.8 ns | 456.7 ns | **−25.1 ns** ✗ |
+
+The full derivation is in §11. Two things follow:
+
+- The "video → CPU → list engine → span → blit" priority of §2.2 is a **priority**
+  rule, not a **temporal** one. Read plainly it implies video-first, which is the
+  ordering that misses by 25 ns; the rule ranks who gets a contested access, not who
+  goes first in an uncontested slot. Both wordings now appear so the distinction
+  cannot be lost again.
+- Spare-first is also what the **fetch-latch clocking** wants. Each chip's display
+  fetch `74AHCT574` is clocked at the end of *that chip's own* fetch, and its output
+  must then be stable for the whole of the next slot's four pixel times. With the
+  spare access first and the fetch second the clock edge lands at **144 ns into the
+  158.9 ns slot** — 14.9 ns of settling before the boundary, and comfortably clear of
+  the spare access's own bus activity. Two properties follow and both are
+  specification, not preference:
+
+  > **Fetch-latch clocking is per-chip and mid-slot.** *Per-chip*, because §5.2.1
+  > grants each chip's spare access independently, so the four chips' bus turnarounds
+  > are not identical, and because §6.4's tile mode gives them different fetch
+  > cadences; a common slot-rate clock would have to be timed for the worst chip in
+  > the worst mode. *Mid-slot*, because a clock on the slot boundary has no settling
+  > margin and is the same edge that reloads the address counters.
+
+  Video-first inverts this: the fetch would complete at 72 ns and the latch would sit
+  through the spare access's turnaround before its data is used, which is survivable —
+  it is the read budget, not the latch, that decides the ordering. But the latch has
+  no reason to prefer the other order, so nothing pulls against §11.
 
 The arbitration *priority rule* of blitter.md §2.3 still applies to the three
 requesters that remain dynamic (list engine, span writer, blit datapath). Only
@@ -259,7 +472,8 @@ stall.
 ÷12 ↔ ÷8 switch, or a speed change lands the CPU slot in the wrong phase for one
 cycle. Gate the divisor change to vertical blank — the same discipline
 minimal256.md §11 item 2 recommends for its clock switch, for the same reason,
-but now on a signal you own.
+but now on a signal you own. The same argument applies to `/WAIT`, which is why §3.3
+constrains it to whole E periods.
 
 ### 5.3 `arm6309` stays clock-slaved — do not make it the clock master
 
@@ -347,6 +561,43 @@ either way. The only cost is memory, and 512 KB covers even 640×480 single-buff
 640×480×8bpp on a 6309 is not a mode any period machine had. It is available for
 one bit in `CTRL` and a couple of terms in the V-sync GAL, so take it.
 
+#### 6.2.1 Sync polarity is part of the mode, and it must switch with it
+
+**A VGA monitor identifies the vertical format by the polarity of the sync pulses,
+not by counting lines.** This is the whole of the VGA/VESA mode-identification
+mechanism at these two timings, and both of this card's `VMODE` families are on it:
+
+| Mode | Dots × lines | HSYNC | VSYNC | What the monitor concludes |
+|---|---|---|---|---|
+| 640×400 @ 70 (`VMODE` 000, 010) | 800 × 449 | **negative** | **positive** | 400-line text format; picture sized to 400 active lines |
+| 640×480 @ 60 (`VMODE` 001, 011) | 800 × 525 | **negative** | **negative** | 480-line graphics format |
+
+The two timings share a dot clock, a line rate to within 0.06 %, and an HSYNC
+polarity. **Polarity of VSYNC is the only thing that distinguishes them at the
+connector.** Get it wrong and the monitor picks the other format's vertical size and
+centring: a 449-line picture displayed against a 480-line template is short, high, and
+letterboxed, and no amount of correct pixel timing fixes it, because the fault is in
+the identification and not in the raster.
+
+So VSYNC polarity is **a function of `VMODE`**, not a constant:
+
+```
+  VPOL   =  VMODE[0]                       ; 0 -> 449-line family, 1 -> 525-line
+  VSYNC  =  VSYNC_raw  XOR  VPOL           ; raw = active-high pulse window
+  HSYNC  =  HSYNC_raw  XOR  HPOL           ; HPOL tied to 1 (negative) in both
+```
+
+**Cost in the sync GAL pair, stated properly**, because §19 item 8 is already the
+tightest fit on the card and this lands on it. A 22V10's macrocells have unequal
+product-term allocations (8, 10, 12, 14, 16, 16, 14, 12, 10, 8). `VSYNC_raw` is a
+window compare on the V line counter, and the window differs per mode: two terms per
+mode over the four `VMODE` values = **4 product terms**. Expressed as sum-of-products,
+`A XOR B` is `A·/B + /A·B`, so the polarity multiplexing **doubles** it to **8 product
+terms** on the VSYNC macrocell. That macrocell must be placed on one of the pair's
+16-term positions, and the same reasoning applies to HSYNC even though `HPOL` is
+strapped — carrying the term costs nothing at fit time and makes an out-of-spec
+monitor a one-JEDEC fix instead of a respin. Recorded against §19 item 8's arithmetic.
+
 ### 6.3 The 64 KB problem — and why the `BANK` register goes away
 
 This is the one architectural question colormin never had to answer: the 64x4 has
@@ -363,8 +614,10 @@ did not survive the single-SKU argument.
 physical A19..A13  <-- MMU block map, 8 blocks x 8 KB, per task
 physical A12..A0   <-- logical A12..A0, untranslated
 
-A19 = 0  : 512 KB system RAM
-A19 = 1  : 512 KB VRAM  (the video card's 1024 x 512 ring)
+A19 = 0  : 512 KB system RAM      } both qualified by /IOPAGE high
+A19 = 1  : 512 KB VRAM            } (the video card's 1024 x 512 ring)
+
+card VRAM select = A19 . /IOPAGE(high) . E . (no other card asserting)
 ```
 
 Why in the CPU rather than as three chips on the motherboard:
@@ -393,13 +646,16 @@ Why in the CPU rather than as three chips on the motherboard:
    window. Any of the eight MMU blocks can be pointed at VRAM, so up to 64 KB of
    framebuffer is directly addressable at once — strictly better than a 16 KB
    window with a bank register, and it is what makes §11's readable VRAM useful.
+3. **That chip select must be qualified against `/IOPAGE`.** ⚠ This document
+   originally wrote consequence 2 as "physical A0–A18 plus a chip select" and stopped
+   there, which is an unsafe card. See §6.3.2.
 
 `WPTR` stays. The auto-incrementing 19-bit pointer is the streaming path and the
 span writer's address source; the MMU is the random-access path. Two paths on
 purpose, exactly as colormin argues — just with the MMU doing the job `BANK` used
 to do badly.
 
-### 6.3.1 The MMU goes on the motherboard — 3 ICs, and one LQFP48 SKU serves both machines
+### 6.3.1 The MMU goes on the motherboard — 5 ICs, and one 48-pin SKU serves both machines
 
 **Decided.** The recommendation above stands as *analysis* — an in-CPU MMU really is
 free in parts, and it really is the easier route to GIME register compatibility — but
@@ -415,21 +671,88 @@ in [`machine.md`](../../docs/machine.md) §5 item 6.
 > covers both targets. The 48-pin part is also the cheaper and the more available of
 > the two — which matters for a board that gets built in ones and twos.
 
-**The three ICs** (period-honest, and what a 1990 machine would really have done — the
-SAM/GIME/DAT arrangement):
+> ⚠ **Superseded — the three-IC list cannot be wired.** The list below stood as
+> ~~"the three ICs"~~ for one revision and it is short by two packages, for two
+> independent reasons that both come from the same place: a **common-I/O** SRAM has
+> one set of pins doing two jobs, and a **translate-mode** address that is wrong
+> during the very cycle that writes it.
+>
+> 1. **Data-bus conflict.** The map SRAM's data pins *are* its outputs, driving
+>    physical A13–A19. To write an entry, CPU `D0–D7` must reach those same pins. If
+>    they sit on the A13–A19 net, CPU data can never get to them; if they sit on
+>    `D0–D7`, then physical A13–A19 **are** `D0–D7` at all times. There is no wiring
+>    that satisfies both — the SRAM needs an **isolation buffer** between its common
+>    I/O and one of the two nets, with break-before-make output-enable discipline.
+> 2. **Missing address mux.** In translate mode the SRAM is addressed by
+>    `{TASK, A15..A13}`. But when the CPU writes entry N at `$FFA0+N`, logical
+>    A15..A13 = **111** — it is the I/O page, by construction — so the write would
+>    land in entry 7 of the current task, whatever N was. The entry index during a
+>    map write must come from **A3..A0**. That is a 4-bit 2:1 mux, and it was not in
+>    the list.
+>
+> **The mux cannot be folded into the GAL.** The tempting escape is to make the GAL
+> emit the four SRAM address lines itself. Count the inputs it would then need:
+> a 12-bit `$FFAx` decode + 4 index bits (A3..A0) + `TASK` + `E` + `R/W` = **19**,
+> against a GAL22V10 whose 22 input pins are only fully available when few macrocells
+> are used as outputs — and this GAL must already produce the SRAM `/WE`, the buffer's
+> two direction/enable controls, the mux select, the map `/OE`, the `'574` clock and
+> the I/O-page term. At that output count the usable input pins do not reach 19. The
+> mux is a package.
+>
+> **The period-honest precedent says the same thing.** §15 dates "MMU as an SRAM
+> block map" to the **SWTPc DAT (1980)** — and the DAT used **74LS189-class register
+> files**, which have *separate data-in and data-out pins*, precisely so that no
+> isolation buffer is needed. A 2K×8 commodity SRAM with common I/O is the modern,
+> cheap, wrong-shaped part, and the buffer is the price of using it.
+
+**The five ICs** (period-honest, and what a 1990 machine would really have done — the
+SAM/GIME/DAT arrangement, with the DAT's separate-port register file replaced by a
+commodity SRAM and the buffer that substitution costs — §15). This is the count
+`docs/machine.md` §5 item 6 carries:
 
 | Qty | Part | Role |
 |---|---|---|
-| 1 | 2K×8 SRAM, **15 ns** | the block map, addressed by `{TASK, A15..A13}`, outputting physical A13..A19 |
-| 1 | `74HC574` | task select and MMU enable — two bits, at addresses this machine picks (see below), not the GIME's `$FF90`/`$FF91` |
-| 1 | GAL (or `'138` + gate) | write decode: steer CPU writes into the map SRAM, and generate the I/O-page override |
+| 1 | 2K×8 SRAM, **15 ns** | the block map, addressed by `{TASK, A15..A13}` in translate mode, outputting physical A13..A19 |
+| 1 | `74HC574` | task select, MMU enable, and the §6.3.3 shadow-ROM disable — three bits, at addresses this machine picks (see below), not the GIME's `$FF90`/`$FF91` |
+| 1 | `GAL22V10` | write decode, the `/IOPAGE` term, and the control sequencing of the two parts below |
+| 1 | `74HC245` | **isolation** between the SRAM's common I/O and `D0–D7`, break-before-make |
+| 1 | `74HC157` | **quad 2:1 mux** on the SRAM address: `{TASK, A15..A13}` in translate mode, `A3..A0` during a map write |
 
 Sixteen of the SRAM's 2048 locations are used. A 2K×8 is specified anyway because a
 15 ns one is a stocked commodity part and a 16×8 is not.
 
+**The map-write cycle, drawn.** This is the sequence the GAL exists to run, and it is
+the part the three-IC list left unstated. Assume `E` high, `R/W` low, the decode
+`$FFAx` true:
+
+| Phase | Mux select | `'245` direction / `/OE` | SRAM `/OE` | SRAM `/WE` | Physical A13–A19 |
+|---|---|---|---|---|---|
+| Idle (translate) | `{TASK,A15..A13}` | **disabled** | asserted | high | the translation — valid |
+| Map write, setup | switches to `A3..A0` | disabled | **de-asserted first** | high | parked (see below) |
+| Map write, drive | `A3..A0` | `B→A`, enabled onto SRAM I/O | de-asserted | high | parked |
+| Map write, strobe | `A3..A0` | enabled | de-asserted | **asserted** | parked |
+| Map write, release | `A3..A0` | `/WE` released, then **disabled** | still de-asserted | high | parked |
+| Idle (translate) | back to `{TASK,...}` | disabled | re-asserted **last** | high | the new translation |
+
+Two orderings are load-bearing and neither is optional:
+
+- **Break before make.** The SRAM's `/OE` is de-asserted *before* the `'245` is
+  enabled, and the `'245` is disabled *before* the SRAM's `/OE` is restored. Two
+  drivers on the SRAM's I/O pins for even one propagation delay is a through-current
+  event on every map write, and NitrOS-9 Level 2 writes the map on every task switch.
+- **What physical A13–A19 carry during the write.** They carry the **parked** pattern,
+  not a translation and not the CPU's data: a map write is a `$FFAx` cycle, so
+  `/IOPAGE` is asserted for the whole of it (§6.3.2), and `/IOPAGE` is exactly what
+  gates the map SRAM's `/OE` and every physical-memory decode in the machine. System
+  RAM and this card's VRAM are both inhibited for the duration, so the backplane's
+  A13–A19 being indeterminate during the write is harmless **because nothing is
+  listening**. Without `/IOPAGE` this cycle would post a write into whatever block 7
+  currently points at — which is the same failure §6.3.2 describes, arriving through
+  the MMU's own front door.
+
 **Pin budget, this machine, both ways.** From plan.md §3.2's 39 usable pins:
 
-| | in-CPU MMU | external 3-IC MMU |
+| | in-CPU MMU | external 5-IC MMU |
 |---|---|---|
 | `A0..A15` | 16 | 16 |
 | `A16..A19` | **4** | 0 — the map SRAM emits A13..A19 |
@@ -437,12 +760,22 @@ Sixteen of the SRAM's 2048 locations are used. A 2K×8 is specified anyway becau
 | `R/W`, `E`, `Q` | 3 | 3 |
 | `/RESET`, `/NMI`, `/IRQ`, `/FIRQ`, `/HALT` | 5 | 5 |
 | `BUS_OE` | 1 | 1 |
-| HSYNC in, for §12.2's raster compare | 1 | 1 |
-| **Used, of 39** | **38** | **34** |
-| Spare | 1 | **5** — debug UART, status LED, and one left |
+| HSYNC **and VSYNC** in, for §12.2's raster compare | 2 | 2 |
+| **Used, of 39** | **39** | **35** |
+| Spare | **0** | **4** — debug UART, status LED, and two left |
 
 plan.md §3.2 now carries the same arithmetic with the UART and LED counted as line items
-rather than as spares; the two tables agree at 39 either way.
+rather than as spares; the two tables agree at 39 either way. ⚠ The HSYNC row was one
+pin when this table was first written; §12.2 shows that a raster line *number* needs a
+frame origin as well as a line clock, so it is two. The in-CPU column now has no spare
+at all, which sharpens rather than changes the conclusion.
+
+⚠ **Package, per `docs/machine.md` §5 item 6:** the part is the **STM32G431CBU6
+(UFQFPN48)**, not the CBT6 (LQFP48) this section originally named. Same die, same 48
+pins, same firmware — but the LQFP48 bonds out only 38 GPIO and does not carry
+`PC4`/`PC6`/`PC10`/`PC11`, which is where `BA`, `BS` and the debug UART live. The
+one-SKU argument below is unaffected in every particular; read "LQFP48" as
+"48-pin part" throughout.
 
 Nothing else in the machine asks the CPU module for a pin. Audio, PS/2, serial and
 storage are all bus cards behind geographic `/IOSEL`, and their interrupts wire-OR onto
@@ -507,9 +840,67 @@ diverges from the GIME at the video registers, the interrupt block, and now the 
 hour is per-subsystem, and nothing here says the *sum* is an hour. It does say the MMU is
 not the reason to choose a package.
 
-**What it costs, then.** Three ICs and their board area, a write-decode GAL that is
+**What it costs, then.** **Five ICs** and their board area, a write-decode GAL that is
 harder to change than firmware, and a NitrOS-9 memory-manager patch the owner has
-priced.
+priced. With the motherboard's E/Q divider GAL that is **six packages of motherboard
+logic**, plus the 25.175 MHz master oscillator (§5.1) which now also lives there —
+seven parts in total. The pin argument that decided the question is unaffected: five
+ICs outside the CPU still buys back A16–A19 and still lets one LQFP48-class SKU serve
+both machines, which was always the point.
+
+### 6.3.2 `/IOPAGE` — why a flat VRAM map is unsafe without it
+
+`$FF00`–`$FFFF` **overrides MMU translation by design** (§6.3.1 detail 1), exactly as
+it does on a CoCo 3. But overriding translation does not stop the map SRAM emitting
+*something* onto physical A13–A19; as originally drawn it keeps emitting the current
+task's block-7 translation throughout the I/O cycle. §6.3 explicitly permits **any**
+MMU block to point at VRAM. Therefore, for a task whose logical `$E000`–`$FFFF` is
+mapped to VRAM, **every single I/O access in the machine also looks like a valid VRAM
+access to this card**:
+
+| CPU does | Card sees | Result |
+|---|---|---|
+| Read `$FF73` (`VSTAT`) | A19 = 1, a stale physical A18–A0, `R/W` high | The addressed card **and** VRAM both drive D0–D7. Electrical double-drive, every I/O read. |
+| Write `$FF41` (audio) | A19 = 1, a stale physical A18–A0, `R/W` low | A posted VRAM write is captured and retired. Silent framebuffer corruption, every I/O write. |
+
+The card cannot compute the inhibit for itself: the term is `logical A15..A13 = 111`
+and logical A13–A15 are **deliberately not on the backplane** — they terminate at the
+map SRAM's address inputs on the motherboard (§6.3.1, `docs/machine.md` §2).
+
+**The fix is one backplane signal**, and it must exist before the backplane is etched:
+
+> **`/IOPAGE`** — motherboard-generated, active-low, asserted for the whole of any
+> logical `$FF00`–`$FFFF` bus cycle. It is the term the motherboard already forms to
+> generate `/IOSEL`, so it costs a pin and a buffer, not logic.
+
+Three consumers, all mandatory:
+
+1. **This card's VRAM select** gains `. /IOPAGE(high)`. One product term in the
+   sequencer pair's decode; it must also gate the **posted-write capture** (§3.1.1),
+   not only the read path, or the write is captured and retired after the fact.
+2. **System RAM's select** gains the same qualification (`docs/machine.md`).
+3. **The map SRAM's own output enable** is gated by `/IOPAGE`, so physical A13–A19 are
+   *parked* at a defined pattern during an I/O cycle rather than carrying a stale
+   translation. That is what makes the map-write cycle of §6.3.1 safe as well.
+
+### 6.3.3 Vector fetches, and what answers at `$FFF0`–`$FFFF`
+
+The same override has a second consequence this document did not draw: with
+`$FF00`–`$FFFF` bypassing translation, and the only I/O-page decodes being
+`$FF40`–`$FF7F` (geographic) and the MMU's own window, **nothing on the backplane
+answers a vector fetch at `$FFF0`–`$FFFF`.** The 6309 reads its reset vector from an
+undriven bus. That is not a video problem, but it is a video *constraint*, because
+the obvious repair (map a ROM into physical space) collides with §6.3's "`A19` = 0
+RAM, `A19` = 1 VRAM" map, which reserves zero bytes for one.
+
+**The machine's answer is CPU-module shadow ROM** (`docs/machine.md` §5 item 0):
+`$FFF0`–`$FFFF` is served from 16 bytes of internal vector RAM in the STM32, always
+on and writable through the MMU window; `$E000`–`$FEFF` is served from internal flash
+at reset and switched off by a bit in the MMU window once the OS is up; and
+`$FF00`–`$FFBF` continues to decode normally to cards and the MMU throughout, so this
+card's registers work during boot. **Nothing on the video card changes** — the
+physical map keeps both halves, no carve-out is needed, and `/IOPAGE` keeps the card
+quiet during all of it. What it does cost is §16 item 8; see there.
 
 ---
 
@@ -638,8 +1029,8 @@ item 8 already flags:
 - The **scan-address pair** must switch between a linear scan address and the
   concatenated tile address, and tri-state its low outputs during the tile fetch.
 
-**Budget +1 to +2 GAL22V10** — 38–40 packages against Rev A's 36 — and fit both
-pairs before committing. This is the item most likely to fail (§19 item 15).
+**Budget +1 to +2 GAL22V10** — **41–43 packages against Rev A's 40** (§14) — and fit
+both pairs before committing. This is the item most likely to fail (§19 item 15).
 
 Against that, two things get cheaper:
 
@@ -832,10 +1223,12 @@ software awareness of the LUT. You have satisfied the constraint literally, and
 you keep fades, palette cycling, per-scanline gradients, optimal per-image 256-of-65,536
 quantisation, and blitter.md §8's "higher value per IC than the blit datapath".
 
-**Cost, honestly stated:** +4 ICs net (2 LUT SRAM, 2 output `'574`, 1 `'593` index
-counter, −1 because the `'244` mode-bypass is deleted anyway), 15 ns SRAM instead
-of 20 ns, and it is the **tightest remaining path in the dot pipeline** at 39.7 ns
-(28 ns used, 11.7 ns margin — §6.1). If the bench says that path does not close,
+**Cost, honestly stated:** +4 ICs net (2 LUT SRAM, 2 output registers — `74AHCT273`,
+not `'574`, see §9.2 — 1 `'593` index counter, −1 because the `'244` mode-bypass is
+deleted anyway), 15 ns SRAM instead of 20 ns, and it is the **tightest remaining path
+in the dot pipeline** at 39.7 ns (28 ns used, 11.7 ns margin — §6.1). The analog stage
+that turns the LUT's output into a VGA signal is §9.1, and it was missing from every
+earlier version of this document. If the bench says that path does not close,
 the retreat is clean and already specified: drive the ladders straight from the
 pixel bus as RGB332 with 3/3/2 R-2R ladders, and software does not change at all,
 because it was already writing RGB332 indices.
@@ -849,22 +1242,164 @@ upgrade you can never add without changing all of it.
 substitutes only at the cost of single-entry palette patching. Confirm
 availability before freezing the register map — that item transfers unchanged.
 
+### 9.1 The drive stage — the ladders cannot face the connector on their own
+
+> ⚠ **Neither this document nor colormin's ever specified what drives the VGA
+> connector.** "3 × R-2R SIP, 5/6/5 ladders" (§14) is the entire analog back end as
+> listed, and it is not buildable. The arithmetic below is why, and it is the
+> arithmetic that was missing.
+
+**What VGA asks for.** The RGB lines are **double-terminated 75 Ω**: a 75 Ω source
+impedance at the card driving a 75 Ω termination inside the monitor, with peak white
+**0.700 V** *at the load*. Sync is not on these lines — HSYNC and VSYNC are separate
+TTL pins — so RGB has no sync tip and the whole 0 → 0.7 V range is picture.
+
+```
+  loaded peak white          0.700 V into 75 ohm
+  open-circuit swing needed  1.400 V   (the divider halves it)
+  current at peak white      1.400 V / 150 ohm = 9.33 mA per channel
+  three channels, peak       28.0 mA;  ~14 mA average on typical picture
+```
+
+**Why a bare ladder cannot do it.** An R-2R ladder's Thevenin output impedance is `R`,
+independent of code. To *be* the 75 Ω source, the ladder must be built with
+`R = 75 Ω`, hence `2R = 150 Ω` in every leg:
+
+```
+  MSB leg current, 5 V logic:  5 V / 150 ohm = 33.3 mA
+  74AHCT574 output rating:                    +/- 8 mA
+                                              -> 4.2x over rating
+```
+
+That is not a margin question. The pin does not source 33 mA; it sags, and it sags by
+a **code-dependent** amount because the ladder node it is fighting moves with the
+code. On the 6-bit green channel one LSB is `0.700 / 63 = 11.1 mV` and an AHCT output
+overdriven to 8 mA is already 0.3–0.5 V below rail — **tens of LSBs of error**, so
+§18 step 1's "DNL measured across all 64 green codes" cannot even be attempted.
+
+**The fix: a high-impedance ladder and an emitter follower per channel.** Raise `R`
+until the logic drives it comfortably, then buffer, then set 75 Ω with a series
+resistor:
+
+| Element | Value | Arithmetic |
+|---|---|---|
+| Ladder `R` / `2R` | **1.00 kΩ / 2.00 kΩ**, 1 % | worst-case per-pin current `5 V / 2.00 kΩ` = **2.5 mA** ≤ 8 mA ✓ |
+| Ladder node settling | ~287 Ω after the divider, ~15 pF stray | `τ` = 4.3 ns, `3τ` = 13 ns < the 39.7 ns dot ✓ |
+| Base divider `R_shunt` | **402 Ω**, 1 % | `4.85 V × R/(1000+R) = 1.40 V` → `R = 406 Ω` |
+| Buffer | **3 × NPN emitter follower**, β ≥ 300 (BC547C class) | `I_b = 9.33 mA / 300 = 31 µA` into 287 Ω = **8.9 mV = 0.8 LSB** green |
+| Series source | **75 Ω**, 1 % | with the monitor's 75 Ω gives the 2:1 divider assumed above |
+| Follower dissipation | `(5 − 1.4) V × 9.33 mA` = **33.6 mW** at peak white | TO-92 ✓ |
+
+Two properties this buys that the bare ladder does not have, and they are the reason
+it is worth three transistors:
+
+- **Per-pin current is now bounded by the leg alone, not by the load**, so there is no
+  code-dependent sag at all. DNL becomes a resistor-tolerance question: 1 % on the MSB
+  leg is ±0.5 % of full scale = ±3.5 mV = **±0.32 LSB** on the 6-bit channel, so the
+  converter is monotonic by construction. A matched SIP network does better still.
+- **Bandwidth is set by the base node, not the connector.** A 2N3904/BC547 at 10 mA
+  has `f_T` ≈ 300 MHz against the 25.175 MHz dot rate; the 13 ns ladder settling above
+  is the binding number, and it fits inside the dot.
+
+**Black level, and the one subtlety.** An NPN follower into a resistive-to-ground load
+cuts off as its emitter approaches 0 V, so the bottom code or two are nonlinear.
+Return the ladder's `2R` legs to a **+V_be reference** — one forward-biased diode of
+the same family, thermally coupled to the three transistors, shared across all three
+channels — so code 0 puts each base at `V_be` and each emitter at **0.000 V** with the
+device just conducting. Residual mismatch between the shared diode and the three
+`V_be`s is ±20–30 mV at the base, ~±2 LSB of green, and §9.2 removes even that: the
+blanking level and the black level travel the **identical** path, so the monitor's
+back-porch clamp subtracts the residual exactly. That is the argument for doing
+blanking after the LUT rather than anywhere else.
+
+**Parts.** 3 × NPN, 1 × diode, 3 × 75 Ω, 3 × 402 Ω, 3 × bias resistors, plus the three
+R-2R SIPs already listed. **No ICs** — they go on §14's discrete line, and their ~40 mA
+peak goes into §14's power total. The modern alternative, a monolithic triple video
+buffer, is one package and is not period; recorded so the choice is deliberate.
+
+### 9.2 Blank-to-black — a mechanism, not an assumption
+
+**RGB must sit at 0 V for the whole of both porches and the sync interval.** This is
+not cosmetic: a VGA monitor establishes its black reference by **clamping on the back
+porch**. Whatever voltage is present there *becomes* black, so a card that leaves the
+last active pixel's colour on the ladders during the back porch has told the monitor
+that that colour is black, and the entire picture shifts against it, per line, with
+the content.
+
+Two mechanisms that look like they solve it and do not:
+
+- ~~**`/OE` on the post-LUT latch.**~~ Three-stating the register **floats** the
+  ladder's inputs. A floating R-2R ladder does not output 0 V; it outputs whatever
+  leakage and stray coupling give it, which is undefined, drifts, and is not black.
+- ~~**Force palette index 0 during blanking.**~~ Wrong for a reason specific to this
+  card: **palette entry 0 is programmable**. §9's boot identity palette happens to put
+  black there, but a fade-to-white, a per-image quantisation, or a palette-cycling
+  effect can put any of 65,536 colours in entry 0, and the porches would be painted
+  with it.
+
+**Blanking must therefore act *after* the LUT**, on the last register before the
+ladders — and it costs nothing:
+
+> **Specify the two post-LUT output latches as `74AHCT273`, not `74AHCT574`.** Same
+> 8-bit D register, same family, same speed grade; the `'273` has an asynchronous
+> `/MR` that forces all eight outputs to **0**, where the `'574` has an `/OE` that
+> forces them to nothing. `/MR` is driven by the registered `BLANK` term already
+> produced by the sync GAL pair (§14). The post-LUT latch drives only the ladders and
+> never a bus, so the `'574`'s output enable was unused anyway. **Zero packages,
+> zero GAL macrocells** — `BLANK` exists already.
+
+Timing: `BLANK` is a *registered* GAL output, so it changes on a dot-clock edge and
+`/MR` therefore asserts on a dot boundary; `74AHCT273` `/MR`-to-output is ~7 ns
+against the 39.7 ns dot, so the first blanked dot is fully black and the first active
+dot after the back porch is fully coloured. Both ladders go to all-zeros together,
+which through §9.1's `V_be`-referenced return is 0.000 V at the connector.
+
+### 9.3 `BORDER` (+$16) is deleted, and here is why
+
+The register at `+$16` was carried over as "border/overscan palette index". **VGA
+timing has no overscan.** A 640×400@70 line is 800 dots: 640 active, then front porch,
+sync, back porch. There is no region of the raster into which a border colour can
+legally be painted, and painting one into the porches is precisely the back-porch
+clamp corruption §9.2 exists to prevent — a *worse* artefact than having no border.
+
+The honest alternative is a **reduced active window**: display, say, 608×384 of
+picture inside the 640×400 active area and paint the 16-pixel margin. It costs more
+than it looks:
+
+| What it needs | Where it lands | Status |
+|---|---|---|
+| Two more window compares (H and V) with programmable edges | sync GAL pair | §19 item 8 — the pair is already at zero macrocell margin (§19 item 8's arithmetic) |
+| A border index register and its decode | register file | free |
+| **A path to inject the border index into the pixel stream** | the `'153` pixel mux | **there is none** — all four `'153` inputs are the four framebuffer chips |
+
+The last row is the blocker. Injecting a fifth source means restructuring the 4 × `'153`
+into an extra mux rank, inside the 39.7 ns dot path that §6.1 already identifies as
+the tightest on the card, to buy a feature the framebuffer gives away for free.
+
+**Decision: delete the register.** The torus is 1024 columns wide against a 640-pixel
+window and 512 rows against 400 (§8), so a border is a **fill in off-screen memory**
+positioned by `HSCROLL`/`VSCROLL` — one span-solid write per row, at zero hardware
+cost and with all 256 colours, changeable per scanline from the list engine. `+$16`
+is handed back to the reserved block in §13. The one thing genuinely lost is a border
+that costs no VRAM, and this card has 384 spare columns; it is not short of VRAM.
+
 ---
 
 ## 10. Blitter, list engine, and the instruction the 64x4 doesn't have
 
 ### 10.1 The GAL wall, stated plainly
 
-blitter.md §6.2 already flags it: the card is 8 GALs, the full blitter adds 10,
+blitter.md §6.2 already flags it: the card is ~~8~~ **9** GALs (§14 — §5.2.1's
+spare-access arbiter is the ninth), the full blitter adds 10,
 and **"eighteen GAL22V10s is the point where the honest question becomes 'why not
 one CPLD'."** You have answered that question — no CPLDs — so the consequence is
 yours to accept rather than to route around:
 
 | Build | GALs | Card ICs (with `'153` mux) |
 |---|---|---|
-| Rev A: framebuffer + span writer + palette + read-back | **8** | **36** |
-| + list engine (the copper) | 10 | 41 |
-| + blit datapath | **~20** | ~55 |
+| Rev A: framebuffer + span writer + palette + read-back | **9** | **40** |
+| + list engine (the copper) | 11 | 45 |
+| + blit datapath | **~21** | ~59 |
 
 18–20 GAL22V10s is not just a fitting problem, it is a **power and area problem**:
 at ~70–90 mA each that is 1.3–1.8 A of GAL alone, on a card that already carries
@@ -945,24 +1480,88 @@ That last row is the decisive one: **without read-back, a windowing OS must keep
 machine where memory is the second-scarcest resource after CPU.
 
 **What it costs:** one `'574` read latch (shared with the blit datapath later) and
-decode terms. Timing:
+decode terms.
+
+> ⚠ **The original budget was a sum, and a sum hides the ordering.** It read
+> ~~`decode 15 + slot alignment <=158.9 + access 72 + latch/drive 20 = ~266 ns`
+> against `~297 ns`, OK~~ — a total-versus-total comparison with an inequality inside
+> it, which is exactly the shape that cannot distinguish a path that closes from one
+> that does not. Re-derived **by phase** below, the read closes at ÷12 with 46.9 ns
+> to spare **only under §5.2.2's spare-first sub-slot ordering**; under the video-first
+> ordering that §2.2's "video → CPU" priority reads as, it misses by 25.1 ns. The
+> sum also omitted the **15 ns the map SRAM adds** to physical A13–A19 (§6.3.1),
+> because "decode 15" was charged from `t_AD` as if the address on the backplane were
+> the address the CPU emitted. It is not; it is the translation of it.
+
+**The budget, by phase.** Everything on this card is phase-locked to the dot clock
+(§5.2), so the slot alignment is not a worst case to be bounded — it is a **constant
+to be computed**. Take `t = 0` at the start of the bus cycle; E falls at 476.7 ns; the
+fetch-slot boundaries inside the cycle are at 0, 158.9, 317.8 and 476.7 ns (÷12 is
+integral in slots, §5.1).
+
+| Phase | Duration | Ends at | Source |
+|---|---|---|---|
+| CPU address valid (`t_AD`, self-specified) | 160.0 ns | **160.0** | §5.3 |
+| Map SRAM → physical A13–A19 | 15.0 ns | **175.0** | §6.3.1 |
+| Card decode, incl. the `/IOPAGE` qualification | 15.0 ns | **190.0** | §6.3.2 |
+| Align to the next fetch-slot boundary | 127.8 ns | **317.8** | slot grid |
+| **Granted access — spare-first, front half of the slot** | 72.0 ns | **389.8** | §2.1, §5.2.2 |
+| Read latch clock-to-Q + `'245` drive onto `D0–D7` | 20.0 ns | **409.8** | §14 |
+| **Deadline: `t_DSR` = 20 ns before E-fall at 476.7 ns** | | **456.7** | HD6309E p.3 |
+| | | **margin +46.9 ns** ✓ | |
+
+And the same table with the display fetch taking the front half instead:
+
+| Phase | Ends at |
+|---|---|
+| …decode complete, aligned | 317.8 |
+| **display fetch** | 389.8 |
+| **granted CPU access — back half of the slot** | 461.8 |
+| latch + drive | **481.8** |
+| Deadline | 456.7 |
+| | **margin −25.1 ns** ✗ |
+
+**So the read budget is an ordering decision, not a timing coincidence**, and
+§5.2.2 makes the decision: spare access first, display fetch second. The fetch latch
+wants the same ordering for its own reasons, so this costs nothing but a sentence —
+which is precisely why the sentence has to exist.
+
+**At ÷8 it does not close, and not by a little.** The cycle is 317.8 ns, the deadline
+is 297.8 ns, and the slot boundaries inside the cycle are at 0 and 158.9 ns only. The
+decode completes at the same absolute 190.0 ns, which is **past** the 158.9 ns
+boundary, so the next available slot is 317.8 ns — the start of the *following* bus
+cycle:
 
 ```
-decode 15 + slot alignment <=158.9 + access 72 + latch/drive 20  =  ~266 ns
-budget at dot/12 (476.7 ns cycle, t_AD 160 ns, t_DSR 20 ns)      =  ~297 ns   OK
-budget at dot/8  (317.8 ns cycle)                                =  ~138 ns   NO
+required for the 158.9 ns slot :  t_AD + 15 (map) + 15 (decode) <= 158.9
+                               =>  t_AD <= 128.9 ns  =  21.9 core cycles @ 170 MHz
+available                      :  plan.md 4.1's worst microcode step is 25 cycles
+                               =>  no
 ```
 
-So **VRAM reads close at 2.098 MHz and do not at 3.147 MHz.** Two clean answers,
-both already in the design:
+> ⚠ **Compatibility line, per `docs/machine.md` §5: this card is specified at ÷12
+> (E = 2.0979 MHz) and only at ÷12.** The ÷8 rate — **fast-E mode**, 3.1469 MHz — is
+> **experimental and not guaranteed**, and flat VRAM read-back is one of the three
+> independent things in the machine that break at it (the others are the 6551, which
+> is 57 % over rating, and the real HD63C09E's 333 ns `t_cyc` minimum against a
+> 317.8 ns cycle, which means the drop-in silicon A/B reference cannot even be
+> captured there). Everything else on this card — writes, span writing, display
+> fetch, palette, registers — closes at both divisors; it is read-back alone that
+> does not.
 
-1. **`/WAIT` stretches E** (§3.3) — transparent to the emulator, transparent to a
-   real 6309E, costs one extra E period on VRAM reads in fast mode only.
+Two answers to fast-E read-back, both already in the design and both **optional**,
+because the rate they serve is not a specified rate:
+
+1. **`/WAIT`** (§3.3) — the motherboard's divider holds E low for one further whole
+   E period on VRAM reads in fast-E mode. Transparent to the emulator, transparent to
+   a real 6309E, and the extra period restores the ÷12 arithmetic exactly. Note that
+   this makes the *effective* fast-E VRAM read no faster than ÷12, which is most of
+   the argument for not chasing ÷8 at all.
 2. Or read through a `VDATA` port at `WPTR` with prefetch (the read for address
    *n* is issued when `WPTR` is set, so the CPU's read returns an already-latched
    byte). Streaming reads then run at full rate with no stall at either clock.
 
-Provide both: flat readable VRAM for random access, `VDATA` for streaming.
+Provide both: flat readable VRAM for random access at ÷12, `VDATA` for streaming.
 
 ---
 
@@ -982,6 +1581,32 @@ in the sync GAL pair, zero packages. This is the system tick: 70.09 Hz in the
 primary mode, 60.0 Hz in the 640×240 mode — and note that a NitrOS-9 tick derived
 from vertical blank is *inherently* tear-free for double-buffer flips.
 
+**Two things "zero packages" glossed over.**
+
+*First, `VSTAT`'s live bits have no path to the data bus.* `VSTAT` (`+$13`, §13) is
+the one register that is **not** a register-file location: `SPANBUSY`, `VBLANK` and
+`HBLANK` are the instantaneous state of the sequencer and sync GALs, so the `'245`
+that reads the register file back (§3.2) has nothing to read. Something has to drive
+those bits onto `D0–D7` for the duration of a `$FF73` read, and nothing in §14 did.
+Two ways:
+
+| Option | Cost | Verdict |
+|---|---|---|
+| **`74HC244`** driven by the GAL macrocells, `/OE` = `VSTAT read` | **+1 IC** | **Specified.** Keeps the GAL outputs as plain totem-pole macrocells and puts the bus turnaround in a part designed for it. |
+| Product-term output enables on the sync/sequencer macrocells themselves | 0 ICs | Rejected — see the note below, and those macrocells are the scarcest resource on the card (§19 item 8). |
+
+*Second, the open-drain idiom costs a product term.* **A GAL22V10's outputs are
+totem-pole**; there is no open-drain option. The standard trick is to tie the
+macrocell's data to a constant 0 and put the *condition* on the output enable, so the
+pin either drives low or floats — a genuine open-drain equivalent, and it is how
+`/IRQ` (here) and `/WAIT` (§3.3) are produced. But a 22V10 macrocell has exactly
+**one OE product term**, so this idiom spends it: the pin can no longer be
+conditionally three-stated for any other reason, and the OE term must contain the
+whole assertion condition (`VBL_pending · IRQ_enable` for `/IRQ`;
+`SPANBUSY · VRAMSEL · /IOPAGE` for `/WAIT`). Both fit in one term as written. It is
+stated here because it is invisible in a macrocell count and it is the reason the
+`'244` above is a package rather than four more OE terms.
+
 ### 12.2 Raster-compare interrupt — in the CPU, not on the card
 
 This is the `arm6309`-specific one, and it is better than the hardware version.
@@ -997,8 +1622,24 @@ emulator then knows the beam line with no card hardware at all, and:
   inside the bus loop. plan.md §4.1 rule 3 already folds control-line sampling
   into the per-cycle budget; a timer read at instruction boundaries is cheaper
   still, and a hardware ISR is **forbidden** here (it would blow `t_AD`).
-- Cost: **one GPIO pin and a timer.** Both available on the LQFP48, once §6.3.1
+- Cost: **two GPIO pins and a timer** — see below. Both available, once §6.3.1
   moves the MMU off the CPU and gives the four A16–A19 pins back.
+
+**Counting HSYNC gives you a line *count*, not a line *number*.** ⚠ This section was
+written as "feed HSYNC to a spare pin", and one signal is not enough: a counter of
+HSYNC pulses has no origin. Something must tell the CPU where the frame starts, or
+line 37 is 37 lines after whenever the timer happened to be started.
+
+| Approach | Cost | Error |
+|---|---|---|
+| Reset the HSYNC counter in the VBL handler | 0 pins | ⚠ **jitters by the whole IRQ dispatch latency** — a NitrOS-9 shared-`/IRQ` dispatch is 48–191 µs (`io/ps2/docs/ps2.md` §5), and a line is 31.78 µs, so the frame origin walks by **1–6 lines**, per frame, depending on what else interrupted. A raster split that moves is worse than no raster split. |
+| **Feed VSYNC to a second GPIO and reset the counter in hardware** | **+1 pin** | **0 lines.** TIM's external-trigger/reset input does it with no ISR at all: HSYNC clocks the counter, VSYNC resets it, and the emulator reads an absolute line number at any instruction boundary. |
+
+**Specify the second pin.** Both HSYNC and VSYNC must therefore be on the backplane
+(§17 carries them from this revision), and the card must present them at TTL levels
+to a slot pin as well as to the VGA connector — a `'244` channel, and §14's
+clock/load fan-out `'244` has channels free. The pin budget in §6.3.1 counted one
+HSYNC input against 5 spares on the external-MMU column; it is two now, and 4 spare.
 
 That is a genuinely better raster-interrupt implementation than the GIME's, in a
 machine that is otherwise less capable than a CoCo 3 — and it costs nothing.
@@ -1042,11 +1683,11 @@ tables are shared between both projects.
 | `+$10` | `PIDX` | b7..0 | palette index, auto-increments after `PDATH` | — |
 | `+$11` | `PDATL` | b7..0 | palette entry `GGGBBBBB` | — |
 | `+$12` | `PDATH` | b7..0 | palette entry `RRRRRGGG`; write commits | — |
-| `+$13` | `VSTAT` | b7 `SPANBUSY`, b6 `VBLANK`, b5 `HBLANK`, b0 IRQ pending | **read**; write clears IRQ | extended |
+| `+$13` | `VSTAT` | b7 `SPANBUSY`, b6 `VBLANK`, b5 `HBLANK`, b0 IRQ pending | **read** through the `'244` of §12.1, not the register file; write clears IRQ | extended |
 | `+$14` | `WADV` | b1..0 | pointer advance: 00 continue, **01 next row same column** (§7.2), 10 vertical (advance by stride) | **new** |
 | `+$15` | `VDATA` | b7..0 | **read or write** VRAM byte at `WPTR`, post-increment | **new** (§11) |
-| `+$16` | `BORDER` | b7..0 | border/overscan palette index | **new** |
-| `+$17`–`$1F` | — | | reserved (`TILEBASE`/`FONTBASE` and map base, §6.4; `WPTR` column shadow, §7.2, is written implicitly) | |
+| ~~`+$16`~~ | ~~`BORDER`~~ | | ⚠ **Deleted — §9.3.** VGA timing has no overscan, the porches must be black for the back-porch clamp, and the `'153` pixel mux has no spare input through which a border index could be injected. The byte is handed back to the reserved block. | ~~**new**~~ |
+| `+$16`–`$1F` | — | | reserved — **10 bytes**, one of them handed back by §9.3 (`TILEBASE`/`FONTBASE` and map base, §6.4; `WPTR` column shadow, §7.2, is written implicitly) | |
 
 **`BANK` is gone** (§6.3). **`MODE` is gone** — there is no stock mode to select;
 `VMODE` chooses among native modes only. Reset forces `CTRL = 0`: display
@@ -1057,51 +1698,147 @@ Register-file reset semantics carry over unchanged from minimal256.md §4.3: the
 reset-critical bits live in the one `'273`, everything else is undefined until
 written, and boot code writes the whole map once.
 
+### 13.1 Palette writes and the LUT address bus — a software rule, stated
+
+**`PIDX`/`PDATL`/`PDATH` writes during active display will snow, and the card has no
+mechanism to prevent it.** The reason is structural, not a bug: the LUT's address bus
+is **shared by tri-state turnaround** between two masters (§9, §14):
+
+| Master | Drives LUT `A7..A0` | When |
+|---|---|---|
+| pixel-index `74AHCT574` | the pixel byte fetched from VRAM | every dot — one per 39.72 ns |
+| `74HC593` `PIDX` counter | the CPU's palette index | whenever the CPU writes `PDATH` |
+
+There is no third state and no arbitration: a `PDATH` commit must take the bus, and
+it takes it from the pixel path, inside a 39.72 ns dot in which the chain
+`index latch → 15 ns LUT → output register` already spends 28 ns (§6.1). The dot in
+which the write lands emits whatever the LUT put out during the turnaround — one or
+two wrong pixels, i.e. **snow**, exactly as a period card with a shared palette bus
+produces.
+
+Three responses, and the card takes the first:
+
+1. **Specified rule: write the palette during blanking.** `VSTAT` already exposes
+   `VBLANK` (b6) and `HBLANK` (b5) precisely so software can gate on them, and §2.1
+   shows blanking is 40 slots per line plus 49 whole lines per frame — room for
+   **all 256 entries** in one vertical blank at 2 writes per entry (512 writes ×
+   ~2.4 µs = 1.2 ms against a 1.56 ms vertical blank at 70.09 Hz, so it fits, but
+   only just; a fade should update half the palette per frame). The VBL handler
+   (§12.1) is where a palette update belongs anyway, because that is the tear-free
+   instant for the *picture* as well as for the LUT. **Zero packages.**
+2. Accept the glitch. Legitimate for effects that are already per-scanline: a
+   gradient written from the raster-compare handler during hblank is response 1 at a
+   finer grain; one written mid-line is this.
+3. Post the write into a holding register and retire it at the next hblank — a
+   `'574` plus a busy bit and sequencer terms, on the pair §19 item 8 already calls
+   the tightest fit on the card. **Not taken**: it buys a case response 1 covers for
+   free.
+
+`docs/video-comparison.md` §2's unqualified "mid-frame palette writes: yes" is
+corrected to carry this rule. It is still a *yes* — the GIME snows in exactly the same
+way and for exactly the same reason — but it is a yes with a rule attached.
+
 ---
 
 ## 14. Chip budget
 
+> ⚠ **This table has been re-tallied, and it moved.** The previous version summed to
+> **36** (32 without the `'153` mux) while §0's headline said "~33 (37 with the mux)"
+> — two numbers that could not both be right and neither of which matched the table.
+> Beyond the addition, the list was missing four things the card genuinely needs and
+> carrying one thing that belongs elsewhere:
+>
+> | Change | Δ | Why |
+> |---|---|---|
+> | Posted-write **address + control** latches | **+3** `74HC574` | §3.1.1 — flat-mapped VRAM means the CPU supplies a 19-bit physical address that must be captured at E-fall |
+> | Spare-access **arbiter** | **+1** `GAL22V10` | §5.2.1 — "the other three chips" is a live compare, not a wire |
+> | `VSTAT` live-bit **driver** | **+1** `74HC244` | §12.1 — `SPANBUSY`/`VBLANK`/`HBLANK` are GAL state, not register-file contents, and had no path to `D0–D7` |
+> | **Master oscillator** | **−1** | §5.1 — it is on the motherboard. A card that supplies E is a card whose removal stops the CPU, and §18 brings the bus up before the card exists |
+> | Post-LUT registers `'574` → `'273` | 0 | §9.2 — blank-to-black needs an asynchronous clear, not an output enable |
+> | VGA **drive stage** | 0 ICs, 4 discretes | §9.1 — the ladders cannot face a 75 Ω double-terminated line on their own |
+> | `BORDER` deleted | 0 | §9.3 |
+>
+> Net **+4 packages**, and none of it is a change of design.
+
 | Qty | Part | Role | vs colormin |
 |---|---|---|---|
 | 4 | AS6C1008-55 (128K×8) | framebuffer, 512 KB, 4-way interleave | = |
-| 4 | 74AHCT574 | fetch read latches | = |
+| 4 | 74AHCT574 | fetch read latches — clocked **per-chip, mid-slot** (§5.2.2) | = |
 | **4** | **74AHCT153** | **4:1 pixel mux — assumed, not fallback (§6.1)** | +4 |
 | 1 | 74AHCT574 | palette index latch | = |
 | 2 | 32K×8 **15 ns** | palette LUT, 256 × 16 b | = (faster grade) |
-| 2 | 74AHCT574 | post-LUT output latch | = |
+| **2** | **74AHCT273** | **post-LUT output register — `/MR` is blank-to-black (§9.2)** | = (was `'574`) |
 | 1 | 74HC593 | `PIDX` counter (sourcing flag, §9) | = |
-| 2 | GAL22V10-15 | H/V sync + blank/border decode + VBL IRQ | = (single timing now) |
+| 2 | GAL22V10-15 | H/V sync, blank, **mode-dependent sync polarity (§6.2.1)**, VBL IRQ | = (single timing now) |
 | 2 | GAL22V10-15 | scan address generators, 19 b, loadable | = |
 | 2 | GAL22V10-15 | `WPTR` / span pointer, 19 b | = |
-| 2 | GAL22V10-15 | sequencer: decode, **static slot assignment**, span control, reg-file addressing, mux phasing | = |
-| 1 | 74HC574 | posted-write data latch | = |
-| 1 | 74HC165 | span mask serialiser | = |
+| 2 | GAL22V10-15 | sequencer: decode (incl. the `/IOPAGE` term, §6.3.2), **static slot assignment**, span control, reg-file addressing, mux phasing | = |
+| **1** | **GAL22V10-15** | **spare-access arbiter — 8 grants + 4 source selects (§5.2.1)** | **+1** |
+| 1 | 74HC574 | posted-write **data** latch | = |
+| **3** | **74HC574** | **posted-write address + control latches — 19 address + VRAMSEL + R/W + `WMODE[1:0]` = 23 bits (§3.1.1)** | **+3** |
+| 1 | 74HC165 | span mask serialiser (`74AHC165` if §6.4 Variant B is built) | = |
 | 1 | 32K×8 20 ns | register file | = |
 | 1 | 74HC273 | `CTRL`, master reset | = |
 | 1 | 74HC245 | register + VRAM read-back | = |
 | **1** | **74HC574** | **VRAM read latch (§11)** | **+1** |
+| **1** | **74HC244** | **`VSTAT` live-bit driver (§12.1)** | **+1** |
 | 2 | 74HC161 | `SPANLEN` down-counter | = |
-| 1 | 74HC244 | clock / load fan-out | = |
-| 1 | 25.175 MHz oscillator | **system master** — also feeds the E/Q divider | = |
-| — | 3 × R-2R SIP | 5/6/5 ladders | = |
+| 1 | 74HC244 | clock / load fan-out, **plus HSYNC/VSYNC out to the backplane (§12.2)** | = |
+| **40** | | **(36 if the tri-state pixel bus closes at 39.7 ns)** | **colormin: 39 (35)** |
+| — | 3 × NPN (β ≥ 300) + 1 × diode + 9 R | VGA drive stage, `V_be`-referenced (§9.1) | **new** |
+| — | 3 × R-2R SIP, 1 kΩ/2 kΩ | 5/6/5 ladders (§9.1 sets the value) | = (value specified) |
+| — | ~~1 × 25.175 MHz oscillator~~ | ⚠ **moved to the motherboard — §5.1** | **−1** |
 | — | — | ~~stock 1bpp VRAM, `'166`, `'244` bypass, `'74` synchroniser~~ | **−4** |
-| **36** | | **(32 if the tri-state pixel bus closes at 39.7 ns)** | **colormin: 39 (35)** |
 
-Off-card, on the motherboard: **1 GAL** (or a `'163` + `'74`) dividing 25.175 MHz
-by 12 or 8 to make E and Q with Q leading by 3 dots. That is the whole clock
-system — plus **§6.3.1's 3 ICs for the MMU**, which is the other thing the
-motherboard now carries.
+**GAL count is 9, not 8.** §10.1's "the card is 8 GALs, the full blitter adds 10" table
+is re-based accordingly: Rev A 9, + list engine 11, + blit datapath ~21. The
+"eighteen GAL22V10s is where the honest question becomes 'why not one CPLD'" line
+lands one package sooner than it did.
 
-**Power.** Seven SRAMs and eight GALs, GAL-dominated as before — estimate
-450–650 mA, and it is still the first thing worth measuring at bring-up
-(minimal256.md §11 item 7 transfers unchanged). §10.1's low-power GAL family
-question applies here too, not only to the blitter.
+**Off-card, on the motherboard**, and this is where the parts that used to be on this
+list went:
 
-**Area.** 36 ICs including 5 × DIP-32 and 3 × DIP-28 is the same envelope
-colormin sizes at ~140 cm² on a 160 cm² Eurocard: 4 layers, disciplined
-placement, and the blitter is a piggyback. Unchanged conclusion.
+| Qty | Part | Role |
+|---|---|---|
+| 1 | 25.175 MHz oscillator | **system master** (§5.1) — feeds the E/Q divider *and* the backplane |
+| 1 | GAL22V10 | ÷12 / ÷8 E and Q generation, with the **divisor-dependent Q tap** (§5.1) and the whole-E-period `/WAIT` (§3.3) |
+| 5 | §6.3.1's MMU | SRAM, `'574`, GAL, `'245` isolation, `'157` address mux |
+| **7** | | the whole of the machine's non-card logic |
 
----
+**Power — restated, because the old figure was smaller than one line of its own
+arithmetic.** This document claimed **450–650 mA** while simultaneously pricing a
+GAL22V10 at "~70–90 mA each" (§10.1); nine of them is 630–810 mA before a single SRAM
+is powered. The honest total:
+
+| Group | Count | Each | Total |
+|---|---|---|---|
+| GAL22V10-15 | 9 | 70–90 mA | **630–810 mA** |
+| AS6C1008-55 framebuffer | 4 | 40–70 mA | 160–280 mA |
+| 32K×8 15 ns LUT (dot rate) | 2 | 70–110 mA | 140–220 mA |
+| 32K×8 20 ns register file (bus rate) | 1 | 10–30 mA | 10–30 mA |
+| AHCT at 25.175 MHz (fetch latches, `'153`, index, post-LUT) | 11 | 9–22 mA | 100–240 mA |
+| HC at bus rate (posted-write ×4, `'165`, `'273`, `'245`, read latch, `'244` ×2, `'161` ×2) | 12 | 2–6 mA | 25–70 mA |
+| Analog drive stage (§9.1) | 3 ch | 9.3 mA peak + bias | 30–45 mA |
+| | | **Total** | **~1.1–1.7 A** |
+
+Call it **1.5 A nominal and specify the regulator, the bulk decoupling and the
+backplane's power pins for 2 A**. Two consequences that the 450–650 mA figure hid:
+a linear 7805 dropping 7 V at 1.5 A dissipates 10.5 W and needs a heatsink that does
+not fit the Eurocard envelope, so the card wants a **switching pre-regulator or a 5 V
+backplane rail**; and at 1.5 A a single 0.5 A-class slot power pin is not enough —
+**the connector needs multiple parallel power and ground pins**, which is a backplane
+decision (§17), not a card one. §10.1's low-power GAL family question is now worth
+real money: nine ATF22V10C-class parts instead of nine bipolar GALs is most of half an
+amp. Measuring card current stays §19 item 10, but it is now a *verification*, not a
+discovery.
+
+**Area.** 40 ICs including 4 × DIP-32 and 3 × DIP-28, against colormin's ~140 cm² on a
+160 cm² Eurocard. Four more packages plus a guarded analog corner by the VGA connector
+puts this at **~150 of 160 cm²** — still a 4-layer Eurocard with disciplined placement
+and the blitter still a piggyback, but the slack that made that conclusion comfortable
+is gone. If the tri-state pixel bus closes at 39.7 ns (§19 item 2) the four `'153`
+come back out and so does the slack; that bench item is now an *area* item as well as
+a BOM item.
 
 ## 15. Period audit
 
@@ -1114,7 +1851,20 @@ placement, and the blitter is a piggyback. Unchanged conclusion.
 | AS6C1008 (128K×8 SRAM) | 1 Mbit SRAMs ~1989–90 | **the newest silicon on the card.** A 1988 build would be 16 × 32K×8 |
 | 20 ns / 15 ns 32K×8 SRAM | ~1988 | period |
 | R-2R SIP ladder DAC | forever | period |
-| MMU as an SRAM block map | 1980 (SWTPc DAT), 1986 (GIME) | period |
+| MMU as an SRAM block map | 1980 (SWTPc DAT), 1986 (GIME) | period — **but see below** |
+
+**On the DAT row.** The SWTPc DAT is the correct precedent, and it is worth being
+precise about *what* it used, because the precision is what §6.3.1 costs two extra
+packages. The DAT is built from **74LS189-class 16×4 register files**, which have
+**separate data-in and data-out pins**. That is why the period design needs no
+isolation buffer: the CPU writes on one port while the address bus reads the other,
+continuously, with no turnaround at all. Substituting a commodity 2K×8 SRAM with
+**common I/O** — cheaper, faster, stocked, and the right modern choice — moves that
+separation from inside the part to outside it, where it costs a `'245` and a
+break-before-make discipline. The `'157` address mux is the second package and it is
+not a period artefact at all: the DAT's index came from the address bus on both
+paths. **The 1980 part was better shaped for the job than the 1990 one**, which is a
+pleasing and slightly humbling result, and it is why the honest count is five.
 
 **The card as a whole places at 1989–1990**, driven by the 1 Mbit SRAM and the
 AHCT dot path. That is a coherent date: a 6309 machine with a VGA card, 512 KB,
@@ -1147,18 +1897,47 @@ any other 6809 homebrew.
    `PC10`/`PC11` for a debug console. Every bus cycle the card sees can be logged.
 4. **The CPU clock is a software parameter.** §5.1's ÷12 / ÷8 choice is not
    limited by 6309E speed-grade availability, only by emulator throughput — which
-   you can improve later without touching hardware.
+   you can improve later without touching hardware. ⚠ **Qualified:** that is true of
+   the *emulated* CPU and is exactly why ÷8 remains buildable, but it is also the
+   half of item 8 that trades against the other half — a rate no rated HD63C09E can
+   run at is a rate with no silicon reference. ÷12 is the specified rate (§5.1).
 5. ~~**The MMU costs nothing** (§6.3) and can be made GIME-register-compatible,
    which is worth real weeks of NitrOS-9 porting.~~ **Both halves spent — §6.3.1.**
-   The MMU went outside to keep one LQFP48 SKU across both machines, so it costs
-   3 ICs, and GIME register compatibility was priced at an hour of NitrOS-9 patching
-   rather than weeks. This is the one item on this list the machine chose not to take.
+   The MMU went outside to keep one 48-pin SKU across both machines, so it costs
+   **5 ICs** (~~3~~ — the three-IC list could not be wired; §6.3.1), and GIME register
+   compatibility was priced at an hour of NitrOS-9 patching rather than weeks. This is
+   the one item on this list the machine chose not to take.
 6. **Raster interrupts cost one pin** (§12.2), and are more flexible than the
    hardware they replace.
 7. **`TFM` exists** (§10.2).
-8. **A real HD63C09E remains a valid part for the socket.** Keeping `arm6309`
+8. ~~**A real HD63C09E remains a valid part for the socket.** Keeping `arm6309`
    clock-slaved (§5.3) means you can drop real silicon in to bisect a bug —
-   emulator or machine? — which is the same A/B lever the CoCo 3 project depends on.
+   emulator or machine? — which is the same A/B lever the CoCo 3 project depends on.~~
+
+   > ⚠ **This property no longer holds as the machine is specified**, and it is worth
+   > being blunt about it because it was one of the load-bearing arguments for the
+   > whole clock-slaved design (§5.3).
+   >
+   > `docs/machine.md` §5 item 0 resolves the machine's boot problem (§6.3.3) by
+   > having the **CPU module serve the vector page and an 8 KB shadow ROM from its own
+   > STM32 flash, without a bus cycle**. A real HD63C09E dropped into that socket
+   > fetches `$FFFE`–`$FFFF` from the backplane, where — as §6.3.3 sets out — nothing
+   > answers. The silicon A/B reference does not boot.
+   >
+   > It holds again **only if the recorded alternative is taken**: an 8 KB EPROM plus
+   > decode on the motherboard, with an explicit vector/ROM carve-out from the I/O
+   > page (2 ICs, no CPU divergence). That is a live option and it is exactly the sort
+   > of thing this list exists to price, so it is recorded rather than mourned.
+   >
+   > A second, smaller qualification, unrelated to boot: at **÷8** the 317.8 ns bus
+   > cycle is below the HD63C09E's **333 ns `t_cyc` minimum**, so the A/B reference
+   > cannot be captured in fast-E mode with a rated part even with a ROM present
+   > (§11). At the specified ÷12 rate, 476.7 ns, it is comfortable.
+   >
+   > What survives untouched is everything the property was *used* for at ÷12 with a
+   > motherboard ROM: clock-slaving (§5.3), the Q-lead specification (§5.1) and the
+   > `/WAIT` discipline (§3.3) are all still written so that real silicon works. The
+   > obstacle is one decode, not the timing.
 
 ---
 
@@ -1168,30 +1947,70 @@ Brief, because it is not the video question — but the backplane spec has to be
 frozen before the video card is laid out, and the sound card is the other consumer.
 
 > **The sound card now has its own document: [`audio.md`](../../audio/docs/audio.md)** — a
-> 4-channel PCM card modelled on the Amiga's Paula, 35 ICs, whose acceptance test
+> 4-channel PCM card modelled on the Amiga's Paula, 57 ICs, whose acceptance test
 > is playing existing OCS tracker modules unmodified, with the loader and
 > replayer that do that in [`modplayer.md`](../../audio/docs/modplayer.md). **It supersedes this
 > section's Ensoniq 5503 DOC assumption**; the bullets below are updated to what
 > that design actually asks of the backplane.
 
 - **Adopt backplane.md's slot model**, retargeted: geographic `/IOSEL` per slot,
-  `/WAIT` open-drain (now meaning "stretch E"), `/IRQ` **and** `/FIRQ` open-drain
-  (backplane.md reserves only `/IRQ`; NitrOS-9 uses both, and audio wants one of
-  its own), `/NMI`, `/RESET`.
+  `/WAIT` open-drain (a **wait state** — E held low for whole E periods, §3.3),
+  `/IRQ` **and** `/FIRQ` open-drain (backplane.md reserves only `/IRQ`; NitrOS-9 uses
+  both, and audio wants one of its own), `/NMI`, `/RESET`.
 - **The geographic decode spans `$FF40`–`$FF7F`, not just `$FF60`–`$FF7F`.**
-  Video takes `$FF60`–`$FF7F` (§13); [`audio.md`](../../audio/docs/audio.md) §9.1 proposes
-  `$FF40`–`$FF4F`, leaving `$FF50`–`$FF5F` for a disk controller. Widen the window
-  now — it is a decode term today and a board respin later.
+
+  > ⚠ **Stale as written, and corrected below.** ~~Video takes `$FF60`–`$FF7F` (§13);
+  > [`audio.md`](../../audio/docs/audio.md) §9.1 proposes `$FF40`–`$FF4F`, leaving
+  > `$FF50`–`$FF5F` for a disk controller.~~ That sentence was true when this document
+  > was the only card specification in the repository. **Three cards now live in
+  > `$FF50`–`$FF5F`**, and the disk-controller reservation was handed back:
+  >
+  > | Range | Size | Owner |
+  > |---|---|---|
+  > | `$FF40`–`$FF4F` | 16 B | audio — `audio/docs/audio.md` §9.1 |
+  > | `$FF50`–`$FF53` | 4 B | PS/2 keyboard + mouse — `io/ps2/docs/ps2.md` §3.2 |
+  > | `$FF54`–`$FF57` | 4 B | RS-232 serial — `io/serial/docs/serial.md` §7.1 |
+  > | `$FF58`–`$FF5B` | 4 B | SD card storage — `storage/docs/sdcard.md` §6.1 |
+  > | `$FF5C`–`$FF5F` | 4 B | **free** — the machine's only unallocated I/O |
+  > | `$FF60`–`$FF7F` | 32 B | video — §13 |
+  >
+  > `docs/machine.md` §3 is the owning table; this one is a copy and defers to it.
+  > **The window is full to within four bytes**, which is a stronger argument for
+  > widening it than the one originally given. Widen it now — it is a decode term
+  > today and a board respin later.
 - **`/FIRQ` belongs to audio, and to audio alone.** [`audio.md`](../../audio/docs/audio.md) §8.1
   takes it as the sole source, so there is no polling chain: video's VBL and
   raster compare stay on `/IRQ` (§12), and a replayer tick gets the cheap
   6809 interrupt it should have. Record the ownership in the backplane spec
   rather than leaving it to first-come.
 - **Carry E, Q, `R/W` and the 25.175 MHz master** rather than `16M`/`8M`/`/MRD`/`/MWR`.
-  Cards derive their own strobes; the master lets any card phase-lock to video.
+  Cards derive their own strobes; the master lets any card phase-lock to video. The
+  master **originates on the motherboard** (§5.1), not on this card.
 - **Carry physical A0–A18 plus A19**, not just logical A0–A15 — the video card
   needs them (§6.3), and so will any future memory card. The sound card does not:
   its whole bus footprint is a 16-byte I/O window and `/FIRQ`.
+- **Carry `/IOPAGE`.** ⚠ **New, and mandatory — §6.3.2.** Motherboard-generated,
+  active-low, asserted for the whole of any logical `$FF00`–`$FFFF` cycle. Every
+  physical-memory decode in the machine — system RAM and this card's VRAM select —
+  must qualify against it, and the map SRAM's own `/OE` is gated by it so physical
+  A13–A19 are parked rather than stale during an I/O cycle. Without it, a task with
+  any MMU block pointed at VRAM double-drives `D0–D7` on every I/O read and posts a
+  spurious VRAM write on every I/O write. It costs a pin and a buffer, because it is
+  the term the motherboard already forms to generate `/IOSEL` — but it costs a
+  **respin** if the backplane is etched without it.
+- **Carry `HSYNC` and `VSYNC`, TTL, from the video card to the CPU slot.** ⚠ **New —
+  §12.2.** The raster-compare timer lives in the STM32 and clocks from HSYNC; without
+  VSYNC as a hardware frame reset the line counter has **no origin**, and
+  resynchronising it in the VBL handler jitters the frame origin by the whole
+  `/IRQ` dispatch latency — 48–191 µs against a 31.78 µs line, i.e. **1–6 lines**,
+  varying per frame with whatever else interrupted. Two pins, one `'244` channel
+  each, on a `'244` the card already carries.
+- **Power pins: size the connector for the load, not for the pin count.** §14's
+  honest card current is ~1.1–1.7 A for video alone, and `docs/machine.md` has to sum
+  the machine. A single power and a single ground pin per slot is not enough; specify
+  **multiple parallel 5 V and ground pins** and put the ground returns adjacent to the
+  clock and sync lines. This is a backplane decision that a per-card "measure at
+  bring-up" cannot make.
 - **Audio: make it stereo, and the reason is now load-bearing rather than
   aesthetic.** backplane.md has one mono `AUDIO` summing node. Paula's channels
   are **hard-panned — 0 and 3 left, 1 and 2 right — and modules are mixed for it**
@@ -1207,6 +2026,23 @@ frozen before the video card is laid out, and the sound card is the other consum
   ([`audio.md`](../../audio/docs/audio.md) §9.3, copying §11's `VDATA` trick), and its posted-write
   path retires at 3.55 M/s against a `TFM`-paced 700 k/s. It is the only card in
   the machine that never stalls the CPU.
+**The signal list, consolidated** (`docs/machine.md` §2 is the owning table):
+
+| Signal | Direction | Note |
+|---|---|---|
+| physical `A0`–`A18`, `A19` | motherboard → cards | translated; §6.3 |
+| `D0`–`D7` | bidirectional | 5 V TTL |
+| `E`, `Q`, `R/W` | motherboard → cards | Q leads E by 90°, which is 3 dots at ÷12 and **2 at ÷8** (§5.1) |
+| 25.175 MHz master | motherboard → cards | lets any card phase-lock to video |
+| `/IOSEL` | motherboard → slot | geographic, per slot |
+| **`/IOPAGE`** | motherboard → cards | **new** — §6.3.2, mandatory |
+| `/WAIT` | cards → motherboard | open-drain; whole E periods only (§3.3) |
+| `/IRQ`, `/FIRQ`, `/NMI` | cards → CPU | open-drain; `/FIRQ` is audio's alone |
+| `/RESET`, `/HALT` | motherboard → cards | |
+| **`HSYNC`, `VSYNC`** | video card → CPU slot | **new** — §12.2, TTL |
+| audio L, audio R + 2 grounds | audio card → connector | stereo, and it is load-bearing |
+| 5 V, ground | | **multiple parallel pins** — §14's power arithmetic |
+
 - **Do not put sample data in the video card's VRAM.** It is tempting (512 KB is a
   lot of memory) and it would couple two subsystems that have no reason to be
   coupled, on the one bus resource that is already scheduled. This bullet survives
@@ -1227,12 +2063,12 @@ measured before anything depends on them.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | **Freeze the machine spec** — bus signals, `$FF` map (video `$FF60`–`$FF7F`, audio `$FF40`–`$FF4F`), `/FIRQ` ownership, MMU register set, E/Q divider | one document; §19's items 1–4 answered |
-| 1 | **Bench the dot path on a breadboard**: 4-way fetch → pixel mux → index latch → LUT → ladders at 25.175 MHz, driven by counters, no CPU | stable 640×400@70 colour bars on the target monitor; DNL measured across all 64 green codes |
+| 0 | **Freeze the machine spec** — bus signals **including `/IOPAGE`, HSYNC and VSYNC** (§17), the full `$FF40`–`$FF7F` map (§17's table — six owners, not two), `/FIRQ` ownership, the MMU register set, the E/Q divider **and its divisor-dependent Q tap**, and the machine's boot arrangement (§6.3.3) | one document; §19's items 1–4 answered |
+| 1 | **Bench the dot path on a breadboard**: 4-way fetch → pixel mux → index latch → LUT → ladders → **§9.1's buffer stage** at 25.175 MHz, driven by counters, no CPU | stable 640×400@70 colour bars on the target monitor, **locked in both `VMODE` families** (§6.2.1's sync polarity is what the monitor identifies them by); black measured at 0 V through the porches (§9.2); DNL measured across all 64 green codes at the **connector**, into a 75 Ω load |
 | 2 | **Sync + scan address GALs**; fit the sequencer pair **first** (minimal256.md §11 item 11) | equations fit with the raster-compare and static-slot terms in place |
 | 3 | **Card rev A**, driven by the STM32 bus exerciser (§16.1) — no 6309 core needed | registers read back; palette loads; framebuffer scans; `VSCROLL`/`HSCROLL` smooth in both axes |
 | 4 | **Span writer + `SPANBUSY`/`/WAIT`** | full-screen clear in ~5 ms; 80×25 glyph render at 13 writes/cell; no lost writes under a hammering loop |
-| 5 | **VRAM read-back** (§11) at ÷12, and the `/WAIT` path at ÷8 | read-modify-write pixel round-trips clean at both clocks |
+| 5 | **VRAM read-back** (§11) at ÷12 — the specified rate. Fast-E mode (÷8) is experimental and read-back does **not** close there without `/WAIT` | read-modify-write pixel round-trips clean at ÷12; the `/WAIT` path demonstrated at ÷8 or fast-E abandoned |
 | 6 | **`arm6309` core on the bus**: MMU, VBL IRQ, raster compare | a monitor ROM prints to the 80×25 screen |
 | 7 | **NitrOS-9 Level 2 bring-up**, then the console/window driver | boots; `CoWin`-class driver drives the bitmap |
 | 8 | **List engine** (5 ICs), if §12.3's software copper proves the value | per-scanline `HSCROLL` from a descriptor list |
@@ -1257,27 +2093,78 @@ unchanged from minimal256.md §11 and are not restated in full.
 3. **Bench the LUT stage at 39.7 ns** with 15 ns SRAM (§6.1). If it does not
    close, fall back to fixed RGB332 ladders — §9 makes that software-invisible,
    but confirm the identity-palette equivalence bit-for-bit first.
-4. ~~**Decide the MMU's location**~~ **Closed — §6.3.1: 3 ICs on the motherboard.**
-   The deciding argument was one LQFP48 SKU across the CoCo 3 drop-in and this
-   machine, not the address path. What it leaves open is the register set itself
-   (`machine.md` §5 item 3), which is now a free design with no GIME to copy, and
-   which is what the write-decode GAL needs before it can be fitted.
+4. ~~**Decide the MMU's location**~~ **Closed — §6.3.1: on the motherboard,
+   ~~3~~ 5 ICs.** The deciding argument was one 48-pin SKU across the CoCo 3 drop-in
+   and this machine, not the address path, and it survives the corrected count
+   unchanged. What it leaves open is the register set itself (`machine.md` §5 item 3),
+   which is now a free design with no GIME to copy, and which is what the write-decode
+   GAL needs before it can be fitted — **including the break-before-make sequencing of
+   §6.3.1's map-write table**, which is that GAL's hardest equation.
 5. **Confirm E/Q phase stability across the ÷12 ↔ ÷8 switch** (§5.2), and gate the
    change to vertical blank.
 6. **Confirm the static slot assignment is actually static** — that the CPU's
-   access phase is fixed for *both* divisors, and that a `/WAIT`-stretched cycle
-   re-enters the correct phase afterwards. This is the load-bearing assumption
+   access phase is fixed for *both* divisors, and that a `/WAIT`-extended cycle
+   re-enters the correct phase afterwards (§3.3 specifies whole E periods for exactly
+   this reason; item 21 is the motherboard half of it). This is the load-bearing assumption
    behind deleting the `'74` synchroniser, and it is the most likely place §5 is
    wrong.
 7. **Verify VRAM read timing on the bench** (§11), not just on paper — the
    266 ns estimate has ~30 ns of margin at ÷12 and none at ÷8.
-8. **GAL fit**, now heavier in two places: the sequencer pair carries static slot
-   assignment, raster compare and register-file addressing; the `WPTR` pair carries
-   the `WADV` modes of §7.2. **carried, and heavier.** Fit both pairs before
-   committing to 8 GALs — and see item 15 before committing to 8 at all.
+8. **GAL fit — and it is worse than "heavier".** The card is now **9** GALs (§14),
+   and two of the four original pairs are at or past their macrocell limit before any
+   of §6.4 is asked for. A GAL22V10 has **10 macrocells**, so a pair has 20, and every
+   output — registered or combinational — is one. The arithmetic, written out because
+   this is the item most likely to fail:
+
+   **Scan-address pair — 20 of 20, zero margin:**
+
+   | Function | Macrocells |
+   |---|---|
+   | 19-bit loadable scan address, `A18..A0` | 19 |
+   | inter-package carry / terminal count | 1 |
+   | **committed** | **20 of 20** |
+
+   Nothing is left, and §6.4's tile mode asks this exact pair for a mode mux on every
+   address bit plus a tri-state window during the tile fetch (§19 item 15). Item 15's
+   answer to "spare pins?" is now known to be "no spare *macrocells* either."
+
+   **Sync pair — 24 wanted, 20 available:**
+
+   | Function | Macrocells |
+   |---|---|
+   | V line counter, 0–524 | 10 |
+   | H counter at the fetch-slot rate, 0–199 | 8 |
+   | `HSYNC`, `VSYNC` (with §6.2.1's polarity XOR — see below) | 2 |
+   | `BLANK` (drives the post-LUT `'273` `/MR`, §9.2) | 1 |
+   | `VBLANK`, `HBLANK` (to `VSTAT`, §12.1) | 2 |
+   | `/IRQ` for VBL (§12.1, OE-idiom) | 1 |
+   | **wanted** | **24 of 20** ✗ |
+
+   Three escapes, none free, and one of them must be chosen at fit time: move the
+   8-bit H slot counter into a `74HC393` + compare terms (**+1 IC**); merge
+   `VBLANK`/`HBLANK`/`BLANK` into fewer outputs and let the `'244` of §12.1 re-derive
+   the status bits combinationally from what is left (**0 ICs, ugly**); or add a
+   **third sync GAL**, taking the card to 41 and the GAL count to 10. The headline
+   count of 40 assumes one of the first two; **budget the third as a named
+   contingency.**
+
+   The one mercy is that **§6.2.1's sync polarity costs product terms, not
+   macrocells**: `VSYNC = VSYNC_raw XOR VPOL` is 4 raw terms doubled to 8, which fits
+   if `VSYNC` is placed on one of the pair's 16-product-term macrocells. Product terms
+   were never expected to be the constraint here and still are not — **macrocells and
+   pins are**, exactly as item 15 predicted for tile mode, one section earlier than
+   anyone looked.
+
+   The sequencer pair, meanwhile, is why §5.2.1's arbiter became its own package
+   rather than four more terms. **Fit the scan and sync pairs before committing the
+   BOM at all**, and see item 15 before committing to 9.
 9. **`74HC593` availability** (§9). **carried.**
-10. **Measure card current** with seven SRAMs and eight GALs, and price the
-    low-power GAL family (§10.1). **carried.**
+10. **Measure card current** with seven SRAMs and **nine** GALs against §14's
+    ~1.1–1.7 A estimate, and price the low-power GAL family (§10.1) — nine
+    ATF22V10C-class parts instead of nine bipolar GALs is most of half an amp.
+    **carried, and no longer a discovery**: §14 does the arithmetic, so this is
+    verification. The regulator topology and the slot's power-pin count depend on the
+    answer (§17).
 11. **Validate 640×400@70 and 640×480@60 on the actual monitors** — CRT, LCD and
     scaler. 70 Hz 400-line is a DOS text mode and should be universal; confirm it.
     **carried, retimed.**
@@ -1297,7 +2184,9 @@ unchanged from minimal256.md §11 and are not restated in full.
     outputs during the tile fetch and switch between linear and concatenated
     addressing; (c) does the sequencer pair hold a second fetch cadence on top of
     what item 8 already lists. Product terms are not expected to be the constraint
-    — pins and macrocell count are. **Fit this before freezing the BOM at 8 GALs.**
+    — pins and macrocell count are, and item 8 now shows the scan-address pair has
+    **zero** macrocells spare before tile mode is asked for anything. **Fit this
+    before freezing the BOM at 9 GALs.**
 16. **Decide the tile fetch's fine-scroll behaviour** (§6.4.6). Sub-cell horizontal
     scroll needs a 3-bit offset applied to the tile-row address, which is new logic
     rather than the free `HSCROLL` of §8. Either implement it or document tile mode
@@ -1306,6 +2195,28 @@ unchanged from minimal256.md §11 and are not restated in full.
     The glyph bit reaches a LUT address pin through a `74AHC165` clock-to-Q, inside
     the 11.7 ns margin item 3 is already measuring. `'HC` grade will not shift at
     25.175 MHz; confirm `'AHC` does, in circuit.
+18. **Bench §9.1's drive stage into a real 75 Ω load** — DNL across all 64 green
+    codes at the connector, black measured at 0.000 V, peak white at 0.700 V, and the
+    `V_be` reference's drift over a 30-minute warm-up. This is the one part of the
+    card that is analog, and it is the part with no prior art in either colormin
+    document. Confirm also that the back-porch clamp on the *actual* monitors removes
+    the residual black offset (§9.2), which is the argument the design rests on.
+19. **Confirm §5.2.2's spare-first sub-slot ordering on the bench**, because §11's
+    read budget is 46.9 ns of margin under it and −25.1 ns without it. Measure the
+    CPU access's position within the fetch slot directly; do not infer it from a
+    working read, because a marginal read works until it does not.
+20. **Fit §5.2.1's arbiter GAL** and confirm the grant logic handles the three cases
+    the wire could not: CPU and span on the *same* chip, CPU absent entirely, and the
+    `/WAIT` case where a span holds the chip the CPU wants.
+21. **Decide `/WAIT`'s granularity with the motherboard** (§3.3): whole E periods is
+    what this card's static phase needs, and it is the motherboard's divider that has
+    to implement it. Confirm that a `/WAIT`-extended cycle re-enters the correct
+    sub-slot phase — this is item 6 with the answer now specified rather than open.
+22. **Verify the sync-polarity table against the actual monitors** (§6.2.1), CRT, LCD
+    and scaler, in *both* `VMODE` families. Polarity is how the monitor picks the
+    vertical format; getting it right on paper and wrong at the connector produces a
+    correctly-timed picture that is the wrong size, which is the failure mode most
+    likely to be misdiagnosed as a timing bug. Folds into item 11.
 
 ---
 
@@ -1316,6 +2227,14 @@ unchanged from minimal256.md §11 and are not restated in full.
 - `~/code/colormin/docs/blitter.md` — list engine and blit datapath budgets,
   arbitration priority rule.
 - `~/code/colormin/docs/backplane.md` — slot bus model, `/WAIT`/`/INH` semantics.
+
+> ⚠ **Those three are home-directory paths into a sibling repository, and this
+> document's load-bearing claims cite them** — "transfers unchanged from
+> `minimal256.md` §11" and the arbitration priority rule are not checkable from a
+> fresh clone of `arm6309`. A reader who is not the author cannot audit the
+> derivation at all. **Snapshot the cited sections under `reference/`, or point at a
+> public location** — `docs/design-review.md` §Sys-n1. Until then, treat every
+> "unchanged from colormin" claim in this document as uncorroborated.
 - `cpu/docs/plan.md` §2.1 (edge-driven requirement), §3.2 (pin budget), §3.3 (timing),
   §3.6 (read latch), §4.1/§4.3 (microcode step, `TFM`).
 - `docs/coco3_c64.md` §5.1 (GIME MMU), §8.2–8.3 (scrolling, raster interrupts),
