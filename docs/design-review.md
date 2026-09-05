@@ -63,9 +63,24 @@ trades something the review has no standing to spend:
 
 1. **A licence for the project's own work** (§Sys-M6). Nothing was chosen; a wrong
    licence is worse than none.
-2. **Purging `reference/68k/` from git history** (§Sys-M6). The files are out of the
-   working tree and the index, but history rewriting needs `git filter-repo` and a force
-   push to the GitHub remote — a rewrite of published history, and yours to trigger.
+2. **Force-pushing the purged history, and clearing GitHub's copies** (§Sys-M6). The
+   local purge is **done** — the three blobs are gone from all 35 commits, verified by
+   content hash rather than by path. What remains is outward-facing: the push is a
+   `git push --force origin devel` over published history, and a force push does not by
+   itself remove anything from GitHub. Unreachable objects stay fetchable by direct SHA
+   until GitHub garbage-collects, so clearing them means a GitHub support request or
+   deleting and recreating the repository — and anyone who cloned or forked already has
+   a copy.
+
+   > ⚠ **The review's first account of this was wrong.** It reported the material as
+   > never pushed, on the strength of a check that asked whether the last pushed commit
+   > contained `reference/68k/Mac-Plus.ROM`. It did not — because at that point in
+   > history the file was `docs/Mac-Plus.ROM`. The blobs were added under `docs/`,
+   > renamed to `68k/`, and only later moved to `reference/68k/`, and the first two
+   > commits are ancestors of the last pushed tip. **Path presence is not content
+   > presence.** The same mistake defeated the first purge attempt, which removed one of
+   > three historical paths and left 18 commits carrying the blobs; stripping by blob ID
+   > is what fixed it, because a content hash survives a rename.
 3. **The `TFM` firmware option** (`sdcard.md` §11.6). Specifying resume-without-re-read
    in the CPU firmware deletes the storage hazard and buys 27 %, at the price of a
    fidelity divergence in the shared CoCo 3 core.

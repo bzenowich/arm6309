@@ -28,8 +28,13 @@ worked example of getting a lot of graphics out of very little hardware, and
 > less: the CHM download is a single click. Size was never the criterion; the right to
 > redistribute is.
 >
-> **They are gone from the working tree and the index, but they remain in the
-> repository's history**, which is where a copyright claim would find them. Purging
-> them needs `git filter-repo` and a force push to the GitHub remote — a rewrite of
-> published history, and the owner's call, not a cleanup a review gets to perform.
-> See `docs/design-review.md` §Sys-M6.
+> **They are gone from the working tree, the index and every commit in this
+> repository's history**, purged with `git filter-repo --strip-blobs-with-ids` — by
+> content hash rather than by path, because the files lived under `docs/` and then
+> `68k/` before `reference/68k/`, and a purge that names paths misses the earlier ones.
+>
+> ⚠ **They were on GitHub before that**, in commits that predate the last push, so this
+> was remediation rather than prevention. Local history is clean; the remote needs a
+> force push, and a force push does not delete anything on its own — unreachable objects
+> stay fetchable by direct SHA until GitHub collects them. See `docs/design-review.md`
+> §Sys-M6.
