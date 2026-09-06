@@ -196,10 +196,13 @@ int mod_load(mod_song *s, card_t *c, const char *path, char *err, size_t errlen)
                 /* One SDATA store per byte, and the byte is converted on the
                  * way: the card's sample converter is unsigned-coded, so card
                  * RAM holds OFFSET BINARY and silence is $80
-                 * (audio.md §6.1, modplayer.md §4.2). On the 6309 that makes
-                 * the loop EORB #$80 per byte instead of a single TFM X+,Y —
-                 * §4.4 costs it, and it is the only transformation the sample
-                 * stream gets. */
+                 * (audio.md §6.1, modplayer.md §4.2). The loader is where the
+                 * flip happens -- audio.md §16 item 27, decided -- so the .mod
+                 * converter must NOT also do it; twice is none. On the 6309 it
+                 * is an in-place LDD/EORD #$8080/STD pass over each sector
+                 * buffer before the TFM, two bytes per instruction; modplayer.md
+                 * §4.4 costs it. It is the only transformation the sample stream
+                 * gets. */
                 card_write(c, A_SDATA, (uint8_t)(raw[src + i] ^ 0x80u));
             }
 

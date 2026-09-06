@@ -47,7 +47,7 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 | **Do we need the Amiga filter?** | **Yes, and not for nostalgia.** It is the reconstruction filter for channels running below ~16 kHz. Both filters, switchable. | §7 |
 | **Where does mod tempo come from?** | **An on-card 16-bit timer clocked at colourclock/5 = 709.379 kHz — the Amiga's CIA clock exactly**, so `Fxx` BPM values are CIA-B-identical. Costs one slot, zero ICs. | §8.2 |
 | **Which interrupt line?** | **`/FIRQ`.** Video's VBL owns `/IRQ`. A 6809 `FIRQ` is what a replayer tick should be. | §8.1 |
-| **What does mod playback cost the 6309?** | **~2.7 % of a 2.098 MHz CPU** for the replayer, with a 19× worst-case margin; **~187 ms once** to upload 128 KB of samples via `TFM X+,Y` — ~690 ms if the loader also has to convert the samples to offset binary (§6.1, §13.2). | §13, [`modplayer.md`](modplayer.md) §7 |
+| **What does mod playback cost the 6309?** | **~2.7 % of a 2.098 MHz CPU** for the replayer, with a 19× worst-case margin; **~738 ms once** to upload 128 KB of samples — a ~500 ms `EORD` pass converting them to offset binary (§6.1, §16 item 27) plus a 238 ms chunked `TFM X+,Y` (§13.2). The `TFM` alone is 187 ms. | §13, [`modplayer.md`](modplayer.md) §7 |
 | **What does this card do that Paula cannot?** | No minimum period; 8 channels at half period resolution; a programmable volume curve (now host software — §6.1); per-channel panning for +3 ICs (§11.1). | §11 |
 
 **Net: 36 ICs**, level with the video card. One oscillator, **one internal clock
@@ -130,7 +130,8 @@ is specified at **E = 25.175/12 = 2.0979 MHz and only that rate**
 ([`machine.md`](../../docs/machine.md)). The divide-by-8 **fast-E** rate (3.1469 MHz) is
 experimental and not guaranteed elsewhere in the machine, but nothing on this card
 breaks at it and the two figures that move both move the right way: §13.2's 128 KB
-upload falls from 187 ms to 125 ms, and §9.4's register-tearing windows shrink by a
+`TFM` falls from 187 ms to 125 ms — and its all-in load, §16 item 27's conversion pass
+included, from ~738 ms to ~492 — and §9.4's register-tearing windows shrink by a
 third (~8 colour clocks per host store becomes ~5.4). The card neither requires
 fast-E nor objects to it.
 
@@ -585,9 +586,11 @@ digital product rather than by widening it.
 DAC takes **unsigned** data, so a two's-complement sample byte would put full-scale
 steps at every zero crossing (§6.3 — this is Aud-M1, and it survives every change to
 this section because it is a property of the converter). The fix used to be baked into
-the LUT's contents. It is now one `XOR #$80` per byte in the loader, which already
-walks every sample to relocate it ([`modplayer.md`](modplayer.md) §4). Samples live in
-card RAM **offset-binary**; silence is `$80`.
+the LUT's contents. It is now one `XOR #$80` per byte **in the loader** — §16 item 27,
+decided there and nowhere else — which already walks every sample to relocate it
+([`modplayer.md`](modplayer.md) §4). Samples live in card RAM **offset-binary**;
+silence is `$80`. **The `.mod` converter of §13.3 does not flip this bit**; flipping it
+twice is flipping it none.
 
 **Silence is exactly zero, and that is new.** At `VOLCODE` = 0 the volume DAC's ladder
 delivers no current at all, so a silent or disabled channel contributes nothing —
@@ -1730,14 +1733,19 @@ fixed** — streams a block to a fixed I/O port at **3 cycles/byte**, which is
 | **`TFM X+,Y`** | **3/byte** | **187 ms for 128 KB** |
 | **`TFM` + an in-place `LDD`/`EORD #$8080`/`STD` pass** | **~11/byte** | **~690 ms for 128 KB** |
 
-**That third row is §6.1's offset-binary conversion, and whether you pay it depends on
-where the file came from.** Card RAM holds samples offset binary because the converter
-is unsigned-coded; a `.mod` holds them two's complement. If the module was prepared
-offline (§13.3 — one `XOR $80` per byte, on a machine where that is free), the loader
-still issues a verbatim `TFM` and the row above it stands. If an unmodified `.mod` is
-being loaded from disk, the loader XORs each sector buffer in place before the `TFM`
-and the upload costs **about 690 ms rather than 187**, once per module. A one-gate
-hardware alternative is recorded as §16 item 27.
+**That third row is §6.1's offset-binary conversion, and it is always paid here.**
+Card RAM holds samples offset binary because the converter is unsigned-coded; a `.mod`
+holds them two's complement. **§16 item 27 is decided: the loader flips the bit**, for
+every module regardless of where the file came from. It XORs each sector buffer in
+place before the `TFM`, and the upload costs **about 690 ms rather than 187**, once per
+module — ~738 ms with the chunking of [`modplayer.md`](modplayer.md) §4.4 applied to
+the `TFM` half.
+
+**The 187 ms row is therefore the card's transfer rate, not a load time anybody sees.**
+It is still the right number for §13.1's store-rate argument and for item 1's scaling,
+and it is what the fast-E figure below is computed from — but no module loads in
+187 ms, because none of them arrive pre-converted any more. Anything quoting a
+user-visible load time should quote ~738 ms.
 
 `W` is 16 bits and `TFM` treats `W` = 0 as 65,536 nowhere — it stops — so 128 KB is
 **three** `TFM` instructions and a pointer fix-up: `65,535 + 65,535 + 2 = 131,072`.
@@ -1745,7 +1753,8 @@ hardware alternative is recorded as §16 item 27.
 card's posted-write path retires one byte per colour clock in slot 5 —
 **3.55 M/s against `TFM`'s 700 k/s**, a 5× margin, so **no `/WAIT`, no FIFO
 stall, no lost writes** (§9.3). At the experimental fast-E rate the numbers become
-1.05 M/s against 3.55 M/s, still 3.4×, and the upload falls to 125 ms.
+1.05 M/s against 3.55 M/s, still 3.4×, and the `TFM` falls to 125 ms — the all-in load,
+conversion pass included, to ~492 ms.
 
 **The margin is not the only thing that can go wrong with this transfer.** `SDATA` is
 a side-effecting port and `TFM`'s interrupt/resume behaviour is unsettled, which is a
@@ -1771,7 +1780,7 @@ Almost nothing, which is the point of §1 and §4.1:
 
 | Field | Transformation |
 |---|---|
-| Sample data | **`XOR $80`** — the card's converter is unsigned-coded, so card RAM holds offset binary (§6.1). One instruction per byte, and the only transformation in this table |
+| Sample data | **copy verbatim.** ⚠ The offset-binary conversion is **not** done here — §16 item 27 puts it in the loader, and doing it twice cancels it |
 | Sample length (words) | **copy verbatim** into `LEN` |
 | Repeat offset / repeat length | **copy verbatim**; the replayer writes them into `LC`/`LEN` on tick 1 (§3.3) |
 | Period values in patterns | **copy verbatim** — same reference clock |
@@ -1780,13 +1789,22 @@ Almost nothing, which is the point of §1 and §4.1:
 | `Fxx` BPM | **copy verbatim** — same CIA-B arithmetic (§8.2) |
 | Sample start address | +base, and >>0 (byte addressed, §9.3) |
 
-The real edits are relocating samples into card RAM, building the address table, and
-flipping one bit of every sample byte. **There is still no resampling, no
-requantisation, no retuning and no arithmetic** — an `XOR` is not a rounding error, and
-it is exactly reversible — and that is the strongest single argument for every decision
-in §4.1, §6.1 and §8.2. A converter that has to do arithmetic is a converter that has a
-rounding error, and mods are unforgiving about rounding errors in `PER`. Doing the
-`XOR` here rather than in the loader is what keeps §13.2's upload a verbatim `TFM`.
+The real edits are relocating samples into card RAM and building the address table.
+**There is no resampling, no requantisation, no retuning and no arithmetic** — and that
+is the strongest single argument for every decision in §4.1, §6.1 and §8.2. A converter
+that has to do arithmetic is a converter that has a rounding error, and mods are
+unforgiving about rounding errors in `PER`.
+
+**This table used to carry an `XOR $80` on the first row, and item 27 took it away.**
+The conversion is a single bit that must be flipped exactly once between the file and
+the converter, and §16 item 27 puts that flip in the loader — so an offline converter
+that also flipped it would hand the loader a pre-flipped file, the loader would flip it
+back, and the card would be fed two's complement: **Aud-M1 in full, a full-scale step
+at every zero crossing.** `XOR $80` is its own inverse, so the doubly-flipped file is a
+structurally valid `.mod` of the right length with a plausible-looking waveform, and
+nothing short of playing it or scoping it (§16 item 21) will say otherwise. The rule is
+one line and the whole project depends on it: **the loader flips, the converter does
+not.**
 
 ### 13.4 NitrOS-9 fit
 
@@ -2035,20 +2053,35 @@ specification that has not been tested.
     now being met by a part chosen for something else. Count the loads on the bus,
     including whatever the backplane spec permits a future card to add, before the
     package is deleted from the BOM rather than from the document.
-27. **Decide where the offset-binary conversion happens** (§6.1, §13.2). Card RAM holds
-    samples offset binary; a `.mod` holds them two's complement. Three places can flip
-    that bit, and the choice is a load-time-versus-package trade nobody has made:
-    - **The offline converter** (§13.3) — free, and the loader keeps its verbatim
-      `TFM` at 187 ms. Only works for modules prepared in advance.
-    - **The loader**, `LDD`/`EORD #$8080`/`STD` over each sector buffer before the
-      `TFM` — **~690 ms rather than 187 ms** for a full 128 KB image, once per module,
-      and it works on any unmodified `.mod` straight off the disk.
-    - **One gate**: an inverter on bit 7 of the sample-RAM-to-state-file fetch path
-      only, leaving card RAM two's complement and `SDATA` read-back verbatim.
-      **+1 package**, and it makes `DAT` (§9.3 offset 8) the one register that does
-      *not* follow the rule, because it writes the state file directly. A single
-      exception in a register map is worth more than 500 ms of load time only if
-      modules are loaded often.
+27. ~~**Decide where the offset-binary conversion happens**~~ (§6.1, §13.2) —
+    **closed: the loader flips the bit.** `LDD`/`EORD #$8080`/`STD` over each sector
+    buffer before the `TFM`, which is what [`../refplayer/`](../refplayer/) already
+    models (`mod_load.c`). The cost is **~690 ms rather than 187 ms** for a full 128 KB
+    image, or **~738 ms** with §4.4's chunked `TFM`, once per module. The two
+    alternatives and why they lost:
+    - **The offline converter** (§13.3) — free, and it kept the loader's verbatim
+      `TFM` at 187 ms, but only for modules prepared in advance. **It answers the
+      wrong question:** a `.mod` player whose fast path requires a proprietary
+      pre-processing step is a player for a curated library, not for the corpus, and
+      the corpus is the entire reason §4.1 refuses to resample. Rejected on scope, not
+      on cost.
+    - **One gate** — an inverter on bit 7 of the sample-RAM-to-state-file fetch path,
+      leaving card RAM two's complement and `SDATA` read-back verbatim. **+1 package**,
+      and it makes `DAT` (§9.3 offset 8) the one register that does *not* follow the
+      rule, because it writes the state file directly. **Rejected**: 500 ms once per
+      module, against the card's whole §16 item 19 problem being that it is one package
+      over its envelope in a place where packages are the scarce thing. A register-map
+      exception is also a permanent cost paid by every future reader of §9, and load
+      time is paid by a user who is already waiting on a disk (§4.1).
+
+    > **What this decision creates is a rule with no local check: the loader flips,
+    > and the `.mod` converter must not.** `XOR $80` is its own inverse, so flipping
+    > twice restores two's complement and reinstates Aud-M1 — a full-scale step at
+    > every zero crossing — out of two components that are each individually correct.
+    > The doubly-flipped file is a valid `.mod` and nothing in §4.6's validation table
+    > can reject it. §13.3's first row now says "copy verbatim" for this reason, and
+    > item 21's zero-crossing scope is the measurement that catches it if anyone gets
+    > it wrong anyway.
 
 ---
 

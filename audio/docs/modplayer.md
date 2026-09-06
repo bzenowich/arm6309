@@ -272,14 +272,22 @@ on the card side ([`audio.md`](audio.md) §13.2):
 | **`TFM X+,Y`** | **3** | **187 ms** |
 | **`LDD`/`EORD #$8080`/`STD` over the buffer, then `TFM`** | ~11 | **~690 ms** |
 
-**The third row is the offset-binary conversion of §4.3, and it is only owed when the
-module has not been converted in advance.** Card RAM holds samples offset binary
-([`audio.md`](audio.md) §6.1); a `.mod` holds them two's complement. A module prepared
-offline arrives already flipped and the loader issues its verbatim `TFM`; an unmodified
-`.mod` streamed off the disk costs one in-place pass over each sector buffer first.
-`EORD` is why it is a pass and not a byte loop — two bytes per instruction. The choice
-is [`audio.md`](audio.md) §16 item 27, which also records the one-gate hardware
-alternative.
+**The third row is the offset-binary conversion of §4.3, and the loader always pays
+it.** [`audio.md`](audio.md) §16 item 27 is decided: **the loader is where the bit gets
+flipped**, for any module from any source. Card RAM holds samples offset binary
+([`audio.md`](audio.md) §6.1); a `.mod` holds them two's complement; the loader walks
+each sector buffer in place before the `TFM`. `EORD` is why it is a pass and not a byte
+loop — two bytes per instruction.
+
+> ⚠ **The `.mod` converter of [`audio.md`](audio.md) §13.3 therefore does *not* flip
+> the bit, and must not.** The conversion happens in exactly one place, and this is it.
+> A module that arrives pre-flipped and then goes through this pass is two's complement
+> again by the time the converter sees it — **Aud-M1 restored in full**, a full-scale
+> step at every zero crossing, produced by a loader that is correct and a file that is
+> correct. Nothing in the file can detect it: `XOR $80` is its own inverse, so a flipped
+> sample is a structurally valid sample of the same length with a plausible waveform.
+> The only defence is that one document says who flips, which is why item 27 had to be
+> decided rather than left to whoever wrote the converter.
 
 `W` is 16 bits, so a >64 KB sample is two `TFM`s and **a full 128 KB card image is
 three**: `65,535 + 65,535 + 2 = 131,072`. ([`audio.md`](audio.md) §13.2 gives the same
@@ -330,6 +338,12 @@ where that shows up.
 > latency is spent against a machine that is not asking the audio card for anything.
 > The storage card pays this cost inside its throughput budget; this card pays it out
 > of slack.
+>
+> **All-in, a full 128 KB image costs ~738 ms**: ~500 ms for the §4.3 conversion pass
+> plus 238 ms for the chunked `TFM`. **Only the `TFM` half needs the masking** — the
+> conversion pass is ordinary `LDD`/`EORD`/`STD` against host RAM, with no
+> side-effecting port and no cached-byte resume question, so an interrupt inside it
+> costs nothing but its own latency.
 >
 > **And there is a third answer that deletes the hazard for both cards.**
 > [`sdcard.md`](../../storage/docs/sdcard.md) §11.6 records it: this machine's 6309 is
