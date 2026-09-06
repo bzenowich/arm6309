@@ -164,7 +164,7 @@ The 6809E/6309E bus gives you the same thing under different names:
 | `/MWR` trailing edge | **E falling edge, `R/W` low** | Write data is valid before E rises and held `t_DHW` ≥ 30 ns past E-fall |
 | `/MRD` asserted | **E high, `R/W` high** | Card must drive D0–D7 by `t_DSR` before E falls |
 | `16M` / `8M` | **E and Q** | Q leads E by 90° |
-| `/IOSEL` per slot | mainboard `'138` on the I/O page | Keep the geographic-slot idea — it is a good one |
+| `/IOSEL` per slot | mainboard `'138` on the I/O page | ⚠ ~~Keep the geographic-slot idea — it is a good one~~ — **the idea does not survive the retarget.** colormin's windows are slot-sized and this machine's are function-sized, so `/IOSEL` becomes a window strobe common to every slot — [`machine.md`](../../docs/machine.md) §2 |
 | `/WAIT` (clock gating) | **`/WAIT`: E held low for whole E periods** | §3.3 |
 | `/INH` | not needed | the MMU decides what answers |
 
@@ -1953,7 +1953,17 @@ frozen before the video card is laid out, and the sound card is the other consum
 > section's Ensoniq 5503 DOC assumption**; the bullets below are updated to what
 > that design actually asks of the backplane.
 
-- **Adopt backplane.md's slot model**, retargeted: geographic `/IOSEL` per slot,
+- **Adopt backplane.md's slot model**, retargeted: ~~geographic `/IOSEL` per slot~~
+  **`/IOSEL` as a window strobe common to every slot,**
+
+  > ⚠ **The geography does not survive the retarget, and this bullet is where it was
+  > lost.** colormin gives four slots one 64-byte window each and decodes them by
+  > position; this machine's windows are function-sized and all different (16/32/4/4/4),
+  > which no position decode can produce. `audio.md` §9.1 and `ps2.md` §3.2 both copied
+  > "per slot" from here and both then promised a base-address jumper, which a position
+  > decode leaves nothing for. Corrected in [`machine.md`](../../docs/machine.md) §2,
+  > which is the owning document; `serial.md` §6 had it right all along.
+
   `/WAIT` open-drain (a **wait state** — E held low for whole E periods, §3.3),
   `/IRQ` **and** `/FIRQ` open-drain (backplane.md reserves only `/IRQ`; NitrOS-9 uses
   both, and audio wants one of its own), `/NMI`, `/RESET`.
@@ -2034,7 +2044,7 @@ frozen before the video card is laid out, and the sound card is the other consum
 | `D0`–`D7` | bidirectional | 5 V TTL |
 | `E`, `Q`, `R/W` | motherboard → cards | Q leads E by 90°, which is 3 dots at ÷12 and **2 at ÷8** (§5.1) |
 | 25.175 MHz master | motherboard → cards | lets any card phase-lock to video |
-| `/IOSEL` | motherboard → slot | geographic, per slot |
+| `/IOSEL` | motherboard → **all** slots | ⚠ ~~geographic, per slot~~ — **the `$FF40`–`$FF7F` window strobe, common to every slot**; the card decodes `A0`–`A5` against a jumpered base. [`machine.md`](../../docs/machine.md) §2 |
 | **`/IOPAGE`** | motherboard → cards | **new** — §6.3.2, mandatory |
 | `/WAIT` | cards → motherboard | open-drain; whole E periods only (§3.3) |
 | `/IRQ`, `/FIRQ`, `/NMI` | cards → CPU | open-drain; `/FIRQ` is audio's alone |

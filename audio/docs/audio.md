@@ -1012,8 +1012,16 @@ has neither at that address).
 disk controller. Sixteen bytes is enough because the per-channel state goes
 through an index/data window rather than being mapped flat (§9.2).
 
-Decode is geographic, from the backplane's per-slot `/IOSEL`
-([`graphics.md`](../../video/docs/graphics.md) §17), so the base is a jumper, not a wire.
+Decode is from the backplane's `/IOSEL`, so the base is a jumper, not a wire.
+
+> ⚠ **This said "geographic, from the backplane's per-slot `/IOSEL`" until 2026-09-06,
+> and the two halves of that sentence contradicted each other.** A per-slot decode fixes
+> each card's window by position, which leaves a base-address jumper nothing to select —
+> and this card's window is 16 bytes where PS/2's is 4, which no slot-sized decode
+> produces. `/IOSEL` is the `$FF40`–`$FF7F` window strobe, common to every slot, and this
+> card completes the decode from `A0`–`A5`. See [`machine.md`](../../docs/machine.md) §2,
+> which now owns it; the claim came from [`graphics.md`](../../video/docs/graphics.md)
+> §17, which copied it from colormin, where it was true.
 
 ### 9.2 The direct window — 16 bytes
 

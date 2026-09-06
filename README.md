@@ -33,6 +33,7 @@ one can be taken.
 | [`io/`](io/) | PS/2 keyboard and mouse — **11 ICs** of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does. | **Both specified** | [`io/README.md`](io/README.md), [`io/ps2/docs/ps2.md`](io/ps2/docs/ps2.md), [`io/serial/docs/serial.md`](io/serial/docs/serial.md) |
 | [`storage/`](storage/) | SD card interface — 7 ICs, **528 KiB/s sustained**, an SPI burst started by the bus read strobe. | **Specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |
 | [`software/`](software/) | 6809/6309 code that runs *on* the machine. | Third-party monitor and FORTH, imported | [`software/README.md`](software/README.md) |
+| [`hardware/`](hardware/) | Board layouts in **tscircuit** — the 72-pin backplane pinout as one table, the motherboard, and the bus interface of all five cards. | **Schematic-level; nothing placed or routed** | [`hardware/README.md`](hardware/README.md) |
 
 Machine-level material that belongs to no single card — the system map, and the
 comparisons against the two chips this machine stands in the tradition of — is in

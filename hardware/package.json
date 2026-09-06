@@ -1,0 +1,23 @@
+{
+  "name": "arm6309-hardware",
+  "version": "0.0.0",
+  "description": "Board layouts for the arm6309 machine",
+  "scripts": {
+    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts",
+    "check:netlist": "bun run lib/netlist.check.ts",
+    "build": "for f in mainboard/mainboard.circuit.tsx cards/*.circuit.tsx; do echo \"-- $f\"; tsci build \"$f\" || exit 1; done",
+    "build:all": "npm run build && npm run check && npm run check:netlist",
+    "dev": "tsci dev"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "@tscircuit/cli": "^0.1.2021"
+  },
+  "devDependencies": {
+    "bun": "^1.4.2"
+  },
+  "overrides": {
+    "circuit-json": "0.0.485"
+  },
+  "private": true
+}

@@ -44,7 +44,7 @@ genuinely undecided.
 | **Audio** | 4-channel 8-bit PCM, Paula-exact — **36 ICs** ([`audio/`](../audio/), `audio.md` §10) |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **7 ICs**, 528 KiB/s sustained — **specified** ([`storage/`](../storage/)). ⚠ The machine's one period exception |
-| **Total silicon** | **~110 ICs** — 97 on cards, ~13 on the motherboard. See §8 |
+| **Total silicon** | **~106 ICs** — 97 on cards, **9** on the motherboard (~~13~~ — §7.1). See §8 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -124,7 +124,7 @@ From `graphics.md` §17, which retargets colormin's slot model:
 
 | Signal | Notes |
 |---|---|
-| `/IOSEL` | geographic, per slot |
+| `/IOSEL` | **the `$FF40`–`$FF7F` window strobe, common to every slot** — ~~geographic, per slot~~. Corrected in this revision; see below |
 | `/IOPAGE` | **open-drain, motherboard-driven — asserted for the whole of any logical `$FF00`–`$FFFF` cycle.** New in this revision; see below |
 | `/WAIT` | open-drain — here it means **hold E** (never "stretch") |
 | `/IRQ` | open-drain |
@@ -185,6 +185,57 @@ From `graphics.md` §17, which retargets colormin's slot model:
 > The video card could not have computed this inhibit for itself, because §2 keeps logical
 > A13–A15 on the motherboard and off every slot. One wire, one sentence — **and a wrong
 > board without it.**
+
+### ⚠ `/IOSEL` is a window strobe, not a geographic select
+
+> **Decided 2026-09-06, and it corrects this table's own row.** Found while drawing the
+> backplane — [`hardware/README.md`](../hardware/README.md) finding 2. **Four documents
+> said "geographic, per slot"**, and the phrase cannot mean here what it meant where it
+> came from.
+>
+> In colormin it really is geographic. `~/code/colormin/docs/backplane.md` §3 gives each
+> of four slots its own **64-byte** window — `$3F00`–`$3F3F` through `$3FC0`–`$3FFF` —
+> decoded by slot position on a common pin. Four slots, four identical blocks, and which
+> card sits in which slot *is* the address decode.
+>
+> **This machine's windows are function-sized, not slot-sized, and no two are alike**:
+> audio 16 bytes, video 32, PS/2 4, serial 4, storage 4 (§3). Decode by position cannot
+> produce them. It would have to nail each slot to a fixed window, which means every card
+> has exactly one slot it will work in — and at that point the **base-address jumper**
+> that `audio.md` §9.1 and `ps2.md` §3.2 each promise *in the very next sentence* selects
+> nothing, because nothing is left for it to select.
+>
+> **The two sentences were never compatible.** "Geographic, per slot" and "so the base is
+> a jumper" are alternatives, and three documents wrote both without noticing.
+>
+> **The decision: `/IOSEL` is the `$FF40`–`$FF7F` window strobe, common to every slot.**
+> It is the `/IOPAGE` term above, further qualified by `A7,A6 = 01` — one more product
+> term on a decode the motherboard already forms. **A card completes its own decode from
+> `A0`–`A5` against its jumpered base**, which is what `A0`–`A5` are on the backplane
+> *for*.
+>
+> **`serial.md` §6 is the card that got this right**, and it did so without remarking on
+> it: its decode GAL takes `CS0`/`/CS1` "from geographic `/IOSEL` **and `A2`–`A5`**".
+> That is the window-strobe model, written down, in the one document that also never
+> claimed the geography.
+>
+> **What it costs, stated because it is a real loss.** The geography went with it: a slot
+> number no longer means anything to the address decode, so **nothing prevents two cards
+> being jumpered to the same base, and nothing detects it.** In colormin that collision
+> was impossible by construction. Here it is a build error that presents as two cards
+> driving `D0`–`D7` at once — the same failure mode `/IOPAGE` was added to prevent, from
+> a different cause.
+>
+> **The alternative, recorded because it is the one that keeps the geography.** Give the
+> motherboard a per-slot base/size comparator — a window register per slot, written at
+> boot. Collisions become impossible again, the map becomes software-configurable, and
+> §5 item 1 dissolves outright. It costs several packages on a motherboard that is nine
+> (§7.1), it needs a window in an `$FF` map with four bytes left, and nobody has specified
+> it. **Not taken now — but it is the shape the answer takes if §5 item 1 is ever resolved
+> by paging rather than by widening the decode.**
+>
+> **"Geographic" survives as the name of the `$FF40`–`$FF7F` range**, here and in five
+> other documents, and that is harmless. It is a name now, not a mechanism.
 
 ### 2.1 Electrical
 
@@ -438,7 +489,7 @@ a cross-card dependency.
 |---|---|---|
 | **machine** | **⚠ Write the MMU register set.** It is now hardware, and three things wait on it: the motherboard's write-decode GAL, the NitrOS-9 patch, and §7.2's boot control | §5 item 3, `graphics.md` §6.3.1 |
 | **machine** | **Keep a NitrOS-9 divergence ledger** — video registers, interrupt block, MMU, boot ROM. Each is priced individually and nothing sums them | §5 item 6 |
-| **machine** | **Draw the motherboard.** It is now six-plus ICs, 512 KB of RAM, a reset supervisor and the pull-ups, and it has no document | §2.1, §7.1, §5 item 5 |
+| **machine** | **Draw the motherboard.** ⚠ **Begun** — [`hardware/`](../hardware/) has the backplane pinout, the motherboard and every card's bus interface, at schematic level. Nine ICs, 512 KB of RAM, a reset supervisor and the pull-ups. Placement waits on the GAL fitting | §2.1, §7.1, §5 item 5, [`hardware/README.md`](../hardware/README.md) |
 | **machine** | **⚠ Fit `$FFA0`–`$FFAF`** — map entries, task, enable, shadow-ROM disable and vector RAM in 16 bytes | §5 item 3, §7.2 |
 | cpu | Confirm the GIME accepts a 3.3 V `V_OH` from the level buffers | `cpu/README.md` TODO |
 | cpu | First silicon measurement, against the recorded predictions | `cpu/docs/plan.md` §5 |
@@ -467,7 +518,32 @@ a cross-card dependency.
 ### 7.1 System RAM
 
 **512 KB of SRAM on the motherboard, selected by `A19 = 0` qualified with `/IOPAGE`
-(§2).** Four × 512K×8 (AS6C4008-class, 55 ns) and a decode.
+(§2).** **One** × 512K×8 (AS6C4008-class, 55 ns), and **no decode**.
+
+> ⚠ **This said "Four × 512K×8 … and a decode" until 2026-09-06, and both halves were
+> wrong.** Found while drawing the motherboard, which is the first thing that had to
+> fit the part rather than cite it — [`hardware/README.md`](../hardware/README.md)
+> finding 1.
+>
+> **512K × 8 is 512 KB.** Four of them is 2 MB — against a 512 KB requirement, in a 1 MB
+> physical map that gives system RAM exactly `A19 = 0`, i.e. **A0–A18, nineteen address
+> lines**. An AS6C4008 has A0–A18. It *is* the requirement, once, and the part this
+> section already named was the right one all along.
+>
+> **And the decode went with the other three.** With one package there is nothing to
+> decode *between*: `/CE` is the `A19 = 0` AND `/IOPAGE` term, and the MMU's `GAL22V10`
+> already forms that term to generate `/IOSEL` (`graphics.md` §6.3.1). The decode was a
+> part the fourth SRAM created and the first one never needed.
+>
+> **The motherboard falls from ~13 ICs to 9** — MMU 5, divider GAL, oscillator, reset
+> supervisor, system RAM — and the machine from ~110 to **~106**. §0 and §8 are
+> corrected to match.
+>
+> It is the same shape of error the 2026-09-04 review kept finding, and §8's own closing
+> lesson names it: **a table that exists to do arithmetic is worth re-examining against
+> the parts catalogue.** This row was never checked against the part it names — and
+> unlike audio's 57, it was not found by re-reading the document. It was found by a
+> board file that had to say how many packages to draw.
 
 This document asserted "`A19 = 0` is 512 KB of system RAM" in §0 and §2 from the
 beginning and never said who provides it. It was in no chip budget — every card accounts
@@ -530,10 +606,10 @@ carve-out drawn into a physical map that has no room for one.
 | 5 V | **audio card** | 36 | **~300–400 mA** — `audio.md` §10 |
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
 | 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + 7 | not yet estimated |
-| 5 V | **motherboard**: MMU (5), divider GAL, oscillator, reset supervisor, 512 KB SRAM + decode | ~13 | not yet estimated |
+| 5 V | **motherboard**: MMU (5), divider GAL, oscillator, reset supervisor, 512 KB SRAM (~~+ decode~~ — §7.1) | ~~13~~ **9** | not yet estimated |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly 2–3 A at 5 V across ~110 ICs, plus a 3.3 V rail.**
+**The machine is plausibly 2–3 A at 5 V across ~106 ICs, plus a 3.3 V rail.**
 
 > ⚠ **Both halves of that sentence moved on 2026-09-04, and in the same direction.** The
 > review estimated "~90 ICs and 1.5–2.5 A" from the counts the card documents then
