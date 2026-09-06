@@ -115,5 +115,22 @@ check(pinsOn("U5", "MAP_WE").length === 0,
 
 check(pinsOn("U2", "TASK").length === 1, "the '574 holds TASK, and TASK is all it holds")
 
+/* -- gal/clkdec.pld: U6 gains the system RAM decode, 2026-09-06 ---------- */
+/* Open item 4: these three reached U8 and nothing else, behind a comment
+ * claiming U3 formed the term. U3 forms no such term and has one free pin,
+ * which is one short of the two /CE needs. */
+for (const net of ["RAM_CE", "RAM_OE", "RAM_WE"]) {
+  const driver = pinsOn("U6", net)
+  const load = pinsOn("U8", net)
+  check(driver.length === 1 && load.length === 1,
+    `${net} runs from U6 to the system RAM`, `U6:[${driver}] U8:[${load}]`)
+}
+check(pinsOn("U6", "A19").length === 1,
+  "U6 takes physical A19 - the decode is downstream of the map SRAM")
+check(pinsOn("U6", "R_W").length === 1,
+  "U6 takes R/W, which is what qualifies RAM /OE")
+check(pinsOn("U1", "A19").length === 1 && pinsOn("U6", "A19").length === 1,
+  "A19 is the map SRAM's output and U6's input - not a CPU pin")
+
 console.log(failures === 0 ? "\nmainboard netlist OK" : `\n${failures} failure(s)`)
 process.exit(failures === 0 ? 0 : 1)

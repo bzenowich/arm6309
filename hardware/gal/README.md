@@ -13,6 +13,8 @@ one that gates the motherboard.
 | [`mmu.v`](mmu.v) | the same seven equations in Verilog |
 | [`mmu_tb.sv`](mmu_tb.sv) | 16 claims against `mmu.v` under **Verilator** — `npm run check:sim` |
 | [`mmu.check.ts`](mmu.check.ts) | the same seven equations again, 23 claims — `npm run check` |
+| [`clkdec.pld`](clkdec.pld) | **U6** — the E/Q divider, `/IOSEL`, and the system RAM's control lines |
+| [`clkdec.v`](clkdec.v) + [`clkdec_tb.sv`](clkdec_tb.sv) | the same, and 15 claims under Verilator |
 
 Three statements of one logic is two too many, and it is deliberate for exactly as long
 as the toolchain is absent — see **Toolchain** below. `mmu.check.ts` runs today.
@@ -160,6 +162,60 @@ comparisons) and §7.2 already keeps `$FF00`–`$FFBF` decoding normally during 
 
 ---
 
+## U6 — the divider, and the one subtle thing in it
+
+`clkdec.pld` carries three jobs on one part: the `E`/`Q` divider (`machine.md` §1),
+`/IOSEL` (which U3 had no room for), and the system RAM's `/CE`, `/OE` and `/WE` (which
+nothing drove at all until 2026-09-06 — `hardware/README.md` open item 4).
+
+**The Q tap is divisor-dependent, and that is the exit criterion `graphics.md` §18 step 0
+names.** `machine.md` §1 says *"Q = same divider, 3 dots early."* Three dots is a quarter
+cycle at ÷12 and **135°** at ÷8. `Q` has to lead `E` by 90° in both, so the tap is **3
+counts at ÷12 and 2 at ÷8** — and `clkdec_tb.sv` asserts the ÷8 case as
+*"Q leads E by 2 and NOT by 3"*, because the sentence in `machine.md` reads as though it
+were 3 in both.
+
+**`E` and `Q` are registered and decoded from the *next* count**, not combinationally from
+the current one. A combinational decode of a 4-bit counter glitches wherever several bits
+change together, and this output is the machine's clock.
+
+Three tricks keep it inside a 22V10, and the product terms are counted rather than hoped:
+
+- **The terminal-count decodes are partial.** 11 is `1011` and 7 is `0111`, and neither
+  needs its zero bits tested because the counter never reaches 15. One product term each
+  instead of four.
+- **`C0` and `C1` need no terminal-count term at all.** Both terminal counts have
+  `C1 = C0 = 1`, so a plain toggle and a plain XOR already land on zero.
+- **Pin placement follows the equations.** A 22V10's macrocells hold 8, 10, 12, 14, 16,
+  16, 14, 12, 10, 8 terms across pins 14–23. `E` (7 terms) and `Q` (5) sit on the two
+  16-term macrocells; nothing else exceeds 4.
+
+The four counter bits come out on pins nothing connects to — **four free test points** on
+the signal hardest to characterise from outside. A 22V10 has no buried nodes, so they were
+going to be driven anyway.
+
+### `/OE` is qualified by `R/W`, and that is not decoration
+
+The AS6C4008's truth table permits tying `/OE` low and letting `/CE` and `/WE` do
+everything. **This machine's bus timing does not.** With `/OE` grounded the SRAM drives
+`D0–D7` from `/CE` time (~140 ns) until `/WE` asserts at E-rise (238 ns), while the CPU is
+also driving write data from ~229 ns — about **90 ns of contention on every write**. One
+macrocell removes it.
+
+`RAM_WE` carries the decode as well as `E` and `R/W`. That term is redundant — a write
+needs `CE#` and `WE#` both low — but it costs nothing and keeps a glitch on `/CE` from
+becoming a write.
+
+### The decode is downstream of the MMU
+
+`A19` is a **physical** address line, so it does not exist until the map SRAM has
+propagated: `t_AD` 110 + map 15 + GAL 10 + RAM access 55 = **190 ns**, against ~437 ns
+before the CPU samples. Comfortable — but it means system RAM can never be faster than the
+translation, which is worth knowing before anyone proposes a faster part.
+
+
+---
+
 ## Toolchain
 
 **Decided 2026-09-06: Verilator for digital verification, ngspice for analogue. No visual
@@ -176,6 +232,9 @@ failure mode `/IOSEL` and `machine.md` §7.1 already demonstrated twice.
 | Analogue — the video output stage (`design-review.md` §Vid-M4) and the audio ladder | **ngspice** | ✓ installed, **nothing written yet** |
 | Equations, today | `bun`, already here | ✓ `npm run check`, 23 claims |
 | A CPU to drive it | [`../vendor/mc6809`](../vendor/mc6809) — Greg Miller's cycle-accurate MC6809E, BSD | ✓ elaborates; **nothing drives it yet** |
+
+Two GALs are written of roughly twenty in the machine. `npm run check:sim` runs both
+testbenches; `npm run check` runs the equation check.
 
 `mmu.v` has now been through Verilator and passes 16 claims exhaustively over the address
 space, `-Wall` clean. **Nothing here has been through a fitter**, so "it fits a 22V10" is
@@ -194,7 +253,5 @@ is `[15:4]` now, so the model states it rather than tolerating it.
 1. **Nothing has been fitted.** The pin budget is arithmetic, not a fitter's report.
    Product terms are all small (the widest is an 8-input AND) and the 22V10's leanest
    macrocell has 8, so it should fit — *should*.
-2. **U6 has not been written.** It gains `/IOSEL` from this work, and it still owns the
-   ÷12 / ÷8 `E`/`Q` divider, which is a state machine and the harder of the two.
-3. **The other cards' GALs are untouched** — nine on video, five on audio's sequencer,
+2. **The other cards' GALs are untouched** — nine on video, five on audio's sequencer,
    plus decode GALs on serial, storage and PS/2.

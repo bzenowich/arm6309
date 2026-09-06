@@ -211,25 +211,42 @@ export default () => (
       * opts into: it breaks the video read-back, takes the 6551 57 % over its
       * rating, and is below the real HD63C09E's t_cyc minimum.
       *
-      * It also owns /IOSEL now. That is /IOPAGE AND (LA7,LA6 = 01), i.e.
-      * $FF40-$FF7F - a machine-level backplane signal rather than MMU
-      * sequencing, and it is here because U3 does not fit with it and this
-      * part is mostly empty. /IOPAGE stays on U3: routing it through here
-      * would put a second GAL delay ahead of MAP_OE, which is the edge the
-      * break-before-make margin is measured from. */}
+      * gal/clkdec.pld is the source of truth for these pins. It carries three
+      * jobs: the divider, /IOSEL, and the system RAM's control lines.
+      *
+      * /IOSEL is /IOPAGE AND (LA7,LA6 = 01) - a machine-level backplane
+      * signal rather than MMU sequencing, and it is here because U3 does not
+      * fit with it. /IOPAGE stays on U3: routing it through here would put a
+      * second GAL delay ahead of MAP_OE, the edge the break-before-make
+      * margin is measured from.
+      *
+      * RAM_CE/OE/WE are here because U3 cannot take them either - it has one
+      * free pin and /CE alone needs two (A19 in, /CE out). They were driven
+      * by NOTHING until 2026-09-06; see hardware/README.md open item 4. Note
+      * A19 is PHYSICAL, so this decode is downstream of the map SRAM: t_AD
+      * 110 + map 15 + GAL 10 + RAM 55 = 190 ns against ~437 available.
+      *
+      * The four counter bits come out on pins nothing connects to. That is
+      * deliberate - they are free test points on the signal that is hardest
+      * to characterise from outside, and a 22V10 has no buried nodes. */}
     <chip
       name="U6"
       footprint="dip24_w0.3in"
       pinLabels={labels(gal22v10({
         2: "FAST_E", 3: "/RESET", 4: "/IOPAGE", 5: "LA7", 6: "LA6",
-        21: "/IOSEL", 22: "E", 23: "Q",
+        7: "A19", 8: "R/W",
+        14: "/RAM_OE", 15: "/IOSEL", 16: "C0", 17: "C1", 18: "E", 19: "Q",
+        20: "C2", 21: "C3", 22: "/RAM_CE", 23: "/RAM_WE",
       }))}
       connections={{
         VCC: "net.V5", GND: "net.GND",
         CLK: "net.CLK25", FAST_E: "net.GND", nRESET: "net.nRESET",
         nIOPAGE: "net.nIOPAGE", LA7: la(7), LA6: la(6),
+        A19: pa(19), R_W: "net.R_W",
         nIOSEL: "net.nIOSEL", E: "net.E", Q: "net.Q",
+        nRAM_CE: "net.RAM_CE", nRAM_OE: "net.RAM_OE", nRAM_WE: "net.RAM_WE",
       }}
+      noConnect={["C0", "C1", "C2", "C3"]}
     />
 
     {/* U7 - power-on reset. Every card takes /RESET as an input and no card
@@ -248,10 +265,12 @@ export default () => (
       * Nineteen address lines is exactly this part. The "and a decode" in the
       * same sentence goes with the other three. See hardware/README.md finding 1.
       *
-      * ⚠ RAM_CE, RAM_OE and RAM_WE ARE NOT DRIVEN. Nothing in this design
-      * connects to them but U8. This comment used to say /CE is "the A19 = 0
-      * AND /IOPAGE term, which U3 already forms" - U3 forms no such term, and
-      * gal/mmu.pld does not emit one. hardware/README.md open item 4. */}
+      * RAM_CE, RAM_OE and RAM_WE come from U6 (gal/clkdec.pld). They were
+      * driven by nothing at all until 2026-09-06, behind a comment claiming
+      * "/CE is the A19 = 0 AND /IOPAGE term, which U3 already forms" - U3
+      * forms no such term. /OE is qualified by R/W rather than tied low,
+      * which is what keeps the SRAM and the CPU off D0-D7 together on a
+      * write. hardware/README.md open item 4, closed. */}
     <chip
       name="U8"
       footprint={SRAM_512K.footprint}

@@ -244,21 +244,14 @@ after finding 1 made it one.
    checked for side effects. It becomes a real number the moment placement starts and not
    before. Placement waits on open item 2 and on the GAL fitting `graphics.md` §18 step 0
    requires.
-4. **⚠ The system RAM's control lines are not driven.** `RAM_CE`, `RAM_OE` and `RAM_WE`
-   reach `U8` and nothing else. The board claimed `/CE` was "the `A19 = 0` AND `/IOPAGE`
-   term, which U3 already forms" — **U3 forms no such term**, and now that
-   [`gal/mmu.pld`](gal/mmu.pld) exists it is provable rather than arguable.
-
-   **U3 cannot take it.** All twelve dedicated inputs are used, six macrocells are
-   outputs, three more are inputs, and **exactly one pin is free** — pin 23. `RAM_CE`
-   needs `A19` *in* and `RAM_CE` *out*, which is two pins. One pin cannot be both.
-   (An earlier revision of this item said it would fit. It does not, and the count in
-   [`gal/README.md`](gal/README.md) is where to check that rather than take it on trust.)
-
-   So the term needs a home, and that is a decision with a cost either way: U6 has room
-   but is the 25.175 MHz divider, and a third GAL is a tenth package on a motherboard
-   `machine.md` §8 counts as nine. How many of the three signals are really needed is the
-   other half of the question — `/OE` may not need a macrocell at all.
+4. ~~**⚠ The system RAM's control lines are not driven.**~~ **Closed 2026-09-06.**
+   `RAM_CE`, `RAM_OE` and `RAM_WE` reached `U8` and nothing else, behind a comment
+   claiming U3 formed the term — U3 forms no such term, and once
+   [`gal/mmu.pld`](gal/mmu.pld) existed that stopped being arguable. U3 could not take
+   them either: one free pin, and `/CE` alone needs two. They are on **U6** now
+   ([`gal/clkdec.pld`](gal/clkdec.pld)), with `/OE` qualified by `R/W` rather than tied
+   low — which removes ~90 ns of SRAM-versus-CPU contention on every write.
+   `check:netlist` asserts all three run from U6 to U8.
 
 5. **Six slots is unargued.** See above.
 6. **Decoupling is not drawn.** One 0.1 µF per package plus bulk, everywhere; it is
