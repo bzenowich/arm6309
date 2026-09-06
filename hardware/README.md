@@ -8,10 +8,11 @@ convention at the bottom of the root [`README.md`](../README.md).
 item owned by the machine, with no document behind it. This directory is the first pass
 at that, and at the five cards that plug into it.
 
-**Status: schematic-level, and nothing is placed or routed.** Three things have to happen
-before layout is meaningful, and none of them has: the GALs must be fitted
-(`graphics.md` §18 step 0), the video output stage must be specified
-(`design-review.md` §Vid-M4), and the package pinouts below need datasheets. What exists
+**Status: schematic-level, and nothing is placed or routed.** Three things had to happen
+before layout is meaningful. **The third is done** — every package pinout is now read off a
+datasheet (open item 1, closed 2026-09-06, and it was not a formality: see finding 4). Two
+remain: the GALs must be fitted (`graphics.md` §18 step 0) and the video output stage must
+be specified (`design-review.md` §Vid-M4). What exists
 today is the **bus interface of every board, generated from one table**, so the
 motherboard and a card cannot disagree about what A17 is.
 
@@ -92,7 +93,7 @@ behind an LDO (`sdcard.md` §7) and the CPU module regulates for itself.
 |---|---|---|
 | [`lib/slot.ts`](lib/slot.ts) | the 72-pin pinout, as data | + [`slot.check.ts`](lib/slot.check.ts) |
 | [`lib/SlotConnector.tsx`](lib/SlotConnector.tsx) | `SlotSocket` (motherboard) and `CardEdge` (card), both from that table | |
-| [`lib/parts.ts`](lib/parts.ts) | package pinouts | ⚠ mostly unverified — open item 1 |
+| [`lib/parts.ts`](lib/parts.ts) | package pinouts | every one datasheet-verified, each naming its source |
 | [`lib/Card.tsx`](lib/Card.tsx) | the 100 × 160 Eurocard scaffold every card uses | |
 | [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
 | [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
@@ -188,21 +189,51 @@ definition. The rule wants an exemption, not the layout.
 
 ---
 
+### 4. The one pinout that was wrong was the one nobody would check twice
+
+**Found 2026-09-06,** when the datasheets open item 1 asked for were fetched from Digi-Key
+and Mouser and the pinouts were read off them rather than recalled.
+
+Four of the five parts were right as drawn — `74HC574`, `74HC245`, `74HC157` and the
+`AS6C4008` matched their datasheets pin for pin, the 512K × 8's awkward 25–31 block
+included. **The map SRAM did not.** `lib/parts.ts` had pins 21–23 as A9 / A8 / `/WE`; the
+part is `/WE` / A9 / A8. The three were rotated, and the package was drawn 600-mil when the
+`CY7C128A`'s DIP is the 300-mil skinny one.
+
+That numbering is the **6116 standard** that every 2K × 8 in a 24-pin DIP shares, which is
+the uncomfortable part: it is not an obscure part-selection subtlety, it is the pinout most
+likely to be written from memory and least likely to be re-read. Nothing downstream caught
+it, and nothing could have — `mainboard.circuit.tsx` connects by pin *name*, and
+`netlist.check.ts` proves the netlist, so both were correct against a footprint that would
+have shipped a board with three pins swapped. **A name-level check cannot see a
+number-level error.** The pin numbers become load-bearing exactly once, at layout, which
+had not happened yet.
+
+`lib/parts.ts` now carries a `source` on every part naming the file and page, and
+`UNVERIFIED_PARTS` is **derived from `provenance`** instead of hand-maintained — the
+hand-written list had already gone stale once, still naming `SRAM_512K` as four packages
+after finding 1 made it one.
+
+
 ## Open items
 
-1. **⚠ Three of the five motherboard part pinouts are unverified.** `lib/parts.ts` marks
-   each one. Only the CPU socket is confirmed — `plan.md` §2.6 reads it off the *Color
-   Computer 3 Service Manual* and §2.6.1 corroborates it against the Dragon 64 schematic.
-   The rest were written from familiarity, and **no datasheet in
-   [`reference/datasheets/`](../reference/datasheets/) covers any of them.** Wanted there:
-   a 2K×8 15 ns SRAM, `AS6C4008`, `74HC245`, `74HC157`, `74HC273`, `74HC244`, `74HC595`,
-   `74HC193`, `GAL22V10`, `R6551A`/`G65SC51`, `74LVC125`. This project puts a measurement
-   in place of an estimate; these are estimates and are marked as such.
+1. ~~**⚠ Three of the five motherboard part pinouts are unverified.**~~ **Closed
+   2026-09-06.** The datasheets were fetched from Digi-Key and Mouser and every pinout is
+   read off one — see finding 4 above for what that caught, and
+   [`reference/datasheets/README.md`](../reference/datasheets/README.md) for the files and
+   what cites each. **One part on the wanted list has no datasheet and will not get one:**
+   the serial card's `R6551A`/`G65SC51` is out of production at both distributors, so
+   `serial.md` §3.4's speed-grade argument still rests on recalled figures. The `W65C51N`
+   sheet is there for the DIP-28 pinout and for nothing else.
+
 2. **The slot socket footprint is a DIP body.** Pad grid and pin numbering are right, the
    outline is not. It needs a measured footprint once a receptacle is sourced.
 3. **Nothing is placed.** Every board's components sit at the origin, so the PCB DRC
-   reports overlaps that mean nothing yet. Placement waits on open items 1 and 2, and on
-   the GAL fitting `graphics.md` §18 step 0 requires.
+   reports overlaps that mean nothing yet — **299 plated-hole clearance errors on the
+   motherboard alone**, a count unchanged by the pinout fix, which is how that fix was
+   checked for side effects. It becomes a real number the moment placement starts and not
+   before. Placement waits on open item 2 and on the GAL fitting `graphics.md` §18 step 0
+   requires.
 4. **Six slots is unargued.** See above.
 5. **Decoupling is not drawn.** One 0.1 µF per package plus bulk, everywhere; it is
    mechanical and belongs with placement.
@@ -220,4 +251,4 @@ definition. The rule wants an exemption, not the layout.
 - **Every claim a check can make, a check makes.** `npm run check` is arithmetic out of
   the machine documents, not style.
 - **Superseded and unverified material is marked, not deleted** — the root `README.md`
-  convention, applied here to the pinouts and to §7.1's four SRAMs.
+  convention, applied here to the map SRAM's wrong pinout and to §7.1's four SRAMs.

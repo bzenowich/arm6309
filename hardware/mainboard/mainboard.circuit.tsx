@@ -14,8 +14,9 @@
  *   six expansion slots                   machine.md 5 item 5 (still open)
  *
  * Schematic-level. Placement and routing are not attempted yet - the GALs have
- * to be fitted first (graphics.md 18 step 0) and three of the parts here still
- * need a datasheet (hardware/README.md open item 1).
+ * to be fitted first (graphics.md 18 step 0). The package pinouts are no longer
+ * a blocker: every part here was verified against its datasheet on 2026-09-06,
+ * and U1's numbering and footprint were wrong until then (lib/parts.ts).
  */
 import { SlotSocket } from "../lib/SlotConnector"
 import {

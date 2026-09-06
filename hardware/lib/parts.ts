@@ -1,13 +1,14 @@
 /* Package pinouts for the parts the motherboard fits.
  *
- * ⚠ PIN NUMBERS ARE UNVERIFIED. The signal names and the roles come from the
- * card documents; the DIP pin *numbers* below were written from familiarity and
- * no datasheet in reference/datasheets/ covers any of these parts. This project
- * puts a measurement in place of an estimate, so they are marked rather than
- * asserted, and hardware/README.md open item 1 lists the datasheets to fetch.
- * Only the CPU socket is confirmed - cpu/docs/plan.md 2.6 reads it off the
- * Color Computer 3 Service Manual, and 2.6.1 corroborates it against the
- * Dragon 64 schematic.
+ * Pin numbers are read off the datasheets in reference/datasheets/, which were
+ * fetched 2026-09-06 from Digi-Key and Mouser for exactly this purpose. Before
+ * that they were written from familiarity and marked unverified, and one of the
+ * five was wrong - see MAP_SRAM below. Every part here now names its source.
+ *
+ * The signal *names* are this board's, and a few differ from the datasheet's on
+ * purpose; where they do, the difference is noted with the part. The names are
+ * what mainboard.circuit.tsx connects by, so they are load-bearing in a way the
+ * numbers only become at layout.
  */
 
 export interface PartDef {
@@ -16,6 +17,7 @@ export interface PartDef {
   footprint: string
   /** Where the pin numbering came from. "unverified" needs a datasheet. */
   provenance: "confirmed" | "unverified"
+  /** The document the numbering was read from. Required once confirmed. */
   source?: string
 }
 
@@ -42,22 +44,34 @@ export const CPU_SOCKET: PartDef = {
 
 /* -- the five MMU packages, video/docs/graphics.md 6.3.1 ------------------ */
 
-/** 2K x 8 SRAM, 15 ns - the block map. Sixteen of 2048 locations are used. */
+/** 2K x 8 SRAM, 15 ns - the block map. Sixteen of 2048 locations are used.
+ *
+ * This is the one part the datasheet caught. Pins 21-23 were A9/A8//WE here and
+ * are /WE/A9/A8 on the part - the three were rotated. That is the 6116 numbering
+ * rather than anything Cypress-specific, so the error was ours and not a
+ * part-choice question. The width was wrong with it: the CY7C128A's DIP is the
+ * 300-mil skinny package, not the 600-mil one drawn before. The datasheet names
+ * the data pins I/O0-I/O7; DQ0-DQ7 here matches SRAM_512K below and is what the
+ * motherboard connects by. */
 export const MAP_SRAM: PartDef = {
-  provenance: "unverified",
-  footprint: "dip24_w0.6in",
+  provenance: "confirmed",
+  source: "reference/datasheets/CY7C128A.pdf p.1 (CY7C128A-15PC, 300-mil DIP-24)",
+  footprint: "dip24_w0.3in",
   pins: {
     ...range(1, ["A7","A6","A5","A4","A3","A2","A1","A0"]),
     ...range(9, ["DQ0","DQ1","DQ2"]),
     12: "GND",
     ...range(13, ["DQ3","DQ4","DQ5","DQ6","DQ7"]),
-    18: "/CE", 19: "A10", 20: "/OE", 21: "A9", 22: "A8", 23: "/WE", 24: "VCC",
+    18: "/CE", 19: "A10", 20: "/OE", 21: "/WE", 22: "A9", 23: "A8", 24: "VCC",
   },
 }
 
-/** 74HC574 - task select, MMU enable, shadow-ROM disable. */
+/** 74HC574 - task select, MMU enable, shadow-ROM disable.
+ * Verified as drawn. The datasheet writes the data pins 1D-8D and the clock
+ * CLK; D1-D8 and CP here are the older names for the same pins. */
 export const HC574: PartDef = {
-  provenance: "unverified",
+  provenance: "confirmed",
+  source: "reference/datasheets/sn74hc574.pdf p.3 (SCLS148H, N package)",
   footprint: "dip20_w0.3in",
   pins: {
     1: "/OE",
@@ -68,9 +82,11 @@ export const HC574: PartDef = {
   },
 }
 
-/** 74HC245 - break-before-make isolation between the map SRAM and D0-D7. */
+/** 74HC245 - break-before-make isolation between the map SRAM and D0-D7.
+ * Verified as drawn, names included. */
 export const HC245: PartDef = {
-  provenance: "unverified",
+  provenance: "confirmed",
+  source: "reference/datasheets/sn74hc245.pdf p.1 (SCLS131D, N package)",
   footprint: "dip20_w0.3in",
   pins: {
     1: "DIR",
@@ -81,9 +97,16 @@ export const HC245: PartDef = {
   },
 }
 
-/** 74HC157 - quad 2:1 mux on the map SRAM address. */
+/** 74HC157 - quad 2:1 mux on the map SRAM address.
+ *
+ * Verified as drawn. Two names differ from the datasheet, and the first one
+ * carries a polarity the motherboard depends on: pin 1 is A/B with the bar over
+ * the A, so SEL *low* selects the A inputs - which is why U5 ties SEL to
+ * MAP_WE and puts the translate path on 1A-4A. Pin 15 is /G on the datasheet
+ * and /E here. */
 export const HC157: PartDef = {
-  provenance: "unverified",
+  provenance: "confirmed",
+  source: "reference/datasheets/sn74hc157.pdf p.1 (SCLS113D, N package)",
   footprint: "dip16_w0.3in",
   pins: {
     1: "SEL", 2: "1A", 3: "1B", 4: "1Y", 5: "2A", 6: "2B", 7: "2Y", 8: "GND",
@@ -91,17 +114,22 @@ export const HC157: PartDef = {
   },
 }
 
-/** GAL22V10. Pin roles are per-design, so the names here are this board's. */
+/** GAL22V10. Pin roles are per-design, so the names here are this board's -
+ * only the three fixed pins are the part's, and those are confirmed. */
 export const gal22v10 = (io: Record<number, string>): PartDef => ({
-  provenance: "unverified",
+  provenance: "confirmed",
+  source: "reference/datasheets/ATF22V10C.pdf 2 fig 2-2 (24-lead PDIP)",
   footprint: "dip24_w0.3in",
   pins: { 1: "CLK", 12: "GND", 24: "VCC", ...io },
 })
 
 /* -- system RAM, docs/machine.md 7.1 ------------------------------------- */
-/** AS6C4008-class 512K x 8, 55 ns. Four of these are the machine's 512 KB. */
+/** AS6C4008 512K x 8, 55 ns - the machine's system RAM, one package and not
+ * four (hardware/README.md, applied to machine.md 7.1 on 2026-09-06). All 32
+ * pins verified, including the 25-31 block that is easiest to get wrong. */
 export const SRAM_512K: PartDef = {
-  provenance: "unverified",
+  provenance: "confirmed",
+  source: "reference/datasheets/AS6C4008.pdf p.2 (600-mil P-DIP-32)",
   footprint: "dip32_w0.6in",
   pins: {
     1: "A18", 2: "A16", 3: "A14", 4: "A12", 5: "A7", 6: "A6", 7: "A5", 8: "A4",
@@ -114,9 +142,15 @@ export const SRAM_512K: PartDef = {
   },
 }
 
-export const UNVERIFIED_PARTS: Record<string, PartDef> = {
-  MAP_SRAM, HC574, HC245, HC157, SRAM_512K,
+export const PARTS: Record<string, PartDef> = {
+  CPU_SOCKET, MAP_SRAM, HC574, HC245, HC157, SRAM_512K,
 }
+
+/** Derived, so it cannot go stale the way the hand-written list did. Empty
+ * since 2026-09-06; a part added without a datasheet reappears here. */
+export const UNVERIFIED_PARTS: Record<string, PartDef> = Object.fromEntries(
+  Object.entries(PARTS).filter(([, p]) => p.provenance !== "confirmed"),
+)
 
 /** pinLabels for a <chip>, from a PartDef. */
 export const labels = (part: PartDef): Record<string, string> =>
