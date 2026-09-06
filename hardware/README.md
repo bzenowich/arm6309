@@ -10,9 +10,15 @@ at that, and at the five cards that plug into it.
 
 **Status: schematic-level, and nothing is placed or routed.** Three things had to happen
 before layout is meaningful. **The third is done** — every package pinout is now read off a
-datasheet (open item 1, closed 2026-09-06, and it was not a formality: see finding 4). Two
-remain: the GALs must be fitted (`graphics.md` §18 step 0) and the video output stage must
-be specified (`design-review.md` §Vid-M4). What exists
+datasheet (open item 1, closed 2026-09-06, and it was not a formality: see finding 4). The
+first is **started**: [`gal/`](gal/) holds the MMU GAL's equations, and fitting them found
+four more defects in the board below. The video output stage (`design-review.md` §Vid-M4)
+has not moved.
+
+> ⚠ **`mainboard/mainboard.circuit.tsx` and [`gal/mmu.pld`](gal/mmu.pld) now disagree
+> about U3, deliberately.** The equations are right and the board is not; rewiring waits
+> on `machine.md` §5 item 3 — the MMU register map — being signed off, because the netlist
+> would bake it in. See [`gal/README.md`](gal/README.md). What exists
 today is the **bus interface of every board, generated from one table**, so the
 motherboard and a card cannot disagree about what A17 is.
 
@@ -98,6 +104,7 @@ behind an LDO (`sdcard.md` §7) and the CPU module regulates for itself.
 | [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
 | [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
 | [`cards/`](cards/) | audio, video, PS/2, serial, storage — bus interface each | |
+| [`gal/`](gal/) | **the programmable logic** — U3's equations, in CUPL, Verilog and as an exhaustive check | + [`gal/mmu.check.ts`](gal/mmu.check.ts) |
 
 ```sh
 npm install          # bun comes with it; the tsci CLI needs it

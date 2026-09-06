@@ -111,9 +111,14 @@ export default () => (
       * /IOPAGE is (LA15..LA13 = 111) AND (LA12..LA8 = 11111) - machine.md 2.
       * /IOSEL is that term AND (LA7,LA6 = 01), i.e. $FF40-$FF7F.
       *
-      * ⚠ Not fitted. graphics.md 6.3.1 already shows the mux cannot fold in
-      * here; whether the remaining terms fit a 22V10 is unproven, and
-      * graphics.md 18 step 0 requires fitting before layout. */}
+      * ⚠ SUPERSEDED BY gal/mmu.pld, 2026-09-06 - do not read the pins below
+      * as current. Writing the equations changed four things here: MMU_EN is
+      * dropped (no bypass path exists, so it cannot do anything), /IOSEL
+      * moves to U6 (the part does not fit otherwise), ISO_DIR becomes a wire
+      * to R/W rather than a macrocell, and Q is now an input because the
+      * break-before-make ordering needs the quadrature. U5's SEL must also
+      * stop being MAP_WE. Rewiring waits on machine.md 5 item 3 - the
+      * register map gal/README.md proposes - being signed off. */}
     <chip
       name="U3"
       footprint="dip24_w0.3in"

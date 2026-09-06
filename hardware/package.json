@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Board layouts for the arm6309 machine",
   "scripts": {
-    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts",
+    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run gal/mmu.check.ts",
     "check:netlist": "bun run lib/netlist.check.ts",
     "build": "for f in mainboard/mainboard.circuit.tsx cards/*.circuit.tsx; do echo \"-- $f\"; tsci build \"$f\" || exit 1; done",
     "build:all": "npm run build && npm run check && npm run check:netlist",

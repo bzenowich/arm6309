@@ -1,0 +1,106 @@
+Name       mmu ;
+PartNo     ARM6309-U3 ;
+Date       2026-09-06 ;
+Revision   01 ;
+Designer   arm6309 ;
+Company    - ;
+Assembly   motherboard ;
+Location   U3 ;
+Device     g22v10 ;
+
+/* ------------------------------------------------------------------------
+ * The MMU sequencer, hardware/mainboard/mainboard.circuit.tsx U3.
+ *
+ * Runs the map-write cycle that video/docs/graphics.md 6.3.1 draws as a phase
+ * table, and generates the machine's /IOPAGE term (docs/machine.md 2).
+ *
+ * Purely combinational. Every phase edge comes from E and Q, which are in
+ * quadrature: within one bus cycle the order is E-fall, Q-rise, E-rise,
+ * Q-fall, E-fall. That is the only sequencing resource on this part - pin 1
+ * carries an address line, not a clock, because the 25.175 MHz master would
+ * buy nothing a 2.0979 MHz bus cycle cannot get from its own quadrature.
+ *
+ * /IOSEL is NOT here. It was, and the part does not fit with it - see
+ * gal/README.md, the pin budget. It moves to U6.
+ * ---------------------------------------------------------------------- */
+
+/* --- inputs ----------------------------------------------------------- */
+PIN 1  = LA15 ;     /* logical A15..A8 - the $FF00-$FFFF page decode.      */
+PIN 2  = LA14 ;     /* These stay on the motherboard by machine.md 2 and   */
+PIN 3  = LA13 ;     /* reach no slot; netlist.check.ts proves it.          */
+PIN 4  = LA12 ;
+PIN 5  = LA11 ;
+PIN 6  = LA10 ;
+PIN 7  = LA9 ;
+PIN 8  = LA8 ;
+PIN 9  = LA7 ;      /* $FFA0-$FFBF window select: A7..A4 = 101x            */
+PIN 10 = LA6 ;
+PIN 11 = LA5 ;
+PIN 13 = LA4 ;      /* 0 = block registers, 1 = control                    */
+PIN 14 = E ;
+PIN 15 = Q ;
+PIN 16 = RW ;       /* 6809 R/W: high = read                               */
+
+/* --- outputs ---------------------------------------------------------- */
+PIN 17 = !IOPAGE ;  /* to the backplane; gates every physical decode       */
+PIN 18 = MUXSEL ;   /* U5 '157 select: high = A3..A0, the write index      */
+PIN 19 = !ISOOE ;   /* U4 '245 output enable                               */
+PIN 20 = !MAPWE ;   /* U1 map SRAM write strobe                            */
+PIN 21 = !MAPOE ;   /* U1 map SRAM output enable                           */
+PIN 22 = !CTRLCP ;  /* U2 '574 clock - see the equation; edge at E-fall     */
+PIN 23 = SPARE ;    /* the one pin the budget has left over                */
+
+/* --- intermediate terms ----------------------------------------------- */
+FIELD page = [LA15..LA8] ;
+
+/* $FF00-$FFFF. This is the term machine.md 2 brings to the backplane so
+ * that system RAM and VRAM stay inhibited for the whole of any I/O cycle. */
+iopage = LA15 & LA14 & LA13 & LA12 & LA11 & LA10 & LA9 & LA8 ;
+
+/* $FFA0-$FFBF, the MMU's own 32 bytes. Motherboard-decoded, outside the
+ * $FF40-$FF7F geographic window - docs/machine.md 3. */
+mmusel = iopage & LA7 & !LA6 & LA5 ;
+blksel = mmusel & !LA4 ;    /* $FFA0-$FFAF - 16 block registers            */
+ctlsel = mmusel &  LA4 ;    /* $FFB0-$FFBF - control, aliased 16 times     */
+
+/* --- equations -------------------------------------------------------- */
+
+IOPAGE = iopage ;
+
+/* The mux switches on address decode alone, so the map SRAM sees its write
+ * index from t_AD after E-fall - about 367 ns of address set-up against the
+ * CY7C128A-15's 12 ns tAW. Tying this to MAPWE, as the board did, gave it
+ * none. */
+MUXSEL = blksel ;
+
+/* The '245 is enabled for E-high only, read or write. Turning it on at
+ * E-rise instead of Q-rise is what makes break-before-make comfortable
+ * rather than marginal: MAPOE has been away since address time. */
+ISOOE = blksel & E ;
+
+/* Inside that window, and started a further quarter cycle later, so the
+ * buffer is already driving. Releases at E-fall, before the buffer does. */
+MAPWE = blksel & !RW & E & !Q ;
+
+/* Asserted whenever this is not an I/O cycle - that is the translation.
+ * Re-asserted for a block-register read, which is the only time the SRAM
+ * drives during an I/O cycle. Never asserted during a block write. */
+MAPOE = !iopage
+      # blksel & RW & E ;
+
+/* The '574 must see ONE rising edge per control write, at E-fall, where
+ * write data has been valid for 247 ns (t_DDW = 110 ns from Q-rise).
+ *
+ * The obvious equation - ctlsel & !RW & !E - is wrong, and the phase table
+ * shows why: E-low occurs twice in a cycle either side of E-high, and the
+ * first of the two is before write data exists. It would clock the '574
+ * once on stale data and once on good. E and Q cannot tell those apart:
+ * the address is already valid at E-fall+t_AD, and (E,Q) = (0,0) both then
+ * and at the moment the strobe is wanted.
+ *
+ * So the term is asserted for E-high and the PIN is declared inverted. The
+ * pin falls at E-rise (harmless, the '574 is rising-edge) and rises at
+ * E-fall - exactly one rising edge, in the right place. */
+CTRLCP = ctlsel & !RW & E ;
+
+SPARE = 'b'0 ;
