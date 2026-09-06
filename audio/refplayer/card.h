@@ -46,35 +46,45 @@ enum {
     A_SDATA   = 0x9,  /* sample RAM at SPTR, post-increment                  */
     A_ASTAT   = 0xA,  /* read only                                           */
     A_TIMER1  = 0xB,  /* tempo reload, bits 15..8                            */
-    A_TIMER0  = 0xC,  /* bits 7..0                                           */
-    A_LIDX1   = 0xD,  /* volume-LUT load index, bits 15..8   (see NOTE)      */
-    A_LIDX0   = 0xE,  /* bits 7..0                                           */
-    A_LDATA   = 0xF   /* volume-LUT byte at LIDX, post-increment             */
+    A_TIMER0  = 0xC   /* bits 7..0                                           */
+    /* $D..$F are reserved and read 0 — they were LIDX/LDATA, the volume-LUT
+     * load path, deleted with the table itself. See the NOTE below. */
 };
 
-/* NOTE — LIDX/LDATA and the 7-bit volume.
+/* NOTE — where the volume went, and why VOL is seven bits.
  *
- * audio/docs/audio.md §6.1 as first written addressed the volume LUT with
- * {curve, VOL[5:0], SAMP[7:0]}. That is one bit short: Paula's volume is 0..64,
- * which needs SEVEN bits, and a 6-bit field silently clamps every channel to
- * 63/64 of its intended level. Writing this model is what found it.
+ * audio/docs/audio.md §6.1 has specified three different volume paths, and this
+ * model has implemented two of them. Worth recording, because the register map
+ * carries the scar:
  *
- * The fix costs nothing and is strictly better: address the LUT with
- * {VOL[6:0], SAMP[7:0]} — exactly the 15 address bits of a 32K x 8 pair — and
- * make the table HOST-LOADABLE through LIDX/LDATA instead of selecting a curve
- * with an address line. The curve then stops being a hardware feature and
- * becomes table content: linear/Paula-exact, logarithmic, soft-clip, or a
- * per-machine calibration, all for the same zero packages. Entries for VOL
- * 65..127 are unreachable in Paula-compatible use and simply repeat VOL 64.
+ *   1. A 32K x 8 lookup addressed {curve, VOL[5:0], SAMP[7:0]}. One bit short:
+ *      Paula's volume is 0..64, which needs SEVEN bits, and a 6-bit field
+ *      silently clamps every channel to 63/64 of its intended level. Writing
+ *      this model is what found it.
+ *   2. {VOL[6:0], SAMP[7:0]} -> 12-bit offset binary, host-loaded through a
+ *      LIDX/LDATA pointer/data pair at registers $D..$F: 65,536 bytes and about
+ *      94 ms of TFM at boot. Correct, and the curve became table content.
+ *   3. No table at all. The card cascades two halves of an AD7528: the sample
+ *      byte drives one multiplying DAC, whose output is the REFERENCE of a
+ *      second whose code is the volume. The multiply happens in the analogue
+ *      domain, so the product is not quantised at all -- better than the 12-bit
+ *      table -- and the SRAM pair, the boot upload and the $D..$F registers all
+ *      go away. That is what this model implements.
  *
- * Loading all 65,536 bytes costs one TFM burst, ~94 ms at 2.098 MHz, once at
- * boot. ACTRL bit 7 keeps the card quiet until it is done.
+ * VOL stays 0..64 and the card shifts it left two to make an 8-bit attenuator
+ * code (saturating at 255, so the top step is 0.4 % narrow). ACTRL_RAWVOL makes
+ * VOL the 8-bit code directly, which is where a non-Paula volume curve now
+ * lives: in the host's software, not in the card's SRAM.
+ *
+ * Samples are stored in card RAM as OFFSET BINARY -- the converter is
+ * unsigned-coded, and the loader converts once (mod_load.c, modplayer.md §4.2).
+ * Silence is $80, not $00.
  */
-
 enum {
     ACTRL_LED     = 0x01,  /* + 2-pole LED filter (audio.md §7)   */
     ACTRL_BYPASS  = 0x02,  /* bypass all filtering                */
     ACTRL_NTSC    = 0x04,  /* NTSC colour clock                   */
+    ACTRL_RAWVOL  = 0x08,  /* VOL is a raw 8-bit attenuator code  */
     ACTRL_8CHAN   = 0x10,  /* audio.md §11.2 — not modelled       */
     ACTRL_PAN     = 0x20,  /* audio.md §11.1 — not modelled       */
     ACTRL_TIMER   = 0x40,  /* tempo timer runs; 0 stops it        */
@@ -104,7 +114,6 @@ enum {
 
 #define CARD_STATE_BYTES   64
 #define CARD_SRAM_BYTES    (512u * 1024u)   /* footprint max, audio.md §5   */
-#define CARD_LUT_ENTRIES   32768u           /* {VOL[6:0], SAMP[7:0]}        */
 
 /* audio/docs/audio.md §16 item 13: enable-triggered work jumps the deferred queue
  * and completes within four colour clocks. modplayer.md §5.3 drops
@@ -116,14 +125,14 @@ typedef struct {
     uint32_t lc;        /* shadow location, byte address, 19 bits          */
     uint32_t len;       /* shadow length, in words                         */
     uint16_t per;
-    uint8_t  vol;       /* 0..127, clamped to 64 by the LUT contents       */
+    uint8_t  vol;       /* 0..64, or an 8-bit code under ACTRL_RAWVOL      */
     uint8_t  att;
     uint8_t  pan;
 
     uint32_t ptr;       /* live pointer                                    */
     uint32_t cnt;       /* live count, in BYTES                            */
     uint16_t next;      /* colour-clock count at which this channel ticks  */
-    int8_t   samp;      /* the byte currently held out to the DAC          */
+    uint8_t  samp;      /* card byte held to the DAC: OFFSET BINARY, $80=0 */
     uint8_t  dmaen;
     uint8_t  start_in;  /* colour clocks until an enable latches; 0 = idle */
 } card_chan;
@@ -142,12 +151,10 @@ typedef struct {
     uint8_t  intena;
     uint8_t  aidx;
     uint32_t sptr;
-    uint16_t lidx;
 
     uint8_t  state[CARD_STATE_BYTES];
     uint8_t *sram;                      /* CARD_SRAM_BYTES, caller-owned   */
     uint32_t sram_bytes;                /* how much is actually populated  */
-    int16_t  lut[CARD_LUT_ENTRIES];     /* 12-bit signed, §6.1             */
 
     /* Model-only bookkeeping, not hardware state. */
     uint64_t cc;            /* colour clocks since reset                   */
@@ -160,13 +167,14 @@ uint8_t card_read(card_t *c, uint8_t reg);
 void    card_step(card_t *c);
 int     card_firq(const card_t *c);
 
-/* L and R as the 12-bit signed codes actually presented to the two DACs:
- * the 13-bit channel sum with its bottom bit dropped (§6.2, §6.3). */
-void    card_dac(const card_t *c, int *l, int *r);
+/* One channel's contribution, as (signed sample) x (8-bit volume code): the
+ * product the cascaded converter pair forms in the analogue domain (§6.1).
+ * +-32640 full scale, and it is not quantised on the card. */
+int     card_chan_out(const card_t *c, unsigned n);
 
-/* Write the Paula-linear volume table through LIDX/LDATA, exactly as boot code
- * would. entry = SAMP * min(VOL,64) / 4, giving 12-bit signed. */
-void    card_load_linear_lut(card_t *c);
+/* L and R at the two summing nodes: the analogue sum of two channels' currents
+ * (§6.2). No truncation anywhere -- the sum is a wire into a virtual ground. */
+void    card_dac(const card_t *c, int *l, int *r);
 
 long    card_colour_clock(const card_t *c);
 

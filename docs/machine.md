@@ -41,10 +41,10 @@ genuinely undecided.
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
 | **Video** | 640×200 × 256 colours, VGA out — **40 ICs**, 9 of them GALs ([`video/`](../video/), `graphics.md` §14) |
-| **Audio** | 4-channel 8-bit PCM, Paula-exact — **57 ICs** ([`audio/`](../audio/), `audio.md` §10) |
+| **Audio** | 4-channel 8-bit PCM, Paula-exact — **36 ICs** ([`audio/`](../audio/), `audio.md` §10) |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **7 ICs**, 528 KiB/s sustained — **specified** ([`storage/`](../storage/)). ⚠ The machine's one period exception |
-| **Total silicon** | **~131 ICs** — 118 on cards, ~13 on the motherboard. See §8 |
+| **Total silicon** | **~110 ICs** — 97 on cards, ~13 on the motherboard. See §8 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -527,27 +527,37 @@ carve-out drawn into a physical map that has no room for one.
 | Rail | Consumer | ICs | Estimate |
 |---|---|---|---|
 | 5 V | **video card** | 40 (9 GALs) | **~1.1–1.7 A**, design to 2 A — `graphics.md` §14. ⚠ It quoted 450–650 mA until 2026-09-04, which its own per-GAL figure (630–810 mA for the GALs alone) already exceeded |
-| 5 V | **audio card** | 57 | **~400–500 mA** — `audio.md` §10 |
+| 5 V | **audio card** | 36 | **~300–400 mA** — `audio.md` §10 |
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
 | 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + 7 | not yet estimated |
 | 5 V | **motherboard**: MMU (5), divider GAL, oscillator, reset supervisor, 512 KB SRAM + decode | ~13 | not yet estimated |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly 2–3 A at 5 V across ~131 ICs, plus a 3.3 V rail.**
+**The machine is plausibly 2–3 A at 5 V across ~110 ICs, plus a 3.3 V rail.**
 
 > ⚠ **Both halves of that sentence moved on 2026-09-04, and in the same direction.** The
 > review estimated "~90 ICs and 1.5–2.5 A" from the counts the card documents then
 > carried. Re-tallying those documents put video at 40 rather than ~33, audio at **57
 > rather than 35**, and PS/2 at 11 rather than 9 — so the machine is about **45 % more
-> silicon than any document claimed**, and the supply grew with it.
+> silicon than any document claimed**, and the supply grew with it. Audio has since come
+> back to **36 — below the 35 it originally claimed, and this time itemised**: the
+> four-DAC analogue sum took 3 (`audio.md` §6.2), moving the host-visible counters and
+> commit staging into the state file the card already owns took 9 (`audio.md` §9.5),
+> and cascading two halves of a dual multiplying DAC so the volume multiply happens in
+> the analogue domain took 9 more (`audio.md` §6.1). It is the only count that has moved
+> down, and the two lessons generalise: **state living outside a card's own state memory
+> is the cheapest thing to find**, and **a table that exists to do arithmetic is worth
+> re-examining against the parts catalogue.**
 
 This is a real supply and a real backplane-distribution question — **how many power and
 ground pins per slot connector** — which §5 item 5 must answer as part of choosing the
 connector. Each card owes a measured figure at its own bring-up; this table is where they
 land.
 
-> ⚠ **57 ICs is also a card that may not fit a card.** `audio.md` §16 item 19 raises the
-> envelope as an open question — double-height, mezzanine, or the four-DAC analogue-sum
-> alternative of its item 17, which is both cheaper *and* closer to Paula and is the
-> single largest lever on that 57. **It is the machine's largest outstanding cost
-> question**, and it is a layout decision nobody has taken.
+> ⚠ **36 ICs is back inside the envelope this document originally assumed, and the fit
+> still has to be measured.** `audio.md` §16 item 19 raised it as an open question at 57;
+> three passes have taken it to 36, against the 35 the single-Eurocard assertion was
+> first made at. The assertion is not restored by arriving at the same number — it was
+> never measured, and the analogue section has grown from two converters and four
+> amplifier channels to eight halves and ten. **Measure it, with the analogue section
+> physically separate.** It remains a layout decision nobody has taken.

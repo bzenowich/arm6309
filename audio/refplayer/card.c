@@ -33,34 +33,11 @@ void card_reset(card_t *c, uint8_t *sram, uint32_t sram_bytes)
     c->sram_bytes = keep_bytes;
 
     /* audio/docs/audio.md §13: reset leaves the card quiet — display of the audio
-     * card, so to speak. Software loads the LUT and the state file, then sets
-     * ACTRL_ENABLE. The LUT comes up zeroed here where real SRAM would come up
-     * undefined; zeroed is the safe direction (silence, not noise). */
+     * card, so to speak. Software loads the state file, then sets ACTRL_ENABLE.
+     * Silence is $80 in offset binary (§6.1), so the held sample bytes do not
+     * come up at zero the way memset left them. */
     c->ctrl = 0;
-}
-
-/* ------------------------------------------------------------------- LUT -- */
-
-void card_load_linear_lut(card_t *c)
-{
-    /* Written through the register interface on purpose: it exercises the same
-     * LIDX/LDATA path the 6309 boot code will use, so a bug in that path shows
-     * up here rather than only on hardware. */
-    card_write(c, A_LIDX1, 0);
-    card_write(c, A_LIDX0, 0);
-
-    for (unsigned v = 0; v < 128u; v++) {
-        unsigned vc = v > 64u ? 64u : v;          /* Paula clamps above 64  */
-        for (unsigned s = 0; s < 256u; s++) {
-            int sv = (int)(int8_t)(uint8_t)s;
-            /* 8-bit signed x 7-bit volume is 14 bits; the LUT is 12, so the
-             * bottom two bits go. audio/docs/audio.md §6.1 argues they are below the
-             * noise floor of the analogue stage. */
-            int e = (sv * (int)vc) / 4;
-            card_write(c, A_LDATA, (uint8_t)((e >> 8) & 0xFF));
-            card_write(c, A_LDATA, (uint8_t)(e & 0xFF));
-        }
-    }
+    for (unsigned n = 0; n < 4u; n++) { c->ch[n].samp = 0x80u; }
 }
 
 /* --------------------------------------------------------- state file ----- */
@@ -109,8 +86,9 @@ void card_write(card_t *c, uint8_t reg, uint8_t val)
         if (off <= ST_PAN) {
             c->state[i] = val;
             if (off == ST_DAT) {
-                /* Direct sample write, audio/docs/audio.md §1 requirement 8. */
-                c->ch[n].samp = (int8_t)val;
+                /* Direct sample write, audio/docs/audio.md §1 requirement 8.
+                 * OFFSET BINARY, like everything else the converter sees. */
+                c->ch[n].samp = val;
             } else {
                 state_sync(c, n);
             }
@@ -193,22 +171,6 @@ void card_write(card_t *c, uint8_t reg, uint8_t val)
         c->cianext = (uint16_t)(c->ciacnt + c->timer);
         break;
 
-    case A_LIDX1: c->lidx = (uint16_t)((c->lidx & 0x00FFu) | ((uint16_t)val << 8)); break;
-    case A_LIDX0: c->lidx = (uint16_t)((c->lidx & 0xFF00u) | val); break;
-
-    case A_LDATA: {
-        /* The LUT is 32768 x 16 bits presented as 65536 bytes, big-endian, so
-         * one TFM burst loads the whole table. */
-        unsigned e = c->lidx >> 1;
-        int16_t cur = c->lut[e];
-        if (c->lidx & 1u) { cur = (int16_t)((cur & ~0xFF) | val); }
-        else              { cur = (int16_t)((cur & 0x00FF) | ((int16_t)val << 8)); }
-        /* Sign-extend the 12-bit field the hardware actually stores. */
-        c->lut[e] = (int16_t)((cur & 0x0FFF) | ((cur & 0x0800) ? ~0x0FFF : 0));
-        c->lidx = (uint16_t)(c->lidx + 1u);
-        break;
-    }
-
     default:
         break;
     }
@@ -264,7 +226,7 @@ static void chan_tick(card_t *c, unsigned n)
         /* Silence rather than whatever is in unwritten RAM, and count it: a
          * non-zero tally here means the loader relocated something wrongly
          * (audio/docs/modplayer.md §4.6), which is worth failing a test over. */
-        byte = 0;
+        byte = 0x80u;                 /* offset-binary silence, §6.1 */
         c->oob_reads++;
     }
 
@@ -275,11 +237,14 @@ static void chan_tick(card_t *c, unsigned n)
          * is an adaptation, not a transcription. UNVERIFIED — no module in the
          * test corpus exercises it. See audio/docs/audio.md §11.3. */
         card_chan *t = &c->ch[(n + 1u) & 3u];
-        if (ch->att & 0x01u) { t->per = (uint16_t)((t->per & 0xFF00u) | byte); }
-        if (ch->att & 0x02u) { t->vol = byte & 0x7Fu; }
-        ch->samp = 0;
+        /* The modulating data is the sample VALUE, so undo the offset-binary
+         * coding the converter needs (§6.1) before it is used as a number. */
+        uint8_t v = (uint8_t)(byte ^ 0x80u);
+        if (ch->att & 0x01u) { t->per = (uint16_t)((t->per & 0xFF00u) | v); }
+        if (ch->att & 0x02u) { t->vol = (uint8_t)(v & 0x7Fu); }
+        ch->samp = 0x80u;
     } else {
-        ch->samp = (int8_t)byte;
+        ch->samp = byte;
     }
 
     ch->ptr = (ch->ptr + 1u) & 0x7FFFFu;
@@ -338,25 +303,45 @@ int card_firq(const card_t *c)
     return (c->intreq & c->intena) != 0;
 }
 
+/* VOL -> the 8-bit code written to the volume converter (§6.1). Paula's 0..64
+ * shifts left two and saturates; ACTRL_RAWVOL passes the byte through, so a
+ * non-linear volume curve lives in host software instead of card silicon. */
+static unsigned vol_code(const card_t *c, unsigned vol)
+{
+    unsigned code;
+    if (c->ctrl & ACTRL_RAWVOL) { return vol & 0xFFu; }
+    if (vol > 64u) { vol = 64u; }
+    code = vol << 2;
+    return code > 255u ? 255u : code;
+}
+
+int card_chan_out(const card_t *c, unsigned n)
+{
+    /* The sample converter is unsigned-coded and its half-scale pedestal is
+     * cancelled at its own I/V node, BEFORE the volume stage (§6.3) — which is
+     * why VOL = 0 is exact silence here, with no DC step to leave behind. */
+    return ((int)c->ch[n].samp - 128) * (int)vol_code(c, c->ch[n].vol);
+}
+
 void card_dac(const card_t *c, int *l, int *r)
 {
     int s[4];
 
     if (!(c->ctrl & ACTRL_ENABLE)) { *l = 0; *r = 0; return; }
 
-    for (unsigned n = 0; n < 4u; n++) {
-        unsigned v = c->ch[n].vol & 0x7Fu;
-        unsigned idx = (v << 8) | (unsigned)(uint8_t)c->ch[n].samp;
-        s[n] = c->lut[idx];
-    }
+    for (unsigned n = 0; n < 4u; n++) { s[n] = card_chan_out(c, n); }
 
     /* Hard-panned, 0 and 3 left, 1 and 2 right — audio/docs/audio.md §1 requirement
      * 5. Not a preference: modules are mixed for it.
      *
-     * The sum of two 12-bit signed values is 13 bits and the DAC is 12, so the
-     * bottom bit is dropped once, at the converter (§6.2, §6.3). */
-    *l = (s[0] + s[3]) >> 1;
-    *r = (s[1] + s[2]) >> 1;
+     * The sum is ANALOGUE on the card (§6.2): the two channels of a side are two
+     * ladders on ONE die, and their currents meet at a single I/V amplifier's
+     * virtual ground. Nothing is quantised or truncated there, which is why this
+     * is a plain addition of two exact products. The port registers and write
+     * windows are not modelled: they exist only to give the converter its 100 ns
+     * of setup, and the latency they add is fixed per channel and inaudible. */
+    *l = s[0] + s[3];
+    *r = s[1] + s[2];
 }
 
 long card_colour_clock(const card_t *c)

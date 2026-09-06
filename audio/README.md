@@ -2,13 +2,29 @@
 
 A **Paula**, not a Paula-alike: 4 channels of 8-bit signed PCM, built from pre-1990
 parts, whose acceptance test is playing existing Amiga OCS tracker modules **correctly**.
-**57 ICs**, card-local sample SRAM, no bus mastering.
+**36 ICs**, card-local sample SRAM, no bus mastering, and **no digital multiply and no
+digital sum anywhere**: volume and mixing both happen in the converters, the way Paula
+does it.
 
-> ⚠ **This README said 35 ICs.** The design review's audio findings put the honest
-> figure at **57** — the channel-sum path, the host-visible counters `SPTR`/`LIDX`/`AIDX`,
-> the host-boundary synchroniser and commit staging, the `ADATA` prefetch latch, the
-> open-collector `/FIRQ` stage, and two more GALs were all argued for in prose and never
-> costed. [`docs/audio.md`](docs/audio.md) §10 carries the itemised delta.
+> ⚠ **This README said 35 ICs, then 57.** The design review's audio findings put the
+> honest figure at **57** — the channel-sum path, the host-visible counters
+> `SPTR`/`LIDX`/`AIDX`, the host-boundary synchroniser and commit staging, the `ADATA`
+> prefetch latch, the open-collector `/FIRQ` stage, and two more GALs were all argued for
+> in prose and never costed. It is now **54**, because the digital channel sum has been
+> replaced by four `LTC7545A` and a resistor pair
+> ([`docs/audio.md`](docs/audio.md) §6.2). That change was recorded as being worth twelve
+> packages; doing the analogue work it was waiting on showed it is worth **three** — the
+> converter needs 100 ns of stable data against a 35 ns LUT window, so every channel
+> needs its own hold latch, and four separate dice cannot sum as currents the way Paula's
+> four on-die ladders do. Then **45**: the host-visible counters and the multi-byte commit
+> staging moved into three of the state file's 2032 spare words, and the read-back `'245`
+> went because the latch behind it already drives the bus (**−9**). Then **36**: an
+> `AD7528` is a *dual* multiplying DAC, so cascading two halves — sample byte into the
+> first, its output as the reference of the second, volume as that one's code — does the
+> multiply in the analogue domain and deletes the 32K×8 volume LUT, its boot upload, six
+> of the eight port latches and a state-file package (**−9**). The product stops being
+> quantised at all, and `VOL` = 0 becomes exact silence.
+> [`docs/audio.md`](docs/audio.md) §10 carries all four itemised deltas.
 
 **Unaffected by the machine's E rate.** Everything on the card is referred to its own
 28.37516 MHz crystal, and §9.3's prefetch means there is no `/WAIT` path to close, so the

@@ -31,7 +31,7 @@ first.
 | **Loader output** | sample data in card RAM, a 31-entry address table, a pattern buffer in system RAM |
 | **What the loader transforms** | **addresses only.** Not periods, not volumes, not lengths, not finetune, not sample data |
 | **Resident RAM** | patterns (typ. 10–30 KB) + ~4 KB of tables and code |
-| **Card RAM** | 2 bytes of silence at `$00000` (the null-loop target) + sample data |
+| **Card RAM** | 2 bytes of silence at `$00000` — **`$80 $80`**, not `$00 $00` (the null-loop target, offset binary) + sample data |
 | **Replayer entry** | `/FIRQ` from the card's tempo timer ([`audio.md`](audio.md) §8.1) |
 | **Tick rate** | `TIMER = 1773447 / BPM`, default BPM 125 → 50.002 Hz |
 | **Per-tick cost** | ~900 cycles plain, ~2,200 on a row tick — **~2.7 % of a 2.098 MHz 6309** |
@@ -205,7 +205,7 @@ be any size — 512 bytes is fine:
   1. read 1084 bytes                    -> header
   2. parse, compute npatterns, validate -> §4.6
   3. read npatterns * 1024 bytes        -> pattern buffer in system RAM
-  4. SPTR <- $00000 ; SDATA <- 0, 0     -> the null-loop block (§4.2)
+  4. SPTR <- $00000 ; SDATA <- $80, $80 -> the null-loop block (§4.2)
   5. for each sample 1..31:
         sample_addr[n] <- current card address
         stream sample_len[n]*2 bytes from disk -> SDATA
@@ -218,7 +218,7 @@ Peak resident memory is the pattern buffer plus one disk sector.
 ### 4.2 Card RAM layout, and the null-loop block
 
 ```
-  $00000  $00 $00        <- THE NULL-LOOP BLOCK: two bytes of silence
+  $00000  $80 $80        <- THE NULL-LOOP BLOCK: two bytes of silence
   $00002  sample 1 data
           sample 2 data
           ...
@@ -247,7 +247,7 @@ malformed pattern cell can never make the card fetch from unwritten RAM.
 
 | Field | Transformation |
 |---|---|
-| Sample data | **copy verbatim** — 8-bit signed, same encoding, no requantisation |
+| Sample data | **`XOR $80` per byte** — the card's converter is unsigned-coded, so card RAM is offset binary ([`audio.md`](audio.md) §6.1). No requantisation, no resampling: one bit, exactly reversible |
 | `length` (words) | **copy verbatim** into `sample_len` |
 | `volume` (0–64) | **copy verbatim** |
 | `finetune` nibble | **copy verbatim** as a row index (§3) |
@@ -270,6 +270,16 @@ on the card side ([`audio.md`](audio.md) §13.2):
 |---|---|---|
 | `LDA ,X+` / `STA SDATA` loop | ~10 | 625 ms |
 | **`TFM X+,Y`** | **3** | **187 ms** |
+| **`LDD`/`EORD #$8080`/`STD` over the buffer, then `TFM`** | ~11 | **~690 ms** |
+
+**The third row is the offset-binary conversion of §4.3, and it is only owed when the
+module has not been converted in advance.** Card RAM holds samples offset binary
+([`audio.md`](audio.md) §6.1); a `.mod` holds them two's complement. A module prepared
+offline arrives already flipped and the loader issues its verbatim `TFM`; an unmodified
+`.mod` streamed off the disk costs one in-place pass over each sector buffer first.
+`EORD` is why it is a pass and not a byte loop — two bytes per instruction. The choice
+is [`audio.md`](audio.md) §16 item 27, which also records the one-gate hardware
+alternative.
 
 `W` is 16 bits, so a >64 KB sample is two `TFM`s and **a full 128 KB card image is
 three**: `65,535 + 65,535 + 2 = 131,072`. ([`audio.md`](audio.md) §13.2 gives the same
@@ -850,8 +860,9 @@ that **each one is invisible to the specific comparison being run**, which is th
 argument for adding probes deliberately rather than adding modules.
 
 **It paid for itself twice.** Building the model found four things these
-documents had wrong: the volume LUT was one address bit short of
-Paula's 0–64 range ([`audio.md`](audio.md) §6.1); the tempo clock was out by
+documents had wrong: the volume LUT was one address bit short of Paula's 0–64 range
+(the table has since been deleted outright — the volume moved into the converter,
+[`audio.md`](audio.md) §6.1 — but the seven-bit `VOL` field it forced is still there); the tempo clock was out by
 2.5× ([`audio.md`](audio.md) §8.2); a reference that runs the replayer in zero
 card time *hides* the §5.3 race instead of testing it, so the model charges each
 register store its real cost; and the LED filter model had a passband bump, which

@@ -1,10 +1,10 @@
 /* Analogue model and WAV output — audio/docs/audio.md §6.2, §7.
  *
- * The card presents a continuous-time signal: each channel is a zero-order hold
- * at its own rate and the four are summed with no output sample rate anywhere
- * (audio/docs/audio.md §6.2). Writing a 48 kHz file therefore needs a decimation
- * stage that the hardware does not have, and it is important to keep the two
- * apart. Everything down to and including the filters is a model of the CARD.
+ * The card presents a continuous-time signal: each channel is a zero-order hold at
+ * its own rate, driving its own converter, and the four are summed in the analogue
+ * domain with no output sample rate anywhere (audio/docs/audio.md §6.2). Writing a
+ * 48 kHz file therefore needs a decimation stage that the hardware does not have, and
+ * it is important to keep the two apart. Everything down to and including the filters is a model of the CARD.
  * The anti-alias stage below it is a RENDERING artefact and would not exist in
  * a listener's ears.
  *

@@ -124,25 +124,50 @@ static void advance_only(void *vp, unsigned cc)
     for (unsigned i = 0; i < cc; i++) { card_step((card_t *)vp); }
 }
 
-static void test_volume_lut(void)
+/* Set channel n's held sample byte (offset binary) and volume directly. */
+static void set_chan(card_t *c, unsigned n, int sample, unsigned vol)
+{
+    c->ch[n].samp = (uint8_t)((sample + 128) & 0xFF);
+    c->ch[n].vol  = (uint8_t)vol;
+}
+
+static void test_volume_law(void)
 {
     card_t c;
     card_reset(&c, sram, 128u * 1024u);
-    card_load_linear_lut(&c);
+    card_write(&c, A_ACTRL, ACTRL_ENABLE);
 
-    /* audio/docs/audio.md §6.1: entry = SAMP * min(VOL,64) / 4, 12-bit signed. */
-    check_eq(c.lut[(64u << 8) | 0x7Fu], 127 * 64 / 4, "LUT: +127 at full volume");
-    check_eq(c.lut[(64u << 8) | 0x80u], -128 * 64 / 4, "LUT: -128 at full volume");
-    check_eq(c.lut[(0u << 8) | 0x7Fu], 0, "LUT: silence at volume 0");
-    check_eq(c.lut[(32u << 8) | 0x40u], 64 * 32 / 4, "LUT: half volume");
+    /* audio/docs/audio.md §6.1: the volume is the CODE of a second multiplying
+     * converter whose reference is the first one's output, so the product is
+     * (signed sample) x (VOL * 4, saturated at 255) and is not quantised. */
+    set_chan(&c, 0, 127, 64);
+    check_eq(card_chan_out(&c, 0), 127 * 255, "volume: +127 at full volume");
+    set_chan(&c, 0, -128, 64);
+    check_eq(card_chan_out(&c, 0), -128 * 255, "volume: -128 at full volume");
+    set_chan(&c, 0, 127, 32);
+    check_eq(card_chan_out(&c, 0), 127 * 128, "volume: half volume is half the code");
 
-    /* The 7-bit volume field is the whole point of the LIDX/LDATA change: at
-     * 6 bits, volume 64 would have been unreachable and every channel would sit
-     * 63/64 of the way up. */
-    check_eq(c.lut[(65u << 8) | 0x7Fu], c.lut[(64u << 8) | 0x7Fu],
-             "LUT: volume above 64 clamps rather than wrapping");
-    check(c.lut[(64u << 8) | 0x7Fu] > c.lut[(63u << 8) | 0x7Fu],
-          "LUT: volume 64 is louder than 63 (the 7th bit exists)");
+    /* VOL = 0 is EXACT silence: the volume ladder passes no current at all, so
+     * there is no pedestal to leave behind and no DC step at DMACON changes. */
+    set_chan(&c, 0, 127, 0);
+    check_eq(card_chan_out(&c, 0), 0, "volume: VOL=0 is exactly zero, not a pedestal");
+    set_chan(&c, 0, -128, 0);
+    check_eq(card_chan_out(&c, 0), 0, "volume: VOL=0 is zero for negative samples too");
+
+    /* Seven bits, because 0..64 is 65 levels -- the correction that writing
+     * this model found. Above 64 clamps rather than wrapping. */
+    set_chan(&c, 0, 127, 65);
+    check_eq(card_chan_out(&c, 0), 127 * 255, "volume: above 64 clamps rather than wrapping");
+    set_chan(&c, 0, 127, 63);
+    check(card_chan_out(&c, 0) < 127 * 255, "volume: 64 is louder than 63 (the 7th bit exists)");
+
+    /* ACTRL b3 is where a non-Paula volume curve lives now: the host writes the
+     * attenuator code itself, and the card stops shifting. */
+    card_write(&c, A_ACTRL, ACTRL_ENABLE | ACTRL_RAWVOL);
+    set_chan(&c, 0, 127, 255);
+    check_eq(card_chan_out(&c, 0), 127 * 255, "raw volume: the code passes through");
+    set_chan(&c, 0, 127, 64);
+    check_eq(card_chan_out(&c, 0), 127 * 64, "raw volume: no shift applied");
 }
 
 static void test_period_is_the_colour_clock(void)
@@ -153,10 +178,9 @@ static void test_period_is_the_colour_clock(void)
     card_t c;
     unsigned per = 428;                  /* ProTracker C-2 */
     unsigned ticks = 0;
-    int8_t last;
+    uint8_t last;          /* the card's held byte is offset binary, §6.1 */
 
     card_reset(&c, sram, 128u * 1024u);
-    card_load_linear_lut(&c);
     /* i+1, never 0: a first sample of 0 is indistinguishable from the
      * reset value and the first fetch would go uncounted. */
     for (unsigned i = 0; i < 256u; i++) { sram[i] = (uint8_t)(i + 1u); }
@@ -192,7 +216,6 @@ static void test_shadow_reload(void)
     unsigned per = 100;
 
     card_reset(&c, sram, 128u * 1024u);
-    card_load_linear_lut(&c);
     for (unsigned i = 0; i < 64u; i++) { sram[i] = (uint8_t)(i + 1u); }
 
     /* Start at 0, length 8 words = 16 bytes. */
@@ -220,7 +243,7 @@ static void test_shadow_reload(void)
     {
         int seen[40];
         unsigned k = 0;
-        int8_t last = 0;
+        uint8_t last = 0x80u;      /* offset-binary silence, the reset value */
         for (unsigned i = 0; i < per * 40u && k < 40u; i++) {
             card_step(&c);
             if (c.ch[0].samp != last) { last = c.ch[0].samp; seen[k++] = last; }
@@ -285,8 +308,8 @@ static void test_loader_and_playback(void)
 
     /* §4.2: the null-loop block, and sample 0 aliased to it. */
     check_eq((long)s.sample_addr[0], MOD_NULL_LOOP, "loader: sample 0 is the null block");
-    check_eq(sram[0], 0, "loader: null block is silent");
-    check_eq(sram[1], 0, "loader: null block is silent");
+    check_eq(sram[0], 0x80, "loader: null block is silent ($80, offset binary)");
+    check_eq(sram[1], 0x80, "loader: null block is silent ($80, offset binary)");
     check_eq((long)s.sample_addr[1], MOD_SAMPLE_BASE, "loader: sample 1 follows the null block");
     check_eq((long)s.sample_rep[1], MOD_SAMPLE_BASE + 32, "loader: loop point relocated");
     check_eq(s.sample_replen[1], 16, "loader: repeat length copied verbatim, in words");
@@ -311,8 +334,9 @@ static void test_loader_and_playback(void)
             if (card_firq(&c)) { mod_tick(&p); }
             card_step(&c);
             if (i > CARD_CC_PAL / 2) {
-                if (c.ch[1].samp == 0) { quiet_ch1++; }
-                if (c.ch[0].samp != 0) { active_ch0++; }
+                /* Silence is $80 — card RAM is offset binary (§6.1). */
+                if (c.ch[1].samp == 0x80u) { quiet_ch1++; }
+                if (c.ch[0].samp != 0x80u) { active_ch0++; }
             }
         }
         check_eq((long)c.oob_reads, 0, "playback: no fetch outside populated RAM");
@@ -898,7 +922,7 @@ int main(void)
     if (!sram) { return 1; }
 
     test_period_table();
-    test_volume_lut();
+    test_volume_law();
     test_period_is_the_colour_clock();
     test_shadow_reload();
     test_tempo();

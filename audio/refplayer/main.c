@@ -182,8 +182,10 @@ int main(int argc, char **argv)
              * VU meters report -- so the two can be compared channel by
              * channel instead of only as a stereo mix. */
             for (unsigned n = 0; n < 4u; n++) {
-                unsigned v = card.ch[n].vol & 0x7Fu;
-                double x = (double)card.lut[(v << 8) | (unsigned)(uint8_t)card.ch[n].samp];
+                /* /16 keeps the historical scale of this figure: it used to be
+                 * the 12-bit LUT entry, SAMP * min(VOL,64) / 4, and the volume
+                 * code is now four times that (card.h). */
+                double x = (double)card_chan_out(&card, n) / 16.0;
                 vu_acc[n] += x * x;
             }
             if (++vu_n >= cc / 100) {

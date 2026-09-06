@@ -58,9 +58,10 @@ appear as "537 KB/s" (`machine.md` §0); they are the same figures.
 | **Address cost** | **Four bytes**, at `$FF58`–`$FF5B` — all four now used (§6.2 spends the reserved one). The disk reservation was eight, so **four still go back to the machine.** | §6.1 |
 | **IC count** | **7**, plus a 3.3 V regulator and the socket. | §8 |
 
-**Net: 7 ICs**, against video's 40, audio's 57, PS/2's 11 and serial's 3 — every one of
+**Net: 7 ICs**, against video's 40, audio's 36, PS/2's 11 and serial's 3 — every one of
 those four counts rose in the 2026-09-04 review pass (`docs/design-review.md`), and this
-card's did not. It remains the machine's smallest card by a wide margin.
+card's did not. (Audio has since given twenty-one back and is now the second-smallest
+card in the machine — `audio/docs/audio.md` §10.) It remains the machine's smallest card by a wide margin.
 
 **Compatibility with fast-E (`machine.md` §1's ÷8 rate).** The card closes at it: the read
 interval becomes 3 / 3.1469 MHz = **953 ns** against the same 636 ns burst, a **1.5×**

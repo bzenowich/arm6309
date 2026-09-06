@@ -105,9 +105,12 @@ static void emit(render_t *r, double l, double u)
     if (++r->phase < RENDER_OVERSAMPLE) { return; }
     r->phase = 0;
 
-    /* The DAC codes are 12-bit signed; scale to 16-bit for the file. */
+    /* The summing nodes carry the sum of two channels' products, each
+     * (signed sample) x (8-bit volume code) -- +-32640 per channel, +-65280
+     * summed (card.c, audio/docs/audio.md §6.2). Halve for the 16-bit file,
+     * which is the same headroom split Paula's ladders make. */
     {
-        double sl = l * 16.0, sr = u * 16.0;
+        double sl = l * 0.5, sr = u * 0.5;
         r->last_l = sl; r->last_r = sr;
         int il, ir;
         double m = fabs(sl) > fabs(sr) ? fabs(sl) : fabs(sr);

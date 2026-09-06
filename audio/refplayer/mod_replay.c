@@ -562,7 +562,6 @@ void mod_start(mod_player *p, mod_song *s, card_t *c)
         p->ch[n].start_len  = 1;
     }
 
-    card_load_linear_lut(c);
 
     /* Quiet, then configured, then enabled — the card comes up with ACTRL = 0
      * precisely so this order is possible (audio/docs/audio.md §9.2). */

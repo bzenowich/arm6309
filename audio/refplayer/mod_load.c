@@ -140,10 +140,14 @@ int mod_load(mod_song *s, card_t *c, const char *path, char *err, size_t errlen)
 
     /* §4.2: two bytes of silence at card address 0, and sample 0 aliased to
      * them, so "no sample given" and a corrupt pattern byte are both safe by
-     * construction rather than by a test in the FIRQ path. */
+     * construction rather than by a test in the FIRQ path.
+     *
+     * Silence is $80, not $00: card RAM holds OFFSET BINARY (audio.md §6.1), and
+     * $00 would be full-scale NEGATIVE — a DC step, not silence. This is the one
+     * place the conversion has to be written out rather than XORed in a loop. */
     card_write(c, A_SPTR2, 0); card_write(c, A_SPTR1, 0); card_write(c, A_SPTR0, 0);
-    card_write(c, A_SDATA, 0);
-    card_write(c, A_SDATA, 0);
+    card_write(c, A_SDATA, 0x80);
+    card_write(c, A_SDATA, 0x80);
 
     s->sample_addr[0] = MOD_NULL_LOOP;
     s->sample_rep[0]  = MOD_NULL_LOOP;
@@ -189,10 +193,14 @@ int mod_load(mod_song *s, card_t *c, const char *path, char *err, size_t errlen)
             s->sample_len[n]  = (uint16_t)(bytes / 2u);
 
             for (uint32_t i = 0; i < bytes; i++) {
-                /* One SDATA store per byte. On the 6309 this whole loop is a
-                 * single TFM X+,Y — 3 cycles a byte, 187 ms for 128 KB
-                 * (§4.4). */
-                card_write(c, A_SDATA, raw[src + i]);
+                /* One SDATA store per byte, and the byte is converted on the
+                 * way: the card's sample converter is unsigned-coded, so card
+                 * RAM holds OFFSET BINARY and silence is $80
+                 * (audio.md §6.1, modplayer.md §4.2). On the 6309 that makes
+                 * the loop EORB #$80 per byte instead of a single TFM X+,Y —
+                 * §4.4 costs it, and it is the only transformation the sample
+                 * stream gets. */
+                card_write(c, A_SDATA, (uint8_t)(raw[src + i] ^ 0x80u));
             }
 
             /* §4.2: replen <= 1 word means "no loop", and the idiom is to point

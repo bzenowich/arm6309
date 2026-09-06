@@ -1947,7 +1947,7 @@ Brief, because it is not the video question — but the backplane spec has to be
 frozen before the video card is laid out, and the sound card is the other consumer.
 
 > **The sound card now has its own document: [`audio.md`](../../audio/docs/audio.md)** — a
-> 4-channel PCM card modelled on the Amiga's Paula, 57 ICs, whose acceptance test
+> 4-channel PCM card modelled on the Amiga's Paula, 36 ICs, whose acceptance test
 > is playing existing OCS tracker modules unmodified, with the loader and
 > replayer that do that in [`modplayer.md`](../../audio/docs/modplayer.md). **It supersedes this
 > section's Ensoniq 5503 DOC assumption**; the bullets below are updated to what
