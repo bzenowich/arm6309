@@ -266,7 +266,26 @@ later).
 | `$FF58`–`$FF5B` | 4 B | **SD card storage** | *proposed* — `storage/docs/sdcard.md` §6.1 |
 | `$FF5C`–`$FF5F` | 4 B | **free** | the machine's only unallocated I/O — half the disk reservation, **handed back** |
 | `$FF60`–`$FF7F` | 32 B | **video** | *taken* — `graphics.md` §13 |
-| `$FFA0`–`$FFAF` | 16 B | **MMU, and now boot control** | on the motherboard, decoded directly — `graphics.md` §6.3.1. **Not** GIME-compatible, and not in the geographic window. Enable, task select, the shadow-ROM disable and the vector RAM all live here — §7.2 |
+| `$FFA0`–`$FFAF` | 16 B | **MMU block registers** | 16 entries, index = `A3..A0` = `{TASK, block}`. Bits 6–0 are physical `A19..A13` — `hardware/gal/README.md` |
+| `$FFB0`–`$FFBF` | 16 B | **MMU control** | one bit — `TASK`. Aliased 16×, canonical `$FFB0`; decoding one byte exactly would cost four GAL inputs the part has not got |
+| `$FF90`–`$FF9F` | 16 B | **vector RAM** | inside the CPU module, §7.2. The motherboard never decodes it |
+
+> ⚠ **This table said `$FFA0`–`$FFAF` held "enable, task select, the shadow-ROM disable
+> and the vector RAM" until 2026-09-06.** Writing the MMU's GAL equations
+> (`hardware/gal/README.md`) showed that none of the four survives:
+>
+> - **Sixteen block registers need all sixteen bytes**, so the vector RAM cannot share
+>   them. It moves to `$FF90`–`$FF9F`, which costs the motherboard nothing because §7.2
+>   serves it inside the CPU module. Nothing in this machine decodes `$FF80`–`$FF9F`.
+> - **MMU enable cannot exist.** The map SRAM's outputs *are* physical `A13–A19` with no
+>   bypass path, so "disabled" would mean floating the address bus. It is also
+>   unnecessary — §7.2's shadow ROM serves `$E000`–`$FFFF` without a bus cycle, so boot
+>   code writes all 16 entries before it needs RAM.
+> - **The shadow-ROM disable cannot reach the motherboard's latch.** The shadow ROM is
+>   inside the CPU module, the link is a 6809E 40-pin socket, and all 40 pins are
+>   defined. It belongs in the module, which sees the write on the bus anyway.
+>
+> What is left is `TASK`, and it is why the control window holds one bit.
 
 ### ⚠ The map has four bytes left, and that is all.
 
@@ -406,11 +425,17 @@ These are not deferred details; each one blocks a board.
    numbers" and stopped there. `graphics.md` §18 step 0 lists it as an exit criterion.
    Nothing in `cpu/` implements it yet — Phase 1 is the timing spike and has no MMU.
 
-   > **Still open, and it grew.** The MMU is **hardware** — a write-decode GAL on the
-   > motherboard (`graphics.md` §6.3.1) — so the register set is a fitting constraint, and
-   > **GIME compatibility is not a requirement**, so this is a free design: the 6-bit block
-   > number becomes 7 bits because the physical map is 1 MB, and enable and task select
-   > move into the same contiguous window instead of sitting at the GIME's `$FF90`/`$FF91`.
+   > **CLOSED 2026-09-06.** [`hardware/gal/README.md`](../hardware/gal/README.md) carries
+   > the map and [`hardware/gal/mmu.pld`](../hardware/gal/mmu.pld) the equations that
+   > decode it; §3 above is updated. **`$FFA0`–`$FFAF` is 16 block registers of 7 bits,
+   > `$FFB0`–`$FFBF` is one control bit.**
+   >
+   > It turned out to be barely a free design at all. The `'157` mux already on the board
+   > puts `TASK` on `MAPA3` and `LA15..LA13` on `MAPA2..0` while translating, and `LA3..LA0`
+   > on the same four lines during a write — so the write index **is** `{TASK, block}` with
+   > no permutation, and `$FFA0+n` is task `n>>3`, block `n&7`. The board was drawn that way
+   > before anyone wrote it down. Enable did not move into the window; it ceased to exist
+   > (§3).
    >
    > ⚠ **§7.2 adds two more things to the same 16 bytes**: the shadow-ROM disable bit and
    > the 16-byte vector RAM's write port. `$FFA0`–`$FFAF` now carries the map entries, task
@@ -570,8 +595,8 @@ can answer a fetch without running one:
 | | |
 |---|---|
 | **Shadow ROM** | at reset, logical `$E000`–`$FFFF` is served from ~8 KB of the STM32's 128 KB flash **without a bus cycle** — except `$FF00`–`$FFBF`, which continues to decode normally to cards and the MMU, so I/O works during boot |
-| **Vector page** | `$FFF0`–`$FFFF` is served from a 16-byte **vector RAM inside the CPU module**, writable through the `$FFA0`–`$FFAF` window, so the OS can retarget the vectors. Initialised from flash at reset to point into the shadow ROM. **Vector service is always on** — it is the one thing that must never depend on a configuration bit |
-| **Disable** | a bit in the `$FFA0` window turns off the `$E000`–`$FEFF` shadow once the OS is up, returning that logical space to RAM. NitrOS-9 Level 2 wants it |
+| **Vector page** | `$FFF0`–`$FFFF` is served from a 16-byte **vector RAM inside the CPU module**, writable through the ~~`$FFA0`–`$FFAF`~~ **`$FF90`–`$FF9F`** window (§3 — `$FFA0`–`$FFAF` is sixteen block registers and has no room), so the OS can retarget the vectors. Initialised from flash at reset to point into the shadow ROM. **Vector service is always on** — it is the one thing that must never depend on a configuration bit |
+| **Disable** | a bit **latched inside the module** turns off the `$E000`–`$FEFF` shadow once the OS is up, returning that logical space to RAM. NitrOS-9 Level 2 wants it. ⚠ It was a bit on the motherboard's `'574` until 2026-09-06, which could never have worked — every one of the socket's 40 pins is defined, so there is no wire to carry it and nowhere to add one (§3) |
 | **CoCo 3 drop-in** | the whole mechanism is **off**. That machine has its own ROM, and a drop-in that shadowed it would be a drop-in that broke it |
 
 **Cost:** zero ICs, ~8 KB of a 128 KB flash, and one more line in the divergence ledger

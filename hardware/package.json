@@ -5,8 +5,9 @@
   "scripts": {
     "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run gal/mmu.check.ts",
     "check:netlist": "bun run lib/netlist.check.ts",
+    "check:sim": "cd gal && verilator --binary --timing -Wall -Wno-DECLFILENAME --top-module mmu_tb mmu.v mmu_tb.sv -o mmu_tb && ./obj_dir/mmu_tb",
     "build": "for f in mainboard/mainboard.circuit.tsx cards/*.circuit.tsx; do echo \"-- $f\"; tsci build \"$f\" || exit 1; done",
-    "build:all": "npm run build && npm run check && npm run check:netlist",
+    "build:all": "npm run build && npm run check && npm run check:netlist && npm run check:sim",
     "dev": "tsci dev"
   },
   "type": "commonjs",

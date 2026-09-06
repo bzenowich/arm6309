@@ -1,15 +1,17 @@
 // The MMU sequencer, motherboard U3 - the same equations as mmu.pld.
 //
-// This is a model of a GAL22V10, not a design to synthesise: it exists so
-// Verilator can assert the orderings that graphics.md 6.3.1 calls
-// load-bearing, which a fitter checks nothing about. Keep it in step with
+// A model of a GAL22V10, not a design to synthesise. It exists so that the
+// orderings graphics.md 6.3.1 calls load-bearing can be asserted mechanically,
+// which a fitter checks nothing about - see mmu_tb.sv. Keep it in step with
 // mmu.pld by hand; there are seven equations and they are the deliverable.
-//
-// Verilator lint_off DECLFILENAME
 `default_nettype none
 
 module mmu (
-    input  wire [15:0] la,      // logical address; only la[15:4] are pins
+    // Logical address, and the range is the point: this GAL has no LA3..LA0
+    // pins. The entry index goes to the '157, not here, and that is why the
+    // control register at $FFB0 is aliased across sixteen addresses - see
+    // README.md, the pin budget.
+    input  wire [15:4] la,
     input  wire        e,       // 6809 E
     input  wire        q,       // 6809 Q, leading E by 90 degrees
     input  wire        rw,      // high = read

@@ -10,8 +10,9 @@ one that gates the motherboard.
 | | |
 |---|---|
 | [`mmu.pld`](mmu.pld) | **U3, the MMU sequencer** — CUPL, the deliverable a fitter consumes |
-| [`mmu.v`](mmu.v) | the same seven equations in Verilog, for Verilator |
-| [`mmu.check.ts`](mmu.check.ts) | the same seven equations again, checked **exhaustively** — `npm run check` |
+| [`mmu.v`](mmu.v) | the same seven equations in Verilog |
+| [`mmu_tb.sv`](mmu_tb.sv) | 16 claims against `mmu.v` under **Verilator** — `npm run check:sim` |
+| [`mmu.check.ts`](mmu.check.ts) | the same seven equations again, 23 claims — `npm run check` |
 
 Three statements of one logic is two too many, and it is deliberate for exactly as long
 as the toolchain is absent — see **Toolchain** below. `mmu.check.ts` runs today.
@@ -22,14 +23,17 @@ as the toolchain is absent — see **Toolchain** below. `mmu.check.ts` runs toda
 
 That item has been open since the project began and is listed as *"the deliverable that
 gates the motherboard's write-decode GAL."* It cannot stay open and have equations, so
-here is the map the equations implement. **It is a proposal and it needs the owner's
-sign-off**, but it is not a free choice in most of its particulars — the `'157` wiring
-already in `mainboard.circuit.tsx` constrains it almost completely.
+here is the map the equations implement. It was not a free choice in most of its
+particulars — the `'157` wiring already in `mainboard.circuit.tsx` constrains it almost
+completely.
 
 | Window | Size | What | Decoded by |
 |---|---|---|---|
 | `$FFA0`–`$FFAF` | 16 B | **16 block registers.** Entry index = `A3..A0`. Bits 6–0 = physical `A19..A13`; bit 7 spare and stored | U3, motherboard |
 | `$FFB0`–`$FFBF` | 16 B | **MMU control**, aliased 16× — bit 0 = `TASK`. Canonical address `$FFB0` | U3, motherboard |
+
+> **Signed off 2026-09-06**, and `mainboard/mainboard.circuit.tsx` now implements it.
+> `docs/machine.md` §5 item 3 is closed against this section.
 
 **`$FFA0`–`$FFA7` is task 0, blocks 0–7; `$FFA8`–`$FFAF` is task 1.** That is forced, not
 chosen: the `'157` mux puts `TASK` on `MAPA3` and `LA15..LA13` on `MAPA2..0` in translate
@@ -167,25 +171,30 @@ failure mode `/IOSEL` and `machine.md` §7.1 already demonstrated twice.
 
 | Job | Tool | Status |
 |---|---|---|
-| GAL equations → JEDEC | `galette` (or WinCUPL for ATF-specific fitting) | ⚠ **not installed** |
-| Digital verification | **Verilator** | ⚠ **not installed** |
-| Analogue — the video output stage (`design-review.md` §Vid-M4) and the audio ladder | **ngspice** | ⚠ **not installed** |
-| Equations, today | `bun`, already here | ✓ `npm run check` |
+| GAL equations → JEDEC | `galette` (or WinCUPL for ATF-specific fitting) | ⚠ **not installed** — the one gap left |
+| Digital verification | **Verilator** 5.020 | ✓ `npm run check:sim`, 16 claims, `-Wall` clean |
+| Analogue — the video output stage (`design-review.md` §Vid-M4) and the audio ladder | **ngspice** | ✓ installed, **nothing written yet** |
+| Equations, today | `bun`, already here | ✓ `npm run check`, 23 claims |
+| A CPU to drive it | [`../vendor/mc6809`](../vendor/mc6809) — Greg Miller's cycle-accurate MC6809E, BSD | ✓ elaborates; **nothing drives it yet** |
 
-Nothing in this directory has been through a fitter or a simulator. `mmu.check.ts` is what
-exists, and what it proves is that the equations mean what the phase table says — not that
-they fit a real ATF22V10C, which only the fitter can answer.
+`mmu.v` has now been through Verilator and passes 16 claims exhaustively over the address
+space, `-Wall` clean. **Nothing here has been through a fitter**, so "it fits a 22V10" is
+still arithmetic in this document and not a fitter's report — and that is the one thing
+neither simulator can answer.
+
+The lint was not free of information. `-Wall` objected that `la[3:0]` was unused, which is
+**true and is the design**: this GAL has no `LA3..LA0` pins, the entry index goes to the
+`'157`, and that is exactly why `$FFB0` is aliased across sixteen addresses. `mmu.v`'s port
+is `[15:4]` now, so the model states it rather than tolerating it.
 
 ---
 
 ## Open items
 
-1. **The register map above is a proposal.** `machine.md` §5 item 3 is still open in that
-   document; this directory implements an answer but does not have the authority to close it.
-2. **Nothing has been fitted.** The pin budget is arithmetic, not a fitter's report.
+1. **Nothing has been fitted.** The pin budget is arithmetic, not a fitter's report.
    Product terms are all small (the widest is an 8-input AND) and the 22V10's leanest
    macrocell has 8, so it should fit — *should*.
-3. **U6 has not been written.** It gains `/IOSEL` from this work, and it still owns the
+2. **U6 has not been written.** It gains `/IOSEL` from this work, and it still owns the
    ÷12 / ÷8 `E`/`Q` divider, which is a state machine and the harder of the two.
-4. **The other cards' GALs are untouched** — nine on video, five on audio's sequencer,
+3. **The other cards' GALs are untouched** — nine on video, five on audio's sequencer,
    plus decode GALs on serial, storage and PS/2.

@@ -15,10 +15,11 @@ first is **started**: [`gal/`](gal/) holds the MMU GAL's equations, and fitting 
 four more defects in the board below. The video output stage (`design-review.md` §Vid-M4)
 has not moved.
 
-> ⚠ **`mainboard/mainboard.circuit.tsx` and [`gal/mmu.pld`](gal/mmu.pld) now disagree
-> about U3, deliberately.** The equations are right and the board is not; rewiring waits
-> on `machine.md` §5 item 3 — the MMU register map — being signed off, because the netlist
-> would bake it in. See [`gal/README.md`](gal/README.md). What exists
+> **The MMU register map was signed off on 2026-09-06 and the board now implements the
+> equations.** `machine.md` §5 item 3 is closed with it. `npm run check:netlist` asserts
+> all five changes the equations forced — the dead nets are gone, `U3` takes `Q`, `/IOSEL`
+> is on `U6`, the `'245`'s direction is `R/W`, and the `'157`'s select is no longer the
+> write strobe. See [`gal/README.md`](gal/README.md). What exists
 today is the **bus interface of every board, generated from one table**, so the
 motherboard and a card cannot disagree about what A17 is.
 
@@ -104,13 +105,15 @@ behind an LDO (`sdcard.md` §7) and the CPU module regulates for itself.
 | [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
 | [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
 | [`cards/`](cards/) | audio, video, PS/2, serial, storage — bus interface each | |
-| [`gal/`](gal/) | **the programmable logic** — U3's equations, in CUPL, Verilog and as an exhaustive check | + [`gal/mmu.check.ts`](gal/mmu.check.ts) |
+| [`gal/`](gal/) | **the programmable logic** — U3's equations, in CUPL, Verilog and as an exhaustive check | + [`gal/mmu.check.ts`](gal/mmu.check.ts), [`gal/mmu_tb.sv`](gal/mmu_tb.sv) |
+| [`vendor/mc6809/`](vendor/mc6809/) | **third-party** — Greg Miller's cycle-accurate MC6809E core, BSD, byte-identical to upstream | |
 
 ```sh
 npm install          # bun comes with it; the tsci CLI needs it
 npm run build        # all six boards -> dist/
 npm run check        # the slot pinout and the $FF map, as arithmetic
 npm run check:netlist  # the motherboard's connectivity claims (needs a build first)
+npm run check:sim      # gal/mmu.v under Verilator
 ```
 
 `npm run dev` opens tscircuit's viewer.
@@ -241,10 +244,26 @@ after finding 1 made it one.
    checked for side effects. It becomes a real number the moment placement starts and not
    before. Placement waits on open item 2 and on the GAL fitting `graphics.md` §18 step 0
    requires.
-4. **Six slots is unargued.** See above.
-5. **Decoupling is not drawn.** One 0.1 µF per package plus bulk, everywhere; it is
+4. **⚠ The system RAM's control lines are not driven.** `RAM_CE`, `RAM_OE` and `RAM_WE`
+   reach `U8` and nothing else. The board claimed `/CE` was "the `A19 = 0` AND `/IOPAGE`
+   term, which U3 already forms" — **U3 forms no such term**, and now that
+   [`gal/mmu.pld`](gal/mmu.pld) exists it is provable rather than arguable.
+
+   **U3 cannot take it.** All twelve dedicated inputs are used, six macrocells are
+   outputs, three more are inputs, and **exactly one pin is free** — pin 23. `RAM_CE`
+   needs `A19` *in* and `RAM_CE` *out*, which is two pins. One pin cannot be both.
+   (An earlier revision of this item said it would fit. It does not, and the count in
+   [`gal/README.md`](gal/README.md) is where to check that rather than take it on trust.)
+
+   So the term needs a home, and that is a decision with a cost either way: U6 has room
+   but is the 25.175 MHz divider, and a third GAL is a tenth package on a motherboard
+   `machine.md` §8 counts as nine. How many of the three signals are really needed is the
+   other half of the question — `/OE` may not need a macrocell at all.
+
+5. **Six slots is unargued.** See above.
+6. **Decoupling is not drawn.** One 0.1 µF per package plus bulk, everywhere; it is
    mechanical and belongs with placement.
-6. **`machine.md` §5 item 1 is still the machine's blocking decision.** Four bytes of the
+7. **`machine.md` §5 item 1 is still the machine's blocking decision.** Four bytes of the
    `$FF` map remain (`npm run check` prints the figure). The `$FF40`–`$FF7F` decode is one
    GAL term in [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx) today
    and a board respin after the backplane is etched.

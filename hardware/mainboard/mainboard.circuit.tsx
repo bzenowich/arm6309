@@ -13,10 +13,11 @@
  *   the open-drain pull-ups               machine.md 2.1
  *   six expansion slots                   machine.md 5 item 5 (still open)
  *
- * Schematic-level. Placement and routing are not attempted yet - the GALs have
- * to be fitted first (graphics.md 18 step 0). The package pinouts are no longer
- * a blocker: every part here was verified against its datasheet on 2026-09-06,
- * and U1's numbering and footprint were wrong until then (lib/parts.ts).
+ * Schematic-level. Placement and routing are not attempted yet. Two of the
+ * three blockers have moved: every package pinout is datasheet-verified
+ * (lib/parts.ts, and U1's was wrong), and U3's equations are written
+ * (gal/mmu.pld, and four things here were wrong). U6 is still unwritten, and
+ * the system RAM's control lines still have no source - see U8.
  */
 import { SlotSocket } from "../lib/SlotConnector"
 import {
@@ -92,8 +93,19 @@ export default () => (
       }}
     />
 
-    {/* U2 - task select, MMU enable, and the 7.2 shadow-ROM disable. Three
-      * bits of eight; the rest are spare and readable nowhere. */}
+    {/* U2 - task select. ONE bit of eight, not the three this comment used to
+      * claim (gal/README.md findings 1 and 3): MMU_EN was dropped because no
+      * bypass path exists for it to switch, and SHADOW_DIS was dropped because
+      * the shadow ROM is inside the CPU module and all 40 socket pins are
+      * defined - there is no wire for it and nowhere to put one.
+      *
+      * The package stays. A '74 would hold TASK in DIP-14, but seven spare
+      * latched bits on a motherboard are worth more than six pins, and
+      * graphics.md 6.3.1's five-IC count is written against a '574.
+      *
+      * CP idles high and its rising edge is at E-fall - U3 emits the inverted
+      * term, so there is exactly one edge per control write and it lands where
+      * 6809 write data has been valid for 247 ns. */}
     <chip
       name="U2"
       footprint={HC574.footprint}
@@ -101,55 +113,60 @@ export default () => (
       connections={{
         VCC: "net.V5", GND: "net.GND", nOE: "net.GND", CP: "net.CTRL_CP",
         ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`D${i + 1}`, d(i)])),
-        Q1: "net.TASK", Q2: "net.MMU_EN", Q3: "net.SHADOW_DIS",
+        Q1: "net.TASK",
       }}
-      noConnect={["Q4", "Q5", "Q6", "Q7", "Q8"]}
+      noConnect={["Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8"]}
     />
 
-    {/* U3 - the write decode, the /IOPAGE term, and the sequencing of U1/U4/U5.
+    {/* U3 - the MMU sequencer. gal/mmu.pld is the source of truth for these
+      * pins and this board follows it; gal/README.md carries the derivation.
       *
       * /IOPAGE is (LA15..LA13 = 111) AND (LA12..LA8 = 11111) - machine.md 2.
-      * /IOSEL is that term AND (LA7,LA6 = 01), i.e. $FF40-$FF7F.
+      * $FFA0-$FFBF is that term AND (LA7..LA5 = 101), split by LA4 into the
+      * 16 block registers and the control latch - machine.md 5 item 3, signed
+      * off 2026-09-06.
       *
-      * ⚠ SUPERSEDED BY gal/mmu.pld, 2026-09-06 - do not read the pins below
-      * as current. Writing the equations changed four things here: MMU_EN is
-      * dropped (no bypass path exists, so it cannot do anything), /IOSEL
-      * moves to U6 (the part does not fit otherwise), ISO_DIR becomes a wire
-      * to R/W rather than a macrocell, and Q is now an input because the
-      * break-before-make ordering needs the quadrature. U5's SEL must also
-      * stop being MAP_WE. Rewiring waits on machine.md 5 item 3 - the
-      * register map gal/README.md proposes - being signed off. */}
+      * Q is here because the break-before-make ordering graphics.md 6.3.1
+      * calls load-bearing needs four phases and E alone gives two.
+      *
+      * /IOSEL is NOT here - it is on U6. With it the part needs 16 inputs and
+      * has 15. ISO_DIR is not here either: it is R/W, and a wire. */}
     <chip
       name="U3"
       footprint="dip24_w0.3in"
       pinLabels={labels(gal22v10({
-        2: "LA15", 3: "LA14", 4: "LA13", 5: "LA12", 6: "LA11", 7: "LA10",
-        8: "LA9", 9: "LA8", 10: "LA7", 11: "LA6",
-        13: "LA5", 14: "LA4", 15: "E", 16: "R/W", 17: "MMU_EN",
-        18: "/IOPAGE", 19: "/IOSEL", 20: "MAP_OE", 21: "MAP_WE",
-        22: "ISO_DIR", 23: "ISO_OE",
+        1: "LA15", 2: "LA14", 3: "LA13", 4: "LA12", 5: "LA11", 6: "LA10",
+        7: "LA9", 8: "LA8", 9: "LA7", 10: "LA6", 11: "LA5",
+        13: "LA4", 14: "E", 15: "Q", 16: "R/W",
+        17: "/IOPAGE", 18: "MUX_SEL", 19: "/ISO_OE", 20: "/MAP_WE",
+        21: "/MAP_OE", 22: "CTRL_CP", 23: "SPARE",
       }))}
       connections={{
         VCC: "net.V5", GND: "net.GND",
-        ...busConnections("LA", 10, la, 6),
-        E: "net.E", R_W: "net.R_W", MMU_EN: "net.MMU_EN",
-        nIOPAGE: "net.nIOPAGE", nIOSEL: "net.nIOSEL",
-        MAP_OE: "net.MAP_OE", MAP_WE: "net.MAP_WE",
-        ISO_DIR: "net.ISO_DIR", ISO_OE: "net.ISO_OE",
+        ...busConnections("LA", 12, la, 4),
+        E: "net.E", Q: "net.Q", R_W: "net.R_W",
+        nIOPAGE: "net.nIOPAGE", MUX_SEL: "net.MUX_SEL",
+        nISO_OE: "net.ISO_OE", nMAP_WE: "net.MAP_WE", nMAP_OE: "net.MAP_OE",
+        CTRL_CP: "net.CTRL_CP",
       }}
-      noConnect={["CLK"]}
+      noConnect={["SPARE"]}
     />
 
     {/* U4 - break-before-make isolation between U1's common I/O and D0-D7.
       * The ordering in graphics.md 6.3.1's table is load-bearing: U1's /OE
-      * comes away before U4 is enabled, and goes back on last. */}
+      * comes away before U4 is enabled, and goes back on last. U4 turns on at
+      * E-rise, which puts ~174 ns between the two - gal/README.md.
+      *
+      * DIR is R/W directly, not a GAL output: a read wants A-to-B and a write
+      * B-to-A, which is R/W exactly. That is one macrocell back, and it is
+      * what makes the break-before-make claim direction-aware. */}
     <chip
       name="U4"
       footprint={HC245.footprint}
       pinLabels={labels(HC245)}
       connections={{
         VCC: "net.V5", GND: "net.GND",
-        DIR: "net.ISO_DIR", nOE: "net.ISO_OE",
+        DIR: "net.R_W", nOE: "net.ISO_OE",
         A1: pa(13), A2: pa(14), A3: pa(15), A4: pa(16),
         A5: pa(17), A6: pa(18), A7: pa(19), A8: "net.MAPD7",
         ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`B${i + 1}`, d(i)])),
@@ -157,13 +174,19 @@ export default () => (
     />
 
     {/* U5 - the quad 2:1 the mux argument in graphics.md 6.3.1 costs a package
-      * for. SEL low = translate, SEL high = the map-write index. */}
+      * for. SEL low = translate, SEL high = the map-write index - the part's
+      * pin 1 is A/B with the bar over the A, so low selects the A inputs.
+      *
+      * ⚠ SEL was MAP_WE until 2026-09-06, which switched the SRAM's address at
+      * the instant the write strobe asserted (gal/README.md finding 2). It is
+      * MUX_SEL now: asserted on address decode, 367 ns of set-up against the
+      * CY7C128A-15's 12 ns tAW. */}
     <chip
       name="U5"
       footprint={HC157.footprint}
       pinLabels={labels(HC157)}
       connections={{
-        VCC: "net.V5", GND: "net.GND", nE: "net.GND", SEL: "net.MAP_WE",
+        VCC: "net.V5", GND: "net.GND", nE: "net.GND", SEL: "net.MUX_SEL",
         "1A": la(13), "1B": la(0), "1Y": "net.MAPA0",
         "2A": la(14), "2B": la(1), "2Y": "net.MAPA1",
         "3A": la(15), "3B": la(2), "3Y": "net.MAPA2",
@@ -186,18 +209,26 @@ export default () => (
     {/* U6 - the divider. 25.175 / 12 = 2.0979 MHz, and that is the machine's
       * rate (machine.md 1.1). The /8 path exists but is an experiment a builder
       * opts into: it breaks the video read-back, takes the 6551 57 % over its
-      * rating, and is below the real HD63C09E's t_cyc minimum. */}
+      * rating, and is below the real HD63C09E's t_cyc minimum.
+      *
+      * It also owns /IOSEL now. That is /IOPAGE AND (LA7,LA6 = 01), i.e.
+      * $FF40-$FF7F - a machine-level backplane signal rather than MMU
+      * sequencing, and it is here because U3 does not fit with it and this
+      * part is mostly empty. /IOPAGE stays on U3: routing it through here
+      * would put a second GAL delay ahead of MAP_OE, which is the edge the
+      * break-before-make margin is measured from. */}
     <chip
       name="U6"
       footprint="dip24_w0.3in"
       pinLabels={labels(gal22v10({
-        2: "FAST_E", 3: "/RESET",
-        22: "E", 23: "Q",
+        2: "FAST_E", 3: "/RESET", 4: "/IOPAGE", 5: "LA7", 6: "LA6",
+        21: "/IOSEL", 22: "E", 23: "Q",
       }))}
       connections={{
         VCC: "net.V5", GND: "net.GND",
         CLK: "net.CLK25", FAST_E: "net.GND", nRESET: "net.nRESET",
-        E: "net.E", Q: "net.Q",
+        nIOPAGE: "net.nIOPAGE", LA7: la(7), LA6: la(6),
+        nIOSEL: "net.nIOSEL", E: "net.E", Q: "net.Q",
       }}
     />
 
@@ -215,8 +246,12 @@ export default () => (
       * so four of them is 2 MB - against a 512 KB requirement, in a 1 MB
       * physical map that allots system RAM exactly A19 = 0, i.e. A0-A18.
       * Nineteen address lines is exactly this part. The "and a decode" in the
-      * same sentence goes with the other three: /CE is the A19 = 0 AND
-      * /IOPAGE term, which U3 already forms. See hardware/README.md finding 1. */}
+      * same sentence goes with the other three. See hardware/README.md finding 1.
+      *
+      * ⚠ RAM_CE, RAM_OE and RAM_WE ARE NOT DRIVEN. Nothing in this design
+      * connects to them but U8. This comment used to say /CE is "the A19 = 0
+      * AND /IOPAGE term, which U3 already forms" - U3 forms no such term, and
+      * gal/mmu.pld does not emit one. hardware/README.md open item 4. */}
     <chip
       name="U8"
       footprint={SRAM_512K.footprint}

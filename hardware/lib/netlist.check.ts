@@ -86,5 +86,34 @@ check(!!haltPull, "/HALT is tied high on the motherboard")
 check(pinsOn("J0", "GND").includes("TSC") || pinsOn("J0", "GND").length >= 2,
   "TSC is grounded at the CPU socket", pinsOn("J0", "GND").join(","))
 
+/* -- gal/mmu.pld: the U3 rewire, 2026-09-06 ------------------------------ */
+/* Writing the MMU's equations changed five things on this board. Each is a
+ * claim here, because a build proves only that every selector resolved. */
+const netExists = (n: string) => nets.some((x: any) => x.name === n)
+
+for (const dead of ["MMU_EN", "SHADOW_DIS", "ISO_DIR"]) {
+  check(!netExists(dead), `${dead} is gone from the netlist`)
+}
+
+check(pinsOn("U3", "Q").length === 1,
+  "U3 takes Q - break before make needs four phases and E gives two")
+const u3addr = Array.from({ length: 12 }, (_, i) => pinsOn("U3", `LA${i + 4}`).length)
+check(u3addr.every((n) => n === 1), "U3 takes LA4-LA15", `${u3addr.filter(Boolean).length}/12`)
+
+check(pinsOn("U3", "nIOPAGE").length === 1, "U3 still drives /IOPAGE")
+check(pinsOn("U3", "nIOSEL").length === 0, "/IOSEL has left U3 - the part does not fit with it")
+check(pinsOn("U6", "nIOSEL").length === 1, "U6 drives /IOSEL")
+check(pinsOn("U6", "LA7").length === 1 && pinsOn("U6", "LA6").length === 1,
+  "U6 takes LA7 and LA6, the $FF40-$FF7F qualifier")
+
+check(pinsOn("U4", "R_W").includes("DIR"),
+  "the '245 direction is R/W itself, not a macrocell", pinsOn("U4", "R_W").join(","))
+check(pinsOn("U5", "MUX_SEL").includes("SEL"),
+  "the '157 select is MUX_SEL", pinsOn("U5", "MUX_SEL").join(","))
+check(pinsOn("U5", "MAP_WE").length === 0,
+  "the '157 select is no longer MAP_WE - that gave the SRAM no address set-up")
+
+check(pinsOn("U2", "TASK").length === 1, "the '574 holds TASK, and TASK is all it holds")
+
 console.log(failures === 0 ? "\nmainboard netlist OK" : `\n${failures} failure(s)`)
 process.exit(failures === 0 ? 0 : 1)
