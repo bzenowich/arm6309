@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "description": "Board layouts for the arm6309 machine",
   "scripts": {
-    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run gal/mmu.check.ts",
+    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run gal/mmu.check.ts && bun run gal/jedec.check.ts",
+    "check:jedec": "bun run gal/jedec.check.ts",
     "check:netlist": "bun run lib/netlist.check.ts",
     "check:sim": "cd gal && verilator --binary --timing -Wall -Wno-DECLFILENAME --top-module mmu_tb mmu.v mmu_tb.sv -o mmu_tb && ./obj_dir/mmu_tb && verilator --binary --timing -Wall -Wno-DECLFILENAME --top-module clkdec_tb clkdec.v clkdec_tb.sv -o clkdec_tb && ./obj_dir/clkdec_tb",
     "build": "for f in mainboard/mainboard.circuit.tsx cards/*.circuit.tsx; do echo \"-- $f\"; tsci build \"$f\" || exit 1; done",

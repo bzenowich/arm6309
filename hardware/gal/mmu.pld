@@ -48,7 +48,12 @@ PIN 19 = !ISOOE ;   /* U4 '245 output enable                               */
 PIN 20 = !MAPWE ;   /* U1 map SRAM write strobe                            */
 PIN 21 = !MAPOE ;   /* U1 map SRAM output enable                           */
 PIN 22 = !CTRLCP ;  /* U2 '574 clock - see the equation; edge at E-fall     */
-PIN 23 = SPARE ;    /* the one pin the budget has left over                */
+/* PIN 23 IS DELIBERATELY NOT DECLARED. It was `SPARE`, driven to 'b'0, and
+ * that spends the pin the budget in gal/README.md counts as spare: a driven
+ * output is a seventh macrocell, which drops available inputs from 16 to 15
+ * against 15 needed. Undeclared, the macrocell stays at high-Z and the pin is
+ * an input if the board ever wants one. Found by assembling the fuse map -
+ * see jedec.check.ts. */
 
 /* --- intermediate terms ----------------------------------------------- */
 FIELD page = [LA15..LA8] ;
@@ -84,7 +89,14 @@ MAPWE = blksel & !RW & E & !Q ;
 
 /* Asserted whenever this is not an I/O cycle - that is the translation.
  * Re-asserted for a block-register read, which is the only time the SRAM
- * drives during an I/O cycle. Never asserted during a block write. */
+ * drives during an I/O cycle. Never asserted during a block write.
+ *
+ * THIS IS NINE PRODUCT TERMS, not one: !iopage is the complement of an
+ * eight-way AND and costs eight of them. It is the only equation on this part
+ * that is not a single term, and pin 21's macrocell holds 12, so it fits
+ * where it is and would NOT fit on pin 14 or pin 23, which hold 8. The
+ * complement is cheaper still - !MAPOE is six terms - and that is the form
+ * mmu.jedec.ts assembles. A fitter chooses between them silently. */
 MAPOE = !iopage
       # blksel & RW & E ;
 
@@ -102,5 +114,3 @@ MAPOE = !iopage
  * pin falls at E-rise (harmless, the '574 is rising-edge) and rises at
  * E-fall - exactly one rising edge, in the right place. */
 CTRLCP = ctlsel & !RW & E ;
-
-SPARE = 'b'0 ;

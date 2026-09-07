@@ -11,7 +11,8 @@ at that, and at the five cards that plug into it.
 **Status: schematic-level, and nothing is placed or routed.** Three things had to happen
 before layout is meaningful. **The third is done** — every package pinout is now read off a
 datasheet (open item 1, closed 2026-09-06, and it was not a formality: see finding 4). The
-first is **started**: [`gal/`](gal/) holds the MMU GAL's equations, and fitting them found
+first is **started**: [`gal/`](gal/) holds the MMU GAL's equations — now fitted, as
+`.jed` files checked at the fuse level — and fitting them found
 four more defects in the board below. The video output stage (`design-review.md` §Vid-M4)
 has not moved.
 
@@ -105,7 +106,7 @@ behind an LDO (`sdcard.md` §7) and the CPU module regulates for itself.
 | [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
 | [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
 | [`cards/`](cards/) | audio, video, PS/2, serial, storage — bus interface each | |
-| [`gal/`](gal/) | **the programmable logic** — U3's equations, in CUPL, Verilog and as an exhaustive check | + [`gal/mmu.check.ts`](gal/mmu.check.ts), [`gal/mmu_tb.sv`](gal/mmu_tb.sv) |
+| [`gal/`](gal/) | **the programmable logic** — U3 and U6's equations in CUPL and Verilog, and [`gal/jedec/`](gal/jedec/), which assembles them into the fuse maps a programmer burns | + [`gal/mmu.check.ts`](gal/mmu.check.ts), [`gal/mmu_tb.sv`](gal/mmu_tb.sv), [`gal/jedec.check.ts`](gal/jedec.check.ts) |
 | [`vendor/mc6809/`](vendor/mc6809/) | **third-party** — Greg Miller's cycle-accurate MC6809E core, BSD, byte-identical to upstream | |
 
 ```sh
@@ -113,7 +114,8 @@ npm install          # bun comes with it; the tsci CLI needs it
 npm run build        # all six boards -> dist/
 npm run check        # the slot pinout and the $FF map, as arithmetic
 npm run check:netlist  # the motherboard's connectivity claims (needs a build first)
-npm run check:sim      # gal/mmu.v under Verilator
+npm run check:sim      # gal/mmu.v and gal/clkdec.v under Verilator
+npm run check:jedec    # assembles both GALs and checks the fuse maps
 ```
 
 `npm run dev` opens tscircuit's viewer.
@@ -243,7 +245,8 @@ after finding 1 made it one.
    motherboard alone**, a count unchanged by the pinout fix, which is how that fix was
    checked for side effects. It becomes a real number the moment placement starts and not
    before. Placement waits on open item 2 and on the GAL fitting `graphics.md` §18 step 0
-   requires.
+   requires — which for the **motherboard's** two parts is now done
+   ([`gal/jedec/`](gal/jedec/)); the video card's nine are not.
 4. ~~**⚠ The system RAM's control lines are not driven.**~~ **Closed 2026-09-06.**
    `RAM_CE`, `RAM_OE` and `RAM_WE` reached `U8` and nothing else, behind a comment
    claiming U3 formed the term — U3 forms no such term, and once
