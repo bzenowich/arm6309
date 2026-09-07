@@ -457,7 +457,10 @@ The full derivation is in §11. Two things follow:
   > grants each chip's spare access independently, so the four chips' bus turnarounds
   > are not identical, and because §6.4's tile mode gives them different fetch
   > cadences; a common slot-rate clock would have to be timed for the worst chip in
-  > the worst mode. *Mid-slot*, because a clock on the slot boundary has no settling
+  > the worst mode. **And, added 2026-09-06, because byte-granular horizontal scroll
+  > requires it** — §8's note: with a common latch clock the display cannot render a
+  > line at `HSCROLL[1:0] ≠ 0` at all. That is the strongest of the three reasons and
+  > it was the one nobody had written down. *Mid-slot*, because a clock on the slot boundary has no settling
   > margin and is the same edge that reloads the address counters.
 
   Video-first inverts this: the fetch would complete at 72 ns and the latch would sit
@@ -1212,6 +1215,25 @@ minimal256.md §5 is correct as written and needs only the geometry substituted:
   (With the `'153` mux of §6.1 this is a mux-select preload rather than an
   output-enable preload — same two bits, same cost.)
 
+  > ⚠ **"Costs zero parts" is true of the mux *select* and is not yet true of what
+  > the four latches hold** — 2026-09-06, from fitting the mux phasing
+  > ([`hardware/gal/seqph.jedec.ts`](../../hardware/gal/seqph.jedec.ts)). Chip *n*
+  > holds the byte at the column where `c mod 4 = n`, so if all four fetch latches
+  > are loaded from a common address bus at a common instant, then during fetch slot
+  > *g* every chip holds a byte of group *g*. With `HSCROLL[1:0] = p`, the mux emits
+  > `4g+p`, `4g+p+1` … and then **wraps to chip 0, which still holds `4g+0`** — the
+  > line steps backwards, `4−p` pixels in. `check:seqph` computes both sequences and
+  > asserts they diverge for every `p ≠ 0`; it is arithmetic, not simulation.
+  >
+  > **The mechanism that fixes it is already on the card**: §5.2.2's *per-chip*
+  > fetch-latch clocking, which lets chips `0..p−1` take the next group's byte while
+  > `p..3` still hold this one. §5.2.2 justifies per-chip clocking by the spare-access
+  > grant and by tile mode, and never mentions scroll; §8 promises the scroll and
+  > never mentions the latches. **The two sections describe one mechanism from
+  > opposite ends and do not meet.** No new package — the four `FCLK` macrocells
+  > exist — but the equations are a phase-dependent offset rather than four copies of
+  > one term, and that is §19 item 23.
+
 **The torus is now 1024 × 512** with a 640 × 200 window on it. The 384 off-screen
 columns are not waste: they are a horizontal margin wide enough for a 1024-pixel
 playfield, and together with the 312 unused rows they hold sprite sheets, glyph
@@ -1458,7 +1480,7 @@ answer to "how do we need fewer GALs" turns on which bits have to reach a pin.
 | sync — `hgen`/`vgen`/`vdec` | 3 | 27 of 30 | 18 | **No** — only 6 signals leave the group |
 | scan address — `hadr`/`vadr` | 2 | 17 of 20 | 17 | **Yes** — they are the framebuffer address bus |
 | `WPTR` / span pointer — `wcol`/`wrow` | 2 | 19 of 20 | 19 | **Yes** — they are the VRAM address path |
-| sequencer | 2 | not yet fitted | | |
+| sequencer — `seqph` + the rest | 2? | 10 fitted, ~20 budgeted (§19 item 23) | 2 | the dot phase is internal |
 | arbiter (§5.2.1) — `arb` | 1 | **8** of 10 | 0 | — |
 
 Seven of the ten are fitted. Two of them are full in **both** dimensions — `vdec`
@@ -2453,6 +2475,41 @@ unchanged from minimal256.md §11 and are not restated in full.
     what this card's static phase needs, and it is the motherboard's divider that has
     to implement it. Confirm that a `/WAIT`-extended cycle re-enters the correct
     sub-slot phase — this is item 6 with the answer now specified rather than open.
+23. **Write the phase-dependent `FCLK` equations, and the sequencer's other half.**
+    Two things, both surfaced by fitting the timing spine
+    ([`hardware/gal/seqph.jedec.ts`](../../hardware/gal/seqph.jedec.ts), 10 of 10
+    macrocells and 3 of 11 input pins).
+
+    **(a) The fetch-latch clocks are not four copies of one term.** §8's note says
+    why: at `HSCROLL[1:0] = p`, chips `0..p−1` must take the next group while `p..3`
+    still hold this one, so `FCLK[n]` is qualified by a compare of *n* against `p`.
+    That is four macrocells already budgeted and a handful of product terms on a part
+    with room, so it is cheap — but it is not written, and until it is, byte-granular
+    horizontal scroll is a claim rather than a design.
+
+    **(b) The rest of the sequencer does not fit in one more part.** §14 lists the
+    pair's duties; the spine took ten macrocells and the remainder budgets as:
+
+    | | Macrocells |
+    |---|---|
+    | register-file address `RA4..RA0`, muxed CPU / internal | 5 |
+    | `SPANBUSY`, serialiser shift, `SPANLEN` count enable | 3 |
+    | `SPNREQ`, posted-write retire strobe | 2 |
+    | `WINC`, `WROWADV`, `LDA`, `LDB`, `LDC` (the `WPTR` pair's controls) | 5 |
+    | `HLOAD`, `ROWADV` (the scan pair's controls) | 2 |
+    | `VRAMSEL` / `REGSEL` decode, incl. the `/IOPAGE` term (§6.3.2) | 2 |
+    | `/WAIT`, open-drain (§3.3, §12.1's idiom) | 1 |
+    | **budget** | **20**, against **10** left in the pair |
+
+    **This is a budget and not a fit**, and it is stated that way because the span
+    writer's state machine is inherited from minimal256 rather than written down here
+    — it is the one block in §14 that is a list of responsibilities instead of a
+    design. Two levers before conceding an eleventh GAL: the register-file address
+    mux is 5 macrocells or **2 × `'157`** (+1 IC, −1 GAL's worth of current), and the
+    `WPTR`/scan control strobes are decodes of the register-write address that a
+    **`'138`** could produce. **Write the span writer's state machine before fitting
+    this**; it is the last thing on the card that has never been stated precisely.
+
 22. **Verify the sync-polarity table against the actual monitors** (§6.2.1), CRT, LCD
     and scaler, in *both* `VMODE` families. Polarity is how the monitor picks the
     vertical format; getting it right on paper and wrong at the connector produces a

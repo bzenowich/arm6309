@@ -53,6 +53,14 @@ to fit time:
 | [`access.check.ts`](access.check.ts) | all 128 arbiter inputs, and the wrap that decides item 12 — `npm run check:access` |
 | [`jedec/place.ts`](jedec/place.ts) | pairs equations to macrocells by term count, so pin order is not hand-arithmetic |
 
+**The sequencer's timing spine** — the one part of `graphics.md` §14's sequencer pair
+that the document specifies rather than lists:
+
+| | |
+|---|---|
+| [`seqph.jedec.ts`](seqph.jedec.ts) | **`seqph`** — dot phase, slot tick, §5.2.2's sub-slot split, four per-chip fetch-latch clocks, pixel mux select |
+| [`seqph.check.ts`](seqph.check.ts) | the phase, that the slot tick does **not** move with `HSCROLL`, and the arithmetic that shows a common fetch-latch clock cannot render a scrolled line — `npm run check:seqph` |
+
 Several statements of one logic is several too many, and the count went *down* on
 2026-09-06 rather than up: `mmu.check.ts` no longer carries its own copy of the
 equations, and `mmu.jedec.ts` is not a fourth statement but the placement of the terms
@@ -371,8 +379,13 @@ is `[15:4]` now, so the model states it rather than tolerating it.
 4. ~~**The scan-address pair will not fit either.**~~ **CLOSED** — it is 17 of 20 with
    three spare. The rule from the sync fit still holds but does not bind there:
    nothing decodes the scan address, it goes straight to the framebuffer's address
-   pins. **The `WPTR` pair and the arbiter are fitted too** (`access.check.ts`);
-   what remains on that card is the sequencer pair.
+   pins. **The `WPTR` pair, the arbiter and the sequencer's timing spine are fitted
+   too.** What remains is the sequencer's other half — and it does not fit in the one
+   part left. `graphics.md` §19 item 23 carries the budget: 20 macrocells wanted
+   against 10 left, on an enumeration of that document's own list of duties. It is a
+   budget rather than a fit because the span writer's state machine is inherited from
+   minimal256 and has never been written down. **That is now the blocking item for the
+   card's GAL count**, and it is a specification job, not a fitting one.
 
 **A placement rule, from three counters fitted.** A loadable counter bit *i* costs
 *i* + 3 product terms and a plain enabled one *i* + 7, so a wide counter wants a
