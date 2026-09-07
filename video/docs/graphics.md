@@ -1615,6 +1615,78 @@ Against that, the sync trio's third part is the only genuine *increase*, and it 
 measured rather than estimated. Net against the pre-fit projection of 9 + a tile-mode
 contingency + an arbiter that did not fit: **10, and settled for five of them.**
 
+#### 10.1.2 The CPLD question, answered with numbers
+
+§10.1 sets the trigger at *"eighteen GAL22V10s is where the honest question becomes
+'why not one CPLD'"*, and the card is at ten — so by its own rule the question is not
+live. Two things say otherwise, and both are new.
+
+**The chronology does not block it.** §15's period audit places this card at
+**1989–90**. Altera's EP300, the first reprogrammable PLD, is **1984** — two years
+*before* the GAL22V10 the card already uses. The MAX 5000 family, the first part that
+is architecturally a CPLD rather than a large PAL, is **1988**, a year before the
+card's own date. A MAX 5000 here would be the *third*-newest part on the board: §15
+already carries 74AHCT at ~1990 and the 1 Mbit SRAM at ~1989–90 and flags both as
+newer. **"No CPLDs" is not a period rule on this card. It is a style rule** — one
+function per package, everything visible on a scope — and that is a good reason to
+keep it, but it is not the reason the README gives.
+
+**And the count that reaches eighteen is the machine's, not the card's.** Ten here,
+two on the motherboard, five on audio's sequencer, plus decode GALs on serial, storage
+and PS/2 — `hardware/gal/README.md` puts it at roughly twenty. The threshold was
+written per-card and the number that crosses it is per-machine.
+
+**What one die would actually absorb** — `npm run census`, computed from the fitted
+designs rather than counted by hand:
+
+| | |
+|---|---|
+| ten GAL22V10s | 90 macrocells, **188 signal pins** |
+| 21 inter-package nets | 43 pins |
+| outputs nothing outside the group consumes | **54 pins** |
+| | **97 of 188 pins — 52% — are an artefact of the packaging** |
+| external I/O, everything that must reach a pin regardless | **84** |
+| macrocells, including ~13 of §19 item 23's unfitted decode | **103** |
+
+Half the pin count is the packaging talking to itself. The 54 is the sharper half: a
+22V10 has **no buried nodes**, so every counter bit and every intermediate term is on
+a pin whether or not anything wants it — 36 address-counter bits, the arbiter's eight
+grants, the mask counter, the dot phase.
+
+**One `ATF1508AS` holds it**: 128 macrocells against 103, 96 I/O against 84. The
+`ATF1504AS` (64/68) does not, and two of them do not help, because splitting puts the
+framebuffer address bus on both.
+
+| | GALs / CPLDs | Card ICs | Board area for the logic |
+|---|---|---|---|
+| ten `ATF22V10C`, DIP-24 | 10 | 41 (44 with §19 item 23's helpers) | ~26 cm² |
+| one `ATF1508AS`, TQFP-100 | 1 | **32** | **~2.6 cm²** |
+| one `ATF1508AS`, PLCC-84 | 1 | 32 | ~9 cm² |
+
+§14 puts the card at ~150 of 160 cm² and calls the slack gone. This returns 17–23 cm²
+of it, which is more than the four `'153`s of §19 item 2 were ever going to.
+
+> ⚠ **The number that would decide it is the one not verified here.** §14's power
+> table makes the ten GALs **700–900 mA of a ~1.2–1.8 A card**, easily its largest
+> line, and Microchip's `Icc` figures for the ATF1508AS could not be retrieved. If one
+> CPLD lands near 150 mA the card falls to ~0.7–1.1 A, and §14's conclusion that a
+> linear 7805 "dissipates 10.5 W and needs a heatsink that does not fit the Eurocard
+> envelope" stops being true — the switching pre-regulator and the multiple backplane
+> power pins both come back into question. **Get the datasheet `Icc` before treating
+> any of this as settled.**
+
+**What would and would not survive the change.** The equations, the models and every
+check in `hardware/gal/` are device-independent and transfer unchanged — a CPLD would
+be verified against the same `sync.model.ts`, `scan.model.ts` and `seqctl.model.ts`.
+What does not transfer is `hardware/gal/jedec/`: its assembler and fuse-map simulator
+are a GAL22V10 and nothing else, and an ATF1508AS is fitted by Microchip's own
+`fit1508.exe`. The verification investment survives; the fitter does not.
+
+**Recommendation: keep the GALs, and record why.** Nothing above is an argument the
+project has to act on — it is the argument the house rule has to answer, and until now
+the rule's justification was chronology, which is wrong on this card's own timeline.
+Rewrite it as a style rule and the ten GALs need no further defence.
+
 ### 10.2 What the 6309 gives you for free
 
 The 64x4 has no block-move instruction. **The 6309 does — `TFM`, 6 + 3n cycles.**

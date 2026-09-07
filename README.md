@@ -9,7 +9,10 @@ grew a machine around the CPU: a 256-colour video card, a Paula-class sound card
 itself, which is the one part 1989 could not have built this way.
 
 **House rules, inherited from the CPU work and applied to every card since:**
-period-appropriate silicon (no CPLDs, no FPGAs — GALs are in), a documented register map
+period-appropriate silicon, **and no CPLDs or FPGAs — which is a style rule, not a
+period one** (`video/docs/graphics.md` §10.1.2: Altera's first EPLD is 1984 and the
+first CPLD 1988, both older than parts this machine already uses; the rule buys one
+function per package and everything visible on a scope), a documented register map
 before a board, an honest IC count, and a measurement in place of an estimate wherever
 one can be taken.
 
