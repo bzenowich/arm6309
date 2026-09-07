@@ -339,8 +339,8 @@ failure mode `/IOSEL` and `machine.md` §7.1 already demonstrated twice.
 |---|---|---|
 | GAL equations → JEDEC | [`jedec/`](jedec/), written here | ✓ `npm run check:jedec` and `check:sync` — five parts assemble, fit and are checked at the fuse level |
 | **CPLD equations → JEDEC** | Microchip `fit1508.exe` under Wine | ⚠ **not attempted, and not worth rewriting** — see below |
-| **CPLD JEDEC → a programmed part, on Linux** | [prjbureau](https://github.com/whitequark/prjbureau) `fuseconv` → SVF → OpenOCD | ✓ available, ATF1508AS included |
-| **CPLD JEDEC → executed against the models** | prjbureau `database.json` | ✗ **ATF1502/1504 only. The ATF1508AS fuse map is not documented.** |
+| **CPLD JEDEC → a programmed part, on Linux** | [prjbureau](https://github.com/whitequark/prjbureau) `fuseconv` → SVF → OpenOCD | ⚠ **the fuse map CSVs exist; prjbureau's own status table says "Untested" for both ATF1504 and ATF1508** |
+| **CPLD JEDEC → executed against the models** | prjbureau `database.json` | ✗ **"Partial" for the 1508, and absent from the checked-in database — 1502 and 1504 only** |
 | Counter and window equations | [`jedec/counter.ts`](jedec/counter.ts), [`jedec/range.ts`](jedec/range.ts) | ✓ generated, not hand-expanded; every range decode verifies itself exhaustively before it is returned |
 | An independent JEDEC, to falsify `jedec/gal22v10.ts` | `galette`, or WinCUPL under Wine | ⚠ **not run** — wanted once, not as a dependency ([`jedec/README.md`](jedec/README.md)) |
 | Digital verification | **Verilator** 5.020 | ✓ `npm run check:sim`, 16 claims, `-Wall` clean |
@@ -414,10 +414,17 @@ a documented fuse map.
 [prjbureau](https://github.com/whitequark/prjbureau) is that documentation, and its
 coverage decides what is possible:
 
-| | ATF1502AS | ATF1504AS | **ATF1508AS** |
-|---|---|---|---|
-| `fusemap/*_jed2svf.csv` — programming | ✓ | ✓ | **✓** |
-| `database.json` — what each fuse *means* | ✓ | ✓ | **✗ absent** |
+prjbureau's own status table, from `docs/intro.rst`:
+
+| | Fuse database | Programming |
+|---|---|---|
+| ATF1502AS/ASV/ASL | **Complete** | **Complete** |
+| ATF1504AS/ASV/ASL | Near-complete | Untested |
+| **ATF1508AS/ASV/ASL** | **Partial** | **Untested** |
+
+and the checked-in `database.json` carries 1502AS/BE and 1504AS/BE only — no 1508
+entry at all. The stated reason is not architectural: *"peculiarities of the toolchain
+result in practical difficulties producing complete fuse map documentation."*
 
 So on Linux, for the part `graphics.md` §10.1.6 selects: **the design can be fitted
 (Wine), programmed (prjbureau + OpenOCD, no Atmel Windows tooling), and verified at

@@ -1933,9 +1933,10 @@ packages while saving 10 further pins.
 
 > ⚠ **One thing the ATF1508AS costs that the ATF1504AS does not: verifiability.**
 > [prjbureau](https://github.com/whitequark/prjbureau) documents the ATF15xx fuse maps,
-> and its coverage is asymmetric — it can *program* an ATF1508AS on Linux (`fuseconv`
-> → SVF → OpenOCD, no Atmel Windows tooling), but its `database.json`, which says what
-> each fuse **means**, covers the ATF1502 and ATF1504 only. So the loop that caught
+> and its coverage is asymmetric. Its own status table rates the ATF1508AS fuse
+> database **"Partial"** and its programming path **"Untested"** — and the checked-in
+> `database.json` has no 1508 entry at all, only 1502 and 1504. The ATF1502 is the
+> only device rated Complete on both. So the loop that caught
 > the `WPTR` hold-gating defect — read the fuse map back, execute it against the model
 > — **cannot be reproduced on an ATF1508AS.** Verification stops at the design.
 >
