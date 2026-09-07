@@ -1682,10 +1682,59 @@ What does not transfer is `hardware/gal/jedec/`: its assembler and fuse-map simu
 are a GAL22V10 and nothing else, and an ATF1508AS is fitted by Microchip's own
 `fit1508.exe`. The verification investment survives; the fitter does not.
 
-**Recommendation: keep the GALs, and record why.** Nothing above is an argument the
-project has to act on — it is the argument the house rule has to answer, and until now
-the rule's justification was chronology, which is wrong on this card's own timeline.
-Rewrite it as a style rule and the ten GALs need no further defence.
+#### 10.1.3 Part selection — `ATF1508AS`, TQFP-100
+
+**Decided 2026-09-06.** The comparison this card invites is with the GIME and the
+VIC-II, and both of those are single custom ASICs; holding this design to discrete
+GALs while measuring it against them is not a like-for-like fight. The house rule is
+restated as a style rule (§10.1.2) and set aside for the video card.
+
+**The ordering code carries a trap.** The 5 V device is `ATF1508AS`; **`ATF1508ASV` is
+the 3.3 V part** — two datasheets, "ATF1508AS(L) **5V** 128-Macrocell" and
+"ATF1508ASV(L) **3.3V** 128-Macrocell". The cheap listings are mostly ASV: an
+`ATF1508ASV-15AU100` is ~$6 where an `ATF1508AS-10AU100` is ~$16. On a 5 V card the
+$6 part is the wrong one.
+
+**The package is decided by pins, again.** `npm run census`, with the absorption of
+§10.1.2 applied:
+
+| Package | Ordering | User I/O | Takes 119 macrocells / 71 I/O? |
+|---|---|---|---|
+| PLCC-84 | `…JC84` | **64** | ✗ — 7 short, and it is the socketable one |
+| **TQFP-100** | **`…AU100`** | **80** | ✓ **9 spare** |
+| PQFP-160 | `…QC160` | 96 | ✓ but 160 pins for 71 |
+
+**So: `ATF1508AS-…AU100`, 5 V, TQFP-100, `-15` speed grade** — the same grade §14
+already specifies for the GALs, and the slowest is the cheapest. ⚠ Confirm a `-15` is
+stocked in 5 V TQFP-100 before committing; DigiKey's `-15AC100` is a Rochester
+listing, and `-10AI100` is marked obsolete. Falling back to `-10` costs money, not
+margin.
+
+**It is cheaper than what it replaces**, which was not the expected result: ~$16
+against ten `ATF22V10C` at $2–3 each, and it deletes four more packages on the way.
+
+| | Card ICs | Logic area |
+|---|---|---|
+| ten GALs + `'244` + `'273` + `'165` | 41 | ~26 cm² |
+| one `ATF1508AS` TQFP-100 | **29** | ~2.6 cm² |
+
+**Two things this costs, and neither is money.** TQFP-100 is 0.5 mm pitch surface
+mount: the PLCC-84 socket that would suit a hand-built Eurocard is exactly the package
+that does not fit, so the card gains a fine-pitch part and loses the ability to pull
+the logic and reseat it. And `hardware/gal/jedec/` stops applying — its assembler and
+fuse-map simulator are a GAL22V10 and nothing else. The equations, the models and all
+164 checks are device-independent and transfer unchanged; the fitter is
+Microchip's `fit1508.exe` from here.
+
+> ⚠ **One question left open, and it is worth five minutes before ordering.** The
+> `ATF1508ASV` has separate `VCCINT` and `VCCIO` rails. **If its I/O are genuinely 5 V
+> tolerant with `VCCIO` at 5 V, the ~$6 part becomes viable and this section
+> changes.** Microchip's datasheets could not be retrieved from this sandbox, so it is
+> unresolved rather than answered — and it is the kind of question where guessing
+> costs parts. Do not assume it.
+
+**Nothing above obliges the rest of the machine.** The motherboard's two GALs and the
+audio card's five are unaffected; §10.1.2's argument was always about this card's ten.
 
 ### 10.2 What the 6309 gives you for free
 

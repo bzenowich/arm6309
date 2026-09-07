@@ -163,15 +163,60 @@ const mcTotal = macrocells + 13
 console.log(`\n  EXTERNAL I/O:  ${total}`)
 console.log(`  MACROCELLS, incl. ~13 of unfitted decode:  ${mcTotal}\n`)
 
-const PARTS = [
-  { name: "ATF1502AS", mc: 32, io: 36 },
-  { name: "ATF1504AS", mc: 64, io: 68 },
-  { name: "ATF1508AS", mc: 128, io: 96 },
+/* -- what the die can swallow on top of the logic ------------------------
+ *
+ * The I/O figure above assumes the CPLD replaces the ten GALs and nothing
+ * else. It does not have to. Several of the card's small parts exist only
+ * because a GAL had no room, and every one of them that moves inside takes
+ * its interface pins with it - which is the difference between the package
+ * that fits and the package that does not.
+ *
+ * Macrocell cost is the flip side, and it runs out first. */
+const ABSORB = [
+  { what: "VSTAT read driven onto D0..D7 directly, deleting the '244 (12.1)",
+    io: 4, ic: 1, mc: 0,
+    note: "VBLANK, HBLANK, SPANBUSY and the '244's enable stop being pins" },
+  { what: "CTRL's '273 becomes 8 macrocells", io: 4, ic: 1, mc: 8,
+    note: "VMODE[0], IRQEN and WMODE[1:0] stop being inputs" },
+  { what: "SPANLEN's '161 pair becomes a buried counter", io: 3, ic: 2, mc: 10,
+    note: "TC, load and count enable stop being pins" },
+  { what: "the '165 span serialiser becomes a buried shifter", io: 3, ic: 1, mc: 8,
+    note: "load, shift, and RETIRE's last external load" },
+  { what: "HPOL becomes a programmed constant", io: 1, ic: 0, mc: 0,
+    note: "a re-burn is the fix a CPLD already offers (6.2.1)" },
+  { what: "the '245's direction is R/W, a wire", io: 1, ic: 0, mc: 0,
+    note: "the same finding the MMU's ISO_DIR made - gal/README.md" },
 ] as const
-console.log(`Against the 5 V CPLDs still in production\n`)
-console.log(`  part        macrocells  max I/O   logic fits?  pins fit?`)
-for (const q of PARTS) {
-  console.log(`  ${q.name}   ${fmt(q.mc, 8)}  ${fmt(q.io, 7)}   ` +
-    `${(q.mc >= mcTotal ? "yes" : "no").padEnd(11)}  ${q.io >= total ? "yes" : "no"}`)
+
+console.log(`What else the die could swallow, and what it costs\n`)
+let aIo = 0, aIc = 0, aMc = 0
+for (const x of ABSORB) {
+  aIo += x.io; aIc += x.ic; aMc += x.mc
+  console.log(`  -${fmt(x.io, 2)} I/O  -${x.ic} IC  +${fmt(x.mc, 2)} mc   ${x.what}`)
+  console.log(`                             ${x.note}`)
 }
-console.log()
+console.log(`\n  all of it:  I/O ${total} -> ${total - aIo},  macrocells ${mcTotal} -> ${mcTotal + aMc},  card ICs -${aIc + CARD.length - 1}`)
+if (mcTotal + aMc > 128) {
+  console.log(`  ...which is ${mcTotal + aMc - 128} macrocells over an ATF1508AS. Drop the widest:`)
+  const widest = [...ABSORB].sort((a, b) => b.mc - a.mc)[0]
+  console.log(`     without "${widest.what}":`)
+  console.log(`     I/O ${total - aIo + widest.io}, macrocells ${mcTotal + aMc - widest.mc}, card ICs -${aIc - widest.ic + CARD.length - 1}`)
+}
+
+const PARTS = [
+  { name: "ATF1502AS", pkg: "PLCC-44 / TQFP-44", mc: 32, io: 36 },
+  { name: "ATF1504AS", pkg: "PLCC-84", mc: 64, io: 64 },
+  { name: "ATF1508AS", pkg: "PLCC-84  JC84", mc: 128, io: 64 },
+  { name: "ATF1508AS", pkg: "TQFP-100 AU100", mc: 128, io: 80 },
+  { name: "ATF1508AS", pkg: "PQFP-160 QC160", mc: 128, io: 96 },
+] as const
+const bestIo = total - aIo + [...ABSORB].sort((a, b) => b.mc - a.mc)[0].io
+const bestMc = mcTotal + aMc - [...ABSORB].sort((a, b) => b.mc - a.mc)[0].mc
+console.log(`\nAgainst the 5 V parts, at ${bestMc} macrocells and ${bestIo} I/O\n`)
+console.log(`  part        package           macrocells  I/O   logic?  pins?`)
+for (const q of PARTS) {
+  console.log(`  ${q.name}   ${q.pkg.padEnd(16)}  ${fmt(q.mc, 9)}  ${fmt(q.io, 4)}  ` +
+    `${(q.mc >= bestMc ? "yes" : "no").padEnd(7)} ${q.io >= bestIo ? "yes" : "no"}`)
+}
+console.log(`\n  NOTE: ATF1508ASV is the 3.3 V part, not this one. The 5 V device is`)
+console.log(`  ATF1508AS. The cheap listings are mostly ASV.\n`)
