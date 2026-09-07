@@ -37,7 +37,7 @@ error, agree with each other perfectly, and the check would pass on a file that
 programs a part to do something else. No amount of simulation closes that,
 because both ends read the same table.
 
-## So the table is corroborated twice, and can be falsified a third way
+## So the table is corroborated twice, and was falsified a third way
 
 Everything in `gal22v10.ts` comes from two sources that were consulted
 independently and agree in every entry:
@@ -54,15 +54,35 @@ independently and agree in every entry:
    entry for entry, and `set_and`'s `neg_off` fixes the true/complement column
    order that `reference/articles/gal.html` shows for the GAL16V8.
 
-**The third way, which is the one that would settle it, has not been done:**
-compile `../mmu.pld` once with CUPL or galette and diff the fuse array against
-`../mmu.jed`. That needs the tool exactly once, not as a dependency, and it
-would retire this section. Until then the honest statement is: *the fuse map is
-self-consistent and matches the models, on a device description with two
-independent sources behind it.*
+**The third way was done on 2026-09-07, and it found two errors.**
+[`../prjbureau/extract-wincupl.sh`](../prjbureau/extract-wincupl.sh) pulls
+Atmel's own CUPL 5.0a out of the WinCUPL installer under Wine; `../mmu.pld` and
+`../clkdec.pld` compiled with it are committed as [`reference/`](reference/),
+and `npm run check:cupl` executes them on our fuse map. Both errors were exactly
+what the warning above describes — the assembler and the simulator shared the
+mistake, so all 178 checks passed either way:
 
-Programming a part and testing it on the bench settles it too, and has to
-happen anyway.
+| | Was | Is |
+|---|---|---|
+| **S0/S1 config-bit order** | pin 14 upward | **pin 23 downward** |
+| **registered macrocell feedback** | the pin level | **the complement of `Q`** |
+
+The first came from misreading galette, which fills `xor[]` with
+`xor[num_olmcs - 1 - i]` — that inversion means index 0 is the *last* macrocell.
+Symmetric pins hid most of it: only 18 and 19 disagreed visibly.
+
+The second is the sharper one. CUPL emits `clkdec`'s `C0.d = !C0` as the single
+literal `C0`, which is only a working counter if the array is fed from `/Q`.
+Ours was written the other way and counted correctly **in our own simulator and
+nowhere else** — every `.jed` here with a registered output that feeds back
+would have been wrong on silicon.
+
+**So the two-source rule this section applies to the device description now
+applies to the fuse map too**, and `check:cupl` keeps it that way: edit
+`gal22v10.ts` again and Atmel's reference files stop evaluating.
+
+Programming a part and testing it on the bench is still the last word, and has
+to happen anyway.
 
 ## The conventions that are easy to get backwards
 
