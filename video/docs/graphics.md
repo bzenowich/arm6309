@@ -1457,9 +1457,13 @@ answer to "how do we need fewer GALs" turns on which bits have to reach a pin.
 |---|---|---|---|---|
 | sync — `hgen`/`vgen`/`vdec` | 3 | 27 of 30 | 18 | **No** — only 6 signals leave the group |
 | scan address — `hadr`/`vadr` | 2 | 17 of 20 | 17 | **Yes** — they are the framebuffer address bus |
-| `WPTR` / span pointer | 2 | 19 of 20 | 19 | **Yes** — they are the VRAM address path |
+| `WPTR` / span pointer — `wcol`/`wrow` | 2 | 19 of 20 | 19 | **Yes** — they are the VRAM address path |
 | sequencer | 2 | not yet fitted | | |
-| arbiter (§5.2.1) | 1 | **8** of 10 | 0 | — |
+| arbiter (§5.2.1) — `arb` | 1 | **8** of 10 | 0 | — |
+
+Seven of the ten are fitted. Two of them are full in **both** dimensions — `vdec`
+at 14 of 14 pins and `wcol` at 10 of 10 macrocells *and* 11 of 11 pins — so neither
+tile mode nor the list engine can borrow capacity there.
 
 **The card is GAL-heavy for exactly one reason: 54 of those macrocells are counter
 bits, and a GAL22V10 has no buried nodes.** Every register costs a macrocell *and* a
@@ -2363,9 +2367,29 @@ unchanged from minimal256.md §11 and are not restated in full.
 11. **Validate 640×400@70 and 640×480@60 on the actual monitors** — CRT, LCD and
     scaler. 70 Hz 400-line is a DOS text mode and should be universal; confirm it.
     **carried, retimed.**
-12. **Decide span-wrap behaviour at the 1024-byte row boundary** — wrap in row, or
-    advance. §7.2's "next row, same column" mode makes advance the natural default;
-    document whichever is chosen. **carried.**
+12. ~~**Decide span-wrap behaviour at the 1024-byte row boundary**~~ — **DECIDED
+    2026-09-06: wrap in row.** Not chosen by taste; the fit chose it, and the rest of
+    the card agrees.
+
+    **The fit.** `WPTR` is nineteen bits with the same `{row, column}` structure as
+    the scan address, because the stride is the same 1024. The column part
+    ([`hardware/gal/access.jedec.ts`](../../hardware/gal/access.jedec.ts) `wcol`) is
+    ten bits in **10 of 10 macrocells and 11 of 11 input pins** — full in both
+    dimensions. Advancing into the next row needs a carry *out* of that part, and
+    there is no eleventh macrocell to emit one from and no pin to carry it on.
+    `check:access` asserts exactly that, so the constraint is recorded rather than
+    remembered.
+
+    **And wrapping is the right answer anyway, which is the part worth keeping.**
+    `hadr`'s scan column counter wraps inside the row — `check:scan` runs it over the
+    boundary 256 times and asserts the row does not move. If the writer advanced
+    where the scanner wraps, the two would disagree about what follows column 1023 of
+    a row, and every span that crossed the boundary would land somewhere the display
+    would not read it from. **The torus is a torus in both directions or in neither.**
+
+    §7.2's "next row, same column" is unaffected: it is `WADV = 01`, a row advance
+    with the column reloaded from the register-file shadow, and it never relies on a
+    carry.
 13. **Emulator model** must charge spans their real ~40 ns/pixel, stall on a busy
     span, model `VSTAT`, the raster compare and the MMU — or software will be
     written against a machine that does not exist. **carried, extended.**
@@ -2406,9 +2430,25 @@ unchanged from minimal256.md §11 and are not restated in full.
     read budget is 46.9 ns of margin under it and −25.1 ns without it. Measure the
     CPU access's position within the fetch slot directly; do not infer it from a
     working read, because a marginal read works until it does not.
-20. **Fit §5.2.1's arbiter GAL** and confirm the grant logic handles the three cases
-    the wire could not: CPU and span on the *same* chip, CPU absent entirely, and the
-    `/WAIT` case where a span holds the chip the CPU wants.
+20. ~~**Fit §5.2.1's arbiter GAL**~~ **CLOSED 2026-09-06.** Fitted in
+    [`hardware/gal/access.jedec.ts`](../../hardware/gal/access.jedec.ts) and checked
+    over all 128 input combinations; two of the three cases are asserted by name.
+
+    - **CPU and span on the same chip** — the span writer yields. ✓
+    - **CPU absent entirely** — the span writer takes the chip rather than idling
+      the slot. ✓
+    - **Never both** — no chip is ever granted to two drivers in one slot, asserted
+      separately from the model because it is the failure this part exists to
+      prevent. ✓
+    - The **`/WAIT` case** is not this part's: a span *holding* the chip the CPU
+      wants is `SPANBUSY · VRAMSEL · /IOPAGE` on the `/WAIT` pin (§3.3, §12.1's
+      open-drain idiom), and the arbiter is purely combinational grant logic with no
+      state to be busy with. It stays open as **item 21**, where it belongs.
+
+    **8 macrocells, not 12** — §14 budgeted "8 grants + 4 source selects" on a part
+    with ten macrocells, which should have been an overflow nobody had noticed. It
+    was never one: §5.2.1's own equations end `SRCSEL[n] = GRANT_CPU[n]`, the same
+    signal. Two macrocells and seven input pins spare.
 21. **Decide `/WAIT`'s granularity with the motherboard** (§3.3): whole E periods is
     what this card's static phase needs, and it is the motherboard's divider that has
     to implement it. Confirm that a `/WAIT`-extended cycle re-enters the correct

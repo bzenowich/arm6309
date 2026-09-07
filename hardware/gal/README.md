@@ -44,6 +44,15 @@ to fit time:
 | [`scan.check.ts`](scan.check.ts) | every address of a 400-line frame at three scroll positions — `npm run check:scan` |
 | `hadr.jed`, `vadr.jed` + `.doc` | 17 macrocells of 20, three spare |
 
+**The arbiter and the `WPTR` pair** — `graphics.md` §19 items 20 and 12:
+
+| | |
+|---|---|
+| [`access.jedec.ts`](access.jedec.ts) | **`arb`, `wcol`, `wrow`** — the spare-access grant logic and the 19-bit pointer |
+| [`access.model.ts`](access.model.ts) | §5.2.1's grant rule verbatim, and the pointer as arithmetic |
+| [`access.check.ts`](access.check.ts) | all 128 arbiter inputs, and the wrap that decides item 12 — `npm run check:access` |
+| [`jedec/place.ts`](jedec/place.ts) | pairs equations to macrocells by term count, so pin order is not hand-arithmetic |
+
 Several statements of one logic is several too many, and the count went *down* on
 2026-09-06 rather than up: `mmu.check.ts` no longer carries its own copy of the
 equations, and `mmu.jedec.ts` is not a fourth statement but the placement of the terms
@@ -362,8 +371,8 @@ is `[15:4]` now, so the model states it rather than tolerating it.
 4. ~~**The scan-address pair will not fit either.**~~ **CLOSED** — it is 17 of 20 with
    three spare. The rule from the sync fit still holds but does not bind there:
    nothing decodes the scan address, it goes straight to the framebuffer's address
-   pins. What remains unfitted on that card is the sequencer pair, the `WPTR` pair and
-   §5.2.1's arbiter.
+   pins. **The `WPTR` pair and the arbiter are fitted too** (`access.check.ts`);
+   what remains on that card is the sequencer pair.
 
 **A placement rule, from three counters fitted.** A loadable counter bit *i* costs
 *i* + 3 product terms and a plain enabled one *i* + 7, so a wide counter wants a
