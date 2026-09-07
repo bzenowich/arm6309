@@ -1422,7 +1422,48 @@ logic; absorb it and they all become inputs. On a hand-built card carrying four
 DACs, the three op-amps, the `4066`, the oscillator and every passive. This is an
 analogue card with a digital corner, and the CPLD is the corner.
 
-> ⚠ **The I/O figure is estimated, not fitted.** §9.5's *"the sample-RAM address now
+#### 10.1.1 Fitted, 2026-09-07
+
+`hardware/gal/cpld/audio.jed` exists: **74,136 fuses, `ATF1508AS`, PLCC-84, "Design
+fits successfully".** One command regenerates it —
+`hardware/gal/prjbureau/fit1508.sh gal/audio.pld` — through Atmel's own CUPL and
+`fit1508.exe` under Wine, on Linux, with no vendor tooling beyond what
+`extract-wincupl.sh` pulls out of the WinCUPL installer.
+
+| | |
+|---|---|
+| macrocells declared | 64 — **39 of them buried** |
+| signals reaching a pin | 25 outputs + 22 inputs + clock + reset = **49**, of 68 usable |
+| `SLOTCLK` | pin 83, a **global clock** — the fitter chose it |
+| `RESET` | pin 1, the **global clear** |
+| fitter passes | 1 failed placement; 2 succeeded with cascade logic |
+
+**The source is generated, not written twice.** `hardware/gal/jedec/cupl.ts` emits the
+`.pld` from the same `Cell` term lists that `check:audio` exercises on six GAL22V10s,
+so the CPLD and the GAL fits have one origin. Writing the CUPL by hand would have made
+a second source with nothing comparing it against the first — which is exactly how two
+errors got into the 22V10 fuse map on 2026-09-06.
+
+Three of the merge's wins are visible only once the parts are one part:
+
+- **`FIRQANY`** — §8.1's condition. The GAL split could not form it, because `REQ` was
+  on one part and `ENA` on another, so it had to arrive as a pin. Here it is six
+  product terms.
+- **`MERGE`** — §9.4.5 wants the colour clock after the synchronised read strobe
+  deasserts. The synchronisers were a `'174` and the read strobe was on the decode GAL.
+- **`PEND0-5`** — the six bits whose crossing is what made the interrupt block
+  unfittable on a `GAL22V10` in either arrangement.
+
+> ⚠ **What is verified and what is not.** The *logic* is verified: `check:audio` runs
+> these equations exhaustively where that is cheap — every strobe over all 16 offsets ×
+> R/W × select, Paula's set/clear over all 256 written bytes twice, the slot walk, the
+> ÷5 prescale, §9.4.5's ordering. The *fuse map* is not, and cannot be: the ATF1508AS
+> is not in prjbureau's database, so unlike `mmu.jed` and `clkdec.jed` this JEDEC
+> cannot be read back and executed against the model. It is trusted to `fit1508.exe`.
+> `hardware/gal/README.md` carries that asymmetry.
+
+> ⚠ **The I/O figure was estimated, not fitted** — and came in at 49 against the
+> estimate's ~48, which is closer than this project's estimates usually manage. §9.5's *"the sample-RAM address now
 > has one source — the state-file read bus"* is what keeps it to ~48: those 19 address
 > lines are board wiring between two memories and never enter the logic at all. The
 > rest of the datapath's interfaces have never been enumerated, and on the video card
