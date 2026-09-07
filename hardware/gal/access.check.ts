@@ -73,8 +73,13 @@ const wrow = build(wrowDesign, "wrow")
    * instead of four: the arbiter has already matched the chip against
    * WPTR[1:0], and "which chip" is not something the span writer acts on. */
   const G = arb.assembly.usage.find((u) => u.name === "SPNGRANT")!
-  check(G.used === G.available && G.used === 16,
-    "SPNGRANT is 16 product terms in a 16-term macrocell - exactly full",
+  /* It was sixteen terms - exactly full - because it was written as the four
+   * per-chip grants ORed, which enumerates the chip four times and expands
+   * !GRANT_CPU four ways inside each. The chip enumeration cancels: the span
+   * writer is refused when the CPU wants THE SAME chip, so it is a comparison
+   * and not a decode. Six terms, and the exhaustive check below is what says
+   * the two are the same function. */
+  check(G.used === 6, "SPNGRANT is 6 product terms, not the 16 it was written as",
     `${G.used}/${G.available}`)
   let orBad: string | null = null
   for (let bits = 0; bits < 128; bits++) {

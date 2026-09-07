@@ -53,15 +53,36 @@ for (let n = 0; n < 4; n++) {
 /* One grant line back to the span writer instead of four. The sequencer only
  * ever needs to know THAT it was granted, not which chip - the arbiter has
  * already matched the chip against WPTR[1:0] to decide. Four pins saved on
- * seqctl for one macrocell here, on a part that had two spare. */
+ * seqctl for one macrocell here, on a part that had two spare.
+ *
+ * SIX TERMS, AND IT WAS SIXTEEN. Writing it as "the four per-chip grants,
+ * ORed" enumerated the chip four ways and then expanded !GRANT_CPU four ways
+ * inside each, and sixteen is what an OR of sixteen products costs. The chip
+ * enumeration cancels: the span writer is refused exactly when the CPU wants
+ * THE SAME chip, so the condition is a comparison between SPNA and CPUA and
+ * not a decode of either. That is one term per address bit per direction, plus
+ * the two ways the CPU is not asking at all.
+ *
+ * Found by minimising it - jedec/twolevel.ts, 2026-09-07 - after the ATF1508
+ * fit showed the equation cascading across four macrocells on vctrl. The
+ * complement is smaller still at five terms, which the 22V10's S1 bit would
+ * give for nothing; it is not taken because SPNGRANT is read by name on two
+ * other parts and inverting it there would cost more than it saves.
+ *
+ * access.check.ts compares this against the four grants ORed over every input
+ * combination, so the rewrite is checked rather than argued. */
 arbCells.push({
   pin: 0, name: "SPNGRANT", assertedLow: false, s0: 1, registered: false,
-  terms: [0, 1, 2, 3].map((n) => `SPNREQ & ${chipIs("SPNA", n)} & !VRAMSEL`)
-    .concat([0, 1, 2, 3].flatMap((n) => [
-      `SPNREQ & ${chipIs("SPNA", n)} & IOPAGE`,
-      `SPNREQ & ${chipIs("SPNA", n)} & ${n & 1 ? "!" : ""}CPUA0`,
-      `SPNREQ & ${chipIs("SPNA", n)} & ${n & 2 ? "!" : ""}CPUA1`,
-    ])),
+  terms: [
+    /* the CPU's chip differs from ours in one address bit or the other */
+    "SPNREQ & !SPNA0 & CPUA0",
+    "SPNREQ & SPNA0 & !CPUA0",
+    "SPNREQ & !SPNA1 & CPUA1",
+    "SPNREQ & SPNA1 & !CPUA1",
+    /* or the CPU is not after VRAM this cycle at all */
+    "SPNREQ & !VRAMSEL",
+    "SPNREQ & IOPAGE",
+  ],
 })
 
 /* 3.3 and 12.1's open-drain idiom: the pin drives low or floats, and the

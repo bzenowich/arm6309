@@ -1,4 +1,4 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Mon Sep 07 14:58:08 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Mon Sep 07 15:33:28 2026
 
 
 fit1508 vctrl.tt2 -device P1508C84 -preassign ignore
@@ -82,7 +82,7 @@ V5 is placed at feedback node 602 (MC 2)
 TC is placed at pin 12 (MC 3)
 XXL_272 is placed at feedback node 603 (MC 3)
 XXL_266 is placed at feedback node 604 (MC 4)
-SPNA0 is placed at pin 11 (MC 5)
+SPNA1 is placed at pin 11 (MC 5)
 XXL_274 is placed at feedback node 605 (MC 5)
 D0 is placed at pin 10 (MC 6)
 XXL_259 is placed at feedback node 606 (MC 6)
@@ -130,16 +130,16 @@ XXL_260 is placed at feedback node 641 (MC 41)
 XXL_264 is placed at feedback node 642 (MC 42)
 VBLANK is placed at pin 27 (MC 43)
 XXL_271 is placed at feedback node 644 (MC 44)
-CPUA1 is placed at pin 25 (MC 45)
+CPUA0 is placed at pin 25 (MC 45)
 VSYNC is placed at pin 24 (MC 46)
 XXL_268 is placed at feedback node 647 (MC 47)
 TMS is placed at pin 23 (MC 48)
 XXL_273 is placed at feedback node 648 (MC 48)
-SPNA1 is placed at pin 41 (MC 49)
+SPNA0 is placed at pin 41 (MC 49)
 MC0 is placed at feedback node 650 (MC 50)
 SPNREQ is placed at pin 40 (MC 51)
 H7 is placed at feedback node 652 (MC 52)
-CPUA0 is placed at pin 39 (MC 53)
+CPUA1 is placed at pin 39 (MC 53)
 H0 is placed at feedback node 654 (MC 54)
 H3 is placed at feedback node 655 (MC 55)
 IOPAGE is placed at pin 37 (MC 56)
@@ -210,7 +210,7 @@ WAIT is placed at pin 81 (MC 128)
                      P                    E  T   W C L   W A C                      
                      N        G       V   S  C G A P A V S T T                      
                      A D  D C N V V V C   E  L N I U N C T W R                      
-                     0 0  5 E D 1 0 2 C   T  K D T 2 K C B R L                      
+                     1 0  5 E D 1 0 2 C   T  K D T 2 K C B R L                      
                     -------------------------------------------                     
                    / 11   9   7   5   3   1  83  81  79  77  75 \                  
                   /    10   8   6   4   2  84  82  80  78  76    \                 
@@ -227,7 +227,7 @@ WAIT is placed at pin 81 (MC 128)
               D2 | 22                 ATF1508                  64 | SLOTTICK        
              TMS | 23               84-Lead PLCC               63 | FCLK2           
            VSYNC | 24                                          62 | TCK             
-           CPUA1 | 25                                          61 | MAPLD           
+           CPUA0 | 25                                          61 | MAPLD           
              VCC | 26                                          60 | GLYPHLD         
           VBLANK | 27                                          59 | GND             
           HBLANK | 28                                          58 | CHARSEL         
@@ -242,7 +242,7 @@ WAIT is placed at pin 81 (MC 128)
                       P 2 E R O C P P P N C C C C N S S S S R C                     
                       A   T A P C U N N D C P P P D P P P P I C                     
                       N   I M A   A R A     U U U   N N N N T                       
-                      B   R S G   0 E 1     3 0 1   0 2 1 3 E                       
+                      B   R S G   1 E 0     3 0 1   0 2 1 3 E                       
                       U   E E E     Q                       S                       
                       S     L                               E                       
                       Y                                     L                       
@@ -361,11 +361,11 @@ H3			(MC18	FB)  : MUX 38		Ref (D55fb)
 
 FanIn assignment for block D [25]
 {
-CPUA1,CE,
+CPUA0,CE,
 H7,H1,H4,H5,H0,H6,H2,H3,
 MC2,MC1,MC0,
 RETIRE,
-SPANBUSY,SPNREQ,SPNA1,
+SPANBUSY,SPNREQ,SPNA0,
 TC,
 WM1,WSTB,WM0,
 XXL_250,XXL_251,XXL_254,XXL_247,
@@ -374,7 +374,7 @@ Multiplexer assignment for block D
 H7			(MC7	FB)  : MUX 0		Ref (D52fb)
 WM1			(MC19	FB)  : MUX 1		Ref (F89fb)
 XXL_250			(MC2	FB)  : MUX 2		Ref (B20fb)
-CPUA1			(MC21	P)   : MUX 4		Ref (C45p)
+CPUA0			(MC21	P)   : MUX 4		Ref (C45p)
 XXL_251			(MC5	FB)  : MUX 5		Ref (B30fb)
 SPANBUSY		(MC16	P)   : MUX 6		Ref (D64p)
 WSTB			(MC24	P)   : MUX 8		Ref (H123p)
@@ -382,7 +382,7 @@ SPNREQ			(MC23	P)   : MUX 9		Ref (D51p)
 CE			(MC20	P)   : MUX 10		Ref (A11p)
 RETIRE			(MC11	P)   : MUX 12		Ref (D59p)
 MC2			(MC14	FB)  : MUX 13		Ref (D62fb)
-SPNA1			(MC22	P)   : MUX 15		Ref (D49p)
+SPNA0			(MC22	P)   : MUX 15		Ref (D49p)
 WM0			(MC18	FB)  : MUX 16		Ref (F84fb)
 MC1			(MC10	FB)  : MUX 19		Ref (D58fb)
 H1			(MC12	FB)  : MUX 25		Ref (D60fb)
@@ -399,12 +399,12 @@ H3			(MC9	FB)  : MUX 38		Ref (D55fb)
 
 FanIn assignment for block E [25]
 {
-CPUA0,CELL,CPUA1,
+CPUA1,CELL,CPUA0,
 D5,D0,
 HS1,HS0,
 IOPAGE,
 PH1,PH0,
-SLOTTICK,SPNA1,SPNREQ,SPANBUSY,SPNA0,
+SLOTTICK,SPNA0,SPNREQ,SPANBUSY,SPNA1,
 TC1,TC0,TC2,
 VRAMSEL,VMODE0,
 WCTRL,
@@ -415,24 +415,24 @@ TC1			(MC9	FB)  : MUX 0		Ref (E71fb)
 SLOTTICK		(MC13	P)   : MUX 1		Ref (G99p)
 D5			(MC25	P)   : MUX 3		Ref (A8p)
 VRAMSEL			(MC19	P)   : MUX 4		Ref (D57p)
-SPNA1			(MC15	P)   : MUX 5		Ref (D49p)
+SPNA0			(MC15	P)   : MUX 5		Ref (D49p)
 XXL_272			(MC1	FB)  : MUX 6		Ref (A3fb)
 WCTRL			(MC22	P)   : MUX 7		Ref (H118p)
 PH1			(MC6	FB)  : MUX 8		Ref (E66fb)
 SPNREQ			(MC16	P)   : MUX 9		Ref (D51p)
 SPANBUSY		(MC5	P)   : MUX 12		Ref (D64p)
-SPNA0			(MC23	P)   : MUX 13		Ref (A5p)
+SPNA1			(MC23	P)   : MUX 13		Ref (A5p)
 XXL_269			(MC2	FB)  : MUX 14		Ref (B23fb)
 IOPAGE			(MC18	P)   : MUX 15		Ref (D56p)
 VMODE0			(MC8	FB)  : MUX 16		Ref (E70fb)
-CPUA0			(MC17	P)   : MUX 17		Ref (D53p)
+CPUA1			(MC17	P)   : MUX 17		Ref (D53p)
 XXL_271			(MC4	FB)  : MUX 19		Ref (C44fb)
 HS1			(MC20	P)   : MUX 23		Ref (H115p)
 CELL			(MC7	FB)  : MUX 24		Ref (E68fb)
 D0			(MC24	P)   : MUX 27		Ref (A6p)
 HS0			(MC21	P)   : MUX 31		Ref (H117p)
 TC0			(MC12	FB)  : MUX 33		Ref (F96fb)
-CPUA1			(MC14	P)   : MUX 34		Ref (C45p)
+CPUA0			(MC14	P)   : MUX 34		Ref (C45p)
 TC2			(MC10	FB)  : MUX 35		Ref (E76fb)
 PH0			(MC11	FB)  : MUX 36		Ref (F82fb)
 XXL_270			(MC3	FB)  : MUX 39		Ref (B29fb)
@@ -485,7 +485,7 @@ HS0			(MC5	P)   : MUX 31		Ref (H117p)
 
 FanIn assignment for block H [7]
 {
-CPUA0,CPUA1,
+CPUA1,CPUA0,
 HBLANK,
 IOPAGE,
 SPANBUSY,
@@ -493,10 +493,10 @@ VBLANK,VRAMSEL,
 }
 Multiplexer assignment for block H
 VBLANK			(MC2	P)   : MUX 0		Ref (C43p)
-CPUA0			(MC5	P)   : MUX 3		Ref (D53p)
+CPUA1			(MC5	P)   : MUX 3		Ref (D53p)
 SPANBUSY		(MC3	P)   : MUX 6		Ref (D64p)
 HBLANK			(MC1	P)   : MUX 11		Ref (C40p)
-CPUA1			(MC4	P)   : MUX 18		Ref (C45p)
+CPUA0			(MC4	P)   : MUX 18		Ref (C45p)
 IOPAGE			(MC6	P)   : MUX 21		Ref (D56p)
 VRAMSEL			(MC7	P)   : MUX 28		Ref (D57p)
 
@@ -608,7 +608,7 @@ PH0.D = !PH0.Q;
 PH1.D = ((PH0.Q & !PH1.Q)
 	# (!PH0.Q & PH1.Q));
 
-RETIRE = ((!CPUA1 & SPANBUSY.Q & SPNA1 & SPNREQ)
+RETIRE = ((CPUA0 & SPANBUSY.Q & !SPNA0 & SPNREQ)
 	# XXL_254);
 
 SLOTTICK = (PH0.Q & PH1.Q);
@@ -807,11 +807,11 @@ XXL_253 = ((!HS1 & PH1.Q & !HS0)
 	# (HS1 & PH0.Q & PH1.Q & HS0)
 	# (!HS1 & PH0.Q & !PH1.Q & HS0));
 
-XXL_254 = ((SPANBUSY.Q & SPNREQ & !VRAMSEL)
+XXL_254 = ((!CPUA0 & SPANBUSY.Q & SPNA0 & SPNREQ)
+	# (SPANBUSY.Q & SPNREQ & CPUA1 & !SPNA1)
+	# (SPANBUSY.Q & SPNREQ & !CPUA1 & SPNA1)
 	# (SPANBUSY.Q & SPNREQ & !IOPAGE)
-	# (SPANBUSY.Q & SPNREQ & CPUA0 & !SPNA0)
-	# (CPUA1 & SPANBUSY.Q & !SPNA1 & SPNREQ)
-	# (SPANBUSY.Q & SPNREQ & !CPUA0 & SPNA0));
+	# (SPANBUSY.Q & SPNREQ & !VRAMSEL));
 
 XXL_255 = ((!V0.Q & V2.Q & V3.Q & VMODE0.Q & V9.Q)
 	# (!V0.Q & !CE)
@@ -1093,7 +1093,7 @@ Pin 6  = V1; /* MC 13 */
 Pin 8  = CE; /* MC 11 */
 Pin 9  = D5; /* MC 8 */
 Pin 10 = D0; /* MC  6 */
-Pin 11 = SPNA0; /* MC  5 */
+Pin 11 = SPNA1; /* MC  5 */
 Pin 12 = TC; /* MC  3 */
 Pin 14 = TDI; /* MC 32 */ 
 Pin 16 = D3; /* MC 27 */ 
@@ -1104,7 +1104,7 @@ Pin 21 = D7; /* MC 19 */
 Pin 22 = D2; /* MC 17 */ 
 Pin 23 = TMS; /* MC 48 */ 
 Pin 24 = VSYNC; /* MC 46 */ 
-Pin 25 = CPUA1; /* MC 45 */ 
+Pin 25 = CPUA0; /* MC 45 */ 
 Pin 27 = VBLANK; /* MC 43 */ 
 Pin 28 = HBLANK; /* MC 40 */ 
 Pin 29 = IRQ; /* MC 38 */ 
@@ -1114,9 +1114,9 @@ Pin 34 = H2; /* MC 61 */
 Pin 35 = RETIRE; /* MC 59 */ 
 Pin 36 = VRAMSEL; /* MC 57 */ 
 Pin 37 = IOPAGE; /* MC 56 */ 
-Pin 39 = CPUA0; /* MC 53 */ 
+Pin 39 = CPUA1; /* MC 53 */ 
 Pin 40 = SPNREQ; /* MC 51 */ 
-Pin 41 = SPNA1; /* MC 49 */ 
+Pin 41 = SPNA0; /* MC 49 */ 
 Pin 44 = GCPU3; /* MC 65 */ 
 Pin 45 = GCPU0; /* MC 67 */ 
 Pin 46 = GCPU1; /* MC 69 */ 
@@ -1233,7 +1233,7 @@ MC1   0         --               XXL_263  C----  NA        --             5     
 MC2   0         --               V5       Dg-g-  NA        --             5     slow
 MC3   12   --   TC        INPUT  XXL_272  C----  --        --             3     slow
 MC4   0         --               XXL_266  C----  NA        --             5     slow
-MC5   11   --   SPNA0     INPUT  XXL_274  C----  NA        --             5     slow
+MC5   11   --   SPNA1     INPUT  XXL_274  C----  NA        --             5     slow
 MC6   10   --   D0        INPUT  XXL_259  C----  NA        --             5     slow
 MC7   0         --               XXL_265  C----  NA        --             5     slow
 MC8   9    --   D5        INPUT  XXL_261  C----  NA        --             5     slow
@@ -1273,15 +1273,15 @@ MC41  0         --               XXL_260  C----  NA        --             5     
 MC42  0         --               XXL_264  C----  NA        --             5     slow
 MC43  27   on   VBLANK    C----  --              --        --             4     slow
 MC44  0         --               XXL_271  C----  NA        --             5     slow
-MC45  25   --   CPUA1     INPUT  --              NA        -> VSYNC       5     slow
+MC45  25   --   CPUA0     INPUT  --              NA        -> VSYNC       5     slow
 MC46  24   on   VSYNC     C----  --              NA        --             5     slow
 MC47  0         --               XXL_268  C----  NA        --             5     slow
 MC48  23   --   TMS       INPUT  XXL_273  C----  NA        --             5     slow
-MC49  41   --   SPNA1     INPUT  --              --        --             0     slow
+MC49  41   --   SPNA0     INPUT  --              --        --             0     slow
 MC50  0         --               MC0      Dg-g-  --        --             2     slow
 MC51  40   --   SPNREQ    INPUT  --              --        --             0     slow
 MC52  0         --               H7       Dg-g-  --        --             2     slow
-MC53  39   --   CPUA0     INPUT  --              --        --             0     slow
+MC53  39   --   CPUA1     INPUT  --              --        --             0     slow
 MC54  0         --               H0       Dg-g-  --        --             2     slow
 MC55  0         --               H3       Dg-g-  --        --             2     slow
 MC56  37   --   IOPAGE    INPUT  --              --        --             0     slow

@@ -19,7 +19,9 @@
     "build:all": "npm run build && npm run check && npm run check:netlist && npm run check:sim",
     "dev": "tsci dev",
     "census": "bun run gal/census.ts",
-    "census:audio": "bun run gal/audio.census.ts"
+    "census:audio": "bun run gal/audio.census.ts",
+    "probe:minimise": "bun run gal/minimise.probe.ts",
+    "probe:polarity": "bun run gal/polarity.probe.ts"
   },
   "type": "commonjs",
   "dependencies": {

@@ -381,22 +381,12 @@ GSPN3 = SPNREQ & SPNA0 & SPNA1 & !VRAMSEL
         # SPNREQ & SPNA0 & SPNA1 & IOPAGE
         # SPNREQ & SPNA0 & SPNA1 & !CPUA0
         # SPNREQ & SPNA0 & SPNA1 & !CPUA1 ;
-SPNGRANT = SPNREQ & !SPNA0 & !SPNA1 & !VRAMSEL
-           # SPNREQ & SPNA0 & !SPNA1 & !VRAMSEL
-           # SPNREQ & !SPNA0 & SPNA1 & !VRAMSEL
-           # SPNREQ & SPNA0 & SPNA1 & !VRAMSEL
-           # SPNREQ & !SPNA0 & !SPNA1 & IOPAGE
-           # SPNREQ & !SPNA0 & !SPNA1 & CPUA0
-           # SPNREQ & !SPNA0 & !SPNA1 & CPUA1
-           # SPNREQ & SPNA0 & !SPNA1 & IOPAGE
-           # SPNREQ & SPNA0 & !SPNA1 & !CPUA0
-           # SPNREQ & SPNA0 & !SPNA1 & CPUA1
-           # SPNREQ & !SPNA0 & SPNA1 & IOPAGE
-           # SPNREQ & !SPNA0 & SPNA1 & CPUA0
-           # SPNREQ & !SPNA0 & SPNA1 & !CPUA1
-           # SPNREQ & SPNA0 & SPNA1 & IOPAGE
-           # SPNREQ & SPNA0 & SPNA1 & !CPUA0
-           # SPNREQ & SPNA0 & SPNA1 & !CPUA1 ;
+SPNGRANT = SPNREQ & !SPNA0 & CPUA0
+           # SPNREQ & SPNA0 & !CPUA0
+           # SPNREQ & !SPNA1 & CPUA1
+           # SPNREQ & SPNA1 & !CPUA1
+           # SPNREQ & !VRAMSEL
+           # SPNREQ & IOPAGE ;
 WAIT = 'b'0 ;
 WAIT.oe = SPANBUSY & VRAMSEL & !IOPAGE ;
 VMODE0.d = WCTRL & D0

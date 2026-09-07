@@ -13,7 +13,15 @@
  *
  * It is not a placer in the layout sense and does not try to be clever about
  * anything else: widest equation to widest macrocell, and if that does not fit
- * nothing else will either.
+ * no other ASSIGNMENT will either.
+ *
+ * That last word is the whole caveat, and the message this file used to print
+ * did not have it - it said "this does not fit on this part at all", which is
+ * a stronger claim than the pairing supports. Sorted pairing is optimal over
+ * assignments of a fixed set of equations. It says nothing about whether the
+ * equations themselves are as small as they could be, and jedec/twolevel.ts
+ * found one that was not: the arbiter's SPNGRANT was written at sixteen terms
+ * and needs six.
  */
 
 import { OLMC } from "./gal22v10"
@@ -40,7 +48,9 @@ export const place = (
       throw new Error(
         `${cell.name} needs ${cell.terms.length} product terms; the widest ` +
         `macrocell still free holds ${OLMC[pin].terms}. Sorted pairing is ` +
-        `optimal, so this does not fit on this part at all.`,
+        `optimal for a FIXED set of equations, so no other assignment of ` +
+        `these helps - but minimising the equation or splitting it across a ` +
+        `spare macrocell might. See jedec/twolevel.ts.`,
       )
     }
     out[cell.name] = pin

@@ -402,6 +402,82 @@ is `[15:4]` now, so the model states it rather than tolerating it.
 
 ---
 
+## What the CPLD fitter knows that we do not — measured, 2026-09-07
+
+Having the ATF1508 fitter beside our own raised an obvious question: it makes a
+design smaller three ways we do not, so how many GALs is that costing us?
+
+It costs none, and the measurement is worth keeping because the answer is not
+the intuitive one.
+
+**The three techniques, and what each is worth here.**
+
+| | What it does | Measured on this machine |
+|---|---|---|
+| Espresso | true two-level minimisation | **1.9%** — 11 product terms across every GAL, none on a binding equation |
+| Polarity selection | store `!f` and let the output XOR invert; the 22V10's S1 bit is free | **5.5%** — 14 equations, one of them large |
+| Foldback | split a wide equation across a spare macrocell | **negative** — it buys terms by spending macrocells |
+
+`gal/minimise.probe.ts` runs the first past CUPL's own minimiser;
+`gal/polarity.probe.ts` runs the second past `jedec/twolevel.ts`, a
+Quine-McCluskey minimiser written for the purpose.
+
+**Why none of it reduces the part count.** Across the machine's eighteen
+GAL22V10s:
+
+```
+macrocells    159 of 180   88%
+product terms 645 of 1746  37%
+```
+
+Eight of seventeen fitted designs sit at exactly 10 of 10 macrocells. Six of
+146 equations have no product-term slack. **Every GAL overflow in this project
+was macrocells or pins and not one was term width** — `aintreq` is 13
+equations for 10 macrocells, `aintreq-split` is 17 inputs for 14 pins, the sync
+section needed a third part for outputs. All three of the fitter's techniques
+work on the 37%, and foldback actively trades the resource we have for the one
+we do not.
+
+**Two things CUPL turned out not to do**, both worth knowing before reaching
+for it as an authority on cost:
+
+- Its minimiser saved 1.9% and nothing that mattered.
+- **It does not choose output polarity by cost.** Given `NARROW = !(A#B#C#D)`
+  it stores `A#B#C#D` — four rows — and sets the polarity fuse, where
+  `!A&!B&!C&!D` is one row and needs no fuse. Confirmed in its own fuse plot.
+  This is why `jedec/twolevel.ts` exists.
+
+### The one real find: `SPNGRANT` was sixteen terms and needs six
+
+The arbiter's grant line was written as "the four per-chip grants, ORed", which
+enumerates the chip four ways and then expands `!GRANT_CPU` four ways inside
+each. Sixteen products, in a 16-term macrocell, recorded here and in
+`access.check.ts` as *exactly full* — which read as a tight fit and was really a
+bad expansion.
+
+The chip enumeration cancels. The span writer is refused exactly when the CPU
+wants **the same** chip, so the condition is a comparison between `SPNA` and
+`CPUA`, not a decode of either: one term per address bit per direction, plus the
+two ways the CPU is not asking at all. Six terms. The complement is five, which
+the S1 bit would give for nothing; it is not taken because `SPNGRANT` is read by
+name on two other parts.
+
+`access.check.ts` compares the new form against the four grants ORed over every
+input combination, so the rewrite is verified rather than argued.
+
+**It changed nothing on the CPLD.** `vctrl` refits at exactly 100 logic cells
+and 331 product terms either way — the ATF1508 fitter had been minimising it
+internally all along. The waste was only ever in the GAL path and in what the
+source claimed about itself.
+
+### The claim in `place.ts` that had to be weakened
+
+The placer used to refuse an over-wide equation with *"sorted pairing is
+optimal, so this does not fit on this part at all."* Sorted pairing is optimal
+over **assignments of a fixed set of equations**. It says nothing about whether
+the equations are as small as they could be, and `SPNGRANT` is the counter-
+example. The message now says which of the two it means.
+
 ## Open items
 
 1. ~~**Nothing has been fitted.**~~ **CLOSED 2026-09-06** by [`jedec/`](jedec/). It
