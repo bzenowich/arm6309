@@ -37,6 +37,12 @@ export LIBCUPL="$SHARED/atmel.dl"
 export PATH="$FITTERS:$PATH"
 
 name=$(basename "$PLD" .pld)
+# Delete the previous run's outputs FIRST. The .tt2 check below is the only
+# thing standing between a CUPL error and a silently stale place-and-route,
+# and without this it passes on yesterday's file. That is not hypothetical:
+# it fitted a design two revisions old, reported success, and the only tell
+# was a signal name in the .fit that no longer existed in the .pld.
+rm -f "$SHARED/$name".*
 cp "$PLD" "$SHARED/"
 ( cd "$SHARED" && wine cupl.exe -j -n -x -f -l -u atmel.dl f1508ispplcc84 "$name" ) | tail -2
 [ -f "$SHARED/$name.tt2" ] || { echo "CUPL produced no .tt2; see $SHARED/$name.lst" >&2; exit 1; }
