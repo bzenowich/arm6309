@@ -63,6 +63,8 @@ that the document specifies rather than lists:
 | [`seqctl.jedec.ts`](seqctl.jedec.ts) | **`seqctl`** — the span writer, respecified for 8 × 8 cells (`graphics.md` §7.4) |
 | [`seqctl.model.ts`](seqctl.model.ts) | its state machine: one handshake, three terminations |
 | [`seqctl.check.ts`](seqctl.check.ts) | all 16 states × 128 inputs, and the eight-byte glyph row — `npm run check:seqctl` |
+| [`tile.model.ts`](tile.model.ts) | §6.4's three address concatenations — bitmap, 8bpp tile, 1bpp character |
+| [`tile.check.ts`](tile.check.ts) | the no-adder property, asserted as OR = ADD over all 524,288 field combinations per variant — `npm run check:tile` |
 
 Several statements of one logic is several too many, and the count went *down* on
 2026-09-06 rather than up: `mmu.check.ts` no longer carries its own copy of the
@@ -336,6 +338,9 @@ failure mode `/IOSEL` and `machine.md` §7.1 already demonstrated twice.
 | Job | Tool | Status |
 |---|---|---|
 | GAL equations → JEDEC | [`jedec/`](jedec/), written here | ✓ `npm run check:jedec` and `check:sync` — five parts assemble, fit and are checked at the fuse level |
+| **CPLD equations → JEDEC** | Microchip `fit1508.exe` under Wine | ⚠ **not attempted, and not worth rewriting** — see below |
+| **CPLD JEDEC → a programmed part, on Linux** | [prjbureau](https://github.com/whitequark/prjbureau) `fuseconv` → SVF → OpenOCD | ✓ available, ATF1508AS included |
+| **CPLD JEDEC → executed against the models** | prjbureau `database.json` | ✗ **ATF1502/1504 only. The ATF1508AS fuse map is not documented.** |
 | Counter and window equations | [`jedec/counter.ts`](jedec/counter.ts), [`jedec/range.ts`](jedec/range.ts) | ✓ generated, not hand-expanded; every range decode verifies itself exhaustively before it is returned |
 | An independent JEDEC, to falsify `jedec/gal22v10.ts` | `galette`, or WinCUPL under Wine | ⚠ **not run** — wanted once, not as a dependency ([`jedec/README.md`](jedec/README.md)) |
 | Digital verification | **Verilator** 5.020 | ✓ `npm run check:sim`, 16 claims, `-Wall` clean |
@@ -389,6 +394,35 @@ is `[15:4]` now, so the model states it rather than tolerating it.
    budget rather than a fit because the span writer's state machine is inherited from
    minimal256 and has never been written down. **That is now the blocking item for the
    card's GAL count**, and it is a specification job, not a fitting one.
+
+### Why the GAL fitter does not become a CPLD fitter
+
+`jedec/` exists because for a GAL22V10 there is nothing between the equations and the
+fuses: every product term can reach every input, so "fitting" is placement and
+bookkeeping, and both are arithmetic. **An ATF15xx is not that.** Each of its logic
+blocks reaches the global bus through a switch matrix that selects 40 signals out of
+many more, so getting a design onto the part is **place and route**, not assembly.
+That is what `fit1508.exe` does and it is not worth reimplementing.
+
+**But the assembler was never the valuable half.** What caught bugs here was
+[`jedec/simulate.ts`](jedec/simulate.ts) — reading the fuse map back and executing it
+against the models. That found the `WPTR` hold-gating defect, which is invisible in a
+macrocell count, a product-term count and a pin budget, and it found the aliasing bug
+in its own API. **That half is worth having for a CPLD too**, and it needs one thing:
+a documented fuse map.
+
+[prjbureau](https://github.com/whitequark/prjbureau) is that documentation, and its
+coverage decides what is possible:
+
+| | ATF1502AS | ATF1504AS | **ATF1508AS** |
+|---|---|---|---|
+| `fusemap/*_jed2svf.csv` — programming | ✓ | ✓ | **✓** |
+| `database.json` — what each fuse *means* | ✓ | ✓ | **✗ absent** |
+
+So on Linux, for the part `graphics.md` §10.1.6 selects: **the design can be fitted
+(Wine), programmed (prjbureau + OpenOCD, no Atmel Windows tooling), and verified at
+the model level — but the fitted JEDEC cannot be executed.** On an ATF1504AS it could
+be. That is a live input to the part choice and `graphics.md` §10.1.6 carries it.
 
 **A placement rule, from three counters fitted.** A loadable counter bit *i* costs
 *i* + 3 product terms and a plain enabled one *i* + 7, so a wide counter wants a

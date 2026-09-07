@@ -981,8 +981,23 @@ minimal256.md §3 establishes for the scan path and §7.2 protects for `WADV`:
 The only new element in the datapath is **getting the map byte from the pixel bus
 onto the VRAM address bus** — one 3-state `'574`, or **zero packages** if it can be
 absorbed into the scan-address GAL as registered macrocells. Each address bit is
-then a two-product-term mode mux, so product terms are not the constraint; **spare
-GAL pins are**. Settle that at fit time (§19 item 15).
+then a ~~two~~ **three**-product-term mode mux — bitmap, Variant A and Variant B are
+all in v1 (§10.1.5), so there are three sources per bit, not two. 17 bits × 3 = 51
+terms across 17 macrocells, **3 each against the 5 an ATF15xx macrocell has before
+cascading**. Product terms are still not the constraint. Checked in
+[`hardware/gal/tile.check.ts`](../../hardware/gal/tile.check.ts), which asserts the
+no-adder property by showing OR equals ADD over all 524,288 field combinations in
+each variant.
+
+> ⚠ **The MAP fetch is not a concatenation, and §6.4.2's "2,000 B" is why.** An 80×25
+> map packed at 2,000 bytes needs `MAPBASE + cellRow × 80 + cellCol`, and **80 is not
+> a power of two** — that is a multiply-accumulate, which is exactly the adder this
+> section's argument says does not exist. The tile and font addresses are clean; the
+> map address was never checked against the same rule.
+>
+> **Fix: a 128-byte row stride.** `MAPBASE` in `A18..A12`, cell row in `A11..A7`, cell
+> column in `A6..A0` — concatenation again, and free. It costs **1,200 bytes** of the
+> 512 KB nobody is using: 3,200 B rather than 2,000. `check:tile` asserts both halves.
 
 Both variants below need the map fetch **pipelined one cell ahead** of the tile
 fetch — a serial dependency, and the same shape of pipelining the card already runs
@@ -996,7 +1011,7 @@ the LUT and the output latch exactly as bitmap bytes do.
 
 | | Bitmap | **8bpp tilemap** |
 |---|---|---|
-| Screen memory | 128,000 B | **2,000 B** + 16 KB tile set |
+| Screen memory | 128,000 B | ~~2,000 B~~ **3,200 B** + 16 KB tile set — §6.4.1's stride note |
 | CPU writes to change one cell | 64 | **1** |
 | Display fetch per 8 dots | 8 accesses | 9 accesses |
 | Per-chip load per cell (4.4 available) | 2.0 | **2.25** ⚠ |
@@ -1915,6 +1930,21 @@ and the two it should carry are the socketed ones.
 refuse for costing macrocells all come back: `CTRL`'s `'273` (+8), the `'161` `SPANLEN`
 pair (+10) and the `'165` (+8) fit easily, taking **189 of 256** and deleting four more
 packages while saving 10 further pins.
+
+> ⚠ **One thing the ATF1508AS costs that the ATF1504AS does not: verifiability.**
+> [prjbureau](https://github.com/whitequark/prjbureau) documents the ATF15xx fuse maps,
+> and its coverage is asymmetric — it can *program* an ATF1508AS on Linux (`fuseconv`
+> → SVF → OpenOCD, no Atmel Windows tooling), but its `database.json`, which says what
+> each fuse **means**, covers the ATF1502 and ATF1504 only. So the loop that caught
+> the `WPTR` hold-gating defect — read the fuse map back, execute it against the model
+> — **cannot be reproduced on an ATF1508AS.** Verification stops at the design.
+>
+> It is a smaller loss than it first looks: that loop existed because *we* were the
+> fitter and had to check our own work. With `fit1508.exe` doing place and route the
+> question is whether we described the design correctly, not whether the fuses are
+> right. But it is a real difference and it is the one argument for 3 × `ATF1504AS`
+> (192 macrocells, fully documented) over 2 × `ATF1508AS` — at ~33 cm², which is worse
+> than the ten GALs it replaces. **Recorded, not acted on.**
 
 **Three costs, and none of them is macrocells:**
 
