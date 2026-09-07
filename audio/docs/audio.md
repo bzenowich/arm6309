@@ -1298,14 +1298,32 @@ Two registers change underneath the host: `AINTREQ` (slot logic sets request bit
 | `SPTR` — sample-RAM pointer, 19-bit auto-increment | 19 | **the state file, word `$7D`** — incremented by the shared `'283` in a deferred slot | **0** |
 | `AIDX` — state-file index, 6-bit auto-increment | 6 | **the state file, word `$7F`** — at a fixed address the sequencer knows, which is what breaks the circularity | **0** |
 | `INTENA` | 6 | GAL 4 | — |
-| `INTREQ` (+ 6-bit pending register, §9.4.5) | 12 | GAL 5 | — |
+| `INTREQ` (+ 6-bit pending register, §9.4.5) | ~~12~~ **13 — and a `GAL22V10` has 10** | ~~GAL 5~~ **does not fit, see below** | — |
 | `DMAEN` | 4 | GAL 3 | — |
 | Tempo ÷5 prescale + timer enable | 4 | GAL 3 | — |
 | Slot counter | 3 | GAL 1 | — |
 | Deferred-work queue + enable-priority term (§16 item 13) | ~6 | GAL 1 / GAL 5 | — |
 | Sequencer state machine, stage control | ~8 | GAL 1 | — |
 | Address mux, decode, host synchroniser control | — | GAL 2 | — |
-| | | **`GAL22V10` ×5** | **5** |
+| | | ~~**`GAL22V10` ×5**~~ **×6, and see below** | **6** |
+
+> ⚠ **The interrupt block does not fit a `GAL22V10`, in either arrangement.**
+> Fitted 2026-09-07 — [`hardware/gal/audio.jedec.ts`](../../hardware/gal/audio.jedec.ts),
+> `npm run check:audio`. This table budgets `INTREQ` + pending at **12 macrocells on a
+> part that has 10**, and §8.1's `/FIRQ` makes it 13. The obvious repair does not work
+> either: move the pending register to its own part and the six `PEND` bits stop being
+> internal, so the `INTREQ` part needs **17 input pins and a `GAL22V10` has 14** — 11
+> dedicated, plus three macrocells not used as an output.
+>
+> Both refusals are asserted by `check:audio` with the fitter's own arithmetic, so the
+> squeeze is recorded rather than remembered. **The other four fit** — `aseq` 10/10,
+> `adec` 10/10, `admat` 8/10, `aintena` 6/10 — and the pending register alone fits at
+> 6/10, which is where the sixth package comes from.
+>
+> This is the same shape of error §9.5 was written to correct: the previous budget
+> asked three GALs to hold 41 flops of counter. The counters moved to the state file;
+> the interrupt block has nowhere comparable to go, because a pending register that is
+> merged on a clock edge is not state the state file can hold.
 
 > ⚠ **Superseded — the counters are gone, not cheaper.** This section first put the 41
 > bits in **6 × `74HC593`** (8-bit counter, input register, three-state outputs),
@@ -1399,7 +1417,7 @@ tables below.
 | Host-visible counters. `SPTR`(19) + `LIDX`(16) + `AIDX`(6) = **41 flops of counter** with nowhere to live; three GALs are 30 macrocells and were already holding the sequencer. | **+6** | §9.5 |
 | Host-boundary hardware: 2 staging latches for the commit-on-low-byte rule, 1 hex flip-flop for the two-flop synchronisers. | **+3** | §9.4 |
 | `ADATA` read-prefetch latch — argued for in §9.3, never costed; the `'574` that *was* listed is the posted-**write** latch on the other path. | **+1** | §9.3 |
-| `74HC07` open-collector stage for the wire-OR `/FIRQ`; a `GAL22V10` output is totem-pole and cannot do it. | **+1** | §8.1 |
+| `74HC07` open-collector stage for the wire-OR `/FIRQ`; a `GAL22V10` output is totem-pole and cannot do it. ⚠ **GAL-specific** — the `ATF1508AS` lists a *Programmable Output Open Collector Option*, so on the CPLD of §10.1 this package is not needed | **+1** | §8.1 |
 | Two more `GAL22V10`. | **+2** | §9.5 |
 | One fewer `TL072`: the LED filter is one Sallen-Key stage per side, not two, and §6.3's bipolar offset is injected rather than subtracted. | **−1** | §7 |
 | **Net** | **+22 → 57** | |

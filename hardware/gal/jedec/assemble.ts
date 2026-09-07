@@ -114,6 +114,25 @@ const writeRow = (
 export const assemble = (d: Design): Assembly => {
   const fuses = new Uint8Array(TOTAL_FUSES) // all zero: every term false, every output high-Z
 
+  /* Pins before terms: a design can be perfectly reasonable and simply have
+   * more signals than the package has holes. Reporting that as a conflict on
+   * whichever pin happened to collide tells you nothing; reporting the budget
+   * tells you what to change. */
+  {
+    const dedicated = d.clockPin === undefined ? 12 : 11
+    const free = OLMC_PINS.length - d.cells.length
+    const available = dedicated + free
+    if (d.inputs.length > available) {
+      throw new Error(
+        `${d.name}: ${d.inputs.length} inputs need pins and the part has ` +
+        `${available} - ${dedicated} dedicated` +
+        `${d.clockPin === undefined ? "" : " (pin 1 is the clock)"} plus ` +
+        `${free} macrocell${free === 1 ? "" : "s"} not used as an output. ` +
+        `Every output costs an input pin as well as a macrocell.`,
+      )
+    }
+  }
+
   const signals = new Map<string, Signal>()
   const claimed = new Map<number, string>()
   const claim = (pin: number, name: string) => {
