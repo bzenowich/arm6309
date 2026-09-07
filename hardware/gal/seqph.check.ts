@@ -43,10 +43,15 @@ const io = (hs: number): Record<number, 0 | 1> =>
       if (p[pin("SPAREWIN")] !== (ph < 2 ? 1 : 0)) {
         phaseBad = `dot ${dot}: SPAREWIN ${p[pin("SPAREWIN")]} at phase ${ph}`; break
       }
-      /* All four fetch-latch clocks rise at the end of the fetch half. */
+      /* Each fetch-latch clock is high in exactly one phase - 3 for the
+       * chips emitted before the wrap, 0 for the ones after it (item 23a).
+       * Which chips those are depends on HSCROLL[1:0]; that a chip has one
+       * and only one does not. */
       for (let n = 0; n < 4; n++) {
-        if (p[pin(`FCLK${n}`)] !== (ph === 3 ? 1 : 0)) {
-          phaseBad = `dot ${dot}: FCLK${n} ${p[pin(`FCLK${n}`)]} at phase ${ph}`
+        const want = (n >= hs ? 3 : 0)
+        if (p[pin(`FCLK${n}`)] !== (ph === want ? 1 : 0)) {
+          phaseBad = `dot ${dot}: HS=${hs} FCLK${n} ${p[pin(`FCLK${n}`)]} at phase ${ph}, ` +
+            `expected high only at phase ${want}`
         }
       }
       if (p[pin("SLOTTICK")]) ticks[hs].push(dot)
@@ -112,20 +117,52 @@ const io = (hs: number): Record<number, 0 | 1> =>
     "and with HSCROLL[1:0] != 0 it does NOT: the mux wraps to chip 0 while that " +
     "chip still holds the current group, so the line steps backwards four pixels in",
     `first wrong pixel: p=1 at ${firstWrong[1]}, p=2 at ${firstWrong[2]}, p=3 at ${firstWrong[3]}`)
-  /* The mechanism that can fix it is already on the card and 8 does not
-   * connect to it. */
-  check(a.usage.filter((u) => u.name.startsWith("FCLK")).length === 4,
-    "the fix has to be per-chip fetch-latch timing (5.2.2), and the four " +
-    "separate FCLK macrocells that 5.2.2 asks for are here to carry it")
-}
 
-console.log("\nThe fit\n")
-console.log(`      ${seqphDesign.partNo}  seqph  ${a.usage.length} macrocells (0 free), ` +
-  `${seqphDesign.inputs.length} of 11 inputs`)
-for (const u of [...a.usage].sort((x, y) => x.pin - y.pin)) {
-  console.log(`        pin ${String(u.pin).padStart(2)}  ${u.name.padEnd(9)} ${u.used}/${u.available}`)
+  /* ---- and now the fix, read out of the fuses ---------------------------
+   *
+   * Item 23(a). A chip clocked at phase 0 latches after this slot's fetch has
+   * landed and a chip clocked at phase 3 latches before it, so the first holds
+   * exactly one group more than the second. Read which is which off the part
+   * rather than restating the equations, then run the same arithmetic that
+   * condemned Rev A. */
+  const edgePhase = (n: number, hs: number) => {
+    gal.reset()
+    for (let dot = 0; dot < 8; dot++) {
+      const p = gal.evaluate(io(hs))
+      const ph = p[pin("PH0")] | (p[pin("PH1")] << 1)
+      if (p[pin(`FCLK${n}`)] === 1) return ph
+      gal.clock(io(hs))
+    }
+    return -1
+  }
+  /* group held by chip n: one more if it is clocked late (phase 0). */
+  const held = (g: number, n: number, hs: number) => g + (edgePhase(n, hs) === 0 ? 1 : 0)
+  const emittedNow = (g: number, dot: number, p: number) => {
+    const n = (dot + p) % 4
+    return 4 * held(g, n, p) + n
+  }
+
+  let stillWrong: string | null = null
+  for (const p of [0, 1, 2, 3]) {
+    for (let g = 0; g < 3 && !stillWrong; g++) {
+      for (let dot = 0; dot < 4; dot++) {
+        if (emittedNow(g, dot, p) !== wanted(g, dot, p)) {
+          stillWrong = `HSCROLL[1:0]=${p}, group ${g}, dot ${dot}: ` +
+            `emits ${emittedNow(g, dot, p)}, wants ${wanted(g, dot, p)}`
+          break
+        }
+      }
+    }
+  }
+  check(stillWrong === null,
+    "item 23(a): with the phase-dependent FCLK equations the line is contiguous " +
+    "for EVERY HSCROLL[1:0], which is what makes byte-granular scroll a design",
+    stillWrong ?? "")
+
+  /* The cost, because the item priced it and the price is the argument. */
+  const fclkPts = a.usage.filter((u) => u.name.startsWith("FCLK"))
+    .reduce((n, u) => n + u.used, 0)
+  check(fclkPts === 9, "and it costs 9 product terms across the 4 macrocells 5.2.2 " +
+    "already budgeted - no new package, which is what item 23(a) claimed",
+    `${fclkPts}`)
 }
-console.log(failures === 0
-  ? "\nThe timing spine fits one part exactly"
-  : `\n${failures} FAILED`)
-if (failures) process.exit(1)

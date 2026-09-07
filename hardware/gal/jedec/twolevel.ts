@@ -129,3 +129,44 @@ export const bestForm = (cubes: Cube[], n: number, vars: string[]) => {
     ? { inverted: false, terms: toTerms(a, vars) }
     : { inverted: true, terms: toTerms(b, vars) }
 }
+
+/* ---- the term-string front end ----------------------------------------- *
+ *
+ * Everything above works in bitmasks. Designs are written as arrays of
+ * "A & !B & C", so this is the adapter, and it is what generators should call
+ * when they emit an equation mechanically. jedec/minimise.ts does subsumption
+ * only and says so; it will not turn A&B # A&!B into A, and a generator that
+ * enumerates a condition four ways produces exactly that shape.
+ */
+
+const parse = (terms: string[]) => {
+  const vars: string[] = []
+  const cubes: Cube[] = terms.map((t) => {
+    let ones = 0, mask = 0
+    for (const lit of t.split("&").map((x) => x.trim()).filter(Boolean)) {
+      const neg = lit.startsWith("!")
+      const name = neg ? lit.slice(1) : lit
+      let i = vars.indexOf(name)
+      if (i < 0) { i = vars.length; vars.push(name) }
+      mask |= 1 << i
+      if (!neg) ones |= 1 << i
+    }
+    return { ones, mask }
+  })
+  return { vars, cubes }
+}
+
+const VAR_LIMIT = 16   // 2^16 minterms; past this, decompose instead
+
+/** Minimal sum of products for a term list. Returns it unchanged, rather than
+ *  throwing, when the support is too wide to enumerate - a caller wanting a
+ *  smaller equation there needs a better decomposition, not a bigger table. */
+export const minimalSop = (terms: string[]): string[] => {
+  if (terms.length === 0) return terms
+  const { vars, cubes } = parse(terms)
+  if (vars.length > VAR_LIMIT) return terms
+  const on = onSet(cubes, vars.length)
+  if (on.size === 0) return []
+  if (on.size === 1 << vars.length) return [""]     // constant true
+  return toTerms(cover(on, primes(on, vars.length), vars.length), vars)
+}

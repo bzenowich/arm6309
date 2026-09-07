@@ -21,6 +21,14 @@ import { arbDesign, wcolDesign, wrowDesign } from "./access.jedec"
 import { seqphDesign } from "./seqph.jedec"
 import { seqctlDesign } from "./seqctl.jedec"
 import { addressMux, listEngine, scrollHolds, tileCadence, tileRegisters } from "./video.parts"
+import { decodeCells, writeStrobes } from "./regfile"
+
+/* CPUA0/CPUA1 were pins of their own beside A0/A1. They are the same two
+ * lines: the arbiter's "which of the four interleaved chips is the CPU after"
+ * is the physical address's low two bits, which the register decode already
+ * needs on this part. Two pins for a rename, and the same kind of identity as
+ * WRITESEL = SPNGRANT. */
+const CPU_CHIP: Record<string, string> = { CPUA0: "A0", CPUA1: "A1" }
 
 /* §10.3's list engine is built only when asked for. It is the one block whose
  * presence changes the answer to "does the video card fit in two parts", so it
@@ -35,7 +43,8 @@ const mux = addressMux(WITH_LIST)
 export const vaddrCpld: Merged = merge(
   [rename(hadrDesign, scanMap), rename(vadrDesign, scanMap),
    rename(wcolDesign, wptrMap), rename(wrowDesign, wptrMap)],
-  [...scrollHolds, ...tileRegisters, ...(WITH_LIST ? listEngine : []), ...mux],
+  [...scrollHolds, ...tileRegisters, ...writeStrobes,
+   ...(WITH_LIST ? listEngine : []), ...mux],
   {
     name: "vaddr", partNo: "ARM6309-UV0A", location: "video card - address datapath",
     device: "f1508ispplcc84", clock: "DOTCLK",
@@ -89,8 +98,9 @@ const ctrlFanout: Cell[] = [
 ]
 
 export const vctrlCpld: Merged = merge(
-  [hgenDesign, vgenDesign, vdecDesign, seqphDesign, seqctlDesign, arbDesign],
-  [...ctrl, ...ctrlFanout, ...tileCadence],
+  [hgenDesign, vgenDesign, vdecDesign, seqphDesign, seqctlDesign,
+   rename(arbDesign, CPU_CHIP)],
+  [...ctrl, ...ctrlFanout, ...tileCadence, ...decodeCells],
   {
     name: "vctrl", partNo: "ARM6309-UV0B", location: "video card - sync, sequencer, arbiter",
     device: "f1508ispplcc84", clock: "DOTCLK",
@@ -104,10 +114,14 @@ export const vctrlCpld: Merged = merge(
       "GCPU0", "GCPU1", "GCPU2", "GCPU3",
       "GSPN0", "GSPN1", "GSPN2", "GSPN3",
       /* §6.4's cadence, out to the address part and the serialiser */
-      "MAPLD", "TILESEL", "CHARSEL", "LINEAR", "GLYPHLD", "GLYPHSH", "LUTPAGE",
+      "MAPLD", "MAPSEL", "TILESEL", "CHARSEL", "LINEAR", "GLYPHLD", "GLYPHSH", "LUTPAGE",
+      /* §19 item 23(b): the file address and one write strobe, in place of one
+       * strobe pin per register. The address part decodes its own. */
+      "RA0", "RA1", "RA2", "RA3", "RA4", "WSTB",
+      "VRAMSEL", "REGSEL", "HLOAD", "ROWADV",
       /* The cell's row and column inside the 8x8 - §6.4's geometry. These are
        * the sync counters' own low bits, so they cost pins and not logic. */
-      "V0", "V1", "V2", "H2",
+      "V0", "V1", "V2",
       /* WRITESEL used to arrive here as an input from nowhere. The span
        * sequencer is on this part, so it is an output. LISTSEL is not: §10.3's
        * arbitration is not designed, and until it is, the address part takes

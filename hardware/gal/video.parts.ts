@@ -16,9 +16,20 @@ import { counterTerms } from "./jedec/counter"
  * for WPTR on the audio card. Holding them here costs 17 macrocells, of which
  * there are plenty, and returns 17 pins, of which there are not. */
 export const scrollHolds: Cell[] = [
-  ...[2, 3, 4, 5, 6, 7, 8, 9].map((b) => ({
+  /* §8: HSCROLL[9:2] preloads the column counter and HSCROLL[1:0] preloads the
+   * mux phase, so the eight bits held HERE are HSCROLL[9:2] - which is §13's
+   * HSCROLL b7..b2 PLUS HSCROLLH b1..b0, not HSCROLL b7..b0. Written the
+   * second way on 2026-09-07 and wrong by two bit positions: every horizontal
+   * scroll would have landed at four times the column asked for, and the top
+   * two bits of a 1024-wide torus would have been unreachable. HS0 and HS1
+   * are on vctrl - the mux phase is seqph's. */
+  ...[2, 3, 4, 5, 6, 7].map((b) => ({
     pin: 0, name: `HS${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: b < 10 ? [`LDHS & D${b - 2}`, `HS${b} & !LDHS`] : [],
+    terms: [`LDHS & D${b}`, `HS${b} & !LDHS`],
+  })),
+  ...[8, 9].map((b) => ({
+    pin: 0, name: `HS${b}`, assertedLow: false, s0: 1 as const, registered: true,
+    terms: [`LDHSH & D${b - 8}`, `HS${b} & !LDHSH`],
   })),
   ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({
     pin: 0, name: `VS${b}`, assertedLow: false, s0: 1 as const, registered: true,
@@ -47,6 +58,11 @@ export const tileRegisters: Cell[] = [
    * (§6.4.1's "pipelined one cell ahead"). §6.4.1 prices this as "one 3-state
    * '574, or zero packages if it can be absorbed into the scan-address GAL as
    * registered macrocells" - on a CPLD it is the second. */
+  /* §6.4.6's map base, +$19. */
+  ...[0, 1, 2, 3, 4, 5, 6].map((b) => ({
+    pin: 0, name: `MB${b}`, assertedLow: false, s0: 1 as const, registered: true,
+    terms: [`LDMB & D${b}`, `MB${b} & !LDMB`],
+  })),
   ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({
     pin: 0, name: `MAP${b}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [`MAPLD & PB${b}`, `MAP${b} & !MAPLD`],
@@ -63,10 +79,25 @@ export const tileRegisters: Cell[] = [
  * A1..A0 never appear: they are the 4-way interleave phase and never leave
  * the '153s, so the chip address is A18..A2 and this is seventeen bits. */
 export const addressMux = (withList = true): Cell[] => {
+  /* A slot is four pixels and a cell is eight, so the byte address WITHIN a
+   * tile row is the column counter's own low bit, SA2 - not a slot-counter
+   * bit, which was written here on 2026-09-07 and addresses in units of
+   * sixteen pixels. */
   const tileSrc = (bit: number) =>
-    bit >= 14 ? `TB${bit - 14}` : bit >= 6 ? `MAP${bit - 6}` : bit >= 3 ? `V${bit - 3}` : "H2"
+    bit >= 14 ? `TB${bit - 14}` : bit >= 6 ? `MAP${bit - 6}` : bit >= 3 ? `V${bit - 3}` : "SA2"
   const charSrc = (bit: number) =>
     bit >= 11 ? `FB${bit - 11}` : bit >= 3 ? `MAP${bit - 3}` : "V2"
+  /* The map's own address - base, cell row, cell column - which the mux did
+   * not have at all, so MAPLD was latching a byte from an address nothing
+   * generated. §19 item 16 lives here and it costs nothing: the intra-cell
+   * offset is {SA2, mux phase}, and §8 already preloads the column counter
+   * with HSCROLL[9:2] and the phase with HSCROLL[1:0]. Both halves are
+   * therefore already scrolled. §6.4.6 calls sub-cell scroll "new logic in
+   * the address concatenation"; it is not, PROVIDED the map byte for a cell
+   * is fetched before that cell's first pixel - a cadence requirement, not an
+   * address one. */
+  const mapSrc = (bit: number) =>
+    bit >= 12 ? `MB${bit - 12}` : bit >= 5 ? `SA${bit - 2}` : `V${bit + 1}`
   return [...Array(17).keys()].map((i) => {
     const bit = i + 2
     return {
@@ -84,6 +115,7 @@ export const addressMux = (withList = true): Cell[] => {
         `WRITESEL & WA${bit}`,
         `TILESEL & ${tileSrc(bit)}`,
         `CHARSEL & ${charSrc(bit)}`,
+        `MAPSEL & ${mapSrc(bit)}`,
         ...(withList ? [`LGRANT & LP${bit}`] : []),
       ],
     }
@@ -103,6 +135,12 @@ export const tileCadence: Cell[] = [
     })),
   { pin: 0, name: "MAPLD", assertedLow: false, s0: 1, registered: false,
     terms: ["TILEMODE & SLOTTICK & !TC2 & !TC1 & !TC0"] },
+  /* The map fetch owns the address for the first slot of the cell; the tile
+   * or glyph fetch owns it afterwards. MAPLEAD is why sub-cell scroll works:
+   * when a line starts mid-cell the map byte for that cell must already be
+   * held, so the fetch leads by one cell rather than by one slot. */
+  { pin: 0, name: "MAPSEL", assertedLow: false, s0: 1, registered: false,
+    terms: ["CELL & !TC2"] },
   { pin: 0, name: "TILESEL", assertedLow: false, s0: 1, registered: false,
     terms: ["TILEMODE & !CHARMODE & TC2"] },
   { pin: 0, name: "CHARSEL", assertedLow: false, s0: 1, registered: false,

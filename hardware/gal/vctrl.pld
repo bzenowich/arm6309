@@ -24,21 +24,17 @@ Device     f1508ispplcc84 ;
 PIN = DOTCLK ;
 PIN = CE ;
 PIN = !RESET ;
-PIN = VSTATWR ;
 PIN = HS0 ;
 PIN = HS1 ;
-PIN = WSTB ;
 PIN = TC ;
 PIN = WADV0 ;
 PIN = WADV1 ;
-PIN = VRAMSEL ;
 PIN = !IOPAGE ;
-PIN = CPUA0 ;
-PIN = CPUA1 ;
+PIN = A0 ;
+PIN = A1 ;
 PIN = SPNREQ ;
 PIN = SPNA0 ;
 PIN = SPNA1 ;
-PIN = WCTRL ;
 PIN = D0 ;
 PIN = D1 ;
 PIN = D2 ;
@@ -47,9 +43,16 @@ PIN = D4 ;
 PIN = D5 ;
 PIN = D6 ;
 PIN = D7 ;
+PIN = A19 ;
+PIN = IOSEL ;
+PIN = A5 ;
+PIN = RW ;
+PIN = E ;
+PIN = A2 ;
+PIN = A3 ;
+PIN = A4 ;
 
 /* --- outputs ------------------------------------------------------ */
-PIN = H2 ;
 PIN = HSYNC ;
 PIN = HBLANK ;
 PIN = V0 ;
@@ -79,16 +82,28 @@ PIN = GSPN3 ;
 PIN = !WAIT ;
 PIN = WRITESEL ;
 PIN = MAPLD ;
+PIN = MAPSEL ;
 PIN = TILESEL ;
 PIN = CHARSEL ;
 PIN = LINEAR ;
 PIN = GLYPHLD ;
 PIN = GLYPHSH ;
 PIN = LUTPAGE ;
+PIN = VRAMSEL ;
+PIN = REGSEL ;
+PIN = WSTB ;
+PIN = RA0 ;
+PIN = RA1 ;
+PIN = RA2 ;
+PIN = RA3 ;
+PIN = RA4 ;
+PIN = HLOAD ;
+PIN = ROWADV ;
 
 /* --- buried registers: state that used to cross a package boundary - */
 PINNODE = H0 ;
 PINNODE = H1 ;
+PINNODE = H2 ;
 PINNODE = H3 ;
 PINNODE = H4 ;
 PINNODE = H5 ;
@@ -119,9 +134,11 @@ PINNODE = DISPEN ;
 PINNODE = TC0 ;
 PINNODE = TC1 ;
 PINNODE = TC2 ;
+PINNODE = FP0 ;
+PINNODE = FP1 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * VTC, SPAREWIN, SPANEND, WROWADV, SPNGRANT, M0, HPOL, TILEMODE, CHARMODE */
+ * VTC, SPAREWIN, SPANEND, WROWADV, SPNGRANT, M0, HPOL, TILEMODE, CHARMODE, RDLEN, RDFG, RDBG, WCTRL, VSTATWR, HLAST */
 
 /* --- equations ---------------------------------------------------- */
 H0.d = CE & !H0
@@ -332,9 +349,14 @@ PH1.d = PH1 & !PH0
         # !PH1 & PH0 ;
 SLOTTICK = PH1 & PH0 ;
 SPAREWIN = !PH1 ;
-FCLK0 = PH1 & PH0 ;
-FCLK1 = PH1 & PH0 ;
-FCLK2 = PH1 & PH0 ;
+FCLK0 = PH1 & PH0 & !HS0 & !HS1
+        # !PH1 & !PH0 & HS0
+        # !PH1 & !PH0 & HS1 ;
+FCLK1 = PH1 & PH0 & !HS1
+        # !PH1 & !PH0 & HS1 ;
+FCLK2 = !PH1 & !PH0 & HS0 & HS1
+        # PH1 & PH0 & !HS1
+        # PH1 & PH0 & !HS0 ;
 FCLK3 = PH1 & PH0 ;
 MUXSEL0 = PH0 & !HS0
           # !PH0 & HS0 ;
@@ -361,30 +383,30 @@ SPANEND = RETIRE & !WM1 & !WM0
           # RETIRE & WM1 & !WM0 & TC ;
 WROWADV = SPANEND & WADV0
           # SPANEND & WADV1 ;
-GCPU0 = VRAMSEL & !IOPAGE & !CPUA0 & !CPUA1 ;
+GCPU0 = VRAMSEL & !IOPAGE & !A0 & !A1 ;
 GSPN0 = SPNREQ & !SPNA0 & !SPNA1 & !VRAMSEL
         # SPNREQ & !SPNA0 & !SPNA1 & IOPAGE
-        # SPNREQ & !SPNA0 & !SPNA1 & CPUA0
-        # SPNREQ & !SPNA0 & !SPNA1 & CPUA1 ;
-GCPU1 = VRAMSEL & !IOPAGE & CPUA0 & !CPUA1 ;
+        # SPNREQ & !SPNA0 & !SPNA1 & A0
+        # SPNREQ & !SPNA0 & !SPNA1 & A1 ;
+GCPU1 = VRAMSEL & !IOPAGE & A0 & !A1 ;
 GSPN1 = SPNREQ & SPNA0 & !SPNA1 & !VRAMSEL
         # SPNREQ & SPNA0 & !SPNA1 & IOPAGE
-        # SPNREQ & SPNA0 & !SPNA1 & !CPUA0
-        # SPNREQ & SPNA0 & !SPNA1 & CPUA1 ;
-GCPU2 = VRAMSEL & !IOPAGE & !CPUA0 & CPUA1 ;
+        # SPNREQ & SPNA0 & !SPNA1 & !A0
+        # SPNREQ & SPNA0 & !SPNA1 & A1 ;
+GCPU2 = VRAMSEL & !IOPAGE & !A0 & A1 ;
 GSPN2 = SPNREQ & !SPNA0 & SPNA1 & !VRAMSEL
         # SPNREQ & !SPNA0 & SPNA1 & IOPAGE
-        # SPNREQ & !SPNA0 & SPNA1 & CPUA0
-        # SPNREQ & !SPNA0 & SPNA1 & !CPUA1 ;
-GCPU3 = VRAMSEL & !IOPAGE & CPUA0 & CPUA1 ;
+        # SPNREQ & !SPNA0 & SPNA1 & A0
+        # SPNREQ & !SPNA0 & SPNA1 & !A1 ;
+GCPU3 = VRAMSEL & !IOPAGE & A0 & A1 ;
 GSPN3 = SPNREQ & SPNA0 & SPNA1 & !VRAMSEL
         # SPNREQ & SPNA0 & SPNA1 & IOPAGE
-        # SPNREQ & SPNA0 & SPNA1 & !CPUA0
-        # SPNREQ & SPNA0 & SPNA1 & !CPUA1 ;
-SPNGRANT = SPNREQ & !SPNA0 & CPUA0
-           # SPNREQ & SPNA0 & !CPUA0
-           # SPNREQ & !SPNA1 & CPUA1
-           # SPNREQ & SPNA1 & !CPUA1
+        # SPNREQ & SPNA0 & SPNA1 & !A0
+        # SPNREQ & SPNA0 & SPNA1 & !A1 ;
+SPNGRANT = SPNREQ & !SPNA0 & A0
+           # SPNREQ & SPNA0 & !A0
+           # SPNREQ & !SPNA1 & A1
+           # SPNREQ & SPNA1 & !A1
            # SPNREQ & !VRAMSEL
            # SPNREQ & IOPAGE ;
 WAIT = 'b'0 ;
@@ -420,20 +442,48 @@ TC2.d = SLOTTICK & TC2 & !TC0
         # SLOTTICK & !TC2 & TC0 & TC1
         # !SLOTTICK & TC2 ;
 MAPLD = TILEMODE & SLOTTICK & !TC2 & !TC1 & !TC0 ;
+MAPSEL = CELL & !TC2 ;
 TILESEL = TILEMODE & !CHARMODE & TC2 ;
 CHARSEL = CHARMODE & TC2 ;
 LINEAR = !TILEMODE & !CHARMODE & !WRITESEL ;
 GLYPHLD = CHARMODE & SLOTTICK & TC1 & !TC0 ;
 GLYPHSH = CHARMODE & !SLOTTICK ;
 LUTPAGE = CHARMODE ;
+VRAMSEL = A19 & !IOPAGE ;
+REGSEL = IOSEL & A5 ;
+WSTB = REGSEL & !RW & E ;
+RA0 = REGSEL & A0
+      # !REGSEL & RDBG
+      # !REGSEL & RDLEN ;
+RA1 = REGSEL & A1
+      # !REGSEL & RDFG
+      # !REGSEL & RDBG ;
+RA2 = REGSEL & A2
+      # !REGSEL & RDFG
+      # !REGSEL & RDLEN
+      # !REGSEL & RDBG ;
+RA3 = REGSEL & A3 ;
+RA4 = REGSEL & A4 ;
+FP0.d = SPANEND & !FP0 ;
+FP1.d = SPANEND & FP1 & !FP0
+        # SPANEND & !FP1 & FP0
+        # !SPANEND & FP1 ;
+RDLEN = !SPANBUSY & !FP1 & !FP0 ;
+RDFG = !SPANBUSY & !FP1 & FP0 ;
+RDBG = !SPANBUSY & FP1 & !FP0 ;
+WCTRL = WSTB & !RA4 & !RA3 & !RA2 & !RA1 & !RA0 ;
+VSTATWR = WSTB & !RA4 & !RA3 & RA2 & !RA1 & RA0 ;
+HLAST = H7 & H6 & H5 & H4 & H3 & H2 & H1 & H0 ;
+HLOAD = HBLANK & SLOTTICK ;
+ROWADV = HLAST & SLOTTICK & !VBLANK ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
 [H0,H1,H2,H3,H4,H5,H6,H7,V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,VSDLY].ck = DOTCLK ;
 [VBLPEND,PH0,PH1,SPANBUSY,MC0,MC1,MC2,VMODE0,VMODE1,CHAR,WM0].ck = DOTCLK ;
-[WM1,CELL,IRQEN,DISPEN,TC0,TC1,TC2].ck = DOTCLK ;
+[WM1,CELL,IRQEN,DISPEN,TC0,TC1,TC2,FP0,FP1].ck = DOTCLK ;
 
 /* One asynchronous reset for every register, as on the GALs. */
 [H0,H1,H2,H3,H4,H5,H6,H7,V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,VSDLY].ar = RESET ;
 [VBLPEND,PH0,PH1,SPANBUSY,MC0,MC1,MC2,VMODE0,VMODE1,CHAR,WM0].ar = RESET ;
-[WM1,CELL,IRQEN,DISPEN,TC0,TC1,TC2].ar = RESET ;
+[WM1,CELL,IRQEN,DISPEN,TC0,TC1,TC2,FP0,FP1].ar = RESET ;

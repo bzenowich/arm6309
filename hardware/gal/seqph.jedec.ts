@@ -19,6 +19,7 @@
 import { counterTerms } from "./jedec/counter"
 import { place } from "./jedec/place"
 import type { Cell, Design } from "./jedec/assemble"
+import { minimalSop } from "./jedec/twolevel"
 
 const PH = ["PH0", "PH1"]
 
@@ -63,22 +64,52 @@ const cells: Cell[] = [
     terms: ["!PH1"],
   },
 
-  /* Four fetch-latch clocks, one per framebuffer chip, each rising at the
-   * end of that chip's own fetch - 144 ns into a 158.9 ns slot, 14.9 ns of
-   * settling before the boundary.
+  /* Four fetch-latch clocks, one per framebuffer chip - 19 item 23(a), and
+   * no longer four copies of one term.
    *
-   * IN REV A THESE FOUR ARE THE SAME EQUATION. They are four macrocells
-   * because 5.2.2 requires them to be able to differ: 5.2.1 grants each
-   * chip's spare access independently, 6.4's tile mode gives the chips
-   * different fetch cadences - and, which 8 does not say and should,
-   * byte-granular horizontal scroll needs them to differ too. See
-   * seqph.check.ts, which shows a common address bus and a common latch
-   * clock cannot produce a scrolled line at all. */
-  ...[0, 1, 2, 3].map((n) => ({
-    pin: 0, name: `FCLK${n}`, assertedLow: false, s0: 1 as const, registered: false,
-    terms: ["PH1 & PH0"],
-    why: n === 0 ? "four copies in Rev A; separate macrocells so they can diverge" : undefined,
-  })),
+   * 8's scroll and 5.2.2's per-chip clocking describe one mechanism from
+   * opposite ends. Here is where they meet. With HSCROLL[1:0] = p the mux
+   * emits chips p, p+1, p+2, p+3 in that order, so chips p..3 are emitted
+   * FIRST and want the current group, and chips 0..p-1 are emitted after the
+   * wrap and want the NEXT one. Two groups have to be live in the latches at
+   * once, and the latches are the only place to keep them.
+   *
+   * The two groups come from ONE address bus and one fetch per slot, because
+   * the '574s can be clocked on either side of the moment the fetched data
+   * lands. The fetch occupies the back half of the slot (SPAREWIN above), so:
+   *
+   *   EARLY  rises at the PH 2->3 boundary, 119.1 ns in, BEFORE this slot's
+   *          fetch has landed - the chip keeps the previous group
+   *   LATE   rises at the PH 3->0 boundary, 158.9 ns in, after it has - the
+   *          chip takes the new one
+   *
+   * so a chip clocked LATE holds exactly one group more than a chip clocked
+   * EARLY, which is the whole of what 8 needs. EARLY is the Rev A equation
+   * unchanged, which is why p = 0 still works and why nothing else on the
+   * card moves.
+   *
+   * Nine product terms across four macrocells that were already budgeted, and
+   * seqph.check.ts now computes the emitted byte sequence for every p and
+   * asserts it is right - where before it could only assert it was wrong. */
+  ...[0, 1, 2, 3].map((n) => {
+    /* chip n is emitted before the wrap exactly when n >= p */
+    const early: string[] = [], late: string[] = []
+    for (let p = 0; p < 4; p++) {
+      const q = `${p & 1 ? "" : "!"}HS0 & ${p & 2 ? "" : "!"}HS1`
+      ;(n >= p ? early : late).push(q)
+    }
+    const guard = (ts: string[], edge: string) => ts.map((t) => `${edge} & ${t}`)
+    return {
+      pin: 0, name: `FCLK${n}`, assertedLow: false, s0: 1 as const, registered: false,
+      /* Enumerated over p and then minimised, because enumerating is the only
+       * way to write this that is obviously right and it produces exactly the
+       * A&B # A&!B shape jedec/minimise.ts cannot reduce. FCLK3 comes out as
+       * one term, which is the arithmetic saying chip 3 is never after the
+       * wrap. */
+      terms: minimalSop([...guard(early, "PH1 & PH0"), ...guard(late, "!PH1 & !PH0")]),
+      why: n === 3 ? "chip 3 is never after the wrap, so it is EARLY for every p" : undefined,
+    }
+  }),
 
   /* Which of the four latched bytes the '153 mux emits. This is the only
    * thing HSCROLL[1:0] touches. */

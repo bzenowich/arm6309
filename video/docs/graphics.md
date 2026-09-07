@@ -1964,10 +1964,15 @@ packages while saving 10 further pins.
 §7 and §5.2 describe; this one carries §6.4's tiling and character generation as well,
 which is the whole of the v1 display list bar §19 item 23's decode.
 
-| | Holds | Logic cells | I/O pins |
-|---|---|---|---|
-| **`vaddr`** | scan and `WPTR` counters, scroll and tile registers, the five-source address mux | **119 of 128** | 62 of 64 |
-| **`vctrl`** | sync trio, sequencer, span control, arbiter, `CTRL`, §6.4's fetch cadence | **100 of 128** | 62 of 64 |
+| | Package | Holds | Logic cells | I/O pins |
+|---|---|---|---|---|
+| **`vaddr`** | PLCC-84 | scan and `WPTR` counters, scroll and tile registers, the write-strobe decode, the six-source address mux | **101 of 128** | 62 of 64 |
+| **`vctrl`** | **TQFP-100** | sync trio, sequencer, span control, arbiter, `CTRL`, §6.4's fetch cadence, §19 item 23's decode | **123 of 128** | 76 of 80 |
+
+⚠ **`vctrl` outgrew the PLCC-84 when item 23 closed** — the fitter refuses it at 74
+I/O — so the two parts are no longer the same package. At 123 of 128 logic cells and
+76 of 80 pins it has almost nothing left; anything further on that part displaces
+something else.
 
 `DOTCLK` lands on a global clock and `RESET` on the global clear, both parts, with two
 of four dedicated inputs used. 74,136 fuses each.
@@ -2030,13 +2035,20 @@ none of them free:
 
 **v1 as specified fits in two parts.** The engine is the line, and it falls just past it.
 
-> ⚠ **Still not carried by either part:** §19 item 23's decode half, ~13 macrocells and
-> roughly 21 pins. `vctrl` has 28 logic cells spare and **2 pins**, so the decode needs
-> the same treatment `CTRL` just got — a register address and a strobe in place of one
-> pin per write target — or it needs its own part. `vaddr` spends nine pins on load
-> strobes that a four-bit register address and one strobe would replace; §12's sixteen
-> byte window has no free offsets for `TILEBASE` and `FONTBASE`, so that decode cannot
-> be written until the window question is settled.
+> ✅ **Item 23 is closed and it took both of those repairs.** The write strobes are
+> decoded on `vaddr` from a five-bit register address and one strobe, in place of nine
+> strobe pins. And the window question was a mistake in this section rather than a real
+> gap: §13's window is **32 bytes**, `$FF60`–`$FF7F`, and §6.4.6 had already reserved
+> `+$17`–`+$19` for `TILEBASE`, `FONTBASE` and the map base. There was nothing to
+> settle.
+>
+> ⚠ **Three errors in the 2026-09-07 fit, found while closing item 23**, all in logic
+> this section had already reported as fitted: the scroll holds loaded `HSCROLL[7:0]`
+> where §8 wants `HSCROLL[9:2]`, four bits off; the intra-cell byte address came from a
+> slot-counter bit, which addresses in units of sixteen pixels rather than four; and
+> the map had **no address source at all**, so `MAPLD` latched a byte from an address
+> nothing generated. Fitting proves a design lands on a part. It does not prove the
+> design is right, and this section read as though it did.
 
 ### 10.2 What the 6309 gives you for free
 
@@ -2980,10 +2992,19 @@ unchanged from minimal256.md §11 and are not restated in full.
     > concatenated addressing multiplies the terms on bits that are already at
     > *i* + 3, and the top bits have the least headroom. **Fit it before freezing the
     > BOM**, but it is no longer a near-certain extra package.
-16. **Decide the tile fetch's fine-scroll behaviour** (§6.4.6). Sub-cell horizontal
-    scroll needs a 3-bit offset applied to the tile-row address, which is new logic
-    rather than the free `HSCROLL` of §8. Either implement it or document tile mode
-    as cell-granular horizontally.
+16. ~~**Decide the tile fetch's fine-scroll behaviour**~~ — **IMPLEMENTED, and it is
+    free after all.** §6.4.6 says sub-cell scroll "needs a 3-bit offset applied to
+    the tile-row address, which is new logic rather than the free `HSCROLL` of §8".
+    It is not new logic. A slot is four pixels and a cell is eight, so the three bits
+    of intra-cell offset are `{SA2, mux phase}` — the column counter's own low bit
+    and the two bits §8 already preloads. §8 loads that counter from `HSCROLL[9:2]`
+    and the phase from `HSCROLL[1:0]`, so **both halves are already scrolled** and
+    the concatenation needs no adder and no offset register.
+
+    What it does need is a **cadence** guarantee, not an address one: the map byte
+    for a cell must be held before that cell's first pixel is emitted, so when a line
+    starts mid-cell the map fetch leads by one cell rather than one slot. That is
+    `MAPSEL` in [`video.parts.ts`](../../hardware/gal/video.parts.ts).
 17. **Bench the serialiser in the LUT address path** if Variant B is built (§6.4.3).
     The glyph bit reaches a LUT address pin through a `74AHC165` clock-to-Q, inside
     the 11.7 ns margin item 3 is already measuring. `'HC` grade will not shift at
@@ -3021,49 +3042,49 @@ unchanged from minimal256.md §11 and are not restated in full.
     what this card's static phase needs, and it is the motherboard's divider that has
     to implement it. Confirm that a `/WAIT`-extended cycle re-enters the correct
     sub-slot phase — this is item 6 with the answer now specified rather than open.
-23. **Write the phase-dependent `FCLK` equations, and the sequencer's other half.**
-    Two things, both surfaced by fitting the timing spine
-    ([`hardware/gal/seqph.jedec.ts`](../../hardware/gal/seqph.jedec.ts), 10 of 10
-    macrocells and 3 of 11 input pins).
+23. ~~**Write the phase-dependent `FCLK` equations, and the sequencer's other half.**~~
+    **CLOSED 2026-09-07.** Both halves are written, fitted and checked.
 
-    **(a) The fetch-latch clocks are not four copies of one term.** §8's note says
-    why: at `HSCROLL[1:0] = p`, chips `0..p−1` must take the next group while `p..3`
-    still hold this one, so `FCLK[n]` is qualified by a compare of *n* against `p`.
-    That is four macrocells already budgeted and a handful of product terms on a part
-    with room, so it is cheap — but it is not written, and until it is, byte-granular
-    horizontal scroll is a claim rather than a design.
+    **(a) The four `FCLK` equations — 9 product terms, 4 macrocells, no new package.**
+    §8 and §5.2.2 described one mechanism from opposite ends; they meet at the
+    observation that the four latches can be clocked on either side of the moment
+    the fetched data lands. The fetch owns the back half of the slot, so a clock
+    rising at the PH 3→0 boundary takes this slot's group and one rising at PH 2→3
+    keeps the previous one — and a chip clocked late therefore holds **exactly one
+    group more** than a chip clocked early, which is all §8 needs. With
+    `HSCROLL[1:0] = p`, chips `p..3` are emitted before the wrap and take the early
+    clock; chips `0..p−1` are emitted after it and take the late one. `FCLK3`
+    reduces to a single term, which is the arithmetic saying chip 3 is never after
+    the wrap.
 
-    **(b) Span control is specified and fitted — §7.4, `seqctl`, 7 of 10 macrocells.**
-    The remaining decode is not, and it does not fit in what is left:
+    `seqph.check.ts` now computes the emitted byte sequence for **every** `p` from
+    the fitted fuses and asserts the line is contiguous — where before it could only
+    assert Rev A's was not. Byte-granular horizontal scroll is a design.
 
-    | | Macrocells | Where it could go instead |
-    |---|---|---|
-    | register-file address `RA4..RA0`, muxed CPU / internal | 5 | **2 × `'157`** |
-    | `LDA`, `LDB`, `LDC` — `WPTR`'s load strobes | 3 | **1 × `'138`** off the register-write address |
-    | `HLOAD`, `ROWADV` — the scan pair's controls | 2 | `HLOAD` fits on `hadr` (2 free macrocells, 2 free pins) |
-    | `VRAMSEL` / `REGSEL` decode, incl. the `/IOPAGE` term (§6.3.2) | 2 | — |
-    | `WSTB` — the posted-write strobe | 1 | it is already the `'574`s' clock, qualified |
-    | **budget** | **13**, against **3** free on `seqctl` | |
+    **(b) The register-file decode — 21 macrocells, 28 product terms.** Item 23's own
+    budget was 13, and the extra 8 are deliberate: they are the per-register write
+    strobes, which used to be **one pin each** into the address part. On a card made
+    of GALs the item's `'138` was right; on a CPLD it is backwards, because
+    macrocells are cheap and pins are the binding resource. Six address lines and one
+    strobe replace nine strobe pins — the same trade §10.1.6.1 made for `CTRL`.
 
-    Three things came off the original budget of 20 rather than being fitted:
-    `SPANBUSY` and the retire handshake went into `seqctl` (§7.4); `SPNREQ` **is**
-    `SPANBUSY`, a wire and not a macrocell; and **`/WAIT` moved to the arbiter**,
-    which already had `VRAMSEL` and `/IOPAGE` on its pins and had the capacity —
-    §10.1.1.
+    Three things the item asked to be *stated*, now stated in
+    [`hardware/gal/regfile.ts`](../../hardware/gal/regfile.ts):
 
-    **Two routes, and they differ by one GAL:**
+    - **`REGSEL` is one address bit.** §13's window is `$FF60`–`$FF7F` and the
+      motherboard's `/IOSEL` is `$FF40`–`$FF7F`, so the card's own decode is `A5`.
+    - **`VRAMSEL` carries the `/IOPAGE` term** §6.3.2 requires. Without it the select
+      matches every I/O access in the machine.
+    - **The file address's internal side**, which the item called "the last thing on
+      the card that has never been stated precisely". A span needs `SPANLEN`, `WFG`
+      and `WBG` once each and none changes while it runs, so §7.4's "two deferrable
+      file reads" become a two-bit walk at span end that fetches all three for the
+      *next* span. Two macrocells and three decodes.
 
-    | | GALs | Card ICs | Current |
-    |---|---|---|---|
-    | a third sequencer part | **11** | 42 | +70–90 mA |
-    | 2 × `'157` + 1 × `'138`, `HLOAD` onto `hadr` | **10** | 44 | +~12 mA |
-
-    The second lands the remainder at 3 macrocells, which is exactly `seqctl`'s
-    spare. **Recommended**: it keeps the count at ten, and §10.1's "eighteen
-    GAL22V10s is where the honest question becomes *why not one CPLD*" is an argument
-    worth not spending a package on. Both routes are arithmetic, not fits — the
-    register-file address mux is the last thing on the card that has never been
-    stated precisely, and it should be written down before either is committed.
+    **The cost is a package, and it is `vctrl`'s.** At 74 I/O the PLCC-84 refuses;
+    the part is now an **`ATF1508AS` TQFP-100**, fitted at **76 of 80 pins and 123 of
+    128 logic cells**. `vaddr` stays PLCC-84 at 62 of 64 and 101 of 128. §10.1.6
+    carries the numbers.
 
 22. **Verify the sync-polarity table against the actual monitors** (§6.2.1), CRT, LCD
     and scaler, in *both* `VMODE` families. Polarity is how the monitor picks the
