@@ -1806,15 +1806,44 @@ stays an external IC rather than being absorbed:
 plus ~15 inter-part nets, costing a pin at each end. It works, it is two sockets
 instead of one fine-pitch part, and it costs back some of what merging bought.
 
-> ⚠ **And the single-chip route is exactly full**: 128 of 128 macrocells. §10.3
-> recommends building the list engine later (5 ICs, 2 GALs' worth of logic), and
-> §6.4's tile mode is still open — **neither has anywhere to go on a full
-> `ATF1508AS`.** If either is likely, the `PQFP-160` or the two-`ATF1504AS` split
-> stops being a package preference and becomes the design decision.
+> ⚠ **"128 of 128 macrocells" was an artefact of this census and is withdrawn.** It
+> absorbed everything that fitted in 128, which optimises for pins when pins are not
+> the binding constraint: absorbing the `'165` buys three pins the TQFP-100 does not
+> need and costs eight macrocells the card does. Taking only what the 80-pin target
+> requires — and every absorption that costs no macrocells, because those are free —
+> the real figure is **120 of 128 macrocells and 78 of 80 I/O.** Two pins and eight
+> macrocells spare.
 
-**Recommendation, unchanged but now qualified: `ATF1508AS` TQFP-100** for a card built
-as specified. **If the list engine is going to happen, take the PQFP-160** — the pins
-are not the reason, the 128-of-128 macrocells are.
+#### 10.1.5 What §6.4's tile mode would cost, and what it is *not* for
+
+**80×25 text does not use tile mode and never did.** §7's first paragraph: *"There is
+no hardware text mode in either design, and there should not be one here either …
+**the span writer is the text engine**."* §6.4 opens by agreeing: *"Neither colormin
+document has a tile mode, and §7 argues against a hardware character generator on cost
+grounds."* Text is §7.4's span writer, it is fitted (`seqctl`), and `check:seqctl`
+asserts §7.3's 13 writes per cell. **Tile mode is for playfields and sprites, and it
+is optional.**
+
+If it is wanted anyway, `npm run census` prices it:
+
+| | I/O | Macrocells |
+|---|---|---|
+| the map byte, from the fetch latches into the address concatenation | **+8** | +0 |
+| linear-vs-concatenated mux on `A13..A6` | +0 | +0 — product terms, not macrocells |
+| the second fetch cadence and its control (§19 item 15 (c)) | +0 | **+5** |
+| | **86** | **125** |
+
+**125 macrocells is comfortable; 86 I/O is not.** TQFP-100 is **6 pins short**;
+PQFP-160 fits with room. Pins bind and macrocells do not, for the sixth time on this
+card.
+
+**So the package is the tile-mode decision**, and it has to be made before layout:
+
+| Build | Part |
+|---|---|
+| the card as specified — bitmap, 80×25 text, span writer, read-back | `ATF1508AS` **TQFP-100**, 78 of 80 I/O |
+| **+ §6.4 tile mode**, or §10.3's list engine | `ATF1508AS` **PQFP-160**, 86 of 96 |
+| socketed, hand-built, no tile mode | **2 × `ATF1504AS` PLCC-84** — 63/57 macrocells, 35/53 I/O, ~15 inter-part nets |
 
 ### 10.2 What the 6309 gives you for free
 

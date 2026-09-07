@@ -210,17 +210,26 @@ if (mcTotal + aMc > 128) {
   console.log(`     I/O ${total - aIo + widest.io}, macrocells ${mcTotal + aMc - widest.mc}, card ICs -${aIc - widest.ic + CARD.length - 1}`)
 }
 
-/* Only the absorptions that stay inside 128 macrocells. The '161 and the '165
- * are the two that do not, and the census picks by macrocell cost. */
-let feasible = [...ABSORB]
-while (mcTotal + feasible.reduce((n, x) => n + x.mc, 0) > 128) {
-  feasible = feasible.filter((x) => x !== [...feasible].sort((a, b) => b.mc - a.mc)[0])
+/* Absorb only as much as the target package's pin count REQUIRES, cheapest in
+ * macrocells first.
+ *
+ * The first version of this took everything that fitted in 128 macrocells,
+ * which optimised for pins when pins were not the binding constraint, and
+ * reported 128 of 128 with nothing spare. That was an artefact of the greedy
+ * choice, not a property of the design: absorbing the '165 buys three pins the
+ * TQFP-100 does not need and costs eight macrocells the card does. */
+const TARGET_IO = 80 // ATF1508AS in TQFP-100, JTAG wired
+/* Anything that costs no macrocells is free margin - take it regardless. */
+const feasible = ABSORB.filter((x) => x.mc === 0)
+for (const x of [...ABSORB].filter((x) => x.mc > 0).sort((a, b) => a.mc - b.mc || b.io - a.io)) {
+  if (total - feasible.reduce((n, y) => n + y.io, 0) <= TARGET_IO) break
+  feasible.push(x)
 }
 const fIo = feasible.reduce((n, x) => n + x.io, 0)
 const fMc = feasible.reduce((n, x) => n + x.mc, 0)
 const bestIo = total - fIo
 const bestMc = mcTotal + fMc
-console.log(`\n  absorbing only what fits in 128 macrocells:`)
+console.log(`\n  absorbing only what the ${TARGET_IO}-pin target needs, cheapest first:`)
 for (const x of ABSORB) {
   console.log(`     ${feasible.includes(x) ? "yes" : "NO "}  ${x.what}`)
 }
@@ -249,6 +258,24 @@ for (const q of PARTS) {
     `${fmt(DEDICATED_IN, 4)}  ${q.socket ? "  n/a" : fmt(-JTAG, 5)}  ${fmt(usable, 6)}  ` +
     `${(q.mc >= bestMc ? "yes" : "no").padEnd(6)} ` +
     `${usable >= bestIo ? "yes" : `no, ${bestIo - usable} short`}`)
+}
+
+/* -- what 6.4's tile mode would add on top (19 item 15) ------------------ */
+const TILE = [
+  ["the map byte, from the fetch latches into the address concatenation", 8, 0],
+  ["linear-vs-concatenated mode mux on A13..A6 - product terms, not macrocells", 0, 0],
+  ["the second fetch cadence and its control (19 item 15 (c))", 0, 5],
+] as const
+const tIo = TILE.reduce((n, [, i]) => n + i, 0)
+const tMc = TILE.reduce((n, [, , m]) => n + m, 0)
+console.log(`  6.4's tile mode, on top - NOT needed for 80x25 text, which is`)
+console.log(`  section 7's span writer and is already fitted:`)
+for (const [what, i, m] of TILE) console.log(`     +${i} I/O  +${m} mc   ${what}`)
+console.log(`     = ${bestIo + tIo} I/O, ${bestMc + tMc} macrocells`)
+for (const q of PARTS) {
+  const usable = q.io + DEDICATED_IN - (q.socket ? 0 : JTAG)
+  if (q.mc < bestMc + tMc) continue
+  console.log(`     ${q.pkg.padEnd(15)} ${usable >= bestIo + tIo ? "FITS" : `${bestIo + tIo - usable} pins short`}`)
 }
 
 console.log(`\n  Two ATF1504AS in PLCC-84 - socketed, and the partition that works:`)
