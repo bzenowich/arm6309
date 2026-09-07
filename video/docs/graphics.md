@@ -1112,10 +1112,25 @@ the one thing this card currently does not have and both period chips do.
 
 ## 7. 80×25 text — software glyphs, and a correction to colormin's cost
 
-There is no hardware text mode in either design, and there should not be one here
-either: NitrOS-9's windowing draws into bitmaps, a hardware character generator
+> ⚠ **This section's opening is superseded by §6.4 and was not updated when §6.4 was
+> written.** It reads as a settled rejection of hardware text; §6.4 reopens the
+> question — *"that argument was about a bitmap-only card"* — and §6.4.5 concludes
+> **"text stops being the span writer's problem"** at 2 CPU writes per cell against
+> 13. §6.4.7 recommends building it. **As of 2026-09-06 the card's text engine is
+> §6.4's Variant B character mode; this section is the fallback and the cost model
+> for the span writer, both of which stay true and stay built.** §10.1.5 carries the
+> decision.
+
+~~There is no hardware text mode in either design, and there should not be one here
+either~~: NitrOS-9's windowing draws into bitmaps, a hardware character generator
 cannot mix with graphics per-pixel, and it would need its own memory and
-serialiser (~8–12 ICs). The span writer is the text engine.
+serialiser (~8–12 ICs). **All three of those were true of a bitmap-only card and two
+of them stopped being true once §6.4 asked the question directly** — the LUT's dead
+127/128 is the colour path, and the scan-address generators are already loadable
+counters. What survives is the first: a character generator cannot mix with graphics
+*per-pixel*, which is §6.4.6's first limit and why the mode is global and switchable
+rather than free. The span writer remains the text engine **in bitmap mode**, and the
+figures below are what text costs when Variant B is not selected.
 
 ### 7.1 The correction
 
@@ -1711,6 +1726,10 @@ $6 part is the wrong one.
 | **TQFP-100** | **`…AU100`** | **80** | ✓ **9 spare** |
 | PQFP-160 | `…QC160` | 96 | ✓ but 160 pins for 71 |
 
+> ⚠ **Superseded by §10.1.5**: with §6.4's Variant A and B in v1 the design needs 89
+> I/O, and TQFP-100 is nine short. **The part is the PQFP-160, `…QC160`.** The rest of
+> this section — voltage, speed grade, the ASV trap — is unchanged.
+
 **So: `ATF1508AS-…AU100`, 5 V, TQFP-100, `-15` speed grade** — the same grade §14
 already specifies for the GALs, and the slowest is the cheapest. ⚠ Confirm a `-15` is
 stocked in 5 V TQFP-100 before committing; DigiKey's `-15AC100` is a Rochester
@@ -1814,36 +1833,62 @@ instead of one fine-pitch part, and it costs back some of what merging bought.
 > the real figure is **120 of 128 macrocells and 78 of 80 I/O.** Two pins and eight
 > macrocells spare.
 
-#### 10.1.5 What §6.4's tile mode would cost, and what it is *not* for
+#### 10.1.5 §6.4's variants are in v1, and they set the package
 
-**80×25 text does not use tile mode and never did.** §7's first paragraph: *"There is
-no hardware text mode in either design, and there should not be one here either …
-**the span writer is the text engine**."* §6.4 opens by agreeing: *"Neither colormin
-document has a tile mode, and §7 argues against a hardware character generator on cost
-grounds."* Text is §7.4's span writer, it is fitted (`seqctl`), and `check:seqctl`
-asserts §7.3's 13 writes per cell. **Tile mode is for playfields and sprites, and it
-is optional.**
+**Decided 2026-09-06.** §6.4.5 is the deciding paragraph and it is easy to miss behind
+§7's flat opening: *"**Text stops being the span writer's problem.**"*
 
-If it is wanted anyway, `npm run census` prices it:
+| Text operation | Span writer (§7.3) | Character mode (§6.4.5) |
+|---|---|---|
+| One cell | 13 writes, ~31 µs | **2 writes, ~4.8 µs** |
+| Scroll one line | ~2.5 ms | **~0.4 ms** |
+| Full 80×25 redraw, per-cell colour | ~62 ms | **~9.5 ms** |
+
+**§2.1 is why this is not optional.** That section's own conclusion is that the card
+has ~77× more memory bandwidth than the CPU can consume and that *"bandwidth is not
+the constraint on this machine — **the CPU is**"*. A 6.5× reduction in CPU writes per
+cell is the single largest thing on this card that acts on the actual bottleneck, and
+§6.4.3's comparison against the chip being replaced is not close: **256 freely defined
+attributes against the GIME's 8 × 8, and any RGB565 pair against palette entries 0–7.**
+
+**Two variants, and they stack.** A is the 8bpp tile fetcher — playfields, sprites,
+every pixel independently coloured. B is the 1bpp character generator that makes text
+cheap, and it needs A's fetch machinery. §6.4.7 recommends A and calls B *"worth it
+for a genuinely cheap 80×25 console"*. `npm run census`:
 
 | | I/O | Macrocells |
 |---|---|---|
-| the map byte, from the fetch latches into the address concatenation | **+8** | +0 |
-| linear-vs-concatenated mux on `A13..A6` | +0 | +0 — product terms, not macrocells |
-| the second fetch cadence and its control (§19 item 15 (c)) | +0 | **+5** |
-| | **86** | **125** |
+| base, bitmap card | 78 | 120 |
+| **A** — map byte (+8 I/O), address mux (product terms), second fetch cadence (+5 mc) | 86 | 125 |
+| **B** — serialiser load/shift (+2), LUT page select (+1), three-access cadence (+3 mc) | **89** | **128** |
 
-**125 macrocells is comfortable; 86 I/O is not.** TQFP-100 is **6 pins short**;
-PQFP-160 fits with room. Pins bind and macrocells do not, for the sixth time on this
-card.
+**So the part is `ATF1508AS` in PQFP-160**, not TQFP-100 — which is 9 pins short. And
+the macrocells land at **128 of 128**, which this time is real and not the census
+artefact of §10.1.4:
 
-**So the package is the tile-mode decision**, and it has to be made before layout:
+> ⚠ **The part is full.** §10.3 recommends the list engine, and §6.4.6's first limit
+> makes it more than a nicety here: the mode is global, but *"a list-engine `MOVE` at
+> a scanline boundary switches mid-frame — a text status bar over a bitmap playfield,
+> from the display list, with no CPU involvement."* That is the feature that beats
+> both period chips, and **there is no room for it on this die.** `ATF1508AS` is the
+> top of the 5 V ATF15xx line, so more macrocells means a second package, not a bigger
+> one. **Plan for two CPLDs, or accept that the list engine is a piggyback.**
 
-| Build | Part |
-|---|---|
-| the card as specified — bitmap, 80×25 text, span writer, read-back | `ATF1508AS` **TQFP-100**, 78 of 80 I/O |
-| **+ §6.4 tile mode**, or §10.3's list engine | `ATF1508AS` **PQFP-160**, 86 of 96 |
-| socketed, hand-built, no tile mode | **2 × `ATF1504AS` PLCC-84** — 63/57 macrocells, 35/53 I/O, ~15 inter-part nets |
+**What §7 keeps.** The span writer is not deleted — it is the bitmap-mode text engine,
+the fill and clear engine, and §6.4.6's limit 1 means bitmap regions still need it.
+`seqctl` and §7.4 stand unchanged; `check:seqctl` still asserts the 13 writes per cell,
+which is now the *fallback* figure rather than the headline one.
+
+**Two costs to keep in view**, both §6.4's own:
+
+- **Character mode reintroduces per-cell colour limits** — two colours per cell, from
+  a 256-entry attribute table. §6.4.7 flags it as *"the one thing this card currently
+  does not have and both period chips do"*. It is per-mode and switchable, not a
+  property of the card.
+- **The glyph serialiser lands on the tightest path on the board** (§6.4.6 limit 3):
+  its clock-to-Q goes inside the 11.7 ns the index → LUT → output chain has at
+  39.7 ns, and `'HC` will not shift at 25.175 MHz. `'AHC165`, and it is §19 item 17's
+  bench measurement before layout.
 
 ### 10.2 What the 6309 gives you for free
 
@@ -2754,8 +2799,16 @@ unchanged from minimal256.md §11 and are not restated in full.
     retargeted to an 8bpp chunky bitmap with a span writer, versus rewritten? This
     is the largest unestimated piece of work in the whole project and it is
     software, not hardware.
-15. **Tile-mode GAL fit — the gating item for §6.4.** Three questions, in order of
-    risk: (a) are there **spare input pins** on the scan-address pair to take the
+15. **Tile-mode fit — ⚠ now a v1 item, not a §6.4 option.** §10.1.5 puts 80×25 text
+    on Variant B's character mode (§6.4.5: 2 CPU writes per cell against 13), so this
+    item is on the critical path rather than gating an enhancement. The macrocell and
+    pin cost is priced — 89 I/O, 128 of 128 macrocells, `ATF1508AS` PQFP-160 — but
+    **the logic itself has never been written**: the map-byte path, the
+    linear-vs-concatenated address mux, and the three-access cadence (code, attribute,
+    font row) are the three pieces, and none of them exists. **This is the largest
+    unwritten block on the card.**
+
+    Three questions, in order of risk: (a) are there **spare input pins** on the scan-address pair to take the
     map byte, or does it cost a `'574`; (b) can those GALs tri-state their low
     outputs during the tile fetch and switch between linear and concatenated
     addressing; (c) does the sequencer pair hold a second fetch cadence on top of

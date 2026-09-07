@@ -260,23 +260,52 @@ for (const q of PARTS) {
     `${usable >= bestIo ? "yes" : `no, ${bestIo - usable} short`}`)
 }
 
-/* -- what 6.4's tile mode would add on top (19 item 15) ------------------ */
-const TILE = [
+/* -- 6.4's two variants, which 6.4.7 recommends building ------------------
+ *
+ * Section 7 says "the span writer is the text engine" and reads as settled.
+ * 6.4 revisits it - "that argument was about a bitmap-only card" - and 6.4.5
+ * concludes "text stops being the span writer's problem", at 2 CPU writes per
+ * cell against 13 and a full redraw of 9.5 ms against 62. On a machine whose
+ * own 2.1 says the CPU is the constraint and not bandwidth, that is the trade
+ * the card exists to make. 6.4.7: "Build Variant A."
+ *
+ * A is the 8bpp tile fetcher - playfields, sprites, every pixel independently
+ * coloured. B is the 1bpp character generator that makes text cheap, and it is
+ * the one that renders 80x25. They stack: B needs A's fetch machinery. */
+const VARIANT_A = [
   ["the map byte, from the fetch latches into the address concatenation", 8, 0],
-  ["linear-vs-concatenated mode mux on A13..A6 - product terms, not macrocells", 0, 0],
+  ["linear-vs-concatenated mux on A13..A6 - product terms, not macrocells", 0, 0],
   ["the second fetch cadence and its control (19 item 15 (c))", 0, 5],
 ] as const
-const tIo = TILE.reduce((n, [, i]) => n + i, 0)
-const tMc = TILE.reduce((n, [, , m]) => n + m, 0)
-console.log(`  6.4's tile mode, on top - NOT needed for 80x25 text, which is`)
-console.log(`  section 7's span writer and is already fitted:`)
-for (const [what, i, m] of TILE) console.log(`     +${i} I/O  +${m} mc   ${what}`)
-console.log(`     = ${bestIo + tIo} I/O, ${bestMc + tMc} macrocells`)
+const VARIANT_B = [
+  ["the glyph serialiser's load and shift ('AHC165, 6.4.6 limit 3)", 2, 0],
+  ["the LUT page select - CTRL b5, out to a LUT address pin (6.4.3)", 1, 0],
+  ["the three-access cadence: code, attribute, font row (6.4.3)", 0, 3],
+] as const
+const sum = (t: readonly (readonly [string, number, number])[]) =>
+  [t.reduce((n, [, i]) => n + i, 0), t.reduce((n, [, , m]) => n + m, 0)] as const
+
+console.log(`  6.4's tile and character modes. 6.4.5 puts 80x25 text HERE, not on`)
+console.log(`  the span writer: 2 CPU writes per cell against 13, ~9.5 ms per`)
+console.log(`  full redraw against ~62. 6.4.7 recommends building it.\n`)
+let vIo = 0, vMc = 0
+for (const [name, table] of [["A  8bpp tiles", VARIANT_A], ["B  1bpp characters - the text mode", VARIANT_B]] as const) {
+  const [i, m] = sum(table)
+  vIo += i; vMc += m
+  console.log(`     Variant ${name}`)
+  for (const [what, ii, mm] of table) console.log(`        +${ii} I/O  +${mm} mc   ${what}`)
+  console.log(`        running total: ${bestIo + vIo} I/O, ${bestMc + vMc} macrocells`)
+}
+console.log()
 for (const q of PARTS) {
   const usable = q.io + DEDICATED_IN - (q.socket ? 0 : JTAG)
-  if (q.mc < bestMc + tMc) continue
-  console.log(`     ${q.pkg.padEnd(15)} ${usable >= bestIo + tIo ? "FITS" : `${bestIo + tIo - usable} pins short`}`)
+  const ok = q.mc >= bestMc + vMc && usable >= bestIo + vIo
+  console.log(`     ${q.name} ${q.pkg.padEnd(15)} ${ok ? "FITS" : q.mc < bestMc + vMc
+    ? `${bestMc + vMc - q.mc} macrocells short` : `${bestIo + vIo - usable} pins short`}`)
 }
+console.log(`\n  ...and at ${bestMc + vMc} of 128 that is the part FULL. 10.3's list engine`)
+console.log(`  and 6.4.6's mid-frame mode switch - the thing that puts a text bar over`)
+console.log(`  a bitmap playfield - would need a second package.`)
 
 console.log(`\n  Two ATF1504AS in PLCC-84 - socketed, and the partition that works:`)
 const SPLIT = [
