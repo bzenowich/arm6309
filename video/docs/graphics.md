@@ -1646,16 +1646,23 @@ designs rather than counted by hand:
 | outputs nothing outside the group consumes | **54 pins** |
 | | **97 of 188 pins — 52% — are an artefact of the packaging** |
 | external I/O, everything that must reach a pin regardless | **84** |
-| macrocells, including ~13 of §19 item 23's unfitted decode | **103** |
+| macrocells: 90 fitted, ~13 of §19 item 23's unfitted decode, **+17 address mux** | **120** |
+
+> ⚠ **The address mux was missed on the first pass and is corrected here.** On GALs
+> the scan pair and the `WPTR` pair tri-state onto a shared framebuffer address bus and
+> the mux costs nothing. Inside one die two macrocells cannot drive one pin, so the 17
+> address outputs are 17 *further* macrocells fed by both counter sets — and the two
+> sets stay, buried. It is the one place where merging the packages costs silicon
+> rather than saving it.
 
 Half the pin count is the packaging talking to itself. The 54 is the sharper half: a
 22V10 has **no buried nodes**, so every counter bit and every intermediate term is on
 a pin whether or not anything wants it — 36 address-counter bits, the arbiter's eight
 grants, the mask counter, the dot phase.
 
-**One `ATF1508AS` holds it**: 128 macrocells against 103, 96 I/O against 84. The
-`ATF1504AS` (64/68) does not, and two of them do not help, because splitting puts the
-framebuffer address bus on both.
+**One `ATF1508AS` holds it, and only just**: 128 macrocells against 128 once the
+affordable absorptions of §10.1.3 are applied, and 80 I/O against 75. The `ATF1504AS`
+(64 macrocells) does not, alone.
 
 | | GALs / CPLDs | Card ICs | Board area for the logic |
 |---|---|---|---|
@@ -1757,6 +1764,57 @@ gain a regulator, a rail and a decoupling story to save ten dollars once. **Buy 
 
 **Nothing above obliges the rest of the machine.** The motherboard's two GALs and the
 audio card's five are unaffected; §10.1.2's argument was always about this card's ten.
+
+#### 10.1.4 Can it be squeezed into PLCC-84? — no, and here is how close
+
+PLCC-84 is the package a hand-built Eurocard wants: a socket exists, it can be pulled
+and reseated, and it is the cheap end of the range. It was worth trying.
+
+**The budget, from `npm run census`:** 128 macrocells and **75 I/O** after absorbing
+everything that fits in 128. The packages, counting honestly:
+
+| | Bidirectional I/O | + dedicated inputs | − JTAG | Usable | Verdict |
+|---|---|---|---|---|---|
+| PLCC-84 | 64 | 4 | not wired¹ | **68** | ✗ **7 short** |
+| TQFP-100 | 80 | 4 | −4 | **80** | ✓ 5 spare |
+| PQFP-160 | 96 | 4 | −4 | **96** | ✓ |
+
+¹ The four dedicated inputs are input-only, which suits this design — it has ~50
+outputs and ~25 inputs. And JTAG costs four I/O only when it is wired for in-system
+programming: **a socketed part is programmed out of circuit and keeps them.** That is
+the one structural advantage PLCC has here, and it is worth 4 pins.
+
+**Seven pins short, and they do not exist.** What was tried:
+
+| | |
+|---|---|
+| one shared `/OE` across the three posted-write address `'574`s | −1 |
+| the four per-chip `/WE` from an external `'139`, fed by 2 select bits + a strobe | −1, +1 IC |
+| **`FCLK0..3` collapsed to one common fetch-latch clock** | **−3, and it costs byte-granular horizontal scroll** (§8) |
+
+−2 without giving anything up, so **73 against 68**. Taking the third gets to 70 — still
+short, and §8's sub-pixel smoothness is not worth trading for a package.
+
+**What does fit in PLCC-84 is two `ATF1504AS`**, socketed, if the `'165` serialiser
+stays an external IC rather than being absorbed:
+
+| | Macrocells | I/O |
+|---|---|---|
+| A — scan and `WPTR` counters, the address mux, the arbiter | 63 of 64 | ~50 of 68 |
+| B — sync, sequencer, span control, decode | 57 of 64 | ~65 of 68 |
+
+plus ~15 inter-part nets, costing a pin at each end. It works, it is two sockets
+instead of one fine-pitch part, and it costs back some of what merging bought.
+
+> ⚠ **And the single-chip route is exactly full**: 128 of 128 macrocells. §10.3
+> recommends building the list engine later (5 ICs, 2 GALs' worth of logic), and
+> §6.4's tile mode is still open — **neither has anywhere to go on a full
+> `ATF1508AS`.** If either is likely, the `PQFP-160` or the two-`ATF1504AS` split
+> stops being a package preference and becomes the design decision.
+
+**Recommendation, unchanged but now qualified: `ATF1508AS` TQFP-100** for a card built
+as specified. **If the list engine is going to happen, take the PQFP-160** — the pins
+are not the reason, the 128-of-128 macrocells are.
 
 ### 10.2 What the 6309 gives you for free
 

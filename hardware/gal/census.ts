@@ -159,7 +159,14 @@ let mergedIn = 0
 for (const [what, n] of MERGED_IN) { mergedIn += n; console.log(`  ${fmt(n, 2)}  ${what}`) }
 
 const total = leaves.length + mergedOut + externalIn.length + mergedIn
-const mcTotal = macrocells + 13
+/* +13 for 19 item 23's unfitted decode, and +17 for the framebuffer address
+ * MUX, which the first version of this census missed. On a GAL the scan pair
+ * and the WPTR pair tri-state onto a shared bus and the mux costs nothing;
+ * inside one die two macrocells cannot drive one pin, so the 17 address pins
+ * are 17 further macrocells fed by both counter sets. The counters stay - they
+ * just become buried. */
+const ADDRESS_MUX = 17
+const mcTotal = macrocells + 13 + ADDRESS_MUX
 console.log(`\n  EXTERNAL I/O:  ${total}`)
 console.log(`  MACROCELLS, incl. ~13 of unfitted decode:  ${mcTotal}\n`)
 
@@ -203,20 +210,55 @@ if (mcTotal + aMc > 128) {
   console.log(`     I/O ${total - aIo + widest.io}, macrocells ${mcTotal + aMc - widest.mc}, card ICs -${aIc - widest.ic + CARD.length - 1}`)
 }
 
-const PARTS = [
-  { name: "ATF1502AS", pkg: "PLCC-44 / TQFP-44", mc: 32, io: 36 },
-  { name: "ATF1504AS", pkg: "PLCC-84", mc: 64, io: 64 },
-  { name: "ATF1508AS", pkg: "PLCC-84  JC84", mc: 128, io: 64 },
-  { name: "ATF1508AS", pkg: "TQFP-100 AU100", mc: 128, io: 80 },
-  { name: "ATF1508AS", pkg: "PQFP-160 QC160", mc: 128, io: 96 },
-] as const
-const bestIo = total - aIo + [...ABSORB].sort((a, b) => b.mc - a.mc)[0].io
-const bestMc = mcTotal + aMc - [...ABSORB].sort((a, b) => b.mc - a.mc)[0].mc
-console.log(`\nAgainst the 5 V parts, at ${bestMc} macrocells and ${bestIo} I/O\n`)
-console.log(`  part        package           macrocells  I/O   logic?  pins?`)
-for (const q of PARTS) {
-  console.log(`  ${q.name}   ${q.pkg.padEnd(16)}  ${fmt(q.mc, 9)}  ${fmt(q.io, 4)}  ` +
-    `${(q.mc >= bestMc ? "yes" : "no").padEnd(7)} ${q.io >= bestIo ? "yes" : "no"}`)
+/* Only the absorptions that stay inside 128 macrocells. The '161 and the '165
+ * are the two that do not, and the census picks by macrocell cost. */
+let feasible = [...ABSORB]
+while (mcTotal + feasible.reduce((n, x) => n + x.mc, 0) > 128) {
+  feasible = feasible.filter((x) => x !== [...feasible].sort((a, b) => b.mc - a.mc)[0])
 }
-console.log(`\n  NOTE: ATF1508ASV is the 3.3 V part, not this one. The 5 V device is`)
-console.log(`  ATF1508AS. The cheap listings are mostly ASV.\n`)
+const fIo = feasible.reduce((n, x) => n + x.io, 0)
+const fMc = feasible.reduce((n, x) => n + x.mc, 0)
+const bestIo = total - fIo
+const bestMc = mcTotal + fMc
+console.log(`\n  absorbing only what fits in 128 macrocells:`)
+for (const x of ABSORB) {
+  console.log(`     ${feasible.includes(x) ? "yes" : "NO "}  ${x.what}`)
+}
+console.log(`\n  I/O ${total} -> ${bestIo},  macrocells ${mcTotal} -> ${bestMc} of 128\n`)
+
+/* Packages. The I/O figure a distributor quotes is BIDIRECTIONAL pins; the
+ * part has four dedicated inputs on top, which this design can use because it
+ * has more outputs than inputs. JTAG costs four I/O when it is wired for
+ * in-system programming - in a socket you program out of circuit and get them
+ * back, which is the one thing PLCC has going for it here. */
+const PARTS = [
+  { name: "ATF1504AS", pkg: "PLCC-84  JU84", mc: 64, io: 64, socket: true },
+  { name: "ATF1508AS", pkg: "PLCC-84  JC84", mc: 128, io: 64, socket: true },
+  { name: "ATF1508AS", pkg: "TQFP-100 AU100", mc: 128, io: 80, socket: false },
+  { name: "ATF1508AS", pkg: "PQFP-160 QC160", mc: 128, io: 96, socket: false },
+] as const
+const DEDICATED_IN = 4
+const JTAG = 4
+console.log(`Against the 5 V parts, at ${bestMc} macrocells and ${bestIo} I/O\n`)
+console.log(`  part        package          mc    I/O  +ded  -JTAG  usable  logic? pins?`)
+for (const q of PARTS) {
+  /* A socketed part can be programmed out of circuit, so JTAG need not be
+   * wired and its four pins stay available. */
+  const usable = q.io + DEDICATED_IN - (q.socket ? 0 : JTAG)
+  console.log(`  ${q.name}   ${q.pkg.padEnd(15)} ${fmt(q.mc, 4)}  ${fmt(q.io, 4)}  ` +
+    `${fmt(DEDICATED_IN, 4)}  ${q.socket ? "  n/a" : fmt(-JTAG, 5)}  ${fmt(usable, 6)}  ` +
+    `${(q.mc >= bestMc ? "yes" : "no").padEnd(6)} ` +
+    `${usable >= bestIo ? "yes" : `no, ${bestIo - usable} short`}`)
+}
+
+console.log(`\n  Two ATF1504AS in PLCC-84 - socketed, and the partition that works:`)
+const SPLIT = [
+  ["A: scan + WPTR counters, the address mux, the arbiter", 53 + 10, 17 + 8 + 10],
+  ["B: sync, sequencer, span control, decode", bestMc - 53 - 10, bestIo - 17 - 8],
+] as const
+for (const [what, mc, io] of SPLIT) {
+  console.log(`     ${(mc <= 64 && io <= 68 ? "fits" : "OVER")}  ${fmt(mc, 3)} mc, ~${fmt(io, 2)} I/O   ${what}`)
+}
+console.log(`     plus ~15 inter-part nets, which cost a pin at each end.`)
+console.log(`\n  NOTE: ATF1508ASV is the 3.3 V part. The 5 V device is ATF1508AS,`)
+console.log(`  and the cheap listings are mostly ASV.\n`)
