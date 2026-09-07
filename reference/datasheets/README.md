@@ -41,7 +41,8 @@ TI `SN74HC…` sheets are the family documents, and pin numbering is what they a
 | `74hc_hct595.pdf` | Nexperia 74HC595 **and 74HCT595**, one document | `sdcard.md` §7 — the SD card's receive register is the **HCT** part deliberately, and the reason is an input threshold: 3.3 V `MISO` clears an HCT input's 2.0 V `V_IH`, so the return path needs no level shifter. That number is here and not in the TI HC sheet above |
 | `sn74hc193.pdf` | TI SN74HC193 4-bit up/down counter | `ps2.md` |
 | `sn74lvc125a.pdf` | TI SN74LVC125A quad bus buffer, 1.65–3.6 V | `sdcard.md` §7 — three of four gates level-shift `SCK`/`MOSI`/`/CS` down to 3.3 V; also `cpu/docs/plan.md` for the LVC family's 5 V-tolerant inputs |
-| `ATF22V10C.pdf` | Microchip (Atmel) ATF22V10C — the in-production `GAL22V10` | every card. Nine on the video card alone (`graphics.md` §14); the house rules allow GALs and nothing more programmable |
+| `ATF22V10C.pdf` | Microchip (Atmel) ATF22V10C — the in-production `GAL22V10` | the motherboard's U3 and U6, and the audio and I/O cards. `hardware/gal/jedec/gal22v10.ts` is built from its §10 fuse counts and §11 array diagram |
+| `ATF1508AS.pdf` | Atmel/Microchip **ATF1508AS(L)**, Rev 0784P–PLD–7/05 — 5 V, 128 macrocells, 84/100/160-pin | **the video card's logic, all of it** (`graphics.md` §10.1.3). Icc vs frequency (p. 16) is the figure §14's power table needed; the DC table's separate `VCCINT` / `VCCIO` rails are why §10.1.3 can leave the 3.3 V `ATF1508ASV` question open |
 
 ## The serial card's ACIA — a gap, and a stand-in
 

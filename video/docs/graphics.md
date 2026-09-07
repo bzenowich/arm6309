@@ -1726,12 +1726,34 @@ fuse-map simulator are a GAL22V10 and nothing else. The equations, the models an
 164 checks are device-independent and transfer unchanged; the fitter is
 Microchip's `fit1508.exe` from here.
 
-> ⚠ **One question left open, and it is worth five minutes before ordering.** The
-> `ATF1508ASV` has separate `VCCINT` and `VCCIO` rails. **If its I/O are genuinely 5 V
-> tolerant with `VCCIO` at 5 V, the ~$6 part becomes viable and this section
-> changes.** Microchip's datasheets could not be retrieved from this sandbox, so it is
-> unresolved rather than answered — and it is the kind of question where guessing
-> costs parts. Do not assume it.
+**The 3.3 V `ATF1508ASV` question, closed — on cost, not on tolerance.**
+`reference/datasheets/ATF1508AS.pdf` is now in the tree and it confirms the family
+splits its rails: `VCCINT` for the core, `VCCIO` per bank, with `VIH` specified as
+`VCCIO + 0.3 V`. On the 5 V `AS` that means 5 V inputs, and the same structure makes
+it *likely* the 3.3 V `ASV` interfaces 5 V with `VCCIO` tied to 5 V — but that is the
+`ASV`'s datasheet to state and this is not it, so the tolerance question stays
+formally open.
+
+**It does not need answering, because the ~$10 saving buys a rail the machine does not
+have.** `ASV` needs `VCCINT` at 3.3 V; §17's backplane carries 5 V, so the card would
+gain a regulator, a rail and a decoupling story to save ten dollars once. **Buy the
+`AS`.**
+
+**What the datasheet changes about the design, beyond the price:**
+
+- **Buried registers are confirmed** — *"Maximum Logic Utilization by Burying a
+  Register within a COM Output"*. §10.1.2's census assumed it; it is a feature line.
+- ⚠ **Five product terms per macrocell, expandable to 40 by cascade.** The 22V10's
+  8–16 term macrocells are not the shape of this part. The widest equations fitted —
+  `V9` at 16 terms, `SPNGRANT` at 16, `VBLANK` at 13 — all need cascade chains, which
+  `fit1508.exe` builds automatically and which cost delay. Not a blocker at 25 MHz,
+  but **the placement rule of §19 item 8 is a GAL rule and does not carry over**: on
+  this part the sorted-pairing constraint simply disappears.
+- **Two bytes of User Signature**, against the GAL's eight. The `A6309Vn` strings in
+  `hardware/gal/*.jedec.ts` do not fit; a two-byte revision code does.
+- **Three global clocks, six global output enables, a global clear** — the 22V10's one
+  clock and one shared asynchronous reset were a real constraint on the sync trio
+  (§19 item 8) and are not one here.
 
 **Nothing above obliges the rest of the machine.** The motherboard's two GALs and the
 audio card's five are unaffected; §10.1.2's argument was always about this card's ten.
@@ -2146,18 +2168,42 @@ is powered. The honest total:
 
 | Group | Count | Each | Total |
 |---|---|---|---|
-| GAL22V10-15 | **10** | 70–90 mA | **700–900 mA** |
+| ~~GAL22V10-15~~ **ATF1508AS**, one, at 25.175 MHz | ~~10~~ **1** | ~~70–90 mA~~ | ~~700–900 mA~~ **~190 mA** |
 | AS6C1008-55 framebuffer | 4 | 40–70 mA | 160–280 mA |
 | 32K×8 15 ns LUT (dot rate) | 2 | 70–110 mA | 140–220 mA |
 | 32K×8 20 ns register file (bus rate) | 1 | 10–30 mA | 10–30 mA |
 | AHCT at 25.175 MHz (fetch latches, `'153`, index, post-LUT) | 11 | 9–22 mA | 100–240 mA |
 | HC at bus rate (posted-write ×4, `'165`, `'273`, `'245`, read latch, `'244` ×2, `'161` ×2) | 12 | 2–6 mA | 25–70 mA |
 | Analog drive stage (§9.1) | 3 ch | 9.3 mA peak + bias | 30–45 mA |
-| | | **Total** | **~1.2–1.8 A** |
+| | | ~~**Total**~~ | ~~**~1.2–1.8 A**~~ |
+| | | **Total, §10.1.3** | **~0.7–1.1 A** |
 
-Call it **1.6 A nominal and specify the regulator, the bulk decoupling and the
-backplane's power pins for 2 A** — and note the 2 A headroom is 0.1 A thinner than
-when it was chosen, before the scan pair is fitted. Two consequences that the 450–650 mA figure hid:
+~~Call it **1.6 A nominal** and specify for 2 A.~~ **Call it 0.9 A nominal and
+specify for 1.5 A** — 2026-09-06, once the ten GALs became one `ATF1508AS`
+(§10.1.3). The measured figures are from `reference/datasheets/ATF1508AS.pdf`:
+
+| | |
+|---|---|
+| `ICC1` standby, standard mode, commercial | **160 mA** typ |
+| `ICC3` reduced-power mode | **65 mA** typ |
+| supply current vs. frequency, p. 16, at 25.175 MHz | **~190 mA** standard, **~100 mA** reduced |
+
+> ⚠ That graph's y-axis is labelled `ICC (µA)` and is plainly **mA** — the same page's
+> standby row is 160 mA and the curve starts near 170. A datasheet typo, recorded
+> because the figure is load-bearing here.
+
+**Reduced power is a per-macrocell option**, and most of this design is slow: the line
+counter advances at 31.5 kHz and the span writer at bus rate. Only the dot-phase and
+slot counters, `FCLK` and `MUXSEL` need full speed. **~100–120 mA is the realistic
+figure**, not 190.
+
+**Two consequences, and only one of them moves.** §14's older text said a linear 7805
+dropping 7 V at 1.5 A dissipates 10.5 W and needs a heatsink that does not fit the
+Eurocard envelope. At **0.9 A that is 6.3 W** — still not comfortable bare, but a
+7805 with a modest heatsink, or a lower input rail, is now arguable where it was not,
+and the switching pre-regulator stops being forced. **The slot power pins do not
+move**: 0.9 A still exceeds a single 0.5 A-class pin, so §17's multiple parallel power
+and ground pins stand. Two consequences that the 450–650 mA figure hid:
 a linear 7805 dropping 7 V at 1.5 A dissipates 10.5 W and needs a heatsink that does
 not fit the Eurocard envelope, so the card wants a **switching pre-regulator or a 5 V
 backplane rail**; and at 1.5 A a single 0.5 A-class slot power pin is not enough —
