@@ -34,6 +34,16 @@ to fit time:
 | [`sync.check.ts`](sync.check.ts) | a whole frame in each family, off the fuses — `npm run check:sync` |
 | `hgen.jed`, `vgen.jed`, `vdec.jed` + `.doc` | 27 macrocells across three parts |
 
+**The video card's scan-address pair**, which came out the other way — `graphics.md`
+§19 item 8 said 20 of 20 with zero margin, and it is 17:
+
+| | |
+|---|---|
+| [`scan.jedec.ts`](scan.jedec.ts) | **`hadr`, `vadr`** — the column and row counters, and why there is no carry between them |
+| [`scan.model.ts`](scan.model.ts) | the 1024 × 512 torus as arithmetic |
+| [`scan.check.ts`](scan.check.ts) | every address of a 400-line frame at three scroll positions — `npm run check:scan` |
+| `hadr.jed`, `vadr.jed` + `.doc` | 17 macrocells of 20, three spare |
+
 Several statements of one logic is several too many, and the count went *down* on
 2026-09-06 rather than up: `mmu.check.ts` no longer carries its own copy of the
 equations, and `mmu.jedec.ts` is not a fourth statement but the placement of the terms
@@ -349,8 +359,16 @@ is `[15:4]` now, so the model states it rather than tolerating it.
    takes equations as they are written; what it does not do is minimise, and the
    video sequencers are where that may start to matter.
 
-4. **The scan-address pair is the next one and it will not fit either.** The sync fit
-   established the rule: a counter cannot be separated from the things that decode it,
-   because the pins to carry it across a package boundary do not exist. The scan pair
-   is 19 address bits plus a carry in 20 macrocells, with no decode anywhere and tile
-   mode still to ask for a mode mux on every bit (`graphics.md` §19 item 15).
+4. ~~**The scan-address pair will not fit either.**~~ **CLOSED** — it is 17 of 20 with
+   three spare. The rule from the sync fit still holds but does not bind there:
+   nothing decodes the scan address, it goes straight to the framebuffer's address
+   pins. What remains unfitted on that card is the sequencer pair, the `WPTR` pair and
+   §5.2.1's arbiter.
+
+**A placement rule, from three counters fitted.** A loadable counter bit *i* costs
+*i* + 3 product terms and a plain enabled one *i* + 7, so a wide counter wants a
+rising staircase of capacity while a 22V10 offers the palindrome 8, 10, 12, 14, 16,
+16, 14, 12, 10, 8. **Past about six bits, bit order is not pin order** — only the
+sorted pairing fits, and it interleaves the bits across the package. `vgen`, `vadr`
+and (predictably) the `WPTR` pair all land on it. The assembler refuses the naive
+order rather than letting it through, which is how `vadr`'s top bit was caught.

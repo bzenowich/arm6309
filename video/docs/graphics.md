@@ -1448,6 +1448,66 @@ seven SRAMs. Two mitigations worth pricing at spec freeze:
 - **Put the blitter on a piggyback**, as both colormin documents conclude for
   area reasons anyway.
 
+#### 10.1.1 Where the macrocells actually go, and what can be removed
+
+Written after five of the ten were fitted (`hardware/gal/`, 2026-09-06), because the
+answer to "how do we need fewer GALs" turns on which bits have to reach a pin.
+
+| Block | GALs | Macrocells | Register bits | Must those bits reach pins? |
+|---|---|---|---|---|
+| sync — `hgen`/`vgen`/`vdec` | 3 | 27 of 30 | 18 | **No** — only 6 signals leave the group |
+| scan address — `hadr`/`vadr` | 2 | 17 of 20 | 17 | **Yes** — they are the framebuffer address bus |
+| `WPTR` / span pointer | 2 | 19 of 20 | 19 | **Yes** — they are the VRAM address path |
+| sequencer | 2 | not yet fitted | | |
+| arbiter (§5.2.1) | 1 | **8** of 10 | 0 | — |
+
+**The card is GAL-heavy for exactly one reason: 54 of those macrocells are counter
+bits, and a GAL22V10 has no buried nodes.** Every register costs a macrocell *and* a
+pin whether or not anything outside the package ever looks at it. That is what made
+the sync section three parts (§19 item 8) and it is what will decide the sequencer
+pair.
+
+So the obvious lever is a GAL-class part with buried registers, and there are two that
+do not breach the no-CPLD rule:
+
+- Lattice **GAL6001/6002** — 10 I/O macrocells plus **8 buried registers**, 24-pin,
+  1990. Unambiguously a GAL.
+- Atmel **ATF750C** — 10 output plus **10 buried** macrocells in the 22V10's own
+  24-pin footprint, still in production alongside the ATF22V10C.
+
+**It saves exactly one package.** Buried registers help only where the register does
+not need to leave the chip, and on this card that is the sync trio and nothing else:
+its 18 counter bits are internal state and only `HSYNC`, `VSYNC`, `BLANK`, `VBLANK`,
+`HBLANK` and `/IRQ` go anywhere. Two ATF750Cs hold all of it. The scan and `WPTR`
+pairs' 36 bits **are** the address buses — no part choice changes that, because the
+output is the point.
+
+| Change | GAL count | What it costs |
+|---|---|---|
+| sync trio on two buried-register parts | 10 → **9** | the "GALs and nothing more programmable" rule, and a part nobody has second-sourced |
+| scan / `WPTR` pairs on buried-register parts | 10 → **10** | nothing gained — the bits are the outputs |
+| pure counters on `'161`/`'163` instead | 10 → 8, ICs 41 → **47** | worse on packages *and* area; better only on current |
+
+**One package in ten, for the house rule.** That is worth stating precisely, because
+"use a bigger GAL" reads like it ought to save more and on this particular card it
+does not.
+
+**What did come off, at no cost, by fitting rather than estimating:**
+
+- **§19 item 15's tile-mode contingency package.** The scan pair is 17 of 20, not
+  20 of 20 — three macrocells spare and two spare input pins.
+- **The arbiter's four `SRCSEL` macrocells.** §14 budgets it as "8 grants + 4 source
+  selects", which is 12 outputs on a part with 10 and should have been an overflow
+  nobody had noticed. It is not one: §5.2.1's own equations say
+  `SRCSEL[n] = GRANT_CPU[n]` — *the same signal*, not a second one. The arbiter is
+  **8 macrocells with 2 spare** and six inputs. (If the `'153` and address-mux loads
+  want a separate driver, a duplicate macrocell costs one product term and there is
+  room for two of them.)
+
+Against that, the sync trio's third part is the only genuine *increase*, and it is
+measured rather than estimated. Net against the pre-fit projection of 9 + a tile-mode
+contingency + an arbiter that did not fit: **10, and settled for five of them.**
+
 ### 10.2 What the 6309 gives you for free
 
 The 64x4 has no block-move instruction. **The 6309 does — `TFM`, 6 + 3n cycles.**
@@ -1811,7 +1871,7 @@ way and for exactly the same reason — but it is a yes with a rule attached.
 | 2 | GAL22V10-15 | scan address generators, 19 b, loadable | = |
 | 2 | GAL22V10-15 | `WPTR` / span pointer, 19 b | = |
 | 2 | GAL22V10-15 | sequencer: decode (incl. the `/IOPAGE` term, §6.3.2), **static slot assignment**, span control, reg-file addressing, mux phasing | = |
-| **1** | **GAL22V10-15** | **spare-access arbiter — 8 grants + 4 source selects (§5.2.1)** | **+1** |
+| **1** | **GAL22V10-15** | **spare-access arbiter — 8 grants; `SRCSEL[n]` *is* `GRANT_CPU[n]` and is not a second macrocell, so 8 of 10 and not 12 (§5.2.1, §10.1.1)** | **+1** |
 | 1 | 74HC574 | posted-write **data** latch | = |
 | **3** | **74HC574** | **posted-write address + control latches — 19 address + VRAMSEL + R/W + `WMODE[1:0]` = 23 bits (§3.1.1)** | **+3** |
 | 1 | 74HC165 | span mask serialiser (`74AHC165` if §6.4 Variant B is built) | = |
@@ -1835,11 +1895,11 @@ sync section was fitted on 2026-09-06 and needs three parts (§19 item 8). §10.
 honest question becomes 'why not one CPLD'" line lands **two** packages sooner than it
 did.
 
-> ⚠ **The scan-address pair is still unfitted, at 20 of 20.** What the sync fit
-> established is that a counter cannot be separated from the things that decode it —
-> the pins do not exist — and the scan pair is 19 address bits plus a carry in 20
-> macrocells, with the decode of nothing. Expect the same answer. **Budget a fourth
-> contingency package**; do not treat 41 as settled.
+> **The scan-address pair was fitted the same day and needs no extra package** —
+> 17 of 20 with three spare (§19 item 8), because it generates a *chip* address of 17
+> bits and not a *byte* address of 19. So 41 stands, and the contingency this note
+> used to demand is withdrawn. What is still unfitted is the sequencer pair, the
+> `WPTR` pair and §5.2.1's arbiter.
 
 **Off-card, on the motherboard**, and this is where the parts that used to be on this
 list went:
@@ -2122,7 +2182,7 @@ measured before anything depends on them.
 |---|---|---|
 | 0 | **Freeze the machine spec** — bus signals **including `/IOPAGE`, HSYNC and VSYNC** (§17), the full `$FF40`–`$FF7F` map (§17's table — six owners, not two), `/FIRQ` ownership, the MMU register set, the E/Q divider **and its divisor-dependent Q tap**, and the machine's boot arrangement (§6.3.3) | one document; §19's items 1–4 answered |
 | 1 | **Bench the dot path on a breadboard**: 4-way fetch → pixel mux → index latch → LUT → ladders → **§9.1's buffer stage** at 25.175 MHz, driven by counters, no CPU | stable 640×400@70 colour bars on the target monitor, **locked in both `VMODE` families** (§6.2.1's sync polarity is what the monitor identifies them by); black measured at 0 V through the porches (§9.2); DNL measured across all 64 green codes at the **connector**, into a 75 Ω load |
-| 2 | **Sync + scan address GALs**; fit the sequencer pair **first** (minimal256.md §11 item 11) | equations fit with the raster-compare and static-slot terms in place. ⚠ **Sync done 2026-09-06** — three parts, not two, checked at the fuse level over whole frames in both families (`hardware/gal/sync.check.ts`). Scan address, sequencer and arbiter outstanding |
+| 2 | **Sync + scan address GALs**; fit the sequencer pair **first** (minimal256.md §11 item 11) | equations fit with the raster-compare and static-slot terms in place. ⚠ **Sync and scan address done 2026-09-06** — sync is three parts, not two; the scan pair is 17 of 20 and not 20 of 20. Both checked at the fuse level (`hardware/gal/`). Sequencer pair, `WPTR` pair and arbiter outstanding |
 | 3 | **Card rev A**, driven by the STM32 bus exerciser (§16.1) — no 6309 core needed | registers read back; palette loads; framebuffer scans; `VSCROLL`/`HSCROLL` smooth in both axes |
 | 4 | **Span writer + `SPANBUSY`/`/WAIT`** | full-screen clear in ~5 ms; 80×25 glyph render at 13 writes/cell; no lost writes under a hammering loop |
 | 5 | **VRAM read-back** (§11) at ÷12 — the specified rate. Fast-E mode (÷8) is experimental and read-back does **not** close there without `/WAIT` | read-modify-write pixel round-trips clean at ÷12; the `/WAIT` path demonstrated at ÷8 or fast-E abandoned |
@@ -2173,17 +2233,41 @@ unchanged from minimal256.md §11 and are not restated in full.
    output — registered or combinational — is one. The arithmetic, written out because
    this is the item most likely to fail:
 
-   **Scan-address pair — 20 of 20, zero margin:**
+   **Scan-address pair — ~~20 of 20, zero margin~~ CLOSED 2026-09-06: it is 17 of 20,
+   and §8 said so all along.** Fitted in
+   [`hardware/gal/scan.jedec.ts`](../../hardware/gal/scan.jedec.ts), checked against
+   the torus by `npm run check:scan`.
 
-   | Function | Macrocells |
-   |---|---|
-   | 19-bit loadable scan address, `A18..A0` | 19 |
-   | inter-package carry / terminal count | 1 |
-   | **committed** | **20 of 20** |
+   | Function | Was | Is |
+   |---|---|---|
+   | 19-bit loadable scan address, `A18..A0` | 19 | — |
+   | 9-bit row counter, `A18..A10` | | 9 |
+   | 8-bit column counter, `A9..A2` | | 8 |
+   | inter-package carry / terminal count | 1 | **0** |
+   | | **20 of 20** ✗ | **17 of 20, three spare** ✓ |
 
-   Nothing is left, and §6.4's tile mode asks this exact pair for a mode mux on every
-   address bit plus a tri-state window during the tile fetch (§19 item 15). Item 15's
-   answer to "spare pins?" is now known to be "no spare *macrocells* either."
+   Two things were counted that are not there, and **§8 of this document already
+   describes the hardware correctly** — *"a separate **9-bit** V-address counter
+   supplies row bits `A18..A10`"*, *"`HSCROLL[9:2]` preloads the H-address counter"*,
+   *"`HSCROLL[1:0]` preloads the **output phase**"*.
+
+   **`A1` and `A0` are not address bits.** The framebuffer is four `128K × 8` parts in
+   4-way interleave (§2.1), so a chip's address *is* the scan address shifted down two
+   and the bottom two bits are *which chip* — the mux phase, which never leaves the
+   `'153`s. A `128K × 8` has **seventeen** address pins and seventeen is what has to be
+   generated. `check:scan` asserts that identity directly.
+
+   **There is no inter-package carry.** The torus is 1024 × 512 with a stride of
+   exactly 1024 and a ring of exactly 512 rows (§8), so the column counter's rollover
+   at `A9` *is* the wrap to column 0 of the same row and the row counter's at `A18`
+   *is* the wrap to row 0 of the ring. Both are free binary rollovers of their own
+   width and neither ever carries into the other. `check:scan` runs the column counter
+   over 256 times and asserts the row does not move. The carry macrocell was the cost
+   of a 19-bit flat counter that this design does not build.
+
+   **So §19 item 15's premise is gone.** Its answer to "are there spare macrocells?"
+   was "zero"; it is **three**, and both parts have spare input pins as well
+   (`hadr` uses 11 of 13, `vadr` 12 of 12).
 
    **Sync — ~~24 wanted, 20 available~~ CLOSED 2026-09-06: it is 27, and it takes
    three parts.** Fitted in [`hardware/gal/sync.jedec.ts`](../../hardware/gal/sync.jedec.ts),
@@ -2256,12 +2340,19 @@ unchanged from minimal256.md §11 and are not restated in full.
    is not, and it is the one with 20 of 20 before tile mode asks for anything.** Fit
    it before committing the BOM, and see item 15 before committing to any GAL count.
 
-   > **What the sync fit implies for the scan pair, before anyone starts.** The rule
-   > that broke escape 1 applies there too: 19 bits of loadable scan address is 19
-   > macrocells and 19 pins, and whatever decodes them has to be on the same package.
-   > The pair has 20 macrocells and 20 pins for 19 + carry. There is no room for the
-   > decode of anything, which means tile mode's mode mux (item 15) is not a question
-   > of spare terms — it is a third package, exactly as it was here.
+   > **The scan pair was fitted the same day and came out the other way** — 17 of 20,
+   > because the pair generates a chip address and not a byte address. The rule that
+   > broke escape 1 still holds; it simply does not bind here, because nothing decodes
+   > the scan address. It goes straight to the framebuffer's address pins.
+
+   **A placement rule, now that three counters have been fitted.** A loadable counter
+   bit *i* costs *i* + 3 product terms and a plain enabled one *i* + 7, so a wide
+   counter's bits want a rising staircase while a 22V10 offers the palindrome
+   8, 10, 12, 14, 16, 16, 14, 12, 10, 8. **Bit order is not pin order** for any counter
+   past about six bits: the only assignment that fits pairs the two sorted sequences,
+   which interleaves the bits across the package. `vgen`, `vadr` and the `WPTR` pair
+   all land on it. The fitter refuses the naive order rather than letting it through —
+   that is how `vadr`'s top bit was caught.
 9. **`74HC593` availability** (§9). **carried.**
 10. **Measure card current** with seven SRAMs and **nine** GALs against §14's
     ~1.1–1.7 A estimate, and price the low-power GAL family (§10.1) — nine
@@ -2288,9 +2379,15 @@ unchanged from minimal256.md §11 and are not restated in full.
     outputs during the tile fetch and switch between linear and concatenated
     addressing; (c) does the sequencer pair hold a second fetch cadence on top of
     what item 8 already lists. Product terms are not expected to be the constraint
-    — pins and macrocell count are, and item 8 now shows the scan-address pair has
-    **zero** macrocells spare before tile mode is asked for anything. **Fit this
-    before freezing the BOM at 9 GALs.**
+    — pins and macrocell count are.
+
+    > **(a) is answered and the premise of the pessimism is gone.** Item 8 said the
+    > scan pair had **zero** macrocells spare; the fit says **three**, plus two spare
+    > input pins on `hadr`. (b) and (c) are still open — tri-stating is free (every
+    > macrocell has an output-enable term), but switching between linear and
+    > concatenated addressing multiplies the terms on bits that are already at
+    > *i* + 3, and the top bits have the least headroom. **Fit it before freezing the
+    > BOM**, but it is no longer a near-certain extra package.
 16. **Decide the tile fetch's fine-scroll behaviour** (§6.4.6). Sub-cell horizontal
     scroll needs a 3-bit offset applied to the tile-row address, which is new logic
     rather than the free `HSCROLL` of §8. Either implement it or document tile mode
