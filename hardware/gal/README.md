@@ -397,12 +397,46 @@ is `[15:4]` now, so the model states it rather than tolerating it.
 
 ### Why the GAL fitter does not become a CPLD fitter
 
-`jedec/` exists because for a GAL22V10 there is nothing between the equations and the
-fuses: every product term can reach every input, so "fitting" is placement and
-bookkeeping, and both are arithmetic. **An ATF15xx is not that.** Each of its logic
-blocks reaches the global bus through a switch matrix that selects 40 signals out of
-many more, so getting a design onto the part is **place and route**, not assembly.
-That is what `fit1508.exe` does and it is not worth reimplementing.
+The reason is not that the ATF1508AS is complicated. It is that **we wrote `jedec/`
+from the ATF22V10C datasheet's fuse map, and the ATF1508AS datasheet does not have
+one.** Both PDFs are in `reference/datasheets/`; grep decides it:
+
+| | `ATF22V10C.pdf` | `ATF1508AS.pdf` |
+|---|---|---|
+| fuse counts | §10: "(5828 Fuses)", "(5892 Fuses)", "(5893 Fuses)" | **no hits** |
+| a numbered array | §11: "Functional Logic Diagram", `INPUT LINES 0..43` | **no hits** |
+| "fuse map" / "fuse number" anywhere | — | **no hits** |
+
+The 1508 datasheet describes the architecture exactly and numbers nothing:
+
+> *"Each of the 128 macrocells generates a buried feedback that goes to the global bus.
+> Each input and I/O pin also feeds into the global bus. The switch matrix in each
+> logic block then selects 40 individual signals from the global bus."*
+
+**So there are two problems, and the GAL had only the second.**
+
+1. **Which fuse is which.** The 22V10's datasheet answers it — that is what
+   `gal22v10.ts`'s provenance note is citing. For the ATF1508AS it is published
+   nowhere, which is exactly why [prjbureau](https://github.com/whitequark/prjbureau)
+   exists and why its method is **fuzzing the vendor fitter** rather than reading a
+   datasheet.
+2. **Which logic goes where.** On a 22V10 this is placement alone: every product term
+   reaches every input, so there is no routing and `jedec/place.ts` is thirty lines.
+   On an ATF15xx each logic block sees **40 signals selected from a global bus of
+   ~200**, and its **16 macrocells share that same 40** — so assignment and routing
+   are coupled, and an equation's signal needs constrain every other equation in its
+   block.
+
+**The order is forced, and it settles the question.** A fitter emits fuses; you cannot
+emit fuses you cannot name. So "write a 1508 fitter" and "extend prjbureau to the
+1508" are not alternatives — **the second is step one of the first**, and it is the
+step that is fuzzing rather than arithmetic.
+
+Problem 2 is the interesting one and may be tractable by hand *for this design*
+specifically, because it is already partitioned by function: the line counter's ten
+macrocells reference about fourteen distinct signals, well inside a block's forty.
+A general fitter would have to search; ours would only have to be checked. But that
+is worth nothing until problem 1 is solved.
 
 **But the assembler was never the valuable half.** What caught bugs here was
 [`jedec/simulate.ts`](jedec/simulate.ts) — reading the fuse map back and executing it
