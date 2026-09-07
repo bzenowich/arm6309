@@ -1,4 +1,5 @@
 aintena - ARM6309-UA4, audio card - INTENA
+*** SUPERSEDED - DO NOT PROGRAM *** audio.md 10.1 - the audio card is 1 x ATF1508AS
 GAL22V10, 5892 fuses, checksum a6f4
 
   pin  signal      terms  of   path           polarity

@@ -1,4 +1,5 @@
 apend - ARM6309-UA6, audio card - INTREQ pending register
+*** SUPERSEDED - DO NOT PROGRAM *** audio.md 10.1 - the audio card is 1 x ATF1508AS
 GAL22V10, 5892 fuses, checksum 6987
 
   pin  signal      terms  of   path           polarity

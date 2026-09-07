@@ -46,6 +46,7 @@ const aseqCells: Cell[] = [
 const aseqPins = place(aseqCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
 export const aseqDesign: Design = {
   name: "aseq", partNo: "ARM6309-UA1", location: "audio card - slot sequencer",
+  supersededBy: "audio.md 10.1 - the audio card is 1 x ATF1508AS",
   signature: "A6309A1", clockPin: 1,
   inputs: [{ name: "RESET", pin: 2, activeLow: true }, { name: "NEWREQ", pin: 3 }],
   cells: aseqCells.map((c) => ({ ...c, pin: aseqPins[c.name] })), ar: "RESET",
@@ -73,6 +74,7 @@ const adecCells: Cell[] = [
 const adecPins = place(adecCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
 export const adecDesign: Design = {
   name: "adec", partNo: "ARM6309-UA2", location: "audio card - host decode",
+  supersededBy: "audio.md 10.1 - the audio card is 1 x ATF1508AS",
   signature: "A6309A2",
   inputs: [{ name: "SEL", pin: 1 }, { name: "A0", pin: 2 }, { name: "A1", pin: 3 },
     { name: "A2", pin: 4 }, { name: "A3", pin: 5 }, { name: "RW", pin: 6 }, { name: "E", pin: 7 }],
@@ -98,6 +100,7 @@ const admatCells: Cell[] = [
 const admatPins = place(admatCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
 export const admatDesign: Design = {
   name: "admat", partNo: "ARM6309-UA3", location: "audio card - DMACON and tempo prescale",
+  supersededBy: "audio.md 10.1 - the audio card is 1 x ATF1508AS",
   signature: "A6309A3", clockPin: 1,
   inputs: [{ name: "RESET", pin: 2, activeLow: true }, { name: "WDMACON", pin: 3 },
     { name: "CCLK", pin: 4 }, ...[0, 1, 2, 3, 7].map((b, i) => ({ name: `D${b}`, pin: 5 + i }))],
@@ -112,6 +115,7 @@ const aintenaCells: Cell[] = [0, 1, 2, 3, 4, 5].map((i) => ({
 const aintenaPins = place(aintenaCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
 export const aintenaDesign: Design = {
   name: "aintena", partNo: "ARM6309-UA4", location: "audio card - INTENA",
+  supersededBy: "audio.md 10.1 - the audio card is 1 x ATF1508AS",
   signature: "A6309A4", clockPin: 1,
   inputs: [{ name: "RESET", pin: 2, activeLow: true }, { name: "WINTENA", pin: 3 },
     ...[0, 1, 2, 3, 4, 5, 7].map((b, i) => ({ name: `D${b}`, pin: 4 + i }))],
@@ -193,6 +197,7 @@ const apendCells: Cell[] = [0, 1, 2, 3, 4, 5].map((i) => ({
 const apendPins = place(apendCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
 export const apendDesign: Design = {
   name: "apend", partNo: "ARM6309-UA6", location: "audio card - INTREQ pending register",
+  supersededBy: "audio.md 10.1 - the audio card is 1 x ATF1508AS",
   signature: "A6309A6", clockPin: 1,
   inputs: [{ name: "RESET", pin: 2, activeLow: true }, { name: "MERGE", pin: 3 },
     ...[0, 1, 2, 3, 4, 5].map((i) => ({ name: `SET${i}`, pin: 4 + i }))],

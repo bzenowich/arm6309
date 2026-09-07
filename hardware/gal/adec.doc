@@ -1,4 +1,5 @@
 adec - ARM6309-UA2, audio card - host decode
+*** SUPERSEDED - DO NOT PROGRAM *** audio.md 10.1 - the audio card is 1 x ATF1508AS
 GAL22V10, 5892 fuses, checksum 70a3
 
   pin  signal      terms  of   path           polarity

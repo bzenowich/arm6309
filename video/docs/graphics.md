@@ -17,7 +17,7 @@ protect MinOS and can be deleted outright.**
 - RGB332 is the colour model you asked for; palette lookup is *nice, not required*.
 - 80×25 text ⇒ **640×200 is preferred over 480×200**.
 - Bitmap with smooth scrolling, and a blitter.
-- **No CPLDs or FPGAs on the graphics card.** GALs are in (colormin already uses 8).
+- ~~**No CPLDs or FPGAs on the graphics card.**~~ **Given up deliberately at §10.1.5**, after §10.1.2 showed it was a style rule and not a period one. The card is two `ATF1508AS` in PLCC-84 (§10.1.6). GALs are in (colormin already uses 8); FPGAs are still out.
 - Period-appropriate silicon. VGA (1987), GAL22V10 (1986), 1 Mbit SRAM (~1989–90)
   and 25.175 MHz all place this card credibly at **1989–1990** — the same window
   the CoCo 3 and the IIgs were still current in.

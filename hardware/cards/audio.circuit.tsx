@@ -1,4 +1,4 @@
-/* Audio card - 4-channel 8-bit PCM, Paula-exact. 36 ICs, audio/docs/audio.md 10.
+/* Audio card - 4-channel 8-bit PCM, Paula-exact. 29 ICs, audio/docs/audio.md 10.
  *
  * Bus interface only. The card's own document is the specification and its
  * 15 step 0 is "freeze the register map", which is ahead of any board.
@@ -11,7 +11,7 @@
 import { Card } from "../lib/Card"
 
 export default () => (
-  <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} icBudget={36}>
+  <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} icBudget={29}>
     {/* Y1 - not the backplane's 25.175 MHz. machine.md 1's one-master rule has
       * exactly one exception and this is it. */}
     <crystal
@@ -22,25 +22,37 @@ export default () => (
       connections={{ pin1: "net.PAL_XTAL", pin2: "net.GND" }}
     />
 
-    {/* U1 - the card's decode and most of its sequencing. audio.md 9.5 moved
-      * the host-visible counters and commit staging into the state file the
-      * card already owns; what is left here is decode and control. */}
+    {/* U1 - ALL of the card's logic, audio.md 10.1. This was five GAL22V10s
+      * when the card was drawn and it is one ATF1508AS now, for a reason that
+      * is not package-count: 9.5's interrupt block does not fit a GAL22V10
+      * whole (13 equations, 10 macrocells) or split (17 inputs, 14 pins), so
+      * the GAL allocation was six and rising. The part also absorbs the '273,
+      * the three '174 synchronisers and the '07, the last because an
+      * ATF1508AS output has a programmable open-collector option and 8.1 needs
+      * the wire-OR a GAL's totem-pole pin cannot do.
+      *
+      * hardware/gal/cpld/audio.jed is the fitted device: 74,136 fuses, 79 of
+      * 128 logic cells, 50 of 64 I/O. Pin numbers below are the ones the
+      * fitter chose and they are NOT settled - audio.md 10.1 keeps the
+      * datapath pinout open, and fit1508.sh is run with -preassign ignore, so
+      * every refit may move them. Only the two the fitter cannot move are
+      * relied on here: the global clock and the global clear.
+      *
+      * Socketed. It is programmed out of circuit, so JTAG is not routed. */}
     <chip
       name="U1"
-      footprint="dip24_w0.3in"
+      footprint="plcc84"
       pinLabels={{
-        pin1: "CLK", pin2: "nIOSEL", pin3: "E", pin4: "R_W",
-        pin5: "A0", pin6: "A1", pin7: "A2", pin8: "A3",
-        pin12: "GND", pin23: "nFIRQ", pin24: "VCC",
+        pin83: "SLOTCLK", pin1: "nRESET",
+        pin84: "VCC", pin42: "GND",
       }}
       connections={{
-        VCC: "net.V5", GND: "net.GND", CLK: "net.PAL_XTAL",
-        nIOSEL: "net.nIOSEL", E: "net.E", R_W: "net.R_W",
-        A0: "net.A0", A1: "net.A1", A2: "net.A2", A3: "net.A3",
-        /* audio.md 8.1 takes /FIRQ as the sole source, so the replayer's
-         * interrupt path has no polling chain. Open-drain onto the backplane;
-         * the pull-up is on the motherboard (machine.md 2.1). */
-        nFIRQ: "net.nFIRQ",
+        VCC: "net.V5", GND: "net.GND",
+        /* 4.1: the card's own 28.37516 MHz reference, divided on-part. Not
+         * the backplane's 25.175 MHz - machine.md 1's one-master rule has
+         * exactly one exception and this is it. */
+        SLOTCLK: "net.PAL_XTAL",
+        nRESET: "net.nRESET",
       }}
     />
 

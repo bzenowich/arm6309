@@ -5,6 +5,10 @@ Name:           aintena
 PartNo:         ARM6309-UA4
 Location:       audio card - INTENA
 
+*** SUPERSEDED - DO NOT PROGRAM ***
+    audio.md 10.1 - the audio card is 1 x ATF1508AS
+    This fit is kept as the derivation behind that decision.
+
 *F0
 *G0
 *QP24
@@ -145,4 +149,4 @@ Location:       audio card - INTENA
 *L5828 0100000100110110001100110011000000111001010000010011010000000000
 *Ca6f4
 *
-5242
+7e1c

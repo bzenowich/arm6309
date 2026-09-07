@@ -11,11 +11,13 @@ one that gates the motherboard.
 
 **Two GALs are live and get burned into silicon:** the motherboard's `U3` (the MMU
 sequencer) and `U6` (the E/Q divider). `mmu.jed` and `clkdec.jed` are the files a
-programmer takes. The audio card's five and the decode GALs on serial, storage and
-PS/2 are still unwritten and will join them.
+programmer takes. The decode GALs on serial, storage and PS/2 are still unwritten and
+will join them.
 
-**The video card's ten are superseded** — `graphics.md` §10.1.6 makes that card two
-`ATF1508AS`. Their `.jed` and `.doc` files carry a `*** SUPERSEDED - DO NOT PROGRAM
+**The audio card's six and the video card's ten are all superseded** — `audio.md`
+§10.1 makes that card one `ATF1508AS` and `graphics.md` §10.1.6 makes the video card
+two. The audio six were never five: §9.5 budgeted five and the fit refused the
+interrupt block both ways, which is what sent the card to a CPLD in the first place. Their `.jed` and `.doc` files carry a `*** SUPERSEDED - DO NOT PROGRAM
 ***` banner, stamped by the writer rather than edited in, so it survives regeneration.
 They are kept because the fits *are* the derivation: the sync section needing three
 parts, §19 item 12's wrap-in-row, item 8's 17-of-20, and every macrocell and pin

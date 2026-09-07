@@ -20,7 +20,12 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 **Constraints taken as given (yours):**
 - **4 channels, 8-bit signed PCM**, Paula's model.
 - **Load an existing `.mod` and play it back correctly** — this is the acceptance test.
-- **Parts available before 1990.** No CPLDs, no FPGAs. GALs are in (the video card uses 8).
+- **Parts available before 1990.** No FPGAs. ~~No CPLDs~~ — **given up at §10.1**, and
+  not because the rule was wrong: §9.5's interrupt block does not fit a `GAL22V10`
+  whole (13 equations, 10 macrocells) or split (17 inputs, 14 pins), so the GAL count
+  was six and rising. `video/docs/graphics.md` §10.1.2 establishes that the rule was
+  never a period one - Altera's first CPLD is 1988. GALs are in (the video card used 8
+  before it too went to CPLDs).
 - Same house rules as the video card: period-honest silicon, one card, a
   documented register map, and an honest IC count.
 
@@ -36,7 +41,7 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 
 | Question | Answer | § |
 |---|---|---|
-| **Discrete card, real Paula, a period sound chip, or an MCU?** | **Discrete card.** **36 ICs** (§10, re-tallied four times), one Eurocard plus a physically separate analogue section. | §12 |
+| **Discrete card, real Paula, a period sound chip, or an MCU?** | **Discrete card.** **29 ICs** (§10, re-tallied five times), one `ATF1508AS` PLCC-84 for the logic, one Eurocard plus a physically separate analogue section. | §12, §10.1 |
 | **Where does the sample data live?** | **Card-local SRAM, 128 KB** (footprint for 512 KB). The card never touches the bus for audio. | §5 |
 | **How are the four channels implemented?** | **One time-multiplexed datapath**, 8 slots per colour clock, state in a 32-bit-wide SRAM file. | §3 |
 | **How is per-channel pitch generated?** | **Compare-against-a-free-running-counter**, not four down-counters. Kills 12+ ICs. | §4.2 |
@@ -50,7 +55,8 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 | **What does mod playback cost the 6309?** | **~2.7 % of a 2.098 MHz CPU** for the replayer, with a 19× worst-case margin; **~738 ms once** to upload 128 KB of samples — a ~500 ms `EORD` pass converting them to offset binary (§6.1, §16 item 27) plus a 238 ms chunked `TFM X+,Y` (§13.2). The `TFM` alone is 187 ms. | §13, [`modplayer.md`](modplayer.md) §7 |
 | **What does this card do that Paula cannot?** | No minimum period; 8 channels at half period resolution; a programmable volume curve (now host software — §6.1); per-channel panning for +3 ICs (§11.1). | §11 |
 
-**Net: 36 ICs**, level with the video card. One oscillator, **one internal clock
+**Net: 29 ICs** — the logic is one `ATF1508AS` PLCC-84 (§10.1), fitted at 79 of 128
+logic cells and 50 of 64 I/O. One oscillator, **one internal clock
 domain and an asynchronous host port** (§9.4), no bus mastering, no `/WAIT`, and
 **no tight path at all**: the fastest thing on the card is a state-file read at
 30 ns inside a 35.24 ns slot, on a part already specified at that grade. The 35 ns
@@ -1364,15 +1370,21 @@ bus it used to share this argument with no longer exists: §6.1 deleted the tabl
 port with `TFM`, which only happens during the §13.2 upload. `SPTR` is 19 bits against
 a 16-bit adder chain; the top three bits are a carry-in increment in the sequencer GAL.
 
-**Why five GALs and not three.** `INTENA`(6) + `INTREQ`(12) + `DMAEN`(4) = 22
-registered bits with feedback, before a single term of sequencer. A `GAL22V10` has ten
-macrocells. Three of them cannot hold the interrupt block, let alone the block *and*
-the slot walk *and* the deferred queue. Five is 50 macrocells and the table above uses
-essentially all of them — **which is a fit that has to be proven, not asserted**
-(§16 item 7, now the sharper question). The video card runs 8 GALs and argues 18 is
-where "why not a CPLD" bites, so five is comfortably inside the house rule; the risk
-is not the count, it is that the sequencer GAL is doing the most interesting work on
-the card with no spare macrocells.
+**Why five GALs and not three — and why the answer turned out to be neither.**
+`INTENA`(6) + `INTREQ`(12) + `DMAEN`(4) = 22 registered bits with feedback, before a
+single term of sequencer. A `GAL22V10` has ten macrocells. Three of them cannot hold
+the interrupt block, let alone the block *and* the slot walk *and* the deferred queue.
+Five is 50 macrocells and the table above uses essentially all of them — **which is a
+fit that has to be proven, not asserted** (§16 item 7).
+
+It was proven, and it failed. `hardware/gal/audio.jedec.ts` builds all five and
+`check:audio` fits them: four land, and **the interrupt block does not fit a
+`GAL22V10` either way**. Whole, it is `INTREQ`(6) + pending(6) + `/FIRQ` = 13
+equations for 10 macrocells. Split, with pending on its own part, the six `PEND` bits
+stop being internal and it needs 17 input pins where a 22V10 has 14. Both refusals are
+asserted in `audio.check.ts` with the fitter's own arithmetic as the evidence, so the
+allocation is **six GALs, not five** — and that is what took the card to §10.1's
+single CPLD. The risk was never the count; it was that the fit had not been run.
 
 ---
 
@@ -1558,11 +1570,13 @@ in write rate blunts and §16 item 9 now exists to measure.
   sum charged 10.
 - **+1 `TL072`** if a DC-coupled output is ever wanted.
 
-**Power.** Four SRAMs, five GALs, ~15 HC packages, ten op-amp channels and four
-`AD7528` at 2 mA each: estimate **300–400 mA**. The old figure of 250–350 mA and its
-"roughly half the video card" gloss went with the 35-package tally; at 36 the card is
-back in that neighbourhood, but by a different route — it is a smaller digital section
-and a larger analogue one. Analogue and digital grounds must meet at exactly one point,
+**Power.** Four SRAMs, one `ATF1508AS`, ~12 HC packages, ten op-amp channels and four
+`AD7528` at 2 mA each: estimate **300–400 mA**, and the CPLD is the term least worth
+trusting — a 128-macrocell part with ~100 registers toggling at 28 MHz is not obviously
+cheaper than the six GALs it replaced, whatever the package count says. §16 wants this
+measured. The old figure of 250–350 mA and its "roughly half the video card" gloss went
+with the 35-package tally; the card is back in that neighbourhood by a different route
+— a smaller digital section and a larger analogue one. Analogue and digital grounds must meet at exactly one point,
 and the `AD7528` reference must not share a rail with the SRAMs. That is the only
 layout constraint on this card that the video card does not also have, and it is the
 one that decides whether it sounds clean.
@@ -1757,7 +1771,7 @@ But it is worth building **first**, and for the same reason
 [`graphics.md`](../../video/docs/graphics.md) §16 gives for the bus exerciser: it decouples the
 software from the hardware. With the MCU card on the bench you can write the
 loader, the replayer and the `.mod` converter, run the acceptance test, and find
-out which of §1's nine requirements you got wrong — **before five GALs have been
+out which of §1's nine requirements you got wrong — **before a CPLD has been
 fitted.** Then the discrete card is a drop-in replacement that has to match a
 known-good reference, and any disagreement is a bug with a bisector attached.
 

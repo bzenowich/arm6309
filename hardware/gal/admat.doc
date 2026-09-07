@@ -1,4 +1,5 @@
 admat - ARM6309-UA3, audio card - DMACON and tempo prescale
+*** SUPERSEDED - DO NOT PROGRAM *** audio.md 10.1 - the audio card is 1 x ATF1508AS
 GAL22V10, 5892 fuses, checksum b1bb
 
   pin  signal      terms  of   path           polarity

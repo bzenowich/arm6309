@@ -41,7 +41,7 @@ genuinely undecided.
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
 | **Video** | 640×200 × 256 colours, VGA out — **41 ICs**, 10 of them GALs ([`video/`](../video/), `graphics.md` §14) |
-| **Audio** | 4-channel 8-bit PCM, Paula-exact — **36 ICs** ([`audio/`](../audio/), `audio.md` §10) |
+| **Audio** | 4-channel 8-bit PCM, Paula-exact — **29 ICs**, one `ATF1508AS` PLCC-84 ([`audio/`](../audio/), `audio.md` §10.1) |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **7 ICs**, 528 KiB/s sustained — **specified** ([`storage/`](../storage/)). ⚠ The machine's one period exception |
 | **Total silicon** | **~106 ICs** — 97 on cards, **9** on the motherboard (~~13~~ — §7.1). See §8 |
@@ -655,9 +655,10 @@ ground pins per slot connector** — which §5 item 5 must answer as part of cho
 connector. Each card owes a measured figure at its own bring-up; this table is where they
 land.
 
-> ⚠ **36 ICs is back inside the envelope this document originally assumed, and the fit
+> ⚠ **29 ICs is inside the envelope this document originally assumed, and the fit
 > still has to be measured.** `audio.md` §16 item 19 raised it as an open question at 57;
-> three passes have taken it to 36, against the 35 the single-Eurocard assertion was
+> four passes have taken it to 29 - the last of them replacing six GAL22V10s and three
+> HC packages with one `ATF1508AS` - against the 35 the single-Eurocard assertion was
 > first made at. The assertion is not restored by arriving at the same number — it was
 > never measured, and the analogue section has grown from two converters and four
 > amplifier channels to eight halves and ten. **Measure it, with the analogue section
