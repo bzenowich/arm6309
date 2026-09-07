@@ -303,9 +303,49 @@ for (const q of PARTS) {
   console.log(`     ${q.name} ${q.pkg.padEnd(15)} ${ok ? "FITS" : q.mc < bestMc + vMc
     ? `${bestMc + vMc - q.mc} macrocells short` : `${bestIo + vIo - usable} pins short`}`)
 }
-console.log(`\n  ...and at ${bestMc + vMc} of 128 that is the part FULL. 10.3's list engine`)
-console.log(`  and 6.4.6's mid-frame mode switch - the thing that puts a text bar over`)
-console.log(`  a bitmap playfield - would need a second package.`)
+console.log(`\n  ...and at ${bestMc + vMc} of 128 that is one part FULL.`)
+
+/* -- 10.3's list engine, and whether two packages make room for it -------
+ *
+ * Its interface is almost entirely INTERNAL, which is what makes it cheap in
+ * pins and expensive in macrocells: it reads VRAM through the arbiter and the
+ * address path that already exist, and its MOVE opcode is "one SRAM write into
+ * the register file" (10.3) - also a path that already exists. What it adds is
+ * state. */
+const LIST_ENGINE = [
+  ["the LIST pointer, 19 bits (13, +$0B..+$0D)", 0, 19],
+  ["descriptor latch and opcode decode", 0, 10],
+  ["fetch/execute sequencing, BCTRL/BSTAT", 2, 6],
+] as const
+const [lIo, lMc] = sum(LIST_ENGINE)
+console.log(`\n  10.3's list engine on top - 6.4.6 limit 1 makes it the thing that`)
+console.log(`  puts a text bar over a bitmap playfield, which is what beats both`)
+console.log(`  period chips:`)
+for (const [what, i, m] of LIST_ENGINE) console.log(`     +${i} I/O  +${m} mc   ${what}`)
+const allIo = bestIo + vIo + lIo
+const allMc = bestMc + vMc + lMc
+console.log(`     = ${allIo} I/O, ${allMc} macrocells\n`)
+
+/* Two packages: macrocells add, usable I/O adds, but every net that crosses
+ * costs a pin at BOTH ends. */
+const CROSSING = 14
+const OPTIONS = [
+  { what: "1 x ATF1508AS PQFP-160", parts: 1, mc: 128, io: 96 + DEDICATED_IN - JTAG, cross: 0, area: 7.8 },
+  { what: "2 x ATF1508AS PLCC-84 ", parts: 2, mc: 256, io: 2 * (64 + DEDICATED_IN), cross: CROSSING, area: 22 },
+  { what: "2 x ATF1504AS PLCC-84 ", parts: 2, mc: 128, io: 2 * (64 + DEDICATED_IN), cross: CROSSING, area: 22 },
+] as const
+console.log(`  With 6.4 A+B and the list engine, at ${allMc} macrocells and ${allIo} external I/O\n`)
+console.log(`  option                   macrocells      pins (incl. ${CROSSING} crossing nets x2)   area`)
+for (const o of OPTIONS) {
+  const pins = allIo + o.cross * 2
+  const ok = o.mc >= allMc && o.io >= pins
+  console.log(`  ${o.what}   ${fmt(allMc, 4)}/${fmt(o.mc, 4)} ${(o.mc >= allMc ? "ok " : "OVER")}` +
+    `   ${fmt(pins, 4)}/${fmt(o.io, 4)} ${(o.io >= pins ? "ok " : "OVER")}` +
+    `   ~${o.area} cm2   ${ok ? "FITS" : ""}`)
+}
+console.log(`\n  ten GAL22V10 in DIP-24, for comparison: ~26 cm2.`)
+console.log(`  PLCC-84 is socketed: programmable out of circuit, so JTAG's four`)
+console.log(`  pins stay available, and the part can be pulled and reseated.`)
 
 console.log(`\n  Two ATF1504AS in PLCC-84 - socketed, and the partition that works:`)
 const SPLIT = [

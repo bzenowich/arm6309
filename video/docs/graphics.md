@@ -1726,9 +1726,11 @@ $6 part is the wrong one.
 | **TQFP-100** | **`…AU100`** | **80** | ✓ **9 spare** |
 | PQFP-160 | `…QC160` | 96 | ✓ but 160 pins for 71 |
 
-> ⚠ **Superseded by §10.1.5**: with §6.4's Variant A and B in v1 the design needs 89
-> I/O, and TQFP-100 is nine short. **The part is the PQFP-160, `…QC160`.** The rest of
-> this section — voltage, speed grade, the ASV trap — is unchanged.
+> ⚠ **Superseded by §10.1.5 and §10.1.6**: with §6.4's Variant A and B in v1 the
+> design needs 89 I/O, and with §10.3's list engine it needs 163 macrocells — more
+> than any one `ATF1508AS`. **The build is two `ATF1508AS-…JC84`, PLCC-84, socketed.**
+> The rest of this section — voltage, speed grade, the ASV trap — is unchanged, and
+> `JC84` is the cheap end of the range.
 
 **So: `ATF1508AS-…AU100`, 5 V, TQFP-100, `-15` speed grade** — the same grade §14
 already specifies for the GALs, and the slowest is the cheapest. ⚠ Confirm a `-15` is
@@ -1866,13 +1868,8 @@ for a genuinely cheap 80×25 console"*. `npm run census`:
 the macrocells land at **128 of 128**, which this time is real and not the census
 artefact of §10.1.4:
 
-> ⚠ **The part is full.** §10.3 recommends the list engine, and §6.4.6's first limit
-> makes it more than a nicety here: the mode is global, but *"a list-engine `MOVE` at
-> a scanline boundary switches mid-frame — a text status bar over a bitmap playfield,
-> from the display list, with no CPU involvement."* That is the feature that beats
-> both period chips, and **there is no room for it on this die.** `ATF1508AS` is the
-> top of the 5 V ATF15xx line, so more macrocells means a second package, not a bigger
-> one. **Plan for two CPLDs, or accept that the list engine is a piggyback.**
+> ⚠ **The part is full**, and §10.3's list engine has nowhere to go — see §10.1.6,
+> which is the answer to that and changes the package.
 
 **What §7 keeps.** The span writer is not deleted — it is the bitmap-mode text engine,
 the fill and clear engine, and §6.4.6's limit 1 means bitmap regions still need it.
@@ -1889,6 +1886,56 @@ which is now the *fallback* figure rather than the headline one.
   its clock-to-Q goes inside the 11.7 ns the index → LUT → output chain has at
   39.7 ns, and `'HC` will not shift at 25.175 MHz. `'AHC165`, and it is §19 item 17's
   bench measurement before layout.
+
+#### 10.1.6 Two PLCC-84 parts — and this is the build
+
+**Decided 2026-09-06.** The `ATF1508AS` in **PLCC-84 has all 128 macrocells**; only
+the I/O is cut, to 64 (+4 dedicated inputs, and JTAG's four come back because a
+socketed part is programmed out of circuit). That one fact settles the question:
+
+| | Macrocells | Pins | Area |
+|---|---|---|---|
+| §6.4 A+B, plus §10.3's list engine | **163** | 91 external | |
+| 1 × `ATF1508AS` PQFP-160 | 128 — **35 over** ✗ | 91 of 96 ✓ | ~7.8 cm² |
+| **2 × `ATF1508AS` PLCC-84** | **256** ✓ | 119 of 136 ✓ | ~22 cm² |
+| 2 × `ATF1504AS` PLCC-84 | 128 — 35 over ✗ | 119 of 136 ✓ | ~22 cm² |
+
+The list engine costs **almost no pins and a lot of macrocells** — 19 for the `LIST`
+pointer, ~10 for the descriptor latch and opcode decode, ~6 for sequencing — because
+its interface is internal: it reads VRAM through the arbiter and address path that
+already exist, and §10.3's `MOVE` is *"one SRAM write into the register file"*, also a
+path that exists. Pins have bound every decision on this card so far. **This is the
+first one macrocells decide.**
+
+**The PQFP-160 is 35 macrocells short**, so taking it means the list engine becomes a
+second package later anyway — at which point the board carries two parts regardless,
+and the two it should carry are the socketed ones.
+
+**93 spare macrocells changes what else is possible.** The absorptions §10.1.4 had to
+refuse for costing macrocells all come back: `CTRL`'s `'273` (+8), the `'161` `SPANLEN`
+pair (+10) and the `'165` (+8) fit easily, taking **189 of 256** and deleting four more
+packages while saving 10 further pins.
+
+**Three costs, and none of them is macrocells:**
+
+- **Area.** ~22 cm² socketed against the PQFP-160's ~7.8, and against ten GALs' ~26.
+  §14 has the card at ~150 of 160 cm², so the CPLD's area windfall largely evaporates
+  — the win is ~4 cm² and four deleted packages, not ~18 cm².
+- **Crossing delay.** A net between packages costs a `tPD` — 15 ns at the `-15` grade,
+  against a 39.7 ns dot period. **The partition has to keep the dot-rate paths inside
+  one part**: the phase counter, `SLOTTICK`, `FCLK0..3` and `MUXSEL` belong together
+  with whatever they clock. With 93 macrocells spare that is a free choice, which is
+  new — every partition on this card so far was forced.
+- **Two JTAG chains**, or one chained through both.
+
+**The partition, provisional:**
+
+| | Holds | Macrocells |
+|---|---|---|
+| **A — datapath** | scan and `WPTR` counters, address mux, tile concatenation, arbiter | ~90 of 128 |
+| **B — control** | sync trio, sequencer, span control, decode, `CTRL`, list engine | ~99 of 128 |
+
+with ~14 crossing nets. Both parts under 68 pins, both under half full.
 
 ### 10.2 What the 6309 gives you for free
 
