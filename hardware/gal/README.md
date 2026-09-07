@@ -60,6 +60,9 @@ that the document specifies rather than lists:
 |---|---|
 | [`seqph.jedec.ts`](seqph.jedec.ts) | **`seqph`** — dot phase, slot tick, §5.2.2's sub-slot split, four per-chip fetch-latch clocks, pixel mux select |
 | [`seqph.check.ts`](seqph.check.ts) | the phase, that the slot tick does **not** move with `HSCROLL`, and the arithmetic that shows a common fetch-latch clock cannot render a scrolled line — `npm run check:seqph` |
+| [`seqctl.jedec.ts`](seqctl.jedec.ts) | **`seqctl`** — the span writer, respecified for 8 × 8 cells (`graphics.md` §7.4) |
+| [`seqctl.model.ts`](seqctl.model.ts) | its state machine: one handshake, three terminations |
+| [`seqctl.check.ts`](seqctl.check.ts) | all 16 states × 128 inputs, and the eight-byte glyph row — `npm run check:seqctl` |
 
 Several statements of one logic is several too many, and the count went *down* on
 2026-09-06 rather than up: `mmu.check.ts` no longer carries its own copy of the

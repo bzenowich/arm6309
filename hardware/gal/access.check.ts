@@ -43,6 +43,7 @@ const wrow = build(wrowDesign, "wrow")
     const pins = arb.gal.evaluate({
       1: vramsel ? 1 : 0, 2: nIopage, 3: (cpuChip & 1) as 0 | 1, 4: ((cpuChip >> 1) & 1) as 0 | 1,
       5: spnreq ? 1 : 0, 6: (spnChip & 1) as 0 | 1, 7: ((spnChip >> 1) & 1) as 0 | 1,
+      8: spnreq ? 1 : 0, // SPANBUSY, for /WAIT
     })
     const want = arbitrate({ vramsel, nIopage, cpuChip, spnreq, spnChip })
     for (let n = 0; n < 4; n++) {
@@ -63,9 +64,38 @@ const wrow = build(wrowDesign, "wrow")
   /* Item 20's three cases, named. */
   check(sameChipYield > 0, "item 20 (a): CPU and span on the same chip - the span writer yields")
   check(cpuAbsent > 0, "item 20 (b): CPU absent entirely - the span writer takes the chip anyway")
-  check(arb.assembly.usage.length === 8,
-    "item 20 (c): the arbiter is 8 macrocells, not 14's 12 - SRCSEL[n] IS GRANT_CPU[n]",
+  check(arb.assembly.usage.length === 10,
+    "item 20 (c): 8 grants - SRCSEL[n] IS GRANT_CPU[n], not a second macrocell - " +
+    "plus the two the spare capacity was spent on: SPNGRANT and /WAIT",
     `${arb.assembly.usage.length}`)
+
+  /* SPNGRANT is the four span grants ORed, so the sequencer needs one pin
+   * instead of four: the arbiter has already matched the chip against
+   * WPTR[1:0], and "which chip" is not something the span writer acts on. */
+  const G = arb.assembly.usage.find((u) => u.name === "SPNGRANT")!
+  check(G.used === G.available && G.used === 16,
+    "SPNGRANT is 16 product terms in a 16-term macrocell - exactly full",
+    `${G.used}/${G.available}`)
+  let orBad: string | null = null
+  for (let bits = 0; bits < 128; bits++) {
+    const vramsel = !!(bits & 1), nIopage = ((bits >> 1) & 1) as 0 | 1
+    const cpuChip = (bits >> 2) & 3, spnreq = !!((bits >> 4) & 1), spnChip = (bits >> 5) & 3
+    const pins = arb.gal.evaluate({
+      1: vramsel ? 1 : 0, 2: nIopage, 3: (cpuChip & 1) as 0 | 1, 4: ((cpuChip >> 1) & 1) as 0 | 1,
+      5: spnreq ? 1 : 0, 6: (spnChip & 1) as 0 | 1, 7: ((spnChip >> 1) & 1) as 0 | 1, 8: 1,
+    })
+    const anyGrant = GS.some((p) => pins[p] === 1) ? 1 : 0
+    if (pins[G.pin] !== anyGrant) orBad = `SPNGRANT ${pins[G.pin]} vs any grant ${anyGrant}`
+  }
+  check(orBad === null, "SPNGRANT is exactly the four span grants ORed", orBad ?? "")
+
+  /* /WAIT is open-drain: it drives low or floats, never high. */
+  const W = arb.assembly.usage.find((u) => u.name === "WAIT")!
+  const held = arb.gal.evaluate({ 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 1 })
+  const idle = arb.gal.evaluate({ 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0 })
+  check(held[W.pin] === 0 && idle[W.pin] === -1,
+    "/WAIT pulls low on SPANBUSY . VRAMSEL . /IOPAGE and floats otherwise (3.3, 12.1)",
+    `${held[W.pin]} / ${idle[W.pin]}`)
 }
 
 /* -- WPTR ----------------------------------------------------------------- */

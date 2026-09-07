@@ -139,7 +139,12 @@ export class Gal22v10 {
   }
 
   /** Apply a set of externally driven pins and read every pin back.
-   *  -1 in the result is high-Z. */
+   *  -1 in the result is high-Z.
+   *
+   *  Returns a COPY. It used to return the internal buffer, which meant two
+   *  evaluate() calls kept in two variables silently aliased each other - a
+   *  check comparing "before" against "after" then compared "after" with
+   *  itself and passed for the wrong reason. Found in access.check.ts. */
   evaluate(driven: Record<number, 0 | 1>): Int8Array {
     this.level.fill(-2)
     for (const [pin, v] of Object.entries(driven)) this.level[Number(pin)] = v
@@ -148,7 +153,7 @@ export class Gal22v10 {
     if (this.row(AR_ROW)) { this.reset(); this.level.fill(-2)
       for (const [pin, v] of Object.entries(driven)) this.level[Number(pin)] = v }
     for (const pin of Object.keys(OLMC).map(Number)) this.resolve(pin)
-    return this.level
+    return this.level.slice()
   }
 
   /** One rising edge on pin 1. */

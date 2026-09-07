@@ -1198,6 +1198,84 @@ glyph is 64 bytes at 3 cycles each = 192 cycles ≈ 92 µs per cell — **3× wo
 the span writer**, because the span writer moves 8 pixels per CPU write and `TFM`
 moves one. Text belongs to the span writer; `TFM` earns its keep elsewhere (§10.2).
 
+### 7.4 The span writer, respecified for 8 × 8 cells
+
+§14 lists "span control" among the sequencer pair's duties and the mechanism itself
+has never been written down here — it is inherited from minimal256, which was designed
+around **6-pixel cells**. §6.1 says what changes and stops one step short of the
+consequence:
+
+> "colormin's span-mask serialises a byte and stops at `SPANLEN`; with 6-px cells two
+> bits per write are wasted. At 8×8 the mask byte *is* the glyph row."
+
+**The consequence is that span-mask mode does not consult `SPANLEN` at all.** Its
+length is eight, always, because eight is the cell width: the byte the CPU writes is
+exactly one glyph row and there is nothing to truncate. The length comes from a
+three-bit counter — three bits *because* a cell is eight wide — and `SPANLEN` with its
+`'161` pair belongs to span-solid alone.
+
+**That is what makes §7.3's "13 writes per character cell" true.** `WPTR` ×3 + `WFG` +
+`WBG` is five of setup, then eight glyph rows. `SPANLEN` is not among them. Had mask
+mode needed it, a cell would be **14** writes and every text figure in §7.3 would be
+7 % worse. `npm run check:seqctl` asserts the 13.
+
+#### Where the state lives
+
+| | Where | Why |
+|---|---|---|
+| the mask byte | `74HC165`, loaded at `WSTB` | its serial output *is* a register-file address line |
+| span-solid's length | `74HC161` ×2, loaded at `WSTB` | §14's `SPANLEN` counter |
+| **span-mask's length** | **3 macrocells in `seqctl`** | **the cell width, fixed at 8** |
+| `SPANBUSY` | 1 macrocell | `VSTAT` b7, and the `/WAIT` condition |
+| the pointer | `wcol` / `wrow` | §19 item 12 |
+
+**The mask bit never enters the sequencer.** The `'165`'s serial output is wired to the
+register file's address bit 0, which is why §13 requires `WFG` at `A0 = 0` and `WBG` at
+`A0 = 1`. Choosing the source colour per pixel costs no macrocell and no product term
+— it is an address line, and that placement rule *is* the mechanism.
+
+#### One handshake, three terminations
+
+```
+  WSTB      a posted write has been latched (§3.1.1's '574s hold the address, the
+            data, R/W and WMODE[1:0]) -> load the '165 and the '161s, zero the
+            mask counter, set SPANBUSY
+  SPNGRANT  the arbiter matched WPTR[1:0] against the CPU's chip and gave the span
+            writer a spare access (§5.2.1)
+  RETIRE    = SPANBUSY · SPNGRANT. One byte goes to VRAM. Drives WPTR's WINC, the
+            '165's shift and the '161's count — one signal, three loads, because
+            those three advance together by construction
+  SPANEND   the last byte retired -> apply WADV, clear SPANBUSY
+```
+
+| `WMODE` | Mode | Ends when |
+|---|---|---|
+| `00` | direct | the **first** byte retires — §3.1.1's posted write |
+| `01` | span-mask | the **eighth** byte retires — the cell width |
+| `10` | span-solid | the `'161` pair's terminal count — `SPANLEN` + 1 bytes |
+
+Loading the `'161` pair in mask mode is harmless, and that is what lets `WSTB` drive
+both loads with no mode qualification: mask mode terminates on its own counter and
+never looks at `TC`. `check:seqctl` asserts the eight-byte length **with `TC` held true
+throughout**, so a leak from the solid path fails it.
+
+#### Chaining, which is the whole text engine
+
+`WADV = 01` ("next row, same column", §7.2) advances `WPTR`'s row at `SPANEND` and
+reloads the column from the register-file shadow. Set it once and a glyph becomes
+**eight mask writes and nothing else** — no pointer arithmetic between rows, no
+`SPANLEN`, no mode changes. That is §7.3's 2.5 ms line scroll.
+
+A span running off column 1023 wraps to column 0 of the same row (§19 item 12), which
+is what the scanner does, so a glyph straddling the torus seam renders where the
+display reads it.
+
+#### What it costs
+
+`seqctl` is **7 macrocells of 10**, 3 free, 8 of 14 input pins — the most headroom of
+any GAL on the card. Checked over all 16 states × 128 input combinations, plus a span
+run end to end in each mode and the no-grant stall that holds `/WAIT`.
+
 ---
 
 ## 8. Scrolling — transfers verbatim, with wider registers
@@ -1480,12 +1558,15 @@ answer to "how do we need fewer GALs" turns on which bits have to reach a pin.
 | sync — `hgen`/`vgen`/`vdec` | 3 | 27 of 30 | 18 | **No** — only 6 signals leave the group |
 | scan address — `hadr`/`vadr` | 2 | 17 of 20 | 17 | **Yes** — they are the framebuffer address bus |
 | `WPTR` / span pointer — `wcol`/`wrow` | 2 | 19 of 20 | 19 | **Yes** — they are the VRAM address path |
-| sequencer — `seqph` + the rest | 2? | 10 fitted, ~20 budgeted (§19 item 23) | 2 | the dot phase is internal |
+| sequencer — `seqph` + `seqctl` | 2 | 17 of 20 fitted, 13 more budgeted (§19 item 23) | 5 | the dot phase and the mask counter are internal |
 | arbiter (§5.2.1) — `arb` | 1 | **8** of 10 | 0 | — |
 
-Seven of the ten are fitted. Two of them are full in **both** dimensions — `vdec`
-at 14 of 14 pins and `wcol` at 10 of 10 macrocells *and* 11 of 11 pins — so neither
-tile mode nor the list engine can borrow capacity there.
+**Nine of the ten are fitted**, and the tenth is the decode half of the sequencer
+pair, whose two routes are in §19 item 23. Three parts are now full in **both**
+dimensions — `vdec` at 14 of 14 pins, `wcol` at 10 of 10 macrocells *and* 11 of 11
+pins, and `arb` once `/WAIT` and `SPNGRANT` moved onto it — so neither tile mode nor
+the list engine can borrow capacity there. What is left is on `seqctl` (3 macrocells,
+6 pins) and `hadr` (2 and 2).
 
 **The card is GAL-heavy for exactly one reason: 54 of those macrocells are counter
 bits, and a GAL22V10 has no buried nodes.** Every register costs a macrocell *and* a
@@ -2487,28 +2568,37 @@ unchanged from minimal256.md §11 and are not restated in full.
     with room, so it is cheap — but it is not written, and until it is, byte-granular
     horizontal scroll is a claim rather than a design.
 
-    **(b) The rest of the sequencer does not fit in one more part.** §14 lists the
-    pair's duties; the spine took ten macrocells and the remainder budgets as:
+    **(b) Span control is specified and fitted — §7.4, `seqctl`, 7 of 10 macrocells.**
+    The remaining decode is not, and it does not fit in what is left:
 
-    | | Macrocells |
-    |---|---|
-    | register-file address `RA4..RA0`, muxed CPU / internal | 5 |
-    | `SPANBUSY`, serialiser shift, `SPANLEN` count enable | 3 |
-    | `SPNREQ`, posted-write retire strobe | 2 |
-    | `WINC`, `WROWADV`, `LDA`, `LDB`, `LDC` (the `WPTR` pair's controls) | 5 |
-    | `HLOAD`, `ROWADV` (the scan pair's controls) | 2 |
-    | `VRAMSEL` / `REGSEL` decode, incl. the `/IOPAGE` term (§6.3.2) | 2 |
-    | `/WAIT`, open-drain (§3.3, §12.1's idiom) | 1 |
-    | **budget** | **20**, against **10** left in the pair |
+    | | Macrocells | Where it could go instead |
+    |---|---|---|
+    | register-file address `RA4..RA0`, muxed CPU / internal | 5 | **2 × `'157`** |
+    | `LDA`, `LDB`, `LDC` — `WPTR`'s load strobes | 3 | **1 × `'138`** off the register-write address |
+    | `HLOAD`, `ROWADV` — the scan pair's controls | 2 | `HLOAD` fits on `hadr` (2 free macrocells, 2 free pins) |
+    | `VRAMSEL` / `REGSEL` decode, incl. the `/IOPAGE` term (§6.3.2) | 2 | — |
+    | `WSTB` — the posted-write strobe | 1 | it is already the `'574`s' clock, qualified |
+    | **budget** | **13**, against **3** free on `seqctl` | |
 
-    **This is a budget and not a fit**, and it is stated that way because the span
-    writer's state machine is inherited from minimal256 rather than written down here
-    — it is the one block in §14 that is a list of responsibilities instead of a
-    design. Two levers before conceding an eleventh GAL: the register-file address
-    mux is 5 macrocells or **2 × `'157`** (+1 IC, −1 GAL's worth of current), and the
-    `WPTR`/scan control strobes are decodes of the register-write address that a
-    **`'138`** could produce. **Write the span writer's state machine before fitting
-    this**; it is the last thing on the card that has never been stated precisely.
+    Three things came off the original budget of 20 rather than being fitted:
+    `SPANBUSY` and the retire handshake went into `seqctl` (§7.4); `SPNREQ` **is**
+    `SPANBUSY`, a wire and not a macrocell; and **`/WAIT` moved to the arbiter**,
+    which already had `VRAMSEL` and `/IOPAGE` on its pins and had the capacity —
+    §10.1.1.
+
+    **Two routes, and they differ by one GAL:**
+
+    | | GALs | Card ICs | Current |
+    |---|---|---|---|
+    | a third sequencer part | **11** | 42 | +70–90 mA |
+    | 2 × `'157` + 1 × `'138`, `HLOAD` onto `hadr` | **10** | 44 | +~12 mA |
+
+    The second lands the remainder at 3 macrocells, which is exactly `seqctl`'s
+    spare. **Recommended**: it keeps the count at ten, and §10.1's "eighteen
+    GAL22V10s is where the honest question becomes *why not one CPLD*" is an argument
+    worth not spending a package on. Both routes are arithmetic, not fits — the
+    register-file address mux is the last thing on the card that has never been
+    stated precisely, and it should be written down before either is committed.
 
 22. **Verify the sync-polarity table against the actual monitors** (§6.2.1), CRT, LCD
     and scaler, in *both* `VMODE` families. Polarity is how the monitor picks the

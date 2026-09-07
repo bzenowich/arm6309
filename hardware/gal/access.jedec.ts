@@ -50,7 +50,32 @@ for (let n = 0; n < 4; n++) {
   })
 }
 
-const arbPins = place(arbCells, [14, 15, 16, 17, 18, 19, 20, 21])
+/* One grant line back to the span writer instead of four. The sequencer only
+ * ever needs to know THAT it was granted, not which chip - the arbiter has
+ * already matched the chip against WPTR[1:0] to decide. Four pins saved on
+ * seqctl for one macrocell here, on a part that had two spare. */
+arbCells.push({
+  pin: 0, name: "SPNGRANT", assertedLow: false, s0: 1, registered: false,
+  terms: [0, 1, 2, 3].map((n) => `SPNREQ & ${chipIs("SPNA", n)} & !VRAMSEL`)
+    .concat([0, 1, 2, 3].flatMap((n) => [
+      `SPNREQ & ${chipIs("SPNA", n)} & IOPAGE`,
+      `SPNREQ & ${chipIs("SPNA", n)} & ${n & 1 ? "!" : ""}CPUA0`,
+      `SPNREQ & ${chipIs("SPNA", n)} & ${n & 2 ? "!" : ""}CPUA1`,
+    ])),
+})
+
+/* 3.3 and 12.1's open-drain idiom: the pin drives low or floats, and the
+ * condition rides on the single output-enable product term. This lands here
+ * rather than on the sequencer because the arbiter already has VRAMSEL and
+ * /IOPAGE on its pins and had the macrocell to spare - see 10.1.1. */
+arbCells.push({
+  pin: 0, name: "WAIT", assertedLow: true, s0: 1, registered: false,
+  why: "open-drain by the OE idiom - SPANBUSY . VRAMSEL . /IOPAGE",
+  terms: [],
+  oe: "SPANBUSY & VRAMSEL & !IOPAGE",
+})
+
+const arbPins = place(arbCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
 
 export const arbDesign: Design = {
   name: "arb",
@@ -64,12 +89,11 @@ export const arbDesign: Design = {
     { name: "CPUA0", pin: 3 }, { name: "CPUA1", pin: 4 },
     { name: "SPNREQ", pin: 5 },
     { name: "SPNA0", pin: 6 }, { name: "SPNA1", pin: 7 },
+    /* From seqctl, for /WAIT. */
+    { name: "SPANBUSY", pin: 8 },
   ],
   cells: arbCells.map((c) => ({ ...c, pin: arbPins[c.name] })),
-  /* Two macrocells and five input pins spare. If the '153 and address-mux
-   * loads want SRCSEL driven separately from GRANT_CPU, a duplicate costs one
-   * product term and there is room for two of them. */
-  spares: [22, 23],
+  spares: [],
 }
 
 /* =====================================================================
