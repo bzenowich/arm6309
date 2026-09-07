@@ -1,4 +1,5 @@
 arb - ARM6309-UV6, video card - spare-access arbiter
+*** SUPERSEDED - DO NOT PROGRAM *** graphics.md 10.1.6 - the video card is 2 x ATF1508AS
 GAL22V10, 5892 fuses, checksum fbab
 
   pin  signal      terms  of   path           polarity

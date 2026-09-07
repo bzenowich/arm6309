@@ -5,6 +5,10 @@ Name:           seqph
 PartNo:         ARM6309-UV9
 Location:       video card - sequencer, timing spine
 
+*** SUPERSEDED - DO NOT PROGRAM ***
+    graphics.md 10.1.6 - the video card is 2 x ATF1508AS
+    This fit is kept as the derivation behind that decision.
+
 *F0
 *G0
 *QP24
@@ -145,4 +149,4 @@ Location:       video card - sequencer, timing spine
 *L5828 0100000100110110001100110011000000111001010101100011100100000000
 *C9715
 *
-57f7
+857a

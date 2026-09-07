@@ -112,6 +112,7 @@ export const seqctlDesign: Design = {
   partNo: "ARM6309-UV10",
   location: "video card - span writer control",
   signature: "A6309VA",
+  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
   clockPin: 1,
   inputs: [
     { name: "RESET", pin: 2, activeLow: true },

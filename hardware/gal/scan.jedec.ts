@@ -57,6 +57,7 @@ export const hadrDesign: Design = {
   partNo: "ARM6309-UV4",
   location: "video card - column scan address",
   signature: "A6309V4",
+  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
   clockPin: 1,
 
   inputs: [
@@ -98,6 +99,7 @@ export const vadrDesign: Design = {
   partNo: "ARM6309-UV5",
   location: "video card - row scan address",
   signature: "A6309V5",
+  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
   clockPin: 1,
 
   inputs: [

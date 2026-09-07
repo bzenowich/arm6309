@@ -5,6 +5,10 @@ Name:           hgen
 PartNo:         ARM6309-UV1
 Location:       video card - horizontal timing
 
+*** SUPERSEDED - DO NOT PROGRAM ***
+    graphics.md 10.1.6 - the video card is 2 x ATF1508AS
+    This fit is kept as the derivation behind that decision.
+
 *F0
 *G0
 *QP24
@@ -145,4 +149,4 @@ Location:       video card - horizontal timing
 *L5828 0100000100110110001100110011000000111001010101100011000100000000
 *C5210
 *
-5b7c
+88ff

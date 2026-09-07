@@ -1,4 +1,5 @@
 hgen - ARM6309-UV1, video card - horizontal timing
+*** SUPERSEDED - DO NOT PROGRAM *** graphics.md 10.1.6 - the video card is 2 x ATF1508AS
 GAL22V10, 5892 fuses, checksum 5210
 
   pin  signal      terms  of   path           polarity

@@ -1,4 +1,5 @@
 seqctl - ARM6309-UV10, video card - span writer control
+*** SUPERSEDED - DO NOT PROGRAM *** graphics.md 10.1.6 - the video card is 2 x ATF1508AS
 GAL22V10, 5892 fuses, checksum 850b
 
   pin  signal      terms  of   path           polarity

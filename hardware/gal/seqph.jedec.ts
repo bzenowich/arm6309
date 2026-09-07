@@ -93,6 +93,7 @@ export const seqphDesign: Design = {
   partNo: "ARM6309-UV9",
   location: "video card - sequencer, timing spine",
   signature: "A6309V9",
+  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
   clockPin: 1,
   inputs: [
     { name: "RESET", pin: 2, activeLow: true },

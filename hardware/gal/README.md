@@ -7,6 +7,41 @@ three were *exit criteria saying the equations must fit*. This directory is the 
 the fitting, taken in the order the machine needs it: the MMU first, because it is the
 one that gates the motherboard.
 
+## What here is a deliverable, and what is derivation
+
+**Two GALs are live and get burned into silicon:** the motherboard's `U3` (the MMU
+sequencer) and `U6` (the E/Q divider). `mmu.jed` and `clkdec.jed` are the files a
+programmer takes. The audio card's five and the decode GALs on serial, storage and
+PS/2 are still unwritten and will join them.
+
+**The video card's ten are superseded** — `graphics.md` §10.1.6 makes that card two
+`ATF1508AS`. Their `.jed` and `.doc` files carry a `*** SUPERSEDED - DO NOT PROGRAM
+***` banner, stamped by the writer rather than edited in, so it survives regeneration.
+They are kept because the fits *are* the derivation: the sync section needing three
+parts, §19 item 12's wrap-in-row, item 8's 17-of-20, and every macrocell and pin
+figure the CPLD's own budget is built on came out of them. Deleting the fits deletes
+the argument.
+
+| | Live | Superseded |
+|---|---|---|
+| designs | `mmu`, `clkdec` | `hgen` `vgen` `vdec` `hadr` `vadr` `arb` `wcol` `wrow` `seqph` `seqctl` |
+| checked against Atmel's CUPL | **both** | not required |
+
+**The rule, and it is enforced:** a GAL does not ship without a CUPL reference.
+`jedec/cupl.check.ts` carries a registry of every design and **fails the build if a
+live one has no reference in `jedec/reference/`**. Generate one with
+[`prjbureau/cupl-reference.sh`](prjbureau/cupl-reference.sh). This is not caution for
+its own sake — on 2026-09-07 two errors survived 178 passing checks because the
+assembler and the fuse-map simulator share a device description and agree with each
+other whatever it says. Only a second implementation broke the tie.
+
+`check:cupl` also prints the conventions still resting on one source, so a future
+design that needs one is flagged rather than trusted. Today that is the 64-bit user
+signature's bit order: our `.pld` files carry no UES directive, so CUPL wrote zeros
+there and never exercised it. It is read-back data and nothing depends on it.
+
+---
+
 | | |
 |---|---|
 | [`mmu.pld`](mmu.pld) | **U3, the MMU sequencer** — CUPL, the deliverable a fitter consumes |

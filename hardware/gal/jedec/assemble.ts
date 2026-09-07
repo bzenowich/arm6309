@@ -47,6 +47,10 @@ export interface Design {
   location: string
   /** up to 8 characters into the 64-bit user signature */
   signature?: string
+  /** set when this part is no longer a deliverable - the fit stands as the
+   *  derivation behind a decision, but nothing burns this file into silicon.
+   *  The text is stamped into the JEDEC header so a stray copy says so too. */
+  supersededBy?: string
   clockPin?: number
   inputs: Signal[]
   cells: Cell[]
@@ -197,6 +201,12 @@ export const toJedec = (d: Design, a: Assembly): string => {
   lines.push(`Name:           ${d.name}`)
   lines.push(`PartNo:         ${d.partNo}`)
   lines.push(`Location:       ${d.location}`)
+  if (d.supersededBy) {
+    lines.push(``)
+    lines.push(`*** SUPERSEDED - DO NOT PROGRAM ***`)
+    lines.push(`    ${d.supersededBy}`)
+    lines.push(`    This fit is kept as the derivation behind that decision.`)
+  }
   lines.push(``)
   lines.push(`*F0`)   // unlisted fuses default to 0
   lines.push(`*G0`)   // security fuse unprogrammed
@@ -224,6 +234,9 @@ export const toJedec = (d: Design, a: Assembly): string => {
 export const toReport = (d: Design, a: Assembly): string => {
   const out: string[] = []
   out.push(`${d.name} - ${d.partNo}, ${d.location}`)
+  if (d.supersededBy) {
+    out.push(`*** SUPERSEDED - DO NOT PROGRAM *** ${d.supersededBy}`)
+  }
   out.push(`GAL22V10, ${TOTAL_FUSES} fuses, checksum ${hex4(fuseChecksum(a.fuses))}`)
   out.push(``)
   out.push(`  pin  signal      terms  of   path           polarity`)

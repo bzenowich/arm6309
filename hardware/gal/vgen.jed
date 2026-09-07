@@ -5,6 +5,10 @@ Name:           vgen
 PartNo:         ARM6309-UV2
 Location:       video card - line counter
 
+*** SUPERSEDED - DO NOT PROGRAM ***
+    graphics.md 10.1.6 - the video card is 2 x ATF1508AS
+    This fit is kept as the derivation behind that decision.
+
 *F0
 *G0
 *QP24
@@ -145,4 +149,4 @@ Location:       video card - line counter
 *L5828 0100000100110110001100110011000000111001010101100011001000000000
 *C7704
 *
-61d2
+8f55

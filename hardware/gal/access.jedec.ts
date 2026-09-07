@@ -82,6 +82,7 @@ export const arbDesign: Design = {
   partNo: "ARM6309-UV6",
   location: "video card - spare-access arbiter",
   signature: "A6309V6",
+  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
 
   inputs: [
     { name: "VRAMSEL", pin: 1 },
@@ -141,6 +142,7 @@ export const wcolDesign: Design = {
   partNo: "ARM6309-UV7",
   location: "video card - WPTR column",
   signature: "A6309V7",
+  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
   clockPin: 1,
   inputs: [
     { name: "D0", pin: 2 }, { name: "D1", pin: 3 }, { name: "D2", pin: 4 },
@@ -177,6 +179,7 @@ export const wrowDesign: Design = {
   partNo: "ARM6309-UV8",
   location: "video card - WPTR row",
   signature: "A6309V8",
+  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
   clockPin: 1,
   inputs: [
     { name: "D0", pin: 2 }, { name: "D1", pin: 3 }, { name: "D2", pin: 4 },

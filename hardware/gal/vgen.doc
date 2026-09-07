@@ -1,4 +1,5 @@
 vgen - ARM6309-UV2, video card - line counter
+*** SUPERSEDED - DO NOT PROGRAM *** graphics.md 10.1.6 - the video card is 2 x ATF1508AS
 GAL22V10, 5892 fuses, checksum 7704
 
   pin  signal      terms  of   path           polarity

@@ -61,6 +61,7 @@ export const hgenDesign: Design = {
   partNo: "ARM6309-UV1",
   location: "video card - horizontal timing",
   signature: "A6309V1",
+  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
   clockPin: 1,
 
   inputs: [
@@ -132,6 +133,7 @@ export const vgenDesign: Design = {
   partNo: "ARM6309-UV2",
   location: "video card - line counter",
   signature: "A6309V2",
+  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
   clockPin: 1,
 
   inputs: [
@@ -183,6 +185,7 @@ export const vdecDesign: Design = {
   partNo: "ARM6309-UV3",
   location: "video card - vertical decodes and VBL",
   signature: "A6309V3",
+  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
   clockPin: 1,
 
   /* No RESET pin, and that is deliberate rather than an omission: the only
