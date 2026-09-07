@@ -21,6 +21,9 @@ export interface Signal {
   pin: number
   /** the pin is LOW when the signal is asserted - CUPL's `PIN n = !NAME` */
   activeLow?: boolean
+  /** driven by a registered macrocell, whose feedback into the array is the
+   *  complement of the register rather than the pin */
+  registered?: boolean
 }
 
 export interface Cell {
@@ -94,9 +97,13 @@ const writeRow = (
     const col = PIN_COL[sig.pin]
     if (col === undefined) throw new Error(`pin ${sig.pin} (${sig.name}) has no array column`)
     /* The literal wants the signal true; the column that carries the signal
-     * true is the complement column when the pin itself is active low. */
-    const offset = lit.negated !== !!sig.activeLow ? 1 : 0
-    fuses[base + col + offset] = 0
+     * true is the complement column when the pin itself is active low - and
+     * again when the signal comes from a REGISTERED macrocell, because the
+     * array is fed from the register's complement rather than from the pin.
+     * See simulate.ts; this was wrong until 2026-09-07 and only Atmel's own
+     * CUPL output could show it. */
+    const flip = (lit.negated !== !!sig.activeLow) !== !!sig.registered
+    fuses[base + col + (flip ? 1 : 0)] = 0
   }
 }
 
@@ -115,7 +122,9 @@ export const assemble = (d: Design): Assembly => {
     claim(c.pin, c.name)
     /* A macrocell's own output feeds back into the array, so it is a signal
      * like any other. Its sense is the pin's sense. */
-    signals.set(c.name, { name: c.name, pin: c.pin, activeLow: c.assertedLow })
+    signals.set(c.name, {
+      name: c.name, pin: c.pin, activeLow: c.assertedLow, registered: c.registered,
+    })
   }
   for (const pin of d.spares ?? []) claim(pin, "(spare)")
   if (d.clockPin !== undefined && !claimed.has(d.clockPin)) claimed.set(d.clockPin, "(clock)")

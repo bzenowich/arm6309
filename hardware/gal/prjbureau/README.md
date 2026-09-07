@@ -63,23 +63,35 @@ The fuzzers drive the **vendor fitter under Wine** and use yosys as a front end
 (`util/toolchain.py` sets `WINEPREFIX`, `FITTERDIR`; `run_uncached` shells out to
 `yosys` for Verilog → EDIF). None of that is installed here:
 
+> ⚠ **The claim that this needs `wine32:i386` was wrong and is withdrawn.** Wine 9
+> runs the 32-bit fitters with WoW64 built in — no multiarch, no `wine32`, no root.
+
+**The fitters are extracted and working.** [`extract-wincupl.sh`](extract-wincupl.sh)
+pulls them out of Microchip's `awincupl.exe` installer on Linux with no root and no
+display:
+
 ```sh
-# the Atmel fitters are 32-bit Windows binaries
-sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install wine32:i386
-
-# prjbureau's front end
-sudo apt install yosys
-
-# PEP 668 blocks a system pip install, so a venv
-python3 -m venv .venv && .venv/bin/pip install bitarray
+./extract-wincupl.sh /path/to/awincupl.exe.zip
+#   Atmel ATF1508AS Fitter Version 1.8.7.8 (02-05-03)
 ```
 
-and then the one thing no package manager provides:
+Three things about that were not obvious:
 
-> ⚠ **The Atmel ATF15xx fitters** (`fit1502.exe`, `fit1504.exe`, `fit1508.exe` and
-> their data files) have to go in prjbureau's `vendor/`. They ship with WinCUPL and
-> with Microchip's standalone ATF15xx fitter package. **This sandbox's proxy refuses
-> `microchip.com`**, so that download is a human step.
+- Wine runs the installer, which **fails at the GUI** — but it has already
+  self-extracted `WinCupl.msi` into the prefix's `Temp` by then, which is enough.
+- **7-Zip cannot open the payload cabinet if you carve it out of the `.exe` by byte
+  offset.** MSI streams live in non-contiguous 4 KB sectors, so the bytes are not
+  consecutive; a carve looks like a valid cabinet header and then fails to inflate.
+  Extract `Data1.cab` *from the MSI* and it opens.
+- `cupl.exe` needs its phase DLLs (`cupla`…`cuplx`) beside it or it exits silently
+  with no message and no output file.
+
+What remains for the fuzzers themselves:
+
+```sh
+sudo apt install yosys                                   # prjbureau's front end
+python3 -m venv .venv && .venv/bin/pip install bitarray  # PEP 668 blocks system pip
+```
 
 With those in place:
 

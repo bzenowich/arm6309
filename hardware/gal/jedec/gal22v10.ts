@@ -92,9 +92,23 @@ export const OLMC_PINS = Object.values(OLMC).map((m) => m.pin).sort((a, b) => a 
 /* S0 is the polarity bit: 1 = the pin follows the sum of products, 0 = the pin
  * is its complement. S1 selects the path: 0 = registered, 1 = combinational
  * (galette stores S1 as 'ac1' and reads `registered = !ac1`). They interleave,
- * S0 then S1, from the pin-14 macrocell upward. */
-export const s0Fuse = (pin: number) => CONFIG_BASE + 2 * (pin - FIRST_OLMC_PIN)
-export const s1Fuse = (pin: number) => CONFIG_BASE + 2 * (pin - FIRST_OLMC_PIN) + 1
+ * S0 then S1.
+ *
+ * ⚠ THE ORDER RUNS FROM PIN 23 DOWNWARD, and this was wrong here until
+ * 2026-09-07. It was written pin-14-upward, which is the natural reading of
+ * galette's `xor[]` array - but galette fills that array with
+ * `xor[num_olmcs - 1 - i]`, and the inversion means index 0 is the LAST
+ * macrocell, not the first.
+ *
+ * Nothing in this repository could catch it. The assembler and the fuse-map
+ * simulator share this file, so both put the polarity bits in the same wrong
+ * places and agreed with each other perfectly; every check passed. It took
+ * compiling mmu.pld with Atmel's own CUPL and finding that CUPL's JEDEC only
+ * evaluates correctly under the other order - which is exactly the
+ * falsification test jedec/README.md named as "the one that would settle it"
+ * and listed as not done. */
+export const s0Fuse = (pin: number) => CONFIG_BASE + 2 * (LAST_OLMC_PIN - pin)
+export const s1Fuse = (pin: number) => CONFIG_BASE + 2 * (LAST_OLMC_PIN - pin) + 1
 
 /* -- the map has to be self-consistent before anything else can be true ---- */
 {

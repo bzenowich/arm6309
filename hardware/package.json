@@ -3,8 +3,9 @@
   "version": "0.0.0",
   "description": "Board layouts for the arm6309 machine",
   "scripts": {
-    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run gal/mmu.check.ts && bun run gal/jedec.check.ts && bun run gal/sync.check.ts && bun run gal/scan.check.ts && bun run gal/access.check.ts && bun run gal/seqph.check.ts && bun run gal/seqctl.check.ts && bun run gal/tile.check.ts",
+    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run gal/mmu.check.ts && bun run gal/jedec.check.ts && bun run gal/sync.check.ts && bun run gal/scan.check.ts && bun run gal/access.check.ts && bun run gal/seqph.check.ts && bun run gal/seqctl.check.ts && bun run gal/tile.check.ts && bun run gal/jedec/cupl.check.ts",
     "check:jedec": "bun run gal/jedec.check.ts",
+    "check:cupl": "bun run gal/jedec/cupl.check.ts",
     "check:sync": "bun run gal/sync.check.ts",
     "check:scan": "bun run gal/scan.check.ts",
     "check:access": "bun run gal/access.check.ts",

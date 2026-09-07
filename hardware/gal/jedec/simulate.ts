@@ -125,8 +125,14 @@ export class Gal22v10 {
     this.resolving.add(pin)
     let out: number
     if (this.registered(pin)) {
-      const q = this.regs.get(pin)!
-      out = this.polarityHigh(pin) ? q : 1 - q
+      /* THE ARRAY SEES THE COMPLEMENT OF Q, not the pin level. Established
+       * 2026-09-07 against Atmel CUPL's own JEDEC for clkdec.pld: CUPL emits
+       * `C0.d = !C0` as the single literal C0 rather than !C0, which only
+       * evaluates to a working counter if the feedback is inverted. Our own
+       * map, written the other way, worked only under the other assumption -
+       * and every check passed either way, because the assembler and this
+       * file shared the mistake. */
+      out = 1 - this.regs.get(pin)!
     } else if (!this.row(m.oeRow)) {
       out = -1 // high-Z, and nothing external is driving it
     } else {
@@ -136,6 +142,13 @@ export class Gal22v10 {
     this.resolving.delete(pin)
     this.level[pin] = out
     return out
+  }
+
+  /** The level a registered macrocell drives on its PIN, which applies S0 and
+   *  is not what the array sees. */
+  pinLevel(pin: number): number {
+    const q = this.regs.get(pin)!
+    return this.polarityHigh(pin) ? q : 1 - q
   }
 
   /** Apply a set of externally driven pins and read every pin back.
@@ -153,7 +166,12 @@ export class Gal22v10 {
     if (this.row(AR_ROW)) { this.reset(); this.level.fill(-2)
       for (const [pin, v] of Object.entries(driven)) this.level[Number(pin)] = v }
     for (const pin of Object.keys(OLMC).map(Number)) this.resolve(pin)
-    return this.level.slice()
+    /* Report the pin, not the feedback, for registered macrocells. */
+    const out = this.level.slice()
+    for (const pin of Object.keys(OLMC).map(Number)) {
+      if (this.registered(pin) && !(pin in driven)) out[pin] = this.pinLevel(pin)
+    }
+    return out
   }
 
   /** One rising edge on pin 1. */
