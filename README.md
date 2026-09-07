@@ -28,7 +28,7 @@ one can be taken.
 | | What | Status | Start here |
 |---|---|---|---|
 | [`cpu/`](cpu/) | HD6309E on an **STM32G431CBU6**, 40-pin drop-in. One UFQFPN48 SKU for the CoCo 3 and this machine — the MMU is on the motherboard, and the CPU also serves the boot ROM and vector page. | **Phase 1 — timing spike written, not yet measured on silicon** | [`cpu/README.md`](cpu/README.md), [`cpu/docs/plan.md`](cpu/docs/plan.md) |
-| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, smooth scroll, span writer. **40 ICs**, 9 of them GALs. | **Specified, not built** | [`video/docs/graphics.md`](video/docs/graphics.md) |
+| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, smooth scroll, span writer. **41 ICs**, 10 of them GALs — the sync trio is fitted. | **Specified, not built** | [`video/docs/graphics.md`](video/docs/graphics.md) |
 | [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula. **36 ICs** — and whether that fits one card is open. Host reference model **builds and passes**. | **Specified; reference player validated against libopenmpt** | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
 | [`io/`](io/) | PS/2 keyboard and mouse — **11 ICs** of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does. | **Both specified** | [`io/README.md`](io/README.md), [`io/ps2/docs/ps2.md`](io/ps2/docs/ps2.md), [`io/serial/docs/serial.md`](io/serial/docs/serial.md) |
 | [`storage/`](storage/) | SD card interface — 7 ICs, **528 KiB/s sustained**, an SPI burst started by the bus read strobe. | **Specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |

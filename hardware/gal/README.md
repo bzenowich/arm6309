@@ -22,6 +22,18 @@ one that gates the motherboard.
 | [`jedec.check.ts`](jedec.check.ts) | assembles both parts and checks **the fuses** against the models — `npm run check:jedec` |
 | `mmu.jed`, `clkdec.jed` + `.doc` | the output: what a programmer burns, and the fitter's report |
 
+**The video card's sync section**, which is where the fitter earned its keep —
+`graphics.md` §19 item 8 said the sync pair did not fit and left the choice of escape
+to fit time:
+
+| | |
+|---|---|
+| [`sync.timing.ts`](sync.timing.ts) | the two VGA timings, with the counter-origin choice that makes `VSYNC` one shared product term — and an arithmetic self-check that caught `graphics.md`'s 60.0 Hz |
+| [`sync.jedec.ts`](sync.jedec.ts) | **`hgen`, `vgen`, `vdec`** — the trio, and why it is a trio |
+| [`sync.model.ts`](sync.model.ts) | the raster as arithmetic: counters are numbers, windows are comparisons |
+| [`sync.check.ts`](sync.check.ts) | a whole frame in each family, off the fuses — `npm run check:sync` |
+| `hgen.jed`, `vgen.jed`, `vdec.jed` + `.doc` | 27 macrocells across three parts |
+
 Several statements of one logic is several too many, and the count went *down* on
 2026-09-06 rather than up: `mmu.check.ts` no longer carries its own copy of the
 equations, and `mmu.jedec.ts` is not a fourth statement but the placement of the terms
@@ -293,7 +305,8 @@ failure mode `/IOSEL` and `machine.md` §7.1 already demonstrated twice.
 
 | Job | Tool | Status |
 |---|---|---|
-| GAL equations → JEDEC | [`jedec/`](jedec/), written here | ✓ `npm run check:jedec` — both parts assemble, fit and are checked at the fuse level |
+| GAL equations → JEDEC | [`jedec/`](jedec/), written here | ✓ `npm run check:jedec` and `check:sync` — five parts assemble, fit and are checked at the fuse level |
+| Counter and window equations | [`jedec/counter.ts`](jedec/counter.ts), [`jedec/range.ts`](jedec/range.ts) | ✓ generated, not hand-expanded; every range decode verifies itself exhaustively before it is returned |
 | An independent JEDEC, to falsify `jedec/gal22v10.ts` | `galette`, or WinCUPL under Wine | ⚠ **not run** — wanted once, not as a dependency ([`jedec/README.md`](jedec/README.md)) |
 | Digital verification | **Verilator** 5.020 | ✓ `npm run check:sim`, 16 claims, `-Wall` clean |
 | Analogue — the video output stage (`design-review.md` §Vid-M4) and the audio ladder | **ngspice** | ✓ installed, **nothing written yet** |
@@ -330,7 +343,14 @@ is `[15:4]` now, so the model states it rather than tolerating it.
    share `jedec/gal22v10.ts`, so they cannot catch an error in it. Compiling one `.pld`
    with galette or CUPL and diffing the fuse array would retire this permanently; it
    needs the tool once, not as a dependency.
-3. **The other cards' GALs are untouched** — nine on video, five on audio's sequencer,
-   plus decode GALs on serial, storage and PS/2. The assembler takes them as they are
-   written; what it does not do is minimise, and the video sequencers are where that may
-   start to matter.
+3. **The other cards' GALs are mostly untouched.** The video card's sync trio is done
+   (`sync.check.ts`); its scan-address pair, sequencer pair and arbiter are not, nor is
+   audio's sequencer, nor the decode GALs on serial, storage and PS/2. The assembler
+   takes equations as they are written; what it does not do is minimise, and the
+   video sequencers are where that may start to matter.
+
+4. **The scan-address pair is the next one and it will not fit either.** The sync fit
+   established the rule: a counter cannot be separated from the things that decode it,
+   because the pins to carry it across a package boundary do not exist. The scan pair
+   is 19 address bits plus a carry in 20 macrocells, with no decode anywhere and tile
+   mode still to ask for a mode mux on every bit (`graphics.md` §19 item 15).

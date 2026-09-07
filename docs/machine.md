@@ -40,7 +40,7 @@ genuinely undecided.
 | **System master clock** | one 25.175 MHz oscillator, **on the motherboard** — §1 |
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
-| **Video** | 640×200 × 256 colours, VGA out — **40 ICs**, 9 of them GALs ([`video/`](../video/), `graphics.md` §14) |
+| **Video** | 640×200 × 256 colours, VGA out — **41 ICs**, 10 of them GALs ([`video/`](../video/), `graphics.md` §14) |
 | **Audio** | 4-channel 8-bit PCM, Paula-exact — **36 ICs** ([`audio/`](../audio/), `audio.md` §10) |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **7 ICs**, 528 KiB/s sustained — **specified** ([`storage/`](../storage/)). ⚠ The machine's one period exception |

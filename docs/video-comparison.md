@@ -202,7 +202,7 @@ microcontroller that knows the beam position.
 
 | | **arm6309 card** | GIME | VIC-II |
 |---|---|---|---|
-| Packages | **40 ICs** (36 if the tri-state pixel bus closes) plus a 3-transistor analog drive stage — ~~36 (32)~~ | **1 custom ASIC** (TCC1014, large DIP) | **1 custom ASIC** (40-pin DIP) |
+| Packages | **41 ICs** (37 if the tri-state pixel bus closes) plus a 3-transistor analog drive stage — ~~40 (36)~~, ~~36 (32)~~ | **1 custom ASIC** (TCC1014, large DIP) | **1 custom ASIC** (40-pin DIP) |
 | Also provides | video only | **MMU, interrupt controller, timer, DRAM control, device-select decode, CPU clock** | master oscillator, ϕ0, DRAM control + refresh, light pen |
 | What the system needs alongside it | raster compare **inside `arm6309`** (two GPIO pins — HSYNC *and* VSYNC, or the line number has no origin); MMU **on the motherboard**, ~~3~~ **5 ICs**; the master oscillator and the E/Q divider GAL, also on the motherboard — **7 parts** in all | very little — it absorbed the SAM and the VDG | **PLA for banking, 2× CIA for timers and interrupts** |
 | Programmable logic | **9 × GAL22V10** (~~8~~ — §5.2.1's arbiter is the ninth), two of the four pairs at zero macrocell margin | none — mask ROM | none |

@@ -54,9 +54,11 @@ protect MinOS and can be deleted outright.**
 > carried a master oscillator that belongs on the motherboard, not on a card you can
 > pull (§14). None of that is a change of design. It is the same card, counted.
 
-**Net: 40 ICs (36 if the tri-state pixel bus closes at 39.7 ns and the `'153` mux is
+**Net: 41 ICs (37 if the tri-state pixel bus closes at 39.7 ns and the `'153` mux is
 not needed), against colormin's 39 (35)** — plus 3 buffer transistors and 3 R-2R SIP
-ladders, which are not ICs and are counted on their own line. **9 GALs, not 8.**
+ladders, which are not ICs and are counted on their own line. **10 GALs, not 8** —
+the sync section was fitted on 2026-09-06 and needs three parts, not two (§19 item 8).
+⚠ The scan-address pair is unfitted and sits at 20 of 20; expect a fourth.
 Higher resolution, readable VRAM, raster interrupts, one clock domain; deleting the
 stock-compatibility path still pays for most of the addition, and the honest bus
 interface eats the rest.
@@ -550,9 +552,17 @@ product terms and nothing else:
 | Mode | V total / active | Rate | Text | Frame bytes |
 |---|---|---|---|---|
 | **640×200**, line-doubled | 449 / 400 | 70.09 Hz | **80×25** | 128,000 |
-| 640×240, line-doubled | 525 / 480 | 60.0 Hz | 80×30 | 153,600 |
+| 640×240, line-doubled | 525 / 480 | **59.94 Hz** | 80×30 | 153,600 |
 | 640×400, progressive | 449 / 400 | 70.09 Hz | 80×50 | 256,000 |
-| 640×480, progressive | 525 / 480 | 60.0 Hz | 80×60 | 307,200 |
+| 640×480, progressive | 525 / 480 | **59.94 Hz** | 80×60 | 307,200 |
+
+> ⚠ **59.94 Hz, not 60.0**, corrected 2026-09-06 by
+> [`hardware/gal/sync.timing.ts`](../../hardware/gal/sync.timing.ts)'s own arithmetic
+> check: 25.175 MHz ÷ 800 ÷ 525 = 59.940 Hz. This is the standard VGA 640×480 rate and
+> it has never been 60. It matters in exactly one place — §12.1 makes vertical blank
+> the NitrOS-9 system tick, so a tick divisor calibrated for one family runs 0.1 %
+> wrong in the other, which is about **86 seconds a day**. The two families need
+> different divisors; they were never interchangeable.
 
 **The progressive modes cost no extra bandwidth.** Line-doubling fetches every
 row twice; 640×400 fetches 400 distinct rows once. Same 640 bytes per scanline
@@ -587,16 +597,41 @@ So VSYNC polarity is **a function of `VMODE`**, not a constant:
   HSYNC  =  HSYNC_raw  XOR  HPOL           ; HPOL tied to 1 (negative) in both
 ```
 
-**Cost in the sync GAL pair, stated properly**, because §19 item 8 is already the
-tightest fit on the card and this lands on it. A 22V10's macrocells have unequal
-product-term allocations (8, 10, 12, 14, 16, 16, 14, 12, 10, 8). `VSYNC_raw` is a
-window compare on the V line counter, and the window differs per mode: two terms per
-mode over the four `VMODE` values = **4 product terms**. Expressed as sum-of-products,
-`A XOR B` is `A·/B + /A·B`, so the polarity multiplexing **doubles** it to **8 product
-terms** on the VSYNC macrocell. That macrocell must be placed on one of the pair's
-16-term positions, and the same reasoning applies to HSYNC even though `HPOL` is
-strapped — carrying the term costs nothing at fit time and makes an out-of-spec
-monitor a one-JEDEC fix instead of a respin. Recorded against §19 item 8's arithmetic.
+**Cost in the sync GALs — fitted 2026-09-06, and the estimate below was wrong twice
+in opposite directions.** A 22V10's macrocells have unequal product-term allocations
+(8, 10, 12, 14, 16, 16, 14, 12, 10, 8), and this paragraph used to read: *"the window
+differs per mode: two terms per mode over the four `VMODE` values = 4 product terms …
+`A XOR B` is `A·/B + /A·B`, so the polarity multiplexing doubles it to 8."*
+
+| | Claimed | Actual |
+|---|---|---|
+| `VSYNC_raw` | 4 terms — one window per `VMODE` value | **1 term, shared by both families** |
+| polarity multiplexing | ×2 → 8 | **+9 → 10** |
+
+**Too high, because only `VMODE[0]` reaches the sync logic.** There are two vertical
+timings, not four: `VMODE[1]` selects line-doubling, which is the scan-address
+generator's business and not the raster's. So there was never a window per `VMODE`
+value.
+
+**Too low, because XOR against a *variable* is not a doubling.** `A XOR B` doubles
+only when `A` and `B` are both single literals. Here `A` is a window compare and `B`
+is `VMODE[0]`, so the `/A·B` half is the **complement** of that compare — one product
+term per literal in it. A nine-literal window compare becomes nine terms, not one.
+
+**What makes it come out at 10 rather than far worse is where the counters start**,
+which nothing in this document had fixed and which
+[`hardware/gal/sync.timing.ts`](../../hardware/gal/sync.timing.ts) now does: both
+counters are zeroed at the **leading edge of their own sync pulse** rather than at the
+start of active video. Then `VSYNC_raw` is `v ≤ 1` — one product term, and *the same
+term in both families*, because both timings open with a two-line pulse. A mid-raster
+origin would have needed a mode-dependent window compare here, and it is the
+complement of that compare that the polarity XOR then has to pay for.
+
+10 terms sits on a 16-term macrocell with room, which is what this section required.
+The same reasoning applies to `HSYNC` even though `HPOL` is strapped: it costs 6 of
+the 10 terms on its macrocell, and carrying the input rather than strapping it in
+silicon makes an out-of-spec monitor a re-burn instead of a cut trace. Fitted in
+`hgen` and `vdec`; §19 item 8 has the macrocell table.
 
 ### 6.3 The 64 KB problem — and why the `BANK` register goes away
 
@@ -1576,9 +1611,12 @@ Two of them, and they belong in different places.
 
 ### 12.1 VBL interrupt — on the card
 
-`VSTAT.VBL` plus an enable bit in `CTRL`, driving `/IRQ` open-drain. One macrocell
-in the sync GAL pair, zero packages. This is the system tick: 70.09 Hz in the
-primary mode, 60.0 Hz in the 640×240 mode — and note that a NitrOS-9 tick derived
+`VSTAT.VBL` plus an enable bit in `CTRL`, driving `/IRQ` open-drain. ~~One macrocell
+in the sync GAL pair~~ — **three, and §19 item 8 has the reason**: the OE idiom below
+ties the macrocell's data to a constant, so the pending flag is a second macrocell,
+and it has to be set by an edge rather than a level or it re-arms under its own
+handler, which is a third. This is the system tick: 70.09 Hz in the
+primary mode, **59.94 Hz** (not 60.0 — §6.2) in the 640×240 mode — and note that a NitrOS-9 tick derived
 from vertical blank is *inherently* tear-free for double-buffer flips.
 
 **Two things "zero packages" glossed over.**
@@ -1769,7 +1807,7 @@ way and for exactly the same reason — but it is a yes with a rule attached.
 | 2 | 32K×8 **15 ns** | palette LUT, 256 × 16 b | = (faster grade) |
 | **2** | **74AHCT273** | **post-LUT output register — `/MR` is blank-to-black (§9.2)** | = (was `'574`) |
 | 1 | 74HC593 | `PIDX` counter (sourcing flag, §9) | = |
-| 2 | GAL22V10-15 | H/V sync, blank, **mode-dependent sync polarity (§6.2.1)**, VBL IRQ | = (single timing now) |
+| **3** | GAL22V10-15 | **`hgen`/`vgen`/`vdec`** — H/V sync, blank, **mode-dependent sync polarity (§6.2.1)**, VBL IRQ. ⚠ **Fitted 2026-09-06 and it is three parts, not two** — §19 item 8 | **+1** |
 | 2 | GAL22V10-15 | scan address generators, 19 b, loadable | = |
 | 2 | GAL22V10-15 | `WPTR` / span pointer, 19 b | = |
 | 2 | GAL22V10-15 | sequencer: decode (incl. the `/IOPAGE` term, §6.3.2), **static slot assignment**, span control, reg-file addressing, mux phasing | = |
@@ -1784,16 +1822,24 @@ way and for exactly the same reason — but it is a yes with a rule attached.
 | **1** | **74HC244** | **`VSTAT` live-bit driver (§12.1)** | **+1** |
 | 2 | 74HC161 | `SPANLEN` down-counter | = |
 | 1 | 74HC244 | clock / load fan-out, **plus HSYNC/VSYNC out to the backplane (§12.2)** | = |
-| **40** | | **(36 if the tri-state pixel bus closes at 39.7 ns)** | **colormin: 39 (35)** |
+| **41** | | **(37 if the tri-state pixel bus closes at 39.7 ns)** | **colormin: 39 (35)** |
 | — | 3 × NPN (β ≥ 300) + 1 × diode + 9 R | VGA drive stage, `V_be`-referenced (§9.1) | **new** |
 | — | 3 × R-2R SIP, 1 kΩ/2 kΩ | 5/6/5 ladders (§9.1 sets the value) | = (value specified) |
 | — | ~~1 × 25.175 MHz oscillator~~ | ⚠ **moved to the motherboard — §5.1** | **−1** |
 | — | — | ~~stock 1bpp VRAM, `'166`, `'244` bypass, `'74` synchroniser~~ | **−4** |
 
-**GAL count is 9, not 8.** §10.1's "the card is 8 GALs, the full blitter adds 10" table
-is re-based accordingly: Rev A 9, + list engine 11, + blit datapath ~21. The
-"eighteen GAL22V10s is where the honest question becomes 'why not one CPLD'" line
-lands one package sooner than it did.
+**GAL count is ~~9~~ 10**, and that third step is measured rather than estimated: the
+sync section was fitted on 2026-09-06 and needs three parts (§19 item 8). §10.1's
+"the card is 8 GALs, the full blitter adds 10" table is re-based accordingly: Rev A
+**10**, + list engine 12, + blit datapath ~22. The "eighteen GAL22V10s is where the
+honest question becomes 'why not one CPLD'" line lands **two** packages sooner than it
+did.
+
+> ⚠ **The scan-address pair is still unfitted, at 20 of 20.** What the sync fit
+> established is that a counter cannot be separated from the things that decode it —
+> the pins do not exist — and the scan pair is 19 address bits plus a carry in 20
+> macrocells, with the decode of nothing. Expect the same answer. **Budget a fourth
+> contingency package**; do not treat 41 as settled.
 
 **Off-card, on the motherboard**, and this is where the parts that used to be on this
 list went:
@@ -1812,17 +1858,18 @@ is powered. The honest total:
 
 | Group | Count | Each | Total |
 |---|---|---|---|
-| GAL22V10-15 | 9 | 70–90 mA | **630–810 mA** |
+| GAL22V10-15 | **10** | 70–90 mA | **700–900 mA** |
 | AS6C1008-55 framebuffer | 4 | 40–70 mA | 160–280 mA |
 | 32K×8 15 ns LUT (dot rate) | 2 | 70–110 mA | 140–220 mA |
 | 32K×8 20 ns register file (bus rate) | 1 | 10–30 mA | 10–30 mA |
 | AHCT at 25.175 MHz (fetch latches, `'153`, index, post-LUT) | 11 | 9–22 mA | 100–240 mA |
 | HC at bus rate (posted-write ×4, `'165`, `'273`, `'245`, read latch, `'244` ×2, `'161` ×2) | 12 | 2–6 mA | 25–70 mA |
 | Analog drive stage (§9.1) | 3 ch | 9.3 mA peak + bias | 30–45 mA |
-| | | **Total** | **~1.1–1.7 A** |
+| | | **Total** | **~1.2–1.8 A** |
 
-Call it **1.5 A nominal and specify the regulator, the bulk decoupling and the
-backplane's power pins for 2 A**. Two consequences that the 450–650 mA figure hid:
+Call it **1.6 A nominal and specify the regulator, the bulk decoupling and the
+backplane's power pins for 2 A** — and note the 2 A headroom is 0.1 A thinner than
+when it was chosen, before the scan pair is fitted. Two consequences that the 450–650 mA figure hid:
 a linear 7805 dropping 7 V at 1.5 A dissipates 10.5 W and needs a heatsink that does
 not fit the Eurocard envelope, so the card wants a **switching pre-regulator or a 5 V
 backplane rail**; and at 1.5 A a single 0.5 A-class slot power pin is not enough —
@@ -1832,7 +1879,7 @@ real money: nine ATF22V10C-class parts instead of nine bipolar GALs is most of h
 amp. Measuring card current stays §19 item 10, but it is now a *verification*, not a
 discovery.
 
-**Area.** 40 ICs including 4 × DIP-32 and 3 × DIP-28, against colormin's ~140 cm² on a
+**Area.** 41 ICs including 4 × DIP-32 and 3 × DIP-28, against colormin's ~140 cm² on a
 160 cm² Eurocard. Four more packages plus a guarded analog corner by the VGA connector
 puts this at **~150 of 160 cm²** — still a 4-layer Eurocard with disciplined placement
 and the blitter still a piggyback, but the slack that made that conclusion comfortable
@@ -2075,7 +2122,7 @@ measured before anything depends on them.
 |---|---|---|
 | 0 | **Freeze the machine spec** — bus signals **including `/IOPAGE`, HSYNC and VSYNC** (§17), the full `$FF40`–`$FF7F` map (§17's table — six owners, not two), `/FIRQ` ownership, the MMU register set, the E/Q divider **and its divisor-dependent Q tap**, and the machine's boot arrangement (§6.3.3) | one document; §19's items 1–4 answered |
 | 1 | **Bench the dot path on a breadboard**: 4-way fetch → pixel mux → index latch → LUT → ladders → **§9.1's buffer stage** at 25.175 MHz, driven by counters, no CPU | stable 640×400@70 colour bars on the target monitor, **locked in both `VMODE` families** (§6.2.1's sync polarity is what the monitor identifies them by); black measured at 0 V through the porches (§9.2); DNL measured across all 64 green codes at the **connector**, into a 75 Ω load |
-| 2 | **Sync + scan address GALs**; fit the sequencer pair **first** (minimal256.md §11 item 11) | equations fit with the raster-compare and static-slot terms in place |
+| 2 | **Sync + scan address GALs**; fit the sequencer pair **first** (minimal256.md §11 item 11) | equations fit with the raster-compare and static-slot terms in place. ⚠ **Sync done 2026-09-06** — three parts, not two, checked at the fuse level over whole frames in both families (`hardware/gal/sync.check.ts`). Scan address, sequencer and arbiter outstanding |
 | 3 | **Card rev A**, driven by the STM32 bus exerciser (§16.1) — no 6309 core needed | registers read back; palette loads; framebuffer scans; `VSCROLL`/`HSCROLL` smooth in both axes |
 | 4 | **Span writer + `SPANBUSY`/`/WAIT`** | full-screen clear in ~5 ms; 80×25 glyph render at 13 writes/cell; no lost writes under a hammering loop |
 | 5 | **VRAM read-back** (§11) at ÷12 — the specified rate. Fast-E mode (÷8) is experimental and read-back does **not** close there without `/WAIT` | read-modify-write pixel round-trips clean at ÷12; the `/WAIT` path demonstrated at ÷8 or fast-E abandoned |
@@ -2138,36 +2185,83 @@ unchanged from minimal256.md §11 and are not restated in full.
    address bit plus a tri-state window during the tile fetch (§19 item 15). Item 15's
    answer to "spare pins?" is now known to be "no spare *macrocells* either."
 
-   **Sync pair — 24 wanted, 20 available:**
+   **Sync — ~~24 wanted, 20 available~~ CLOSED 2026-09-06: it is 27, and it takes
+   three parts.** Fitted in [`hardware/gal/sync.jedec.ts`](../../hardware/gal/sync.jedec.ts),
+   checked at the fuse level over whole frames in both families by
+   `npm run check:sync`. The count was three low:
 
-   | Function | Macrocells |
-   |---|---|
-   | V line counter, 0–524 | 10 |
-   | H counter at the fetch-slot rate, 0–199 | 8 |
-   | `HSYNC`, `VSYNC` (with §6.2.1's polarity XOR — see below) | 2 |
-   | `BLANK` (drives the post-LUT `'273` `/MR`, §9.2) | 1 |
-   | `VBLANK`, `HBLANK` (to `VSTAT`, §12.1) | 2 |
-   | `/IRQ` for VBL (§12.1, OE-idiom) | 1 |
-   | **wanted** | **24 of 20** ✗ |
+   | Function | Macrocells | |
+   |---|---|---|
+   | V line counter, 0–524 | 10 | |
+   | H counter at the fetch-slot rate, 0–199 | 8 | |
+   | `HSYNC`, `VSYNC` (with §6.2.1's polarity XOR) | 2 | |
+   | `BLANK` (drives the post-LUT `'273` `/MR`, §9.2) | 1 | |
+   | `VBLANK`, `HBLANK` (to `VSTAT`, §12.1) | 2 | |
+   | `/IRQ` for VBL (§12.1, OE-idiom) | 1 | |
+   | **`VTC` — the line counter's mode-dependent modulus** | **1** | **not counted** |
+   | **`VBLPEND` — the latched flag behind `/IRQ`** | **1** | **not counted** |
+   | **`VSDLY` — one dot of delay, so the flag is an edge** | **1** | **not counted** |
+   | **needed** | **27 of 30** | three GAL22V10s |
 
-   Three escapes, none free, and one of them must be chosen at fit time: move the
-   8-bit H slot counter into a `74HC393` + compare terms (**+1 IC**); merge
-   `VBLANK`/`HBLANK`/`BLANK` into fewer outputs and let the `'244` of §12.1 re-derive
-   the status bits combinationally from what is left (**0 ICs, ugly**); or add a
-   **third sync GAL**, taking the card to 41 and the GAL count to 10. The headline
-   count of 40 assumes one of the first two; **budget the third as a named
-   contingency.**
+   The three that were missing are all consequences of things this document already
+   says. `VTC` is a *decode of the line counter*, and the line counter fills its own
+   part, so the modulus cannot live where the counter lives. `/IRQ`'s OE idiom
+   (§12.1) ties the macrocell's **data** to a constant, which means the pin carries no
+   state and the pending flag has to be a macrocell of its own. And `VBLPEND` has to
+   be set by an **edge**, not by the level of the blanking window: a 6809 enters an
+   interrupt in ~10 µs and the window is 63.5 µs, so a level re-arms the interrupt
+   under its own handler. That is `VSDLY`.
 
-   The one mercy is that **§6.2.1's sync polarity costs product terms, not
-   macrocells**: `VSYNC = VSYNC_raw XOR VPOL` is 4 raw terms doubled to 8, which fits
-   if `VSYNC` is placed on one of the pair's 16-product-term macrocells. Product terms
-   were never expected to be the constraint here and still are not — **macrocells and
-   pins are**, exactly as item 15 predicted for tile mode, one section earlier than
-   anyone looked.
+   **The first escape does not work, and it was the cheapest-looking one.** Moving
+   the 8-bit slot counter to a `'393` frees eight macrocells, but then one part has
+   to decode *both* counters, and the pins are not there:
+
+       h[7:0] + v[9:0] + VMODE0 + HPOL + IRQEN + VSTATWR   = 22 inputs
+       a 22V10 carrying the six decode outputs             = 16 available
+
+   Splitting the decodes to fix that costs two GALs *plus* the external counter,
+   which is worse than the three GALs it was avoiding. **A counter has to stay on
+   the same package as the things that decode it** — that is the rule this item was
+   groping for when it said "macrocells and pins are" the constraint, and pins turn
+   out to be the binding half.
+
+   **So it is the third escape, and it is not a contingency: the card is 10 GALs and
+   41 ICs.** What that buys is the only slack anywhere in the sync section — three
+   free macrocells on `vdec`. The other two parts have none:
+
+   | Part | Holds | Macrocells | Pins |
+   |---|---|---|---|
+   | `hgen` | `H0..H7`, `HSYNC`, `HBLANK` | 10 of 10 | 3 of 11 inputs |
+   | `vgen` | `V0..V9` | 10 of 10 | 8 of 11 inputs |
+   | `vdec` | `VTC`, `VSYNC`, `VBLANK`, `BLANK`, `VSDLY`, `VBLPEND`, `/IRQ` | 7 of 10 | **14 of 14** |
+
+   **`vgen` is the tightest fit in the machine.** A ten-bit counter behind a
+   six-literal clock enable costs bit *i* exactly *i* + 7 product terms, so the bits
+   need 7, 8, … 16 and a 22V10 offers 8, 10, 12, 14, 16, 16, 14, 12, 10, 8. Only the
+   sorted pairing fits, which interleaves the bits across the package — even bits
+   climb pins 14–18, odd bits descend 23–19 — and `V9` lands on **16 product terms in
+   a 16-term macrocell**. Every other bit is at its limit or one below it. The
+   six-literal enable is the slot counter's terminal count read back as five pins,
+   and it is what keeps `hgen` at ten macrocells instead of eleven.
+
+   **§6.2.1's arithmetic was wrong twice, in opposite directions, and the result
+   still fits.** See that section.
+
+   Product terms were never expected to be the constraint here and were not: the
+   widest equation on the three parts is `V9` at 16, and the widest *decode* is
+   `VBLANK` at 13 of 14.
 
    The sequencer pair, meanwhile, is why §5.2.1's arbiter became its own package
-   rather than four more terms. **Fit the scan and sync pairs before committing the
-   BOM at all**, and see item 15 before committing to 9.
+   rather than four more terms. **The sync section is fitted; the scan-address pair
+   is not, and it is the one with 20 of 20 before tile mode asks for anything.** Fit
+   it before committing the BOM, and see item 15 before committing to any GAL count.
+
+   > **What the sync fit implies for the scan pair, before anyone starts.** The rule
+   > that broke escape 1 applies there too: 19 bits of loadable scan address is 19
+   > macrocells and 19 pins, and whatever decodes them has to be on the same package.
+   > The pair has 20 macrocells and 20 pins for 19 + carry. There is no room for the
+   > decode of anything, which means tile mode's mode mux (item 15) is not a question
+   > of spare terms — it is a third package, exactly as it was here.
 9. **`74HC593` availability** (§9). **carried.**
 10. **Measure card current** with seven SRAMs and **nine** GALs against §14's
     ~1.1–1.7 A estimate, and price the low-power GAL family (§10.1) — nine

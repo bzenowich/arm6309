@@ -1,10 +1,14 @@
 # `video/` — the 256-colour video card
 
 640×200 in **256 colours**, 80×25 text, a scrolling bitmap and a span writer, out of a
-VGA connector at the standard 25.175 MHz dot clock. **40 ICs** — 36 if the tri-state
-pixel bus closes at 39.7 ns and the `'153` mux is not needed — of which **9 are
+VGA connector at the standard 25.175 MHz dot clock. **41 ICs** — 37 if the tri-state
+pixel bus closes at 39.7 ns and the `'153` mux is not needed — of which **10 are
 GAL22V10**, plus a three-transistor analog drive stage. No CPLDs, no FPGAs.
-**~1.1–1.7 A at 5 V.**
+**~1.2–1.8 A at 5 V.**
+
+The sync GALs are written, fitted and checked at the fuse level —
+[`hardware/gal/sync.jedec.ts`](../hardware/gal/sync.jedec.ts), `npm run check:sync`.
+That is what moved the count from 40/9: the sync section needs three parts, not two.
 
 > ⚠ **The count and the power figure both moved.** This file, `docs/graphics.md` §0
 > and `docs/machine.md` previously said ~~"~33 ICs"~~ against a §14 table that summed
