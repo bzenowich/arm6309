@@ -29,3 +29,10 @@ reference/**/*.tiff
 reference/**/*.ROM
 reference/**/*.rom
 reference/**/*.zip
+
+# Vendor installers. awincupl.exe.zip is Microchip's WinCUPL, which
+# hardware/gal/prjbureau/extract-wincupl.sh unpacks for the ATF15xx fitters and
+# the CUPL compiler. Licensed, 20 MB, and freely downloadable - not ours to
+# redistribute, and reference/README.md's rule for vendor blobs applies.
+awincupl.exe.zip
+*wincupl*.zip
