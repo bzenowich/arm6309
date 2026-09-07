@@ -30,6 +30,29 @@ export interface Merged {
   ar?: string
 }
 
+/** Rewrite a design's signal names. Two of the video card's fits call their
+ *  outputs A2..A18 - the scan address and the write pointer - and they are
+ *  different nets that collide the moment the parts merge. Renaming has to
+ *  reach the term strings as well as the cell names, which is why it lives
+ *  here rather than in each design. */
+export const rename = (d: Design, map: Record<string, string>): Design => {
+  const sub = (text: string) =>
+    text.replace(/!?[A-Za-z_][A-Za-z0-9_]*/g, (tok) => {
+      const neg = tok.startsWith("!")
+      const bare = neg ? tok.slice(1) : tok
+      return (neg ? "!" : "") + (map[bare] ?? bare)
+    })
+  return {
+    ...d,
+    cells: d.cells.map((c) => ({
+      ...c, name: map[c.name] ?? c.name,
+      terms: c.terms.map(sub), oe: c.oe ? sub(c.oe) : undefined,
+    })),
+    inputs: d.inputs.map((i) => ({ ...i, name: map[i.name] ?? i.name })),
+    ar: d.ar ? sub(d.ar) : undefined,
+  }
+}
+
 /** Fold several 22V10 designs into one part. Any signal produced by one and
  *  consumed by another stops being a pin and becomes an internal node - which
  *  is the whole reason for doing it. */

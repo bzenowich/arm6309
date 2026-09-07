@@ -1,0 +1,1162 @@
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Mon Sep 07 14:24:30 2026
+
+
+fit1508 vaddr.tt2 -device P1508C84 -preassign ignore
+
+
+****** Initial fitting strategy and property ******
+ Pla_in_file = vaddr.tt2
+ Pla_out_file = vaddr.tt3
+ Jedec_file = vaddr.jed
+ Vector_file = vaddr.tmv
+ verilog_file = vaddr.vt
+ Time_file = 
+ Log_file = vaddr.fit
+ err_file = 
+ Device_name = PLCC84
+ Module_name = 
+ Package_type = PLCC
+ Preassign_file = 
+ Property_file = 
+ Sleep_mode = 
+ Preassignment = 
+ Security_mode = OFF
+ Pin_keep_mode = ON
+ Dedicated_input_clock = 
+ Dedicated_input_reset = 
+ Dedicated_input_oe = 
+ supporter = CUPL
+ optimize = ON
+ Soft_buffer = 
+ Xor_synthesis = OFF
+ Foldback_logic =  on
+ Expander = 
+ Cascade_logic = OFF
+ Dedicated_input = 
+ Output_fast = OFF
+ *******************************
+ Power down pin 1 = OFF
+ Power down pin 2 = OFF
+ power_reset = OFF
+ JTAG = ON
+ TDI pullup = OFF
+ TMS pullup = OFF
+ MC_power = OFF
+ Open_collector = OFF
+ ITD0 = ON
+ ITD1 = ON
+ ITD2 = ON
+ Fast_inlatch = off
+ *******************************
+---------------------------------------------------------
+ Fitter_Pass 1, Preassign = IGNORE, LOGIC_DOUBLING : OFF 
+ ... 
+
+Performing global Output Enable pin assignments ...
+
+Performing global pin assignments ...
+--------------------------------------
+
+
+
+Final global control pins assignment (if applicable)...
+-------------------------------------------------------
+DOTCLK assigned to pin  83
+RESET assigned to pin  1
+
+
+
+Performing input pin pre-assignments ...
+------------------------------------
+DOTCLK assigned to pin  83
+RESET assigned to pin  1
+
+Attempt to place floating signals ...
+------------------------------------
+WA3 is placed at feedback node 602 (MC 2)
+SCANSEL is placed at pin 12 (MC 3)
+WA4 is placed at feedback node 604 (MC 4)
+D1 is placed at pin 11 (MC 5)
+FETCH is placed at pin 10 (MC 6)
+WA5 is placed at feedback node 606 (MC 6)
+HS9 is placed at pin 9 (MC 8)
+WA6 is placed at feedback node 608 (MC 8)
+WA7 is placed at feedback node 610 (MC 10)
+D0 is placed at pin 8 (MC 11)
+HS8 is placed at pin 6 (MC 13)
+WA8 is placed at feedback node 613 (MC 13)
+LDB is placed at pin 5 (MC 14)
+HS7 is placed at pin 4 (MC 16)
+WA9 is placed at feedback node 616 (MC 16)
+HS6 is placed at pin 22 (MC 17)
+WA10 is placed at feedback node 617 (MC 17)
+WA12 is placed at feedback node 618 (MC 18)
+WINC is placed at pin 21 (MC 19)
+WA13 is placed at feedback node 620 (MC 20)
+LDA is placed at pin 20 (MC 21)
+WA14 is placed at feedback node 622 (MC 22)
+HS5 is placed at pin 18 (MC 24)
+WA15 is placed at feedback node 624 (MC 24)
+HS4 is placed at pin 17 (MC 25)
+WA11 is placed at feedback node 625 (MC 25)
+HS3 is placed at pin 16 (MC 27)
+WA16 is placed at feedback node 627 (MC 27)
+HS2 is placed at pin 15 (MC 29)
+WA17 is placed at feedback node 629 (MC 29)
+TDI is placed at pin 14 (MC 32)
+WA18 is placed at feedback node 632 (MC 32)
+SA10 is placed at feedback node 633 (MC 33)
+SA11 is placed at feedback node 634 (MC 34)
+D7 is placed at pin 31 (MC 35)
+SA13 is placed at feedback node 636 (MC 36)
+D6 is placed at pin 30 (MC 37)
+SA14 is placed at feedback node 638 (MC 38)
+SA15 is placed at feedback node 640 (MC 40)
+SA12 is placed at feedback node 641 (MC 41)
+SA16 is placed at feedback node 643 (MC 43)
+SA17 is placed at feedback node 645 (MC 45)
+D5 is placed at pin 24 (MC 46)
+TMS is placed at pin 23 (MC 48)
+SA18 is placed at feedback node 648 (MC 48)
+SA2 is placed at feedback node 649 (MC 49)
+SA3 is placed at feedback node 650 (MC 50)
+D4 is placed at pin 40 (MC 51)
+SA5 is placed at feedback node 652 (MC 52)
+D3 is placed at pin 39 (MC 53)
+SA6 is placed at feedback node 654 (MC 54)
+SA7 is placed at feedback node 656 (MC 56)
+D2 is placed at pin 36 (MC 57)
+SA8 is placed at feedback node 658 (MC 58)
+FBA4 is placed at pin 35 (MC 59)
+SA4 is placed at feedback node 660 (MC 60)
+FBA2 is placed at pin 34 (MC 61)
+SA9 is placed at feedback node 663 (MC 63)
+FBA5 is placed at pin 33 (MC 64)
+FBA10 is placed at pin 44 (MC 65)
+FBA6 is placed at pin 45 (MC 67)
+FBA9 is placed at pin 46 (MC 69)
+FBA8 is placed at pin 48 (MC 72)
+FBA3 is placed at pin 49 (MC 73)
+FBA7 is placed at pin 50 (MC 75)
+WA0 is placed at pin 51 (MC 77)
+WA2 is placed at feedback node 679 (MC 79)
+WA1 is placed at pin 52 (MC 80)
+FBA16 is placed at pin 54 (MC 83)
+FBA15 is placed at pin 55 (MC 85)
+FBA17 is placed at pin 56 (MC 86)
+FBA13 is placed at pin 57 (MC 88)
+FBA14 is placed at pin 58 (MC 91)
+FBA11 is placed at pin 60 (MC 93)
+FBA12 is placed at pin 61 (MC 94)
+TCK is placed at pin 62 (MC 96)
+LDC is placed at pin 63 (MC 97)
+WROWADV is placed at pin 64 (MC 99)
+VLOAD is placed at pin 65 (MC 101)
+ROWADV is placed at pin 67 (MC 104)
+VS8 is placed at pin 68 (MC 105)
+VS7 is placed at pin 69 (MC 107)
+FBA18 is placed at pin 70 (MC 109)
+TDO is placed at pin 71 (MC 112)
+VS6 is placed at pin 73 (MC 115)
+VS5 is placed at pin 74 (MC 117)
+VS4 is placed at pin 75 (MC 118)
+VS3 is placed at pin 76 (MC 120)
+VS2 is placed at pin 77 (MC 123)
+VS1 is placed at pin 79 (MC 125)
+VS0 is placed at pin 80 (MC 126)
+HLOAD is placed at pin 81 (MC 128)
+
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                             D                                      
+                       F                  R  O   H                                  
+                       E                  E  T   L                                  
+                       T  H   G H L H V   S  C G O V V V V V V                      
+                     D C  S D N S D S C   E  L N A S S C S S S                      
+                     1 H  9 0 D 8 B 7 C   T  K D D 0 1 C 2 3 4                      
+                    -------------------------------------------                     
+                   / 11   9   7   5   3   1  83  81  79  77  75 \                  
+                  /    10   8   6   4   2  84  82  80  78  76    \                 
+         SCANSEL | 12                    (*)                   74 | VS5             
+             VCC | 13                                          73 | VS6             
+             TDI | 14                                          72 | GND             
+             HS2 | 15                                          71 | TDO             
+             HS3 | 16                                          70 | FBA18           
+             HS4 | 17                                          69 | VS7             
+             HS5 | 18                                          68 | VS8             
+             GND | 19                                          67 | ROWADV          
+             LDA | 20                                          66 | VCC             
+            WINC | 21                                          65 | VLOAD           
+             HS6 | 22                 ATF1508                  64 | WROWADV         
+             TMS | 23               84-Lead PLCC               63 | LDC             
+              D5 | 24                                          62 | TCK             
+                 | 25                                          61 | FBA12           
+             VCC | 26                                          60 | FBA11           
+                 | 27                                          59 | GND             
+                 | 28                                          58 | FBA14           
+                 | 29                                          57 | FBA13           
+              D6 | 30                                          56 | FBA17           
+              D7 | 31                                          55 | FBA15           
+             GND | 32                                          54 | FBA16           
+                  \     34  36  38  40  42  44  46  48  50  52   /                 
+                   \  33  35  37  39  41  43  45  47  49  51  53/                  
+              	    --------------------------------------------                     
+                      F F F D   V D D   G V F F F G F F F W W V                     
+                      B B B 2   C 3 4   N C B B B N B B B A A C                     
+                      A A A     C       D C A A A D A A A 0 1 C                     
+                      5 2 4                 1 6 9   8 3 7                           
+                                            0                                       
+
+
+
+VCC = Supply Voltage pin which must be connected to (5.0V or 3.0V)
+
+GND = GND pin which must be connected to ground
+
+TMS,TDI,TDO,TDI = JTAG pins which must reserved for the JTAG interface
+
+NC = Unused I/O pins which must be unconnected on the board
+
+Universal-Interconnect-Multiplexer assignments
+------------------------------------------------
+FanIn assignment for block A [20]
+{
+D6,D0,D1,D7,D5,D4,D3,
+LDB,LDA,
+WA4,WA2,WA6,WA7,WA9,WA1,WA0,WINC,WA5,WA8,WA3,
+}
+Multiplexer assignment for block A
+D6			(MC17	P)   : MUX 1		Ref (C37p)
+WA4			(MC2	FB)  : MUX 2		Ref (A4fb)
+WA2			(MC9	FB)  : MUX 5		Ref (E79fb)
+WA6			(MC4	FB)  : MUX 6		Ref (A8fb)
+WA7			(MC5	FB)  : MUX 7		Ref (A10fb)
+D0			(MC12	P)   : MUX 10		Ref (A11p)
+WA9			(MC7	FB)  : MUX 11		Ref (A16fb)
+LDB			(MC13	P)   : MUX 12		Ref (A14p)
+D1			(MC11	P)   : MUX 13		Ref (A5p)
+WA1			(MC10	P)   : MUX 14		Ref (E80p)
+D7			(MC16	P)   : MUX 15		Ref (C35p)
+WA0			(MC8	P)   : MUX 16		Ref (E77p)
+D5			(MC18	P)   : MUX 20		Ref (C46p)
+D4			(MC19	P)   : MUX 27		Ref (D51p)
+WINC			(MC14	P)   : MUX 29		Ref (B19p)
+D3			(MC20	P)   : MUX 31		Ref (D53p)
+LDA			(MC15	P)   : MUX 33		Ref (B21p)
+WA5			(MC3	FB)  : MUX 34		Ref (A6fb)
+WA8			(MC6	FB)  : MUX 37		Ref (A13fb)
+WA3			(MC1	FB)  : MUX 38		Ref (A2fb)
+
+FanIn assignment for block B [20]
+{
+D5,D6,D2,D4,D0,D1,D3,D7,
+LDC,LDB,
+WA13,WROWADV,WA18,WA15,WA12,WA10,WA16,WA14,WA11,WA17,
+}
+Multiplexer assignment for block B
+D5			(MC15	P)   : MUX 0		Ref (C46p)
+D6			(MC14	P)   : MUX 1		Ref (C37p)
+WA13			(MC3	FB)  : MUX 2		Ref (B20fb)
+WROWADV			(MC20	P)   : MUX 5		Ref (G99p)
+D2			(MC18	P)   : MUX 6		Ref (D57p)
+LDC			(MC19	P)   : MUX 7		Ref (G97p)
+D4			(MC16	P)   : MUX 9		Ref (D51p)
+D0			(MC11	P)   : MUX 10		Ref (A11p)
+WA18			(MC9	FB)  : MUX 11		Ref (B32fb)
+WA15			(MC5	FB)  : MUX 12		Ref (B24fb)
+D1			(MC10	P)   : MUX 13		Ref (A5p)
+WA12			(MC2	FB)  : MUX 14		Ref (B18fb)
+D3			(MC17	P)   : MUX 17		Ref (D53p)
+LDB			(MC12	P)   : MUX 26		Ref (A14p)
+WA10			(MC1	FB)  : MUX 32		Ref (B17fb)
+WA16			(MC7	FB)  : MUX 33		Ref (B27fb)
+WA14			(MC4	FB)  : MUX 34		Ref (B22fb)
+D7			(MC13	P)   : MUX 35		Ref (C35p)
+WA11			(MC6	FB)  : MUX 37		Ref (B25fb)
+WA17			(MC8	FB)  : MUX 39		Ref (B29fb)
+
+FanIn assignment for block C [20]
+{
+ROWADV,
+SA15,SA12,SA17,SA11,SA10,SA18,SA14,SA16,SA13,
+VS1,VS0,VS2,VLOAD,VS6,VS3,VS8,VS4,VS7,VS5,
+}
+Multiplexer assignment for block C
+SA15			(MC5	FB)  : MUX 0		Ref (C40fb)
+SA12			(MC6	FB)  : MUX 1		Ref (C41fb)
+VS1			(MC19	P)   : MUX 4		Ref (H125p)
+SA17			(MC8	FB)  : MUX 5		Ref (C45fb)
+VS0			(MC20	P)   : MUX 6		Ref (H126p)
+VS2			(MC18	P)   : MUX 8		Ref (H123p)
+VLOAD			(MC10	P)   : MUX 9		Ref (G101p)
+SA11			(MC2	FB)  : MUX 10		Ref (C34fb)
+VS6			(MC14	P)   : MUX 13		Ref (H115p)
+SA10			(MC1	FB)  : MUX 14		Ref (C33fb)
+ROWADV			(MC11	P)   : MUX 15		Ref (G104p)
+VS3			(MC17	P)   : MUX 19		Ref (H120p)
+SA18			(MC9	FB)  : MUX 21		Ref (C48fb)
+VS8			(MC12	P)   : MUX 22		Ref (G105p)
+SA14			(MC4	FB)  : MUX 24		Ref (C38fb)
+VS4			(MC16	P)   : MUX 25		Ref (H118p)
+VS7			(MC13	P)   : MUX 26		Ref (G107p)
+VS5			(MC15	P)   : MUX 31		Ref (H117p)
+SA16			(MC7	FB)  : MUX 35		Ref (C43fb)
+SA13			(MC3	FB)  : MUX 36		Ref (C36fb)
+
+FanIn assignment for block D [22]
+{
+FETCH,
+HS3,HS7,HS9,HS2,HS6,HS8,HS5,HS4,HLOAD,
+SA8,SA2,SA6,SA3,SA5,SA9,SA7,SCANSEL,SA4,
+WA2,WA5,WA4,
+}
+Multiplexer assignment for block D
+SA8			(MC8	FB)  : MUX 1		Ref (D58fb)
+HS3			(MC21	P)   : MUX 2		Ref (B27p)
+HS7			(MC17	P)   : MUX 4		Ref (A16p)
+HS9			(MC15	P)   : MUX 7		Ref (A8p)
+SA2			(MC3	FB)  : MUX 8		Ref (D49fb)
+FETCH			(MC14	P)   : MUX 9		Ref (A6p)
+WA2			(MC11	FB)  : MUX 11		Ref (E79fb)
+SA6			(MC6	FB)  : MUX 12		Ref (D54fb)
+HS2			(MC22	P)   : MUX 14		Ref (B29p)
+HS6			(MC18	P)   : MUX 15		Ref (B17p)
+SA3			(MC4	FB)  : MUX 16		Ref (D50fb)
+SA5			(MC5	FB)  : MUX 18		Ref (D52fb)
+SA9			(MC10	FB)  : MUX 19		Ref (D63fb)
+HS8			(MC16	P)   : MUX 20		Ref (A13p)
+SA7			(MC7	FB)  : MUX 22		Ref (D56fb)
+HS5			(MC19	P)   : MUX 25		Ref (B24p)
+WA5			(MC2	FB)  : MUX 26		Ref (A6fb)
+SCANSEL			(MC12	P)   : MUX 29		Ref (A3p)
+HS4			(MC20	P)   : MUX 30		Ref (B25p)
+HLOAD			(MC13	P)   : MUX 32		Ref (H128p)
+WA4			(MC1	FB)  : MUX 38		Ref (A4fb)
+SA4			(MC9	FB)  : MUX 39		Ref (D60fb)
+
+FanIn assignment for block E [21]
+{
+D0,D1,D2,
+LDA,
+SCANSEL,SA6,SA9,SA3,SA8,SA7,SA10,
+WA0,WA9,WA1,WA2,WINC,WA10,WA7,WA6,WA3,WA8,
+}
+Multiplexer assignment for block E
+WA0			(MC13	P)   : MUX 0		Ref (E77p)
+WA9			(MC5	FB)  : MUX 3		Ref (A16fb)
+WA1			(MC15	P)   : MUX 4		Ref (E80p)
+WA2			(MC14	FB)  : MUX 5		Ref (E79fb)
+SCANSEL			(MC16	P)   : MUX 7		Ref (A3p)
+WINC			(MC19	P)   : MUX 9		Ref (B19p)
+D0			(MC18	P)   : MUX 10		Ref (A11p)
+SA6			(MC9	FB)  : MUX 12		Ref (D54fb)
+D1			(MC17	P)   : MUX 13		Ref (A5p)
+SA9			(MC12	FB)  : MUX 15		Ref (D63fb)
+SA3			(MC8	FB)  : MUX 16		Ref (D50fb)
+WA10			(MC6	FB)  : MUX 26		Ref (B17fb)
+WA7			(MC3	FB)  : MUX 27		Ref (A10fb)
+D2			(MC21	P)   : MUX 28		Ref (D57p)
+SA8			(MC11	FB)  : MUX 29		Ref (D58fb)
+WA6			(MC2	FB)  : MUX 30		Ref (A8fb)
+LDA			(MC20	P)   : MUX 33		Ref (B21p)
+WA3			(MC1	FB)  : MUX 34		Ref (A2fb)
+SA7			(MC10	FB)  : MUX 36		Ref (D56fb)
+WA8			(MC4	FB)  : MUX 37		Ref (A13fb)
+SA10			(MC7	FB)  : MUX 38		Ref (C33fb)
+
+FanIn assignment for block F [15]
+{
+SA13,SA14,SA17,SA15,SCANSEL,SA16,SA12,SA11,
+WA15,WA12,WA13,WA16,WA14,WA17,WA11,
+}
+Multiplexer assignment for block F
+SA13			(MC9	FB)  : MUX 0		Ref (C36fb)
+SA14			(MC10	FB)  : MUX 2		Ref (C38fb)
+WA15			(MC4	FB)  : MUX 4		Ref (B24fb)
+SA17			(MC14	FB)  : MUX 5		Ref (C45fb)
+SA15			(MC11	FB)  : MUX 6		Ref (C40fb)
+SCANSEL			(MC15	P)   : MUX 7		Ref (A3p)
+WA12			(MC1	FB)  : MUX 14		Ref (B18fb)
+SA16			(MC13	FB)  : MUX 17		Ref (C43fb)
+WA13			(MC2	FB)  : MUX 18		Ref (B20fb)
+SA12			(MC12	FB)  : MUX 25		Ref (C41fb)
+SA11			(MC8	FB)  : MUX 28		Ref (C34fb)
+WA16			(MC6	FB)  : MUX 33		Ref (B27fb)
+WA14			(MC3	FB)  : MUX 34		Ref (B22fb)
+WA17			(MC7	FB)  : MUX 35		Ref (B29fb)
+WA11			(MC5	FB)  : MUX 37		Ref (B25fb)
+
+FanIn assignment for block G [3]
+{
+SA18,SCANSEL,
+WA18,
+}
+Multiplexer assignment for block G
+SA18			(MC2	FB)  : MUX 3		Ref (C48fb)
+SCANSEL			(MC3	P)   : MUX 7		Ref (A3p)
+WA18			(MC1	FB)  : MUX 11		Ref (B32fb)
+
+Creating JEDEC file vaddr.jed ...
+
+PLCC84 programmed logic:
+-----------------------------------
+FBA4 = ((!SCANSEL & WA4.Q)
+	# (SA4.Q & SCANSEL));
+
+FBA2 = ((!SCANSEL & WA2.Q)
+	# (SA2.Q & SCANSEL));
+
+FBA3 = ((!SCANSEL & WA3.Q)
+	# (SA3.Q & SCANSEL));
+
+FBA7 = ((!SCANSEL & WA7.Q)
+	# (SA7.Q & SCANSEL));
+
+FBA5 = ((!SCANSEL & WA5.Q)
+	# (SA5.Q & SCANSEL));
+
+FBA6 = ((!SCANSEL & WA6.Q)
+	# (SA6.Q & SCANSEL));
+
+FBA10 = ((!SCANSEL & WA10.Q)
+	# (SA10.Q & SCANSEL));
+
+FBA8 = ((!SCANSEL & WA8.Q)
+	# (SA8.Q & SCANSEL));
+
+FBA9 = ((!SCANSEL & WA9.Q)
+	# (SA9.Q & SCANSEL));
+
+FBA11 = ((!SCANSEL & WA11.Q)
+	# (SA11.Q & SCANSEL));
+
+FBA12 = ((!SCANSEL & WA12.Q)
+	# (SA12.Q & SCANSEL));
+
+FBA15 = ((!SCANSEL & WA15.Q)
+	# (SA15.Q & SCANSEL));
+
+FBA13 = ((!SCANSEL & WA13.Q)
+	# (SA13.Q & SCANSEL));
+
+FBA14 = ((!SCANSEL & WA14.Q)
+	# (SA14.Q & SCANSEL));
+
+FBA16 = ((!SCANSEL & WA16.Q)
+	# (SA16.Q & SCANSEL));
+
+FBA17 = ((!SCANSEL & WA17.Q)
+	# (SA17.Q & SCANSEL));
+
+FBA18 = ((!SCANSEL & WA18.Q)
+	# (SA18.Q & SCANSEL));
+
+SA2.D = ((!HLOAD & FETCH & !SA2.Q)
+	# (!HLOAD & !FETCH & SA2.Q)
+	# (HLOAD & HS2));
+
+SA3.D = ((!HLOAD & !SA2.Q & SA3.Q)
+	# (!HLOAD & FETCH & SA2.Q & !SA3.Q)
+	# (!HLOAD & !FETCH & SA3.Q)
+	# (HLOAD & HS3));
+
+SA4.D = ((!HLOAD & !SA2.Q & SA4.Q)
+	# (!HLOAD & SA4.Q & !SA3.Q)
+	# (!HLOAD & FETCH & SA2.Q & !SA4.Q & SA3.Q)
+	# (!HLOAD & !FETCH & SA4.Q)
+	# (HLOAD & HS4));
+
+SA5.D = ((!HLOAD & !SA2.Q & SA5.Q)
+	# (!HLOAD & SA5.Q & !SA3.Q)
+	# (!HLOAD & SA5.Q & !SA4.Q)
+	# (!HLOAD & FETCH & SA2.Q & !SA5.Q & SA3.Q & SA4.Q)
+	# (!HLOAD & !FETCH & SA5.Q)
+	# (HLOAD & HS5));
+
+SA6.D = ((!HLOAD & !SA2.Q & SA6.Q)
+	# (!HLOAD & SA6.Q & !SA3.Q)
+	# (!HLOAD & SA6.Q & !SA4.Q)
+	# (!HLOAD & SA6.Q & !SA5.Q)
+	# (!HLOAD & FETCH & SA2.Q & !SA6.Q & SA3.Q & SA4.Q & SA5.Q)
+	# (!HLOAD & !FETCH & SA6.Q)
+	# (HLOAD & HS6));
+
+SA7.D = ((!HLOAD & !SA2.Q & SA7.Q)
+	# (!HLOAD & SA7.Q & !SA3.Q)
+	# (!HLOAD & SA7.Q & !SA4.Q)
+	# (!HLOAD & SA7.Q & !SA5.Q)
+	# (!HLOAD & SA7.Q & !SA6.Q)
+	# (!HLOAD & FETCH & SA2.Q & !SA7.Q & SA3.Q & SA4.Q & SA5.Q & SA6.Q)
+	# (!HLOAD & !FETCH & SA7.Q)
+	# (HLOAD & HS7));
+
+SA8.D = ((!HLOAD & !SA2.Q & SA8.Q)
+	# (!HLOAD & SA8.Q & !SA3.Q)
+	# (!HLOAD & SA8.Q & !SA4.Q)
+	# (!HLOAD & SA8.Q & !SA5.Q)
+	# (!HLOAD & SA8.Q & !SA6.Q)
+	# (!HLOAD & SA8.Q & !SA7.Q)
+	# (!HLOAD & FETCH & SA2.Q & !SA8.Q & SA3.Q & SA4.Q & SA5.Q & SA6.Q & SA7.Q)
+	# (!HLOAD & !FETCH & SA8.Q)
+	# (HLOAD & HS8));
+
+SA9.D = ((!HLOAD & !SA2.Q & SA9.Q)
+	# (!HLOAD & SA9.Q & !SA3.Q)
+	# (!HLOAD & SA9.Q & !SA4.Q)
+	# (!HLOAD & SA9.Q & !SA5.Q)
+	# (!HLOAD & SA9.Q & !SA6.Q)
+	# (!HLOAD & SA9.Q & !SA7.Q)
+	# (!HLOAD & SA9.Q & !SA8.Q)
+	# (!HLOAD & FETCH & SA2.Q & !SA9.Q & SA3.Q & SA4.Q & SA5.Q & SA6.Q & SA7.Q & SA8.Q)
+	# (!HLOAD & !FETCH & SA9.Q)
+	# (HLOAD & HS9));
+
+SA10.D = ((!VLOAD & ROWADV & !SA10.Q)
+	# (!VLOAD & !ROWADV & SA10.Q)
+	# (VLOAD & VS0));
+
+SA11.D = ((!VLOAD & !SA10.Q & SA11.Q)
+	# (!VLOAD & ROWADV & SA10.Q & !SA11.Q)
+	# (!VLOAD & !ROWADV & SA11.Q)
+	# (VLOAD & VS1));
+
+SA12.D = ((!VLOAD & !SA10.Q & SA12.Q)
+	# (!VLOAD & SA12.Q & !SA11.Q)
+	# (!VLOAD & ROWADV & SA10.Q & !SA12.Q & SA11.Q)
+	# (!VLOAD & !ROWADV & SA12.Q)
+	# (VLOAD & VS2));
+
+SA13.D = ((!VLOAD & !SA10.Q & SA13.Q)
+	# (!VLOAD & SA13.Q & !SA11.Q)
+	# (!VLOAD & SA13.Q & !SA12.Q)
+	# (!VLOAD & ROWADV & SA10.Q & !SA13.Q & SA11.Q & SA12.Q)
+	# (!VLOAD & !ROWADV & SA13.Q)
+	# (VLOAD & VS3));
+
+SA14.D = ((!VLOAD & !SA10.Q & SA14.Q)
+	# (!VLOAD & SA14.Q & !SA11.Q)
+	# (!VLOAD & SA14.Q & !SA12.Q)
+	# (!VLOAD & SA14.Q & !SA13.Q)
+	# (!VLOAD & ROWADV & SA10.Q & !SA14.Q & SA11.Q & SA12.Q & SA13.Q)
+	# (!VLOAD & !ROWADV & SA14.Q)
+	# (VLOAD & VS4));
+
+SA15.D = ((!VLOAD & !SA10.Q & SA15.Q)
+	# (!VLOAD & SA15.Q & !SA11.Q)
+	# (!VLOAD & SA15.Q & !SA12.Q)
+	# (!VLOAD & SA15.Q & !SA13.Q)
+	# (!VLOAD & SA15.Q & !SA14.Q)
+	# (!VLOAD & ROWADV & SA10.Q & !SA15.Q & SA11.Q & SA12.Q & SA13.Q & SA14.Q)
+	# (!VLOAD & !ROWADV & SA15.Q)
+	# (VLOAD & VS5));
+
+SA16.D = ((!VLOAD & !SA10.Q & SA16.Q)
+	# (!VLOAD & SA16.Q & !SA11.Q)
+	# (!VLOAD & SA16.Q & !SA12.Q)
+	# (!VLOAD & SA16.Q & !SA13.Q)
+	# (!VLOAD & SA16.Q & !SA14.Q)
+	# (!VLOAD & SA16.Q & !SA15.Q)
+	# (!VLOAD & ROWADV & SA10.Q & !SA16.Q & SA11.Q & SA12.Q & SA13.Q & SA14.Q & SA15.Q)
+	# (!VLOAD & !ROWADV & SA16.Q)
+	# (VLOAD & VS6));
+
+SA17.D = ((!VLOAD & !SA10.Q & SA17.Q)
+	# (!VLOAD & SA17.Q & !SA11.Q)
+	# (!VLOAD & SA17.Q & !SA12.Q)
+	# (!VLOAD & SA17.Q & !SA13.Q)
+	# (!VLOAD & SA17.Q & !SA14.Q)
+	# (!VLOAD & SA17.Q & !SA15.Q)
+	# (!VLOAD & SA17.Q & !SA16.Q)
+	# (!VLOAD & ROWADV & SA10.Q & !SA17.Q & SA11.Q & SA12.Q & SA13.Q & SA14.Q & SA15.Q & SA16.Q)
+	# (!VLOAD & !ROWADV & SA17.Q)
+	# (VLOAD & VS7));
+
+SA18.D = ((!VLOAD & !SA10.Q & SA18.Q)
+	# (!VLOAD & SA18.Q & !SA11.Q)
+	# (!VLOAD & SA18.Q & !SA12.Q)
+	# (!VLOAD & SA18.Q & !SA13.Q)
+	# (!VLOAD & SA18.Q & !SA14.Q)
+	# (!VLOAD & SA18.Q & !SA15.Q)
+	# (!VLOAD & SA18.Q & !SA16.Q)
+	# (!VLOAD & SA18.Q & !SA17.Q)
+	# (!VLOAD & ROWADV & SA10.Q & !SA18.Q & SA11.Q & SA12.Q & SA13.Q & SA14.Q & SA15.Q & SA16.Q & SA17.Q)
+	# (!VLOAD & !ROWADV & SA18.Q)
+	# (VLOAD & VS8));
+
+WA0.D = ((!LDA & !WA0.Q & WINC)
+	# (!LDA & WA0.Q & !WINC)
+	# (D0 & LDA));
+
+WA1.D = ((!LDA & !WA0.Q & WA1.Q)
+	# (!LDA & WA0.Q & !WA1.Q & WINC)
+	# (!LDA & WA1.Q & !WINC)
+	# (D1 & LDA));
+
+WA2.D = ((!LDA & !WA0.Q & WA2.Q)
+	# (!LDA & WA2.Q & !WA1.Q)
+	# (!LDA & WA0.Q & !WA2.Q & WINC & WA1.Q)
+	# (!LDA & WA2.Q & !WINC)
+	# (D2 & LDA));
+
+WA3.D = ((!LDA & !WA0.Q & WA3.Q)
+	# (!LDA & WA3.Q & !WA1.Q)
+	# (!LDA & WA3.Q & !WA2.Q)
+	# (!LDA & WA0.Q & !WA3.Q & WINC & WA1.Q & WA2.Q)
+	# (!LDA & WA3.Q & !WINC)
+	# (D3 & LDA));
+
+WA4.D = ((!LDA & !WA0.Q & WA4.Q)
+	# (!LDA & WA4.Q & !WA1.Q)
+	# (!LDA & WA4.Q & !WA2.Q)
+	# (!LDA & WA4.Q & !WA3.Q)
+	# (!LDA & WA0.Q & !WA4.Q & WINC & WA1.Q & WA2.Q & WA3.Q)
+	# (!LDA & WA4.Q & !WINC)
+	# (D4 & LDA));
+
+WA5.D = ((!LDA & !WA0.Q & WA5.Q)
+	# (!LDA & WA5.Q & !WA1.Q)
+	# (!LDA & WA5.Q & !WA2.Q)
+	# (!LDA & WA5.Q & !WA3.Q)
+	# (!LDA & WA5.Q & !WA4.Q)
+	# (!LDA & WA0.Q & !WA5.Q & WINC & WA1.Q & WA2.Q & WA3.Q & WA4.Q)
+	# (!LDA & WA5.Q & !WINC)
+	# (D5 & LDA));
+
+WA6.D = ((!LDA & !WA0.Q & WA6.Q)
+	# (!LDA & WA6.Q & !WA1.Q)
+	# (!LDA & WA6.Q & !WA2.Q)
+	# (!LDA & WA6.Q & !WA3.Q)
+	# (!LDA & WA6.Q & !WA4.Q)
+	# (!LDA & WA6.Q & !WA5.Q)
+	# (!LDA & WA0.Q & !WA6.Q & WINC & WA1.Q & WA2.Q & WA3.Q & WA4.Q & WA5.Q)
+	# (!LDA & WA6.Q & !WINC)
+	# (D6 & LDA));
+
+WA7.D = ((!LDA & !WA0.Q & WA7.Q)
+	# (!LDA & WA7.Q & !WA1.Q)
+	# (!LDA & WA7.Q & !WA2.Q)
+	# (!LDA & WA7.Q & !WA3.Q)
+	# (!LDA & WA7.Q & !WA4.Q)
+	# (!LDA & WA7.Q & !WA5.Q)
+	# (!LDA & WA7.Q & !WA6.Q)
+	# (!LDA & WA0.Q & !WA7.Q & WINC & WA1.Q & WA2.Q & WA3.Q & WA4.Q & WA5.Q & WA6.Q)
+	# (!LDA & WA7.Q & !WINC)
+	# (D7 & LDA));
+
+WA8.D = ((!LDB & !WA0.Q & WA8.Q)
+	# (!LDB & WA8.Q & !WA1.Q)
+	# (!LDB & WA8.Q & !WA2.Q)
+	# (!LDB & WA8.Q & !WA3.Q)
+	# (!LDB & WA8.Q & !WA4.Q)
+	# (!LDB & WA8.Q & !WA5.Q)
+	# (!LDB & WA8.Q & !WA6.Q)
+	# (!LDB & WA8.Q & !WA7.Q)
+	# (!LDB & WA0.Q & !WA8.Q & WINC & WA1.Q & WA2.Q & WA3.Q & WA4.Q & WA5.Q & WA6.Q & WA7.Q)
+	# (!LDB & WA8.Q & !WINC)
+	# (D0 & LDB));
+
+WA9.D = ((!LDB & !WA0.Q & WA9.Q)
+	# (!LDB & WA9.Q & !WA1.Q)
+	# (!LDB & WA9.Q & !WA2.Q)
+	# (!LDB & WA9.Q & !WA3.Q)
+	# (!LDB & WA9.Q & !WA4.Q)
+	# (!LDB & WA9.Q & !WA5.Q)
+	# (!LDB & WA9.Q & !WA6.Q)
+	# (!LDB & WA9.Q & !WA7.Q)
+	# (!LDB & WA9.Q & !WA8.Q)
+	# (!LDB & WA0.Q & !WA9.Q & WINC & WA1.Q & WA2.Q & WA3.Q & WA4.Q & WA5.Q & WA6.Q & WA7.Q & WA8.Q)
+	# (!LDB & WA9.Q & !WINC)
+	# (D1 & LDB));
+
+WA10.D = ((!LDB & !WA10.Q & WROWADV)
+	# (!LDB & WA10.Q & !WROWADV)
+	# (D2 & LDB));
+
+WA11.D = ((!LDB & !WA10.Q & WA11.Q)
+	# (!LDB & WA10.Q & !WA11.Q & WROWADV)
+	# (!LDB & WA11.Q & !WROWADV)
+	# (D3 & LDB));
+
+WA12.D = ((!LDB & !WA10.Q & WA12.Q)
+	# (!LDB & WA12.Q & !WA11.Q)
+	# (!LDB & WA10.Q & !WA12.Q & WROWADV & WA11.Q)
+	# (!LDB & WA12.Q & !WROWADV)
+	# (D4 & LDB));
+
+WA13.D = ((!LDB & !WA10.Q & WA13.Q)
+	# (!LDB & WA13.Q & !WA11.Q)
+	# (!LDB & WA13.Q & !WA12.Q)
+	# (!LDB & WA10.Q & !WA13.Q & WROWADV & WA11.Q & WA12.Q)
+	# (!LDB & WA13.Q & !WROWADV)
+	# (D5 & LDB));
+
+WA14.D = ((!LDB & !WA10.Q & WA14.Q)
+	# (!LDB & WA14.Q & !WA11.Q)
+	# (!LDB & WA14.Q & !WA12.Q)
+	# (!LDB & WA14.Q & !WA13.Q)
+	# (!LDB & WA10.Q & !WA14.Q & WROWADV & WA11.Q & WA12.Q & WA13.Q)
+	# (!LDB & WA14.Q & !WROWADV)
+	# (D6 & LDB));
+
+WA15.D = ((!LDB & !WA10.Q & WA15.Q)
+	# (!LDB & WA15.Q & !WA11.Q)
+	# (!LDB & WA15.Q & !WA12.Q)
+	# (!LDB & WA15.Q & !WA13.Q)
+	# (!LDB & WA15.Q & !WA14.Q)
+	# (!LDB & WA10.Q & !WA15.Q & WROWADV & WA11.Q & WA12.Q & WA13.Q & WA14.Q)
+	# (!LDB & WA15.Q & !WROWADV)
+	# (D7 & LDB));
+
+WA16.D = ((!LDC & !WA10.Q & WA16.Q)
+	# (!LDC & WA16.Q & !WA11.Q)
+	# (!LDC & WA16.Q & !WA12.Q)
+	# (!LDC & WA16.Q & !WA13.Q)
+	# (!LDC & WA16.Q & !WA14.Q)
+	# (!LDC & WA16.Q & !WA15.Q)
+	# (!LDC & WA10.Q & !WA16.Q & WROWADV & WA11.Q & WA12.Q & WA13.Q & WA14.Q & WA15.Q)
+	# (!LDC & WA16.Q & !WROWADV)
+	# (D0 & LDC));
+
+WA17.D = ((!LDC & !WA10.Q & WA17.Q)
+	# (!LDC & WA17.Q & !WA11.Q)
+	# (!LDC & WA17.Q & !WA12.Q)
+	# (!LDC & WA17.Q & !WA13.Q)
+	# (!LDC & WA17.Q & !WA14.Q)
+	# (!LDC & WA17.Q & !WA15.Q)
+	# (!LDC & WA17.Q & !WA16.Q)
+	# (!LDC & WA10.Q & !WA17.Q & WROWADV & WA11.Q & WA12.Q & WA13.Q & WA14.Q & WA15.Q & WA16.Q)
+	# (!LDC & WA17.Q & !WROWADV)
+	# (D1 & LDC));
+
+WA18.D = ((!LDC & !WA10.Q & WA18.Q)
+	# (!LDC & WA18.Q & !WA11.Q)
+	# (!LDC & WA18.Q & !WA12.Q)
+	# (!LDC & WA18.Q & !WA13.Q)
+	# (!LDC & WA18.Q & !WA14.Q)
+	# (!LDC & WA18.Q & !WA15.Q)
+	# (!LDC & WA18.Q & !WA16.Q)
+	# (!LDC & WA18.Q & !WA17.Q)
+	# (!LDC & WA10.Q & !WA18.Q & WROWADV & WA11.Q & WA12.Q & WA13.Q & WA14.Q & WA15.Q & WA16.Q & WA17.Q)
+	# (!LDC & WA18.Q & !WROWADV)
+	# (D2 & LDC));
+
+SA2.C = DOTCLK;
+
+SA2.AR = !RESET;
+
+SA3.C = DOTCLK;
+
+SA3.AR = !RESET;
+
+SA4.C = DOTCLK;
+
+SA4.AR = !RESET;
+
+SA5.C = DOTCLK;
+
+SA5.AR = !RESET;
+
+SA6.C = DOTCLK;
+
+SA6.AR = !RESET;
+
+SA7.C = DOTCLK;
+
+SA7.AR = !RESET;
+
+SA8.C = DOTCLK;
+
+SA8.AR = !RESET;
+
+SA9.C = DOTCLK;
+
+SA9.AR = !RESET;
+
+SA10.C = DOTCLK;
+
+SA10.AR = !RESET;
+
+SA11.C = DOTCLK;
+
+SA11.AR = !RESET;
+
+SA12.C = DOTCLK;
+
+SA12.AR = !RESET;
+
+SA13.C = DOTCLK;
+
+SA13.AR = !RESET;
+
+SA14.C = DOTCLK;
+
+SA14.AR = !RESET;
+
+SA15.C = DOTCLK;
+
+SA15.AR = !RESET;
+
+SA16.C = DOTCLK;
+
+SA16.AR = !RESET;
+
+SA17.C = DOTCLK;
+
+SA17.AR = !RESET;
+
+SA18.C = DOTCLK;
+
+SA18.AR = !RESET;
+
+WA0.C = DOTCLK;
+
+WA0.AR = !RESET;
+
+WA1.C = DOTCLK;
+
+WA1.AR = !RESET;
+
+WA2.C = DOTCLK;
+
+WA2.AR = !RESET;
+
+WA3.C = DOTCLK;
+
+WA3.AR = !RESET;
+
+WA4.C = DOTCLK;
+
+WA4.AR = !RESET;
+
+WA5.C = DOTCLK;
+
+WA5.AR = !RESET;
+
+WA6.C = DOTCLK;
+
+WA6.AR = !RESET;
+
+WA7.C = DOTCLK;
+
+WA7.AR = !RESET;
+
+WA8.C = DOTCLK;
+
+WA8.AR = !RESET;
+
+WA9.C = DOTCLK;
+
+WA9.AR = !RESET;
+
+WA10.C = DOTCLK;
+
+WA10.AR = !RESET;
+
+WA11.C = DOTCLK;
+
+WA11.AR = !RESET;
+
+WA12.C = DOTCLK;
+
+WA12.AR = !RESET;
+
+WA13.C = DOTCLK;
+
+WA13.AR = !RESET;
+
+WA14.C = DOTCLK;
+
+WA14.AR = !RESET;
+
+WA15.C = DOTCLK;
+
+WA15.AR = !RESET;
+
+WA16.C = DOTCLK;
+
+WA16.AR = !RESET;
+
+WA17.C = DOTCLK;
+
+WA17.AR = !RESET;
+
+WA18.C = DOTCLK;
+
+WA18.AR = !RESET;
+
+
+PLCC84 Pin/Node Placement:
+------------------------------------
+Pin 1  = RESET;
+Pin 4  = HS7; /* MC 16 */
+Pin 5  = LDB; /* MC 14 */
+Pin 6  = HS8; /* MC 13 */
+Pin 8  = D0; /* MC 11 */
+Pin 9  = HS9; /* MC 8 */
+Pin 10 = FETCH; /* MC  6 */
+Pin 11 = D1; /* MC  5 */
+Pin 12 = SCANSEL; /* MC  3 */
+Pin 14 = TDI; /* MC 32 */ 
+Pin 15 = HS2; /* MC 29 */ 
+Pin 16 = HS3; /* MC 27 */ 
+Pin 17 = HS4; /* MC 25 */ 
+Pin 18 = HS5; /* MC 24 */ 
+Pin 20 = LDA; /* MC 21 */ 
+Pin 21 = WINC; /* MC 19 */ 
+Pin 22 = HS6; /* MC 17 */ 
+Pin 23 = TMS; /* MC 48 */ 
+Pin 24 = D5; /* MC 46 */ 
+Pin 30 = D6; /* MC 37 */ 
+Pin 31 = D7; /* MC 35 */ 
+Pin 33 = FBA5; /* MC 64 */ 
+Pin 34 = FBA2; /* MC 61 */ 
+Pin 35 = FBA4; /* MC 59 */ 
+Pin 36 = D2; /* MC 57 */ 
+Pin 39 = D3; /* MC 53 */ 
+Pin 40 = D4; /* MC 51 */ 
+Pin 44 = FBA10; /* MC 65 */ 
+Pin 45 = FBA6; /* MC 67 */ 
+Pin 46 = FBA9; /* MC 69 */ 
+Pin 48 = FBA8; /* MC 72 */ 
+Pin 49 = FBA3; /* MC 73 */ 
+Pin 50 = FBA7; /* MC 75 */ 
+Pin 51 = WA0; /* MC 77 */ 
+Pin 52 = WA1; /* MC 80 */ 
+Pin 54 = FBA16; /* MC 83 */ 
+Pin 55 = FBA15; /* MC 85 */ 
+Pin 56 = FBA17; /* MC 86 */ 
+Pin 57 = FBA13; /* MC 88 */ 
+Pin 58 = FBA14; /* MC 91 */ 
+Pin 60 = FBA11; /* MC 93 */ 
+Pin 61 = FBA12; /* MC 94 */ 
+Pin 62 = TCK; /* MC 96 */ 
+Pin 63 = LDC; /* MC 97 */ 
+Pin 64 = WROWADV; /* MC 99 */ 
+Pin 65 = VLOAD; /* MC 101 */ 
+Pin 67 = ROWADV; /* MC 104 */ 
+Pin 68 = VS8; /* MC 105 */ 
+Pin 69 = VS7; /* MC 107 */ 
+Pin 70 = FBA18; /* MC 109 */ 
+Pin 71 = TDO; /* MC 112 */ 
+Pin 73 = VS6; /* MC 115 */ 
+Pin 74 = VS5; /* MC 117 */ 
+Pin 75 = VS4; /* MC 118 */ 
+Pin 76 = VS3; /* MC 120 */ 
+Pin 77 = VS2; /* MC 123 */ 
+Pin 79 = VS1; /* MC 125 */ 
+Pin 80 = VS0; /* MC 126 */ 
+Pin 81 = HLOAD; /* MC 128 */ 
+Pin 83 = DOTCLK;
+PINNODE 602 = WA3; /* MC 2 Feedback */
+PINNODE 604 = WA4; /* MC 4 Feedback */
+PINNODE 606 = WA5; /* MC 6 Feedback */
+PINNODE 608 = WA6; /* MC 8 Feedback */
+PINNODE 610 = WA7; /* MC 10 Feedback */
+PINNODE 613 = WA8; /* MC 13 Feedback */
+PINNODE 616 = WA9; /* MC 16 Feedback */
+PINNODE 617 = WA10; /* MC 17 Feedback */
+PINNODE 618 = WA12; /* MC 18 Feedback */
+PINNODE 620 = WA13; /* MC 20 Feedback */
+PINNODE 622 = WA14; /* MC 22 Feedback */
+PINNODE 624 = WA15; /* MC 24 Feedback */
+PINNODE 625 = WA11; /* MC 25 Feedback */
+PINNODE 627 = WA16; /* MC 27 Feedback */
+PINNODE 629 = WA17; /* MC 29 Feedback */
+PINNODE 632 = WA18; /* MC 32 Feedback */
+PINNODE 633 = SA10; /* MC 33 Feedback */
+PINNODE 634 = SA11; /* MC 34 Feedback */
+PINNODE 636 = SA13; /* MC 36 Feedback */
+PINNODE 638 = SA14; /* MC 38 Feedback */
+PINNODE 640 = SA15; /* MC 40 Feedback */
+PINNODE 641 = SA12; /* MC 41 Feedback */
+PINNODE 643 = SA16; /* MC 43 Feedback */
+PINNODE 645 = SA17; /* MC 45 Feedback */
+PINNODE 648 = SA18; /* MC 48 Feedback */
+PINNODE 649 = SA2; /* MC 49 Feedback */
+PINNODE 650 = SA3; /* MC 50 Feedback */
+PINNODE 652 = SA5; /* MC 52 Feedback */
+PINNODE 654 = SA6; /* MC 54 Feedback */
+PINNODE 656 = SA7; /* MC 56 Feedback */
+PINNODE 658 = SA8; /* MC 58 Feedback */
+PINNODE 660 = SA4; /* MC 60 Feedback */
+PINNODE 663 = SA9; /* MC 63 Feedback */
+PINNODE 679 = WA2; /* MC 79 Feedback */
+
+** Resource Usage **
+
+
+DCERP Field = Summary of Allocations.
+|||||
+|||||_Preset [p,-]       ==  p = PT preset, - No Preset.
+||||
+||||__Reset [g,r,-]      ==  g= Global AR, r = PT reset, - No reset.
+|||
+|||___Clock Enable [e,-] ==  e = Product Term, - always enabled, - none.
+||
+||____Clock [c,g,-],     ==  c = Product term, g = Global term, - No Clock.
+|
+|_____Type [C,D,L,T],    ==  Register type C= combin, D=dff, L=latch, T=tff.
+
+For input only = INPUT.
+
+MCell Pin# Oe   PinDrive  DCERP  FBDrive  DCERP  Foldback  CascadeOut     TotPT output_slew
+MC1   0         --               --              --        -> WA3         5     slow
+MC2   0         --               WA3      Dg-g-  --        --             1     slow
+MC3   12   --   SCANSEL   INPUT  --              --        -> WA4         5     slow
+MC4   0         --               WA4      Dg-g-  --        --             2     slow
+MC5   11   --   D1        INPUT  --              --        -> WA5         5     slow
+MC6   10   --   FETCH     INPUT  WA5      Dg-g-  --        --             3     slow
+MC7   0         --               --              --        -> WA6         5     slow
+MC8   9    --   HS9       INPUT  WA6      Dg-g-  NA        --             4     slow
+MC9   0         --               --              NA        -> WA7         5     slow
+MC10  0         --               WA7      Dg-g-  NA        --             5     slow
+MC11  8    --   D0        INPUT  --              --        -> WA8         5     slow
+MC12  0         --               --              --        -> WA8         5     slow
+MC13  6    --   HS8       INPUT  WA8      Dg-g-  --        --             1     slow
+MC14  5    --   LDB       INPUT  --              --        -> WA9         5     slow
+MC15  0         --               --              --        -> WA9         5     slow
+MC16  4    --   HS7       INPUT  WA9      Dg-g-  --        --             2     slow
+MC17  22   --   HS6       INPUT  WA10     Dg-g-  --        --             3     slow
+MC18  0         --               WA12     Dg-g-  NA        --             5     slow
+MC19  21   --   WINC      INPUT  --              --        -> WA13        5     slow
+MC20  0         --               WA13     Dg-g-  --        --             1     slow
+MC21  20   --   LDA       INPUT  --              --        -> WA14        5     slow
+MC22  0         --               WA14     Dg-g-  --        --             2     slow
+MC23  0         --               --              --        -> WA15        5     slow
+MC24  18   --   HS5       INPUT  WA15     Dg-g-  --        --             3     slow
+MC25  17   --   HS4       INPUT  WA11     Dg-g-  --        --             4     slow
+MC26  0         --               --              --        -> WA16        5     slow
+MC27  16   --   HS3       INPUT  WA16     Dg-g-  NA        --             4     slow
+MC28  0         --               --              NA        -> WA17        5     slow
+MC29  15   --   HS2       INPUT  WA17     Dg-g-  NA        --             5     slow
+MC30  0         --               --              --        -> WA18        5     slow
+MC31  0         --               --              --        -> WA18        5     slow
+MC32  14   --   TDI       INPUT  WA18     Dg-g-  --        --             1     slow
+MC33  0         --               SA10     Dg-g-  --        --             3     slow
+MC34  0         --               SA11     Dg-g-  --        --             4     slow
+MC35  31   --   D7        INPUT  --              --        -> SA13        5     slow
+MC36  0         --               SA13     Dg-g-  --        --             1     slow
+MC37  30   --   D6        INPUT  --              --        -> SA14        5     slow
+MC38  29        --               SA14     Dg-g-  --        --             2     slow
+MC39  0         --               --              --        -> SA15        5     slow
+MC40  28        --               SA15     Dg-g-  --        --             3     slow
+MC41  0         --               SA12     Dg-g-  NA        --             5     slow
+MC42  0         --               --              --        -> SA16        5     slow
+MC43  27        --               SA16     Dg-g-  NA        --             4     slow
+MC44  0         --               --              NA        -> SA17        5     slow
+MC45  25        --               SA17     Dg-g-  NA        --             5     slow
+MC46  24   --   D5        INPUT  --              --        -> SA18        5     slow
+MC47  0         --               --              --        -> SA18        5     slow
+MC48  23   --   TMS       INPUT  SA18     Dg-g-  --        --             1     slow
+MC49  41        --               SA2      Dg-g-  --        --             3     slow
+MC50  0         --               SA3      Dg-g-  --        --             4     slow
+MC51  40   --   D4        INPUT  --              --        -> SA5         5     slow
+MC52  0         --               SA5      Dg-g-  --        --             1     slow
+MC53  39   --   D3        INPUT  --              --        -> SA6         5     slow
+MC54  0         --               SA6      Dg-g-  --        --             2     slow
+MC55  0         --               --              --        -> SA7         5     slow
+MC56  37        --               SA7      Dg-g-  --        --             3     slow
+MC57  36   --   D2        INPUT  --              --        -> SA8         5     slow
+MC58  0         --               SA8      Dg-g-  NA        --             4     slow
+MC59  35   on   FBA4      C----  --              --        --             2     slow
+MC60  0         --               SA4      Dg-g-  NA        --             5     slow
+MC61  34   on   FBA2      C----  --              --        --             2     slow
+MC62  0         --               --              NA        -> SA9         5     slow
+MC63  0         --               SA9      Dg-g-  NA        --             5     slow
+MC64  33   on   FBA5      C----  --              --        --             2     slow
+MC65  44   on   FBA10     C----  --              --        --             2     slow
+MC66  0         --               --              --        --             0     slow
+MC67  45   on   FBA6      C----  --              --        --             2     slow
+MC68  0         --               --              --        --             0     slow
+MC69  46   on   FBA9      C----  --              --        --             2     slow
+MC70  0         --               --              --        --             0     slow
+MC71  0         --               --              --        --             0     slow
+MC72  48   on   FBA8      C----  --              --        --             2     slow
+MC73  49   on   FBA3      C----  --              --        --             2     slow
+MC74  0         --               --              --        --             0     slow
+MC75  50   on   FBA7      C----  --              --        --             2     slow
+MC76  0         --               --              --        --             0     slow
+MC77  51   on   WA0       Dg-g-  --              --        --             3     slow
+MC78  0         --               --              --        --             0     slow
+MC79  0         --               WA2      Dg-g-  NA        --             5     slow
+MC80  52   on   WA1       Dg-g-  --              --        --             4     slow
+MC81  0         --               --              --        --             0     slow
+MC82  0         --               --              --        --             0     slow
+MC83  54   on   FBA16     C----  --              --        --             2     slow
+MC84  0         --               --              --        --             0     slow
+MC85  55   on   FBA15     C----  --              --        --             2     slow
+MC86  56   on   FBA17     C----  --              --        --             2     slow
+MC87  0         --               --              --        --             0     slow
+MC88  57   on   FBA13     C----  --              --        --             2     slow
+MC89  0         --               --              --        --             0     slow
+MC90  0         --               --              --        --             0     slow
+MC91  58   on   FBA14     C----  --              --        --             2     slow
+MC92  0         --               --              --        --             0     slow
+MC93  60   on   FBA11     C----  --              --        --             2     slow
+MC94  61   on   FBA12     C----  --              --        --             2     slow
+MC95  0         --               --              --        --             0     slow
+MC96  62   --   TCK       INPUT  --              --        --             0     slow
+MC97  63   --   LDC       INPUT  --              --        --             0     slow
+MC98  0         --               --              --        --             0     slow
+MC99  64   --   WROWADV   INPUT  --              --        --             0     slow
+MC100 0         --               --              --        --             0     slow
+MC101 65   --   VLOAD     INPUT  --              --        --             0     slow
+MC102 0         --               --              --        --             0     slow
+MC103 0         --               --              --        --             0     slow
+MC104 67   --   ROWADV    INPUT  --              --        --             0     slow
+MC105 68   --   VS8       INPUT  --              --        --             0     slow
+MC106 0         --               --              --        --             0     slow
+MC107 69   --   VS7       INPUT  --              --        --             0     slow
+MC108 0         --               --              --        --             0     slow
+MC109 70   on   FBA18     C----  --              --        --             2     slow
+MC110 0         --               --              --        --             0     slow
+MC111 0         --               --              --        --             0     slow
+MC112 71   --   TDO       INPUT  --              --        --             0     slow
+MC113 0         --               --              --        --             0     slow
+MC114 0         --               --              --        --             0     slow
+MC115 73   --   VS6       INPUT  --              --        --             0     slow
+MC116 0         --               --              --        --             0     slow
+MC117 74   --   VS5       INPUT  --              --        --             0     slow
+MC118 75   --   VS4       INPUT  --              --        --             0     slow
+MC119 0         --               --              --        --             0     slow
+MC120 76   --   VS3       INPUT  --              --        --             0     slow
+MC121 0         --               --              --        --             0     slow
+MC122 0         --               --              --        --             0     slow
+MC123 77   --   VS2       INPUT  --              --        --             0     slow
+MC124 0         --               --              --        --             0     slow
+MC125 79   --   VS1       INPUT  --              --        --             0     slow
+MC126 80   --   VS0       INPUT  --              --        --             0     slow
+MC127 0         --               --              --        --             0     slow
+MC128 81   --   HLOAD     INPUT  --              --        --             0     slow
+MC0   2         --               --              --        --             0     slow
+MC0   1         RESET     INPUT  --              --        --             0     slow
+MC0   84        --               --              --        --             0     slow
+MC0   83        DOTCLK    INPUT  --              --        --             0     slow
+
+Logic Array Block	Logic Cells	I/O Pins	Foldbacks	TotalPT		FanIN	Cascades
+A: LC1	- LC16		7/16(43%)	8/16(50%)	0/16(0%)	63/80(78%)	(20)	9
+B: LC17	- LC32		9/16(56%)	8/16(50%)	0/16(0%)	63/80(78%)	(20)	7
+C: LC33	- LC48		9/16(56%)	4/16(25%)	0/16(0%)	63/80(78%)	(20)	7
+D: LC49	- LC64		11/16(68%)	6/16(37%)	0/16(0%)	58/80(72%)	(22)	5
+E: LC65	- LC80		9/16(56%)	8/16(50%)	0/16(0%)	24/80(30%)	(21)	0
+F: LC81	- LC96		7/16(43%)	8/16(50%)	0/16(0%)	14/80(17%)	(15)	0
+G: LC97	- LC112		1/16(6%)	8/16(50%)	0/16(0%)	2/80(2%)	(3)	0
+H: LC113- LC128		0/16(0%)	8/16(50%)	0/16(0%)	0/80(0%)	(0)	0
+
+Total dedicated input used:	2/4 	(50%)
+Total I/O pins used		58/64 	(90%)
+Total Logic cells used 		81/128 	(63%)
+Total Flip-Flop used 		36/128 	(28%)
+Total Foldback logic used 	0/128 	(0%)
+Total Nodes+FB/MCells 		53/128 	(41%)
+Total cascade used 		28
+Total input pins 		41
+Total output pins 		19
+Total Pts 			287
+Creating pla file vaddr.tt3 with 0 inputs 0 outputs, 0 pins 0 nodes and 0 pterms...
+
+----------------  End fitter, Design FITS
+$Device PLCC84 fits 
+FIT1508 completed in 0.00 seconds

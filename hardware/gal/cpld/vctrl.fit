@@ -1,0 +1,1175 @@
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Mon Sep 07 14:24:34 2026
+
+
+fit1508 vctrl.tt2 -device P1508C84 -preassign ignore
+
+
+****** Initial fitting strategy and property ******
+ Pla_in_file = vctrl.tt2
+ Pla_out_file = vctrl.tt3
+ Jedec_file = vctrl.jed
+ Vector_file = vctrl.tmv
+ verilog_file = vctrl.vt
+ Time_file = 
+ Log_file = vctrl.fit
+ err_file = 
+ Device_name = PLCC84
+ Module_name = 
+ Package_type = PLCC
+ Preassign_file = 
+ Property_file = 
+ Sleep_mode = 
+ Preassignment = 
+ Security_mode = OFF
+ Pin_keep_mode = ON
+ Dedicated_input_clock = 
+ Dedicated_input_reset = 
+ Dedicated_input_oe = 
+ supporter = CUPL
+ optimize = ON
+ Soft_buffer = 
+ Xor_synthesis = OFF
+ Foldback_logic =  on
+ Expander = 
+ Cascade_logic = OFF
+ Dedicated_input = 
+ Output_fast = OFF
+ *******************************
+ Power down pin 1 = OFF
+ Power down pin 2 = OFF
+ power_reset = OFF
+ JTAG = ON
+ TDI pullup = OFF
+ TMS pullup = OFF
+ MC_power = OFF
+ Open_collector = OFF
+ ITD0 = ON
+ ITD1 = ON
+ ITD2 = ON
+ Fast_inlatch = off
+ *******************************
+Info: vctrl uses 95% of the pins available in device PLCC84
+  If you wish to have more pins available for future logic changes
+  Atmel  recommends using a larger device
+---------------------------------------------------------
+ Fitter_Pass 1, Preassign = IGNORE, LOGIC_DOUBLING : OFF 
+ ... 
+
+Performing global Output Enable pin assignments ...
+
+Performing global pin assignments ...
+--------------------------------------
+
+
+
+Final global control pins assignment (if applicable)...
+-------------------------------------------------------
+DOTCLK assigned to pin  83
+RESET assigned to pin  1
+
+
+
+Performing input pin pre-assignments ...
+------------------------------------
+DOTCLK assigned to pin  83
+RESET assigned to pin  1
+
+Attempt to place floating signals ...
+------------------------------------
+V0 is placed at feedback node 602 (MC 2)
+CE is placed at pin 12 (MC 3)
+D1 is placed at pin 11 (MC 5)
+V5 is placed at feedback node 605 (MC 5)
+M0 is placed at pin 10 (MC 6)
+D3 is placed at pin 9 (MC 8)
+V6 is placed at feedback node 608 (MC 8)
+VRAMSEL is placed at pin 8 (MC 11)
+V7 is placed at feedback node 612 (MC 12)
+IOPAGE is placed at pin 6 (MC 13)
+CPUA0 is placed at pin 5 (MC 14)
+D5 is placed at pin 4 (MC 16)
+V8 is placed at feedback node 616 (MC 16)
+CPUA1 is placed at pin 22 (MC 17)
+V1 is placed at feedback node 618 (MC 18)
+HS0 is placed at pin 21 (MC 19)
+V2 is placed at feedback node 620 (MC 20)
+WCTRL is placed at pin 20 (MC 21)
+D4 is placed at pin 18 (MC 24)
+V9 is placed at feedback node 624 (MC 24)
+IRQEN is placed at pin 17 (MC 25)
+D6 is placed at pin 16 (MC 27)
+V3 is placed at feedback node 627 (MC 27)
+VSYNC is placed at pin 15 (MC 29)
+TDI is placed at pin 14 (MC 32)
+V4 is placed at feedback node 632 (MC 32)
+VSDLY is placed at feedback node 633 (MC 33)
+VBLPEND is placed at feedback node 634 (MC 34)
+VSTATWR is placed at pin 31 (MC 35)
+H7 is placed at feedback node 636 (MC 36)
+HPOL is placed at pin 30 (MC 37)
+D7 is placed at pin 29 (MC 38)
+H3 is placed at feedback node 638 (MC 38)
+H4 is placed at feedback node 640 (MC 40)
+H5 is placed at feedback node 642 (MC 42)
+IRQ is placed at pin 27 (MC 43)
+SPNREQ is placed at pin 25 (MC 45)
+VBLANK is placed at pin 24 (MC 46)
+TMS is placed at pin 23 (MC 48)
+H6 is placed at feedback node 648 (MC 48)
+WAIT is placed at pin 41 (MC 49)
+GSPN2 is placed at pin 40 (MC 51)
+H0 is placed at feedback node 652 (MC 52)
+GSPN3 is placed at pin 39 (MC 53)
+MC0 is placed at feedback node 654 (MC 54)
+H1 is placed at feedback node 655 (MC 55)
+GSPN1 is placed at pin 37 (MC 56)
+GSPN0 is placed at pin 36 (MC 57)
+MC1 is placed at feedback node 658 (MC 58)
+SPANBUSY is placed at pin 35 (MC 59)
+RETIRE is placed at pin 34 (MC 61)
+MC2 is placed at feedback node 662 (MC 62)
+HSYNC is placed at pin 33 (MC 64)
+GCPU3 is placed at pin 44 (MC 65)
+GCPU2 is placed at pin 45 (MC 67)
+GCPU0 is placed at pin 46 (MC 69)
+GCPU1 is placed at pin 48 (MC 72)
+CTRL0 is placed at pin 49 (MC 73)
+PH0 is placed at feedback node 674 (MC 74)
+CTRL2 is placed at pin 50 (MC 75)
+PH1 is placed at feedback node 676 (MC 76)
+HBLANK is placed at pin 51 (MC 77)
+H2 is placed at feedback node 678 (MC 78)
+MUXSEL1 is placed at pin 52 (MC 80)
+FCLK0 is placed at pin 54 (MC 83)
+CTRL7 is placed at pin 55 (MC 85)
+CTRL6 is placed at pin 56 (MC 86)
+CTRL4 is placed at pin 57 (MC 88)
+CTRL5 is placed at pin 58 (MC 91)
+CTRL3 is placed at pin 60 (MC 93)
+CTRL1 is placed at pin 61 (MC 94)
+TCK is placed at pin 62 (MC 96)
+SPNA0 is placed at pin 63 (MC 97)
+SLOTTICK is placed at pin 64 (MC 99)
+FCLK2 is placed at pin 65 (MC 101)
+FCLK1 is placed at pin 67 (MC 104)
+BLANK is placed at pin 68 (MC 105)
+FCLK3 is placed at pin 69 (MC 107)
+MUXSEL0 is placed at pin 70 (MC 109)
+TDO is placed at pin 71 (MC 112)
+SPNA1 is placed at pin 73 (MC 115)
+WSTB is placed at pin 74 (MC 117)
+TC is placed at pin 75 (MC 118)
+WM0 is placed at pin 76 (MC 120)
+WM1 is placed at pin 77 (MC 123)
+HS1 is placed at pin 79 (MC 125)
+D2 is placed at pin 80 (MC 126)
+D0 is placed at pin 81 (MC 128)
+
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                            V                                                       
+                            R   I            D                                      
+                            A   O C       R  O                                      
+                            M   P P       E  T                                      
+                            S G A U   V   S  C G     H V W W                        
+                     D M  D E N G A D C   E  L N D D S C M M T                      
+                     1 0  3 L D E 0 5 C   T  K D 0 2 1 C 1 0 C                      
+                    -------------------------------------------                     
+                   / 11   9   7   5   3   1  83  81  79  77  75 \                  
+                  /    10   8   6   4   2  84  82  80  78  76    \                 
+              CE | 12                    (*)                   74 | WSTB            
+             VCC | 13                                          73 | SPNA1           
+             TDI | 14                                          72 | GND             
+           VSYNC | 15                                          71 | TDO             
+              D6 | 16                                          70 | MUXSEL0         
+           IRQEN | 17                                          69 | FCLK3           
+              D4 | 18                                          68 | BLANK           
+             GND | 19                                          67 | FCLK1           
+           WCTRL | 20                                          66 | VCC             
+             HS0 | 21                                          65 | FCLK2           
+           CPUA1 | 22                 ATF1508                  64 | SLOTTICK        
+             TMS | 23               84-Lead PLCC               63 | SPNA0           
+          VBLANK | 24                                          62 | TCK             
+          SPNREQ | 25                                          61 | CTRL1           
+             VCC | 26                                          60 | CTRL3           
+             IRQ | 27                                          59 | GND             
+                 | 28                                          58 | CTRL5           
+              D7 | 29                                          57 | CTRL4           
+            HPOL | 30                                          56 | CTRL6           
+         VSTATWR | 31                                          55 | CTRL7           
+             GND | 32                                          54 | FCLK0           
+                  \     34  36  38  40  42  44  46  48  50  52   /                 
+                   \  33  35  37  39  41  43  45  47  49  51  53/                  
+              	    --------------------------------------------                     
+                      H R S G G V G G W G V G G G G G C C H M V                     
+                      S E P S S C S S A N C C C C N C T T B U C                     
+                      Y T A P P C P P I D C P P P D P R R L X C                     
+                      N I N N N   N N T     U U U   U L L A S                       
+                      C R B 0 1   3 2       3 2 0   1 0 2 N E                       
+                        E U                               K L                       
+                          S                                 1                       
+                          Y                                                         
+
+
+
+VCC = Supply Voltage pin which must be connected to (5.0V or 3.0V)
+
+GND = GND pin which must be connected to ground
+
+TMS,TDI,TDO,TDI = JTAG pins which must reserved for the JTAG interface
+
+NC = Unused I/O pins which must be unconnected on the board
+
+Universal-Interconnect-Multiplexer assignments
+------------------------------------------------
+FanIn assignment for block A [17]
+{
+CE,
+H0,H2,H1,H7,H6,
+M0,
+V7,V8,V2,V0,V9,V3,V5,V6,V1,V4,
+}
+Multiplexer assignment for block A
+V7			(MC4	FB)  : MUX 1		Ref (A12fb)
+H0			(MC13	FB)  : MUX 2		Ref (D52fb)
+V8			(MC5	FB)  : MUX 3		Ref (A16fb)
+V2			(MC7	FB)  : MUX 4		Ref (B20fb)
+H2			(MC15	FB)  : MUX 5		Ref (E78fb)
+CE			(MC16	P)   : MUX 7		Ref (A3p)
+V0			(MC1	FB)  : MUX 10		Ref (A2fb)
+V9			(MC8	FB)  : MUX 12		Ref (B24fb)
+M0			(MC17	P)   : MUX 15		Ref (A6p)
+H1			(MC14	FB)  : MUX 16		Ref (D55fb)
+H7			(MC11	FB)  : MUX 18		Ref (C36fb)
+V3			(MC9	FB)  : MUX 23		Ref (B27fb)
+V5			(MC2	FB)  : MUX 28		Ref (A5fb)
+V6			(MC3	FB)  : MUX 30		Ref (A8fb)
+V1			(MC6	FB)  : MUX 34		Ref (B18fb)
+V4			(MC10	FB)  : MUX 37		Ref (B32fb)
+H6			(MC12	FB)  : MUX 39		Ref (C48fb)
+
+FanIn assignment for block B [17]
+{
+CE,
+H0,H2,H1,H7,H6,
+M0,
+V7,V8,V2,V0,V9,V3,V5,V6,V1,V4,
+}
+Multiplexer assignment for block B
+V7			(MC4	FB)  : MUX 1		Ref (A12fb)
+H0			(MC13	FB)  : MUX 2		Ref (D52fb)
+V8			(MC5	FB)  : MUX 3		Ref (A16fb)
+V2			(MC7	FB)  : MUX 4		Ref (B20fb)
+H2			(MC15	FB)  : MUX 5		Ref (E78fb)
+CE			(MC16	P)   : MUX 7		Ref (A3p)
+V0			(MC1	FB)  : MUX 10		Ref (A2fb)
+V9			(MC8	FB)  : MUX 12		Ref (B24fb)
+M0			(MC17	P)   : MUX 15		Ref (A6p)
+H1			(MC14	FB)  : MUX 16		Ref (D55fb)
+H7			(MC11	FB)  : MUX 18		Ref (C36fb)
+V3			(MC9	FB)  : MUX 23		Ref (B27fb)
+V5			(MC2	FB)  : MUX 28		Ref (A5fb)
+V6			(MC3	FB)  : MUX 30		Ref (A8fb)
+V1			(MC6	FB)  : MUX 34		Ref (B18fb)
+V4			(MC10	FB)  : MUX 37		Ref (B32fb)
+H6			(MC12	FB)  : MUX 39		Ref (C48fb)
+
+FanIn assignment for block C [24]
+{
+CE,
+H2,H7,H5,H3,H1,H0,H6,H4,
+IRQEN,
+M0,
+V8,V5,V2,V0,V9,VSTATWR,V4,V6,V1,VBLPEND,V7,VSDLY,V3,
+}
+Multiplexer assignment for block C
+V8			(MC5	FB)  : MUX 1		Ref (A16fb)
+V5			(MC2	FB)  : MUX 2		Ref (A5fb)
+V2			(MC7	FB)  : MUX 4		Ref (B20fb)
+H2			(MC20	FB)  : MUX 5		Ref (E78fb)
+CE			(MC21	P)   : MUX 7		Ref (A3p)
+H7			(MC13	FB)  : MUX 8		Ref (C36fb)
+V0			(MC1	FB)  : MUX 10		Ref (A2fb)
+H5			(MC16	FB)  : MUX 11		Ref (C42fb)
+H3			(MC14	FB)  : MUX 12		Ref (C38fb)
+IRQEN			(MC23	P)   : MUX 14		Ref (B25p)
+M0			(MC22	P)   : MUX 15		Ref (A6p)
+H1			(MC19	FB)  : MUX 16		Ref (D55fb)
+H0			(MC18	FB)  : MUX 18		Ref (D52fb)
+H6			(MC17	FB)  : MUX 21		Ref (C48fb)
+V9			(MC8	FB)  : MUX 22		Ref (B24fb)
+VSTATWR			(MC24	P)   : MUX 23		Ref (C35p)
+H4			(MC15	FB)  : MUX 28		Ref (C40fb)
+V4			(MC10	FB)  : MUX 29		Ref (B32fb)
+V6			(MC3	FB)  : MUX 30		Ref (A8fb)
+V1			(MC6	FB)  : MUX 34		Ref (B18fb)
+VBLPEND			(MC12	FB)  : MUX 36		Ref (C34fb)
+V7			(MC4	FB)  : MUX 37		Ref (A12fb)
+VSDLY			(MC11	FB)  : MUX 38		Ref (C33fb)
+V3			(MC9	FB)  : MUX 39		Ref (B27fb)
+
+FanIn assignment for block D [25]
+{
+CPUA1,CE,CPUA0,
+H3,HPOL,H5,H7,H6,H0,H1,H4,
+IOPAGE,
+MC2,MC0,MC1,
+RETIRE,
+SPNREQ,SPNA0,SPANBUSY,SPNA1,
+TC,
+VRAMSEL,
+WM1,WM0,WSTB,
+}
+Multiplexer assignment for block D
+IOPAGE			(MC15	P)   : MUX 0		Ref (A13p)
+MC2			(MC12	FB)  : MUX 1		Ref (D62fb)
+H3			(MC2	FB)  : MUX 2		Ref (C38fb)
+HPOL			(MC18	P)   : MUX 3		Ref (C37p)
+SPNREQ			(MC19	P)   : MUX 4		Ref (C45p)
+RETIRE			(MC11	P)   : MUX 8		Ref (D61p)
+SPNA0			(MC20	P)   : MUX 9		Ref (G97p)
+VRAMSEL			(MC14	P)   : MUX 10		Ref (A11p)
+TC			(MC23	P)   : MUX 11		Ref (H118p)
+SPANBUSY		(MC10	P)   : MUX 12		Ref (D59p)
+CPUA1			(MC17	P)   : MUX 13		Ref (B17p)
+WM1			(MC25	P)   : MUX 14		Ref (H123p)
+H5			(MC4	FB)  : MUX 15		Ref (C42fb)
+MC0			(MC7	FB)  : MUX 16		Ref (D54fb)
+CE			(MC13	P)   : MUX 17		Ref (A3p)
+H7			(MC1	FB)  : MUX 18		Ref (C36fb)
+WM0			(MC24	P)   : MUX 19		Ref (H120p)
+H6			(MC5	FB)  : MUX 21		Ref (C48fb)
+CPUA0			(MC16	P)   : MUX 22		Ref (A14p)
+SPNA1			(MC21	P)   : MUX 23		Ref (H115p)
+H0			(MC6	FB)  : MUX 24		Ref (D52fb)
+WSTB			(MC22	P)   : MUX 31		Ref (H117p)
+H1			(MC8	FB)  : MUX 34		Ref (D55fb)
+H4			(MC3	FB)  : MUX 38		Ref (C40fb)
+MC1			(MC9	FB)  : MUX 39		Ref (D58fb)
+
+FanIn assignment for block E [22]
+{
+CTRL2,CPUA0,CTRL0,CE,CPUA1,
+D0,D2,
+H6,HS1,HS0,H2,H1,H0,H5,H3,H7,H4,
+IOPAGE,
+PH1,PH0,
+VRAMSEL,
+WCTRL,
+}
+Multiplexer assignment for block E
+D0			(MC22	P)   : MUX 0		Ref (H128p)
+H6			(MC5	FB)  : MUX 3		Ref (C48fb)
+HS1			(MC20	P)   : MUX 4		Ref (H125p)
+CTRL2			(MC10	P)   : MUX 6		Ref (E75p)
+CPUA0			(MC16	P)   : MUX 8		Ref (A14p)
+HS0			(MC18	P)   : MUX 9		Ref (B19p)
+WCTRL			(MC19	P)   : MUX 11		Ref (B21p)
+CTRL0			(MC8	P)   : MUX 14		Ref (E73p)
+H2			(MC12	FB)  : MUX 15		Ref (E78fb)
+H1			(MC7	FB)  : MUX 16		Ref (D55fb)
+CE			(MC13	P)   : MUX 17		Ref (A3p)
+H0			(MC6	FB)  : MUX 18		Ref (D52fb)
+H5			(MC4	FB)  : MUX 23		Ref (C42fb)
+VRAMSEL			(MC14	P)   : MUX 24		Ref (A11p)
+PH1			(MC11	FB)  : MUX 25		Ref (E76fb)
+H3			(MC2	FB)  : MUX 26		Ref (C38fb)
+IOPAGE			(MC15	P)   : MUX 28		Ref (A13p)
+D2			(MC21	P)   : MUX 30		Ref (H126p)
+CPUA1			(MC17	P)   : MUX 33		Ref (B17p)
+H7			(MC1	FB)  : MUX 36		Ref (C36fb)
+H4			(MC3	FB)  : MUX 38		Ref (C40fb)
+PH0			(MC9	FB)  : MUX 39		Ref (E74fb)
+
+FanIn assignment for block F [15]
+{
+CTRL6,CTRL4,CTRL7,CTRL5,CTRL3,CTRL1,
+D5,D3,D1,D7,D4,D6,
+PH1,PH0,
+WCTRL,
+}
+Multiplexer assignment for block F
+CTRL6			(MC4	P)   : MUX 1		Ref (F86p)
+CTRL4			(MC5	P)   : MUX 3		Ref (F88p)
+D5			(MC12	P)   : MUX 4		Ref (A16p)
+CTRL7			(MC3	P)   : MUX 5		Ref (F85p)
+CTRL5			(MC6	P)   : MUX 6		Ref (F91p)
+D3			(MC11	P)   : MUX 7		Ref (A8p)
+PH1			(MC2	FB)  : MUX 11		Ref (E76fb)
+CTRL3			(MC7	P)   : MUX 12		Ref (F93p)
+D1			(MC10	P)   : MUX 13		Ref (A5p)
+PH0			(MC1	FB)  : MUX 15		Ref (E74fb)
+D7			(MC15	P)   : MUX 17		Ref (C38p)
+D4			(MC13	P)   : MUX 23		Ref (B24p)
+D6			(MC14	P)   : MUX 24		Ref (B27p)
+WCTRL			(MC9	P)   : MUX 33		Ref (B21p)
+CTRL1			(MC8	P)   : MUX 34		Ref (F94p)
+
+FanIn assignment for block G [5]
+{
+HBLANK,HS0,
+PH0,PH1,
+VBLANK,
+}
+Multiplexer assignment for block G
+HBLANK			(MC4	P)   : MUX 0		Ref (E77p)
+HS0			(MC5	P)   : MUX 11		Ref (B19p)
+VBLANK			(MC1	P)   : MUX 12		Ref (C46p)
+PH0			(MC2	FB)  : MUX 15		Ref (E74fb)
+PH1			(MC3	FB)  : MUX 35		Ref (E76fb)
+
+Creating JEDEC file vctrl.jed ...
+
+PLCC84 programmed logic:
+-----------------------------------
+CTRL0.D = ((!WCTRL & CTRL0.Q)
+	# (D0 & WCTRL));
+
+CTRL1.D = ((!WCTRL & CTRL1.Q)
+	# (D1 & WCTRL));
+
+CTRL2.D = ((!WCTRL & CTRL2.Q)
+	# (D2 & WCTRL));
+
+CTRL3.D = ((!WCTRL & CTRL3.Q)
+	# (D3 & WCTRL));
+
+CTRL4.D = ((!WCTRL & CTRL4.Q)
+	# (D4 & WCTRL));
+
+CTRL5.D = ((!WCTRL & CTRL5.Q)
+	# (D5 & WCTRL));
+
+CTRL6.D = ((!WCTRL & CTRL6.Q)
+	# (D6 & WCTRL));
+
+CTRL7.D = ((!WCTRL & CTRL7.Q)
+	# (D7 & WCTRL));
+
+FCLK0 = (PH0.Q & PH1.Q);
+
+FCLK3 = (PH0.Q & PH1.Q);
+
+FCLK1 = (PH0.Q & PH1.Q);
+
+FCLK2 = (PH0.Q & PH1.Q);
+
+GCPU0 = (!CPUA0 & !CPUA1 & IOPAGE & VRAMSEL);
+
+GCPU1 = (CPUA0 & !CPUA1 & IOPAGE & VRAMSEL);
+
+GSPN0 = ((!SPNA0 & !SPNA1 & SPNREQ & !IOPAGE)
+	# (!SPNA0 & !SPNA1 & SPNREQ & CPUA0)
+	# (!SPNA0 & !SPNA1 & SPNREQ & CPUA1)
+	# (!SPNA0 & !SPNA1 & SPNREQ & !VRAMSEL));
+
+GCPU2 = (!CPUA0 & CPUA1 & IOPAGE & VRAMSEL);
+
+GCPU3 = (CPUA0 & CPUA1 & IOPAGE & VRAMSEL);
+
+GSPN1 = ((SPNA0 & !SPNA1 & SPNREQ & !IOPAGE)
+	# (SPNA0 & !SPNA1 & SPNREQ & !CPUA0)
+	# (SPNA0 & !SPNA1 & SPNREQ & CPUA1)
+	# (SPNA0 & !SPNA1 & SPNREQ & !VRAMSEL));
+
+GSPN2 = ((!SPNA0 & SPNA1 & SPNREQ & !IOPAGE)
+	# (!SPNA0 & SPNA1 & SPNREQ & CPUA0)
+	# (!SPNA0 & SPNA1 & SPNREQ & !CPUA1)
+	# (!SPNA0 & SPNA1 & SPNREQ & !VRAMSEL));
+
+H0.D = ((!CE & H0.Q)
+	# (CE & !H0.Q));
+
+GSPN3 = ((SPNA0 & SPNA1 & SPNREQ & !IOPAGE)
+	# (SPNA0 & SPNA1 & SPNREQ & !CPUA0)
+	# (SPNA0 & SPNA1 & SPNREQ & !CPUA1)
+	# (SPNA0 & SPNA1 & SPNREQ & !VRAMSEL));
+
+H1.D = ((CE & H0.Q & !H1.Q)
+	# (!CE & H1.Q)
+	# (!H0.Q & H1.Q));
+
+H2.D = ((H2.Q & !H1.Q)
+	# (CE & H0.Q & !H2.Q & H1.Q)
+	# (!CE & H2.Q)
+	# (!H0.Q & H2.Q));
+
+H3.D = ((H3.Q & !H1.Q)
+	# (H3.Q & !H2.Q)
+	# (CE & H0.Q & !H3.Q & H1.Q & H2.Q & !H7.Q)
+	# (CE & H0.Q & !H3.Q & H1.Q & H2.Q & !H6.Q)
+	# (!CE & H3.Q)
+	# (!H0.Q & H3.Q));
+
+!H4.D = ((!H4.Q & !CE)
+	# (!H4.Q & !H0.Q)
+	# (!H4.Q & !H1.Q)
+	# (!H4.Q & !H2.Q)
+	# (!H4.Q & !H3.Q)
+	# (H4.Q & CE & H0.Q & H1.Q & H2.Q & H3.Q)
+	# (H6.Q & H7.Q & CE & H0.Q & H1.Q & H2.Q));
+
+!H5.D = ((CE & H0.Q & H1.Q & H2.Q & H5.Q & H3.Q & H4.Q)
+	# (!CE & !H5.Q)
+	# (!H0.Q & !H5.Q)
+	# (!H1.Q & !H5.Q)
+	# (!H2.Q & !H5.Q)
+	# (!H5.Q & !H3.Q)
+	# (!H5.Q & !H4.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q));
+
+H6.D = ((H6.Q & !H1.Q)
+	# (H6.Q & !H2.Q)
+	# (H6.Q & !H3.Q & !H7.Q)
+	# (H6.Q & !H7.Q & !H4.Q)
+	# (H6.Q & !H7.Q & !H5.Q)
+	# (CE & H0.Q & !H6.Q & H1.Q & H2.Q & H3.Q & H4.Q & H5.Q)
+	# (!CE & H6.Q)
+	# (!H0.Q & H6.Q));
+
+H7.D = ((H7.Q & !H1.Q)
+	# (H7.Q & !H2.Q)
+	# (H7.Q & !H6.Q)
+	# (CE & H0.Q & !H7.Q & H1.Q & H2.Q & H6.Q & H3.Q & H4.Q & H5.Q)
+	# (!CE & H7.Q)
+	# (!H0.Q & H7.Q));
+
+HBLANK = ((!H6.Q & !H7.Q & !H2.Q & !H3.Q & !H4.Q)
+	# (H6.Q & H7.Q & H2.Q)
+	# (!H5.Q & !H6.Q & !H7.Q));
+
+HSYNC = ((!H5.Q & !H6.Q & !H7.Q & !HPOL & !H3.Q)
+	# (H4.Q & HPOL & H3.Q)
+	# (H5.Q & HPOL)
+	# (H6.Q & HPOL)
+	# (H7.Q & HPOL)
+	# (!H4.Q & !H5.Q & !H6.Q & !H7.Q & !HPOL));
+
+IRQ = 1;
+
+MUXSEL0 = ((HS0 & !PH0.Q)
+	# (!HS0 & PH0.Q));
+
+PH0.D = !PH0.Q;
+
+MUXSEL1 = ((!HS1 & PH1.Q & !HS0)
+	# (HS1 & !PH0.Q & !PH1.Q)
+	# (HS1 & !PH1.Q & !HS0)
+	# (HS1 & PH0.Q & PH1.Q & HS0)
+	# (!HS1 & PH0.Q & !PH1.Q & HS0)
+	# (!HS1 & !PH0.Q & PH1.Q));
+
+PH1.D = ((PH0.Q & !PH1.Q)
+	# (!PH0.Q & PH1.Q));
+
+RETIRE = ((SPANBUSY.Q & SPNREQ & !VRAMSEL)
+	# (SPANBUSY.Q & SPNREQ & !IOPAGE)
+	# (SPANBUSY.Q & SPNREQ & CPUA0 & !SPNA0)
+	# (CPUA1 & SPANBUSY.Q & !SPNA1 & SPNREQ)
+	# (SPANBUSY.Q & SPNREQ & !CPUA0 & SPNA0)
+	# (!CPUA1 & SPANBUSY.Q & SPNA1 & SPNREQ));
+
+SLOTTICK = (PH0.Q & PH1.Q);
+
+!V0.D = ((M0 & !V0.Q & V2.Q & V3.Q & V9.Q)
+	# (!V0.Q & !CE)
+	# (!V0.Q & !H0.Q)
+	# (!V0.Q & !H1.Q)
+	# (!V0.Q & !H2.Q)
+	# (!V0.Q & !H6.Q)
+	# (!V0.Q & !H7.Q)
+	# (V0.Q & CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q)
+	# (!M0 & !V0.Q & !V1.Q & !V2.Q & !V3.Q & !V4.Q & !V5.Q & V6.Q & V7.Q & V8.Q));
+
+!V1.D = ((M0 & V2.Q & V3.Q & V9.Q & CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q)
+	# (!V1.Q & !CE)
+	# (!V1.Q & !H0.Q)
+	# (!V1.Q & !H1.Q)
+	# (!V1.Q & !H2.Q)
+	# (!V1.Q & !H6.Q)
+	# (!V1.Q & !H7.Q)
+	# (V0.Q & V1.Q & CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q)
+	# (!V0.Q & !V1.Q));
+
+!V2.D = ((!CE & !V2.Q)
+	# (!H0.Q & !V2.Q)
+	# (!H1.Q & !V2.Q)
+	# (!H2.Q & !V2.Q)
+	# (!H6.Q & !V2.Q)
+	# (!H7.Q & !V2.Q)
+	# (!V2.Q & !V0.Q)
+	# (!V2.Q & !V1.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & V2.Q & V0.Q & V1.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & M0 & V2.Q & V3.Q & V9.Q));
+
+!V3.D = ((!CE & !V3.Q)
+	# (!H0.Q & !V3.Q)
+	# (!H1.Q & !V3.Q)
+	# (!H2.Q & !V3.Q)
+	# (!H6.Q & !V3.Q)
+	# (!H7.Q & !V3.Q)
+	# (!V3.Q & !V0.Q)
+	# (!V3.Q & !V1.Q)
+	# (!V2.Q & !V3.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & V2.Q & V3.Q & V0.Q & V1.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & M0 & V2.Q & V3.Q & V9.Q));
+
+!V4.D = ((CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & V2.Q & V3.Q & V4.Q & V0.Q & V1.Q)
+	# (!CE & !V4.Q)
+	# (!H0.Q & !V4.Q)
+	# (!H1.Q & !V4.Q)
+	# (!H2.Q & !V4.Q)
+	# (!H6.Q & !V4.Q)
+	# (!H7.Q & !V4.Q)
+	# (!V4.Q & !V0.Q)
+	# (!V4.Q & !V1.Q)
+	# (!V2.Q & !V4.Q)
+	# (!V3.Q & !V4.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & M0 & V2.Q & V3.Q & V9.Q));
+
+!V5.D = ((CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & V2.Q & V3.Q & V5.Q & V0.Q & V1.Q & V4.Q)
+	# (!CE & !V5.Q)
+	# (!H0.Q & !V5.Q)
+	# (!H1.Q & !V5.Q)
+	# (!H2.Q & !V5.Q)
+	# (!H6.Q & !V5.Q)
+	# (!H7.Q & !V5.Q)
+	# (!V5.Q & !V0.Q)
+	# (!V5.Q & !V1.Q)
+	# (!V2.Q & !V5.Q)
+	# (!V3.Q & !V5.Q)
+	# (!V5.Q & !V4.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & M0 & V2.Q & V3.Q & V9.Q));
+
+!V6.D = ((CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & V2.Q & V3.Q & V6.Q & V0.Q & V1.Q & V4.Q & V5.Q)
+	# (!CE & !V6.Q)
+	# (!H0.Q & !V6.Q)
+	# (!H1.Q & !V6.Q)
+	# (!H2.Q & !V6.Q)
+	# (!H6.Q & !V6.Q)
+	# (!H7.Q & !V6.Q)
+	# (!V6.Q & !V0.Q)
+	# (!V6.Q & !V1.Q)
+	# (!V2.Q & !V6.Q)
+	# (!V3.Q & !V6.Q)
+	# (!V6.Q & !V4.Q)
+	# (!V6.Q & !V5.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & !M0 & !V2.Q & !V3.Q & !V0.Q & !V1.Q & !V4.Q & !V5.Q & V7.Q & V8.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & M0 & V2.Q & V3.Q & V9.Q));
+
+!V7.D = ((CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & V2.Q & V3.Q & V7.Q & V0.Q & V1.Q & V4.Q & V5.Q & V6.Q)
+	# (!CE & !V7.Q)
+	# (!H0.Q & !V7.Q)
+	# (!H1.Q & !V7.Q)
+	# (!H2.Q & !V7.Q)
+	# (!H6.Q & !V7.Q)
+	# (!H7.Q & !V7.Q)
+	# (!V7.Q & !V0.Q)
+	# (!V7.Q & !V1.Q)
+	# (!V2.Q & !V7.Q)
+	# (!V3.Q & !V7.Q)
+	# (!V7.Q & !V4.Q)
+	# (!V7.Q & !V5.Q)
+	# (!V7.Q & !V6.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & !M0 & !V2.Q & !V3.Q & !V0.Q & !V1.Q & !V4.Q & !V5.Q & V6.Q & V8.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & M0 & V2.Q & V3.Q & V9.Q));
+
+!V8.D = ((CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & V2.Q & V3.Q & V8.Q & V0.Q & V1.Q & V4.Q & V5.Q & V6.Q & V7.Q)
+	# (!CE & !V8.Q)
+	# (!H0.Q & !V8.Q)
+	# (!H1.Q & !V8.Q)
+	# (!H2.Q & !V8.Q)
+	# (!H6.Q & !V8.Q)
+	# (!H7.Q & !V8.Q)
+	# (!V8.Q & !V0.Q)
+	# (!V8.Q & !V1.Q)
+	# (!V2.Q & !V8.Q)
+	# (!V3.Q & !V8.Q)
+	# (!V8.Q & !V4.Q)
+	# (!V8.Q & !V5.Q)
+	# (!V8.Q & !V6.Q)
+	# (!V8.Q & !V7.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & !M0 & !V2.Q & !V3.Q & !V0.Q & !V1.Q & !V4.Q & !V5.Q & V6.Q & V7.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & M0 & V2.Q & V3.Q & V9.Q));
+
+!V9.D = ((!CE & !V9.Q)
+	# (!H0.Q & !V9.Q)
+	# (!H1.Q & !V9.Q)
+	# (!H2.Q & !V9.Q)
+	# (!H6.Q & !V9.Q)
+	# (!H7.Q & !V9.Q)
+	# (!V9.Q & !V0.Q)
+	# (!V9.Q & !V1.Q)
+	# (!V2.Q & !V9.Q)
+	# (!V3.Q & !V9.Q)
+	# (!V9.Q & !V4.Q)
+	# (!V9.Q & !V5.Q)
+	# (!V9.Q & !V6.Q)
+	# (!V9.Q & !V7.Q)
+	# (!V9.Q & !V8.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & !M0 & !V2.Q & !V3.Q & !V0.Q & !V1.Q & !V4.Q & !V5.Q & V6.Q & V7.Q & V8.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & V2.Q & V3.Q & V9.Q & V0.Q & V1.Q & V4.Q & V5.Q & V6.Q & V7.Q & V8.Q)
+	# (CE & H0.Q & H1.Q & H2.Q & H6.Q & H7.Q & M0 & V2.Q & V3.Q & V9.Q));
+
+VBLANK = ((V5.Q & !V6.Q & !V7.Q & !V8.Q & !M0 & !V2.Q & !V3.Q & !V4.Q)
+	# (V5.Q & !V6.Q & !V7.Q & !V8.Q & !M0 & !V3.Q & !V4.Q & !V0.Q & !V1.Q)
+	# (V5.Q & !V6.Q & V7.Q & V8.Q & !M0 & V2.Q & V4.Q & V0.Q)
+	# (V5.Q & !V6.Q & V7.Q & V8.Q & !M0 & V2.Q & V4.Q & V1.Q)
+	# (V5.Q & !V6.Q & V7.Q & V8.Q & !M0 & V3.Q & V4.Q)
+	# (!V5.Q & V6.Q & V7.Q & V8.Q & !M0 & !V2.Q & !V3.Q & !V4.Q & !V0.Q & !V1.Q)
+	# (V5.Q & !V6.Q & !V7.Q & !V8.Q & !V2.Q & !V3.Q & !V4.Q & !V1.Q)
+	# (V5.Q & !V6.Q & !V7.Q & !V8.Q & !V2.Q & !V3.Q & !V4.Q & !V0.Q)
+	# (V9.Q & M0 & V0.Q & V1.Q)
+	# (V9.Q & M0 & V2.Q)
+	# (V9.Q & M0 & V3.Q)
+	# (!V5.Q & !V6.Q & !V7.Q & !V8.Q & !V9.Q));
+
+VBLPEND.D = ((VBLPEND.Q & !VSTATWR)
+	# (!V1.Q & !V2.Q & !V3.Q & !V4.Q & !V5.Q & !V6.Q & !V7.Q & !V8.Q & !V9.Q & !VSDLY.Q));
+
+VSDLY.D = (!V1.Q & !V2.Q & !V3.Q & !V4.Q & !V5.Q & !V6.Q & !V7.Q & !V8.Q & !V9.Q);
+
+WAIT = 1;
+
+VSYNC = ((M0 & V1.Q)
+	# (M0 & V2.Q)
+	# (M0 & V3.Q)
+	# (M0 & V4.Q)
+	# (M0 & V5.Q)
+	# (M0 & V6.Q)
+	# (M0 & V7.Q)
+	# (M0 & V8.Q)
+	# (M0 & V9.Q)
+	# (!M0 & !V1.Q & !V2.Q & !V3.Q & !V4.Q & !V5.Q & !V6.Q & !V7.Q & !V8.Q & !V9.Q));
+
+!BLANK = (!HBLANK & !VBLANK);
+
+MC0.D = ((MC0.Q & !RETIRE & !WSTB)
+	# (!MC0.Q & RETIRE & !WSTB));
+
+MC1.D = ((MC0.Q & !MC1.Q & RETIRE & !WSTB)
+	# (MC1.Q & !RETIRE & !WSTB)
+	# (!MC0.Q & MC1.Q & !WSTB));
+
+MC2.D = ((MC2.Q & !WSTB & !MC1.Q)
+	# (MC0.Q & !MC2.Q & RETIRE & !WSTB & MC1.Q)
+	# (MC2.Q & !RETIRE & !WSTB)
+	# (!MC0.Q & MC2.Q & !WSTB));
+
+!SPANBUSY.D = ((!WSTB & RETIRE & TC & !WM0)
+	# (!WSTB & RETIRE & !WM0 & !WM1)
+	# (!WSTB & RETIRE & !WM1 & MC0.Q & MC1.Q & MC2.Q)
+	# (!SPANBUSY.Q & !WSTB));
+
+CTRL0.C = DOTCLK;
+
+CTRL0.AR = !RESET;
+
+CTRL1.C = DOTCLK;
+
+CTRL1.AR = !RESET;
+
+CTRL2.C = DOTCLK;
+
+CTRL2.AR = !RESET;
+
+CTRL3.C = DOTCLK;
+
+CTRL3.AR = !RESET;
+
+CTRL4.C = DOTCLK;
+
+CTRL4.AR = !RESET;
+
+CTRL5.C = DOTCLK;
+
+CTRL5.AR = !RESET;
+
+CTRL6.C = DOTCLK;
+
+CTRL6.AR = !RESET;
+
+CTRL7.C = DOTCLK;
+
+CTRL7.AR = !RESET;
+
+H0.C = DOTCLK;
+
+H0.AR = !RESET;
+
+H1.C = DOTCLK;
+
+H1.AR = !RESET;
+
+H2.C = DOTCLK;
+
+H2.AR = !RESET;
+
+H3.C = DOTCLK;
+
+H3.AR = !RESET;
+
+H4.C = DOTCLK;
+
+H4.AR = !RESET;
+
+H5.C = DOTCLK;
+
+H5.AR = !RESET;
+
+H6.C = DOTCLK;
+
+H6.AR = !RESET;
+
+H7.C = DOTCLK;
+
+H7.AR = !RESET;
+
+IRQ.OE = (IRQEN & VBLPEND.Q);
+
+PH0.C = DOTCLK;
+
+PH0.AR = !RESET;
+
+PH1.C = DOTCLK;
+
+PH1.AR = !RESET;
+
+V0.C = DOTCLK;
+
+V0.AR = !RESET;
+
+V1.C = DOTCLK;
+
+V1.AR = !RESET;
+
+V2.C = DOTCLK;
+
+V2.AR = !RESET;
+
+V3.C = DOTCLK;
+
+V3.AR = !RESET;
+
+V4.C = DOTCLK;
+
+V4.AR = !RESET;
+
+V5.C = DOTCLK;
+
+V5.AR = !RESET;
+
+V6.C = DOTCLK;
+
+V6.AR = !RESET;
+
+V7.C = DOTCLK;
+
+V7.AR = !RESET;
+
+V8.C = DOTCLK;
+
+V8.AR = !RESET;
+
+V9.C = DOTCLK;
+
+V9.AR = !RESET;
+
+VBLPEND.C = DOTCLK;
+
+VBLPEND.AR = !RESET;
+
+VSDLY.C = DOTCLK;
+
+VSDLY.AR = !RESET;
+
+WAIT.OE = (IOPAGE & SPANBUSY.Q & VRAMSEL);
+
+MC0.C = DOTCLK;
+
+MC0.AR = !RESET;
+
+MC1.C = DOTCLK;
+
+MC1.AR = !RESET;
+
+MC2.C = DOTCLK;
+
+MC2.AR = !RESET;
+
+SPANBUSY.C = DOTCLK;
+
+SPANBUSY.AR = !RESET;
+
+
+PLCC84 Pin/Node Placement:
+------------------------------------
+Pin 1  = RESET;
+Pin 4  = D5; /* MC 16 */
+Pin 5  = CPUA0; /* MC 14 */
+Pin 6  = IOPAGE; /* MC 13 */
+Pin 8  = VRAMSEL; /* MC 11 */
+Pin 9  = D3; /* MC 8 */
+Pin 10 = M0; /* MC  6 */
+Pin 11 = D1; /* MC  5 */
+Pin 12 = CE; /* MC  3 */
+Pin 14 = TDI; /* MC 32 */ 
+Pin 15 = VSYNC; /* MC 29 */ 
+Pin 16 = D6; /* MC 27 */ 
+Pin 17 = IRQEN; /* MC 25 */ 
+Pin 18 = D4; /* MC 24 */ 
+Pin 20 = WCTRL; /* MC 21 */ 
+Pin 21 = HS0; /* MC 19 */ 
+Pin 22 = CPUA1; /* MC 17 */ 
+Pin 23 = TMS; /* MC 48 */ 
+Pin 24 = VBLANK; /* MC 46 */ 
+Pin 25 = SPNREQ; /* MC 45 */ 
+Pin 27 = IRQ; /* MC 43 */ 
+Pin 29 = D7; /* MC 38 */ 
+Pin 30 = HPOL; /* MC 37 */ 
+Pin 31 = VSTATWR; /* MC 35 */ 
+Pin 33 = HSYNC; /* MC 64 */ 
+Pin 34 = RETIRE; /* MC 61 */ 
+Pin 35 = SPANBUSY; /* MC 59 */ 
+Pin 36 = GSPN0; /* MC 57 */ 
+Pin 37 = GSPN1; /* MC 56 */ 
+Pin 39 = GSPN3; /* MC 53 */ 
+Pin 40 = GSPN2; /* MC 51 */ 
+Pin 41 = WAIT; /* MC 49 */ 
+Pin 44 = GCPU3; /* MC 65 */ 
+Pin 45 = GCPU2; /* MC 67 */ 
+Pin 46 = GCPU0; /* MC 69 */ 
+Pin 48 = GCPU1; /* MC 72 */ 
+Pin 49 = CTRL0; /* MC 73 */ 
+Pin 50 = CTRL2; /* MC 75 */ 
+Pin 51 = HBLANK; /* MC 77 */ 
+Pin 52 = MUXSEL1; /* MC 80 */ 
+Pin 54 = FCLK0; /* MC 83 */ 
+Pin 55 = CTRL7; /* MC 85 */ 
+Pin 56 = CTRL6; /* MC 86 */ 
+Pin 57 = CTRL4; /* MC 88 */ 
+Pin 58 = CTRL5; /* MC 91 */ 
+Pin 60 = CTRL3; /* MC 93 */ 
+Pin 61 = CTRL1; /* MC 94 */ 
+Pin 62 = TCK; /* MC 96 */ 
+Pin 63 = SPNA0; /* MC 97 */ 
+Pin 64 = SLOTTICK; /* MC 99 */ 
+Pin 65 = FCLK2; /* MC 101 */ 
+Pin 67 = FCLK1; /* MC 104 */ 
+Pin 68 = BLANK; /* MC 105 */ 
+Pin 69 = FCLK3; /* MC 107 */ 
+Pin 70 = MUXSEL0; /* MC 109 */ 
+Pin 71 = TDO; /* MC 112 */ 
+Pin 73 = SPNA1; /* MC 115 */ 
+Pin 74 = WSTB; /* MC 117 */ 
+Pin 75 = TC; /* MC 118 */ 
+Pin 76 = WM0; /* MC 120 */ 
+Pin 77 = WM1; /* MC 123 */ 
+Pin 79 = HS1; /* MC 125 */ 
+Pin 80 = D2; /* MC 126 */ 
+Pin 81 = D0; /* MC 128 */ 
+Pin 83 = DOTCLK;
+PINNODE 602 = V0; /* MC 2 Feedback */
+PINNODE 605 = V5; /* MC 5 Feedback */
+PINNODE 608 = V6; /* MC 8 Feedback */
+PINNODE 612 = V7; /* MC 12 Feedback */
+PINNODE 616 = V8; /* MC 16 Feedback */
+PINNODE 618 = V1; /* MC 18 Feedback */
+PINNODE 620 = V2; /* MC 20 Feedback */
+PINNODE 624 = V9; /* MC 24 Feedback */
+PINNODE 627 = V3; /* MC 27 Feedback */
+PINNODE 632 = V4; /* MC 32 Feedback */
+PINNODE 633 = VSDLY; /* MC 33 Feedback */
+PINNODE 634 = VBLPEND; /* MC 34 Feedback */
+PINNODE 636 = H7; /* MC 36 Feedback */
+PINNODE 638 = H3; /* MC 38 Feedback */
+PINNODE 640 = H4; /* MC 40 Feedback */
+PINNODE 642 = H5; /* MC 42 Feedback */
+PINNODE 648 = H6; /* MC 48 Feedback */
+PINNODE 652 = H0; /* MC 52 Feedback */
+PINNODE 654 = MC0; /* MC 54 Feedback */
+PINNODE 655 = H1; /* MC 55 Feedback */
+PINNODE 658 = MC1; /* MC 58 Feedback */
+PINNODE 662 = MC2; /* MC 62 Feedback */
+PINNODE 674 = PH0; /* MC 74 Feedback */
+PINNODE 676 = PH1; /* MC 76 Feedback */
+PINNODE 678 = H2; /* MC 78 Feedback */
+
+** Resource Usage **
+
+
+DCERP Field = Summary of Allocations.
+|||||
+|||||_Preset [p,-]       ==  p = PT preset, - No Preset.
+||||
+||||__Reset [g,r,-]      ==  g= Global AR, r = PT reset, - No reset.
+|||
+|||___Clock Enable [e,-] ==  e = Product Term, - always enabled, - none.
+||
+||____Clock [c,g,-],     ==  c = Product term, g = Global term, - No Clock.
+|
+|_____Type [C,D,L,T],    ==  Register type C= combin, D=dff, L=latch, T=tff.
+
+For input only = INPUT.
+
+MCell Pin# Oe   PinDrive  DCERP  FBDrive  DCERP  Foldback  CascadeOut     TotPT output_slew
+MC1   0         --               --              --        -> V0          5     slow
+MC2   0         --               V0       Dg-g-  NA        --             4     slow
+MC3   12   --   CE        INPUT  --              --        -> V5          5     slow
+MC4   0         --               --              --        -> V5          5     slow
+MC5   11   --   D1        INPUT  V5       Dg-g-  NA        --             3     slow
+MC6   10   --   M0        INPUT  --              NA        -> V6          5     slow
+MC7   0         --               --              NA        -> V6          5     slow
+MC8   9    --   D3        INPUT  V6       Dg-g-  NA        --             5     slow
+MC9   0         --               --              --        -> V7          5     slow
+MC10  0         --               --              --        -> V7          5     slow
+MC11  8    --   VRAMSEL   INPUT  --              --        -> V7          5     slow
+MC12  0         --               V7       Dg-g-  --        --             1     slow
+MC13  6    --   IOPAGE    INPUT  --              --        -> V8          5     slow
+MC14  5    --   CPUA0     INPUT  --              --        -> V8          5     slow
+MC15  0         --               --              --        -> V8          5     slow
+MC16  4    --   D5        INPUT  V8       Dg-g-  NA        --             2     slow
+MC17  22   --   CPUA1     INPUT  --              --        -> V1          5     slow
+MC18  0         --               V1       Dg-g-  NA        --             4     slow
+MC19  21   --   HS0       INPUT  --              NA        -> V2          5     slow
+MC20  0         --               V2       Dg-g-  NA        --             5     slow
+MC21  20   --   WCTRL     INPUT  --              NA        -> V9          5     slow
+MC22  0         --               --              --        -> V9          5     slow
+MC23  0         --               --              --        -> V9          5     slow
+MC24  18   --   D4        INPUT  V9       Dg-g-  NA        --             3     slow
+MC25  17   --   IRQEN     INPUT  --              --        -> V3          5     slow
+MC26  0         --               --              --        -> V3          5     slow
+MC27  16   --   D6        INPUT  V3       Dg-g-  --        --             1     slow
+MC28  0         --               --              NA        -> VSYNC       5     slow
+MC29  15   on   VSYNC     C----  --              NA        --             5     slow
+MC30  0         --               --              --        -> V4          5     slow
+MC31  0         --               --              --        -> V4          5     slow
+MC32  14   --   TDI       INPUT  V4       Dg-g-  --        --             2     slow
+MC33  0         --               VSDLY    Dg-g-  --        --             1     slow
+MC34  0         --               VBLPEND  Dg-g-  --        --             2     slow
+MC35  31   --   VSTATWR   INPUT  --              --        -> H7          5     slow
+MC36  0         --               H7       Dg-g-  --        --             1     slow
+MC37  30   --   HPOL      INPUT  --              --        -> H3          5     slow
+MC38  29   --   D7        INPUT  H3       Dg-g-  --        --             1     slow
+MC39  0         --               --              --        -> H4          5     slow
+MC40  28        --               H4       Dg-g-  --        --             2     slow
+MC41  0         --               --              --        -> H5          5     slow
+MC42  0         --               H5       Dg-g-  --        --             3     slow
+MC43  27   PT   IRQ       C----  --              --        --             1     slow
+MC44  0         --               --              --        -> VBLANK      5     slow
+MC45  25   --   SPNREQ    INPUT  --              --        -> VBLANK      5     slow
+MC46  24   on   VBLANK    C----  --              --        --             2     slow
+MC47  0         --               --              --        -> H6          5     slow
+MC48  23   --   TMS       INPUT  H6       Dg-g-  --        --             3     slow
+MC49  41   PT   WAIT      C----  --              --        --             1     slow
+MC50  0         --               --              --        --             0     slow
+MC51  40   on   GSPN2     C----  --              --        --             4     slow
+MC52  0         --               H0       Dg-g-  --        --             2     slow
+MC53  39   on   GSPN3     C----  --              --        --             4     slow
+MC54  0         --               MC0      Dg-g-  --        --             2     slow
+MC55  0         --               H1       Dg-g-  --        --             3     slow
+MC56  37   on   GSPN1     C----  --              --        --             4     slow
+MC57  36   on   GSPN0     C----  --              --        --             4     slow
+MC58  0         --               MC1      Dg-g-  --        --             3     slow
+MC59  35   on   SPANBUSY  Dg-g-  --              --        --             4     slow
+MC60  0         --               --              --        -> RETIRE      5     slow
+MC61  34   on   RETIRE    C----  --              --        --             1     slow
+MC62  0         --               MC2      Dg-g-  --        --             4     slow
+MC63  0         --               --              --        -> HSYNC       5     slow
+MC64  33   on   HSYNC     C----  --              --        --             1     slow
+MC65  44   on   GCPU3     C----  --              --        --             1     slow
+MC66  0         --               --              --        --             0     slow
+MC67  45   on   GCPU2     C----  --              --        --             1     slow
+MC68  0         --               --              --        --             0     slow
+MC69  46   on   GCPU0     C----  --              --        --             1     slow
+MC70  0         --               --              --        --             0     slow
+MC71  0         --               --              --        --             0     slow
+MC72  48   on   GCPU1     C----  --              --        --             1     slow
+MC73  49   on   CTRL0     Dg-g-  --              --        --             2     slow
+MC74  0         --               PH0      Dg-g-  --        --             1     slow
+MC75  50   on   CTRL2     Dg-g-  --              --        --             2     slow
+MC76  0         --               PH1      Dg-g-  --        --             2     slow
+MC77  51   on   HBLANK    C----  --              --        --             3     slow
+MC78  0         --               H2       Dg-g-  --        --             4     slow
+MC79  0         --               --              --        -> MUXSEL1     5     slow
+MC80  52   on   MUXSEL1   C----  --              --        --             1     slow
+MC81  0         --               --              --        --             0     slow
+MC82  0         --               --              --        --             0     slow
+MC83  54   on   FCLK0     C----  --              --        --             1     slow
+MC84  0         --               --              --        --             0     slow
+MC85  55   on   CTRL7     Dg-g-  --              --        --             2     slow
+MC86  56   on   CTRL6     Dg-g-  --              --        --             2     slow
+MC87  0         --               --              --        --             0     slow
+MC88  57   on   CTRL4     Dg-g-  --              --        --             2     slow
+MC89  0         --               --              --        --             0     slow
+MC90  0         --               --              --        --             0     slow
+MC91  58   on   CTRL5     Dg-g-  --              --        --             2     slow
+MC92  0         --               --              --        --             0     slow
+MC93  60   on   CTRL3     Dg-g-  --              --        --             2     slow
+MC94  61   on   CTRL1     Dg-g-  --              --        --             2     slow
+MC95  0         --               --              --        --             0     slow
+MC96  62   --   TCK       INPUT  --              --        --             0     slow
+MC97  63   --   SPNA0     INPUT  --              --        --             0     slow
+MC98  0         --               --              --        --             0     slow
+MC99  64   on   SLOTTICK  C----  --              --        --             1     slow
+MC100 0         --               --              --        --             0     slow
+MC101 65   on   FCLK2     C----  --              --        --             1     slow
+MC102 0         --               --              --        --             0     slow
+MC103 0         --               --              --        --             0     slow
+MC104 67   on   FCLK1     C----  --              --        --             1     slow
+MC105 68   on   BLANK     C----  --              --        --             1     slow
+MC106 0         --               --              --        --             0     slow
+MC107 69   on   FCLK3     C----  --              --        --             1     slow
+MC108 0         --               --              --        --             0     slow
+MC109 70   on   MUXSEL0   C----  --              --        --             2     slow
+MC110 0         --               --              --        --             0     slow
+MC111 0         --               --              --        --             0     slow
+MC112 71   --   TDO       INPUT  --              --        --             0     slow
+MC113 0         --               --              --        --             0     slow
+MC114 0         --               --              --        --             0     slow
+MC115 73   --   SPNA1     INPUT  --              --        --             0     slow
+MC116 0         --               --              --        --             0     slow
+MC117 74   --   WSTB      INPUT  --              --        --             0     slow
+MC118 75   --   TC        INPUT  --              --        --             0     slow
+MC119 0         --               --              --        --             0     slow
+MC120 76   --   WM0       INPUT  --              --        --             0     slow
+MC121 0         --               --              --        --             0     slow
+MC122 0         --               --              --        --             0     slow
+MC123 77   --   WM1       INPUT  --              --        --             0     slow
+MC124 0         --               --              --        --             0     slow
+MC125 79   --   HS1       INPUT  --              --        --             0     slow
+MC126 80   --   D2        INPUT  --              --        --             0     slow
+MC127 0         --               --              --        --             0     slow
+MC128 81   --   D0        INPUT  --              --        --             0     slow
+MC0   2         --               --              --        --             0     slow
+MC0   1         RESET     INPUT  --              --        --             0     slow
+MC0   84        --               --              --        --             0     slow
+MC0   83        DOTCLK    INPUT  --              --        --             0     slow
+
+Logic Array Block	Logic Cells	I/O Pins	Foldbacks	TotalPT		FanIN	Cascades
+A: LC1	- LC16		5/16(31%)	8/16(50%)	0/16(0%)	70/80(87%)	(17)	11
+B: LC17	- LC32		6/16(37%)	8/16(50%)	0/16(0%)	70/80(87%)	(17)	10
+C: LC33	- LC48		9/16(56%)	7/16(43%)	0/16(0%)	51/80(63%)	(24)	7
+D: LC49	- LC64		13/16(81%)	8/16(50%)	0/16(0%)	47/80(58%)	(25)	2
+E: LC65	- LC80		11/16(68%)	8/16(50%)	0/16(0%)	24/80(30%)	(22)	1
+F: LC81	- LC96		7/16(43%)	8/16(50%)	0/16(0%)	13/80(16%)	(15)	0
+G: LC97	- LC112		6/16(37%)	8/16(50%)	0/16(0%)	7/80(8%)	(5)	0
+H: LC113- LC128		0/16(0%)	8/16(50%)	0/16(0%)	0/80(0%)	(0)	0
+
+Total dedicated input used:	2/4 	(50%)
+Total I/O pins used		63/64 	(98%)
+Total Logic cells used 		88/128 	(68%)
+Total Flip-Flop used 		34/128 	(26%)
+Total Foldback logic used 	0/128 	(0%)
+Total Nodes+FB/MCells 		57/128 	(44%)
+Total cascade used 		31
+Total input pins 		33
+Total output pins 		32
+Total Pts 			282
+Creating pla file vctrl.tt3 with 0 inputs 0 outputs, 0 pins 0 nodes and 0 pterms...
+
+----------------  End fitter, Design FITS
+$Device PLCC84 fits 
+FIT1508 completed in 0.00 seconds
