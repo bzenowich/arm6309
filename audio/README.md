@@ -2,8 +2,9 @@
 
 A **Paula**, not a Paula-alike: 4 channels of 8-bit signed PCM, built from pre-1990
 parts, whose acceptance test is playing existing Amiga OCS tracker modules **correctly**.
-**36 ICs**, card-local sample SRAM, no bus mastering, and **no digital multiply and no
-digital sum anywhere**: volume and mixing both happen in the converters, the way Paula
+**29 ICs** — one `ATF1508AS` CPLD in a PLCC-84 socket holds all the logic
+([`docs/audio.md`](docs/audio.md) §10.1) — card-local sample SRAM, no bus mastering,
+and **no digital multiply and no digital sum anywhere**: volume and mixing both happen in the converters, the way Paula
 does it.
 
 > ⚠ **This README said 35 ICs, then 57.** The design review's audio findings put the

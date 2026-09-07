@@ -1393,14 +1393,41 @@ the card with no spare macrocells.
 | 1 | 74HC4066 | filter select / bypass (§7) |
 | 1 | 74HC574 | posted-write data latch (host → sample RAM) |
 | **1** | **74HC574** | **`ADATA`/`SDATA` read-prefetch latch (§9.3)** |
-| **1** | **74HC174** | **two-flop host-port synchronisers ×3 (§9.4.4)** |
-| 1 | 74HC273 | `ACTRL`, master reset |
-| **1** | **74HC07** | **open-drain buffer for the wire-OR `/FIRQ` (§8.1, decision D9)** |
-| **5** | **GAL22V10-15** | **sequencer/queue; address mux + decode; `DMACON`/timer; `INTENA`; `INTREQ`+pending (§9.5)** |
+| ~~1~~ | ~~74HC174~~ | ~~two-flop host-port synchronisers ×3 (§9.4.4)~~ — **into the CPLD** |
+| ~~1~~ | ~~74HC273~~ | ~~`ACTRL`, master reset~~ — **into the CPLD, §10.1** |
+| ~~1~~ | ~~74HC07~~ | ~~open-drain buffer for the wire-OR `/FIRQ`~~ — **into the CPLD**, whose *Programmable Output Open Collector Option* is exactly what §8.1 says a GAL lacks |
+| ~~5~~ **1** | ~~`GAL22V10-15`~~ **`ATF1508AS-…JC84`, PLCC-84, socketed** | **the whole of the card's logic — §10.1 below.** The GAL allocation of §9.5 was **six** parts once fitted, not five, and this absorbs those plus the `'273`, the `'174` and the `'07` |
 | 1 | 28.37516 MHz osc | PAL Amiga master (§4.1) |
 | (1) | (28.63636 MHz osc) | (NTSC, socketed option, §4.1) |
 | — | R-2R / passives | filter networks, offset-injection resistors (§6.3), output stage |
-| **36** | | **(37 with the NTSC can)** |
+| **29** | | **(30 with the NTSC can)** — was 36 with five GALs, 37 once the fit found six |
+
+### 10.1 One CPLD, and why the counter and comparator stay outside
+
+**Decided 2026-09-07**, from `npm run census:audio`. The card's logic goes into a single
+**`ATF1508AS` in PLCC-84** — socketed, reseatable, programmed out of circuit so JTAG's
+four pins stay available.
+
+| | Absorbed | Macrocells | External I/O | PLCC-84 |
+|---|---|---|---|---|
+| **A — chosen** | 6 GALs + `'273` + `'174` + `'07` = **9 → 1** | 61 of 128 | ~48 of 68 | **fits** |
+| B | also the `'590` counter and `'688` comparator = 13 → 1 | 81 | ~72 | 4 pins short |
+
+**B saves four more packages and costs the socket**, because §4.2's comparator reads
+`NEXT` off the state-file bus: leave it outside and those 24 bits never enter the
+logic; absorb it and they all become inputs. On a hand-built card carrying four
+`AD7528`s and three op-amps, a socket is worth more than four packages.
+
+**What does not move, and never could:** the four SRAMs, the four `AD7528` multiplying
+DACs, the three op-amps, the `4066`, the oscillator and every passive. This is an
+analogue card with a digital corner, and the CPLD is the corner.
+
+> ⚠ **The I/O figure is estimated, not fitted.** §9.5's *"the sample-RAM address now
+> has one source — the state-file read bus"* is what keeps it to ~48: those 19 address
+> lines are board wiring between two memories and never enter the logic at all. The
+> rest of the datapath's interfaces have never been enumerated, and on the video card
+> every such estimate was wrong until it was fitted. **48 of 68 has room for that to be
+> wrong by twenty**; B's 72 of 68 does not, which is the second reason to take A.
 
 Video card, for comparison: **36** (32 if the tri-state pixel bus closes). **This card
 is no longer the small one**, and the honest statement of that is the point of the two

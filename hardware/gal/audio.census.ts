@@ -72,7 +72,18 @@ let aIc = 0, aMc = 0
 console.log(`\nWhat else one die could take\n`)
 for (const x of ABSORB) { aIc += x.ic; aMc += x.mc
   console.log(`     -${x.ic} IC  +${fmt(x.mc, 2)} mc   ${x.what}`) }
-console.log(`\n  ${FITTED.length + 1} GALs + ${aIc} more packages -> 1.  Card 36 -> ${36 - (FITTED.length + 1) - aIc + 1}.`)
+/* The card's IC count, derived rather than asserted.
+ *
+ * audio.md §10 totals 36 - but that table carries FIVE GAL22V10 and the fit
+ * needs six (§9.5's note), so the baseline this replaces is 37. Getting that
+ * wrong is how a "36 -> 28" turns into an off-by-one: the sixth GAL has to be
+ * added before it is taken away again. */
+const DOCUMENTED = 36
+const GAL_CORRECTION = 1        // §9.5: the interrupt block is two parts, not one
+const baseline = DOCUMENTED + GAL_CORRECTION
+const galPackages = FITTED.length + 1
+console.log(`\n  audio.md §10 totals ${DOCUMENTED} ICs with five GALs; the fit needs six, so`)
+console.log(`  the baseline is ${baseline}.`)
 console.log(`  macrocells ${macrocells} + ${aMc} = ${macrocells + aMc} of 128.`)
 
 /* -- and the pins, which is where it will be decided --------------------- *
@@ -103,9 +114,16 @@ console.log(`     as 2 x '688 outside and the bus never enters the logic. Absorb
 console.log(`     which is what deletes four of the seven packages above - and all 24`)
 console.log(`     bits become inputs.`)
 
+/* Case A keeps the '590 counter and '688 comparator outside, so it absorbs the
+ * GALs plus the '273, the '174 and the '07 - nine packages. Case B takes the
+ * counter and comparator too, which is four more. */
+const A_ABSORBED = galPackages + 3
+const B_ABSORBED = galPackages + aIc
 const CASES = [
-  { what: "comparator stays external ('590 + '688 keep 4 packages)", io: base, mc: macrocells + 14 },
-  { what: "comparator absorbed - the 24-bit state-file bus comes in", io: base + 24, mc: macrocells + aMc },
+  { what: "A - comparator stays external ('590 + '688 keep their 4 packages)",
+    io: base, mc: macrocells + 14, absorbed: A_ABSORBED },
+  { what: "B - comparator absorbed; the 24-bit state-file bus comes in",
+    io: base + 24, mc: macrocells + aMc, absorbed: B_ABSORBED },
 ] as const
 
 const PARTS = [
@@ -116,6 +134,7 @@ const PARTS = [
 
 for (const c of CASES) {
   console.log(`\n  ${c.what}`)
+  console.log(`     ${c.absorbed} packages -> 1, so ${baseline} - ${c.absorbed} + 1 = ${baseline - c.absorbed + 1} ICs`)
   console.log(`     ${c.mc} macrocells, ~${c.io} I/O`)
   for (const q of PARTS) {
     console.log(`     ${q.name}  ${q.mc >= c.mc && q.io >= c.io ? "FITS" :
