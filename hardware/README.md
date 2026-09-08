@@ -127,6 +127,7 @@ The backplane carries **5 V only** — the storage card makes its own 3.3 V behi
 | [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
 | [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
 | [`cards/`](cards/) | audio, video, **io** (PS/2 + serial, merged 2026-09-08), storage, net — bus interface each | |
+| [`ram.md`](ram.md) | **RAM expansion, 512 KB to 16 MB** — a brainstorm. The address path costs one SRAM because the MMU was built with 128× the map storage it uses; the memory costs a DRAM controller, which `/WAIT` only made possible on 2026-09-08 | |
 | [`place/`](place/) | **the placement study** — every board drawn 1 : 1 from its parts list, and the check that found the video card did not fit a Eurocard | + [`place/place.check.ts`](place/place.check.ts) |
 | [`gal/`](gal/) | **the programmable logic** — U3 and U6's equations in CUPL and Verilog, and [`gal/jedec/`](gal/jedec/), which assembles them into the fuse maps a programmer burns | + [`gal/mmu.check.ts`](gal/mmu.check.ts), [`gal/mmu_tb.sv`](gal/mmu_tb.sv), [`gal/jedec.check.ts`](gal/jedec.check.ts) |
 | [`vendor/mc6809/`](vendor/mc6809/) | **third-party** — Greg Miller's cycle-accurate MC6809E core, BSD, byte-identical to upstream | |

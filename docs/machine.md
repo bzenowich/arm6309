@@ -811,7 +811,8 @@ a cross-card dependency.
 | **video** | **⚠ `vctrl` has zero spare pins and therefore no JTAG.** 64 of 64 with JTAG costing four I/O: it is programmed out of circuit, as the audio card's U1 already is. Getting in-circuit programming back means moving `RA0`–`RA4` and `WSTB` to a second GAL | `video.cpld.ts` |
 | **video** | **⚠ Bound `SPANBUSY`.** `/WAIT` works now, and no document says how long the span writer holds it. Any card scheduling against `E` needs that number | §5 item 10, `net.md` §16 item 5 |
 | **audio** | **⚠ Decide whether the sample RAM moves into `A20 = 1`.** Its 128 KB upload is a chunked `TFM X+,Y` into a port and pays the same tax storage and net just stopped paying — and it is the last card carrying the doubled-write exposure | §5 item 7, `audio.md` §13 |
-| **machine** | **⚠ Divide the megabyte at `A20 = 1`** — how a card claims a region, at what granularity, and who arbitrates a host access the card cannot defer | §5 item 7 |
+| **machine** | **⚠ Divide the megabyte at `A20 = 1`** — how a card claims a region, at what granularity, and who arbitrates a host access the card cannot defer. ⚠ **And it now blocks a second thing**: `hardware/ram.md` §11 item 1 shows the motherboard's three reserved SRAM footprints cannot be populated until `A20 = 1` is re-carved | §5 item 7, `hardware/ram.md` |
+| **machine** | **⚠ RAM expansion is a live question and it wants three backplane pins.** `hardware/ram.md`: 16 MB needs 11-bit map entries — one more SRAM and `A21`–`A23`. ⭐ It also finds that `TASK` can widen from 1 bit to 8 **for nothing**, giving 256 resident contexts and a one-write process switch | `hardware/ram.md` §3.2, §7 |
 | ~~**storage, io**~~ | ~~Re-price against a memory-mapped buffer.~~ **Done 2026-09-08** — both cards took it. `sdcard.md` §11.1 and §4.5; `net.md` §13.3 and §7.6. ⚠ **What is left is `sdcard.md` §13 item 6**: its *write* path is still on the port | §5 item 1 D |
 | **io** | **Find out whether a NitrOS-9 network stack exists.** It is the net card's largest cost and nobody has looked — the same shape of unknown as `serial`'s `sc6551` | `net.md` §14.2, §16 item 12 |
 | ~~**project**~~ | ~~**⚠ Restate or retire the no-CPLD house rule.**~~ **RETIRED 2026-09-08** — root `README.md`. Programmable logic is in; FPGAs are unproposed rather than banned. ⚠ **One consequence outstanding**: `sdcard.md` §8.1's `ATF1508AS` was refused on the rule alone and is now unblocked at 8 ICs against 14 | root `README.md`; `sdcard.md` §13 item 12 |
@@ -831,6 +832,13 @@ a cross-card dependency.
 
 **512 KB of SRAM on the motherboard, selected by `A19 = 0` qualified with `/IOPAGE`
 (§2).** **One** × 512K×8 (AS6C4008-class, 55 ns), and **no decode**.
+
+> ⭐ **Expansion is now written up** — [`hardware/ram.md`](../hardware/ram.md), 2026-09-08.
+> Three more footprints are reserved on the board and the path to 16 MB is one more map
+> SRAM, because the MMU stores 16 entries in a part that holds 2048. ⚠ **And this
+> section's reason for rejecting DRAM expired**: *"DRAM needs a refresh owner and this
+> machine has none"* was true until §5 item 8 gave the divider a `/WAIT` hold, which is
+> exactly the mechanism a refresh controller needs.
 
 > ⚠ **This said "Four × 512K×8 … and a decode" until 2026-09-06, and both halves were
 > wrong.** Found while drawing the motherboard, which is the first thing that had to
