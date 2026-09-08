@@ -67,13 +67,19 @@ if (free === 0) {
 
 /* -- every card carries the same edge ------------------------------------ */
 const cardFiles = readdirSync("cards").filter((f) => f.endsWith(".circuit.tsx"))
-check(cardFiles.length === 6, "six card boards exist", cardFiles.join(" "))
+check(cardFiles.length === 5, "five card boards exist", cardFiles.join(" "))
 for (const f of cardFiles) {
   const src = await Bun.file(`cards/${f}`).text()
   check(
     src.includes('from "../lib/Card"'),
     `${f} takes its edge from lib/slot.ts`,
   )
+  /* Since 2026-09-08 a card also declares how long it is. place/parts.ts
+   * carries the packing that justifies the number and place.check.ts asserts
+   * it is the shortest that works. */
+  const len = src.match(/length=\{(\d+)\}/)
+  check(len !== null && [120, 180, 240].includes(Number(len[1])),
+    `${f} declares a 12, 18 or 24 cm length`, len ? len[1] : "none")
 }
 const windowCards = new Set(WINDOWS.filter((w) => w.status !== "free").map((w) => w.card))
 for (const f of cardFiles) {

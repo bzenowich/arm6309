@@ -950,10 +950,16 @@ this section said the sentence in the root README would have to change. It did.
 
 1. **The slot budget forbids the 74xx design.** `applenet`'s v2 measured a discrete
    10BASE-T MAC at **41 ICs across two cards** — it needed two because the logic does not
-   fit one Apple II card. A 100 × 160 Eurocard is larger, but not by enough to also carry
-   two SRAMs, the MagJack, the filter network and the analogue section. Two cards means
-   two slots. [`hardware/README.md`](../../hardware/README.md) gives the machine
-   **six slots, five of them already claimed**. There is one.
+   fit one Apple II card. Two cards means two slots, and
+   [`hardware/README.md`](../../hardware/README.md) gave the machine **six slots, five of
+   them already claimed**.
+
+   > ⚠ **The premise moved on 2026-09-08 and the conclusion did not.** PS/2 and serial
+   > merged onto one board, so there are **five cards and a spare slot** — a two-card MAC
+   > would now fit. What kills it is point 2 rather than the slot count, and this card's
+   > own board is a 12 cm one with 27 % of its area used, so the 74xx version would have
+   > needed both slots *and* both boards full. **The argument is weaker than it was and
+   > still holds**, which is worth more than pretending it is untouched.
 2. **The CRC has no software escape at 2.0979 MHz.** A table-driven CRC-32 over 1518
    bytes at ~30 cycles/byte is **~22 ms per frame** — eighteen times a frame's own
    transmission time. `arch-v3.md`'s own cut order says that if only one hardware CRC

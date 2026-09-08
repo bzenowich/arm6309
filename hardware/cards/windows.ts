@@ -24,8 +24,10 @@ export const GEOGRAPHIC_WINDOW = { base: 0xff00, size: 0x80 }
 export const WINDOWS: Window[] = [
   { card: "(free)",  base: 0xff00, size: 64, status: "free",     source: "machine.md 5 item 1 option A, taken 2026-09-08" },
   { card: "audio",   base: 0xff40, size: 16, status: "proposed", source: "audio/docs/audio.md 9.1" },
-  { card: "ps2",     base: 0xff50, size: 4,  status: "proposed", source: "io/ps2/docs/ps2.md 3.2" },
-  { card: "serial",  base: 0xff54, size: 4,  status: "proposed", source: "io/serial/docs/serial.md 7.1" },
+  /* ⚠ ps2 $FF50-$FF53 and serial $FF54-$FF57 were separate cards and separate
+   * decodes until 2026-09-08. They are contiguous, so combining the cards
+   * combines the windows: eight bytes and one decode. cards/io.circuit.tsx. */
+  { card: "io",      base: 0xff50, size: 8,  status: "proposed", source: "io/ps2/docs/ps2.md 3.2 + io/serial/docs/serial.md 7.1" },
   { card: "storage", base: 0xff58, size: 4,  status: "proposed", source: "storage/docs/sdcard.md 6.1" },
   { card: "net",     base: 0xff5c, size: 4,  status: "proposed", source: "net/docs/net.md 5.1" },
   { card: "video",   base: 0xff60, size: 32, status: "taken",    source: "video/docs/graphics.md 13" },

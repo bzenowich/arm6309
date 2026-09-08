@@ -8,6 +8,27 @@ deliberate instead of at the root.
 | [`ps2/`](ps2/) | PS/2 keyboard and mouse | **specified** — [`ps2/docs/ps2.md`](ps2/docs/ps2.md), 11 ICs |
 | [`serial/`](serial/) | RS-232 serial | **specified** — [`serial/docs/serial.md`](serial/docs/serial.md), 3 ICs |
 
+> ⚠ **One card since 2026-09-08.** The two documents stay separate — they specify
+> different problems and neither shrank — but the *boards* merged into
+> `hardware/cards/io.circuit.tsx`, **14 ICs on a 12 cm card**.
+>
+> **What merges them is this directory's own subject: the `$FF` map.** PS/2 holds
+> `$FF50`–`$FF53` and serial `$FF54`–`$FF57`, and they are contiguous, so one card
+> decodes eight bytes where two decoded four each. The machine gets a slot back — six
+> cards became five against six slots.
+>
+> **14 is 11 + 3 with nothing shared**, which is the honest count and not the cheapest.
+> The obvious saving is the second `GAL22V10`, and it is not free: `ps2.md` §9 already
+> calls its GAL the fitting risk at roughly ten macrocells of ten, and the pressure is
+> the `DR` latches and the `/PL` terms rather than the decode. One `ATF1508AS` would
+> absorb both GALs, the `'273` and the `'244` and take the card to 11, which the retired
+> house rule no longer forbids. **Neither is specified.**
+>
+> ⚠ **The merge does not merge the interrupt handlers.** `docs/machine.md` §4.1 still
+> polls video, net, PS/2, then **serial last**, because reading the 6551's `STATUS`
+> clears the interrupt and returns the error bits in the same read. One card, two
+> sources, unchanged order.
+
 **The two cards answer the "discrete or a chip?" question differently, and both are
 right.** PS/2 is eleven packages of 74-series logic because no period chip decodes PS/2 —
 `ps2.md` §4.5 evaluates the closest thing, a 6522 per port, and rejects it on I/O space.

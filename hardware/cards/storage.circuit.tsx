@@ -1,4 +1,4 @@
-/* SD card storage - 13 ICs, storage/docs/sdcard.md 8. 681 KiB/s sustained.
+/* SD card storage - 14 ICs, storage/docs/sdcard.md 8. 681 KiB/s sustained.
  *
  * The machine's one period exception, and it is honest about it: an SPI burst
  * started by the bus read strobe (sdcard.md 3.1).
@@ -11,7 +11,7 @@
  * mitigating it (a re-read of RAM is idempotent - sdcard.md 4.2's own
  * argument), and took sustained reads from 528 to 681 KiB/s.
  *
- * It cost six ICs, five of them address and data plumbing. One ATF1508AS would
+ * It cost seven ICs, six of them address and data plumbing. One ATF1508AS would
  * absorb both GALs, the counter and the mux for an 8-IC card.
  *
  * That was refused on the no-CPLD house rule, which was retired on 2026-09-08
@@ -23,7 +23,7 @@
 import { Card } from "../lib/Card"
 
 export default () => (
-  <Card name="arm6309-storage" ioBase={0xff58} ioSize={4} icBudget={13}>
+  <Card name="arm6309-storage" ioBase={0xff58} ioSize={4} length={120} icBudget={14}>
     {/* U1 - decode and the burst sequencer, from geographic /IOSEL.
       *
       * The decode is A0-A6 now, seven bits: /IOSEL widened to $FF00-$FF7F on

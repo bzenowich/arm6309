@@ -1,6 +1,6 @@
 # `storage/` — mass storage
 
-An SD card interface: **13 ICs, 681 KiB/s sustained, four bytes of I/O space and a 64 KB
+An SD card interface: **14 ICs, 681 KiB/s sustained, four bytes of I/O space and a 64 KB
 buffer region.**
 
 Paths below are relative to this directory.
@@ -142,10 +142,10 @@ alive and its constituency changed.
 
 ## ⚠ Six ICs, and an alternative that would have cost one
 
-The buffer is not free: **7 ICs became 13**, and five of the six are address and data
+The buffer is not free: **7 ICs became 14**, and six of the seven are address and data
 plumbing — a `74HC4040` block-address counter, three `74HC157`s muxing it against the
 backplane, and a `74HCT245` on the data path. **The card was the machine's smallest and is
-now its fourth largest.**
+now its third largest.**
 
 **One `ATF1508AS` would absorb both GALs, the counter and the mux — an 8-IC card.** It is
 ~~not taken because it would spend the no-CPLD house rule a fourth time~~ — ⚠ **the rule

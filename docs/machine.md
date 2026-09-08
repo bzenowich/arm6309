@@ -43,9 +43,9 @@ genuinely undecided.
 | **Video** | 640×200 × 256 colours, VGA out — **30 ICs** (~~41~~), the programmable logic being **2 × `ATF1508AS` PLCC-84 + 1 `GAL22V10`** ([`video/`](../video/), `graphics.md` §14.1) |
 | **Audio** | 4-channel 8-bit PCM, Paula-exact — **29 ICs**, one `ATF1508AS` PLCC-84 ([`audio/`](../audio/), `audio.md` §10.1) |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified** |
-| **Storage** | SD card over SPI, **13 ICs** (~~7~~), **681 KiB/s** sustained (~~528~~) — **specified** ([`storage/`](../storage/)). Its block buffer moved into `A20 = 1` on 2026-09-08 and took the `TFM` hazard with it. ⚠ ~~The machine's one period exception~~ the first of two |
+| **Storage** | SD card over SPI, **14 ICs** (~~7~~), **681 KiB/s** sustained (~~528~~) — **specified** ([`storage/`](../storage/)). Its block buffer moved into `A20 = 1` on 2026-09-08 and took the `TFM` hazard with it. ⚠ ~~The machine's one period exception~~ the first of two |
 | **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs** (~~16~~), two of them `ATF1508AS` — **specified** ([`net/`](../net/)). ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | **107 ICs** — **98 on cards**, **9** on the motherboard. ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
+| **Total silicon** | **108 ICs** — **99 on cards**, **9** on the motherboard. ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -308,8 +308,7 @@ version was two.
 |---|---|---|---|
 | `$FF00`–`$FF3F` | **64 B** | **free** | **the whole of the 2026-09-08 widening**, and the machine's entire margin |
 | `$FF40`–`$FF4F` | 16 B | **audio** | *proposed* — `audio.md` §9.1 |
-| `$FF50`–`$FF53` | 4 B | **PS/2 keyboard + mouse** | *proposed* — `io/ps2/docs/ps2.md` §3.2 |
-| `$FF54`–`$FF57` | 4 B | **RS-232 serial** | *proposed* — `io/serial/docs/serial.md` §7.1 |
+| `$FF50`–`$FF57` | **8 B** | **I/O — PS/2 keyboard, mouse and RS-232, one card** | *proposed* — `ps2.md` §3.2 + `serial.md` §7.1. ⚠ **Two windows and two cards until 2026-09-08**; they were contiguous, so combining the cards combined the decode |
 | `$FF58`–`$FF5B` | 4 B | **SD card storage** | *proposed* — `storage/docs/sdcard.md` §6.1 |
 | `$FF5C`–`$FF5F` | 4 B | **network** | *proposed* — [`net/docs/net.md`](../net/docs/net.md) §5.1. ~~free~~ — **the machine's last unallocated I/O, and this is what spent it** |
 | `$FF60`–`$FF7F` | 32 B | **video** | *taken* — `graphics.md` §13 |
@@ -815,7 +814,7 @@ a cross-card dependency.
 | **machine** | **⚠ Divide the megabyte at `A20 = 1`** — how a card claims a region, at what granularity, and who arbitrates a host access the card cannot defer | §5 item 7 |
 | ~~**storage, io**~~ | ~~Re-price against a memory-mapped buffer.~~ **Done 2026-09-08** — both cards took it. `sdcard.md` §11.1 and §4.5; `net.md` §13.3 and §7.6. ⚠ **What is left is `sdcard.md` §13 item 6**: its *write* path is still on the port | §5 item 1 D |
 | **io** | **Find out whether a NitrOS-9 network stack exists.** It is the net card's largest cost and nobody has looked — the same shape of unknown as `serial`'s `sc6551` | `net.md` §14.2, §16 item 12 |
-| ~~**project**~~ | ~~**⚠ Restate or retire the no-CPLD house rule.**~~ **RETIRED 2026-09-08** — root `README.md`. Programmable logic is in; FPGAs are unproposed rather than banned. ⚠ **One consequence outstanding**: `sdcard.md` §8.1's `ATF1508AS` was refused on the rule alone and is now unblocked at 8 ICs against 13 | root `README.md`; `sdcard.md` §13 item 12 |
+| ~~**project**~~ | ~~**⚠ Restate or retire the no-CPLD house rule.**~~ **RETIRED 2026-09-08** — root `README.md`. Programmable logic is in; FPGAs are unproposed rather than banned. ⚠ **One consequence outstanding**: `sdcard.md` §8.1's `ATF1508AS` was refused on the rule alone and is now unblocked at 8 ICs against 14 | root `README.md`; `sdcard.md` §13 item 12 |
 | storage | A NitrOS-9 `RBF` driver — larger than the card. Evaluate matching CoCoSDC's map to inherit one | `sdcard.md` §13 item 4 |
 | **project** | **Choose a licence.** The repository has none for its own work | `design-review.md` §Sys-M6 |
 
@@ -920,11 +919,11 @@ carve-out drawn into a physical map that has no room for one.
 | 5 V | **audio card** | **29** (~~36~~ — `audio.md` §10.1 is the current count) | **~300–400 mA** — `audio.md` §10 |
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
 | 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The second largest single-card draw after video**, and the only figure on that card that cannot be derived from a datasheet with confidence |
-| 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + **13** (~~7~~ — its block buffer, §5 item 7) | not yet estimated |
+| 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + **14** (~~7~~ — its block buffer, §5 item 7) | not yet estimated |
 | 5 V | **motherboard**: MMU (5), divider GAL, oscillator, reset supervisor, 512 KB SRAM (~~+ decode~~ — §7.1) | ~~13~~ **9** | not yet estimated |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly ~~2–3~~ **2.0–3.0 A** at 5 V across ~~~106~~ **107 ICs**, plus
+**The machine is plausibly ~~2–3~~ **2.0–3.0 A** at 5 V across ~~~106~~ **108 ICs**, plus
 a 3.3 V rail.**
 
 > ⚠ **Both halves re-derived 2026-09-08, and the card total had never been added up.**
@@ -934,11 +933,11 @@ a 3.3 V rail.**
 >
 > | video | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
 > |---|---|---|---|---|---|---|---|---|
-> | **30** | 29 | 11 | 3 | **13** | **12** | **98** | 9 | **107** |
+> | **30** | 29 | 11 | 3 | **14** | **12** | **99** | 9 | **108** |
 >
 > Video fell 41 → 30 when `graphics.md` §14.1 finally counted the two `ATF1508AS` that
 > replaced its ten GALs (2026-09-06's decision, 2026-09-08's arithmetic); storage rose
-> 7 → 13 and net fell 16 → 12 in the same week's buffer work. **The current estimate
+> 7 → 14 and net fell 16 → 12 in the same week's buffer work. **The current estimate
 > fell** because ten GAL22V10 at 70–90 mA each were most of an amp and two CPLDs are
 > not.
 

@@ -1,0 +1,125 @@
+<div class="wrap">
+<p class="lbl">arm6309 &middot; placement study &middot; five cards, three lengths &middot; 2026-09-08</p>
+<h1>Boards, to scale</h1>
+<p class="deck">Every card drawn 1&nbsp;:&nbsp;1 from its own document&rsquo;s parts list, 100&nbsp;mm high,
+each taking the <strong>shortest of 12, 18 or 24&nbsp;cm that its packages fit</strong>. Apple&nbsp;II
+proportions: gold fingers along the bottom rear, connectors on the back edge. Click any board to
+read it full size.</p>
+<p class="deck" style="margin-top:-.9rem">The motherboard carries four system-RAM footprints &mdash; one fitted, three reserved &mdash; and the drawing is where their two preconditions become visible.</p>
+
+<div class="finding">
+  <div>
+    <p class="lbl">Three of five cards are the short one</p>
+    <p style="margin:.35rem 0 0">Only video needs 24&nbsp;cm and only audio needs 18. <strong>Net,
+    storage and the combined I/O card all fit 12</strong> &mdash; and net is as dense at 12&nbsp;cm
+    (64&nbsp;%) as video is at 24. Five cards come to <strong>780&nbsp;cm&sup2; of board</strong>
+    against 1,250 if every card were cut to the longest.</p>
+  </div>
+  <div style="text-align:right">
+    <div class="big">12 &middot; 12 &middot; 12<br><span style="font-size:.62em;color:var(--muted)">18 &middot; 24</span></div>
+    <p class="lbl" style="margin-top:6px">cm, five cards</p>
+  </div>
+</div>
+
+<div class="key">
+  <span><i style="background:var(--k-pld)"></i>programmable logic</span>
+  <span><i style="background:var(--k-mem)"></i>memory</span>
+  <span><i style="background:var(--k-bus)"></i>bus latch / buffer</span>
+  <span><i style="background:var(--k-glue)"></i>glue</span>
+  <span><i style="background:var(--k-analog)"></i>analogue</span>
+  <span><i style="background:var(--k-clk)"></i>clock</span>
+  <span><i style="background:var(--k-conn)"></i>connector</span>
+</div>
+
+<div class="strip">{{CELLS}}</div>
+
+<hr class="rule">
+<h2>PS/2 and serial, combined</h2>
+<p>The two smallest cards merge cleanly, and the reason is in the <code>$FF</code> map rather than
+in the logic: <strong>PS/2 holds <code>$FF50&ndash;$FF53</code> and serial <code>$FF54&ndash;$FF57</code>,
+which are contiguous.</strong> One card decodes eight bytes where two cards decoded four each.</p>
+<p>Both were already <code>/IRQ</code> sources and both keep their place in
+<code>machine.md</code> &sect;4.1&rsquo;s polling order &mdash; serial stays last, because reading the
+6551&rsquo;s <code>STATUS</code> clears the interrupt and returns the error bits in the same read.
+Merging the cards does not merge the handlers.</p>
+<div class="note"><p style="margin:0"><strong>Drawn at 14 ICs, which is 11 + 3 with nothing
+shared.</strong> The obvious saving is the second <code>GAL22V10</code>: two four-byte decodes become
+one eight-byte decode. <strong>It is not free</strong> &mdash; <code>ps2.md</code> &sect;9 already calls
+its GAL the fitting risk at roughly ten macrocells of ten, and the pressure is the <code>DR</code>
+latches and <code>/PL</code> terms rather than the decode. A single <code>ATF1508AS</code> would
+absorb both GALs, the <code>'273</code> and the <code>'244</code> and take the card to 11, which the
+retired house rule no longer forbids. <strong>Neither is specified here</strong>; the drawing shows
+the honest 14.</p></div>
+
+<hr class="rule">
+<h2>And a slot comes back</h2>
+<p>Six cards became five, so <strong>one of the six slots is now spare</strong> &mdash; drawn empty.
+That matters to an argument on the books: <code>net.md</code> &sect;12 justifies the net card&rsquo;s
+CPLDs partly on <em>&ldquo;six slots, five of them already claimed &mdash; there is one&rdquo;</em>, and a
+74xx MAC needing two slots was the reason it lost. The premise has changed even though the
+conclusion has not; the CPLD case now rests on the CRC arithmetic alone.</p>
+{{MB}}
+<p style="margin-top:14px">The dashed outlines are the card envelopes at their real lengths. A
+socket is 91.4&nbsp;mm and the longest card is 240, so <strong>video overhangs its socket by
+149&nbsp;mm</strong> while the three 12&nbsp;cm cards barely overhang at all. The board is sized by the
+longest card; the motherboard&rsquo;s own logic sits in a strip outside every envelope.</p>
+
+<h2 style="margin-top:30px">The SRAM bank &mdash; one populated, three reserved</h2>
+<p>Four <code>AS6C4008</code> footprints in a row, <code>U8</code> fitted and
+<code>RAM2</code>&ndash;<code>RAM4</code> left empty, plus a reserved <code>74HC139</code>. They cost
+<strong>27&nbsp;cm&sup2; of board and nothing else</strong> while unpopulated, and the board grows from
+176 to 190&nbsp;mm to carry them. <strong>Two things have to be true before any of them can be
+stuffed, and neither is true today.</strong></p>
+
+<div class="note"><p style="margin:0 0 .7rem"><strong>&#9888; 1. Only two of the three have an
+address to live at.</strong> <code>machine.md</code> &sect;7.1 fixes system RAM at
+<code>A20&nbsp;=&nbsp;0,&nbsp;A19&nbsp;=&nbsp;0</code>. Three more parts want 1.5&nbsp;MB, and the 2&nbsp;MB
+map is already spoken for:</p>
+<div class="scroll"><table style="margin-bottom:.7rem"><thead><tr><th>A20</th><th>A19</th><th>512 KB</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td class="mono">0</td><td class="mono">0</td><td>system RAM</td><td><code>U8</code>, populated</td></tr>
+<tr><td class="mono">0</td><td class="mono">1</td><td>video ring</td><td>on the video card &mdash; <code>graphics.md</code> &sect;6.3</td></tr>
+<tr><td class="mono">1</td><td class="mono">0</td><td rowspan="2">card buffers, 16 &times; 64 KB</td><td rowspan="2"><code>machine.md</code> &sect;5 item 7 &mdash; <strong>storage and net both hold a region</strong></td></tr>
+<tr><td class="mono">1</td><td class="mono">1</td></tr>
+</tbody></table></div>
+<p style="margin:0"><strong>The megabyte at <code>A20&nbsp;=&nbsp;1</code> would take two of them and
+evict every card buffer</strong> &mdash; which is what retired the <code>TFM</code> hazard on two cards
+four days ago. The third has nowhere at all short of moving VRAM. <strong>Reserving the footprints
+is free; populating them is a map decision nobody has made.</strong></p></div>
+
+<div class="note"><p style="margin:0"><strong>&#9888; 2. The decode is the part &sect;7.1 deleted.</strong>
+One SRAM needs no decode: <code>/CE</code> is <code>/IOPAGE&nbsp;&middot;&nbsp;/A19&nbsp;&middot;&nbsp;/A20</code>
+and <code>U6</code> already forms it. Four need <code>A20:A19</code> split into four chip selects, and
+<strong><code>U6</code> is 10 macrocells of 10 with none spare</strong> &mdash; so it is a
+<code>74HC139</code>, drawn reserved beside the bank. &sect;7.1&rsquo;s own words: <em>&ldquo;the decode was
+a part the fourth SRAM created and the first one never needed.&rdquo;</em> Reserving the fourth socket
+reserves it again.</p></div>
+
+<hr class="rule">
+<h2>The census</h2>
+<div class="scroll"><table>
+<thead><tr><th>Card</th><th class="n">Length</th><th class="n">ICs</th><th class="n">Courtyard</th>
+<th class="n">Placeable</th><th class="n">Used</th><th>I/O window</th><th>Largest packages</th></tr></thead>
+<tbody>{{ROWS}}</tbody></table></div>
+<p style="margin-top:14px;color:var(--muted)">Placeable area is the board less the 91.4&nbsp;&times;&nbsp;11&nbsp;mm
+finger zone and the reserved rear connectors, so it differs per card. A 12&nbsp;cm card gives up
+proportionally more to the fingers than a 24&nbsp;cm one &mdash; which is why net reads 64&nbsp;% on a
+board only a third the size of video&rsquo;s.</p>
+
+<hr class="rule">
+<h2>What this drawing is, and is not</h2>
+<p><strong>It is</strong> every package from each card&rsquo;s own chip budget at its real DIP or PLCC
+footprint, placed by a skyline packer &mdash; parts settle to the lowest free position rather than into
+fixed rows, so a pair of 0.3&Prime; DIPs can stack beside a PLCC the way they would on a real
+through-hole board. Courtyards are 0.1&Prime; on every side. Each document&rsquo;s connectors and analogue
+corners are reserved on the rear edge first.</p>
+<p><strong>It is not</strong> a layout. No traces, no vias, no decoupling capacitors &mdash; about thirty
+per card, another 6&nbsp;cm&sup2; the percentages do not carry. Real placement groups by signal, not by
+what fits lowest. <strong>The area figure is the finding; the arrangement illustrates it.</strong></p>
+<p style="color:var(--muted)">Parts from <code>video/docs/graphics.md</code> &sect;14.1,
+<code>audio/docs/audio.md</code> &sect;10, <code>net/docs/net.md</code> &sect;9,
+<code>storage/docs/sdcard.md</code> &sect;8, <code>io/ps2/docs/ps2.md</code> &sect;9 and
+<code>io/serial/docs/serial.md</code> &sect;9; the 72-pin edge from
+<code>hardware/lib/slot.ts</code>. Lengths chosen by the packer, not by hand.</p>
+</div>
+

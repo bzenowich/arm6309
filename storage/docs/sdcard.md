@@ -61,9 +61,9 @@ appear as "537 KB/s" (`machine.md` §0); they are the same figures.
 | **Which cards?** | **SDHC/SDXC only.** Block addressing, fixed 512-byte blocks, no SDSC byte-address branch to get silently wrong. | §9.0 |
 | **What happens on an error?** | R1 checked, error tokens decoded, three timeouts specified, card-change polled on the VBL tick. | §9.3 |
 | **Address cost** | **Four bytes at `$FF58`–`$FF5B`, plus one 64 KB physical region at `A20 = 1`** of which 2 KB is used. | §6.1 |
-| **IC count** | **13**, plus a 3.3 V regulator and the socket. ~~7~~ | §8 |
+| **IC count** | **14**, plus a 3.3 V regulator and the socket. ~~7~~, ~~13~~ | §8 |
 
-**Net: 13 ICs**, against video's 41, audio's 29, net's 12, PS/2's 11 and serial's 3.
+**Net: 14 ICs**, against video's 30, audio's 29, net's 12, PS/2's 11 and serial's 3.
 
 > ⚠ **This card was the machine's smallest and is not any more, and the six ICs bought
 > exactly one thing each.** A `6116` for the buffer, a `74HC4040` for the block address, a
@@ -737,12 +737,18 @@ will read a valid 3.3 V high as indeterminate.
 | 12 | **74HCT245** | **backplane `D7`–`D0` ↔ the buffer's local data bus** |
 | 13 | **GAL22V10** ×2 | decode from `/IOSEL` **and** the `A20 = 1` region; `SDCTRL` including `FILL`/`BUF`; `SDSTAT`; the burst trigger; the `machine.md` §5 item 7 bus phase |
 
-**Total: 13.** ~~7.~~ Plus a 3.3 V LDO, an SD socket, and passives.
+**Total: 14.** ~~7.~~ Plus a 3.3 V LDO, an SD socket, and passives.
 
-> ⚠ **This card went from 7 ICs to 13 on 2026-09-08, and it is worth being blunt about
+> ⚠ **13 until 2026-09-08, and it was this table's own row numbering that hid it**: the
+> rows run 1 to 13, but row 13 is *two* `GAL22V10` and rows 9–11 are three `'157`, so the
+> count of rows is not the count of parts. **12 single rows + 2 + … = 14.** Found while
+> placing the board, which is the first thing that had to draw each package rather than
+> cite it — the same way `machine.md` §7.1's four SRAMs became one.
+
+> ⚠ **This card went from 7 ICs to 14 on 2026-09-08, and it is worth being blunt about
 > what was bought.** §11.1 — 29 % more sustained throughput and the deletion of §4's
-> hazard — for six packages, **five of which are address and data plumbing**. The card was
-> the machine's smallest and is now its fourth largest. Whether that is a good trade is a
+> hazard — for **seven** packages, **six of which are address and data plumbing**. The
+> card was the machine's smallest and is now its third largest. Whether that is a good trade is a
 > judgement, and this document's is that a card whose correctness rested on an
 > undocumented CPU behaviour was not a card to keep for the sake of six packages.
 
@@ -769,7 +775,7 @@ part**, and #13 is budgeted as two.
 >
 > | For | Against |
 > |---|---|
-> | **8 ICs against 13** — five packages, all of them address and data plumbing | **~160 mA against two GALs' ~140–180 mA** — roughly a wash, not the saving CPLDs give on bigger cards |
+> | **8 ICs against 14** — six packages, all of them address and data plumbing | **~160 mA against two GALs' ~140–180 mA** — roughly a wash, not the saving CPLDs give on bigger cards |
 > | one part to fit instead of two, and in-circuit reprogrammable over JTAG | ⚠ **fuse-level verification is lost.** `hardware/gal/jedec/` reads a `GAL22V10`'s fuse map back and executes it; prjbureau rates the ATF1508AS database *"Partial"* and its programming path *"Untested"* (`graphics.md` §10.1.6) |
 > | the same decision video, audio and net all reached | this card is the only one whose logic **fits two GALs comfortably**. The others took CPLDs because a GAL could not carry them |
 >
@@ -780,7 +786,7 @@ part**, and #13 is budgeted as two.
 **What the second GAL costs elsewhere**: nothing on the backplane, ~50 mA, and one more
 part to program. **What it does not cost is the `74HC574` escape hatch** — §12 step 3's
 "if `SDCTRL` does not fit, move it to a `'574` and the card is 8" is now "…and the card is
-14", and with two parts it should not be needed.
+15", and with two parts it should not be needed.
 
 ---
 

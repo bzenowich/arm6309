@@ -223,6 +223,12 @@ Decode is from the backplane's `/IOSEL`, so the base is a jumper.
 > ⚠ **This said "geographic from the backplane's per-slot `/IOSEL`" until 2026-09-06.**
 > A per-slot decode fixes each card's window by position and leaves the jumper in the
 > same sentence nothing to select. `/IOSEL` is the `$FF40`–`$FF7F` window strobe, common
+> ⚠ **This card shares a board with the serial card since 2026-09-08** —
+> `hardware/cards/io.circuit.tsx`, 14 ICs on a 12 cm card. The two windows are
+> contiguous, so the merged card decodes `$FF50`–`$FF57` as eight bytes. This document
+> is unchanged: the card's logic, its 11 packages and its interrupt behaviour are what
+> they were, and `machine.md` §4.1 still polls it ahead of serial.
+>
 > to every slot; this card decodes its four bytes from ~~`A0`–`A5`~~ **`A0`–`A6`** (⚠ the
 > window widened to `$FF00`–`$FF7F` on 2026-09-08 and `A6` left the strobe — six bits
 > answer at `$FF50` *and* `$FF10`) against the jumpered

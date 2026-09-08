@@ -6,7 +6,7 @@ convention at the bottom of the root [`README.md`](../README.md).
 
 [`docs/machine.md`](../docs/machine.md) §6 lists **"Draw the motherboard"** as an open
 item owned by the machine, with no document behind it. This directory is the first pass
-at that, and at the six cards that plug into it.
+at that, and at the five cards that plug into it.
 
 **Status: schematic-level, and nothing is placed or routed.** Three things had to happen
 before layout is meaningful. **The third is done** — every package pinout is now read off a
@@ -33,15 +33,23 @@ slot count and the CPU module's siting open, and a pinout cannot be written with
 
 | | Decision | Why |
 |---|---|---|
-| **Connector** | **72-pin 0.1" card edge, 2 × 36** | 45 signals + 2 audio returns need more than colormin's 50 pins. A 100 mm Eurocard edge at 0.1" pitch holds 39 positions; 36 leaves 8.6 mm for the notch and mechanical margin, so **the card format sizes the connector**. |
+| **Connector** | **72-pin 0.1" card edge, 2 × 36** | 45 signals + 2 audio returns need more than colormin's 50 pins. A 100 mm Eurocard edge at 0.1" pitch holds 39 positions; 36 leaves 8.6 mm for the notch and mechanical margin, so **the card format sizes the connector**. ⚠ **That premise expired on 2026-09-08** — see below. |
+| **Card format** | **100 mm high × 120, 180 or 240 mm long** — Apple II proportions, per card | ⚠ **Was a 100 × 160 mm Eurocard.** [`place/`](place/) drew the boards and the video card did not fit one: 134.4 cm² of courtyard against 133.4 cm² of placeable area. Three of the five cards then turned out to fit 12 cm, so the length is per-card and `place.check.ts` asserts each takes the shortest that works. |
 | **CPU siting** | **A 40-pin DIP socket on the motherboard** | The module is the drop-in board [`cpu/`](../cpu/) already builds for the CoCo 3, plugged in — **one hardware SKU serving both machines literally**, not by recompilation. Its own `'541`/`'245` level buffers ride with it (`plan.md` §2.6), so the motherboard adds no buffering. |
 
-**Slot count is six, and that is a guess** — ~~five specified cards plus one free~~
-**six specified cards and none free**, since [`net/`](../net/) landed. Nothing
-in the machine documents has ever said how many, and the guess is now load-bearing:
-`net/docs/net.md` §12 rests part of its house-rule argument on there being exactly one
-slot left for a card that would otherwise need two. Six slots is 12 A of finger capacity
-against a 2–3 A machine, so the supply and not the connector is the limit.
+**Slot count is six, and that is a guess** — ~~five specified cards plus one free~~,
+~~six specified cards and none free~~, and since PS/2 and serial merged on 2026-09-08,
+**five cards and one spare again**. Nothing in the machine documents has ever said how
+many. Six slots is 12 A of finger capacity against a 2–3 A machine, so the supply and
+not the connector is the limit.
+
+> ⚠ **A 240 mm edge holds 98 positions at 0.1", not 39, so the connector's own
+> justification no longer binds.** The 72-pin decision was derived from the Eurocard —
+> *"the card format sizes the connector"* — and the format changed. Three things that
+> were foreclosed by having exactly one spare pin come back into scope: the DMA
+> request/grant pair `net/docs/net.md` §13.1 wanted, a future rail, and the spare that
+> physical `A20` spent. **The connector is not re-specified**; this is a note that it
+> could be, and `machine.md` §5 item 5 is where it would be decided.
 
 ---
 
@@ -115,16 +123,19 @@ The backplane carries **5 V only** — the storage card makes its own 3.3 V behi
 | [`lib/slot.ts`](lib/slot.ts) | the 72-pin pinout, as data | + [`slot.check.ts`](lib/slot.check.ts) |
 | [`lib/SlotConnector.tsx`](lib/SlotConnector.tsx) | `SlotSocket` (motherboard) and `CardEdge` (card), both from that table | |
 | [`lib/parts.ts`](lib/parts.ts) | package pinouts | every one datasheet-verified, each naming its source |
-| [`lib/Card.tsx`](lib/Card.tsx) | the 100 × 160 Eurocard scaffold every card uses | |
+| [`lib/Card.tsx`](lib/Card.tsx) | the card scaffold — 100 mm high, length per card | + [`place/`](place/) |
 | [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
 | [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
-| [`cards/`](cards/) | audio, video, PS/2, serial, storage, net — bus interface each | |
+| [`cards/`](cards/) | audio, video, **io** (PS/2 + serial, merged 2026-09-08), storage, net — bus interface each | |
+| [`place/`](place/) | **the placement study** — every board drawn 1 : 1 from its parts list, and the check that found the video card did not fit a Eurocard | + [`place/place.check.ts`](place/place.check.ts) |
 | [`gal/`](gal/) | **the programmable logic** — U3 and U6's equations in CUPL and Verilog, and [`gal/jedec/`](gal/jedec/), which assembles them into the fuse maps a programmer burns | + [`gal/mmu.check.ts`](gal/mmu.check.ts), [`gal/mmu_tb.sv`](gal/mmu_tb.sv), [`gal/jedec.check.ts`](gal/jedec.check.ts) |
 | [`vendor/mc6809/`](vendor/mc6809/) | **third-party** — Greg Miller's cycle-accurate MC6809E core, BSD, byte-identical to upstream | |
 
 ```sh
 npm install          # bun comes with it; the tsci CLI needs it
-npm run build        # all seven boards -> dist/
+npm run build        # all six boards -> dist/
+npm run check:place  # every card places on the length it declares
+npm run render:boards # the drawings -> dist/boards.html
 npm run check        # the slot pinout and the $FF map, as arithmetic
 npm run check:netlist  # the motherboard's connectivity claims (needs a build first)
 npm run check:sim      # gal/mmu.v and gal/clkdec.v under Verilator

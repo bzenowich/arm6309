@@ -21,7 +21,7 @@
 import { Card } from "../lib/Card"
 
 export default () => (
-  <Card name="arm6309-net" ioBase={0xff5c} ioSize={4} icBudget={12}>
+  <Card name="arm6309-net" ioBase={0xff5c} ioSize={4} length={120} icBudget={12}>
     {/* Y1 - the bit rate must be 10.000 MHz +/-100 ppm and 25.175 / 10 is not
       * an integer, so the backplane cannot supply it. net.md 11: this is the
       * machine's third oscillator, and unlike audio's it is forced by an

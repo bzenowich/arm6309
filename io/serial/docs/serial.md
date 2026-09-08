@@ -595,6 +595,13 @@ being serviced.
 
 ### 7.1 Placement — ~~and the `$FF` map is now **full**~~ and what filling it eventually bought
 
+> ⚠ **This card shares a board with PS/2 since 2026-09-08** —
+> `hardware/cards/io.circuit.tsx`, 14 ICs on a 12 cm card, decoding `$FF50`–`$FF57` as
+> one eight-byte window. **Nothing in this document changes**: the 6551 is the 6551, §5's
+> ceiling is unchanged, and §4.5's `16C550` proposal applies to the merged card exactly
+> as it did to the separate one — it would want the same eight addresses out of the
+> card's eight, which is the one thing the merge makes tighter rather than looser.
+
 **Propose `$FF54`–`$FF57`**, the four bytes immediately above PS/2.
 
 | Window | Size | Owner |
