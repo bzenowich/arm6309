@@ -277,20 +277,20 @@ and nothing else.
 
 ### 4.2 The buffers — one 64 KB physical region
 
-`machine.md` §5 item 7: **eight regions of 64 KB**, selected by physical `A18`–`A16`
-against a **three-position jumper** with `A19 = 0`, **qualified by `/IOPAGE` high**. This
-card takes one region and splits it once:
+`machine.md` §5 item 7: **sixteen regions of 64 KB**, selected by physical `A19`–`A16`
+against a four-position jumper, **qualified by `/IOPAGE` high**. This card takes one
+region and splits it once:
 
-> ⚠ **Sixteen regions and a four-position jumper until 2026-09-08.**
-> `hardware/ram.md` §5.2 halved the card space so the motherboard's three reserved SRAM
-> footprints could be populated — four × 512 KB is 2 MB and that was the whole map. **The
-> region size, this card's 64 KB and its address are unchanged**; what changed is that
-> `A19` moved from the jumper into the fixed decode. One product term on U2, no pins.
+> **The regions were halved to eight on 2026-09-08 and restored the same day.** The
+> halving paid for a 512 KB system-RAM bank on the motherboard; `hardware/ram.md` §6
+> then dropped the DIP SRAM for SIMM sockets, so there was nothing left to pay for.
+> **Nothing on this card ever changed** — it is recorded because the jumper briefly
+> said three positions.
 >
-> ⭐ **And `/IOPAGE` now also keeps this card off the machine's top 30 MB.** The map went
-> to 32 MB and `A21`–`A24` stay on the motherboard, so `U9` pulls `/IOPAGE` low above
-> 2 MB and every card's physical decode goes quiet without knowing why. **This card needs
-> no change for that at all** — `machine.md` §2.
+> ⭐ **And `/IOPAGE` keeps this card off the machine's top 30 MB for nothing.** The map
+> is 32 MB and `A21`–`A24` stay on the motherboard, so `U9` pulls `/IOPAGE` low above
+> 2 MB and every card's physical decode goes quiet without knowing why —
+> `machine.md` §2.
 
 | | | |
 |---|---|---|
@@ -333,21 +333,25 @@ Both framers hold their byte in a register across the deferral — U1's parallel
 serializer and U2's deserializer output latch, both of which exist for other reasons — so
 a deferral of up to one bus cycle costs nothing.
 
-> ⚠ **A stretched cycle breaks this schedule, and `/WAIT` became real on 2026-09-08.**
-> `machine.md` §5 item 8 gave the divider a hold term, so **another card can now freeze
-> `E` mid-cycle** — the video card's span writer is the one that does it. Two things
-> follow and neither is solved here:
+> ⚠ **A stretched cycle breaks a schedule tied to `E`, and `/WAIT` became real on
+> 2026-09-08 — so this schedule is not tied to `E`.**
 >
-> - **The host's window must be "tick 7 until `E` falls", not "ticks 7–11".** A stretch
->   extends the hold; the SRAM's `/OE` stays asserted and the data stays valid, which is
->   harmless. **The phase counter must saturate rather than wrap**, or the host's window
->   moves under it.
-> - **⚠ The framers starve.** They get slots at ticks 0–3 of a cycle that has stopped
->   advancing. A stretch longer than **~800 ns** — one byte time — overruns the RX
->   deserializer's output register and loses a byte. **A lost byte is a failed FCS, so it
->   is a dropped frame and not silent corruption**, which is the one piece of luck here.
->   **Nobody has said how long `SPANBUSY` lasts** (`graphics.md`), so nobody can say
->   whether this ever happens. §16 item 5.
+> `machine.md` §5 item 8 gave the divider a hold term, so another card can freeze `E`
+> mid-cycle; `graphics.md` §7.4 bounds that at **40.7 µs**, which is **51 byte times**.
+> A framer counting bus cycles would lose 50 bytes of a frame.
+>
+> **So the phase counter free-runs on `CLK25` and is only *reset* by E-fall.** The
+> framers take their two slots every twelve ticks whether or not `E` is advancing;
+> only the host window is gated on a decoded access to this card's region. During a
+> video stall the CPU is on VRAM, **not on this card**, so the buffers are idle and the
+> framers can have every slot they ask for.
+>
+> **The host's window is "tick 7 until `E` falls", not "ticks 7–11"** — a stretch just
+> extends the hold, the SRAM's `/OE` stays asserted and the data stays valid.
+>
+> ⭐ **`machine.md` §5 item 10 states this as a machine rule**, because this card is the
+> one that had the bug and the next one should not: *a card's internal realtime
+> scheduling free-runs on `CLK25`; only host-facing windows may be derived from `E`.*
 >
 > ⚠ **The schedule is derived at ÷12 and does not carry to fast-E unchanged.**
 > `machine.md` §1.1's experimental ÷8 gives eight ticks of 39.7 ns in a 317.8 ns cycle,
@@ -1219,13 +1223,12 @@ against them. What is left is the card's own work.
    mode this card gained rather than shed.
 4. ~~**⚠ The house rule**~~ **CLOSED 2026-09-08** — retired at the root `README.md`,
    with this card's §12 as one of the three arguments.
-5. **⚠ §4.3's schedule assumes a bus cycle of fixed length, and `/WAIT` broke that.**
-   `machine.md` §5 item 8 made `/WAIT` work on 2026-09-08; the video card asserts it while
-   its span writer runs, and this card's framers get no slot while `E` is frozen. **A
-   stretch longer than 800 ns drops a received frame.** Two things are needed: the phase
-   counter must saturate rather than wrap, and **`graphics.md` must bound `SPANBUSY`'s
-   duration**, which no document does. **This is the highest-priority item on the card
-   that is not a fit.**
+5. ~~**⚠ §4.3's schedule assumes a bus cycle of fixed length.**~~ **CLOSED 2026-09-08.**
+   `graphics.md` §7.4 bounded `SPANBUSY` at **40.7 µs — 51 byte times**, which a framer
+   counting bus cycles would not survive. §4.3 now free-runs the phase counter on
+   `CLK25` and resets it on E-fall, so a stretch costs this card nothing: during one the
+   CPU is on VRAM and this card's buffers are idle. `machine.md` §5 item 10 carries the
+   general rule.
 6. **⚠ §4.3's schedule is a ÷12 schedule.** Fast-E needs the framers interleaved on
    alternate bus cycles and nobody has done that arithmetic.
 

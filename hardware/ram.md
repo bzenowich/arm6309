@@ -230,38 +230,34 @@ most useful thing this document found.
 
 ### 5.2 The map
 
-**12 of the 16 entry bits, `A24..A13` — a 32 MB space**, addressed in 512 KB
-quadrants by `A24..A19`:
+**12 of the 16 entry bits, `A24..A13` — a 32 MB space**, addressed in 512 KB quadrants
+by `A24..A19`:
 
 | `A24..A19` | Range | Contents | Status |
 |---|---|---|---|
-| `000000` | 0.0–0.5 M | **system RAM 0** — `U8` | **unchanged** |
+| `000000` | 0.0–0.5 M | **reserved** — the natural home for §6.5's boot scratch | |
 | `000001` | 0.5–1.0 M | **VRAM** — the video ring | **unchanged** |
-| `000010` | 1.0–1.5 M | **card buffers — 8 regions of 64 KB** | ⚠ **halved from 16** |
-| `000011` | 1.5–2.0 M | **system RAM 1** — `RAM2` | **new — the freed half** |
-| `000100` | 2.0–2.5 M | **system RAM 2** — `RAM3` | new |
-| `000101` | 2.5–3.0 M | **system RAM 3** — `RAM4` | new |
-| `00011x` | 3.0–4.0 M | reserved | |
-| `001xxx`–`100xxx` | 4–20 M | **four SIMM windows of 4 MB** | §6 |
+| `00001x` | 1.0–2.0 M | **card buffers — 16 regions of 64 KB** | **unchanged** |
+| `0001xx` | 2.0–4.0 M | reserved | |
+| `001xxx`–`100xxx` | **4–20 M** | **four SIMM windows of 4 MB — all of system RAM** | §6 |
 | `101xxx`–`111xxx` | 20–32 M | reserved | |
 
-**Nothing that exists changes address.** `VRAM` keeps `A20:A19 = 01` and the
-card regions keep `A20 = 1`, so **the video card is untouched and no card
-document is re-specified.**
+**Nothing that exists changes address.** VRAM keeps `A20:A19 = 01` and the card regions
+keep `A20 = 1`, so **the video card is untouched and no card document is
+re-specified.**
 
-**The re-carve is one thing: the card megabyte becomes half a megabyte.**
-Sixteen 64 KB regions for a machine with six slots was always generous; eight
-is still more than one per slot. The freed half becomes system RAM 1.
+⭐ **And system RAM is not in the bottom 4 MB at all** — it is 4–20 MB, entirely on the
+SIMMs. **Nothing cares**, because this is a block-mapped machine: physical addresses are
+invisible to software except through the MMU, and the memory manager allocates blocks
+rather than ranges.
 
-⚠ **What it costs the cards is one jumper position.** A region was selected by
-`A19`–`A16` against a four-position jumper; it is now `A18`–`A16` against three,
-with `A19 = 0` part of the fixed decode. **Both cards already take `A19`**
-(`net.md` §7.4 lists it in the region decode), so this is a jumper and a
-product term, not a pin.
-
-⚠ **System RAM is not contiguous**: 0–0.5 M and 1.5–3.0 M, with VRAM and card
-space in the hole. A memory manager allocates blocks and does not care; code
-that assumes flat RAM does.
+> ⚠ **The card megabyte was halved to eight regions on 2026-09-08 and restored the same
+> day.** The halving bought a 512 KB system-RAM quadrant for the second of four DIP
+> SRAMs; §6 then dropped the DIP SRAM entirely for SIMM sockets, and **a cost paid for
+> something that no longer exists is a cost to take back**. `net.md` and `sdcard.md`
+> briefly said three jumper positions and say four again. Recorded because the churn is
+> the interesting part: **the halving was right for one day and wrong the next, and the
+> thing that changed was not the card space.**
 
 ### 5.3 ⭐ And no card needs `A21` and above — `/IOPAGE` already does the work
 
@@ -315,45 +311,86 @@ the board at 272 × 190 mm and most of that is slot field.
 what a refresh needs and what the machine could not do at all before. **The
 sentence was true when it was written and is not any more.**
 
-### 6.2 What the bank costs
+### 6.2 ⭐ And the DIP SRAM goes away entirely
+
+**Decided 2026-09-08, after the SIMM sockets.** `place/` reserved four `AS6C4008`
+footprints and §5.1 showed they could not be populated without a wider map. Once the map
+*is* wider and there are SIMM sockets on the board, **the four DIP SRAMs have no job
+left**: 2 MB of SRAM against 4–16 MB of DRAM in four sockets, for four packages and
+~120 cm² of a board that is mostly slot field.
+
+| | |
+|---|---|
+| Reserved footprints | **removed** — `place/svg.ts` |
+| Motherboard | **18 → 14 ICs**, and the board shrinks with them |
+| The `74HC139` the footprints needed | never built; U9 does the space decode |
+
+⚠ **What it costs is the boot path** — §6.5.
+
+### 6.3 What the bank costs
 
 | | Part | Role |
 |---|---|---|
 | 4 | **30-pin SIMM socket** | ×8 or ×9, 1 MB or **4 MB** each — **4 to 16 MB** |
-| 1 | **`GAL22V10` U9** | space decode: four SRAM `/CE`s, the SIMM-space term, and §5.3's open-drain `/IOPAGE` pull. Replaces the `74HC139` `place/` had reserved |
+| 1 | **`GAL22V10` U9** | space decode: the four SIMM windows, and §5.3's open-drain `/IOPAGE` pull |
 | 1 | **`GAL22V10` U10** | SIMM timing — `RAS0`–`RAS3`, `CAS`, `/WE`, the mux select, refresh request and `/WAIT` |
 | 3 | **`74HC157`** | RAS/CAS address mux, 11 bits (a 4 MB 30-pin SIMM is 4M×8 — 22 bits, 11 row + 11 column) |
-| **+4 ICs and 4 sockets** | | against 32 packages for the same capacity in SRAM |
+| **+5 ICs and 4 sockets** | | **all** of the machine's memory, against 32 packages for 16 MB of SRAM |
 
-⭐ **Refresh needs no counter.** **CAS-before-RAS** refresh makes the DRAM
-generate its own row address internally, so the refresh row counter that a
-1980s design would have carried — a `74HC4040` and its mux path — is **not on
-this list**. One request every ~15.6 µs, arbitrated by U10.
+⭐ **Refresh needs no counter.** **CAS-before-RAS** makes the DRAM generate its own row
+address, so the refresh row counter a 1980s design would have carried — a `74HC4040` and
+its mux path — is **not on this list**. One request every ~15.6 µs, arbitrated by U10.
 
-### 6.3 The motherboard, assembled
+### 6.4 ⚠ The boot path, which is what the SRAM was quietly insuring
+
+**With no SRAM, the machine has no memory at all until the DRAM controller is up.** The
+CPU module serves its shadow ROM and vector page without a bus cycle (`machine.md` §7.2),
+so it *executes* — but **the first `JSR` needs a stack**, and there is nowhere to put one.
+
+Two answers, and the second is nearly free:
+
+| | |
+|---|---|
+| **Stackless DRAM init** | boot code brings up refresh and the map using registers only, no subroutine calls, until the first SIMM answers. The 6309 has the registers for it; it is careful assembly and a real constraint on the boot ROM |
+| ⭐ **The CPU module serves a scratch RAM** | it already serves an 8 KB shadow ROM and a 16-byte vector RAM from its own flash and SRAM. **An `STM32G431CB` has 32 KB of SRAM**; serving 2 KB of it as a logical window costs **zero ICs** and a firmware change, and it parallels §7.2 exactly |
+
+**The second is recommended and not specified.** It also gives the machine somewhere to
+run from if a SIMM is absent or dead, which the four-SRAM version got for free and this
+one does not.
+
+### 6.5 The motherboard, assembled
 
 | | ICs |
 |---|---|
 | today | 9 |
-| + `RAM2`–`RAM4`, the reserved footprints populated | +3 |
+| ~~+ `RAM2`–`RAM4` populated~~ | ~~+3~~ — §6.2 |
 | + second map SRAM, 16-bit entries (§3.1) | +1 |
 | + U9 space decode, U10 SIMM timing, 3 × `'157` | +5 |
-| **total** | **18 ICs + 4 SIMM sockets** |
+| **total** | **14 ICs + 4 SIMM sockets** |
 
-⚠ **The `74HC139` `place/` reserved is not built.** It was the two-to-four
-decode for four SRAMs; U9 does that and three other things, and a `GAL22V10`
-was always going to be needed once the SIMM space and the `/IOPAGE` term
-existed. **The reserved footprint changes part, not position.**
+### 6.6 ⭐ Refresh against stretched cycles — settled
 
-### 6.4 What is not decided
+This was the open question and `graphics.md` §7.4 closed it on 2026-09-08.
 
-⚠ **Refresh steals cycles and nothing in this machine has ever stolen one.** A
-CAS-before-RAS burst every 15.6 µs is well under 1 % of the bus, but it is 1 %
-that `audio.md` §13's replayer budget and `net.md` §3.4's dispatch arithmetic
-have never carried. **And it is a second source of stretched cycles** after the
-video card's span writer — `machine.md` §5 item 10 says a stretch starves any
-card scheduling its buffer against `E`, and that item is still open with no
-bound on `SPANBUSY`. **Bound both before building this**, §11 item 4.
+**The video card's `/WAIT` is `SPANBUSY · VRAMSEL · /IOPAGE · E`** — it is asserted only
+when the CPU is touching **VRAM**. The bound is **40.7 µs**, a 256-byte span-solid at one
+retired byte per 158.9 ns fetch slot.
+
+⭐ **Refresh and the video stall never contend.** During those 40.7 µs the CPU is stalled
+*on VRAM*, so the DRAM bus is idle and U10's refresh runs off `CLK25` regardless of what
+`E` is doing. **A maximal span is 2.6 refresh intervals of completely free DRAM time**,
+which is better than neutral.
+
+**What is left is smaller and it is a rule rather than a mechanism.** `machine.md` §5
+item 10: *a card's internal realtime scheduling free-runs on `CLK25`; only host-facing
+windows may be derived from `E`.* U10's refresh timer obeys it by construction — it has
+no reason to count bus cycles — and the rule exists because the net card did count them
+and would have lost 50 bytes of a frame per maximal span.
+
+⚠ **What is still not measured** is refresh's own cost: a CAS-before-RAS burst every
+15.6 µs is well under 1 % of the bus, and it is 1 % that `audio.md` §13's replayer budget
+and `net.md` §3.4's dispatch arithmetic have never carried. **Small, and nobody has
+subtracted it from anything.**
 
 ## 7. The backplane — ~~three pins the slot does not have~~ none, after §5.3
 
@@ -380,16 +417,16 @@ see. **Zero new pins.**
 | Second map SRAM | +1 | `CY7C128A`, §3.1 — **and it is what lets the footprints be populated at all** (§5.1) |
 | U3 high-byte write strobe | 0 | pin 23 is free |
 | `TASK` widened to 8 bits | 0 | seven unused bits of an existing `'574`, §3.2 |
-| `RAM2`–`RAM4` populated | +3 | the footprints `place/` reserved |
-| U9 space decode | +1 | replaces the reserved `'139`, §6.2 |
-| U10 SIMM timing + 3 × `'157` | +4 | §6.2 |
-| **Motherboard** | **9 → 18** | plus four SIMM sockets |
+| ~~`RAM2`–`RAM4` populated~~ | ~~+3~~ | **the DIP SRAM is gone entirely — §6.2** |
+| U9 space decode | +1 | §6.3 |
+| U10 SIMM timing + 3 × `'157` | +4 | §6.3 |
+| **Motherboard** | **9 → 14** | plus four SIMM sockets |
 | Backplane | **0 pins** | §5.3 |
 | Cards | **0 changes** | one jumper position on storage and net, §5.2 |
 
-**2 MB of SRAM and up to 16 MB of DRAM, for nine packages and no card
-re-specification.** The map widening is the load-bearing part and it is one of
-the nine.
+**Up to 16 MB of DRAM for five packages and no card re-specification.** The map widening
+is the load-bearing part and it is one of the five. ⚠ **And the machine now has no SRAM
+at all**, which is §6.4's boot problem and the one thing this design gives up.
 
 ## 9. ⚠ The ceiling that is not hardware
 
@@ -433,41 +470,39 @@ and tried to make the OS use all of it.
 |---|---|---|---|
 | **0** | **Widen `TASK` to 8 bits** (§3.2) | **0 ICs** | 256 resident contexts; a process switch becomes one write. Independent of everything below and the only step that helps software that exists today |
 | **1** | **Second map SRAM, 16-bit entries** (§3.1, §4) | +1 IC | the 32 MB address path — ⚠ **and the precondition for step 2**, which §5.1 is about |
-| **2** | **U9, and populate `RAM2`–`RAM4`** (§5.2, §6.2) | +4 ICs | **2 MB of system RAM** — the OS ceiling (§9), reached with no DRAM and no refresh |
-| **3** | **SIMM bank** — 4 sockets, U10, 3 × `'157` (§6.2) | +4 ICs | **4–16 MB of DRAM** |
+| **2** | **U9 and the SIMM bank** — 4 sockets, U10, 3 × `'157` (§6.3) | +5 ICs | **4–16 MB of DRAM: all of the machine's memory** |
 | **4** | A bank-register window (§2.1) | +2 ICs | the space above the OS ceiling as an unmanaged store, without a memory-manager port |
 
-⚠ **Step 1 before step 2 is not a preference.** Four 512 KB parts is 2 MB and a
-2 MB map has no room for VRAM or the card regions — §5.1. The footprints
-`place/` reserved cannot be stuffed until the entries are 16 bits wide.
+⚠ **Step 1 before step 2 is not a preference.** The SIMM windows are at 4–20 MB and an
+8-bit map entry reaches 2 MB; **no SIMM is addressable until the entries are 16 bits
+wide.**
 
-**Steps 0–2 are a weekend and reach the operating system's ceiling.** Step 3 is
-the project — refresh arbitration against `machine.md` §5 item 10's stretched
-cycles is the part with unknowns in it, not the DRAM.
+⚠ **And there is no step that yields a working machine without DRAM any more**, which is
+what dropping the four SRAMs cost (§6.2, §6.4). The machine executes from the CPU
+module's shadow ROM and has nowhere to put a stack until a SIMM answers. **§6.4's
+scratch-RAM-in-the-module is the cheap insurance and it is not specified.**
 
 ## 11. Open items
 
-1. **~~`machine.md` §5 item 7 blocks step 1~~ — answered by §5.2.** The card
-   megabyte halves to 512 KB and eight regions, the freed half becomes system
-   RAM 1, and **nothing that exists changes address**. ⚠ **What is owed is the
-   jumper**: storage and net select a region with four positions against
-   `A19`–`A16` and it becomes three against `A18`–`A16`. One product term each,
-   no pins, and **neither document has been updated**.
-2. **⚠ `/IOPAGE` is being redefined** (§5.3) — from "the `$FFxx` page" to "cards
-   must not respond", which is what it always did and not what it is called.
-   **`machine.md` §2 must say so**, because a card author reading the current
-   sentence will qualify against the wrong thing.
+1. **~~`machine.md` §5 item 7 blocks step 1~~ — moot.** The card regions were halved for
+   system RAM 1 and restored when the DIP SRAM went away (§5.2). **Nothing is owed** and
+   the two card documents are back where they started.
+2. ⭐ **~~Refresh against stretched cycles~~ — SETTLED.** §6.6: the video card's `/WAIT`
+   is qualified on `VRAMSEL`, so the DRAM bus is idle for the whole 40.7 µs and refresh
+   never contends. What remains is `machine.md` §5 item 10's rule, which U10 obeys by
+   construction.
 3. **⚠ Layout A or B** (§4) — a NitrOS-9 cost question, not a hardware one, and
    the only genuinely open part of §3.
-4. **⚠ Refresh against stretched cycles.** `machine.md` §5 item 10 says a
-   stretched `E` starves any card scheduling its buffer against it, and nobody
-   has bounded the video card's `SPANBUSY`. Refresh would be the **second**
-   source of stretches. **Bound both before step 3**, not during it.
+4. ⚠ **NEW — the boot path has no RAM** (§6.4). Either the boot ROM initialises DRAM
+   without a stack, or the CPU module serves 2 KB of its own SRAM as a window — zero
+   ICs, and it parallels `machine.md` §7.2 exactly. **Not specified, and it is the thing
+   the four SRAMs were quietly insuring.**
 5. **Does U3 fit the second write strobe?** Pin 23 is free and `gal/README.md`
    says the part fits *"with one pin spare"*. One output costs a macrocell
    **and** a pin. **Fit it before believing §8's "+1 IC".**
-6. **Fit U9 and U10.** U9 is ~6 macrocells of 10 and 7 inputs of 12 — it should
-   be comfortable. U10 carries the RAS/CAS state machine, refresh arbitration
+6. **Fit U9 and U10.** U9 is smaller than it was — the four SRAM chip selects went with
+   the SRAM — so it is the four SIMM windows and the `/IOPAGE` pull, comfortably inside a
+   `GAL22V10`. U10 carries the RAS/CAS state machine, refresh arbitration
    and `/WAIT`, and has not been counted at all.
 7. **Source the SIMMs.** 4 MB 30-pin modules were made and are not
    current-production; this is `net.md` §13.6's lesson again — **availability is

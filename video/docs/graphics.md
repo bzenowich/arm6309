@@ -1220,7 +1220,13 @@ table scales on):
 | One character cell | 13 | ~31 µs |
 | **Scroll one line** (render new row, then `VSCROLL += 8`) | 1,040 | **~2.5 ms** |
 | Full 80×25 redraw, per-cell colour | 26,000 | ~62 ms |
-| Full-screen clear (128,000 px, span-solid) | ~500 | ~1.2 ms CPU, **~5.1 ms to retire** |
+| Full-screen clear (128,000 px, span-solid) | ~500 | ~1.2 ms CPU, ⚠ **~20.3 ms to retire** (~~5.1~~) |
+
+> ⚠ **The retire figure was wrong by 4× until 2026-09-08**, and §7.4's bound is what
+> caught it: it assumed the span writer took all four chips' spare accesses in a slot,
+> but `WPTR` names one chip at a time and two accesses do not fit the slack. **One byte
+> per 158.9 ns slot**, so 128,000 bytes is 20.3 ms. The CPU-bound rows are unaffected —
+> a line scroll is 1,040 writes of CPU against 0.81 ms of retire, and stays CPU-bound.
 
 **A terminal never full-redraws** — it scrolls, and scrolling is 2.5 ms plus one
 register write. That is the number that matters, and it is comfortable. The 62 ms
@@ -1302,6 +1308,52 @@ reloads the column from the register-file shadow. Set it once and a glyph become
 A span running off column 1023 wraps to column 0 of the same row (§19 item 12), which
 is what the scanner does, so a glyph straddling the torus seam renders where the
 display reads it.
+
+#### ⭐ How long `SPANBUSY` lasts — the bound `machine.md` §5 item 10 asked for
+
+**Answered 2026-09-08.** `/WAIT` is `SPANBUSY · VRAMSEL · /IOPAGE · E`
+(`gal/access.jedec.ts`), so the video card holds the machine only while a span is in
+flight **and** the CPU is touching VRAM. The length of that is `WMODE` and nothing else,
+because the retire rate is fixed: §3.1.1 gives **one granted retire per fetch slot**, and
+a fetch slot is 158.9 ns.
+
+| `WMODE` | Bytes | `SPANBUSY` | |
+|---|---|---|---|
+| `00` direct | 1 | **159 ns** | one posted write |
+| `01` span-mask | 8 | **1.27 µs** | a glyph row — the cell width, §7.4 |
+| `10` span-solid | **up to 256** | **up to 40.7 µs** | `SPANLEN` is a `'161` **pair**, so eight bits |
+
+**40.7 µs is the number, and it is longer than a scanline.** Against the rest of the
+machine: 85 bus cycles, 2.6 DRAM refresh intervals, 51 net framer byte-times, and just
+under `sdcard.md` §4.4's 49 µs masked chunk.
+
+> **Why the span writer is 6.29 MB/s and not 25.** Its pointer is one pointer. §2.1
+> leaves one spare access per chip per slot and there are four chips, but `WPTR` names
+> one of them at a time, and two sequential accesses do not fit the 86.9 ns of slack
+> (2 × 72 ns). So the span writer retires **one byte per slot**, and every rate that
+> depends on it follows from 158.9 ns.
+
+**Three consequences, and only the third needs anything done:**
+
+1. **DRAM refresh is unaffected** — `hardware/ram.md` §6.4's open question, closed. `/WAIT`
+   here is qualified on `VRAMSEL`, so the CPU is stalled *on VRAM*; the DRAM bus is idle
+   for the whole 40.7 µs and the refresh controller runs off `CLK25` regardless. **They
+   never contend**, and a long span is 2.6 refresh intervals of free DRAM time.
+2. **Interrupt latency gains up to 40.7 µs**, because holding `E` holds dispatch too.
+   That belongs in `machine.md` §4's table beside PS/2's 1.3 ms and storage's 49 µs, and
+   it is the smallest of the three.
+3. ⚠ **A card that schedules against `E` starves.** `net.md` §4.3 does, and 40.7 µs is
+   51 byte-times — a dropped frame every time a maximal span meets a received frame.
+   **The fix is on that card and it is small** (`net.md` §16 item 5): free-run the framer
+   phase on `CLK25` and gate only the host window on `E`. During a video stall the CPU is
+   on VRAM, not on the net card, so its buffers are idle and its framers can have every
+   slot.
+
+**And the practical bound is zero, not 40.7 µs.** `VSTAT` b7 **is** `SPANBUSY` (§13), the
+read has no side effects, and it is in the I/O page — so it does not trigger `/WAIT`.
+**Software that polls it before touching VRAM never stalls the machine at all**, and
+`/WAIT` goes back to being the backstop §3.3 calls it rather than the normal path. One
+bus cycle of poll against up to 85 of stall.
 
 #### What it costs
 

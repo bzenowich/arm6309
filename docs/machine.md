@@ -36,7 +36,7 @@ genuinely undecided.
 | **Boot** | **the CPU module serves an ~8 KB shadow ROM and the vector page from its own flash** — §7.2. No ROM chip on the motherboard |
 | **MMU** | **on the motherboard: 5 ICs, the SAM/GIME/DAT arrangement** — `graphics.md` §6.3.1. Register set is a free design, not GIME-compatible (§5 item 3) |
 | **Address space** | 64 KB logical, MMU-mapped; ~~1 MB~~ ~~2 MB~~ **32 MB physical (A0–A24)** — 16-bit map entries, `hardware/ram.md` §5.2. ⚠ **`A21`–`A24` stay on the motherboard**; the backplane still carries `A0`–`A20` |
-| **System RAM** | **2 MB SRAM on the motherboard** — four × 512K×8, `hardware/ram.md` §5.2 (~~512 KB~~). Plus **four 30-pin SIMM sockets, 4–16 MB of DRAM** — §6 |
+| **System RAM** | **four 30-pin SIMM sockets, 4–16 MB of DRAM** — `hardware/ram.md` §6 (~~512 KB of SRAM~~, ~~2 MB of SRAM~~). ⚠ **No SRAM at all**, so the machine has no memory until the DRAM controller is up — §6.4 |
 | **System master clock** | one 25.175 MHz oscillator, **on the motherboard** — §1 |
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
@@ -45,7 +45,7 @@ genuinely undecided.
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **14 ICs** (~~7~~), **681 KiB/s** sustained (~~528~~) — **specified** ([`storage/`](../storage/)). Its block buffer moved into `A20 = 1` on 2026-09-08 and took the `TFM` hazard with it. ⚠ ~~The machine's one period exception~~ the first of two |
 | **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs** (~~16~~), two of them `ATF1508AS` — **specified** ([`net/`](../net/)). ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | **117 ICs** — **99 on cards**, **18** on the motherboard (~~9~~ — `hardware/ram.md` §6.3, plus four SIMM sockets). ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
+| **Total silicon** | **113 ICs** — **99 on cards**, **14** on the motherboard (~~9~~, ~~18~~ — `hardware/ram.md` §6.5, plus four SIMM sockets). ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -145,13 +145,11 @@ three reserved SRAM footprints could be populated:
 
 | `A24..A19` | Range | 512 KB | |
 |---|---|---|---|
-| `000000` | 0.0–0.5 M | **system RAM 0** (§7.1) | unchanged |
+| `000000` | 0.0–0.5 M | **reserved** — §7.1's boot scratch would go here | ⚠ no RAM here any more |
 | `000001` | 0.5–1.0 M | the video card's ring (`graphics.md` §6.3) | unchanged |
-| `000010` | 1.0–1.5 M | **card buffers — 8 regions of 64 KB** | ⚠ **halved from 16** |
-| `000011` | 1.5–2.0 M | **system RAM 1** | the freed half |
-| `000100`, `000101` | 2.0–3.0 M | **system RAM 2 and 3** | new |
-| `00011x` | 3.0–4.0 M | reserved | |
-| `001xxx`–`100xxx` | 4–20 M | **four 4 MB SIMM windows** | `ram.md` §6 |
+| `00001x` | 1.0–2.0 M | **card buffers — 16 regions of 64 KB** | unchanged |
+| `0001xx` | 2.0–4.0 M | reserved | |
+| `001xxx`–`100xxx` | **4–20 M** | **four 4 MB SIMM windows — all of system RAM** | `ram.md` §6 |
 | `101xxx`–`111xxx` | 20–32 M | reserved | |
 
 **`VRAM` keeps `A20:A19 = 01` and the card regions keep `A20 = 1`, so no card changes
@@ -462,6 +460,7 @@ different documents:
 | Masked window | Duration | Consequence |
 |---|---|---|
 | `sdcard.md` §4.4 — a chunked TFM sector transfer | 49 µs per chunk | 0.25 % of the replayer's 20 ms tick; `/FIRQ` is delayed, not lost, because the source is level-held. VBL is latched in `VSTAT` and survives |
+| `graphics.md` §7.4 — a maximal span-solid, with the CPU touching VRAM | **up to 40.7 µs** | holds `E`, so it holds interrupt dispatch too. **Avoidable entirely** by polling `VSTAT` b7 first — §5 item 10 |
 | `ps2.md` §7 — a host-to-device transmit (keyboard LEDs, mouse enable) | **~0.8–1.3 ms per frame** | ⚠ Longer than the 6551's 521 µs inter-byte deadline at 19,200 baud, so **an LED update during a download guarantees a serial overrun** — `design-review.md` §IO-P4. **And 1.06 maximum-size Ethernet frames of arrival**, which is why `net.md` §3.3 sizes the net card's RX ring at four banks rather than two |
 | `net.md` §3.2 — a chunked masked `TFM` drain of a received frame | 49 µs per chunk | the same window `sdcard.md` opens, from the same instruction and the same cause. **Two cards now depend on `TFM`'s resume behaviour** — §6 |
 
@@ -666,8 +665,8 @@ These are not deferred details; each one blocks a board.
    | | |
    |---|---|
    | **Region size** | **64 KB.** The MMU maps in 8 KB blocks, so 8 KB is the floor; 64 KB is chosen because **a region is then exactly one 6309 logical address space** — eight blocks, one `TASK`'s whole map |
-   | **How many** | ~~16~~ **8**, selected by physical `A18`–`A16` with `A19 = 0`. ⚠ **Halved 2026-09-08** — `hardware/ram.md` §5.2 took the other half for system RAM, because 1 MB of card space for a six-slot machine was generous and 2 MB of system RAM would not fit otherwise |
-   | **How claimed** | a ~~4~~ **3-position** jumper per card, compared against `A18`–`A16`. The same mechanism as the `$FF` window's base and with the same known flaw: nothing prevents two cards being jumpered alike and nothing detects it (§2). ⚠ **`storage` and `net` both specify four positions and neither document has been updated** — `ram.md` §11 item 1 |
+   | **How many** | **16**, selected by physical `A19`–`A16`. ⚠ **Halved to 8 on 2026-09-08 and restored the same day** — the halving paid for a system-RAM quadrant that `ram.md` §6.2 then deleted along with all the DIP SRAM |
+   | **How claimed** | a **4-position jumper** per card, compared against `A19`–`A16`. The same mechanism as the `$FF` window's base and with the same known flaw: nothing prevents two cards being jumpered alike and nothing detects it (§2) |
    | **Qualification** | **`/IOPAGE` high, always.** A card buffer is a physical-memory decode and §2's rule is not optional for it — a card answering during an `$FFxx` cycle is the bug `/IOPAGE` exists to prevent |
    | **Below `A16`** | the card's business. `net.md` splits its region `A15 = 0` RX / `A15 = 1` TX; `sdcard.md` uses 2 KB of one |
 
@@ -781,28 +780,51 @@ These are not deferred details; each one blocks a board.
    > and only once a design using the idiom was compiled as a GAL rather than merged into
    > a CPLD.
 
-10. **⚠ NEW — a stretched cycle is a hazard for any card that schedules against `E`.**
+10. **⚠ ~~NEW — a stretched cycle is a hazard for any card that schedules against `E`.~~
+    BOUNDED 2026-09-08. 40.7 µs, and it is one card's span writer.**
 
-   Item 8's fix means `E` can now stop mid-cycle, and item 7's card buffers count `CLK25`
-   ticks *within* a bus cycle to decide who owns their SRAM. **Those two decisions were
-   made on the same day and they interact.**
+    Item 8's fix means `E` can stop mid-cycle, and item 7's card buffers count `CLK25`
+    ticks *within* a bus cycle. **`graphics.md` §7.4 now bounds the stretch**, and the
+    length is `WMODE` and nothing else, because the span writer retires one byte per
+    158.9 ns fetch slot:
 
-   [`net/docs/net.md`](../net/docs/net.md) §4.3 is the worked case: its framers take
-   ticks 0–3 and the host ticks 7 onward, and **while `E` is frozen the framers get no
-   slot at all.** A stretch longer than one byte time — ~800 ns at 10 Mbit — loses a
-   received byte, which fails the FCS and drops the frame. Not silent, but not free.
+    | `WMODE` | Bytes | `/WAIT` held |
+    |---|---|---|
+    | direct | 1 | 159 ns |
+    | span-mask | 8 | 1.27 µs |
+    | **span-solid** | **up to 256** | **up to 40.7 µs** |
 
-   Two things are owed and neither has an owner:
+    **40.7 µs is longer than a scanline.** It is 85 bus cycles, 2.6 DRAM refresh
+    intervals and 51 net framer byte-times.
 
-   - **A rule for item 7**: a phase counter must **saturate rather than wrap** during a
-     stretch, so a card's host window does not move under it. That is cheap and should be
-     written into item 7.
-   - **⚠ `graphics.md` must bound how long the span writer asserts `/WAIT`.** No document
-     says. Until one does, no card that schedules against `E` can state a worst case —
-     and item 8 is what turned that from a dead wire into a real constraint.
+    ### What it settles
 
-   **This is the cost of fixing item 8, and it is worth paying**: a `/WAIT` that does
-   nothing is a video card that corrupts its own reads.
+    - ⭐ **DRAM refresh is safe** — `hardware/ram.md` §6.4's open question, closed.
+      `/WAIT` here is qualified on `VRAMSEL`, so the CPU is stalled *on VRAM* and the
+      DRAM bus is idle for the whole 40.7 µs while the refresh controller runs off
+      `CLK25`. **They never contend**, and a maximal span is 2.6 refresh intervals of
+      free DRAM time.
+    - **Interrupt latency gains up to 40.7 µs**, because holding `E` holds dispatch.
+      Added to §4's table; it is the smallest of the three entries there.
+    - ⚠ **`net.md` §4.3 starves**, and that is a card-side fix — free-run the framer
+      phase on `CLK25` and gate only the host window on `E`.
+
+    ### ⭐ And the rule that generalises it
+
+    > **A card's internal realtime scheduling free-runs on `CLK25`. Only host-facing
+    > windows may be derived from `E`.**
+
+    `E` can stop, and stopping it is a thing any card may do. A framer, a serialiser or
+    a refresh counter that counts bus cycles has a correctness bug that appears only
+    when some *other* card is busy — which is the worst kind. The net card is the one
+    that has it today and the rule is written here so the next card does not.
+
+    ### And the practical bound is zero
+
+    `VSTAT` b7 **is** `SPANBUSY`, the read has no side effects, and it is in the I/O
+    page — so it does not trigger `/WAIT`. **Software that polls it before touching VRAM
+    never stalls the machine**, at a cost of one bus cycle against up to 85. `/WAIT`
+    goes back to being the backstop `graphics.md` §3.3 calls it.
 
 ---
 
@@ -834,8 +856,8 @@ a cross-card dependency.
 | **video** | **⚠ `vctrl` has zero spare pins and therefore no JTAG.** 64 of 64 with JTAG costing four I/O: it is programmed out of circuit, as the audio card's U1 already is. Getting in-circuit programming back means moving `RA0`–`RA4` and `WSTB` to a second GAL | `video.cpld.ts` |
 | **video** | **⚠ Bound `SPANBUSY`.** `/WAIT` works now, and no document says how long the span writer holds it. Any card scheduling against `E` needs that number | §5 item 10, `net.md` §16 item 5 |
 | **audio** | **⚠ Decide whether the sample RAM moves into `A20 = 1`.** Its 128 KB upload is a chunked `TFM X+,Y` into a port and pays the same tax storage and net just stopped paying — and it is the last card carrying the doubled-write exposure | §5 item 7, `audio.md` §13 |
-| **machine** | ~~**⚠ Divide the megabyte at `A20 = 1`**~~ **Re-carved 2026-09-08** — 8 regions of 64 KB, the other half to system RAM (`hardware/ram.md` §5.2). ⚠ **What is still owed is the arbitration question** — who wins a host access the card cannot defer — and the **3-position jumper** in `sdcard.md` and `net.md` | §5 item 7, `hardware/ram.md` §11 item 1 |
-| **machine** | **⚠ RAM expansion — decided, not built.** `hardware/ram.md`: 16-bit map entries, a 32 MB map, 2 MB of SRAM and four 30-pin SIMM sockets, for **nine packages, zero backplane pins and zero card changes**. ⭐ Also: `TASK` widens from 1 bit to 8 **for nothing** — 256 resident contexts and a one-write process switch | `hardware/ram.md` §5, §6, §10 |
+| **machine** | **⚠ Divide the megabyte at `A20 = 1`** — 16 regions of 64 KB stands; **what is open is the arbitration**, who wins a host access the card cannot defer | §5 item 7 |
+| **machine** | **⚠ RAM expansion — decided, not built.** `hardware/ram.md`: 16-bit map entries, a 32 MB map, four 30-pin SIMM sockets and **no SRAM**, for **five packages, zero backplane pins and zero card changes**. ⚠ **It owes a boot path** — §6.4. ⭐ Also: `TASK` widens from 1 bit to 8 **for nothing** — 256 contexts and a one-write process switch | `hardware/ram.md` §5, §6, §10 |
 | ~~**storage, io**~~ | ~~Re-price against a memory-mapped buffer.~~ **Done 2026-09-08** — both cards took it. `sdcard.md` §11.1 and §4.5; `net.md` §13.3 and §7.6. ⚠ **What is left is `sdcard.md` §13 item 6**: its *write* path is still on the port | §5 item 1 D |
 | **io** | **Find out whether a NitrOS-9 network stack exists.** It is the net card's largest cost and nobody has looked — the same shape of unknown as `serial`'s `sc6551` | `net.md` §14.2, §16 item 12 |
 | ~~**project**~~ | ~~**⚠ Restate or retire the no-CPLD house rule.**~~ **RETIRED 2026-09-08** — root `README.md`. Programmable logic is in; FPGAs are unproposed rather than banned. ⚠ **One consequence outstanding**: `sdcard.md` §8.1's `ATF1508AS` was refused on the rule alone and is now unblocked at 8 ICs against 14 | root `README.md`; `sdcard.md` §13 item 12 |
@@ -853,48 +875,25 @@ a cross-card dependency.
 
 ### 7.1 System RAM
 
-**~~512 KB~~ 2 MB of SRAM on the motherboard** — **four** × 512K×8 (AS6C4008-class,
-55 ns), decoded by a `GAL22V10` that also forms §2's above-2 MB `/IOPAGE` pull
-(`hardware/ram.md` §6.2). **Plus four 30-pin SIMM sockets, 4–16 MB of DRAM.**
+**~~512 KB of SRAM~~ four 30-pin SIMM sockets, 4–16 MB of DRAM**, at physical
+4–20 MB — [`hardware/ram.md`](../hardware/ram.md) §5.2, §6.
 
-> ⭐ **Decided 2026-09-08 — `hardware/ram.md`.** Three of the four SRAM footprints were
-> reserved on the board and could not be populated, because **four × 512 KB is 2 MB and
-> that was the whole physical map**. Widening the map entry to 16 bits and halving the
-> card regions (§5 item 7) fixed both. ⚠ **And this section's reason for rejecting DRAM
-> expired**: *"DRAM needs a refresh owner and this machine has none"* was true until §5
-> item 8 gave the divider a `/WAIT` hold, which is exactly the mechanism a refresh
-> controller needs.
+> ⭐ **Decided 2026-09-08 and then simplified the same day.** Three SRAM footprints were
+> reserved and could not be populated, because **four × 512 KB is 2 MB and that was the
+> whole physical map** — so the map entry widened to 16 bits. Once there were SIMM
+> sockets on the board the four DIP SRAMs had no job left, and they went: **14 ICs, not
+> 18.** ⚠ **And this section's reason for rejecting DRAM expired** — *"DRAM needs a
+> refresh owner and this machine has none"* was true until §5 item 8 gave the divider a
+> `/WAIT` hold, and §5 item 10 then showed refresh and the video card's stall never
+> contend.
 >
-> **Superseded text follows**, because the arithmetic in it is still the argument for
-> one part rather than four *at 512 KB*, and that argument is what makes the fourth
-> package a deliberate purchase rather than an inherited assumption.
-
-
-
-> ⚠ **This said "Four × 512K×8 … and a decode" until 2026-09-06, and both halves were
-> wrong.** Found while drawing the motherboard, which is the first thing that had to
-> fit the part rather than cite it — [`hardware/README.md`](../hardware/README.md)
-> finding 1.
+> ⚠ **What it costs is the boot path.** With no SRAM the machine executes from the CPU
+> module's shadow ROM and **has nowhere to put a stack** until a SIMM answers.
+> `ram.md` §6.4 recommends the module serve 2 KB of its own SRAM as a window — zero ICs,
+> and exactly the mechanism §7.2 already uses for the vector page. **Not specified.**
 >
-> **512K × 8 is 512 KB.** Four of them is 2 MB — against a 512 KB requirement, in a 1 MB
-> physical map that gives system RAM exactly `A19 = 0`, i.e. **A0–A18, nineteen address
-> lines**. An AS6C4008 has A0–A18. It *is* the requirement, once, and the part this
-> section already named was the right one all along.
->
-> **And the decode went with the other three.** With one package there is nothing to
-> decode *between*: `/CE` is the `A19 = 0` AND `/IOPAGE` term, and the MMU's `GAL22V10`
-> already forms that term to generate `/IOSEL` (`graphics.md` §6.3.1). The decode was a
-> part the fourth SRAM created and the first one never needed.
->
-> **The motherboard falls from ~13 ICs to 9** — MMU 5, divider GAL, oscillator, reset
-> supervisor, system RAM — and the machine from ~110 to **~106**. §0 and §8 are
-> corrected to match.
->
-> It is the same shape of error the 2026-09-04 review kept finding, and §8's own closing
-> lesson names it: **a table that exists to do arithmetic is worth re-examining against
-> the parts catalogue.** This row was never checked against the part it names — and
-> unlike audio's 57, it was not found by re-reading the document. It was found by a
-> board file that had to say how many packages to draw.
+> **Superseded text follows**, because its arithmetic is still the argument for one part
+> rather than four *at 512 KB*.
 
 This document asserted "`A19 = 0` is 512 KB of system RAM" in §0 and §2 from the
 beginning and never said who provides it. It was in no chip budget — every card accounts
@@ -959,10 +958,10 @@ carve-out drawn into a physical map that has no room for one.
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
 | 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The second largest single-card draw after video**, and the only figure on that card that cannot be derived from a datasheet with confidence |
 | 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + **14** (~~7~~ — its block buffer, §5 item 7) | not yet estimated |
-| 5 V | **motherboard**: MMU (5, +1 map SRAM), divider GAL, oscillator, reset supervisor, **2 MB SRAM (4)**, **U9/U10 GALs and 3 × `'157`** — `hardware/ram.md` §6.3 | ~~13~~ ~~9~~ **18** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load |
+| 5 V | **motherboard**: MMU (5, +1 map SRAM), divider GAL, oscillator, reset supervisor, **U9/U10 GALs and 3 × `'157`** — `hardware/ram.md` §6.5 | ~~13~~ ~~9~~ **14** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly ~~2–3~~ **2.0–3.0 A** at 5 V across ~~~106~~ ~~108~~ **117 ICs**, plus
+**The machine is plausibly ~~2–3~~ **2.0–3.0 A** at 5 V across ~~~106~~ ~~108~~ **113 ICs**, plus
 a 3.3 V rail.**
 
 > ⚠ **Both halves re-derived 2026-09-08, and the card total had never been added up.**
