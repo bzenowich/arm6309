@@ -1,14 +1,32 @@
-/* SD card storage - 7 ICs, storage/docs/sdcard.md 8. 528 KiB/s sustained.
+/* SD card storage - 13 ICs, storage/docs/sdcard.md 8. 681 KiB/s sustained.
  *
  * The machine's one period exception, and it is honest about it: an SPI burst
- * started by the bus read strobe, so TFM's 1430 ns read interval covers a
- * 636 ns burst with 2.25x margin at the specified /12 E (sdcard.md 3.3).
+ * started by the bus read strobe (sdcard.md 3.1).
+ *
+ * REVISED 2026-09-08. sdcard.md 11.1 wanted a memory-mapped block buffer from
+ * the beginning and called it "the clean answer we cannot afford" - the $FF
+ * window was 64 bytes and the 1 MB physical map was fully spent. machine.md 5
+ * item 1 option D and item 7 made it affordable, so the SPI engine now fills a
+ * 2 KB SRAM the host reads as memory. That RETIRED the TFM hazard rather than
+ * mitigating it (a re-read of RAM is idempotent - sdcard.md 4.2's own
+ * argument), and took sustained reads from 528 to 681 KiB/s.
+ *
+ * It cost six ICs, five of them address and data plumbing. One ATF1508AS would
+ * have absorbed both GALs, the counter and the mux for an 8-IC card; not taken,
+ * because it would spend the no-CPLD house rule a fourth time on the one card
+ * whose exception is the media rather than the silicon. sdcard.md 8.1.
  */
 import { Card } from "../lib/Card"
 
 export default () => (
-  <Card name="arm6309-storage" ioBase={0xff58} ioSize={4} icBudget={7}>
-    {/* U1 - decode and the burst sequencer, from geographic /IOSEL. */}
+  <Card name="arm6309-storage" ioBase={0xff58} ioSize={4} icBudget={13}>
+    {/* U1 - decode and the burst sequencer, from geographic /IOSEL.
+      *
+      * The decode is A0-A6 now, seven bits: /IOSEL widened to $FF00-$FF7F on
+      * 2026-09-08 and A6 left the strobe, so six bits would answer at $FF58
+      * AND $FF18 (sdcard.md 6.1). This part also gained FILL/BUF (sdcard.md
+      * 6.2) and the A20 = 1 region compare, which is why sdcard.md 8 budgets
+      * the GAL as two packages. */}
     <chip
       name="U1"
       footprint="dip24_w0.3in"
@@ -27,6 +45,28 @@ export default () => (
       noConnect={[]}
     />
 
+    {/* U7 - the block buffer. 6116, 2K x 8, four 512-byte buffers, at offset 0
+      * of the card's 64 KB region at A20 = 1 (machine.md 5 item 7). The host
+      * reads it through the MMU as ordinary memory, which is the whole of
+      * sdcard.md 4.5: there is nothing here for an interrupted TFM to break.
+      *
+      * Filled by a 74HC4040 9-bit counter and the FILL bit; three 74HC157s mux
+      * that counter against backplane A8-A0. Those four packages plus this one
+      * and the '245 are the six ICs the revision cost. */}
+    <chip
+      name="U7"
+      manufacturerPartNumber="6116"
+      footprint="dip24_w0.6in"
+      pinLabels={{
+        pin1: "A7", pin2: "A6", pin3: "A5", pin4: "A4", pin5: "A3",
+        pin6: "A2", pin7: "A1", pin8: "A0", pin9: "DQ0", pin10: "DQ1",
+        pin11: "DQ2", pin12: "GND", pin13: "DQ3", pin14: "DQ4", pin15: "DQ5",
+        pin16: "DQ6", pin17: "DQ7", pin18: "nCE", pin19: "A10", pin20: "nOE",
+        pin21: "nWE", pin22: "A9", pin23: "A8", pin24: "VCC",
+      }}
+      connections={{ VCC: "net.V5", GND: "net.GND" }}
+    />
+
     {/* U2 - the receive shift register, and it is 74HCT595 and not 74HC595 for
       * one specific reason: the SD card's V_OH of ~2.48 V clears an HCT input's
       * 2.0 V V_IH, so MISO needs no level shifter at all. An HC part would read
@@ -41,7 +81,12 @@ export default () => (
         pin12: "RCLK", pin13: "nOE", pin14: "SER", pin15: "QA", pin16: "VCC",
       }}
       connections={{
-        VCC: "net.V5", GND: "net.GND", nSRCLR: "net.V5", nOE: "net.GND",
+        /* nOE is no longer tied low onto the slot bus: the '595 now three-states
+         * onto the buffer's LOCAL data bus, and its enable is the fill engine's
+         * write window rather than a bus-read decode. sdcard.md 3.5 flags this
+         * as the most likely place to get the revision wrong, because the part
+         * is unchanged and its wiring is not. */
+        VCC: "net.V5", GND: "net.GND", nSRCLR: "net.V5",
         SER: "net.MISO", SRCLK: "net.SCK_5V",
       }}
     />

@@ -18,7 +18,7 @@ const check = (ok: boolean, claim: string, detail = "") => {
 
 /* -- the machine's own signal list, docs/machine.md 2 -------------------- */
 const REQUIRED = [
-  ...Array.from({ length: 20 }, (_, i) => `A${i}`), // A0..A19, physical
+  ...Array.from({ length: 21 }, (_, i) => `A${i}`), // A0..A20, physical - A20 since 2026-09-08
   ...Array.from({ length: 8 }, (_, i) => `D${i}`),
   "E", "Q", "R/W",
   "CLK25",

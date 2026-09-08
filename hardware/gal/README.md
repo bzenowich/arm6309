@@ -128,7 +128,7 @@ completely.
 
 | Window | Size | What | Decoded by |
 |---|---|---|---|
-| `$FFA0`–`$FFAF` | 16 B | **16 block registers.** Entry index = `A3..A0`. Bits 6–0 = physical `A19..A13`; bit 7 spare and stored | U3, motherboard |
+| `$FFA0`–`$FFAF` | 16 B | **16 block registers.** Entry index = `A3..A0`. Bits ~~6~~ **7**–0 = physical ~~`A19`~~ **`A20`**`..A13` | U3, motherboard |
 | `$FFB0`–`$FFBF` | 16 B | **MMU control**, aliased 16× — bit 0 = `TASK`. Canonical address `$FFB0` | U3, motherboard |
 
 > **Signed off 2026-09-06**, and `mainboard/mainboard.circuit.tsx` now implements it.
@@ -144,8 +144,18 @@ was drawn this way before anyone wrote it down; `mmu.check.ts` now asserts it.
 exactly would need `LA3..LA0` as four more GAL inputs, and the budget below has one pin
 spare. Aliasing costs nothing and is ordinary for the period.
 
-**Sixteen 7-bit block registers is the whole 2 KB SRAM's useful content** — 16 of 2048
-locations, as §6.3.1 says.
+**Sixteen ~~7~~ 8-bit block registers is the whole 2 KB SRAM's useful content** — 16 of
+2048 locations, as §6.3.1 says.
+
+> ⚠ **Bit 7 said "spare and stored" until 2026-09-08, and that sentence was the machine's
+> cheapest unclaimed asset.** `machine.md` §5 item 1 option D made it **physical `A20`**,
+> doubling the map to 2 MB so cards can put buffers somewhere the CPU addresses as memory
+> (`sdcard.md` §11.1, `net.md` §7.6). **It cost one backplane pin and no parts**: the map
+> SRAM is byte-wide, `U4` already carried all eight bits, and the bit was already written
+> and read back. It simply drove nothing.
+>
+> The map is now genuinely full at 8 of 8. A physical `A21` would need a second map SRAM
+> byte and a wider write path, which is a different order of change entirely.
 
 ---
 
@@ -169,8 +179,10 @@ Two things came off, and both are improvements rather than concessions:
 - **`ISO_DIR` is `R/W`.** The `'245`'s A side is the SRAM, its B side is `D0–D7`; a read
   wants A→B (`DIR` = 1) and a write B→A (`DIR` = 0). That is `R/W` exactly. It was a
   macrocell in the board file and it is a **wire**.
-- **`/IOSEL` moves to U6.** It is `/IOPAGE · A7 · /A6` — a machine-level backplane signal,
-  not MMU sequencing, and U6 (the E/Q divider) has most of a 22V10 unused. `/IOPAGE`
+- **`/IOSEL` moves to U6.** It is ~~`/IOPAGE · A7 · /A6`~~ **`/IOPAGE · /A7`** — a
+  machine-level backplane signal, not MMU sequencing, and U6 (the E/Q divider) has most of
+  a 22V10 unused. (**Two corrections on 2026-09-08**: the term written here was the wrong
+  polarity, and the window then widened. §U6 below.) `/IOPAGE`
   stays on U3 because putting it on U6 would put a second GAL delay in series ahead of
   `MAP_OE`, and the break-before-make margin is measured from that edge.
 
@@ -314,6 +326,46 @@ bench.
 `clkdec.pld` carries three jobs on one part: the `E`/`Q` divider (`machine.md` §1),
 `/IOSEL` (which U3 had no room for), and the system RAM's `/CE`, `/OE` and `/WE` (which
 nothing drove at all until 2026-09-06 — `hardware/README.md` open item 4).
+
+### ⚠ `/IOSEL` was the wrong 64 bytes, from the day it was written until 2026-09-08
+
+It read **`/IOPAGE · A7 · /A6`**. `LA7` and `LA6` are true-sense on this part — `mmu.pld`
+uses them the same way to decode `$FFA0`–`$FFBF` as `A7..A5 = 101` — so that term is
+**`$FF80`–`$FFBF`: the MMU's own two windows and the CPU module's vector RAM.**
+`$FF40`–`$FF7F` is `A7 = 0, A6 = 1`. The two literals were swapped.
+
+**Every card's `/IOSEL` fired on an MMU block-register write and never on the card window
+at all** — six cards onto `D0`–`D7` against U3, which is the failure mode `/IOPAGE` was
+added to prevent, arriving from a third cause.
+
+**Five artefacts carried it and agreed**: `clkdec.pld`, `clkdec.v`, `clkdec.jedec.ts`,
+`clkdec.model.ts` and this file. It reached `clkdec.jed`, so it would have reached a
+programmer.
+
+**Why 15 passing claims did not see it.** `clkdec_tb.sv` asserted
+`p == 0 && a7 == 1 && a6 == 0` under the message *"/IOSEL is $FF40-$FF7F: the I/O page
+with A7,A6 = 01"*. **The assertion and its own message disagree**, and the implementation
+was written from the assertion. `mainboard.circuit.tsx`'s comment stated the intent
+correctly too, directly above wiring that was fine.
+
+> **This is `jedec/cupl.check.ts`'s lesson one step further out.** That file established
+> that our assembler and our simulator share a device description and therefore agree
+> whatever it says, so a second implementation is what breaks the tie. **The same is true
+> of a check and the design it was written beside**: both came out of one understanding,
+> so the check tested the understanding. Atmel's CUPL could not help here either — it
+> compiles the equation it is given.
+>
+> The replacement claim is the one that could not have been written wrong in the same
+> direction: **sweep `A6` and require it to have no effect.** It is in the testbench next
+> to the range check, and it would have failed loudly on the old equation.
+
+**And then the window widened**, `machine.md` §5 item 1 option A, in the same pass:
+`$FF00`–`$FF7F`, 128 bytes. The decode is now **`/IOPAGE · /A7`, one literal** — cheaper
+than the broken two-literal version. `LA6` stays wired to pin 6 driving nothing, so
+`$FF80`–`$FF8F` remains a one-line change; **pin 9 took physical `A20`** with option D.
+
+⚠ **Cards must decode `A0`–`A6` now.** Six bits answer at the base and 64 bytes below it.
+`vctrl.pld`'s `REGSEL` gained `A6` with this change and **has not been refitted.**
 
 **The Q tap is divisor-dependent, and that is the exit criterion `graphics.md` §18 step 0
 names.** `machine.md` §1 says *"Q = same divider, 3 dots early."* Three dots is a quarter

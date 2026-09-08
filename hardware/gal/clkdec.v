@@ -24,6 +24,7 @@ module clkdec (
     input  wire       la7,
     input  wire       la6,
     input  wire       a19,       // PHYSICAL A19 - it comes out of the map SRAM
+    input  wire       a20,       // PHYSICAL A20 - the map SRAM's eighth bit
     input  wire       rw,
 
     output reg  [3:0] cnt,       // on pins, unconnected: four free test points
@@ -56,7 +57,7 @@ module clkdec (
   // The four combinational outputs are a separate module so that a testbench
   // can sweep them without reaching inside the divider. In the GAL they are
   // simply four more macrocells on the same part.
-  decode dec (.n_iopage(n_iopage), .la7(la7), .la6(la6), .a19(a19), .rw(rw),
+  decode dec (.n_iopage(n_iopage), .la7(la7), .la6(la6), .a19(a19), .a20(a20), .rw(rw),
               .e(e), .n_iosel(n_iosel), .n_ram_ce(n_ram_ce),
               .n_ram_oe(n_ram_oe), .n_ram_we(n_ram_we));
 
@@ -64,18 +65,30 @@ endmodule
 
 
 module decode (
-    input  wire n_iopage, la7, la6, a19, rw, e,
+    input  wire n_iopage, la7, a19, a20, rw, e,
+    /* verilator lint_off UNUSEDSIGNAL */
+    // A REAL PIN THAT NO EQUATION USES, and the port stays to say so. U6 pin
+    // 6 is wired to LA6 on the board; the 2026-09-08 widening to $FF00-$FF7F
+    // deleted the term that read it. Keeping the port here and the trace
+    // there is what makes $FF80-$FF8F (machine.md 5 item 1's option A+) a
+    // one-line change instead of a respin. clkdec.pld carries the argument.
+    input  wire la6,
+    /* verilator lint_on UNUSEDSIGNAL */
     output wire n_iosel, n_ram_ce, n_ram_oe, n_ram_we
 );
 
-  // $FF40-$FF7F, common to every slot - machine.md 2. /IOPAGE comes from U3.
-  assign n_iosel  = ~(~n_iopage & la7 & ~la6);
+  // $FF00-$FF7F: the I/O page with A7 = 0 - machine.md 2 and 3. /IOPAGE comes
+  // from U3. Two independent changes landed on this line on 2026-09-08 - a
+  // polarity fix and the widening - and clkdec.pld sets both out.
+  assign n_iosel  = ~(~n_iopage & ~la7);
 
   // System RAM: physical A19 = 0, and never during an I/O cycle. Qualifying
   // /OE with R/W is what stops the SRAM and the CPU both driving D0-D7 on a
   // write - with /OE tied low the SRAM drives from /CE time until /WE asserts,
   // about 90 ns of contention on every write.
-  wire ramsel = n_iopage & ~a19;
+  // A20 = 0 as well since 2026-09-08 - the map is 2 MB and system RAM is
+  // the bottom quarter. clkdec.pld carries the argument.
+  wire ramsel = n_iopage & ~a19 & ~a20;
   assign n_ram_ce = ~ramsel;
   assign n_ram_oe = ~(ramsel & rw);
   assign n_ram_we = ~(ramsel & ~rw & e);

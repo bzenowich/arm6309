@@ -52,7 +52,7 @@ for (let i = 0; i <= 12; i++) {
   const onCpu = pinsOn("J0", `LA${i}`).length > 0
   check(onCpu, `CPU A${i} drives logical LA${i}`)
 }
-for (let i = 13; i <= 19; i++) {
+for (let i = 13; i <= 20; i++) {
   const fromMap = pinsOn("U1", `A${i}`)
   check(fromMap.length === 1, `physical A${i} comes from the map SRAM`, fromMap.join(","))
 }
@@ -62,8 +62,8 @@ for (let i = 0; i < 8; i++) {
   const b = pinsOn("U4", `D${i}`)
   check(b.length === 1, `isolation buffer B${i + 1} is on D${i}`, b.join(","))
 }
-const aSide = [13, 14, 15, 16, 17, 18, 19].map((n) => pinsOn("U4", `A${n}`).length)
-check(aSide.every((n) => n === 1), "isolation buffer A side is on physical A13-A19")
+const aSide = [13, 14, 15, 16, 17, 18, 19, 20].map((n) => pinsOn("U4", `A${n}`).length)
+check(aSide.every((n) => n === 1), "isolation buffer A side is on physical A13-A20")
 
 /* -- machine.md 7.1: 512 KB is one part, addressed A0-A18 ---------------- */
 const rams = comps.filter((c) => c.name === "U8")
@@ -71,6 +71,9 @@ check(rams.length === 1, "one system RAM package")
 const ramAddr = Array.from({ length: 19 }, (_, i) => pinsOn("U8", `A${i}`).length)
 check(ramAddr.every((n) => n === 1), "system RAM takes physical A0-A18", `${ramAddr.filter(Boolean).length}/19`)
 check(pinsOn("U8", "A19").length === 0, "system RAM does not see A19 (it is the RAM/VRAM selector)")
+check(pinsOn("U8", "A20").length === 0, "system RAM does not see A20 (it selects the card megabyte)")
+check(pinsOn("U6", "A20").length === 1,
+  "U6 takes physical A20 - system RAM is A20 = 0 as well as A19 = 0")
 
 /* -- machine.md 2.1: the open-drain pull-ups are here -------------------- */
 for (const net of ["nIRQ", "nFIRQ", "nWAIT", "nNMI", "nIOPAGE"]) {

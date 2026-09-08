@@ -34,6 +34,9 @@ export const clkdecDesign: Design = {
     /* PHYSICAL A19, out of the map SRAM, not off the CPU. */
     { name: "A19", pin: 7 },
     { name: "RW", pin: 8 },
+    /* PHYSICAL A20 - the map SRAM's eighth output bit, which was stored and
+     * read back and drove nothing until 2026-09-08. machine.md 5 item 1 D. */
+    { name: "A20", pin: 9 },
   ],
 
   cells: [
@@ -92,21 +95,23 @@ export const clkdecDesign: Design = {
     /* -- the two decodes ------------------------------------------------ */
     /* $FF40-$FF7F, common to every slot - machine.md 2, corrected from
      * "geographic, per slot". */
-    { pin: 15, name: "IOSEL", assertedLow: true, s0: 0, terms: ["IOPAGE & LA7 & !LA6"] },
+    /* $FF00-$FF7F. One literal: the widening in clkdec.pld deleted LA6. */
+    { pin: 15, name: "IOSEL", assertedLow: true, s0: 0, terms: ["IOPAGE & !LA7"] },
 
-    /* System RAM is physical A19 = 0 and never during an I/O cycle. Both
-     * terms are why /IOPAGE had to reach the backplane at all. */
-    { pin: 22, name: "RAM_CE", assertedLow: true, s0: 0, terms: ["!IOPAGE & !A19"] },
+    /* System RAM is physical A20 = 0 AND A19 = 0, and never during an I/O
+     * cycle - the /IOPAGE term is why that signal had to reach the backplane
+     * at all. A20 arrived 2026-09-08 with the 2 MB map. */
+    { pin: 22, name: "RAM_CE", assertedLow: true, s0: 0, terms: ["!IOPAGE & !A19 & !A20"] },
 
     /* /OE qualified by R/W, which is not decoration: with /OE tied low the
      * SRAM drives D0-D7 from /CE time until /WE asserts while the CPU is also
      * driving write data - about 90 ns of contention on every write. */
-    { pin: 14, name: "RAM_OE", assertedLow: true, s0: 0, terms: ["!IOPAGE & !A19 & RW"] },
+    { pin: 14, name: "RAM_OE", assertedLow: true, s0: 0, terms: ["!IOPAGE & !A19 & !A20 & RW"] },
 
     /* E-qualified, and decode-qualified as well. The decode is redundant - a
      * write needs CE# and WE# both low - but it keeps a glitch on /CE from
      * becoming a write. E here is this part's own output, fed back. */
-    { pin: 23, name: "RAM_WE", assertedLow: true, s0: 0, terms: ["!IOPAGE & !A19 & !RW & E"] },
+    { pin: 23, name: "RAM_WE", assertedLow: true, s0: 0, terms: ["!IOPAGE & !A19 & !A20 & !RW & E"] },
   ],
 
   /* The 22V10's asynchronous reset is ONE product term shared by every

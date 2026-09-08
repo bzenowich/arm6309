@@ -85,10 +85,15 @@ export default () => (
         A0: "net.MAPA0", A1: "net.MAPA1", A2: "net.MAPA2", A3: "net.MAPA3",
         A4: "net.GND", A5: "net.GND", A6: "net.GND", A7: "net.GND",
         A8: "net.GND", A9: "net.GND", A10: "net.GND",
-        /* DQ0-DQ6 are physical A13-A19. DQ7 is spare and reads back as the
-         * eighth bit of a map entry. */
+        /* DQ0-DQ7 are physical A13-A20.
+         *
+         * ⚠ DQ7 WAS "spare and reads back as the eighth bit of a map entry"
+         * until 2026-09-08, and that is the whole cost of doubling the
+         * physical map to 2 MB (machine.md 5 item 1 option D): the bit was
+         * already stored, already written through U4, and already read back.
+         * It drove nothing. It now drives slot A34. Zero ICs. */
         DQ0: pa(13), DQ1: pa(14), DQ2: pa(15), DQ3: pa(16),
-        DQ4: pa(17), DQ5: pa(18), DQ6: pa(19), DQ7: "net.MAPD7",
+        DQ4: pa(17), DQ5: pa(18), DQ6: pa(19), DQ7: pa(20),
         nCE: "net.GND", nOE: "net.MAP_OE", nWE: "net.MAP_WE",
       }}
     />
@@ -168,7 +173,7 @@ export default () => (
         VCC: "net.V5", GND: "net.GND",
         DIR: "net.R_W", nOE: "net.ISO_OE",
         A1: pa(13), A2: pa(14), A3: pa(15), A4: pa(16),
-        A5: pa(17), A6: pa(18), A7: pa(19), A8: "net.MAPD7",
+        A5: pa(17), A6: pa(18), A7: pa(19), A8: pa(20),
         ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`B${i + 1}`, d(i)])),
       }}
     />
@@ -214,7 +219,14 @@ export default () => (
       * gal/clkdec.pld is the source of truth for these pins. It carries three
       * jobs: the divider, /IOSEL, and the system RAM's control lines.
       *
-      * /IOSEL is /IOPAGE AND (LA7,LA6 = 01) - a machine-level backplane
+      * /IOSEL is /IOPAGE AND A7 = 0 - $FF00-$FF7F, widened from $FF40 on
+      * 2026-09-08 (machine.md 5 item 1 A), which DELETED the LA6 term rather
+      * than adding one. LA6 stays wired to pin 6 driving nothing, so
+      * $FF80-$FF8F remains a one-line change. Pin 9 took physical A20 in the
+      * same pass. gal/clkdec.pld is the source of truth and it records that
+      * this equation also had its polarity wrong until that day.
+      *
+      * /IOSEL is a machine-level backplane
       * signal rather than MMU sequencing, and it is here because U3 does not
       * fit with it. /IOPAGE stays on U3: routing it through here would put a
       * second GAL delay ahead of MAP_OE, the edge the break-before-make
@@ -234,7 +246,7 @@ export default () => (
       footprint="dip24_w0.3in"
       pinLabels={labels(gal22v10({
         2: "FAST_E", 3: "/RESET", 4: "/IOPAGE", 5: "LA7", 6: "LA6",
-        7: "A19", 8: "R/W",
+        7: "A19", 8: "R/W", 9: "A20",
         14: "/RAM_OE", 15: "/IOSEL", 16: "C0", 17: "C1", 18: "E", 19: "Q",
         20: "C2", 21: "C3", 22: "/RAM_CE", 23: "/RAM_WE",
       }))}
@@ -242,7 +254,7 @@ export default () => (
         VCC: "net.V5", GND: "net.GND",
         CLK: "net.CLK25", FAST_E: "net.GND", nRESET: "net.nRESET",
         nIOPAGE: "net.nIOPAGE", LA7: la(7), LA6: la(6),
-        A19: pa(19), R_W: "net.R_W",
+        A19: pa(19), A20: pa(20), R_W: "net.R_W",
         nIOSEL: "net.nIOSEL", E: "net.E", Q: "net.Q",
         nRAM_CE: "net.RAM_CE", nRAM_OE: "net.RAM_OE", nRAM_WE: "net.RAM_WE",
       }}

@@ -10,8 +10,20 @@
  * hardware/README.md.
  *
  * Sizing. A 100 mm Eurocard edge at 0.1" pitch holds 39 positions; 36 leaves
- * 8.6 mm for the keying notch and mechanical margin. 44 signals + 2 audio
- * returns leave 26 positions for power, ground, the key and growth.
+ * 8.6 mm for the keying notch and mechanical margin. 45 signals + 2 audio
+ * returns leave 25 positions for power, ground and the key.
+ *
+ * A34 WAS THE ONE SPARE AND IT IS NOW PHYSICAL A20 - machine.md 5 item 1
+ * option D, taken 2026-09-08. It doubles the physical map to 2 MB for one
+ * pin and no ICs: the map SRAM is already byte-wide and its eighth bit was
+ * already stored and read back (gal/README.md), so A20 costs a trace out of
+ * a latch that was carrying it anyway.
+ *
+ * THERE IS NO SPARE PIN NOW. net/docs/net.md 13.1 wanted two of them for a
+ * DMA request/grant pair and hardware/README.md wanted one for a future
+ * rail; A20 beat both on the arithmetic and that competition is over, not
+ * deferred. A seventh signal position would have to come out of the ground
+ * or power allocation, and slot.check.ts is what says what that costs.
  */
 
 export type PinKind = "signal" | "power" | "ground" | "key" | "spare"
@@ -41,7 +53,7 @@ const ROW_A = [
   "GND", "A8", "A9", "A10", "A11",
   "GND", "A12", "A13", "A14", "A15",
   "GND", "A16", "A17", "A18", "A19",
-  "GND", "+5V", "SPARE", "+5V", "GND",
+  "GND", "+5V", "A20", "+5V", "GND",
 ] as const
 
 const ROW_B = [

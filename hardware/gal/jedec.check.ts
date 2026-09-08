@@ -132,7 +132,8 @@ const readCounter = (pins: Int8Array): Counter => {
 for (const fastE of [false, true]) {
   const label = fastE ? "/8 (fast-E)" : "/12"
   const base = { 2: (fastE ? 1 : 0) as 0 | 1, 3: 1 as const, 4: 1 as const,
-                 5: 0 as const, 6: 0 as const, 7: 0 as const, 8: 1 as const }
+                 5: 0 as const, 6: 0 as const, 7: 0 as const, 8: 1 as const,
+                 9: 0 as const }
 
   /* Reset is asserted by pulling pin 3 LOW, and it is a level: it holds. */
   u6.gal.evaluate({ ...base, 3: 0 })
@@ -158,26 +159,28 @@ for (const fastE of [false, true]) {
     }
     if (got.e) sawE1 = true; else sawE0 = true
 
-    /* Every combination of the four decode inputs, at this phase. */
-    for (let bits = 0; bits < 16 && !bad; bits++) {
+    /* Every combination of the five decode inputs, at this phase. A20 (pin 9)
+     * joined them on 2026-09-08 with the 2 MB map. */
+    for (let bits = 0; bits < 32 && !bad; bits++) {
       const d = { ...base,
-        4: ((bits >> 3) & 1) as 0 | 1, 5: ((bits >> 2) & 1) as 0 | 1,
-        6: ((bits >> 1) & 1) as 0 | 1, 7: (bits & 1) as 0 | 1 }
+        4: ((bits >> 4) & 1) as 0 | 1, 5: ((bits >> 3) & 1) as 0 | 1,
+        6: ((bits >> 2) & 1) as 0 | 1, 7: ((bits >> 1) & 1) as 0 | 1,
+        9: (bits & 1) as 0 | 1 }
       for (const rw of [0, 1] as const) {
         const pins = u6.gal.evaluate({ ...d, 8: rw })
-        const want = decode({ nIopage: d[4], la7: d[5], la6: d[6], a19: d[7], rw, e: got.e })
+        const want = decode({ nIopage: d[4], la7: d[5], la6: d[6], a19: d[7], a20: d[9], rw, e: got.e })
         const got4 = { nIosel: pins[15], nRamCe: pins[22], nRamOe: pins[14], nRamWe: pins[23] }
         for (const k of ["nIosel", "nRamCe", "nRamOe", "nRamWe"] as const) {
           if (got4[k] !== want[k]) {
             bad = `${k} = ${got4[k]}, expected ${want[k]} with ` +
-              `/IOPAGE=${d[4]} LA7=${d[5]} LA6=${d[6]} A19=${d[7]} R/W=${rw} E=${got.e}`
+              `/IOPAGE=${d[4]} LA7=${d[5]} LA6=${d[6]} A19=${d[7]} A20=${d[9]} R/W=${rw} E=${got.e}`
           }
         }
       }
     }
   }
   check(bad === null, `${label}: the fuse map matches clkdec.model.ts for ${period * 8} edges ` +
-    `and all 32 decode inputs at each`, bad ?? "")
+    `and all 64 decode inputs at each`, bad ?? "")
   check(sawE0 && sawE1, `${label}: the decode sweep covered E low and E high`)
 }
 

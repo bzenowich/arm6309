@@ -15,22 +15,22 @@ module clkdec_tb;
   always #5 clk25 <= ~clk25;
 
   logic n_reset = 0, fast_e = 0;
-  logic n_iopage = 1, la7 = 0, la6 = 0, a19 = 0, rw = 1;
+  logic n_iopage = 1, la7 = 0, la6 = 0, a19 = 0, a20 = 0, rw = 1;
   logic [3:0] cnt;
   logic e, q, n_iosel, n_ram_ce, n_ram_oe, n_ram_we;
 
   clkdec dut (.clk25(clk25), .n_reset(n_reset), .fast_e(fast_e),
-              .n_iopage(n_iopage), .la7(la7), .la6(la6), .a19(a19), .rw(rw),
+              .n_iopage(n_iopage), .la7(la7), .la6(la6), .a19(a19), .a20(a20), .rw(rw),
               .cnt(cnt), .e(e), .q(q), .n_iosel(n_iosel),
               .n_ram_ce(n_ram_ce), .n_ram_oe(n_ram_oe), .n_ram_we(n_ram_we));
 
   // A bare instance of the combinational half, so the decode can be swept
   // exhaustively without reaching inside the divider.
-  logic d_iopage, d_la7, d_la6, d_a19, d_rw, d_e;
+  logic d_iopage, d_la7, d_la6, d_a19, d_a20, d_rw, d_e;
   logic d_iosel, d_ce, d_oe, d_we;
   decode ddut (.n_iopage(d_iopage), .la7(d_la7), .la6(d_la6), .a19(d_a19),
-               .rw(d_rw), .e(d_e), .n_iosel(d_iosel), .n_ram_ce(d_ce),
-               .n_ram_oe(d_oe), .n_ram_we(d_we));
+               .a20(d_a20), .rw(d_rw), .e(d_e), .n_iosel(d_iosel),
+               .n_ram_ce(d_ce), .n_ram_oe(d_oe), .n_ram_we(d_we));
 
   int fails = 0;
   task automatic ok(input bit good, input string claim);
@@ -40,7 +40,7 @@ module clkdec_tb;
 
   int period, high, lead, e_rise, q_rise, prev_rise, t;
   bit pe, pq;
-  bit sel_ok, oe_ok, we_ok, never_io, never_both, wired, iosel_ok;
+  bit sel_ok, oe_ok, we_ok, never_io, never_both, wired, iosel_ok, top_ok;
   bit want;
   string order;
 
@@ -109,25 +109,45 @@ module clkdec_tb;
       for (int a7 = 0; a7 < 2; a7++)
         for (int a6 = 0; a6 < 2; a6++) begin
           d_iopage = p[0]; d_la7 = a7[0]; d_la6 = a6[0]; #1;
-          if ((!d_iosel) != (p == 0 && a7 == 1 && a6 == 0)) iosel_ok = 0;
+          if ((!d_iosel) != (p == 0 && a7 == 0)) iosel_ok = 0;
         end
-    ok(iosel_ok, "/IOSEL is $FF40-$FF7F: the I/O page with A7,A6 = 01");
+    ok(iosel_ok, "/IOSEL is $FF00-$FF7F: the I/O page with A7 = 0");
+
+    // A6 must not appear in the decode at all. Until 2026-09-08 the loop
+    // above asserted A7 = 1, A6 = 0 - $FF80-$FFBF - under a message that
+    // said A7,A6 = 01, and the assertion is what the implementation was
+    // written from. Sweeping A6 and demanding no effect is the claim that
+    // could not have been written wrong in the same direction.
+    iosel_ok = 1;
+    for (int p = 0; p < 2; p++)
+      for (int a7 = 0; a7 < 2; a7++) begin
+        d_iopage = p[0]; d_la7 = a7[0]; d_la6 = 1'b0; #1;
+        want = !d_iosel;
+        d_la6 = 1'b1; #1;
+        if ((!d_iosel) != want) iosel_ok = 0;
+      end
+    ok(iosel_ok, "A6 does not appear in /IOSEL - the window is 128 bytes");
 
     // ---- the system RAM decode, exhaustive ------------------------------
-    sel_ok = 1; oe_ok = 1; we_ok = 1; never_io = 1; never_both = 1;
+    sel_ok = 1; oe_ok = 1; we_ok = 1; never_io = 1; never_both = 1; top_ok = 1;
     for (int p = 0; p < 2; p++)
       for (int a = 0; a < 2; a++)
-        for (int r = 0; r < 2; r++)
-          for (int ee = 0; ee < 2; ee++) begin
-            want = (p == 1 && a == 0);        // not the I/O page, A19 = 0
-            d_iopage = p[0]; d_a19 = a[0]; d_rw = r[0]; d_e = ee[0]; #1;
-            if ((!d_ce) != want)                        sel_ok     = 0;
-            if ((!d_oe) != (want && r == 1))            oe_ok      = 0;
-            if ((!d_we) != (want && r == 0 && ee == 1)) we_ok      = 0;
-            if (p == 0 && (!d_ce || !d_we))             never_io   = 0;
-            if (!d_oe && !d_we)                         never_both = 0;
-          end
-    ok(sel_ok,     "system RAM is selected by A19 = 0, outside the I/O page");
+        for (int a2 = 0; a2 < 2; a2++)
+          for (int r = 0; r < 2; r++)
+            for (int ee = 0; ee < 2; ee++) begin
+              // not the I/O page, A20 = 0 and A19 = 0
+              want = (p == 1 && a == 0 && a2 == 0);
+              d_iopage = p[0]; d_a19 = a[0]; d_a20 = a2[0];
+              d_rw = r[0]; d_e = ee[0]; #1;
+              if ((!d_ce) != want)                        sel_ok     = 0;
+              if ((!d_oe) != (want && r == 1))            oe_ok      = 0;
+              if ((!d_we) != (want && r == 0 && ee == 1)) we_ok      = 0;
+              if (p == 0 && (!d_ce || !d_we))             never_io   = 0;
+              if (!d_oe && !d_we)                         never_both = 0;
+              if (a2 == 1 && (!d_ce || !d_oe || !d_we))   top_ok     = 0;
+            end
+    ok(sel_ok,     "system RAM is selected by A20 = 0 and A19 = 0, outside the I/O page");
+    ok(top_ok,     "system RAM is silent throughout A20 = 1 - the megabyte cards may claim");
     ok(oe_ok,      "RAM /OE is qualified by R/W - no bus fight on a write");
     ok(we_ok,      "RAM /WE is the decode, R/W low and E high");
     ok(never_io,   "the system RAM is never selected or written during an I/O cycle");
@@ -138,15 +158,16 @@ module clkdec_tb;
     for (int p = 0; p < 2; p++)
       for (int a = 0; a < 2; a++)
         for (int r = 0; r < 2; r++) begin
-          n_iopage = p[0]; a19 = a[0]; rw = r[0]; la7 = 1'b1; la6 = 1'b0;
+          n_iopage = p[0]; a19 = a[0]; rw = r[0]; la7 = 1'b0; la6 = 1'b0;
+          a20 = 1'b0;
           d_iopage = p[0]; d_a19 = a[0]; d_rw = r[0]; d_e = e;
-          d_la7 = 1'b1; d_la6 = 1'b0; #1;
+          d_la7 = 1'b0; d_la6 = 1'b0; d_a20 = 1'b0; #1;
           if (n_ram_ce != d_ce || n_ram_oe != d_oe
               || n_ram_we != d_we || n_iosel != d_iosel) wired = 0;
         end
     ok(wired, "U6's own decode outputs match a bare decode on the same inputs");
 
-    if (fails == 0) $display("\nclkdec.v OK - 15 claims");
+    if (fails == 0) $display("\nclkdec.v OK - 17 claims");
     else            $display("\n%0d FAILED", fails);
     if (fails != 0) $fatal(1);
     $finish;

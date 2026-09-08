@@ -10,13 +10,23 @@ itself, which is the one part 1989 could not have built this way.
 
 **House rules, inherited from the CPU work and applied to every card since:**
 period-appropriate silicon, ~~and no CPLDs or FPGAs~~ — **that rule has been spent,
-deliberately, on two cards.** It was never a period rule (`video/docs/graphics.md`
+deliberately, on ~~two~~ three cards.** It was never a period rule (`video/docs/graphics.md`
 §10.1.2: Altera's first EPLD is 1984 and the first CPLD 1988, both older than parts
 this machine already uses); it was a style rule that bought one function per package
 and everything visible on a scope. The video card gave it up to compete with a GIME on
-even terms (§10.1.5) and the audio card because its interrupt block does not fit a
-GAL22V10 either way (`audio.md` §9.5). **It still holds everywhere else**, including
-the motherboard. A documented register map
+even terms (§10.1.5), the audio card because its interrupt block does not fit a
+GAL22V10 either way (`audio.md` §9.5), and now the net card because a 74xx 10BASE-T MAC
+is 41 ICs across **two** slots and this machine has one left (`net/docs/net.md` §12).
+**It still holds everywhere else**, including the motherboard.
+
+> ⚠ **Three of six cards is not an exception any more, and `net.md` §12 says so rather
+> than quietly taking a fourth.** `io/README.md` already re-derived the working rule —
+> *"the house rule bars CPLDs and FPGAs, not LSI; what decides each case is whether a
+> period part exists that fits the I/O budget"* — and by that test the net card is the
+> one that fails most instructively: a period part **does** exist (a National `DP8390`,
+> 1986, four ICs), and it loses only because its register file needs 16 bytes of an `$FF`
+> map that now has **zero** free (`net.md` §13.6). **The rule wants restating or
+> retiring; that is the owner's call and this README is where the answer goes.** A documented register map
 before a board, an honest IC count, and a measurement in place of an estimate wherever
 one can be taken.
 
@@ -38,9 +48,10 @@ one can be taken.
 | [`video/`](video/) | 640×200 × 256 colours, 80×25 text, smooth scroll, span writer. **41 ICs**, 10 of them GALs — the sync trio is fitted. | **Specified, not built** | [`video/docs/graphics.md`](video/docs/graphics.md) |
 | [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula. **29 ICs** — one `ATF1508AS` PLCC-84 holds all the logic; whether the analogue section fits the same card is open. Host reference model **builds and passes**. | **Specified; reference player validated against libopenmpt** | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
 | [`io/`](io/) | PS/2 keyboard and mouse — **11 ICs** of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does. | **Both specified** | [`io/README.md`](io/README.md), [`io/ps2/docs/ps2.md`](io/ps2/docs/ps2.md), [`io/serial/docs/serial.md`](io/serial/docs/serial.md) |
-| [`storage/`](storage/) | SD card interface — 7 ICs, **528 KiB/s sustained**, an SPI burst started by the bus read strobe. | **Specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |
+| [`storage/`](storage/) | SD card interface — **13 ICs**, **681 KiB/s sustained**, an SPI burst started by the bus read strobe into a block buffer the host reads as memory. ⚠ The `TFM` hazard is retired, not mitigated. | **Specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |
+| [`net/`](net/) | 10BASE-T with no MAC or PHY chip — **12 ICs**, two `ATF1508AS`, ported from `~/code/applenet`. ⚠ The host takes **56 % of the wire**; its sixteen-frame ring lives in the machine's new physical space. | **Specified** | [`net/README.md`](net/README.md), [`net/docs/net.md`](net/docs/net.md) |
 | [`software/`](software/) | 6809/6309 code that runs *on* the machine. | Third-party monitor and FORTH, imported | [`software/README.md`](software/README.md) |
-| [`hardware/`](hardware/) | Board layouts in **tscircuit** — the 72-pin backplane pinout as one table, the motherboard, and the bus interface of all five cards. | **Schematic-level; nothing placed or routed** | [`hardware/README.md`](hardware/README.md) |
+| [`hardware/`](hardware/) | Board layouts in **tscircuit** — the 72-pin backplane pinout as one table, the motherboard, and the bus interface of all ~~five~~ six cards. | **Schematic-level; nothing placed or routed** | [`hardware/README.md`](hardware/README.md) |
 
 Machine-level material that belongs to no single card — the system map, and the
 comparisons against the two chips this machine stands in the tradition of — is in

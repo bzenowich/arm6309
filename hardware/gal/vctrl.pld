@@ -44,8 +44,14 @@ PIN = D5 ;
 PIN = D6 ;
 PIN = D7 ;
 PIN = A19 ;
+PIN = A20 ;      /* PHYSICAL A20 - machine.md 5 item 1 D, 2026-09-08 */
 PIN = IOSEL ;
 PIN = A5 ;
+/* A6 joined the decode on 2026-09-08. /IOSEL widened to $FF00-$FF7F
+ * (machine.md 5 item 1 option A), so A6 is no longer implied by the strobe
+ * and a card that matches only A0-A5 answers twice - here at $FF60-$FF7F and
+ * again at $FF20-$FF3F. Every card on this backplane now decodes A0-A6. */
+PIN = A6 ;
 PIN = RW ;
 PIN = E ;
 PIN = A2 ;
@@ -449,8 +455,12 @@ LINEAR = !TILEMODE & !CHARMODE & !WRITESEL ;
 GLYPHLD = CHARMODE & SLOTTICK & TC1 & !TC0 ;
 GLYPHSH = CHARMODE & !SLOTTICK ;
 LUTPAGE = CHARMODE ;
-VRAMSEL = A19 & !IOPAGE ;
-REGSEL = IOSEL & A5 ;
+/* A20 = 0 as well since 2026-09-08: the physical map is 2 MB and the video
+ * ring is its second quarter, not its top half. machine.md 5 item 1 D. */
+VRAMSEL = A19 & !A20 & !IOPAGE ;
+/* $FF60-$FF7F. A6 & A5 where the window strobe used to supply A6 itself -
+ * see the pin declaration above. */
+REGSEL = IOSEL & A6 & A5 ;
 WSTB = REGSEL & !RW & E ;
 RA0 = REGSEL & A0
       # !REGSEL & RDBG

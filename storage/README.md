@@ -1,6 +1,7 @@
 # `storage/` — mass storage
 
-An SD card interface: **7 ICs, 528 KiB/s sustained, four bytes of I/O space.**
+An SD card interface: **13 ICs, 681 KiB/s sustained, four bytes of I/O space and a 64 KB
+buffer region.**
 
 Paths below are relative to this directory.
 
@@ -24,27 +25,40 @@ It goes faster here because the 6309 has **`TFM X,Y+`** — a block move with a 
 source* and incrementing destination, three cycles a byte. That is exactly "read this port
 512 times into a buffer", and it is one instruction.
 
-## And that is where it goes wrong
+## That used to be where it went wrong
 
 **`TFM` is the 6309's only interruptible instruction, and on resume it re-reads the source
 address.** Against RAM that is idempotent, which is why
 [`../audio/docs/modplayer.md`](../audio/docs/modplayer.md) §4.4's mirror-image
 `TFM X+,Y` upload is safe. Against a port whose read *pops a byte*, the re-read returns
 the wrong one, the block shifts by one from that point, and **nothing detects it** — not
-even the block's own CRC, which ends up read at the wrong offset.
+even the block's own CRC, which ends up read at the wrong offset. At ~200 interrupts/s
+against a 735 µs block, roughly **one block in seven**.
 
-At ~200 interrupts/s against a 735 µs block, that is roughly **one block in seven**.
+**⚠ Retired 2026-09-08, and not by mitigating it.** The hazard was never about `TFM`; it
+was about a port whose read has a side effect. `machine.md` §5 item 1 option D gave the
+machine a megabyte of physical space for card buffers, so **the block lands in a 2 KB SRAM
+the host addresses as memory** and the copy is RAM → RAM:
 
-*This* card's hardware cannot fix it: a `TFM` resume read and a legitimate next read are the
-same bus cycle. The specified fix is to **chunk the transfer and mask interrupts around each
-chunk** — 32-byte chunks cost 21 % of peak and add 49 µs of interrupt latency, which is
-nothing against a 20 ms replayer tick. §4.
+```
+        ldx   #buffer_in_card
+        ldy   #dest
+        ldw   #512
+        tfm   x+,y+              ; no masking, no chunking, no 21 %
+```
 
-⚠ **This is the only place in the machine where a card's correctness depends on an
-undocumented CPU behaviour.** `plan.md` §7 already wanted `TFM` interruptibility settled by
-silicon capture; this makes it two things waiting on that answer — and the capture is now
-asked **three** questions, because the *write* path has the same exposure if the capture
-shows a doubled write. §12 step 1.
+The 21 % that chunk-and-mask cost is what **537 → 681 KiB/s** is made of. §4.5, §11.1.
+
+**What is still owed**: `SDDATA` is still a read-triggered port for the command path, so
+the machine still wants its silicon capture — but for a single-byte question rather than
+for every block. §13 item 1.
+
+⚠ **~~This is the only place in the machine where a card's correctness depends on an
+undocumented CPU behaviour.~~** It was, then briefly it was two (`../net/` had the
+identical exposure on its data port), and **on 2026-09-08 both cards moved their buffers
+into the machine's new physical space and it became none — for bulk transfers.** The
+capture is still owed on two of its three questions: dummy cycles driving `$FFFF`, and
+whether a destination can be written twice. §12 step 1, §13 item 1.
 
 ## Three rates, not one
 
@@ -55,16 +69,17 @@ terms that decide what anyone actually experiences.
 
 | | Rate | Bound by |
 |---|---|---|
-| Read, intra-block | 537 KiB/s | the `TFM` loop — a ceiling |
-| **Read, sustained, `CMD18` multi-block** | **528 KiB/s** | nothing much; 98 % of the ceiling |
-| Read, sustained, one `CMD17` per block | **253 KiB/s** | the card's ~1 ms read access latency, paid 256 times instead of once |
-| Write, transfer | 680 KiB/s | the `TFM` loop — a ceiling |
+| Read, intra-block | **681 KiB/s** ~~537~~ | the unchunked `TFM` copy |
+| **Read, sustained, `CMD18` multi-block** | **681 KiB/s** ~~528~~ | the host. The SPI engine fills a buffer in 326 µs while the host copies the last one in 735 µs, so **the SD card is never waited on** |
+| Read, sustained, one `CMD17` per block | **253 KiB/s** | the card's ~1 ms read access latency, paid 256 times instead of once. **Unchanged — no buffer hides a command you did not send** |
+| Write, transfer | 681 KiB/s | the `TFM` loop |
 | **Write, sustained** | **126–408 KiB/s** | **the card's program time**, not the SPI clock |
 | Write, one 256-byte `RBF` sector | 63 KiB/s | read-modify-write against a 512-byte SD block |
 
 **`CMD18` READ_MULTIPLE_BLOCK costs zero hardware and is the difference between the disk
-being the bottleneck and not being it.** 128 KiB of mod samples arrive in 243 ms with it and
-505 ms without, against the 187 ms the audio card needs to swallow them. §5, §9.1.1.
+being the bottleneck and not being it.** 128 KiB of mod samples arrive in **193 ms** with
+it and 505 ms without, against the 187 ms the audio card needs to swallow them —
+**a 56 ms gap closed to 6 ms.** §5, §9.1.1.
 
 ## Software is most of this card
 
@@ -93,7 +108,11 @@ The document's §9 is now the largest section, and that is the honest shape of t
 
 **It gives four bytes back to the `$FF` map.** `serial.md` §7.1 reported the map exactly
 full; an SPI port needs four registers where the WD1773 the reservation was sized for
-needs five plus a latch, so `$FF5C`–`$FF5F` is free again. §6.1.
+needs five plus a latch, so `$FF5C`–`$FF5F` is free again. §6.1. ⚠ **Those four bytes
+were spent on 2026-09-07** by [`../net/`](../net/) — `sdcard.md` §6.1 called them "one
+small card, once", and the net card is that card. Filling the window is what closed
+`machine.md` §5 item 1 the next day: the map is `$FF00`–`$FF7F` now, and **this card
+decodes `A0`–`A6`**.
 
 ⚠ **An SD card is 1999**, and there is no arguing it into a pre-1990 machine. §10 makes the
 case that the *circuit* is period-legal TTL and only the *media* is not — the same status
@@ -109,6 +128,29 @@ the masking and the 21 % tax and takes sustained reads to 667 KiB/s, at the cost
 fidelity divergence from a real HD63C09E. **§11.6 prices it and deliberately does not decide
 it: that call is the owner's.** It should be made when §12 step 1's capture is read, because
 that is when the information is on the table.
+
+⚠ **And it now has a second card behind it.** `net/docs/net.md` §3.2 pays the same 21 %
+tax for the same reason, and unlike a disk block a dropped Ethernet frame cannot be
+re-read — so the argument for specifying the hazard out of the CPU is stronger than it
+was when only this card made it.
+
+⚠ **§11.1 was taken the same day, which changes what the question is for.** The block
+path no longer runs over a port, so specifying the hazard out of the CPU would no longer
+buy this card anything. **What it would still buy is `modplayer.md` §4.4's upload and this
+card's own write path**, which §13 item 6 admits is still on the port — so the option is
+alive and its constituency changed.
+
+## ⚠ Six ICs, and an alternative that would have cost one
+
+The buffer is not free: **7 ICs became 13**, and five of the six are address and data
+plumbing — a `74HC4040` block-address counter, three `74HC157`s muxing it against the
+backplane, and a `74HCT245` on the data path. **The card was the machine's smallest and is
+now its fourth largest.**
+
+**One `ATF1508AS` would absorb both GALs, the counter and the mux — an 8-IC card.** It is
+not taken because it would spend the no-CPLD house rule a **fourth** time, on a card whose
+only current exception is the media rather than the silicon. **If the rule is retired,
+take it immediately**: it is the best-value CPLD in the machine. §8.1.
 
 ## Status
 

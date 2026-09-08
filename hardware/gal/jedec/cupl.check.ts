@@ -85,7 +85,8 @@ const CNT = { 16: 0, 17: 1, 20: 2, 21: 3 } as const
 const checkClkdec = (label: string, gal: Gal22v10) => {
   for (const fastE of [false, true]) {
     const base = { 2: (fastE ? 1 : 0) as 0 | 1, 3: 1 as const, 4: 1 as const,
-                   5: 0 as const, 6: 0 as const, 7: 0 as const, 8: 1 as const }
+                   5: 0 as const, 6: 0 as const, 7: 0 as const, 8: 1 as const,
+                   9: 0 as const }
     gal.evaluate({ ...base, 3: 0 }); gal.reset()
     let model: Counter = { ...RESET_STATE }, bad: string | null = null
     const edges = fastE ? 64 : 96
@@ -98,7 +99,7 @@ const checkClkdec = (label: string, gal: Gal22v10) => {
           `model cnt=${model.cnt} e=${model.e} q=${model.q}`
         break
       }
-      const want = decode({ nIopage: 1, la7: 0, la6: 0, a19: 0, rw: 1, e: model.e })
+      const want = decode({ nIopage: 1, la7: 0, la6: 0, a19: 0, a20: 0, rw: 1, e: model.e })
       if (p[15] !== want.nIosel || p[22] !== want.nRamCe ||
           p[14] !== want.nRamOe || p[23] !== want.nRamWe) bad = `decode differs at edge ${i}`
     }

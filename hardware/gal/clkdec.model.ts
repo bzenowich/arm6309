@@ -36,6 +36,7 @@ export interface DecodeIn {
   la7: 0 | 1
   la6: 0 | 1
   a19: 0 | 1 // PHYSICAL A19, out of the map SRAM
+  a20: 0 | 1 // PHYSICAL A20, likewise - the map SRAM's eighth output bit
   rw: 0 | 1
   e: 0 | 1
 }
@@ -50,9 +51,11 @@ export interface DecodeOut {
 const not = (b: boolean): 0 | 1 => (b ? 0 : 1)
 
 export const decode = (i: DecodeIn): DecodeOut => {
-  const ramsel = !!i.nIopage && !i.a19
+  /* A20 = 0 as well: the map is 2 MB and system RAM is its bottom quarter. */
+  const ramsel = !!i.nIopage && !i.a19 && !i.a20
   return {
-    nIosel: not(!i.nIopage && !!i.la7 && !i.la6),
+    /* $FF00-$FF7F: the I/O page with A7 = 0. la6 is unused - clkdec.pld. */
+    nIosel: not(!i.nIopage && !i.la7),
     nRamCe: not(ramsel),
     /* /OE is qualified by R/W: with it tied low the SRAM drives D0-D7 from
      * /CE time until /WE asserts, about 90 ns of contention on every write. */

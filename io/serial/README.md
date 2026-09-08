@@ -72,9 +72,14 @@ it — the ISR that would deassert `/RTS` is precisely what is not running. §5.
 ## This card closed the `$FF` map
 
 `$FF54`–`$FF57`, four bytes — and with them the `$FF40`–`$FF7F` geographic decode was
-**exactly full**. [`../../storage/`](../../storage/) has since returned four, needing only
-half the disk-controller reservation, so the machine's entire I/O margin is now
-`$FF5C`–`$FF5F`.
+**exactly full**. [`../../storage/`](../../storage/) then returned four, needing only half
+the disk-controller reservation; [`../../net/`](../../net/) spent those on 2026-09-07; and
+**that is what finally closed `machine.md` §5 item 1 on 2026-09-08.** The window is
+`$FF00`–`$FF7F` now — 128 bytes, 64 free — and `/IOSEL` got *cheaper* in the process.
+
+⚠ **This card's decode is `A0`–`A6`, not `A0`–`A5`.** §6's "`CS0`/`/CS1` from geographic
+`/IOSEL` and `A2`–`A5`" needs `A6` as well: `A6` left the strobe with the widening, and a
+six-bit match answers at `$FF54` **and** `$FF14`.
 
 `graphics.md` §17's "widen the window now" has stopped being prudent advice and become
 blocking; see [`../../docs/machine.md`](../../docs/machine.md) §5 item 1, which now also

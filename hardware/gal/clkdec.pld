@@ -14,8 +14,10 @@ Device     g22v10 ;
  *   1. the E/Q divider - docs/machine.md 1. 25.175 / 12 = 2.0979 MHz, with
  *      /8 = 3.1469 MHz as fast-E mode (machine.md 1.1: an experiment a
  *      builder opts into, not a speed software may throw)
- *   2. /IOSEL, the $FF40-$FF7F window strobe - machine.md 2. It is here and
- *      not on U3 because U3 does not fit with it (gal/README.md)
+ *   2. /IOSEL, the $FF00-$FF7F window strobe - machine.md 2 and 3. It is
+ *      here and not on U3 because U3 does not fit with it (gal/README.md).
+ *      TWO changes landed on this one equation on 2026-09-08 and they are
+ *      separate findings - see the equation itself
  *   3. the system RAM's /CE, /OE and /WE - hardware/README.md open item 4,
  *      which were connected to nothing at all until 2026-09-06
  *
@@ -34,9 +36,16 @@ PIN 2  = FAST_E ;    /* high = /8. Tied low on the board; machine.md 1.1  */
 PIN 3  = !RESET ;
 PIN 4  = !IOPAGE ;   /* from U3 - this part does not form it              */
 PIN 5  = LA7 ;
-PIN 6  = LA6 ;
+PIN 6  = LA6 ;      /* KEPT WIRED, USED BY NOTHING. The window widened to
+                     * $FF00-$FF7F and LA6 fell out of the decode. The trace
+                     * stays because $FF80-$FF8F (machine.md 5 item 1's option
+                     * A+) is then a one-line change rather than a respin, and
+                     * removing a trace to gain nothing is not a saving. */
 PIN 7  = A19 ;       /* PHYSICAL A19, out of the map SRAM, not the CPU    */
 PIN 8  = RW ;
+PIN 9  = A20 ;       /* PHYSICAL A20, the map SRAM's eighth output bit -
+                      * machine.md 5 item 1 option D, 2026-09-08. It was
+                      * stored and read back and drove nothing.           */
 
 /* --- outputs ---------------------------------------------------------- */
 PIN 14 = !RAM_OE ;   /*  8 terms available, 1 used */
@@ -103,13 +112,39 @@ Q.d = !FAST_E & ( !C3 & C1             /* 2, 3, 6, 7  */
 [C0,C1,C2,C3,E,Q].sp = 'b'0 ;
 
 /* --- the two decodes -------------------------------------------------- */
-/* $FF40-$FF7F, common to every slot - machine.md 2, corrected 2026-09-06
- * from "geographic, per slot". */
-IOSEL = IOPAGE & LA7 & !LA6 ;
+/* $FF00-$FF7F, common to every slot - machine.md 2, corrected 2026-09-06
+ * from "geographic, per slot".
+ *
+ * TWO CHANGES, 2026-09-08, and they are independent:
+ *
+ *   1. THE POLARITY WAS WRONG. This read `IOPAGE & LA7 & !LA6`, which is
+ *      A7 = 1, A6 = 0 - that is $FF80-$FFBF, the MMU's own windows and the
+ *      CPU module's vector RAM. $FF40-$FF7F is A7 = 0, A6 = 1. Every card's
+ *      /IOSEL fired on an MMU block-register write and never on the card
+ *      window at all. Five artefacts carried it - this file, clkdec.v,
+ *      clkdec.jedec.ts, clkdec.model.ts and gal/README.md - and
+ *      clkdec_tb.sv asserted the wrong sense under a message stating the
+ *      right one, which is why 15 passing claims did not see it.
+ *
+ *   2. THE WINDOW WIDENED to $FF00-$FF7F - machine.md 5 item 1 option A,
+ *      64 bytes to 128. That deletes the LA6 term outright, so this decode
+ *      is now cheaper than the broken one it replaces.
+ *
+ * A CARD MUST DECODE A6. With A6 out of this term, a card that matches only
+ * A0-A5 answers twice - at its base and 64 bytes below it. machine.md 2 is
+ * where that rule lives. */
+IOSEL = IOPAGE & !LA7 ;
 
-/* System RAM is physical A19 = 0, and never during an I/O cycle. Both terms
- * are why /IOPAGE had to reach the backplane at all (machine.md 2). */
-ramsel = !IOPAGE & !A19 ;
+/* Never during an I/O cycle - that term is why /IOPAGE had to reach the
+ * backplane at all (machine.md 2).
+ *
+ * SYSTEM RAM IS A20 = 0 AND A19 = 0, since 2026-09-08 - machine.md 5 item 1
+ * option D. The physical map is 2 MB now, and system RAM is the bottom
+ * quarter of it: A20 = 0 keeps the top megabyte for card buffers, which is
+ * what the option exists to provide (storage's 512-byte block buffer,
+ * net's ring). One more literal on three terms, on a pin this part had
+ * spare - a 22V10 has 12 dedicated inputs and this design used 7. */
+ramsel = !IOPAGE & !A19 & !A20 ;
 
 RAM_CE = ramsel ;
 

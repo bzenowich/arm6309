@@ -185,9 +185,25 @@ where the first instruction comes from. Three compounding facts:
    the I/O page are `$FF40`–`$FF7F` (geographic) and `$FFA0`–`$FFAF` (MMU,
    write-side). `$FFFE` selects nothing. The CPU fetches its reset vector from an
    undriven bus.
+
+   > ⚠ **Two numbers in this paragraph moved after the review, and the finding did
+   > not.** The geographic window is **`$FF00`–`$FF7F`** since 2026-09-08
+   > (`machine.md` §5 item 1 A) and the physical map is **2 MB, `A0`–`A20`** (option
+   > D), which is finding 2 below. `$FFFE` still selects nothing, and §7.2's shadow
+   > ROM is still what answers it. **This document is a dated record and is not
+   > rewritten** — per the convention at the bottom of the root `README.md`, the
+   > superseded numbers stay visible and the marker says where the current ones are.
 2. **There is no physical address for a ROM even if one were added.** `graphics.md`
    §6.3 fixes the entire 1 MB map: `A19=0` system RAM, `A19=1` VRAM. Zero bytes of
    physical space are reservable for ROM without a carve-out nobody has drawn.
+
+   > ⚠ **No longer true, and it took two years to stop being true.** `machine.md` §5
+   > item 1 option D (2026-09-08) made the map 2 MB; `A20 = 1` is a megabyte with
+   > nothing in it. **The boot answer does not change** — §7.2's shadow ROM costs
+   > zero ICs and this would cost a part and a decode — but the sentence *"zero bytes
+   > of physical space are reservable"* is what a card buffer, and this ROM, were
+   > both refused on, and it was a statement about a decision nobody had revisited
+   > rather than about the machine.
 3. **The NitrOS-9 load path is circular.** `sdcard.md` §12 step 0 boots NitrOS-9
    over DriveWire "before any of this exists" — but DriveWire needs a running 6809
    boot client, which needs ROM, which doesn't exist. ASSIST09 is "2 KB at `$F800`"

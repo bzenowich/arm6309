@@ -22,27 +22,33 @@ two things an I/O card runs into first. **[`ps2/docs/ps2.md`](ps2/docs/ps2.md) �
 both** — take `/IRQ` as a third source, and take `$FF50`–`$FF53` — and a serial card should
 either adopt those answers or argue with them, not rediscover the problem:
 
-- **There is no free `$FF` window.** The geographic decode spans `$FF40`–`$FF7F`; video
-  has `$FF60`–`$FF7F`, audio proposes `$FF40`–`$FF4F`, and `$FF50`–`$FF5F` is pencilled
-  in for a disk controller.
+- ~~**There is no free `$FF` window.**~~ **There are 64 free bytes at `$FF00`–`$FF3F`**,
+  and they are the whole of the 2026-09-08 widening. The geographic decode spans
+  `$FF00`–`$FF7F`; video has `$FF60`–`$FF7F`, audio proposes `$FF40`–`$FF4F`, and
+  `$FF50`–`$FF5F` went to PS/2, serial, storage and the net card, four bytes each.
 - **Both maskable interrupt lines are claimed.** `/IRQ` is video's VBL — which is also
   NitrOS-9's system tick — and `audio.md` §8.1 takes `/FIRQ` as the *sole* source on
   purpose. Polling a keyboard from the VBL tick is a genuine option at 50–70 Hz, but it
   should be chosen rather than defaulted into.
 
-**And the `$FF` map has four bytes left.** Audio 16, PS/2 4, serial 4, storage 4, video 32
-— of 64. [`../storage/`](../storage/) returned half the old disk-controller reservation,
-and `$FF5C`–`$FF5F` is the machine's entire I/O margin. `serial/docs/serial.md` §7.1
+**~~And the `$FF` map has four bytes left.~~ ~~And the `$FF` map is full.~~ And the `$FF`
+map is `$FF00`–`$FF7F`, with 64 bytes free.** Audio 16, PS/2 4, serial 4, storage 4,
+**net 4**, video 32 — of **128**, since `docs/machine.md` §5 item 1 closed on 2026-09-08.
+[`../storage/`](../storage/) returned half the old disk-controller reservation;
+[`../net/`](../net/) spent it and filled the window, and widening below `$FF40` is the
+answer that took. ⚠ **A card now decodes `A0`–`A6`** — `A6` left the strobe with the
+widening, and six bits answer twice. `serial/docs/serial.md` §7.1
 escalates `graphics.md` §17's "widen the window now" from advice to a blocker, and
 `sdcard.md` §11.1 shows it now costs throughput as well as expandability.
 
 `ps2/docs/ps2.md` §3.1 takes **`/IRQ` as a third source** — it is open-drain, already
 carries VBL and raster compare, and only `/FIRQ` is exclusive — and §3.2 takes
 `$FF50`–`$FF53`. Both are still **proposals** until `docs/machine.md` records them as
-taken.
+taken. [`../net/`](../net/) has since joined `/IRQ` as a **fifth** source, and it is the
+first one that can out-rate video's VBL (`net/docs/net.md` §3.4).
 
 **A shared line has an order, and it is not free to choose.** `docs/machine.md` §4 records
-it: **video `VSTAT`, then PS/2 `IOSTAT`, then serial `STATUS` last.** The reason belongs to
+it: **video `VSTAT`, then net `NRXST`, then PS/2 `IOSTAT`, then serial `STATUS` last.** The reason belongs to
 the serial card — reading the 6551's `STATUS` *clears* the interrupt and returns the error
 bits in the same read (`serial/docs/serial.md` §7.3), so its handler cannot probe cheaply
 and defer; it must consume what it finds. PS/2's `IOSTAT` read has no side effects at all

@@ -6,7 +6,7 @@ convention at the bottom of the root [`README.md`](../README.md).
 
 [`docs/machine.md`](../docs/machine.md) §6 lists **"Draw the motherboard"** as an open
 item owned by the machine, with no document behind it. This directory is the first pass
-at that, and at the five cards that plug into it.
+at that, and at the six cards that plug into it.
 
 **Status: schematic-level, and nothing is placed or routed.** Three things had to happen
 before layout is meaningful. **The third is done** — every package pinout is now read off a
@@ -33,11 +33,14 @@ slot count and the CPU module's siting open, and a pinout cannot be written with
 
 | | Decision | Why |
 |---|---|---|
-| **Connector** | **72-pin 0.1" card edge, 2 × 36** | 44 signals + 2 audio returns need more than colormin's 50 pins. A 100 mm Eurocard edge at 0.1" pitch holds 39 positions; 36 leaves 8.6 mm for the notch and mechanical margin, so **the card format sizes the connector**. |
+| **Connector** | **72-pin 0.1" card edge, 2 × 36** | 45 signals + 2 audio returns need more than colormin's 50 pins. A 100 mm Eurocard edge at 0.1" pitch holds 39 positions; 36 leaves 8.6 mm for the notch and mechanical margin, so **the card format sizes the connector**. |
 | **CPU siting** | **A 40-pin DIP socket on the motherboard** | The module is the drop-in board [`cpu/`](../cpu/) already builds for the CoCo 3, plugged in — **one hardware SKU serving both machines literally**, not by recompilation. Its own `'541`/`'245` level buffers ride with it (`plan.md` §2.6), so the motherboard adds no buffering. |
 
-**Slot count is six, and that is a guess** — five specified cards plus one free. Nothing
-in the machine documents has ever said how many. Six slots is 12 A of finger capacity
+**Slot count is six, and that is a guess** — ~~five specified cards plus one free~~
+**six specified cards and none free**, since [`net/`](../net/) landed. Nothing
+in the machine documents has ever said how many, and the guess is now load-bearing:
+`net/docs/net.md` §12 rests part of its house-rule argument on there being exactly one
+slot left for a card that would otherwise need two. Six slots is 12 A of finger capacity
 against a 2–3 A machine, so the supply and not the connector is the limit.
 
 ---
@@ -52,7 +55,7 @@ re-derives the claims `machine.md` §2 and `graphics.md` §17 make about it.
                     row A                              row B
   1   GND                                1   GND
   2   +5V                                2   +5V
-  3   /RESET                             3   /IOSEL        (geographic)
+  3   /RESET                             3   /IOSEL   ($FF00-$FF7F)
   4   /HALT                              4   /IOPAGE
   5   /WAIT                              5   R/W
   6   KEY  ── polarising notch ──        6   KEY
@@ -68,12 +71,12 @@ re-derives the claims `machine.md` §2 and `graphics.md` §17 make about it.
   28-31 A16 A17 A18 A19                  26  VSYNC    27 GND
   32  GND                                28-30 /IRQ /FIRQ /NMI
   33  +5V                                31  GND
-  34  SPARE                              32  AUDIO_L  33 AGND
+  34  A20                                32  AUDIO_L  33 AGND
   35  +5V                                34  AUDIO_R  35 AGND
   36  GND                                36  +5V
 ```
 
-**44 signals, 5 × +5 V, 18 GND, 2 dedicated analogue returns, 1 key, 1 spare.**
+**45 signals, 5 × +5 V, 18 GND, 2 dedicated analogue returns, 1 key, and no spare.**
 
 Four properties are load-bearing, and each is checked rather than asserted:
 
@@ -89,9 +92,19 @@ Four properties are load-bearing, and each is checked rather than asserted:
 - **Logical A13–A15 appear nowhere.** They are the map SRAM's address inputs and stay on
   the motherboard (`machine.md` §2). `lib/netlist.check.ts` proves they reach no slot.
 
-**The spare at A34** sits between two +5 V pins, which makes it the natural home for a
-future rail. The backplane carries **5 V only** — the storage card makes its own 3.3 V
-behind an LDO (`sdcard.md` §7) and the CPU module regulates for itself.
+> ⚠ **~~The spare at A34~~ A34 is physical `A20`, since 2026-09-08.** It sits between two
+> +5 V pins and this document called it "the natural home for a future rail".
+> `machine.md` §5 item 1 option D spent it on the top address bit instead, doubling the
+> physical map to 2 MB — and the reason it won is that it needs **nothing else**: the map
+> SRAM is byte-wide, its eighth bit was already stored and read back through the
+> isolation `'245`, and it drove nothing. One trace, no ICs, 1 MB.
+>
+> **`net/docs/net.md` §13.1 wanted two of these pins for a DMA request/grant pair and
+> lost the same day.** There is no spare position now; a seventh signal would come out of
+> the ground or power allocation, and `lib/slot.check.ts` is what prices that.
+
+The backplane carries **5 V only** — the storage card makes its own 3.3 V behind an LDO
+(`sdcard.md` §7) and the CPU module regulates for itself.
 
 ---
 
@@ -105,13 +118,13 @@ behind an LDO (`sdcard.md` §7) and the CPU module regulates for itself.
 | [`lib/Card.tsx`](lib/Card.tsx) | the 100 × 160 Eurocard scaffold every card uses | |
 | [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
 | [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
-| [`cards/`](cards/) | audio, video, PS/2, serial, storage — bus interface each | |
+| [`cards/`](cards/) | audio, video, PS/2, serial, storage, net — bus interface each | |
 | [`gal/`](gal/) | **the programmable logic** — U3 and U6's equations in CUPL and Verilog, and [`gal/jedec/`](gal/jedec/), which assembles them into the fuse maps a programmer burns | + [`gal/mmu.check.ts`](gal/mmu.check.ts), [`gal/mmu_tb.sv`](gal/mmu_tb.sv), [`gal/jedec.check.ts`](gal/jedec.check.ts) |
 | [`vendor/mc6809/`](vendor/mc6809/) | **third-party** — Greg Miller's cycle-accurate MC6809E core, BSD, byte-identical to upstream | |
 
 ```sh
 npm install          # bun comes with it; the tsci CLI needs it
-npm run build        # all six boards -> dist/
+npm run build        # all seven boards -> dist/
 npm run check        # the slot pinout and the $FF map, as arithmetic
 npm run check:netlist  # the motherboard's connectivity claims (needs a build first)
 npm run check:sim      # gal/mmu.v and gal/clkdec.v under Verilator
@@ -181,10 +194,12 @@ would force each card into one specific slot, at which point a base-address jump
 nothing.
 
 The reading that works is the one `machine.md` §2 already implies when it derives
-`/IOPAGE`: **`/IOSEL` is the `$FF40`–`$FF7F` window strobe**, common to every slot — the
-`/IOPAGE` term further qualified by `A7,A6 = 01` — and each card completes its own decode
-from A0–A5 against its jumpered base. That is why A0–A5 are on the backplane at all, and
-it is what the boards here implement. **It was not, however, what any document said** —
+`/IOPAGE`: **`/IOSEL` is the ~~`$FF40`–`$FF7F`~~ `$FF00`–`$FF7F` window strobe**, common
+to every slot — the `/IOPAGE` term further qualified by ~~`A7,A6 = 01`~~ **`A7 = 0`** —
+and each card completes its own decode from ~~A0–A5~~ **A0–A6** against its jumpered base.
+That is why the low address lines are on the backplane at all, and it is what the boards
+here implement. (**Widened 2026-09-08**, `machine.md` §5 item 1 A; and the term as
+originally written had its polarity wrong — [`gal/README.md`](gal/README.md).) **It was not, however, what any document said** —
 except `serial.md` §6, whose decode GAL takes `CS0`/`/CS1` "from geographic `/IOSEL` *and
 `A2`–`A5`*". That is the window-strobe model written down, in the one card document that
 never claimed the geography.
@@ -259,10 +274,12 @@ after finding 1 made it one.
 5. **Six slots is unargued.** See above.
 6. **Decoupling is not drawn.** One 0.1 µF per package plus bulk, everywhere; it is
    mechanical and belongs with placement.
-7. **`machine.md` §5 item 1 is still the machine's blocking decision.** Four bytes of the
-   `$FF` map remain (`npm run check` prints the figure). The `$FF40`–`$FF7F` decode is one
-   GAL term in [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx) today
-   and a board respin after the backplane is etched.
+7. ~~**`machine.md` §5 item 1 is still the machine's blocking decision.**~~ **CLOSED
+   2026-09-08.** The window is `$FF00`–`$FF7F`, 64 bytes of it free (`npm run check`
+   prints the figure), and the physical map is 2 MB — `machine.md` §5 item 1, options A
+   and D. This finding said the decode "is one GAL term today and a board respin after the
+   backplane is etched", and it was right: the widening was one literal *removed* from
+   [`gal/clkdec.pld`](gal/clkdec.pld), taken while the backplane is still a table.
 
 ---
 
