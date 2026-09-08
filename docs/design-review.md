@@ -1,5 +1,13 @@
 # Design Review
 
+> **This is an archived record.** It is the 2026-09-04 review exactly as written, and
+> every finding in it has been applied; the specifications have since moved on (see each
+> component's `history.md` for what changed and when). Read it for how the numbers were
+> derived and what the review caught — not for current values. Where it says superseded
+> claims are "marked in place, per the house convention", that convention has since been
+> replaced: superseded material now moves to the per-component `history.md` files, and
+> the specifications describe only the present design.
+
 **Date:** 2026-09-04. **Scope:** every subsystem specification, the machine-level
 documents, the firmware spike, the reference player, and the repo itself. Each
 subsystem was reviewed independently, with the load-bearing arithmetic re-derived and

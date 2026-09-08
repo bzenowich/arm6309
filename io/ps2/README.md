@@ -15,8 +15,7 @@ packages** — one `74HC595`, one `74HC193`, one `74HCT132` — and reading its 
 this card from 16 ICs to 9. Four ideas transfer intact:
 
 - The `'595`'s **separate storage register** solves the 11-bit-frame-into-8-bit-register
-  problem for free. ⚠ ~~and gives one byte of buffering at zero cost~~ — **it does not**;
-  see below.
+  problem for free. ⚠ It does **not** give a byte of buffering — see below.
 - **`Q0` of the bit counter drives `RCLK`**, so no decode of "the ninth clock" is needed.
 - **The bit order is reversed in the wiring** — PS/2 is LSB-first, so `QA`→`BUS7`.
 - **Schmitt inputs are mandatory, and `HCT` not `HC`**: PS/2 edges can exceed the 400 ns
@@ -28,28 +27,25 @@ CPU branch flag** rather than an address decoder. Three of this card's eight ext
 are the tax for the 6309 being a fixed CPU, and two more are the tax for not having that
 branch flag either.
 
-> ### ⚠ The buffering was not free, and the card is 11, not 9
+> ### ⚠ The buffering is not the `'595`'s — a `74HC574` per port is what makes it real
 >
-> **The 2026-09-04 design review (`../../docs/design-review.md` §5, IO-P1) overturned this
-> card's central claim.** The second bullet above is why: `RCLK` is `Q0` of the bit
-> counter, and `Q0` toggles on **every clock edge of every frame**, so the storage register
-> is re-copied throughout the *next* frame — and edge 1 of frame N+1 is its **start bit**.
-> Byte N survives from edge 9 of frame N to edge 1 of frame N+1, which means the service
-> deadline was never the 660 µs of frame time the document claimed; it was the **inter-byte
-> gap**, which the host does not control and which inside a 3-byte mouse packet can be a
-> couple of hundred microseconds. One NitrOS-9 dispatch at the guessed 400 cycles is
-> 191 µs. With no parity or framing check, the resulting torn byte is indistinguishable
-> from a good one.
+> `RCLK` is `Q0` of the bit counter, and `Q0` toggles on **every clock edge of every
+> frame**, so the storage register is re-copied throughout the *next* frame — and
+> edge 1 of frame N+1 is its **start bit**. Without the latch, the service deadline
+> is the **inter-byte gap**, which the host does not control and which inside a
+> 3-byte mouse packet can be a couple of hundred microseconds, against a NitrOS-9
+> dispatch of ~191 µs — and with no parity or framing check the resulting torn byte
+> is indistinguishable from a good one.
 >
-> **The fix is a `74HC574` per port**, clocked once at end-of-frame, which makes the buffer
-> genuinely one frame deep: 660 µs at the fastest PS/2 clock rate, 1.1 ms at the slowest.
-> **+2 ICs, 9 → 11.** Three further corrections came with it and cost nothing: the `'193`
-> is now actually *loaded* (preset strapped to 10, `~TCD` looped back to `/PL`), `IOCTRL`
-> becomes a `74HC273` cleared by backplane `/RESET` — the card previously had no power-on
-> reset at all, and a `DR` latch stuck set at boot hangs the machine on the shared `/IRQ` —
-> and §7's software transmit is documented as running with `/IRQ` **masked**, which is the
-> longest interrupt-off window in the machine and costs the serial card data.
-> `docs/ps2.md` §5, §6.1, §8.4, §7.1.
+> **The `74HC574` per port, clocked once at end-of-frame**, makes the buffer
+> genuinely one frame deep: 660 µs at the fastest PS/2 clock rate, 1.1 ms at the
+> slowest. Alongside it: the `'193` is *loaded* (preset strapped to 10, `~TCD`
+> looped back to `/PL`), `IOCTRL` is a `74HC273` cleared by backplane `/RESET` (a
+> `DR` latch stuck set at boot would hang the machine on the shared `/IRQ`), and
+> §7's software transmit runs with `/IRQ` **masked** — the longest interrupt-off
+> window in the machine, which costs the serial card data. `docs/ps2.md` §5, §6.1,
+> §8.4, §7.1; the 9-IC claim this corrected is in
+> [`docs/history.md`](docs/history.md).
 
 **§4.4 is the second piece of prior art**, and it argues in two directions. Burrell
 Smith's 1981 Apple II mouse card did the job in *two* chips — a 6522 VIA and a flip-flop —

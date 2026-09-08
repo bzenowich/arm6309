@@ -4,10 +4,10 @@
 and boots **NitrOS-9 Level 2 in 6309 native mode**.
 
 **Status:** planning — Phase 0 decisions locked; Phase 1 written, not yet measured
-**Date:** 2026-08-19, revised 2026-08-27 (real 6309E timing; §3.6 latch; §3.7 MCU review),
-2026-08-28 (core clock committed at 170 MHz; 200 MHz overclock rejected — §3.4(4)),
-2026-09-04 (design review: package corrected to UFQFPN48 — §3.2; §3.6 glue redrawn;
-the homebrew machine's real E rates costed — §3.3(e); shadow boot ROM specified — §4.5)
+**Date:** 2026-09-04
+
+> Superseded material is archived in [history.md](history.md); this document describes
+> only the present design.
 
 ---
 
@@ -20,7 +20,7 @@ the homebrew machine's real E rates costed — §3.3(e); shadow boot ROM specifi
 | **Data sampling** | **External 74LVC574 latch, clocked by E-fall** | §3.6. Mandatory at 3 MHz (`t_DSR` = 20 ns is below the software floor); worthwhile at 1.79 MHz. ~$0.30, +1 package. |
 | **Socket** | **HD6309E** — E and Q are **inputs** | Matches the CoCo 3. Clock-slaved; we never hold E, and there is no `/WAIT` path into this module. |
 | **Primary target** | **CoCo 3 @ 0.895 **and** 1.79 MHz**, switchable at runtime | **Feasible with 5–10 core cycles of deadline margin and ~48 cycles/bus cycle for the emulator.** See §3.3. |
-| **Optional rate probe** | **3 MHz** (HD63C09E rated max) on boards you design | Reachable with the §3.6 latch; throughput-limited, not deadline-limited. 5 MHz withdrawn — no speed grade exists (§3.3). On the homebrew machine the corresponding rate is **fast-E, 3.1469 MHz**, which is experimental and not guaranteed (§3.3(e)). |
+| **Optional rate probe** | **3 MHz** (HD63C09E rated max) on boards you design | Reachable with the §3.6 latch; throughput-limited, not deadline-limited. 5 MHz is not a target — no such speed grade exists (§3.3). On the homebrew machine the corresponding rate is **fast-E, 3.1469 MHz**, which is experimental and not guaranteed (§3.3(e)). |
 | **Accuracy** | **L2 + mandatory `/HALT`/`BA`/`BS`** | `/HALT` is not optional on a CoCo — it is how the floppy transfers data (§2.2). |
 | **Method** | Measure the ceiling first, back off as forced | Drives phase ordering in §7. |
 
@@ -47,8 +47,8 @@ A comfortable fit, not a heroic one.
 **2 MHz — the HD63B09E's rated maximum — is comfortable at 170 MHz with no added parts:**
 both gates pass and the emulator gets ~41 cycles per bus cycle.
 
-**3 MHz is reachable too, still at 170 MHz, but for a different reason than expected.**
-The real HD63C09E numbers hold `t_AD` at 110 ns across both speed grades, so the
+**3 MHz is reachable too, still at 170 MHz — and not for the obvious reason.**
+The HD63C09E numbers hold `t_AD` at 110 ns across both speed grades, so the
 address-drive path — the thing variant 2 was hand-written for — keeps its full margin at
 3 MHz. What halves is `t_DSR` (40 → 20 ns), which puts read-data sampling **below the
 floor for any software polling loop on this part, at any clock it can reach**. One
@@ -61,8 +61,8 @@ evaluated in detail and rejected (§3.4(4)): it moves no gate from fail to pass 
 target rate, and the PLL VCO ceiling of 344 MHz means any SYSCLK above 172 MHz
 overclocks the analog PLL as well as the core.
 
-The 5 MHz target is **withdrawn**. No 6309E speed grade above HD63C09E exists, and the
-figure traced to an unsourced range rather than a datasheet (§3.3).
+**5 MHz is not a target.** No 6309E speed grade above the HD63C09E exists, so 3 MHz is
+the fastest rate any datasheet supports (§3.3).
 
 Prior art supports the approach: **MCL6809**, a Teensy-based cycle-exact 6809E drop-in,
 has been demonstrated on vintage Tandy hardware, and a real **HD63C09E is already a
@@ -130,7 +130,7 @@ CoCo 3 software does cycle-timed GIME video tricks. This is not a machine where
 "close enough" timing passes. It is also why the CoCo 3 is a good validation target:
 if raster-timed demos render correctly, the timing is right.
 
-### 2.6 Signals the CoCo 3 does not use — **ANSWERED**
+### 2.6 Signals the CoCo 3 does not use
 
 Read directly off the *Color Computer 3 Service Manual* (Cat. No. 26-3334) NTSC
 schematic, p.103, IC1 `68B09E`:
@@ -209,9 +209,8 @@ Everything else is wired as §3.2 budgets it:
 | 24–31 | `D7..D0` | bus |
 
 **Consequence: the Dragon 64 needs the same 33 pins as the CoCo 3, so one part covers
-both targets with no change to the pin budget or the pinout** — the UFQFPN48 since the
-2026-09-04 correction in §3.2. `BUS_OE` still earns
-its pin — `/HALT` is a bus here too, reaching the cartridge port, so the DMA-release path
+both targets with no change to the pin budget or the pinout** — the UFQFPN48 of §3.2.
+`BUS_OE` still earns its pin — `/HALT` is a bus here too, reaching the cartridge port, so the DMA-release path
 of §2.2 applies unchanged.
 
 Three items to close before calling the Dragon 64 supported. None of them is pin count:
@@ -257,41 +256,30 @@ The address bus is one 32-bit store; the data bus is one byte-aligned load.
 **The package matters and the two 48-pin options are not interchangeable.** DS12589
 Table 2 gives the GPIO count as "38 in LQFP48, 42 in UFQFPN48", and the four-pin
 difference is precisely `PC4`, `PC6`, `PC10`, `PC11` — which is precisely `BA`, `BS`,
-`UART_TX`, `UART_RX` in §3.2. See the marked block in §3.2 for the arithmetic that
-was wrong and how it was found.
+`UART_TX`, `UART_RX` in §3.2.
 
 ### 3.2 Pin budget and pinout
 
 On the **UFQFPN48**: available 42, minus `PA13`/`PA14` (SWD, keep for bring-up) and
 `PG10` (NRST) = **39**.
 
-> ⚠ **The package was wrong until 2026-09-04, and the pinout below did not exist on it.**
-> Every revision of this document through 2026-08-28 committed to the **STM32G431CB*T*6,
-> LQFP48**, and the budget line read "42, minus SWD and NRST = 39" for that package too.
-> **It is 38 GPIO on LQFP48, not 42** (DS12589 Table 2: "38 in LQFP48, 42 in UFQFPN48";
-> the LQFP48 pinout figure carries `PA0-15`, `PB0-15`, `PC13/14/15`, `PF0/1`, `PG10` and
-> nothing else on port C). `PC4`, `PC6`, `PC10` and `PC11` are **not bonded out** on
-> LQFP48 — and those four carry `BA`, `BS`, `UART_TX` and `UART_RX`.
->
-> The real LQFP48 arithmetic: 38 − 2 (SWD) − 1 (NRST) = **35 usable**. The 33 mandatory
-> CoCo 3 signals still fit, but the only spares are `PF0`/`PF1`, so on that package there
-> is no `BA`, no `BS`, and no debug UART — and `gpio_init()` would have been configuring
-> `GPIOC` registers for pins with no pads behind them, which fails silently. The error
-> came from reading the family-wide pin list in `modm-devices` rather than the LQFP48
-> bonding; "verified against modm-devices" was true and insufficient.
->
-> **Fix (machine-wide decision D4): STM32G431CB*U*6, UFQFPN48.** Same die, same
-> peripheral set, same 42 GPIO the tables assumed — so the pinout, `cpu/include/pinout.h`
-> and the firmware are unchanged, and QFN soldering is the entire cost. The alternative,
-> staying on LQFP48 and deleting `BA`/`BS`/UART from every table, was rejected: it costs
-> the debug UART on a board that has never been brought up, for no saving.
->
-> **The external-MMU decision survives unchanged, and is if anything reinforced.** The
-> comparison below shows an in-CPU MMU needing all 39 pins on the 42-GPIO package; on the
-> 35 usable pins of an LQFP48 it is not close to feasible. Nothing about
-> `docs/machine.md` §5 item 6 depends on which 48-pin package is fitted.
-
-Caught in the 2026-09-04 design review (finding Cpu-C1), before any board was drawn.
+> ⚠ **The two 48-pin packages are not interchangeable, and only the UFQFPN48 works
+> here** (machine-wide decision D4). The LQFP48 bonds out **38 GPIO, not 42** (DS12589
+> Table 2: "38 in LQFP48, 42 in UFQFPN48"; its pinout figure carries `PA0-15`, `PB0-15`,
+> `PC13/14/15`, `PF0/1`, `PG10` and nothing else on port C). `PC4`, `PC6`, `PC10` and
+> `PC11` are **not bonded out** on LQFP48 — and those four carry `BA`, `BS`, `UART_TX`
+> and `UART_RX`. The LQFP48 arithmetic is 38 − 2 (SWD) − 1 (NRST) = **35 usable**: the
+> 33 mandatory CoCo 3 signals fit, but the only spares are `PF0`/`PF1`, so on that
+> package there is no `BA`, no `BS`, and no debug UART — and configuring `GPIOC`
+> registers for pins with no pads behind them fails silently. The **STM32G431CB*U*6,
+> UFQFPN48** is the same die with the same peripheral set and all 42 GPIO, so the pinout
+> below, `cpu/include/pinout.h` and the firmware work verbatim; QFN soldering is the
+> entire cost. The alternative — LQFP48 with `BA`/`BS`/UART deleted from every table —
+> is rejected: it costs the debug UART on a board that has never been brought up, for no
+> saving. Ordering note: the `modm-devices` XML is a family pin list, not a per-package
+> bonding table; DS12589 Table 2 and the package pinout figures are the authority (§11).
+> How the wrong package got committed, and how it was caught, is archived in
+> [history.md](history.md).
 
 | Group | Count | Running total |
 |---|---|---|
@@ -326,11 +314,10 @@ pin for this target.
   stock CoCo 3 nothing else drives the bus during `/HALT`, so this is strictly
   insurance for DMA cartridges — but it is one pin.
 
-**The 48-pin part is now comfortable and the LQFP64 question is closed.** The earlier
-zero-slack concern was based on assuming every 6309E signal needed wiring; §2.6 removed
-six of them. Note that this only holds on the **UFQFPN48** — see the marked block at the
-head of this section; on LQFP48 the same accounting gives 35 usable pins and 33 used, and
-the "6 spare / 4 spare" numbers below never existed there.
+**The 48-pin part is comfortable and LQFP64 is not needed:** §2.6 removes six signals
+from the must-wire list. This holds only on the **UFQFPN48** — on LQFP48 the same
+accounting gives 35 usable pins against 33 used, and the "6 spare / 4 spare" numbers
+here do not exist there (see the ⚠ block at the head of this section).
 
 Drive-strength constraint works out cleanly: `PC13`/`PC14`/`PC15` are backup-domain pins
 with limited output drive, so they are input-only here — and they carry `/NMI`, `/IRQ`,
@@ -341,8 +328,7 @@ Two pin-saving tricks, both worth taking:
 - **Derive the data-buffer enables from the buffered `R/W` in hardware.** That is
   literally what `R/W` means; no GPIO needed. (§3.6 splits the data path into a '574 for
   reads, enabled by `/R/W`, and a '541 for writes, enabled by `R/W` — both `OE`s are
-  active low, and §3.6 corrects the polarity this line used to state backwards. `/R/W`
-  is not free: it comes from the inverter §3.6 adds to the BOM.)
+  active low. `/R/W` is not free: it comes from the inverter on §3.6's BOM.)
 - **One shared `BUS_OE`** for the address '541s, the write '541 and the `R/W` gate — the
   parts that face the backplane. They float together and only together, during `/HALT`.
   The read '574 is deliberately **not** in that set: its outputs face only `PA0..PA7`, so
@@ -373,13 +359,9 @@ PG10        NRST
 
 Totals: 20 outputs (`A0-15`, `R/W`, `BUS_OE`, `BA`, `BS`), 8 bidirectional (`D0-7`),
 8 inputs (`E`, `Q`, `/RESET`, `/HALT`, `/NMI`, `/IRQ`, `/FIRQ`, `UART_RX`), plus
-`UART_TX` and `LED`, plus the `PF1` strap. **39 of 39, none spare** — on the UFQFPN48.
-The same map needs 39 of 35 on the LQFP48, i.e. it does not fit; see the marked block
-above.
-
-> ⚠ **This read "38 of 39, one spare" until 2026-09-04.** `PF1` was that spare, and §4.5's
-> shadow ROM spends it on the machine-mode strap. The count is now exact on both targets —
-> see the marked block under the three-machine table below.
+`UART_TX` and `LED`, plus the `PF1` strap. **39 of 39, none spare** — on the UFQFPN48;
+the same map needs 39 pins of the LQFP48's 35, i.e. it does not fit (§3.1). The last
+spare pin goes to §4.5's machine-mode strap on `PF1`.
 
 **`PB8` is `A8` and it is also `BOOT0`. That is a provisioning obligation, not a
 pinout problem.** On the STM32G431 `BOOT0` shares `PB8`, and with the shipping default
@@ -424,24 +406,22 @@ settled the *other* target's architecture, so record the arithmetic here where i
 | UART ×2, LED | 3 | 1 — LED only, no room for the UART | 3 |
 | **of 39** | **39**, none spare | **41 — does not fit** | **39**, none spare |
 
-> ⚠ **This table gained two rows on 2026-09-04 and the budget went from comfortable to
-> exactly full.** Both additions came from elsewhere:
+> ⚠ **Both target columns stand at exactly 39 of 39 — nothing is left over on either.**
+> Two rows are easy to miss because they come from elsewhere:
 >
-> - **VSYNC.** `graphics.md` §12.2 counted only HSYNC, but counting HSYNC pulses yields a
->   line number *with no origin* — the raster-compare timer needs a frame reset too, and
->   resynchronising in the VBL handler jitters by interrupt-dispatch latency (1–6 lines).
->   The video card's fix pass made VSYNC a hardware input (`design-review.md` §Vid-m4).
+> - **VSYNC.** Counting HSYNC pulses yields a line number *with no origin* — the
+>   raster-compare timer needs a frame reset too, and resynchronising in the VBL handler
+>   jitters by interrupt-dispatch latency (1–6 lines). VSYNC is therefore a hardware
+>   input (`graphics.md` §12.2).
 > - **The `PF1` machine strap**, which §4.5's shadow ROM needs in order to keep the
->   "one firmware, three machines" property. It is the pin this document called spare.
+>   "one firmware, three machines" property. It is the pinout's last spare pin.
 >
-> **Both target columns now stand at 39 of 39.** Nothing is left over on either — the
-> next CPU-side signal anyone wants costs the debug UART, and it should be a deliberate
-> trade rather than a discovery during layout. §10.7's strap-versus-build-flag question is
-> now also a pin question: the build-flag alternative is what buys the spare back.
+> The next CPU-side signal anyone wants costs the debug UART, and it should be a
+> deliberate trade rather than a discovery during layout. §10.7's strap-versus-build-flag
+> question is also a pin question: the build-flag alternative is what buys the spare back.
 >
-> **And the in-CPU MMU column no longer fits at all** — 41 pins against 39. It was already
-> rejected on one-SKU grounds (below); it is now arithmetically impossible on this package,
-> which retires the question rather than merely settling it.
+> **The in-CPU MMU column does not fit at all** — 41 pins against 39. It is also rejected
+> on one-SKU grounds (below), so the question is retired rather than merely settled.
 
 An in-CPU MMU costs the debug UART on a board that has never been brought up. Moving it
 to 3 ICs on the motherboard ([`graphics.md`](../../video/docs/graphics.md) §6.3.1) returns
@@ -473,14 +453,12 @@ driven before E rises.
 
 At 170 MHz (5.882 ns per core cycle):
 
-> **Correction — this section has been wrong twice; this is the version backed by the
-> right document.** Early revisions used the quarter cycle (E-fall to Q-rise) as the
-> address deadline. That was wrong. The replacement used `reference/datasheets/MC6809E.pdf`, whose
-> columns stop at the 2 MHz MC68B09E, and extrapolated `t_AD` to 3 MHz across speed
-> grades as ≈0.21 × `t_cyc` ≈ 76 ns. **That was also wrong.** The authoritative source
-> is now in the repo: `reference/datasheets/HD6309E_datasheet.pdf` p.3 gives AC characteristics for
-> **HD63B09E and HD63C09E in adjacent columns**, and Hitachi holds `t_AD` at
-> **110 ns for both grades**. The address deadline does *not* tighten at 3 MHz.
+**The authoritative timing source is `reference/datasheets/HD6309E_datasheet.pdf`.**
+Its p.3 gives AC characteristics for **HD63B09E and HD63C09E in adjacent columns**, and
+Hitachi holds `t_AD` at **110 ns for both grades**: the address deadline does *not*
+tighten at 3 MHz. (Two earlier framings of this deadline — the quarter cycle, then an
+extrapolation from the MC6809E datasheet — were wrong in different directions; see
+[history.md](history.md).)
 
 **Datasheet timing — `reference/datasheets/HD6309E_datasheet.pdf` p.3, "AC CHARACTERISTICS".**
 One core cycle = 5.882 ns at 170 MHz, the committed core clock (§0).
@@ -507,8 +485,8 @@ the module runs warm under the RF shield (§2.7), never cold.
 `t_AD` and `t_AH` do not move. Everything that tightens is a setup or delay figure:
 `t_DSR` halves (40 → 20 ns), `t_DDW` falls to 70 ns, `t_PCS` falls to 70 ns. So 3 MHz
 does **not** squeeze the address-drive path. It squeezes **read-data sampling, write-data
-delivery, and control-input setup.** §3.6 exists because of the first of those, and the
-other two are newly load-bearing gates that earlier revisions never sized.
+delivery, and control-input setup.** §3.6 exists because of the first of those; the
+other two are load-bearing gates that no variant yet measures (§8).
 
 **These are absolute times, not fractions of the E period.** For any one part the same
 `t_AD` applies at every rate it is clocked at, so on the CoCo 3 the 110 ns holds at both
@@ -531,14 +509,12 @@ is **5–10 cycles, not 10–15**.
 | **3.0 MHz (HD63C09E max)** | 333 ns | 56.7 | 18.7 cy | **3.4 cy** | **needs §3.6 latch; drive path fine** |
 | 5.0 MHz | 200 ns | 34.0 | n/a † | n/a † | out of spec for every 6309E grade |
 
-† There is no speed grade above HD63C09E. The "5 MHz" figure that appeared in earlier
-revisions of this plan traces to an unsourced family-wide range in Wikipedia's 6309
-infobox and is **not** supported by any datasheet. The best-documented overclock found
-is 4 MHz (HD63C09 non-E, 16 MHz crystal ÷ 4, Digicool Things). 5 MHz is removed as a
-target; if it is ever revisited, the deadline would have to be derived from whatever
-the host's memory system needs, not from a Hitachi spec.
+† There is no speed grade above HD63C09E, and no datasheet supports 5 MHz. The
+best-documented overclock found is 4 MHz (HD63C09 non-E, 16 MHz crystal ÷ 4, Digicool
+Things). 5 MHz is not a target; if it is ever revisited, the deadline would have to be
+derived from whatever the host's memory system needs, not from a Hitachi spec.
 
-**The picture at 3 MHz is the opposite of what earlier revisions assumed.** The
+**The picture at 3 MHz inverts the intuition.** The
 address-drive path — the thing variant 2 was hand-written to optimise — has **18.7
 cycles of budget against a ~13-cycle path, i.e. 5.7 cycles spare, unchanged from
 1.79 MHz.** What fails is read-data sampling, where the budget halves to 3.4 cycles.
@@ -617,11 +593,9 @@ Two consequences for the Phase 1 code as written:
 
 **(d) Average throughput — and not all of the cycle is usable.**
 
-> **Correction.** Earlier revisions said "at 1.79 MHz there are 95 core cycles per bus
-> cycle, ~3–6× headroom", treating the whole period as available to the emulator. It is
-> not. The CPU has to be *in* the tight sampling loop when E falls, and any work
-> interleaved between samples would breach `T_iter`. So every cycle spent waiting for the
-> edge is dead time.
+The whole period is *not* available to the emulator. The CPU has to be *in* the tight
+sampling loop when E falls, and any work interleaved between samples would breach
+`T_iter`. So every cycle spent waiting for the edge is dead time.
 
 Timeline of one bus cycle at 1.79 MHz (period 559 ns = 95 core cycles), from the service
 manual's Figure 5-3 — note E is not a 50% duty cycle, it is 315 ns low / 244 ns high:
@@ -679,7 +653,7 @@ clock — it is whether read data is sampled in hardware or software. At 170 MHz
 slack depending where the real step lands.** That is the whole ballgame, and it is why
 the microcode step cost is the top risk in §8 rather than anything about clocking.
 
-**The microcode step cost is no longer an estimate — it has been measured.**
+**The microcode step cost is measured, not estimated.**
 `cpu/tools/microstate-probe/` compiles candidate microstates with the firmware's exact flags
 and runs each body through `llvm-mca`'s Cortex-M4 model. See that directory's README for
 method and caveats. Headline result:
@@ -706,22 +680,22 @@ Component costs, tuned hot path (`cpu/tools/microstate-probe/tuned.S`):
 the way §4.1 now describes. The naive shape misses the budget at *every* target rate,
 including 1.79 MHz, which makes this a design constraint rather than an optimisation.
 
-*Refinement now safe, not previously implemented:* an earlier revision dismissed
-predicting the E edge from `CCR2 + P/4 − margin` because the live 0.895 ↔ 1.79 MHz
-switch (§2.1) invalidates a prediction made from the last observed period. That
-dismissal was too quick. **Predict using the fastest possible period, not the last
-observed one** — always assume 1.79 MHz. After a switch you are then early, never late;
+*Refinement, not yet implemented:* the E edge can be predicted from
+`CCR2 + P/4 − margin` even under the live 0.895 ↔ 1.79 MHz switch (§2.1), which
+invalidates any prediction made from the last observed period — **predict using the
+fastest possible period, not the last observed one**, i.e. always assume 1.79 MHz.
+After a switch you are then early, never late;
 at 0.895 MHz you poll ~3× longer than necessary and lose nothing, because those cycles
 were dead anyway. Worth ~+6–8 cycles per bus cycle. Moot once §3.6 lands, but correct.
 
 **(e) The homebrew machine's actual E rates — 2.0979 and 3.1469 MHz.**
 
-> **Added 2026-09-04.** Everything above analyses 0.895 / 1.79 / 2.0 / 3.0 MHz, which are
-> CoCo 3 and datasheet-grade numbers. The homebrew machine of
-> [`docs/machine.md`](../../docs/machine.md) runs neither. Its E comes from the 25.175 MHz
-> video master clock, and the two divider settings give **2.0979 MHz** and **3.1469 MHz**.
-> Every "3 MHz" row above is therefore ~5 % optimistic for that machine, and the
-> difference is large enough to move a conclusion.
+Everything above analyses 0.895 / 1.79 / 2.0 / 3.0 MHz, which are CoCo 3 and
+datasheet-grade numbers. The homebrew machine of
+[`docs/machine.md`](../../docs/machine.md) runs neither. Its E comes from the 25.175 MHz
+video master clock, and the two divider settings give **2.0979 MHz** and **3.1469 MHz**.
+Every "3 MHz" row above is therefore ~5 % optimistic for that machine, and the
+difference is large enough to move a conclusion.
 
 | | division | E | `t_cyc` | Core cycles @170 MHz |
 |---|---|---|---|---|
@@ -737,7 +711,7 @@ Re-running §3.3(d)'s budget at the real rates, same terms (drive ~13, bookkeepi
 | 3.1469 MHz (fast-E) | poll | 54.0 | − 13.5 | − 23 | ~18 cy — *and unsound, §3.3(c)* | −7 |
 | **3.1469 MHz (fast-E)** | **latch** | 54.0 | — | − 23 | **~31 cy** | **6 spare** |
 
-**The fast-E row is the one that changed.** The table in §3.3(d) budgets 3.0 MHz at 56.7
+**The fast-E row is the one to watch.** The table in §3.3(d) budgets 3.0 MHz at 56.7
 core cycles and ~34 with the latch, leaving 9 spare against the probe's measured 25-cycle
 `TFM` worst case. At the machine's real 3.1469 MHz the bus cycle is **54.0** core cycles,
 the budget is **~31**, and `TFM` keeps **~6 cycles, not 9**. That is still positive, but
@@ -801,9 +775,9 @@ reasoning is not repeated.
    Whether this is worth building is an empirical question, and variant 3 exists to
    answer it: triggered DMA on STM32 is commonly 10–25 core cycles, so it may well come
    in **worse** than variant 2's ~13. That would be a useful negative result.
-4. **~~Overclock the G4 to 200 MHz.~~ EVALUATED AND REJECTED (2026-08-28).**
-   **The core clock is committed at 170 MHz** (§0). Recorded in full because the analysis
-   is worth not repeating, and because the conclusion is not the obvious one.
+4. **Overclock the G4 to 200 MHz — evaluated and rejected (2026-08-28).**
+   **The core clock is committed at 170 MHz** (§0). The analysis is recorded because
+   the conclusion is not the obvious one.
 
    It would have bought ~+29% of microcode budget at 3 MHz (34 → 44 cycles, §3.3(d)) and
    nothing at all at 1.79 or 2 MHz, where the budget is already comfortable. **No gate
@@ -938,18 +912,13 @@ reasoning is not repeated.
   buffers it is destructive on every read cycle.** This is what makes buffers mandatory
   rather than optional.
 
-  > **The recorded inventory was incomplete until 2026-09-04.** Earlier revisions listed
-  > `PA0..PA7`, `PB0..PB2` and `PB10`, omitting **`PB13`, `PB14` and `PC5`**, which Table
-  > 12 also gives as `TT_a`. On this pinout that means **six** of the sixteen address
-  > lines are 3.6 V pins (`A0`, `A1`, `A2`, `A10`, `A13`, `A14`), not four; `PC5` carries
-  > nothing here. The conclusion is unchanged and was never in doubt — buffers are
-  > mandatory either way — but §8's own instruction is "verify FT/FT_a in DS12589 before
-  > PCB", and a list that is wrong is not a verification. Corrected here and in
-  > `cpu/include/pinout.h`.
+  On this pinout that means **six** of the sixteen address lines are 3.6 V pins
+  (`A0`, `A1`, `A2`, `A10`, `A13`, `A14`); `PC5` carries nothing here. The full `TT_a`
+  list is mirrored in `cpu/include/pinout.h`.
 - Driving 5 V logic from 3.3 V: fine for LS/ALS/HCT (V_IH = 2.0 V), **not** plain HC
   (V_IH = 3.5 V). Check what the CoCo 3 actually uses on each bus.
-- **74LVC574** for read data and **74LVC541** for write data (§3.6 — this pair replaces
-  the 74LVC245 an earlier revision specified), **74LVC541 ×2** on the address bus, a
+- **74LVC574** for read data and **74LVC541** for write data (§3.6),
+  **74LVC541 ×2** on the address bus, a
   **74LVC541** for the seven control inputs, a **74LVC1G125** for `R/W` out and a
   **74LVC2G04** for `/E` and `/R/W`. `BUS_OE` gates the address buffers, the write
   buffer and the `R/W` gate — the parts that face the backplane — and deliberately not
@@ -990,10 +959,6 @@ adding them.
 
 #### Direct push-pull with no buffers? **No — ruled out on 5 V tolerance.**
 
-> **Correction.** An earlier revision of this section recommended building v1 direct-drive
-> and treating 5 V tolerance as an open question. The datasheet answers it, and the answer
-> is no.
-
 **DS12589 Table 12 (`reference/datasheets/stm32g431kb.pdf` pp.52–53) lists `PA0`–`PA7` as `TT_a`, every
 one of them.** `TT` means **3.6 V tolerant I/O** — not 5 V. `PB0`, `PB1`, `PB2` and `PB10`
 are `TT_a` as well.
@@ -1016,7 +981,7 @@ place (§3.2).
 doing two jobs, and the second one is the non-negotiable one: level shifting, and
 protecting 3.6 V pins from a 5 V bus.
 
-The pinout in §3.2 needs no change — behind 3.3 V-powered buffers, the MCU never sees
+The §3.2 pinout is compatible as-is — behind 3.3 V-powered buffers, the MCU never sees
 more than 3.3 V, so `TT_a` is fine. `BUS_OE` stays.
 
 <details>
@@ -1030,18 +995,7 @@ the STM32's ~10–25 Ω output dominates the 4.7 K pull-up and the line would ha
 3.3 V, comfortably above the 2.0 V `V_IH` of the LS parts downstream.
 </details>
 
-- Driving high, the STM32's ~10–25 Ω output easily dominates the 4.7 K pull-up; the line
-  sits near 3.3 V, comfortably above the 2.0 V `V_IH` of the LS parts downstream.
-- Driving low, it sinks ~1.1 mA per line from the pull-up. Trivial.
-- **`BUS_OE` disappears.** Tri-stating for `/HALT` becomes one write to `GPIOB->MODER` —
-  off the per-cycle critical path, and it frees a pin.
-- **Saves ~5 ns each way** of buffer propagation ≈ 1.7 core cycles per direction. Against
-  an 18.7-cycle deadline that is real money.
-- Fewer parts and less board area, which matters under the RF shield (§2.7).
-- Drive strength is a non-issue: the original 68B09E is HMOS with weak drive, and the
-  STM32 is stronger.
-
-One risk survives the switch to buffers and is worth stating separately:
+One risk is independent of the buffers and worth stating separately:
 
 **3.3 V `V_OH` must satisfy every downstream `V_IH`.** The buffers output 3.3 V, not 5 V.
 LS/LSTTL wants 2.0 V and is fine. **The GIME is the unknown** — it is a custom gate array,
@@ -1123,31 +1077,8 @@ See §3.7 for the worked comparison.
 
 #### Board impact — the glue, drawn properly
 
-> ⚠ **The glue in this subsection was wrong until 2026-09-04.** It read, in full:
->
-> > - `'574` `OE` ← `R/W` (drives `PA0..PA7` during reads)
-> > - `'541` `OE` ← `/R/W` (drives the bus during writes)
-> > - both still gated by `BUS_OE` for `/HALT` tri-stating (§2.2)
-> >
-> > Net **+1 package, ~+$0.30**, and one extra `OE` net derivable from the
-> > already-buffered `R/W`.
->
-> Four defects, found in the 2026-09-04 design review (Cpu-M3). **(1)** A `'574` is an
-> **edge-triggered flip-flop that clocks on the RISING edge**; "clocked by E's falling
-> edge" therefore needs `/E`, and **no inverter existed anywhere in this document or in
-> §9**, where every part listed ('541, '574, '125) is non-inverting. **(2)** The two `OE`
-> lines are **swapped**: `OE` on both parts is active LOW, so `'574 /OE ← R/W` disables
-> the read latch during reads and `'541 /OE ← /R/W` disables the write buffer during
-> writes — exactly inverted. **(3)** The `'574` has a **single** `/OE` covering all eight
-> outputs, so "gated by `BUS_OE` as well" is not a wiring instruction, it is an OR gate
-> that was not on the BOM. **(4)** `/R/W` itself is a signal nobody generated. Separately,
-> the one `74LVC125` in §9 has **4 channels** against 7 control inputs plus `R/W` out.
-> None of this changes the §3.6 conclusion — the latch is still right and still ~$0.30 —
-> but it was not buildable as drawn. The corrected drawing follows.
-
-The bus is bidirectional, so the '245 an earlier revision specified splits into a read
-path and a write path; otherwise the '574 fights the MCU when it drives `PA0..PA7` for
-writes.
+The bus is bidirectional, so the data path is split into a read path and a write path;
+without the split the '574 would fight the MCU when it drives `PA0..PA7` for writes.
 
 **Data path**
 
@@ -1158,14 +1089,14 @@ writes.
 
 Read the enable column as active-low throughout: a `'541`/`'574` output stage is on when
 its `/OE` is **low**. `R/W` = 1 means read, so the *read* latch is enabled by `/R/W` and
-the *write* buffer by `R/W` — the polarity the superseded text had backwards. Take both
+the *write* buffer by `R/W`. Take both
 from the **host-side** `R/W` net rather than from `PA10`, so the enables stay correct
 during `/HALT` when another master owns the line.
 
 **The `'574` does not need `BUS_OE`, and this is deliberate.** Its outputs face `PA0..PA7`
 and nothing else — never the host bus — so there is nothing on the backplane for it to
 contend with, and no reason to tri-state it for `/HALT`. `/R/W` alone is the whole enable
-term, and the OR gate that defect (3) would have required is not built. The one thing
+term; no OR gate is needed. The one thing
 `/OE ← /R/W` must do is get the latch off `PA0..PA7` while the MCU drives them for a
 write, which it does.
 
@@ -1186,11 +1117,11 @@ whatever is in its path:
 | `E` → `'541` → `'1G04` → `CLK` | ~5 + 5.2 = 10.2 ns max | **negative — does not work** |
 
 So `E` from the socket feeds the inverter directly, and separately feeds the `'541` that
-drives `PA8`. §3.6's existing layout note ("`E` must reach the `'574` clock no later than
-it reaches `PA8`") is satisfied by construction with margin to spare, and the inverter's
-propagation is charged against `t_DHR`, not against `t_AD`.
+drives `PA8`. The layout note at the end of this section ("`E` must reach the `'574`
+clock no later than it reaches `PA8`") is satisfied by construction with margin to
+spare, and the inverter's propagation is charged against `t_DHR`, not against `t_AD`.
 
-**Control inputs and the `R/W` output — re-counted.**
+**Control inputs and the `R/W` output — counted.**
 
 | Signal | Direction | Channels |
 |---|---|---|
@@ -1198,7 +1129,7 @@ propagation is charged against `t_DHR`, not against `t_AD`.
 | `R/W` | MCU → host, tri-stated by `BUS_OE` | 1 |
 | **Total** | | **8** |
 
-Eight channels do not fit in one 4-channel `74LVC125`, which is what §9 listed. The
+Eight channels do not fit in one 4-channel `74LVC125`. The
 inputs never need to tri-state — they are inputs — so they do not need `'125` channels at
 all: **one `74LVC541` carries all seven with a channel spare**, `/OE` tied low. `R/W` is
 the only signal that must float under `/HALT`, so it takes **one `74LVC1G125`** with
@@ -1213,12 +1144,10 @@ are up, and during LDO ramp-up — when the host is already driving `E`, `Q` and
 control set goes through the `'541`. This applies to the `FT` pins as well as the `TT_a`
 ones of §3.5; `TT_a` is worse (3.6 V absolute), but neither may see the socket directly.
 
-**Revised glue budget:** `74LVC574` ×1 (data in), `74LVC541` ×1 (data out),
+**Glue budget:** `74LVC574` ×1 (data in), `74LVC541` ×1 (data out),
 `74LVC541` ×2 (address), `74LVC541` ×1 (control in), `74LVC1G125` ×1 (`R/W` out),
-`74LVC2G04` ×1 (inverters) — **7 packages**, versus the 5 the earlier text implied. Net
-change from the review: +1 small-outline dual gate, one `'125` shrunk to a single gate,
-one `'541` added for the control inputs. Under a dollar in parts; the real cost is board
-area under the RF shield (§2.7). **Pinout in §3.2 is unchanged.**
+`74LVC2G04` ×1 (inverters) — **7 packages**. Under a dollar in parts; the real cost is
+board area under the RF shield (§2.7). **The §3.2 pinout is unaffected.**
 
 #### Two things to verify on hardware
 
@@ -1305,24 +1234,13 @@ question at rates above 3 MHz. Rejected for now on cost (~$20 against ~$3) and b
 Not a `switch (opcode)` interpreter. An explicit state machine where **every state emits
 exactly one bus cycle**.
 
-> **Revised 2026-08-28 after measurement.** This section previously specified the
-> structure below, with two indirect calls per bus cycle and eagerly-computed condition
-> codes:
->
-> ```c
-> typedef struct microstate {
->     uint16_t (*addr)(cpu_t *);      /* address to drive this cycle       */
->     uint8_t   rw;                   /* read or write                     */
->     void    (*action)(cpu_t *);     /* register/ALU work for this cycle  */
->     const struct microstate *next;  /* successor (may be patched)        */
-> } microstate_t;
-> ```
->
-> **It costs ~80 core cycles per bus cycle and misses the budget at every target rate,
-> including 1.79 MHz** (`cpu/tools/microstate-probe/`). Two indirect calls cost ~8 cycles of
-> pipeline refill alone, the per-state struct load costs more, and eager CC computation
-> costs 31 cycles for an 8-bit ADD. The shape is retained conceptually; the mechanism is
-> replaced by the three rules below.
+**The obvious mechanism misses the budget, and that is measured, not estimated.** A
+per-state struct carrying two function pointers (address and action) with
+eagerly-computed condition codes costs **~80 core cycles per bus cycle — over budget at
+every target rate, including 1.79 MHz** (`cpu/tools/microstate-probe/`). Two indirect
+calls cost ~8 cycles of pipeline refill alone, the per-state struct load costs more, and
+eager CC computation costs 31 cycles for an 8-bit ADD. The shape — one state, one bus
+cycle — is retained conceptually; the mechanism is the three rules below.
 
 **Three rules, all measurement-driven. They are constraints, not optimisations.**
 
@@ -1396,16 +1314,15 @@ validation strategy (§6) and the escape hatch (§3.4(5)) both depend on it.
 
 ### 4.5 Boot — the shadow ROM and vector page live in the CPU module
 
-**New requirement, 2026-09-04, machine-wide decision D1.** The design review found that
-the homebrew machine cannot boot: no document allocated a boot ROM, the reset vector at
-`$FFFE` lands inside the I/O page — which overrides MMU translation by design — nothing
-decodes there, and the 1 MB physical map has no room for a ROM (`docs/machine.md`,
-finding Sys-C1). The resolution puts the boot ROM **in this module**, served from STM32
-flash with no bus cycle at all, because that is the one place in the machine that already
-has non-volatile storage and an address decoder.
+**Machine-wide decision D1.** Without this mechanism the homebrew machine cannot boot:
+no ROM chip exists anywhere in its physical map, and the reset vector at `$FFFE` lands
+inside the I/O page — which overrides MMU translation by design — so nothing decodes
+there (`docs/machine.md`). The resolution puts the boot ROM **in this module**, served
+from STM32 flash with no bus cycle at all, because that is the one place in the machine
+that already has non-volatile storage and an address decoder.
 
 **This is specification, not implementation.** Phase 1 is a timing spike and has no
-shadow ROM; the mechanism lands with the core, in the phase added to §7.
+shadow ROM; the mechanism lands with the core, in Phase 6b (§7).
 
 #### 4.5.1 What the module serves
 
@@ -1455,10 +1372,9 @@ Three rules, and the second is the one that is easy to get wrong:
   instead, this section becomes dead and the drop-in property below is restored.
 
 > ⚠ **Consequence for the drop-in claim.** `video/docs/graphics.md` §16.8's "you can drop
-> a real HD63C09E into the homebrew machine" property **no longer holds** with the shadow
+> a real HD63C09E into the homebrew machine" property **does not hold** with the shadow
 > ROM in the CPU: a real 6309 has no flash and the machine has no boot ROM without it.
-> The property survives only under the EPROM alternative. Marked, not deleted, because
-> the trade is a live one.
+> The property survives only under the EPROM alternative; the trade is live (§10.8).
 
 #### 4.5.3 Cost
 
@@ -1497,9 +1413,9 @@ able to **switch between 0.895 and 1.79 MHz mid-run** to exercise §2.1.
   the quarter cycle; see §3.3 — but **the gate is 14, not 18**, and the four missing
   cycles are the point:
 
-  > **The measurement is biased optimistic, not conservative.** The README used to claim
-  > that the `DSB` before the timestamp "errs in the safe direction". It does, by a
-  > couple of cycles — and three larger terms err the other way. **(1)** TIM1's capture
+  > **The measurement is biased optimistic, not conservative.** The `DSB` before the
+  > timestamp errs in the safe direction, by a
+  > couple of cycles — but three larger terms err the other way. **(1)** TIM1's capture
   > path resynchronises `TI1` to the timer clock even with the input filter off
   > (`ICF` = 0), so `CCR1` is latched **~2–3 core cycles after the physical edge**, and
   > every cycle of that lag subtracts from the measured latency. **(2)** `t_done` is read
@@ -1509,9 +1425,8 @@ able to **switch between 0.895 and 1.79 MHz mid-run** to exercise §2.1.
   > on the inbound `E` are both absent from the number and present in the product,
   > ~0.9 cycles each. **Net ~3–5 cycles of optimism against a claimed margin of 5.7** — a
   > spike reporting 17 could be a socket-referred 21, and an 18-cycle gate would pass it.
-  > Found in the 2026-09-04 review (Cpu-M4).
   >
-  > **Gate set to 14** (`cpu/include/spike.h`, `SPIKE_TAD_CYCLES`; the raw 18 is kept
+  > **The gate is 14** (`cpu/include/spike.h`, `SPIKE_TAD_CYCLES`; the raw 18 is kept
   > alongside as `SPIKE_TAD_RAW_CYCLES` for the arithmetic). A gate that is too tight
   > costs a rerun; one that is too loose costs a PCB.
   >
@@ -1528,8 +1443,8 @@ able to **switch between 0.895 and 1.79 MHz mid-run** to exercise §2.1.
 1. Software polling loop, C.
 2. Software polling loop, hand-written assembly (rolled; `T_iter` 4/6).
 3. EXTI + DMAMUX + DMA precomputed store (§3.4(3)).
-4. ~~(2) or (3) with the G4 overclocked to 200 MHz.~~ **Dropped** — §3.4(4). The core
-   clock is committed at 170 MHz, so there is no overclocked variant to measure.
+4. *Dropped* — this slot held the 200 MHz overclock of (2)/(3), rejected in §3.4(4).
+   The core clock is committed at 170 MHz, so there is no overclocked variant to measure.
 5. **Straight-line unrolled poll** (§3.3(c)), uniform `T_iter` = 4.
 6. **External '574 latch** (§3.6). The one that decides whether 3 MHz is reachable.
 
@@ -1540,7 +1455,7 @@ able to **switch between 0.895 and 1.79 MHz mid-run** to exercise §2.1.
   20 ns (3 MHz grade).
 
 **Predictions on record** (worth checking honestly — a wrong prediction here is
-informative). Revised 2026-08-27 now that the real HD63C09E numbers are in hand:
+informative), sized against the real HD63C09E numbers:
 
 | Variant | Predicted ceiling | Reasoning |
 |---|---|---|
@@ -1684,15 +1599,12 @@ contribute upstream.
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| ~~Microcode step costs more than 15–30 cycles~~ | **Largely closed** | Measured: 14 cy typical, 25 cy worst, against 34 available at 3 MHz (§3.3(d), `cpu/tools/microstate-probe/`). Residual risk is coverage — see the two rows below. |
 | **Lazy-CC materialisation missed on some path** | **High** | §4.1 rule 2 trades per-cycle cost for an obligation: every path that can observe CC must call `cc_materialise()`, incl. interrupt stacking. A miss is an accuracy bug, not a slow path. Make it a fuzzing invariant in §6.3(2), not a code-review item. |
 | **Microstate sample is not a survey** | Medium | The probe covers ALU, indexed post-inc and `TFM`. Not covered: interrupt stacking, `DIVQ`/`DIVD`, indexed-indirect, `/HALT` entry/exit. Re-run the probe as each lands in Phase 3/4. |
 | `/HALT` floppy path wrong or too slow | **High** | It gates NitrOS-9 boot. §2.2 is explicit; test at §6.3(c) before attempting a boot. |
-| ~~Overclock to 200 MHz fails silently and rarely~~ | **Closed — not taken** | Core clock committed at 170 MHz (§0, §3.4(4)). The risk is retired by declining the option; it bought no gate at any target rate. |
-| `t_DDW` = 70 ns and `t_PCS` = 70 ns at 3 MHz | Medium | Newly surfaced gates (§3.3) that no variant currently measures. Size the write path and the interrupt//HALT sampling path against them before Phase 6. |
+| `t_DDW` = 70 ns and `t_PCS` = 70 ns at 3 MHz | Medium | Gates (§3.3) that no variant currently measures. Size the write path and the interrupt//HALT sampling path against them before Phase 6. |
 | LVC574 setup/hold not verified for a specific part | Low | §3.6 uses typical LVC figures. Confirm against the chosen vendor's datasheet; margin is ~7–10× so this is a formality. |
 | Native-mode cycle counts wrong | **High** | NitrOS-9 runs native, and MAME is known-buggy exactly there. Silicon capture (§6.2(1)) is the oracle. |
-| ~~Pin budget has zero slack~~ | **Closed** | §2.6 confirmed six signals are unconnected on the CoCo 3. 35 of 39 used for the bus, leaving a debug UART, an LED and a spare. ~~LQFP48 stands.~~ **The package did not** — the budget was right and the part was wrong; UFQFPN48 since 2026-09-04 (§3.2). |
 | **Interrupt recognition shifts by one bus cycle** | Medium | §4.1 rule 3 AND-folds the control inputs at an undefined instant in the cycle; silicon samples at a defined point with `t_PCS` setup. Never loses an assertion, can notice one a cycle early or late. Pin against the §6.2(1) silicon capture; a trace diff is the only thing that sees it. |
 | Option bytes not programmed on a module | **High** | `BOOT0` = `PB8` = `A8`: a factory-default part boots the bootloader on a random subset of resets (§3.2). Gate in §7 Phase 6, verified by read-back, not by "it booted once". |
 | §4.5 shadow ROM competes for microcode budget | Low | One range test per formed address, in the step measured by §3.3(d), not on the `t_AD` path. Re-run `cpu/tools/microstate-probe/` once it is written. |
@@ -1704,29 +1616,19 @@ contribute upstream.
 | GIME setup/hold stricter than assumed | Medium | A/B logic-analyzer capture against a real 6309E in the same socket. |
 | `TFM` interruptibility subtleties | Medium | Dedicated vectors from silicon capture. |
 | Per-pin 5 V tolerance assumptions wrong | Medium | Verify FT/FT_a in DS12589 before PCB; LVC buffers regardless. |
-| ~~5 MHz stretch unreachable~~ | **Withdrawn** | No 6309E grade above HD63C09E exists; the figure was unsourced (§3.3). 3 MHz replaces it as the stretch target. |
 | Flash wait states cause jitter | Low | Hot loop in CCM SRAM (zero-wait). |
 
 ---
 
 ## 9. Parts
 
-- **STM32G431CBU6** (**UFQFPN48**) ×2
-  > ⚠ **Was `STM32G431CBT6` (LQFP48) until 2026-09-04.** That package has 38 GPIO, not
-  > 42: `PC4`/`PC6`/`PC10`/`PC11` — `BA`, `BS` and the debug UART — are not bonded out on
-  > it, so the §3.2 pinout could not be built. Same die, same firmware, QFN footprint.
-  > See the marked block in §3.2.
+- **STM32G431CBU6** (**UFQFPN48** — the LQFP48 does not bond out `PC4`/`PC6`/`PC10`/
+  `PC11` and cannot carry the §3.2 pinout) ×2
 - 74LVC541 ×2 (address), **74LVC574 ×1 (data in — the §3.6 latch)**,
   **74LVC541 ×1 (data out)**, **74LVC541 ×1 (the seven control inputs)**,
   **74LVC1G125 ×1 (`R/W` out, tri-stated by `BUS_OE`)**,
   **74LVC2G04 ×1 (`/E` for the '574 clock, `/R/W` for its `/OE`)**
-  - the '574 + '541 pair replaces the single '245 an earlier revision specified; see §3.6
-  > ⚠ **The glue list was short by two packages and one of them was load-bearing.**
-  > Through 2026-08-28 this line read "74LVC125/AHCT125 (`R/W` + control)" — four
-  > channels against eight signals — and **no inverter appeared anywhere**, although
-  > §3.6 called for a '574 "clocked by E's falling edge" and a '541 enabled by `/R/W`,
-  > neither of which exists without one. Corrected 2026-09-04 (Cpu-M3); the §3.6
-  > drawing is the authority.
+  — the §3.6 drawing is the authority for the glue
 - 3.3 V LDO, decoupling, 40-pin machined-pin header/socket
 - Second MCU or signal generator for the Phase 1 E/Q stimulus, with runtime speed switching
 - **HD63C09E ×2** — the A/B reference and the capture rig
@@ -1738,34 +1640,27 @@ contribute upstream.
 
 ## 10. Open questions
 
-1. ~~Does the CoCo 3 connect `TSC`/`/LIC`/`AVMA`/`BUSY`/`BA`/`BS`?~~ **Answered** — see
-   §2.6. All five outputs NC, `TSC` grounded.
-2. ~~LQFP48 or LQFP64?~~ **Answered — 48 pins, with 4 to spare. Answered again on
-   2026-09-04: it has to be the UFQFPN48, not the LQFP48.** The 48-pin *die* was never in
-   question; the *bonding* was. LQFP48 brings out 38 GPIO and drops
-   `PC4`/`PC6`/`PC10`/`PC11`, i.e. `BA`, `BS` and the debug UART, leaving 35 usable
-   against 33 mandatory signals. UFQFPN48 brings out 42 and the §3.2 pinout works
-   verbatim. **The homebrew machine's answer is unchanged** — it is the pin *budget*, not
-   the package, that moved that machine's MMU onto the motherboard, and an in-CPU MMU is
-   further out of reach on 35 pins than on 39: see §3.2 and `docs/machine.md` §5 item 6.
-3. ~~What are `t_DSR` and `t_DHR`?~~ **Answered, twice.** First from `reference/datasheets/MC6809E.pdf`
-   p.3 (40 ns / 10 ns, MC68B09E), then properly from `reference/datasheets/HD6309E_datasheet.pdf` p.3,
-   which carries **HD63B09E and HD63C09E columns side by side**: `t_DSR` 40 → **20 ns**
-   and `t_AD` **110 ns at both grades**. See §3.3 — this retired an extrapolation that
-   had the 3 MHz analysis wrong in both directions.
-3c. ~~Is the HD63C09E rated 3 MHz, and does it run at 5?~~ **Half answered.** 3 MHz
-   confirmed from Hitachi's own documents (`t_cyc` min 333 ns; the non-E datasheet's
-   crystal table specifies 12 MHz and 8 MHz AT-cut parts with the internal ÷4, giving the
-   3 MHz and 2 MHz grades). **5 MHz is unsupported** — see the footnote in §3.3. Removed
-   as a target.
-3d. ~~Does the microcode step fit the budget?~~ **Answered — yes, with the §4.1 rules.**
-   Measured 14 cycles typical / 25 worst against 34 available at 3 MHz
-   (`cpu/tools/microstate-probe/`, §3.3(d)). The 15–30 estimate was pessimistic. But the
-   §4.1 design *as originally specified* costs ~80 and misses at every rate, so this was
-   a design constraint discovered just in time rather than a comfortable confirmation.
-3a. ~~Are all bus pins 5 V-tolerant?~~ **Answered — no.** `PA0..PA7`, `PB0..PB2` and
-   `PB10` are `TT_a`, 3.6 V only (DS12589 Table 12, pp.52–53). Buffers are mandatory;
-   direct drive is ruled out. See §3.5.
+1. *Answered* — the CoCo 3 leaves `BA`/`BS`/`BUSY`/`/LIC`/`AVMA` unconnected and
+   grounds `TSC` (§2.6).
+2. *Answered* — 48 pins, and specifically the **UFQFPN48**: LQFP48 bonds out only 38
+   GPIO and drops `BA`/`BS`/UART (§3.2). The homebrew machine's MMU stays on the
+   motherboard either way — it is the pin *budget*, not the package, that moved it
+   there, and an in-CPU MMU is further out of reach on 35 pins than on 39
+   (`docs/machine.md` §5 item 6).
+3. *Answered* — `t_DSR` 40 ns (B grade) / **20 ns** (C grade), `t_DHR` 20 ns Hitachi /
+   10 ns Motorola, `t_AD` **110 ns at both grades**
+   (`reference/datasheets/HD6309E_datasheet.pdf` p.3; §3.3).
+3c. *Answered in part* — 3 MHz is confirmed from Hitachi's own documents (`t_cyc` min
+   333 ns; the non-E datasheet's crystal table specifies 12 MHz and 8 MHz AT-cut parts
+   with the internal ÷4, giving the 3 MHz and 2 MHz grades). **5 MHz is unsupported by
+   any datasheet** and is not a target — see the footnote in §3.3.
+3d. *Answered* — yes, with the §4.1 rules: measured 14 cycles typical / 25 worst against
+   34 available at 3 MHz (`cpu/tools/microstate-probe/`, §3.3(d)). The naive shape costs
+   ~80 and misses at every rate, so the rules are a design constraint, not a tuning
+   option.
+3a. *Answered* — no. `PA0..PA7` and six of the address pins are `TT_a`, 3.6 V only
+   (DS12589 Table 12, pp.52–53). Buffers are mandatory; direct drive is ruled out
+   (§3.5).
 3b. **What is the GIME's input `V_IH`?** Our buffers output 3.3 V. If the GIME wants
    CMOS levels (~3.5 V) that is marginal, and only a 5 V-powered translator fixes it.
    **Still open**, and probably only answerable by measurement on real hardware.

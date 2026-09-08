@@ -8,18 +8,19 @@ convention at the bottom of the root [`README.md`](../README.md).
 item owned by the machine, with no document behind it. This directory is the first pass
 at that, and at the five cards that plug into it.
 
-**Status: schematic-level, and nothing is placed or routed.** Three things had to happen
-before layout is meaningful. **The third is done** — every package pinout is now read off a
-datasheet (open item 1, closed 2026-09-06, and it was not a formality: see finding 4). The
-first is **started**: [`gal/`](gal/) holds the MMU GAL's equations — now fitted, as
-`.jed` files checked at the fuse level — and fitting them found
-four more defects in the board below. The video output stage (`design-review.md` §Vid-M4)
-has not moved.
+> Superseded material is archived in [history.md](history.md); this document describes
+> only the present design.
 
-> **The MMU register map was signed off on 2026-09-06 and the board now implements the
+**Status: schematic-level, and nothing is placed or routed.** Three things gate layout.
+Every package pinout is read off a datasheet — open item 1, and it was not a formality:
+see history.md's finding 4. [`gal/`](gal/) holds the motherboard GALs' equations, fitted
+as `.jed` files checked at the fuse level — fitting them found four defects in the board
+below (history.md). The video output stage (`design-review.md` §Vid-M4) has not moved.
+
+> **The MMU register map is signed off (2026-09-06) and the board implements the
 > equations.** `machine.md` §5 item 3 is closed with it. `npm run check:netlist` asserts
-> all five changes the equations forced — the dead nets are gone, `U3` takes `Q`, `/IOSEL`
-> is on `U6`, the `'245`'s direction is `R/W`, and the `'157`'s select is no longer the
+> the five properties the equations force — no dead nets, `U3` takes `Q`, `/IOSEL`
+> is on `U6`, the `'245`'s direction is `R/W`, and the `'157`'s select is not the
 > write strobe. See [`gal/README.md`](gal/README.md). What exists
 today is the **bus interface of every board, generated from one table**, so the
 motherboard and a card cannot disagree about what A17 is.
@@ -34,14 +35,13 @@ slot count and the CPU module's siting open, and a pinout cannot be written with
 | | Decision | Why |
 |---|---|---|
 | **Connector** | **72-pin 0.1" card edge, 2 × 36** | 45 signals + 2 audio returns need more than colormin's 50 pins. A 100 mm Eurocard edge at 0.1" pitch holds 39 positions; 36 leaves 8.6 mm for the notch and mechanical margin, so **the card format sizes the connector**. ⚠ **That premise expired on 2026-09-08** — see below. |
-| **Card format** | **100 mm high × 120, 180 or 240 mm long** — Apple II proportions, per card | ⚠ **Was a 100 × 160 mm Eurocard.** [`place/`](place/) drew the boards and the video card did not fit one: 134.4 cm² of courtyard against 133.4 cm² of placeable area. Three of the five cards then turned out to fit 12 cm, so the length is per-card and `place.check.ts` asserts each takes the shortest that works. |
+| **Card format** | **100 mm high × 120, 180 or 240 mm long** — Apple II proportions, per card | [`place/`](place/) drew the boards: the video card does not fit a 100 × 160 mm Eurocard (134.4 cm² of courtyard against 133.4 cm² of placeable area), and three of the five cards fit 12 cm — so the length is per-card and `place.check.ts` asserts each takes the shortest that works. |
 | **CPU siting** | **A 40-pin DIP socket on the motherboard** | The module is the drop-in board [`cpu/`](../cpu/) already builds for the CoCo 3, plugged in — **one hardware SKU serving both machines literally**, not by recompilation. Its own `'541`/`'245` level buffers ride with it (`plan.md` §2.6), so the motherboard adds no buffering. |
 
-**Slot count is six, and that is a guess** — ~~five specified cards plus one free~~,
-~~six specified cards and none free~~, and since PS/2 and serial merged on 2026-09-08,
-**five cards and one spare again**. Nothing in the machine documents has ever said how
-many. Six slots is 12 A of finger capacity against a 2–3 A machine, so the supply and
-not the connector is the limit.
+**Slot count is six, and that is a guess** — five specified cards (PS/2 and serial share
+one I/O card, merged 2026-09-08) plus one spare. Nothing in the machine documents has
+ever said how many. Six slots is 12 A of finger capacity against a 2–3 A machine, so the
+supply and not the connector is the limit.
 
 > ⚠ **A 240 mm edge holds 98 positions at 0.1", not 39, so the connector's own
 > justification no longer binds.** The 72-pin decision was derived from the Eurocard —
@@ -100,16 +100,14 @@ Four properties are load-bearing, and each is checked rather than asserted:
 - **Logical A13–A15 appear nowhere.** They are the map SRAM's address inputs and stay on
   the motherboard (`machine.md` §2). `lib/netlist.check.ts` proves they reach no slot.
 
-> ⚠ **~~The spare at A34~~ A34 is physical `A20`, since 2026-09-08.** It sits between two
-> +5 V pins and this document called it "the natural home for a future rail".
-> `machine.md` §5 item 1 option D spent it on the top address bit instead, doubling the
-> physical map to 2 MB — and the reason it won is that it needs **nothing else**: the map
-> SRAM is byte-wide, its eighth bit was already stored and read back through the
-> isolation `'245`, and it drove nothing. One trace, no ICs, 1 MB.
+> ⚠ **A34 is physical `A20`** — `machine.md` §5 item 1 option D (2026-09-08), doubling
+> the physical map to 2 MB. The reason that use of the pin won is that it needs
+> **nothing else**: the map SRAM is byte-wide, its eighth bit was already stored and read
+> back through the isolation `'245`, and it drove nothing. One trace, no ICs, 1 MB.
 >
-> **`net/docs/net.md` §13.1 wanted two of these pins for a DMA request/grant pair and
-> lost the same day.** There is no spare position now; a seventh signal would come out of
-> the ground or power allocation, and `lib/slot.check.ts` is what prices that.
+> **There is no spare position.** `net/docs/net.md` §13.1's DMA request/grant pair lost
+> to `A20` the same day; a seventh signal would come out of the ground or power
+> allocation, and `lib/slot.check.ts` is what prices that.
 
 The backplane carries **5 V only** — the storage card makes its own 3.3 V behind an LDO
 (`sdcard.md` §7) and the CPU module regulates for itself.
@@ -127,7 +125,7 @@ The backplane carries **5 V only** — the storage card makes its own 3.3 V behi
 | [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
 | [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
 | [`cards/`](cards/) | audio, video, **io** (PS/2 + serial, merged 2026-09-08), storage, net — bus interface each | |
-| [`ram.md`](ram.md) | **RAM expansion, 512 KB to 16 MB** — a brainstorm. The address path costs one SRAM because the MMU was built with 128× the map storage it uses; the memory costs a DRAM controller, which `/WAIT` only made possible on 2026-09-08 | |
+| [`ram.md`](ram.md) | **the memory system — decided 2026-09-08**: 16-bit map entries, a 32 MB physical map, four 30-pin SIMM sockets of DRAM and no SRAM at all. The address path costs one SRAM because the MMU was built with 128× the map storage it uses; the rest of the document is a staged brainstorm | |
 | [`place/`](place/) | **the placement study** — every board drawn 1 : 1 from its parts list, and the check that found the video card did not fit a Eurocard | + [`place/place.check.ts`](place/place.check.ts) |
 | [`gal/`](gal/) | **the programmable logic** — U3 and U6's equations in CUPL and Verilog, and [`gal/jedec/`](gal/jedec/), which assembles them into the fuse maps a programmer burns | + [`gal/mmu.check.ts`](gal/mmu.check.ts), [`gal/mmu_tb.sv`](gal/mmu_tb.sv), [`gal/jedec.check.ts`](gal/jedec.check.ts) |
 | [`vendor/mc6809/`](vendor/mc6809/) | **third-party** — Greg Miller's cycle-accurate MC6809E core, BSD, byte-identical to upstream | |
@@ -155,70 +153,29 @@ npm run check:jedec    # assembles both GALs and checks the fuse maps
 
 ## What the layout found
 
-Drawing a board is a different check on a specification than reading it, and this pass
-turned up three things. The first changes a parts list.
+Drawing a board is a different check on a specification than reading it. Two of this
+pass's findings are applied — their record is in [history.md](history.md) — and one is a
+live DRC caveat.
 
-### 1. ⚠ `machine.md` §7.1's system RAM is one part, not four — and needs no decode
+### 1. `machine.md` §7.1's system RAM is one part, not four (applied 2026-09-06; see history.md)
 
-**Applied 2026-09-06.** `machine.md` §7.1 now says one package and no decode, and §0, §6
-and §8 carry the corrected counts. What follows is the finding as it was made.
+**One `AS6C4008` is the whole 512 KB requirement, and with one part there is nothing to
+decode**: `/CE` is the `A19 = 0 · /IOPAGE` term. [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx)
+fits **U8 alone**, and `lib/netlist.check.ts` asserts both halves: one package, A0–A18,
+and no sight of A19. ([`ram.md`](ram.md) §6.2 has since removed the DIP SRAM from the
+decided design entirely; the board file still draws today's 9-IC state.)
 
-> **512 KB of SRAM on the motherboard, selected by `A19 = 0` qualified with `/IOPAGE`.**
-> Four × 512K×8 (AS6C4008-class, 55 ns) and a decode.
+### 2. `/IOSEL` is the `$FF00`–`$FF7F` window strobe, not geographic (applied 2026-09-06; see history.md)
 
-**512K × 8 is 512 KB.** Four of them is 2 MB — against a 512 KB requirement, in a 1 MB
-physical map that allots system RAM exactly `A19 = 0`, i.e. **A0–A18, nineteen address
-lines**. An AS6C4008 has A0–A18. It *is* the requirement, once.
+**`/IOSEL` is common to every slot** — the `/IOPAGE` term further qualified by
+**`A7 = 0`** — and each card completes its own decode from **A0–A6** against its
+jumpered base. That is why the low address lines are on the backplane at all, and it is
+what the boards here implement. colormin's geographic per-slot model cannot work here:
+this machine's windows are *function*-sized and all different, so a positional decode
+would pin each card to one slot and make a base-address jumper meaningless.
 
-And "a decode" goes with the other three. With one part there is nothing to decode
-between: `/CE` is the `A19 = 0 · /IOPAGE` term, which the MMU's `GAL22V10` already forms
-to generate `/IOSEL`. The motherboard is drawn that way here — [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx)
-fits **U8 alone** — and `lib/netlist.check.ts` asserts both halves: one package, A0–A18,
-and no sight of A19.
-
-**This moves §8's motherboard line from ~13 ICs to 9**: MMU 5, divider GAL, oscillator,
-reset supervisor, system RAM. The machine total moves with it, from ~110 to ~106.
-
-It is the same shape of error the 2026-09-04 review found repeatedly: **a table that
-exists to do arithmetic is worth re-examining against the parts catalogue** (§8's own
-closing lesson). Unlike audio's 57, though, it was not found by re-reading the document —
-it was found by a board file that had to say how many packages to draw.
-
-### 2. `/IOSEL` cannot be geographic in this machine, and four documents assume it is
-
-**Applied 2026-09-06.** `machine.md` §2 now owns the correction, and `graphics.md` §17,
-`audio.md` §9.1 and `ps2.md` §3.2 defer to it. What follows is the finding as it was made.
-
-> ⚠ **One correction to the finding itself:** it first named `sdcard.md` §6.1 as a
-> repeater of the claim. It is not — that section only proposes a window. The documents
-> carrying "per slot" were `machine.md` §2, `graphics.md` §17 (twice), `audio.md` §9.1 and
-> `ps2.md` §3.2.
-
-`graphics.md` §17 adopts colormin's slot model, where `/IOSEL` is **geographic** — slot
-*n* gets the *n*th 64-byte window, decoded by position. `audio.md` §9.1 and `ps2.md` §3.2
-both repeat "decode is geographic from the backplane's per-slot `/IOSEL`", and each adds
-**"so the base is a jumper"**.
-
-Those two sentences cannot both be true here. colormin's windows are *slot*-sized — four
-identical 64-byte blocks. This machine's are *function*-sized and all different: audio 16
-bytes, video 32, PS/2 4, serial 4, storage 4. A decode that assigns windows by position
-would force each card into one specific slot, at which point a base-address jumper decodes
-nothing.
-
-The reading that works is the one `machine.md` §2 already implies when it derives
-`/IOPAGE`: **`/IOSEL` is the ~~`$FF40`–`$FF7F`~~ `$FF00`–`$FF7F` window strobe**, common
-to every slot — the `/IOPAGE` term further qualified by ~~`A7,A6 = 01`~~ **`A7 = 0`** —
-and each card completes its own decode from ~~A0–A5~~ **A0–A6** against its jumpered base.
-That is why the low address lines are on the backplane at all, and it is what the boards
-here implement. (**Widened 2026-09-08**, `machine.md` §5 item 1 A; and the term as
-originally written had its polarity wrong — [`gal/README.md`](gal/README.md).) **It was not, however, what any document said** —
-except `serial.md` §6, whose decode GAL takes `CS0`/`/CS1` "from geographic `/IOSEL` *and
-`A2`–`A5`*". That is the window-strobe model written down, in the one card document that
-never claimed the geography.
-
-The cost of the fix is recorded with it in `machine.md` §2: the geography is genuinely
-lost, so nothing now prevents two cards being jumpered to the same base, and nothing
-detects it.
+The cost is recorded in `machine.md` §2: the geography is genuinely lost, so nothing
+prevents two cards being jumpered to the same base, and nothing detects it.
 
 ### 3. Card-edge fingers fail a copper-to-edge DRC, correctly
 
@@ -228,69 +185,49 @@ definition. The rule wants an exemption, not the layout.
 
 ---
 
-### 4. The one pinout that was wrong was the one nobody would check twice
+### 4. The one pinout that was wrong was the one nobody would check twice (found and fixed 2026-09-06; see history.md)
 
-**Found 2026-09-06,** when the datasheets open item 1 asked for were fetched from Digi-Key
-and Mouser and the pinouts were read off them rather than recalled.
+The map SRAM's pins 21–23 were rotated against the `CY7C128A` datasheet, and the package
+was drawn 600-mil where the part is the 300-mil skinny DIP — a name-level netlist check
+cannot see a number-level footprint error, so only reading the datasheet caught it. The
+full account, and why the 6116-standard pinout is exactly the one that gets written from
+memory, is in history.md.
 
-Four of the five parts were right as drawn — `74HC574`, `74HC245`, `74HC157` and the
-`AS6C4008` matched their datasheets pin for pin, the 512K × 8's awkward 25–31 block
-included. **The map SRAM did not.** `lib/parts.ts` had pins 21–23 as A9 / A8 / `/WE`; the
-part is `/WE` / A9 / A8. The three were rotated, and the package was drawn 600-mil when the
-`CY7C128A`'s DIP is the 300-mil skinny one.
-
-That numbering is the **6116 standard** that every 2K × 8 in a 24-pin DIP shares, which is
-the uncomfortable part: it is not an obscure part-selection subtlety, it is the pinout most
-likely to be written from memory and least likely to be re-read. Nothing downstream caught
-it, and nothing could have — `mainboard.circuit.tsx` connects by pin *name*, and
-`netlist.check.ts` proves the netlist, so both were correct against a footprint that would
-have shipped a board with three pins swapped. **A name-level check cannot see a
-number-level error.** The pin numbers become load-bearing exactly once, at layout, which
-had not happened yet.
-
-`lib/parts.ts` now carries a `source` on every part naming the file and page, and
-`UNVERIFIED_PARTS` is **derived from `provenance`** instead of hand-maintained — the
-hand-written list had already gone stale once, still naming `SRAM_512K` as four packages
-after finding 1 made it one.
+`lib/parts.ts` carries a `source` on every part naming the datasheet file and page, and
+`UNVERIFIED_PARTS` is **derived from `provenance`** rather than hand-maintained.
 
 
 ## Open items
 
-1. ~~**⚠ Three of the five motherboard part pinouts are unverified.**~~ **Closed
-   2026-09-06.** The datasheets were fetched from Digi-Key and Mouser and every pinout is
-   read off one — see finding 4 above for what that caught, and
+1. **Closed 2026-09-06** — every motherboard pinout is read off a datasheet: see finding
+   4 for what that caught, and
    [`reference/datasheets/README.md`](../reference/datasheets/README.md) for the files and
    what cites each. **One part on the wanted list has no datasheet and will not get one:**
-   the serial card's `R6551A`/`G65SC51` is out of production at both distributors, so
-   `serial.md` §3.4's speed-grade argument still rests on recalled figures. The `W65C51N`
+   the I/O card's `R6551A`/`G65SC51` is out of production at both distributors, so
+   `serial.md` §3.4's speed-grade argument rests on recalled figures. The `W65C51N`
    sheet is there for the DIP-28 pinout and for nothing else.
 
 2. **The slot socket footprint is a DIP body.** Pad grid and pin numbering are right, the
    outline is not. It needs a measured footprint once a receptacle is sourced.
 3. **Nothing is placed.** Every board's components sit at the origin, so the PCB DRC
    reports overlaps that mean nothing yet — **299 plated-hole clearance errors on the
-   motherboard alone**, a count unchanged by the pinout fix, which is how that fix was
-   checked for side effects. It becomes a real number the moment placement starts and not
+   motherboard alone**. It becomes a real number the moment placement starts and not
    before. Placement waits on open item 2 and on the GAL fitting `graphics.md` §18 step 0
-   requires — which for the **motherboard's** two parts is now done
-   ([`gal/jedec/`](gal/jedec/)); the video card's nine are not.
-4. ~~**⚠ The system RAM's control lines are not driven.**~~ **Closed 2026-09-06.**
-   `RAM_CE`, `RAM_OE` and `RAM_WE` reached `U8` and nothing else, behind a comment
-   claiming U3 formed the term — U3 forms no such term, and once
-   [`gal/mmu.pld`](gal/mmu.pld) existed that stopped being arguable. U3 could not take
-   them either: one free pin, and `/CE` alone needs two. They are on **U6** now
-   ([`gal/clkdec.pld`](gal/clkdec.pld)), with `/OE` qualified by `R/W` rather than tied
-   low — which removes ~90 ns of SRAM-versus-CPU contention on every write.
-   `check:netlist` asserts all three run from U6 to U8.
+   requires — the motherboard's two parts are fitted ([`gal/jedec/`](gal/jedec/)), and so
+   are the video card's two CPLDs and its `rfa` GAL ([`gal/cpld/`](gal/cpld/),
+   `gal/rfa.jed`).
+4. **Closed 2026-09-06** — the system RAM's control lines are driven: `RAM_CE`, `RAM_OE`
+   and `RAM_WE` come from **U6** ([`gal/clkdec.pld`](gal/clkdec.pld)), with `/OE`
+   qualified by `R/W` rather than tied low — which removes ~90 ns of SRAM-versus-CPU
+   contention on every write. `check:netlist` asserts all three run from U6 to U8. (The
+   defect this closed is archived in history.md.)
 
 5. **Six slots is unargued.** See above.
 6. **Decoupling is not drawn.** One 0.1 µF per package plus bulk, everywhere; it is
    mechanical and belongs with placement.
-7. ~~**`machine.md` §5 item 1 is still the machine's blocking decision.**~~ **CLOSED
-   2026-09-08.** The window is `$FF00`–`$FF7F`, 64 bytes of it free (`npm run check`
-   prints the figure), and the physical map is 2 MB — `machine.md` §5 item 1, options A
-   and D. This finding said the decode "is one GAL term today and a board respin after the
-   backplane is etched", and it was right: the widening was one literal *removed* from
+7. **CLOSED 2026-09-08** — `machine.md` §5 item 1 is decided: the window is
+   `$FF00`–`$FF7F`, 64 bytes of it free (`npm run check` prints the figure), and the
+   physical map is 2 MB — options A and D. The widening was one literal *removed* from
    [`gal/clkdec.pld`](gal/clkdec.pld), taken while the backplane is still a table.
 
 ---
@@ -301,5 +238,6 @@ after finding 1 made it one.
   board that hardcodes one has a bug.
 - **Every claim a check can make, a check makes.** `npm run check` is arithmetic out of
   the machine documents, not style.
-- **Superseded and unverified material is marked, not deleted** — the root `README.md`
-  convention, applied here to the map SRAM's wrong pinout and to §7.1's four SRAMs.
+- **Superseded material is archived, not lost** — it moves to [`history.md`](history.md),
+  one archive for the whole `hardware/` area. Unverified material is still marked in
+  place.

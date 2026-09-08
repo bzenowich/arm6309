@@ -5,16 +5,10 @@
  * = 39. The CoCo 3 needs 33; we wire 35 (adding BA/BS) and spend the rest on a
  * debug console, an LED and the plan.md 4.5 machine-mode strap. Nothing spare.
  *
- *   > !! SUPERSEDED (2026-09-04): this header used to name the STM32G431CBT6,
- *   > LQFP48. The map below does not exist on that package. DS12589 Table 2
- *   > gives GPIOs as "38 in LQFP48, 42 in UFQFPN48", and the four extra pins
- *   > are exactly PC4, PC6, PC10 and PC11 — BA, BS, UART_TX and UART_RX here.
- *   > On LQFP48 the usable count is 38 - 2 (SWD) - 1 (NRST) = 35, the 33
- *   > mandatory CoCo 3 signals fit with only PF0/PF1 left over, and gpio_init()
- *   > would be configuring registers for pins that are not bonded out. Caught
- *   > in the 2026-09-04 design review (Cpu-C1). The CBU6 is the same die in a
- *   > QFN package, so this pinout, this header and the firmware are unchanged;
- *   > QFN soldering is the whole cost.
+ * !! THE PACKAGE IS LOAD-BEARING: this map needs the UFQFPN48's 42 GPIOs.
+ * The LQFP48 (CBT6) bonds out only 38 — PC4, PC6, PC10 and PC11 (BA, BS,
+ * UART_TX, UART_RX here) do not exist on it. Do not substitute the LQFP.
+ * (History: cpu/docs/history.md, design review Cpu-C1.)
  *
  * !! BOOT0 IS PB8 — WHICH IS A8. PROGRAM THE OPTION BYTES BEFORE FITTING.
  *

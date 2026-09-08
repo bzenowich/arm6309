@@ -1,8 +1,10 @@
 # `place/` — the placement study
 
-**Every board drawn 1 : 1 from its own document's parts list.** Nothing in this
-repository had ever been placed; `graphics.md` §14 carried an area claim
-(*"~150 of 160 cm²"*) that nobody had checked against a package outline.
+**Every board drawn 1 : 1 from its own document's parts list**, so the documents' area
+claims are checked against package outlines instead of asserted.
+
+> Superseded material is archived in [../history.md](../history.md); this document
+> describes only the present design.
 
 ```sh
 npm run check:place     # the arithmetic
@@ -20,10 +22,11 @@ npm run render:boards   # dist/boards.html
 
 ## What it found
 
-**The video card did not fit a Eurocard.** 30 packages come to 134.4 cm² of
+**The video card does not fit a Eurocard.** 30 packages come to 134.4 cm² of
 courtyard against 133.4 cm² of placeable area on 100 × 160 mm — over budget
 before a single routing channel, at 0.1″ clearances. That is what moved the
-card format to 250 × 100 and then to per-card lengths.
+card format off the Eurocard to per-card lengths ([`../README.md`](../README.md);
+the intermediate step is archived in [../history.md](../history.md)).
 
 **Three of five cards fit 12 cm**, one needs 18 and only video needs 24. Five
 cards come to 780 cm² of board against 1,200 if every card were cut to the

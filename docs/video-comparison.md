@@ -9,16 +9,11 @@ to the two chips it stands in the tradition of — the **GIME** (Tandy CoCo 3, 1
 
 The card is a **1989–90-plausible discrete design**; the other two are single-chip ASICs
 from 1986 and 1982. That gap is the whole story: three to seven years of silicon, and
-**40 packages** instead of one.
+**27 packages** instead of one.
 
-> ⚠ **Figures re-based against `graphics.md`'s corrected §14.** This document mirrored
-> the card specification faithfully, including its errors: the package count
-> (~~36~~ → **40**), the GAL count (~~8~~ → **9**), the card power figure
-> (~~450–650 mA~~ → **~1.1–1.7 A**), the spare-bandwidth total (~~34 M accesses/s~~ →
-> **32.4 M**), the MMU's package count (~~3 ICs~~ → **5**), and two capability rows —
-> "steals CPU cycles: never" and "mid-frame palette writes: yes" — that were true only
-> with a qualification the card document had not yet written down. Corrected in place
-> below, with the old figures struck rather than deleted.
+> Superseded figures and their correction trails are archived in
+> [history.md](history.md); this document carries only the current numbers, from
+> `graphics.md` §14.
 
 ---
 
@@ -65,7 +60,7 @@ without a scaler, and the only one that cannot drive a period television.
 | Programmable palette | **yes** | yes | **no** |
 | Palette readable by the CPU | **yes** — `'245` read-back (§3.2) | **no** — write-only, shadow it in RAM | n/a — nothing to program |
 | Attribute clash | **none** — chunky 8bpp | **none** — every pixel indexes the palette | **severe** — the defining C64 limitation |
-| Independent border colour | ~~yes (`BORDER`)~~ **no — register deleted** (`graphics.md` §9.3: VGA timing has no overscan, and the `'153` pixel mux has no spare input for a border index). A border is a fill in the off-screen torus instead, at no hardware cost | yes, from all 64 | yes, from the 16 |
+| Independent border colour | **no** (`graphics.md` §9.3: VGA timing has no overscan, and the `'153` pixel mux has no spare input for a border index). A border is a fill in the off-screen torus instead, at no hardware cost | yes, from all 64 | yes, from the 16 |
 | Mid-frame palette writes | **yes — during blanking**; a write during active display **snows**, because the `'593` index counter and the pixel-index `'574` share the LUT address bus by tri-state turnaround (`graphics.md` §13.1). `VSTAT` exposes `HBLANK`/`VBLANK` so software can gate on it | yes — and the GIME snows the same way, for the same reason | not possible |
 | Grey ramp | 24 exact greys, tint ≤ 4/255 | 2 exact greys (4-level blue grid) | fixed ladder, 9 usable greys ⚠ |
 
@@ -79,7 +74,7 @@ quantisation.
 
 | | **arm6309 card** | GIME | VIC-II |
 |---|---|---|---|
-| Framebuffer lives in | **dedicated 512 KB SRAM**, separate from 512 KB system RAM | main DRAM, shared with the CPU | main DRAM, shared with the CPU |
+| Framebuffer lives in | **dedicated 512 KB SRAM**, separate from system RAM (4–16 MB of SIMM DRAM — `machine.md` §7.1) | main DRAM, shared with the CPU | main DRAM, shared with the CPU |
 | Video address reach | 19 bits / 512 KB, **all scannable** | 19 bits / 512 KB | **14 bits / 16 KB window** |
 | CPU access to the framebuffer | MMU-mapped + `WPTR`/`VDATA` (§6.3, §11) | direct — it is just RAM | direct — it is just RAM |
 | Framebuffer read-back | **yes** — colormin's write-only rule reversed (§11) | yes | yes |
@@ -87,7 +82,7 @@ quantisation.
 | Off-screen working space | **384 spare columns + 312 spare rows** in one 1024×512 torus | whatever RAM you spare | inside the same 16 KB window |
 | Holes in the video window | none | none | **character ROM shadow** in banks 0 and 2 |
 | Colour storage | in the pixel byte | in the pixel bits | **separate 1024×4 static colour RAM** off the video bus |
-| CPU memory management | **MMU on the motherboard, ~~3~~ 5 ICs** — 8 blocks, 2 task registers, its own register set (`graphics.md` §6.3.1: the map SRAM has common I/O, so it needs a `'245` isolation buffer, and the entry index during a map write comes from `A3..A0`, so it needs a `'157` address mux) | **8-page MMU, 2 task banks** | none — PLA + 6510 port `$01` |
+| CPU memory management | **MMU on the motherboard, 5 ICs** — 8 blocks, 2 task registers, its own register set (`graphics.md` §6.3.1: the map SRAM has common I/O, so it needs a `'245` isolation buffer, and the entry index during a map write comes from `A3..A0`, so it needs a `'157` address mux) | **8-page MMU, 2 task banks** | none — PLA + 6510 port `$01` |
 
 ---
 
@@ -96,8 +91,8 @@ quantisation.
 | | **arm6309 card** | GIME | VIC-II |
 |---|---|---|---|
 | Peak video fetch | **640 B/line = 20.1 MB/s** | 160 B/line = 2.51 MB/s | 80 B/line on bad lines + sprite fetches |
-| Spare memory bandwidth for drawing | **~32.4 M accesses/s** (§2.1 — ~~34 M~~; the blanking rows were charged at a raw 72 ns cadence instead of the 158.9 ns fetch-slot grid) | none — drawing is CPU stores into DRAM | none |
-| Ratio of card bandwidth to what the CPU can consume | **~77×** (~~80×~~) | ~1× | <1× |
+| Spare memory bandwidth for drawing | **~32.4 M accesses/s** (§2.1) | none — drawing is CPU stores into DRAM | none |
+| Ratio of card bandwidth to what the CPU can consume | **~77×** | ~1× | <1× |
 | Steals CPU cycles for video | **never** — static slot assignment (§5), ⚠ **once the arbiter of §5.2.1 exists**. Phase-locking fixes *when* the CPU's access happens; *which* of the four chips it hits is `address[1:0]`, so a live compare and a grant per chip stand between "never" and a stall | **never** | **yes — bad lines** (~40 cycles) |
 | Steals CPU cycles for sprites | n/a | n/a | **yes** — 2+ per sprite per line |
 | Worst-case CPU cycles lost per line | **0** | **0** | **~46 of 63** ⚠ |
@@ -169,8 +164,8 @@ CoCo 3 software pre-shifts bitmaps in software to compensate.
 | Sprite expansion / priority | n/a | n/a | 2× in X and Y, per-sprite priority vs foreground |
 | Collision detection | n/a | n/a | **sprite-sprite and sprite-background, with interrupts** |
 | Fill / span engine | **span writer** — mask and solid, 8 px per write | none | none |
-| Display list / copper | **reserved, ≈5 ICs + 2 GALs** (§10.3) | none | none |
-| Blit datapath | **deferred** — ~10 more GALs (§10.1) | none | none |
+| Display list / copper | **yes — the list engine** (`graphics.md` §10.1.6.2): per-scanline `HSCROLL`, palette and mode changes from a descriptor list, no CPU | none | none |
+| Blit datapath | **deferred** (§10) | none | none |
 | Practical moving-object count | CPU-bound, no hardware help | CPU-bound, no hardware help | **16–24 via sprite multiplexing** |
 
 For an action game, the VIC-II's sprites are worth more than every resolution and colour
@@ -186,12 +181,12 @@ advantage on this page. Neither of the other two has an answer to them.
 | Raster compare | **true line compare in the emulator** — any number of values, changeable per line (§12.2) | **none** — count `HBORD` every line, or repurpose the timer | **yes** — any of 312 lines (`$D012`) |
 | Cost of a mid-frame split | one timer read at an instruction boundary | one interrupt per 57 CPU cycles, or the 12-bit timer | write one register and return |
 | Interrupt sources | VBL + line compare (+ MCU timers) | **6** — `TMR`, `HBORD`, `VBORD`, and 3 external | 4 — raster, 2 collision, light pen |
-| Per-source IRQ/FIRQ routing | inherited — `$FF92`/`$FF93`-compatible | **yes, per source** | no — single IRQ line |
+| Per-source IRQ/FIRQ routing | **no** — the card's sources share the machine's `/IRQ` with a specified polling order, and `/FIRQ` is audio's alone (`machine.md` §4, §4.1) | **yes, per source** | no — single IRQ line |
 | Programmable timer | in the MCU | **12-bit, auto-reload** (`$FF94`/`$FF95`) | none — the CIAs provide it |
 
 The card's raster compare is the one place it is unambiguously better than the chip it
 replaces, and it costs **two GPIO pins and a timer** (§12.2 — HSYNC clocks the line
-counter, ~~and that is all~~ **and VSYNC resets it**; counting HSYNC alone gives a line
+counter, **and VSYNC resets it**; counting HSYNC alone gives a line
 *count* with no origin, and resynchronising in the VBL handler jitters the frame origin
 by the `/IRQ` dispatch latency, 1–6 lines) — because the CPU is already a
 microcontroller that knows the beam position.
@@ -202,12 +197,12 @@ microcontroller that knows the beam position.
 
 | | **arm6309 card** | GIME | VIC-II |
 |---|---|---|---|
-| Packages | **30 ICs** (26 if the tri-state pixel bus closes) — 2 × `ATF1508AS` PLCC-84, 1 × `GAL22V10`, 27 memory and 74-series — plus a 3-transistor analog drive stage. ~~41 (37)~~, ~~40 (36)~~, ~~36 (32)~~ — `graphics.md` §14.1 reconciles the three counts that were live at once | **1 custom ASIC** (TCC1014, large DIP) | **1 custom ASIC** (40-pin DIP) |
+| Packages | **27 ICs** (23 if the tri-state pixel bus closes) — 2 × `ATF1508AS` PLCC-84, 1 × `GAL22V10`, 24 memory and 74-series — plus a 3-transistor analog drive stage (`graphics.md` §14.1) | **1 custom ASIC** (TCC1014, large DIP) | **1 custom ASIC** (40-pin DIP) |
 | Also provides | video only | **MMU, interrupt controller, timer, DRAM control, device-select decode, CPU clock** | master oscillator, ϕ0, DRAM control + refresh, light pen |
-| What the system needs alongside it | raster compare **inside `arm6309`** (two GPIO pins — HSYNC *and* VSYNC, or the line number has no origin); MMU **on the motherboard**, ~~3~~ **5 ICs**; the master oscillator and the E/Q divider GAL, also on the motherboard — **7 parts** in all | very little — it absorbed the SAM and the VDG | **PLA for banking, 2× CIA for timers and interrupts** |
-| Programmable logic | **9 × GAL22V10** (~~8~~ — §5.2.1's arbiter is the ninth), two of the four pairs at zero macrocell margin | none — mask ROM | none |
-| Power | **~1.1–1.7 A** ⚠ estimate, GAL-dominated (~~450–650 mA~~, which was less than nine GALs alone) | one chip | one chip, famously hot |
-| Area | ~150 cm² on a 160 cm² Eurocard (~~140~~) | a socket | a socket |
+| What the system needs alongside it | raster compare **inside `arm6309`** (two GPIO pins — HSYNC *and* VSYNC, or the line number has no origin); MMU **on the motherboard**, **5 ICs**; the master oscillator and the E/Q divider GAL, also on the motherboard — **7 parts** in all | very little — it absorbed the SAM and the VDG | **PLA for banking, 2× CIA for timers and interrupts** |
+| Programmable logic | **2 × `ATF1508AS` + 1 × `GAL22V10`** (`graphics.md` §10.1.6) | none — mask ROM | none |
+| Power | **~0.5–0.85 A, 0.65 A nominal** ⚠ estimate, design to 1 A (`graphics.md` §14.2) | one chip | one chip, famously hot |
+| Area | ~150 cm² on a 160 cm² Eurocard | a socket | a socket |
 | Buildable from parts available today | **yes** | no | no |
 
 That last row is the card's real justification. The other two columns describe chips nobody
@@ -227,13 +222,12 @@ can buy.
 | Raster interrupts | **arm6309 card** and **VIC-II** — true compare; the GIME has none |
 | CPU bus friendliness | **arm6309 card** and **GIME** — neither ever steals a cycle |
 | Moving objects | **VIC-II**, decisively — 8 sprites with collision, and nothing else has any |
-| Text, as specified (Rev A) | **GIME** — hardware character generator, 80 columns, attributes, zero CPU |
-| Text, with `graphics.md` §6.4 | **arm6309 card** — 80×25 at 2 writes/cell, and **256 attribute pairs from all 65,536 colours** against 8 fg × 8 bg |
-| Tiled backgrounds | **arm6309 card** with §6.4 — an **8bpp tilemap with no attribute clash**, which neither period chip can express |
+| Text | **GIME** — hardware character generator, 80 columns, attributes, zero CPU; the card's text is the span writer at 13 writes/cell (`graphics.md` §6.4.3) |
+| Tiled backgrounds | **arm6309 card** with §6.4.2's Variant A — an **8bpp tilemap with no attribute clash**, which neither period chip can express |
 | Video output options | **GIME** — RGB, composite and RF; the card is VGA-only |
 | Colour into a television | **VIC-II** — separate luma/chroma, a fixed palette chosen with care |
 | Integration | **GIME** — five subsystems in one package |
-| Parts count and power | **GIME** and **VIC-II** — one chip each, against 40 and ~1.5 A |
+| Parts count and power | **GIME** and **VIC-II** — one chip each, against 27 and ~0.65 A |
 | Cycle-exact emulation of the *host* CPU | **GIME** — no video arbitration to model at all (`coco3_c64.md` §10) |
 | Availability in 2026 | **arm6309 card** — the only one you can still build |
 

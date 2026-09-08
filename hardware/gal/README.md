@@ -1,18 +1,21 @@
 # `hardware/gal/` — the programmable logic, and how it is checked
 
 **`video/docs/graphics.md` §18 step 2 is "fit the GALs", and §18 says
-"do steps 1 and 2 before laying out anything."** Nothing in this repository had a
-GAL equation in it before 2026-09-06 — `grep -rn equation` returned three hits and all
-three were *exit criteria saying the equations must fit*. This directory is the start of
-the fitting, taken in the order the machine needs it: the MMU first, because it is the
-one that gates the motherboard.
+"do steps 1 and 2 before laying out anything."** This directory is the fitting, taken in
+the order the machine needs it: the MMU first, because it is the one that gates the
+motherboard.
+
+> Superseded material is archived in [../history.md](../history.md); this document
+> describes only the present design.
 
 ## What here is a deliverable, and what is derivation
 
-**Two GALs are live and get burned into silicon:** the motherboard's `U3` (the MMU
-sequencer) and `U6` (the E/Q divider). `mmu.jed` and `clkdec.jed` are the files a
-programmer takes. The decode GALs on serial, storage and PS/2 are still unwritten and
-will join them.
+**Three GALs are live and get burned into silicon:** the motherboard's `U3` (the MMU
+sequencer) and `U6` (the E/Q divider), and the video card's `rfa` (the register-file
+address decode, split off `vctrl` — [`regfile.jedec.ts`](regfile.jedec.ts)). `mmu.jed`,
+`clkdec.jed` and `rfa.jed` are the files a programmer takes. The decode GALs on serial,
+storage and PS/2 — and the motherboard's U9 and U10 ([`../ram.md`](../ram.md) §6.3) —
+are still unwritten and will join them.
 
 **The audio card's six and the video card's ten are all superseded** — `audio.md`
 §10.1 makes that card one `ATF1508AS` and `graphics.md` §10.1.6 makes the video card
@@ -26,8 +29,8 @@ the argument.
 
 | | Live | Superseded |
 |---|---|---|
-| designs | `mmu`, `clkdec` | `hgen` `vgen` `vdec` `hadr` `vadr` `arb` `wcol` `wrow` `seqph` `seqctl` |
-| checked against Atmel's CUPL | **both** | not required |
+| designs | `mmu`, `clkdec`, `rfa` | `hgen` `vgen` `vdec` `hadr` `vadr` `arb` `wcol` `wrow` `seqph` `seqctl` |
+| checked against Atmel's CUPL | **all three** | not required |
 
 **The rule, and it is enforced:** a GAL does not ship without a CUPL reference.
 `jedec/cupl.check.ts` carries a registry of every design and **fails the build if a
@@ -103,10 +106,9 @@ that the document specifies rather than lists:
 | [`tile.model.ts`](tile.model.ts) | §6.4's three address concatenations — bitmap, 8bpp tile, 1bpp character |
 | [`tile.check.ts`](tile.check.ts) | the no-adder property, asserted as OR = ADD over all 524,288 field combinations per variant — `npm run check:tile` |
 
-Several statements of one logic is several too many, and the count went *down* on
-2026-09-06 rather than up: `mmu.check.ts` no longer carries its own copy of the
-equations, and `mmu.jedec.ts` is not a fourth statement but the placement of the terms
-`mmu.pld` already holds. What checks what:
+Several statements of one logic is several too many, so the redundancy is kept minimal:
+`mmu.check.ts` carries no copy of the equations, and `mmu.jedec.ts` is not a fourth
+statement but the placement of the terms `mmu.pld` already holds. What checks what:
 
     mmu.pld ─── the deliverable, read by CUPL if anyone ever runs one
     mmu.v ───── Verilator ─── mmu_tb.sv, 16 claims
@@ -118,21 +120,18 @@ the most heavily checked.
 
 ---
 
-## The register map — `machine.md` §5 item 3, proposed
+## The register map — `machine.md` §5 item 3, signed off 2026-09-06
 
-That item has been open since the project began and is listed as *"the deliverable that
-gates the motherboard's write-decode GAL."* It cannot stay open and have equations, so
-here is the map the equations implement. It was not a free choice in most of its
-particulars — the `'157` wiring already in `mainboard.circuit.tsx` constrains it almost
+`machine.md` §5 item 3 called this map *"the deliverable that gates the motherboard's
+write-decode GAL"*; the equations implement it, `mainboard/mainboard.circuit.tsx` wires
+it, and the item is closed against this section. It was not a free choice in most of its
+particulars — the `'157` wiring in `mainboard.circuit.tsx` constrains it almost
 completely.
 
 | Window | Size | What | Decoded by |
 |---|---|---|---|
-| `$FFA0`–`$FFAF` | 16 B | **16 block registers.** Entry index = `A3..A0`. Bits ~~6~~ **7**–0 = physical ~~`A19`~~ **`A20`**`..A13` | U3, motherboard |
+| `$FFA0`–`$FFAF` | 16 B | **16 block registers.** Entry index = `A3..A0`. Bits **7**–0 = physical **`A20`**`..A13` | U3, motherboard |
 | `$FFB0`–`$FFBF` | 16 B | **MMU control**, aliased 16× — bit 0 = `TASK`. Canonical address `$FFB0` | U3, motherboard |
-
-> **Signed off 2026-09-06**, and `mainboard/mainboard.circuit.tsx` now implements it.
-> `docs/machine.md` §5 item 3 is closed against this section.
 
 **`$FFA0`–`$FFA7` is task 0, blocks 0–7; `$FFA8`–`$FFAF` is task 1.** That is forced, not
 chosen: the `'157` mux puts `TASK` on `MAPA3` and `LA15..LA13` on `MAPA2..0` in translate
@@ -144,18 +143,17 @@ was drawn this way before anyone wrote it down; `mmu.check.ts` now asserts it.
 exactly would need `LA3..LA0` as four more GAL inputs, and the budget below has one pin
 spare. Aliasing costs nothing and is ordinary for the period.
 
-**Sixteen ~~7~~ 8-bit block registers is the whole 2 KB SRAM's useful content** — 16 of
+**Sixteen 8-bit block registers is the whole 2 KB SRAM's useful content** — 16 of
 2048 locations, as §6.3.1 says.
 
-> ⚠ **Bit 7 said "spare and stored" until 2026-09-08, and that sentence was the machine's
-> cheapest unclaimed asset.** `machine.md` §5 item 1 option D made it **physical `A20`**,
-> doubling the map to 2 MB so cards can put buffers somewhere the CPU addresses as memory
+> **Bit 7 is physical `A20`** — `machine.md` §5 item 1 option D (2026-09-08), doubling
+> the map to 2 MB so cards can put buffers somewhere the CPU addresses as memory
 > (`sdcard.md` §11.1, `net.md` §7.6). **It cost one backplane pin and no parts**: the map
 > SRAM is byte-wide, `U4` already carried all eight bits, and the bit was already written
 > and read back. It simply drove nothing.
 >
-> The map is now genuinely full at 8 of 8. A physical `A21` would need a second map SRAM
-> byte and a wider write path, which is a different order of change entirely.
+> ⚠ The map is genuinely full at 8 of 8. A physical `A21` needs a second map SRAM
+> byte and a wider write path — which is what [`../ram.md`](../ram.md) §3.1 specifies.
 
 ---
 
@@ -179,10 +177,9 @@ Two things came off, and both are improvements rather than concessions:
 - **`ISO_DIR` is `R/W`.** The `'245`'s A side is the SRAM, its B side is `D0–D7`; a read
   wants A→B (`DIR` = 1) and a write B→A (`DIR` = 0). That is `R/W` exactly. It was a
   macrocell in the board file and it is a **wire**.
-- **`/IOSEL` moves to U6.** It is ~~`/IOPAGE · A7 · /A6`~~ **`/IOPAGE · /A7`** — a
+- **`/IOSEL` moves to U6.** It is **`/IOPAGE · /A7`** — a
   machine-level backplane signal, not MMU sequencing, and U6 (the E/Q divider) has most of
-  a 22V10 unused. (**Two corrections on 2026-09-08**: the term written here was the wrong
-  polarity, and the window then widened. §U6 below.) `/IOPAGE`
+  a 22V10 unused. (The term's two-defect history is archived — §U6 below.) `/IOPAGE`
   stays on U3 because putting it on U6 would put a second GAL delay in series ahead of
   `MAP_OE`, and the break-before-make margin is measured from that edge.
 
@@ -324,127 +321,81 @@ bench.
 ## U6 — the divider, and the one subtle thing in it
 
 `clkdec.pld` carries three jobs on one part: the `E`/`Q` divider (`machine.md` §1),
-`/IOSEL` (which U3 had no room for), and the system RAM's `/CE`, `/OE` and `/WE` (which
-nothing drove at all until 2026-09-06 — `hardware/README.md` open item 4).
+`/IOSEL` (which U3 has no room for), and the system RAM's `/CE`, `/OE` and `/WE`
+(`hardware/README.md` open item 4).
 
-### ⚠ `/IOSEL` was the wrong 64 bytes, from the day it was written until 2026-09-08
+### `/IOSEL` — `$FF00`–`$FF7F`, one literal
 
-It read **`/IOPAGE · A7 · /A6`**. `LA7` and `LA6` are true-sense on this part — `mmu.pld`
-uses them the same way to decode `$FFA0`–`$FFBF` as `A7..A5 = 101` — so that term is
-**`$FF80`–`$FFBF`: the MMU's own two windows and the CPU module's vector RAM.**
-`$FF40`–`$FF7F` is `A7 = 0, A6 = 1`. The two literals were swapped.
+The decode is **`/IOPAGE · /A7`** — the 128-byte window `machine.md` §5 item 1 option A
+chose (2026-09-08). `LA6` stays wired to pin 6 driving nothing, so carving
+`$FF80`–`$FF8F` back out remains a one-line change; **pin 9 carries physical `A20`**
+(option D).
 
-**Every card's `/IOSEL` fired on an MMU block-register write and never on the card window
-at all** — six cards onto `D0`–`D7` against U3, which is the failure mode `/IOPAGE` was
-added to prevent, arriving from a third cause.
+⚠ **Cards must decode `A0`–`A6`.** A card that matches only `A0`–`A5` answers at its
+base and 64 bytes below it. `vctrl`'s `REGSEL` carries `A6` for exactly this reason.
 
-**Five artefacts carried it and agreed**: `clkdec.pld`, `clkdec.v`, `clkdec.jedec.ts`,
-`clkdec.model.ts` and this file. It reached `clkdec.jed`, so it would have reached a
-programmer.
+> ⚠ The term's history is instructive and archived in [../history.md](../history.md): as
+> first written the decode had its polarity wrong — it strobed `$FF80`–`$FFBF`, the MMU's
+> own windows — and 15 passing claims did not see it, because the testbench was written
+> from the same misunderstanding as the implementation. The claim that replaced it is the
+> one that could not be written wrong in the same direction: **sweep `A6` and require it
+> to have no effect.** It is in `clkdec_tb.sv` next to the range check.
 
-**Why 15 passing claims did not see it.** `clkdec_tb.sv` asserted
-`p == 0 && a7 == 1 && a6 == 0` under the message *"/IOSEL is $FF40-$FF7F: the I/O page
-with A7,A6 = 01"*. **The assertion and its own message disagree**, and the implementation
-was written from the assertion. `mainboard.circuit.tsx`'s comment stated the intent
-correctly too, directly above wiring that was fine.
+### `/WAIT` — the hold, and two machine-level rules
 
-> **This is `jedec/cupl.check.ts`'s lesson one step further out.** That file established
-> that our assembler and our simulator share a device description and therefore agree
-> whatever it says, so a second implementation is what breaks the tie. **The same is true
-> of a check and the design it was written beside**: both came out of one understanding,
-> so the check tested the understanding. Atmel's CUPL could not help here either — it
-> compiles the equation it is given.
->
-> The replacement claim is the one that could not have been written wrong in the same
-> direction: **sweep `A6` and require it to have no effect.** It is in the testbench next
-> to the range check, and it would have failed loudly on the old equation.
+The video card drives `/WAIT` open-drain
+(`WAIT.oe = SPANBUSY & VRAMSEL & !IOPAGE & E & !RW`, [`access.jedec.ts`](access.jedec.ts))
+and **U6 consumes it** — `machine.md` §5 item 8 (2026-09-08). One hold term on each of
+the six registered macrocells (`X.d = next & /WAIT # X & WAIT`), which is **+1 product
+term each and zero macrocells** — the latter mattering because this part uses all ten.
+`E` is 8 terms of 16. The input is pin 10, one of the four dedicated inputs this design
+has spare.
 
-**And then the window widened**, `machine.md` §5 item 1 option A, in the same pass:
-`$FF00`–`$FF7F`, 128 bytes. The decode is now **`/IOPAGE · /A7`, one literal** — cheaper
-than the broken two-literal version. `LA6` stays wired to pin 6 driving nothing, so
-`$FF80`–`$FF8F` remains a one-line change; **pin 9 took physical `A20`** with option D.
-
-⚠ **Cards must decode `A0`–`A6` now.** Six bits answer at the base and 64 bytes below it.
-`vctrl.pld`'s `REGSEL` gained `A6` with this change and **has been refitted** — see below.
-
-### `/WAIT`, which had a producer and no consumer
-
-`vctrl.pld` has driven `/WAIT` open-drain since the video card was captured
-(`WAIT.oe = SPANBUSY & VRAMSEL & !IOPAGE`), and **this part had no `/WAIT` input at all.**
-`machine.md` §2's "it holds E" named an effect with no mechanism: the span writer held
-nothing, and the CPU read VRAM out from under it.
-
-**Fixed 2026-09-08 — `machine.md` §5 item 8.** One hold term on each of the six registered
-macrocells (`X.d = next & /WAIT # X & WAIT`), which is **+1 product term each and zero
-macrocells** — the latter mattering because this part uses all ten. `E` went from 7 terms
-of 16 to 8. The input is pin 10, one of the four dedicated inputs this design had spare.
-
-**Two rules came with it and both are machine-level:**
+**Two rules come with it and both are machine-level:**
 
 1. **`/WAIT` is driven synchronously to `CLK25`.** It gates a counter clocked by `CLK25`
    and there is no macrocell left for a synchroniser. Every card that can drive it already
    has `CLK25` from the backplane, and `SPANBUSY` is in a `CLK25`-derived domain.
 2. **`/WAIT` is asserted only while `E` is high.** Stretching the low half helps nobody.
    Qualifying it here would double the term count on `E`; qualifying it at the source is
-   one literal, and `vctrl.pld`'s `WAIT.oe` now ends `& E`.
+   one literal, and the source's `WAIT.oe` carries `& E`.
 
 `clkdec_tb.sv` carries four claims for it, including **"/RESET beats /WAIT"** — an
 asynchronous clear a card could veto by holding a wire low would be a machine that cannot
 be reset — and `lib/netlist.check.ts` asserts that U6 takes the signal at all, which is
-the thing that stops this recurring.
+the thing that stops the producer-with-no-consumer defect (archived in
+[../history.md](../history.md)) from recurring.
 
-### The video CPLD refit, and a package worth noticing
+### The video card's fitted logic, for reference
 
-`vctrl.pld` gained three literals on 2026-09-08: `A6` on `REGSEL`, `/A20` on `VRAMSEL`,
-and `& E` on `WAIT.oe`. **It fits — at 78 of 80 I/O and 123 of 128 logic cells, and only
-on the fitter's second placement pass** (`cpld/vctrl.fit`). The logic-cell count did not
-move; the two extra pins did.
+The video card's programmable logic is **two ATF1508AS PLCC-84s plus the `rfa`
+`GAL22V10`** (`video.cpld.ts`, `regfile.jedec.ts`). Both CPLDs are fitted
+(`cpld/vaddr.fit`, `cpld/vctrl.fit`): `vaddr` at 64 of 64 I/O and 102 of 128 logic
+cells, `vctrl` at **62 of 64 I/O and 97 of 128 logic cells** — with the arbiter merged
+into `vctrl`, where `WRITESEL` **is** `SPNGRANT`, and the register-file address decode
+out on `rfa` so `graphics.md` §7.4's broadcast write has pins to signal through.
 
-⚠ **The committed fit targeted a `P1508T100` — a TQFP100 — where the `.pld` declared a
-PLCC-84 and `regfile.ts` says "vctrl fits at 62 of 64".** The design and its fit had
-disagreed about the package, and nothing checked it. **The card is a PLCC-84**, and
-2026-09-08's two extra inputs are what forced the question:
+⚠ **JTAG costs four I/O and 62 of 64 leaves two — so `vctrl` has no in-circuit
+programming.** It is programmed out of circuit, which is what the audio card's U1
+already does.
 
-| | I/O | logic cells |
-|---|---|---|
-| as committed, TQFP100 | 76 / 80 | 123 / 128 |
-| + `A6`, `/A20`, `& E`, still TQFP100 | 78 / 80 | 123 / 128 |
-| **on a PLCC-84** | **76 needed, 64 available — does not fit** | |
-| **arbiter moved out to a `GAL22V10`** | **64 / 64** | **112 / 128** |
+> The route here — a committed fit that silently targeted a TQFP100 where the design
+> declared a PLCC-84, an arbiter moved out to a `GAL22V10` and merged back the same day —
+> is archived in [../history.md](../history.md).
 
-**The arbiter is the cheapest ten pins on the part to give back**: eight grants, `WAIT`
-and `SPNGRANT` are exactly ten macrocells against a `GAL22V10`'s ten; its inputs are
-backplane signals or already exported; and `access.jedec.ts` never stopped carrying it as
-a standalone design with `access.check.ts` still checking it. It was a GAL before the
-two-CPLD rebalance and it is one again. `WRITESEL` **is** `SPNGRANT`, so it stops being an
-output of `vctrl` and becomes an input to it.
+### ⚠ Open-drain outputs: an active-low `.oe`-idiom cell writes `'b'1`
 
-⚠ **64 of 64 is zero spare, and JTAG costs four I/O — so `vctrl` has none.** It is
-programmed out of circuit, which is what the audio card's U1 already does. If in-circuit
-programming is wanted back, `RA0`–`RA4` and `WSTB` onto a second `GAL22V10` is the obvious
-six pins, at the cost of exporting `RDFG`/`RDBG`/`RDLEN`.
+The open-drain idiom is a cell with **no product terms**: it drives a constant and the
+condition rides entirely on `.oe`. The pin is declared `PIN n = !WAIT`, **so CUPL inverts
+the constant** — an active-low cell must therefore be written `'b'1`, or the pin drives
+HIGH when enabled: on a shared line, a card fighting the motherboard's 3.3 kΩ pull-up and
+every other driver on it. Both emitters write `'b'1` for an active-low cell.
 
-### ⚠ And every open-drain output in the machine drove its line the wrong way
-
-Compiling `/WAIT` as a GAL for the first time made `jedec/cupl.check.ts` **disagree with
-Atmel's compiler on exactly one signal.**
-
-The idiom is a cell with **no product terms**: it drives a constant and the condition
-rides entirely on `.oe`. Both emitters wrote `'b'0`. The pin is declared `PIN n = !WAIT`,
-**so CUPL inverts it and the pin drives HIGH when enabled** — on a shared line, a card
-fighting the motherboard's 3.3 kΩ pull-up and every other driver on it.
-
-**Three cells used the idiom and all three were wrong**: video's `/WAIT`
-(`access.jedec.ts`), **video's `/IRQ`** (`sync.jedec.ts` — the line PS/2, serial and net
-also pull), and audio's `/FIRQ` (`audio.jedec.ts`). Both emitters now write
-`'b'1` for an active-low cell, and every affected device has been refitted.
-
-> **`cupl.check.ts`'s header records two earlier errors that "178 passing checks could not
-> find, because the assembler and the fuse-map simulator shared the mistake". This one was
-> worse.** The mistake was in the **emitter**, upstream of both — so it was invisible to
-> the assembler, the simulator, and every check written against either. Only a second
-> compiler could see it, and only once a design using the idiom was built as a GAL instead
-> of merged into a CPLD. **`machine.md` §5 item 9.**
+> `machine.md` §5 item 9 records the defect this convention retired: all three cells that
+> used the idiom (`/WAIT`, `/IRQ`, `/FIRQ`) drove their lines the wrong way, the mistake
+> was in the **emitter** — upstream of the assembler, the simulator, and every check
+> written against either — and only a second compiler could see it. The full account is
+> in [../history.md](../history.md).
 
 **The Q tap is divisor-dependent, and that is the exit criterion `graphics.md` §18 step 0
 names.** `machine.md` §1 says *"Q = same divider, 3 dots early."* Three dots is a quarter
@@ -505,7 +456,7 @@ failure mode `/IOSEL` and `machine.md` §7.1 already demonstrated twice.
 
 | Job | Tool | Status |
 |---|---|---|
-| GAL equations → JEDEC | [`jedec/`](jedec/), written here | ✓ `npm run check:jedec` and `check:sync` — five parts assemble, fit and are checked at the fuse level |
+| GAL equations → JEDEC | [`jedec/`](jedec/), written here | ✓ every GAL design assembles, fits and is checked at the fuse level — `check:jedec`, `check:sync`, `check:scan`, `check:access`, `check:regfile`, `check:seqph`, `check:seqctl`, `check:audio` |
 | **CPLD equations → JEDEC** | Microchip `fit1508.exe` under Wine | ⚠ **not attempted, and not worth rewriting** — see below |
 | **CPLD JEDEC → a programmed part, on Linux** | [prjbureau](https://github.com/whitequark/prjbureau) `fuseconv` → SVF → OpenOCD | ⚠ **the fuse map CSVs exist; prjbureau's own status table says "Untested" for both ATF1504 and ATF1508** |
 | **CPLD JEDEC → executed against the models** | prjbureau `database.json` | ✗ **"Partial" for the 1508, and absent from the checked-in database — 1502 and 1504 only** |
@@ -516,14 +467,15 @@ failure mode `/IOSEL` and `machine.md` §7.1 already demonstrated twice.
 | Equations | `bun`, already here | ✓ `npm run check`, 23 claims |
 | A CPU to drive it | [`../vendor/mc6809`](../vendor/mc6809) — Greg Miller's cycle-accurate MC6809E, BSD | ✓ elaborates; **nothing drives it yet** |
 
-Two GALs are written of roughly twenty in the machine. `npm run check:sim` runs both
-testbenches; `npm run check` runs the equation check.
+Three GALs ship — the motherboard's two and the video card's `rfa` — of the roughly
+twenty programmable parts the machine carries across its boards. `npm run check:sim` runs
+the two motherboard testbenches; `npm run check` runs the equation check.
 
-`mmu.v` has now been through Verilator and passes 16 claims exhaustively over the address
-space, `-Wall` clean. **Both parts have now been fitted** — not by a compiler, but by
+`mmu.v` has been through Verilator and passes 16 claims exhaustively over the address
+space, `-Wall` clean. **Both motherboard parts are fitted** — not by a compiler, but by
 assembling the fuse map directly and then executing it: `jedec.check.ts` writes
 `mmu.jed` and `clkdec.jed`, reads them back, reconstructs the AND array out of the bits
-and compares it with `mmu.model.ts` and `clkdec.model.ts`. "It fits a 22V10" is no longer
+and compares it with `mmu.model.ts` and `clkdec.model.ts`. "It fits a 22V10" is not
 arithmetic in this document; it is a placement that either succeeded or the assembler
 refused. See [`jedec/README.md`](jedec/README.md) for what that is worth and, more to the
 point, what it is not worth.
@@ -603,41 +555,34 @@ and 331 product terms either way — the ATF1508 fitter had been minimising it
 internally all along. The waste was only ever in the GAL path and in what the
 source claimed about itself.
 
-### The claim in `place.ts` that had to be weakened
+### The claim `place.ts` makes, precisely
 
-The placer used to refuse an over-wide equation with *"sorted pairing is
-optimal, so this does not fit on this part at all."* Sorted pairing is optimal
-over **assignments of a fixed set of equations**. It says nothing about whether
-the equations are as small as they could be, and `SPNGRANT` is the counter-
-example. The message now says which of the two it means.
+Sorted pairing is optimal over **assignments of a fixed set of equations**. It says
+nothing about whether the equations are as small as they could be, and `SPNGRANT` is the
+counter-example — so the placer's refusal message for an over-wide equation says which of
+the two claims it is making.
 
 ## Open items
 
-1. ~~**Nothing has been fitted.**~~ **CLOSED 2026-09-06** by [`jedec/`](jedec/). It
-   closed with a correction: this item said *"product terms are all small (the widest is
-   an 8-input AND)"*, which counts literals inside a term, and the macrocell's limit is
-   **terms**. `MAPOE` is nine of them — see §5 below. The remaining doubt is not about
-   fitting but about the device description the fitter uses, and it is item 3.
+1. **CLOSED 2026-09-06** by [`jedec/`](jedec/) — the fitting question is answered. It
+   closed with a correction, archived in [../history.md](../history.md): a macrocell's
+   limit is product **terms**, not literals inside one, and `MAPOE` is nine of them —
+   see finding 5 above. The remaining doubt is not about fitting but about the device
+   description the fitter uses, and it is item 2.
 2. **No independent JEDEC has been produced.** The assembler and the fuse-map simulator
    share `jedec/gal22v10.ts`, so they cannot catch an error in it. Compiling one `.pld`
    with galette or CUPL and diffing the fuse array would retire this permanently; it
    needs the tool once, not as a dependency.
-3. **The other cards' GALs are mostly untouched.** The video card's sync trio is done
-   (`sync.check.ts`); its scan-address pair, sequencer pair and arbiter are not, nor is
-   audio's sequencer, nor the decode GALs on serial, storage and PS/2. The assembler
-   takes equations as they are written; what it does not do is minimise, and the
-   video sequencers are where that may start to matter.
+3. **The decode GALs on serial, storage and PS/2 are unwritten**, as are the
+   motherboard's U9 and U10 ([`../ram.md`](../ram.md) §11 item 6). Every design the
+   video and audio cards need is fitted — as CPLD input or as the live `rfa`.
 
-4. ~~**The scan-address pair will not fit either.**~~ **CLOSED** — it is 17 of 20 with
-   three spare. The rule from the sync fit still holds but does not bind there:
-   nothing decodes the scan address, it goes straight to the framebuffer's address
-   pins. **The `WPTR` pair, the arbiter and the sequencer's timing spine are fitted
-   too.** What remains is the sequencer's other half — and it does not fit in the one
-   part left. `graphics.md` §19 item 23 carries the budget: 20 macrocells wanted
-   against 10 left, on an enumeration of that document's own list of duties. It is a
-   budget rather than a fit because the span writer's state machine is inherited from
-   minimal256 and has never been written down. **That is now the blocking item for the
-   card's GAL count**, and it is a specification job, not a fitting one.
+4. **CLOSED** — every fit scare on the video card is resolved: the scan-address pair is
+   17 of 20 with three spare (nothing decodes the scan address, so the sync fit's rule
+   does not bind there), the span writer is stated and fitted (`seqctl.jedec.ts`,
+   `seqctl.check.ts`), and the whole card's logic sits in the two CPLDs plus `rfa` (see
+   above). The budget narrative this item carried is archived in
+   [../history.md](../history.md).
 
 ### Why the GAL fitter does not become a CPLD fitter
 

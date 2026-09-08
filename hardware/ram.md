@@ -6,6 +6,9 @@
 physical map. What would it take to reach **16 MB**, and what is the cheapest
 path that does not throw away the 2 MB that already works?
 
+> Superseded material is archived in [history.md](history.md); this document describes
+> only the present design.
+
 **Status: ⭐ decided 2026-09-08 for the memory system; brainstorm for the rest.**
 §5 and §6 are decisions — the physical map is re-carved and the memory is four
 30-pin SIMM sockets. §3's map widening comes with them because it has to (§5.1).
@@ -104,7 +107,7 @@ that comes back, because it is what >2 MB is realistically *for*.
 
 ---
 
-## 3. The address path — one SRAM and one GAL output (~~three pins~~ none, §5.3)
+## 3. The address path — one SRAM and one GAL output (no backplane pins, §5.3)
 
 ### 3.1 The change
 
@@ -116,10 +119,10 @@ high byte drives `A23..A21` and five flags.
 |---|---|
 | Second `CY7C128A` map SRAM | **+1 IC** |
 | High-byte write strobe | **+1 output on U3** — and pin 23 is deliberately free (`mmu.pld`) |
-| ~~`A21`–`A24` to the backplane~~ | **0** — §5.3 keeps them on the motherboard and pulls `/IOPAGE` instead |
+| `A21`–`A24` to the backplane | **0** — §5.3 keeps them on the motherboard and pulls `/IOPAGE` instead |
 | Isolation `'245` | **0** — both SRAMs sit on the same `D0`–`D7`; the address picks which is written |
 | Address mux `'157` | **0** — §3.2 |
-| **Address path alone** | **9 ICs → 10** — §8 has the whole memory system at 18 |
+| **Address path alone** | **9 ICs → 10** — §8 has the whole memory system at 14 |
 
 **Both bytes must be read in the same access**, which is why this is two
 byte-wide parts and not one wider one: translation needs `A23..A13`
@@ -128,7 +131,7 @@ latency inside a 110 ns `t_AD` budget that has 15 ns of SRAM in it already.
 
 ### 3.2 ⭐ And the map store is already 128× larger than the design uses
 
-`gal/README.md` records it without drawing the conclusion: *"Sixteen 7-bit
+`gal/README.md` records it without drawing the conclusion: *"Sixteen 8-bit
 block registers is the whole 2 KB SRAM's useful content — **16 of 2048**."*
 
 **2048 locations is exactly 256 tasks × 8 blocks.** And the register that holds
@@ -180,7 +183,7 @@ Two layouts, and they differ in what they give up.
 |---|---|
 | `$FFA0`–`$FFA7` | blocks 0–7, **low byte** — `A20..A13` |
 | `$FFA8`–`$FFAF` | blocks 0–7, **high byte** — `A23..A21` + flags |
-| `$FFB0` | **`TASK`, 8 bits** (was 1 bit aliased 16×) |
+| `$FFB0` | **`TASK`, 8 bits** (today one bit, aliased 16×) |
 
 **It fits the windows that exist, exactly, with no new I/O space** — and the
 `$FFB0`–`$FFBF` alias that has been carrying one bit since the map was
@@ -251,21 +254,13 @@ SIMMs. **Nothing cares**, because this is a block-mapped machine: physical addre
 invisible to software except through the MMU, and the memory manager allocates blocks
 rather than ranges.
 
-> ⚠ **The card megabyte was halved to eight regions on 2026-09-08 and restored the same
-> day.** The halving bought a 512 KB system-RAM quadrant for the second of four DIP
-> SRAMs; §6 then dropped the DIP SRAM entirely for SIMM sockets, and **a cost paid for
-> something that no longer exists is a cost to take back**. `net.md` and `sdcard.md`
-> briefly said three jumper positions and say four again. Recorded because the churn is
-> the interesting part: **the halving was right for one day and wrong the next, and the
-> thing that changed was not the card space.**
-
 ### 5.3 ⭐ And no card needs `A21` and above — `/IOPAGE` already does the work
 
 The obvious problem with a map above 2 MB is that **cards decode only
 `A0`–`A20`**, so an access at 2.5 MB looks to a card exactly like one at
 0.5 MB. Giving every card `A21`–`A24` is four backplane pins the slot does not
-have — and `vctrl` is at **64 of 64 I/O** (`graphics.md` §10.1.6.3), so the
-video card could not take even one.
+have — and `vctrl` sits at **62 of 64 I/O** (`gal/cpld/vctrl.fit`), with no
+room for four more inputs.
 
 **It does not have to.** `machine.md` §2 already requires every physical decode
 on every card to qualify against `/IOPAGE`, and `/IOPAGE` is **open-drain**. So
@@ -290,7 +285,7 @@ wrong.
 
 **512K×8 in a DIP-32 is the ceiling for through-hole SRAM.** 16 MB is
 **32 packages**, which is not a motherboard — [`place/`](place/) already puts
-the board at 272 × 190 mm and most of that is slot field.
+the board at 272 × 224 mm and most of that is slot field.
 
 | Approach | 16 MB costs | Verdict |
 |---|---|---|
@@ -306,10 +301,9 @@ the board at 272 × 190 mm and most of that is slot field.
 > SRAM rather than DRAM because **DRAM needs a refresh owner and this machine
 > has none**.
 
-⭐ **That changed on 2026-09-08.** `machine.md` §5 item 8 gave the E/Q divider a
-`/WAIT` hold, so a controller can stall the CPU mid-cycle — which is precisely
-what a refresh needs and what the machine could not do at all before. **The
-sentence was true when it was written and is not any more.**
+⭐ **That ground is gone.** `machine.md` §5 item 8 (2026-09-08) gives the E/Q
+divider a `/WAIT` hold, so a controller can stall the CPU mid-cycle — which is
+precisely what a refresh needs.
 
 ### 6.2 ⭐ And the DIP SRAM goes away entirely
 
@@ -362,8 +356,8 @@ one does not.
 
 | | ICs |
 |---|---|
-| today | 9 |
-| ~~+ `RAM2`–`RAM4` populated~~ | ~~+3~~ — §6.2 |
+| the board as drawn today (`mainboard.circuit.tsx`) | 9 |
+| − the DIP system RAM, removed (§6.2) | −1 |
 | + second map SRAM, 16-bit entries (§3.1) | +1 |
 | + U9 space decode, U10 SIMM timing, 3 × `'157` | +5 |
 | **total** | **14 ICs + 4 SIMM sockets** |
@@ -372,9 +366,10 @@ one does not.
 
 This was the open question and `graphics.md` §7.4 closed it on 2026-09-08.
 
-**The video card's `/WAIT` is `SPANBUSY · VRAMSEL · /IOPAGE · E`** — it is asserted only
-when the CPU is touching **VRAM**. The bound is **40.7 µs**, a 256-byte span-solid at one
-retired byte per 158.9 ns fetch slot.
+**The video card's `/WAIT` is `SPANBUSY · VRAMSEL · /IOPAGE · E · write`**
+(`gal/access.jedec.ts`) — it is asserted only when the CPU is **writing VRAM**; reads
+never wait. The bound is **40.7 µs**, a 256-byte span-solid at one retired byte per
+158.9 ns fetch slot.
 
 ⭐ **Refresh and the video stall never contend.** During those 40.7 µs the CPU is stalled
 *on VRAM*, so the DRAM bus is idle and U10's refresh runs off `CLK25` regardless of what
@@ -392,16 +387,15 @@ and would have lost 50 bytes of a frame per maximal span.
 and `net.md` §3.4's dispatch arithmetic have never carried. **Small, and nobody has
 subtracted it from anything.**
 
-## 7. The backplane — ~~three pins the slot does not have~~ none, after §5.3
+## 7. The backplane — zero new pins (§5.3)
 
-**This section wanted `A21`–`A23` on the slot and §5.3 deleted the requirement.**
-The motherboard keeps every address bit above `A20` to itself and pulls
+**The motherboard keeps every address bit above `A20` to itself** and pulls
 `/IOPAGE` low for accesses above 2 MB, so cards see the machine they already
 see. **Zero new pins.**
 
-**Which is fortunate**, because the slot has none —
+**Which is fortunate**, because the slot has none to give —
 [`lib/slot.ts`](lib/slot.ts) spent its last position on physical `A20` — and
-`vctrl` is at 64 of 64 I/O, so the video card could not have taken one.
+`vctrl` sits at 62 of 64 I/O, with no room for an address extension.
 
 > **What is still true** is that the connector's own justification expired when
 > the card format changed: a 240 mm edge holds 98 positions at 0.1″ where the
@@ -417,7 +411,7 @@ see. **Zero new pins.**
 | Second map SRAM | +1 | `CY7C128A`, §3.1 — **and it is what lets the footprints be populated at all** (§5.1) |
 | U3 high-byte write strobe | 0 | pin 23 is free |
 | `TASK` widened to 8 bits | 0 | seven unused bits of an existing `'574`, §3.2 |
-| ~~`RAM2`–`RAM4` populated~~ | ~~+3~~ | **the DIP SRAM is gone entirely — §6.2** |
+| The DIP system RAM, removed | −1 | **no DIP SRAM at all — §6.2** |
 | U9 space decode | +1 | §6.3 |
 | U10 SIMM timing + 3 × `'157` | +4 | §6.3 |
 | **Motherboard** | **9 → 14** | plus four SIMM sockets |
@@ -484,10 +478,10 @@ scratch-RAM-in-the-module is the cheap insurance and it is not specified.**
 
 ## 11. Open items
 
-1. **~~`machine.md` §5 item 7 blocks step 1~~ — moot.** The card regions were halved for
-   system RAM 1 and restored when the DIP SRAM went away (§5.2). **Nothing is owed** and
-   the two card documents are back where they started.
-2. ⭐ **~~Refresh against stretched cycles~~ — SETTLED.** §6.6: the video card's `/WAIT`
+1. **`machine.md` §5 item 7 is settled — nothing is owed.** The card space is 16 regions
+   of 64 KB and `net.md` and `sdcard.md` both say four jumper positions. (The one-day
+   halving that briefly said otherwise is archived in [history.md](history.md).)
+2. ⭐ **Refresh against stretched cycles — SETTLED.** §6.6: the video card's `/WAIT`
    is qualified on `VRAMSEL`, so the DRAM bus is idle for the whole 40.7 µs and refresh
    never contends. What remains is `machine.md` §5 item 10's rule, which U10 obeys by
    construction.
@@ -519,6 +513,6 @@ scratch-RAM-in-the-module is the cheap insurance and it is not specified.**
 |---|---|
 | [`gal/README.md`](gal/README.md) | the MMU's register map, the entry format, and the "16 of 2048" line §3.2 turns into a capability |
 | [`../docs/machine.md`](../docs/machine.md) | §5 item 1 the 2 MB map, §5 item 5 the connector, §5 item 7 the card regions, §5 item 8 `/WAIT`, §5 item 10 stretched cycles, §7.1 system RAM and the DRAM rejection |
-| [`place/`](place/) | the four SRAM footprints and the two preconditions they made visible |
+| [`place/`](place/) | the placement study — `svg.ts` draws the motherboard at 14 ICs and four SIMM sockets, with no SRAM |
 | [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx) | the `'574` with seven unused bits, and U3's free pin 23 |
 | [`../audio/docs/audio.md`](../audio/docs/audio.md) §16 item 0 | the other card asking to put its memory in the physical map |

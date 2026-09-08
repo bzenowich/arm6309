@@ -1,14 +1,16 @@
 # `io/` — keyboard, mouse and serial
 
-**Not started.** This directory exists so that the next two cards land somewhere
-deliberate instead of at the root.
+Both subsystems are **specified** — the deliverables so far are the documents — and
+nothing is built. Superseded material from these docs is archived in
+[`ps2/docs/history.md`](ps2/docs/history.md) and
+[`serial/docs/history.md`](serial/docs/history.md).
 
 | | | |
 |---|---|---|
 | [`ps2/`](ps2/) | PS/2 keyboard and mouse | **specified** — [`ps2/docs/ps2.md`](ps2/docs/ps2.md), 11 ICs |
 | [`serial/`](serial/) | RS-232 serial | **specified** — [`serial/docs/serial.md`](serial/docs/serial.md), 3 ICs |
 
-> ⚠ **One card since 2026-09-08.** The two documents stay separate — they specify
+> ⚠ **One card.** The two documents stay separate — they specify
 > different problems and neither shrank — but the *boards* merged into
 > `hardware/cards/io.circuit.tsx`, **14 ICs on a 12 cm card**.
 >
@@ -33,8 +35,8 @@ deliberate instead of at the root.
 right.** PS/2 is eleven packages of 74-series logic because no period chip decodes PS/2 —
 `ps2.md` §4.5 evaluates the closest thing, a 6522 per port, and rejects it on I/O space.
 Serial is three packages because the 6551 (1977) does the whole job in one, costs four
-addresses, and shipped inside a CoCo. **The rule that used to bar CPLDs was retired on
-2026-09-08** (root `README.md`); what decides each case is whether a period part exists,
+addresses, and shipped inside a CoCo. **The period rules do not bar CPLDs** (root
+`README.md`); what decides each case is whether a period part exists,
 whether it can still be bought, and whether it fits the I/O budget — in that order.
 
 ## Read this before specifying another one
@@ -44,7 +46,7 @@ two things an I/O card runs into first. **[`ps2/docs/ps2.md`](ps2/docs/ps2.md) �
 both** — take `/IRQ` as a third source, and take `$FF50`–`$FF53` — and a serial card should
 either adopt those answers or argue with them, not rediscover the problem:
 
-- ~~**There is no free `$FF` window.**~~ **There are 64 free bytes at `$FF00`–`$FF3F`**,
+- **There are 64 free bytes at `$FF00`–`$FF3F`**,
   and they are the whole of the 2026-09-08 widening. The geographic decode spans
   `$FF00`–`$FF7F`; video has `$FF60`–`$FF7F`, audio proposes `$FF40`–`$FF4F`, and
   `$FF50`–`$FF5F` went to PS/2, serial, storage and the net card, four bytes each.
@@ -53,7 +55,7 @@ either adopt those answers or argue with them, not rediscover the problem:
   purpose. Polling a keyboard from the VBL tick is a genuine option at 50–70 Hz, but it
   should be chosen rather than defaulted into.
 
-**~~And the `$FF` map has four bytes left.~~ ~~And the `$FF` map is full.~~ And the `$FF`
+**And the `$FF`
 map is `$FF00`–`$FF7F`, with 64 bytes free.** Audio 16, PS/2 4, serial 4, storage 4,
 **net 4**, video 32 — of **128**, since `docs/machine.md` §5 item 1 closed on 2026-09-08.
 [`../storage/`](../storage/) returned half the old disk-controller reservation;
@@ -77,11 +79,10 @@ and defer; it must consume what it finds. PS/2's `IOSTAT` read has no side effec
 (`ps2/docs/ps2.md` §8.1), which is what lets it sit in the middle. Any third I/O card
 joining `/IRQ` inherits this constraint.
 
-> ⚠ **The PS/2 card was 9 ICs until the 2026-09-04 design review.** Its central claim —
-> that the `74HC595`'s storage register gives a byte of buffering for free — was false:
-> `RCLK` is the bit counter's `Q0`, which fires on every edge of every frame, so the next
-> frame's **start bit** overwrites the byte. A `74HC574` per port, clocked at end-of-frame,
-> is what makes the buffer real. **9 → 11.** `ps2/docs/ps2.md` §5.
+> **The PS/2 card is 11 ICs, and two of them are what makes the buffering real**: a
+> `74HC574` per port, clocked once at end-of-frame — the `'595`'s storage register
+> alone is overwritten by the next frame's start bit. `ps2/docs/ps2.md` §5, and
+> [`ps2/docs/history.md`](ps2/docs/history.md) for the 9-IC claim this replaced.
 
 ## The prior art is worth reading before you design anything here
 

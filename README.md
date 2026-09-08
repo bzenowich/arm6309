@@ -39,8 +39,8 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > against the datasheets and found 6 critical and 35 major defects — including that the
 > machine **had no way to execute its first instruction**. The counts below are the
 > corrected ones; they rose by about 45 % in aggregate. Every finding has been applied,
-> and the superseded claims are marked in place rather than deleted, per the convention
-> at the bottom of this file.
+> and the claims each one overturned are preserved in the per-component `history.md`
+> files, per the convention at the bottom of this file.
 
 ---
 
@@ -49,13 +49,13 @@ count, and a measurement in place of an estimate wherever one can be taken.
 | | What | Status | Start here |
 |---|---|---|---|
 | [`cpu/`](cpu/) | HD6309E on an **STM32G431CBU6**, 40-pin drop-in. One UFQFPN48 SKU for the CoCo 3 and this machine — the MMU is on the motherboard, and the CPU also serves the boot ROM and vector page. | **Phase 1 — timing spike written, not yet measured on silicon** | [`cpu/README.md`](cpu/README.md), [`cpu/docs/plan.md`](cpu/docs/plan.md) |
-| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, smooth scroll, span writer. **30 ICs** — 2 `ATF1508AS`, 1 `GAL22V10`, both CPLDs fitted. | **Specified, not built** | [`video/README.md`](video/README.md), [`video/docs/graphics.md`](video/docs/graphics.md), [`video/docs/features.md`](video/docs/features.md) |
+| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, smooth scroll, span writer. **27 ICs** — 2 `ATF1508AS`, 1 `GAL22V10`, both CPLDs fitted. | **Specified, not built** | [`video/README.md`](video/README.md), [`video/docs/graphics.md`](video/docs/graphics.md), [`video/docs/features.md`](video/docs/features.md) |
 | [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula. **29 ICs** — one `ATF1508AS` PLCC-84 holds all the logic; whether the analogue section fits the same card is open. Host reference model **builds and passes**. | **Specified; reference player validated against libopenmpt** | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
 | [`io/`](io/) | PS/2 keyboard and mouse — **11 ICs** of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does. | **Both specified** | [`io/README.md`](io/README.md), [`io/ps2/docs/ps2.md`](io/ps2/docs/ps2.md), [`io/serial/docs/serial.md`](io/serial/docs/serial.md) |
 | [`storage/`](storage/) | SD card interface — **14 ICs**, **681 KiB/s sustained**, an SPI burst started by the bus read strobe into a block buffer the host reads as memory. ⚠ The `TFM` hazard is retired, not mitigated. | **Specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |
 | [`net/`](net/) | 10BASE-T with no MAC or PHY chip — **12 ICs**, two `ATF1508AS`, ported from `~/code/applenet`. ⚠ The host takes **56 % of the wire**; its sixteen-frame ring lives in the machine's new physical space. | **Specified** | [`net/README.md`](net/README.md), [`net/docs/net.md`](net/docs/net.md) |
 | [`software/`](software/) | 6809/6309 code that runs *on* the machine. | Third-party monitor and FORTH, imported | [`software/README.md`](software/README.md) |
-| [`hardware/`](hardware/) | Board layouts in **tscircuit** — the 72-pin backplane pinout as one table, the motherboard, and the bus interface of all ~~five~~ six cards. | **Schematic-level; nothing placed or routed** | [`hardware/README.md`](hardware/README.md) |
+| [`hardware/`](hardware/) | Board layouts in **tscircuit** — the 72-pin backplane pinout as one table, the motherboard, and the bus interface of all six cards. | **Schematic-level; nothing placed or routed** | [`hardware/README.md`](hardware/README.md) |
 
 Machine-level material that belongs to no single card — the system map, and the
 comparisons against the two chips this machine stands in the tradition of — is in
@@ -126,6 +126,16 @@ and build nothing.
   relative, because they have to resolve.
 - **Every card's specification is one document**, and it owns its own open-items list and
   build order. Cross-document claims cite section numbers.
-- **Superseded text is marked, not deleted.** Several documents carry `⚠` blocks where a
-  later measurement overturned an earlier estimate; the wrong prediction is left visible
-  on purpose.
+- **Superseded text is archived, not deleted — and not left in place.** Until
+  2026-09-08 the rule was "marked, not deleted", and the specifications carried every
+  overturned estimate inline; at ~500 markers they stopped being readable. Each
+  component now splits in two: the **specification describes only the present
+  design**, and a `history.md` beside it archives what was superseded, with dates and
+  the reason each number moved (`video/docs/history.md`, `audio/docs/history.md`,
+  `cpu/docs/history.md`, `net/docs/history.md`, `storage/docs/history.md`,
+  `io/ps2/docs/history.md`, `io/serial/docs/history.md`, `hardware/history.md`,
+  `docs/history.md`). The wrong predictions are still visible on purpose — one
+  directory over. A `⚠` in a spec now marks only a **live** hazard or unverified
+  assumption, never a revision. Section numbers are never reused: a section whose
+  content moved to history keeps its number as a one-line stub, so cross-document
+  citations stay valid. `docs/design-review.md` is kept verbatim as a dated record.

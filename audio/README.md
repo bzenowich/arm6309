@@ -7,25 +7,8 @@ parts, whose acceptance test is playing existing Amiga OCS tracker modules **cor
 and **no digital multiply and no digital sum anywhere**: volume and mixing both happen in the converters, the way Paula
 does it.
 
-> ⚠ **This README said 35 ICs, then 57.** The design review's audio findings put the
-> honest figure at **57** — the channel-sum path, the host-visible counters
-> `SPTR`/`LIDX`/`AIDX`, the host-boundary synchroniser and commit staging, the `ADATA`
-> prefetch latch, the open-collector `/FIRQ` stage, and two more GALs were all argued for
-> in prose and never costed. It is now **54**, because the digital channel sum has been
-> replaced by four `LTC7545A` and a resistor pair
-> ([`docs/audio.md`](docs/audio.md) §6.2). That change was recorded as being worth twelve
-> packages; doing the analogue work it was waiting on showed it is worth **three** — the
-> converter needs 100 ns of stable data against a 35 ns LUT window, so every channel
-> needs its own hold latch, and four separate dice cannot sum as currents the way Paula's
-> four on-die ladders do. Then **45**: the host-visible counters and the multi-byte commit
-> staging moved into three of the state file's 2032 spare words, and the read-back `'245`
-> went because the latch behind it already drives the bus (**−9**). Then **36**: an
-> `AD7528` is a *dual* multiplying DAC, so cascading two halves — sample byte into the
-> first, its output as the reference of the second, volume as that one's code — does the
-> multiply in the analogue domain and deletes the 32K×8 volume LUT, its boot upload, six
-> of the eight port latches and a state-file package (**−9**). The product stops being
-> quantised at all, and `VOL` = 0 becomes exact silence.
-> [`docs/audio.md`](docs/audio.md) §10 carries all four itemised deltas.
+> The IC count's path from the first tally of 35 through 57, 54, 45 and 36 to
+> today's **29** is archived, itemised, in [docs/history.md](docs/history.md).
 
 **Unaffected by the machine's E rate.** Everything on the card is referred to its own
 28.37516 MHz crystal, and §9.3's prefetch means there is no `/WAIT` path to close, so the
@@ -67,25 +50,22 @@ measurable.** 15/15 single-effect probes and the whole 1112-row path through
 `ode2ptk.mod` agree with libopenmpt's Paula emulation — identical row/pattern
 traversal, ≤0.3 dB gain, spectral correlation at or above the calibration ceiling.
 
-> ⚠ **"+0.0 cents tuning" is withdrawn as an exit criterion.** The A/B harness's
-> spectral check runs at 24 bins/octave — **50 cents per step** — and thresholds at
-> ±12 cents, so it can only return an integer multiple of 50 and can only pass at
-> exactly 0. Every error the design brief is about is smaller than one step: the
+> ⚠ **The tuning claim is unmeasured.** The A/B harness's spectral check resolves
+> **50 cents per step** and thresholds at ±12 cents, so it can only pass at exactly
+> 0 — and every error the design brief is about is smaller than one step: the
 > NTSC-clock mistake is **+16 cents**, the worst period-table transcription error
-> **16 cents**, one finetune step **12.5 cents**. What step 0 actually closed is
-> *"no tuning error larger than 50 cents"* — which excludes a wrong period table and a
-> wrong note, and does not exclude a wrong crystal. The corrected method is parabolic
-> interpolation of the correlation peak, or FFT peak interpolation on a single-note
-> probe, either of which resolves ~1 cent: [`docs/modplayer.md`](docs/modplayer.md) §8
-> and [`docs/audio.md`](docs/audio.md) §16 item 22.
+> **16 cents**, one finetune step **12.5 cents**. What the A/B closed is *"no tuning
+> error larger than 50 cents"* — which excludes a wrong period table and a wrong
+> note, and does not exclude a wrong crystal. The fix is ~1-cent peak interpolation:
+> [`docs/modplayer.md`](docs/modplayer.md) §8 and [`docs/audio.md`](docs/audio.md)
+> §16 item 22.
 
-The design review also overturned three specification claims that the model and the
-tests had faithfully reproduced: the DAC is coded **offset binary**, not two's
-complement ([`docs/audio.md`](docs/audio.md) §6.3); the channel sum is **latched**, not
-combinational (§6.2); and the "LED" filter is **2-pole**, not 5-pole (§7). Each is
-marked in place.
+The design-review findings the model had faithfully reproduced — DAC coding, the
+channel-sum costing, the LED filter's order — are archived in
+[docs/history.md](docs/history.md); the specs describe only the present design.
 
-Next is `docs/audio.md` §15 step 0 — freeze the §9 register map, now with `ACTRL` b4
+Next is `docs/audio.md` §15 step 0 — freeze the §9 register map, with `ACTRL` b4
 (8-channel), `ACTRL` b6 (timer enable), `AINTREQ`'s set form and `ASTAT` b6/b7 all
-decided — which is a [machine-level](../docs/machine.md) decision, and then §12.5's MCU
-bring-up card, which is what proves the map before any discrete board is laid out.
+decided in §9.2 — which is a [machine-level](../docs/machine.md) decision, and then
+§12.5's MCU bring-up card, which is what proves the map before any discrete board is
+laid out.

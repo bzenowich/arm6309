@@ -16,6 +16,9 @@ reaches a conclusion that document does not state, the conclusion is marked.
 > 7, they fall 29 %. **The memory-side figures do not move**, because they come off the
 > fetch-slot grid.
 
+> Superseded material is archived in [history.md](history.md); this document
+> describes only the present design.
+
 ---
 
 ## 0. Capability summary
@@ -130,40 +133,15 @@ by showing OR equals ADD over all 524,288 field combinations.
 mask byte *is* the glyph row, with nothing wasted and nothing to truncate (§3). They
 also mean CP437, the CoCo 3 hi-res font and VT100 line-drawing all drop in unmodified.
 
-### 2.2 ⚠ Character mode — DROPPED 2026-09-08
+### 2.2 Character mode (dropped 2026-09-08; see history.md)
 
-> ⚠ **This mode is not built.** `graphics.md` §6.4.3's Variant B was spent on §10.3's
-> display list, which needed its macrocells, product terms and four pins. **Text is
-> §2.3's span writer in bitmap mode**, and every text figure in this document is that
-> one unless it says otherwise. The section stays because it is the design a rebuild
-> would start from and the cost model the decision was made against.
->
-> ⭐ **What decided it was §2.3's scroll row, not the redraw row.** A 9600-baud BBS
-> delivers ~12 lines/s, so 12 × 2.5 ms is **3 % of the CPU**; a full ANSI art screen is
-> 2–4 KB of escape codes and takes **2–4 seconds to arrive** against 62 ms to draw.
-> **And under NitrOS-9 it was never usable** — the mode is global, not per-window
-> (`graphics.md` §6.4.6), which is the whole of NitrOS-9's windowing.
-
-*What it would have been:* `CTRL` b2 `CHAR` with b5 `CELL` selects a 1bpp character generator. Its colour path is
-**the 127/128 of the palette LUT that the 256-entry palette does not use**
-(`graphics.md` §6.4.3):
-
-```
-graphics :  LUT[ 0 | 0000000 | pixel[7:0] ]        -> RGB565
-text     :  LUT[ 1 | 000000  | attr[7:0] | bit ]   -> RGB565
-```
-
-No comparator, no foreground/background mux, no second colour path — the attribute byte
-rides the existing pixel bus and the glyph bit is one spare LUT address pin.
-
-| | GIME text | **This card** |
-|---|---|---|
-| Attribute combinations | 8 fg × 8 bg | **256, freely defined** |
-| Colour space per attribute | 64 | **65,536** |
-| Foreground / background | palette entries 0–7 | **any RGB565 pair** |
-
-**Cost per cell: 2 CPU writes (code + attribute), ~4.8 µs.** A full 80×25 redraw with
-per-cell colour is **~9.5 ms**; a line scroll is **~0.4 ms**.
+Not built. `graphics.md` §6.4.3's Variant B — a 1bpp character generator colouring
+text through the palette LUT's unused 127/128, at 2 CPU writes per cell — was spent
+on §4's display list, which needed its macrocells, product terms and four pins.
+**Text is §2.3's span writer in bitmap mode**, and every text figure in this
+document is that one unless it says otherwise. The full design, its cost model, and
+the trade that decided the drop are archived in
+[history.md](history.md) (§6.4.3 entry).
 
 ### 2.3 ⭐ Text in bitmap mode — the card's only text mode
 
@@ -171,7 +149,7 @@ Character mode was **global** anyway — cells or pixels, not both in one region
 (`graphics.md` §6.4.6) — so a program needing text *over* graphics always rendered
 glyphs into the bitmap with the span writer. Since 2026-09-08 that is every program:
 
-| | ~~Character mode~~ (not built) | ⭐ **Span writer, in bitmap mode** |
+| | Character mode (not built — §2.2) | ⭐ **Span writer, in bitmap mode** |
 |---|---|---|
 | One cell | 2 writes, ~4.8 µs | **13 writes, ~31 µs** |
 | **Scroll one line** — what a terminal does | ~0.4 ms | **~2.5 ms**, ~400 lines/s |
@@ -224,11 +202,11 @@ glyph is *eight mask writes and nothing else*.
 
 | | |
 |---|---|
-| **Solid fill rate** | **6.29 MB/s** — ⚠ ~~25.1~~. **One** byte per 158.9 ns fetch slot: `WPTR` names one of the four interleaved chips at a time and two accesses do not fit the 86.9 ns of slack. `graphics.md` §7.4. ⭐ **25.1 MB/s with §7.4's broadcast write**, which retires four bytes in *one* access rather than four — every byte of a solid is the same byte, and `4n`…`4n+3` are the same intra-chip address on four chips |
+| **Solid fill rate** | **25.1 MB/s with §14.2's broadcast write** — four bytes in *one* access: every byte of a solid is the same byte, and `4n`…`4n+3` are the same intra-chip address behind four byte enables. **6.29 MB/s without it** (one byte per 158.9 ns fetch slot — `WPTR` names one interleave at a time; `graphics.md` §7.4). Broadcast is the default once §5.2's rewrite lands (`graphics.md` §19 item 25) |
 | **Mask fill rate** | **8 pixels per CPU write** = 3.4 Mpx/s, CPU-bound |
 | Setup per span | `WPTR` ×3 + `SPANLEN` + the posted write = **5 writes ≈ 11.9 µs** |
-| Full-screen clear, 640×200 | ~500 CPU writes, **~1.2 ms of CPU and ~20.3 ms to retire** (~~5.1~~) — **5.1 ms with broadcast**, back inside a 14.3 ms frame |
-| Hardware cost | `74HC165`, `74HC161` ×2, 3 macrocells of mask counter, and `SPANBUSY` |
+| Full-screen clear, 640×200 | ~500 CPU writes, **~1.2 ms of CPU** — **5.1 ms to retire with broadcast** (20.3 ms without), inside a 14.3 ms frame |
+| Hardware cost | the mask serialiser, `SPANLEN` counter and mask counter live in the CPLDs (`graphics.md` §10.1.6), plus `SPANBUSY` |
 
 **The span writer is why bandwidth is not this machine's constraint.** The card has
 ≈32.4 M spare accesses/s against a CPU that can issue ~420,000 writes/s — **77× more
@@ -298,17 +276,15 @@ The deferred blit datapath is ~14 ICs and ~10 GALs for **~8.7 Mpx/s**
 
 | Operation | Span writer today | Blitter |
 |---|---|---|
-| Solid fill | **6.29 MB/s**, 25.1 broadcast | 8.7 Mpx/s — ⚠ *faster* today, ~~slower~~; **slower than broadcast** |
+| Solid fill | **25.1 MB/s broadcast** (6.29 without) | 8.7 Mpx/s — **slower than broadcast** |
 | 1bpp mask → 2 colours | 3.4 Mpx/s | 8.7 Mpx/s |
 | **8bpp source → destination** | **cannot** | **8.7 Mpx/s** |
 | **8bpp with transparency** | **cannot** | **8.7 Mpx/s** |
 | Arbitrary 2D rect, source and destination strides | CPU sets up every scanline | in hardware |
 
 **So the blitter still buys mainly one capability class: moving *colour image data*.**
-⚠ **It also buys 38 % on solid fills**, which the 25.1 MB/s figure hid — that row read
-*"slower"* until 2026-09-08. ⭐ **`graphics.md` §7.4's broadcast write takes that back
-for one wide product term and a by-four counter**, at which point the blitter buys
-nothing on solid fills again. Two-colour work is a factor of 2.5. Everything the
+With `graphics.md` §7.4's broadcast write the blitter buys nothing on solid fills.
+Two-colour work is a factor of 2.5. Everything the
 span writer cannot do at all is in the third and fourth rows — colour sprites, image
 copies, off-screen composition of 8bpp artwork — and against `TFM`'s 0.70 Mpx/s that is
 a **12×**.
@@ -341,19 +317,13 @@ until the run gets wide enough that the retire time dominates at **~75 pixels**:
 | **300 px** | 47.7 µs, **11.9 µs broadcast** | 6.29, **25.1 Mpx/s** | 9×, **36×** — broadcast's crossover |
 | 640 px | 101.7 µs | **6.29 Mpx/s** — memory-bound | 9× |
 
-> ⚠ **Corrected 2026-09-08, and downward.** This table read 8.4 Mpx/s at 100 px and 25.1
-> at 640, from a fill rate that assumed the span writer took all four chips' spare
-> accesses in a slot. It takes one — `graphics.md` §7.4. **The setup cost is unchanged,
-> so narrow spans do not move**; what moves is the ceiling, 25.1 → 6.29, and the
-> crossover, 300 px → 75.
->
-> **The span writer no longer beats the deferred blitter** — 6.29 Mpx/s against 8.7 — but
-> it is still **9× `TFM`**, and it still covers text, fills, clears and scroll refills,
-> which is what `graphics.md` §10.3 defers the blitter on. §5's conclusion is unchanged
-> in kind and narrower in margin.
->
-> ⭐ **And §7.4 proposes getting the 4× back** — broadcast writes, which restore 25.1
-> Mpx/s and a 300-pixel crossover without a blitter. The row above shows both.
+> The non-broadcast ceiling is 6.29 Mpx/s — one access per slot, `graphics.md` §7.4
+> — with the crossover at 75 px; broadcast restores 25.1 Mpx/s and a 300-pixel
+> crossover without a blitter. The setup cost is the same either way, so narrow
+> spans do not move. Without broadcast the span writer trails the deferred blitter
+> (6.29 against 8.7 Mpx/s) but is still **9× `TFM`**, and it covers text, fills,
+> clears and scroll refills, which is what `graphics.md` §10.3 defers the blitter
+> on.
 
 **What it does not do**: Gouraud or textured fills (the run is one colour), and the edge
 stepping is all CPU. A flat-shaded 3D scene of, say, 40 triangles averaging 60-pixel
@@ -538,31 +508,21 @@ brochure.
 
 These are capability questions, and `graphics.md` §19 does not carry them.
 
-0. **⚠ CORRECTED 2026-09-08 — the fill rate was 4× too high.** Every figure that depended
-   on the span writer's *memory* bound has moved: 25.1 → **6.29 MB/s**, because `WPTR`
-   names one interleaved chip at a time. `graphics.md` §7.4 has the derivation, and §7.3's
-   own full-screen-clear row was wrong the same way. **The CPU-bound figures did not
-   move**, which is most of them.
-
-   ⭐ **And §7.4 proposes getting the 4× back the same day** — *broadcast writes*: in
-   span-solid every byte is the same byte and four consecutive addresses are one
-   intra-chip address on four chips, so a quad needs one address, one data byte and four
-   `/WE`. **25.1 MB/s, a 300-pixel polygon crossover, a 5.1 ms full-screen clear and a
-   10.2 µs `SPANBUSY` bound.** ⭐ **And §14.2 delivers it**: the framebuffer becomes two
-   ×16 SRAMs instead of four ×8 — same four bytes per slot, half the packages, ~250 mA
-   less — and then there is one spare access per slot, one grant to give, and four byte
-   enables on it. The arbitration problem the proposal owed is gone. Every figure in
-   this document is the **today** figure unless it says otherwise.
+0. **Land §5.2's rewrite so the broadcast write is fitted, not just designed.**
+   `graphics.md` §14.2 delivers the mechanism — two ×16 SRAMs, one spare access per
+   slot, one grant, four byte enables — giving **25.1 MB/s, a 300-pixel polygon
+   crossover, a 5.1 ms full-screen clear and a 10.2 µs `SPANBUSY` bound**; the
+   2-grant arbiter and per-chip clocking rewrite is `graphics.md` §19 item 25's
+   confirmation. The CPU-bound figures — most of them — do not depend on it.
 1. **⚠ Measure the store rate.** Every microsecond figure above scales on
    `graphics.md` §7.3's unverified 5-cycles-per-store. It is `graphics.md` §19 item 1
    and it is the cheapest measurement on the card.
 2. **⭐ Fit the transparent span-mask mode** (§8.4). One product term and a `WMODE`
    code on paper; an order of magnitude for sprites and the mouse pointer; and it needs
    the mask bit somewhere §7.4 explicitly does not put it.
-3. ~~**Decide the list engine's three options** (§4).~~ **DECIDED AND BUILT
-   2026-09-08** — the engine shares `WPTR` and §2.2's character generator came out to
-   pay for it. ⚠ **What is left is software's half**: the shared pointer means a list
-   clobbers `WPTR`, and `graphics.md` §10.3 has not written the reload rule down.
+3. **The list engine — decided and built 2026-09-08**: the engine shares `WPTR`
+   and §2.2's character generator came out to pay for it. The shared pointer means
+   a list clobbers `WPTR`; `graphics.md` §10.3.1 carries the reload rule.
 4. **Nobody has costed a 320-wide mode** (§10), and it is the cheapest way to halve the
    cost of every full-screen operation.
 5. **The software-sprite budget has never been measured**, only computed (§8.3). Four

@@ -20,6 +20,9 @@ Paths in this document are repository-root-relative, per the convention at the b
 the root [`README.md`](../../README.md). References of the form `arch-v3.md §x` are to
 `~/code/applenet/docs/`, which is **not** part of this repository.
 
+> Superseded material is archived in [history.md](history.md); this document describes
+> only the present design.
+
 ---
 
 ## 0. Summary — the verdict in one table
@@ -34,21 +37,14 @@ the root [`README.md`](../../README.md). References of the form `arch-v3.md §x`
 | **TX buffering** | 6264, **4 banks of 2 KB**, likewise |
 | **Hardware CRC-32** | **both directions**, bit-serial, `0xEDB88320` reflected. Not optional here — §13.4 |
 | **Sustained RX** | **681 KiB/s = 56 % of the wire** — §3.1 |
-| **Sustained TX** | **681 KiB/s**, because fill and transmit now overlap — §3.1 |
+| **Sustained TX** | **681 KiB/s**, because fill and transmit overlap — §3.1 |
 | **⚠ Minimum-size frames** | **dispatch-bound at ~9,600 frames/s against 14,881 arriving** — §3.4 |
-| **~~The `TFM` hazard~~** | **retired.** The host reads SRAM, not a port that pops a byte — §3.2 |
-| **⚠ The fit risk** | **U2 at 91 % of an `ATF1508AS` and U1 at 88 %.** Unchanged in kind; the buffer decision bought ICs and throughput, not macrocells — §7.3 |
+| **The `TFM` hazard** | **retired, not mitigated.** The host reads SRAM, not a port that pops a byte — §3.2 |
+| **⚠ The fit risk** | **U2 at 91 % of an `ATF1508AS` and U1 at 89 %.** The buffer decision bought ICs and throughput, not macrocells — §7.3 |
 | **House rule** | this was the **third** card to take a CPLD, and one of the three reasons the no-CPLD rule was **retired on 2026-09-08** — §12 |
-| **Power** | **~430–530 mA**, of which ~250 mA is the two CPLDs. §10 |
+| **Power** | **~410–510 mA**, of which ~250 mA is the two CPLDs. §10 |
 | Period | 10BASE-T is **IEEE 802.3i-1990** — one year past the machine's line. §12 |
 
-> **⚠ Revised 2026-09-08, and the revision is structural.** This document originally
-> specified the buffers behind a prefetched, auto-incrementing `NDATA` port in the four
-> bytes of `$FF` space, because that was the only address space the machine had.
-> `machine.md` §5 item 1 option D and §5 item 7 gave the machine a megabyte for exactly
-> this, and the card was re-specified against it: **four ICs and the `TFM` hazard came
-> off, throughput rose 27 %, and the ring went from four frames to sixteen.**
-> Superseded passages are marked in place rather than deleted.
 ## 1. Sources and confidence
 
 | | |
@@ -57,7 +53,7 @@ the root [`README.md`](../../README.md). References of the form `arch-v3.md §x`
 | `~/code/applenet/docs/arch-v3.md` | the two-CPLD architecture. Carried with four changes, §2.2 |
 | `~/code/applenet/docs/review.md` | 40 findings against v1. Everything marked FIXED there is assumed fixed; the four still OPEN are carried into §16 |
 | [`docs/machine.md`](../../docs/machine.md) | the bus, the `$FF` map, the interrupt ownership, the clock tree, the power table |
-| [`storage/docs/sdcard.md`](../../storage/docs/sdcard.md) | §4.2's argument that a `TFM` against RAM is idempotent is what §3.2 rests on, and §11.1 is the same decision this card took. **Both cards moved their buffers into `A20 = 1` on 2026-09-08** |
+| [`storage/docs/sdcard.md`](../../storage/docs/sdcard.md) | §4.2's argument that a `TFM` against RAM is idempotent is what §3.2 rests on, and §11.1 is the same decision this card took. **Both cards keep their buffers in `A20 = 1`** |
 | [`hardware/README.md`](../../hardware/README.md) | the 72-pin slot, and the six-slot count that decides §12 |
 
 **Not measured.** Every timing figure here is arithmetic from datasheet numbers and from
@@ -109,6 +105,7 @@ physical address space to spare, so every byte of a frame crosses the bus throug
 This machine, since `machine.md` §5 item 7, hands a card **64 KB of ordinary memory** —
 and a buffer that is memory rather than a port is a different card: no pointer, no
 prefetch, no auto-increment, and nothing for an interrupted `TFM` to corrupt.
+
 ## 3. ⚠ The host is 56 % of the wire, and that is the card
 
 ### 3.1 The three rates
@@ -126,29 +123,23 @@ figure is `machine.md`'s established one: `sdcard.md` §4.4 measures a 512-byte 
 | **10BASE-T** | **1,250,000 B/s** | **1221 KiB/s** |
 | **Ratio** | | **56 %** |
 
-> ⚠ **This read 44 % until 2026-09-08**, because the port version paid a further 21 % for
-> the chunk-and-mask that §3.2 no longer needs. The wire got no slower; the tax came off.
-
-**The wire is still 1.8× faster than the host can drain it**, and no hardware on this card
+**The wire is 1.8× faster than the host can drain it**, and no hardware on this card
 changes that — the bottleneck is one `TFM` instruction against a 2.0979 MHz `E`. What §3.3
 does with buffering buys *time*, not throughput.
 
 | | Rate | Bound by |
 |---|---|---|
-| RX, port ceiling | 681 KiB/s | the `TFM` loop |
+| RX, host ceiling | 681 KiB/s | the `TFM` loop |
 | **RX, sustained, large frames** | **681 KiB/s** while the ring holds; **0 during a ring-full drop** | the host, then the ring |
 | **RX, sustained, minimum frames** | **~600 KiB/s equivalent, ~9,600 frames/s** | NitrOS-9's interrupt dispatch — §3.4 |
 | **TX, sustained** | **681 KiB/s** | the host filling the buffer |
 
-> ⚠ **TX read 373 KiB/s until 2026-09-08.** The port version was single-buffered — the
-> host filled through the same pointer the transmitter read with, so a maximum-size frame
-> cost 2178 µs of fill *then* 1221 µs of transmit. With the buffer memory-mapped there is
-> no shared pointer: the host writes bank B while bank A transmits, TX is four-deep for
-> the price of the SRAM that was already there, and **the 31 % that overlap used to cost
-> is simply gone.** This was §13.3's "best-value addition on the card" and it turned out
-> to be free.
+**TX matches RX because fill and transmit overlap.** The buffer is memory-mapped, so
+there is no shared pointer between the host and the transmitter: the host writes bank B
+while bank A transmits, and TX is four-deep for the price of the SRAM that is already
+there (§13.3).
 
-### 3.2 ~~⚠ The `TFM` hazard, again~~ The `TFM` hazard, and how this card stopped having one
+### 3.2 The `TFM` hazard, and why this card does not have one
 
 `sdcard.md` §4 is the machine's longest-standing hardware caveat:
 
@@ -156,30 +147,23 @@ does with buffering buys *time*, not throughput.
 > source address.** Against a port whose read has a side effect, the re-read returns the
 > wrong byte, everything after it shifts by one, and nothing detects it.
 
-**This document originally inherited that exactly.** Its `NDATA` port returned a
-prefetched byte *and* advanced the pointer, so an interrupted drain shifted the frame by
-one byte from that point — past an FCS that hardware had already checked and passed.
-The specified fix was `sdcard.md` §4.4's chunk-and-mask: 32-byte chunks, 3.81 cycles/byte,
-**21 % of the card's throughput**, and 49 µs of added interrupt latency.
+**This card retires the hazard rather than mitigating it.** `sdcard.md` §4.2's own
+argument is that the mirror-image `TFM X+,Y` against RAM **is** safe, because re-reading
+a memory location returns the same byte. The ring is memory (§4.2). The drain is
 
-> **⚠ Retired 2026-09-08, and not by mitigating it.** `sdcard.md` §4.2's own argument is
-> that the mirror-image `TFM X+,Y` against RAM **is** safe, because re-reading a memory
-> location returns the same byte. The ring is memory now (§4.2). The drain is
->
-> ```
->         ldx   #bank            ; the card's RX bank, mapped through the MMU
->         ldy   #buffer
->         ldw   len
->         tfm   x+,y+            ; no masking, no chunking, no 21 %
-> ```
->
-> and there is nothing in it for an interrupt to break. **The 21 % is what §3.1's 44 % →
-> 56 % is made of.**
+```
+        ldx   #bank            ; the card's RX bank, mapped through the MMU
+        ldy   #buffer
+        ldw   len
+        tfm   x+,y+            ; no masking, no chunking
+```
+
+and there is nothing in it for an interrupt to break.
 
 **What this does not do is let the machine off `TFM`.** `machine.md` §6 still lists
 "settle `TFM`'s interrupt/resume behaviour from silicon" as a `cpu`-owned item, because
 `sdcard.md`'s `SDDATA` is still a side-effecting port and this card still has four bytes
-of registers in `$FF` space. What changed is that **no bulk transfer in this machine now
+of registers in `$FF` space. The result is that **no bulk transfer in this machine
 runs over a side-effecting port**, so the answer decides a correctness question about
 single-byte accesses rather than about every block and every frame.
 
@@ -193,15 +177,12 @@ so back-to-back maximum frames arrive every **1230 µs**. The host drains one in
 |---|---|---|
 | 1 (single buffer) | **0 µs** — every frame arriving during a drain is lost | |
 | 2 (ping-pong) | 5.7 ms | |
-| 4 | 11.3 ms | *what the port version could afford* |
+| 4 | 11.3 ms | |
 | **16 (specified)** | **45.2 ms** | *what 32 KB of SRAM costs* |
 
-**Sixteen is not a judgement call any more, and that is the point.** In the port version
-each bank cost macrocells — a wider write-bank counter, a wider compare, a deeper
-read-side mux — so four was a budget decision argued against `machine.md` §4's 0.8–1.3 ms
-PS/2 interrupt-mask window. With the ring addressed as memory the depth is **a choice of
-SRAM part**: a `62256` is the same package, the same price and the same pin count as the
-`6264` it replaces, and 32 KB is 16 banks. The only cost is four more bits of write-bank
+**Sixteen is not a judgement call.** With the ring addressed as memory the depth is **a
+choice of SRAM part**: a `62256` is the same package, the same price and the same pin
+count as a `6264`, and 32 KB is 16 banks. The only cost is four more bits of write-bank
 counter.
 
 45 ms covers every interrupt-mask window in the machine with two orders of magnitude to
@@ -227,7 +208,7 @@ that machine has no spare physical address space to map a buffer into. Here it d
 the host's offset comes from the bus and the framer keeps its own pointer, so there is
 nothing to share.
 
-### 3.4 ⚠ Minimum-size frames are dispatch-bound, and the numbers are better but not good
+### 3.4 ⚠ Minimum-size frames are dispatch-bound, and the numbers are not good
 
 A 64-byte frame plus preamble occupies 57.6 µs; with the gap, one arrives every 67.2 µs —
 **14,881 frames/s**. The host's cost per frame is the drain (64 B ÷ 681 KiB/s = 91.9 µs)
@@ -243,8 +224,8 @@ cycles, i.e. 47.7 to 190.7 µs.
 - **The ring is worth 2.7× at 400 cycles**, because the driver drains every waiting frame
   inside one dispatch and sixteen is deep enough that it usually can. This is the ring's
   second job and it is the more valuable one.
-- **The card reaches 65 % of the small-frame wire rate**, against 41 % for the port
-  version. Small-frame floods are still the shape of traffic this machine loses.
+- **The card reaches 65 % of the small-frame wire rate.** Small-frame floods are still
+  the shape of traffic this machine loses.
 - **⚠ Every figure in that table is a rate at which the machine does nothing else.** They
   are derived by filling the whole CPU with drain plus dispatch. What the card controls is
   the *dispatch share*: at 400 cycles and sixteen frames per dispatch it is **11.5 % of
@@ -260,6 +241,7 @@ cycles, i.e. 47.7 to 190.7 µs.
   > ceiling, whether PS/2's FIFO comes back, `machine.md` §4.1's margins, and how much of
   > this card is usable. It is the highest-value measurement in the machine and it costs
   > one afternoon.
+
 ## 4. The bus interface
 
 The card answers at **two** addresses, and they are different kinds of thing.
@@ -268,8 +250,8 @@ The card answers at **two** addresses, and they are different kinds of thing.
 
 `machine.md` §2 settles the mechanism: **`/IOSEL` is the `$FF00`–`$FF7F` window strobe,
 common to every slot**, and a card completes its own decode from `A0`–`A6` against a
-jumpered base. **Seven bits, not six** — `A6` left the strobe with the 2026-09-08
-widening, and a six-bit comparator would answer at `$FF5C` *and* `$FF1C`.
+jumpered base. **Seven bits, not six** — `/IOSEL` does not qualify `A6`, and a six-bit
+comparator would answer at `$FF5C` *and* `$FF1C`.
 
 The card takes `A0`–`A6`, `D0`–`D7`, `R/W`, `E`, `CLK25`, `/RESET`, `/IOSEL` and `/IRQ`
 for this, and it holds **no data path** here — §5 is four registers of control and status
@@ -281,21 +263,15 @@ and nothing else.
 against a four-position jumper, **qualified by `/IOPAGE` high**. This card takes one
 region and splits it once:
 
-> **The regions were halved to eight on 2026-09-08 and restored the same day.** The
-> halving paid for a 512 KB system-RAM bank on the motherboard; `hardware/ram.md` §6
-> then dropped the DIP SRAM for SIMM sockets, so there was nothing left to pay for.
-> **Nothing on this card ever changed** — it is recorded because the jumper briefly
-> said three positions.
->
-> ⭐ **And `/IOPAGE` keeps this card off the machine's top 30 MB for nothing.** The map
-> is 32 MB and `A21`–`A24` stay on the motherboard, so `U9` pulls `/IOPAGE` low above
-> 2 MB and every card's physical decode goes quiet without knowing why —
-> `machine.md` §2.
-
 | | | |
 |---|---|---|
 | `A15 = 0` | **32 KB, `62256`** | the RX ring — 16 banks of 2 KB |
 | `A15 = 1` | **8 KB, `6264`** | TX — 4 banks of 2 KB |
+
+> ⭐ **`/IOPAGE` keeps this card off the machine's top 30 MB for nothing.** The map
+> is 32 MB and `A21`–`A24` stay on the motherboard, so `U9` pulls `/IOPAGE` low above
+> 2 MB and every card's physical decode goes quiet without knowing why —
+> `machine.md` §2.
 
 The host reaches both through the MMU like any other memory: point an 8 KB block at the
 region and a bank is 2 KB inside it. `A14`–`A0` come off the backplane through two
@@ -304,7 +280,7 @@ region and a bank is 2 KB inside it. `A14`–`A0` come off the backplane through
 them when is §4.3.
 
 **Nothing here has a side effect.** No auto-increment, no read trigger, no prefetch — that
-is the whole reason the buffers moved (§3.2), and any future revision that puts a
+is the whole reason the buffers are memory (§3.2), and any future revision that puts a
 side-effecting register in this region is undoing it.
 
 ### 4.3 The schedule — three masters, no handshake
@@ -325,18 +301,17 @@ rather than an arbiter, and this is that schedule:
 | **7–11** | **the host**, if its decode matches | address valid since tick 3; SRAM `/OE` asserted at tick 7, data valid at tick 9 (357 ns) and **held to the end of the cycle** |
 
 **The host's data is valid 357 ns into a cycle that needs it by ~437 ns** — 80 ns of
-margin, with no register in the path and no prefetch. That is the timing the port version
-needed a `74HC574` to make (`§4.2` as it stood before this revision), and it comes free
-once the address arrives on the bus instead of out of a counter.
+margin, with no register in the path and no prefetch. That timing comes free once the
+address arrives on the bus instead of out of a counter.
 
 Both framers hold their byte in a register across the deferral — U1's parallel-load
 serializer and U2's deserializer output latch, both of which exist for other reasons — so
 a deferral of up to one bus cycle costs nothing.
 
-> ⚠ **A stretched cycle breaks a schedule tied to `E`, and `/WAIT` became real on
-> 2026-09-08 — so this schedule is not tied to `E`.**
+> ⚠ **A stretched cycle breaks a schedule tied to `E` — so this schedule is not tied
+> to `E`.**
 >
-> `machine.md` §5 item 8 gave the divider a hold term, so another card can freeze `E`
+> `machine.md` §5 item 8 gives the divider a hold term, so another card can freeze `E`
 > mid-cycle; `graphics.md` §7.4 bounds that at **40.7 µs**, which is **51 byte times**.
 > A framer counting bus cycles would lose 50 bytes of a frame.
 >
@@ -369,18 +344,19 @@ strobe on this card is taken at E-fall**, which is the convention
 `'574`. Writes into the buffer region are ordinary SRAM writes in the tick 7–11 window,
 with `/WE` timed from `E` and `R/W`.
 
-### 4.5 ~~Phantom reads — checked, and clean~~ Phantom reads cannot matter here
+### 4.5 Phantom reads cannot matter here
 
 A read-triggered port dies quietly on a 6809-family bus if dead cycles land on it, and
 `sdcard.md` §3.4 establishes the answer for this machine: **the core drives `$FFFF` on
 every dead cycle**, outside `$FF00`–`$FF7F`.
 
-**This card no longer needs that guarantee.** Nothing it exposes has a side effect on
+**This card does not need that guarantee.** Nothing it exposes has a side effect on
 read: the registers in §5 are status, and the buffers are memory. A dead cycle landing
 anywhere on this card reads a byte and changes nothing.
 
-That is worth stating because it *was* load-bearing one revision ago, and because it is
-the second thing (after §3.2) that a memory-mapped buffer retires rather than mitigates.
+It is the second thing (after §3.2) that a memory-mapped buffer retires rather than
+mitigates.
+
 ## 5. Register map, and the memory map
 
 ### 5.1 Placement
@@ -397,21 +373,12 @@ the second thing (after §3.2) that a memory-mapped buffer retires rather than m
 | **`$FF5C`–`$FF5F`** | **4** | **net — this document** |
 | `$FF60`–`$FF7F` | 32 | video |
 
-> ⚠ **This took the machine's last four bytes on 2026-09-07, and that is what closed
-> `machine.md` §5 item 1 the next day.** For one day the geographic decode was 64 of 64
-> with nothing free. The window is `$FF00`–`$FF7F` now — 128 bytes, 64 of them free — and
-> `/IOSEL` got *cheaper* in the process. **The card's base does not move; its decode
-> becomes `A0`–`A6`** (§4.1).
->
-> The same decision gave the machine a megabyte of physical space (`machine.md` §5 item 1
-> option D and item 7), and **that is where this card's 40 KB of SRAM went.** §13.6
-> records the period alternative and why it lost — and why the map was never the
-> load-bearing half of that argument.
+The card's 40 KB of SRAM lives in the megabyte of physical space `machine.md` §5 item 1
+option D and item 7 provide. §13.6 records the period alternative and why it lost — and
+why the map was never the load-bearing half of that argument.
 
-**Four bytes is now comfortable rather than tight**, because the data path left. The port
-version needed a `DATA` port, a pointer low byte, a pointer high byte, a direction-select
-bit and a command register in the same four addresses, split by `R/W` to get eight
-registers out of four. What is left is control, status and commands.
+**Four bytes is comfortable rather than tight**, because no data path lives here — the
+buffers are memory (§4.2). What the four addresses hold is control, status and commands.
 
 **What still does not fit is anything extra**: no interrupt-coalescing threshold (§3.4),
 no MAC-address filter, no second status page.
@@ -445,13 +412,6 @@ Read and write sides are decoded separately by `R/W` — eight registers in four
 performs the load. The other order loads the previous high bits. This is `plan.md`
 §9.2.1's rule with the register names changed, and it is the only ordering constraint left
 on the card.
-
-> ⚠ **Four registers were deleted in the 2026-09-08 revision and it is worth naming them,
-> because each one was a workaround for the address space the card did not have.**
-> `NDATA` (the prefetched, auto-incrementing data port — §3.2's hazard), `NPTRL`/`NPTRH`
-> for the *RX* side, and the `SEL` bit that said which direction the data port and pointer
-> referred to. The host now addresses the frame directly. `NTXPL`/`NTXPH` survive because
-> the transmitter still needs to be told where to start.
 
 ### 5.3 `NTXST` and `NRXST`
 
@@ -538,9 +498,8 @@ macrocells**, which is more than either device has in total. Putting the length 
 buffer costs three macrocells of state machine and two bytes of a RAM that is 74 % used.
 
 > **This is the trick that makes a sixteen-deep ring possible at all**, and it only works
-> because the host can address the header. In the port version the host had to *stream*
-> the header out through `NDATA` before the frame; here it reads two bytes wherever it
-> likes, twice if it wants to.
+> because the host can address the header: it reads the two bytes wherever it likes,
+> twice if it wants to.
 
 **The TX side has no header.** The host writes the frame end-aligned in a 2 KB bank and
 points `TXPTR` at its first byte; terminal count at the end of the bank means "SRAM data
@@ -581,8 +540,7 @@ VBL.
 > 9,600 interrupts/s and serial 1,920, against VBL's 50–70. The frequency ordering is
 > now *serial, net, video, PS/2* and the specified order is *video, net, PS/2, serial* —
 > they are nearly reversed. The specified order is still right, because the 6551's
-> destructive read is a correctness matter and polling cost is not. But nobody had to
-> choose between them before.
+> destructive read is a correctness matter and polling cost is not.
 
 **Ack-window race.** `review.md` §7.2's finding carries: an event landing during the ack
 window can be lost. The driver rule is the same — **re-read `NRXST` after acking** and
@@ -615,8 +573,7 @@ register (`review.md` §3.1 found that as a blocker).
 | **`SLOT`** | **U1 → U2** | **U2's two-tick window in the §4.3 schedule.** U1 owns the phase counter; U2 is told when to drive the shared buses rather than deriving it, so the two cannot disagree about a bus they both drive |
 | `CARRIER` | U2 → U1 | optional, for deferral; unused on a switched link |
 
-> ⚠ **`SLOT` is new in the 2026-09-08 revision and it is the one genuinely new failure
-> mode.** Two devices three-stating onto one address bus and one data bus is a contention
+> ⚠ **`SLOT` is the card's one genuinely new failure mode.** Two devices three-stating onto one address bus and one data bus is a contention
 > hazard that the private-SRAM-per-device arrangement did not have. It is answered by
 > making the schedule single-sourced — U1 counts, U2 obeys — rather than by two counters
 > that are supposed to agree. **Both devices' output enables must also be
@@ -648,13 +605,13 @@ Three of `arch-v3.md`'s U1 blocks are gone, and its own cut order is why:
 - **Pad-to-60 (−6).** Software pads. `arch-v3.md`'s cut 2, and cheaper here: the host
   builds the frame in the card's own SRAM, TX is not the starved direction (§3.1), and a
   `memset` of at most 18 bytes is noise against a 2178 µs fill. **The cost is that
-  software can now violate the 64-byte minimum**, and the driver is the only writer.
+  software can violate the 64-byte minimum**, and the driver is the only writer.
 - **The host-side TX data path (−16).** The host writes the TX buffer directly through the
   `'245` and the shared bus; U1 drives neither the slot data bus for frame bytes nor a
   pointer for the host. It kept only the eight macrocells that put status and its own
   framer reads on the shared bus.
 
-### 7.3 U2 — RX, and this is still the fit risk
+### 7.3 U2 — RX, and this is the fit risk
 
 | block | MC |
 |---|---|
@@ -671,17 +628,15 @@ Three of `arch-v3.md`'s U1 blocks are gone, and its own cut order is why:
 | `/IRQ`, LINK LED | 2 |
 | **total** | **116 / 128 (91 %)** |
 
-> ⚠ **91 % will very likely not fit, and this is still the card's largest technical risk.**
+> ⚠ **91 % will very likely not fit, and this is the card's largest technical risk.**
 > `arch-v3.md` flags 91 % as the level at which ATF15xx fitters get unhappy — from
 > switch-matrix routing pressure, not logic capacity.
 >
-> **The memory-mapped buffer did not relieve this, and saying so is the point of the
-> table.** It bought four ICs, 27 % of throughput, the `TFM` hazard and a four-times
-> deeper ring. It did **not** buy macrocells: U2 shed the host-side pointer, the prefetch
-> control and the `SEL` bit (−13) and gained the ring bookkeeping for sixteen banks and a
-> wider framer address (+11). The two nearly cancel. **A structural change that improves
-> four things and leaves the fifth alone is the normal case, and a document that quietly
-> re-scored the fifth would be the suspicious one.**
+> **The memory-mapped buffer did not relieve this.** It bought four ICs, 27 % of
+> throughput, the `TFM` hazard and a four-times deeper ring. It did **not** buy
+> macrocells: against the port design U2 shed the host-side pointer, the prefetch
+> control and the `SEL` bit (−13) and gained the ring bookkeeping for sixteen banks and
+> a wider framer address (+11), and the two nearly cancel.
 
 **The cut order, in the order to take it:**
 
@@ -717,10 +672,9 @@ during bring-up and because §7.3's cut order may be exercised after the board e
 | `/IRQ`, LED | 2 | 2 |
 | **user I/O used** | **60 / 60** | **49 / 60** |
 
-> ⚠ **U1 is now the pin-limited device, at 60 of 60, and this is a change of character.**
-> One revision ago U2 was at 56 of 60 and U1 at 37; moving the region decode, the SRAM
-> control and the schedule onto U1 moved the shortage with them. **There is no spare pin
-> on U1**, so anything added there costs something else first.
+> ⚠ **U1 is the pin-limited device, at 60 of 60.** It carries the region decode, the
+> SRAM control and the §4.3 schedule as well as its own TX domain. **There is no spare
+> pin on U1**, so anything added there costs something else first.
 >
 > The relief, if it is needed: **`CARRIER` is unused on a switched link** (`plan.md` §2.4
 > — no CSMA/CD, no deferral) and can come off both devices for a pin each; the second LED
@@ -742,7 +696,7 @@ carries a 25.175 MHz master to every slot** (`machine.md` §2, put there so any 
 phase-lock to video), and both devices take it. It is what makes §4.3's schedule possible
 at all, and it is the single largest thing the port gains.
 
-> ⚠ **U1 now needs four clocks — `CLK25`, `E`, 20 MHz and the global clear** — and an
+> ⚠ **U1 needs four clocks — `CLK25`, `E`, 20 MHz and the global clear** — and an
 > `ATF1508AS` has exactly three global clocks plus GCLR. The 20 MHz bit clock goes on
 > GCLK3, which is pin 81, **an I/O pin the fitter must be told about**, and it is the one
 > that matters most: the serializer and the CRC LFSR are the 100 ns path. Verify the
@@ -763,28 +717,17 @@ bug class the 74xx version did not have. The list:
 
 This list is a review checklist item, not something a testbench is expected to find.
 
-### 7.6 ~~Arbitration — one counter, two contexts~~ Arbitration is §4.3, and it is nine macrocells
+### 7.6 Arbitration is §4.3, and it is nine macrocells
 
-**This section used to be the hardest part of the card**, and it is worth keeping its
-shape because it is the clearest measure of what the address space bought.
+The host and the framer both need the RX SRAM, at different offsets, at the same time —
+and the host's offset comes off the backplane (§4.2), so there is no second counter on
+the card, no shadow, no mux and no prefetch register. Arbitration is §4.3's phase
+counter and the `SLOT` wire — **six macrocells on U1 and three on U2** — plus the two
+`'244`s and the `'245` that get the bus onto the card, which are needed anyway.
 
-The problem was that the host and the framer both needed the RX SRAM at different offsets
-at the same time, and the host's offset lived in a counter on the card. Three mechanisms
-were priced:
-
-| | how | cost |
-|---|---|---|
-| Two counters and a mux | both offsets in macrocells; a 2:1 mux drives the address pins | 11 + 11 + 11 = **33 MC** |
-| One counter and a shadow | the counter drives the pins; the shadow holds the inactive context; a swap is a simultaneous parallel load | 11 + 11 + 5 = **27 MC** |
-| **One counter, host side external** *(specified until 2026-09-08)* | U2's counter drives the pins and three-states; a `'161` cascade drives them through `'244`s the rest of the time | **4 MC, +5 ICs** |
-
-**All three are gone.** The host's offset comes off the backplane (§4.2), so there is no
-second counter, no shadow, no mux and no `'161` cascade. What replaced them is §4.3's
-phase counter and the `SLOT` wire — **six macrocells on U1 and three on U2** — plus the
-two `'244`s and the `'245` that get the bus onto the card, which were needed anyway.
-
-**Five ICs and 4 macrocells out; three ICs and 9 macrocells in.** The `74HC574` prefetch
-register went with them, because §4.3's 80 ns of margin does not need one.
+This is the clearest measure of what the address space bought: the port design's three
+priced host-pointer mechanisms — up to 33 macrocells, or five extra ICs — are archived
+in [history.md](history.md).
 
 ## 8. The analogue front end and the recovery block
 
@@ -859,16 +802,8 @@ first on §7.3's cut list. **Keep the jumper footprint on the board regardless.*
 | — | RJ45 MagJack, 1:1 | e.g. `HR911105A` |
 | — | | TX filter network, 100 Ω RX termination, LEDs, decoupling, JTAG header, two jumper blocks (`$FF` base, region base) |
 
-**12 ICs.** For scale: video 41, audio 29, PS/2 11, storage 13, serial 3.
-
-> ⚠ **This was 16 until 2026-09-08, and the four that left are worth naming**: three
-> `74HC161` and a `74HC244`/`74HC125` pair carrying the host-side RX pointer, and the
-> `74HC574` that prefetched a byte for it. **All five existed to get an address to the
-> SRAM that the backplane now delivers**, and the two `'244`s and the `'245` that replaced
-> them are doing a simpler job. §7.6.
->
-> The `6264` on the RX side became a `62256` in the same revision — same package, same
-> pin count, same price, four times the ring (§3.3).
+**12 ICs.** For scale ([`hardware/place/parts.ts`](../../hardware/place/parts.ts)):
+video 27, audio 29, storage 14, I/O (PS/2 + serial) 14.
 
 **`74HCT` only where a part's input is driven from the slot** — here that is the `'245`
 and the two `'244`s. Both CPLDs accept TTL levels natively (`V_IH(min)` = 2.0 V) and
@@ -912,7 +847,7 @@ Without reduced-power mode the pair is 320 mA of standby before any dynamic curr
 
 **This must be measured before a PCB is committed**, as `arch-v3.md` says. Against a
 machine `machine.md` §8 estimates at 2.5–3.5 A it is not alarming; it is the second
-largest single-card draw after video's 1.1–1.7 A, and it is the only figure on this card
+largest single-card draw after video's 0.5–0.85 A, and it is the only figure on this card
 that cannot be derived from a datasheet with confidence.
 
 ## 11. Clocks — and the machine's third crystal
@@ -924,7 +859,7 @@ the card and U1 divides by two, exactly as `plan.md` §11 specifies.
 That makes three oscillators in the machine: 25.175 MHz on the motherboard, 28.37516 MHz
 on the audio card (`audio.md` §4.1, non-negotiable because every module in the corpus was
 tuned by ear against it), and 20 MHz here. `machine.md` §1's "one oscillator, everything
-derived" had one exception; it now has two, and this one is forced by an external
+derived" has two exceptions, and this one is forced by an external
 standard rather than chosen.
 
 **The RX side needs no oscillator**, because the bit clock is recovered from the incoming
@@ -950,44 +885,38 @@ This is the machine's **second** period exception, after the SD card, and a much
 one: the *format* is a year late, not the *silicon*. §13.5 records the period-exact
 alternative, which is 10BASE2 and costs a different analogue front end and nothing else.
 
-### ~~The house rule~~ The house rule, and this card is what retired it
+### The house rule, and this card is what retired it
 
 **The root [`README.md`](../../README.md)'s no-CPLD rule was retired on 2026-09-08**,
 and the argument below is one of the three reasons. It is kept because it is the
 argument, not because the conclusion is still in doubt.
-
-When this card was specified the rule read *"no CPLDs or FPGAs — spent, deliberately,
-on two cards"* — video, to compete with a GIME on even terms, and audio, because its
-interrupt block does not fit a `GAL22V10` either way. **This card was the third**, and
-this section said the sentence in the root README would have to change. It did.
 
 **The argument, and it is a machine-level one rather than a taste one:**
 
 1. **The slot budget forbids the 74xx design.** `applenet`'s v2 measured a discrete
    10BASE-T MAC at **41 ICs across two cards** — it needed two because the logic does not
    fit one Apple II card. Two cards means two slots, and
-   [`hardware/README.md`](../../hardware/README.md) gave the machine **six slots, five of
-   them already claimed**.
+   [`hardware/README.md`](../../hardware/README.md) gives the machine **six slots, five
+   of them claimed** by its five cards.
 
-   > ⚠ **The premise moved on 2026-09-08 and the conclusion did not.** PS/2 and serial
-   > merged onto one board, so there are **five cards and a spare slot** — a two-card MAC
-   > would now fit. What kills it is point 2 rather than the slot count, and this card's
-   > own board is a 12 cm one with 27 % of its area used, so the 74xx version would have
-   > needed both slots *and* both boards full. **The argument is weaker than it was and
-   > still holds**, which is worth more than pretending it is untouched.
+   > ⚠ **The honest version of this argument is weaker than a full backplane would make
+   > it, and it still holds.** The one spare slot means a two-card MAC would physically
+   > fit — what kills it is point 2 rather than the slot count, and this card's own
+   > board is a 12 cm one with 27 % of its area used, so the 74xx version would have
+   > needed both slots *and* both boards full.
 2. **The CRC has no software escape at 2.0979 MHz.** A table-driven CRC-32 over 1518
    bytes at ~30 cycles/byte is **~22 ms per frame** — eighteen times a frame's own
    transmission time. `arch-v3.md`'s own cut order says that if only one hardware CRC
    survives it must be the RX one; here neither can go.
 3. **A `GAL22V10` cannot hold any of it.** Ten macrocells against 33 for one LFSR.
 
-**What the rule says now.** Period-appropriate silicon, and **programmable logic is in**
+**What the rule says.** Period-appropriate silicon, and **programmable logic is in**
 — GALs, and CPLDs where a GAL will not carry the design. Point 3 above is that test,
 stated before the rule was written to match it.
 
-[`io/README.md`](../../io/README.md) had already derived the working version —
+[`io/README.md`](../../io/README.md) derives the working version —
 *"what decides each case is whether a period part exists that fits the I/O budget"* —
-and §13.6 added the term it was missing, at this card's expense: **availability comes
+and §13.6 adds the term it was missing, at this card's expense: **availability comes
 first.** A `DP8390` exists and fits; you cannot buy one.
 
 ---
@@ -1006,15 +935,16 @@ motherboard through 4.7 kΩ — nothing in this machine drives it, and saying so
 point"; and `BA`/`BS`, which are how a 6809-family CPU announces it has released the bus,
 never leave the CPU module.
 
-> ⚠ **And on 2026-09-08 the one spare pin went to something else.** `machine.md` §5 item 1
-> option D made slot position A34 physical `A20`. That competition is decided: a seventh
-> signal position would now have to come out of the ground or power allocation.
+> ⚠ **And the one spare pin went to something else.** `machine.md` §5 item 1 option D
+> made slot position A34 physical `A20`. That competition is decided: a seventh signal
+> position would have to come out of the ground or power allocation.
 >
-> **The card did better out of it than it would have out of DMA.** DMA was wanted for
+> **The card did better out of `A20` than it would have out of DMA.** DMA was wanted for
 > §3.1's ceiling, and `A20` does not raise that — the ceiling is one `TFM` against a
-> 2.0979 MHz `E` either way. What `A20` bought instead is everything §7.6 lists: the
-> `TFM` hazard retired, five ICs deleted, the ring four times deeper, and TX overlap for
-> free. **DMA would have bought one number; the address space bought five.**
+> 2.0979 MHz `E` either way. What `A20` bought instead: the `TFM` hazard retired (§3.2),
+> the five host-pointer ICs the arbiter does not need (§7.6), a ring four times deeper
+> (§3.3), and TX overlap for free (§3.1). **DMA would have bought one number; the
+> address space bought five.**
 
 **What is still true** is that this is the first card in the machine that would actually
 want bus mastering, and that the pins could have been reserved for free while
@@ -1022,28 +952,24 @@ want bus mastering, and that the pins could have been reserved for free while
 
 ### 13.2 A third CPLD
 
-U2 at 92 % (§7.3) has an obvious answer: move the host port and the ring's host side into
+U2 at 91 % (§7.3) has an obvious answer: move the host port and the ring's host side into
 a third device, which fits comfortably (~49 macrocells, ~46 pins) and takes U2 to ~73 %.
 
 **Not taken**, for two reasons and neither is elegance: it adds ~160 mA of standby to a
 card that is already the machine's second largest draw, and it spends the house rule
-three times on one card. §7.3's cut order reaches 83 % without it. **If U2 fails on pins
+three times on one card. §7.3's cut order reaches 81 % without it. **If U2 fails on pins
 rather than macrocells, this becomes the answer** (§7.4).
 
-### 13.3 ~~A deeper ring, a second TX buffer, a 62256~~ Taken — all three, 2026-09-08
+### 13.3 A deeper ring, a second TX buffer, a 62256 — taken, all three
 
-This section used to price three additions and defer all of them, "cheap in parts and
-expensive in the one currency that is short". **The currency stopped being short.**
+The buffer additions a port-fed design has to defer are simply part of this card: a
+sixteen-bank ring for a `62256` in the same package (§3.3), and four TX banks for
+nothing — the host addresses the buffer, so there is no shared pointer to ping-pong
+around (§3.1).
 
-| | then | now |
-|---|---|---|
-| eight RX banks instead of four | ~5 macrocells at 92 % — "revisit after the first fit" | **sixteen**, for a `62256` in the same package. §3.3 |
-| TX ping-pong | 12 macrocells on U1 plus a shadow-exchange arbiter — "the best-value addition on the card" | **four TX banks, for nothing.** The host addresses the buffer, so there is no shared pointer to ping-pong around. §3.1 |
-| a `62256` | the cheap half of a change whose expensive half was macrocells | fitted |
-
-**What paid for all three is `machine.md` §5 item 1 option D and §5 item 7** — a megabyte
-of physical space at `A20 = 1`, bought with one backplane pin and no ICs. The card's whole
-buffer subsystem stopped being a macrocell problem and became a choice of SRAM part.
+**What pays for all three is `machine.md` §5 item 1 option D and §5 item 7** — a megabyte
+of physical space at `A20 = 1`, bought with one backplane pin and no ICs. The card's
+whole buffer subsystem is not a macrocell problem; it is a choice of SRAM part.
 
 **The deferred alternative that is left**: 64 KB of RX ring instead of 32, i.e. 32 banks,
 which needs a larger part or a second `62256` and one more bit of write-bank counter.
@@ -1068,7 +994,7 @@ becomes real because the segment is genuinely shared — which is precisely the
 simplification `plan.md` §1 takes and would have to give back.
 
 **Not taken** because collision detect, backoff and deferral are a substantial addition to
-a device already at 92 %, and because nothing in 2026 has a 10BASE2 port to plug into.
+a device already at 91 %, and because nothing in 2026 has a 10BASE2 port to plug into.
 It is recorded because it is the honest answer to "could this have been built in 1989".
 
 ### 13.6 A period Ethernet controller — the `DP8390`, and why it lost twice
@@ -1079,32 +1005,28 @@ Ethernet has such a part on paper: the **National `DP8390` NIC (1986)** plus a `
 coax transceiver, buffer RAM and a latch — **four to six ICs**, no CPLD, no house-rule
 exception, and a design shipping in volume before this machine's notional date.
 
-**It failed the second half of the test when this document was written.** The `DP8390`'s
-register file is 16 registers across four pages plus a remote-DMA data port and a reset
-port — **16 bytes at an absolute minimum and 32 as everyone actually decoded it.**
-`machine.md` §3 had **four**, and §5.1 above is what happened to those four.
+**It lost twice, on different grounds, and the order of the two grounds is the lesson.**
 
-> ⚠ **`machine.md` §5 item 1 was closed on 2026-09-08 and the window is 128 bytes, so
-> that argument no longer holds — and the decision does not change.** The reason is one
-> this document did not check and should have, because it is the first question to ask of
-> any part: **the `DP8390` is long obsolete.** It is not in production, distributor stock
-> is gone, and what is offered is priced as a collectable rather than as a component.
-> A design cannot rest on a part you cannot buy at a sane price, and "four ICs" is not
-> four ICs if one of them is a hunt.
->
-> **So the card keeps the dual-`ATF1508AS` design of §7, unchanged**, and now for a
-> better reason than the one it was chosen with. The `ATF1508AS` is in production, in a
-> hand-solderable PLCC-84, programmable in circuit over JTAG, and already on this
-> machine's audio card. **Availability, not address space, is what decides this**, and
-> that ordering is worth carrying to the next card: the I/O budget is the second
-> question.
->
-> **The superseded argument is kept rather than deleted**, per the convention at the
-> bottom of the root `README.md`. It was true on the day it was written, it is what
-> `machine.md` §5 item 1 cites as the strongest evidence the map had produced against
-> itself, and deleting it would make the machine's own history unreadable.
+**Round one — address space.** The `DP8390`'s register file is 16 registers across four
+pages plus a remote-DMA data port and a reset port — **16 bytes at an absolute minimum
+and 32 as everyone actually decoded it** — against the four bytes the machine's map had
+when this card was specified. That round is what `machine.md` §5 item 1 cites as the
+strongest evidence the old map had produced against itself, and it expired with the map:
+the window is 128 bytes and would hold a `DP8390` easily.
 
-**One thing does survive both rounds**, and it is a project argument rather than an
+**Round two — availability, and this is the round that decides.** ⚠ **The `DP8390` is
+long obsolete.** It is not in production, distributor stock is gone, and what is offered
+is priced as a collectable rather than as a component. A design cannot rest on a part
+you cannot buy at a sane price, and "four ICs" is not four ICs if one of them is a hunt.
+
+**So the card keeps the dual-`ATF1508AS` design of §7.** The `ATF1508AS` is in
+production, in a hand-solderable PLCC-84, programmable in circuit over JTAG, and already
+on this machine's audio card. **Availability, not address space, is what decides this**,
+and that ordering is worth carrying to the next card: **availability is the first
+question to ask of any part, and the I/O budget is the second.** It is the ordering the
+root `README.md` cites this section for.
+
+**One thing survives both rounds**, and it is a project argument rather than an
 engineering one: `applenet/docs/plan.md` §1's stated primary purpose is *learning Ethernet
 framing at the bit level*, and a `DP8390` is exactly the chip that hides all of it. On a
 card whose reason to exist is the framing, buying the framing is not a saving.
@@ -1131,17 +1053,11 @@ card whose reason to exist is the framing, buying the framing is not a saving.
   then `NCMD` = `RX_ADV`. **Loop until `NRXCNT` reads zero before `RTI`** — §3.4 is why,
   and it is the single most important line of the driver.
 - **TX**: build DST..payload **in the card's TX bank directly** — there is no reason to
-  build it in system RAM and copy — **pad to 60 bytes** (§7.2 moved this to software),
+  build it in system RAM and copy — **pad to 60 bytes** (padding is software's job — §7.2),
   end-align it so the last byte is the last byte of the bank, write `NTXPH` then `NTXPL`
   with the first byte's offset, then `NCMD` = `TX_GO`.
 - The host computes no CRC and does no Manchester. It shuffles bytes and builds headers,
   which is the point.
-
-> ⚠ **Three things the 2026-09-08 revision deleted from this driver**: the chunk-and-mask
-> loop (§3.2), the `SEL` bit before every pointer write, and the two `NDATA` reads that
-> used to fetch the header. **Building the TX frame in place is new** and it is worth
-> noticing — the port version could not, because the only way into the buffer was a
-> byte at a time through a register.
 
 ### 14.2 ⚠ And above the driver there is nothing
 
@@ -1164,7 +1080,7 @@ problems:
 naive one will not survive contact with a busy LAN. This is a bigger software cost than
 `storage`'s RBF driver, which `sdcard.md` §13 item 4 already calls "larger than the card".
 
-> **One thing got structurally easier.** A memory-mapped ring means a stack can parse a
+> **One thing is structurally easy here.** A memory-mapped ring means a stack can parse a
 > frame **in place** and copy only the payload it keeps — an ARP or ICMP responder never
 > has to copy at all. §3.1's 681 KiB/s is the cost of a full copy, and a driver that is
 > clever about what it copies is not bound by it.
@@ -1173,9 +1089,8 @@ naive one will not survive contact with a busy LAN. This is a bigger software co
 
 ## 15. Build order
 
-**Step 0 — ~~freeze `machine.md` §5 item 1~~ done.** The machine settled its address
-spaces on 2026-09-08 (`machine.md` §5 items 1 and 7) and this card was re-specified
-against them. What is left is the card's own work.
+**Step 0 is done.** The machine's address spaces are settled (`machine.md` §5 items 1
+and 7) and this card is specified against them. What is left is the card's own work.
 
 1. **The recovery block, alone, on perfboard.** `m1-notes.md` §§3–4 is the procedure and
    it is written for exactly this: 20 MHz can, ÷2, a `'165` shifting a known pattern,
@@ -1197,8 +1112,8 @@ against them. What is left is the card's own work.
    devices three-state onto one address bus and one data bus; the `SLOT` wire is what
    keeps them apart and it is the card's one new failure mode (§7.1). **Scope the shared
    buses for overlap with the host's window and with each other**, with both framers
-   running and the host hammering the region. This step did not exist before 2026-09-08
-   and it is the price of the four ICs that came off.
+   running and the host hammering the region. It is the price of the four ICs the shared
+   buses took off the card.
 6. **Loopback the whole card**: the RJ45 plug from step 1, TX → RX, one frame, `CRC_OK`
    set, `RXLEN` right, the header where §5.5 says, in the bank `NRXHD` names.
 7. **A real switch**, then a real host: ARP request out, ARP reply in and checked.
@@ -1216,19 +1131,16 @@ against them. What is left is the card's own work.
 
 1. **⚠ U2 does not obviously fit** — 116/128 macrocells, §7.3. Fit it before layout; the
    cut order is there and cuts 1–3 reach 81 %.
-2. **⚠ U1 has no spare pin** — 60 of 60, §7.4. It took the region decode, the SRAM
-   control and the §4.3 schedule in the 2026-09-08 revision and that is where the pins
-   went. Three separate reliefs are listed; none has been chosen.
-3. **⚠ The `SLOT` handshake and the shared buses** — §7.1, §15 step 5. The one failure
-   mode this card gained rather than shed.
-4. ~~**⚠ The house rule**~~ **CLOSED 2026-09-08** — retired at the root `README.md`,
-   with this card's §12 as one of the three arguments.
-5. ~~**⚠ §4.3's schedule assumes a bus cycle of fixed length.**~~ **CLOSED 2026-09-08.**
-   `graphics.md` §7.4 bounded `SPANBUSY` at **40.7 µs — 51 byte times**, which a framer
-   counting bus cycles would not survive. §4.3 now free-runs the phase counter on
-   `CLK25` and resets it on E-fall, so a stretch costs this card nothing: during one the
-   CPU is on VRAM and this card's buffers are idle. `machine.md` §5 item 10 carries the
-   general rule.
+2. **⚠ U1 has no spare pin** — 60 of 60, §7.4. It carries the region decode, the SRAM
+   control and the §4.3 schedule as well as its own TX domain, and that is where the
+   pins went. Three separate reliefs are listed; none has been chosen.
+3. **⚠ The `SLOT` handshake and the shared buses** — §7.1, §15 step 5. The card's one
+   genuinely new failure mode.
+4. *Closed 2026-09-08 — the house rule; retired at the root `README.md` with this
+   card's §12 as one of the three arguments. See [history.md](history.md).*
+5. *Closed 2026-09-08 — the fixed-length-cycle assumption. §4.3 free-runs the phase
+   counter on `CLK25`; `machine.md` §5 item 10 carries the general rule. See
+   [history.md](history.md).*
 6. **⚠ §4.3's schedule is a ÷12 schedule.** Fast-E needs the framers interleaved on
    alternate bus cycles and nobody has done that arithmetic.
 
@@ -1255,15 +1167,6 @@ against them. What is left is the card's own work.
 14. **⚠ Does a NitrOS-9 network stack exist?** §14.2. It is the card's largest cost and
     nobody has looked.
 
-**Closed 2026-09-08:**
-
-- ~~*The `$FF` map has no room for this card.*~~ `machine.md` §5 item 1 A — the window is
-  128 bytes. The card's decode became `A0`–`A6` (§4.1).
-- ~~*Re-price the RX buffer against `A20`.*~~ Done; it is this revision. §7.6, §13.3.
-- ~~*The `TFM` hazard.*~~ Retired rather than mitigated — §3.2. `sdcard.md` §13 item 1
-  still needs its silicon capture, but no bulk transfer on this card runs over a port any
-  more.
-
 ---
 
 ## 17. Cross-references
@@ -1278,4 +1181,4 @@ against them. What is left is the card's own work.
 | [`hardware/gal/README.md`](../../hardware/gal/README.md) | the house bus cycle — E-fall, Q-rise, E-rise, Q-fall — that §4.2 and §4.3 are written against |
 | `~/code/applenet/docs/plan.md` | the wire format, the analogue front end, the recovery block, the CRC taps, the golden frame |
 | `~/code/applenet/docs/arch-v3.md` | the two-CPLD architecture, and §3.3.1's finding against it |
-| `~/code/applenet/docs/review.md` | 40 findings; the four still open are items 4–7 above |
+| `~/code/applenet/docs/review.md` | 40 findings; the four still open are items 7–10 above |

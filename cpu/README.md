@@ -8,17 +8,13 @@ one 48-pin part serve both machines. See `docs/machine.md` §5 item 6 and
 [`video/docs/graphics.md`](../video/docs/graphics.md) §6.3.1, and `docs/plan.md` §3.2 for
 the pin budget that decided it.
 
-> ⚠ **The package changed on 2026-09-04, and the old one could not have worked.** This
-> README and the plan committed to the **STM32G431CB*T*6, LQFP48** and to "42 GPIO" on it.
-> DS12589 Table 2 gives **38 GPIO in LQFP48, 42 in UFQFPN48**, and the four missing pads
-> are exactly `PC4`, `PC6`, `PC10`, `PC11` — `BA`, `BS`, `UART_TX`, `UART_RX` in
-> [`include/pinout.h`](include/pinout.h). Usable pins: **42 − SWD(2) − NRST(1) = 39 on the
-> UFQFPN48**, against **38 − 2 − 1 = 35 on the LQFP48**, where the 33 mandatory CoCo 3
-> signals fit but nothing else does. The `CBU6` is the same die in a QFN package, so the
-> pinout, this firmware and every timing number are unchanged; QFN soldering is the whole
-> cost. **The external-MMU decision survives untouched** — an in-CPU MMU wants all 39 pins
-> and is further out of reach on 35, not closer. Found in review (`docs/design-review.md`
-> Cpu-C1) before a board was drawn.
+> ⚠ **The package must be the UFQFPN48 (`CBU6`), not the LQFP48 (`CBT6`).** DS12589
+> Table 2 gives **38 GPIO in LQFP48, 42 in UFQFPN48**, and the four pads the LQFP48
+> lacks are exactly `PC4`, `PC6`, `PC10`, `PC11` — `BA`, `BS`, `UART_TX`, `UART_RX` in
+> [`include/pinout.h`](include/pinout.h). Usable pins: **42 − SWD(2) − NRST(1) = 39 on
+> the UFQFPN48**, against **38 − 2 − 1 = 35 on the LQFP48**, where the 33 mandatory
+> CoCo 3 signals fit but nothing else does. See `docs/plan.md` §3.2, and
+> [`docs/history.md`](docs/history.md) for how the wrong package was once committed.
 
 > ⚠ **`PB8` is `A8` and it is also `BOOT0`.** Every module must have its option bytes
 > programmed — `nSWBOOT0` = 0, `nBOOT0` = 1 — **before it goes into a socket**. See
@@ -26,50 +22,33 @@ the pin budget that decided it.
 
 Full analysis, pinout rationale, timing budgets and phase plan: **[`docs/plan.md`](docs/plan.md)**.
 
-> ⚠ **This README's timing numbers are superseded (2026-08-27).** They were derived from
-> `reference/datasheets/MC6809E.pdf`, whose columns stop at the 2 MHz MC68B09E. The real
-> HD63B09E/HD63C09E figures are now in `reference/datasheets/HD6309E_datasheet.pdf` and analysed in
-> [`cpu/docs/plan.md`](docs/plan.md) §3.3. Two things changed that matter here:
-> **`t_AD` is 110 ns at *both* speed grades** (the address deadline does not tighten at
-> 3 MHz), and **`t_DSR` halves to 20 ns at 3 MHz** (3.4 core cycles), which puts read-data
-> sampling below the floor for *any* software polling loop on this part. The fix is an
-> external 74LVC574 latch — `plan.md` §3.6. Sections below that quote `t_DSR` = 40 ns,
-> `t_DHR` = 10 ns or a `T_iter ≤ 6` gate are correct **only for the 1.79 MHz target**.
+> Superseded material is archived in [`docs/history.md`](docs/history.md); this README
+> describes only the present design.
 
 **Current state: Phase 1 — the timing spike.** No 6309 emulation exists yet, by design.
 Phase 1 answers the one question that can invalidate the project before any core is
 written: *after the host drops E, can we get the next address onto the bus inside
-`t_AD` = 110 ns?* (Earlier revisions asked it as "inside a quarter cycle"; that framing is
-retired — see the marked table below.)
+`t_AD` = 110 ns?*
 
 ---
 
 ## The question Phase 1 answers
 
 A 6809E bus cycle runs from one E falling edge to the next. Read data is latched at E's
-fall, and the **next address must be valid before Q rises** — one quarter cycle later.
+fall, and the next address must be driven within `t_AD` of the fall — an **absolute**
+figure (`reference/datasheets/HD6309E_datasheet.pdf` p.3, held at 110 ns for both the
+2 MHz and 3 MHz grades), not a fraction of the E period, so it is identical at 0.895 and
+1.79 MHz.
 
-| E rate | Core cycles/bus cycle | Quarter cycle | Estimated need | Verdict |
-|---|---|---|---|---|
-| 0.895 MHz (CoCo 3 boot) | 190 | **47.5** | 9–14 | comfortable |
-| 1.79 MHz (CoCo 3 fast) | 95 | **23.7** | 9–14 | **target** |
-| 3.0 MHz (63C09E max) | 57 | 14.2 | 9–14 | marginal |
-| 5.0 MHz | 34 | 8.5 | 9–14 | below the floor |
-
-> **The table above is superseded.** The deadline is not the quarter cycle. Per the
-> MC6809E datasheet (`reference/datasheets/MC6809E.pdf` p.3, item 11), *Address Delay Time from E Low*
-> `t_AD` is **110 ns max** for the MC68B09E — an **absolute** figure, not a fraction of
-> the E period, so it is identical at 0.895 and 1.79 MHz.
-
-**The real requirement: drive the next address in the window [3.4, 18.7] core cycles
-after E falls.**
+**The requirement: drive the next address in the window [3.4, 18.7] core cycles after E
+falls.**
 
 | Parameter | Symbol | Value | Core cycles @170 MHz |
 |---|---|---|---|
-| Address delay from E low | `t_AD` | ≤ 110 ns | **18.7** ← ceiling |
+| Address delay from E low | `t_AD` | ≤ 110 ns (both grades) | **18.7** ← ceiling |
 | Address hold time | `t_AH` | ≥ 20 ns | **3.4** ← floor |
-| Read data setup | `t_DSR` | ≥ 40 ns | 6.8 |
-| Read data hold | `t_DHR` | ≥ 10 ns | 1.7 |
+| Read data setup | `t_DSR` | ≥ 40 ns (2 MHz grade) / ≥ 20 ns (3 MHz) | 6.8 / 3.4 |
+| Read data hold | `t_DHR` | ≥ 10 ns (Motorola; Hitachi 20 — design to 10) | 1.7 |
 
 Both ends bind — driving too early violates the hold time on the outgoing address.
 Against an estimated 9–14 cycle critical path, the margin is **5–10 cycles**. Phase 1
@@ -128,9 +107,9 @@ overran and Q had already fallen.
 Worth understanding before trusting any result, and the reason
 `spike_characterise_data_window()` exists.
 
-**Now resolved, and provably so.** The MC6809E datasheet (`reference/datasheets/MC6809E.pdf` p.3) gives,
-for the MC68B09E: `t_DSR` = **40 ns** (item 17) and `t_DHR` = **10 ns** (item 18). Read
-data is guaranteed valid over `[E_fall − 40 ns, E_fall + 10 ns]` — a **50 ns window**.
+Read data is guaranteed valid over `[E_fall − t_DSR, E_fall + t_DHR]`. At the 2 MHz
+grade — which covers the CoCo 3 targets — `t_DSR` = **40 ns** and `t_DHR` = **10 ns**
+(Motorola, the stricter figure; the CoCo ships with a Motorola part): a **50 ns window**.
 
 A 10 ns hold is **1.7 core cycles** — no polling loop can reliably sample *after* the
 edge. So `spike_poll.c` samples continuously while E is high and keeps the **last sample
@@ -147,6 +126,11 @@ If the loop's iteration period is `T_iter`, then `s_prev` lands in
 
 > **`T_iter ≤ t_DSR` = 40 ns = 6.8 core cycles ⟹ `s_prev` is provably inside the
 > guaranteed valid window.**
+
+At the 3 MHz grade `t_DSR` halves to **20 ns = 3.4 core cycles**, below the hard
+4-cycle floor of any M4 polling loop — so the `T_iter` gate in this section applies to
+the ≤2 MHz rates only, and 3 MHz needs the external 74LVC574 latch of `plan.md` §3.6
+(variant 6).
 
 **This is why variant 2 exists.** The natural C loop needs a register copy to retain the
 previous sample, which costs 7 cycles per iteration — **over budget**, making its
@@ -190,8 +174,7 @@ this.
 option byte `nSWBOOT0` = 1 the pad is sampled *throughout* the reset phase (RM0440 §2.6),
 so the part reads whatever the address bus happens to be doing at reset and boots the
 **system bootloader** on a random subset of resets. It is the classic failure that works
-on the bench with a debugger attached and fails in the socket — and no document in this
-repository mentioned it before 2026-09-04 (`docs/design-review.md` Cpu-M2).
+on the bench with a debugger attached and fails in the socket.
 
 Program once per part, and read the bytes back — the write goes through a separate flash
 sequence and a failed one is silent:
@@ -221,7 +204,7 @@ Specified in [`docs/plan.md`](docs/plan.md) §4.5, **not implemented** — Phase
 spike and has no shadow ROM.
 
 The homebrew machine of [`docs/machine.md`](../docs/machine.md) has no boot ROM anywhere in
-its 1 MB physical map, and its reset vector at `$FFFE` lands inside the I/O page, which
+its physical map, and its reset vector at `$FFFE` lands inside the I/O page, which
 overrides MMU translation by design. The machine-wide resolution puts the ROM **here**:
 this module serves logical `$E000`–`$FEFF` and `$FFC0`–`$FFEF` from **~8 KB of its own
 128 KB flash** with no bus cycle, keeps `$FF00`–`$FFBF` decoding normally so the boot code
@@ -233,7 +216,7 @@ ROM once the OS is up, freeing that logical space for RAM; vector service stays 
 `$E000`–`$FFFF` from their own ROM, and a drop-in that served something else would not be
 a drop-in. Mode comes from a strap on `PF1`, the pinout's last spare pin, read once at
 reset. Consequence worth stating plainly: with this mechanism in the CPU, a real HD63C09E
-is no longer a drop-in *for the homebrew machine* — see plan §4.5.
+is not a drop-in *for the homebrew machine* — see plan §4.5.
 
 ---
 
@@ -304,16 +287,12 @@ that:
 | > 0 | **> 0** | the transfer was attempted and **bus-errored** (`TEIF`) — the channel configuration is wrong, typically a source address the DMA cannot reach |
 | > 0 | 0 | the **trigger** never arrived — wiring, a clock enable, or the request-line ID |
 
-> ⚠ **This README used to say a timeout "points at wiring or a clock enable rather than a
-> wrong bit position", and that advice would have sent you the wrong way.** The register
-> constants *are* verified against RM0440 Rev 9, but that was never the only way to get a
-> timeout: until 2026-09-04 `s_dma_addr` was declared `__ccmbss`, i.e. linked at
-> `0x1000xxxx`, and **RM0440 §2.4 says CCM SRAM can be accessed by DMA only through its
-> alias** (`0x2000 5800` on a category-2 part). Every transfer would have bus-errored,
-> `dma_timeouts` would have equalled `n_cycles`, and the project's own documentation
-> would have pointed the bench at the wiring. The variable is in ordinary SRAM now, and
-> `dma_errors` exists so the two failures can never be confused again
-> (`docs/design-review.md` Cpu-M1).
+> The register constants are verified against RM0440 Rev 9, but a wrong bit position is
+> not the only way to get a timeout: **RM0440 §2.4 says CCM SRAM can be accessed by DMA
+> only through its alias** (`0x2000 5800` on a category-2 part), so a `__ccmbss` source
+> address at `0x1000xxxx` bus-errors every transfer. `s_dma_addr` therefore lives in
+> ordinary SRAM, and `dma_errors` exists so a bus-error and a missing trigger can never
+> be confused.
 
 ### What variant 3 does and does not buy
 
@@ -361,11 +340,10 @@ average — an emulator that misses one deadline in 10⁴ is simply wrong.
 
 ### Why the latency gate is 14 and not 18
 
-> ⚠ **This README used to call the measurement "slightly conservative", on the grounds
-> that the `DSB` before the timestamp costs a couple of cycles in the safe direction. It
-> is not. Net, it is optimistic by roughly 3–5 core cycles** — against a claimed margin
-> of 5.7 (`docs/plan.md` §3.3), which is most of the margin. Three terms, all one-way,
-> all outside the number:
+> ⚠ **The measurement is optimistic, not conservative.** The `DSB` before the timestamp
+> costs a couple of cycles in the safe direction, but **net, the number is optimistic by
+> roughly 3–5 core cycles** — against a claimed margin of 5.7 (`docs/plan.md` §3.3),
+> which is most of the margin. Three terms, all one-way, all outside the number:
 >
 > 1. **TIM1's capture path resynchronises `TI1`** to the timer clock even with the input
 >    filter off (`ICF` = 0), so `CCR1` is latched **~2–3 core cycles after the physical
@@ -377,11 +355,10 @@ average — an emulator that misses one deadline in 10⁴ is simply wrong.
 >    propagation outbound and the inbound `E` buffer — ~0.9 cycles each — are absent from
 >    the measurement and present in the module.
 >
-> A spike reporting 17 can be a socket-referred 21, and the old 18-cycle gate would have
-> passed it. (`docs/design-review.md` Cpu-M4.)
+> A spike reporting 17 can be a socket-referred 21, and an 18-cycle gate would pass it.
 
-The `t_AD` ceiling is unchanged at 110 ns = **18.7** core cycles; what changed is what we
-are willing to call a pass. **18 − 4 = 14**, and the constant lives in
+The `t_AD` ceiling stays 110 ns = **18.7** core cycles; the gate is what we are willing
+to call a pass. **18 − 4 = 14**, and the constant lives in
 [`include/spike.h`](include/spike.h) as `SPIKE_TAD_CYCLES`, with the raw ceiling kept
 beside it as `SPIKE_TAD_RAW_CYCLES`. The failure mode of a gate that is too tight is a
 rerun; of one that is too loose, a PCB.
@@ -440,8 +417,8 @@ and it lives in [`../software/`](../software/).
 - [x] Variant 3 — DMA-driven address (`cpu/src/spike_dma.c`)
 - [x] Verify the DMAMUX/EXTI constants against RM0440 Rev 9 — all confirmed correct
 - [x] Confirm the CoCo 3 pin budget against the service manual (§2.6 — six signals freed)
-- [x] Verify `t_DSR` / `t_DHR` against the datasheet — 40 ns / 10 ns; deadline corrected
-      from the quarter cycle to `t_AD` = 110 ns
+- [x] Verify `t_DSR` / `t_DHR` against the datasheets — 40 ns / 10 ns at the 2 MHz
+      grade, `t_DSR` 20 ns at 3 MHz; the deadline is `t_AD` = 110 ns at both grades
 - [x] Firmware compiles (`arm-none-eabi-gcc` 13.2.1); hot loop confirmed at `0x10000000`
 - [x] Decide direct-drive vs buffers — **buffers, mandatory**: `PA0..PA7`, `PB0`, `PB1`,
       `PB2`, `PB10`, `PB13`, `PB14` (and `PC5`) are `TT_a` (3.6 V), and the CoCo drives
@@ -454,11 +431,9 @@ and it lives in [`../software/`](../software/).
       `BOOT0` is `PB8` is `A8` (see Provisioning above). Blocks any socket test
 - [ ] Confirm the GIME accepts 3.3 V `V_OH` — buffers output 3.3 V, not 5 V
 - [ ] Debug console on `USART3` (`PC10`/`PC11`), so results don't need a debugger
-- [ ] Variant 2 — hand-written assembly (predicted ~2.5 MHz)
-- [ ] Variant 3 — EXTI + DMAMUX + DMA precomputed store (predicted ~3–3.5 MHz)
-- [x] ~~Variant 4 — overclock to 180–200 MHz~~ — **dropped.** Core clock committed at
-      170 MHz, in spec; see `cpu/docs/plan.md` §3.4(4). It moved no gate from fail to pass,
-      and 344 MHz is the PLL VCO ceiling (any SYSCLK > 172 MHz overclocks the PLL too).
+- Variant 4 does not exist — the 200 MHz overclock is rejected (`cpu/docs/plan.md`
+  §3.4(4)): it moves no gate from fail to pass, and 344 MHz is the PLL VCO ceiling
+  (any SYSCLK > 172 MHz overclocks the PLL too). Core clock: 170 MHz, in spec.
 - [ ] Variant 5 — straight-line unrolled poll, uniform `T_iter` = 4 (`plan.md` §3.3(c))
 - [ ] Variant 6 — external 74LVC574 read-data latch (`plan.md` §3.6) — decides 3 MHz
 - [ ] Build the stimulus generator — with a '574 fitted from the start (`plan.md` §7)

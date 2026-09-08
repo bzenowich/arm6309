@@ -92,8 +92,8 @@ That is also why a non-standard 2× crystal is a trap: 38,400 baud is 3,840 inte
 receive-only and 7,680 full duplex — 37 % of the CPU on the optimistic dispatch figure and
 arithmetically impossible on the pessimistic one. The baud generator was never the limit.
 
-> ⚠ **`/RTS` does not rescue this, and an earlier revision of `docs/serial.md` §5 said it
-> did** — "an overrun becomes throttling rather than lost data". That describes a 16550.
+> ⚠ **`/RTS` does not rescue this.** "An overrun becomes throttling rather than lost
+> data" describes a 16550.
 > On a 6551, **`/RTS` is a bit in `COMMAND`**, not a receiver-driven output, so throttling
 > is software flow control carried on a hardware wire, driven from the ISR at a
 > ring-buffer high-water mark — and the only encoding that deasserts `/RTS` also **disables
@@ -136,10 +136,9 @@ structure (**open drain**, which the wire-OR onto the shared `/IRQ` depends on),
 transition interrupt, and the maximum `φ2` for the grade in hand. Step 2 is the shared
 interrupt-cost measurement.
 
-**Buy a null-modem cable.** `docs/serial.md` §8 used to say a straight-through cable to a
-modern USB-serial adapter was what the DE-9 expected; a USB-serial adapter is **also a
-DTE**, so the first cable anyone plugs in has to be a crossover. The straight-through one
-is for the modem.
+**Buy a null-modem cable.** A USB-serial adapter is **also a DTE**, so the first
+cable anyone plugs in has to be a crossover (`docs/serial.md` §8). The
+straight-through one is for the modem.
 
 **The NitrOS-9 driver probably exists.** The CoCo 3 tree ships an `sc6551` SCF driver for
 the Deluxe RS-232 Pak — the same part on the same bus — so §3.2's "base-address change and

@@ -12,9 +12,9 @@ human to touch it. What does a PS/2 keyboard and mouse card look like, given tha
 software.** Slu4's Minimal 64x4 receives PS/2 in **three packages** — one `74HC595`, one
 `74HC193`, one `74HCT132` — and §4.1 explains exactly how. Most of what a "proper" PS/2
 controller contains is optional, and this card keeps only the parts that a **mouse**
-forces: a transmit path, a second port, an address decoder — and, since the 2026-09-04
-design review, **a second-stage latch per port**, because the buffering §5 thought it was
-getting for free from the `'595` does not exist. That comes to **eleven**.
+forces: a transmit path, a second port, an address decoder — and **a second-stage latch
+per port**, because the `'595`'s storage register is not the byte of buffering it looks
+like (§5). That comes to **eleven**.
 
 The half of the design people skip is **host-to-device transmit**, and it is not
 optional — a mouse sends nothing at all until it is told `F4`. But it does not need
@@ -32,25 +32,29 @@ driver bit-bangs it through two control bits and the whole transmit engine disap
 > and contemporary with the VGA connector [`graphics.md`](../../../video/docs/graphics.md)
 > §15 already justifies on the same grounds. §12 audits the rest of the BOM.
 
+> Superseded material — earlier revisions' claims, dropped numbers, and the 2026-09-04
+> design-review trail — is archived in [history.md](history.md); this document describes
+> only the present design.
+
 ---
 
 ## 0. Summary — the verdict in one table
 
 | Question | Answer | § |
 |---|---|---|
-| **How much hardware does receiving PS/2 actually take?** | **Three packages per port** — a `'595`, a `'193` and a `'574` — plus a shared `'132`. The first two are the Minimal 64x4's; the third is §5.1's correction. | §4.1, §5.1, §6 |
+| **How much hardware does receiving PS/2 actually take?** | **Three packages per port** — a `'595`, a `'193` and a `'574` — plus a shared `'132`. The first two are the Minimal 64x4's; the third is §5.1's second-stage latch. | §4.1, §5.1, §6 |
 | **Would a quadrature mouse be cheaper, as on Burrell Smith's Apple II card?** | **Two packages cheaper and unaffordable.** Interrupt-per-notch scales with hand speed — up to 4,000/s, against PS/2's fixed 180. | §4.4(c) |
 | **Would one 6522 VIA per port replace most of this?** | **Four packages instead of eleven, and rejected on I/O space:** two VIAs decode 32 bytes against a 4-byte budget. | §4.5 |
-| **How does the card get the CPU's attention?** | **`/IRQ`, as a third source.** `/IRQ` is already an open-drain line with two sources (VBL, raster compare); only `/FIRQ` is exclusive. | §3.1 |
+| **How does the card get the CPU's attention?** | **`/IRQ`, shared.** `/IRQ` is an open-drain line with multiple sources (VBL, raster compare, net); only `/FIRQ` is exclusive. | §3.1 |
 | **What does that cost?** | **~1.1 % of the CPU while input is actually happening**, zero when it is not — with the mouse at 60 samples/s. | §3.1, §5.2 |
 | **Why is there no FIFO?** | Because with an interrupt there is nothing to *queue*. But the `'595`'s storage register is **not** a byte of buffering — it is overwritten by the next frame's start bit — so the card buys the frame time with a `'574` per port instead. | §5, §5.1 |
 | **Why is the mouse set to 60 samples/s?** | You cannot display a pointer faster than the 70.09 Hz frame rate, and **60 /s is the largest standard PS/2 rate below it**. | §5.2 |
 | **Does the card check parity?** | **No.** 30 cm of shielded cable at 16 kHz, and the only recovery costs a round trip worth more than the error. Slu4 checks nothing either. | §6.2 |
 | **Does the card need to transmit?** | **Yes** — a mouse is silent until `F4`. **In software**, through two control bits and a `7407`. | §7 |
-| **Where does it live in the `$FF` map?** | **`$FF50`–`$FF53`, four bytes** — a quarter of the region pencilled in for a disk controller, not half. | §3.2 |
+| **Where does it live in the `$FF` map?** | **`$FF50`–`$FF53`, four bytes** — the lower half of the merged I/O card's eight-byte window. | §3.2 |
 | **Does it decode scan codes?** | **No.** Raw set-2 bytes; translation is the driver's job. | §11.1 |
 | **Emulate the CoCo's PIA0 keyboard matrix so stock NitrOS-9 drivers work?** | **No** — it would cost more than the entire card. | §10 |
-| **IC count** | **11.** Was 16 before reading the Minimal 64x4, and 9 before §5.1's second-stage latch. | §9 |
+| **IC count** | **11.** | §9 |
 
 **Net: 11 ICs** — one GAL22V10, two `'595`, two `'193`, two `'574`, and four glue
 packages — against the video card's count (`graphics.md` §14) and audio's
@@ -150,9 +154,9 @@ rather than defaulted into. Here are the choices.
 
 `audio.md` §8.1 takes `/FIRQ` as the **sole** source, deliberately, so the replayer's
 interrupt path has no polling chain in it. That exclusivity is specific to `/FIRQ`.
-**`/IRQ` is the opposite**: `graphics.md` §12 already puts *two* sources on it — VBL and
-raster compare — open-drain, with a GIME-compatible interrupt-source block that
-"NitrOS-9's CoCo 3 IRQ code already talks to". A third source is what the line is for.
+**`/IRQ` is the opposite**: `graphics.md` §12 puts *two* sources on it — VBL and raster
+compare — open-drain, and `machine.md` §4.1 chains five including the net card. A shared
+line is what `/IRQ` is for.
 
 `/NMI` is free and is the wrong answer: being non-maskable, a keypress would pre-empt the
 replayer tick that `/FIRQ`'s exclusivity exists to protect.
@@ -168,14 +172,9 @@ replayer tick that `/FIRQ`'s exclusivity exists to protect.
 | Cost at 400 cycles/interrupt (NitrOS-9 dispatch ⚠) | **4.6 %** |
 | Cost when nobody is touching anything | **zero** |
 
-Arithmetic: 240 × 400 = 96,000 cycles/s against 2,097,900 = 4.58 %. At the old 40 /s
-mouse rate it was 180 × 400 = 72,000 = 3.4 %; §5.2 explains why the extra 1.2 points is
+Arithmetic: 240 × 400 = 96,000 cycles/s against 2,097,900 = 4.58 %. At §5.2's 40 /s
+fallback rate it is 180 × 400 = 72,000 = 3.4 %; §5.2 explains why the extra 1.2 points is
 worth buying, and what to do if §13 step 8 says it is not.
-
-> ⚠ **The 40 /s figure in the row above replaced an earlier one and has itself been
-> replaced.** §5.2, per the 2026-09-04 design review (IO-P5): 40 /s was chosen as "just
-> under the frame rate", but 60 /s is a standard PS/2 rate and 70.09 Hz is the frame rate,
-> so the criterion's own answer was 60 all along.
 
 > **The 400-cycle figure is a guess and it is the weakest number in this document.**
 > If NitrOS-9's dispatcher is worse than that, 4.6 % becomes 9.2 % and this decision
@@ -183,56 +182,42 @@ worth buying, and what to do if §13 step 8 says it is not.
 > 40 /s mouse rate (which costs nothing) and then §5.3's FIFO, which trades four packages
 > for the interrupt load.
 
-**The earlier revision of this document polled from the VBL tick instead**, to avoid
-touching the interrupt structure at all. That was the wrong trade: it cost a 16-byte FIFO
-per port — **four of sixteen packages** — to save an interrupt on a line that already had
-two sources. Reading the Minimal 64x4 is what made that visible.
-
 Polling remains a supported fallback and is how §13 step 7 brings the card up before the
 video card exists — but with one byte of buffering it is only sound for the keyboard.
 
 **The line is shared, so the order in which the handler polls it is a machine-level
-decision, not this card's.** `machine.md` §4 records it, and it is: **video `VSTAT`
-first** (VBL is NitrOS-9's system tick and by far the most frequent source), **then this
-card's `IOSTAT`**, **then the serial card's `STATUS` last**. Serial is last because
+decision, not this card's.** `machine.md` §4.1 records it, and it is: **video `VSTAT`
+first** (VBL is NitrOS-9's system tick and by far the most frequent source), **then net's
+`NRXST`** (side-effect-free, and under load the most frequent source after VBL), **then
+this card's `IOSTAT`**, **then the serial card's `STATUS` last**. Serial is last because
 reading the 6551's `STATUS` *clears* its interrupt and returns the error bits in the same
 read (`serial.md` §7.3), so that card's handler cannot probe cheaply and defer — it must
 consume what it finds. This card is deliberately in the middle: §8.1's `IOSTAT` read has
 **no side effects at all**, so an early handler in the chain may read it as often as it
 likes, and the byte is not consumed until `KDATA`/`MDATA` is read.
 
-### 3.2 `$FF50`–`$FF53` — a quarter of the disk controller's window, not half
+### 3.2 `$FF50`–`$FF53` — four bytes
 
-The geographic decode spans `$FF40`–`$FF7F` (`graphics.md` §17). Video has
-`$FF60`–`$FF7F`; `audio.md` §9.1 proposes `$FF40`–`$FF4F`; `$FF50`–`$FF5F` is pencilled
-in for a disk controller that does not exist.
+The geographic decode spans `$FF00`–`$FF7F` (`machine.md` §2; `hardware/cards/windows.ts`
+is the map as data). Video has `$FF60`–`$FF7F`, `audio.md` §9.1 proposes `$FF40`–`$FF4F`,
+storage holds `$FF58`–`$FF5B` and net `$FF5C`–`$FF5F`.
 
-**Propose `$FF50`–`$FF53` — four bytes** — leaving `$FF54`–`$FF5F`, twelve bytes, for the
-disk controller. Four is enough because §8 has exactly four registers, and it has four
-registers because §5 has no FIFO to index and §7 has no transmit engine to command. A
-WD1773 is four registers plus a latch, so twelve bytes leaves the disk controller room it
-would not otherwise have had.
+**Propose `$FF50`–`$FF53` — four bytes** — with serial's `$FF54`–`$FF57` immediately
+above it. Four is enough because §8 has exactly four registers, and it has four
+registers because §5 has no FIFO to index and §7 has no transmit engine to command.
+(A WD1773 disk controller, for comparison, is four registers plus the drive-select
+latch every CoCo-style board adds beside it — `machine.md` §3.)
 
-> ⚠ **Four, not five.** `machine.md` §3's parallel sentence says "five registers plus a
-> latch"; the WD1773 has four (`COMMAND`/`STATUS`, `TRACK`, `SECTOR`, `DATA`) plus the
-> drive-select/side/density latch that every CoCo-style controller board adds beside it.
-> The figure in this section is the correct one; `machine.md` is the document to fix.
+Decode is from the backplane's `/IOSEL` — the `$FF00`–`$FF7F` window strobe, common to
+every slot — so the base is a jumper, and the card matches **`A0`–`A6`** against it.
+⚠ **`A6` is load-bearing**: it is not implied by the strobe, and a six-bit match answers
+at `$FF50` *and* `$FF10` ([`machine.md`](../../../docs/machine.md) §2).
 
-Decode is from the backplane's `/IOSEL`, so the base is a jumper.
-
-> ⚠ **This said "geographic from the backplane's per-slot `/IOSEL`" until 2026-09-06.**
-> A per-slot decode fixes each card's window by position and leaves the jumper in the
-> same sentence nothing to select. `/IOSEL` is the `$FF40`–`$FF7F` window strobe, common
-> ⚠ **This card shares a board with the serial card since 2026-09-08** —
+> ⚠ **This card shares a board with the serial card** —
 > `hardware/cards/io.circuit.tsx`, 14 ICs on a 12 cm card. The two windows are
-> contiguous, so the merged card decodes `$FF50`–`$FF57` as eight bytes. This document
-> is unchanged: the card's logic, its 11 packages and its interrupt behaviour are what
-> they were, and `machine.md` §4.1 still polls it ahead of serial.
->
-> to every slot; this card decodes its four bytes from ~~`A0`–`A5`~~ **`A0`–`A6`** (⚠ the
-> window widened to `$FF00`–`$FF7F` on 2026-09-08 and `A6` left the strobe — six bits
-> answer at `$FF50` *and* `$FF10`) against the jumpered
-> base. [`machine.md`](../../../docs/machine.md) §2 owns the correction.
+> contiguous, so the merged card decodes `$FF50`–`$FF57` as eight bytes. The card's
+> logic, its 11 packages and its interrupt behaviour are unchanged by the merge, and
+> `machine.md` §4.1 still polls it ahead of serial.
 
 ---
 
@@ -349,21 +334,20 @@ consumed by conditioning `CLK` and `DATA` on each.
                           └───────────┘    read strobe ──► /OE ──► D0–D7
 ```
 
-Five things in that diagram are not in the Minimal 64x4's, and four of them are the
-2026-09-04 design review's:
+Five things in that diagram are not drawn on the Minimal 64x4's sheet:
 
 1. **The `'193`'s preset inputs are strapped to 1010 = 10**, and `~TCD` is fed back to
-   `/PL` through the GAL so the counter reloads itself at the end of every frame. The
-   Minimal 64x4 does this and this document's earlier revision did not draw it. §6.1
-   derives the value, and §6.1's note explains why the load pulse is self-terminating and
-   still wide enough. `MR` is **tied low permanently** — it forces 0000, not the preload,
-   and a down-counter released at 0000 borrows on its very next edge.
+   `/PL` through the GAL so the counter reloads itself at the end of every frame — the
+   Minimal 64x4 does this too. §6.1 derives the value, and §6.1's note explains why the
+   load pulse is self-terminating and still wide enough. `MR` is **tied low
+   permanently** — it forces 0000, not the preload, and a down-counter released at 0000
+   borrows on its very next edge.
 2. **`KRST` asserts `/PL`, not `MR`**, for the same reason: "held in reset" for this
    counter means *held at the preload*, so that when the driver releases it the next
    `CLK` falling edge is counted as edge 1.
 3. **A `74HC574` per port** captures the `'595`'s storage register once per frame and
-   drives the bus — §5.1. The `'595`'s own `~OE` is now tied **permanently enabled**; it
-   no longer touches the bus.
+   drives the bus — §5.1. The `'595`'s own `~OE` is tied **permanently enabled**; it
+   never touches the bus.
 4. **`/RESET` is a GAL input**, clearing both `DR` latches — §8.4.
 5. The `DR` latch, as well as raising `/IRQ`, is what **clocks the `'574`** — §5.1
    explains why the capture strobe is taken from the latch's clean output level rather
@@ -393,13 +377,13 @@ And the reason for the dozen:
 > *"…they didn't think the Apple II could deal with interrupts properly (even though we
 > had demonstrated that it could), so they added tons of hardware."*
 
-**That is exactly the mistake the first revision of this document made.** It assumed no
-interrupt was available (§3.1 — the assumption was wrong; `/IRQ` was never exclusive) and
-paid for the assumption with a 16-byte FIFO per port: four packages of hardware bought by
-distrusting an interrupt. Same error, same price, 45 years apart. It is recorded here
-because the *pattern* is what recurs — **hardware is what you build when you do not
-believe the CPU will be there in time**, and the first thing to check is always whether
-that belief is true.
+**That is exactly the mistake §3.1 exists to head off.** Assume no interrupt is
+available — `/IRQ` was never exclusive — and the assumption costs a 16-byte FIFO per
+port: four packages of hardware bought by distrusting an interrupt, the same error at the
+same price 45 years apart ([history.md](history.md) records this card paying it once).
+It is recorded here because the *pattern* is what recurs — **hardware is what you build
+when you do not believe the CPU will be there in time**, and the first thing to check is
+always whether that belief is true.
 
 #### (b) The video-sync trick — inapplicable, but the shape of it is not
 
@@ -475,9 +459,9 @@ A 6522 has a shift register with modes for **shift in and shift out under an ext
 clock on `CB1`** — which is, on the face of it, exactly a PS/2 port: `CB1` = `CLK`,
 `CB2` = `DATA`, the port bits give §7's line drive and read-back, a timer gives the 100 µs
 inhibit, and the interrupt logic gives `/IRQ`. Two VIAs, a `7407` and an `'HCT132` is
-**four packages against this card's eleven**, and a 6522 is a 1977 part — comfortably inside
-the period rules, which have never barred LSI — and since 2026-09-08 do not bar
-programmable logic either (root `README.md`).
+**four packages against this card's eleven**, and a 6522 is a 1977 part — comfortably
+inside the period rules, which have never barred LSI and do not bar programmable logic
+(root `README.md`).
 
 **Rejected, on three counts, and the first one is decisive:**
 
@@ -506,43 +490,27 @@ revisited against a real datasheet.
 
 ## 5. Buffering — one byte is enough, and two packages are what it costs
 
-This is where the earlier revisions of this document were wrong, twice, and it is worth
-showing the arithmetic that changed each time.
+**The tempting free lunch here is not real, and the card's shape follows from that.** The
+`'595`'s storage register looks like a byte of buffering — hold byte N while frame N+1
+shifts in, and the CPU has a whole frame time (660 µs at 16.7 kHz, 1.1 ms at 10 kHz) to
+collect it. **It is not.** `RCLK` is `Q0` of the `'193` (§4.1 idea 2), and `Q0` toggles on
+**every clock edge of every frame** — it has no notion of a frame boundary. For the
+capture to work at all `Q0` must rise on the odd edges, 1, 3, 5, 7, 9, so that its last
+rising edge lands during bit 7. **Edge 1 of frame N+1 is that frame's start bit**, and it
+copies the shift register into storage again: byte N shifted one place further, with the
+new frame's start bit in `d0`. So byte N is valid from edge 9 of frame N until **edge 1
+of frame N+1**, and the service deadline is not the frame time at all. It is the
+**inter-byte gap** — a quantity the host does not control, that no PS/2 document
+specifies, and that inside a 3-byte mouse packet is device-dependent and can be a few
+hundred µs.
 
-> ### ⚠ The `'595`'s storage register is **not** a byte of buffering. Superseded 2026-09-04.
->
-> **The claim below was this card's central engineering argument, and it is false:**
->
-> > **The `'595`'s storage register holds one byte while the next frame shifts in.** That
-> > buys one full frame time — **660 µs at the slowest clock rate** — to service the port.
-> > The only question is whether the CPU can be there inside 660 µs.
-> >
-> > - **With `/IRQ` (§3.1): trivially yes.** Interrupt latency on a 6309 is
-> >   instruction-time plus dispatch, three orders of magnitude inside the window.
-> >   **No FIFO. No packages.**
->
-> **The small error first.** 660 µs is 11 × 60 µs, which is the *fastest* PS/2 clock rate
-> (16.7 kHz). The *slowest* (10 kHz) gives 11 × 100 µs = **1.1 ms**. The label is
-> inverted; 660 µs is the floor of the frame time, not its ceiling.
->
-> **The large error.** `RCLK` is `Q0` of the `'193` (§4.1 idea 2), and `Q0` toggles on
-> **every clock edge of every frame** — it has no notion of a frame boundary. For the
-> capture to work at all `Q0` must rise on the odd edges, 1, 3, 5, 7, 9, so that its last
-> rising edge lands during bit 7. **Edge 1 of frame N+1 is that frame's start bit**, and
-> it copies the shift register into storage again: byte N shifted one place further, with
-> the new frame's start bit in `d0`. So byte N is valid from edge 9 of frame N until
-> **edge 1 of frame N+1**, and the service deadline is not the frame time at all. It is
-> the **inter-byte gap** — a quantity the host does not control, that no PS/2 document
-> specifies, and that inside a 3-byte mouse packet is device-dependent and can be a few
-> hundred µs.
->
-> Against that, one NitrOS-9 dispatch at this document's own 400-cycle guess is
-> 400 / 2.0979 MHz = **191 µs** — before the shared-`/IRQ` chain of §3.1 has polled
-> video's two sources, and before the handler body runs. And §6.2 checks neither parity
-> nor framing, so a torn byte is **indistinguishable from a good one**: the failure mode
-> is silent corruption of the mouse stream, not a detected error.
->
-> Found in the 2026-09-04 design review, `docs/design-review.md` §5 IO-P1.
+Against that, one NitrOS-9 dispatch at this document's own 400-cycle guess is
+400 / 2.0979 MHz = **191 µs** — before the shared-`/IRQ` chain of §3.1 has polled the
+sources ahead of this card, and before the handler body runs. And §6.2 checks neither
+parity nor framing, so a torn byte is **indistinguishable from a good one**: the failure
+mode is silent corruption of the mouse stream, not a detected error. Slu4's machine is
+immune because its CPU tests a branch flag and reads the byte within a couple of
+instructions; a 6309 arriving through an interrupt dispatcher is not.
 
 ### 5.1 The second-stage latch — two packages, and the buffer becomes real
 
@@ -583,16 +551,15 @@ wanted:
   is the byte it gets; a late driver loses the *new* byte rather than having the old one
   swapped underneath it mid-read.
 
-**Cost: +2 ICs, and the card goes from 9 to 11** (§9). The `'595`'s own `~OE` is tied
-permanently enabled and no longer drives the bus — the `'574`'s `/OE` does, from the same
+**Cost: two of the card's 11 ICs** (§9). The `'595`'s own `~OE` is tied
+permanently enabled and never drives the bus — the `'574`'s `/OE` does, from the same
 read strobe that clears `DR`. Nothing else in the datapath moves.
 
 **Polling at the 70.09 Hz VBL tick is still no** — 14.27 ms is 13 to 21 frame times, so
-one byte of buffering never made polling work and the `'574` does not change that. That is
-what forced the earlier design's 16-byte FIFO, and it is four packages of tail wagging one
-dog.
+one byte of buffering never made polling work and the `'574` does not change that. A
+polled design needs §5.3's FIFO — four packages of tail wagging one dog.
 
-### 5.2 The mouse sample rate — 60 /s, which is what the criterion always said
+### 5.2 The mouse sample rate — 60 /s, which is what the criterion says
 
 **Set the mouse to 60 samples/s** (`F3`, then `$3C`), not the 100 default.
 
@@ -605,24 +572,20 @@ rejects anything else. Each report is a 3-byte packet, so each costs three inter
 | 100 /s (default) | 300 | 300 | 4.3 | 5.7 % |
 | 80 /s | 240 | 240 | 3.4 | 4.6 % |
 | **60 /s (specified)** | **180** | **180** | **2.6** | **3.4 %** |
-| 40 /s (previous revision) | 120 | 120 | 1.7 | 2.3 % |
+| 40 /s (the fallback) | 120 | 120 | 1.7 | 2.3 % |
 | 20 /s | 60 | 60 | 0.9 | 1.1 % |
 | 10 /s | 30 | 30 | 0.4 | 0.6 % |
 
-**You cannot display a pointer faster than the frame rate**, so the criterion is: take the
-largest standard rate that still sits below 70.09 Hz. That rate is **60**, and the
-previous revision's 40 was a rate chosen from a menu that omitted it.
+**You cannot display a pointer faster than the frame rate**, so the criterion is: take
+the largest standard rate that still sits below 70.09 Hz. That rate is **60** — 80 is the
+first rate above the frame rate, and 40 is what you pick only when CPU budget forces it.
+The `F3` argument is **`$3C`** (§11.2 step 3, §13 step 5).
 
-> ⚠ **The previous revision specified 40 /s and justified it as "just under the frame
-> rate".** It is not — 60 is, and 80 is the first rate above it. Corrected per the
-> 2026-09-04 design review (IO-P5). The `F3` argument changes from `$28` to `$3C`
-> (§11.2 step 3, §13 step 5).
-
-What it costs: mouse interrupts go from 120 /s to 180 /s, so §3.1's combined worst case
-goes from ~180 /s to ~240 /s, and the CPU budget from 0.9 %/3.4 % to **1.1 %/4.6 %**.
-What it buys: worst-case pointer latency falls from 25 ms (one 40 Hz report period) to
-16.7 ms, which is under one 14.27 ms frame plus a compositing pass rather than nearly two
-frames.
+What 60 costs over the 40 /s fallback: mouse interrupts go from 120 /s to 180 /s, so
+§3.1's combined worst case goes from ~180 /s to ~240 /s, and the CPU budget from
+0.9 %/3.4 % to **1.1 %/4.6 %**. What it buys: worst-case pointer latency falls from 25 ms
+(one 40 Hz report period) to 16.7 ms, which is under one 14.27 ms frame plus a
+compositing pass rather than nearly two frames.
 
 **If §13 step 8 measures a dispatch cost worse than 400 cycles, drop back to 40 /s before
 touching anything else.** It is a one-byte change in the driver, it recovers 1.2 points of
@@ -642,8 +605,7 @@ expensive one.
 > **13, not 15**, because the FIFO **subsumes** §5.1's second-stage latch: the
 > `CD40105B`'s shift-in strobe is the same end-of-frame signal the `'574` uses, and it
 > captures the storage register the same way — sixteen deep instead of one. So the
-> fallback is 11 − 2 + 4 = 13, exactly the number the earlier revision quoted, arrived at
-> for a different reason.
+> fallback is 11 − 2 + 4 = 13.
 
 ---
 
@@ -691,14 +653,12 @@ boundary. Then:
 > from `~TCD`: a 40 ns strobe is fine for an asynchronous load and needlessly tight for a
 > registered capture.
 
-> ⚠ **The `'193` was never loaded in the previous revision.** It said the counter idles
-> "preloaded" without saying with what or by what mechanism, §4.3's datapath drew no
-> connection to `/PL` or the preset inputs, and §8.2 specified `KRST`/`MRST` as holding
-> the counter "in reset" — but a 74HC193's `MR` forces **0000**, not the preload. A
-> down-counter released at 0000 borrows on its very first clock edge, sets `DR` with
-> garbage, and every following frame is misaligned by one. Corrected per the 2026-09-04
-> design review (IO-P2); §13 step 2's breadboard is where the value 10 gets falsified if
-> it is wrong.
+> ⚠ **`MR` is not a substitute for `/PL`.** A 74HC193's `MR` forces **0000**, not the
+> preload, and a down-counter released at 0000 borrows on its very first clock edge, sets
+> `DR` with garbage, and misaligns every following frame by one. "Held in reset" for this
+> counter therefore means *held at the preload* — which is why `KRST`/`MRST` drive `/PL`
+> (§8.2) and `MR` is tied low. §13 step 2's breadboard is where the value 10 gets
+> falsified if it is wrong.
 
 **Frame phase is set once, by releasing `KRST` while the line is idle.** The counter has
 no timebase and cannot see a frame boundary, so if it is ever released mid-frame its phase
@@ -744,10 +704,9 @@ before the last `Q0` rise survive into storage, so there is nothing to clear.
 frame is **0.7–1.1 ms** of busy-wait — cheap for a driver doing one-time setup, and absurd
 to spend a shift register, a sequencer and a timer on.
 
-**What it is not is free**, and §7.1 is the part the earlier revision left out: that
-busy-wait has to run with `/IRQ` masked, which makes it the longest interrupt-off window
-in the machine and puts it in conflict with `serial.md` §5.1. Read §7.1 before writing the
-driver.
+**What it is not is free**, and §7.1 is the part that gets skipped: that busy-wait has to
+run with `/IRQ` masked, which makes it the longest interrupt-off window in the machine
+and puts it in conflict with `serial.md` §5.1. Read §7.1 before writing the driver.
 
 The hardware is four bits of `IOCTRL` and four bits of `IOSTAT`:
 
@@ -788,21 +747,20 @@ The driver then walks §2.3 directly:
 Timeouts are software counters: 15 ms for the device to start clocking, 2 ms for the frame
 to complete. No `'4040`, no monostable, no state machine.
 
-> ⚠ **Steps 3–5 previously read in true-line polarity** — "poll `KCLK` for a falling
-> edge", "`KDAT` low" — which is correct about the wire and wrong about the register, and
-> a driver written from it inverts every poll. All four `'HCT132` gates are consumed by
+> ⚠ **Do not rewrite steps 3–5 in true-line polarity** — "poll `KCLK` for a falling
+> edge", "`KDAT` low" — which is correct about the wire and wrong about the register: a
+> driver written that way inverts every poll. All four `'HCT132` gates are consumed by
 > conditioning two ports' `CLK` and `DATA` (§4.2, §9), so **nothing on the card can
 > re-invert them**: the inversion is load-bearing for the receive path, where the PS/2
-> falling edge has to become the rising edge the `'595` and `'193` clock on. Corrected per
-> the 2026-09-04 design review (IO-P6); §8.1 states the register polarity once,
-> normatively.
+> falling edge has to become the rising edge the `'595` and `'193` clock on. §8.1 states
+> the register polarity once, normatively.
 
 ### 7.1 Transmit runs with `/IRQ` masked, and that is expensive
 
-> **The previous revision's only concurrency rule was "a transmit must not happen inside
-> an interrupt handler".** That is the easy half. The half that matters is the converse:
-> **a transmit at task level with interrupts enabled is corrupted *by* interrupt
-> handlers.**
+**Two concurrency rules, and the second is the one that matters.** The easy half: a
+transmit must not happen inside an interrupt handler. The half that bites is the
+converse: **a transmit at task level with interrupts enabled is corrupted *by* interrupt
+handlers.**
 
 Step 4 must present each bit inside one device clock-low half-period — **30–50 µs** by
 §2.2's own table. One NitrOS-9 dispatch is 48–191 µs (100–400 cycles at 2.0979 MHz). So a
@@ -843,9 +801,6 @@ driven from the ISR, and the ISR is precisely what is not running (`serial.md` �
 | **Quiesce the mouse first** — `F5`, transmit, `F4` | two *more* masked frames, and the `F5` transmit has the same exposure it is trying to fix | halves the input traffic during the window it does not remove; worth it only if mouse tearing, not serial, is the observed problem |
 | **Drop `/IRQ` masking, accept `FE` retries** | a retry budget (§11.2 already allows three) and unbounded latency under load | tempting and wrong: with the mouse streaming, *every* attempt sees traffic, so the retries correlate |
 | **Defer the LED update to an idle window** — a flag consumed when both ports and the serial ring buffer are quiet | a few lines of driver, no hardware | **the cheapest real mitigation, and the one to try first** |
-
-This §7.1 ↔ `serial.md` §5.1 interaction was recorded in neither document before the
-2026-09-04 design review (IO-P4).
 
 > **What this gives up.** A hardware transmitter would let the driver fire and forget.
 > This one blocks the driver for ~1 ms *with `/IRQ` off*. Under NitrOS-9 that means a
@@ -889,9 +844,7 @@ There is no index/data window — contrast `audio.md` §9.2, which needs one bec
 > gates are consumed**, so there is nothing on the card that could re-invert them for the
 > status port.
 >
-> **So a line at rest reads 0, not 1.** The previous revision of this table described bits
-> 2–5 as "line state" and called idle-high "a crude presence check" — both of which read
-> backwards at the register. Corrected per the 2026-09-04 design review (IO-P6).
+> **So a line at rest reads 0, not 1.**
 >
 > **Presence check, correctly stated:** a port with a device attached and idle reads
 > `KCLK` = 0 and `KDAT` = 0. A port with **nothing plugged in** reads the same, because
@@ -905,10 +858,11 @@ There is no index/data window — contrast `audio.md` §9.2, which needs one bec
 
 **Reading `IOSTAT` has no side effects.** The interrupt handler reads it first to decide
 which port to service, and clearing happens only on the `KDATA`/`MDATA` read. That matters
-for the shared line: **this card sits second in the `/IRQ` polling chain** (§3.1, and
-`machine.md` §4), between video's `VSTAT` and the serial card's `STATUS`, and a
-side-effect-free status read is what lets it be polled by a handler that turns out not to
-need it. The serial card cannot offer that, which is why it is polled last.
+for the shared line: **this card sits mid-chain in the `/IRQ` polling order** (§3.1, and
+`machine.md` §4.1), after video's `VSTAT` and net's `NRXST`, before the serial card's
+`STATUS`, and a side-effect-free status read is what lets it be polled by a handler that
+turns out not to need it. The serial card cannot offer that, which is why it is polled
+last.
 
 There are no error bits, because §6.2 detects no errors.
 
@@ -929,18 +883,19 @@ There are no error bits, because §6.2 detects no errors.
 not spending a register on read-back.
 
 **`IOCTRL` is a `74HC273`, not a `'574`** — the same octal D register with an
-asynchronous `/MR` in place of the output enable, wired to backplane `/RESET`. The `'574`
-the previous revision specified had its `OE` tied active anyway, because `IOCTRL` never
-drives the bus, so the swap is **free**: same package, same pin count, same price. §8.4 is
-why it is not optional.
+asynchronous `/MR` in place of the output enable, wired to backplane `/RESET`. `IOCTRL`
+never drives the bus, so the `'574`'s output enable buys nothing here and the `/MR` is
+**free**: same package, same pin count, same price. §8.4 is why it is not optional.
 
 ### 8.3 The interrupt handler
 
-This card is **second** in the shared-`/IRQ` chain — after video's `VSTAT`, before the
-serial card's `STATUS` (§3.1, `machine.md` §4, `serial.md` §7.3):
+This card sits **mid-chain** on the shared `/IRQ` — after video's `VSTAT` and net's
+`NRXST`, before the serial card's `STATUS` (§3.1, `machine.md` §4.1, `serial.md` §7.3):
 
 ```
         lda   VSTAT           ; video first - VBL is the system tick
+        ...
+        lda   NRXST           ; then net - side-effect-free, most frequent after VBL
         ...
         lda   IOSTAT          ; then this card - no side effects, safe to probe
         bita  #%00000001      ; keyboard byte?
@@ -961,11 +916,12 @@ instructions and costs the serial path nothing.
 
 ### 8.4 Reset — what the card does at power-up
 
-The previous revision of this document had **`/RESET` as an input to no IC on the card**.
-The serial card gets this right (`serial.md` §6 wires backplane `/RESET` straight to the
-6551's `/RES`); this one did not, and the consequences are not cosmetic.
+Backplane `/RESET` reaches two ICs on this card — the `'273` and the GAL — and both
+connections are load-bearing. The serial card gets the same property from one pin
+(`serial.md` §6 wires backplane `/RESET` straight to the 6551's `/RES`); this card has to
+construct it, and what it prevents is not cosmetic.
 
-**What was undefined at power-up, and what each undefined bit did:**
+**What would be undefined at power-up without it, and what each undefined bit does:**
 
 | Undefined | Consequence |
 |---|---|
@@ -981,12 +937,12 @@ it**: the read that clears `DR` lives in a driver that has not been loaded. That
 interrupt storm at boot, on the line the system tick uses, and the machine does not get to
 a prompt.
 
-**So, two changes, at zero net IC cost:**
+**So, two connections, at zero net IC cost:**
 
-1. **`IOCTRL` becomes a `74HC273`** with `/MR` on backplane `/RESET`. All eight bits clear:
+1. **`IOCTRL` is a `74HC273`** with `/MR` on backplane `/RESET`. All eight bits clear:
    both ports' lines released (devices run their BAT normally), `KRST`/`MRST` clear, and
    **`IRQEN` = 0**, which is the bit that matters.
-2. **`/RESET` becomes a GAL input** that clears both `DR` latches. The GAL already forms
+2. **`/RESET` is a GAL input** that clears both `DR` latches. The GAL already forms
    them (§9), so this is one product term on each, not a package.
 
 **What is still undefined after reset, deliberately:** the two `'193`s' *phase*. `/RESET`
@@ -998,8 +954,6 @@ asserting `KRST`, waiting for `IOSTAT` to show `CLK` idle, and releasing. Making
 *also* assert `KRST` would need an inverting stage between the `'273` and `/PL`, or a
 negative-logic redefinition of the bit; neither is worth a gate for a state the driver
 must establish deliberately anyway.
-
-Corrected per the 2026-09-04 design review (IO-P3).
 
 ---
 
@@ -1026,11 +980,6 @@ Corrected per the 2026-09-04 design review (IO-P3).
 **Total: 11.** Plus four 4.7 kΩ pull-ups, **two polyfuses**, two mini-DIN-6 connectors,
 and the +5 V provisioning below.
 
-> ⚠ **The card was 9 until the 2026-09-04 design review.** The two `'574`s of §5.1 are the
-> whole difference; the `'273`-for-`'574` swap of §8.4 is free. Every "nine packages"
-> comparison elsewhere in this document has been restated against 11, and the FIFO
-> fallback stays at 13 (§5.3).
-
 **Connector power — the row a BOM forgets.** PS/2 devices are powered from the port:
 **mini-DIN-6 pin 4 is +5 V, pin 3 is ground.** A keyboard draws **~50–100 mA** (more with
 all three LEDs lit), a mouse ~30 mA. Both come off the backplane's +5 V rail, and each
@@ -1040,18 +989,18 @@ insert at an angle. A shorted pin 4 without one takes down the whole backplane r
 one it takes down a keyboard until it is unplugged. Add 100 nF of local decoupling per
 connector while the pen is there.
 
-Three things are *absent* that the earlier revision had, and each is worth naming: **no
+Three things a reader might expect are *absent*, and each is worth naming: **no
 `'245`** — the `'574`'s own 3-state output drives the bus, which is what Slu4 does with
 the `'595`; **no FIFO** — §5.3; **no transmit engine and no timer** — §7.
 
-> **The GAL is the fitting risk, and it got tighter.** A `GAL22V10` has 10 macrocells.
+> **The GAL is the fitting risk, and it is tight.** A `GAL22V10` has 10 macrocells.
 > Four strobes + two `DR` latches + `/IRQ` + **two `/PL` terms** (§6.1) = **9**, leaving
-> **1** for the decode terms — where the earlier revision had 3. The `DR` latches remain
-> the awkward part: set by an asynchronous external signal (`~TCD`), cleared synchronously
-> by the read strobe and asynchronously by `/RESET`, which is not the shape a registered
-> macrocell likes. **If it does not fit, `DR` moves back to a `74HC74` (one package for
-> both ports, `/CLR` on `/RESET`) and the card is 12.** §13 step 4, and it is the same
-> arithmetic `graphics.md` §18 step 2 insists on doing before layout.
+> **1** for the decode terms. The `DR` latches are the awkward part: set by an
+> asynchronous external signal (`~TCD`), cleared synchronously by the read strobe and
+> asynchronously by `/RESET`, which is not the shape a registered macrocell likes. **If
+> it does not fit, `DR` moves out to a `74HC74` (one package for both ports, `/CLR` on
+> `/RESET`) and the card is 12.** §13 step 4, and it is the same arithmetic
+> `graphics.md` §18 step 2 insists on doing before layout.
 >
 > If the fit fails *and* the decode needs more room, the honest fallback is a second GAL
 > rather than a squeeze; that is also 12.
@@ -1073,14 +1022,14 @@ difference between porting the memory manager and configuring it") and the sound
 **Paula-exact** period reference (`audio.md` §4.1 — every module transfers verbatim). The
 pattern is real and has earned its place twice.
 
-**Reject it, and the margin is wider than it was.** Three reasons, increasing in weight:
+**Reject it, and the margin is wide.** Three reasons, increasing in weight:
 
 1. **It costs more than the entire card.** A scan-code → matrix-position table (a 256 × 8
    EPROM or boot-loaded SRAM), an 8 × 8 bit matrix file with set/clear on make/break, the
    `$FF00` decode, and for the mouse a 6-bit magnitude comparator pair plus the
    channel-select logic to fake the joystick's successive-approximation read — **about
-   seven packages, against an eleven-package card.** At sixteen packages this was a 44 %
-   increase; against eleven it is 64 %, and the thing it buys is *not writing software*.
+   seven packages, against an eleven-package card — a 64 % increase**, and the thing it
+   buys is *not writing software*.
 
 2. **The compatibility argument is much weaker than it looks.** NitrOS-9 *cannot boot*
    without an MMU and its Level 2 MMU code is GIME-specific and deep in the kernel. A
@@ -1109,11 +1058,9 @@ is that the protocol is slow enough not to need one.
 
 The driver sees, for `A`: `1C` on press, `F0 1C` on release. Extended keys carry an `E0`
 prefix; `Pause` is an **eight**-byte make sequence — `E1 14 77 E1 F0 14 F0 77`, with no
-break sequence at all — and is special-cased everywhere, including here.
-
-> ⚠ **This said "seven bytes".** It is eight: `E1 14 77 E1 F0 14 F0 77`. The count matters
-> to anyone writing the state machine that swallows it, which is the only reason the
-> sequence is mentioned. Corrected per the 2026-09-04 design review (IO-P7).
+break sequence at all — and is special-cased everywhere, including here. The count
+matters to anyone writing the state machine that swallows it, which is the only reason
+the sequence is spelled out.
 
 ### 11.2 Initialisation
 
@@ -1128,14 +1075,10 @@ level, not in the interrupt handler.
 | 3 | `ED` set LEDs, `F3` typematic rate | **`F3` then `$3C` — sample rate 60 /s, §5.2** |
 | 4 | `F4` enable scanning | **`F4` enable reporting — without this the mouse is silent** |
 
-Step 0 is new and it is not optional: after `/RESET` the counters are running with an
-undefined *phase* (§8.4), and only a `KRST` pulse released during a confirmed idle window
-fixes it. Every transmit in steps 1–4 re-establishes it as a side effect (§7 steps 1 and
-6), which is why the previous revision got away without saying so.
+Step 0 is not optional: after `/RESET` the counters are running with an undefined *phase*
+(§8.4), and only a `KRST` pulse released during a confirmed idle window fixes it. Every
+transmit in steps 1–4 re-establishes it as a side effect (§7 steps 1 and 6).
 
-⚠ **`$3C` was `$28` (40 /s) in the previous revision** — see §5.2 and the design review's
-IO-P5. Both are valid `F3` arguments; only one of them is the largest standard rate below
-the frame rate.
 `FE` (resend) means the device rejected the frame; retry. Three retries and mark the port
 dead rather than loop — a missing device produces silence, not `FE`.
 
@@ -1161,8 +1104,8 @@ opt-in (a device only sends it after a magic sample-rate knock). Ignoring it is 
 ### 11.4 Where the driver lives
 
 The interrupt handler is §8.3 — read `IOSTAT`, read a byte, push to a ring buffer in
-system RAM, return. **The ring buffer moved from hardware to software**, which is the
-whole §5 trade: sixteen bytes of 6309 RAM instead of four `CD40105B`. What §5.1 keeps in
+system RAM, return. **The ring buffer lives in software, not hardware** — the whole §5
+trade: sixteen bytes of 6309 RAM instead of four `CD40105B`. What §5.1 keeps in
 hardware is not the queue — it is the one byte the driver has already been told about, and
 two `'574`s is the price of that byte being the byte it was told about.
 
@@ -1173,7 +1116,7 @@ two `'574`s is the price of that byte being the byte it was told about.
 | Part | First available | Verdict |
 |---|---|---|
 | PS/2 interface, 6-pin mini-DIN | **1987** (IBM PS/2) | in period, contemporary with the VGA connector `graphics.md` §15 justifies |
-| GAL22V10 | 1986 | in period; the machine already uses 9 of them |
+| GAL22V10 | 1986 | in period; the machine's placement carries five of them (`hardware/place/parts.ts`) |
 | 74HC595, 74HC193, 74HC244, 74HC574, 74HC273 | 1980s HC family | in period |
 | 74HCT132 | 1980s HCT family | in period |
 | 7407 | 1970s | in period, and the open-collector part everyone used |
@@ -1190,11 +1133,11 @@ needs the `AD7545A` → `LTC7545A` substitution.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | **Settle `machine.md` §5 items 1 and 2** — `$FF50`–`$FF53`, and `/IRQ` as a third source | `machine.md` records both as taken rather than proposed |
+| 0 | **Settle `machine.md` §5 items 1 and 2** — `$FF50`–`$FF53`, and `/IRQ` as an added source | `machine.md` records both as taken rather than proposed (`hardware/cards/windows.ts` still carries the window as proposed) |
 | 1 | **Measure the protocol.** Scope a real keyboard and mouse: clock rate, half-periods, **rise/fall times (§4.2)**, request-to-first-clock, and — **the number §5's whole no-FIFO argument turns on — the inter-byte gap *inside* a 3-byte mouse packet**, at 60 /s and at 200 /s, on every mouse to hand | §2.2's ⚠ table replaced with measured numbers; a PS/2 reference added to `reference/`; **the intra-packet gap recorded as a number, because if it is comfortably longer than a frame time then §5.1's `'574`s are insurance rather than a fix, and if it is 150 µs then they are the card** |
 | 2 | **Breadboard the Minimal 64x4 receiver verbatim** — one `'595`, one `'193`, one `'HCT132`, one port, real keyboard — **with the preset strapped to 10 and `~TCD` looped to `/PL`** (§6.1) | raw set-2 codes read out correctly, **including the reversed bit order and the `Q0`→`RCLK` timing**; a preset of 11 demonstrably reads the wrong eight bits, which is what confirms the value rather than assuming it. Then add the `'574` and show that a byte survives the next frame's start bit. This step exists to confirm §4.1 and falsify §6.1 before generalising either. |
 | 3 | **Software transmit** on the same breadboard, `7407` and two GPIO lines | `FF` returns `FA` then `AA`; `ED` visibly lights the keyboard LEDs |
-| 4 | **Fit the GAL** — four strobes, two `DR` latches, `/IRQ` | fits one `GAL22V10`, or the card becomes 10 with a `'74` — §9 |
+| 4 | **Fit the GAL** — four strobes, two `DR` latches, two `/PL` terms, `/IRQ` | fits one `GAL22V10`, or the card becomes 12 with a `'74` — §9 |
 | 5 | **Mouse: `F3`/`$3C` then `F4`** (§5.2) | 3-byte packets at 60 /s, correct deltas, no desync over an hour |
 | 6 | **Card rev A** on the STM32 bus exerciser (`graphics.md` §16.1) — no 6309 core needed | both ports read back; `IOSTAT` tracks **in the polarity §8.1 specifies**; `/IRQ` asserts and clears; **pulse `/RESET` with a device attached and confirm `IOCTRL` reads back as clear, both ports' lines released, and `/IRQ` high** — §8.4 |
 | 7 | **Polled driver against a monitor ROM**, software loop, no VBL, keyboard only | keystrokes echo to the console — the step that does not depend on the video card |
@@ -1214,9 +1157,8 @@ to the owner.**
    recalled. Add Chapweske's protocol document or an IBM PS/2 technical reference, and
    re-grade §1. **Blocks §13 step 4.**
 
-2. **`$FF50`–`$FF53` takes a quarter of the disk controller's reservation** (§3.2). Better
-   than the half the previous revision wanted, but still a claim on a region nobody has
-   specified. Raise it in `machine.md` before the backplane is laid out.
+2. **`$FF50`–`$FF53` is still a proposal** (§3.2) — `hardware/cards/windows.ts` carries
+   it as proposed, not taken. Raise it in `machine.md` before the backplane is laid out.
 
 3. **NitrOS-9's interrupt dispatch cost is a guess**, and §3.1's entire budget rests on
    it. At the specified 60 /s mouse rate, 100 cycles gives 1.1 %; 400 gives 4.6 %; 800
@@ -1224,8 +1166,8 @@ to the owner.**
    number that decides first whether §5.2 drops back to 40 /s, and then whether §5.3's
    FIFO comes back.
 
-4. **The `DR` latch may not fit the GAL** (§9), and the margin is now one macrocell rather
-   than three, because §6.1's two `/PL` terms moved into the same package. Asynchronous
+4. **The `DR` latch may not fit the GAL** (§9), and the margin is one macrocell, because
+   §6.1's two `/PL` terms live in the same package. Asynchronous
    set, synchronous clear *and* an asynchronous `/RESET` clear is not a registered
    macrocell's natural shape. Costs one `74HC74` if not, and the card is 12.
 
@@ -1237,14 +1179,14 @@ to the owner.**
 5. **`IOCTRL` is write-only** (§8.2) and must be shadowed by the driver. If §13 step 4
    finds GAL capacity spare, making it readable is worth more than it costs.
 
-6. **Hot-plug is not designed for.** `KCLK`/`MCLK` (§8.1) is a **weaker** presence check
-   than the previous revision claimed — the pull-ups read the same with the connector
-   empty — so the only real probe is an `FF` that returns `AA`, which costs a §7.1 masked
-   window. Decide whether the driver re-initialises on a transition or the card simply
-   requires a reset. §9's per-port polyfuse is the *electrical* half of this item and is
-   now specified; the software half is not.
+6. **Hot-plug is not designed for.** `KCLK`/`MCLK` (§8.1) is a **weak** presence check —
+   the pull-ups read the same with the connector empty — so the only real probe is an
+   `FF` that returns `AA`, which costs a §7.1 masked window. Decide whether the driver
+   re-initialises on a transition or the card simply requires a reset. §9's per-port
+   polyfuse is the *electrical* half of this item and is specified; the software half is
+   not.
 
-7. **A third port** is no longer cheap in the way it was. With per-port `'595` + `'193` +
+7. **A third port is not cheap.** With per-port `'595` + `'193` +
    `'574` it is **+3 ICs** plus `IOSTAT`/`IOCTRL` bits that are already nearly full, and
    the GAL has one macrocell of margin (§9). Decide before layout, not after.
 
@@ -1279,7 +1221,7 @@ to the owner.**
 | [`graphics.md`](../../../video/docs/graphics.md) | §12 the `/IRQ` sources this card joins; §16.1 the bus exerciser; §17 the backplane and the `$FF` map; §18 the build-order form |
 | [`audio.md`](../../../audio/docs/audio.md) | §8.1 why `/FIRQ` is exclusive and `/IRQ` is not; §9 the register-map conventions; §10 the chip-budget form |
 | [`plan.md`](../../../cpu/docs/plan.md) | §3.3 the bus timing this card's read path sits inside |
-| [`serial.md`](../../serial/docs/serial.md) | §5 the flow-control mechanism §7.1's masked window defeats, and the other half of that interaction; §7.3 why serial is polled last on the shared `/IRQ`; §6 the `/RESET` wiring §8.4 should have copied |
-| [`docs/design-review.md`](../../../docs/design-review.md) | §5, 2026-09-04. IO-P1 (§5), IO-P2 (§6.1), IO-P3 (§8.4), IO-P4 (§7.1), IO-P5 (§5.2), IO-P6 (§8.1), IO-P7 (§11.1), IO-P8 (§9) |
+| [`serial.md`](../../serial/docs/serial.md) | §5 the flow-control mechanism §7.1's masked window defeats, and the other half of that interaction; §7.3 why serial is polled last on the shared `/IRQ`; §6 the one-pin `/RESET` wiring whose property §8.4 constructs |
+| [`docs/design-review.md`](../../../docs/design-review.md) | §5, 2026-09-04 — the review whose findings (IO-P1…P8) shaped this design; what each one changed is archived in [history.md](history.md) |
 | Adam Chapweske, *The PS/2 Mouse/Keyboard Protocol* | the community reference for §2. **Not in `reference/` — §14 item 1.** |
 | ARM PrimeCell PS/2 Keyboard/Mouse Interface, `DDI0096` | an independent description of the same frame format |
