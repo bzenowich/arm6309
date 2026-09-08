@@ -28,6 +28,7 @@ import { join } from "node:path"
 
 import { Gal22v10, parseJedec } from "./simulate"
 import type { Design } from "./assemble"
+import { assemble, toJedec } from "./assemble"
 import { mmuDesign } from "../mmu.jedec"
 import { clkdecDesign } from "../clkdec.jedec"
 import { hgenDesign, vgenDesign, vdecDesign } from "../sync.jedec"
@@ -39,6 +40,10 @@ import { aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign } from 
 import { ALL } from "../designs"
 import { PHASES, mmu } from "../mmu.model"
 import { RESET_STATE, decode, step, type Counter } from "../clkdec.model"
+
+/* The arbiter, assembled here so its pin placement is known to the sweep. */
+const arbAsm = assemble(arbDesign)
+const ourArb = new Gal22v10(parseJedec(toJedec(arbDesign, arbAsm)).fuses)
 
 let failures = 0
 const check = (ok: boolean, claim: string, detail = "") => {
@@ -86,7 +91,7 @@ const checkClkdec = (label: string, gal: Gal22v10) => {
   for (const fastE of [false, true]) {
     const base = { 2: (fastE ? 1 : 0) as 0 | 1, 3: 1 as const, 4: 1 as const,
                    5: 0 as const, 6: 0 as const, 7: 0 as const, 8: 1 as const,
-                   9: 0 as const }
+                   9: 0 as const, 10: 0 as const }
     gal.evaluate({ ...base, 3: 0 }); gal.reset()
     let model: Counter = { ...RESET_STATE }, bad: string | null = null
     const edges = fastE ? 64 : 96
@@ -113,6 +118,35 @@ const cuplMmu = load("reference/mmu.cupl.jed")
 const cuplClk = load("reference/clkdec.cupl.jed")
 checkMmu("CUPL mmu.jed", cuplMmu)
 checkClkdec("CUPL clkdec.jed", cuplClk)
+
+/* -- U-V6, the arbiter: combinational, so it is swept rather than clocked --- */
+const checkArb = (label: string, gal: Gal22v10) => {
+  const names = ["GCPU0", "GSPN0", "GCPU1", "GSPN1", "GCPU2", "GSPN2",
+                 "GCPU3", "GSPN3", "SPNGRANT", "WAIT"]
+  const pinOf = Object.fromEntries(
+    names.map((n) => [n, arbAsm.usage.find((u) => u.name === n)!.pin]))
+  let bad: string | null = null
+  for (let bits = 0; bits < 512 && !bad; bits++) {
+    const inputs = {
+      1: (bits & 1) as 0 | 1, 2: ((bits >> 1) & 1) as 0 | 1,
+      3: ((bits >> 2) & 1) as 0 | 1, 4: ((bits >> 3) & 1) as 0 | 1,
+      5: ((bits >> 4) & 1) as 0 | 1, 6: ((bits >> 5) & 1) as 0 | 1,
+      7: ((bits >> 6) & 1) as 0 | 1, 8: ((bits >> 7) & 1) as 0 | 1,
+      9: ((bits >> 8) & 1) as 0 | 1,
+    }
+    const ours = ourArb.evaluate(inputs)
+    const theirs = gal.evaluate(inputs)
+    for (const n of names) {
+      if (ours[pinOf[n]] !== theirs[pinOf[n]]) {
+        bad = `${n} at inputs ${bits.toString(2).padStart(9, "0")}: ` +
+          `ours ${ours[pinOf[n]]}, CUPL ${theirs[pinOf[n]]}`
+        break
+      }
+    }
+  }
+  check(bad === null, `${label}: matches our fuse map over all 512 inputs`, bad ?? "")
+}
+checkArb("CUPL arb.jed", load("reference/arb.cupl.jed"))
 
 console.log("\nAnd ours, which must agree with it\n")
 checkMmu("our mmu.jed", load("../mmu.jed"))
@@ -146,7 +180,11 @@ const REGISTRY: Part[] = [
   { design: clkdecDesign, reference: "reference/clkdec.cupl.jed" },
   { design: hgenDesign, reference: null }, { design: vgenDesign, reference: null },
   { design: vdecDesign, reference: null }, { design: hadrDesign, reference: null },
-  { design: vadrDesign, reference: null }, { design: arbDesign, reference: null },
+  { design: vadrDesign, reference: null },
+  /* arb came back out of vctrl on 2026-09-08 (video.cpld.ts), so it is a live
+   * GAL again and the registry's rule applies to it: a GAL does not ship
+   * without a second implementation to check it against. */
+  { design: arbDesign, reference: "reference/arb.cupl.jed" },
   { design: wcolDesign, reference: null }, { design: wrowDesign, reference: null },
   { design: seqphDesign, reference: null }, { design: seqctlDesign, reference: null },
   /* The audio five were missing from this list until 2026-09-07, which is the

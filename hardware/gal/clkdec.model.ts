@@ -17,7 +17,11 @@ export interface Counter { cnt: number; e: 0 | 1; q: 0 | 1 }
 export const RESET_STATE: Counter = { cnt: 0, e: 0, q: 0 }
 
 /** One rising edge of the 25.175 MHz master. */
-export const step = (s: Counter, fastE: boolean): Counter => {
+/* /WAIT holds every registered macrocell - machine.md 5 item 8. It is a
+ * third argument rather than a field of Counter because it is an input to the
+ * part, not state inside it. */
+export const step = (s: Counter, fastE: boolean, wait = false): Counter => {
+  if (wait) return { ...s }
   const nxt = (fastE ? s.cnt === 7 : s.cnt === 11) ? 0 : s.cnt + 1
   return {
     cnt: nxt,

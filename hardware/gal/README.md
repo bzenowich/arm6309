@@ -365,7 +365,86 @@ than the broken two-literal version. `LA6` stays wired to pin 6 driving nothing,
 `$FF80`–`$FF8F` remains a one-line change; **pin 9 took physical `A20`** with option D.
 
 ⚠ **Cards must decode `A0`–`A6` now.** Six bits answer at the base and 64 bytes below it.
-`vctrl.pld`'s `REGSEL` gained `A6` with this change and **has not been refitted.**
+`vctrl.pld`'s `REGSEL` gained `A6` with this change and **has been refitted** — see below.
+
+### `/WAIT`, which had a producer and no consumer
+
+`vctrl.pld` has driven `/WAIT` open-drain since the video card was captured
+(`WAIT.oe = SPANBUSY & VRAMSEL & !IOPAGE`), and **this part had no `/WAIT` input at all.**
+`machine.md` §2's "it holds E" named an effect with no mechanism: the span writer held
+nothing, and the CPU read VRAM out from under it.
+
+**Fixed 2026-09-08 — `machine.md` §5 item 8.** One hold term on each of the six registered
+macrocells (`X.d = next & /WAIT # X & WAIT`), which is **+1 product term each and zero
+macrocells** — the latter mattering because this part uses all ten. `E` went from 7 terms
+of 16 to 8. The input is pin 10, one of the four dedicated inputs this design had spare.
+
+**Two rules came with it and both are machine-level:**
+
+1. **`/WAIT` is driven synchronously to `CLK25`.** It gates a counter clocked by `CLK25`
+   and there is no macrocell left for a synchroniser. Every card that can drive it already
+   has `CLK25` from the backplane, and `SPANBUSY` is in a `CLK25`-derived domain.
+2. **`/WAIT` is asserted only while `E` is high.** Stretching the low half helps nobody.
+   Qualifying it here would double the term count on `E`; qualifying it at the source is
+   one literal, and `vctrl.pld`'s `WAIT.oe` now ends `& E`.
+
+`clkdec_tb.sv` carries four claims for it, including **"/RESET beats /WAIT"** — an
+asynchronous clear a card could veto by holding a wire low would be a machine that cannot
+be reset — and `lib/netlist.check.ts` asserts that U6 takes the signal at all, which is
+the thing that stops this recurring.
+
+### The video CPLD refit, and a package worth noticing
+
+`vctrl.pld` gained three literals on 2026-09-08: `A6` on `REGSEL`, `/A20` on `VRAMSEL`,
+and `& E` on `WAIT.oe`. **It fits — at 78 of 80 I/O and 123 of 128 logic cells, and only
+on the fitter's second placement pass** (`cpld/vctrl.fit`). The logic-cell count did not
+move; the two extra pins did.
+
+⚠ **The committed fit targeted a `P1508T100` — a TQFP100 — where the `.pld` declared a
+PLCC-84 and `regfile.ts` says "vctrl fits at 62 of 64".** The design and its fit had
+disagreed about the package, and nothing checked it. **The card is a PLCC-84**, and
+2026-09-08's two extra inputs are what forced the question:
+
+| | I/O | logic cells |
+|---|---|---|
+| as committed, TQFP100 | 76 / 80 | 123 / 128 |
+| + `A6`, `/A20`, `& E`, still TQFP100 | 78 / 80 | 123 / 128 |
+| **on a PLCC-84** | **76 needed, 64 available — does not fit** | |
+| **arbiter moved out to a `GAL22V10`** | **64 / 64** | **112 / 128** |
+
+**The arbiter is the cheapest ten pins on the part to give back**: eight grants, `WAIT`
+and `SPNGRANT` are exactly ten macrocells against a `GAL22V10`'s ten; its inputs are
+backplane signals or already exported; and `access.jedec.ts` never stopped carrying it as
+a standalone design with `access.check.ts` still checking it. It was a GAL before the
+two-CPLD rebalance and it is one again. `WRITESEL` **is** `SPNGRANT`, so it stops being an
+output of `vctrl` and becomes an input to it.
+
+⚠ **64 of 64 is zero spare, and JTAG costs four I/O — so `vctrl` has none.** It is
+programmed out of circuit, which is what the audio card's U1 already does. If in-circuit
+programming is wanted back, `RA0`–`RA4` and `WSTB` onto a second `GAL22V10` is the obvious
+six pins, at the cost of exporting `RDFG`/`RDBG`/`RDLEN`.
+
+### ⚠ And every open-drain output in the machine drove its line the wrong way
+
+Compiling `/WAIT` as a GAL for the first time made `jedec/cupl.check.ts` **disagree with
+Atmel's compiler on exactly one signal.**
+
+The idiom is a cell with **no product terms**: it drives a constant and the condition
+rides entirely on `.oe`. Both emitters wrote `'b'0`. The pin is declared `PIN n = !WAIT`,
+**so CUPL inverts it and the pin drives HIGH when enabled** — on a shared line, a card
+fighting the motherboard's 3.3 kΩ pull-up and every other driver on it.
+
+**Three cells used the idiom and all three were wrong**: video's `/WAIT`
+(`access.jedec.ts`), **video's `/IRQ`** (`sync.jedec.ts` — the line PS/2, serial and net
+also pull), and audio's `/FIRQ` (`audio.jedec.ts`). Both emitters now write
+`'b'1` for an active-low cell, and every affected device has been refitted.
+
+> **`cupl.check.ts`'s header records two earlier errors that "178 passing checks could not
+> find, because the assembler and the fuse-map simulator shared the mistake". This one was
+> worse.** The mistake was in the **emitter**, upstream of both — so it was invisible to
+> the assembler, the simulator, and every check written against either. Only a second
+> compiler could see it, and only once a design using the idiom was built as a GAL instead
+> of merged into a CPLD. **`machine.md` §5 item 9.**
 
 **The Q tap is divisor-dependent, and that is the exit criterion `graphics.md` §18 step 0
 names.** `machine.md` §1 says *"Q = same divider, 3 dots early."* Three dots is a quarter

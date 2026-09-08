@@ -15,12 +15,13 @@ module clkdec_tb;
   always #5 clk25 <= ~clk25;
 
   logic n_reset = 0, fast_e = 0;
-  logic n_iopage = 1, la7 = 0, la6 = 0, a19 = 0, a20 = 0, rw = 1;
+  logic n_iopage = 1, la7 = 0, la6 = 0, a19 = 0, a20 = 0, rw = 1, wait_i = 0;
   logic [3:0] cnt;
   logic e, q, n_iosel, n_ram_ce, n_ram_oe, n_ram_we;
 
   clkdec dut (.clk25(clk25), .n_reset(n_reset), .fast_e(fast_e),
-              .n_iopage(n_iopage), .la7(la7), .la6(la6), .a19(a19), .a20(a20), .rw(rw),
+              .n_iopage(n_iopage), .la7(la7), .la6(la6), .a19(a19), .a20(a20),
+              .wait_i(wait_i), .rw(rw),
               .cnt(cnt), .e(e), .q(q), .n_iosel(n_iosel),
               .n_ram_ce(n_ram_ce), .n_ram_oe(n_ram_oe), .n_ram_we(n_ram_we));
 
@@ -41,6 +42,7 @@ module clkdec_tb;
   int period, high, lead, e_rise, q_rise, prev_rise, t;
   bit pe, pq;
   bit sel_ok, oe_ok, we_ok, never_io, never_both, wired, iosel_ok, top_ok;
+  logic [3:0] hold_cnt; logic hold_e, hold_q;
   bit want;
   string order;
 
@@ -167,7 +169,43 @@ module clkdec_tb;
         end
     ok(wired, "U6's own decode outputs match a bare decode on the same inputs");
 
-    if (fails == 0) $display("\nclkdec.v OK - 17 claims");
+    // ---- /WAIT holds the divider -----------------------------------------
+    // machine.md 5 item 8. vctrl.pld has driven this signal since the video
+    // card was captured and nothing listened; these are the claims that say
+    // something does now.
+    wait_i = 0; n_reset = 0; @(posedge clk25); #1; n_reset = 1;
+    repeat (7) @(posedge clk25); #1;          // land somewhere mid-cycle
+    hold_cnt = cnt; hold_e = e; hold_q = q;
+    wait_i = 1;
+    top_ok = 1;
+    repeat (40) begin
+      @(posedge clk25); #1;
+      if (cnt !== hold_cnt || e !== hold_e || q !== hold_q) top_ok = 0;
+    end
+    ok(top_ok, "/WAIT holds the counter, E and Q for as long as it is asserted");
+
+    // Releasing it must resume the sequence, not restart or skip it: the next
+    // count is exactly the one the counter would have produced with no wait at
+    // all. Comparing against a recomputed successor rather than against
+    // "something changed" is what makes this a claim instead of a smoke test.
+    wait_i = 0;
+    @(posedge clk25); #1;
+    ok(cnt === ((hold_cnt == 4'd11) ? 4'd0 : hold_cnt + 4'd1),
+       "releasing /WAIT resumes the exact count the divider would have reached");
+
+    // And the phase survives, which is what the whole machine's bus timing
+    // rests on: E and Q are decoded from the next count, so if the count is
+    // right the quadrature is right. Check E against its own decode.
+    ok(e === (((hold_cnt == 4'd11) ? 4'd0 : hold_cnt + 4'd1) >= 4'd6),
+       "E resumes in phase - a wait stretches a cycle, it does not skip one");
+
+    // /RESET must still win over /WAIT: an asynchronous clear that a card
+    // could veto by holding a wire low would be a machine that cannot be reset.
+    wait_i = 1; n_reset = 0; @(posedge clk25); #1;
+    ok(cnt == 0 && e == 0 && q == 0, "/RESET beats /WAIT - the clear is asynchronous");
+    n_reset = 1; wait_i = 0;
+
+    if (fails == 0) $display("\nclkdec.v OK - 21 claims");
     else            $display("\n%0d FAILED", fails);
     if (fails != 0) $fatal(1);
     $finish;

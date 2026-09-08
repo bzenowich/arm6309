@@ -43,6 +43,10 @@ PIN 6  = LA6 ;      /* KEPT WIRED, USED BY NOTHING. The window widened to
                      * removing a trace to gain nothing is not a saving. */
 PIN 7  = A19 ;       /* PHYSICAL A19, out of the map SRAM, not the CPU    */
 PIN 8  = RW ;
+PIN 10 = WAIT ;      /* /WAIT from the backplane, ACTIVE HIGH here (the pin
+                      * is open-drain low on the slot and inverted by the
+                      * 3.3k pull-up + this declaration). It HOLDS the whole
+                      * divider - see the counter below. machine.md 5 item 8 */
 PIN 9  = A20 ;       /* PHYSICAL A20, the map SRAM's eighth output bit -
                       * machine.md 5 item 1 option D, 2026-09-08. It was
                       * stored and read back and drove nothing.           */
@@ -66,17 +70,45 @@ PIN 23 = !RAM_WE ;   /*  8, 1 */
 tc12 = C3 & C1 & C0 ;
 tc8  = C2 & C1 & C0 ;
 
+/* --- /WAIT, added 2026-09-08 ------------------------------------------
+ * machine.md 5 item 8: vctrl.pld has driven /WAIT open-drain since the video
+ * card was captured, and NOTHING LISTENED. E and Q are made here and this
+ * part had no WAIT input, so "it holds E" (machine.md 2) named an effect with
+ * no mechanism - the span writer held nothing and the CPU read VRAM out from
+ * under it.
+ *
+ * The fix is one hold term on every registered macrocell: the counter stops,
+ * so E and Q stop with it, and the bus cycle stretches. It costs ONE PRODUCT
+ * TERM each against 8-16 available and NO macrocells, which matters because
+ * this part uses all ten.
+ *
+ * TWO RULES GO WITH IT, and neither is optional:
+ *
+ *   1. /WAIT IS DRIVEN SYNCHRONOUSLY TO CLK25. This gates a counter clocked
+ *      by CLK25 and there is no macrocell left for a synchroniser. Every card
+ *      that can drive it already has CLK25 from the backplane.
+ *   2. /WAIT IS ASSERTED ONLY WHILE E IS HIGH. Stretching the low half of a
+ *      cycle helps nobody and costs the machine time. Qualifying it here
+ *      would double the term count on E; qualifying it at the source is one
+ *      literal, and vctrl.pld now does that.
+ */
+hold = WAIT ;
+
 /* C0 and C1 need no terminal-count term at all: both terminal counts have
  * C1 = C0 = 1, so a plain toggle and a plain XOR already land on zero. */
-C0.d = !C0 ;
-C1.d = C1 $ C0 ;
+C0.d = !C0 & !hold
+     #  C0 &  hold ;
+C1.d = (C1 $ C0) & !hold
+     #  C1 &  hold ;
 
 /* C2 must be suppressed at 11 (it would carry into a 12th count) but not at
  * 7, where the XOR already gives zero. */
-C2.d = (C2 $ (C1 & C0)) & !(!FAST_E & tc12) ;
+C2.d = (C2 $ (C1 & C0)) & !(!FAST_E & tc12) & !hold
+     #  C2 &  hold ;
 
 /* C3 exists only in /12. In fast-E mode the counter is three bits. */
-C3.d = !FAST_E & (C3 & !C1 # C3 & !C0 # !C3 & C2 & C1 & C0) ;
+C3.d = !FAST_E & (C3 & !C1 # C3 & !C0 # !C3 & C2 & C1 & C0) & !hold
+     #  C3 &  hold ;
 
 /* --- E and Q ---------------------------------------------------------- */
 /* Both are REGISTERED and decoded from the NEXT count, not the current one.
@@ -90,20 +122,22 @@ C3.d = !FAST_E & (C3 & !C1 # C3 & !C0 # !C3 & C2 & C1 & C0) ;
  * as an exit criterion and this is where it is discharged. */
 
 /* E is high for counts 6-11 (/12) or 4-7 (/8), so E.d decodes 5-10 or 3-6. */
-E.d = !FAST_E & ( !C3 & C2 & C0        /* 5, 7        */
-                # !C3 & C2 & C1        /* 6, 7        */
-                #  C3 & !C1            /* 8, 9        */
-                #  C3 & !C0 )          /* 8, 10       */
-    #  FAST_E & ( !C3 & !C2 & C1 & C0  /* 3           */
-                # !C3 & C2 & !C1       /* 4, 5        */
-                # !C3 & C2 & !C0 ) ;   /* 4, 6        */
+E.d = ( !FAST_E & ( !C3 & C2 & C0        /* 5, 7        */
+                  # !C3 & C2 & C1        /* 6, 7        */
+                  #  C3 & !C1            /* 8, 9        */
+                  #  C3 & !C0 )          /* 8, 10       */
+      #  FAST_E & ( !C3 & !C2 & C1 & C0  /* 3           */
+                  # !C3 & C2 & !C1       /* 4, 5        */
+                  # !C3 & C2 & !C0 ) ) & !hold
+    # E & hold ;
 
 /* Q is high for counts 3-8 (/12) or 2-5 (/8), so Q.d decodes 2-7 or 1-4. */
-Q.d = !FAST_E & ( !C3 & C1             /* 2, 3, 6, 7  */
-                # !C3 & C2 )           /* 4, 5, 6, 7  */
-    #  FAST_E & ( !C3 & !C2 & C0       /* 1, 3        */
-                # !C3 & !C2 & C1       /* 2, 3        */
-                # !C3 & C2 & !C1 & !C0 ) ;  /* 4      */
+Q.d = ( !FAST_E & ( !C3 & C1             /* 2, 3, 6, 7  */
+                  # !C3 & C2 )           /* 4, 5, 6, 7  */
+      #  FAST_E & ( !C3 & !C2 & C0       /* 1, 3        */
+                  # !C3 & !C2 & C1       /* 2, 3        */
+                  # !C3 & C2 & !C1 & !C0 ) ) & !hold  /* 4 */
+    # Q & hold ;
 
 /* The 22V10's asynchronous reset is one term shared by every registered
  * macrocell, so the counter, E and Q all land in a defined state together.

@@ -1,4 +1,4 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Mon Sep 07 14:56:01 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Mon Sep 07 20:38:20 2026
 
 
 fit1508 audio.tt2 -device P1508C84 -preassign ignore
@@ -565,7 +565,7 @@ ENA5.D = ((RW & ENA5.Q)
 
 HOSTSLOT = (S0.Q & !S1.Q & S2.Q);
 
-FIRQ = 1;
+FIRQ = 0;
 
 RASTAT = (!A0 & A1 & !A2 & A3 & RW & SEL);
 

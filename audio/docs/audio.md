@@ -1025,7 +1025,8 @@ Decode is from the backplane's `/IOSEL`, so the base is a jumper, not a wire.
 > each card's window by position, which leaves a base-address jumper nothing to select —
 > and this card's window is 16 bytes where PS/2's is 4, which no slot-sized decode
 > produces. `/IOSEL` is the `$FF40`–`$FF7F` window strobe, common to every slot, and this
-> card completes the decode from `A0`–`A5`. See [`machine.md`](../../docs/machine.md) §2,
+> card completes the decode from ~~`A0`–`A5`~~ **`A0`–`A6`**. See
+[`machine.md`](../../docs/machine.md) §2,
 > which now owns it; the claim came from [`graphics.md`](../../video/docs/graphics.md)
 > §17, which copied it from colormin, where it was true.
 
@@ -1968,6 +1969,34 @@ specification that has not been tested.
 ---
 
 ## 16. Open items
+
+0. **⚠ NEW 2026-09-08 — should the sample RAM move into the machine's physical map?**
+
+   `machine.md` §5 item 1 option D gave the machine a second megabyte and §5 item 7
+   divided it into sixteen 64 KB regions for card buffers. **Two cards took it the same
+   day** — `sdcard.md` §11.1's block buffer and `net.md` §13.3's ring — and this card's
+   sample RAM is the third candidate and the one nobody has evaluated.
+
+   **What it would buy:**
+
+   | | now | mapped |
+   |---|---|---|
+   | 128 KB upload | **238 ms**, a chunked `TFM X+,Y` into a port | **188 ms**, an unchunked `TFM X+,Y+` RAM → RAM |
+   | the `TFM` doubled-write exposure | **carried** — the destination is a port, and `sdcard.md` §13 item 1 keeps that question open specifically for this upload and §9.2's | **gone.** A doubled write to RAM writes the same byte twice |
+   | streaming a module larger than the sample RAM | not possible — the port is write-only and the card owns the memory | ordinary memory: the player can page samples in |
+
+   **What it would cost:** the same address and data plumbing the other two cards paid —
+   `sdcard.md` §8 priced it at **five 74-series packages**, and this card would need the
+   same or an `ATF1508AS` I/O widening. On a card that fought its way down from 57 ICs to
+   29 that is not a small ask for 50 ms once per module.
+
+   ⚠ **And 128 KB is two regions of the sixteen**, because §5 item 7 fixed the region at
+   64 KB. That is the first time anything has asked for more than one, and it is worth
+   checking against that item before assuming it is allowed.
+
+   **Not decided here.** The 50 ms is minor; **closing the machine's last doubled-write
+   exposure is not**, and it is the argument that should decide this. `machine.md` §6 now
+   carries it as an `audio`-owned row.
 
 1. **Confirm the CPU store rate.** §13.1's ~3 % and §13.2's 187 ms both scale on
    "~5 core cycles per store, native mode" — the same assumption

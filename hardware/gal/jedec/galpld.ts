@@ -45,8 +45,27 @@ export const toGalPld = (d: Design, complement = false): string => {
   out.push("")
   for (const c of d.cells) {
     const lhs = c.registered ? `${c.name}.d` : c.name
-    const sop = c.terms.join("\n" + " ".repeat(lhs.length + 5) + "# ")
-    out.push(complement ? `${lhs} = !( ${sop} ) ;` : `${lhs} = ${sop} ;`)
+    /* An EMPTY term list is the open-drain idiom, not an oversight: the cell
+     * drives a constant and the condition rides entirely on .oe, so the pin
+     * pulls to one rail or floats and never drives the other. CUPL will not
+     * accept `WAIT = ;` for it - the constant has to be written out.
+     *
+     * THE CONSTANT IS 'b'1 FOR AN ACTIVE-LOW CELL, NOT 'b'0, and getting that
+     * backwards is how /WAIT acquired its third defect on 2026-09-08. The pin
+     * is declared `PIN n = !WAIT`, so CUPL inverts: writing `WAIT = 'b'0`
+     * makes the pin drive HIGH whenever the enable is true - which on a shared
+     * open-drain line is not "no wait", it is this card fighting the
+     * motherboard's 3.3k pull-up and every other card on the wire.
+     *
+     * jedec/cupl.check.ts caught it by disagreeing with Atmel's own compiler
+     * over exactly one signal, which is the entire reason that file exists.
+     * This emitter went years without meeting the idiom because the only
+     * design using it was merged into a CPLD. It came back out on 2026-09-08. */
+    const sop = c.terms.length
+      ? c.terms.join("\n" + " ".repeat(lhs.length + 5) + "# ")
+      : `'b'${c.assertedLow ? 1 : 0}`
+    out.push(complement || !c.terms.length ? `${lhs} = ${complement && c.terms.length ? `!( ${sop} )` : sop} ;`
+                                           : `${lhs} = ${sop} ;`)
     if (c.oe) out.push(`${c.name}.oe = ${c.oe} ;`)
   }
   const regs = d.cells.filter((c) => c.registered).map((c) => c.name)

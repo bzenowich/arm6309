@@ -97,22 +97,42 @@ const ctrlFanout: Cell[] = [
   comb("WRITESEL", ["SPNGRANT"]),
 ]
 
+/* ⚠ THE ARBITER CAME BACK OUT ON 2026-09-08, and it is why this part is a
+ * PLCC-84 rather than a TQFP100.
+ *
+ * The 2026-09-08 window widening and physical A20 put two more inputs on this
+ * part (A6 on REGSEL, /A20 on VRAMSEL - regfile.ts), and 76 I/O does not fit a
+ * PLCC-84's 64. The arbiter is the cheapest ten pins on the part to give back:
+ * eight grants, WAIT and SPNGRANT are ten macrocells against a GAL22V10's ten,
+ * its seven inputs are all backplane or already-exported signals, and
+ * access.jedec.ts still carries it as a standalone design with access.check.ts
+ * still checking it. It was a GAL before the two-CPLD rebalance; it is one
+ * again.
+ *
+ * WRITESEL is SPNGRANT under another name (video.parts.ts), so it stops being
+ * an output of this part and becomes an input to it - LINEAR is the only thing
+ * here that reads it. */
 export const vctrlCpld: Merged = merge(
-  [hgenDesign, vgenDesign, vdecDesign, seqphDesign, seqctlDesign,
-   rename(arbDesign, CPU_CHIP)],
+  [hgenDesign, vgenDesign, vdecDesign, seqphDesign, seqctlDesign],
   [...ctrl, ...ctrlFanout, ...tileCadence, ...decodeCells],
   {
-    name: "vctrl", partNo: "ARM6309-UV0B", location: "video card - sync, sequencer, arbiter",
-    device: "f1508ispplcc84", clock: "DOTCLK",
+    name: "vctrl", partNo: "ARM6309-UV0B", location: "video card - sync and sequencer",
+    /* ⚠ f1508plcc84, NOT f1508ispplcc84. The fit is 64 of 64 I/O and 4 of 4
+     * dedicated inputs with ZERO spare, and JTAG costs four I/O - so this part
+     * cannot have both. It is programmed out of circuit, which is what the
+     * audio card's U1 already does.
+     *
+     * If in-circuit programming is wanted back, four pins have to come from
+     * somewhere: RA0-RA4 and WSTB onto a second GAL22V10 is the obvious six,
+     * at the cost of exporting RDFG/RDBG/RDLEN. Nobody has needed it yet. */
+    device: "f1508plcc84", clock: "DOTCLK",
     external: new Set([
       "HSYNC", "VSYNC", "BLANK",
       "VBLANK", "HBLANK", "SPANBUSY",                    // VSTAT, driven onto D0-7
-      "IRQ", "WAIT",
+      "IRQ",
       "FCLK0", "FCLK1", "FCLK2", "FCLK3",
       "MUXSEL0", "MUXSEL1",
       "SLOTTICK", "RETIRE",
-      "GCPU0", "GCPU1", "GCPU2", "GCPU3",
-      "GSPN0", "GSPN1", "GSPN2", "GSPN3",
       /* §6.4's cadence, out to the address part and the serialiser */
       "MAPLD", "MAPSEL", "TILESEL", "CHARSEL", "LINEAR", "GLYPHLD", "GLYPHSH", "LUTPAGE",
       /* §19 item 23(b): the file address and one write strobe, in place of one
@@ -122,14 +142,18 @@ export const vctrlCpld: Merged = merge(
       /* The cell's row and column inside the 8x8 - §6.4's geometry. These are
        * the sync counters' own low bits, so they cost pins and not logic. */
       "V0", "V1", "V2",
-      /* WRITESEL used to arrive here as an input from nowhere. The span
-       * sequencer is on this part, so it is an output. LISTSEL is not: §10.3's
-       * arbitration is not designed, and until it is, the address part takes
-       * it as an input rather than this part inventing it. */
-      "WRITESEL",
+      /* ⚠ WRITESEL was an output here until 2026-09-08 and is an input again.
+       * It IS SPNGRANT, and SPNGRANT went back to the arbiter GAL with the
+       * eight grants. LISTSEL is likewise an input: §10.3's arbitration is not
+       * designed, and until it is, neither part invents it. */
     ]),
   },
 )
+
+/* The arbiter, standalone again - a GAL22V10 exactly as access.jedec.ts has
+ * always described it. CPUA0/CPUA1 are physical A0/A1, the same rename the
+ * merge used. */
+export const arbGal = rename(arbDesign, CPU_CHIP)
 
 export const vaddrSource = () => toCupl(vaddrCpld)
 export const vctrlSource = () => toCupl(vctrlCpld)

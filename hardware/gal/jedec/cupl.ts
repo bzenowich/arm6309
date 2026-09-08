@@ -150,8 +150,21 @@ export const toCupl = (m: Merged): string => {
   out.push("/* --- equations ---------------------------------------------------- */")
   for (const c of m.cells) {
     const lhs = `${c.name}${c.registered ? ".d" : ""}`
+    /* An EMPTY term list is the open-drain idiom: the cell drives a constant
+     * and the condition rides entirely on .oe, so the pin pulls to one rail or
+     * floats and never drives the other.
+     *
+     * THE CONSTANT IS 'b'1 FOR AN ACTIVE-LOW CELL, NOT 'b'0, and getting that
+     * backwards is how /WAIT acquired its third defect on 2026-09-08. The pin
+     * is declared `PIN n = !WAIT`, so CUPL inverts: writing `WAIT = 'b'0`
+     * makes the pin drive HIGH whenever the enable is true - which on a shared
+     * open-drain line is not "no wait", it is this card fighting the
+     * motherboard's 3.3k pull-up and every other card on the wire.
+     *
+     * jedec/cupl.check.ts caught it by disagreeing with Atmel's own compiler
+     * over exactly one signal, which is the entire reason that file exists. */
     if (c.terms.length === 0) {
-      out.push(`${lhs} = 'b'0 ;`)
+      out.push(`${lhs} = 'b'${c.assertedLow ? 1 : 0} ;`)
     } else {
       out.push(`${lhs} = ${c.terms.join("\n${pad}# ".replace("${pad}", " ".repeat(lhs.length + 3)))} ;`)
     }

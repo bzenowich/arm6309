@@ -51,11 +51,18 @@ export const decodeCells: Cell[] = [
   /* §6.3.2 consumer 1. One product term, and the /IOPAGE literal in it is the
    * difference between a working card and one that corrupts its framebuffer
    * on every I/O write in the machine. */
-  comb("VRAMSEL", ["A19 & !IOPAGE"],
-    "6.3.2 - A19 alone matches every I/O access, because the map SRAM keeps driving it"),
+  comb("VRAMSEL", ["A19 & !A20 & !IOPAGE"],
+    "6.3.2 - A19 alone matches every I/O access, because the map SRAM keeps driving it. " +
+    "/A20 since 2026-09-08: the physical map is 2 MB (machine.md 5 item 1 D) and the " +
+    "ring is its second quarter, not the top half of a 1 MB map"),
 
-  /* $FF60-$FF7F: the upper half of the motherboard's /IOSEL window. */
-  comb("REGSEL", ["IOSEL & A5"]),
+  /* $FF60-$FF7F: the upper half of the motherboard's /IOSEL window.
+   *
+   * A6 joined on 2026-09-08. /IOSEL widened to $FF00-$FF7F (machine.md 5 item 1
+   * A) and A6 left the strobe, so IOSEL & A5 alone matches $FF60-$FF7F AND
+   * $FF20-$FF3F - the card would answer twice. Every card on this backplane
+   * decodes A0-A6 now. */
+  comb("REGSEL", ["IOSEL & A6 & A5"]),
 
   /* The posted-write strobe. E-qualified, because a 6809 write is only valid
    * data in the second half of the cycle, and §6.3.2 wants the capture gated

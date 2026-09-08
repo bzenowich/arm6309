@@ -246,7 +246,7 @@ export default () => (
       footprint="dip24_w0.3in"
       pinLabels={labels(gal22v10({
         2: "FAST_E", 3: "/RESET", 4: "/IOPAGE", 5: "LA7", 6: "LA6",
-        7: "A19", 8: "R/W", 9: "A20",
+        7: "A19", 8: "R/W", 9: "A20", 10: "/WAIT",
         14: "/RAM_OE", 15: "/IOSEL", 16: "C0", 17: "C1", 18: "E", 19: "Q",
         20: "C2", 21: "C3", 22: "/RAM_CE", 23: "/RAM_WE",
       }))}
@@ -254,7 +254,7 @@ export default () => (
         VCC: "net.V5", GND: "net.GND",
         CLK: "net.CLK25", FAST_E: "net.GND", nRESET: "net.nRESET",
         nIOPAGE: "net.nIOPAGE", LA7: la(7), LA6: la(6),
-        A19: pa(19), A20: pa(20), R_W: "net.R_W",
+        A19: pa(19), A20: pa(20), R_W: "net.R_W", nWAIT: "net.nWAIT",
         nIOSEL: "net.nIOSEL", E: "net.E", Q: "net.Q",
         nRAM_CE: "net.RAM_CE", nRAM_OE: "net.RAM_OE", nRAM_WE: "net.RAM_WE",
       }}

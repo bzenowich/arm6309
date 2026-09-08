@@ -688,7 +688,8 @@ These are not deferred details; each one blocks a board.
    `net.md` §3.2). A card wanting a side-effecting register keeps it in its four bytes of
    `$FF` space, where `TFM` will not land on it.
 
-8. **⚠ NEW — `/WAIT` has a producer and no consumer.**
+8. **⚠ ~~NEW — `/WAIT` has a producer and no consumer.~~ FIXED 2026-09-08, and it created
+   a second item — see 9.**
 
    [`hardware/gal/vctrl.pld`](../hardware/gal/vctrl.pld) line 419 drives it open-drain —
    `WAIT.oe = SPANBUSY & VRAMSEL & !IOPAGE`, the video card holding the CPU off VRAM while
@@ -712,7 +713,74 @@ These are not deferred details; each one blocks a board.
    `CLK25`-derived domain already, so the rule costs nothing and must be written down
    before a second card assumes otherwise.
 
-   **Item 7's card buffers do not need `/WAIT`** and are unaffected either way.
+   **Item 7's card buffers do not need `/WAIT`** — their fixed-phase schedule never asks
+   for one.
+
+   > **Done.** `gal/clkdec.pld` has the hold term on all six registered macrocells
+   > (E went from 7 product terms to 8 of 16, and no macrocells were needed);
+   > `gal/vctrl.pld`'s `WAIT.oe` gained `& E`; `clkdec_tb.sv` carries four new claims
+   > including *"/RESET beats /WAIT"*; and Atmel's own CUPL agrees with the fuse map.
+   > `lib/netlist.check.ts` now asserts that U6 takes the signal, which is the thing that
+   > stops this recurring.
+
+9. **⚠ NEW — every open-drain output in the machine drove its line the wrong way.**
+
+   Fixing item 8 meant compiling `/WAIT` for a real GAL for the first time, and
+   `hardware/gal/jedec/cupl.check.ts` — the falsification check that runs Atmel's own
+   compiler against our fuse map — **disagreed on exactly one signal.**
+
+   The idiom is a cell with **no product terms**: it drives a constant and the condition
+   rides entirely on the output enable, so the pin pulls to one rail or floats. Both
+   emitters wrote the constant as `'b'0`. The pin is declared `PIN n = !WAIT`, so **CUPL
+   inverts it and the pin drives HIGH whenever the enable is true.**
+
+   On a shared open-drain line that is not "no wait". It is a card **fighting the
+   motherboard's 3.3 kΩ pull-up and every other card on the wire.**
+
+   **Three signals used the idiom and all three were wrong:**
+
+   | | line | consequence |
+   |---|---|---|
+   | video `/WAIT` | shared, 5 cards | the defect of item 8, twice over |
+   | **video `/IRQ`** | **shared with PS/2, serial and net** | **a card driving the machine's interrupt line high against four other open-drain drivers.** §4's whole ownership scheme assumes wire-OR |
+   | audio `/FIRQ` | audio alone | fights the pull-up; sole owner, so no card-to-card contention |
+
+   **Fixed** — `jedec/cupl.ts` and `jedec/galpld.ts` now emit `'b'1` for an active-low
+   cell — and **verified the only way it could be**: Atmel's CUPL and our assembler now
+   agree over all 512 input combinations of the arbiter. Every affected device was
+   refitted.
+
+   > **This is the second time `cupl.check.ts` has earned its existence**, and the lesson
+   > is sharper than the first. Its own header records two errors that "178 passing checks
+   > could not find, because in both cases the assembler and the fuse-map simulator shared
+   > the mistake and agreed with each other perfectly". **This one was worse**: the
+   > mistake was in the *emitter*, so it was invisible to the assembler and the simulator
+   > **and** to every check written against either. Only a second compiler could see it —
+   > and only once a design using the idiom was compiled as a GAL rather than merged into
+   > a CPLD.
+
+10. **⚠ NEW — a stretched cycle is a hazard for any card that schedules against `E`.**
+
+   Item 8's fix means `E` can now stop mid-cycle, and item 7's card buffers count `CLK25`
+   ticks *within* a bus cycle to decide who owns their SRAM. **Those two decisions were
+   made on the same day and they interact.**
+
+   [`net/docs/net.md`](../net/docs/net.md) §4.3 is the worked case: its framers take
+   ticks 0–3 and the host ticks 7 onward, and **while `E` is frozen the framers get no
+   slot at all.** A stretch longer than one byte time — ~800 ns at 10 Mbit — loses a
+   received byte, which fails the FCS and drops the frame. Not silent, but not free.
+
+   Two things are owed and neither has an owner:
+
+   - **A rule for item 7**: a phase counter must **saturate rather than wrap** during a
+     stretch, so a card's host window does not move under it. That is cheap and should be
+     written into item 7.
+   - **⚠ `graphics.md` must bound how long the span writer asserts `/WAIT`.** No document
+     says. Until one does, no card that schedules against `E` can state a worst case —
+     and item 8 is what turned that from a dead wire into a real constraint.
+
+   **This is the cost of fixing item 8, and it is worth paying**: a `/WAIT` that does
+   nothing is a video card that corrupts its own reads.
 
 ---
 
@@ -740,7 +808,10 @@ a cross-card dependency.
 | io | Confirm whether NitrOS-9's `sc6551` exists; it is the card's entire software cost | `serial.md` §13 item 2 |
 | **cpu** | **⚠ Settle `TFM`'s interrupt/resume behaviour from silicon** — and note it is now a *choice*, not a discovery, because this machine's 6309 is the project's own firmware. **Two cards now wait on it**, and the second one cannot retry a lost frame | `sdcard.md` §4, §13 item 1; `net.md` §3.2 |
 | **io** | **⚠ Fit `net`'s U2 before laying out its board** — 118 of 128 macrocells and 56 of 60 pins, with a five-step cut order behind it | `net.md` §7.3, §16 item 1 |
-| **video** | **⚠ Refit `vctrl`.** Two decodes changed under it on 2026-09-08 — `REGSEL` gained `A6` (§3, the widened window) and `VRAMSEL` gained `/A20` (§5 item 1 D). Both are one literal on an ATF1508AS, and neither has been through the fitter | `hardware/gal/vctrl.pld` |
+| **video** | ~~**⚠ Refit `vctrl`.**~~ **Done 2026-09-08** — `REGSEL` gained `A6`, `VRAMSEL` gained `/A20`, `WAIT.oe` gained `& E`, and **the arbiter moved back out to its own `GAL22V10`** so the part stays a **PLCC-84**. It fits at **64 of 64 I/O, 4 of 4 dedicated inputs, 112 of 128 logic cells** | `hardware/gal/video.cpld.ts`, `cpld/vctrl.fit` |
+| **video** | **⚠ `vctrl` has zero spare pins and therefore no JTAG.** 64 of 64 with JTAG costing four I/O: it is programmed out of circuit, as the audio card's U1 already is. Getting in-circuit programming back means moving `RA0`–`RA4` and `WSTB` to a second GAL | `video.cpld.ts` |
+| **video** | **⚠ Bound `SPANBUSY`.** `/WAIT` works now, and no document says how long the span writer holds it. Any card scheduling against `E` needs that number | §5 item 10, `net.md` §16 item 5 |
+| **audio** | **⚠ Decide whether the sample RAM moves into `A20 = 1`.** Its 128 KB upload is a chunked `TFM X+,Y` into a port and pays the same tax storage and net just stopped paying — and it is the last card carrying the doubled-write exposure | §5 item 7, `audio.md` §13 |
 | **machine** | **⚠ Divide the megabyte at `A20 = 1`** — how a card claims a region, at what granularity, and who arbitrates a host access the card cannot defer | §5 item 7 |
 | ~~**storage, io**~~ | ~~Re-price against a memory-mapped buffer.~~ **Done 2026-09-08** — both cards took it. `sdcard.md` §11.1 and §4.5; `net.md` §13.3 and §7.6. ⚠ **What is left is `sdcard.md` §13 item 6**: its *write* path is still on the port | §5 item 1 D |
 | **io** | **Find out whether a NitrOS-9 network stack exists.** It is the net card's largest cost and nobody has looked — the same shape of unknown as `serial`'s `sc6551` | `net.md` §14.2, §16 item 12 |

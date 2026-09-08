@@ -2727,7 +2727,8 @@ frozen before the video card is laid out, and the sound card is the other consum
 | `D0`–`D7` | bidirectional | 5 V TTL |
 | `E`, `Q`, `R/W` | motherboard → cards | Q leads E by 90°, which is 3 dots at ÷12 and **2 at ÷8** (§5.1) |
 | 25.175 MHz master | motherboard → cards | lets any card phase-lock to video |
-| `/IOSEL` | motherboard → **all** slots | ⚠ ~~geographic, per slot~~ — **the `$FF40`–`$FF7F` window strobe, common to every slot**; the card decodes `A0`–`A5` against a jumpered base. [`machine.md`](../../docs/machine.md) §2 |
+| `/IOSEL` | motherboard → **all** slots | ⚠ ~~geographic, per slot~~ — **the ~~`$FF40`~~ `$FF00`–`$FF7F` window strobe, common to every slot**; the card decodes ~~`A0`–`A5`~~ **`A0`–`A6`** against a jumpered base. Widened 2026-09-08 — [`machine.md`](../../docs/machine.md) §2, §5 item 1 A. `hardware/gal/vctrl.pld`'s `REGSEL` is `IOSEL & A6 & A5` and has been refitted |
+| `A20` | motherboard → **all** slots | **new 2026-09-08** — physical `A20`, `machine.md` §5 item 1 D. **This card's `VRAMSEL` gained `/A20`**: the ring is `A20 = 0, A19 = 1`, the second quarter of a 2 MB map rather than the top half of a 1 MB one |
 | **`/IOPAGE`** | motherboard → cards | **new** — §6.3.2, mandatory |
 | `/WAIT` | cards → motherboard | open-drain; whole E periods only (§3.3) |
 | `/IRQ`, `/FIRQ`, `/NMI` | cards → CPU | open-drain; `/FIRQ` is audio's alone |

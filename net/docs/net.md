@@ -322,6 +322,22 @@ Both framers hold their byte in a register across the deferral — U1's parallel
 serializer and U2's deserializer output latch, both of which exist for other reasons — so
 a deferral of up to one bus cycle costs nothing.
 
+> ⚠ **A stretched cycle breaks this schedule, and `/WAIT` became real on 2026-09-08.**
+> `machine.md` §5 item 8 gave the divider a hold term, so **another card can now freeze
+> `E` mid-cycle** — the video card's span writer is the one that does it. Two things
+> follow and neither is solved here:
+>
+> - **The host's window must be "tick 7 until `E` falls", not "ticks 7–11".** A stretch
+>   extends the hold; the SRAM's `/OE` stays asserted and the data stays valid, which is
+>   harmless. **The phase counter must saturate rather than wrap**, or the host's window
+>   moves under it.
+> - **⚠ The framers starve.** They get slots at ticks 0–3 of a cycle that has stopped
+>   advancing. A stretch longer than **~800 ns** — one byte time — overruns the RX
+>   deserializer's output register and loses a byte. **A lost byte is a failed FCS, so it
+>   is a dropped frame and not silent corruption**, which is the one piece of luck here.
+>   **Nobody has said how long `SPANBUSY` lasts** (`graphics.md`), so nobody can say
+>   whether this ever happens. §16 item 5.
+>
 > ⚠ **The schedule is derived at ÷12 and does not carry to fast-E unchanged.**
 > `machine.md` §1.1's experimental ÷8 gives eight ticks of 39.7 ns in a 317.8 ns cycle,
 > and `t_AD` does not shrink with it — the address is valid from tick 2.8, so the host's
@@ -1181,30 +1197,37 @@ against them. What is left is the card's own work.
    mode this card gained rather than shed.
 4. **⚠ The house rule** — third spend, §12. Restate or retire it; do not leave the root
    `README.md` claiming it is spent on two cards.
-5. **⚠ §4.3's schedule is a ÷12 schedule.** Fast-E needs the framers interleaved on
+5. **⚠ §4.3's schedule assumes a bus cycle of fixed length, and `/WAIT` broke that.**
+   `machine.md` §5 item 8 made `/WAIT` work on 2026-09-08; the video card asserts it while
+   its span writer runs, and this card's framers get no slot while `E` is frozen. **A
+   stretch longer than 800 ns drops a received frame.** Two things are needed: the phase
+   counter must saturate rather than wrap, and **`graphics.md` must bound `SPANBUSY`'s
+   duration**, which no document does. **This is the highest-priority item on the card
+   that is not a fit.**
+6. **⚠ §4.3's schedule is a ÷12 schedule.** Fast-E needs the framers interleaved on
    alternate bus cycles and nobody has done that arithmetic.
 
 **Carried from `applenet`, unchanged and still open:**
 
-6. **Recovery margin (`review.md` §2.1)** — the recovered-clock sampling window is ~35 ns
+7. **Recovery margin (`review.md` §2.1)** — the recovered-clock sampling window is ~35 ns
    of a 50 ns budget, on paper, never scoped. The project's oldest risk.
-7. **RX pair polarity (`review.md` §1.4)** — §8.3 proposes two macrocells that close it
+8. **RX pair polarity (`review.md` §1.4)** — §8.3 proposes two macrocells that close it
    and admits they are untested. Keep the jumper footprint.
-8. **TX filter and MagJack choice** (`arch-v3.md` open item 8.3) and **shield/chassis
+9. **TX filter and MagJack choice** (`arch-v3.md` open item 8.3) and **shield/chassis
    ground** (8.5).
-9. **PLCC-84 socket footprint availability.**
+10. **PLCC-84 socket footprint availability.**
 
 **Measurement, and shared with the machine:**
 
-10. **⚠ NitrOS-9's interrupt dispatch cost.** `ps2.md` §14 item 3. It decides four things
+11. **⚠ NitrOS-9's interrupt dispatch cost.** `ps2.md` §14 item 3. It decides four things
     (§3.4) and it is the cheapest high-value measurement in the machine.
-11. **Power** (§10) — bench it before a PCB.
-12. **Clock-domain crossings** (§7.5) — the synchroniser list is a review item, not a
+12. **Power** (§10) — bench it before a PCB.
+13. **Clock-domain crossings** (§7.5) — the synchroniser list is a review item, not a
     testbench item.
 
 **Software:**
 
-13. **⚠ Does a NitrOS-9 network stack exist?** §14.2. It is the card's largest cost and
+14. **⚠ Does a NitrOS-9 network stack exist?** §14.2. It is the card's largest cost and
     nobody has looked.
 
 **Closed 2026-09-08:**

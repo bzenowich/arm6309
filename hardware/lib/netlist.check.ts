@@ -75,6 +75,13 @@ check(pinsOn("U8", "A20").length === 0, "system RAM does not see A20 (it selects
 check(pinsOn("U6", "A20").length === 1,
   "U6 takes physical A20 - system RAM is A20 = 0 as well as A19 = 0")
 
+/* -- machine.md 5 item 8: /WAIT had a producer and no consumer ------------
+ * vctrl.pld drives it open-drain and E/Q are made on U6, which had no /WAIT
+ * input at all - so "it holds E" named an effect with no mechanism. This is
+ * the assertion that stops that recurring. */
+check(pinsOn("U6", "nWAIT").length === 1,
+  "U6 takes /WAIT - the signal that holds E has something listening to it")
+
 /* -- machine.md 2.1: the open-drain pull-ups are here -------------------- */
 for (const net of ["nIRQ", "nFIRQ", "nWAIT", "nNMI", "nIOPAGE"]) {
   const pulled = comps

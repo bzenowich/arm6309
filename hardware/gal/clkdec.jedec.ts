@@ -37,6 +37,10 @@ export const clkdecDesign: Design = {
     /* PHYSICAL A20 - the map SRAM's eighth output bit, which was stored and
      * read back and drove nothing until 2026-09-08. machine.md 5 item 1 D. */
     { name: "A20", pin: 9 },
+    /* /WAIT from the backplane, active high after the slot's open-drain
+     * inversion. It holds every registered macrocell below - machine.md 5
+     * item 8, and clkdec.pld carries the two rules that go with it. */
+    { name: "WAIT", pin: 10 },
   ],
 
   cells: [
@@ -44,11 +48,11 @@ export const clkdecDesign: Design = {
     /* C0 and C1 need no terminal-count term at all: both terminal counts
      * (11 = 1011 and 7 = 0111) have C1 = C0 = 1, so a plain toggle and a
      * plain XOR already land on zero. */
-    { pin: 16, name: "C0", assertedLow: false, s0: 1, registered: true, terms: ["!C0"] },
+    { pin: 16, name: "C0", assertedLow: false, s0: 1, registered: true, terms: ["!C0 & !WAIT", "C0 & WAIT"] },
     {
       pin: 17, name: "C1", assertedLow: false, s0: 1, registered: true,
       why: "C1 $ C0, expanded",
-      terms: ["C1 & !C0", "!C1 & C0"],
+      terms: ["C1 & !C0 & !WAIT", "!C1 & C0 & !WAIT", "C1 & WAIT"],
     },
 
     /* C2 must be suppressed at 11, which would carry into a 12th count, but
@@ -58,13 +62,15 @@ export const clkdecDesign: Design = {
      * splits on the suppression. */
     {
       pin: 20, name: "C2", assertedLow: false, s0: 1, registered: true,
-      terms: ["C2 & !C1", "C2 & !C0", "!C2 & C1 & C0 & FAST_E", "!C2 & C1 & C0 & !C3"],
+      terms: ["C2 & !C1 & !WAIT", "C2 & !C0 & !WAIT", "!C2 & C1 & C0 & FAST_E & !WAIT",
+        "!C2 & C1 & C0 & !C3 & !WAIT", "C2 & WAIT"],
     },
 
     /* C3 exists only in /12. In fast-E mode the counter is three bits. */
     {
       pin: 21, name: "C3", assertedLow: false, s0: 1, registered: true,
-      terms: ["!FAST_E & C3 & !C1", "!FAST_E & C3 & !C0", "!FAST_E & !C3 & C2 & C1 & C0"],
+      terms: ["!FAST_E & C3 & !C1 & !WAIT", "!FAST_E & C3 & !C0 & !WAIT",
+        "!FAST_E & !C3 & C2 & C1 & C0 & !WAIT", "C3 & WAIT"],
     },
 
     /* E is high for counts 6-11 (/12) or 4-7 (/8), so it decodes 5-10 or 3-6
@@ -73,10 +79,11 @@ export const clkdecDesign: Design = {
     {
       pin: 18, name: "E", assertedLow: false, s0: 1, registered: true,
       terms: [
-        "!FAST_E & !C3 & C2 & C0", "!FAST_E & !C3 & C2 & C1",
-        "!FAST_E & C3 & !C1", "!FAST_E & C3 & !C0",
-        "FAST_E & !C3 & !C2 & C1 & C0", "FAST_E & !C3 & C2 & !C1",
-        "FAST_E & !C3 & C2 & !C0",
+        "!FAST_E & !C3 & C2 & C0 & !WAIT", "!FAST_E & !C3 & C2 & C1 & !WAIT",
+        "!FAST_E & C3 & !C1 & !WAIT", "!FAST_E & C3 & !C0 & !WAIT",
+        "FAST_E & !C3 & !C2 & C1 & C0 & !WAIT", "FAST_E & !C3 & C2 & !C1 & !WAIT",
+        "FAST_E & !C3 & C2 & !C0 & !WAIT",
+        "E & WAIT",
       ],
     },
 
@@ -86,9 +93,10 @@ export const clkdecDesign: Design = {
     {
       pin: 19, name: "Q", assertedLow: false, s0: 1, registered: true,
       terms: [
-        "!FAST_E & !C3 & C1", "!FAST_E & !C3 & C2",
-        "FAST_E & !C3 & !C2 & C0", "FAST_E & !C3 & !C2 & C1",
-        "FAST_E & !C3 & C2 & !C1 & !C0",
+        "!FAST_E & !C3 & C1 & !WAIT", "!FAST_E & !C3 & C2 & !WAIT",
+        "FAST_E & !C3 & !C2 & C0 & !WAIT", "FAST_E & !C3 & !C2 & C1 & !WAIT",
+        "FAST_E & !C3 & C2 & !C1 & !C0 & !WAIT",
+        "Q & WAIT",
       ],
     },
 

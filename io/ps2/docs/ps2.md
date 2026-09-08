@@ -223,7 +223,9 @@ Decode is from the backplane's `/IOSEL`, so the base is a jumper.
 > ⚠ **This said "geographic from the backplane's per-slot `/IOSEL`" until 2026-09-06.**
 > A per-slot decode fixes each card's window by position and leaves the jumper in the
 > same sentence nothing to select. `/IOSEL` is the `$FF40`–`$FF7F` window strobe, common
-> to every slot; this card decodes its four bytes from `A0`–`A5` against the jumpered
+> to every slot; this card decodes its four bytes from ~~`A0`–`A5`~~ **`A0`–`A6`** (⚠ the
+> window widened to `$FF00`–`$FF7F` on 2026-09-08 and `A6` left the strobe — six bits
+> answer at `$FF50` *and* `$FF10`) against the jumpered
 > base. [`machine.md`](../../../docs/machine.md) §2 owns the correction.
 
 ---

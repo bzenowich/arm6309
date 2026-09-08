@@ -91,9 +91,18 @@ arbCells.push({
  * /IOPAGE on its pins and had the macrocell to spare - see 10.1.1. */
 arbCells.push({
   pin: 0, name: "WAIT", assertedLow: true, s0: 1, registered: false,
-  why: "open-drain by the OE idiom - SPANBUSY . VRAMSEL . /IOPAGE",
+  why: "open-drain by the OE idiom - SPANBUSY . VRAMSEL . /IOPAGE . E",
   terms: [],
-  oe: "SPANBUSY & VRAMSEL & !IOPAGE",
+  /* NOTHING LISTENED TO THIS UNTIL 2026-09-08. E and Q are made on the
+   * motherboard's U6 and that part had no /WAIT input, so this output held
+   * nothing and the CPU read VRAM out from under the span writer -
+   * machine.md 5 item 8. gal/clkdec.pld now has the hold term.
+   *
+   * The E literal is the second of the two rules that came with the fix: a
+   * wait is only useful while E is high, and qualifying it here is one
+   * literal where qualifying it in the divider would double the term count
+   * on E itself. */
+  oe: "SPANBUSY & VRAMSEL & !IOPAGE & E",
 })
 
 const arbPins = place(arbCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
@@ -103,7 +112,12 @@ export const arbDesign: Design = {
   partNo: "ARM6309-UV6",
   location: "video card - spare-access arbiter",
   signature: "A6309V6",
-  supersededBy: "graphics.md 10.1.6 - the video card is 2 x ATF1508AS",
+  /* ⚠ NOT superseded any more. This design was folded into vctrl by the
+   * two-CPLD rebalance and came back out on 2026-09-08: the widened $FF window
+   * and physical A20 put two more inputs on vctrl, 76 I/O does not fit a
+   * PLCC-84's 64, and these ten macrocells are the cheapest ten pins on that
+   * part to give back. video.cpld.ts carries the argument; vctrl now fits at
+   * 64 of 64. */
 
   inputs: [
     { name: "VRAMSEL", pin: 1 },
@@ -113,6 +127,9 @@ export const arbDesign: Design = {
     { name: "SPNA0", pin: 6 }, { name: "SPNA1", pin: 7 },
     /* From seqctl, for /WAIT. */
     { name: "SPANBUSY", pin: 8 },
+    /* The bus clock, for /WAIT's E qualification - machine.md 5 item 8's
+     * second rule. Added 2026-09-08 with the E literal on the output enable. */
+    { name: "E", pin: 9 },
   ],
   cells: arbCells.map((c) => ({ ...c, pin: arbPins[c.name] })),
   spares: [],

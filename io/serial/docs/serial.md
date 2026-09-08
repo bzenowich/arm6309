@@ -403,7 +403,7 @@ Straightforward, and §3.2 is the reason to expect it to be.
 |---|---|
 | `φ2` | backplane `E` — **and this is why §3.4's speed grade is a card-level constraint**: the part is clocked by whatever rate the machine is running at |
 | `R/W` | backplane `R/W` |
-| `CS0`, `/CS1` | the decode GAL, from the `/IOSEL` window strobe **and `A2`–`A5`** — ⚠ this row said "geographic `/IOSEL`" until 2026-09-06, but the *mechanism* was right and is now the machine's: [`machine.md`](../../../docs/machine.md) §2 cites this card as the one that never claimed the geography |
+| `CS0`, `/CS1` | the decode GAL, from the `/IOSEL` window strobe **and `A2`–~~`A5`~~`A6`** — ⚠ **`A6` joined on 2026-09-08**, when the window widened to `$FF00`–`$FF7F` and `A6` left the strobe; without it this card answers at `$FF54` *and* `$FF14`. This row said "geographic `/IOSEL`" until 2026-09-06, but the *mechanism* was right and is now the machine's: [`machine.md`](../../../docs/machine.md) §2 cites this card as the one that never claimed the geography |
 | `RS0`, `RS1` | `A0`, `A1` |
 | `D0`–`D7` | backplane `D0`–`D7` |
 | `/IRQ` | backplane `/IRQ`, **open-drain — confirm this on the datasheet, §12 step 1** — third card on the line after video and PS/2 |

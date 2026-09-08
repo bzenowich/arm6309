@@ -25,6 +25,7 @@ module clkdec (
     input  wire       la6,
     input  wire       a19,       // PHYSICAL A19 - it comes out of the map SRAM
     input  wire       a20,       // PHYSICAL A20 - the map SRAM's eighth bit
+    input  wire       wait_i,    // /WAIT, active high here. Holds the divider
     input  wire       rw,
 
     output reg  [3:0] cnt,       // on pins, unconnected: four free test points
@@ -50,9 +51,13 @@ module clkdec (
 
   // The 22V10's asynchronous reset is one product term shared by every
   // registered macrocell, so all six land in a defined state together.
+  // /WAIT holds all six. machine.md 5 item 8: vctrl.pld drove this signal and
+  // nothing listened, so the video card's span writer held nothing. One hold
+  // term per macrocell, no macrocells - clkdec.pld has the two rules that go
+  // with it (CLK25-synchronous, and asserted only while E is high).
   always @(posedge clk25 or negedge n_reset)
-    if (!n_reset) begin cnt <= 4'd0; e <= 1'b0; q <= 1'b0; end
-    else          begin cnt <= nxt;  e <= e_nxt; q <= q_nxt; end
+    if (!n_reset)     begin cnt <= 4'd0; e <= 1'b0; q <= 1'b0; end
+    else if (!wait_i) begin cnt <= nxt;  e <= e_nxt; q <= q_nxt; end
 
   // The four combinational outputs are a separate module so that a testbench
   // can sweep them without reaching inside the divider. In the GAL they are
