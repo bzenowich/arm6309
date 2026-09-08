@@ -65,13 +65,13 @@ export const FINGER_H = 11
 
 export const CARDS: Record<string, CardSpec> = {
   video: {
-    title: "Video", length: 240, ics: 30, source: "video/docs/graphics.md 14.1",
+    title: "Video", length: 240, ics: 31, source: "video/docs/graphics.md 14.1",
     note: "640x200 x 256 colours, VGA out",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
     parts: [
-      pkg(33, 33, "ATF1508AS vaddr", "pld", 2, "1508"),
-      dip(24, 0.3, "GAL22V10 arb", "pld"),
+      pkg(33, 33, "ATF1508AS vaddr/vctrl", "pld", 2, "1508"),
+      dip(24, 0.3, "GAL22V10 arb/rfa", "pld", 2),
       dip(32, 0.6, "AS6C1008 128Kx8", "mem", 4),
       dip(28, 0.6, "32Kx8 15ns LUT", "mem", 2),
       dip(28, 0.6, "32Kx8 regfile", "mem"),

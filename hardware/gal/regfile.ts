@@ -46,71 +46,26 @@ const comb = (name: string, terms: string[], why?: string): Cell =>
 const strobeHere = (name: string, off: number, why?: string) =>
   comb(name, [`WSTB & ${isReg(off)}`], why)
 
-/* ---- on vctrl: the two selects, the strobe, and the file address -------- */
+/* ---- on vctrl: the VRAM select, and that is now all of it ---------------
+ *
+ * ⚠ REGSEL, WSTB and RA0-RA4 LEFT THIS PART on 2026-09-08 for regfile.jedec.ts's
+ * own GAL22V10. This file's header argues for keeping them here - "macrocells
+ * are cheap and pins are not (vctrl fits at 62 of 64)" - and that was right
+ * until vctrl hit 64 of 64 and graphics.md 7.4's broadcast write needed
+ * signalling between vctrl and vaddr with nowhere to put it.
+ *
+ * The trade reversed rather than the reasoning being wrong: six pins out and
+ * two back, because the new part forms RDFG/RDBG/RDLEN itself from FP1:FP0
+ * instead of taking them decoded. REGSEL goes too - nothing consumed it, and
+ * rfa recomputes it from IOSEL & A6 & A5, all three of which are on the card. */
 export const decodeCells: Cell[] = [
   /* §6.3.2 consumer 1. One product term, and the /IOPAGE literal in it is the
    * difference between a working card and one that corrupts its framebuffer
    * on every I/O write in the machine. */
   comb("VRAMSEL", ["A19 & !A20 & !IOPAGE"],
     "6.3.2 - A19 alone matches every I/O access, because the map SRAM keeps driving it. " +
-    "/A20 since 2026-09-08: the physical map is 2 MB (machine.md 5 item 1 D) and the " +
-    "ring is its second quarter, not the top half of a 1 MB map"),
-
-  /* $FF60-$FF7F: the upper half of the motherboard's /IOSEL window.
-   *
-   * A6 joined on 2026-09-08. /IOSEL widened to $FF00-$FF7F (machine.md 5 item 1
-   * A) and A6 left the strobe, so IOSEL & A5 alone matches $FF60-$FF7F AND
-   * $FF20-$FF3F - the card would answer twice. Every card on this backplane
-   * decodes A0-A6 now. */
-  comb("REGSEL", ["IOSEL & A6 & A5"]),
-
-  /* The posted-write strobe. E-qualified, because a 6809 write is only valid
-   * data in the second half of the cycle, and §6.3.2 wants the capture gated
-   * by /IOPAGE too - which it is, through REGSEL. */
-  comb("WSTB", ["REGSEL & !RW & E"]),
-
-  /* The file address: the CPU's low five bits during a register access, and
-   * the sequencer's own during everything else. §7.4's two deferrable reads
-   * are WFG and WBG, which differ only in bit 0 - §13.1 already requires that
-   * placement, so the internal side is one selected constant and not a mux. */
-  ...[0, 1, 2, 3, 4].map((b) => comb(`RA${b}`, minimalSop([
-    `REGSEL & A${b}`,
-    ...(((REGS.WFG >> b) & 1) ? ["!REGSEL & RDFG"] : []),
-    ...(((REGS.WBG >> b) & 1) ? ["!REGSEL & RDBG"] : []),
-    ...(((REGS.SPANLEN >> b) & 1) ? ["!REGSEL & RDLEN"] : []),
-  ]), b === 0 ? "13.1's WFG-at-A0=0 / WBG-at-A0=1 rule is what keeps this one term" : undefined)),
-
-  /* §7.4's "two deferrable file reads" at span end, plus the length read, as
-   * a stated micro-sequence rather than three signals arriving from nowhere.
-   * Item 23 says the internal side of the file address "has never been stated
-   * precisely"; this is the statement. A span needs SPANLEN, WFG and WBG once
-   * each and none of them changes while it runs, so a two-bit walk at span
-   * end fetches all three for the NEXT span - which is what makes them
-   * deferrable. Two macrocells and three decodes. */
-  ...[0, 1].map((b) => ({
-    pin: 0, name: `FP${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: b === 0
-      ? ["SPANEND & !FP0"]
-      : ["SPANEND & FP1 & !FP0", "SPANEND & !FP1 & FP0", "!SPANEND & FP1"],
-  })),
-  comb("RDLEN", ["!SPANBUSY & !FP1 & !FP0"]),
-  comb("RDFG", ["!SPANBUSY & !FP1 & FP0"]),
-  comb("RDBG", ["!SPANBUSY & FP1 & !FP0"]),
-
-  /* The two register writes that are not loads of a counter: CTRL and the
-   * VSTAT-side strobe. They were pins into this part until item 23 gave it
-   * the file address to decode them from. */
-  strobeHere("WCTRL", REGS.CTRL),
-  strobeHere("VSTATWR", REGS.SPANLEN),
-
-  /* hgen's terminal count is hgen's, and hgen is on this part. */
-  comb("HLAST", ["H7 & H6 & H5 & H4 & H3 & H2 & H1 & H0"]),
-
-  /* The scan pair's two controls. Both are raster positions, not register
-   * writes, so they are here rather than in the strobe decode below. */
-  comb("HLOAD", ["HBLANK & SLOTTICK"],
-    "8 - the column counter preloads from HSCROLL[9:2] at the start of each line's fetch"),
-  comb("ROWADV", ["HLAST & SLOTTICK & !VBLANK"]),
+    "/A20 since 2026-09-08: the physical map is 32 MB (machine.md 5 item 1 D) and the " +
+    "ring is one 512 KB quadrant of it, not the top half of a 1 MB map"),
 ]
 
 /* ---- on vaddr: one strobe per write target, from the address ------------ */

@@ -54,7 +54,7 @@ protect MinOS and can be deleted outright.**
 > carried a master oscillator that belongs on the motherboard, not on a card you can
 > pull (§14). None of that is a change of design. It is the same card, counted.
 
-**Net: ~~41 ICs (37…)~~ 30 ICs (26 if the tri-state pixel bus closes at 39.7 ns and the
+**Net: ~~41 ICs (37…)~~ 31 ICs (27 if the tri-state pixel bus closes at 39.7 ns and the
 `'153` mux is not needed), against colormin's 39 (35)** — plus 3 buffer transistors and
 3 R-2R SIP ladders, which are not ICs and are counted on their own line.
 
@@ -1309,6 +1309,66 @@ A span running off column 1023 wraps to column 0 of the same row (§19 item 12),
 is what the scanner does, so a glyph straddling the torus seam renders where the
 display reads it.
 
+#### ⭐ Broadcast writes — how to get the 4× back
+
+**Proposal, 2026-09-08. The datapath for it is already wired.**
+
+The retire rate is one byte per fetch slot because `WPTR` names one of the four
+interleaved chips at a time. **In span-solid it does not have to.**
+
+Two facts collide usefully:
+
+1. **Every byte of a span-solid is the same byte** — `WFG` or `WBG`, one colour.
+2. **Four consecutive framebuffer addresses `4n`…`4n+3` are the same *intra-chip*
+   address `n` on four different chips**, because the chip select is `A[1:0]` and the
+   intra-chip address is `A[18:2]`.
+
+So a 4-byte group needs **one address, one data byte and four `/WE`** — a single 72 ns
+access rather than four. It fits the 86.9 ns of slack easily, because the four accesses
+are *simultaneous* rather than sequential, and sequential is what did not fit.
+
+> ⭐ **And §14's parts list says the wiring is already there.** There is **one**
+> `74HC574` posted-write data latch, four chips, and **no write-data mux or demux
+> anywhere on the list** — so the latch already fans out to all four chips' data buses
+> and the chip is chosen by `/WE`. Broadcast is not a new datapath; it is a different
+> set of write enables on the one that exists.
+
+| | one byte per slot | broadcast |
+|---|---|---|
+| Fill rate | 6.29 MB/s | **25.1 MB/s** |
+| Full-screen clear | 20.3 ms | **5.1 ms** — against a 14.3 ms frame |
+| Polygon crossover (`features.md` §6) | 75 px | **300 px** |
+| A 200-pixel span | 31.8 µs, memory-bound | **11.9 µs, CPU-bound again — 16.8 Mpx/s** |
+| **`SPANBUSY` worst case** | 40.7 µs | **10.2 µs** |
+
+A 256-byte span is **4.0× aligned and 3.8× worst case** — three head bytes, then quads,
+then three tail bytes. Software issuing a fill can align it.
+
+**It lands exactly where the bottleneck is.** Span-mask gains nothing and needs nothing:
+eight bytes retire in 1.27 µs against 2.38 µs per CPU write, so mask mode is already
+CPU-bound. **Span-solid is the only retire-bound mode on the card.**
+
+##### What it costs, and the one part that is real work
+
+The logic is product terms rather than macrocells: a wide term on the arbiter's
+`GSPNn`, a by-four increment on `WPTR`, a by-four countdown on `SPANLEN`.
+
+**The pins are no longer the problem.** §10.1.6.3 priced the relief at one more
+`GAL22V10` and **that GAL is built** — `gal/regfile.jedec.ts`, 2026-09-08 — which took
+`vctrl` from 64 of 64 I/O to **50 of 64**. There is room to signal now.
+
+> ⚠ **The arbitration is the real work, and it is not solved here.** An all-or-nothing
+> "grant all four chips" is one extra term and needs no feedback — but **during a
+> `/WAIT` stall the CPU is holding one chip, so only three are free**, and the wide
+> grant would never fire in exactly the case where the span writer is the bottleneck.
+> Granting *whichever* chips are free works, and then the span writer has to learn how
+> many it got: a count back from the arbiter into `WPTR`'s increment and `SPANLEN`'s
+> countdown. **That is a real design, and this section is a proposal until someone does
+> it.**
+
+**Two things that are cheaper and already taken**, recorded here because they came out
+of the same analysis: the `R/W` qualification below, and `regfile.jedec.ts`.
+
 #### ⭐ How long `SPANBUSY` lasts — the bound `machine.md` §5 item 10 asked for
 
 **Answered 2026-09-08.** `/WAIT` is `SPANBUSY · VRAMSEL · /IOPAGE · E`
@@ -1348,6 +1408,32 @@ under `sdcard.md` §4.4's 49 µs masked chunk.
    phase on `CLK25` and gate only the host window on `E`. During a video stall the CPU is
    on VRAM, not on the net card, so its buffers are idle and its framers can have every
    slot.
+
+##### ⭐ And only writes wait — taken 2026-09-08
+
+`/WAIT` was `SPANBUSY · VRAMSEL · /IOPAGE · E`, which stalled the CPU on **any** VRAM
+access. §3.1.1 says what the backstop actually protects: **the depth-1 posted-write
+latch**, which a second CPU *write* during a span would overwrite.
+
+**A read does not touch that latch**, and §5.2.1's arbiter already gives the CPU its
+chip ahead of the span writer, so a read has no conflict to wait for either. It was
+stalling for up to 40.7 µs anyway.
+
+**`WAIT.oe` gains `& !RW`** — one literal on an output-enable term that already exists,
+on a GAL that had the input pin free.
+
+| | |
+|---|---|
+| Writes | still wait — **that is the throttle** that stops the CPU outrunning the span writer, and it is deliberate |
+| **Reads** | **never wait** |
+
+⭐ **What it buys is on the other side of the card.** `features.md` §8 and §9's sprite
+save-behind, mouse cursor and read-modify-write pixels are **all VRAM reads**, and they
+stop being exposed to the bound entirely.
+
+**A read during a span sees a partially retired span.** That is the caller's own span
+and `VSTAT` b7 says whether it has finished — a software rule, not a hazard.
+`gal/access.check.ts` asserts the float on a read.
 
 **And the practical bound is zero, not 40.7 µs.** `VSTAT` b7 **is** `SPANBUSY` (§13), the
 read has no side effects, and it is in the I/O page — so it does not trigger `/WAIT`.
@@ -1625,7 +1711,7 @@ real and the card walked into it:
 | + blit datapath | **~21** | ~59 |
 
 > ⚠ **This table is the GAL build and §10.1.6 replaced it.** The card is **2 ×
-> `ATF1508AS` + 1 × `GAL22V10` + 27 packages = 30 ICs** — §14.1 has the arithmetic.
+> `ATF1508AS` + 2 × `GAL22V10` + 27 packages = 31 ICs** — §14.1 has the arithmetic.
 > The section below is kept because **it is the argument that produced that decision**:
 > the wall it describes is real, the card hit it, and what follows is what happened
 > next.
@@ -2037,7 +2123,7 @@ which is the whole of the v1 display list bar §19 item 23's decode.
 | | Package | Holds | Logic cells | I/O pins |
 |---|---|---|---|---|
 | **`vaddr`** | PLCC-84 | scan and `WPTR` counters, scroll and tile registers, the write-strobe decode, the six-source address mux | **101 of 128** | 62 of 64 |
-| **`vctrl`** | **PLCC-84** | sync trio, sequencer, span control, `CTRL`, §6.4's fetch cadence, §19 item 23's decode | **112 of 128** | **64 of 64** |
+| **`vctrl`** | **PLCC-84** | sync trio, sequencer, span control, `CTRL`, §6.4's fetch cadence, §19 item 23's decode | **91 of 128** | **50 of 64** |
 | **`arb`** | **`GAL22V10`** | **the spare-access arbiter — eight grants, `SPNGRANT`, `/WAIT`** | 10 of 10 | 9 of 12 in |
 
 ⚠ **`vctrl` outgrew the PLCC-84 when item 23 closed, and the fix was to take the
@@ -2149,10 +2235,33 @@ it. **It was a GAL before the two-CPLD rebalance and it is one again.** `WRITESE
 
 ⚠ **64 of 64 is zero spare, and JTAG costs four I/O — so `vctrl` has none.** It is
 programmed out of circuit, which is what the audio card's `ATF1508AS` already does and
-what this section's opening paragraph assumed. **If in-circuit programming is wanted
-back, four pins have to come from somewhere**: `RA0`–`RA4` and `WSTB` onto a second
-`GAL22V10` is the obvious six, at the cost of exporting `RDFG`/`RDBG`/`RDLEN`.
-`hardware/gal/video.cpld.ts` carries the argument and the device declaration.
+what this section's opening paragraph assumed.
+
+##### ⭐ The six pins were taken — `rfa`, `gal/regfile.jedec.ts`, 2026-09-08
+
+The paragraph above proposed `RA0`–`RA4` and `WSTB` onto a second `GAL22V10` "if
+in-circuit programming is wanted back". §7.4's broadcast-write proposal wanted signalling
+pins for a different reason, and one GAL answers both, so it was built: **U-V9 `rfa`**,
+the register-file address.
+
+**It re-derives rather than imports.** `REGSEL` is `IOSEL & A6 & A5` — three signals it
+already needs — so it is recomputed locally instead of being carried across from `vctrl`,
+and `RDLEN`/`RDFG`/`RDBG` come from `!SPANBUSY & FP1:FP0`. The trade is **six pins out and
+two back** (`FP0`, `FP1`); `SPANBUSY` and `E` were already on the backplane side.
+
+| | I/O | Logic cells |
+|---|---|---|
+| arbiter out, before this | 64 / 64 — **zero spare** | 112 / 128 |
+| **`RA0`–`RA4` + `WSTB` out to `rfa`** | **50 / 64** — 14 spare | **91 / 128** |
+
+⭐ **Fourteen pins, not the five the estimate promised.** Removing the five `RA` outputs
+also removed every input that existed *only* to feed them — `A0`–`A4`, `IOSEL`, `A5`,
+`A6` — nine inputs that went out with them. **JTAG's four fit with ten to spare**, and
+§7.4 has room to signal a partial grant back to the span writer.
+
+`rfa` is 6 macrocells of 10 (largest equation 10 terms of 16, `RA2`), checked against
+CUPL over all 8,192 input combinations by `gal/jedec/cupl.check.ts`.
+`hardware/gal/video.cpld.ts` and `hardware/gal/regfile.ts` carry the argument.
 
 
 ### 10.2 What the 6309 gives you for free
@@ -2554,7 +2663,7 @@ sync section was fitted on 2026-09-06 and needs three parts (§19 item 8). §10.
 > 17 of 20 with three spare (§19 item 8), because it generates a *chip* address of 17
 > bits and not a *byte* address of 19.
 
-### 14.1 ⚠ The card is 30 ICs, and three numbers in this document disagreed
+### 14.1 ⚠ The card is 31 ICs, and three numbers in this document disagreed
 
 **Reconciled 2026-09-08.** The table above is the **GAL build**, and §10.1.6 replaced it
 on 2026-09-06 — *"Two PLCC-84 parts, and this is the build"* — without the arithmetic
@@ -2576,9 +2685,10 @@ by this document:
 | + 2 × `ATF1508AS-15JC84`, PLCC-84 | **+2** | `vaddr` and `vctrl` — §10.1.6 |
 | − §10.1.6's absorptions | **−4** | `CTRL`'s `'273`, the `SPANLEN` `'161` pair, the `'165` span-mask serialiser |
 | + 1 × `GAL22V10`, the arbiter | **+1** | §10.1.6.3 — it came back out on 2026-09-08 so `vctrl` stays a PLCC-84 |
-| **= the build** | **30** | **26 if the tri-state pixel bus closes and the four `'153` come out** |
+| + 1 × `GAL22V10`, `rfa` | **+1** | §10.1.6.3 — the register-file address, out the same day, which bought JTAG back and §7.4 its signalling pins |
+| **= the build** | **31** | **27 if the tri-state pixel bus closes and the four `'153` come out** |
 
-**30 ICs: 2 CPLDs, 1 GAL, and 27 packages of memory and 74-series.** Against
+**31 ICs: 2 CPLDs, 2 GALs, and 27 packages of memory and 74-series.** Against
 colormin's 39 (35), and against the 41 this document carried for two days after the
 decision that replaced it.
 
@@ -2667,7 +2777,7 @@ amp. Measuring card current stays §19 item 10, but it is now a *verification*, 
 discovery.
 
 **Area.** ⚠ **The paragraph below is the GAL build's; §14.1 has the current figure of
-~140 cm² for 30 ICs.** ~~41 ICs including 4 × DIP-32 and 3 × DIP-28~~, against
+~140 cm² for 31 ICs.** ~~41 ICs including 4 × DIP-32 and 3 × DIP-28~~, against
 colormin's ~140 cm² on a 160 cm² Eurocard. Four more packages plus a guarded analog corner by the VGA connector
 puts this at **~150 of 160 cm²** — still a 4-layer Eurocard with disciplined placement
 and the blitter still a piggyback, but the slack that made that conclusion comfortable
@@ -3039,9 +3149,9 @@ unchanged from minimal256.md §11 and are not restated in full.
    out to be the binding half.
 
    **So it is the third escape, and it is not a contingency: the card is ~~10 GALs and
-   41 ICs~~ 2 `ATF1508AS` + 1 `GAL22V10` and 30 ICs (§14.1).** ⚠ **This item's
+   41 ICs~~ 2 `ATF1508AS` + 2 `GAL22V10` and 31 ICs (§14.1).** ⚠ **This item's
    macrocell table below is the GAL partition and §10.1.6's fit superseded it** — the
-   sync trio is inside `vctrl` now, which is 112 of 128 cells and 64 of 64 pins. The
+   sync trio is inside `vctrl` now, which is 91 of 128 cells and 50 of 64 pins. The
    item is kept because it is what proved the sync section needs three parts' worth of
    logic, which is why it did not fit two GALs:
 

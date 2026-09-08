@@ -40,12 +40,12 @@ genuinely undecided.
 | **System master clock** | one 25.175 MHz oscillator, **on the motherboard** — §1 |
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
-| **Video** | 640×200 × 256 colours, VGA out — **30 ICs** (~~41~~), the programmable logic being **2 × `ATF1508AS` PLCC-84 + 1 `GAL22V10`** ([`video/`](../video/), `graphics.md` §14.1) |
+| **Video** | 640×200 × 256 colours, VGA out — **31 ICs** (~~41~~), the programmable logic being **2 × `ATF1508AS` PLCC-84 + 2 × `GAL22V10`** ([`video/`](../video/), `graphics.md` §14.1) |
 | **Audio** | 4-channel 8-bit PCM, Paula-exact — **29 ICs**, one `ATF1508AS` PLCC-84 ([`audio/`](../audio/), `audio.md` §10.1) |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **14 ICs** (~~7~~), **681 KiB/s** sustained (~~528~~) — **specified** ([`storage/`](../storage/)). Its block buffer moved into `A20 = 1` on 2026-09-08 and took the `TFM` hazard with it. ⚠ ~~The machine's one period exception~~ the first of two |
 | **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs** (~~16~~), two of them `ATF1508AS` — **specified** ([`net/`](../net/)). ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | **113 ICs** — **99 on cards**, **14** on the motherboard (~~9~~, ~~18~~ — `hardware/ram.md` §6.5, plus four SIMM sockets). ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
+| **Total silicon** | **114 ICs** — **100 on cards**, **14** on the motherboard (~~9~~, ~~18~~ — `hardware/ram.md` §6.5, plus four SIMM sockets). ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -953,7 +953,7 @@ carve-out drawn into a physical map that has no room for one.
 
 | Rail | Consumer | ICs | Estimate |
 |---|---|---|---|
-| 5 V | **video card** | **30** (~~40~~) — 2 CPLDs, 1 GAL | **~0.75–1.3 A, 0.9 A nominal**, design to 1.5 A — `graphics.md` §14.1. ⚠ It quoted 450–650 mA until 2026-09-04 (less than its own GAL row) and **~1.1–1.7 A until 2026-09-08**, when the ten GALs at 70–90 mA each were finally replaced in the arithmetic as well as in the design |
+| 5 V | **video card** | **31** (~~40~~) — 2 CPLDs, 2 GALs | **~0.75–1.3 A, 0.9 A nominal**, design to 1.5 A — `graphics.md` §14.1. ⚠ It quoted 450–650 mA until 2026-09-04 (less than its own GAL row) and **~1.1–1.7 A until 2026-09-08**, when the ten GALs at 70–90 mA each were finally replaced in the arithmetic as well as in the design |
 | 5 V | **audio card** | **29** (~~36~~ — `audio.md` §10.1 is the current count) | **~300–400 mA** — `audio.md` §10 |
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
 | 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The second largest single-card draw after video**, and the only figure on that card that cannot be derived from a datasheet with confidence |
@@ -961,7 +961,7 @@ carve-out drawn into a physical map that has no room for one.
 | 5 V | **motherboard**: MMU (5, +1 map SRAM), divider GAL, oscillator, reset supervisor, **U9/U10 GALs and 3 × `'157`** — `hardware/ram.md` §6.5 | ~~13~~ ~~9~~ **14** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly ~~2–3~~ **2.0–3.0 A** at 5 V across ~~~106~~ ~~108~~ **113 ICs**, plus
+**The machine is plausibly ~~2–3~~ **2.0–3.0 A** at 5 V across ~~~106~~ ~~108~~ ~~113~~ **114 ICs**, plus
 a 3.3 V rail.**
 
 > ⚠ **Both halves re-derived 2026-09-08, and the card total had never been added up.**
@@ -971,11 +971,12 @@ a 3.3 V rail.**
 >
 > | video | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
 > |---|---|---|---|---|---|---|---|---|
-> | **30** | 29 | 11 | 3 | **14** | **12** | **99** | 9 | **108** |
+> | **31** | 29 | 11 | 3 | **14** | **12** | **100** | **14** | **114** |
 >
 > Video fell 41 → 30 when `graphics.md` §14.1 finally counted the two `ATF1508AS` that
-> replaced its ten GALs (2026-09-06's decision, 2026-09-08's arithmetic); storage rose
-> 7 → 14 and net fell 16 → 12 in the same week's buffer work. **The current estimate
+> replaced its ten GALs (2026-09-06's decision, 2026-09-08's arithmetic), then rose to
+> **31** with `rfa` (§10.1.6.3); storage rose 7 → 14 and net fell 16 → 12 in the same
+> week's buffer work; the motherboard rose 9 → 14 for the DRAM controller. **The current estimate
 > fell** because ten GAL22V10 at 70–90 mA each were most of an amp and two CPLDs are
 > not.
 

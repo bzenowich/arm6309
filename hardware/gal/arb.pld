@@ -20,6 +20,7 @@ PIN 6 = SPNA0 ;
 PIN 7 = SPNA1 ;
 PIN 8 = SPANBUSY ;
 PIN 9 = E ;
+PIN 10 = RW ;
 
 PIN 23 = GCPU0 ;
 PIN 21 = GSPN0 ;
@@ -59,4 +60,4 @@ SPNGRANT = SPNREQ & !SPNA0 & CPUA0
              # SPNREQ & !VRAMSEL
              # SPNREQ & IOPAGE ;
 WAIT = 'b'1 ;
-WAIT.oe = SPANBUSY & VRAMSEL & !IOPAGE & E ;
+WAIT.oe = SPANBUSY & VRAMSEL & !IOPAGE & E & !RW ;

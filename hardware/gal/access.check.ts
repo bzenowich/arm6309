@@ -45,6 +45,7 @@ const wrow = build(wrowDesign, "wrow")
       5: spnreq ? 1 : 0, 6: (spnChip & 1) as 0 | 1, 7: ((spnChip >> 1) & 1) as 0 | 1,
       8: spnreq ? 1 : 0, // SPANBUSY, for /WAIT
       9: 1,              // E, for /WAIT's E qualification (machine.md 5 item 8)
+      10: 0,             // R/W low - a write, so /WAIT may assert
     })
     const want = arbitrate({ vramsel, nIopage, cpuChip, spnreq, spnChip })
     for (let n = 0; n < 4; n++) {
@@ -89,7 +90,7 @@ const wrow = build(wrowDesign, "wrow")
     const pins = arb.gal.evaluate({
       1: vramsel ? 1 : 0, 2: nIopage, 3: (cpuChip & 1) as 0 | 1, 4: ((cpuChip >> 1) & 1) as 0 | 1,
       5: spnreq ? 1 : 0, 6: (spnChip & 1) as 0 | 1, 7: ((spnChip >> 1) & 1) as 0 | 1, 8: 1,
-      9: 1,
+      9: 1, 10: 0,
     })
     const anyGrant = GS.some((p) => pins[p] === 1) ? 1 : 0
     if (pins[G.pin] !== anyGrant) orBad = `SPNGRANT ${pins[G.pin]} vs any grant ${anyGrant}`
@@ -98,8 +99,8 @@ const wrow = build(wrowDesign, "wrow")
 
   /* /WAIT is open-drain: it drives low or floats, never high. */
   const W = arb.assembly.usage.find((u) => u.name === "WAIT")!
-  const held = arb.gal.evaluate({ 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 1, 9: 1 })
-  const idle = arb.gal.evaluate({ 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 1 })
+  const held = arb.gal.evaluate({ 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 1, 9: 1, 10: 0 })
+  const idle = arb.gal.evaluate({ 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 1, 10: 0 })
   check(held[W.pin] === 0 && idle[W.pin] === -1,
     "/WAIT pulls low on SPANBUSY . VRAMSEL . /IOPAGE . E and floats otherwise (3.3, 12.1)",
     `${held[W.pin]} / ${idle[W.pin]}`)
@@ -109,10 +110,18 @@ const wrow = build(wrowDesign, "wrow")
    * divider would double the term count on E itself. This is that literal,
    * asserted rather than assumed - and it is new on 2026-09-08, along with
    * anything at all listening to this pin. */
-  const eLow = arb.gal.evaluate({ 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 1, 9: 0 })
+  const eLow = arb.gal.evaluate({ 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 1, 9: 0, 10: 0 })
   check(eLow[W.pin] === -1,
     "/WAIT floats while E is low - a wait only ever stretches the high half",
     `${eLow[W.pin]}`)
+
+  /* graphics.md 7.4: only WRITES wait. The backstop protects the depth-1
+   * posted-write latch, which a read does not touch - and a read that stalled
+   * for up to 40.7 us is what features.md 8 and 9's save-behind and cursor
+   * paths were paying. */
+  const rd = arb.gal.evaluate({ 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 1, 9: 1, 10: 1 })
+  check(rd[W.pin] === -1,
+    "/WAIT floats on a READ - only writes are throttled (7.4)", `${rd[W.pin]}`)
 }
 
 /* -- WPTR ----------------------------------------------------------------- */

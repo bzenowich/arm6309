@@ -91,7 +91,7 @@ arbCells.push({
  * /IOPAGE on its pins and had the macrocell to spare - see 10.1.1. */
 arbCells.push({
   pin: 0, name: "WAIT", assertedLow: true, s0: 1, registered: false,
-  why: "open-drain by the OE idiom - SPANBUSY . VRAMSEL . /IOPAGE . E",
+  why: "open-drain by the OE idiom - SPANBUSY . VRAMSEL . /IOPAGE . E . /RW",
   terms: [],
   /* NOTHING LISTENED TO THIS UNTIL 2026-09-08. E and Q are made on the
    * motherboard's U6 and that part had no /WAIT input, so this output held
@@ -102,7 +102,24 @@ arbCells.push({
    * wait is only useful while E is high, and qualifying it here is one
    * literal where qualifying it in the divider would double the term count
    * on E itself. */
-  oe: "SPANBUSY & VRAMSEL & !IOPAGE & E",
+  /* !RW: ONLY WRITES WAIT, added 2026-09-08.
+   *
+   * 3.1.1 says what this backstop actually protects - the depth-1 posted-write
+   * latch, which a second CPU write during a span would overwrite. A READ does
+   * not touch that latch, and 5.2.1's arbiter already gives the CPU its chip
+   * ahead of the span writer, so a read has no conflict to wait for either.
+   * It was stalling anyway, for up to 7.4's 40.7 us.
+   *
+   * What that buys is on the other side of the card: features.md 8 and 9's
+   * sprite save-behind, mouse cursor and read-modify-write pixels are all
+   * VRAM READS, and they stop being exposed to the bound entirely. Writes
+   * still wait, which is the throttle that keeps the CPU from outrunning the
+   * span writer - that part is deliberate.
+   *
+   * A read during a span sees a partially retired span. That is the caller's
+   * own span and VSTAT b7 says whether it has finished, so it is a software
+   * rule (7.4) and not a hazard. */
+  oe: "SPANBUSY & VRAMSEL & !IOPAGE & E & !RW",
 })
 
 const arbPins = place(arbCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
@@ -130,6 +147,8 @@ export const arbDesign: Design = {
     /* The bus clock, for /WAIT's E qualification - machine.md 5 item 8's
      * second rule. Added 2026-09-08 with the E literal on the output enable. */
     { name: "E", pin: 9 },
+    /* R/W, so that only WRITES wait - see the output enable below. */
+    { name: "RW", pin: 10 },
   ],
   cells: arbCells.map((c) => ({ ...c, pin: arbPins[c.name] })),
   spares: [],

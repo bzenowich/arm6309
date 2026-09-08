@@ -135,10 +135,13 @@ export const vctrlCpld: Merged = merge(
       "SLOTTICK", "RETIRE",
       /* §6.4's cadence, out to the address part and the serialiser */
       "MAPLD", "MAPSEL", "TILESEL", "CHARSEL", "LINEAR", "GLYPHLD", "GLYPHSH", "LUTPAGE",
-      /* §19 item 23(b): the file address and one write strobe, in place of one
-       * strobe pin per register. The address part decodes its own. */
-      "RA0", "RA1", "RA2", "RA3", "RA4", "WSTB",
-      "VRAMSEL", "REGSEL", "HLOAD", "ROWADV",
+      /* ⚠ RA0-RA4, WSTB and REGSEL left this part on 2026-09-08 for
+       * regfile.jedec.ts's own GAL22V10 - §10.1.6.3's relief, taken. vaddr
+       * still takes the same six signals; only the chip driving them moved.
+       * What goes back is FP0/FP1, so that part can form the read-back
+       * selects itself. Six pins out, two back. */
+      "FP0", "FP1",
+      "VRAMSEL", "HLOAD", "ROWADV",
       /* The cell's row and column inside the 8x8 - §6.4's geometry. These are
        * the sync counters' own low bits, so they cost pins and not logic. */
       "V0", "V1", "V2",

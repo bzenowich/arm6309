@@ -28,7 +28,7 @@ reaches a conclusion that document does not state, the conclusion is marked.
 | **Colour depth** | 8bpp everywhere. There is **no 4bpp, 2bpp or 1bpp packed mode** and no 320-wide mode. §10 |
 | **Scrolling** | **Free, both axes, pixel-accurate**, by register — a 1024 × 512 ring. §1.3 |
 | **Buffers** | 512 KB of VRAM = **four full 640×200 screens**. Double and triple buffering are free. §1.2 |
-| **Span writer** | the card's drawing engine: **6.29 MB/s solid fill**, 8 pixels per CPU write in mask mode. §3 |
+| **Span writer** | the card's drawing engine: **6.29 MB/s solid fill today, 25.1 MB/s if `graphics.md` §7.4's broadcast write is built**, 8 pixels per CPU write in mask mode. §3 |
 | **Polygon fills** | **Yes** — scanline decomposition in the CPU, spans in hardware. **0.7 to 6.3 Mpx/s depending on span width.** §6 |
 | **QuickDraw offload** | **`PaintRect`, pattern fills, glyph blits, horizontal spans and scroll: yes.** Lines, arcs, regions, colour image copies: no. §7 |
 | **Sprites** | **No hardware sprites.** Software costs ~0.9 ms per 16×16 sprite per frame, so **4–6 moving objects**. §8 |
@@ -206,10 +206,10 @@ glyph is *eight mask writes and nothing else*.
 
 | | |
 |---|---|
-| **Solid fill rate** | **6.29 MB/s** — ⚠ ~~25.1~~. **One** byte per 158.9 ns fetch slot: `WPTR` names one of the four interleaved chips at a time and two accesses do not fit the 86.9 ns of slack. `graphics.md` §7.4 |
+| **Solid fill rate** | **6.29 MB/s** — ⚠ ~~25.1~~. **One** byte per 158.9 ns fetch slot: `WPTR` names one of the four interleaved chips at a time and two accesses do not fit the 86.9 ns of slack. `graphics.md` §7.4. ⭐ **25.1 MB/s with §7.4's broadcast write**, which retires four bytes in *one* access rather than four — every byte of a solid is the same byte, and `4n`…`4n+3` are the same intra-chip address on four chips |
 | **Mask fill rate** | **8 pixels per CPU write** = 3.4 Mpx/s, CPU-bound |
 | Setup per span | `WPTR` ×3 + `SPANLEN` + the posted write = **5 writes ≈ 11.9 µs** |
-| Full-screen clear, 640×200 | ~500 CPU writes, **~1.2 ms of CPU and ~20.3 ms to retire** (~~5.1~~) |
+| Full-screen clear, 640×200 | ~500 CPU writes, **~1.2 ms of CPU and ~20.3 ms to retire** (~~5.1~~) — **5.1 ms with broadcast**, back inside a 14.3 ms frame |
 | Hardware cost | `74HC165`, `74HC161` ×2, 3 macrocells of mask counter, and `SPANBUSY` |
 
 **The span writer is why bandwidth is not this machine's constraint.** The card has
@@ -265,7 +265,7 @@ The deferred blit datapath is ~14 ICs and ~10 GALs for **~8.7 Mpx/s**
 
 | Operation | Span writer today | Blitter |
 |---|---|---|
-| Solid fill | **6.29 MB/s** | 8.7 Mpx/s — ⚠ *faster*, ~~slower~~ |
+| Solid fill | **6.29 MB/s**, 25.1 broadcast | 8.7 Mpx/s — ⚠ *faster* today, ~~slower~~; **slower than broadcast** |
 | 1bpp mask → 2 colours | 3.4 Mpx/s | 8.7 Mpx/s |
 | **8bpp source → destination** | **cannot** | **8.7 Mpx/s** |
 | **8bpp with transparency** | **cannot** | **8.7 Mpx/s** |
@@ -273,7 +273,9 @@ The deferred blit datapath is ~14 ICs and ~10 GALs for **~8.7 Mpx/s**
 
 **So the blitter still buys mainly one capability class: moving *colour image data*.**
 ⚠ **It also buys 38 % on solid fills**, which the 25.1 MB/s figure hid — that row read
-*"slower"* until 2026-09-08. Two-colour work is a factor of 2.5. Everything the
+*"slower"* until 2026-09-08. ⭐ **`graphics.md` §7.4's broadcast write takes that back
+for one wide product term and a by-four counter**, at which point the blitter buys
+nothing on solid fills again. Two-colour work is a factor of 2.5. Everything the
 span writer cannot do at all is in the third and fourth rows — colour sprites, image
 copies, off-screen composition of 8bpp artwork — and against `TFM`'s 0.70 Mpx/s that is
 a **12×**.
@@ -303,6 +305,7 @@ until the run gets wide enough that the retire time dominates at **~75 pixels**:
 | 64 px | 11.9 µs | 5.4 Mpx/s | 7.7× |
 | **75 px** | 11.9 µs | **6.29 Mpx/s** | **9×** — the crossover |
 | 100 px | 15.9 µs | 6.29 Mpx/s | 9× |
+| **300 px** | 47.7 µs, **11.9 µs broadcast** | 6.29, **25.1 Mpx/s** | 9×, **36×** — broadcast's crossover |
 | 640 px | 101.7 µs | **6.29 Mpx/s** — memory-bound | 9× |
 
 > ⚠ **Corrected 2026-09-08, and downward.** This table read 8.4 Mpx/s at 100 px and 25.1
@@ -315,6 +318,9 @@ until the run gets wide enough that the retire time dominates at **~75 pixels**:
 > it is still **9× `TFM`**, and it still covers text, fills, clears and scroll refills,
 > which is what `graphics.md` §10.3 defers the blitter on. §5's conclusion is unchanged
 > in kind and narrower in margin.
+>
+> ⭐ **And §7.4 proposes getting the 4× back** — broadcast writes, which restore 25.1
+> Mpx/s and a 300-pixel crossover without a blitter. The row above shows both.
 
 **What it does not do**: Gouraud or textured fills (the run is one colour), and the edge
 stepping is all CPU. A flat-shaded 3D scene of, say, 40 triangles averaging 60-pixel
@@ -503,6 +509,15 @@ These are capability questions, and `graphics.md` §19 does not carry them.
    names one interleaved chip at a time. `graphics.md` §7.4 has the derivation, and §7.3's
    own full-screen-clear row was wrong the same way. **The CPU-bound figures did not
    move**, which is most of them.
+
+   ⭐ **And §7.4 proposes getting the 4× back the same day** — *broadcast writes*: in
+   span-solid every byte is the same byte and four consecutive addresses are one
+   intra-chip address on four chips, so a quad needs one address, one data byte and four
+   `/WE`. **25.1 MB/s, a 300-pixel polygon crossover, a 5.1 ms full-screen clear and a
+   10.2 µs `SPANBUSY` bound.** ⚠ **It is a proposal, not a build**: the arbitration is
+   real work, because during a `/WAIT` stall only three chips are free and the span
+   writer has to learn how many it got. Every figure in this document is the **today**
+   figure unless it says otherwise.
 1. **⚠ Measure the store rate.** Every microsecond figure above scales on
    `graphics.md` §7.3's unverified 5-cycles-per-store. It is `graphics.md` §19 item 1
    and it is the cheapest measurement on the card.

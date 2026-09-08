@@ -34,6 +34,7 @@ import { clkdecDesign } from "../clkdec.jedec"
 import { hgenDesign, vgenDesign, vdecDesign } from "../sync.jedec"
 import { hadrDesign, vadrDesign } from "../scan.jedec"
 import { arbDesign, wcolDesign, wrowDesign } from "../access.jedec"
+import { rfaDesign } from "../regfile.jedec"
 import { seqphDesign } from "../seqph.jedec"
 import { seqctlDesign } from "../seqctl.jedec"
 import { aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign } from "../audio.jedec"
@@ -41,9 +42,11 @@ import { ALL } from "../designs"
 import { PHASES, mmu } from "../mmu.model"
 import { RESET_STATE, decode, step, type Counter } from "../clkdec.model"
 
-/* The arbiter, assembled here so its pin placement is known to the sweep. */
+/* Assembled here so the sweeps know where each equation landed. */
 const arbAsm = assemble(arbDesign)
 const ourArb = new Gal22v10(parseJedec(toJedec(arbDesign, arbAsm)).fuses)
+const rfaAsm = assemble(rfaDesign)
+const ourRfa = new Gal22v10(parseJedec(toJedec(rfaDesign, rfaAsm)).fuses)
 
 let failures = 0
 const check = (ok: boolean, claim: string, detail = "") => {
@@ -126,27 +129,52 @@ const checkArb = (label: string, gal: Gal22v10) => {
   const pinOf = Object.fromEntries(
     names.map((n) => [n, arbAsm.usage.find((u) => u.name === n)!.pin]))
   let bad: string | null = null
-  for (let bits = 0; bits < 512 && !bad; bits++) {
-    const inputs = {
-      1: (bits & 1) as 0 | 1, 2: ((bits >> 1) & 1) as 0 | 1,
-      3: ((bits >> 2) & 1) as 0 | 1, 4: ((bits >> 3) & 1) as 0 | 1,
-      5: ((bits >> 4) & 1) as 0 | 1, 6: ((bits >> 5) & 1) as 0 | 1,
-      7: ((bits >> 6) & 1) as 0 | 1, 8: ((bits >> 7) & 1) as 0 | 1,
-      9: ((bits >> 8) & 1) as 0 | 1,
-    }
+  /* Ten inputs since R/W joined on 2026-09-08 - graphics.md 7.4, only writes
+   * wait. 1,024 combinations, so still exhaustive. */
+  for (let bits = 0; bits < 1024 && !bad; bits++) {
+    const inputs: Record<number, 0 | 1> = {}
+    ;[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach((p, i) => {
+      inputs[p] = ((bits >> i) & 1) as 0 | 1
+    })
     const ours = ourArb.evaluate(inputs)
     const theirs = gal.evaluate(inputs)
     for (const n of names) {
       if (ours[pinOf[n]] !== theirs[pinOf[n]]) {
-        bad = `${n} at inputs ${bits.toString(2).padStart(9, "0")}: ` +
+        bad = `${n} at inputs ${bits.toString(2).padStart(10, "0")}: ` +
           `ours ${ours[pinOf[n]]}, CUPL ${theirs[pinOf[n]]}`
         break
       }
     }
   }
-  check(bad === null, `${label}: matches our fuse map over all 512 inputs`, bad ?? "")
+  check(bad === null, `${label}: matches our fuse map over all 1,024 inputs`, bad ?? "")
 }
 checkArb("CUPL arb.jed", load("reference/arb.cupl.jed"))
+
+/* -- U-V9, the register-file address: combinational, swept exhaustively ----- */
+const checkRfa = (label: string, gal: Gal22v10) => {
+  const names = ["WSTB", "RA0", "RA1", "RA2", "RA3", "RA4"]
+  const pinOf = Object.fromEntries(
+    names.map((n) => [n, rfaAsm.usage.find((u) => u.name === n)!.pin]))
+  /* Thirteen inputs is 8,192 combinations - small enough to be exhaustive,
+   * which is the only kind of sweep worth writing for a decode. */
+  let bad: string | null = null
+  for (let bits = 0; bits < 8192 && !bad; bits++) {
+    const inputs: Record<number, 0 | 1> = {}
+    const pins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 23]
+    pins.forEach((p, i) => { inputs[p] = ((bits >> i) & 1) as 0 | 1 })
+    const ours = ourRfa.evaluate(inputs)
+    const theirs = gal.evaluate(inputs)
+    for (const n of names) {
+      if (ours[pinOf[n]] !== theirs[pinOf[n]]) {
+        bad = `${n} at ${bits.toString(2).padStart(13, "0")}: ` +
+          `ours ${ours[pinOf[n]]}, CUPL ${theirs[pinOf[n]]}`
+        break
+      }
+    }
+  }
+  check(bad === null, `${label}: matches our fuse map over all 8,192 inputs`, bad ?? "")
+}
+checkRfa("CUPL rfa.jed", load("reference/rfa.cupl.jed"))
 
 console.log("\nAnd ours, which must agree with it\n")
 checkMmu("our mmu.jed", load("../mmu.jed"))
@@ -185,6 +213,9 @@ const REGISTRY: Part[] = [
    * GAL again and the registry's rule applies to it: a GAL does not ship
    * without a second implementation to check it against. */
   { design: arbDesign, reference: "reference/arb.cupl.jed" },
+  /* rfa split off vctrl on 2026-09-08 - graphics.md 10.1.6.3's relief, taken
+   * so 7.4's broadcast write has pins to signal through. */
+  { design: rfaDesign, reference: "reference/rfa.cupl.jed" },
   { design: wcolDesign, reference: null }, { design: wrowDesign, reference: null },
   { design: seqphDesign, reference: null }, { design: seqctlDesign, reference: null },
   /* The audio five were missing from this list until 2026-09-07, which is the
