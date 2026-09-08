@@ -12,8 +12,9 @@ deliberate instead of at the root.
 right.** PS/2 is eleven packages of 74-series logic because no period chip decodes PS/2 —
 `ps2.md` §4.5 evaluates the closest thing, a 6522 per port, and rejects it on I/O space.
 Serial is three packages because the 6551 (1977) does the whole job in one, costs four
-addresses, and shipped inside a CoCo. The house rule bars CPLDs and FPGAs, not LSI; what
-decides each case is whether a period part exists that fits the I/O budget.
+addresses, and shipped inside a CoCo. **The rule that used to bar CPLDs was retired on
+2026-09-08** (root `README.md`); what decides each case is whether a period part exists,
+whether it can still be bought, and whether it fits the I/O budget — in that order.
 
 ## Read this before specifying another one
 

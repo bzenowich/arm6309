@@ -40,12 +40,12 @@ genuinely undecided.
 | **System master clock** | one 25.175 MHz oscillator, **on the motherboard** — §1 |
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
-| **Video** | 640×200 × 256 colours, VGA out — **41 ICs**, 10 of them GALs ([`video/`](../video/), `graphics.md` §14) |
+| **Video** | 640×200 × 256 colours, VGA out — **30 ICs** (~~41~~), the programmable logic being **2 × `ATF1508AS` PLCC-84 + 1 `GAL22V10`** ([`video/`](../video/), `graphics.md` §14.1) |
 | **Audio** | 4-channel 8-bit PCM, Paula-exact — **29 ICs**, one `ATF1508AS` PLCC-84 ([`audio/`](../audio/), `audio.md` §10.1) |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **13 ICs** (~~7~~), **681 KiB/s** sustained (~~528~~) — **specified** ([`storage/`](../storage/)). Its block buffer moved into `A20 = 1` on 2026-09-08 and took the `TFM` hazard with it. ⚠ ~~The machine's one period exception~~ the first of two |
 | **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs** (~~16~~), two of them `ATF1508AS` — **specified** ([`net/`](../net/)). ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | ~~**~106 ICs** — 97 on cards~~ **~124 ICs** — 115 on cards, **9** on the motherboard (~~13~~ — §7.1). See §8 |
+| **Total silicon** | **107 ICs** — **98 on cards**, **9** on the motherboard. ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -804,7 +804,7 @@ a cross-card dependency.
 | audio | The MCU bring-up card, which is what proves the register map | `audio.md` §12.5 |
 | io | Measure the PS/2 protocol on a scope; add a reference document to `reference/` | `ps2.md` §13 step 1, §14 item 1 |
 | io | **Measure NitrOS-9's interrupt dispatch cost** — it decides serial's ceiling, PS/2's FIFO, and §4.1's margins | `ps2.md` §14 item 3, §13 step 8 |
-| io | Source an `R6551A` or `G65SC51` — the in-production `W65C51N` is defective for this use | `serial.md` §3.3, §13 item 5 |
+| io | ~~Source an `R6551A` or `G65SC51`~~ **⭐ Decide `serial.md` §5.4's tier first.** A `16C550` is +1 IC for 115,200 baud instead of 19,200, is current-production, and takes its timing from its own crystal — closing the `W65C51N` trap and the fast-E speed grade outright. **It needs eight `$FF` addresses, which is what §5 item 1 made available** | `serial.md` §4.5, §13 items 5–7 |
 | io | Confirm whether NitrOS-9's `sc6551` exists; it is the card's entire software cost | `serial.md` §13 item 2 |
 | **cpu** | **⚠ Settle `TFM`'s interrupt/resume behaviour from silicon** — and note it is now a *choice*, not a discovery, because this machine's 6309 is the project's own firmware. **Two cards now wait on it**, and the second one cannot retry a lost frame | `sdcard.md` §4, §13 item 1; `net.md` §3.2 |
 | **io** | **⚠ Fit `net`'s U2 before laying out its board** — 118 of 128 macrocells and 56 of 60 pins, with a five-step cut order behind it | `net.md` §7.3, §16 item 1 |
@@ -815,7 +815,7 @@ a cross-card dependency.
 | **machine** | **⚠ Divide the megabyte at `A20 = 1`** — how a card claims a region, at what granularity, and who arbitrates a host access the card cannot defer | §5 item 7 |
 | ~~**storage, io**~~ | ~~Re-price against a memory-mapped buffer.~~ **Done 2026-09-08** — both cards took it. `sdcard.md` §11.1 and §4.5; `net.md` §13.3 and §7.6. ⚠ **What is left is `sdcard.md` §13 item 6**: its *write* path is still on the port | §5 item 1 D |
 | **io** | **Find out whether a NitrOS-9 network stack exists.** It is the net card's largest cost and nobody has looked — the same shape of unknown as `serial`'s `sc6551` | `net.md` §14.2, §16 item 12 |
-| **project** | **⚠ Restate or retire the no-CPLD house rule.** Three of six cards have now spent it, and the root `README.md` still says it is spent on two | `net.md` §12 |
+| ~~**project**~~ | ~~**⚠ Restate or retire the no-CPLD house rule.**~~ **RETIRED 2026-09-08** — root `README.md`. Programmable logic is in; FPGAs are unproposed rather than banned. ⚠ **One consequence outstanding**: `sdcard.md` §8.1's `ATF1508AS` was refused on the rule alone and is now unblocked at 8 ICs against 13 | root `README.md`; `sdcard.md` §13 item 12 |
 | storage | A NitrOS-9 `RBF` driver — larger than the card. Evaluate matching CoCoSDC's map to inherit one | `sdcard.md` §13 item 4 |
 | **project** | **Choose a licence.** The repository has none for its own work | `design-review.md` §Sys-M6 |
 
@@ -916,17 +916,31 @@ carve-out drawn into a physical map that has no room for one.
 
 | Rail | Consumer | ICs | Estimate |
 |---|---|---|---|
-| 5 V | **video card** | 40 (9 GALs) | **~1.1–1.7 A**, design to 2 A — `graphics.md` §14. ⚠ It quoted 450–650 mA until 2026-09-04, which its own per-GAL figure (630–810 mA for the GALs alone) already exceeded |
-| 5 V | **audio card** | 36 | **~300–400 mA** — `audio.md` §10 |
+| 5 V | **video card** | **30** (~~40~~) — 2 CPLDs, 1 GAL | **~0.75–1.3 A, 0.9 A nominal**, design to 1.5 A — `graphics.md` §14.1. ⚠ It quoted 450–650 mA until 2026-09-04 (less than its own GAL row) and **~1.1–1.7 A until 2026-09-08**, when the ten GALs at 70–90 mA each were finally replaced in the arithmetic as well as in the design |
+| 5 V | **audio card** | **29** (~~36~~ — `audio.md` §10.1 is the current count) | **~300–400 mA** — `audio.md` §10 |
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
 | 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The second largest single-card draw after video**, and the only figure on that card that cannot be derived from a datasheet with confidence |
 | 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + **13** (~~7~~ — its block buffer, §5 item 7) | not yet estimated |
 | 5 V | **motherboard**: MMU (5), divider GAL, oscillator, reset supervisor, 512 KB SRAM (~~+ decode~~ — §7.1) | ~~13~~ **9** | not yet estimated |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly ~~2–3~~ 2.5–3.5 A at 5 V across ~~~106~~ ~122 ICs, plus a
-3.3 V rail** — the net card adds 12 packages and ~0.5 A, and it fills the sixth and last
-slot (`hardware/README.md`).
+**The machine is plausibly ~~2–3~~ **2.0–3.0 A** at 5 V across ~~~106~~ **107 ICs**, plus
+a 3.3 V rail.**
+
+> ⚠ **Both halves re-derived 2026-09-08, and the card total had never been added up.**
+> This row carried "97 on cards" while the card documents summed to 91, and neither
+> number tracked the four counts that changed during the week. **The sum, from each
+> card's own document:**
+>
+> | video | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
+> |---|---|---|---|---|---|---|---|---|
+> | **30** | 29 | 11 | 3 | **13** | **12** | **98** | 9 | **107** |
+>
+> Video fell 41 → 30 when `graphics.md` §14.1 finally counted the two `ATF1508AS` that
+> replaced its ten GALs (2026-09-06's decision, 2026-09-08's arithmetic); storage rose
+> 7 → 13 and net fell 16 → 12 in the same week's buffer work. **The current estimate
+> fell** because ten GAL22V10 at 70–90 mA each were most of an amp and two CPLDs are
+> not.
 
 > ⚠ **Both halves of that sentence moved on 2026-09-04, and in the same direction.** The
 > review estimated "~90 ICs and 1.5–2.5 A" from the counts the card documents then

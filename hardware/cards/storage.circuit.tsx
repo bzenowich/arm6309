@@ -12,9 +12,13 @@
  * argument), and took sustained reads from 528 to 681 KiB/s.
  *
  * It cost six ICs, five of them address and data plumbing. One ATF1508AS would
- * have absorbed both GALs, the counter and the mux for an 8-IC card; not taken,
- * because it would spend the no-CPLD house rule a fourth time on the one card
- * whose exception is the media rather than the silicon. sdcard.md 8.1.
+ * absorb both GALs, the counter and the mux for an 8-IC card.
+ *
+ * That was refused on the no-CPLD house rule, which was retired on 2026-09-08
+ * (root README.md), so it is no longer blocked - and it has not been taken.
+ * Unlike video, audio and net, this card's logic fits two GALs comfortably, so a
+ * CPLD here buys packages rather than capability and gives up the fuse-level
+ * verification hardware/gal/jedec/ provides. sdcard.md 8.1, 13 item 12.
  */
 import { Card } from "../lib/Card"
 

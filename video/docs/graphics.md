@@ -17,7 +17,7 @@ protect MinOS and can be deleted outright.**
 - RGB332 is the colour model you asked for; palette lookup is *nice, not required*.
 - 80×25 text ⇒ **640×200 is preferred over 480×200**.
 - Bitmap with smooth scrolling, and a blitter.
-- ~~**No CPLDs or FPGAs on the graphics card.**~~ **Given up deliberately at §10.1.5**, after §10.1.2 showed it was a style rule and not a period one. The card is two `ATF1508AS` in PLCC-84 (§10.1.6). GALs are in (colormin already uses 8); FPGAs are still out.
+- ~~**No CPLDs or FPGAs on the graphics card.**~~ **Given up deliberately at §10.1.5**, after §10.1.2 showed it was a style rule and not a period one. The card is two `ATF1508AS` in PLCC-84 plus one `GAL22V10` (§10.1.6, §14.1). ⚠ **This card's exception became the machine's rule on 2026-09-08**: the root `README.md` retired the no-CPLD rule outright. FPGAs are unproposed rather than banned.
 - Period-appropriate silicon. VGA (1987), GAL22V10 (1986), 1 Mbit SRAM (~1989–90)
   and 25.175 MHz all place this card credibly at **1989–1990** — the same window
   the CoCo 3 and the IIgs were still current in.
@@ -54,11 +54,14 @@ protect MinOS and can be deleted outright.**
 > carried a master oscillator that belongs on the motherboard, not on a card you can
 > pull (§14). None of that is a change of design. It is the same card, counted.
 
-**Net: 41 ICs (37 if the tri-state pixel bus closes at 39.7 ns and the `'153` mux is
-not needed), against colormin's 39 (35)** — plus 3 buffer transistors and 3 R-2R SIP
-ladders, which are not ICs and are counted on their own line. **10 GALs, not 8** —
-the sync section was fitted on 2026-09-06 and needs three parts, not two (§19 item 8).
-⚠ The scan-address pair is unfitted and sits at 20 of 20; expect a fourth.
+**Net: ~~41 ICs (37…)~~ 30 ICs (26 if the tri-state pixel bus closes at 39.7 ns and the
+`'153` mux is not needed), against colormin's 39 (35)** — plus 3 buffer transistors and
+3 R-2R SIP ladders, which are not ICs and are counted on their own line.
+
+**The programmable logic is 2 × `ATF1508AS-15JC84` (PLCC-84) + 1 × `GAL22V10`** —
+`vaddr`, `vctrl` and the spare-access arbiter. ⚠ **41 and "10 GALs" were the GAL build,
+which §10.1.6 replaced on 2026-09-06 without the arithmetic being carried back; three
+different counts were live in this document until 2026-09-08. §14.1 reconciles them.**
 Higher resolution, readable VRAM, raster interrupts, one clock domain; deleting the
 stock-compatibility path still pays for most of the addition, and the honest bus
 interface eats the rest.
@@ -1557,14 +1560,23 @@ that costs no VRAM, and this card has 384 spare columns; it is not short of VRAM
 blitter.md §6.2 already flags it: the card is ~~8~~ **9** GALs (§14 — §5.2.1's
 spare-access arbiter is the ninth), the full blitter adds 10,
 and **"eighteen GAL22V10s is the point where the honest question becomes 'why not
-one CPLD'."** You have answered that question — no CPLDs — so the consequence is
-yours to accept rather than to route around:
+one CPLD'."** ⚠ **That question was open when this section was written and the answer
+was "no CPLDs".** §10.1.5 gave the rule up for this card and the root `README.md`
+retired it for the machine on 2026-09-08. **Everything from here to §10.1.5 is the
+argument that produced that reversal**, and it is kept for that reason — the wall is
+real and the card walked into it:
 
 | Build | GALs | Card ICs (with `'153` mux) |
 |---|---|---|
 | Rev A: framebuffer + span writer + palette + read-back | **9** | **40** |
 | + list engine (the copper) | 11 | 45 |
 | + blit datapath | **~21** | ~59 |
+
+> ⚠ **This table is the GAL build and §10.1.6 replaced it.** The card is **2 ×
+> `ATF1508AS` + 1 × `GAL22V10` + 27 packages = 30 ICs** — §14.1 has the arithmetic.
+> The section below is kept because **it is the argument that produced that decision**:
+> the wall it describes is real, the card hit it, and what follows is what happened
+> next.
 
 18–20 GAL22V10s is not just a fitting problem, it is a **power and area problem**:
 at ~70–90 mA each that is 1.3–1.8 A of GAL alone, on a card that already carries
@@ -1604,8 +1616,9 @@ pin whether or not anything outside the package ever looks at it. That is what m
 the sync section three parts (§19 item 8) and it is what will decide the sequencer
 pair.
 
-So the obvious lever is a GAL-class part with buried registers, and there are two that
-do not breach the no-CPLD rule:
+So the obvious lever is a GAL-class part with buried registers, and there are two —
+⚠ **evaluated while the no-CPLD rule still stood, and now of interest only for the
+arbiter's `GAL22V10` (§10.1.6.3), which fits a plain 22V10 at 10 of 10:**
 
 - Lattice **GAL6001/6002** — 10 I/O macrocells plus **8 buried registers**, 24-pin,
   1990. Unambiguously a GAL.
@@ -1660,6 +1673,11 @@ already carries 74AHCT at ~1990 and the 1 Mbit SRAM at ~1989–90 and flags both
 newer. **"No CPLDs" is not a period rule on this card. It is a style rule** — one
 function per package, everything visible on a scope — and that is a good reason to
 keep it, but it is not the reason the README gives.
+
+> **This paragraph is what eventually retired the rule**, three cards later. The root
+> `README.md`'s 2026-09-08 note cites it by section number: *"it was never a period
+> rule — Altera's first EPLD is 1984 and the first CPLD 1988, both older than parts
+> this machine already uses."*
 
 **And the count that reaches eighteen is the machine's, not the card's.** Ten here,
 two on the motherboard, five on audio's sequencer, plus decode GALs on serial, storage
@@ -1967,12 +1985,12 @@ which is the whole of the v1 display list bar §19 item 23's decode.
 | | Package | Holds | Logic cells | I/O pins |
 |---|---|---|---|---|
 | **`vaddr`** | PLCC-84 | scan and `WPTR` counters, scroll and tile registers, the write-strobe decode, the six-source address mux | **101 of 128** | 62 of 64 |
-| **`vctrl`** | **TQFP-100** | sync trio, sequencer, span control, arbiter, `CTRL`, §6.4's fetch cadence, §19 item 23's decode | **123 of 128** | 76 of 80 |
+| **`vctrl`** | **PLCC-84** | sync trio, sequencer, span control, `CTRL`, §6.4's fetch cadence, §19 item 23's decode | **112 of 128** | **64 of 64** |
+| **`arb`** | **`GAL22V10`** | **the spare-access arbiter — eight grants, `SPNGRANT`, `/WAIT`** | 10 of 10 | 9 of 12 in |
 
-⚠ **`vctrl` outgrew the PLCC-84 when item 23 closed** — the fitter refuses it at 74
-I/O — so the two parts are no longer the same package. At 123 of 128 logic cells and
-76 of 80 pins it has almost nothing left; anything further on that part displaces
-something else.
+⚠ **`vctrl` outgrew the PLCC-84 when item 23 closed, and the fix was to take the
+arbiter back out — §10.1.6.3.** The three-line table above is the whole card's
+programmable logic.
 
 `DOTCLK` lands on a global clock and `RESET` on the global clear, both parts, with two
 of four dedicated inputs used. 74,136 fuses each.
@@ -2049,6 +2067,41 @@ none of them free:
 > the map had **no address source at all**, so `MAPLD` latched a byte from an address
 > nothing generated. Fitting proves a design lands on a part. It does not prove the
 > design is right, and this section read as though it did.
+
+#### 10.1.6.3 ⚠ The arbiter came back out, and the card stays on PLCC-84
+
+**2026-09-08.** Two machine-level decisions put two more inputs on `vctrl` — `A6` on
+`REGSEL` (`machine.md` §5 item 1 A widened the geographic window to `$FF00`–`$FF7F`,
+so `A6` left the strobe and every card decodes seven bits) and `/A20` on `VRAMSEL`
+(§5 item 1 D made the physical map 2 MB). A third followed: `& E` on `WAIT.oe`, from
+§5 item 8.
+
+**76 I/O against a PLCC-84's 64.** The committed fit had been run against a
+`P1508T100` — a TQFP-100 — while the `.pld` declared `f1508ispplcc84` and
+`hardware/gal/regfile.ts` said *"vctrl fits at 62 of 64"*. **The design and its fit
+had disagreed about the package and nothing checked it.**
+
+**The arbiter is the cheapest ten pins on the part to give back.** Eight grants,
+`SPNGRANT` and `/WAIT` are exactly ten macrocells against a `GAL22V10`'s ten; its
+seven inputs are backplane signals or already-exported ones; and `access.jedec.ts`
+never stopped carrying it as a standalone design with `access.check.ts` still checking
+it. **It was a GAL before the two-CPLD rebalance and it is one again.** `WRITESEL`
+**is** `SPNGRANT`, so it stops being a `vctrl` output and becomes a `vctrl` input.
+
+| | I/O | Logic cells |
+|---|---|---|
+| as committed, TQFP-100 | 76 / 80 | 123 / 128 |
+| + `A6`, `/A20`, `& E`, still TQFP-100 | 78 / 80 | 123 / 128 |
+| **on a PLCC-84** | **76 needed, 64 available — does not fit** | |
+| **arbiter out to a `GAL22V10`** | **64 / 64** ✓ | **112 / 128** |
+
+⚠ **64 of 64 is zero spare, and JTAG costs four I/O — so `vctrl` has none.** It is
+programmed out of circuit, which is what the audio card's `ATF1508AS` already does and
+what this section's opening paragraph assumed. **If in-circuit programming is wanted
+back, four pins have to come from somewhere**: `RA0`–`RA4` and `WSTB` onto a second
+`GAL22V10` is the obvious six, at the cost of exporting `RDFG`/`RDBG`/`RDLEN`.
+`hardware/gal/video.cpld.ts` carries the argument and the device declaration.
+
 
 ### 10.2 What the 6309 gives you for free
 
@@ -2434,7 +2487,7 @@ way and for exactly the same reason — but it is a yes with a rule attached.
 | **1** | **74HC244** | **`VSTAT` live-bit driver (§12.1)** | **+1** |
 | 2 | 74HC161 | `SPANLEN` down-counter | = |
 | 1 | 74HC244 | clock / load fan-out, **plus HSYNC/VSYNC out to the backplane (§12.2)** | = |
-| **41** | | **(37 if the tri-state pixel bus closes at 39.7 ns)** | **colormin: 39 (35)** |
+| **41** | | ⚠ **the GAL build — superseded, see §14.1** | **colormin: 39 (35)** |
 | — | 3 × NPN (β ≥ 300) + 1 × diode + 9 R | VGA drive stage, `V_be`-referenced (§9.1) | **new** |
 | — | 3 × R-2R SIP, 1 kΩ/2 kΩ | 5/6/5 ladders (§9.1 sets the value) | = (value specified) |
 | — | ~~1 × 25.175 MHz oscillator~~ | ⚠ **moved to the motherboard — §5.1** | **−1** |
@@ -2443,15 +2496,61 @@ way and for exactly the same reason — but it is a yes with a rule attached.
 **GAL count is ~~9~~ 10**, and that third step is measured rather than estimated: the
 sync section was fitted on 2026-09-06 and needs three parts (§19 item 8). §10.1's
 "the card is 8 GALs, the full blitter adds 10" table is re-based accordingly: Rev A
-**10**, + list engine 12, + blit datapath ~22. The "eighteen GAL22V10s is where the
-honest question becomes 'why not one CPLD'" line lands **two** packages sooner than it
-did.
+**10**, + list engine 12, + blit datapath ~22.
 
 > **The scan-address pair was fitted the same day and needs no extra package** —
 > 17 of 20 with three spare (§19 item 8), because it generates a *chip* address of 17
-> bits and not a *byte* address of 19. So 41 stands, and the contingency this note
-> used to demand is withdrawn. What is still unfitted is the sequencer pair, the
-> `WPTR` pair and §5.2.1's arbiter.
+> bits and not a *byte* address of 19.
+
+### 14.1 ⚠ The card is 30 ICs, and three numbers in this document disagreed
+
+**Reconciled 2026-09-08.** The table above is the **GAL build**, and §10.1.6 replaced it
+on 2026-09-06 — *"Two PLCC-84 parts, and this is the build"* — without the arithmetic
+being carried back here. The result was three counts live at once, all of them written
+by this document:
+
+| Where | Said | Status |
+|---|---|---|
+| §0 and the table above | **41 ICs, 10 GAL22V10** | the GAL build — **superseded** |
+| §10.1.6 | 2 × `ATF1508AS`, no total given | the build, **uncounted** |
+| §14's power table | *"`ATF1508AS`, one"* | **wrong in a third way** — the partition is two parts, not one |
+
+**The count, derived from the table above:**
+
+| | Δ | |
+|---|---|---|
+| GAL build | **41** | |
+| − the ten `GAL22V10` | **−10** | sync ×3, scan ×2, `WPTR` ×2, sequencer ×2, arbiter ×1 |
+| + 2 × `ATF1508AS-15JC84`, PLCC-84 | **+2** | `vaddr` and `vctrl` — §10.1.6 |
+| − §10.1.6's absorptions | **−4** | `CTRL`'s `'273`, the `SPANLEN` `'161` pair, the `'165` span-mask serialiser |
+| + 1 × `GAL22V10`, the arbiter | **+1** | §10.1.6.3 — it came back out on 2026-09-08 so `vctrl` stays a PLCC-84 |
+| **= the build** | **30** | **26 if the tri-state pixel bus closes and the four `'153` come out** |
+
+**30 ICs: 2 CPLDs, 1 GAL, and 27 packages of memory and 74-series.** Against
+colormin's 39 (35), and against the 41 this document carried for two days after the
+decision that replaced it.
+
+> **The `VSTAT` `'244` (§12.1) survives the CPLD**, which is not obvious — an
+> `ATF1508AS` has per-macrocell three-state with a product-term enable, so §12.1's
+> reason for rejecting the OE idiom evaporates. **Pins are why it stays**: driving
+> `D0`–`D7` from `vctrl` needs eight it does not have (§10.1.6.3). The same argument
+> keeps the three posted-write address `'574`s: 23 bits of latch is 23 pins, and
+> `vaddr` has two spare.
+
+**Power does not move**, and that is worth stating because it is the number a supply
+gets sized from. The programmable-logic row above assumed **one** `ATF1508AS` at
+~190 mA; it is **two at ~100–120 mA each with reduced-power mode on the slow
+macrocells, plus one `GAL22V10` at 70–90 mA** — call it **270–330 mA**, against the
+ten GALs' 700–900 mA and against the single part's assumed 190. The card lands at
+**~0.75–1.3 A, 0.9 A nominal, specify for 1.5 A** — the same conclusion §14's power
+paragraph already reaches, by different arithmetic.
+
+**Area moves less than §10.1.6 hoped.** Ten `GAL22V10` in DIP-24 are ~26 cm²; two
+PLCC-84 sockets are ~22 and the arbiter GAL is ~2.6, so the win is **~1.4 cm²**, not
+the ~4 that section predicts — because the arbiter came back out. The four deleted
+packages are the real saving, and §14's *"~150 of 160 cm²"* becomes roughly **140**.
+⚠ **If the tri-state pixel bus closes (§19 item 2) the four `'153` go too**, and the
+card is 26 ICs at ~130 cm², which is where the slack comes back.
 
 **Off-card, on the motherboard**, and this is where the parts that used to be on this
 list went:
@@ -2515,8 +2614,9 @@ real money: nine ATF22V10C-class parts instead of nine bipolar GALs is most of h
 amp. Measuring card current stays §19 item 10, but it is now a *verification*, not a
 discovery.
 
-**Area.** 41 ICs including 4 × DIP-32 and 3 × DIP-28, against colormin's ~140 cm² on a
-160 cm² Eurocard. Four more packages plus a guarded analog corner by the VGA connector
+**Area.** ⚠ **The paragraph below is the GAL build's; §14.1 has the current figure of
+~140 cm² for 30 ICs.** ~~41 ICs including 4 × DIP-32 and 3 × DIP-28~~, against
+colormin's ~140 cm² on a 160 cm² Eurocard. Four more packages plus a guarded analog corner by the VGA connector
 puts this at **~150 of 160 cm²** — still a 4-layer Eurocard with disciplined placement
 and the blitter still a piggyback, but the slack that made that conclusion comfortable
 is gone. If the tri-state pixel bus closes at 39.7 ns (§19 item 2) the four `'153`
@@ -2886,9 +2986,12 @@ unchanged from minimal256.md §11 and are not restated in full.
    groping for when it said "macrocells and pins are" the constraint, and pins turn
    out to be the binding half.
 
-   **So it is the third escape, and it is not a contingency: the card is 10 GALs and
-   41 ICs.** What that buys is the only slack anywhere in the sync section — three
-   free macrocells on `vdec`. The other two parts have none:
+   **So it is the third escape, and it is not a contingency: the card is ~~10 GALs and
+   41 ICs~~ 2 `ATF1508AS` + 1 `GAL22V10` and 30 ICs (§14.1).** ⚠ **This item's
+   macrocell table below is the GAL partition and §10.1.6's fit superseded it** — the
+   sync trio is inside `vctrl` now, which is 112 of 128 cells and 64 of 64 pins. The
+   item is kept because it is what proved the sync section needs three parts' worth of
+   logic, which is why it did not fit two GALs:
 
    | Part | Holds | Macrocells | Pins |
    |---|---|---|---|

@@ -23,7 +23,7 @@ driver bit-bangs it through two control bits and the whole transmit engine disap
 
 **Constraints taken as given (yours):**
 - **PS/2 keyboard and mouse**, one port each.
-- **Parts available before 1990.** No CPLDs, no FPGAs. GALs are in (video uses 8).
+- **Parts available before 1990.** Programmable logic is in — GALs, and CPLDs where a GAL will not carry the design (root `README.md`; video uses two `ATF1508AS`).
 - Same house rules as the other cards: period-honest silicon, one card, a documented
   register map, and an honest IC count.
 
@@ -470,7 +470,8 @@ clock on `CB1`** — which is, on the face of it, exactly a PS/2 port: `CB1` = `
 `CB2` = `DATA`, the port bits give §7's line drive and read-back, a timer gives the 100 µs
 inhibit, and the interrupt logic gives `/IRQ`. Two VIAs, a `7407` and an `'HCT132` is
 **four packages against this card's eleven**, and a 6522 is a 1977 part — comfortably inside
-the period rules, which bar CPLDs and FPGAs, not LSI.
+the period rules, which have never barred LSI — and since 2026-09-08 do not bar
+programmable logic either (root `README.md`).
 
 **Rejected, on three counts, and the first one is decisive:**
 

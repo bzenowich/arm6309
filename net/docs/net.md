@@ -38,7 +38,7 @@ the root [`README.md`](../../README.md). References of the form `arch-v3.md §x`
 | **⚠ Minimum-size frames** | **dispatch-bound at ~9,600 frames/s against 14,881 arriving** — §3.4 |
 | **~~The `TFM` hazard~~** | **retired.** The host reads SRAM, not a port that pops a byte — §3.2 |
 | **⚠ The fit risk** | **U2 at 91 % of an `ATF1508AS` and U1 at 88 %.** Unchanged in kind; the buffer decision bought ICs and throughput, not macrocells — §7.3 |
-| **⚠ House rule** | this is the **third** card to spend the no-CPLD rule, on a rule the root `README.md` says is already spent on two — §12 |
+| **House rule** | this was the **third** card to take a CPLD, and one of the three reasons the no-CPLD rule was **retired on 2026-09-08** — §12 |
 | **Power** | **~430–530 mA**, of which ~250 mA is the two CPLDs. §10 |
 | Period | 10BASE-T is **IEEE 802.3i-1990** — one year past the machine's line. §12 |
 
@@ -919,7 +919,7 @@ the two must not be confused, and nothing in the `rec_clk` domain is allowed to 
 
 ---
 
-## 12. Period audit, and the house rule spent a third time
+## 12. Period audit, and the house rule this card retired
 
 **10BASE-T is IEEE 802.3i, ratified in 1990.** The machine's implicit line is 1989. So:
 
@@ -935,13 +935,16 @@ This is the machine's **second** period exception, after the SD card, and a much
 one: the *format* is a year late, not the *silicon*. §13.5 records the period-exact
 alternative, which is 10BASE2 and costs a different analogue front end and nothing else.
 
-### The house rule
+### ~~The house rule~~ The house rule, and this card is what retired it
 
-The root [`README.md`](../../README.md) says the no-CPLD rule "has been spent,
-deliberately, on two cards" — video, to compete with a GIME on even terms, and audio,
-because its interrupt block does not fit a `GAL22V10` either way. **This card spends it a
-third time**, and honesty requires saying that the sentence in the root README will have
-to change if this card is built.
+**The root [`README.md`](../../README.md)'s no-CPLD rule was retired on 2026-09-08**,
+and the argument below is one of the three reasons. It is kept because it is the
+argument, not because the conclusion is still in doubt.
+
+When this card was specified the rule read *"no CPLDs or FPGAs — spent, deliberately,
+on two cards"* — video, to compete with a GIME on even terms, and audio, because its
+interrupt block does not fit a `GAL22V10` either way. **This card was the third**, and
+this section said the sentence in the root README would have to change. It did.
 
 **The argument, and it is a machine-level one rather than a taste one:**
 
@@ -957,12 +960,14 @@ to change if this card is built.
    survives it must be the RX one; here neither can go.
 3. **A `GAL22V10` cannot hold any of it.** Ten macrocells against 33 for one LFSR.
 
-**What the rule should probably say now.** [`io/README.md`](../../io/README.md) already
-observes that "the house rule bars CPLDs and FPGAs, not LSI; what decides each case is
-whether a period part exists that fits the I/O budget". Three of six cards have now
-spent it. **That is a rule the owner should either restate or retire, and it is not this
-document's call** — but pretending it is intact after a third exception would be the
-dishonest option.
+**What the rule says now.** Period-appropriate silicon, and **programmable logic is in**
+— GALs, and CPLDs where a GAL will not carry the design. Point 3 above is that test,
+stated before the rule was written to match it.
+
+[`io/README.md`](../../io/README.md) had already derived the working version —
+*"what decides each case is whether a period part exists that fits the I/O budget"* —
+and §13.6 added the term it was missing, at this card's expense: **availability comes
+first.** A `DP8390` exists and fits; you cannot buy one.
 
 ---
 
@@ -1195,8 +1200,8 @@ against them. What is left is the card's own work.
    went. Three separate reliefs are listed; none has been chosen.
 3. **⚠ The `SLOT` handshake and the shared buses** — §7.1, §15 step 5. The one failure
    mode this card gained rather than shed.
-4. **⚠ The house rule** — third spend, §12. Restate or retire it; do not leave the root
-   `README.md` claiming it is spent on two cards.
+4. ~~**⚠ The house rule**~~ **CLOSED 2026-09-08** — retired at the root `README.md`,
+   with this card's §12 as one of the three arguments.
 5. **⚠ §4.3's schedule assumes a bus cycle of fixed length, and `/WAIT` broke that.**
    `machine.md` §5 item 8 made `/WAIT` work on 2026-09-08; the video card asserts it while
    its span writer runs, and this card's framers get no slot while `E` is frozen. **A

@@ -21,7 +21,7 @@ a port whose read pops a byte, it silently loses one and shifts the rest of the 
 §4 is the whole document.
 
 **Constraints taken as given (yours):**
-- **Parts available before 1990.** No CPLDs, no FPGAs. GALs are in.
+- **Parts available before 1990.** Programmable logic is in — GALs, and CPLDs where a GAL will not carry the design (root `README.md`).
 - Same house rules as the other cards: period-honest silicon, one card, a documented
   register map, and an honest IC count.
 
@@ -74,9 +74,11 @@ appear as "537 KB/s" (`machine.md` §0); they are the same figures.
 >
 > The alternative that would have cost one IC instead of six is an `ATF1508AS` absorbing
 > the counter, the mux and the existing `GAL22V10` — an **8-IC** card. It is not taken
-> because it would spend the no-CPLD house rule a **fourth** time, on a card whose only
-> current exception is the media rather than the silicon (§10). **That is the owner's call
-> and it is recorded in §8, not decided here.**
+> ⚠ **and the objection it was refused on no longer exists.** It was "this would spend
+> the no-CPLD house rule a fourth time"; **the rule was retired on 2026-09-08** (root
+> `README.md`). §8.1 is now the live question and the arithmetic favours it: **8 ICs
+> against 13.** Not taken in this revision because it is a card re-specification and
+> nobody has asked for one — but it is no longer blocked, and §13 item 12 carries it.
 
 **Compatibility with fast-E (`machine.md` §1's ÷8 rate).** Unchanged and now easier: the
 SPI burst no longer races a `TFM` read interval at all, because the engine fills the
@@ -758,13 +760,22 @@ part**, and #13 is budgeted as two.
 > **8 ICs**: `'595`, `'165`, `'574`, `'163`, `'393`, `'LVC125`, `6116`, CPLD. Cheaper than
 > 13, fewer things to get wrong, and in-circuit reprogrammable.
 >
-> ⚠ **Not taken here, because it would spend the no-CPLD house rule a fourth time** — see
-> the root [`README.md`](../../README.md), which still says the rule is spent on two
-> cards, and `net/docs/net.md` §12, which says a third and asks for the rule to be
-> restated or retired. **This card's only exception today is the media, not the silicon**
-> (§10), and giving that up is the owner's call rather than this document's. **If the rule
-> is retired, take this immediately**: it is the best-value CPLD in the machine, and it is
-> the difference between 13 ICs and 8.
+> ⚠ **The rule that blocked this was retired on 2026-09-08** (root
+> [`README.md`](../../README.md)), and this section said *"if the rule is retired, take
+> this immediately."* **It is no longer blocked and it has not yet been taken** — §13
+> item 12.
+>
+> **What is left to weigh, now that the rule is not in the way:**
+>
+> | For | Against |
+> |---|---|
+> | **8 ICs against 13** — five packages, all of them address and data plumbing | **~160 mA against two GALs' ~140–180 mA** — roughly a wash, not the saving CPLDs give on bigger cards |
+> | one part to fit instead of two, and in-circuit reprogrammable over JTAG | ⚠ **fuse-level verification is lost.** `hardware/gal/jedec/` reads a `GAL22V10`'s fuse map back and executes it; prjbureau rates the ATF1508AS database *"Partial"* and its programming path *"Untested"* (`graphics.md` §10.1.6) |
+> | the same decision video, audio and net all reached | this card is the only one whose logic **fits two GALs comfortably**. The others took CPLDs because a GAL could not carry them |
+>
+> **That last row is the real argument against**, and it is not a rule — it is that a
+> CPLD here buys packages rather than capability, which is the weakest case for one in
+> the machine.
 
 **What the second GAL costs elsewhere**: nothing on the backplane, ~50 mA, and one more
 part to program. **What it does not cost is the `74HC574` escape hatch** — §12 step 3's

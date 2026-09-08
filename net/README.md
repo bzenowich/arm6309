@@ -66,11 +66,12 @@ there.
 bytes of the old 64-byte window; the window is `$FF00`–`$FF7F` now and 64 bytes are free.
 The card's decode is **`A0`–`A6`, seven bits** — `A6` left the strobe with the widening.
 
-⚠ **It is the third card to spend the no-CPLD house rule**, on a rule the root
-`README.md` says is already spent on two. The argument is a machine-level one — six
-slots, five claimed, and a 74xx MAC is 41 ICs across two of them; plus a software CRC-32
-at 2.0979 MHz costs 22 ms per frame, eighteen times the frame's own transmission time.
-**The rule should be restated or retired rather than quietly broken.** §12.
+**It was the third card to take a CPLD, and one of the three arguments that retired the
+no-CPLD house rule on 2026-09-08** (root `README.md`). The case is machine-level rather
+than a matter of taste — six slots, five claimed, and a 74xx MAC is 41 ICs across two of
+them; plus a software CRC-32 at 2.0979 MHz costs 22 ms per frame, eighteen times the
+frame's own transmission time, and a `GAL22V10`'s ten macrocells do not hold a 33-stage
+LFSR. §12.
 
 ⚠ **And it gained one failure mode.** Two CPLDs now three-state onto one shared address
 bus and one shared data bus, on a fixed `CLK25` schedule with U1 counting and U2 obeying

@@ -1,12 +1,48 @@
 # `io/serial/` — RS-232 serial
 
-One port, **3 ICs**: a 6551 ACIA, a `MAX232`, and a decode GAL.
+One port, **3 ICs**: a 6551 ACIA, a `MAX232`, and a decode GAL. ⭐ **And an open
+proposal to make it four and six times faster** — `docs/serial.md` §4.5.
 
 Paths below are relative to this directory.
 
 | | |
 |---|---|
-| [`docs/serial.md`](docs/serial.md) | the card — part choice, the alternatives, the throughput ceiling, register map |
+| [`docs/serial.md`](docs/serial.md) | the card — part choice, the alternatives, the throughput ceiling, register map. **§4.5 and §5.4 are the 2026-09-08 revisit** |
+
+## ⭐ The revisit, 2026-09-08
+
+**The card is bound by one interrupt per byte, not by the baud rate**, and §5 has always
+said so: 19,200 full duplex is 3,840 interrupts/s and **73 % of a 2.098 MHz CPU** at the
+pessimistic dispatch figure. The part also caps at 19,200.
+
+**§4 never asked whether a better UART exists.** It asks *"6551, or build one out of
+logic?"*, rejects the logic options on package count, and stops. The reason is buried in
+its own wording: *"a 6551 costs **four addresses**"* — and until 2026-09-08 the `$FF` map
+had four bytes left in it. **A `16C550` costs eight, and eight did not exist.**
+
+`machine.md` §5 item 1 closed on 2026-09-08. The window is `$FF00`–`$FF7F` with 64 bytes
+free, and the machine has a megabyte of physical space for card buffers. So:
+
+| | ICs | 19,200 fd | 38,400 fd | 115,200 fd | 460,800 fd |
+|---|---|---|---|---|---|
+| **6551 — today** | 3 | **75 %** | impossible | *part caps at 19,200* | — |
+| **Tier 1 — `16C550`** | **4** | 7 % | **13 %** | **40 %** | — |
+| **Tier 2 — + a ring in `A20 = 1`** | ~9 | 1 % | 2 % | **5 %** | **20 %** |
+
+**Tier 1 is the recommendation**: one extra IC, 6× the baud rate, and **38,400 costs less
+CPU than 19,200 does today.** It also closes two of the card's oldest open items — the
+`W65C51N` sourcing trap and the fast-E speed grade — because a `16C550` is
+current-production and is clocked by its own crystal rather than by backplane `E`.
+**That is worth more than the throughput**, and it is `net.md` §13.6's lesson applied:
+availability is the first question about a part, the I/O budget the second.
+
+⚠ **The real ceiling is not the wire.** At 115,200 you receive 5.8 screens of text a
+second, and ANSI rendering on a 2 MHz 6309 is an estimated 22 % of the CPU at that rate.
+**~115,200 for a console; 460,800–921,600 for file transfer**, where nothing renders.
+§5.6.
+
+**Neither tier is built and §3's verdict is unchanged.** They are proposals with
+arithmetic — §13 items 6 and 7.
 
 ## Don't build this one out of logic
 
@@ -14,7 +50,8 @@ Every other card in this machine is discrete because no period chip does what it
 Serial is the exception: the **6551 ACIA (1977)** has four registers, an on-chip
 programmable baud generator that needs nothing but a 1.8432 MHz crystal, full modem
 control and an interrupt output. It is *older* than most of the 74HC parts around it, and
-the period rules bar CPLDs and FPGAs, not LSI.
+the period rules have never barred LSI — and since 2026-09-08 they do not bar
+programmable logic either (root `README.md`).
 
 **And it shipped on this bus.** The Tandy Deluxe RS-232 Program Pak (26-2226, 1983) is a
 6551 with a 1.8432 MHz crystal decoding four ports on a CoCo — a 6809 machine, where `E`

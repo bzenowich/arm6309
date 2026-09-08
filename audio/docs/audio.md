@@ -20,7 +20,7 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 **Constraints taken as given (yours):**
 - **4 channels, 8-bit signed PCM**, Paula's model.
 - **Load an existing `.mod` and play it back correctly** — this is the acceptance test.
-- **Parts available before 1990.** No FPGAs. ~~No CPLDs~~ — **given up at §10.1**, and
+- **Parts available before 1990.** Programmable logic is in (root `README.md`) — this card took a CPLD at §10.1, and
   not because the rule was wrong: §9.5's interrupt block does not fit a `GAL22V10`
   whole (13 equations, 10 macrocells) or split (17 inputs, 14 pins), so the GAL count
   was six and rising. `video/docs/graphics.md` §10.1.2 establishes that the rule was

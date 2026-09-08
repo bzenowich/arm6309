@@ -148,9 +148,11 @@ backplane, and a `74HCT245` on the data path. **The card was the machine's small
 now its fourth largest.**
 
 **One `ATF1508AS` would absorb both GALs, the counter and the mux — an 8-IC card.** It is
-not taken because it would spend the no-CPLD house rule a **fourth** time, on a card whose
-only current exception is the media rather than the silicon. **If the rule is retired,
-take it immediately**: it is the best-value CPLD in the machine. §8.1.
+~~not taken because it would spend the no-CPLD house rule a fourth time~~ — ⚠ **the rule
+was retired on 2026-09-08** and this is no longer blocked. **It has not been taken
+either**: unlike video, audio and net, this card's logic fits two GALs comfortably, so a
+CPLD here buys packages rather than capability, and it costs the fuse-level verification
+`hardware/gal/jedec/` gives a `GAL22V10`. §8.1 weighs it; §13 item 12 carries it.
 
 ## Status
 
