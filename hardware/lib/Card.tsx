@@ -12,6 +12,11 @@
  * then turned out to fit 12 cm, so the length is per-card rather than one
  * format for all.
  *
+ * The video card came back to 18 cm later the same day: graphics.md 14.2
+ * consolidated seven SRAMs into four, and 101.5 cm2 fits a 15.0 cm2-per-cm
+ * board with room to route. Nothing takes 24 cm any more, and the length stays
+ * in LENGTHS because the packer, not this comment, decides.
+ *
  * Every card takes /RESET as an input. io/ps2/docs/ps2.md did not until the
  * 2026-09-04 review (design-review.md IO-P3); nothing new should repeat that,
  * so the scaffold wires it rather than leaving it to each card.

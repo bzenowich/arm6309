@@ -28,7 +28,7 @@ reaches a conclusion that document does not state, the conclusion is marked.
 | **Colour depth** | 8bpp everywhere. There is **no 4bpp, 2bpp or 1bpp packed mode** and no 320-wide mode. §10 |
 | **Scrolling** | **Free, both axes, pixel-accurate**, by register — a 1024 × 512 ring. §1.3 |
 | **Buffers** | 512 KB of VRAM = **four full 640×200 screens**. Double and triple buffering are free. §1.2 |
-| **Span writer** | the card's drawing engine: **6.29 MB/s solid fill today, 25.1 MB/s if `graphics.md` §7.4's broadcast write is built**, 8 pixels per CPU write in mask mode. §3 |
+| **Span writer** | the card's drawing engine: **6.29 MB/s solid fill today, 25.1 MB/s once `graphics.md` §14.2's two-chip framebuffer lands**, 8 pixels per CPU write in mask mode. §3 |
 | **Polygon fills** | **Yes** — scanline decomposition in the CPU, spans in hardware. **0.7 to 6.3 Mpx/s depending on span width.** §6 |
 | **QuickDraw offload** | **`PaintRect`, pattern fills, glyph blits, horizontal spans and scroll: yes.** Lines, arcs, regions, colour image copies: no. §7 |
 | **Sprites** | **No hardware sprites.** Software costs ~0.9 ms per 16×16 sprite per frame, so **4–6 moving objects**. §8 |
@@ -514,10 +514,11 @@ These are capability questions, and `graphics.md` §19 does not carry them.
    span-solid every byte is the same byte and four consecutive addresses are one
    intra-chip address on four chips, so a quad needs one address, one data byte and four
    `/WE`. **25.1 MB/s, a 300-pixel polygon crossover, a 5.1 ms full-screen clear and a
-   10.2 µs `SPANBUSY` bound.** ⚠ **It is a proposal, not a build**: the arbitration is
-   real work, because during a `/WAIT` stall only three chips are free and the span
-   writer has to learn how many it got. Every figure in this document is the **today**
-   figure unless it says otherwise.
+   10.2 µs `SPANBUSY` bound.** ⭐ **And §14.2 delivers it**: the framebuffer becomes two
+   ×16 SRAMs instead of four ×8 — same four bytes per slot, half the packages, ~250 mA
+   less — and then there is one spare access per slot, one grant to give, and four byte
+   enables on it. The arbitration problem the proposal owed is gone. Every figure in
+   this document is the **today** figure unless it says otherwise.
 1. **⚠ Measure the store rate.** Every microsecond figure above scales on
    `graphics.md` §7.3's unverified 5-cycles-per-store. It is `graphics.md` §19 item 1
    and it is the cheapest measurement on the card.

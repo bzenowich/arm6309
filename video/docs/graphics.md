@@ -54,7 +54,7 @@ protect MinOS and can be deleted outright.**
 > carried a master oscillator that belongs on the motherboard, not on a card you can
 > pull (§14). None of that is a change of design. It is the same card, counted.
 
-**Net: ~~41 ICs (37…)~~ 31 ICs (27 if the tri-state pixel bus closes at 39.7 ns and the
+**Net: ~~41 ICs (37…)~~ 28 ICs (24 if the tri-state pixel bus closes at 39.7 ns and the
 `'153` mux is not needed), against colormin's 39 (35)** — plus 3 buffer transistors and
 3 R-2R SIP ladders, which are not ICs and are counted on their own line.
 
@@ -110,6 +110,20 @@ slope, because a 72 ns access does not fit twice into the per-chip video cadence
 **The no-stall guarantee survives.** A direct CPU write still finds a slot within
 one fetch period, so it never waits. If 55 ns proves marginal in layout, the
 AS6C1008-45 grade takes the access to 62 ns and the slack to 96.9 ns.
+
+> ⚠ **§14.2 spends that escape hatch.** The `AS6C8016` is a **55 ns part and Alliance
+> list no faster grade**, so the −45 fallback above does not exist for it. 86.9 ns of
+> slack against a 72 ns access is the margin, and there is no part-swap behind it —
+> only a retreat to the four `AS6C1008`, which is why §14.2 is a packaging decision
+> that can be reversed at layout and not one that closes a door.
+
+> ⭐ **"4-way" is the interleave, not the package count — §14.2, 2026-09-08.** The
+> framebuffer is **two `AS6C8016` 512K×16** parts rather than four `AS6C1008` 128K×8,
+> and two ×16 accesses deliver the same four bytes in the same 158.9 ns slot. Every
+> timing number in this section is unchanged, and so are the seventeen address bits
+> (§19 item 3) — `A1` selects the part and `A0` drives `/LB` / `/UB` where both used to be
+> chip select. **What does change is the spare-access budget** (four per slot becomes
+> one, of up to four bytes) and that is the whole of §7.4's broadcast write.
 
 Free accesses for the span writer and blitter, at 70 Hz:
 
@@ -1355,19 +1369,29 @@ The logic is product terms rather than macrocells: a wide term on the arbiter's
 
 **The pins are no longer the problem.** §10.1.6.3 priced the relief at one more
 `GAL22V10` and **that GAL is built** — `gal/regfile.jedec.ts`, 2026-09-08 — which took
-`vctrl` from 64 of 64 I/O to **50 of 64**. There is room to signal now.
+`vctrl` from 64 of 64 I/O to **50 of 64**. There is room to signal now, and §14.2's
+two-chip framebuffer means there is barely anything to signal.
 
-> ⚠ **The arbitration is the real work, and it is not solved here.** An all-or-nothing
-> "grant all four chips" is one extra term and needs no feedback — but **during a
-> `/WAIT` stall the CPU is holding one chip, so only three are free**, and the wide
-> grant would never fire in exactly the case where the span writer is the bottleneck.
-> Granting *whichever* chips are free works, and then the span writer has to learn how
-> many it got: a count back from the arbiter into `WPTR`'s increment and `SPANLEN`'s
-> countdown. **That is a real design, and this section is a proposal until someone does
-> it.**
+> ⚠ **The arbitration is the real work on four chips.** An all-or-nothing "grant all
+> four" is one extra term and needs no feedback — but **during a `/WAIT` stall the CPU
+> is holding one chip, so only three are free**, and the wide grant would never fire in
+> exactly the case where the span writer is the bottleneck. Granting *whichever* chips
+> are free works, and then the span writer has to learn how many it got: a count back
+> from the arbiter into `WPTR`'s increment and `SPANLEN`'s countdown.
 
-**Two things that are cheaper and already taken**, recorded here because they came out
-of the same analysis: the `R/W` qualification below, and `regfile.jedec.ts`.
+⭐ **§14.2 dissolves that, and it is why this stopped being a proposal.** The framebuffer
+becomes **two ×16 parts instead of four ×8** — same four bytes per slot, same seventeen
+address bits, half the packages — and then there is **one spare access per slot and one
+grant to give**. Four byte enables on that access retire four bytes. Nothing to count,
+no partial grant, no feedback path. The wide term *is* the design.
+
+The cost is the other side of the same fact: spare bandwidth falls from four accesses
+per slot to one, so the CPU and the span writer can no longer proceed in the same slot
+on different chips and one of them waits **158.9 ns** — against 2.38 µs per CPU write.
+§14.2.3 has the full comparison.
+
+**Three things came out of this analysis and all three are taken**: the `R/W`
+qualification below, `regfile.jedec.ts`, and §14.2's seven-SRAMs-to-four.
 
 #### ⭐ How long `SPANBUSY` lasts — the bound `machine.md` §5 item 10 asked for
 
@@ -1711,7 +1735,7 @@ real and the card walked into it:
 | + blit datapath | **~21** | ~59 |
 
 > ⚠ **This table is the GAL build and §10.1.6 replaced it.** The card is **2 ×
-> `ATF1508AS` + 2 × `GAL22V10` + 27 packages = 31 ICs** — §14.1 has the arithmetic.
+> `ATF1508AS` + 2 × `GAL22V10` + 4 SRAM + 20 packages = 28 ICs** — §14.1 has the arithmetic.
 > The section below is kept because **it is the argument that produced that decision**:
 > the wall it describes is real, the card hit it, and what follows is what happened
 > next.
@@ -2191,6 +2215,39 @@ none of them free:
 
 **v1 as specified fits in two parts.** The engine is the line, and it falls just past it.
 
+##### ⭐ Option 2 measured, 2026-09-08 — and it nearly works
+
+The three ways forward above were reasoned, not fitted. Option 2 was, and it is much
+better than "changes the semantics":
+
+| | I/O | Logic cells | Nodes+FB | Result |
+|---|---|---|---|---|
+| `vaddr` as built, no engine | 62 / 64 | 104 / 128 | — | ✓ |
+| **+ engine with its own `LIST` pointer** | | | | **`INTERNAL ERROR`** |
+| **+ engine sharing `WPTR`**, PLCC-84 | **64 / 64** | 113 / 128 | **153 / 128** | ✗ — by nodes |
+| + engine sharing `WPTR`, TQFP-100 | 65 / 80 | 113 / 128 | 153 / 128 | **✓** |
+| ⭐ **+ engine sharing `WPTR`, Variant B dropped**, PLCC-84 | **64 / 64** | **105 / 128** | **135 / 128** | **✓** |
+
+**Dropping the engine's own nineteen-bit pointer is the whole unlock.** It removes 19
+registers, 19 mux inputs and the mux's *sixth* product term per address bit, and it
+turns a design the fitter cannot even place into one that misses a PLCC-84 by nodes
+rather than by fan-in.
+
+⭐ **And then there is a version that fits the package we have.** Give up **§6.4.3's
+Variant B** — the 1bpp character generator — and the shared-pointer engine lands at
+**64 of 64 I/O and 105 of 128 cells**.
+
+> **What that trade actually is.** Variant B is the *hardware* text mode: 3 accesses
+> per 8 dots, 256 freely-defined attributes each choosing any RGB565 pair, and ~160,000
+> accesses per frame handed back. Without it, **text still works** — §7's span writer is
+> the text engine in bitmap mode, and §6.4.2's Variant A still gives 8bpp graphics
+> tiles. What goes is the cheap 80-column text mode and its attribute colour path.
+>
+> ⚠ **Neither option leaves `vaddr` any JTAG**: both are 64 of 64. And this is a fit,
+> not a design — the engine's semantics under a shared `WPTR` (it clobbers the CPU's
+> write pointer, so software reloads after any list activity) are still §10.3's to
+> settle. **What is settled is that the package is no longer the reason not to.**
+
 > ✅ **Item 23 is closed and it took both of those repairs.** The write strobes are
 > decoded on `vaddr` from a five-bit register address and one strobe, in place of nine
 > strobe pins. And the window question was a mistake in this section rather than a real
@@ -2626,11 +2683,11 @@ way and for exactly the same reason — but it is a yes with a rule attached.
 
 | Qty | Part | Role | vs colormin |
 |---|---|---|---|
-| 4 | AS6C1008-55 (128K×8) | framebuffer, 512 KB, 4-way interleave | = |
+| ~~4~~ **2** | ~~AS6C1008-55 (128K×8)~~ **AS6C8016-55 (512K×16)** | framebuffer, ~~512 KB~~ **2 MB**, 4-way interleave as **2 parts × 2 bytes** — §14.2 | **−2** |
 | 4 | 74AHCT574 | fetch read latches — clocked **per-chip, mid-slot** (§5.2.2) | = |
 | **4** | **74AHCT153** | **4:1 pixel mux — assumed, not fallback (§6.1)** | +4 |
 | 1 | 74AHCT574 | palette index latch | = |
-| 2 | 32K×8 **15 ns** | palette LUT, 256 × 16 b | = (faster grade) |
+| ~~2~~ **1** | ~~32K×8 **15 ns**~~ **IS61C6416AL-12 (64K×16)** | palette LUT, 256 × 16 b — **one ×16 part holds both bytes** (§14.2) | **−1** |
 | **2** | **74AHCT273** | **post-LUT output register — `/MR` is blank-to-black (§9.2)** | = (was `'574`) |
 | 1 | 74HC593 | `PIDX` counter (sourcing flag, §9) | = |
 | **3** | GAL22V10-15 | **`hgen`/`vgen`/`vdec`** — H/V sync, blank, **mode-dependent sync polarity (§6.2.1)**, VBL IRQ. ⚠ **Fitted 2026-09-06 and it is three parts, not two** — §19 item 8 | **+1** |
@@ -2663,7 +2720,7 @@ sync section was fitted on 2026-09-06 and needs three parts (§19 item 8). §10.
 > 17 of 20 with three spare (§19 item 8), because it generates a *chip* address of 17
 > bits and not a *byte* address of 19.
 
-### 14.1 ⚠ The card is 31 ICs, and three numbers in this document disagreed
+### 14.1 ⚠ The card is ~~31~~ 28 ICs, and three numbers in this document disagreed
 
 **Reconciled 2026-09-08.** The table above is the **GAL build**, and §10.1.6 replaced it
 on 2026-09-06 — *"Two PLCC-84 parts, and this is the build"* — without the arithmetic
@@ -2686,9 +2743,10 @@ by this document:
 | − §10.1.6's absorptions | **−4** | `CTRL`'s `'273`, the `SPANLEN` `'161` pair, the `'165` span-mask serialiser |
 | + 1 × `GAL22V10`, the arbiter | **+1** | §10.1.6.3 — it came back out on 2026-09-08 so `vctrl` stays a PLCC-84 |
 | + 1 × `GAL22V10`, `rfa` | **+1** | §10.1.6.3 — the register-file address, out the same day, which bought JTAG back and §7.4 its signalling pins |
-| **= the build** | **31** | **27 if the tri-state pixel bus closes and the four `'153` come out** |
+| **− 3 SRAM** | **−3** | **§14.2** — two ×16 parts feed the dot clock where four ×8 did, and one holds the whole 16-bit palette |
+| **= the build** | **28** | **24 if the tri-state pixel bus closes and the four `'153` come out** |
 
-**31 ICs: 2 CPLDs, 2 GALs, and 27 packages of memory and 74-series.** Against
+**28 ICs: 2 CPLDs, 2 GALs, 4 SRAMs and 20 packages of 74-series.** Against
 colormin's 39 (35), and against the 41 this document carried for two days after the
 decision that replaced it.
 
@@ -2704,15 +2762,151 @@ gets sized from. The programmable-logic row above assumed **one** `ATF1508AS` at
 ~190 mA; it is **two at ~100–120 mA each with reduced-power mode on the slow
 macrocells, plus one `GAL22V10` at 70–90 mA** — call it **270–330 mA**, against the
 ten GALs' 700–900 mA and against the single part's assumed 190. The card lands at
-**~0.75–1.3 A, 0.9 A nominal, specify for 1.5 A** — the same conclusion §14's power
+~~**~0.75–1.3 A, 0.9 A nominal, specify for 1.5 A**~~ — the same conclusion §14's power
 paragraph already reaches, by different arithmetic.
+
+⭐ **And then §14.2 took ~250 mA off it**, by consolidating seven SRAMs into four out of
+a lower-power family. **~0.5–0.85 A, 0.65 A nominal, specify for 1 A.**
 
 **Area moves less than §10.1.6 hoped.** Ten `GAL22V10` in DIP-24 are ~26 cm²; two
 PLCC-84 sockets are ~22 and the arbiter GAL is ~2.6, so the win is **~1.4 cm²**, not
 the ~4 that section predicts — because the arbiter came back out. The four deleted
-packages are the real saving, and §14's *"~150 of 160 cm²"* becomes roughly **140**.
+packages are the real saving, and §14's *"~150 of 160 cm²"* becomes **102.5 cm²** once
+§14.2's SRAM consolidation lands — measured by `hardware/place`, not estimated.
 ⚠ **If the tri-state pixel bus closes (§19 item 2) the four `'153` go too**, and the
-card is 26 ICs at ~130 cm², which is where the slack comes back.
+card is **24 ICs**, which is where the slack comes back.
+
+### 14.2 ⭐ The seven SRAMs become four, and the broadcast write falls out of it
+
+**2026-09-08, after checking pricing and stock rather than guessing.** §14's table
+carries **seven** SRAMs — four framebuffer, two palette LUT, one register file — and
+two of those counts are not capacity. They are **width**.
+
+| | Why that many | Capacity actually used |
+|---|---|---|
+| 4 × `AS6C1008` 128K×8 | **bandwidth.** A 55 ns part cannot feed a 39.7 ns dot clock; §2.1's 4-way interleave is the cliff that forces it | 128 KB of 512 KB at 640×200 |
+| 2 × 32K×8 15 ns | **width.** The palette is 256 × **16** bits and both bytes are read every dot | **512 bytes of 64 KB** |
+| 1 × 32K×8 20 ns | the register file | ~32 bytes of 32 KB |
+
+**A ×16 part supplies both bytes in one access**, so two of them deliver the same four
+bytes per 158.9 ns slot that four ×8 parts do — and one of them is a whole palette LUT.
+
+#### 14.2.1 The parts exist, they are cheap, and they are stocked
+
+The concern that made this worth checking first: **5 V wide async SRAM is mostly 1990s
+cache silicon**, and the modern ×16 parts (`IS61WV`, `IS62WV`, `CY62`) are 3.3 V. Two
+current parts answer it.
+
+| | Part | Org | V | t<sub>AA</sub> | I<sub>CC</sub> | Package | Price | Stock |
+|---|---|---|---|---|---|---|---|---|
+| **framebuffer**, ×2 | `AS6C8016-55ZIN` | 512K×16 | **2.7–5.5** | 55 ns | **30 mA** typ, 6 µA standby | TSOP-44 II | ~$5.59 (1 k) – $8.83 (1) | **3,646 at DigiKey** |
+| **palette LUT**, ×1 | `IS61C6416AL-12TLI` | 64K×16 | 4.5–5.5 | **12 ns** | **175 mW ≈ 35 mA** typ | TSOP-44 II | **$3.28** | **1,470 at Mouser** |
+
+Both carry **`/LB` and `/UB` byte enables** alongside `/CE`, `/OE`, `/WE`, which is the
+pin the whole scheme turns on.
+
+⭐ **`AS6C8016` is Alliance's own part, the same vendor and the same `AS6C` low-power
+family as the `AS6C1008` this table already specifies.** 2.7–5.5 V and 55 ns are the
+numbers §2.1's 72 ns access budget was written against, unchanged.
+
+> ⚠ **And the part being replaced is in worse shape than the replacement.** A 15 ns
+> 5 V 32K×8 in DIP-28 is legacy: `AS7C256C-15PCN` is ~**$8.14** in ones at DigiKey and
+> the `IS61C256AH-15N` / `CY7C199-15PC` alternatives are secondary-market. **Two of
+> those at $8.14 become one at $3.28.** The consolidation is not only fewer packages —
+> it moves the card's tightest timing path off the least available part on it.
+
+| | today | consolidated |
+|---|---|---|
+| Framebuffer | 4 × `AS6C1008-55PCN`, ~$4.85–9.44 ea | **2 × `AS6C8016`**, ~$5.59–8.83 ea |
+| Palette LUT | 2 × 32K×8 15 ns, ~$8.14 ea | **1 × `IS61C6416AL-12`**, $3.28 |
+| Register file | 1 × 32K×8 20 ns | unchanged, and excluded from both totals |
+| **SRAM packages** | **7** | **4** |
+| **SRAM cost** | **~$36–54** | **~$14–21** |
+
+> Prices and stock are single-distributor quotes taken **2026-09-08** and are the kind
+> of number that moves. What is unlikely to move is the *shape*: a currently-stocked
+> low-power ×16 part is cheaper than four ×8, and much cheaper than two legacy 15 ns
+> DIP-28s. **Re-check before ordering, not before deciding.**
+
+#### 14.2.2 The address generation does not change at all
+
+This is the part that makes it cheap rather than a redesign. §19 item 3 fixes the point:
+*"A 128K×8 has seventeen address pins and seventeen is what has to be generated."*
+
+```
+19-bit byte pointer (WPTR, or the scan address)
+
+  A0        -> /LB, /UB       byte within the word     (was: part of the chip select)
+  A1        -> chip select    which of the two parts   (was: part of the chip select)
+  A18..A2   -> A16..A0        the SAME seventeen bits
+```
+
+**`A1:A0` are still not address bits** and the scan and `WPTR` generators still emit
+seventeen. The `AS6C8016` has nineteen address pins and two get tied off, so each part
+gives up **768 KB of its 1 MB** — precisely what §6.4.1 already tolerates on the LUT,
+and precisely the **2 MB upgrade path** the moment the pointers widen to 21 bits.
+
+#### 14.2.3 ⭐ What it does to §7.4
+
+**§7.4's broadcast write stops being a proposal and becomes the default.** That section
+ends on an unsolved arbitration: *"during a `/WAIT` stall the CPU is holding one chip,
+so only three are free"*, and the span writer would have to count how many it got.
+
+**With two parts there is one spare access per slot and one grant to give.** Four byte
+enables on that access retire four bytes. Nothing to count, no partial grant, no
+feedback path — the wide term is the whole design.
+
+| | 4 × ×8 | **2 × ×16** |
+|---|---|---|
+| Display fetch | 4 accesses/slot | **1** |
+| Spare accesses | 4/slot, ~32.4 M/s | 1/slot, ~8.1 M/s |
+| Headroom over the CPU's ~420 K writes/s | 77× | **15×** |
+| **Span-solid retire** | 6.29 MB/s | **25.1 MB/s** |
+| Full-screen clear | 20.3 ms | **5.1 ms** |
+| `SPANBUSY` worst case (§7.4) | 40.7 µs | **10.2 µs** |
+| Arbiter | 8 grants, `GAL22V10` at 10 of 10 | **2 grants** |
+
+⚠ **The bandwidth headroom really does fall 77× → 15×**, and that is the honest cost:
+the CPU and the span writer can no longer proceed in the same slot on different chips,
+so one of them waits **158.9 ns**. Against 2.38 µs per CPU write that is not a figure
+anybody will measure. §3.1.1's posted-write backstop and §7.4's `R/W`-qualified `/WAIT`
+already cover the case.
+
+**The arbiter falling from 8 grants to 2 probably takes a package with it** — 2 grants
+plus `SPNGRANT` and `/WAIT` is four macrocells, and §10.1.6.3's `vctrl` now has 14 spare
+pins to host them. **That is not counted below**, because it needs a fit, not an
+estimate.
+
+#### 14.2.4 What it costs
+
+| | |
+|---|---|
+| ⚠ **Surface mount** | TSOP-44 II. **The machine's first SMD** — the `ATF1508AS` are socketed PLCC-84 and everything else is DIP. This is an assembly decision, not an electrical one |
+| ⚠ **§5.2 is rewritten** | the 8-grant arbiter, §5.2.2's per-chip fetch latch clocking, and the `SRCSEL = GRANT_CPU` identity all assume four chips |
+| ⭐ **The card gets shorter** | 137.7 cm² of courtyard becomes **102.5**, and `hardware/place` puts it on an **18 cm** board instead of 24 — the same length as the audio card. Three DIP-32/28 out, three TSOP-44 in |
+| Dead capacity | **1.5 MB of the framebuffer's 2 MB** (768 KB per part — two address pins tied off), and 63.5 KB of the LUT's 64 |
+| The four `'153` and four `'574` | **unchanged** — still 32 bits latched and still a 4:1 mux at dot rate |
+
+#### 14.2.5 ⭐ And it takes ~250 mA off the nominal
+
+| Group | today | consolidated |
+|---|---|---|
+| Framebuffer | 4 × 40–70 mA = **160–280 mA** | 2 × 30 mA = **~60 mA** |
+| Palette LUT | 2 × 70–110 mA = **140–220 mA** | 1 × ~35 mA = **~35 mA** |
+| Register file | 10–30 mA | unchanged |
+| **SRAM total** | **310–530 mA** | **~105–125 mA** |
+
+**205–405 mA saved, ~250 at the nominal**, which takes the card from ~0.9 A to
+**~0.65 A** and moves §14's regulator argument again: a 7805 dropping 7 V at 0.65 A is
+**4.6 W**, and the switching pre-regulator stops being arguable and becomes
+unnecessary.
+
+> **Why this is a bigger saving than the package count suggests:** the `AS6C8016` is a
+> *low-power* part at 30 mA typ where the `AS6C1008` is 40–70 mA, and the LUT swap
+> trades two 15 ns cache-grade parts for one. **Half the saving is the family, not the
+> consolidation.**
+
+---
 
 **Off-card, on the motherboard**, and this is where the parts that used to be on this
 list went:
@@ -2732,18 +2926,20 @@ is powered. The honest total:
 | Group | Count | Each | Total |
 |---|---|---|---|
 | ~~GAL22V10-15~~ **ATF1508AS**, one, at 25.175 MHz | ~~10~~ **1** | ~~70–90 mA~~ | ~~700–900 mA~~ **~190 mA** |
-| AS6C1008-55 framebuffer | 4 | 40–70 mA | 160–280 mA |
-| 32K×8 15 ns LUT (dot rate) | 2 | 70–110 mA | 140–220 mA |
+| ~~AS6C1008-55~~ **AS6C8016-55** framebuffer | ~~4~~ **2** | ~~40–70 mA~~ **30 mA typ** | ~~160–280 mA~~ **~60 mA** — §14.2 |
+| ~~32K×8 15 ns~~ **IS61C6416AL-12** LUT (dot rate) | ~~2~~ **1** | ~~70–110 mA~~ **~35 mA typ** | ~~140–220 mA~~ **~35 mA** — §14.2 |
 | 32K×8 20 ns register file (bus rate) | 1 | 10–30 mA | 10–30 mA |
 | AHCT at 25.175 MHz (fetch latches, `'153`, index, post-LUT) | 11 | 9–22 mA | 100–240 mA |
 | HC at bus rate (posted-write ×4, `'165`, `'273`, `'245`, read latch, `'244` ×2, `'161` ×2) | 12 | 2–6 mA | 25–70 mA |
 | Analog drive stage (§9.1) | 3 ch | 9.3 mA peak + bias | 30–45 mA |
 | | | ~~**Total**~~ | ~~**~1.2–1.8 A**~~ |
-| | | **Total, §10.1.3** | **~0.7–1.1 A** |
+| | | ~~**Total, §10.1.3**~~ | ~~**~0.7–1.1 A**~~ |
+| | | **Total, §14.2** | **~0.5–0.85 A** |
 
-~~Call it **1.6 A nominal** and specify for 2 A.~~ **Call it 0.9 A nominal and
-specify for 1.5 A** — 2026-09-06, once the ten GALs became one `ATF1508AS`
-(§10.1.3). The measured figures are from `reference/datasheets/ATF1508AS.pdf`:
+~~Call it **1.6 A nominal** and specify for 2 A.~~ ~~Call it 0.9 A nominal and
+specify for 1.5 A~~ — 2026-09-06, once the ten GALs became one `ATF1508AS`
+(§10.1.3). ⭐ **Call it 0.65 A nominal and specify for 1 A** — 2026-09-08, once
+§14.2's four SRAMs replaced seven. The measured figures are from `reference/datasheets/ATF1508AS.pdf`:
 
 | | |
 |---|---|
@@ -2766,7 +2962,12 @@ Eurocard envelope. At **0.9 A that is 6.3 W** — still not comfortable bare, bu
 7805 with a modest heatsink, or a lower input rail, is now arguable where it was not,
 and the switching pre-regulator stops being forced. **The slot power pins do not
 move**: 0.9 A still exceeds a single 0.5 A-class pin, so §17's multiple parallel power
-and ground pins stand. Two consequences that the 450–650 mA figure hid:
+and ground pins stand.
+
+> ⭐ **At §14.2's 0.65 A the 7805 is 4.6 W**, which a TO-220 on a small clip-on
+> heatsink carries comfortably. The switching pre-regulator stops being arguable and
+> becomes unnecessary. **The slot pins still do not move** — 0.65 A is still over a
+> 0.5 A pin, so §17 stands unchanged and for the same reason. Two consequences that the 450–650 mA figure hid:
 a linear 7805 dropping 7 V at 1.5 A dissipates 10.5 W and needs a heatsink that does
 not fit the Eurocard envelope, so the card wants a **switching pre-regulator or a 5 V
 backplane rail**; and at 1.5 A a single 0.5 A-class slot power pin is not enough —
@@ -2776,8 +2977,10 @@ real money: nine ATF22V10C-class parts instead of nine bipolar GALs is most of h
 amp. Measuring card current stays §19 item 10, but it is now a *verification*, not a
 discovery.
 
-**Area.** ⚠ **The paragraph below is the GAL build's; §14.1 has the current figure of
-~140 cm² for 31 ICs.** ~~41 ICs including 4 × DIP-32 and 3 × DIP-28~~, against
+**Area.** ⚠ **The paragraph below is the GAL build's. The current figure is
+`hardware/place`'s, measured rather than estimated: 28 ICs of courtyard is
+**102.5 cm²**, and the card fits an **18 cm** Apple-II board rather than the 24 cm it
+needed at 31 — §14.2 took three DIP-32/28 SRAMs off it and put back three TSOP-44.** ~~41 ICs including 4 × DIP-32 and 3 × DIP-28~~, against
 colormin's ~140 cm² on a 160 cm² Eurocard. Four more packages plus a guarded analog corner by the VGA connector
 puts this at **~150 of 160 cm²** — still a 4-layer Eurocard with disciplined placement
 and the blitter still a piggyback, but the slack that made that conclusion comfortable
@@ -2793,7 +2996,7 @@ a BOM item.
 | HD63C09E | 1988 | the machine's premise |
 | GAL22V10 | 1986 | period; PAL16L8 is 1978 |
 | 74AHCT | ~1990 | **the newest family on the card.** 74F is the period-honest substitute on the dot path |
-| AS6C1008 (128K×8 SRAM) | 1 Mbit SRAMs ~1989–90 | **the newest silicon on the card.** A 1988 build would be 16 × 32K×8 |
+| ~~AS6C1008 (128K×8)~~ **AS6C8016 (512K×16)** | ~~1 Mbit~~ **8 Mbit** SRAMs ~~~1989–90~~ **~1995** | ⚠ **§14.2 gives up the 1989 plausibility**, and knowingly: an 8 Mbit ×16 part in TSOP is mid-90s silicon. The 1989 build is the four `AS6C1008`, and it still works — this is a packaging choice, not a capability one |
 | 20 ns / 15 ns 32K×8 SRAM | ~1988 | period |
 | R-2R SIP ladder DAC | forever | period |
 | MMU as an SRAM block map | 1980 (SWTPc DAT), 1986 (GIME) | period — **but see below** |
@@ -3149,7 +3352,7 @@ unchanged from minimal256.md §11 and are not restated in full.
    out to be the binding half.
 
    **So it is the third escape, and it is not a contingency: the card is ~~10 GALs and
-   41 ICs~~ 2 `ATF1508AS` + 2 `GAL22V10` and 31 ICs (§14.1).** ⚠ **This item's
+   41 ICs~~ 2 `ATF1508AS` + 2 `GAL22V10` and 28 ICs (§14.1).** ⚠ **This item's
    macrocell table below is the GAL partition and §10.1.6's fit superseded it** — the
    sync trio is inside `vctrl` now, which is 91 of 128 cells and 50 of 64 pins. The
    item is kept because it is what proved the sync section needs three parts' worth of
@@ -3196,11 +3399,13 @@ unchanged from minimal256.md §11 and are not restated in full.
    all land on it. The fitter refuses the naive order rather than letting it through —
    that is how `vadr`'s top bit was caught.
 9. **`74HC593` availability** (§9). **carried.**
-10. **Measure card current** with seven SRAMs and **nine** GALs against §14's
-    ~1.1–1.7 A estimate, and price the low-power GAL family (§10.1) — nine
-    ATF22V10C-class parts instead of nine bipolar GALs is most of half an amp.
-    **carried, and no longer a discovery**: §14 does the arithmetic, so this is
-    verification. The regulator topology and the slot's power-pin count depend on the
+10. **Measure card current** with ~~seven SRAMs and nine GALs~~ **four SRAMs, two
+    CPLDs and two GALs** against §14's ~~~1.1–1.7 A~~ **0.5–0.85 A** estimate, and
+    price the low-power GAL family (§10.1) — nine ATF22V10C-class parts instead of
+    nine bipolar GALs is most of half an amp. **carried, and no longer a discovery**:
+    §14 and §14.2 do the arithmetic, so this is verification. ⚠ **And §14.2's three
+    TSOP-44 parts are the ones to measure first** — their 30 mA and 175 mW typicals
+    are *typical*, and the whole 205–405 mA saving rests on them. The regulator topology and the slot's power-pin count depend on the
     answer (§17).
 11. **Validate 640×400@70 and 640×480@60 on the actual monitors** — CRT, LCD and
     scaler. 70 Hz 400-line is a DOS text mode and should be universal; confirm it.

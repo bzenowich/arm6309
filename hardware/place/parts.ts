@@ -65,15 +65,19 @@ export const FINGER_H = 11
 
 export const CARDS: Record<string, CardSpec> = {
   video: {
-    title: "Video", length: 240, ics: 31, source: "video/docs/graphics.md 14.1",
+    title: "Video", length: 180, ics: 28, source: "video/docs/graphics.md 14.1",
     note: "640x200 x 256 colours, VGA out",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
     parts: [
       pkg(33, 33, "ATF1508AS vaddr/vctrl", "pld", 2, "1508"),
       dip(24, 0.3, "GAL22V10 arb/rfa", "pld", 2),
-      dip(32, 0.6, "AS6C1008 128Kx8", "mem", 4),
-      dip(28, 0.6, "32Kx8 15ns LUT", "mem", 2),
+      /* 14.2: two x16 parts feed the dot clock where four x8 did, and one
+       * holds the whole 16-bit palette. TSOP-44 II is a 10.16 x 18.42 mm body
+       * with the leads on the short ends; 11.8 includes them, which is the
+       * same convention dip() uses when it takes the row spacing. */
+      pkg(18.4, 11.8, "AS6C8016 512Kx16", "mem", 2, "8016"),
+      pkg(18.4, 11.8, "IS61C6416 64Kx16 LUT", "mem", 1, "6416"),
       dip(28, 0.6, "32Kx8 regfile", "mem"),
       dip(20, 0.3, "74AHCT574 fetch", "bus", 4),
       dip(16, 0.3, "74AHCT153 mux", "bus", 4),

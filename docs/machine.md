@@ -40,12 +40,12 @@ genuinely undecided.
 | **System master clock** | one 25.175 MHz oscillator, **on the motherboard** — §1 |
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
-| **Video** | 640×200 × 256 colours, VGA out — **31 ICs** (~~41~~), the programmable logic being **2 × `ATF1508AS` PLCC-84 + 2 × `GAL22V10`** ([`video/`](../video/), `graphics.md` §14.1) |
+| **Video** | 640×200 × 256 colours, VGA out — **28 ICs** (~~41~~, ~~31~~), the programmable logic being **2 × `ATF1508AS` PLCC-84 + 2 × `GAL22V10`** ([`video/`](../video/), `graphics.md` §14.1) |
 | **Audio** | 4-channel 8-bit PCM, Paula-exact — **29 ICs**, one `ATF1508AS` PLCC-84 ([`audio/`](../audio/), `audio.md` §10.1) |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **14 ICs** (~~7~~), **681 KiB/s** sustained (~~528~~) — **specified** ([`storage/`](../storage/)). Its block buffer moved into `A20 = 1` on 2026-09-08 and took the `TFM` hazard with it. ⚠ ~~The machine's one period exception~~ the first of two |
 | **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs** (~~16~~), two of them `ATF1508AS` — **specified** ([`net/`](../net/)). ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | **114 ICs** — **100 on cards**, **14** on the motherboard (~~9~~, ~~18~~ — `hardware/ram.md` §6.5, plus four SIMM sockets). ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
+| **Total silicon** | **111 ICs** — **97 on cards**, **14** on the motherboard (~~9~~, ~~18~~ — `hardware/ram.md` §6.5, plus four SIMM sockets). ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -852,9 +852,11 @@ a cross-card dependency.
 | io | Confirm whether NitrOS-9's `sc6551` exists; it is the card's entire software cost | `serial.md` §13 item 2 |
 | **cpu** | **⚠ Settle `TFM`'s interrupt/resume behaviour from silicon** — and note it is now a *choice*, not a discovery, because this machine's 6309 is the project's own firmware. **Two cards now wait on it**, and the second one cannot retry a lost frame | `sdcard.md` §4, §13 item 1; `net.md` §3.2 |
 | **io** | **⚠ Fit `net`'s U2 before laying out its board** — 118 of 128 macrocells and 56 of 60 pins, with a five-step cut order behind it | `net.md` §7.3, §16 item 1 |
-| **video** | ~~**⚠ Refit `vctrl`.**~~ **Done 2026-09-08** — `REGSEL` gained `A6`, `VRAMSEL` gained `/A20`, `WAIT.oe` gained `& E`, and **the arbiter moved back out to its own `GAL22V10`** so the part stays a **PLCC-84**. It fits at **64 of 64 I/O, 4 of 4 dedicated inputs, 112 of 128 logic cells** | `hardware/gal/video.cpld.ts`, `cpld/vctrl.fit` |
-| **video** | **⚠ `vctrl` has zero spare pins and therefore no JTAG.** 64 of 64 with JTAG costing four I/O: it is programmed out of circuit, as the audio card's U1 already is. Getting in-circuit programming back means moving `RA0`–`RA4` and `WSTB` to a second GAL | `video.cpld.ts` |
-| **video** | **⚠ Bound `SPANBUSY`.** `/WAIT` works now, and no document says how long the span writer holds it. Any card scheduling against `E` needs that number | §5 item 10, `net.md` §16 item 5 |
+| **video** | ~~**⚠ Refit `vctrl`.**~~ **Done 2026-09-08** — `REGSEL` gained `A6`, `VRAMSEL` gained `/A20`, `WAIT.oe` gained `& E`, and **the arbiter moved back out to its own `GAL22V10`** so the part stays a **PLCC-84**. Then `RA0`–`RA4` and `WSTB` went out to a second GAL (`rfa`) and it fits at **50 of 64 I/O, 91 of 128 logic cells** (~~64 of 64, 112 of 128~~) | `hardware/gal/video.cpld.ts`, `cpld/vctrl.fit` |
+| ~~**video**~~ | ~~**⚠ `vctrl` has zero spare pins and therefore no JTAG.**~~ **Done 2026-09-08** — `RA0`–`RA4` and `WSTB` moved to `rfa`, a second `GAL22V10`. The estimate said five pins; it was **fourteen**, because nine inputs existed only to feed those outputs. **JTAG fits with ten to spare** | `hardware/gal/regfile.jedec.ts`, `graphics.md` §10.1.6.3 |
+| ~~**video**~~ | ~~**⚠ Bound `SPANBUSY`.**~~ **Done 2026-09-08** — **40.7 µs** worst case, and **10.2 µs** once §14.2's two-chip framebuffer lands. `/WAIT` is also qualified on `R/W` now, so **reads never wait at all** | `graphics.md` §7.4 |
+| **video** | **⚠ Decide whether the display list is worth `§6.4.3`'s Variant B.** Fitted 2026-09-08: §10.3's list engine fits a PLCC-84 **if** it shares `WPTR` instead of carrying its own pointer **and** the 1bpp character generator comes out — 64 of 64 I/O, 105 of 128 cells. With Variant B kept it needs a TQFP-100. **Text still works either way** (the span writer in bitmap mode); what is lost is the hardware 80-column mode | `graphics.md` §10.1.6.2 |
+| **video** | **⚠ The framebuffer and palette go surface-mount.** `graphics.md` §14.2 consolidates seven SRAMs into four — 2 × `AS6C8016-55ZIN` and 1 × `IS61C6416AL-12TLI`, both TSOP-44 II, both stocked, ~$14–21 against ~$36–54 and 205–405 mA lighter. **These are the machine's first SMD parts**; everything else is DIP or a socketed PLCC. That is an assembly decision, not an electrical one | `graphics.md` §14.2 |
 | **audio** | **⚠ Decide whether the sample RAM moves into `A20 = 1`.** Its 128 KB upload is a chunked `TFM X+,Y` into a port and pays the same tax storage and net just stopped paying — and it is the last card carrying the doubled-write exposure | §5 item 7, `audio.md` §13 |
 | **machine** | **⚠ Divide the megabyte at `A20 = 1`** — 16 regions of 64 KB stands; **what is open is the arbitration**, who wins a host access the card cannot defer | §5 item 7 |
 | **machine** | **⚠ RAM expansion — decided, not built.** `hardware/ram.md`: 16-bit map entries, a 32 MB map, four 30-pin SIMM sockets and **no SRAM**, for **five packages, zero backplane pins and zero card changes**. ⚠ **It owes a boot path** — §6.4. ⭐ Also: `TASK` widens from 1 bit to 8 **for nothing** — 256 contexts and a one-write process switch | `hardware/ram.md` §5, §6, §10 |
@@ -953,7 +955,7 @@ carve-out drawn into a physical map that has no room for one.
 
 | Rail | Consumer | ICs | Estimate |
 |---|---|---|---|
-| 5 V | **video card** | **31** (~~40~~) — 2 CPLDs, 2 GALs | **~0.75–1.3 A, 0.9 A nominal**, design to 1.5 A — `graphics.md` §14.1. ⚠ It quoted 450–650 mA until 2026-09-04 (less than its own GAL row) and **~1.1–1.7 A until 2026-09-08**, when the ten GALs at 70–90 mA each were finally replaced in the arithmetic as well as in the design |
+| 5 V | **video card** | **28** (~~40~~, ~~31~~) — 2 CPLDs, 2 GALs, 4 SRAMs | **~0.5–0.85 A, 0.65 A nominal**, design to 1 A — `graphics.md` §14.2 (~~0.75–1.3 A, 0.9 A nominal~~; the seven SRAMs became four and took ~250 mA with them). ⚠ It quoted 450–650 mA until 2026-09-04 (less than its own GAL row) and **~1.1–1.7 A until 2026-09-08**, when the ten GALs at 70–90 mA each were finally replaced in the arithmetic as well as in the design |
 | 5 V | **audio card** | **29** (~~36~~ — `audio.md` §10.1 is the current count) | **~300–400 mA** — `audio.md` §10 |
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
 | 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The second largest single-card draw after video**, and the only figure on that card that cannot be derived from a datasheet with confidence |
@@ -961,7 +963,7 @@ carve-out drawn into a physical map that has no room for one.
 | 5 V | **motherboard**: MMU (5, +1 map SRAM), divider GAL, oscillator, reset supervisor, **U9/U10 GALs and 3 × `'157`** — `hardware/ram.md` §6.5 | ~~13~~ ~~9~~ **14** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly ~~2–3~~ **2.0–3.0 A** at 5 V across ~~~106~~ ~~108~~ ~~113~~ **114 ICs**, plus
+**The machine is plausibly ~~2–3~~ **1.8–2.8 A** at 5 V across ~~~106~~ ~~108~~ ~~113~~ ~~114~~ **111 ICs**, plus
 a 3.3 V rail.**
 
 > ⚠ **Both halves re-derived 2026-09-08, and the card total had never been added up.**
@@ -971,12 +973,13 @@ a 3.3 V rail.**
 >
 > | video | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
 > |---|---|---|---|---|---|---|---|---|
-> | **31** | 29 | 11 | 3 | **14** | **12** | **100** | **14** | **114** |
+> | **28** | 29 | 11 | 3 | **14** | **12** | **97** | **14** | **111** |
 >
 > Video fell 41 → 30 when `graphics.md` §14.1 finally counted the two `ATF1508AS` that
-> replaced its ten GALs (2026-09-06's decision, 2026-09-08's arithmetic), then rose to
-> **31** with `rfa` (§10.1.6.3); storage rose 7 → 14 and net fell 16 → 12 in the same
-> week's buffer work; the motherboard rose 9 → 14 for the DRAM controller. **The current estimate
+> replaced its ten GALs (2026-09-06's decision, 2026-09-08's arithmetic), rose to **31**
+> with `rfa` (§10.1.6.3) and fell to **28** when §14.2 consolidated seven SRAMs into
+> four; storage rose 7 → 14 and net fell 16 → 12 in the same week's buffer work; the
+> motherboard rose 9 → 14 for the DRAM controller. **The current estimate
 > fell** because ten GAL22V10 at 70–90 mA each were most of an amp and two CPLDs are
 > not.
 
