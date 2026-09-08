@@ -1,4 +1,4 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Tue Sep 08 11:24:43 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Tue Sep 08 11:49:28 2026
 
 
 fit1508 vaddr.tt2 -device P1508C84 -preassign ignore
@@ -240,7 +240,7 @@ MAP6 is placed at feedback node 713 (MC 113)
 MAP3 is placed at feedback node 714 (MC 114)
 LINEAR is placed at pin 73 (MC 115)
 MAP1 is placed at feedback node 716 (MC 116)
-WRITESEL is placed at pin 74 (MC 117)
+SPNGRANT is placed at pin 74 (MC 117)
 TILESEL is placed at pin 75 (MC 118)
 MAP0 is placed at feedback node 719 (MC 119)
 D3 is placed at pin 76 (MC 120)
@@ -269,7 +269,7 @@ XXL_462 is placed at foldback expander node 428 (MC 128)
                     -------------------------------------------                     
                    / 11   9   7   5   3   1  83  81  79  77  75 \                  
                   /    10   8   6   4   2  84  82  80  78  76    \                 
-         WROWADV | 12                    (*)                   74 | WRITESEL        
+         WROWADV | 12                    (*)                   74 | SPNGRANT        
              VCC | 13                                          73 | LINEAR          
              TDI | 14                                          72 | GND             
            HLOAD | 15                                          71 | TDO             
@@ -449,16 +449,16 @@ FETCH,
 HS2,HS9,HS6,HS3,HLOAD,HS7,HS4,HS8,HS5,
 LINEAR,
 MAP2,MAPSEL,MAP3,MAP1,MAP0,
-SA5,SA2,SA9,SA4,SA3,SA6,SA8,SA7,
+SA5,SPNGRANT,SA2,SA9,SA4,SA3,SA6,SA8,SA7,
 TILESEL,
 V2,
-WA8,WRITESEL,WA9,WA6,WA5,WA7,
+WA8,WA9,WA6,WA5,WA7,
 }
 Multiplexer assignment for block D
 HS2			(MC8	FB)  : MUX 0		Ref (B18fb)
 SA5			(MC18	FB)  : MUX 1		Ref (D58fb)
 WA8			(MC2	FB)  : MUX 2		Ref (A4fb)
-WRITESEL		(MC31	P)   : MUX 3		Ref (H117p)
+SPNGRANT		(MC31	P)   : MUX 3		Ref (H117p)
 HS9			(MC3	FB)  : MUX 4		Ref (A8fb)
 MAP2			(MC25	FB)  : MUX 7		Ref (H121fb)
 HS6			(MC12	FB)  : MUX 8		Ref (C37fb)
@@ -494,9 +494,9 @@ BCTRLGO,
 LGRANT,LD0,LD7,LINEAR,LD2,LD1,LRUN,LD6,LD4,LD5,LD3,
 MAP4,MAPLD,MAPSEL,MAP5,
 PB2,PB6,PB1,PB5,PB0,PB4,PB3,PB7,
-SA11,SA10,SA9,SA8,
+SA11,SA10,SA9,SPNGRANT,SA8,
 TILESEL,
-WRITESEL,WA10,WA11,
+WA10,WA11,
 }
 Multiplexer assignment for block E
 PB2			(MC18	P)   : MUX 1		Ref (A5p)
@@ -515,7 +515,7 @@ PB0			(MC19	P)   : MUX 15		Ref (A6p)
 SA10			(MC4	FB)  : MUX 17		Ref (C43fb)
 PB4			(MC28	P)   : MUX 18		Ref (C43p)
 SA9			(MC6	FB)  : MUX 19		Ref (D63fb)
-WRITESEL		(MC31	P)   : MUX 21		Ref (H117p)
+SPNGRANT		(MC31	P)   : MUX 21		Ref (H117p)
 WA10			(MC1	FB)  : MUX 23		Ref (A11fb)
 PB3			(MC21	P)   : MUX 24		Ref (A11p)
 TILESEL			(MC32	P)   : MUX 25		Ref (H118p)
@@ -536,10 +536,10 @@ FanIn assignment for block F [32]
 {
 LINEAR,
 MAP6,MAP7,MB5,MB1,MAPSEL,MB0,MB2,MB3,
-SA17,SA14,SA4,SA3,SA15,SA13,SA12,
+SA17,SA14,SA4,SA3,SPNGRANT,SA15,SA13,SA12,
 TILESEL,TB3,TB1,TB0,
 V4,V0,V1,V5,
-WA4,WA12,WA3,WA17,WRITESEL,WA13,WA14,WA15,
+WA4,WA12,WA3,WA17,WA13,WA14,WA15,
 }
 Multiplexer assignment for block F
 V4			(MC25	P)   : MUX 0		Ref (C46p)
@@ -559,7 +559,7 @@ SA4			(MC18	FB)  : MUX 16		Ref (D54fb)
 MAPSEL			(MC28	P)   : MUX 17		Ref (G104p)
 WA17			(MC10	FB)  : MUX 19		Ref (B30fb)
 SA3			(MC17	FB)  : MUX 20		Ref (D52fb)
-WRITESEL		(MC30	P)   : MUX 21		Ref (H117p)
+SPNGRANT		(MC30	P)   : MUX 21		Ref (H117p)
 LINEAR			(MC29	P)   : MUX 23		Ref (H115p)
 MB0			(MC13	FB)  : MUX 24		Ref (C38fb)
 TILESEL			(MC31	P)   : MUX 25		Ref (H118p)
@@ -581,10 +581,10 @@ D4,D6,D3,D5,D0,
 LINEAR,
 MB4,MAPSEL,MB5,MB6,MB3,
 RA3,RA1,RA2,RA0,RA4,
-SA2,SA16,SA18,
+SA2,SPNGRANT,SA16,SA18,
 TB0,TB4,TB2,TB3,TILESEL,
 V3,VS3,VS5,
-WA16,WA2,WSTB,WRITESEL,WA18,
+WA16,WA2,WSTB,WA18,
 }
 Multiplexer assignment for block G
 WA16			(MC2	FB)  : MUX 0		Ref (B23fb)
@@ -606,7 +606,7 @@ MAPSEL			(MC26	P)   : MUX 17		Ref (G104p)
 RA0			(MC17	P)   : MUX 18		Ref (C45p)
 D3			(MC30	P)   : MUX 19		Ref (H120p)
 TB3			(MC12	FB)  : MUX 20		Ref (G103fb)
-WRITESEL		(MC28	P)   : MUX 21		Ref (H117p)
+SPNGRANT		(MC28	P)   : MUX 21		Ref (H117p)
 LINEAR			(MC27	P)   : MUX 23		Ref (H115p)
 MB5			(MC13	FB)  : MUX 24		Ref (G104fb)
 TILESEL			(MC29	P)   : MUX 25		Ref (H118p)
@@ -662,87 +662,87 @@ PLCC84 programmed logic:
 -----------------------------------
 FBA3 = ((MAPSEL & V4)
 	# (LINEAR & SA3.Q)
-	# (WA3.Q & WRITESEL)
+	# (SPNGRANT & WA3.Q)
 	# (TILESEL & V0));
 
 FBA4 = ((MAPSEL & V5)
 	# (LINEAR & SA4.Q)
-	# (WA4.Q & WRITESEL)
+	# (SPNGRANT & WA4.Q)
 	# (TILESEL & V1));
 
 FBA2 = ((SA2.Q & TILESEL)
 	# (MAPSEL & V3)
-	# (WA2.Q & WRITESEL)
+	# (SPNGRANT & WA2.Q)
 	# (SA2.Q & LINEAR));
 
 FBA7 = ((MAPSEL & SA5.Q)
 	# (LINEAR & SA7.Q)
-	# (WA7.Q & WRITESEL)
+	# (SPNGRANT & WA7.Q)
 	# (MAP1.Q & TILESEL));
 
 FBA5 = ((MAPSEL & SA3.Q)
 	# (LINEAR & SA5.Q)
-	# (WA5.Q & WRITESEL)
+	# (SPNGRANT & WA5.Q)
 	# (TILESEL & V2));
 
 FBA6 = ((MAPSEL & SA4.Q)
 	# (LINEAR & SA6.Q)
-	# (WA6.Q & WRITESEL)
+	# (SPNGRANT & WA6.Q)
 	# (MAP0.Q & TILESEL));
 
 FBA10 = ((MAPSEL & SA8.Q)
 	# (LINEAR & SA10.Q)
-	# (WA10.Q & WRITESEL)
+	# (SPNGRANT & WA10.Q)
 	# (MAP4.Q & TILESEL));
 
 FBA8 = ((MAPSEL & SA6.Q)
 	# (LINEAR & SA8.Q)
-	# (WA8.Q & WRITESEL)
+	# (SPNGRANT & WA8.Q)
 	# (MAP2.Q & TILESEL));
 
 FBA9 = ((MAPSEL & SA7.Q)
 	# (LINEAR & SA9.Q)
-	# (WA9.Q & WRITESEL)
+	# (SPNGRANT & WA9.Q)
 	# (MAP3.Q & TILESEL));
 
 FBA11 = ((MAPSEL & SA9.Q)
 	# (LINEAR & SA11.Q)
-	# (WA11.Q & WRITESEL)
+	# (SPNGRANT & WA11.Q)
 	# (MAP5.Q & TILESEL));
 
 FBA12 = ((MAPSEL & MB0.Q)
 	# (LINEAR & SA12.Q)
-	# (WA12.Q & WRITESEL)
+	# (SPNGRANT & WA12.Q)
 	# (MAP6.Q & TILESEL));
 
 FBA15 = ((MAPSEL & MB3.Q)
 	# (LINEAR & SA15.Q)
-	# (WA15.Q & WRITESEL)
+	# (SPNGRANT & WA15.Q)
 	# (TB1.Q & TILESEL));
 
 FBA13 = ((MAPSEL & MB1.Q)
 	# (LINEAR & SA13.Q)
-	# (WA13.Q & WRITESEL)
+	# (SPNGRANT & WA13.Q)
 	# (MAP7.Q & TILESEL));
 
 FBA14 = ((MAPSEL & MB2.Q)
 	# (LINEAR & SA14.Q)
-	# (WA14.Q & WRITESEL)
+	# (SPNGRANT & WA14.Q)
 	# (TB0.Q & TILESEL));
 
 FBA18 = ((MAPSEL & MB6.Q)
 	# (LINEAR & SA18.Q)
-	# (WA18.Q & WRITESEL)
+	# (SPNGRANT & WA18.Q)
 	# (TB4.Q & TILESEL));
 
 FBA16 = ((MAPSEL & MB4.Q)
 	# (LINEAR & SA16.Q)
-	# (WA16.Q & WRITESEL)
+	# (SPNGRANT & WA16.Q)
 	# (TB2.Q & TILESEL));
 
 FBA17 = ((MAPSEL & MB5.Q)
 	# (LINEAR & SA17.Q)
-	# (WA17.Q & WRITESEL)
+	# (SPNGRANT & WA17.Q)
 	# (TB3.Q & TILESEL));
 
 HS2.D = ((HS2.Q & XXL_466)
@@ -1503,7 +1503,7 @@ Pin 69 = FBA16; /* MC 107 */
 Pin 70 = FBA18; /* MC 109 */ 
 Pin 71 = TDO; /* MC 112 */ 
 Pin 73 = LINEAR; /* MC 115 */ 
-Pin 74 = WRITESEL; /* MC 117 */ 
+Pin 74 = SPNGRANT; /* MC 117 */ 
 Pin 75 = TILESEL; /* MC 118 */ 
 Pin 76 = D3; /* MC 120 */ 
 Pin 77 = D5; /* MC 123 */ 
@@ -1759,7 +1759,7 @@ MC113 0         --               MAP6     Dg-g-  --        --             2     
 MC114 0         --               MAP3     Dg-g-  --        --             2     slow
 MC115 73   --   LINEAR    INPUT  --              --        --             0     slow
 MC116 0         --               MAP1     Dg-g-  --        --             2     slow
-MC117 74   --   WRITESEL  INPUT  --              --        --             0     slow
+MC117 74   --   SPNGRANT  INPUT  --              --        --             0     slow
 MC118 75   --   TILESEL   INPUT  --              --        --             0     slow
 MC119 0         --               MAP0     Dg-g-  --        --             2     slow
 MC120 76   --   D3        INPUT  --              --        --             0     slow

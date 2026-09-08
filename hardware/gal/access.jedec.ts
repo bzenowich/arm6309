@@ -129,12 +129,21 @@ export const arbDesign: Design = {
   partNo: "ARM6309-UV6",
   location: "video card - spare-access arbiter",
   signature: "A6309V6",
-  /* ⚠ NOT superseded any more. This design was folded into vctrl by the
-   * two-CPLD rebalance and came back out on 2026-09-08: the widened $FF window
-   * and physical A20 put two more inputs on vctrl, 76 I/O does not fit a
-   * PLCC-84's 64, and these ten macrocells are the cheapest ten pins on that
-   * part to give back. video.cpld.ts carries the argument; vctrl now fits at
-   * 64 of 64. */
+  /* ⚠ SUPERSEDED AGAIN, and the round trip took one day. The two-CPLD rebalance
+   * folded this design into vctrl; the morning of 2026-09-08 pulled it back out,
+   * because the widened $FF window and physical A20 put vctrl at 76 I/O against
+   * a PLCC-84's 64 and these ten macrocells were the cheapest ten pins to give
+   * back; and the evening put it in again, because three unrelated changes -
+   * rfa (-14 pins), 6.4.3's Variant B (-4) - had left vctrl at 46 of 64 with a
+   * GAL22V10 beside it doing ten macrocells of work.
+   *
+   * THE DESIGN IS STILL CHECKED. access.check.ts executes its fuses against
+   * access.model.ts and jedec/cupl.check.ts sweeps it against Atmel's compiler
+   * over all 1,024 inputs, exactly as it does for the sync trio and the scan
+   * pair, which have been inside a CPLD since 2026-09-06. A GAL22V10 fuse map
+   * is the only form either check can execute, so the standalone design is the
+   * verification and not a leftover. */
+  supersededBy: "graphics.md 10.1.6.3 - merged back into vctrl 2026-09-08",
 
   inputs: [
     { name: "VRAMSEL", pin: 1 },

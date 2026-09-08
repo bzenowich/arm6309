@@ -32,7 +32,12 @@ export const REGS = {
   CTRL: 0x00, VSCROLL: 0x01, VSCROLLH: 0x02, HSCROLL: 0x03, HSCROLLH: 0x04,
   SPANLEN: 0x05, WFG: 0x06, WBG: 0x07,
   WPTRA: 0x08, WPTRB: 0x09, WPTRC: 0x0a,
-  LISTA: 0x0b, LISTB: 0x0c, LISTC: 0x0d, BCTRL: 0x0e,
+  /* ⚠ LISTA/B/C AT $0B-$0D ARE GONE - 2026-09-08, graphics.md 10.3.1. The list
+   * engine shares WPTR rather than carrying its own pointer (10.1.6.2 option
+   * 2), so a second address for the same nineteen registers was a fiction, and
+   * a fiction that invites exactly the bug 10.3.1 exists to warn about. A list
+   * is started by loading WPTR at $08-$0A and writing BCTRL. $0B-$0D are free. */
+  BCTRL: 0x0e,
   TILEBASE: 0x17, FONTBASE: 0x18, MAPBASE: 0x19,
 } as const
 
@@ -79,9 +84,16 @@ export const writeStrobes: Cell[] = [
   strobe("LDB", REGS.WPTRB), strobe("LDC", REGS.WPTRC),
   strobe("LDTB", REGS.TILEBASE), strobe("LDFB", REGS.FONTBASE),
   strobe("LDMB", REGS.MAPBASE),
-  /* LIST is three bytes and one strobe: the pointer loads a byte at a time
-   * and the engine is reserved (§10.3), so the byte select rides on RA1..RA0
-   * inside the pointer rather than costing three macrocells here. */
-  comb("LLOAD", [`WSTB & !RA4 & RA3 & !RA2 & RA1`],
-    "$0B-$0D, LIST's three bytes under one strobe"),
+  /* ⚠ LLOAD IS DELETED - 2026-09-08, and it was carrying a defect.
+   *
+   * It read: WSTB & !RA4 & RA3 & !RA2 & RA1, described as "$0B-$0D, LIST's
+   * three bytes under one strobe". That term matches $0A AND $0B - five bits
+   * with RA0 free is two addresses, not three - and $0A IS WPTRC. So a write
+   * to the write pointer's third byte also loaded the list pointer.
+   *
+   * It never fired in anger because the engine was not built, and the shared
+   * pointer deletes both the strobe and the bug: nothing reads LLOAD now,
+   * because LP0-LP18 are gone (video.parts.ts). Recorded rather than quietly
+   * removed - a decode that claimed three addresses and matched two is the
+   * kind of arithmetic this file is supposed to get right. */
 ]

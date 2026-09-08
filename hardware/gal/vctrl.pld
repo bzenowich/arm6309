@@ -28,10 +28,17 @@ PIN = VSTATWR ;
 PIN = HS0 ;
 PIN = HS1 ;
 PIN = WSTB ;
-PIN = SPNGRANT ;
 PIN = TC ;
 PIN = WADV0 ;
 PIN = WADV1 ;
+PIN = !IOPAGE ;
+PIN = A0 ;
+PIN = A1 ;
+PIN = SPNREQ ;
+PIN = SPNA0 ;
+PIN = SPNA1 ;
+PIN = E ;
+PIN = RW ;
 PIN = WCTRL ;
 PIN = D0 ;
 PIN = D1 ;
@@ -43,7 +50,6 @@ PIN = D6 ;
 PIN = D7 ;
 PIN = A19 ;
 PIN = A20 ;
-PIN = IOPAGE ;
 
 /* --- outputs ------------------------------------------------------ */
 PIN = HSYNC ;
@@ -64,6 +70,16 @@ PIN = MUXSEL0 ;
 PIN = MUXSEL1 ;
 PIN = SPANBUSY ;
 PIN = RETIRE ;
+PIN = GCPU0 ;
+PIN = GSPN0 ;
+PIN = GCPU1 ;
+PIN = GSPN1 ;
+PIN = GCPU2 ;
+PIN = GSPN2 ;
+PIN = GCPU3 ;
+PIN = GSPN3 ;
+PIN = SPNGRANT ;
+PIN = !WAIT ;
 PIN = MAPLD ;
 PIN = MAPSEL ;
 PIN = TILESEL ;
@@ -106,7 +122,7 @@ PINNODE = TC1 ;
 PINNODE = TC2 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * VTC, SPAREWIN, SPANEND, WROWADV, M0, HPOL, TILEMODE, WRITESEL */
+ * VTC, SPAREWIN, SPANEND, WROWADV, M0, HPOL, TILEMODE */
 
 /* --- equations ---------------------------------------------------- */
 H0.d = CE & !H0
@@ -351,6 +367,34 @@ SPANEND = RETIRE & !WM1 & !WM0
           # RETIRE & WM1 & !WM0 & TC ;
 WROWADV = SPANEND & WADV0
           # SPANEND & WADV1 ;
+GCPU0 = VRAMSEL & !IOPAGE & !A0 & !A1 ;
+GSPN0 = SPNREQ & !SPNA0 & !SPNA1 & !VRAMSEL
+        # SPNREQ & !SPNA0 & !SPNA1 & IOPAGE
+        # SPNREQ & !SPNA0 & !SPNA1 & A0
+        # SPNREQ & !SPNA0 & !SPNA1 & A1 ;
+GCPU1 = VRAMSEL & !IOPAGE & A0 & !A1 ;
+GSPN1 = SPNREQ & SPNA0 & !SPNA1 & !VRAMSEL
+        # SPNREQ & SPNA0 & !SPNA1 & IOPAGE
+        # SPNREQ & SPNA0 & !SPNA1 & !A0
+        # SPNREQ & SPNA0 & !SPNA1 & A1 ;
+GCPU2 = VRAMSEL & !IOPAGE & !A0 & A1 ;
+GSPN2 = SPNREQ & !SPNA0 & SPNA1 & !VRAMSEL
+        # SPNREQ & !SPNA0 & SPNA1 & IOPAGE
+        # SPNREQ & !SPNA0 & SPNA1 & A0
+        # SPNREQ & !SPNA0 & SPNA1 & !A1 ;
+GCPU3 = VRAMSEL & !IOPAGE & A0 & A1 ;
+GSPN3 = SPNREQ & SPNA0 & SPNA1 & !VRAMSEL
+        # SPNREQ & SPNA0 & SPNA1 & IOPAGE
+        # SPNREQ & SPNA0 & SPNA1 & !A0
+        # SPNREQ & SPNA0 & SPNA1 & !A1 ;
+SPNGRANT = SPNREQ & !SPNA0 & A0
+           # SPNREQ & SPNA0 & !A0
+           # SPNREQ & !SPNA1 & A1
+           # SPNREQ & SPNA1 & !A1
+           # SPNREQ & !VRAMSEL
+           # SPNREQ & IOPAGE ;
+WAIT = 'b'1 ;
+WAIT.oe = SPANBUSY & VRAMSEL & !IOPAGE & E & !RW ;
 VMODE0.d = WCTRL & D0
            # VMODE0 & !WCTRL ;
 VMODE1.d = WCTRL & D1
@@ -370,7 +414,6 @@ DISPEN.d = WCTRL & D7
 M0 = VMODE0 ;
 HPOL = !VMODE0 ;
 TILEMODE = CELL ;
-WRITESEL = SPNGRANT ;
 TC0.d = SLOTTICK & !TC0
         # !SLOTTICK & TC0 ;
 TC1.d = SLOTTICK & TC1 & !TC0
@@ -383,7 +426,7 @@ TC2.d = SLOTTICK & TC2 & !TC0
 MAPLD = TILEMODE & SLOTTICK & !TC2 & !TC1 & !TC0 ;
 MAPSEL = CELL & !TC2 ;
 TILESEL = TILEMODE & TC2 ;
-LINEAR = !TILEMODE & !WRITESEL ;
+LINEAR = !TILEMODE & !SPNGRANT ;
 VRAMSEL = A19 & !A20 & !IOPAGE ;
 
 /* One clock for every register: the card is one slot-walked datapath

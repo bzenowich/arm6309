@@ -13,7 +13,7 @@
 import { Card } from "../lib/Card"
 
 export default () => (
-  <Card name="arm6309-video" ioBase={0xff60} ioSize={32} length={180} icBudget={28}>
+  <Card name="arm6309-video" ioBase={0xff60} ioSize={32} length={180} icBudget={27}>
     {/* U1 - the host data path. */}
     <chip
       name="U1"

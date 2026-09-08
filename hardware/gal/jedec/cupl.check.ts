@@ -209,9 +209,11 @@ const REGISTRY: Part[] = [
   { design: hgenDesign, reference: null }, { design: vgenDesign, reference: null },
   { design: vdecDesign, reference: null }, { design: hadrDesign, reference: null },
   { design: vadrDesign, reference: null },
-  /* arb came back out of vctrl on 2026-09-08 (video.cpld.ts), so it is a live
-   * GAL again and the registry's rule applies to it: a GAL does not ship
-   * without a second implementation to check it against. */
+  /* ⚠ arb went out of vctrl and back in, both on 2026-09-08 (video.cpld.ts), so
+   * it is NOT a live GAL and the registry's rule no longer compels a reference.
+   * The reference is kept anyway, and the sweep below with it: a check that
+   * exists and passes is not worth deleting because the rule stopped requiring
+   * it, and the design is still what the CPLD is built from. */
   { design: arbDesign, reference: "reference/arb.cupl.jed" },
   /* rfa split off vctrl on 2026-09-08 - graphics.md 10.1.6.3's relief, taken
    * so 7.4's broadcast write has pins to signal through. */

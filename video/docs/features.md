@@ -34,7 +34,7 @@ reaches a conclusion that document does not state, the conclusion is marked.
 | **Sprites** | **No hardware sprites.** Software costs ~0.9 ms per 16×16 sprite per frame, so **4–6 moving objects**. §8 |
 | **Mouse cursor** | **Yes, pixel-accurate in bitmap mode** — save-behind, **~0.9 ms per move, 6.4 % of the CPU while dragging and 0 % when still.** §9 |
 | **Raster effects** | VBL + line-compare interrupts give a **software copper at 2–3 splits/frame** today. §4 |
-| ⚠ **Display list** | **Specified, and it does not fit v1** — not on macrocells, on switch-matrix fan-in. §4 |
+| ⭐ **Display list** | **Built 2026-09-08, for zero packages.** Per-scanline `HSCROLL`, palette and mode changes with no CPU. ⚠ It shares `WPTR`, so a list clobbers the write pointer — `graphics.md` §10.3.1. §4 |
 | ⚠ **Blitter** | **Deferred.** ~14 ICs and ~10 GALs for 8.7 Mpx/s of *8bpp* movement, which is the one thing the span writer cannot do. §5 |
 
 ---
@@ -269,8 +269,15 @@ locked to the raster and writes the card's own registers at chosen scanlines. It
 > and 87/128. **Zero extra packages.**
 >
 > ⚠ **Two prices.** The engine **clobbers the CPU's write pointer**, so anything that
-> starts a list reloads `WPTR` afterwards — three writes, and a rule software has to
-> keep. And `vaddr` has **no JTAG** at 64 of 64, so it is programmed out of circuit.
+> starts a list reloads `WPTR` afterwards — three writes, ~7.1 µs, and a rule software
+> has to keep. `graphics.md` §10.3.1 is that rule, and a per-frame list is started once
+> in `VBLANK`, so in practice it is **0.05 % of a frame**. And `vaddr` has **no JTAG** at
+> 64 of 64, so it is programmed out of circuit.
+>
+> ⭐ **`WPTR` at `+$08`–`$0A` *is* the list pointer** — `LIST` at `+$0B`–`$0D` was
+> deleted rather than kept as an alias, because a second address for the same nineteen
+> registers is a fiction that invites the very mistake the rule guards against. Three
+> register bytes came back.
 
 **What you get instead, today:** VBL and line-compare interrupts (`graphics.md` §12)
 give a **software copper at 2–3 splits per frame** — enough for a status bar and a

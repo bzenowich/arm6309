@@ -55,7 +55,7 @@ PIN = RA0 ;
 PIN = BCTRLGO ;
 PIN = LGRANT ;
 PIN = LINEAR ;
-PIN = WRITESEL ;
+PIN = SPNGRANT ;
 PIN = TILESEL ;
 PIN = MAPSEL ;
 PIN = V3 ;
@@ -169,7 +169,7 @@ PINNODE = LD6 ;
 PINNODE = LD7 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * LDVSL, LDVSH, LDHS, LDHSH, LDA, LDB, LDC, LDTB, LDFB, LDMB, LLOAD, LSTOP, LADV, LFETCH, LMOVE */
+ * LDVSL, LDVSH, LDHS, LDHSH, LDA, LDB, LDC, LDTB, LDFB, LDMB, LSTOP, LADV, LFETCH, LMOVE */
 
 /* --- equations ---------------------------------------------------- */
 SA2.d = HLOAD & HS2
@@ -509,7 +509,6 @@ LDC = WSTB & !RA4 & RA3 & !RA2 & RA1 & !RA0 ;
 LDTB = WSTB & RA4 & !RA3 & RA2 & RA1 & RA0 ;
 LDFB = WSTB & RA4 & RA3 & !RA2 & !RA1 & !RA0 ;
 LDMB = WSTB & RA4 & RA3 & !RA2 & !RA1 & RA0 ;
-LLOAD = WSTB & !RA4 & RA3 & !RA2 & RA1 ;
 LD0.d = LFETCH & PB0
         # LD0 & !LFETCH ;
 LD1.d = LFETCH & PB1
@@ -533,71 +532,71 @@ LADV = LRUN & LGRANT ;
 LFETCH = LRUN & LGRANT ;
 LMOVE = LRUN & !LSTOP & LGRANT ;
 FBA2 = LINEAR & SA2
-       # WRITESEL & WA2
+       # SPNGRANT & WA2
        # TILESEL & SA2
        # MAPSEL & V3 ;
 FBA3 = LINEAR & SA3
-       # WRITESEL & WA3
+       # SPNGRANT & WA3
        # TILESEL & V0
        # MAPSEL & V4 ;
 FBA4 = LINEAR & SA4
-       # WRITESEL & WA4
+       # SPNGRANT & WA4
        # TILESEL & V1
        # MAPSEL & V5 ;
 FBA5 = LINEAR & SA5
-       # WRITESEL & WA5
+       # SPNGRANT & WA5
        # TILESEL & V2
        # MAPSEL & SA3 ;
 FBA6 = LINEAR & SA6
-       # WRITESEL & WA6
+       # SPNGRANT & WA6
        # TILESEL & MAP0
        # MAPSEL & SA4 ;
 FBA7 = LINEAR & SA7
-       # WRITESEL & WA7
+       # SPNGRANT & WA7
        # TILESEL & MAP1
        # MAPSEL & SA5 ;
 FBA8 = LINEAR & SA8
-       # WRITESEL & WA8
+       # SPNGRANT & WA8
        # TILESEL & MAP2
        # MAPSEL & SA6 ;
 FBA9 = LINEAR & SA9
-       # WRITESEL & WA9
+       # SPNGRANT & WA9
        # TILESEL & MAP3
        # MAPSEL & SA7 ;
 FBA10 = LINEAR & SA10
-        # WRITESEL & WA10
+        # SPNGRANT & WA10
         # TILESEL & MAP4
         # MAPSEL & SA8 ;
 FBA11 = LINEAR & SA11
-        # WRITESEL & WA11
+        # SPNGRANT & WA11
         # TILESEL & MAP5
         # MAPSEL & SA9 ;
 FBA12 = LINEAR & SA12
-        # WRITESEL & WA12
+        # SPNGRANT & WA12
         # TILESEL & MAP6
         # MAPSEL & MB0 ;
 FBA13 = LINEAR & SA13
-        # WRITESEL & WA13
+        # SPNGRANT & WA13
         # TILESEL & MAP7
         # MAPSEL & MB1 ;
 FBA14 = LINEAR & SA14
-        # WRITESEL & WA14
+        # SPNGRANT & WA14
         # TILESEL & TB0
         # MAPSEL & MB2 ;
 FBA15 = LINEAR & SA15
-        # WRITESEL & WA15
+        # SPNGRANT & WA15
         # TILESEL & TB1
         # MAPSEL & MB3 ;
 FBA16 = LINEAR & SA16
-        # WRITESEL & WA16
+        # SPNGRANT & WA16
         # TILESEL & TB2
         # MAPSEL & MB4 ;
 FBA17 = LINEAR & SA17
-        # WRITESEL & WA17
+        # SPNGRANT & WA17
         # TILESEL & TB3
         # MAPSEL & MB5 ;
 FBA18 = LINEAR & SA18
-        # WRITESEL & WA18
+        # SPNGRANT & WA18
         # TILESEL & TB4
         # MAPSEL & MB6 ;
 

@@ -54,7 +54,7 @@ protect MinOS and can be deleted outright.**
 > carried a master oscillator that belongs on the motherboard, not on a card you can
 > pull (§14). None of that is a change of design. It is the same card, counted.
 
-**Net: ~~41 ICs (37…)~~ 28 ICs (24 if the tri-state pixel bus closes at 39.7 ns and the
+**Net: ~~41 ICs (37…)~~ 27 ICs (23 if the tri-state pixel bus closes at 39.7 ns and the
 `'153` mux is not needed), against colormin's 39 (35)** — plus 3 buffer transistors and
 3 R-2R SIP ladders, which are not ICs and are counted on their own line.
 
@@ -1779,7 +1779,7 @@ real and the card walked into it:
 | + blit datapath | **~21** | ~59 |
 
 > ⚠ **This table is the GAL build and §10.1.6 replaced it.** The card is **2 ×
-> `ATF1508AS` + 2 × `GAL22V10` + 4 SRAM + 20 packages = 28 ICs** — §14.1 has the arithmetic.
+> `ATF1508AS` + 1 × `GAL22V10` + 4 SRAM + 20 packages = 27 ICs** — §14.1 has the arithmetic.
 > The section below is kept because **it is the argument that produced that decision**:
 > the wall it describes is real, the card hit it, and what follows is what happened
 > next.
@@ -2314,7 +2314,8 @@ Variant B** — the 1bpp character generator — and the shared-pointer engine l
 > the engine CLOBBERS THE CPU'S WRITE POINTER**, so anything that starts a list must
 > reload `WPTR` afterwards. §13's `+$08`–`$0A` is the reload and it is three writes.
 > That is cheap, but it is a rule software has to keep, and **§10.3 owns it.** `LIST`
-> at `+$0B`–`$0D` stays in the register map as the *load* path — it writes `WPTR`.
+> at `+$0B`–`$0D` was deleted rather than kept as a load path: a second address for the
+> same registers is a fiction. **§10.3.1 has the rule and the three bytes are free.**
 
 > ✅ **Item 23 is closed and it took both of those repairs.** The write strobes are
 > decoded on `vaddr` from a five-bit register address and one strobe, in place of nine
@@ -2361,6 +2362,47 @@ it. **It was a GAL before the two-CPLD rebalance and it is one again.** `WRITESE
 ⚠ **64 of 64 is zero spare, and JTAG costs four I/O — so `vctrl` has none.** It is
 programmed out of circuit, which is what the audio card's `ATF1508AS` already does and
 what this section's opening paragraph assumed.
+
+##### ⭐ And then the arbiter came home — 2026-09-08, second round
+
+**One GAL, not two.** The three changes above and in §6.4.3 took pins off `vctrl` and
+none of them were about the arbiter:
+
+| | I/O | Cells | |
+|---|---|---|---|
+| arbiter out, as this section first landed | 64 / 64 | 112 / 128 | zero spare |
+| − `RA0`–`RA4`, `WSTB` → `rfa` | 50 / 64 | 91 / 128 | **−14** |
+| − §6.4.3's Variant B | **46 / 64** | **87 / 128** | **−4** |
+| **+ the arbiter, merged back** | **62 / 64** | **97 / 128** | ✓ **one package deleted** |
+
+A part at two-thirds capacity sitting beside a `GAL22V10` doing ten macrocells of work
+is a package nobody is buying anything with. **The card is 27 ICs and one GAL.**
+
+⚠ **It costs `vctrl` its JTAG** — 2 spare pins against the 4 it needs — so both CPLDs
+are now programmed out of circuit, as the audio card's `ATF1508AS` already is. ⭐ **And
+§14.2 is what buys it back**: two ×16 framebuffer parts make the arbiter **2 grants
+instead of 8**, which is six output pins, so `vctrl` lands near 56 of 64 with room for
+JTAG. That is a §5.2 rewrite rather than a rebalance, and it is not done.
+
+> **`WRITESEL` stops existing, and that is the tell that this is the right shape.** It
+> was never a signal — §5.2.1 says `WRITESEL` **is** `SPNGRANT`, and the alias existed
+> only because the arbiter was off-part, so `vctrl` took `SPNGRANT` in and re-emitted it
+> under the name `vaddr`'s mux reads. One macrocell and one pin for a wire. With the
+> arbiter back, `vaddr` reads `SPNGRANT` directly and the identity is an identity again.
+
+> ⚠ **`rfa` cannot follow it.** Merging both was fitted and fails: `rfa` is what bought
+> the fourteen pins that made room for the arbiter, so putting it back spends them and
+> `vctrl` overflows. **The two GALs were never symmetric** — one exports six outputs and
+> takes nine inputs that exist only to feed them, and the other exports ten and takes
+> signals the part already has.
+
+> ⭐ **Merging costs no verification.** `arbDesign` stays in `access.jedec.ts`;
+> `access.check.ts` still executes its fuses against `access.model.ts` and
+> `jedec/cupl.check.ts` still sweeps it against Atmel's compiler over all 1,024 inputs.
+> That is how the sync trio and the scan pair have worked since 2026-09-06 — a
+> `GAL22V10` fuse map is the only form either check can execute, so the standalone
+> design is the verification and not a leftover. Its `.jed` carries the **SUPERSEDED —
+> DO NOT PROGRAM** banner, which is the guard that stops a superseded design being burnt.
 
 ##### ⭐ The six pins were taken — `rfa`, `gal/regfile.jedec.ts`, 2026-09-08
 
@@ -2427,8 +2469,79 @@ stronger here:
 - Its `MOVE` opcode is one SRAM write into the register file, and the palette it
   writes to already exists.
 
-Reserve `+$0B..$0F` for `LIST`/`BCTRL`/`BSTAT` at spec freeze (blitter.md §9,
-hook 2 — free), and reserve the board-to-board header (hook 6).
+~~Reserve `+$0B..$0F` for `LIST`/`BCTRL`/`BSTAT` at spec freeze~~ — **`BCTRL` and `BSTAT`
+are built and `LIST` is deleted** (§10.3.1)
+(blitter.md §9, hook 2), and the board-to-board header stays reserved (hook 6).
+
+#### ⭐ 10.3.1 The `WPTR` reload rule — what the shared pointer costs software
+
+**The engine has no pointer of its own.** §10.1.6.2's option 2 is what made it fit, and
+the price is a rule rather than a package: **`WPTR` and `LIST` are the same nineteen
+registers.** Writing this down is the whole of what the fit left owing.
+
+| | |
+|---|---|
+| `+$08`–`$0A` `WPTR` | the span writer's pointer — **and the list engine's.** A list is started by pointing this at the descriptor list |
+| ~~`+$0B`–`$0D` `LIST`~~ | ⚠ **deleted.** A second address for the same nineteen registers is a fiction, and one that invites exactly the mistake this section exists to prevent. **Three bytes back to `+$16`–`$1F`'s reserve** |
+| `+$0E` `BCTRL` b0 `GO` | starts the walk. From here the engine owns `WPTR` |
+| `+$0F` `BSTAT` b0 `LRUN` | **1 while the engine owns it**, 0 when the list ends |
+
+**The rule, in one sentence: anything that starts a list must reload `WPTR` before its
+next drawing operation.** Three writes to `+$08`–`$0A`, ~7.1 µs.
+
+```
+    ; start a display list - WPTR IS the list pointer
+    lda   #list>>16
+    sta   WPTR          ; +$08 - the pointer is 19 bits, so three byte stores
+    ldx   #list
+    stx   WPTR+1        ; +$09, +$0A
+    lda   #1
+    sta   BCTRL         ; GO. WPTR now belongs to the engine.
+    ...
+    ; before ANY span, fill or glyph, point it back:
+    lda   #dest>>16
+    sta   WPTR
+    ldx   #dest
+    stx   WPTR+1        ; three writes, ~7.1 us
+```
+
+##### Why this is safe rather than merely cheap
+
+**The two never contend.** §5.2.1's arbiter grants one requester per chip per slot, and
+the engine and the span writer are the same requester — they reach the framebuffer
+through the same `SPNGRANT & WA[n]` mux source (`video.parts.ts`). There is no window in
+which both hold the pointer, so the failure mode is not corruption; **it is drawing at
+the wrong address**, which is deterministic and reproducible.
+
+**And it is observable before it bites.** `BSTAT` b0 `LRUN` is 1 for exactly as long as
+the engine owns `WPTR`, so a driver that cannot statically know whether a list is running
+polls one bit. `VSTAT` b7 `SPANBUSY` (§13) answers the same question for the span writer,
+and §7.4's `R/W` qualification means **reading either is free** — neither is in VRAM, so
+neither triggers `/WAIT`.
+
+##### The three rules a driver keeps
+
+1. **Reload `WPTR` after `BCTRL.GO`**, before the next span, fill or glyph.
+2. **Do not start a list while `SPANBUSY`**, or the engine's first `LADV` collides with a
+   span still retiring. §7.4 bounds that wait at **40.7 µs** today and **10.2 µs** once
+   §14.2's two-chip framebuffer lands — poll `VSTAT` b7.
+3. **A per-frame list is started once in `VBLANK`**, not per drawing operation, so in
+   practice rule 1 costs 7.1 µs per *frame* — **0.05 % of a 14.27 ms frame**, against the
+   0 % it would cost with a separate pointer and the package that pointer did not fit in.
+
+> ⚠ **Deleting `LIST` also deleted a defect, which is recorded because the arithmetic
+> is the kind this project is meant to get right.** `regfile.ts`'s `LLOAD` strobe read
+> `WSTB & !RA4 & RA3 & !RA2 & RA1` and was described as *"$0B–$0D, LIST's three bytes
+> under one strobe"*. **Five bits with `RA0` free is two addresses, not three**, and the
+> two are `$0A` and `$0B` — so it matched **`WPTRC`**, and a write to the write pointer's
+> third byte would also have loaded the list pointer. It never fired in anger because the
+> engine was never built; the shared pointer removes the strobe and the bug together.
+
+⚠ **What is not settled here is the interaction with `WADV`.** §13's `+$14` changes what
+`WPTR` does on increment, and the engine's own walk is a plain +1. A driver that leaves
+`WADV` in vertical mode and then starts a list would have the engine step by the stride.
+**`BCTRL.GO` should force `WADV` to 00**, which is one product term on `vctrl` and is not
+built — it is filed as §19 item 24 rather than assumed.
 
 **One option you have excluded, recorded for completeness:** the machine's CPU is
 already a microcontroller, so an MCU-based blitter would be no larger a departure
@@ -2661,9 +2774,9 @@ tables are shared between both projects.
 | `+$06` | `WFG` | b7..0 | span foreground index — **must stay at A0=0** | — |
 | `+$07` | `WBG` | b7..0 | span background index — **must stay at A0=1** | — |
 | `+$08`–`$0A` | `WPTR` | | write/read pointer, 19 bits, auto-increment | — |
-| `+$0B`–`$0D` | `LIST` | | display-list pointer — ⭐ **built 2026-09-08** (§10.1.6.2). ⚠ **It loads `WPTR`**: the engine shares the write pointer rather than carrying its own, so starting a list clobbers `+$08`–`$0A` and software reloads after | **built** |
-| `+$0E` | `BCTRL` | | list engine control — ⭐ **built**, b0 = `GO` | **built** |
-| `+$0F` | `BSTAT` | | list engine status — ⭐ **built**, b0 = `LRUN` | **built** |
+| ~~`+$0B`–`$0D`~~ | ~~`LIST`~~ | | ⚠ **DELETED 2026-09-08 — §10.3.1.** The engine shares `WPTR`, so a list is started by loading `+$08`–`$0A`. **Three bytes returned to the reserve** | **freed** |
+| `+$0E` | `BCTRL` | b0 `GO` | list engine control — ⭐ **built**. Writing b0 starts the walk from `WPTR` (§10.3.1) | **built** |
+| `+$0F` | `BSTAT` | b0 `LRUN` | list engine status — ⭐ **built**. 1 while the engine owns `WPTR`; the bit a driver polls (§10.3.1) | **built** |
 | `+$10` | `PIDX` | b7..0 | palette index, auto-increments after `PDATH` | — |
 | `+$11` | `PDATL` | b7..0 | palette entry `GGGBBBBB` | — |
 | `+$12` | `PDATH` | b7..0 | palette entry `RRRRRGGG`; write commits | — |
@@ -2678,10 +2791,12 @@ tables are shared between both projects.
 one for `CHAR`, so it is now two. Sync polarity is **not** a register bit — it follows
 `VMODE0`, since §12's 70 Hz codes are exactly the positive-H ones (§10.1.6.1).
 
-⚠ **`TILEBASE` and `FONTBASE` have no offsets and the sixteen-byte window is full.**
-§6.4's fetch needs both, `vaddr` holds both, and `+$0B`–`+$0F` are reserved for the list
-engine — which §10.1.6.2 now shows does not fit in v1. Reassigning two of those five is
-the obvious move and it has not been made.
+~~⚠ **`TILEBASE` and `FONTBASE` have no offsets and the sixteen-byte window is full.**~~
+**RESOLVED, twice over.** The window is **32 bytes**, not sixteen (§19 item 23), so
+`TILEBASE`/`FONTBASE`/map base sit at `+$17`–`+$19`. And the five bytes this paragraph
+wanted to reassign are now three: **`+$0E`–`+$0F` are the list engine's and are built,
+`+$0B`–`+$0D` came free** when §10.3.1 deleted `LIST`. ⚠ **`FONTBASE` at `+$18` is
+reserved rather than used** — §6.4.3's Variant B is not built.
 
 `VMODE` chooses among native modes only. Reset forces `CTRL = 0`: display
 disabled, direct writes, no IRQ — so the machine comes up quiet and software
@@ -2766,7 +2881,7 @@ way and for exactly the same reason — but it is a yes with a rule attached.
 | 2 | GAL22V10-15 | scan address generators, 19 b, loadable | = |
 | 2 | GAL22V10-15 | `WPTR` / span pointer, 19 b | = |
 | 2 | GAL22V10-15 | sequencer: decode (incl. the `/IOPAGE` term, §6.3.2), **static slot assignment**, span control, reg-file addressing, mux phasing | = |
-| **1** | **GAL22V10-15** | **spare-access arbiter — 8 grants; `SRCSEL[n]` *is* `GRANT_CPU[n]` and is not a second macrocell, so 8 of 10 and not 12 (§5.2.1, §10.1.1)** | **+1** |
+| ~~1~~ **0** | ~~GAL22V10-15~~ | ⚠ **the spare-access arbiter is back inside `vctrl`** — 2026-09-08, §10.1.6.3. 8 grants; `SRCSEL[n]` *is* `GRANT_CPU[n]` and is not a second macrocell, so 8 of 10 and not 12 (§5.2.1, §10.1.1) | **0** |
 | 1 | 74HC574 | posted-write **data** latch | = |
 | **3** | **74HC574** | **posted-write address + control latches — 19 address + VRAMSEL + R/W + `WMODE[1:0]` = 23 bits (§3.1.1)** | **+3** |
 | 1 | 74HC165 | span mask serialiser (~~`74AHC165` if §6.4 Variant B is built~~ — Variant B is not built, §6.4.3, so the plain HC grade stands) | = |
@@ -2792,7 +2907,7 @@ sync section was fitted on 2026-09-06 and needs three parts (§19 item 8). §10.
 > 17 of 20 with three spare (§19 item 8), because it generates a *chip* address of 17
 > bits and not a *byte* address of 19.
 
-### 14.1 ⚠ The card is ~~31~~ 28 ICs, and three numbers in this document disagreed
+### 14.1 ⚠ The card is ~~31~~ ~~28~~ 27 ICs, and three numbers in this document disagreed
 
 **Reconciled 2026-09-08.** The table above is the **GAL build**, and §10.1.6 replaced it
 on 2026-09-06 — *"Two PLCC-84 parts, and this is the build"* — without the arithmetic
@@ -2813,12 +2928,12 @@ by this document:
 | − the ten `GAL22V10` | **−10** | sync ×3, scan ×2, `WPTR` ×2, sequencer ×2, arbiter ×1 |
 | + 2 × `ATF1508AS-15JC84`, PLCC-84 | **+2** | `vaddr` and `vctrl` — §10.1.6 |
 | − §10.1.6's absorptions | **−4** | `CTRL`'s `'273`, the `SPANLEN` `'161` pair, the `'165` span-mask serialiser |
-| + 1 × `GAL22V10`, the arbiter | **+1** | §10.1.6.3 — it came back out on 2026-09-08 so `vctrl` stays a PLCC-84 |
-| + 1 × `GAL22V10`, `rfa` | **+1** | §10.1.6.3 — the register-file address, out the same day, which bought JTAG back and §7.4 its signalling pins |
+| ~~+ 1 × `GAL22V10`, the arbiter~~ | **0** | §10.1.6.3 — out in the morning of 2026-09-08 so `vctrl` stayed a PLCC-84, **and back in by the evening** once three other changes had left that part at 46 of 64 |
+| + 1 × `GAL22V10`, `rfa` | **+1** | §10.1.6.3 — the register-file address, which bought fourteen pins and is why the arbiter could come home |
 | **− 3 SRAM** | **−3** | **§14.2** — two ×16 parts feed the dot clock where four ×8 did, and one holds the whole 16-bit palette |
-| **= the build** | **28** | **24 if the tri-state pixel bus closes and the four `'153` come out** |
+| **= the build** | **27** | **23 if the tri-state pixel bus closes and the four `'153` come out** |
 
-**28 ICs: 2 CPLDs, 2 GALs, 4 SRAMs and 20 packages of 74-series.** Against
+**27 ICs: 2 CPLDs, 1 GAL, 4 SRAMs and 20 packages of 74-series.** Against
 colormin's 39 (35), and against the 41 this document carried for two days after the
 decision that replaced it.
 
@@ -2840,13 +2955,14 @@ paragraph already reaches, by different arithmetic.
 ⭐ **And then §14.2 took ~250 mA off it**, by consolidating seven SRAMs into four out of
 a lower-power family. **~0.5–0.85 A, 0.65 A nominal, specify for 1 A.**
 
-**Area moves less than §10.1.6 hoped.** Ten `GAL22V10` in DIP-24 are ~26 cm²; two
-PLCC-84 sockets are ~22 and the arbiter GAL is ~2.6, so the win is **~1.4 cm²**, not
-the ~4 that section predicts — because the arbiter came back out. The four deleted
-packages are the real saving, and §14's *"~150 of 160 cm²"* becomes **102.5 cm²** once
-§14.2's SRAM consolidation lands — measured by `hardware/place`, not estimated.
+~~**Area moves less than §10.1.6 hoped.**~~ **It moves more.** Ten `GAL22V10` in DIP-24
+are ~26 cm²; two PLCC-84 sockets are ~22 and ~~the arbiter GAL is ~2.6, so the win is
+**~1.4 cm²**~~ — **the arbiter came back into `vctrl` on 2026-09-08 and `rfa` is the only
+GAL left**, so it is ~22 + 2.6 against 26 and the win is **~1.4 cm²** after all, by a
+different route. The deleted packages are the real saving, and §14's
+*"~150 of 160 cm²"* is now **99.1 cm²** — measured by `hardware/place`, not estimated.
 ⚠ **If the tri-state pixel bus closes (§19 item 2) the four `'153` go too**, and the
-card is **24 ICs**, which is where the slack comes back.
+card is **23 ICs**, which is where the slack comes back.
 
 ### 14.2 ⭐ The seven SRAMs become four, and the broadcast write falls out of it
 
@@ -2955,7 +3071,7 @@ estimate.
 |---|---|
 | ⚠ **Surface mount** | TSOP-44 II. **The machine's first SMD** — the `ATF1508AS` are socketed PLCC-84 and everything else is DIP. This is an assembly decision, not an electrical one |
 | ⚠ **§5.2 is rewritten** | the 8-grant arbiter, §5.2.2's per-chip fetch latch clocking, and the `SRCSEL = GRANT_CPU` identity all assume four chips |
-| ⭐ **The card gets shorter** | 137.7 cm² of courtyard becomes **102.5**, and `hardware/place` puts it on an **18 cm** board instead of 24 — the same length as the audio card. Three DIP-32/28 out, three TSOP-44 in |
+| ⭐ **The card gets shorter** | 137.7 cm² of courtyard becomes **99.1**, and `hardware/place` puts it on an **18 cm** board instead of 24 — the same length as the audio card. Three DIP-32/28 out, three TSOP-44 in; the arbiter GAL went too (§10.1.6.3) |
 | Dead capacity | **1.5 MB of the framebuffer's 2 MB** (768 KB per part — two address pins tied off), and 63.5 KB of the LUT's 64 |
 | The four `'153` and four `'574` | **unchanged** — still 32 bits latched and still a 4:1 mux at dot rate |
 
@@ -3050,8 +3166,8 @@ amp. Measuring card current stays §19 item 10, but it is now a *verification*, 
 discovery.
 
 **Area.** ⚠ **The paragraph below is the GAL build's. The current figure is
-`hardware/place`'s, measured rather than estimated: 28 ICs of courtyard is
-**102.5 cm²**, and the card fits an **18 cm** Apple-II board rather than the 24 cm it
+`hardware/place`'s, measured rather than estimated: 27 ICs of courtyard is
+**99.1 cm²**, and the card fits an **18 cm** Apple-II board rather than the 24 cm it
 needed at 31 — §14.2 took three DIP-32/28 SRAMs off it and put back three TSOP-44.** ~~41 ICs including 4 × DIP-32 and 3 × DIP-28~~, against
 colormin's ~140 cm² on a 160 cm² Eurocard. Four more packages plus a guarded analog corner by the VGA connector
 puts this at **~150 of 160 cm²** — still a 4-layer Eurocard with disciplined placement
@@ -3424,7 +3540,7 @@ unchanged from minimal256.md §11 and are not restated in full.
    out to be the binding half.
 
    **So it is the third escape, and it is not a contingency: the card is ~~10 GALs and
-   41 ICs~~ 2 `ATF1508AS` + 2 `GAL22V10` and 28 ICs (§14.1).** ⚠ **This item's
+   41 ICs~~ 2 `ATF1508AS` + 1 `GAL22V10` and 27 ICs (§14.1).** ⚠ **This item's
    macrocell table below is the GAL partition and §10.1.6's fit superseded it** — the
    sync trio is inside `vctrl` now, which is 91 of 128 cells and 50 of 64 pins. The
    item is kept because it is what proved the sync section needs three parts' worth of
@@ -3639,6 +3755,31 @@ unchanged from minimal256.md §11 and are not restated in full.
     vertical format; getting it right on paper and wrong at the connector produces a
     correctly-timed picture that is the wrong size, which is the failure mode most
     likely to be misdiagnosed as a timing bug. Folds into item 11.
+24. **⚠ `WADV` and the list engine's walk.** §10.3.1's reload rule is written, and this
+    is the one thing it could not settle. §13's `+$14` `WADV` changes what `WPTR` does on
+    increment — 01 is next-row-same-column, 10 advances by the stride — and the engine's
+    own walk is a plain +1 through the descriptor list. **A driver that leaves `WADV` in
+    vertical mode and then starts a list gets an engine that steps by 1,024.**
+
+    **The fix is one product term**: `BCTRL.GO` forces `WADV` to `00`. It is not built,
+    and it is cheap enough that the only reason to file it rather than do it is that
+    `vctrl` should be fitted once with it rather than twice. **`vctrl` has 2 spare
+    pins and 31 spare macrocells**, so this is a macrocell question and not a pin one.
+
+    The alternative — make it software's rule, a fourth line in §10.3.1 — is free and
+    worse: it is a rule that fires only in the combination of two features neither of
+    which is obviously related to the other, which is the shape of bug that survives
+    into a released driver.
+25. **⚠ `vctrl` has no JTAG, and neither does `vaddr`.** Both parts are programmed out
+    of circuit as of 2026-09-08 — `vaddr` at 64 of 64 for the display list, `vctrl` at
+    62 of 64 for the arbiter's return (§10.1.6.3). That matches the audio card's
+    `ATF1508AS` and it is a socket-and-programmer workflow, not a blocker.
+
+    ⭐ **§14.2 is what buys `vctrl`'s back**: two ×16 framebuffer parts make the
+    arbiter **2 grants instead of 8**, six output pins, landing the part near 56 of 64.
+    **Confirm that when §5.2 is rewritten**, rather than assuming it — the estimate
+    that said `rfa` would free five pins freed fourteen, and estimates on this card
+    have been wrong in both directions.
 
 ---
 

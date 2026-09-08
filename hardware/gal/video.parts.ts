@@ -101,7 +101,12 @@ export const addressMux = (): Cell[] => {
       /* FOUR sources since 2026-09-08, and both changes that day were about
        * this list. 6.4.3's Variant B took CHARSEL out; 10.1.6.2's option 2
        * means the list engine never adds one, because it drives the address
-       * through WRITESEL & WA[n] - WPTR IS its pointer.
+       * through SPNGRANT & WA[n] - WPTR IS its pointer.
+       *
+       * ⚠ The write-pointer source reads SPNGRANT and not WRITESEL. They were
+       * always the same signal (5.2.1) and WRITESEL was the name vctrl re-emitted
+       * it under while the arbiter sat on its own GAL. The arbiter came back onto
+       * vctrl on 2026-09-08 and the alias went with it.
        *
        * That second point is the whole reason the engine fits. Its own
        * nineteen-bit pointer was not just 19 registers: it was 19 more mux
@@ -109,7 +114,7 @@ export const addressMux = (): Cell[] => {
        * macrocells, and an ATF15xx macrocell holds five before it cascades. */
       terms: [
         `LINEAR & SA${bit}`,
-        `WRITESEL & WA${bit}`,
+        `SPNGRANT & WA${bit}`,
         `TILESEL & ${tileSrc(bit)}`,
         `MAPSEL & ${mapSrc(bit)}`,
       ],
@@ -139,7 +144,7 @@ export const tileCadence: Cell[] = [
   { pin: 0, name: "TILESEL", assertedLow: false, s0: 1, registered: false,
     terms: ["TILEMODE & TC2"] },
   { pin: 0, name: "LINEAR", assertedLow: false, s0: 1, registered: false,
-    terms: ["!TILEMODE & !WRITESEL"] },
+    terms: ["!TILEMODE & !SPNGRANT"] },
   /* ⚠ VARIANT B WAS DROPPED 2026-09-08 - graphics.md 6.4.3 and 10.1.6.2.
    * CHARSEL, GLYPHLD, GLYPHSH and LUTPAGE lived here, and the eight FONTBASE
    * registers above; what they bought was a 1bpp hardware character generator
@@ -175,7 +180,7 @@ export const listEngine: Cell[] = [
    *
    * SO WPTR IS THE LIST POINTER. The span writer and the engine never drive
    * the address in the same slot, LADV drives WPTR's increment, and the
-   * engine reaches the address bus through the mux's WRITESEL & WA[n] term
+   * engine reaches the address bus through the mux's SPNGRANT & WA[n] term
    * that already exists.
    *
    * ⚠ THE PRICE IS SOFTWARE'S, and it is not settled here: the engine
