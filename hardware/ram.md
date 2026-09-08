@@ -6,7 +6,10 @@
 physical map. What would it take to reach **16 MB**, and what is the cheapest
 path that does not throw away the 2 MB that already works?
 
-**Status: brainstorm.** Nothing here is decided. Every option is priced against
+**Status: ⭐ decided 2026-09-08 for the memory system; brainstorm for the rest.**
+§5 and §6 are decisions — the physical map is re-carved and the memory is four
+30-pin SIMM sockets. §3's map widening comes with them because it has to (§5.1).
+Everything else is still options. Every option is priced against
 the parts that exist on [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx)
 today, and the recommendation at §10 is a staging order rather than a design.
 
@@ -72,12 +75,14 @@ Eleven bits do not fit in a byte, and that single fact drives everything below.
 | **2 MB — today** | **8** | 256 | **1 byte** |
 | 4 MB | 9 | 512 | 2 bytes |
 | 8 MB | 10 | 1024 | 2 bytes |
-| **16 MB** | **11** | **2048** | **2 bytes** |
-| 32 MB | 12 | 4096 | 2 bytes |
+| 16 MB | 11 | 2048 | 2 bytes |
+| **32 MB — taken, §5.2** | **12** | **4096** | **2 bytes** |
 
-**Two bytes per entry buys 32 MB as easily as 16.** The width is a step
-function: once the entry is 16 bits there are five spare bits at 16 MB, and
-spending one of them costs nothing. §3.3 is what they are worth.
+**Two bytes per entry buys 32 MB as easily as 16**, and §5.2 spends the extra
+bit: four 4 MB SIMMs is 16 MB of DRAM, which does not fit a 16 MB map alongside
+2 MB of SRAM, VRAM and the card regions. **`A24` costs one more wire on the
+motherboard and nothing else**, so the map is 32 MB and the four remaining
+entry bits are §3.3's.
 
 ### 2.1 ⚠ Why a bank register is the wrong shape, and it is worth being precise
 
@@ -99,7 +104,7 @@ that comes back, because it is what >2 MB is realistically *for*.
 
 ---
 
-## 3. The address path — one SRAM, one GAL output, three pins
+## 3. The address path — one SRAM and one GAL output (~~three pins~~ none, §5.3)
 
 ### 3.1 The change
 
@@ -111,10 +116,10 @@ high byte drives `A23..A21` and five flags.
 |---|---|
 | Second `CY7C128A` map SRAM | **+1 IC** |
 | High-byte write strobe | **+1 output on U3** — and pin 23 is deliberately free (`mmu.pld`) |
-| `A21`, `A22`, `A23` to the backplane | **+3 slot pins** — §7, and the slot has none |
+| ~~`A21`–`A24` to the backplane~~ | **0** — §5.3 keeps them on the motherboard and pulls `/IOPAGE` instead |
 | Isolation `'245` | **0** — both SRAMs sit on the same `D0`–`D7`; the address picks which is written |
 | Address mux `'157` | **0** — §3.2 |
-| **Motherboard total** | **9 ICs → 10** |
+| **Address path alone** | **9 ICs → 10** — §8 has the whole memory system at 18 |
 
 **Both bytes must be read in the same access**, which is why this is two
 byte-wide parts and not one wider one: translation needs `A23..A13`
@@ -208,128 +213,183 @@ wearing a hardware costume.
 
 ---
 
-## 5. The physical map — and how not to move anything
+## 5. ⭐ The re-carve — decided
 
-16 MB re-carves `A23..A19`, and three things already live in the bottom 2 MB:
-system RAM, the video ring, and `machine.md` §5 item 7's sixteen card-buffer
-regions, **two of which storage and net now hold**.
+### 5.1 Why populating the footprints forces the map wider
 
-**So do not re-carve it. Extend above it:**
+**Four × 512 KB is 2 MB, which is the entire `A0`–`A20` map.** There is no
+arrangement of a 2 MB space that holds 2 MB of system RAM *and* the video ring
+*and* the card regions. So:
 
-| `A23..A21` | Size | Contents |
-|---|---|---|
-| `000` | 2 MB | **the machine exactly as it is** — RAM 512 KB, VRAM 512 KB, card buffers 1 MB. Nothing moves |
-| `001`–`111` | **14 MB** | expansion RAM |
+> **The three reserved SRAM footprints cannot be populated at 8-bit map
+> entries, at all, under any re-carve.** §3's second map SRAM is not an
+> optional companion to filling them — it is a precondition.
 
-**Nothing that exists changes address**, no card is re-specified, and
-`clkdec.pld`'s `ramsel` term keeps working for the first 512 KB while the
-expansion decodes above it. The alternative — a clean map with RAM contiguous
-from zero — is tidier on paper and costs a re-specification of every card that
-took a region four days ago.
+That was not obvious when the footprints were reserved, and it is the single
+most useful thing this document found.
 
-⚠ **The cost is that system RAM is not contiguous**: 512 KB at the bottom and
-14 MB starting at 2 MB, with VRAM and card space in the hole. A memory manager
-handles that trivially — it allocates blocks, not ranges — but any code that
-assumes flat RAM does not.
+### 5.2 The map
+
+**12 of the 16 entry bits, `A24..A13` — a 32 MB space**, addressed in 512 KB
+quadrants by `A24..A19`:
+
+| `A24..A19` | Range | Contents | Status |
+|---|---|---|---|
+| `000000` | 0.0–0.5 M | **system RAM 0** — `U8` | **unchanged** |
+| `000001` | 0.5–1.0 M | **VRAM** — the video ring | **unchanged** |
+| `000010` | 1.0–1.5 M | **card buffers — 8 regions of 64 KB** | ⚠ **halved from 16** |
+| `000011` | 1.5–2.0 M | **system RAM 1** — `RAM2` | **new — the freed half** |
+| `000100` | 2.0–2.5 M | **system RAM 2** — `RAM3` | new |
+| `000101` | 2.5–3.0 M | **system RAM 3** — `RAM4` | new |
+| `00011x` | 3.0–4.0 M | reserved | |
+| `001xxx`–`100xxx` | 4–20 M | **four SIMM windows of 4 MB** | §6 |
+| `101xxx`–`111xxx` | 20–32 M | reserved | |
+
+**Nothing that exists changes address.** `VRAM` keeps `A20:A19 = 01` and the
+card regions keep `A20 = 1`, so **the video card is untouched and no card
+document is re-specified.**
+
+**The re-carve is one thing: the card megabyte becomes half a megabyte.**
+Sixteen 64 KB regions for a machine with six slots was always generous; eight
+is still more than one per slot. The freed half becomes system RAM 1.
+
+⚠ **What it costs the cards is one jumper position.** A region was selected by
+`A19`–`A16` against a four-position jumper; it is now `A18`–`A16` against three,
+with `A19 = 0` part of the fixed decode. **Both cards already take `A19`**
+(`net.md` §7.4 lists it in the region decode), so this is a jumper and a
+product term, not a pin.
+
+⚠ **System RAM is not contiguous**: 0–0.5 M and 1.5–3.0 M, with VRAM and card
+space in the hole. A memory manager allocates blocks and does not care; code
+that assumes flat RAM does.
+
+### 5.3 ⭐ And no card needs `A21` and above — `/IOPAGE` already does the work
+
+The obvious problem with a map above 2 MB is that **cards decode only
+`A0`–`A20`**, so an access at 2.5 MB looks to a card exactly like one at
+0.5 MB. Giving every card `A21`–`A24` is four backplane pins the slot does not
+have — and `vctrl` is at **64 of 64 I/O** (`graphics.md` §10.1.6.3), so the
+video card could not take even one.
+
+**It does not have to.** `machine.md` §2 already requires every physical decode
+on every card to qualify against `/IOPAGE`, and `/IOPAGE` is **open-drain**. So
+the motherboard's new decode GAL simply **pulls `/IOPAGE` low for any access
+above the bottom 2 MB**, and every card goes silent for free:
+
+| | |
+|---|---|
+| Card changes | **none** |
+| New backplane pins | **none** |
+| Cost | one open-drain output on a GAL that has to exist anyway (§6.2) |
+
+**`/IOPAGE` stops meaning "the `$FFxx` page" and starts meaning "cards must not
+respond".** It already meant the second thing; the first was just the only
+reason it had to. ⚠ **That is a redefinition and it belongs in
+`machine.md` §2**, because a card author reading the old sentence would get it
+wrong.
 
 ---
 
-## 6. The memory itself, which is the expensive half
+## 6. ⭐ The memory — four 30-pin SIMM sockets, decided
 
 **512K×8 in a DIP-32 is the ceiling for through-hole SRAM.** 16 MB is
-**32 packages**, which is not a motherboard — [`place/`](place/) puts nine ICs
-and four reserved footprints on 272 × 190 mm and that board is already mostly
-slot field.
+**32 packages**, which is not a motherboard — [`place/`](place/) already puts
+the board at 272 × 190 mm and most of that is slot field.
 
 | Approach | 16 MB costs | Verdict |
 |---|---|---|
-| **DIP SRAM**, `AS6C4008` | **32 packages**, ~1,300 cm² | not a board |
-| SMD SRAM | 4–8 packages | ⚠ needs a part number nobody has sourced — §11 |
-| **30-pin SIMM, DRAM** | **four sockets** at 4 MB each | **the period answer, and the cheap one** |
+| DIP SRAM, `AS6C4008` | **32 packages**, ~1,300 cm² | not a board |
+| SMD SRAM | 4–8 packages | ⚠ no sourced part number — §11 |
+| **30-pin SIMM, DRAM** | **four sockets and four ICs** | **taken** |
 | 72-pin SIMM | one socket | 32 bits wide; three quarters of the data path wasted or muxed |
 
-### 6.1 SIMMs, and the refresh owner the machine has never had
+### 6.1 Why the DRAM objection expired
 
-**A 30-pin SIMM is byte-wide (×8, or ×9 with parity), 1987, and stocked in
-1 MB and 4 MB.** Four sockets is 4–16 MB, socketed, on a board that already
-reserves four SRAM footprints (`place/svg.ts`).
-
-**It is DRAM, and `machine.md` §7.1 rejected DRAM on exactly one ground:**
+`machine.md` §7.1 rejected DRAM on exactly one ground:
 
 > SRAM rather than DRAM because **DRAM needs a refresh owner and this machine
 > has none**.
 
 ⭐ **That changed on 2026-09-08.** `machine.md` §5 item 8 gave the E/Q divider a
-`/WAIT` hold — a card can now stall the CPU mid-cycle, which is precisely what
-a refresh controller needs and what the machine could not do before. **The
-sentence that rejected DRAM was true when it was written and is not any more.**
+`/WAIT` hold, so a controller can stall the CPU mid-cycle — which is precisely
+what a refresh needs and what the machine could not do at all before. **The
+sentence was true when it was written and is not any more.**
 
-What a SIMM bank needs:
+### 6.2 What the bank costs
 
-| | |
+| | Part | Role |
+|---|---|---|
+| 4 | **30-pin SIMM socket** | ×8 or ×9, 1 MB or **4 MB** each — **4 to 16 MB** |
+| 1 | **`GAL22V10` U9** | space decode: four SRAM `/CE`s, the SIMM-space term, and §5.3's open-drain `/IOPAGE` pull. Replaces the `74HC139` `place/` had reserved |
+| 1 | **`GAL22V10` U10** | SIMM timing — `RAS0`–`RAS3`, `CAS`, `/WE`, the mux select, refresh request and `/WAIT` |
+| 3 | **`74HC157`** | RAS/CAS address mux, 11 bits (a 4 MB 30-pin SIMM is 4M×8 — 22 bits, 11 row + 11 column) |
+| **+4 ICs and 4 sockets** | | against 32 packages for the same capacity in SRAM |
+
+⭐ **Refresh needs no counter.** **CAS-before-RAS** refresh makes the DRAM
+generate its own row address internally, so the refresh row counter that a
+1980s design would have carried — a `74HC4040` and its mux path — is **not on
+this list**. One request every ~15.6 µs, arbitrated by U10.
+
+### 6.3 The motherboard, assembled
+
+| | ICs |
 |---|---|
-| RAS/CAS address mux, 11 bits | **3 × `74HC157`** |
-| Refresh counter and timing | a `GAL22V10` — CAS-before-RAS, ~15.6 µs interval |
-| Refresh arbitration | `/WAIT`, per the rule: **driven synchronously to `CLK25`, asserted only while E is high** (`clkdec.pld`) |
-| Data buffering | probably one `'245` |
-| **Total** | **~5–6 ICs for 4–16 MB**, against 32 for SRAM |
+| today | 9 |
+| + `RAM2`–`RAM4`, the reserved footprints populated | +3 |
+| + second map SRAM, 16-bit entries (§3.1) | +1 |
+| + U9 space decode, U10 SIMM timing, 3 × `'157` | +5 |
+| **total** | **18 ICs + 4 SIMM sockets** |
 
-⚠ **Refresh steals cycles, and nothing in this machine has ever stolen one.**
-A CAS-before-RAS burst every 15.6 µs is well under 1 % of the bus, but it is
-1 % that `audio.md` §13's replayer budget and `net.md` §3.4's dispatch
-arithmetic have never had to carry. **It also interacts with `machine.md` §5
-item 10** — a stretched cycle starves any card scheduling its buffer against
-`E`, and refresh would be a second source of stretches after the video card's
-span writer. That is the item to check before committing, not after.
+⚠ **The `74HC139` `place/` reserved is not built.** It was the two-to-four
+decode for four SRAMs; U9 does that and three other things, and a `GAL22V10`
+was always going to be needed once the SIMM space and the `/IOPAGE` term
+existed. **The reserved footprint changes part, not position.**
 
----
+### 6.4 What is not decided
 
-## 7. The backplane — three pins the slot does not have
+⚠ **Refresh steals cycles and nothing in this machine has ever stolen one.** A
+CAS-before-RAS burst every 15.6 µs is well under 1 % of the bus, but it is 1 %
+that `audio.md` §13's replayer budget and `net.md` §3.4's dispatch arithmetic
+have never carried. **And it is a second source of stretched cycles** after the
+video card's span writer — `machine.md` §5 item 10 says a stretch starves any
+card scheduling its buffer against `E`, and that item is still open with no
+bound on `SPANBUSY`. **Bound both before building this**, §11 item 4.
 
-`A21`, `A22` and `A23` have to reach any card that decodes physical addresses,
-and [`lib/slot.ts`](lib/slot.ts) has **no spare positions**: A34 was the last
-one and physical `A20` took it.
+## 7. The backplane — ~~three pins the slot does not have~~ none, after §5.3
 
-**But the card format changed on 2026-09-08** and
-[`README.md`](README.md) records what that did to the connector's own
-justification: *"a 100 mm Eurocard edge at 0.1″ pitch holds 39 positions… the
-card format sizes the connector."* **A 240 mm edge holds 98.**
+**This section wanted `A21`–`A23` on the slot and §5.3 deleted the requirement.**
+The motherboard keeps every address bit above `A20` to itself and pulls
+`/IOPAGE` low for accesses above 2 MB, so cards see the machine they already
+see. **Zero new pins.**
 
-| | |
-|---|---|
-| Needed for 16 MB | `A21`, `A22`, `A23` — **3 pins** |
-| Also waiting on pins | DMA request/grant (`net.md` §13.1) — 2, plus `BA`/`BS` |
-| Also waiting | a future rail |
-| Available on a 240 mm edge | **~26 more positions at 0.1″** |
+**Which is fortunate**, because the slot has none —
+[`lib/slot.ts`](lib/slot.ts) spent its last position on physical `A20` — and
+`vctrl` is at 64 of 64 I/O, so the video card could not have taken one.
 
-⚠ **This is one decision, not three, and it is `machine.md` §5 item 5.** The
-connector should be re-specified once, for everything that wants a pin, rather
-than three times. **A RAM expansion is the third claimant in a week.**
-
-> **One escape worth naming.** If expansion RAM lives **only on the
-> motherboard**, `A21`–`A23` never leave it and the backplane does not change
-> at all. That works for a SIMM bank and fails the moment anyone wants a RAM
-> *card* — which is the traditional way this machine's ancestors got memory.
-
----
+> **What is still true** is that the connector's own justification expired when
+> the card format changed: a 240 mm edge holds 98 positions at 0.1″ where the
+> Eurocard held 39 ([`README.md`](README.md)). The DMA request/grant pair
+> `net.md` §13.1 wanted and a future rail are still waiting on that decision.
+> **RAM is no longer one of the claimants**, which makes the decision smaller
+> rather than larger.
 
 ## 8. What it costs, assembled
 
 | | ICs | Notes |
 |---|---|---|
-| Second map SRAM | +1 | `CY7C128A`, §3.1 |
+| Second map SRAM | +1 | `CY7C128A`, §3.1 — **and it is what lets the footprints be populated at all** (§5.1) |
 | U3 high-byte write strobe | 0 | pin 23 is free |
 | `TASK` widened to 8 bits | 0 | seven unused bits of an existing `'574`, §3.2 |
-| **Address path to 16 MB** | **+1** | **9 → 10 ICs** |
-| SIMM bank, 4–16 MB | +5–6 | §6.1, includes the refresh GAL |
-| **Motherboard total** | **~16 ICs** | from 9 |
-| Backplane | +3 pins | §7, or zero if RAM stays on the motherboard |
+| `RAM2`–`RAM4` populated | +3 | the footprints `place/` reserved |
+| U9 space decode | +1 | replaces the reserved `'139`, §6.2 |
+| U10 SIMM timing + 3 × `'157` | +4 | §6.2 |
+| **Motherboard** | **9 → 18** | plus four SIMM sockets |
+| Backplane | **0 pins** | §5.3 |
+| Cards | **0 changes** | one jumper position on storage and net, §5.2 |
 
-**The address path is one package.** Everything expensive is the memory and its
-controller, which is the honest shape of the answer: the MMU was over-built and
-the memory subsystem was never built at all.
-
----
+**2 MB of SRAM and up to 16 MB of DRAM, for nine packages and no card
+re-specification.** The map widening is the load-bearing part and it is one of
+the nine.
 
 ## 9. ⚠ The ceiling that is not hardware
 
@@ -371,45 +431,52 @@ and tried to make the OS use all of it.
 
 | | Step | Cost | What it buys |
 |---|---|---|---|
-| **0** | **Widen `TASK` to 8 bits** (§3.2) | **0 ICs** | 256 resident contexts; a process switch becomes one write. Independent of everything below |
-| **1** | Populate `RAM2`–`RAM4`, the footprints `place/` already reserves | 3 SRAM + the `'139` | **2 MB of system RAM** — the OS ceiling, with no map change at all ⚠ needs `machine.md` §5 item 7's card regions rehoused, which is the open question those footprints raised |
-| **2** | Second map SRAM, 16-bit entries (§3.1, §4) | +1 IC, 3 pins | the **address path to 16 MB**, populated or not |
-| **3** | SIMM bank and refresh (§6.1) | +5–6 ICs | **4–16 MB of actual memory** |
-| **4** | A bank-register window (§2.1) | +2 ICs | the 14 MB above the OS ceiling, usable as a RAM disk without a memory-manager port |
+| **0** | **Widen `TASK` to 8 bits** (§3.2) | **0 ICs** | 256 resident contexts; a process switch becomes one write. Independent of everything below and the only step that helps software that exists today |
+| **1** | **Second map SRAM, 16-bit entries** (§3.1, §4) | +1 IC | the 32 MB address path — ⚠ **and the precondition for step 2**, which §5.1 is about |
+| **2** | **U9, and populate `RAM2`–`RAM4`** (§5.2, §6.2) | +4 ICs | **2 MB of system RAM** — the OS ceiling (§9), reached with no DRAM and no refresh |
+| **3** | **SIMM bank** — 4 sockets, U10, 3 × `'157` (§6.2) | +4 ICs | **4–16 MB of DRAM** |
+| **4** | A bank-register window (§2.1) | +2 ICs | the space above the OS ceiling as an unmanaged store, without a memory-manager port |
 
-**Step 0 first, because it is free and it is the only one that helps software
-that exists today.** Step 1 before step 2, because 2 MB is the OS ceiling and
-reaching it needs no map change. Steps 3 and 4 are one project and should be
-specified together.
+⚠ **Step 1 before step 2 is not a preference.** Four 512 KB parts is 2 MB and a
+2 MB map has no room for VRAM or the card regions — §5.1. The footprints
+`place/` reserved cannot be stuffed until the entries are 16 bits wide.
 
----
+**Steps 0–2 are a weekend and reach the operating system's ceiling.** Step 3 is
+the project — refresh arbitration against `machine.md` §5 item 10's stretched
+cycles is the part with unknowns in it, not the DRAM.
 
 ## 11. Open items
 
-1. **⚠ `machine.md` §5 item 7 blocks step 1.** The three reserved SRAM
-   footprints need `A20 = 1`, which is the card-buffer megabyte that storage and
-   net both hold a region in. **Nothing above 512 KB can be populated until that
-   is re-carved**, and §5's "extend above, move nothing" answer is the proposal.
-2. **⚠ Layout A or B** (§4) — a NitrOS-9 cost question, not a hardware one.
-3. **⚠ Does U3 fit the second write strobe?** Pin 23 is free and
-   `gal/README.md` says the part fits *"with one pin spare"*. One output costs a
-   macrocell **and** a pin. **Fit it before believing §8's "+1 IC".**
-4. **The refresh interaction with `/WAIT`** — `machine.md` §5 item 10 already
-   says a stretched cycle starves cards that schedule against `E`, and refresh
-   would be the second source of stretches. Bound it before designing it.
-5. **Source an SMD SRAM above 512 KB**, or accept DRAM. §6's table has a row it
-   cannot fill.
-6. **Three claimants for backplane pins in one week** (§7) — RAM's three, DMA's
-   two, a rail. `machine.md` §5 item 5 should decide the connector once.
-7. **Nobody has measured what a process switch costs today**, so §3.2's "eight
-   bus cycles to one" is arithmetic rather than a saving. It is the same
-   unmeasured NitrOS-9 dispatch cost as `ps2.md` §14 item 3.
+1. **~~`machine.md` §5 item 7 blocks step 1~~ — answered by §5.2.** The card
+   megabyte halves to 512 KB and eight regions, the freed half becomes system
+   RAM 1, and **nothing that exists changes address**. ⚠ **What is owed is the
+   jumper**: storage and net select a region with four positions against
+   `A19`–`A16` and it becomes three against `A18`–`A16`. One product term each,
+   no pins, and **neither document has been updated**.
+2. **⚠ `/IOPAGE` is being redefined** (§5.3) — from "the `$FFxx` page" to "cards
+   must not respond", which is what it always did and not what it is called.
+   **`machine.md` §2 must say so**, because a card author reading the current
+   sentence will qualify against the wrong thing.
+3. **⚠ Layout A or B** (§4) — a NitrOS-9 cost question, not a hardware one, and
+   the only genuinely open part of §3.
+4. **⚠ Refresh against stretched cycles.** `machine.md` §5 item 10 says a
+   stretched `E` starves any card scheduling its buffer against it, and nobody
+   has bounded the video card's `SPANBUSY`. Refresh would be the **second**
+   source of stretches. **Bound both before step 3**, not during it.
+5. **Does U3 fit the second write strobe?** Pin 23 is free and `gal/README.md`
+   says the part fits *"with one pin spare"*. One output costs a macrocell
+   **and** a pin. **Fit it before believing §8's "+1 IC".**
+6. **Fit U9 and U10.** U9 is ~6 macrocells of 10 and 7 inputs of 12 — it should
+   be comfortable. U10 carries the RAS/CAS state machine, refresh arbitration
+   and `/WAIT`, and has not been counted at all.
+7. **Source the SIMMs.** 4 MB 30-pin modules were made and are not
+   current-production; this is `net.md` §13.6's lesson again — **availability is
+   the first question about a part.** 1 MB modules are commoner and give 4 MB.
 8. **Period audit.** 30-pin SIMMs are 1987 and in period. **16 MB in 1989 was a
-   workstation**, and a 2 MB CoCo 3 was exotic — so the *capacity* is a stretch
-   even though every part is not. Worth an honest line in
-   `docs/machine.md` §15 if this is ever built.
-
----
+   workstation** and a 2 MB CoCo 3 was exotic, so the *capacity* is a stretch
+   even though every part is not. `docs/machine.md` §15 if this is built.
+9. **Nobody has measured a process switch**, so §3.2's "eight bus cycles to one"
+   is arithmetic. Same unmeasured NitrOS-9 dispatch cost as `ps2.md` §14 item 3.
 
 ## 12. Cross-references
 

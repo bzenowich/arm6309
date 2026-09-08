@@ -18,6 +18,7 @@ import { join } from "node:path"
 
 import { CARDS, LENGTHS, BOARD_H, icCount, footprintCount, type CardSpec } from "./parts"
 import { pack, fits } from "./pack"
+import { MB, MB_PARTS } from "./svg"
 import { WINDOWS } from "../cards/windows"
 
 let failures = 0
@@ -83,6 +84,26 @@ for (const key of Object.keys(CARDS)) {
 for (const w of WINDOWS) {
   if (w.status === "free") continue
   check(w.card in CARDS, `the $FF map's "${w.card}" is a drawn card`)
+}
+
+/* -- the motherboard is placed by hand, so check it by hand ---------------- */
+{
+  let bad: string | null = null
+  for (let i = 0; i < MB_PARTS.length && !bad; i++) {
+    const [ax, ay, aw, ah, an] = MB_PARTS[i]
+    if (ax + aw > MB.W - 3 || ay + ah > MB.H - 3) { bad = `${an} runs off the board`; break }
+    for (let j = i + 1; j < MB_PARTS.length; j++) {
+      const [bx, by, bw, bh, bn] = MB_PARTS[j]
+      if (ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah) {
+        bad = `${an} overlaps ${bn}`; break
+      }
+    }
+  }
+  check(bad === null, "the motherboard's parts do not overlap or run off the board", bad ?? "")
+  const slotBottom = MB.sy + 6 * MB.pitch
+  const above = MB_PARTS.filter(([, y]) => y < slotBottom)
+  check(above.length === 0, "no motherboard part sits under the slot field",
+    above.map(([, , , , n]) => n).join(", "))
 }
 
 /* -- the report ----------------------------------------------------------- */

@@ -277,9 +277,20 @@ and nothing else.
 
 ### 4.2 The buffers — one 64 KB physical region
 
-`machine.md` §5 item 7: `A20 = 1` is sixteen regions of 64 KB, selected by physical
-`A19`–`A16` against a four-position jumper, **qualified by `/IOPAGE` high**. This card
-takes one region and splits it once:
+`machine.md` §5 item 7: **eight regions of 64 KB**, selected by physical `A18`–`A16`
+against a **three-position jumper** with `A19 = 0`, **qualified by `/IOPAGE` high**. This
+card takes one region and splits it once:
+
+> ⚠ **Sixteen regions and a four-position jumper until 2026-09-08.**
+> `hardware/ram.md` §5.2 halved the card space so the motherboard's three reserved SRAM
+> footprints could be populated — four × 512 KB is 2 MB and that was the whole map. **The
+> region size, this card's 64 KB and its address are unchanged**; what changed is that
+> `A19` moved from the jumper into the fixed decode. One product term on U2, no pins.
+>
+> ⭐ **And `/IOPAGE` now also keeps this card off the machine's top 30 MB.** The map went
+> to 32 MB and `A21`–`A24` stay on the motherboard, so `U9` pulls `/IOPAGE` low above
+> 2 MB and every card's physical decode goes quiet without knowing why. **This card needs
+> no change for that at all** — `machine.md` §2.
 
 | | | |
 |---|---|---|

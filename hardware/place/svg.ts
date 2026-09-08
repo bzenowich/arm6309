@@ -58,25 +58,44 @@ export const cardSvg = (c: CardSpec, pad = 14): string => {
 }
 
 /* ---- the motherboard, placed by hand because it has no packing problem ---- */
-export const MB = { W: 272, H: 190, pad: 15, slotL: 91.4, slotW: 10.16, pitch: 20.32, sx: 168, sy: 10 }
+export const MB = { W: 272, H: 246, pad: 15, slotL: 91.4, slotW: 10.16, pitch: 20.32, sx: 168, sy: 10 }
 
-/** x, y, w, h, label, kind, reserved. Overlap-checked by place.check.ts. */
+/** x, y, w, h, label, kind, reserved. Overlap-checked by place.check.ts.
+ *
+ * The memory system is hardware/ram.md §6.3: four 512 KB SRAMs populated, a
+ * second map SRAM for 16-bit entries, U9 space decode, U10 SIMM timing and the
+ * RAS/CAS mux, plus four 30-pin SIMM sockets. 18 ICs, from 9. */
 export const MB_PARTS: [number, number, number, number, string, Kind, boolean][] = [
+  /* -- system RAM: all four populated, ram.md §5.2 ------------------------ */
   [12, 140, 40.6, 15.24, "U8 512Kx8", "mem", false],
-  [56, 140, 40.6, 15.24, "RAM2 512K", "mem", true],
-  [100, 140, 40.6, 15.24, "RAM3 512K", "mem", true],
-  [144, 140, 40.6, 15.24, "RAM4 512K", "mem", true],
-  [190, 140, 20.3, 7.62, "U9 139", "bus", true],
+  [56, 140, 40.6, 15.24, "RAM2 512K", "mem", false],
+  [100, 140, 40.6, 15.24, "RAM3 512K", "mem", false],
+  [144, 140, 40.6, 15.24, "RAM4 512K", "mem", false],
+  /* -- U9 replaces the '139 place/ used to reserve: four /CE, the SIMM-space
+   *    term, and the open-drain /IOPAGE pull that keeps cards off the top
+   *    30 MB (ram.md §5.3). ------------------------------------------------ */
+  [190, 140, 30.5, 7.62, "U9 GAL22V10", "pld", false],
+  [190, 152, 30.5, 7.62, "U10 GAL22V10", "pld", false],
+  [228, 140, 20.3, 7.62, "U11 157", "bus", false],
+  [228, 152, 20.3, 7.62, "U12 157", "bus", false],
+  [228, 164, 20.3, 7.62, "U13 157", "bus", false],
+  /* -- the MMU, now two map SRAMs for 16-bit entries ---------------------- */
   [12, 162, 50.8, 15.24, "J0 6309 socket", "pld", false],
-  [68, 162, 30.5, 15.24, "U1 map SRAM", "mem", false],
-  [104, 162, 30.5, 7.62, "U3 GAL22V10", "pld", false],
-  [104, 172, 30.5, 7.62, "U6 GAL22V10 E/Q", "pld", false],
-  [139, 162, 25.4, 7.62, "U4 245", "bus", false],
-  [139, 172, 25.4, 7.62, "U2 574", "bus", false],
-  [169, 162, 20.3, 7.62, "U5 157", "bus", false],
-  [169, 172, 10.2, 7.62, "OSC1", "clk", false],
-  [184, 172, 3.0, 3.0, "U7", "analog", false],
-  [196, 164, 32.0, 12.0, "power in", "conn", false],
+  [68, 162, 30.5, 15.24, "U1 map lo", "mem", false],
+  [103, 162, 30.5, 15.24, "U1b map hi", "mem", false],
+  [12, 182, 30.5, 7.62, "U3 GAL22V10", "pld", false],
+  [12, 192, 30.5, 7.62, "U6 GAL22V10 E/Q", "pld", false],
+  [47, 182, 25.4, 7.62, "U4 245", "bus", false],
+  [47, 192, 25.4, 7.62, "U2 574", "bus", false],
+  [77, 182, 20.3, 7.62, "U5 157", "bus", false],
+  [77, 192, 10.2, 7.62, "OSC1", "clk", false],
+  [92, 192, 3.0, 3.0, "U7", "analog", false],
+  [104, 182, 32.0, 12.0, "power in", "conn", false],
+  /* -- four 30-pin SIMM sockets, 4 to 16 MB (ram.md §6.2) ----------------- */
+  [150, 182, 89.0, 8.0, "30-pin SIMM 0", "mem", false],
+  [150, 194, 89.0, 8.0, "30-pin SIMM 1", "mem", false],
+  [150, 206, 89.0, 8.0, "30-pin SIMM 2", "mem", false],
+  [150, 218, 89.0, 8.0, "30-pin SIMM 3", "mem", false],
 ]
 
 export const mbSvg = (envelopes: { len: number; label: string }[]): string => {

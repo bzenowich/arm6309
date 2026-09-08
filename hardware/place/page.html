@@ -64,36 +64,42 @@ socket is 91.4&nbsp;mm and the longest card is 240, so <strong>video overhangs i
 149&nbsp;mm</strong> while the three 12&nbsp;cm cards barely overhang at all. The board is sized by the
 longest card; the motherboard&rsquo;s own logic sits in a strip outside every envelope.</p>
 
-<h2 style="margin-top:30px">The SRAM bank &mdash; one populated, three reserved</h2>
-<p>Four <code>AS6C4008</code> footprints in a row, <code>U8</code> fitted and
-<code>RAM2</code>&ndash;<code>RAM4</code> left empty, plus a reserved <code>74HC139</code>. They cost
-<strong>27&nbsp;cm&sup2; of board and nothing else</strong> while unpopulated, and the board grows from
-176 to 190&nbsp;mm to carry them. <strong>Two things have to be true before any of them can be
-stuffed, and neither is true today.</strong></p>
+<h2 style="margin-top:30px">The memory system &mdash; 2 MB of SRAM and four SIMM sockets</h2>
+<p>Four <code>AS6C4008</code> populated rather than one, plus <strong>four 30-pin SIMM
+sockets</strong> for 4&ndash;16&nbsp;MB of DRAM. The board grows from 190 to 246&nbsp;mm to
+carry them and the motherboard goes from 9 ICs to 18.
+<code>hardware/ram.md</code> has the design; two things in it are worth seeing on the
+drawing.</p>
 
-<div class="note"><p style="margin:0 0 .7rem"><strong>&#9888; 1. Only two of the three have an
-address to live at.</strong> <code>machine.md</code> &sect;7.1 fixes system RAM at
-<code>A20&nbsp;=&nbsp;0,&nbsp;A19&nbsp;=&nbsp;0</code>. Three more parts want 1.5&nbsp;MB, and the 2&nbsp;MB
-map is already spoken for:</p>
-<div class="scroll"><table style="margin-bottom:.7rem"><thead><tr><th>A20</th><th>A19</th><th>512 KB</th><th>Status</th></tr></thead>
-<tbody>
-<tr><td class="mono">0</td><td class="mono">0</td><td>system RAM</td><td><code>U8</code>, populated</td></tr>
-<tr><td class="mono">0</td><td class="mono">1</td><td>video ring</td><td>on the video card &mdash; <code>graphics.md</code> &sect;6.3</td></tr>
-<tr><td class="mono">1</td><td class="mono">0</td><td rowspan="2">card buffers, 16 &times; 64 KB</td><td rowspan="2"><code>machine.md</code> &sect;5 item 7 &mdash; <strong>storage and net both hold a region</strong></td></tr>
-<tr><td class="mono">1</td><td class="mono">1</td></tr>
-</tbody></table></div>
-<p style="margin:0"><strong>The megabyte at <code>A20&nbsp;=&nbsp;1</code> would take two of them and
-evict every card buffer</strong> &mdash; which is what retired the <code>TFM</code> hazard on two cards
-four days ago. The third has nowhere at all short of moving VRAM. <strong>Reserving the footprints
-is free; populating them is a map decision nobody has made.</strong></p></div>
+<div class="note"><p style="margin:0"><strong>&#9888; The reserved footprints could not be
+populated, and the reason was arithmetic.</strong> Four &times; 512&nbsp;KB is 2&nbsp;MB,
+which was <em>the entire physical map</em> &mdash; there is no re-carve of a 2&nbsp;MB space
+that holds 2&nbsp;MB of RAM plus the video ring plus the card regions. So the map entry
+widened from 8 bits to 16 (a second <code>CY7C128A</code>, one IC), the map became
+32&nbsp;MB, and <strong>the card megabyte halved to eight 64&nbsp;KB regions</strong> with
+the freed half becoming system RAM&nbsp;1. Nothing that already exists changes address:
+VRAM keeps <code>A20:A19&nbsp;=&nbsp;01</code> and the card regions keep
+<code>A20&nbsp;=&nbsp;1</code>.</p></div>
 
-<div class="note"><p style="margin:0"><strong>&#9888; 2. The decode is the part &sect;7.1 deleted.</strong>
-One SRAM needs no decode: <code>/CE</code> is <code>/IOPAGE&nbsp;&middot;&nbsp;/A19&nbsp;&middot;&nbsp;/A20</code>
-and <code>U6</code> already forms it. Four need <code>A20:A19</code> split into four chip selects, and
-<strong><code>U6</code> is 10 macrocells of 10 with none spare</strong> &mdash; so it is a
-<code>74HC139</code>, drawn reserved beside the bank. &sect;7.1&rsquo;s own words: <em>&ldquo;the decode was
-a part the fourth SRAM created and the first one never needed.&rdquo;</em> Reserving the fourth socket
-reserves it again.</p></div>
+<div class="note"><p style="margin:0"><strong>&#11088; And no card needs the new address
+bits.</strong> <code>A21</code>&ndash;<code>A24</code> never leave the motherboard, so an
+access at 2.5&nbsp;MB would look to a card exactly like one at 0.5. Four more backplane
+pins do not exist and <code>vctrl</code> is at 64 of 64 I/O, so the video card could not
+take even one. <strong><code>/IOPAGE</code> solves it for nothing</strong>: it is
+open-drain, every card already qualifies its physical decode against it, so
+<code>U9</code> pulls it low for any access above the bottom 2&nbsp;MB and every card goes
+silent. <strong>Zero card changes, zero new pins</strong> &mdash; and
+<code>/IOPAGE</code> stops meaning &ldquo;the <code>$FFxx</code> page&rdquo; and starts
+meaning &ldquo;cards must not respond&rdquo;, which is what it always did.</p></div>
+
+<p><strong>The DRAM objection expired four days ago too.</strong>
+<code>machine.md</code> &sect;7.1 rejected DRAM because &ldquo;it needs a refresh owner and
+this machine has none&rdquo; &mdash; until &sect;5 item 8 gave the divider a
+<code>/WAIT</code> hold, which is exactly what a refresh controller needs. Four sockets
+and four ICs (<code>U9</code>, <code>U10</code> and three <code>'157</code> for the
+RAS/CAS mux) against <strong>32 packages</strong> for the same capacity in DIP SRAM. And
+CAS-before-RAS refresh means the DRAM generates its own row address, so the refresh
+counter a 1980s design would have carried is not on the list.</p>
 
 <hr class="rule">
 <h2>The census</h2>

@@ -529,9 +529,14 @@ back**, because an SPI port needs four registers where a WD1773 needs five plus 
 >
 > - **The decode is `A0`–`A6`, seven bits.** `A6` left the window strobe with the
 >   widening, so a card matching only `A0`–`A5` answers at `$FF58` **and** at `$FF18`.
-> - **The region base is a second jumper**, four positions against physical `A19`–`A16`,
->   and the region decode is qualified by **`/IOPAGE` high** — a buffer is a
->   physical-memory decode and `machine.md` §2's rule is not optional for it.
+> - **The region base is a second jumper**, ~~four~~ **three** positions against physical
+>   `A18`–`A16` with `A19 = 0`, and the region decode is qualified by **`/IOPAGE` high** —
+>   a buffer is a physical-memory decode and `machine.md` §2's rule is not optional for it.
+>   ⚠ **Halved 2026-09-08**: `hardware/ram.md` §5.2 took half the card megabyte for system
+>   RAM, because four × 512 KB is 2 MB and that was the entire map. **This card's region,
+>   its 2 KB and its address are unchanged**; `A19` moved from the jumper into the fixed
+>   decode, which is one product term. ⭐ And `/IOPAGE` now also silences the card above
+>   2 MB, for nothing — `machine.md` §2.
 
 ### 6.2 The registers
 

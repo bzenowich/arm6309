@@ -35,8 +35,8 @@ genuinely undecided.
 | **CPU** | HD6309E in native mode, synthesised on an **STM32G431CBU6** ([`cpu/`](../cpu/)) — UFQFPN48, not the LQFP48 this table named until 2026-09-04 (§5 item 6) |
 | **Boot** | **the CPU module serves an ~8 KB shadow ROM and the vector page from its own flash** — §7.2. No ROM chip on the motherboard |
 | **MMU** | **on the motherboard: 5 ICs, the SAM/GIME/DAT arrangement** — `graphics.md` §6.3.1. Register set is a free design, not GIME-compatible (§5 item 3) |
-| **Address space** | 64 KB logical, MMU-mapped; ~~1 MB physical (A0–A19)~~ **2 MB physical (A0–A20)** — §5 item 1 option D, 2026-09-08. The map SRAM's eighth bit was already stored and drove nothing |
-| **System RAM** | **512 KB SRAM on the motherboard**, `A19 = 0` — §7.1. Nobody owned this until 2026-09-04 |
+| **Address space** | 64 KB logical, MMU-mapped; ~~1 MB~~ ~~2 MB~~ **32 MB physical (A0–A24)** — 16-bit map entries, `hardware/ram.md` §5.2. ⚠ **`A21`–`A24` stay on the motherboard**; the backplane still carries `A0`–`A20` |
+| **System RAM** | **2 MB SRAM on the motherboard** — four × 512K×8, `hardware/ram.md` §5.2 (~~512 KB~~). Plus **four 30-pin SIMM sockets, 4–16 MB of DRAM** — §6 |
 | **System master clock** | one 25.175 MHz oscillator, **on the motherboard** — §1 |
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
@@ -45,7 +45,7 @@ genuinely undecided.
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** ([`io/serial/`](../io/serial/)). Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **14 ICs** (~~7~~), **681 KiB/s** sustained (~~528~~) — **specified** ([`storage/`](../storage/)). Its block buffer moved into `A20 = 1` on 2026-09-08 and took the `TFM` hazard with it. ⚠ ~~The machine's one period exception~~ the first of two |
 | **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs** (~~16~~), two of them `ATF1508AS` — **specified** ([`net/`](../net/)). ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | **108 ICs** — **99 on cards**, **9** on the motherboard. ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
+| **Total silicon** | **117 ICs** — **99 on cards**, **18** on the motherboard (~~9~~ — `hardware/ram.md` §6.3, plus four SIMM sockets). ~~106~~, ~~124~~ — re-derived 2026-09-08 by adding the six card documents up, which nothing had done. See §8 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -139,17 +139,40 @@ From `graphics.md` §17, which retargets colormin's slot model:
 | `A0–A18`, `A19`, **`A20`** | **physical**, not logical A0–A15 — the video card needs the translated address. **`A20` since 2026-09-08** (§5 item 1 D), on the position A34 that used to be the backplane's one spare |
 | `D0–D7` | |
 
-**`A20:A19` is the physical map's top-level selector**, ~~`A19` alone~~ since §5 item 1 D:
+**`A24..A19` selects a 512 KB quadrant of a 32 MB map** — ~~`A19` alone~~, ~~`A20:A19`~~,
+re-carved 2026-09-08 by [`hardware/ram.md`](../hardware/ram.md) §5.2 so the motherboard's
+three reserved SRAM footprints could be populated:
 
-| `A20` | `A19` | 512 KB |
-|---|---|---|
-| 0 | 0 | system RAM (§7.1) |
-| 0 | 1 | the video card's ring (`graphics.md` §6.3) |
-| **1** | **0** | **free — card buffers.** Unallocated; §5 item 7 is the item that must divide it |
-| **1** | **1** | **free** |
+| `A24..A19` | Range | 512 KB | |
+|---|---|---|---|
+| `000000` | 0.0–0.5 M | **system RAM 0** (§7.1) | unchanged |
+| `000001` | 0.5–1.0 M | the video card's ring (`graphics.md` §6.3) | unchanged |
+| `000010` | 1.0–1.5 M | **card buffers — 8 regions of 64 KB** | ⚠ **halved from 16** |
+| `000011` | 1.5–2.0 M | **system RAM 1** | the freed half |
+| `000100`, `000101` | 2.0–3.0 M | **system RAM 2 and 3** | new |
+| `00011x` | 3.0–4.0 M | reserved | |
+| `001xxx`–`100xxx` | 4–20 M | **four 4 MB SIMM windows** | `ram.md` §6 |
+| `101xxx`–`111xxx` | 20–32 M | reserved | |
 
-Both decodes gained one input and neither gained a part: `gal/clkdec.pld`'s `ramsel` is
-`/IOPAGE · /A19 · /A20` and `gal/vctrl.pld`'s `VRAMSEL` is `A19 · /A20 · /IOPAGE`.
+**`VRAM` keeps `A20:A19 = 01` and the card regions keep `A20 = 1`, so no card changes
+address and the video card is untouched.** `gal/clkdec.pld`'s `ramsel` and
+`gal/vctrl.pld`'s `VRAMSEL` are unchanged; the new quadrants are decoded by a motherboard
+GAL (`ram.md` §6.2).
+
+> ### ⭐ `/IOPAGE` is redefined, and every card author has to know
+>
+> **`A21`–`A24` never reach a slot.** A card decodes `A0`–`A20`, so an access at 2.5 MB
+> would look to it exactly like one at 0.5 MB — and giving every card four more address
+> pins is four the backplane has not got, on a video card that is at 64 of 64 I/O.
+>
+> **`/IOPAGE` solves it for nothing.** It is open-drain and this section already requires
+> every physical decode on every card to qualify against it, so the motherboard simply
+> **pulls it low for any access above the bottom 2 MB** and every card goes silent.
+>
+> **So `/IOPAGE` no longer means "the `$FF00`–`$FFFF` page". It means "cards must not
+> respond to this cycle."** It always did the second thing; the I/O page was just the
+> only reason it had to. **A card qualifies against it and asks no further questions** —
+> which is exactly what the cards already do, and why this cost nothing.
 
 **Physical A13–A19 come from the motherboard's MMU, not from the CPU** (§5 item 6,
 `graphics.md` §6.3.1). Two consequences for whoever draws the backplane:
@@ -642,9 +665,9 @@ These are not deferred details; each one blocks a board.
 
    | | |
    |---|---|
-   | **Region size** | **64 KB.** The MMU maps in 8 KB blocks, so 8 KB is the floor; 64 KB is chosen because **a region is then exactly one 6309 logical address space** — eight blocks, one `TASK`'s whole map — and because 1 MB has no other claimant |
-   | **How many** | **16**, selected by physical `A19`–`A16` |
-   | **How claimed** | a **4-position jumper** per card, compared against `A19`–`A16`. The same mechanism as the `$FF` window's base and with the same known flaw: nothing prevents two cards being jumpered alike and nothing detects it (§2) |
+   | **Region size** | **64 KB.** The MMU maps in 8 KB blocks, so 8 KB is the floor; 64 KB is chosen because **a region is then exactly one 6309 logical address space** — eight blocks, one `TASK`'s whole map |
+   | **How many** | ~~16~~ **8**, selected by physical `A18`–`A16` with `A19 = 0`. ⚠ **Halved 2026-09-08** — `hardware/ram.md` §5.2 took the other half for system RAM, because 1 MB of card space for a six-slot machine was generous and 2 MB of system RAM would not fit otherwise |
+   | **How claimed** | a ~~4~~ **3-position** jumper per card, compared against `A18`–`A16`. The same mechanism as the `$FF` window's base and with the same known flaw: nothing prevents two cards being jumpered alike and nothing detects it (§2). ⚠ **`storage` and `net` both specify four positions and neither document has been updated** — `ram.md` §11 item 1 |
    | **Qualification** | **`/IOPAGE` high, always.** A card buffer is a physical-memory decode and §2's rule is not optional for it — a card answering during an `$FFxx` cycle is the bug `/IOPAGE` exists to prevent |
    | **Below `A16`** | the card's business. `net.md` splits its region `A15 = 0` RX / `A15 = 1` TX; `sdcard.md` uses 2 KB of one |
 
@@ -811,8 +834,8 @@ a cross-card dependency.
 | **video** | **⚠ `vctrl` has zero spare pins and therefore no JTAG.** 64 of 64 with JTAG costing four I/O: it is programmed out of circuit, as the audio card's U1 already is. Getting in-circuit programming back means moving `RA0`–`RA4` and `WSTB` to a second GAL | `video.cpld.ts` |
 | **video** | **⚠ Bound `SPANBUSY`.** `/WAIT` works now, and no document says how long the span writer holds it. Any card scheduling against `E` needs that number | §5 item 10, `net.md` §16 item 5 |
 | **audio** | **⚠ Decide whether the sample RAM moves into `A20 = 1`.** Its 128 KB upload is a chunked `TFM X+,Y` into a port and pays the same tax storage and net just stopped paying — and it is the last card carrying the doubled-write exposure | §5 item 7, `audio.md` §13 |
-| **machine** | **⚠ Divide the megabyte at `A20 = 1`** — how a card claims a region, at what granularity, and who arbitrates a host access the card cannot defer. ⚠ **And it now blocks a second thing**: `hardware/ram.md` §11 item 1 shows the motherboard's three reserved SRAM footprints cannot be populated until `A20 = 1` is re-carved | §5 item 7, `hardware/ram.md` |
-| **machine** | **⚠ RAM expansion is a live question and it wants three backplane pins.** `hardware/ram.md`: 16 MB needs 11-bit map entries — one more SRAM and `A21`–`A23`. ⭐ It also finds that `TASK` can widen from 1 bit to 8 **for nothing**, giving 256 resident contexts and a one-write process switch | `hardware/ram.md` §3.2, §7 |
+| **machine** | ~~**⚠ Divide the megabyte at `A20 = 1`**~~ **Re-carved 2026-09-08** — 8 regions of 64 KB, the other half to system RAM (`hardware/ram.md` §5.2). ⚠ **What is still owed is the arbitration question** — who wins a host access the card cannot defer — and the **3-position jumper** in `sdcard.md` and `net.md` | §5 item 7, `hardware/ram.md` §11 item 1 |
+| **machine** | **⚠ RAM expansion — decided, not built.** `hardware/ram.md`: 16-bit map entries, a 32 MB map, 2 MB of SRAM and four 30-pin SIMM sockets, for **nine packages, zero backplane pins and zero card changes**. ⭐ Also: `TASK` widens from 1 bit to 8 **for nothing** — 256 resident contexts and a one-write process switch | `hardware/ram.md` §5, §6, §10 |
 | ~~**storage, io**~~ | ~~Re-price against a memory-mapped buffer.~~ **Done 2026-09-08** — both cards took it. `sdcard.md` §11.1 and §4.5; `net.md` §13.3 and §7.6. ⚠ **What is left is `sdcard.md` §13 item 6**: its *write* path is still on the port | §5 item 1 D |
 | **io** | **Find out whether a NitrOS-9 network stack exists.** It is the net card's largest cost and nobody has looked — the same shape of unknown as `serial`'s `sc6551` | `net.md` §14.2, §16 item 12 |
 | ~~**project**~~ | ~~**⚠ Restate or retire the no-CPLD house rule.**~~ **RETIRED 2026-09-08** — root `README.md`. Programmable logic is in; FPGAs are unproposed rather than banned. ⚠ **One consequence outstanding**: `sdcard.md` §8.1's `ATF1508AS` was refused on the rule alone and is now unblocked at 8 ICs against 14 | root `README.md`; `sdcard.md` §13 item 12 |
@@ -830,15 +853,23 @@ a cross-card dependency.
 
 ### 7.1 System RAM
 
-**512 KB of SRAM on the motherboard, selected by `A19 = 0` qualified with `/IOPAGE`
-(§2).** **One** × 512K×8 (AS6C4008-class, 55 ns), and **no decode**.
+**~~512 KB~~ 2 MB of SRAM on the motherboard** — **four** × 512K×8 (AS6C4008-class,
+55 ns), decoded by a `GAL22V10` that also forms §2's above-2 MB `/IOPAGE` pull
+(`hardware/ram.md` §6.2). **Plus four 30-pin SIMM sockets, 4–16 MB of DRAM.**
 
-> ⭐ **Expansion is now written up** — [`hardware/ram.md`](../hardware/ram.md), 2026-09-08.
-> Three more footprints are reserved on the board and the path to 16 MB is one more map
-> SRAM, because the MMU stores 16 entries in a part that holds 2048. ⚠ **And this
-> section's reason for rejecting DRAM expired**: *"DRAM needs a refresh owner and this
-> machine has none"* was true until §5 item 8 gave the divider a `/WAIT` hold, which is
-> exactly the mechanism a refresh controller needs.
+> ⭐ **Decided 2026-09-08 — `hardware/ram.md`.** Three of the four SRAM footprints were
+> reserved on the board and could not be populated, because **four × 512 KB is 2 MB and
+> that was the whole physical map**. Widening the map entry to 16 bits and halving the
+> card regions (§5 item 7) fixed both. ⚠ **And this section's reason for rejecting DRAM
+> expired**: *"DRAM needs a refresh owner and this machine has none"* was true until §5
+> item 8 gave the divider a `/WAIT` hold, which is exactly the mechanism a refresh
+> controller needs.
+>
+> **Superseded text follows**, because the arithmetic in it is still the argument for
+> one part rather than four *at 512 KB*, and that argument is what makes the fourth
+> package a deliberate purchase rather than an inherited assumption.
+
+
 
 > ⚠ **This said "Four × 512K×8 … and a decode" until 2026-09-06, and both halves were
 > wrong.** Found while drawing the motherboard, which is the first thing that had to
@@ -928,10 +959,10 @@ carve-out drawn into a physical map that has no room for one.
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
 | 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The second largest single-card draw after video**, and the only figure on that card that cannot be derived from a datasheet with confidence |
 | 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + **14** (~~7~~ — its block buffer, §5 item 7) | not yet estimated |
-| 5 V | **motherboard**: MMU (5), divider GAL, oscillator, reset supervisor, 512 KB SRAM (~~+ decode~~ — §7.1) | ~~13~~ **9** | not yet estimated |
+| 5 V | **motherboard**: MMU (5, +1 map SRAM), divider GAL, oscillator, reset supervisor, **2 MB SRAM (4)**, **U9/U10 GALs and 3 × `'157`** — `hardware/ram.md` §6.3 | ~~13~~ ~~9~~ **18** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly ~~2–3~~ **2.0–3.0 A** at 5 V across ~~~106~~ **108 ICs**, plus
+**The machine is plausibly ~~2–3~~ **2.0–3.0 A** at 5 V across ~~~106~~ ~~108~~ **117 ICs**, plus
 a 3.3 V rail.**
 
 > ⚠ **Both halves re-derived 2026-09-08, and the card total had never been added up.**
