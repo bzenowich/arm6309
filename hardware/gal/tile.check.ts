@@ -1,5 +1,11 @@
 /* graphics.md 6.4's address concatenation, checked exhaustively.
  *
+ * ⚠ TWO OF THE THREE MODES ARE BUILT. Variant B - 6.4.3's 1bpp character
+ * generator - was dropped on 2026-09-08 to afford 10.3's list engine, and its
+ * claims below are marked. The model is kept deliberately: it is what a
+ * rebuild would need, and it is also the evidence that the mode was costed
+ * rather than waved away.
+ *
  * This is model-level and not fuse-level, and that is not a shortcut - see
  * gal/README.md's toolchain note. The ATF1508AS's fuse map is not publicly
  * documented, so the JEDEC that fit1508.exe produces cannot be executed the
@@ -14,6 +20,7 @@ import {
   MAP_COLS, MAP_ROWS, MAP_STRIDE, charAddress, chipAddress, linearAddress,
   mapAddress, packedMapAddress, tileAddress,
 } from "./tile.model"
+import { addressMux } from "./video.parts"
 
 let failures = 0
 const check = (ok: boolean, claim: string, detail = "") => {
@@ -52,7 +59,12 @@ const check = (ok: boolean, claim: string, detail = "") => {
       }
     }
   }
-  check(bad === null, "Variant B: the same, over all 524,288 combinations", bad ?? "")
+  /* ⚠ Variant B is MODELLED AND NOT BUILT since 2026-09-08 - graphics.md
+   * 6.4.3 and 10.1.6.2. It was dropped to afford §10.3's list engine, and the
+   * model stays because the retreat is real: the concatenation is what a
+   * rebuild would need, and nothing about it has been shown wrong. */
+  check(bad === null,
+    "Variant B (NOT BUILT - 6.4.3): the same, over all 524,288 combinations", bad ?? "")
 }
 
 /* -- the sets are 19 bits and land where 6.4.1 says ---------------------- */
@@ -65,14 +77,14 @@ const check = (ok: boolean, claim: string, detail = "") => {
   check(tileAddress({ tilebase: 31, code: 255, cellRow: 7, cellCol: 7 }) === 0x7ffff,
     "Variant A fills exactly 19 bits with every field at maximum")
   check(charAddress({ fontbase: 255, code: 255, cellRow: 7 }) === 0x7ffff,
-    "Variant B fills exactly 19 bits with every field at maximum")
+    "Variant B (NOT BUILT) fills exactly 19 bits with every field at maximum")
   check(linearAddress({ scanRow: 511, scanCol: 1023 }) === 0x7ffff,
     "and so does the bitmap scan address - all three modes are 19 bits wide")
   /* 16 KB aligned, 2 KB aligned - the alignment the concatenation needs. */
   check((tileAddress({ tilebase: 1, code: 0, cellRow: 0, cellCol: 0 }) & 0x3fff) === 0,
     "the tile set is 16 KB aligned, which is what makes TILEBASE a field")
   check((charAddress({ fontbase: 1, code: 0, cellRow: 0 }) & 0x7ff) === 0,
-    "the font is 2 KB aligned")
+    "the font is 2 KB aligned (Variant B, NOT BUILT)")
 }
 
 /* -- A1..A0 are the interleave phase and never leave --------------------- */
@@ -117,19 +129,34 @@ const check = (ok: boolean, claim: string, detail = "") => {
 /* -- how many product terms the mode mux really is ----------------------- */
 {
   /* 6.4.1: "each address bit is then a two-product-term mode mux". That is
-   * true for two modes. Variant A and Variant B are both in v1 (10.1.5), and
-   * with the bitmap that is three sources per bit. */
-  const MODES = 3
-  check(MODES === 3,
-    "⚠ 6.4.1 says the mode mux is TWO product terms per address bit; with " +
-    "Variant A, Variant B and bitmap all present it is three")
+   * true for two modes, and the built mux has more sources than modes: the
+   * write pointer and the map fetch are two of them.
+   *
+   * ⚠ COUNTED FROM addressMux() RATHER THAN ASSERTED AS A CONSTANT, because
+   * this number decided whether the display list fits. Five sources is what an
+   * ATF15xx macrocell holds before cascading, and the mux was AT five with
+   * Variant B in - so 10.3's engine wanting a sixth for its own pointer is why
+   * 10.1.6.2's first fit returned INTERNAL ERROR rather than an overflow.
+   * Dropping Variant B and sharing WPTR are both subtractions here. */
+  const mux = addressMux()
   const bits = 17 // A18..A2, what the chips see
-  check(bits * MODES === 51,
-    `${bits} address bits x ${MODES} sources = ${bits * MODES} product terms across ` +
-    "17 macrocells - 3 each, against the 5 an ATF15xx macrocell has before cascading")
+  check(mux.length === bits, `the mux is ${bits} bits - A18..A2, not A18..A0`,
+    `${mux.length}`)
+  const sources = new Set(mux.map((c) => c.terms.length))
+  check(sources.size === 1, "every address bit has the same number of sources",
+    [...sources].join(","))
+  const n = mux[0]!.terms.length
+  check(n <= 5,
+    `${bits} address bits x ${n} sources = ${bits * n} product terms across ` +
+    "17 macrocells - within the 5 an ATF15xx macrocell has before cascading",
+    `${n}`)
+  check(!mux.some((c) => c.terms.some((t) => t.startsWith("CHARSEL"))),
+    "Variant B's CHARSEL is not a mux source - 6.4.3, dropped 2026-09-08")
+  check(!mux.some((c) => c.terms.some((t) => /^LGRANT/.test(t))),
+    "and the list engine is not one either - it shares WPTR (10.1.6.2 option 2)")
 }
 
 console.log(failures === 0
-  ? "\n6.4's address concatenation holds: no adder, 19 bits, three modes"
+  ? "\n6.4's address concatenation holds: no adder, 19 bits, three modes (two built)"
   : `\n${failures} FAILED`)
 if (failures) process.exit(1)

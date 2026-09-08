@@ -34,7 +34,7 @@ protect MinOS and can be deleted outright.**
 | **Separate scroll counters, sync untouched** | **Keep verbatim.** Still the right way to scroll. | §8 |
 | **SRAM register file + `/245` read-back** | **Keep.** Cheaper here — a 6809 bus read window is 2–3× wider. | §3.2 |
 | **256 × 16 b palette LUT** | **Keep, with an RGB332 identity palette at boot.** §9 argues this satisfies your RGB332 constraint at no cost in software. ⚠ The analog stage behind it needs a real buffer, and blanking has to act after the LUT. | §9, §9.1, §9.2 |
-| **Blitter + display-list engine** | **List engine yes; blit datapath defer.** The 6309's `TFM` plus the span writer cover most of the gap, and 18 GALs is where "no CPLD" starts to hurt — a wall the card now reaches one package sooner (§14). | §10 |
+| **Blitter + display-list engine** | **List engine ⭐ BUILT 2026-09-08; blit datapath defer.** The 6309's `TFM` plus the span writer cover most of the gap, and 18 GALs is where "no CPLD" starts to hurt — a wall the card now reaches one package sooner (§14). The engine cost **no package**: §6.4.3's Variant B and its own pointer instead. | §10, §10.1.6.2 |
 | **Arbitration priority rule / preemption** | **Keep the rule, delete most of the mechanism.** Phase-locking makes CPU arbitration static **in time** — ⚠ but not in space: which chip the CPU hits is `address[1:0]`, so a small arbiter survives. +1 GAL. | §5, §5.2.1 |
 | **MODE=0 bit-exact stock 1bpp path** | **Delete.** −4 ICs, −1 clock domain, −2 open items. Pure win. | §4 |
 | **`$4000–$7FFF` broadcast window + RAM shadow write** | **Delete.** An artefact of MinOS compatibility. | §4 |
@@ -1001,7 +1001,16 @@ absorbed into the scan-address GAL as registered macrocells. Each address bit is
 then a ~~two~~ **three**-product-term mode mux — bitmap, Variant A and Variant B are
 all in v1 (§10.1.5), so there are three sources per bit, not two. 17 bits × 3 = 51
 terms across 17 macrocells, **3 each against the 5 an ATF15xx macrocell has before
-cascading**. Product terms are still not the constraint. Checked in
+cascading**. Product terms are still not the constraint.
+
+> ⚠ **The built mux is four sources, not three, and the arithmetic is why the display
+> list needed Variant B.** The count above is the *modes*; the implementation adds
+> `WRITESEL & WA[n]` for the write pointer and `MAPSEL` for the map fetch, so it was
+> **five** — exactly what an ATF15xx macrocell holds before cascading, with nothing
+> left. §10.3's engine wanted a **sixth** for its own pointer, which is the real reason
+> §10.1.6.2's first fit did not merely overflow but returned `INTERNAL ERROR`.
+> **Both fixes were subtractions**: the engine shares `WPTR` so it needs no source of
+> its own, and Variant B's `CHARSEL` came out. **Four sources, and one spare.** Checked in
 [`hardware/gal/tile.check.ts`](../../hardware/gal/tile.check.ts), which asserts the
 no-adder property by showing OR equals ADD over all 524,288 field combinations in
 each variant.
@@ -1046,7 +1055,42 @@ cell attributes. This one is strictly a superset.
 
 **Cost: +1 IC, possibly 0.**
 
-#### 6.4.3 Variant B — 1bpp character generator, and what the dead LUT space buys
+#### 6.4.3 ⚠ Variant B — 1bpp character generator, DROPPED 2026-09-08
+
+> ⚠ **This variant is not built.** It was spent on §10.3's list engine, which needed
+> its macrocells, its product terms and its four pins — §10.1.6.2 has the fits. **The
+> section is kept in full** because it is the design a rebuild would start from, the
+> cost model the decision was made against, and the record that the mode was priced
+> rather than dismissed.
+>
+> **What the trade actually is**, since the headline figure is not the deciding one:
+>
+> | | Variant B | span writer, bitmap mode (§7.3) |
+> |---|---|---|
+> | Per cell | **2 writes** | 13 writes |
+> | Full 80×25 redraw | 9.5 ms — **105 Hz** | 62 ms — **16 Hz** |
+> | **Scroll one line** — what a terminal does | 0.38 ms | **2.5 ms** |
+>
+> ⭐ **The scroll row is the one that decides it.** A 9600-baud BBS delivers about
+> twelve 80-column lines a second, so 12 × 2.5 ms is **3 % of the CPU**; at 115.2 kbaud
+> it is 36 % and still runs. And a full-screen ANSI art frame is 2–4 KB of escape codes,
+> which takes **2–4 seconds to arrive over the modem** against 62 ms to draw. **The
+> renderer is 30–60× faster than the line feeding it**, so the screen is never the
+> bottleneck for the application this mode existed to serve.
+>
+> **And under NitrOS-9 it was never usable anyway.** §6.4.6 limit 1 is that the mode is
+> **global, not per-window** — a text window and a graphics window cannot coexist, which
+> is the whole of NitrOS-9's windowing. It was usable only in a single full-screen text
+> session, which is exactly the case that is comfortable in bitmap mode.
+>
+> **What is lost that is not an update rate:** the attribute colour path below — 256
+> freely-defined attributes each choosing any RGB565 pair out of the LUT's dead space,
+> for no extra hardware. In bitmap mode per-cell colour is two of §7.3's thirteen
+> writes, so it is not *lost*, it is *paid for*. And §6.4.6 limit 1's "text status bar
+> over a bitmap playfield" survives via **Variant A's 8bpp tiles** — at 16 KB of font
+> instead of 2 KB, and without the attribute path.
+
+
 
 Per cell: fetch code, attribute, and one font row — **3 accesses per 8 dots against
 the bitmap's 8**. The font byte goes to a serialiser; its output bit plus the
@@ -2069,7 +2113,9 @@ artefact of §10.1.4:
 **What §7 keeps.** The span writer is not deleted — it is the bitmap-mode text engine,
 the fill and clear engine, and §6.4.6's limit 1 means bitmap regions still need it.
 `seqctl` and §7.4 stand unchanged; `check:seqctl` still asserts the 13 writes per cell,
-which is now the *fallback* figure rather than the headline one.
+~~which is now the *fallback* figure rather than the headline one~~ — ⭐ **and since
+§6.4.3's Variant B was dropped on 2026-09-08 it is the headline figure again, and the
+card's only text mode.**
 
 **Two costs to keep in view**, both §6.4's own:
 
@@ -2215,7 +2261,26 @@ none of them free:
 
 **v1 as specified fits in two parts.** The engine is the line, and it falls just past it.
 
-##### ⭐ Option 2 measured, 2026-09-08 — and it nearly works
+##### ⭐ Option 2 measured, and then taken — 2026-09-08
+
+**The engine is built.** `ARM6309_LIST` defaults to on in `gal/video.cpld.ts`, both
+parts fit a PLCC-84, and §14's table gains nothing — it costs no package at all. It
+cost two things that are not packages, and both are recorded where they land:
+**§6.4.3's Variant B**, and the engine's own pointer.
+
+| | I/O | Logic cells | Nodes+FB | |
+|---|---|---|---|---|
+| `vaddr`, no engine, Variant B built | 62 / 64 | 104 / 128 | — | the state before |
+| **`vctrl`, Variant B out** | **46 / 64** | **87 / 128** | 83 / 128 | ~~50 / 64, 91 / 128~~ |
+| **`vaddr`, engine in, Variant B out** | **64 / 64** | **102 / 128** | 133 / 128 | ✓ **built** |
+
+⚠ **`vaddr` has no JTAG** — 64 of 64, and JTAG costs four I/O. It is programmed out of
+circuit, which is what `vctrl` did until `rfa` bought its pins back (§10.1.6.3) and what
+the audio card's `ATF1508AS` already does. **`vctrl` has 18 spare pins now**, so if
+in-circuit programming matters more than the display list, that is the pair to
+rebalance and not this decision to revisit.
+
+##### How it was measured, before it was taken
 
 The three ways forward above were reasoned, not fitted. Option 2 was, and it is much
 better than "changes the semantics":
@@ -2243,10 +2308,13 @@ Variant B** — the 1bpp character generator — and the shared-pointer engine l
 > the text engine in bitmap mode, and §6.4.2's Variant A still gives 8bpp graphics
 > tiles. What goes is the cheap 80-column text mode and its attribute colour path.
 >
-> ⚠ **Neither option leaves `vaddr` any JTAG**: both are 64 of 64. And this is a fit,
-> not a design — the engine's semantics under a shared `WPTR` (it clobbers the CPU's
-> write pointer, so software reloads after any list activity) are still §10.3's to
-> settle. **What is settled is that the package is no longer the reason not to.**
+> ⚠ **Neither option leaves `vaddr` any JTAG**: both are 64 of 64.
+>
+> ⚠ **And the shared pointer is a specification change that the fit does not settle:
+> the engine CLOBBERS THE CPU'S WRITE POINTER**, so anything that starts a list must
+> reload `WPTR` afterwards. §13's `+$08`–`$0A` is the reload and it is three writes.
+> That is cheap, but it is a rule software has to keep, and **§10.3 owns it.** `LIST`
+> at `+$0B`–`$0D` stays in the register map as the *load* path — it writes `WPTR`.
 
 > ✅ **Item 23 is closed and it took both of those repairs.** The write strobes are
 > decoded on `vaddr` from a five-bit register address and one strobe, in place of nine
@@ -2341,6 +2409,10 @@ your primary goal regardless.
 ### 10.3 Recommendation
 
 **Build the list engine (≈5 ICs, 2 GALs); defer the blit datapath.**
+
+> ⭐ **Done 2026-09-08, and for zero packages rather than five.** The CPLD partition
+> absorbed it: `ARM6309_LIST` defaults to on and both parts fit a PLCC-84. It cost
+> §6.4.3's Variant B and the engine's own pointer instead — §10.1.6.2.
 
 blitter.md §6.1 already reaches this conclusion for colormin, and every reason is
 stronger here:
@@ -2589,9 +2661,9 @@ tables are shared between both projects.
 | `+$06` | `WFG` | b7..0 | span foreground index — **must stay at A0=0** | — |
 | `+$07` | `WBG` | b7..0 | span background index — **must stay at A0=1** | — |
 | `+$08`–`$0A` | `WPTR` | | write/read pointer, 19 bits, auto-increment | — |
-| `+$0B`–`$0D` | `LIST` | | display-list pointer (reserved, §10.3) | — |
-| `+$0E` | `BCTRL` | | list engine control (reserved) | — |
-| `+$0F` | `BSTAT` | | list engine status (reserved, read) | — |
+| `+$0B`–`$0D` | `LIST` | | display-list pointer — ⭐ **built 2026-09-08** (§10.1.6.2). ⚠ **It loads `WPTR`**: the engine shares the write pointer rather than carrying its own, so starting a list clobbers `+$08`–`$0A` and software reloads after | **built** |
+| `+$0E` | `BCTRL` | | list engine control — ⭐ **built**, b0 = `GO` | **built** |
+| `+$0F` | `BSTAT` | | list engine status — ⭐ **built**, b0 = `LRUN` | **built** |
 | `+$10` | `PIDX` | b7..0 | palette index, auto-increments after `PDATH` | — |
 | `+$11` | `PDATL` | b7..0 | palette entry `GGGBBBBB` | — |
 | `+$12` | `PDATH` | b7..0 | palette entry `RRRRRGGG`; write commits | — |
@@ -2697,7 +2769,7 @@ way and for exactly the same reason — but it is a yes with a rule attached.
 | **1** | **GAL22V10-15** | **spare-access arbiter — 8 grants; `SRCSEL[n]` *is* `GRANT_CPU[n]` and is not a second macrocell, so 8 of 10 and not 12 (§5.2.1, §10.1.1)** | **+1** |
 | 1 | 74HC574 | posted-write **data** latch | = |
 | **3** | **74HC574** | **posted-write address + control latches — 19 address + VRAMSEL + R/W + `WMODE[1:0]` = 23 bits (§3.1.1)** | **+3** |
-| 1 | 74HC165 | span mask serialiser (`74AHC165` if §6.4 Variant B is built) | = |
+| 1 | 74HC165 | span mask serialiser (~~`74AHC165` if §6.4 Variant B is built~~ — Variant B is not built, §6.4.3, so the plain HC grade stands) | = |
 | 1 | 32K×8 20 ns | register file | = |
 | 1 | 74HC273 | `CTRL`, master reset | = |
 | 1 | 74HC245 | register + VRAM read-back | = |
@@ -3476,10 +3548,15 @@ unchanged from minimal256.md §11 and are not restated in full.
     for a cell must be held before that cell's first pixel is emitted, so when a line
     starts mid-cell the map fetch leads by one cell rather than one slot. That is
     `MAPSEL` in [`video.parts.ts`](../../hardware/gal/video.parts.ts).
-17. **Bench the serialiser in the LUT address path** if Variant B is built (§6.4.3).
-    The glyph bit reaches a LUT address pin through a `74AHC165` clock-to-Q, inside
-    the 11.7 ns margin item 3 is already measuring. `'HC` grade will not shift at
-    25.175 MHz; confirm `'AHC` does, in circuit.
+17. ~~**Bench the serialiser in the LUT address path** if Variant B is built (§6.4.3).~~
+    **CLOSED 2026-09-08 — Variant B is not built** (§6.4.3, §10.1.6.2). The serialiser
+    on §6.1's 11.7 ns margin was its own risk and it goes with it. The `74HC165` on
+    §14's list is the *span-mask* serialiser and stays; §14's *"`74AHC165` if Variant B
+    is built"* note lapses, so the plain HC grade is what the card takes.
+
+    *The item as written:* the glyph bit reaches a LUT address pin through a
+    `74AHC165` clock-to-Q, inside the 11.7 ns margin item 3 is already measuring.
+    `'HC` grade will not shift at 25.175 MHz; confirm `'AHC` does, in circuit.
 18. **Bench §9.1's drive stage into a real 75 Ω load** — DNL across all 64 green
     codes at the connector, black measured at 0.000 V, peak white at 0.700 V, and the
     `V_be` reference's drift over a 30-minute warm-up. This is the one part of the

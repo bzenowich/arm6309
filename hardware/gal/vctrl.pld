@@ -67,11 +67,7 @@ PIN = RETIRE ;
 PIN = MAPLD ;
 PIN = MAPSEL ;
 PIN = TILESEL ;
-PIN = CHARSEL ;
 PIN = LINEAR ;
-PIN = GLYPHLD ;
-PIN = GLYPHSH ;
-PIN = LUTPAGE ;
 PIN = VRAMSEL ;
 
 /* --- buried registers: state that used to cross a package boundary - */
@@ -110,7 +106,7 @@ PINNODE = TC1 ;
 PINNODE = TC2 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * VTC, SPAREWIN, SPANEND, WROWADV, M0, HPOL, TILEMODE, CHARMODE, WRITESEL */
+ * VTC, SPAREWIN, SPANEND, WROWADV, M0, HPOL, TILEMODE, WRITESEL */
 
 /* --- equations ---------------------------------------------------- */
 H0.d = CE & !H0
@@ -373,8 +369,7 @@ DISPEN.d = WCTRL & D7
            # DISPEN & !WCTRL ;
 M0 = VMODE0 ;
 HPOL = !VMODE0 ;
-TILEMODE = CELL & !CHAR ;
-CHARMODE = CELL & CHAR ;
+TILEMODE = CELL ;
 WRITESEL = SPNGRANT ;
 TC0.d = SLOTTICK & !TC0
         # !SLOTTICK & TC0 ;
@@ -387,12 +382,8 @@ TC2.d = SLOTTICK & TC2 & !TC0
         # !SLOTTICK & TC2 ;
 MAPLD = TILEMODE & SLOTTICK & !TC2 & !TC1 & !TC0 ;
 MAPSEL = CELL & !TC2 ;
-TILESEL = TILEMODE & !CHARMODE & TC2 ;
-CHARSEL = CHARMODE & TC2 ;
-LINEAR = !TILEMODE & !CHARMODE & !WRITESEL ;
-GLYPHLD = CHARMODE & SLOTTICK & TC1 & !TC0 ;
-GLYPHSH = CHARMODE & !SLOTTICK ;
-LUTPAGE = CHARMODE ;
+TILESEL = TILEMODE & TC2 ;
+LINEAR = !TILEMODE & !WRITESEL ;
 VRAMSEL = A19 & !A20 & !IOPAGE ;
 
 /* One clock for every register: the card is one slot-walked datapath

@@ -50,10 +50,8 @@ export const tileRegisters: Cell[] = [
     pin: 0, name: `TB${b}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [`LDTB & D${b}`, `TB${b} & !LDTB`],
   })),
-  ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({
-    pin: 0, name: `FB${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: [`LDFB & D${b}`, `FB${b} & !LDFB`],
-  })),
+  /* ⚠ FONTBASE's eight registers went with Variant B on 2026-09-08 - see
+   * graphics.md 6.4.3. The register itself stays reserved at +$18. */
   /* The map byte, latched off the pixel bus one cell ahead of the tile fetch
    * (§6.4.1's "pipelined one cell ahead"). §6.4.1 prices this as "one 3-state
    * '574, or zero packages if it can be absorbed into the scan-address GAL as
@@ -78,15 +76,13 @@ export const tileRegisters: Cell[] = [
  *
  * A1..A0 never appear: they are the 4-way interleave phase and never leave
  * the '153s, so the chip address is A18..A2 and this is seventeen bits. */
-export const addressMux = (withList = true): Cell[] => {
+export const addressMux = (): Cell[] => {
   /* A slot is four pixels and a cell is eight, so the byte address WITHIN a
    * tile row is the column counter's own low bit, SA2 - not a slot-counter
    * bit, which was written here on 2026-09-07 and addresses in units of
    * sixteen pixels. */
   const tileSrc = (bit: number) =>
     bit >= 14 ? `TB${bit - 14}` : bit >= 6 ? `MAP${bit - 6}` : bit >= 3 ? `V${bit - 3}` : "SA2"
-  const charSrc = (bit: number) =>
-    bit >= 11 ? `FB${bit - 11}` : bit >= 3 ? `MAP${bit - 3}` : "V2"
   /* The map's own address - base, cell row, cell column - which the mux did
    * not have at all, so MAPLD was latching a byte from an address nothing
    * generated. §19 item 16 lives here and it costs nothing: the intra-cell
@@ -102,21 +98,20 @@ export const addressMux = (withList = true): Cell[] => {
     const bit = i + 2
     return {
       pin: 0, name: `FBA${bit}`, assertedLow: false, s0: 1 as const, registered: false,
-      /* Five sources, which is exactly what an ATF15xx macrocell holds before
-       * it has to cascade. The list engine is the fifth and it is why the
-       * engine belongs on this part: its pointer feeds the address mux, so
-       * putting it anywhere else makes nineteen crossing nets.
+      /* FOUR sources since 2026-09-08, and both changes that day were about
+       * this list. 6.4.3's Variant B took CHARSEL out; 10.1.6.2's option 2
+       * means the list engine never adds one, because it drives the address
+       * through WRITESEL & WA[n] - WPTR IS its pointer.
        *
-       * Its select is LGRANT itself, not a separate LISTSEL pin: the engine
-       * drives the address exactly when it holds the grant, the same identity
-       * that makes vctrl's WRITESEL and SPNGRANT one signal. */
+       * That second point is the whole reason the engine fits. Its own
+       * nineteen-bit pointer was not just 19 registers: it was 19 more mux
+       * inputs and a SIXTH product term on every one of these seventeen
+       * macrocells, and an ATF15xx macrocell holds five before it cascades. */
       terms: [
         `LINEAR & SA${bit}`,
         `WRITESEL & WA${bit}`,
         `TILESEL & ${tileSrc(bit)}`,
-        `CHARSEL & ${charSrc(bit)}`,
         `MAPSEL & ${mapSrc(bit)}`,
-        ...(withList ? [`LGRANT & LP${bit}`] : []),
       ],
     }
   })
@@ -142,20 +137,23 @@ export const tileCadence: Cell[] = [
   { pin: 0, name: "MAPSEL", assertedLow: false, s0: 1, registered: false,
     terms: ["CELL & !TC2"] },
   { pin: 0, name: "TILESEL", assertedLow: false, s0: 1, registered: false,
-    terms: ["TILEMODE & !CHARMODE & TC2"] },
-  { pin: 0, name: "CHARSEL", assertedLow: false, s0: 1, registered: false,
-    terms: ["CHARMODE & TC2"] },
+    terms: ["TILEMODE & TC2"] },
   { pin: 0, name: "LINEAR", assertedLow: false, s0: 1, registered: false,
-    terms: ["!TILEMODE & !CHARMODE & !WRITESEL"] },
-  /* Variant B's serialiser: the glyph bit goes straight to a spare LUT address
-   * pin, so what the logic owns is the load and the shift (§6.4.3). */
-  { pin: 0, name: "GLYPHLD", assertedLow: false, s0: 1, registered: false,
-    terms: ["CHARMODE & SLOTTICK & TC1 & !TC0"] },
-  { pin: 0, name: "GLYPHSH", assertedLow: false, s0: 1, registered: false,
-    terms: ["CHARMODE & !SLOTTICK"] },
-  /* §6.4.3's LUT page select: graphics is page 0, text page 1. One CTRL bit. */
-  { pin: 0, name: "LUTPAGE", assertedLow: false, s0: 1, registered: false,
-    terms: ["CHARMODE"] },
+    terms: ["!TILEMODE & !WRITESEL"] },
+  /* ⚠ VARIANT B WAS DROPPED 2026-09-08 - graphics.md 6.4.3 and 10.1.6.2.
+   * CHARSEL, GLYPHLD, GLYPHSH and LUTPAGE lived here, and the eight FONTBASE
+   * registers above; what they bought was a 1bpp hardware character generator
+   * at 2 CPU writes per cell against the span writer's 13.
+   *
+   * They were spent on the display list, which needs the macrocells, the
+   * product terms and the four pins. The trade is 105 Hz full-screen text
+   * against 16 Hz - and 0.38 ms per scrolled line against 2.5 ms, which is
+   * the figure a terminal actually pays. A 9600-baud BBS delivers twelve
+   * lines a second, so that is 3% of the CPU. Text still works; it is the
+   * span writer in bitmap mode, which is what 7.1-7.3 already cost out.
+   *
+   * !CHARMODE dropped out of TILESEL and LINEAR above rather than being
+   * deleted: with no char mode, TILEMODE alone says which it is. */
 ]
 
 /* ---- §10.3's list engine ------------------------------------------------ *
@@ -165,12 +163,24 @@ export const tileCadence: Cell[] = [
  * of macrocells: it reads VRAM through the arbiter and the address path that
  * are already here, and writes the register file through one that is too. */
 export const listEngine: Cell[] = [
-  /* LIST, 19 bits (§13, +$0B..+$0D), auto-incrementing as it walks. */
-  ...counterTerms({ bits: [...Array(19).keys()].map((i) => `LP${i}`), enable: "LADV" })
-    .map((terms, i) => ({
-      pin: 0, name: `LP${i}`, assertedLow: false, s0: 1 as const, registered: true,
-      terms: terms.map((t) => `!LLOAD & ${t}`).concat(i < 8 ? [`LLOAD & D${i}`] : []),
-    })),
+  /* ⚠ THE ENGINE HAS NO POINTER OF ITS OWN - 10.1.6.2's option 2, taken
+   * 2026-09-08 because it is the only thing that makes the engine fit.
+   *
+   * It used to carry LIST as 19 registers here (§13, +$0B..+$0D), auto-
+   * incrementing as it walked, and that cost far more than 19 macrocells: 19
+   * more inputs to the address mux and a SIXTH product term on each of its
+   * seventeen bits, past what an ATF15xx macrocell holds before cascading.
+   * With them the fitter did not report a shortage, it reported INTERNAL
+   * ERROR; without them the design fits a PLCC-84.
+   *
+   * SO WPTR IS THE LIST POINTER. The span writer and the engine never drive
+   * the address in the same slot, LADV drives WPTR's increment, and the
+   * engine reaches the address bus through the mux's WRITESEL & WA[n] term
+   * that already exists.
+   *
+   * ⚠ THE PRICE IS SOFTWARE'S, and it is not settled here: the engine
+   * CLOBBERS THE CPU'S WRITE POINTER, so anything that starts a list reloads
+   * WPTR afterwards. 10.3 owns that decision; this file only shows it fits. */
   /* The descriptor byte, and the opcode decode that turns it into a write. */
   ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({
     pin: 0, name: `LD${b}`, assertedLow: false, s0: 1 as const, registered: true,

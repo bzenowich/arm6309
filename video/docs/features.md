@@ -3,7 +3,7 @@
 ## Modes, the Span Writer, and Nine Questions About Drawing
 
 **Question this answers:** [`graphics.md`](graphics.md) is 3,100 lines of *why* — why
-640 wide, why the LUT is 32K×8, why the list engine does not fit. It is organised
+640 wide, why the LUT is one ×16 part, what the list engine cost. It is organised
 around decisions, not around capability, so *"can this thing fill a polygon?"* has its
 answer scattered across four sections and its arithmetic in a fifth. **This document is
 the capability view.** It invents nothing; every number is `graphics.md`'s, and where it
@@ -23,7 +23,7 @@ reaches a conclusion that document does not state, the conclusion is marked.
 | | |
 |---|---|
 | **Bitmap** | **640×200, 640×240, 640×400, 640×480 — all 8bpp**, 256 simultaneous colours from 65,536 (RGB565 LUT). §1 |
-| **Text** | **80×25, 80×30, 80×50, 80×60**, 8×8 cells. **Any of 256 attributes → any RGB565 foreground/background pair.** §2 |
+| **Text** | **80×25, 80×30, 80×50, 80×60**, 8×8 cells, rendered by the span writer at **13 writes/cell**. ⚠ **No hardware character generator** — §2.2 was dropped 2026-09-08 to afford the display list. §2 |
 | **Tiles** | 8×8, **8bpp per pixel — no attribute clash**, 64:1 write compression. §1.4 |
 | **Colour depth** | 8bpp everywhere. There is **no 4bpp, 2bpp or 1bpp packed mode** and no 320-wide mode. §10 |
 | **Scrolling** | **Free, both axes, pixel-accurate**, by register — a 1024 × 512 ring. §1.3 |
@@ -130,9 +130,21 @@ by showing OR equals ADD over all 524,288 field combinations.
 mask byte *is* the glyph row, with nothing wasted and nothing to truncate (§3). They
 also mean CP437, the CoCo 3 hi-res font and VT100 line-drawing all drop in unmodified.
 
-### 2.2 Character mode — 256 attributes, each an arbitrary colour pair
+### 2.2 ⚠ Character mode — DROPPED 2026-09-08
 
-`CTRL` b2 `CHAR` with b5 `CELL` selects a 1bpp character generator. Its colour path is
+> ⚠ **This mode is not built.** `graphics.md` §6.4.3's Variant B was spent on §10.3's
+> display list, which needed its macrocells, product terms and four pins. **Text is
+> §2.3's span writer in bitmap mode**, and every text figure in this document is that
+> one unless it says otherwise. The section stays because it is the design a rebuild
+> would start from and the cost model the decision was made against.
+>
+> ⭐ **What decided it was §2.3's scroll row, not the redraw row.** A 9600-baud BBS
+> delivers ~12 lines/s, so 12 × 2.5 ms is **3 % of the CPU**; a full ANSI art screen is
+> 2–4 KB of escape codes and takes **2–4 seconds to arrive** against 62 ms to draw.
+> **And under NitrOS-9 it was never usable** — the mode is global, not per-window
+> (`graphics.md` §6.4.6), which is the whole of NitrOS-9's windowing.
+
+*What it would have been:* `CTRL` b2 `CHAR` with b5 `CELL` selects a 1bpp character generator. Its colour path is
 **the 127/128 of the palette LUT that the 256-entry palette does not use**
 (`graphics.md` §6.4.3):
 
@@ -153,21 +165,27 @@ rides the existing pixel bus and the glyph bit is one spare LUT address pin.
 **Cost per cell: 2 CPU writes (code + attribute), ~4.8 µs.** A full 80×25 redraw with
 per-cell colour is **~9.5 ms**; a line scroll is **~0.4 ms**.
 
-### 2.3 Text in bitmap mode, for when you need both
+### 2.3 ⭐ Text in bitmap mode — the card's only text mode
 
-Character mode is **global** — cells or pixels, not both in one region (`graphics.md`
-§6.4.6). When a program needs text *over* graphics it renders glyphs into the bitmap
-with the span writer instead:
+Character mode was **global** anyway — cells or pixels, not both in one region
+(`graphics.md` §6.4.6) — so a program needing text *over* graphics always rendered
+glyphs into the bitmap with the span writer. Since 2026-09-08 that is every program:
 
-| | Character mode | Span writer, in bitmap mode |
+| | ~~Character mode~~ (not built) | ⭐ **Span writer, in bitmap mode** |
 |---|---|---|
 | One cell | 2 writes, ~4.8 µs | **13 writes, ~31 µs** |
-| Scroll one line | ~0.4 ms | **~2.5 ms** |
-| Full 80×25 redraw | ~9.5 ms | ~62 ms |
+| **Scroll one line** — what a terminal does | ~0.4 ms | **~2.5 ms**, ~400 lines/s |
+| Full 80×25 redraw | ~9.5 ms, 105 Hz | **~62 ms, 16 Hz** |
+| At 9600 baud (~12 lines/s) | 0.5 % CPU | **3 % CPU** |
+| At 115.2 kbaud (~144 lines/s) | 5 % CPU | **36 % CPU** |
 
 **A terminal never full-redraws** — it scrolls, and 2.5 ms plus one register write is
 comfortable. The 13 writes are `WPTR` ×3 + `WFG` + `WBG` + eight glyph rows, and
 `npm run check:seqctl` asserts the 13.
+
+⭐ **And where a redraw does happen, the wire is the bottleneck, not the card.** A full
+80×25 ANSI art screen is 2–4 KB of escape codes: **2–4 seconds at 9600 baud** against
+62 ms to draw it. The renderer is 30–60× faster than the line feeding it.
 
 > **Both are ~3× better than the obvious alternative.** A `TFM` of a pre-rendered
 > 8×8×8bpp glyph is 64 bytes at 3 cycles each ≈ 92 µs per cell, because `TFM` moves one
@@ -219,7 +237,7 @@ below is a CPU figure.
 
 ---
 
-## 4. What the display list would provide
+## 4. ⭐ What the display list provides — built 2026-09-08
 
 The list engine — the "copper" — is a small sequencer that walks a descriptor list
 locked to the raster and writes the card's own registers at chosen scanlines. Its
@@ -233,18 +251,26 @@ locked to the raster and writes the card's own registers at chosen scanlines. It
   screen at once.
 - **Mid-frame `CTRL` changes** — §6.4.6 spells out the good one: **a text status bar
   over a bitmap playfield**, because the cell/pixel mode is a register and the list can
-  write it at a scanline boundary.
+  write it at a scanline boundary. ⚠ With §2.2 dropped that bar is Variant A's 8bpp
+  tiles rather than a character generator — 16 KB of font instead of 2 KB, and no
+  attribute colour path.
 
-> ⚠ **It does not fit v1, and macrocells are not why** (`graphics.md` §10.1.6.2). Both
-> packages were fitted and both failed: PLCC-84 aborts with an internal fitter error at
-> 90 % logic and 95 % pins; **TQFP-100 has 80 I/O instead of 64 and still fails at 90 %
-> logic.** What runs out is **switch-matrix fan-in** — an ATF1508AS logic block admits
-> 40 of ~200 global signals, and a 19-bit pointer feeding a six-source 17-bit address
-> mux does not fit through that window however many macrocells sit behind it.
+> ⚠ **It did not fit v1, and macrocells were not why** (`graphics.md` §10.1.6.2). Both
+> packages were fitted and both failed: PLCC-84 aborts with an internal fitter error;
+> **TQFP-100 has 80 I/O instead of 64 and still fails.** What ran out was
+> **switch-matrix fan-in** — an ATF1508AS logic block admits 40 of ~200 global signals,
+> and a 19-bit pointer feeding a six-source 17-bit address mux does not fit through that
+> window however many macrocells sit behind it.
 >
-> Three ways forward, none free: a third CPLD; let the engine share `WPTR` (19 registers
-> and most of the fan-in saved, but it clobbers the CPU's write pointer — a
-> specification decision, not a fitting one); or leave it out, which is what v1 does.
+> ⭐ **Both halves of that sentence were the fix.** Delete the engine's own pointer so it
+> **shares `WPTR`** — 19 registers, 19 mux inputs and the mux's *sixth* product term per
+> bit, all gone — and drop §2.2's character generator, and it lands on the PLCC-84 the
+> card already has: `vaddr` at **64/64 I/O and 102/128 cells**, `vctrl` down to 46/64
+> and 87/128. **Zero extra packages.**
+>
+> ⚠ **Two prices.** The engine **clobbers the CPU's write pointer**, so anything that
+> starts a list reloads `WPTR` afterwards — three writes, and a rule software has to
+> keep. And `vaddr` has **no JTAG** at 64 of 64, so it is programmed out of circuit.
 
 **What you get instead, today:** VBL and line-compare interrupts (`graphics.md` §12)
 give a **software copper at 2–3 splits per frame** — enough for a status bar and a
@@ -492,7 +518,8 @@ brochure.
 | **Any depth but 8bpp** | No packed 1/2/4bpp modes. A 640×200 screen is 128,000 bytes whatever it contains, so full-screen operations cost the same for a two-colour image as for a photograph |
 | **Hardware sprites** | §8 — the pixel path has 11.7 ns of margin |
 | **Hardware cursor** | §9, same reason |
-| **Per-region mode mixing** | Cell/pixel is global. A list engine could switch it *per scanline* (§4), and the list engine does not fit v1 |
+| **Per-region mode mixing** | Cell/pixel is global — but ⭐ **the list engine switches it per scanline** (§4), and it is built |
+| **A hardware character generator** | ⚠ §2.2, dropped 2026-09-08 to afford the list engine. Text is the span writer at 13 writes/cell (§2.3) |
 | **Colour image blits** | §5 — this is the blitter's whole remaining value |
 | **A border colour** | `BORDER` was deleted: VGA timing has no overscan, the porches must be black for the back-porch clamp, and the `'153` pixel mux has no spare input (`graphics.md` §9.3) |
 | **Palette writes during active display** | They snow. Write during blanking (§1.2) |
@@ -525,8 +552,10 @@ These are capability questions, and `graphics.md` §19 does not carry them.
 2. **⭐ Fit the transparent span-mask mode** (§8.4). One product term and a `WMODE`
    code on paper; an order of magnitude for sprites and the mouse pointer; and it needs
    the mask bit somewhere §7.4 explicitly does not put it.
-3. **Decide the list engine's three options** (§4). Sprites, splits and mid-frame mode
-   changes all wait on it, and `graphics.md` §10.1.6.2 leaves the choice open.
+3. ~~**Decide the list engine's three options** (§4).~~ **DECIDED AND BUILT
+   2026-09-08** — the engine shares `WPTR` and §2.2's character generator came out to
+   pay for it. ⚠ **What is left is software's half**: the shared pointer means a list
+   clobbers `WPTR`, and `graphics.md` §10.3 has not written the reload rule down.
 4. **Nobody has costed a 320-wide mode** (§10), and it is the cheapest way to halve the
    cost of every full-screen operation.
 5. **The software-sprite budget has never been measured**, only computed (§8.3). Four

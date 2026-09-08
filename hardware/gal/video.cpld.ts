@@ -30,15 +30,25 @@ import { decodeCells, writeStrobes } from "./regfile"
  * WRITESEL = SPNGRANT. */
 const CPU_CHIP: Record<string, string> = { CPUA0: "A0", CPUA1: "A1" }
 
-/* §10.3's list engine is built only when asked for. It is the one block whose
- * presence changes the answer to "does the video card fit in two parts", so it
- * is a switch and not a comment, and both sides of it are fitted. */
-export const WITH_LIST = process.env.ARM6309_LIST === "1"
+/* §10.3's list engine. It is the one block whose presence changes the answer to
+ * "does the video card fit in two parts", so it is a switch and not a comment,
+ * and both sides of it are fitted.
+ *
+ * ⚠ IT DEFAULTS TO BUILT AS OF 2026-09-08, which it did not before. Two changes
+ * that day bought the room, and both cost something:
+ *
+ *   - 10.1.6.2 option 2: the engine shares WPTR instead of carrying its own
+ *     19-bit pointer, so it clobbers the CPU's write pointer.
+ *   - 6.4.3's Variant B, the 1bpp character generator, is gone.
+ *
+ * ARM6309_LIST=0 builds the card without it, which is the state every fit in
+ * graphics.md before 2026-09-08 describes. */
+export const WITH_LIST = process.env.ARM6309_LIST !== "0"
 
 const scanMap = Object.fromEntries([...Array(19).keys()].map((i) => [`A${i}`, `SA${i}`]))
 const wptrMap = Object.fromEntries([...Array(19).keys()].map((i) => [`A${i}`, `WA${i}`]))
 
-const mux = addressMux(WITH_LIST)
+const mux = addressMux()
 
 export const vaddrCpld: Merged = merge(
   [rename(hadrDesign, scanMap), rename(vadrDesign, scanMap),
@@ -89,8 +99,9 @@ const ctrlFanout: Cell[] = [
    * 70 Hz at VMODE0 = 0 and 60 Hz at VMODE0 = 1, and the 70 Hz pair is the
    * positive-H pair. A pin for this was a pin for a NOT gate. */
   comb("HPOL", ["!VMODE0"]),
-  comb("TILEMODE", ["CELL & !CHAR"]),
-  comb("CHARMODE", ["CELL & CHAR"]),
+  /* ⚠ CHARMODE went with Variant B on 2026-09-08 - graphics.md 6.4.3. CTRL's
+   * CHAR bit stays reserved; nothing reads it. */
+  comb("TILEMODE", ["CELL"]),
   /* The write pointer owns the address bus exactly when the arbiter has given
    * the span writer a chip. It is the same signal as SPNGRANT under the name
    * the address part's mux uses. */
@@ -134,7 +145,10 @@ export const vctrlCpld: Merged = merge(
       "MUXSEL0", "MUXSEL1",
       "SLOTTICK", "RETIRE",
       /* §6.4's cadence, out to the address part and the serialiser */
-      "MAPLD", "MAPSEL", "TILESEL", "CHARSEL", "LINEAR", "GLYPHLD", "GLYPHSH", "LUTPAGE",
+      "MAPLD", "MAPSEL", "TILESEL", "LINEAR",   // CHARSEL/GLYPHLD/GLYPHSH/LUTPAGE: 6.4.3
+      /* §10.3's engine holds the address bus through WRITESEL, so what vctrl
+       * owes it is the grant and nothing else. */
+      ...(WITH_LIST ? ["LGRANT"] : []),
       /* ⚠ RA0-RA4, WSTB and REGSEL left this part on 2026-09-08 for
        * regfile.jedec.ts's own GAL22V10 - §10.1.6.3's relief, taken. vaddr
        * still takes the same six signals; only the chip driving them moved.
