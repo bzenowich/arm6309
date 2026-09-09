@@ -38,11 +38,12 @@ discrete logic and the deliverable is the document.
 breadboard **including the analog drive stage** — **comes before laying out anything**,
 because it contains the design's real unknowns.
 
-⚠ **Both CPLDs are full in the dimension that matters.** `vaddr` is 102 of 128 logic
-cells and **64 of 64 pins**; `vctrl` is 97 of 128 and 62 of 64 — two pins spare
-against the four JTAG needs, so both are programmed out of circuit. Anything added
-to either displaces something else, and `graphics.md` §10.1.6.3 records what it
-would cost to get in-circuit programming back.
+⚠ **Both CPLDs are full in the dimension that matters — logic cells.** `vaddr` is
+**109 of 128** and `vctrl` **121 of 128**; anything added to either displaces
+something else. Pins are binding too, now: `vaddr` is 61 of 64 and `vctrl`
+**64 of 64**, and those totals **include JTAG's four** — the `ATF1508AS` shares
+`TMS`/`TDI`/`TDO`/`TCK` with ordinary I/O, so `vctrl` is 60 logic pins plus four and
+has nothing spare. Both are programmed in circuit (`graphics.md` §10.1.6.3).
 
 **Specified at ÷12 only.** E = 25.175/12 = 2.0979 MHz is the rate this card is
 specified at. The ÷8 rate — fast-E mode, 3.1469 MHz — is **experimental and not

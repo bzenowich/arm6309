@@ -212,13 +212,22 @@ table struck the `RAM2`–`RAM4` row without showing the −1 for the system RAM
 cleaned table carries the −1 row so the arithmetic sums to 14, which is the count
 `place/svg.ts` draws.
 
-## ram.md §7 — `vctrl` at 64 of 64
+## ram.md §7 — `vctrl` at 64 of 64, then 62 of 64
 
 §5.3 and §7 said `vctrl` was at **64 of 64 I/O** (citing `graphics.md` §10.1.6.3) — the
 figure from the arbiter-out-to-a-GAL arrangement (see the gal/README.md CPLD-refit entry
 below). The arbiter merged back and the register-file address split out to `rfa`;
-`gal/cpld/vctrl.fit` puts the part at **62 of 64**, which is the figure the spec now
-carries. The conclusion (no room for an `A21`–`A24` extension) is unchanged.
+`gal/cpld/vctrl.fit` put the part at **62 of 64**.
+
+Then **59 of 64**, and then **64 of 64**, both later the same day: `graphics.md` §6.4.1's cell address was taking
+its vertical fields from the sync line counter, which meant `vctrl` exported `V0..V2`
+to `vaddr` for a field that should never have crossed parts (`video/docs/history.md`
+has the correction). Three pins came back on each part — and `graphics.md` §6.4.9's
+fetch cadence spent them again hours later, landing the part at **64 of 64 I/O and
+120 of 128 cells**. Both parts still fit with JTAG reserved. The spec carries 64 of
+64. **The conclusion is unchanged through all three
+figures** — there is no room for an `A21`–`A24` extension, and five spare pins are not
+four address lines plus the JTAG the part now uses them for.
 
 ## ram.md §11 — closed open items 1 and 2
 

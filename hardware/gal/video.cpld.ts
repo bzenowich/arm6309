@@ -20,7 +20,9 @@ import { hadrDesign, vadrDesign } from "./scan.jedec"
 import { arbDesign, wcolDesign, wrowDesign } from "./access.jedec"
 import { seqphDesign } from "./seqph.jedec"
 import { seqctlDesign } from "./seqctl.jedec"
-import { addressMux, listEngine, scrollHolds, tileCadence, tileRegisters } from "./video.parts"
+import {
+  addressMux, listEngine, mapColumn, scrollHolds, tileCadence, tileRegisters,
+} from "./video.parts"
 import { decodeCells, writeStrobes } from "./regfile"
 
 /* CPUA0/CPUA1 were pins of their own beside A0/A1. They are the same two
@@ -29,6 +31,13 @@ import { decodeCells, writeStrobes } from "./regfile"
  * needs on this part. Two pins for a rename, and the same kind of identity as
  * WRITESEL = SPNGRANT. */
 const CPU_CHIP: Record<string, string> = { CPUA0: "A0", CPUA1: "A1" }
+
+/* ⚠ AND CE IS SLOTTICK. hgen declares its slot enable as an input and says why
+ * in the same breath - "the sequencer pair already forms the dot phase for the
+ * pixel mux, so this is that signal and not a second divider". seqph produces
+ * it, on this same part, and vctrl was taking it back in on a pin anyway. One
+ * more identity, one more pin, and 6.4.9's cadence needed it. */
+const SLOT_CE: Record<string, string> = { CE: "SLOTTICK" }
 
 /* §10.3's list engine. It is the one block whose presence changes the answer to
  * "does the video card fit in two parts", so it is a switch and not a comment,
@@ -46,14 +55,21 @@ const CPU_CHIP: Record<string, string> = { CPUA0: "A0", CPUA1: "A1" }
 export const WITH_LIST = process.env.ARM6309_LIST !== "0"
 
 const scanMap = Object.fromEntries([...Array(19).keys()].map((i) => [`A${i}`, `SA${i}`]))
+/* ⚠ VLOAD IS VBLANK. scan.jedec.ts declares vadr's load input as "asserted
+ * through vertical blanking", which is what vdec's VBLANK already is and has
+ * always been - so the signal was invented twice and produced once. Renaming it
+ * here costs nothing and saves the pin that producing a second copy would have
+ * needed, on a part with none to spare. Same identity as WRITESEL = SPNGRANT
+ * and CE = SLOTTICK below. */
+const rowMap = { ...scanMap, VLOAD: "VBLANK" }
 const wptrMap = Object.fromEntries([...Array(19).keys()].map((i) => [`A${i}`, `WA${i}`]))
 
 const mux = addressMux()
 
 export const vaddrCpld: Merged = merge(
-  [rename(hadrDesign, scanMap), rename(vadrDesign, scanMap),
+  [rename(hadrDesign, scanMap), rename(vadrDesign, rowMap),
    rename(wcolDesign, wptrMap), rename(wrowDesign, wptrMap)],
-  [...scrollHolds, ...tileRegisters, ...writeStrobes,
+  [...scrollHolds, ...tileRegisters, ...mapColumn, ...writeStrobes,
    ...(WITH_LIST ? listEngine : []), ...mux],
   {
     name: "vaddr", partNo: "ARM6309-UV0A", location: "video card - address datapath",
@@ -61,6 +77,10 @@ export const vaddrCpld: Merged = merge(
     external: new Set([
       ...mux.map((c) => c.name),   // the framebuffer address, and almost nothing else
       "WA0", "WA1",                 // WPTR[1:0] - the span writer's chip, to vctrl's arbiter
+      /* §6.4.2's map fetch is a spare access too, so it names a chip the same
+       * way: MAPA[1:0] = cellCol[1:0]. Two pins out, and three come back below
+       * - V0..V2 are no longer imported at all. */
+      "MAPA0", "MAPA1",
       ...(WITH_LIST ? ["LRUN"] : []),  // BSTAT, and the arbiter's third requester
     ]),
   },
@@ -117,7 +137,28 @@ const ctrlFanout: Cell[] = [
  * ⚠ Exported as well as merged, because access.check.ts and cupl.check.ts both
  * check arbDesign standalone and a GAL22V10 fuse map is the only form either of
  * them can execute. */
-export const arbGalDesign = rename(arbDesign, CPU_CHIP)
+/* ⚠ FOUR MORE RENAMES SINCE 2026-09-08, all so that §6.4's map fetch can become
+ * the arbiter's fourth requester WITHOUT editing arbDesign - which stays a
+ * standalone GAL22V10 that access.check.ts and cupl.check.ts can execute, and
+ * which is full at 10 of 10 macrocells and 10 of 10 input pins.
+ *
+ *   GCPU0..3 -> ACPU0..3   the raw CPU grant; tileCadence withdraws the map's
+ *                          chip from it and emits the real GCPU0..3
+ *   SPNREQ   -> SPNREQG    the span writer's request, gated off in a map slot
+ *                          because the two share the card's one address bus
+ *   SPANBUSY -> WAITSRC    /WAIT's source: the span backstop OR a map hold
+ *   RW       -> WAITRW     /WAIT's read qualifier, defeated by a map hold so
+ *                          that reads wait for it too (7.4 keeps its !RW)
+ *
+ * Renaming an input is how CPUA0/CPUA1 already reach it; renaming an output is
+ * the same operation and the fuse map is untouched either way. */
+const ARB_MAP: Record<string, string> = {
+  ...CPU_CHIP,
+  GCPU0: "ACPU0", GCPU1: "ACPU1", GCPU2: "ACPU2", GCPU3: "ACPU3",
+  SPNREQ: "SPNREQG", SPANBUSY: "WAITSRC", RW: "WAITRW",
+}
+
+export const arbGalDesign = rename(arbDesign, ARB_MAP)
 export const arbGal = arbGalDesign
 
 /* ⚠ THE ARBITER WENT OUT AND CAME BACK, BOTH ON 2026-09-08, and the round trip
@@ -147,19 +188,23 @@ export const arbGal = arbGalDesign
  * 1,024 inputs. Merging a design into a CPLD costs no verification here - that
  * is how the sync trio and the scan pair already work. */
 export const vctrlCpld: Merged = merge(
-  [hgenDesign, vgenDesign, vdecDesign, seqphDesign, seqctlDesign, arbGalDesign],
+  [rename(hgenDesign, SLOT_CE), rename(vgenDesign, SLOT_CE), vdecDesign,
+   seqphDesign, seqctlDesign, arbGalDesign],
   [...ctrl, ...ctrlFanout, ...tileCadence, ...decodeCells],
   {
     name: "vctrl", partNo: "ARM6309-UV0B", location: "video card - sync and sequencer",
-    /* ⚠ f1508plcc84, NOT f1508ispplcc84. The fit is 64 of 64 I/O and 4 of 4
-     * dedicated inputs with ZERO spare, and JTAG costs four I/O - so this part
-     * cannot have both. It is programmed out of circuit, which is what the
-     * audio card's U1 already does.
+    /* ⚠ f1508ispplcc84 SINCE 2026-09-08, and it was f1508plcc84 for a day.
+     * The reasoning against JTAG was arithmetic - "the fit is 62 of 64 I/O and
+     * JTAG costs four, so this part cannot have both" - and 6.4's corrected
+     * cell address is what changed the input to it. V0..V2 were exported from
+     * here to vaddr as the row inside the cell and were the WRONG COUNTER
+     * (sync.timing.ts's V starts at the leading edge of VSYNC); the right one,
+     * vadr's row counter, is already on vaddr. Three pins came back, the fit is
+     * 59 of 64 with JTAG reserved, and this part is programmable in circuit.
      *
-     * If in-circuit programming is wanted back, four pins have to come from
-     * somewhere: RA0-RA4 and WSTB onto a second GAL22V10 is the obvious six,
-     * at the cost of exporting RDFG/RDBG/RDLEN. Nobody has needed it yet. */
-    device: "f1508plcc84", clock: "DOTCLK",
+     * `JTAG=on gal/prjbureau/fit1508.sh gal/vctrl.pld` is what says so - the
+     * fitter reserves TMS/TDI/TDO/TCK and reports "Design fits successfully". */
+    device: "f1508ispplcc84", clock: "DOTCLK",
     external: new Set([
       "HSYNC", "VSYNC", "BLANK",
       "VBLANK", "HBLANK", "SPANBUSY",                    // VSTAT, driven onto D0-7
@@ -169,6 +214,14 @@ export const vctrlCpld: Merged = merge(
       "SLOTTICK", "RETIRE",
       /* §6.4's cadence, out to the address part and the serialiser */
       "MAPLD", "MAPSEL", "TILESEL", "LINEAR",   // CHARSEL/GLYPHLD/GLYPHSH/LUTPAGE: 6.4.3
+      /* §6.4's fetch sequence, and §8's two window signals with it - census.ts
+       * listed FETCH and HLOAD as "produced by the sequencer's unfitted decode
+       * half" and nothing produced them. MCADV steps the map's column counter,
+       * which is on vaddr because the address it feeds is. */
+      "FETCH", "MCADV",
+      /* The CPU's per-chip grant, with the map's chip withdrawn - 5.2.1's
+       * SRCSEL[n] under its own name now that it is not arbDesign's output. */
+      "GCPU0", "GCPU1", "GCPU2", "GCPU3",
       /* §10.3's engine holds the address bus through SPNGRANT, so what vctrl
        * owes it is the grant and nothing else. */
       ...(WITH_LIST ? ["LGRANT"] : []),
@@ -179,14 +232,21 @@ export const vctrlCpld: Merged = merge(
        * selects itself. Six pins out, two back. */
       "FP0", "FP1",
       "VRAMSEL", "HLOAD", "ROWADV",
-      /* The cell's row and column inside the 8x8 - §6.4's geometry. These are
-       * the sync counters' own low bits, so they cost pins and not logic. */
-      "V0", "V1", "V2",
+      /* ⚠ V0..V2 LEFT THIS LIST ON 2026-09-08. They were exported as "the cell's
+       * row inside the 8x8 - the sync counters' own low bits, so they cost pins
+       * and not logic", and they were the wrong counter: sync.timing.ts starts
+       * V at the leading edge of VSYNC, so active video begins at V = 37 or 35
+       * depending on the family and V2..V0 is 5 or 3 at the top of the screen,
+       * not 0. §6.4's vertical fields are vadr's row counter instead - SA12..10
+       * for the row within the cell, SA17..13 for the cell row - which is on
+       * vaddr already and is zero-based and VSCROLL-offset by construction.
+       * Three pins back, and cell mode gains free vertical scroll with them. */
       /* §5.2.1's arbiter, back on this part. The eight per-chip grants go to
        * the SRAMs' /WE and the four '153 source selects; SPNGRANT goes to
        * vaddr's address mux, which is what WRITESEL used to be; /WAIT goes to
        * the backplane through its open drain. */
-      ...arbGalDesign.cells.map((c) => c.name),
+      /* ACPU0..3 are buried: the cadence gates them into GCPU0..3 above. */
+      ...arbGalDesign.cells.map((c) => c.name).filter((n) => !/^ACPU\d$/.test(n)),
     ]),
   },
 )

@@ -104,7 +104,8 @@ that the document specifies rather than lists:
 | [`seqctl.model.ts`](seqctl.model.ts) | its state machine: one handshake, three terminations |
 | [`seqctl.check.ts`](seqctl.check.ts) | all 16 states × 128 inputs, and the eight-byte glyph row — `npm run check:seqctl` |
 | [`tile.model.ts`](tile.model.ts) | §6.4's three address concatenations — bitmap, 8bpp tile, 1bpp character |
-| [`tile.check.ts`](tile.check.ts) | the no-adder property, asserted as OR = ADD over all 524,288 field combinations per variant — `npm run check:tile` |
+| [`cadence.check.ts`](cadence.check.ts) | §6.4.9's cell-mode fetch sequence over **a whole 800-dot line** — 80 map accesses for 80 cells in order, the one-cell lead measured in dots, §6.4.2's 9-per-8-dots and 2.25-per-chip, one source on the address bus, the four `/WAIT` cases — **and §8.1's window signals over a whole frame in each of the four `VMODE` codes**: which row each displayed line shows at five scroll positions, §6.2's line doubling, and every counter enable counted **per dot**, which is what catches a missing `SLOTTICK` gate — `npm run check:cadence` |
+| [`tile.check.ts`](tile.check.ts) | the no-adder property, asserted as OR = ADD over all 524,288 field combinations per variant — **and that the fitted `addressMux()` computes the modelled tile and map addresses**, over every cell, every pixel within it and all 256 codes — `npm run check:tile` |
 
 Several statements of one logic is several too many, so the redundancy is kept minimal:
 `mmu.check.ts` carries no copy of the equations, and `mmu.jedec.ts` is not a fourth
@@ -370,14 +371,21 @@ the thing that stops the producer-with-no-consumer defect (archived in
 
 The video card's programmable logic is **two ATF1508AS PLCC-84s plus the `rfa`
 `GAL22V10`** (`video.cpld.ts`, `regfile.jedec.ts`). Both CPLDs are fitted
-(`cpld/vaddr.fit`, `cpld/vctrl.fit`): `vaddr` at 64 of 64 I/O and 102 of 128 logic
-cells, `vctrl` at **62 of 64 I/O and 97 of 128 logic cells** — with the arbiter merged
+(`cpld/vaddr.fit`, `cpld/vctrl.fit`): `vaddr` at 61 of 64 I/O and 109 of 128 logic
+cells, `vctrl` at **64 of 64 I/O and 121 of 128 logic cells** — with the arbiter merged
 into `vctrl`, where `WRITESEL` **is** `SPNGRANT`, and the register-file address decode
 out on `rfa` so `graphics.md` §7.4's broadcast write has pins to signal through.
 
-⚠ **JTAG costs four I/O and 62 of 64 leaves two — so `vctrl` has no in-circuit
-programming.** It is programmed out of circuit, which is what the audio card's U1
-already does.
+⭐ **Both fits reserve JTAG and both still fit**, so the video card's CPLDs are
+programmed **in circuit** — unlike the audio card's U1. `JTAG=on prjbureau/fit1508.sh
+vctrl.pld` is the run that says so; the fitter places `TMS`/`TDI`/`TDO`/`TCK` and
+reports "Design fits successfully".
+
+⚠ **JTAG's four are four of the 64 I/O, not four more.** The `ATF1508AS` shares them
+with ordinary I/O (PLCC-84 pins 14, 23, 62, 71), so the reported totals are logic pins
+plus JTAG: `vaddr` **57 + 4 = 61 of 64**, `vctrl` **60 + 4 = 64 of 64**. Fitting the
+same designs with `JTAG=off` reports 58 and 60, which is the A/B that shows what the
+four cost. `vctrl` is exactly full.
 
 > The route here — a committed fit that silently targeted a TQFP100 where the design
 > declared a PLCC-84, an arbiter moved out to a `GAL22V10` and merged back the same day —

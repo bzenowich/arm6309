@@ -459,14 +459,19 @@ bound, what it settles, and the free-run-on-`CLK25` rule stay in the item.
   so the part stayed a PLCC-84; then `RA0`–`RA4` and `WSTB` went out to a second GAL
   (`rfa`) and §6.4.3's Variant B came out for the display list, leaving it at 46 of
   64 — at which point the arbiter came back in and deleted its package. **Fit chain:
-  64/64 I/O, 112/128 cells → 50/64, 91/128 → 46/64, 87/128 → final 62/64, 97/128**
-  (`hardware/gal/video.cpld.ts`, `cpld/vctrl.fit`).
+  64/64 I/O, 112/128 cells → 50/64, 91/128 → 46/64, 87/128 → 62/64, 97/128 → final
+  59/64, 97/128** (`hardware/gal/video.cpld.ts`, `cpld/vctrl.fit`).
 - **"`vctrl` has zero spare pins and therefore no JTAG"** — done 2026-09-08:
   `RA0`–`RA4` and `WSTB` moved to `rfa`, a second `GAL22V10`. The estimate said five
   pins; it was **fourteen**, because nine inputs existed only to feed those outputs.
   JTAG fitted with ten to spare — and was spent again the same day on the display list
-  and the arbiter's return. (`vaddr`, not `vctrl`, is the CPLD without JTAG now — the
-  live row.)
+  and the arbiter's return. **Then it came back, on both parts**, when `graphics.md`
+  §6.4.1's cell address stopped taking its vertical fields from the sync line counter:
+  `vctrl` was exporting `V0..V2` to `vaddr` for a field that should never have crossed
+  parts, and removing them returned three pins on each. `vaddr` 61/64 and `vctrl`
+  59/64 both fit with `TMS`/`TDI`/`TDO`/`TCK` reserved, so the machine's video CPLDs
+  are programmed in circuit and `machine.md` §6's JTAG row is struck.
+  (`video/docs/history.md` has the correction.)
 - **"Bound `SPANBUSY`"** — done 2026-09-08: **40.7 µs** worst case, **10.2 µs** once
   `graphics.md` §14.2's broadcast write lands; `/WAIT` also qualified on `R/W`, so
   reads never wait (`graphics.md` §7.4). Now §5 item 10.
@@ -655,6 +660,40 @@ list engine was **built** on 2026-09-08 at **no package cost** (`graphics.md`
 `graphics.md` §6.4: **arm6309 card** — 80×25 at 2 writes/cell, and 256 attribute pairs
 from all 65,536 colours", with a qualification block noting §6.4 was "a proposal, not
 the specified card" gated on GAL pin fit. §6.4.3's Variant B (the 2-writes/cell 1bpp
-character mode) was **dropped 2026-09-08**; text is the span writer in bitmap mode at
-**13 writes/cell**, and the GIME keeps the text row. Variant A's 8bpp tilemap — the
+character mode) was **dropped 2026-09-08**; text that mixes with graphics or colours
+per cell is the span writer in bitmap mode at **13 writes/cell**, and the GIME keeps
+the text row. A **one-colour-pair console** is cheaper than either — §6.4.8 spends
+Variant A's 256 tile codes on glyphs and pays **1 write/cell** — but it is bounded to
+256 (glyph, colour) pairs and a global mode, so it does not move the GIME row. Variant A's 8bpp tilemap — the
 mode with no period equivalent — survives and keeps its row.
+
+## machine.md §6 — the video card's two text rows
+
+The hazard table carried **"⚠ `vaddr` has no JTAG — 64 of 64 I/O, so it is programmed
+out of circuit like the audio card's `ATF1508AS`. `vctrl` has 18 spare pins, so the
+pair can be rebalanced if in-circuit programming matters more than the display list"**.
+Struck 2026-09-08: both CPLDs fit with JTAG reserved (`vaddr` 61 of 64, `vctrl` 59 of
+64) once `graphics.md` §6.4.1's cell address stopped crossing the wrong line counter
+between the parts. No rebalance was needed and none was done.
+
+The text row read **"⚠ No hardware text mode. §6.4.3's Variant B is dropped; text is
+the span writer in bitmap mode at 13 writes/cell"** with the 2.5 ms / 3 % / 62 ms
+figures. Those figures are unchanged and still the row's, but text is **two modes, not
+one**: §6.4.8's cell-mode console is 1 write/cell, 0.19 ms per scrolled line and 4.8 ms
+per screen, bounded by 256 (glyph, colour) pairs and 32 cell rows. The row now names
+both and keeps "no hardware character generator" as the accurate form of the warning.
+
+## machine.md §6 — the video card's cell-mode row, twice in one day
+
+The hazard table gained **"⚠ Cell mode is addressed but not sequenced"** when
+`graphics.md` §19 item 15(c) was widened from "the map fetch has no arbiter
+requester" to "the fetch cadence is a placeholder" — it counted a four-cell period
+where a cell is two slots, so it fetched half a line's tile bytes and one map byte in
+four. The row was replaced the same day: §6.4.9's cadence is built and
+`cadence.check.ts` runs a line against the fitted terms.
+
+What replaced it is **narrower and not cell-specific**: `ROWADV` and `VLOAD` are the
+vertical half of what `census.ts` calls the sequencer's unfitted decode half, and
+until they exist the row counter does not step in *either* mode. §6.4.9 produced
+`FETCH` and `HLOAD`, the horizontal half, on its way past. The second new row records
+that both video CPLDs are now out of pins and cells.

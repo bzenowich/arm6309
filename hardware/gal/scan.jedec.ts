@@ -29,21 +29,8 @@
  *   package boundary for free because the two counters are independent.
  */
 
-import { counterTerms } from "./jedec/counter"
+import { loadable } from "./jedec/counter"
 import type { Design } from "./jedec/assemble"
-
-/* A loadable counter: load wins, then count if enabled, else hold. The
- * generator gives the count-or-hold half; the load is one term per bit and
- * has to qualify the other two. */
-const loadable = (
-  bits: string[], enable: string, load: string, from: string[],
-): string[][] => {
-  const counted = counterTerms({ bits, enable })
-  return bits.map((_, i) => [
-    `${load} & ${from[i]}`,
-    ...counted[i].map((t) => `!${load} & ${t}`),
-  ])
-}
 
 /* =====================================================================
  * hadr - the column address, A9..A2

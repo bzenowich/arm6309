@@ -157,7 +157,8 @@ quadrants above it are decoded by a motherboard GAL (`ram.md` §6.2).
 >
 > **`A21`–`A24` never reach a slot.** A card decodes `A0`–`A20`, so an access at 2.5 MB
 > would look to it exactly like one at 0.5 MB — and giving every card four more address
-> pins is four the backplane has not got, on a video card that is at 64 of 64 I/O.
+> pins is four the backplane has not got, on a video card whose `vaddr` is at 61 of
+> 64 I/O with JTAG reserved — three free, against the four.
 >
 > **`/IOPAGE` solves it for nothing.** It is open-drain and this section already requires
 > every physical decode on every card to qualify against it, so the motherboard simply
@@ -670,8 +671,8 @@ a cross-card dependency.
 | video | Bench the dot path and fit the sequencer GALs *before* layout | `graphics.md` §18 steps 1–2 |
 | video | **Specify the video output stage** — the R-2R ladders cannot drive 75 Ω from `'574` outputs, and blanking has no mechanism | `design-review.md` §Vid-M4 |
 | **video** | **⚠ The list engine clobbers `WPTR`, and that is software's rule to keep.** Sharing the write pointer is what made the display list fit; anything that starts a list reloads `+$08`–`$0A` afterwards, three writes. §10.3 owns the semantics | `graphics.md` §10.1.6.2, §13 |
-| **video** | **⚠ `vaddr` has no JTAG** — 64 of 64 I/O, so it is programmed out of circuit like the audio card's `ATF1508AS`. **`vctrl` has 18 spare pins**, so the pair can be rebalanced if in-circuit programming matters more than the display list | `cpld/vaddr.fit` |
-| **video** | **⚠ No hardware text mode.** §6.4.3's Variant B is dropped; text is the span writer in bitmap mode at **13 writes/cell**. A scrolled line is 2.5 ms — **3 % of the CPU at 9600 baud** — and a full 80×25 redraw is 62 ms against the 2–4 s a full ANSI screen takes to arrive over the modem. **Under NitrOS-9 it was never usable anyway**: §6.4.6's mode is global, not per-window | `graphics.md` §6.4.3 |
+| **video** | **⚠ Both video CPLDs are out of room.** §6.4.9's cadence and §8.1's window signals took `vctrl` to **64 of 64 I/O — 60 logic pins plus JTAG's four, which the `ATF1508AS` shares with ordinary I/O — and 121 of 128 cells** and `vaddr` to 109 of 128 — both still fit with JTAG reserved, and neither has room for the next thing. §14.2's two ×16 framebuffer parts would return six output pins by making the arbiter 2 grants instead of 8 | `cpld/vctrl.fit`, `graphics.md` §19 item 25 |
+| **video** | **⚠ No hardware character generator, and text is two modes not one.** §6.4.3's Variant B is dropped. Text that mixes with graphics or colours per cell is the span writer in bitmap mode at **13 writes/cell** — a scrolled line is 2.5 ms, **3 % of the CPU at 9600 baud**, and a full 80×25 redraw is 62 ms against the 2–4 s a full ANSI screen takes to arrive over the modem. A **one-colour-pair console** is §6.4.8's cell mode instead, at **1 write/cell**, 0.19 ms per scrolled line and 4.8 ms per screen — bounded by 256 (glyph, colour) pairs, 32 cell rows, and a global mode. **Under NitrOS-9 neither is per-window**: §6.4.6's mode is global | `graphics.md` §6.4.3, §6.4.8 |
 | **video** | **⚠ The framebuffer and palette go surface-mount.** `graphics.md` §14.2 consolidates seven SRAMs into four — 2 × `AS6C8016-55ZIN` and 1 × `IS61C6416AL-12TLI`, both TSOP-44 II, both stocked, ~$14–21 against ~$36–54 and 205–405 mA lighter. **These are the machine's first SMD parts**; everything else is DIP or a socketed PLCC. That is an assembly decision, not an electrical one | `graphics.md` §14.2 |
 | audio | Freeze §9's register map — it is the deliverable, ahead of any board | `audio.md` §15 step 0 |
 | audio | The MCU bring-up card, which is what proves the register map | `audio.md` §12.5 |

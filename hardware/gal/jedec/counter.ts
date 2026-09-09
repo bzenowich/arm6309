@@ -85,3 +85,19 @@ export const counterNext = (
   if (opts.clear) return 0
   return value + 1 >= opts.modulus ? 0 : value + 1
 }
+
+/** A loadable counter: load wins, then count if enabled, else hold. The
+ *  generator gives the count-or-hold half; the load is one term per bit and has
+ *  to qualify the other two.
+ *
+ *  Lived in scan.jedec.ts until 2026-09-08, when 6.4's map column counter
+ *  became the second user (video.parts.ts). Same equations, one home. */
+export const loadable = (
+  bits: string[], enable: string, load: string, from: string[],
+): string[][] => {
+  const counted = counterTerms({ bits, enable })
+  return bits.map((_, i) => [
+    `${load} & ${from[i]}`,
+    ...counted[i].map((t) => `!${load} & ${t}`),
+  ])
+}

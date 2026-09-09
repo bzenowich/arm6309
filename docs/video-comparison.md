@@ -127,12 +127,12 @@ be the *slowest* of the three to fill.
 
 | | **arm6309 card** | GIME | VIC-II |
 |---|---|---|---|
-| Character generator | **none — software glyphs via the span writer** (§7) | **on-chip ROM** | off-chip ROM, fetched over the video bus |
+| Character generator | **none in hardware** — software glyphs via the span writer (§7), or a font baked into the tile set (`graphics.md` §6.4.8) | **on-chip ROM** | off-chip ROM, fetched over the video bus |
 | Text geometry | **80×25** at 8×8 | 32 / 40 / **80** columns, 8 or 9 lines per row | 40×25 at 8×8 |
-| Colour per cell | **any of 256 fg + any of 256 bg** | 8 fg + 8 bg (palette entries 0–7) | 1 fg of 16 + **one global** bg |
+| Colour per cell | **any of 256 fg + any of 256 bg** — in the span writer's text; a tile-set console is one pair per bank, 32 banks | 8 fg + 8 bg (palette entries 0–7) | 1 fg of 16 + **one global** bg |
 | Hardware attributes | none | **blink, underline** | none |
-| Cost per cell | 13 writes ≈ 31 µs (§7.2) | **2 bytes, zero CPU beyond the write** | **1 byte + 1 colour nibble** |
-| Scroll one line | **~2.5 ms** (render row, `VSCROLL += 8`) | one register write | ~10 ms ⚠ derived (move 1 K screen + 1 K colour) |
+| Cost per cell | 13 writes ≈ 31 µs (§7.2), or **1 write ≈ 2.4 µs** in a tile-set console | **2 bytes, zero CPU beyond the write** | **1 byte + 1 colour nibble** |
+| Scroll one line | **~2.5 ms** (render row, `VSCROLL += 8`), or **~0.19 ms** in a tile-set console | one register write | ~10 ms ⚠ derived (move 1 K screen + 1 K colour) |
 | Mixing text and graphics | **yes, per pixel — it is all one bitmap** | no — mode is global | no, except via raster splits |
 
 The GIME's hardware character generator is its clearest structural win over the card. The
@@ -222,7 +222,7 @@ can buy.
 | Raster interrupts | **arm6309 card** and **VIC-II** — true compare; the GIME has none |
 | CPU bus friendliness | **arm6309 card** and **GIME** — neither ever steals a cycle |
 | Moving objects | **VIC-II**, decisively — 8 sprites with collision, and nothing else has any |
-| Text | **GIME** — hardware character generator, 80 columns, attributes, zero CPU; the card's text is the span writer at 13 writes/cell (`graphics.md` §6.4.3) |
+| Text | **GIME** — hardware character generator, 80 columns, attributes, zero CPU. The card answers with two software modes and neither is free: the span writer at 13 writes/cell with per-cell colour, or a tile-set console at 1 write/cell with one colour pair (`graphics.md` §6.4.3, §6.4.8) |
 | Tiled backgrounds | **arm6309 card** with §6.4.2's Variant A — an **8bpp tilemap with no attribute clash**, which neither period chip can express |
 | Video output options | **GIME** — RGB, composite and RF; the card is VGA-only |
 | Colour into a television | **VIC-II** — separate luma/chroma, a fixed palette chosen with care |

@@ -99,9 +99,16 @@ const MERGED_OUT = [
 ] as const
 
 /* Inputs produced by the sequencer's unfitted decode half - inside one die
- * they are never pins either. */
+ * they are never pins either.
+ *
+ * ⚠ FETCH AND HLOAD LEFT THIS SET ON 2026-09-08. They are produced now, by
+ * video.parts.ts's tileCadence, because 6.4's map fetch has to be placed
+ * relative to the display fetch window and there was no window signal to place
+ * it against - two range compares on hgen's counter, which was already on the
+ * same part. ROWADV and VLOAD are still owed: they are the vertical half and
+ * 6.2's line doubling is tangled up in them. */
 const FROM_DECODE = new Set([
-  "FETCH", "HLOAD", "ROWADV", "VLOAD", "LDA", "LDB", "LDC", "WSTB", "VSTATWR",
+  "ROWADV", "VLOAD", "LDA", "LDB", "LDC", "WSTB", "VSTATWR",
 ])
 /* HSCROLL and VSCROLL reach the counters on the register file's data path,
  * not on nineteen dedicated lines: D0..D7 with a load strobe per slice. */

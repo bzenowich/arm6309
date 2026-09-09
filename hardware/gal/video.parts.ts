@@ -6,7 +6,12 @@
  */
 
 import type { Cell } from "./jedec/assemble"
-import { counterTerms } from "./jedec/counter"
+import { counterTerms, loadable } from "./jedec/counter"
+import { rangeTerms } from "./jedec/range"
+import { H } from "./sync.timing"
+
+/* hgen's slot counter, which the windows below are compares on. */
+const HB = ["H0", "H1", "H2", "H3", "H4", "H5", "H6", "H7"]
 
 /* ---- the scroll preloads, which were seventeen wasted pins -------------- *
  *
@@ -67,6 +72,47 @@ export const tileRegisters: Cell[] = [
   })),
 ]
 
+/* ---- the map fetch's own cell column, 6.4.1's "one cell ahead" ---------- *
+ *
+ * WHY SEVEN MACROCELLS RATHER THAN REUSING SA9..SA3. 6.4.1 requires the map
+ * byte "pipelined one cell ahead" of the tile fetch, and the reason is timing.
+ * A slot is 158.9 ns and 5.2.2 splits it - spare access first, display fetch
+ * second, 79.4 ns each. Fetching the map byte in the spare half of the SAME
+ * slot that then fetches the tile row puts this chain inside one 79.4 ns half:
+ * address mux (~15 ns) + SRAM (55 ns, 14.2's AS6C8016-55) + latch setup
+ * (~5 ns) = 75 ns, and the tile address then has to repeat it. Two 4.4 ns
+ * margins, on a card whose tightest documented path (6.1) has 11.7. One cell of
+ * lead turns both into a full half-slot of slack.
+ *
+ * Leading by one cell means the map fetch addresses cell N while the tile fetch
+ * addresses cell N-1 - and SA9..SA3 IS the cell being tile-fetched. The obvious
+ * fix is SA + 1 and 6.4.1's whole argument is that there is no adder. So the
+ * map keeps its own counter: same load value, HSCROLL[9:3], started one cell
+ * earlier because MFETCH opens two slots before TFETCH (tileCadence below).
+ * "One ahead" costs a counter, not an adder.
+ *
+ * Seven bits, no terminal count: the map is 128 cells wide (6.4.1's 128-byte
+ * stride) and 128 is where seven bits wrap, which is the horizontal ring. */
+export const mapColumn: Cell[] = [
+  ...loadable(
+    ["MC0", "MC1", "MC2", "MC3", "MC4", "MC5", "MC6"],
+    "MCADV", "HLOAD",
+    ["HS3", "HS4", "HS5", "HS6", "HS7", "HS8", "HS9"],
+  ).map((terms, i) => ({
+    pin: 0, name: `MC${i}`, assertedLow: false, s0: 1 as const, registered: true, terms,
+  })),
+  /* §6.4.2's ninth access. "Display fetch per 8 dots: 9 accesses" against the
+   * bitmap's 8 is exactly eight tile bytes - two slots of four through the
+   * ordinary display path - PLUS ONE, and that one is the map byte, taken from
+   * a spare access. A spare access names one of the four chips and the name is
+   * the low two bits of the address it wants, the same identity as SPNA1/SPNA0
+   * = WPTR[1:0] (5.2.1). Here they are cellCol[1:0], so four adjacent cells sit
+   * on four different chips and the map load spreads evenly - which is what
+   * makes 6.4.2's "2.25 accesses per chip per cell" true. */
+  { pin: 0, name: "MAPA0", assertedLow: false, s0: 1, registered: false, terms: ["MC0"] },
+  { pin: 0, name: "MAPA1", assertedLow: false, s0: 1, registered: false, terms: ["MC1"] },
+]
+
 /* The framebuffer address, now with four sources. §6.4.1's concatenations:
  *
  *   linear   A18..A10 scan row      A9..A2  scan column
@@ -80,9 +126,21 @@ export const addressMux = (): Cell[] => {
   /* A slot is four pixels and a cell is eight, so the byte address WITHIN a
    * tile row is the column counter's own low bit, SA2 - not a slot-counter
    * bit, which was written here on 2026-09-07 and addresses in units of
-   * sixteen pixels. */
+   * sixteen pixels.
+   *
+   * ⚠ THE ROW WITHIN THE CELL IS SA12..SA10, NOT V2..V0 - corrected
+   * 2026-09-08. Both name a line and only one of them is zero at the top of
+   * the display: sync.timing.ts puts BOTH counters' origin at the leading edge
+   * of their own sync pulse, so active video starts at V = 37 in the 449-line
+   * family and V = 35 in the 525-line one. V2..V0 as the glyph row would have
+   * rotated every cell by 37 mod 8 = 5 rows in one mode and 3 in the other.
+   * vadr's row counter has neither problem: VLOAD loads it from VSCROLL through
+   * vertical blanking and ROWADV advances it once per DISPLAYED row
+   * (scan.jedec.ts), so SA18..SA10 is zero-based at the top of the window by
+   * construction - and scrolled, which is what makes VSCROLL work in cell mode
+   * at all (graphics.md 6.4.8). */
   const tileSrc = (bit: number) =>
-    bit >= 14 ? `TB${bit - 14}` : bit >= 6 ? `MAP${bit - 6}` : bit >= 3 ? `V${bit - 3}` : "SA2"
+    bit >= 14 ? `TB${bit - 14}` : bit >= 6 ? `MAP${bit - 6}` : bit >= 3 ? `SA${bit + 7}` : "SA2"
   /* The map's own address - base, cell row, cell column - which the mux did
    * not have at all, so MAPLD was latching a byte from an address nothing
    * generated. §19 item 16 lives here and it costs nothing: the intra-cell
@@ -91,9 +149,32 @@ export const addressMux = (): Cell[] => {
    * therefore already scrolled. §6.4.6 calls sub-cell scroll "new logic in
    * the address concatenation"; it is not, PROVIDED the map byte for a cell
    * is fetched before that cell's first pixel - a cadence requirement, not an
-   * address one. */
+   * address one.
+   *
+   * ⚠ THE FIELDS WERE TRANSPOSED UNTIL 2026-09-08. This read
+   * `bit >= 5 ? SA[bit-2] : V[bit+1]`, which puts cellCol at A11..A5 and three
+   * bits of cell row at A4..A2: a map with a 32-byte COLUMN stride, a 4-byte
+   * row stride, 8 addressable rows against the 25 an 80x25 needs, and the
+   * HSCROLL mux phase left in A1..A0. tile.model.ts's mapAddress and
+   * graphics.md 6.4.1 both say MAPBASE | cellRow<<7 | cellCol, and nothing
+   * asserted the two agreed - tile.check.ts imported addressMux only to COUNT
+   * it. It now derives the map address from these terms and compares.
+   *
+   *   A18..A12  MAPBASE      MB6..MB0
+   *   A11..A7   cell row     SA17..SA13   (the row counter's own bits, / 8)
+   *   A6..A0    cell column  MC6..MC0     (the MAP's own counter - see below)
+   *
+   * ⚠ THE COLUMN IS MC AND NOT SA9..SA3, since 2026-09-08's cadence. The map
+   * fetch runs ONE CELL AHEAD of the tile fetch that consumes it (6.4.1's
+   * "pipelined one cell ahead"), and SA9..SA3 is by construction the cell being
+   * TILE-fetched - using it addresses the map one cell late. 6.4.1's argument
+   * forbids the obvious fix, because a +1 is an adder. MC is that counter, one
+   * cell in front: "one ahead" costs a counter, not an adder.
+   *
+   * so A1..A0 here are cellCol[1:0] = {MC1, MC0} and NOT the pixel phase.
+   * That is MAPA1/MAPA0 in mapColumn. */
   const mapSrc = (bit: number) =>
-    bit >= 12 ? `MB${bit - 12}` : bit >= 5 ? `SA${bit - 2}` : `V${bit + 1}`
+    bit >= 12 ? `MB${bit - 12}` : bit >= 7 ? `SA${bit + 6}` : `MC${bit}`
   return [...Array(17).keys()].map((i) => {
     const bit = i + 2
     return {
@@ -122,43 +203,200 @@ export const addressMux = (): Cell[] => {
   })
 }
 
-/* ---- §6.4.2/6.4.3's fetch cadence -------------------------------------- *
+/* ---- §6.4's fetch cadence, and §5.2.2's slot ---------------------------- *
  *
- * Variant A is map byte then eight tile bytes; Variant B is code, attribute
- * and one font row - "3 accesses per 8 dots against the bitmap's 8". Both are
- * a second cadence on top of §5.2.2's slot, and §19 item 15(c) names it as the
- * open question. */
+ * ⚠ REWRITTEN 2026-09-08. What was here counted TC0..TC2 on SLOTTICK and split
+ * the period at TC2 - and a slot is four dots while a cell is eight, so that
+ * period was FOUR CELLS. Over it the design fetched 16 tile bytes where 32 are
+ * needed and latched one map byte where four are: half a line's pixels had no
+ * data and three cells in four had no code. It was a sketch of "map byte, then
+ * the tile row" and graphics.md 19 item 15(c) is where it is recorded.
+ *
+ * THE SEQUENCE IS FIXED BY 6.4.2'S OWN ARITHMETIC - nine accesses per eight
+ * dots. Eight tile bytes ARE two ordinary display fetches (four interleaved
+ * chips x two slots), so in cell mode the tile address owns the display half of
+ * every slot exactly as the bitmap's scan address does, and the NINTH access is
+ * the map byte out of a spare window (5.2.2's front half), once per cell.
+ *
+ *   slot     2k          2k+1        2k+2        2k+3
+ *   spare    map[N+1]    -           map[N+2]    -
+ *   fetch    tile N.0-3  tile N.4-7  tile N+1.0-3  ...
+ *            \_____ cell N _____/   \____ cell N+1 ____/
+ *
+ * The cell is two slots and its phase is H0, the slot counter's own low bit -
+ * no counter of its own, which is the second thing the old TC got wrong.
+ *
+ * THE MAP FETCH LEADS BY ONE CELL, which is why MFETCH opens two slots before
+ * TFETCH and why the map has its own column counter (mapColumn above). During
+ * MFETCH's first cell - the last two slots of the back porch - the map byte for
+ * screen cell 0 is fetched while the tile fetch is still idle.
+ */
 export const tileCadence: Cell[] = [
-  ...counterTerms({ bits: ["TC0", "TC1", "TC2"], enable: "SLOTTICK" })
-    .map((terms, i) => ({
-      pin: 0, name: `TC${i}`, assertedLow: false, s0: 1 as const, registered: true, terms,
-    })),
+  /* The display fetch window, in slots. 8's column counter reloads at HLOAD and
+   * advances on FETCH, and both were listed in census.ts as "produced by the
+   * sequencer's unfitted decode half" - nothing generated them. They are two
+   * window compares on hgen's counter, which is on this part. */
+  { pin: 0, name: "TFETCH", assertedLow: false, s0: 1, registered: false,
+    terms: rangeTerms({ bits: HB, lo: H.backEnd + 1, hi: H.activeEnd, max: H.last }) },
+  /* Two slots - one cell - earlier, and it ends two slots earlier too: the last
+   * cell of a line has no successor to fetch a code for. */
+  { pin: 0, name: "MFETCH", assertedLow: false, s0: 1, registered: false,
+    terms: rangeTerms({ bits: HB, lo: H.backEnd - 1, hi: H.activeEnd - 2, max: H.last }) },
+  /* ⚠ AND IT IS SLOTTICK-GATED, because everything here is clocked on DOTCLK.
+   * 8's column counter takes this as its ENABLE, so a level asserted for the
+   * whole window would advance it four times a slot - once per dot - and put
+   * the line four times too far along. Written as a bare level on 2026-09-08
+   * and caught by the frame check the same day: SLOTTICK is one dot wide (dot
+   * 3), so the increment lands on the slot boundary. Every counter enable on
+   * this part carries it; a LOAD does not, because a load is idempotent. */
+  { pin: 0, name: "FETCH", assertedLow: false, s0: 1, registered: false,
+    terms: ["TFETCH & SLOTTICK"] },
+  /* Through the sync pulse and the back porch, up to the slot before MFETCH
+   * opens: both column counters take their scroll offset here. */
+  { pin: 0, name: "HLOAD", assertedLow: false, s0: 1, registered: false,
+    terms: rangeTerms({ bits: HB, lo: 0, hi: H.backEnd - 2, max: H.last }) },
+
+  /* ---- the vertical window, §8 ------------------------------------------ *
+   *
+   * ROWADV is "one pulse at the end of each displayed line" (scan.jedec.ts) and
+   * VLOAD is "asserted through vertical blanking". Both were listed in
+   * census.ts as the sequencer's unfitted decode half, and without them the row
+   * counter never takes VSCROLL and never steps - in EITHER mode, so this was
+   * the bitmap's gap as much as the tilemap's.
+   *
+   * ⚠ VLOAD IS NOT BUILT, BECAUSE IT ALREADY EXISTS. "Asserted through vertical
+   * blanking" is VBLANK's definition, and vdec has produced VBLANK all along -
+   * vadr's input is renamed to it on merge (video.cpld.ts). The same identity
+   * as WRITESEL = SPNGRANT: two names, one signal, and on a part at 64 of 64
+   * I/O the difference is a pin.
+   *
+   * ROWADV fires in the LAST slot of the line. TFETCH ends at slot 195 and
+   * MFETCH at 193, so slot 199 is clear of both this line's fetch and the next
+   * line's, which is what lets the row counter be stable across a whole line's
+   * worth of map and tile addresses. */
+  { pin: 0, name: "HEND", assertedLow: false, s0: 1, registered: false,
+    terms: rangeTerms({ bits: HB, lo: H.last, hi: H.last, max: H.last }) },
+  /* §6.2's line doubling lives here and nowhere else: "the sequencer withholds
+   * every second one, which is the whole of line-doubling" (scan.jedec.ts).
+   * VMODE1 = 0 is the doubled pair - 640x200 in the 449-line family and 640x240
+   * in the 525-line one, both 200/240 rows over 400/480 active lines - and
+   * VMODE1 = 1 is 640x400 and 640x480, one row per line.
+   *
+   * WHICH LINES TO WITHHOLD IS ONE TERM IN BOTH FAMILIES, and that is luck
+   * worth writing down. A doubled row must advance at the end of the SECOND
+   * displayed line of the pair, so the test is on the parity of V minus the
+   * first active line - 37 in the 449 family, 35 in the 525 (sync.timing.ts).
+   * Both are ODD, so display-line parity is V's parity inverted in both, and
+   * "advance when V is even" covers the pair. It is the same accident that
+   * gives vdec its "v <= 1 in both families" sync window.
+   *
+   *   ROWADV = /VBLANK . HEND . SLOTTICK . (VMODE1 # /V0)
+   *
+   * SLOTTICK for the same reason FETCH carries it: HEND is a whole slot and the
+   * part is clocked on DOTCLK, so without it the row would advance FOUR times a
+   * line and the picture would scan at a quarter height. */
+  { pin: 0, name: "ROWADV", assertedLow: false, s0: 1, registered: false,
+    terms: ["!VBLANK & HEND & SLOTTICK & VMODE1", "!VBLANK & HEND & SLOTTICK & !V0"] },
+
+  /* One map access per cell, in the FIRST slot of the map cell - H0 is the cell
+   * phase. The counter steps in the second, so MC names one cell throughout the
+   * cell that fetches it. */
+  { pin: 0, name: "MAPREQ", assertedLow: false, s0: 1, registered: false,
+    terms: ["TILEMODE & MFETCH & !H0"] },
+  { pin: 0, name: "MCADV", assertedLow: false, s0: 1, registered: false,
+    terms: ["TILEMODE & MFETCH & H0 & SLOTTICK"] },
+  /* 5.2.2's spare access is dots 0-1 (SPAREWIN = !PH1) and the display fetch is
+   * dots 2-3. The map byte is latched on the boundary between them - true
+   * during dot 1, so the register clocks at the dot 1 -> 2 edge. */
   { pin: 0, name: "MAPLD", assertedLow: false, s0: 1, registered: false,
-    terms: ["TILEMODE & SLOTTICK & !TC2 & !TC1 & !TC0"] },
-  /* The map fetch owns the address for the first slot of the cell; the tile
-   * or glyph fetch owns it afterwards. MAPLEAD is why sub-cell scroll works:
-   * when a line starts mid-cell the map byte for that cell must already be
-   * held, so the fetch leads by one cell rather than by one slot. */
+    terms: ["MAPREQ & !PH1 & PH0"] },
+
+  /* ---- who owns the address bus ---------------------------------------- *
+   *
+   * ⚠ ONE INTERNAL ADDRESS BUS, and this is the constraint that shapes the rest.
+   * 5.2.1's SRCSEL[n] muxes each CHIP's address source between the CPU's bus and
+   * the card's, so the CPU is independent per chip - but the display fetch, the
+   * span writer and the map fetch all drive the card's single bus and are
+   * therefore mutually exclusive in TIME. The map owns it for its spare window;
+   * the tile address has it the rest of the time. */
   { pin: 0, name: "MAPSEL", assertedLow: false, s0: 1, registered: false,
-    terms: ["CELL & !TC2"] },
+    terms: ["MAPREQ & !PH1"] },
   { pin: 0, name: "TILESEL", assertedLow: false, s0: 1, registered: false,
-    terms: ["TILEMODE & TC2"] },
+    terms: ["TILEMODE & !MAPSEL & !SPNGRANT"] },
   { pin: 0, name: "LINEAR", assertedLow: false, s0: 1, registered: false,
     terms: ["!TILEMODE & !SPNGRANT"] },
+
+  /* ---- the arbiter's fourth requester ----------------------------------- *
+   *
+   * 2.2's priority is "video -> CPU -> list engine -> span -> blit" and the map
+   * byte is VIDEO: refuse it and the cell displays a stale code, every frame.
+   * So it outranks both of the arbiter's existing requesters, and the two ranks
+   * are refused in two different places because they collide in two different
+   * ways.
+   *
+   * THE SPAN WRITER collides on the BUS, so it stands down for the whole of a
+   * map slot - SPNREQ is gated before it reaches the arbiter, which is one gate
+   * rather than five and leaves arbDesign untouched and still checkable as a
+   * standalone GAL22V10.
+   *
+   * ⚠ That costs the span writer HALF its spare slots in cell mode, not the
+   * "roughly an eighth" 6.4.2 quotes. Both numbers are right about different
+   * things: per-CHIP load does rise only 2.0 -> 2.25, because the map hits one
+   * chip in four; but the map takes the shared bus one slot in two, and slots
+   * are what the span writer actually queues for. graphics.md 6.4.2 carries the
+   * correction. */
+  { pin: 0, name: "SPNREQG", assertedLow: false, s0: 1, registered: false,
+    terms: ["SPNREQ & !MAPREQ"] },
+  /* THE CPU collides per CHIP, because its address path is its own. GMAP is the
+   * map's chip and the CPU's grant - which is 5.2.1's SRCSEL[n], the thing that
+   * would otherwise point that chip at the CPU's address - is withdrawn for it.
+   * ACPU is arbDesign's GCPU, renamed on merge (video.cpld.ts). */
+  ...[0, 1, 2, 3].map((n) => ({
+    pin: 0, name: `GMAP${n}`, assertedLow: false, s0: 1 as const, registered: false,
+    terms: [`MAPREQ & ${n & 1 ? "" : "!"}MAPA0 & ${n & 2 ? "" : "!"}MAPA1`],
+  })),
+  ...[0, 1, 2, 3].map((n) => ({
+    pin: 0, name: `GCPU${n}`, assertedLow: false, s0: 1 as const, registered: false,
+    terms: [`ACPU${n} & !GMAP${n}`],
+  })),
+
+  /* ---- and the CPU therefore has to be able to wait --------------------- *
+   *
+   * A refused CPU access is a lost one unless /WAIT stretches the cycle, so the
+   * map's chip collision joins the span writer's on the backstop. It is a
+   * DIFFERENT KIND of wait and the difference matters: 7.4's is up to 40.7 us
+   * and only writes take it, this one is a single 158.9 ns slot and it has to
+   * apply to reads as well, because a read whose chip is pointed elsewhere
+   * returns the wrong byte just as surely.
+   *
+   * arbDesign is not touched. Its /WAIT already reads two inputs on the output
+   * enable - SPANBUSY and R/W - and both are renamed on merge to signals formed
+   * here, so the pin, the open-drain idiom and access.check.ts's assertions
+   * about them all stand:
+   *
+   *   oe = WAITSRC & VRAMSEL & !IOPAGE & E & !WAITRW
+   *
+   * WAITSRC = SPANBUSY # MAPHOLD and WAITRW = RW & !MAPHOLD, so a map hold
+   * asserts for reads and writes alike while 7.4's span backstop keeps its
+   * !RW exactly as before. */
+  { pin: 0, name: "MAPHOLD", assertedLow: false, s0: 1, registered: false,
+    terms: [
+      "MAPREQ & !MAPA0 & !A0 & !MAPA1 & !A1",
+      "MAPREQ & MAPA0 & A0 & !MAPA1 & !A1",
+      "MAPREQ & !MAPA0 & !A0 & MAPA1 & A1",
+      "MAPREQ & MAPA0 & A0 & MAPA1 & A1",
+    ] },
+  { pin: 0, name: "WAITSRC", assertedLow: false, s0: 1, registered: false,
+    terms: ["SPANBUSY", "MAPHOLD"] },
+  { pin: 0, name: "WAITRW", assertedLow: false, s0: 1, registered: false,
+    terms: ["RW & !MAPHOLD"] },
+
   /* ⚠ VARIANT B WAS DROPPED 2026-09-08 - graphics.md 6.4.3 and 10.1.6.2.
    * CHARSEL, GLYPHLD, GLYPHSH and LUTPAGE lived here, and the eight FONTBASE
    * registers above; what they bought was a 1bpp hardware character generator
-   * at 2 CPU writes per cell against the span writer's 13.
-   *
-   * They were spent on the display list, which needs the macrocells, the
-   * product terms and the four pins. The trade is 105 Hz full-screen text
-   * against 16 Hz - and 0.38 ms per scrolled line against 2.5 ms, which is
-   * the figure a terminal actually pays. A 9600-baud BBS delivers twelve
-   * lines a second, so that is 3% of the CPU. Text still works; it is the
-   * span writer in bitmap mode, which is what 7.1-7.3 already cost out.
-   *
-   * !CHARMODE dropped out of TILESEL and LINEAR above rather than being
-   * deleted: with no char mode, TILEMODE alone says which it is. */
+   * at 2 CPU writes per cell against the span writer's 13. They were spent on
+   * the display list. !CHARMODE dropped out of TILESEL and LINEAR above rather
+   * than being deleted: with no char mode, TILEMODE alone says which it is. */
 ]
 
 /* ---- §10.3's list engine ------------------------------------------------ *

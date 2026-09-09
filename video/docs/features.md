@@ -26,7 +26,7 @@ reaches a conclusion that document does not state, the conclusion is marked.
 | | |
 |---|---|
 | **Bitmap** | **640×200, 640×240, 640×400, 640×480 — all 8bpp**, 256 simultaneous colours from 65,536 (RGB565 LUT). §1 |
-| **Text** | **80×25, 80×30, 80×50, 80×60**, 8×8 cells, rendered by the span writer at **13 writes/cell**. ⚠ **No hardware character generator** — §2.2 was dropped 2026-09-08 to afford the display list. §2 |
+| **Text** | **80×25, 80×30, 80×50, 80×60**, 8×8 cells, rendered by the span writer at **13 writes/cell** — or, for a one-colour-pair console at 80×25/80×30, by cell mode at **1 write/cell** (§2.4). ⚠ **No hardware character generator** — §2.2 was dropped 2026-09-08 to afford the display list. §2 |
 | **Tiles** | 8×8, **8bpp per pixel — no attribute clash**, 64:1 write compression. §1.4 |
 | **Colour depth** | 8bpp everywhere. There is **no 4bpp, 2bpp or 1bpp packed mode** and no 320-wide mode. §10 |
 | **Scrolling** | **Free, both axes, pixel-accurate**, by register — a 1024 × 512 ring. §1.3 |
@@ -112,7 +112,34 @@ superset of either.
 
 The tile address is **concatenation, not arithmetic** — every field lands on its own
 address bits, so there is no adder anywhere. `hardware/gal/tile.check.ts` asserts that
-by showing OR equals ADD over all 524,288 field combinations.
+by showing OR equals ADD over all 524,288 field combinations, and that the fitted
+address mux computes the same addresses the model does.
+
+⭐ **Tile mode scrolls in both axes, coarse and fine, from the same two registers as
+bitmap mode.** Every field of the cell address is a slice of a scan counter §1.3
+already preloads, so a scrolling tilemap costs a `HSCROLL`/`VSCROLL` write and
+nothing else — no adder, no offset register, no new logic.
+
+| | Horizontal | Vertical |
+|---|---|---|
+| Which cell | `HSCROLL[9:3]` | `VSCROLL[8:3]` |
+| Which pixel within it | `HSCROLL[2:0]` | `VSCROLL[2:0]` |
+| **Ring** | **128 cells — 1024 px** | **⚠ 32 cell rows — 256 px** |
+| Off-screen margin at 80×25 | 48 cells | **7 rows** |
+
+`hardware/gal/tile.check.ts` walks every displayed pixel at whole-cell offsets,
+sub-cell offsets and across both ring wraps.
+
+⚠ **The vertical ring is half the bitmap's.** The map address has no `A18`, so a
+vertically scrolling playfield has **seven cell rows of runway** to write ahead into
+rather than the bitmap's thirty-nine, and the mode reaches 80×25 and 80×30 but not
+80×50 or 80×60. Horizontally there is no such asymmetry — 48 cells of margin, the
+same 384 px §1.3 gives the bitmap.
+
+The fetch sequence behind it is built and checked too — `graphics.md` §6.4.9 for the
+cell cadence, §8.1 for the window signals that step the counters — and
+`hardware/gal/cadence.check.ts` runs a whole line and a whole frame in each of the
+four modes.
 
 ---
 
@@ -143,11 +170,13 @@ document is that one unless it says otherwise. The full design, its cost model, 
 the trade that decided the drop are archived in
 [history.md](history.md) (§6.4.3 entry).
 
-### 2.3 ⭐ Text in bitmap mode — the card's only text mode
+### 2.3 ⭐ Text in bitmap mode — the general text mode
 
 Character mode was **global** anyway — cells or pixels, not both in one region
 (`graphics.md` §6.4.6) — so a program needing text *over* graphics always rendered
-glyphs into the bitmap with the span writer. Since 2026-09-08 that is every program:
+glyphs into the bitmap with the span writer. Since 2026-09-08 that is every program
+that needs text over graphics or a colour per cell; §2.4 is the console that needs
+neither:
 
 | | Character mode (not built — §2.2) | ⭐ **Span writer, in bitmap mode** |
 |---|---|---|
@@ -168,6 +197,49 @@ comfortable. The 13 writes are `WPTR` ×3 + `WFG` + `WBG` + eight glyph rows, an
 > **Both are ~3× better than the obvious alternative.** A `TFM` of a pre-rendered
 > 8×8×8bpp glyph is 64 bytes at 3 cycles each ≈ 92 µs per cell, because `TFM` moves one
 > pixel per cycle-triple and the span writer moves eight pixels per CPU write.
+
+### 2.4 ⭐ Fast monochrome text — cell mode, at one write per cell
+
+**Spend the 256 tile codes on glyphs instead of graphics and §1.4's tile mode is a
+character generator** — a better one than §2.2's, which is the mode that was dropped.
+Bake an 8×8 font into the tile set, one glyph per code, and a character cell is **one
+CPU write of one map byte**. Nothing new is built: the mode, the address and the
+register are §1.4's, and the font is data.
+
+| | Span writer, bitmap (§2.3) | Character mode (not built — §2.2) | ⭐ **Cell mode, one colour pair** |
+|---|---|---|---|
+| One cell | 13 writes, ~31 µs | 2 writes, ~4.8 µs | **1 write, ~2.4 µs** |
+| **Scroll one line** — what a terminal does | ~2.5 ms | ~0.4 ms | **~0.19 ms** |
+| Full 80×25 redraw | ~62 ms, 16 Hz | ~9.5 ms, 105 Hz | **~4.8 ms, 210 Hz** |
+| At 9600 baud (~12 lines/s) | 3 % CPU | 0.5 % CPU | **0.23 % CPU** |
+| At 115.2 kbaud (~144 lines/s) | 36 % CPU | 5 % CPU | **2.7 % CPU** |
+| Screen memory | 128,000 B | 2 KB font + map | **16 KB tiles + a 4 KB map ring** (3,200 B displayed) |
+| Glyphs | any, 8bpp | 256, 1bpp + attribute | **256, 8bpp — antialiasing is legal** |
+
+⭐ **The scroll is a register write.** §1.4's cell row is the scan counter's own bits,
+so a scrolled line is `VSCROLL += 8` plus the 80 map bytes of the new row — not a
+memmove of the map. That matters more than the redraw figure, because a terminal
+scrolls and does not redraw: **115.2 kbaud stops being a third of the CPU.**
+
+**The price is that 256 tiles are 256 (glyph, colour) pairs, not 256 glyphs.** The map
+byte *is* the cell, so the same glyph in another colour is another code:
+
+- **One fg/bg pair** buys all 256 glyphs — CP437 entire, the CoCo 3 hi-res font, or
+  VT100 line drawing, in 16 KB. This is what the mode is for.
+- **More pairs** are more banks: `TILEBASE` is five bits, so VRAM holds **32**, and
+  switching is one register write — or a display-list `MOVE` at a scanline boundary
+  (§4), which makes colour free *per region*. It is never per cell.
+- **256-colour ANSI art stays in §2.3's bitmap mode**, where a cell's own colours are
+  two of the thirteen writes and already paid for.
+
+Building a bank costs **256 × 13 span-writer writes, ~7.9 ms, once** — one screen's
+worth of work to make every later screen thirteen times cheaper.
+
+⚠ **Three bounds.** The mode is **global** (§4, `graphics.md` §6.4.6), so this no more
+rescues NitrOS-9 windowing than §2.2 would have. The cell row is five bits, so **32
+cell rows** — 80×25 and 80×30 only. And it costs the span writer **half its spare
+slots** while it is on, because the map fetch takes the card's one internal address
+bus one slot in two (`graphics.md` §6.4.2).
 
 ---
 
@@ -249,8 +321,7 @@ locked to the raster and writes the card's own registers at chosen scanlines. It
 > ⚠ **Two prices.** The engine **clobbers the CPU's write pointer**, so anything that
 > starts a list reloads `WPTR` afterwards — three writes, ~7.1 µs, and a rule software
 > has to keep. `graphics.md` §10.3.1 is that rule, and a per-frame list is started once
-> in `VBLANK`, so in practice it is **0.05 % of a frame**. And `vaddr` has **no JTAG** at
-> 64 of 64, so it is programmed out of circuit.
+> in `VBLANK`, so in practice it is **0.05 % of a frame**.
 >
 > ⭐ **`WPTR` at `+$08`–`$0A` *is* the list pointer** — `LIST` at `+$0B`–`$0D` was
 > deleted rather than kept as an alias, because a second address for the same nineteen
@@ -496,11 +567,12 @@ brochure.
 | **Hardware sprites** | §8 — the pixel path has 11.7 ns of margin |
 | **Hardware cursor** | §9, same reason |
 | **Per-region mode mixing** | Cell/pixel is global — but ⭐ **the list engine switches it per scanline** (§4), and it is built |
-| **A hardware character generator** | ⚠ §2.2, dropped 2026-09-08 to afford the list engine. Text is the span writer at 13 writes/cell (§2.3) |
+| **A hardware character generator** | ⚠ §2.2, dropped 2026-09-08 to afford the list engine. Text is the span writer at 13 writes/cell (§2.3), or cell mode at 1 write/cell where one colour pair will do (§2.4) |
 | **Colour image blits** | §5 — this is the blitter's whole remaining value |
 | **A border colour** | `BORDER` was deleted: VGA timing has no overscan, the porches must be black for the back-porch clamp, and the `'153` pixel mux has no spare input (`graphics.md` §9.3) |
 | **Palette writes during active display** | They snow. Write during blanking (§1.2) |
-| **Fine horizontal scroll in tile mode** | Needs a 3-bit offset into the tile row — new logic in the address concatenation, not the free `HSCROLL` of bitmap mode (`graphics.md` §6.4.6) |
+| **Per-cell colour in tile mode** | The map byte is the whole cell, so 256 codes are 256 (glyph, colour) pairs. Colour is per *bank* — one register write, or per scanline region from the display list — never per cell (§2.4) |
+| **Cell mode at 80×50 or 80×60** | The map's cell row is five bits, so cell mode reaches 32 rows. 640×400 and 640×480 text is the span writer's (`graphics.md` §6.4.1) |
 
 ---
 

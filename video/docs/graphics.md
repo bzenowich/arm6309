@@ -958,10 +958,10 @@ minimal256.md §3 establishes for the scan path and §7.2 protects for `WADV`:
 ```
 8bpp tiles, 8x8 (64 B each), 256 tiles = 16 KB, aligned to 16 KB:
 
-  A18..A14   TILEBASE     (register)
-  A13..A6    code[7:0]    <- the map byte just fetched
-  A5..A3     row[2:0]     <- scan line within the cell
-  A2..A0     col[2:0]     <- pixel within the row
+  A18..A14   TILEBASE     (register)          TB4..TB0
+  A13..A6    code[7:0]    <- the map byte just fetched   MAP7..MAP0
+  A5..A3     row[2:0]     <- scan line within the cell   SA12..SA10
+  A2..A0     col[2:0]     <- pixel within the row        SA2, and the mux phase
 
 1bpp glyphs, 8 B each, 256 glyphs = 2 KB, aligned to 2 KB:
 
@@ -969,6 +969,16 @@ minimal256.md §3 establishes for the scan path and §7.2 protects for `WADV`:
   A10..A3    code[7:0]
   A2..A0     row[2:0]
 ```
+
+⚠ **The vertical fields are `vadr`'s row counter, not the sync line counter.**
+Both count lines and only one of them is zero at the top of the display:
+[`sync.timing.ts`](../../hardware/gal/sync.timing.ts) puts both counters' origin
+at the leading edge of their own sync pulse, so active video begins at line 37 in
+the 449-line family and line 35 in the 525-line one. `vadr` has neither problem —
+`VLOAD` loads it from `VSCROLL` through vertical blanking and `ROWADV` steps it
+once per *displayed* row (§8) — so `SA18..SA10` is zero-based at the top of the
+window by construction, **and scrolled**. That is the whole reason `VSCROLL` works
+in cell mode (§6.4.8).
 
 The only new element in the datapath is **getting the map byte from the pixel bus
 onto the VRAM address bus** — **zero packages**, absorbed into `vaddr` as registered
@@ -986,9 +996,27 @@ each variant.
 > 80×25 map packed at 2,000 bytes would need `MAPBASE + cellRow × 80 + cellCol`, and
 > **80 is not a power of two** — a multiply-accumulate, which is exactly the adder
 > this section's argument says does not exist. With the 128-byte stride, `MAPBASE`
-> sits in `A18..A12`, cell row in `A11..A7`, cell column in `A6..A0` —
-> concatenation again, and free. It costs **1,200 bytes** of the 512 KB nobody is
-> using: 3,200 B rather than 2,000. `check:tile` asserts both halves.
+> sits in `A18..A12`, cell row in `A11..A7` (`SA17..SA13`), cell column in `A6..A0`
+> (`SA9..SA3`) — concatenation again, and free. It costs **1,200 bytes** of the
+> 512 KB nobody is using: 3,200 B rather than 2,000. `check:tile` asserts both
+> halves, **and that the fitted mux computes the same address the model does** —
+> it evaluates `addressMux()` over every cell and every pixel within it rather
+> than only counting its product terms.
+>
+> ⚠ **The cell row is five bits, so cell mode addresses 32 rows.** That covers
+> 80×25 and 80×30; **`VMODE` 10 and 11 need 50 and 60 rows and cell mode does not
+> reach them.** Widening the field to six bits costs one bit of `MAPBASE`, takes
+> the map region from 4 KB to 8 KB, and is otherwise the same concatenation —
+> nobody has needed it.
+
+**The map byte's `A1..A0` are not the pixel phase.** Every other fetch on the card
+puts `col[1:0]` there, which is exactly what the `'153` mux is selecting on, so the
+low two bits look after themselves. The map fetch is the exception: its `A1..A0`
+are `cellCol[1:0]`, and a spare access has to *name* the chip it wants. So `vaddr`
+emits **`MAPA1`/`MAPA0` = `SA4`/`SA3`** — the same identity as `SPNA[1:0]` =
+`WPTR[1:0]` (§5.2.1). Four adjacent cells therefore sit on four different chips and
+the map load spreads evenly. ⚠ **The name is fitted; the request is not** — the
+arbiter gains it as a fourth requester (§6.4.9).
 
 Both variants below need the map fetch **pipelined one cell ahead** of the tile
 fetch — a serial dependency, and the same shape of pipelining the card already runs
@@ -1010,9 +1038,16 @@ the LUT and the output latch exactly as bitmap bytes do.
 
 It costs the same display bandwidth as the bitmap and buys **64:1 write
 compression**, which is the right trade on a machine whose documented bottleneck is
-the CPU and not bandwidth (§2.1). It also costs the span writer and blitter a little
-of their spare-slot budget: 2.25 accesses per chip per cell against 2.0, so the
-free-access figure in §2.1 falls by roughly an eighth in this mode.
+the CPU and not bandwidth (§2.1). The nine accesses are eight tile bytes — two
+ordinary four-chip display fetches — **plus one map byte from a spare access**; §6.4.9
+is the sequence.
+
+⚠ **Two different costs, and only one of them is an eighth.** Per-chip *load* rises
+2.0 → 2.25 per cell, because the map byte lands on one chip in four, and that is the
+figure §2.1's free-access budget scales by. But the map fetch takes the card's single
+internal address bus for **one slot in two**, and slots are what the span writer
+actually queues for — so **cell mode halves the span writer's spare slots**, and the
+list engine's with them. `check:cadence` asserts both numbers off the fitted terms.
 
 **A chunky 8bpp tilemap with no per-cell colour limit is not a mode any period
 machine had** — the GIME's and VIC-II's tile/character modes are both 1bpp with
@@ -1041,7 +1076,11 @@ The ICs are not the price. The price is programmable logic: the sequencer gains 
 second fetch cadence with a serial dependency, and the scan-address logic must
 switch between a linear scan address and the concatenated tile address, tri-stating
 its low outputs during the tile fetch. Both are absorbed by the CPLD partition —
-§10.1.6's `vaddr`/`vctrl` fit carries the whole of §6.4's tiling, at zero packages.
+§10.1.6's `vaddr`/`vctrl` fit carries the whole of §6.4 — addressing and cadence
+both — at **zero packages**. §6.4.9 is the sequence and §19 item 15(c) is closed. What
+it did cost is headroom: `vctrl` went to **64 of 64 I/O and 121 of 128 cells**, and
+`vaddr` to 109 of 128, so both still take JTAG and neither has room for the next
+thing (§10.1.6.3).
 
 Against that, **the blit datapath's 14 ICs become much easier to defer** (§10.3). A
 tilemap redraws itself from the map every frame at zero CPU and zero blit cost, so
@@ -1054,10 +1093,30 @@ left for the blitter is *moving objects*, which is what §10.3 says it is for.
    register, so a list-engine `MOVE` at a scanline boundary switches mid-frame: a
    status bar over a bitmap playfield, from the display list, with no CPU
    involvement (§10.3). The copper earns its keep again.
-2. **Fine horizontal scroll starts the tile fetch mid-tile**, and it is free: the
-   3-bit intra-cell offset is `{SA2, mux phase}` — the column counter's own low bit
-   and the two bits §8 already preloads (§19 item 16 has the derivation and the
-   one cadence guarantee it does need).
+2. ⭐ **Cell mode scrolls in both axes, coarse and fine, from the same two
+   registers as bitmap mode** — every cell-address field is a slice of a scan
+   counter §8 already preloads, so `HSCROLL` and `VSCROLL` scroll a tilemap for
+   nothing. `check:tile` walks every displayed pixel at whole-cell offsets,
+   sub-cell offsets and across both ring wraps.
+
+   | | Horizontal | Vertical |
+   |---|---|---|
+   | Cell | `SA9..SA3` — `HSCROLL[9:3]` | `SA17..SA13` — `VSCROLL[8:3]` |
+   | Within the cell | `{SA2, mux phase}` = `HSCROLL[2:0]` | `SA12..SA10` = `VSCROLL[2:0]` |
+   | **Ring** | **128 cells — 1024 px**, the bitmap's own torus | **⚠ 32 cell rows — 256 px** |
+   | Margin off-screen at 80×25 | 48 cells | **7 rows** |
+
+   ⚠ **The two rings are not the same size.** The map address has no `A18`, so the
+   vertical ring is 32 cell rows against the bitmap's 512-row torus: a vertically
+   scrolling playfield has **seven rows of runway** to write ahead into, not
+   thirty-nine. Horizontally there is no such asymmetry — 48 cells of margin, the
+   same 384 px §8 gives the bitmap. A sixth cell-row bit (§6.4.1) would take the
+   ring to 64 rows for one bit of `MAPBASE` and 4 KB more map.
+
+   `VSCROLL += 1` per frame is pixel-smooth in cell mode exactly as in bitmap mode,
+   and `VSCROLL += 8` advances one whole cell row — the mechanism §6.4.8's terminal
+   scroll uses. (§19 item 16 has the horizontal derivation and the one cadence
+   guarantee it needs.)
 3. **A 1bpp glyph serialiser would land on the tightest path in the card** — §6.1
    gives the index → LUT → output chain 11.7 ns of margin at 39.7 ns. That risk went
    out with Variant B (§6.4.3); it binds any rebuild.
@@ -1067,19 +1126,175 @@ left for the blitter is *moving objects*, which is what §10.3 says it is for.
 
 #### 6.4.7 Recommendation
 
-**Variant A is built** — every pixel independently coloured, 64:1 write compression
-on exactly the workload the CPU is worst at, and no change to the pixel path at all.
+**Variant A is the built variant** — every pixel independently coloured, 64:1 write
+compression on exactly the workload the CPU is worst at, and no change to the pixel
+path at all — and since 2026-09-08 **sequenced**: §6.4.9's cadence closed §19 item
+15(c), and `check:cadence` runs a line against the fitted terms.
 Variant B was priced and dropped (§6.4.3): it reintroduces per-cell colour limits —
 the one thing this card does not have and both period chips do — and §10.1.6.2's
 fits show its silicon is worth more as the display list.
 
+#### 6.4.8 Text in cell mode — one write per cell, one colour pair
+
+**Variant A is also a character generator, if you are willing to spend the tile
+codes on glyphs instead of graphics.** Bake a font into the tile set — one 8×8
+glyph per code, rendered once with §7's span writer — and a character cell becomes
+**one CPU write of one map byte**. Nothing new is built for this: the mode, the
+concatenation and the register are §6.4's, and the font is data.
+
+That is *fewer* writes per cell than §6.4.3's dropped hardware character
+generator, which needed a code and an attribute:
+
+| | span writer, bitmap (§7.3) | Variant B (dropped, §6.4.3) | **cell mode, one colour pair** |
+|---|---|---|---|
+| Writes per cell | 13 | 2 | **1** |
+| Full 80×25 redraw | 62 ms — 16 Hz | 9.5 ms — 105 Hz | **4.8 ms — 210 Hz** |
+| **Scroll one line** | 2.5 ms | 0.38 ms | **0.19 ms** |
+| At 9600 baud (~12 lines/s) | 3 % CPU | 0.5 % | **0.23 %** |
+| At 115.2 kbaud (~144 lines/s) | 36 % CPU | 5 % | **2.7 %** |
+| Screen memory | 128,000 B | 2 KB font + map | **16 KB tiles + a 4 KB map ring** (3,200 B displayed) |
+| Glyph depth | 8bpp, any colours | 1bpp + attribute | **8bpp — antialiased glyphs are legal** |
+
+At the §7.3 rate of one write per 5 cycles at 2.098 MHz, 2,000 cells is 4.8 ms and
+a scrolled line is **80 map bytes plus one write to `VSCROLL`**. The scroll is the
+row that matters and it is the row cell mode wins by the widest margin: **115.2
+kbaud stops being a third of the CPU and becomes a rounding error.**
+
+**Scrolling is `VSCROLL`, not a memmove.** §6.4.6 limit 2: the map's cell row is
+`SA17..SA13`, so `VSCROLL += 8` advances one cell row within a 32-row ring. 25 of
+those 32 rows are displayed, so the seven off-screen rows are where the incoming line
+is written before it is scrolled into view — the same trick §8's 512-row torus plays
+for the bitmap, in cells.
+
+**Without it the mode would be *worse* than the span writer**: moving 1,920 map bytes
+with `TFM` is 2.75 ms against bitmap text's 2.5 ms, and the 64:1 write compression
+would evaporate on the one operation a terminal does constantly.
+
+**The price is that 256 tiles are 256 (glyph, colour) pairs, not 256 glyphs.** The
+map byte is the whole cell, so a code that is a glyph in one colour is a different
+code in another. That buys the one write and it is the thing Variant B's attribute
+byte bought instead:
+
+- **One fg/bg pair:** 256 glyphs — the whole of CP437, the CoCo 3 hi-res font, or
+  VT100 line drawing, in 16 KB. This is the case the mode is good at.
+- **More than one:** `TILEBASE` is five bits, so the 512 KB holds **32 banks**, and
+  switching them is one register write — or a list-engine `MOVE` at a scanline
+  boundary (§10.3), which makes the colour *per region* free. It is never
+  per-cell.
+- **256-colour ANSI art stays in bitmap mode**, where per-cell colour is two of
+  §7.3's thirteen writes and paid for.
+
+**⚠ Three things bound it.**
+
+1. **The mode is global** (§6.4.6 limit 1), so this does not rescue NitrOS-9
+   windowing any more than Variant B did — a text window beside a graphics window
+   is still the span writer's job.
+2. **32 cell rows**, so 80×25 and 80×30 only (§6.4.1). `VMODE` 10 and 11 need a
+   six-bit cell row.
+3. **The span writer loses half its spare slots while cell mode is on** (§6.4.2),
+   because the map fetch takes the card's one internal address bus one slot in
+   two. Per-*chip* load only rises 2.0 → 2.25; slots are the figure that moves.
+
+**Building the font costs 256 × 13 = 3,328 span-writer writes, about 7.9 ms, once**
+at mode set — and again per colour bank. Against a 4.8 ms redraw that is one
+screen's worth of work to make every later screen thirteen times cheaper.
+
+#### 6.4.9 The fetch cadence — nine accesses, one bus, one cell of lead
+
+**§6.4.2's arithmetic fixes the sequence, and there is only one that fits it.** Eight
+tile bytes *are* two ordinary display fetches — four interleaved chips × two slots —
+so in cell mode the tile address owns the display half of every slot exactly as the
+bitmap's scan address does, and the **ninth access is the map byte, out of §5.2.2's
+spare window, once per cell**:
+
+```
+  slot     2k            2k+1          2k+2          2k+3
+  spare    map[N+1]      -             map[N+2]      -
+  fetch    tile N.0-3    tile N.4-7    tile N+1.0-3  tile N+1.4-7
+           \______ cell N ______/      \_____ cell N+1 _____/
+```
+
+A cell is two slots and **its phase is `H0`, the slot counter's own low bit** — cell
+mode needs no counter of its own to know where it is.
+
+**The map fetch leads by one cell, and that lead is a timing requirement.** §6.4.1
+calls it "pipelined one cell ahead"; the number behind it is that a slot is 158.9 ns
+split half-and-half by §5.2.2. Fetching the map byte in the spare half of the *same*
+slot that then fetches the tile row puts address mux (~15 ns) + SRAM (55 ns, §14.2's
+`AS6C8016-55`) + latch setup (~5 ns) = **75 ns inside a 79.4 ns half**, and then makes
+the tile address repeat it. Two 4.4 ns margins on a card whose tightest documented
+path has 11.7 (§6.1). One cell of lead makes both a full half-slot.
+
+So `MFETCH` opens **two slots before** `TFETCH`, during the last cell of the back
+porch, and the map keeps **its own cell-column counter `MC6..MC0`** — because leading
+by one cell means addressing cell *N* while `SA9..SA3` names cell *N−1*, and `SA + 1`
+is the adder §6.4.1 says does not exist. Seven macrocells on `vaddr`, loaded from the
+same `HSCROLL[9:3]`, started one cell earlier. **"One ahead" costs a counter, not an
+adder.**
+
+##### The arbiter gains a fourth requester, and the two ranks collide differently
+
+§2.2's priority is *video → CPU → list engine → span → blit*, and **the map byte is
+video**: refuse it and the cell shows a stale code, every frame. So it outranks both
+existing requesters — but not in the same place, because §5.2.1's `SRCSEL[n]` muxes
+each *chip's* address source:
+
+- **The span writer collides on the bus.** The display fetch, the span writer and the
+  map fetch all drive the card's one internal address bus, so they are exclusive in
+  *time*. `SPNREQ` is gated off for the whole of a map slot — one gate, upstream of
+  the arbiter, which leaves `arbDesign` untouched and still executable as a standalone
+  `GAL22V10` by `check:access` and `check:cupl`. This is what halves the span writer's
+  slots (§6.4.2).
+- **The CPU collides per chip**, because its address path is its own. `GMAP[n]` is the
+  map's chip and the CPU's grant is withdrawn for that chip only.
+
+##### And so the CPU has to be able to wait
+
+A refused CPU access is a lost one. The map's collision therefore joins §7.4's span
+backstop on `/WAIT`, and **it is a different kind of wait**: §7.4's is up to 40.7 µs
+and only writes take it; this one is **a single 158.9 ns slot and it must apply to
+reads too**, because a read whose chip is pointed elsewhere returns the wrong byte.
+
+`arbDesign` is not edited for this either. Its `/WAIT` output enable already reads two
+signals, and both are renamed at merge to ones the cadence forms:
+
+```
+  oe      = WAITSRC & VRAMSEL & /IOPAGE & E & /WAITRW
+  WAITSRC = SPANBUSY # MAPHOLD
+  WAITRW  = RW & /MAPHOLD
+```
+
+so a map hold waits on reads and writes alike while §7.4's backstop keeps its `!RW`
+exactly as before. `check:cadence` asserts all four cases.
+
+##### What it is checked against
+
+[`cadence.check.ts`](../../hardware/gal/cadence.check.ts) evaluates the fitted terms
+over **a whole 800-dot line** and asserts the sequence rather than the equations: 80
+map accesses for 80 cells, in order; `MAPLD` one dot per cell on the spare/fetch
+boundary; the lead measured in dots; §6.4.2's 9-per-8-dots and 2.25-per-chip; never
+two sources on the address bus; and the four `/WAIT` cases. Removing the one-cell lead
+fails six of them.
+
+**`FETCH` and `HLOAD` are produced here too**, because the map fetch had to be placed
+against a fetch window and `census.ts` listed both as *"produced by the sequencer's
+unfitted decode half"* — nothing generated them, in either mode. They are two range
+compares on `hgen`'s slot counter, which is on the same part. The vertical half —
+`ROWADV`, and the load that turned out not to need building — is **§8.1**.
+
 ## 7. 80×25 text — software glyphs, and a correction to colormin's cost
 
-**The span writer is the card's text engine.** §6.4.3's Variant B — a hardware
-character generator — was priced and dropped, so the figures below are what text
-costs, full stop. A character generator cannot mix with graphics *per-pixel*
-(§6.4.6 limit 1), so even built it would have been global and switchable rather
-than free; NitrOS-9's windowing draws into bitmaps either way.
+**The span writer is the card's general text engine.** §6.4.3's Variant B — a
+hardware character generator — was priced and dropped, so the figures below are
+what text costs wherever it has to mix with graphics or carry per-cell colour. A
+character generator cannot mix with graphics *per-pixel* (§6.4.6 limit 1), so even
+built it would have been global and switchable rather than free; NitrOS-9's
+windowing draws into bitmaps either way.
+
+⭐ **The exception is a full-screen console in one colour pair**, which §6.4.8 does
+in cell mode at one write per cell and a `VSCROLL` per scrolled line. It is the same
+global-mode trade Variant B made, so it does not replace this section — it is the
+faster path for the one case that does not need per-cell colour.
 
 ### 7.1 The correction
 
@@ -1284,7 +1499,7 @@ The logic is product terms rather than macrocells: a wide term on the arbiter's
 `GSPNn`, a by-four increment on `WPTR`, a by-four countdown on `SPANLEN`.
 
 **The pins are not a problem.** `rfa` (`gal/regfile.jedec.ts`) freed fourteen of
-them, and even with the arbiter merged back `vctrl` sits at **62 of 64** (§10.1.6.3).
+them, and even with the arbiter merged back `vctrl` sits at **64 of 64** (§10.1.6.3).
 There is room to signal, and §14.2's two-chip framebuffer means there is barely
 anything to signal.
 
@@ -1416,6 +1631,55 @@ minimal256.md §5 is correct as written and needs only the geometry substituted:
   > from the fitted fuses: it asserts the common-clock line diverges for every
   > `p ≠ 0` and the per-chip line is contiguous for every `p` — arithmetic, not
   > simulation.
+
+### 8.1 What drives the counters
+
+⭐ **Scrolling is a register write only if something steps the counter the register
+loads.** Until 2026-09-08 nothing did: `FETCH`, `HLOAD`, `ROWADV` and `VLOAD` were
+declared as `hadr`/`vadr` inputs and produced by nobody, so the column counter never
+took `HSCROLL`, the row counter never took `VSCROLL`, and **the row never advanced at
+all — in either mode.** That was the bitmap's gap as much as the tilemap's. All four
+are fitted now, on `vctrl` beside the counters they time.
+
+| | | |
+|---|---|---|
+| `HLOAD` | slots 0–33 | through the sync pulse and back porch, before `MFETCH` opens |
+| `FETCH` | `TFETCH & SLOTTICK` | one edge per slot of the 160-slot window |
+| **`VLOAD`** | **`VBLANK`** | not built — see below |
+| `ROWADV` | `!VBLANK & HEND & SLOTTICK & (VMODE1 # !V0)` | one edge per displayed line, in slot 199 |
+
+⚠ **Every counter *enable* carries `SLOTTICK`; a *load* does not.** Both parts are
+clocked on `DOTCLK`, so a window level asserted for a whole slot advances a counter
+four times — once per dot. `FETCH` without it walks 2,560 pixels across a 640-pixel
+line; `ROWADV` without it scans the picture at quarter height. A load is idempotent
+and needs no gate, which is why `HLOAD` and `VBLANK` are plain windows.
+`check:cadence` counts the edges per dot, which is the only way that distinction is
+visible.
+
+**`VLOAD` is `VBLANK`.** §8 asks for a load "asserted through vertical blanking", and
+that is what `vdec` has been producing all along — the signal was named twice and
+built once. `vadr`'s input is renamed at merge, which keeps the standalone design and
+its `GAL22V10` checks untouched and costs nothing on a part at 64 of 64 I/O. The same
+identity as `WRITESEL` = `SPNGRANT` (§5.2.1) — and **`CE` = `SLOTTICK`** turned out to
+be a third: `hgen` declared its slot enable as an input while saying in the same
+breath that it *"is that signal and not a second divider"*, and `vctrl` was taking its
+own output back in on a pin. That pin is what paid for `ROWADV`.
+
+⭐ **§6.2's line doubling lives in `ROWADV` and nowhere else** — *"the sequencer
+withholds every second one"*. `VMODE1 = 0` is the doubled pair (640×200, 640×240) and
+`VMODE1 = 1` is one row per line (640×400, 640×480). Which line to withhold is **one
+term in both families**: a doubled row must advance at the end of the second displayed
+line, so the test is the parity of `V` minus the first active line — 37 in the
+449-line family, 35 in the 525 — and **both are odd**, so "advance when `V` is even"
+covers both. The same accident that gives `vdec` its "`v <= 1` in both families" sync
+window (§6.2.1).
+
+[`cadence.check.ts`](../../hardware/gal/cadence.check.ts) runs a **whole frame in each
+of §12's four `VMODE` codes** at five scroll positions including the 512-row wrap, and
+asserts which row each displayed line shows, that each mode visits exactly 200/240/400/480
+rows, that a doubled mode shows each row on exactly two consecutive lines starting at
+display line 0, and that `ROWADV` fires clear of both fetch windows so the row cannot
+move under the addresses it is feeding.
 
 **The torus is now 1024 × 512** with a 640 × 200 window on it. The 384 off-screen
 columns are not waste: they are a horizontal margin wide enough for a 1024-pixel
@@ -1771,16 +2035,23 @@ single-package fit and onto the two-PLCC-84 build — §10.1.6. (The census
 arithmetic, and the role §6.4.3's Variant B played in it before it was dropped, are
 archived in [history.md](history.md).)
 
+**v1 hardware, and a sequence that runs.** The registers, the address mux and the
+pins are fitted; `check:tile` asserts what they compute, including both axes of scroll
+(§6.4.6 limit 2); and `check:cadence` runs the second fetch cadence over a whole line
+(§6.4.9). ⚠ The package decision is unchanged but its **headroom is gone**: the
+cadence took `vctrl` to 64 of 64 I/O and 121 of 128 cells.
+
 **What §7 keeps.** The span writer is not deleted — it is the text engine, the fill
 and clear engine, and §6.4.6's limit 1 means bitmap regions need it regardless.
 `seqctl` and §7.4 stand unchanged; `check:seqctl` asserts the 13 writes per cell,
-and since Variant B is not built (§6.4.3) that is the card's only text mode.
+and since Variant B is not built (§6.4.3) that is the card's only text mode that
+mixes with graphics or colours per cell — §6.4.8 is the one-colour-pair console.
 
 #### 10.1.6 Two PLCC-84 parts — and this is the build
 
 The `ATF1508AS` in **PLCC-84 has all 128 macrocells**; only
-the I/O is cut, to 64 (+4 dedicated inputs, and JTAG's four come back because a
-socketed part is programmed out of circuit). That one fact settles the question:
+the I/O is cut, to 64 (+4 dedicated inputs, less JTAG's four — both parts reserve
+them and still fit, §10.1.6.3). That one fact settles the question:
 
 | | Macrocells | Pins | Area |
 |---|---|---|---|
@@ -1829,8 +2100,8 @@ packages while saving 10 further pins.
 - **Crossing delay.** A net between packages costs a `tPD` — 15 ns at the `-15` grade,
   against a 39.7 ns dot period. **The partition has to keep the dot-rate paths inside
   one part**: the phase counter, `SLOTTICK`, `FCLK0..3` and `MUXSEL` belong together
-  with whatever they clock. The fit spends that freedom — `vaddr` is at 102 of 128
-  logic cells and 64 of 64 I/O — so the choice is no longer free.
+  with whatever they clock. The fit spends that freedom — `vaddr` is at 109 of 128
+  logic cells and 61 of 64 I/O — so the choice is no longer free.
 - **Two JTAG chains**, or one chained through both.
 
 **The partition** — `hardware/gal/cpld/`, regenerated by
@@ -1839,8 +2110,8 @@ list — the whole of v1:
 
 | | Package | Holds | Logic cells | I/O pins |
 |---|---|---|---|---|
-| **`vaddr`** | PLCC-84 | scan and `WPTR` counters (`WPTR` doubling as the list engine's pointer, §10.3.1), scroll and tile registers, the write-strobe decode, the four-source address mux, the list engine | **102 of 128** | **64 of 64** |
-| **`vctrl`** | PLCC-84 | sync trio, sequencer, span control, `CTRL`, §6.4's fetch cadence, the register decode, **the spare-access arbiter** (§10.1.6.3) | **97 of 128** | **62 of 64** |
+| **`vaddr`** | PLCC-84 | scan and `WPTR` counters (`WPTR` doubling as the list engine's pointer, §10.3.1), scroll and tile registers, the write-strobe decode, the four-source address mux, the list engine | **109 of 128** | **61 of 64** |
+| **`vctrl`** | PLCC-84 | sync trio, sequencer, span control, `CTRL`, §6.4's fetch cadence, the register decode, **the spare-access arbiter** (§10.1.6.3) | **121 of 128** | **64 of 64** |
 | **`rfa`** | **`GAL22V10`** | the register-file address — `RA0`–`RA4`, `WSTB`, the span-source walk (§10.1.6.3) | 6 of 10 | — |
 
 The three-line table is the whole card's programmable logic. `DOTCLK` lands on a
@@ -1892,7 +2163,7 @@ per address bit. With §6.4.3's Variant B also out, the build lands at:
 | | I/O | Logic cells | Nodes+FB | |
 |---|---|---|---|---|
 | **`vaddr`, engine in, Variant B out** | **64 / 64** | **102 / 128** | 133 / 128 | ✓ **built** |
-| `vctrl`, Variant B out, before the arbiter's return | 46 / 64 | 87 / 128 | 83 / 128 | ✓ — §10.1.6.3 has the final 62 of 64 |
+| `vctrl`, Variant B out, before the arbiter's return | 46 / 64 | 87 / 128 | 83 / 128 | ✓ — §10.1.6.3 has the final 64 of 64 |
 
 `ARM6309_LIST` defaults to on in `gal/video.cpld.ts`, and §14's table gains nothing
 — the engine costs no package. It cost two things that are not packages: **§6.4.3's
@@ -1900,10 +2171,9 @@ Variant B** (its macrocells, product terms and four pins), and the engine's own
 pointer. The intermediate fits, and the alternatives that were measured and not
 taken, are archived in [history.md](history.md).
 
-> ⚠ **`vaddr` has no JTAG** — 64 of 64, and JTAG costs four I/O. It is programmed
-> out of circuit, as the audio card's `ATF1508AS` already is. If in-circuit
-> programming ever matters more than the display list, the pair to rebalance is
-> `vaddr`/`vctrl` — not this decision to revisit.
+> ⭐ **`vaddr` has JTAG** — 61 of 64 with `TMS`/`TDI`/`TDO`/`TCK` reserved, so the
+> display list did not cost in-circuit programming after all. §6.4.1's corrected
+> cell address is what paid for it (§10.1.6.3), not a rebalance against `vctrl`.
 
 > ⚠ **The shared pointer is a specification rule, not only a fit: the engine
 > CLOBBERS THE CPU'S WRITE POINTER**, so anything that starts a list must reload
@@ -1938,7 +2208,7 @@ combinations by `gal/jedec/cupl.check.ts`. `hardware/gal/video.cpld.ts` and
 to signal through the freed pins.
 
 **The spare-access arbiter is inside `vctrl`.** With `rfa`'s fourteen pins and
-Variant B's four freed, `vctrl` holds the arbiter at **62 of 64 I/O and 97 of 128
+Variant B's four freed, `vctrl` holds the arbiter at **64 of 64 I/O and 121 of 128
 cells**. A CPLD at two-thirds capacity sitting beside a `GAL22V10` doing ten
 macrocells of work would be a package nobody is buying anything with — the
 one-morning excursion in which the arbiter *was* a separate GAL is archived in
@@ -1963,12 +2233,34 @@ the signal across a package boundary. With the arbiter on-part, `vaddr` reads
 > leftover. Its `.jed` carries the **SUPERSEDED — DO NOT PROGRAM** banner, which is
 > the guard that stops a superseded design being burnt.
 
-⚠ **Neither CPLD has JTAG** — `vaddr` at 64 of 64 and `vctrl` at 62 of 64, against
-the four pins JTAG needs — so both are programmed out of circuit, as the audio
-card's `ATF1508AS` already is. ⭐ **§14.2 is what could buy `vctrl`'s back**: two
-×16 framebuffer parts make the arbiter **2 grants instead of 8** — six output pins,
-landing the part near 56 of 64 with room for JTAG. That is a §5.2 rewrite rather
-than a rebalance, and it is not done — §19 item 25.
+⭐ **Both CPLDs have JTAG.** `TMS`/`TDI`/`TDO`/`TCK` are **four of the 64 I/O, not
+extra pins** — the `ATF1508AS` shares them with ordinary I/O (PLCC-84 pins 14, 23, 62
+and 71), which is exactly why JTAG has a cost at all. So the totals are logic pins
+*plus* those four:
+
+| | logic I/O | JTAG | total | dedicated inputs | cells |
+|---|---|---|---|---|---|
+| `vaddr` | 57 | +4 | **61 of 64** | 3 of 4 | 109 of 128 |
+| `vctrl` | **60** | +4 | **64 of 64** | 2 of 4 | 121 of 128 |
+
+Both report "Design fits successfully" with the four reserved
+(`JTAG=on hardware/gal/prjbureau/fit1508.sh`), and no logic signal is placed on them.
+**They are programmed in circuit**, unlike the audio card's `ATF1508AS`. ⚠ `vctrl` is
+*exactly* full: 60 + 4 = 64, nothing spare.
+
+⚠ **And that is the end of the headroom.** §6.4.9's cadence spent what §6.4.1's
+correction returned: `vctrl` is at **64 of 64 I/O and 121 of 128 cells**, `vaddr` at
+61 of 64 and 109 of 128. Both still fit, JTAG included, and **neither has room for
+the next thing.** §14.2's two ×16 framebuffer parts are the relief that exists on
+paper — 2 grants instead of 8, six output pins — and it is a §5.2 rewrite (§19 item
+25).
+
+The pins came from §6.4.1's correction, not from a rebalance: `vctrl` was exporting
+`V0..V2` to `vaddr` as the row inside the cell, and that was the wrong counter —
+the right one, `vadr`'s row counter, was already on `vaddr`. Three pins on each
+part, against the four JTAG needs and the two `vctrl` had. §14.2's two ×16
+framebuffer parts would free six more by making the arbiter 2 grants instead of 8
+(§19 item 25); that is no longer what in-circuit programming waits on.
 
 ### 10.2 What the 6309 gives you for free
 
@@ -2385,8 +2677,8 @@ against colormin's 39 (35). (The GAL-build table this section used to carry — 
 | **1** | **IS61C6416AL-12 (64K×16)** | palette LUT, 256 × 16 b — **one ×16 part holds both bytes** (§14.2) | **−1** |
 | **2** | **74AHCT273** | **post-LUT output register — `/MR` is blank-to-black (§9.2)** | = (was `'574`) |
 | 1 | 74HC593 | `PIDX` counter (sourcing flag, §9) | = |
-| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vaddr`** — scan address, `WPTR`/span pointer, tile/list address sources. **64 of 64 I/O, 102 of 128 cells** (`hardware/gal/cpld/vaddr.fit`) | |
-| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, `SPANLEN`, span-mask handling. **62 of 64 I/O, 97 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) | |
+| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vaddr`** — scan address, `WPTR`/span pointer, tile/list address sources. **61 of 64 I/O, 109 of 128 cells** (`hardware/gal/cpld/vaddr.fit`) | |
+| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, `SPANLEN`, span-mask handling. **64 of 64 I/O, 121 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) | |
 | 1 | GAL22V10-15 | **`rfa`** — the register-file address (§10.1.6.3), which is what bought `vctrl` its fourteen pins back | |
 | 1 | 74HC574 | posted-write **data** latch | = |
 | **3** | **74HC574** | **posted-write address + control latches — 19 address + VRAMSEL + R/W + `WMODE[1:0]` = 23 bits (§3.1.1)** | **+3** |
@@ -2959,9 +3251,36 @@ unchanged from minimal256.md §11 and are not restated in full.
     [`video.parts.ts`](../../hardware/gal/video.parts.ts), the
     aligned-tile "OR = ADD" address identity is asserted over all 524,288 field
     combinations by `tile.check.ts`, and both CPLDs fit with it in (§10.1.6, §14).
-    What remains is bench verification with everything else, not a fit question.
+    What remains on the fit is bench verification with everything else.
     (The item's earlier fit questions and the Variant-B-era pricing are archived in
     [history.md](history.md).)
+
+    **(c) The fetch cadence — closed 2026-09-08.** It was a placeholder: `TC0..TC2`
+    counted on `SLOTTICK` and split at `TC2`, and since a slot is four dots and a
+    cell is eight, that period was **four cells** — 16 tile bytes fetched where 32
+    are needed, one map byte latched where four are. Half a line's pixels had no
+    data and three cells in four had no code. It had never been run.
+
+    §6.4.9 is the sequence that replaced it, and
+    [`cadence.check.ts`](../../hardware/gal/cadence.check.ts) runs a whole line
+    against the fitted terms. What it cost: seven macrocells for the map's own
+    column counter (`vaddr`, §6.4.9's one-cell lead), a `SPNREQ` gate and four
+    `GMAP`/`GCPU` pairs on `vctrl`, and two more signals on `/WAIT`. `arbDesign`
+    itself is untouched and still executable as a standalone `GAL22V10`.
+
+    **(d) The vertical window — closed 2026-09-08.** (c) produced `FETCH` and
+    `HLOAD` because the map fetch needed a fetch window to sit against; `ROWADV`
+    and `VLOAD` were the other half, and without them the row counter neither
+    loaded `VSCROLL` nor stepped, **in either mode**. §8.1 is the answer and it
+    cost two macrocells: `VLOAD` turned out to be `VBLANK` under a second name,
+    and the pin `ROWADV` needed came from `CE` = `SLOTTICK`, a third identity of
+    the same kind. §6.2's line doubling is one term inside `ROWADV`, and
+    `check:cadence` runs a frame in each `VMODE`.
+
+    ⚠ **What is left of the decode half is not the display's.** `LDA`, `LDB`,
+    `LDC`, `WSTB` and `VSTATWR` are register-file strobes (`census.ts`) and have
+    nothing to do with scanning; §18's bench brings them up with the CPU
+    interface.
 16. **The tile fetch's fine-scroll behaviour — implemented, and it is
     free.** A slot is four pixels and a cell is eight, so the three bits
     of intra-cell offset are `{SA2, mux phase}` — the column counter's own low bit
@@ -3047,8 +3366,8 @@ unchanged from minimal256.md §11 and are not restated in full.
     **The pin cost was later paid by a GAL, not a bigger package.** The decode's
     I/O load briefly pushed `vctrl` toward a TQFP-100; splitting the register-file
     *address* onto its own `GAL22V10` (`rfa` — `hardware/gal/rfa.pld`) bought
-    fourteen pins back, and both CPLDs are PLCC-84: `vctrl` at 62 of 64 I/O and
-    97 of 128 cells, `vaddr` at 64 of 64 and 102 of 128 (§10.1.6.3, §14, the
+    fourteen pins back, and both CPLDs are PLCC-84: `vctrl` at 64 of 64 I/O and
+    121 of 128 cells, `vaddr` at 61 of 64 and 109 of 128 (§10.1.6.3, §14, the
     `hardware/gal/cpld/*.fit` files).
 
 22. **Verify the sync-polarity table against the actual monitors** (§6.2.1), CRT, LCD
@@ -3071,16 +3390,17 @@ unchanged from minimal256.md §11 and are not restated in full.
     worse: it is a rule that fires only in the combination of two features neither of
     which is obviously related to the other, which is the shape of bug that survives
     into a released driver.
-25. **⚠ `vctrl` has no JTAG, and neither does `vaddr`.** Both parts are programmed out
-    of circuit as of 2026-09-08 — `vaddr` at 64 of 64 for the display list, `vctrl` at
-    62 of 64 for the arbiter's return (§10.1.6.3). That matches the audio card's
-    `ATF1508AS` and it is a socket-and-programmer workflow, not a blocker.
+25. **JTAG — closed 2026-09-08, in the other direction.** Both parts are programmed
+    **in circuit**: `vaddr` at 61 of 64 and `vctrl` at 64 of 64 with the four JTAG
+    pins reserved, both fitting (§10.1.6.3). The item existed because the pair was at
+    64 and 62 of 64; §6.4.1's corrected cell address returned three pins on each by
+    stopping `vctrl` exporting a line counter that was the wrong one to begin with.
 
-    ⭐ **§14.2 is what buys `vctrl`'s back**: two ×16 framebuffer parts make the
-    arbiter **2 grants instead of 8**, six output pins, landing the part near 56 of 64.
-    **Confirm that when §5.2 is rewritten**, rather than assuming it — the estimate
-    that said `rfa` would free five pins freed fourteen, and estimates on this card
-    have been wrong in both directions.
+    §14.2's two ×16 framebuffer parts would still free six more output pins by making
+    the arbiter 2 grants instead of 8, landing `vctrl` near 53 of 64 — worth having,
+    no longer needed for this. **Confirm it when §5.2 is rewritten** rather than
+    assuming it: the estimate that said `rfa` would free five pins freed fourteen,
+    and estimates on this card have been wrong in both directions.
 
 ---
 

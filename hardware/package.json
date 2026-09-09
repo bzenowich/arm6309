@@ -13,6 +13,7 @@
     "check:seqph": "bun run gal/seqph.check.ts",
     "check:seqctl": "bun run gal/seqctl.check.ts",
     "check:tile": "bun run gal/tile.check.ts",
+    "check:cadence": "bun run gal/cadence.check.ts",
     "check:audio": "bun run gal/audio.check.ts",
     "check:netlist": "bun run lib/netlist.check.ts",
     "check:place": "bun run place/place.check.ts",

@@ -368,6 +368,193 @@ buy it back (~56 of 64) once §5.2 is rewritten, which is §19 item 25.
 
 ---
 
+## §6.4.1 / §6.4.6 / §7 / §10.1.6.3 / §19 item 25 — the cell address took the wrong counter (corrected 2026-09-08)
+
+`video.parts.ts` computed a **different map address from the one §6.4.1 and
+`tile.model.ts` specify**, and had done since the tile fetch was written. `mapSrc`
+read
+
+```
+bit >= 12 ? MB[bit-12] : bit >= 5 ? SA[bit-2] : V[bit+1]
+```
+
+which places the cell column at `A11..A5` and three bits of cell row at `A4..A2` —
+a map with a **32-byte column stride and a 4-byte row stride**, 8 addressable rows
+against the 25 an 80×25 needs, and the `HSCROLL` mux phase left in `A1..A0`. The
+spec says `MAPBASE | cellRow<<7 | cellCol` throughout.
+
+Two things let it stand. **Nothing asserted the design and the model agreed** —
+`tile.check.ts` imported `addressMux()` only to *count* its product terms, and
+counting a mux does not check what it computes. And the vertical source was the
+**sync line counter `V`, not `vadr`'s row counter**, which is wrong independently
+of where the bits land: `sync.timing.ts` puts both counters' origin at the leading
+edge of their own sync pulse, so active video starts at line 37 in the 449-line
+family and 35 in the 525-line one. `V2..V0` as the row inside the cell would have
+rotated every cell by 5 rows in one mode and 3 in the other. `tileSrc` used exactly
+that. The five bits the map's cell row needs, `V7..V3`, were declared as `vaddr`
+input pins and **driven by nothing** — `vctrl` exported only `V0..V2`.
+
+**What replaced it.** Both vertical fields are `vadr`'s row counter — `SA12..SA10`
+for the row inside the cell, `SA17..SA13` for the cell row — which `VLOAD` loads
+from `VSCROLL` at vblank and `ROWADV` steps once per *displayed* row, so it is
+zero-based at the top of the window and scrolled. `mapSrc` is
+`bit >= 12 ? MB[bit-12] : bit >= 7 ? SA[bit+6] : SA[bit+3]`. `MAPA1`/`MAPA0` =
+`SA4`/`SA3` were added to name the chip the map byte lives on, the map fetch being
+a spare access. `tile.check.ts` now evaluates the fitted mux against the model over
+every cell, every pixel within it and all 256 codes, and asserts no cell-mode
+address bit reads `V`; both halves of the old code fail it.
+
+**Three claims moved with it.**
+
+- **§6.4.6 limit 2 said fine scroll was free horizontally.** It is free in both
+  axes — the vertical intra-cell offset is `SA12..SA10`, the same counter bits —
+  and the cell ring is 32 rows, which is what makes §6.4.8's terminal scroll a
+  single `VSCROLL` write. (`features.md` §10 had also still listed "fine
+  horizontal scroll in tile mode" as *not* available, which §6.4.6 had already
+  contradicted.)
+- **§7 said the span writer was "the card's only text mode".** It is the only one
+  that mixes with graphics or colours per cell; §6.4.8 is the one-colour-pair
+  console at 1 write per cell, which is fewer than the dropped Variant B's 2.
+- **⚠ "Neither CPLD has JTAG" (§10.1.6.3, §19 item 25) is no longer true.**
+  `vctrl` exported `V0..V2` to `vaddr` for a field that should never have crossed;
+  removing them returned three pins on each part. The fits are now **`vaddr` 61 of
+  64 and `vctrl` 59 of 64 with `TMS`/`TDI`/`TDO`/`TCK` reserved**, both reporting
+  "Design fits successfully" — so both parts are programmed **in circuit**. The
+  superseded figures were `vaddr` 64 of 64 and `vctrl` 62 of 64, "two pins spare
+  against the four JTAG needs", with §14.2's 2-grant arbiter named as the thing
+  that would buy `vctrl`'s back. §14.2 would still free six output pins; it is no
+  longer what in-circuit programming waits on. `vctrl`'s declared device moved
+  `f1508plcc84` → `f1508ispplcc84` with it.
+
+**§6.4.5 / §10.1.5 / §19 item 15 said the tile fetch was closed by the CPLD build.**
+§19 item 15 read *"closed by the CPLD build … what remains is bench verification with
+everything else, not a fit question"*, §6.4.5 said the fit *"carries the whole of
+§6.4's tiling"*, and §10.1.5 called Variant A *"v1 hardware, not an option"* without
+qualification. **The fit was closed; the sequence never was.** `tileCadence` counts
+`TC0..TC2` on `SLOTTICK` and splits at `TC2` — but a slot is four dots and a cell is
+eight, so the period is four cells, and over it the design fetches 16 tile bytes where
+32 are needed and latches one map byte where four are. Restated 2026-09-08 as item
+15(c): the address path is checked (`check:tile`, both axes of scroll included) and
+the fetch path is a placeholder needing a cell-aligned cadence, a fourth arbiter
+requester for the map byte, and `MAPLEAD`.
+
+---
+
+## §8 / §19 item 15(d) — nothing drove the scan counters (built 2026-09-08)
+
+§8 has always read as though scrolling worked: *"a separate 9-bit V-address counter
+supplies row bits A18..A10, loaded from `VSCROLL` during vblank"*, *"`HSCROLL[9:2]`
+preloads the H-address counter at the start of each line's fetch window"*. Both
+counters were fitted and `scan.check.ts` exercised them over a 400-line frame at three
+scroll positions. **Nothing produced their load or enable inputs.** `FETCH`, `HLOAD`,
+`ROWADV` and `VLOAD` were declared as `hadr`/`vadr` inputs and listed in `census.ts`
+under *"produced by the sequencer's unfitted decode half"* — a set that read as a
+to-do list and was load-bearing. So the column counter never took `HSCROLL`, the row
+counter never took `VSCROLL`, and **the row never advanced at all**, in bitmap mode as
+much as in cell mode. A checked counter with no clock enable is still a counter that
+does not count.
+
+§6.4.9's cadence produced `FETCH` and `HLOAD` on its way past, because the map fetch
+had to be placed against a fetch window. §8.1 is the rest, and two of its four
+signals cost nothing:
+
+- **`VLOAD` is `VBLANK`.** "Asserted through vertical blanking" is VBLANK's
+  definition and `vdec` had been producing it all along — the signal was named twice
+  and built once. Renamed at merge.
+- **`CE` is `SLOTTICK`.** `hgen` declared its slot enable as an input while saying in
+  the same breath that it *"is that signal and not a second divider"*, and `vctrl` was
+  taking its own output back in on a pin. That pin paid for `ROWADV`.
+
+Both are the same kind of identity as `WRITESEL` = `SPNGRANT`, and on a part at 64 of
+64 I/O the difference between an identity and a signal is a pin.
+
+**⚠ And a rule that was not written down anywhere: every counter *enable* carries
+`SLOTTICK`, every *load* does not.** Both CPLDs are clocked on `DOTCLK`, so a window
+level asserted for a whole slot steps a counter four times. `FETCH` and `MCADV` were
+written as bare levels when §6.4.9 was built and would have walked 2,560 pixels across
+a 640-pixel line; `ROWADV` was written the same way and would have scanned the picture
+at quarter height. The first version of `cadence.check.ts` missed it by modelling the
+map counter on rising *edges* instead of clock edges — a model kinder than the
+silicon. Counting per dot is what makes the gate visible, and it is now what the check
+does.
+
+§6.2's line doubling ended up living entirely inside `ROWADV`, as `scan.jedec.ts`
+always said it would: *"the sequencer withholds every second one"*. Which line to
+withhold is one term in both families, because the first active line is odd in both
+(37 and 35) — the same accident behind `vdec`'s "`v <= 1` in both families".
+
+---
+
+## §6.4.5 / §6.4.9 / §19 item 15(c) — the fetch cadence was never a sequence (built 2026-09-08)
+
+`tileCadence` in `video.parts.ts` read:
+
+```
+  TC0..TC2 = counter on SLOTTICK
+  MAPLD    = TILEMODE & SLOTTICK & !TC2 & !TC1 & !TC0
+  MAPSEL   = CELL & !TC2
+  TILESEL  = TILEMODE & TC2
+```
+
+**A slot is four dots and a cell is eight, so that period is four cells**, and the
+split at `TC2` gave four slots to each side. Over those four cells it fetched **16
+tile bytes where 32 are needed and latched one map byte where four are** — half a
+line's pixels with no data, three cells in four with no code. It was a sketch of
+"map byte, then the tile row", and it had never been run: no check evaluated it.
+
+The docs had it as done. §19 item 15 read *"closed by the CPLD build … what remains
+is bench verification with everything else, not a fit question"*; §6.4.5 said the fit
+*"carries the whole of §6.4's tiling"*; §10.1.5 called Variant A *"v1 hardware, not
+an option"* unqualified. **The fit was closed and the sequence never was** — the
+distinction the archive should have carried and did not.
+
+Replaced by §6.4.9, whose shape is forced by §6.4.2's own arithmetic: eight tile
+bytes are two four-chip display fetches, so the ninth access is the map byte out of
+§5.2.2's spare window, once per cell, with `H0` as the cell phase. Three things came
+with it and each cost something:
+
+- **A one-cell lead, and a counter to carry it.** Same-slot fetching leaves 4.4 ns
+  twice over (mux 15 + SRAM 55 + setup 5 against a 79.4 ns half-slot), so `MFETCH`
+  opens two slots before `TFETCH`. Addressing cell *N* while `SA9..SA3` names *N−1*
+  needs `SA + 1`, which is the adder §6.4.1 forbids — so the map got its own seven-bit
+  column counter `MC6..MC0`, loaded from the same `HSCROLL[9:3]` and started a cell
+  earlier. `MAPA1/MAPA0` moved from `SA4/SA3` to `MC1/MC0` with it.
+- **A fourth arbiter requester, refused in two places.** The span writer collides on
+  the card's one internal address bus and stands down for whole map slots; the CPU
+  collides per chip and loses only that chip. `arbDesign` is untouched — the gating
+  is renames at merge — so it stays executable as a standalone `GAL22V10`.
+- **`/WAIT` on reads, for the first time.** §7.4's backstop is write-only by a
+  decision made the same day; a map hold has to stall reads too, since a read whose
+  chip is pointed elsewhere returns the wrong byte. The two are separated by
+  `WAITSRC`/`WAITRW` rather than by relaxing §7.4's rule, and the hold is one 158.9 ns
+  slot against §7.4's 40.7 µs.
+
+**A number moved with it.** §6.4.2 said cell mode costs the span writer *"roughly an
+eighth"* of its free accesses. That is the per-chip figure (2.0 → 2.25 per cell) and
+it is right; but the map takes the shared bus **one slot in two**, and slots are what
+the span writer queues for, so its spare slots **halve**. Both numbers are now stated.
+
+**And the fits moved twice in a day.** §6.4.1's correction returned three pins per
+part (`vaddr` 64 → 61 of 64, `vctrl` 62 → 59) and §6.4.9's cadence spent them:
+`vctrl` **64 of 64 I/O and 120 of 128 cells**, `vaddr` 61 of 64 and 109 of 128. Both
+still fit with JTAG reserved. Neither has headroom left.
+
+**What §19 item 15(c) left behind.** Building the cadence needed a fetch window to
+place the map fetch against, and `census.ts` listed `FETCH` and `HLOAD` as *"produced
+by the sequencer's unfitted decode half"* — nothing generated them, in either mode.
+They are two range compares on `hgen`'s counter and are now produced. `ROWADV` and
+`VLOAD`, the vertical half, are **not**: item 15(d), and until they exist the row
+counter does not step in either mode.
+
+---
+
+**What did not change on the day of the address correction.** Logic-cell occupancy
+— `vaddr` 102 of 128, `vctrl` 97 of 128 — and §19 item 15(c), the map fetch's missing
+arbiter requester, which the `MAPA` pair made stated rather than latent. Both moved
+again hours later when the cadence was built; see the entry above.
+
+---
+
 ## §12.1 / §12.2 — "one macrocell" and "one pin"
 
 The VBL interrupt was priced at one macrocell in the sync GALs; it is three — the

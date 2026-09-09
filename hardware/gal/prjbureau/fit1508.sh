@@ -49,8 +49,12 @@ cp "$PLD" "$SHARED/"
 
 rm -f "$FITTERS/$name".*
 cp "$SHARED/$name.tt2" "$FITTERS/"
-( cd "$FITTERS" && wine fit1508.exe "$name.tt2" -device "$DEV" -preassign ignore ) \
-  | grep -viE '^warning' | tail -6
+# JTAG=on reserves TMS/TDI/TDO/TCK so the part can be programmed in circuit.
+# It costs four I/O, so it is a fit result and not a preference: ask for it and
+# read whether the design still fits.
+JTAG=${JTAG:-off}
+( cd "$FITTERS" && wine fit1508.exe "$name.tt2" -device "$DEV" -preassign ignore \
+    -strategy JTAG="$JTAG" ) | grep -viE '^warning' | tail -6
 
 [ -f "$FITTERS/$name.jed" ] || { echo "fitter produced no JEDEC; see $FITTERS/$name.fit" >&2; exit 1; }
 mkdir -p "$OUT"
