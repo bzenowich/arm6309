@@ -103,3 +103,19 @@ td.n{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric
 .note strong{color:var(--ink)}
 :focus-visible{outline:2px solid var(--copper);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---- part tooltip (render.ts) ------------------------------------------ */
+g.part { cursor: help; }
+g.part:hover rect, g.part:focus rect { stroke: #111; stroke-width: .5; }
+g.part:focus { outline: none; }
+.tip {
+  position: fixed; z-index: 40; max-width: 30rem; pointer-events: none;
+  background: #fffef8; color: #161513;
+  border: 1px solid #b9b2a0; border-radius: 5px;
+  box-shadow: 0 6px 22px rgba(0,0,0,.22);
+  padding: .55rem .7rem; font-size: .82rem; line-height: 1.42;
+}
+.tip[hidden] { display: none; }
+.tip b { display: block; font-size: .9rem; }
+.tip i { display: block; margin-top: .3rem; color: #4a463c; font-style: normal; }
+.tip p { margin: .45rem 0 0; }

@@ -2,6 +2,7 @@
  * the board plus a margin and everything inside is life-size. */
 import { type CardSpec, type Kind, BOARD_H, FINGER_W, FINGER_H } from "./parts"
 import { pack } from "./pack"
+import { FAMILY, MB_ROLE, ROLE } from "./parts.info"
 
 const FILL: Record<Kind, string> = {
   pld: "var(--k-pld)", mem: "var(--k-mem)", bus: "var(--k-bus)",
@@ -17,7 +18,24 @@ const scaleBar = (x: number, y: number) => [
   `<text class="dim" x="${x + 53}" y="${y + 1.6}">50 mm</text>`,
 ]
 
+/* ---- hover text -------------------------------------------------------- *
+ *
+ * Every part carries what it IS and what it DOES here, as data attributes the
+ * page turns into a tooltip. A native <title> goes in too, so the text is
+ * still reachable with JavaScript off and by a screen reader - the <g> takes
+ * role="img" and an aria-label for the same reason. */
+const describe = (card: string, label: string): { fam: string; role: string } => {
+  /* The part number is the first word - except for a clock, whose first word
+   * is its frequency ("28.375 MHz osc"), so those key off the last word. */
+  const w = label.split(" ")
+  const key = /^(osc|xtal)$/.test(w[w.length - 1]) ? w[w.length - 1] : w[0]
+  return { fam: FAMILY[key] ?? "", role: ROLE[`${card}:${label}`] ?? "" }
+}
+
 export const cardSvg = (c: CardSpec, pad = 14): string => {
+  /* ROLE is keyed by the CARDS key, and what we have here is the spec. The
+   * title is the key with a capital and, for one card, a slash. */
+  const card = c.title.toLowerCase().replace("/", "")
   const W = c.length
   const r = pack(c)
   const o: string[] = [
@@ -37,6 +55,14 @@ export const cardSvg = (c: CardSpec, pad = 14): string => {
   for (const p of r.placed) {
     const x = pad + p.x, y = pad + p.y
     const cls = p.reserved ? "resv" : "pk"
+    const d = p.reserved ? { fam: "", role: "" } : describe(card, p.label)
+    /* ⚠ The <g> wraps rect, pin-1 dot and legend so the whole footprint is one
+     * hover target. Without it the tooltip flickers as the pointer crosses
+     * from the body to the text sitting on top of it. */
+    o.push(`<g class="part" tabindex="0" role="img" aria-label="${esc(p.label)}${d.fam ? `. ${esc(d.fam)}` : ""}"` +
+      ` data-label="${esc(p.label)}" data-fam="${esc(d.fam)}" data-role="${esc(d.role)}">`)
+    o.push(`<title>${esc(p.label)}${d.fam ? `\n\n${esc(d.fam)}` : ""}` +
+      `${d.role ? `\n\n${esc(d.role)}` : ""}</title>`)
     o.push(`<rect class="${cls}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" ` +
       `width="${p.w.toFixed(1)}" height="${p.h.toFixed(1)}" rx="0.7" style="fill:${FILL[p.kind]}"/>`)
     if (!p.reserved) {
@@ -48,6 +74,7 @@ export const cardSvg = (c: CardSpec, pad = 14): string => {
         `x="${(x + p.w / 2).toFixed(1)}" y="${(y + p.h / 2 + fs * 0.36).toFixed(1)}" ` +
         `text-anchor="middle">${esc(p.reserved ? p.label : p.short)}</text>`)
     }
+    o.push(`</g>`)
   }
   o.push(...scaleBar(pad, pad + BOARD_H + 7.5))
   o.push(`<text class="dim" x="${pad + W / 2}" y="${pad - 4}" text-anchor="middle">${W} mm</text>`)
@@ -140,6 +167,12 @@ export const mbSvg = (envelopes: { len: number; label: string }[]): string => {
     `no SRAM &#8212; all memory is DRAM on four 30-pin SIMMs (ram.md 6.2), ` +
     `plus a 1 MB boot ROM at physical 2.0&#8211;3.0 M (ram.md 6.7)</text>`)
   for (const [x, y, w, h, lab, kind, rsv] of MB_PARTS) {
+    const d = MB_ROLE[lab] ?? { fam: "", role: "" }
+    o.push(`<g class="part" tabindex="0" role="img" ` +
+      `aria-label="${esc(lab)}${d.fam ? `. ${esc(d.fam)}` : ""}" ` +
+      `data-label="${esc(lab)}" data-fam="${esc(d.fam)}" data-role="${esc(d.role)}">`)
+    o.push(`<title>${esc(lab)}${d.fam ? `\n\n${esc(d.fam)}` : ""}` +
+      `${d.role ? `\n\n${esc(d.role)}` : ""}</title>`)
     o.push(`<rect class="${rsv ? "resv" : "pk"}" x="${pad + x}" y="${pad + y}" ` +
       `width="${w}" height="${h}" rx="0.7" style="fill:${FILL[kind]}"/>`)
     if (!rsv) o.push(`<circle class="p1" cx="${pad + x + 1.6}" cy="${pad + y + 1.6}" r="0.65"/>`)
@@ -147,6 +180,7 @@ export const mbSvg = (envelopes: { len: number; label: string }[]): string => {
       o.push(`<text class="${rsv ? "rl" : "pl"}" style="font-size:3.0px" ` +
         `x="${pad + x + w / 2}" y="${pad + y + h / 2 + 1.2}" text-anchor="middle">${esc(lab)}</text>`)
     }
+    o.push(`</g>`)
   }
   o.push(`<text class="dim" x="${pad + W / 2}" y="${pad - 4}" text-anchor="middle">` +
     `${W} mm &#8212; set by the longest card, not by any document</text>`)

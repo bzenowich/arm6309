@@ -19,6 +19,7 @@ import { join } from "node:path"
 import { CARDS, LENGTHS, BOARD_H, icCount, footprintCount, type CardSpec } from "./parts"
 import { pack, fits } from "./pack"
 import { MB, MB_PARTS } from "./svg"
+import { FAMILY, MB_ROLE, ROLE } from "./parts.info"
 import { WINDOWS } from "../cards/windows"
 
 let failures = 0
@@ -121,6 +122,35 @@ for (const [key, c] of Object.entries(CARDS)) {
     `${String(r.courtyard).padStart(6)} of ${String(r.placeable).padStart(6)} cm²  ` +
     `${String(pct(c)).padStart(3)} %`)
 }
+/* -- every placed part can be explained -----------------------------------
+ *
+ * The drawings carry hover text: what each part IS (FAMILY, by part number)
+ * and what it DOES here (ROLE, by card and label). ⚠ A part with no entry is
+ * a silent gap - the tooltip simply does not appear, and nothing else would
+ * ever say so. This is the assertion that keeps place/parts.info.ts complete
+ * as parts are added, which they were eleven times on 2026-09-09 alone. */
+{
+  const famKey = (label: string) => {
+    const w = label.split(" ")
+    return /^(osc|xtal)$/.test(w[w.length - 1]) ? w[w.length - 1] : w[0]
+  }
+  const noFam: string[] = [], noRole: string[] = []
+  for (const [k, c] of Object.entries(CARDS)) {
+    for (const p of c.parts) {
+      if (!FAMILY[famKey(p.label)]) noFam.push(`${k}:${p.label}`)
+      if (!ROLE[`${k}:${p.label}`]) noRole.push(`${k}:${p.label}`)
+    }
+  }
+  check(noFam.length === 0,
+    "every card part has a FAMILY entry - what the chip is", noFam.join(", "))
+  check(noRole.length === 0,
+    "and a ROLE entry - what it does in this circuit", noRole.join(", "))
+
+  const noMb = MB_PARTS.filter((p) => !MB_ROLE[p[4]]).map((p) => p[4])
+  check(noMb.length === 0,
+    "and every motherboard part has both", noMb.join(", "))
+}
+
 console.log(`\n      ${Object.keys(CARDS).length} cards, ${area.toFixed(0)} cm² of board.` +
   ` Cut to the longest they would be ${((LENGTHS[2] * BOARD_H) / 100) * Object.keys(CARDS).length} cm².`)
 

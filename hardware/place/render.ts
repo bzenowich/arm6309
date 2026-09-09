@@ -109,6 +109,46 @@ document.querySelectorAll('.cell').forEach(function (btn) {
 });
 document.getElementById('lbX').addEventListener('click', function () { lb.close(); });
 lb.addEventListener('click', function (e) { if (e.target === lb) lb.close(); });
+
+/* ---- the part tooltip ---------------------------------------------------
+ *
+ * Every footprint is a <g class="part"> carrying data-label / data-fam /
+ * data-role, and each also has a native <title> - so the text is reachable
+ * with this script disabled, just slower and unstyled. Delegated from the
+ * document so it works inside the enlarged dialog too, where the SVG is a
+ * clone that did not exist when this ran.
+ *
+ * Positioned against the viewport and flipped near an edge, because the
+ * boards are wide and the rightmost parts would otherwise open off-screen. */
+const tip = document.createElement('div');
+tip.className = 'tip'; tip.hidden = true; document.body.appendChild(tip);
+
+function showTip(g, x, y) {
+  const fam = g.dataset.fam || '', role = g.dataset.role || '';
+  tip.innerHTML = '<b>' + g.dataset.label + '</b>'
+    + (fam ? '<i>' + fam + '</i>' : '')
+    + (role ? '<p>' + role + '</p>' : '');
+  tip.hidden = false;
+  const r = tip.getBoundingClientRect(), M = 14;
+  let left = x + M, top = y + M;
+  if (left + r.width > innerWidth - 8) left = x - r.width - M;
+  if (top + r.height > innerHeight - 8) top = Math.max(8, y - r.height - M);
+  tip.style.left = left + 'px'; tip.style.top = top + 'px';
+}
+
+document.addEventListener('mousemove', function (e) {
+  const g = e.target.closest && e.target.closest('g.part');
+  if (g) showTip(g, e.clientX, e.clientY); else tip.hidden = true;
+});
+/* Keyboard and touch: the <g> is focusable, so tab or tap reaches it too. */
+document.addEventListener('focusin', function (e) {
+  const g = e.target.closest && e.target.closest('g.part');
+  if (!g) { tip.hidden = true; return; }
+  const b = g.getBoundingClientRect();
+  showTip(g, b.left + b.width / 2, b.bottom);
+});
+document.addEventListener('scroll', function () { tip.hidden = true; }, true);
+lb.addEventListener('close', function () { tip.hidden = true; });
 </script>
 `
 
