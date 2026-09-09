@@ -2,17 +2,18 @@
 
 A **Paula**, not a Paula-alike: 4 channels of 8-bit signed PCM, built from pre-1990
 parts, whose acceptance test is playing existing Amiga OCS tracker modules **correctly**.
-**32 ICs** — one `ATF1508AS` CPLD in a PLCC-84 socket holds all the logic
-([`docs/audio.md`](docs/audio.md) §10.1) — **512 KB of card-local sample SRAM in one
-package**, no bus mastering, and **no digital multiply and no digital sum anywhere**:
+**45 ICs on a 24 cm card** — **two** `ATF1508AS`, both fitted
+([`docs/audio.md`](docs/audio.md) §10.1, §10.2) — **512 KB of card-local
+sample SRAM in one package**, no bus mastering, and **no digital multiply and no digital
+sum anywhere**:
 volume, panning and mixing all happen in the converters, the way Paula does it. Two
 outputs, and they are different signals: a **headphone-driven 3.5 mm stereo jack** at the
 card's rear edge, and a **line-level** pair on the backplane (§7.1).
 
-> The IC count's path from the first tally of 35 through 57, 54, 45 and 36 to 29, and
-> then to 31 on 2026-09-08 when programmable panning was built and the memory
-> consolidated, and to **32** on 2026-09-09 with the headphone driver, is archived,
-> itemised, in [docs/history.md](docs/history.md).
+> The IC count's path from the first tally of 35 through 57, 54, 45, 36, 29, 31 and 32
+> to **45** on 2026-09-09 — when the sequencer was enumerated, and then built, and
+> turned out to be a second CPLD and twelve datapath and glue packages nobody had
+> counted — is archived, itemised, in [docs/history.md](docs/history.md).
 
 **Unaffected by the machine's E rate.** Everything on the card is referred to its own
 28.37516 MHz crystal, and §9.3's prefetch means there is no `/WAIT` path to close, so the
@@ -49,7 +50,23 @@ ctest --test-dir build-host --output-on-failure
 
 ## Status
 
-**Specified; the model is validated structurally, and the tuning claim is not yet
+⭐ **Both CPLDs are fitted and the card is simulated end to end.** `audio_tb` writes a
+channel's `LC`/`LEN`/`PER` through the host port, enables it with `DMACON`, and watches a
+sample byte come out of card RAM through `PEND`, a converter port register and into an
+`AD7528` — then rewrites `LC`/`LEN` while the first pass is still playing and sees the
+buffer loop to the new address and the end-of-buffer interrupt reach `/FIRQ`. 33 claims,
+0 failed.
+
+| | | |
+|---|---|---|
+| **U1** the host register block, `audio` | 77 of 128 cells, 46 of 64 I/O | room |
+| **U2** the sequencer, `aseq` (§10.2) | ⚠ **128 of 128 cells**, 62 of 64 I/O | **full** |
+
+⚠ **U2 is exactly full**, and a TQFP-100 does not help — both packages carry the same 128
+macrocells. **What is not closed is the analogue half**: the converter glitch, the
+cascaded settling and the layout at 45 packages on a 24 cm card (§16 items 9, 10, 19).
+
+**The model is validated structurally, and the tuning claim is not yet
 measurable.** 15/15 single-effect probes and the whole 1112-row path through
 `ode2ptk.mod` agree with libopenmpt's Paula emulation — identical row/pattern
 traversal, ≤0.3 dB gain, spectral correlation at or above the calibration ceiling.
@@ -74,6 +91,6 @@ form and `ASTAT` b6/b7 all decided in §9.2 — which is a
 [machine-level](../docs/machine.md) decision, and then §12.5's MCU bring-up card, which
 is what proves the map before any discrete board is laid out.
 
-⚠ **The CPLD fit is one day behind the document** — `cpld/audio.jed` was fitted before
-panning and before the state file changed width. Neither adds a pin; §16 item 30 is the
-refit.
+⭐ **The CPLD fit is current** — `cpld/audio.jed` was refitted 2026-09-09 with §9.1's
+decode, §9.3's read-back path and the prefetch latch's output enable, none of which had
+ever been built. §16 items 0b and 30.

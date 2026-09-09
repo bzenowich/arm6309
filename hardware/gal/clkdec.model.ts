@@ -73,14 +73,20 @@ export const setsRun = (i: {
 
 export const decode = (i: DecodeIn): DecodeOut => {
   const iopage = !i.nIopage
-  /* ⭐ The buffer drives exactly when the map SRAMs do not, which is the
-   * complement of u9.model.ts's nMapCeLo/nMapCeHi and is written as that
-   * rather than as a list of modes - clkdec.pld has what the list got wrong
-   * in both directions. The vector page falls out: $FFC0-$FFFF is an I/O
-   * cycle and not a block access, so the SRAMs are off there already. */
-  const blkhi = iopage && !!i.la7 && !i.la6 && !i.la5 && !!i.la4
+  /* ⭐ The buffer drives exactly when the LOW map SRAM does not, which is the
+   * complement of u9.model.ts's nMapCeLo and is written as that rather than
+   * as a list of modes - clkdec.pld has what the list got wrong in both
+   * directions. The vector page falls out: $FFC0-$FFFF is an I/O cycle and
+   * not a block access, so the SRAM is off there already.
+   *
+   * ⚠ THE LOW ONE, NOT THE UNION - 2026-09-09. The rule is about a NET:
+   * physical A20-A13, whose only two drivers are U1 and this buffer. U1B's
+   * four bits are A24-A21, on their own buffer, and they never leave the
+   * board. Pairing with the union was right only while ONE '245 served both
+   * windows; once U4 shut for the high window (mmu.model.ts) the union left
+   * A20-A13 undriven for the sixteen high-byte writes of every boot. */
   const blklo = iopage && !!i.la7 && !i.la6 && !!i.la5 && !i.la4
-  const mapsel = (!!i.run && !iopage) || blkhi || blklo
+  const mapsel = (!!i.run && !iopage) || blklo
   return {
     /* $FF00-$FF7F: the I/O page with A7 = 0. */
     nIosel: not(iopage && !i.la7),

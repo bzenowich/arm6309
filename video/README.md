@@ -1,17 +1,25 @@
 # `video/` — the 256-colour video card
 
 640×200 in **256 colours**, 80×25 text, a scrolling bitmap and a span writer, out of a
-VGA connector at the standard 25.175 MHz dot clock. **28 ICs** — 24 if the tri-state
-pixel bus closes at 39.7 ns and the `'153` mux is not needed — of which the
-programmable logic is **2 × `ATF1508AS` in PLCC-84 plus one `GAL22V10`**, alongside a
-three-transistor analog drive stage. **~0.5–0.85 A at 5 V, 0.65 A nominal.**
+VGA connector at the standard 25.175 MHz dot clock. **The card is 36 ICs** on a 24 cm
+board — 32 if the tri-state pixel bus closes at 39.7 ns and the `'153` mux is not
+needed — of which the programmable logic is **3 × `ATF1508AS` in PLCC-84 and no
+GALs**, alongside a three-transistor analog drive stage. **~0.6–0.95 A at 5 V, 0.75 A
+nominal.**
+
+⭐ **It grew by eight packages on 2026-09-09 and seven of them are features that were
+already specified and had no hardware**: §8.2's byte-granular horizontal scroll (a
+second rank of fetch latches), §9's palette **write path** — which had no producer at
+all, so the CPU could not put a colour on the screen — and §10.3.3's display-list
+register port. The third CPLD `vsup` went the other way: it absorbed all three
+`GAL22V10`s, so **a third PLCC-84 reduced the package count by two.**
 
 The logic is written, fitted and checked at the fuse level —
 [`hardware/gal/video.cpld.ts`](../hardware/gal/video.cpld.ts) and
-`hardware/gal/cpld/`, with the `rfa` `GAL22V10` checked against Atmel's own
-compiler by `npm run check:cupl`. `graphics.md` §14.1 has the line-by-line count;
-the path the count took to get there (~33 → 41 → 30 → 27, with power falling from
-~1.2–1.8 A) is archived in [`docs/history.md`](docs/history.md).
+`hardware/gal/cpld/`, with every design also checked against Atmel's own compiler by
+`npm run check:cupl`. `graphics.md` §14.1 has the line-by-line count; the path the
+count took to get there (~33 → 41 → 30 → 27 → 28, with power falling from ~1.2–1.8 A)
+is archived in [`docs/history.md`](docs/history.md).
 
 Paths below are relative to this directory; build commands run from the repository
 root.
@@ -45,15 +53,28 @@ monitor's 75 Ω, and blanking by `74AHCT273` `/MR` for zero packages. **No ICs**
 transistors, a diode and fifteen resistors — which is what closed `design-review.md`
 §Vid-M4. It is still what step 1 has to measure.
 
-⚠ **`vctrl` is full in every dimension.** `vaddr` is **109 of 128** logic cells and
-61 of 64 I/O; `vctrl` is **122 of 128** and **64 of 64 I/O — plus 4 of 4 dedicated
-inputs**, which `features.md` §8.4's sprite mode spent on 2026-09-09. Those totals
-**include JTAG's four**, because the `ATF1508AS` shares `TMS`/`TDI`/`TDO`/`TCK` with
-ordinary I/O, and both parts are still programmed in circuit (`graphics.md` §10.1.6.3).
+⚠ **Every part on this card is bound by PINS, and none of them by macrocells.**
+`vctrl` is 64 of 64 I/O.
+`vaddr` is 63 of 64 I/O.
+`vsup` is 58 of 64 I/O.
+Their cell counts are 98, 113 and 84 of 128. Those totals **include JTAG's four**,
+because the `ATF1508AS` shares `TMS`/`TDI`/`TDO`/`TCK` with ordinary I/O, and all three
+parts are programmed in circuit.
+
+⛔ **And `vaddr` is bound by a third thing: LAB fan-in.** An `ATF1508AS` block sees 40
+signals through the switch matrix and `vaddr` sits at **40 of 40 in all eight**. Three
+separate one-literal changes to the display list were refused there on 2026-09-09 — two
+`Grouping fail / Design does not fit`, one `INTERNAL ERROR` — which is why the engine's
+descriptor half moved to `vsup` rather than growing in place. It is invisible in a cell
+count and a pin count; only `hardware/gal/cpld/vaddr.fit` shows it.
 
 **Nothing further can be added to `vctrl`.** §14.2's two ×16 framebuffer parts return six
 output pins by making the arbiter 2 grants instead of 8 — already worth doing, and now
 the thing the card's next feature waits on.
+
+⚠ **`vsup`'s spare room is 44 macrocells and 6 pins**, which is the shape of every
+constraint on this card: a blit datapath (`blitter.md`) fits the cells and does not fit
+the pins. **Blitter room is a pin question here, not a macrocell question.**
 
 **Specified at ÷12 only.** E = 25.175/12 = 2.0979 MHz is the rate this card is
 specified at. The ÷8 rate — fast-E mode, 3.1469 MHz — is **experimental and not

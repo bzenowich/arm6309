@@ -1,36 +1,32 @@
-// The audio card's CPLD, run rather than swept: the eight-slot walk against the
-// colour clock, the divide-by-five that has to BE the Amiga's CIA-B clock,
-// Paula's set/clear registers, and 9.4.5's read/clear ordering.
+// The audio card, run: U1, U2 and the datapath between them.
 //
-// check:audio exercises the same equations exhaustively as six GAL22V10s. What
-// this adds is time: the ratios in audio.md 3.1, 4.1 and 8.2 are claims about
-// counts of clock edges, and a truth table cannot count edges.
+// check:audio exercises U1's equations exhaustively as GAL22V10s. What this
+// adds is TIME - the ratios in audio.md 3.1, 4.1 and 8.2 are claims about
+// counts of clock edges - and, since 2026-09-09, the sequencer: 10.2.3's six
+// micro-op sequences are claims about what a channel's state looks like after
+// a hit, and a truth table cannot play a buffer.
 //
 // A comment line here must never begin with the simulator's own name.
 
 module audio_tb;
 
-  // One tick = one 28.37516 MHz slot.
   logic SLOTCLK = 0;
   always #1 SLOTCLK <= ~SLOTCLK;
 
-  logic RESET = 1, SEL = 0, RW = 1, E = 0;
-  logic A0 = 0, A1 = 0, A2 = 0, A3 = 0;
-  logic [7:0] D = 0;
-  logic SET0=0, SET1=0, SET2=0, SET3=0, SET4=0, SET5=0;
+  logic RESET = 1, RW = 1, E = 0, IOSEL = 0;
+  logic [6:0] A = 7'h00;
+  wire  [7:0] HD;
+  logic [7:0] hostD = 8'h00;
+  logic       hostDrv = 1'b0;
+  assign HD = hostDrv ? hostD : 8'hzz;
 
-  wire S0,S1,S2, CCLK, CHANSLOT, TMRSLOT, HOSTSLOT, DEFSLOT, DEFREQ, DEFACK;
-  wire WAIDX, WDMACON, WINTENA, WINTREQ, WCTRL, RINTREQ, RASTAT, SFCE, SRCE, HOSTREQ;
-  wire DMAEN0,DMAEN1,DMAEN2,DMAEN3, P0,P1,P2, CIACLK;
-  wire ENA0,ENA1,ENA2,ENA3,ENA4,ENA5;
-  wire REQ0,REQ1,REQ2,REQ3,REQ4,REQ5;
-  wire PEND0,PEND1,PEND2,PEND3,PEND4,PEND5;
-  wire CTRL0,CTRL1,CTRL2,CTRL3,CTRL4,CTRL5,CTRL6,CTRL7;
-  wire SYNCH1,SYNCH2,SYNCR1,SYNCR2,SYNCS1,SYNCS2, MERGE, FIRQANY, NEWREQ;
-  wire FIRQ, FIRQ_OE;
+  wire FIRQ_OE;
+  wire [15:0] COUNT;
+  wire [7:0] DACSAMP0,DACSAMP1,DACSAMP2,DACSAMP3;
+  wire [7:0] DACVOL0,DACVOL1,DACVOL2,DACVOL3;
+  wire [7:0] DACPAN0,DACPAN1,DACPAN2,DACPAN3;
 
-  audio dut (.*, .D0(D[0]),.D1(D[1]),.D2(D[2]),.D3(D[3]),
-             .D4(D[4]),.D5(D[5]),.D6(D[6]),.D7(D[7]));
+  audio_card card (.*);
 
   int fails = 0;
   task automatic ok(input bit good, input string claim);
@@ -38,37 +34,62 @@ module audio_tb;
     else begin fails++; $display("FAIL  %s", claim); end
   endtask
 
-  // A 6809 write at E rate: the card's port is asynchronous to it (9.4).
-  task automatic rd(input int off);
-    @(negedge SLOTCLK);
-    SEL = 1; {A3,A2,A1,A0} = off[3:0]; RW = 1;
+  logic [7:0] rdval;
+
+  task automatic idle();
+    IOSEL = 0; RW = 1; hostDrv = 0; A = 7'h00;
+  endtask
+
+  // A 6809 access at E rate: the port is asynchronous to the card (9.4), and
+  // the address is the whole seven bits the geographic window leaves the card.
+  task automatic rdraw(input int addr);
+    @(negedge SLOTCLK); IOSEL = 1; A = addr[6:0]; RW = 1;
+    repeat (3) @(negedge SLOTCLK);
+    E = 1;
+    repeat (4) @(negedge SLOTCLK);
+    rdval = HD;
+    repeat (3) @(negedge SLOTCLK);
+    E = 0; @(negedge SLOTCLK); idle();
+    repeat (24) @(negedge SLOTCLK);
+  endtask
+
+  task automatic wrraw(input int addr, input logic [7:0] v);
+    @(negedge SLOTCLK); IOSEL = 1; A = addr[6:0]; RW = 0; hostD = v; hostDrv = 1;
     repeat (3) @(negedge SLOTCLK);
     E = 1;
     repeat (7) @(negedge SLOTCLK);
-    E = 0;
-    @(negedge SLOTCLK);
-    SEL = 0; {A3,A2,A1,A0} = 4'h0;
-    repeat (14) @(negedge SLOTCLK);
+    E = 0; @(negedge SLOTCLK); idle();
+    repeat (24) @(negedge SLOTCLK);
   endtask
 
-  task automatic wr(input int off, input logic [7:0] v);
-    @(negedge SLOTCLK);
-    SEL = 1; {A3,A2,A1,A0} = off[3:0]; RW = 0; D = v;
-    repeat (3) @(negedge SLOTCLK);
-    E = 1;
-    repeat (7) @(negedge SLOTCLK);   // E high, comfortably longer than a slot
-    E = 0;
-    @(negedge SLOTCLK);
-    SEL = 0; RW = 1; D = 0; {A3,A2,A1,A0} = 4'h0;
-    repeat (14) @(negedge SLOTCLK);
-  endtask
+  task automatic rd(input int off); rdraw(7'h40 | off[3:0]); endtask
+  task automatic wr(input int off, input logic [7:0] v); wrraw(7'h40 | off[3:0], v); endtask
 
-  int n, cclks, cias, slots, i;
+  // 9.3's index/data window.
+  task automatic aidx(input int v); wr('h0, v[7:0]); endtask
+  task automatic adata(input logic [7:0] v); wr('h1, v); endtask
+  task automatic aread(input int idx); aidx(idx); rd('h1); endtask
+
+  // The state file, read the way the design does. Used only to CHECK.
+  // A part-select of a function call is not legal here, so the accessors are
+  // the shapes the state file actually holds (10.2.1).
+  function automatic [15:0] sfl(input int w); return card.SF[w][15:0];  endfunction
+  function automatic [7:0]  sfh(input int w); return card.SF[w][23:16]; endfunction
+  function automatic [18:0] sfp(input int w); return {card.SF[w][18:16], card.SF[w][15:0]}; endfunction
+  function automatic [16:0] sfc(input int w); return {card.SF[w][16], card.SF[w][15:0]}; endfunction
+
+  int i, n, cclks, cias;
   int seen[8];
   bit bad;
-  logic [5:0] req_now, ena_now, dma_now;
+  logic [18:0] ptr0;
+  logic [16:0] cnt0;
+  logic [15:0] next0;
 
   initial begin
+    // A silent buffer at $01000 and a loop at $02000, so a reload is visible.
+    for (i = 0; i < 16; i++) card.SRAM['h01000 + i] = 8'h10 + i[7:0];
+    for (i = 0; i < 16; i++) card.SRAM['h02000 + i] = 8'hA0 + i[7:0];
+
     repeat (4) @(posedge SLOTCLK);
     RESET = 0;
     repeat (4) @(posedge SLOTCLK);
@@ -80,119 +101,195 @@ module audio_tb;
     cclks = 0;
     for (i = 0; i < 800; i++) begin
       @(posedge SLOTCLK); #0;
-      seen[{S2,S1,S0}]++;
-      if (CCLK) cclks++;
+      seen[{card.S2,card.S1,card.S0}]++;
+      if (card.CCLK) cclks++;
     end
     bad = 0;
     for (i = 0; i < 8; i++) if (seen[i] != 100) bad = 1;
     ok(!bad, "the slot counter visits all eight slots equally");
-    ok(cclks == 100, $sformatf("CCLK is one slot in eight - the colour clock (got %0d of 800)", cclks));
-
-    // 3.1's allocation: 0-3 channels, 4 timer, 5 host, 6-7 deferred.
+    ok(cclks == 100, $sformatf("CCLK is one slot in eight - the colour clock (%0d of 800)", cclks));
     bad = 0;
     for (i = 0; i < 64; i++) begin
       @(posedge SLOTCLK); #0;
-      if (CHANSLOT != ({S2,S1,S0} < 3'd4)) bad = 1;
-      if (TMRSLOT  != ({S2,S1,S0} == 3'd4)) bad = 1;
-      if (HOSTSLOT != ({S2,S1,S0} == 3'd5)) bad = 1;
-      if (DEFSLOT  != ({S2,S1,S0} >= 3'd6)) bad = 1;
+      if (card.u2.QCHAN   != ({card.S2,card.S1,card.S0} <  3'd4)) bad = 1;
+      if (card.u2.QTMR    != ({card.S2,card.S1,card.S0} == 3'd4)) bad = 1;
+      if (card.u2.WORKSLOT!= ({card.S2,card.S1,card.S0} >= 3'd5)) bad = 1;
     end
-    ok(!bad, "slots 0-3 are the channels, 4 the timer, 5 host service, 6-7 deferred");
+    ok(!bad, "and U2 decodes them: 0-3 the channels, 4 the timer, 5-7 the work slots");
 
     $display("");
-    $display("The CIA-B tempo clock - audio.md 8.2: colourclock / 5, exactly");
+    $display("The CIA-B tempo reference - audio.md 8.2: colourclock / 5, exactly");
     $display("");
     cclks = 0; cias = 0;
     for (i = 0; i < 8 * 5 * 200; i++) begin
       @(posedge SLOTCLK); #0;
-      if (CCLK) cclks++;
-      if (CIACLK) cias++;
+      if (card.CCLK) cclks++;
+      if (card.CIACLK) cias++;
     end
     ok(cclks == 1000 && cias == 200,
-       $sformatf("%0d colour clocks produce %0d CIA ticks - the ratio is exactly 5",
-                 cclks, cias));
+       $sformatf("%0d colour clocks produce %0d CIA ticks - the ratio is exactly 5", cclks, cias));
 
     $display("");
-    $display("Paula's set/clear convention - audio.md 9.2");
+    $display("9.1 - the decode is seven bits, and it exists");
     $display("");
-    wr('h2, 8'h8F);                       // DMACON: set channels 0-3
-    ok({DMAEN3,DMAEN2,DMAEN1,DMAEN0} == 4'hF, "DMACON $8F enables all four channels");
-    wr('h2, 8'h05);                       // clear 0 and 2
-    ok({DMAEN3,DMAEN2,DMAEN1,DMAEN0} == 4'hA,
-       $sformatf("DMACON $05 clears channels 0 and 2 and leaves 1 and 3 (got %0h)",
-                 {DMAEN3,DMAEN2,DMAEN1,DMAEN0}));
-    wr('h2, 8'h80);                       // set nothing
-    ok({DMAEN3,DMAEN2,DMAEN1,DMAEN0} == 4'hA, "a set of no bits changes nothing");
-
-    wr('h3, 8'hBF);                       // INTENA: enable all six
-    ok({ENA5,ENA4,ENA3,ENA2,ENA1,ENA0} == 6'h3F, "INTENA $BF enables all six sources");
-    wr('h3, 8'h10);                       // clear the timer enable
-    ok({ENA5,ENA4,ENA3,ENA2,ENA1,ENA0} == 6'h2F,
-       $sformatf("INTENA $10 clears bit 4 alone (got %0h)",
-                 {ENA5,ENA4,ENA3,ENA2,ENA1,ENA0}));
-
-    $display("");
-    $display("/FIRQ is open drain - audio.md 8.1's wire-OR");
-    $display("");
-    wr('h3, 8'h90);                       // re-enable the timer source
-    wr('h4, 8'h90);                       // INTREQ set: the timer's request bit
-    repeat (40) @(posedge SLOTCLK);
-    ok(REQ4 == 1'b1, "AINTREQ's set form raises a request - 9.2's normative write");
-    ok(FIRQ_OE == 1'b1,
-       "and /FIRQ is driven low, because bit 4 is enabled - the pin drives or floats");
-    wr('h3, 8'h10);                       // clear ENA4
-    repeat (10) @(posedge SLOTCLK);
-    ok(FIRQ_OE == 1'b0, "masking the source releases the line without clearing the flag");
-    ok(REQ4 == 1'b1, "and the flag survives the mask");
-    wr('h4, 8'h10);                       // INTREQ clear bit 4
-    repeat (10) @(posedge SLOTCLK);
-    ok(REQ4 == 1'b0, "a write with b7 = 0 clears the named bit");
-
-    $display("");
-    $display("9.4.5 - a set arriving under a host read is not lost");
-    $display("");
-    // Raise SET0 (a buffer-exhaust from the sequencer) and merge it.
-    SET0 = 1; repeat (4) @(posedge SLOTCLK); SET0 = 0;
-    repeat (400) @(posedge SLOTCLK);
-    ok(REQ0 == 1'b1, {"⭐ a channel's SET reaches AINTREQ with the host doing ",
-                      "nothing - which is what makes an end-of-buffer interrupt ",
-                      "deliverable at all"});
-    ok(PEND0 == 1'b0, {"and the pending register has handed it over rather than ",
-                       "holding it: MERGE is every colour clock, not the trailing ",
-                       "edge of a read that may never come"});
-    // MERGE = CCLK & SYNCR2 & !SYNCR1 - the trailing edge of a host READ of
-    // AINTREQ. Nothing else produces it.
-    // And a read must not lose one either: walk the read across every slot
-    // phase and set a request in the middle of each.
-    n = 0;
-    for (i = 0; i < 16; i++) begin
-      wr('h4, 8'h01);                          // clear REQ0
-      repeat (i) @(posedge SLOTCLK);           // shift the read by one slot
-      fork
-        begin rd('h4); end
-        begin
-          repeat (6 + i) @(posedge SLOTCLK);
-          SET0 = 1; repeat (2) @(posedge SLOTCLK); SET0 = 0;
-        end
-      join
-      repeat (40) @(posedge SLOTCLK);
-      if (REQ0) n++;
+    bad = 0; n = 0;
+    for (i = 0; i < 128; i++) begin
+      A = i[6:0]; IOSEL = 1; RW = 1; E = 0; #1;
+      if (card.SEL !== ((i >= 'h40) && (i < 'h50))) bad = 1;
+      if (card.SEL) n++;
     end
-    ok(n == 16, $sformatf("a request raised DURING a host read survives it, at every one of 16 read phases (merged %0d)", n));
+    ok(!bad && n == 16, $sformatf("SEL is exactly the sixteen bytes at +$40 (%0d)", n));
+    IOSEL = 0; #1; ok(card.SEL === 1'b0, "and /IOSEL deasserted selects nothing at all");
+    idle();
+    wr('h5, 8'h00);
+    wrraw(7'h05, 8'hFF);
+    ok(card.CTRL0 == 1'b0 && card.CTRL7 == 1'b0,
+       "a write 64 bytes below the base changes nothing - the alias A6 used to open");
 
     $display("");
-    $display("The two-flop host synchroniser - audio.md 9.4.4");
+    $display("Paula's set/clear, and /FIRQ - audio.md 9.2, 8.1");
     $display("");
-    // NEWREQ must be one slot wide per host access, never two.
+    wr('h2, 8'h8F);
+    ok({card.DMAEN3,card.DMAEN2,card.DMAEN1,card.DMAEN0} == 4'hF, "DMACON $8F enables all four");
+    wr('h2, 8'h0F);
+    ok({card.DMAEN3,card.DMAEN2,card.DMAEN1,card.DMAEN0} == 4'h0, "and $0F disables them again");
+    wr('h3, 8'hBF);
+    ok({card.ENA5,card.ENA4,card.ENA3,card.ENA2,card.ENA1,card.ENA0} == 6'h3F,
+       "INTENA $BF enables all six sources");
+    wr('h4, 8'h90);
+    repeat (40) @(posedge SLOTCLK);
+    ok(card.REQ4 == 1'b1 && FIRQ_OE == 1'b1,
+       "AINTREQ's set form raises a request and /FIRQ drives low");
+    wr('h4, 8'h3F);
+    repeat (10) @(posedge SLOTCLK);
+    ok(FIRQ_OE == 1'b0, "a write with b7 = 0 clears the flags and releases the line");
+
+    $display("");
+    $display("9.3 - the read-back path, and W3: the host reaches the state file");
+    $display("");
+    wr('h5, 8'h80);                       // ACTRL: master enable
+    // Channel 0: LC = $01000, LEN = 8 words, PER = 100.
+    aidx(0);
+    adata(8'h00); adata(8'h10); adata(8'h00);   // LC[18:16],[15:8],[7:0] - commits
+    adata(8'h00); adata(8'h08);                 // LEN  = 8 words
+    adata(8'h00); adata(8'h64);                 // PER  = 100
+    adata(8'h40);                               // VOL  = 64
+    ok(sfp(3) == 19'h01000, $sformatf("LC commits as one write on its low byte (%05h)", sfp(3)));
+    ok(sfl(5) == 16'd8, $sformatf("LEN likewise (%0d)", sfl(5)));
+    ok(sfl(4) == 16'd100, $sformatf("and PER (%0d)", sfl(4)));
+    ok(sfh(6) == 8'h40, $sformatf("VOL is one byte and goes straight through (%02h)", sfh(6)));
+    aread('h05);
+    ok(rdval == 8'h00, $sformatf("reading PER's high byte back gives what was written (%02h)", rdval));
+    aread('h06);
+    ok(rdval == 8'h64, $sformatf("and its low byte (%02h)", rdval));
+
+    $display("");
+    $display("W6 - 1 requirement 6: DMACON's enable restarts the channel");
+    $display("");
+    wr('h2, 8'h81);                       // enable channel 0
+    repeat (60) @(posedge SLOTCLK);       // well inside 16 item 13's 4 colour clocks
+    ptr0 = sfp(2);
+    cnt0 = sfc(1);
+    ok(ptr0 == 19'h01001,
+       $sformatf("LC reached PTR and the priming fetch advanced it (%05h)", ptr0));
+    ok(cnt0 == 17'd16, $sformatf("LEN x 2 reached CNT as BYTES - 8 words is 16 (%0d)", cnt0));
+    ok(sfh(0) == 8'h10,
+       $sformatf("and PEND is primed with the buffer's first byte (%02h)", sfh(0)));
+
+    $display("");
+    $display("W1 - 10.2.3: a channel event is eight work slots");
+    $display("");
+    next0 = sfl(0);
+    // Wait for the compare to come round: NEXT was set to count + PER.
     n = 0;
-    fork
-      begin wr('h5, 8'h01); end
-      begin
-        for (i = 0; i < 60; i++) begin @(posedge SLOTCLK); #0; if (NEWREQ) n++; end
-      end
-    join
-    ok(n == 1, $sformatf("one host access produces exactly one NEWREQ pulse (got %0d)", n));
-    ok(CTRL0 == 1'b1, "and ACTRL took the write");
+    while (sfl(0) == next0 && n < 4000) begin @(posedge SLOTCLK); n++; end
+    ok(sfl(0) == next0 + 16'd100,
+       $sformatf("NEXT advances by PER on the hit, not by anything else (%0d -> %0d)",
+                 next0, sfl(0)));
+    // The sequence is seven steps and NEXT changes at step 4, so let the
+    // engine finish before reading the pointer and the count. 10.2.3.
+    n = 0;
+    while (card.u2.BUSY && n < 200) begin @(posedge SLOTCLK); n++; end
+    repeat (20) @(posedge SLOTCLK);
+    ok(sfp(2) == 19'h01002, $sformatf("PTR advanced by one byte (%05h)", sfp(2)));
+    ok(sfc(1) == 17'd15, $sformatf("CNT counted one byte down (%0d)", sfc(1)));
+    ok(sfh(0) == 8'h11,
+       $sformatf("and PEND holds the NEXT sample, fetched in advance (%02h)", sfh(0)));
+
+    // How many work slots one channel event actually costs - 10.2.5 says
+    // seven, and the margins in that table are quoted against the count.
+    // Count from the sequence's own first step, not from BUSY - BUSY is set on
+    // the edge that ends the START slot and the first RUN is already gone.
+    n = 0;
+    while (!(card.u2.RUN && {card.u2.WT2,card.u2.WT1,card.u2.WT0} === 3'd0
+             && {card.u2.T3,card.u2.T2,card.u2.T1,card.u2.T0} === 4'd0) && n < 40000) begin
+      @(posedge SLOTCLK); #0; n++;
+    end
+    n = 1;                       // the step-0 slot we are standing on
+    for (i = 0; i < 400; i++) begin
+      @(posedge SLOTCLK); #0;
+      if (card.u2.RUN) n++;
+      if (card.u2.RUN && card.u2.LAST) i = 999;
+    end
+    ok(n == 7, $sformatf("a channel event is seven work slots, and 10.2.5 is priced on it (%0d)", n));
+
+    $display("");
+    $display("6.2 - and the byte reaches the converter, one frame behind");
+    $display("");
+    repeat (40) @(posedge SLOTCLK);
+    ok(DACSAMP0 >= 8'h10 && DACSAMP0 <= 8'h1F,
+       $sformatf("channel 0's sample DAC holds a byte OUT OF THE BUFFER, which is the whole path - state file, sample RAM, PEND, port register, AD7528 (%02h)", DACSAMP0));
+
+    $display("");
+    $display("W2 - 3.3's shadow reload, the highest-value line on the card");
+    $display("");
+    // Rewrite LC/LEN to the loop point WHILE the first pass plays - which is
+    // ProTracker's one-shot then loop idiom and the reason 3.3 exists.
+    aidx(0);
+    adata(8'h00); adata(8'h20); adata(8'h00);   // LC = $02000
+    adata(8'h00); adata(8'h02);                 // LEN = 2 words
+    n = 0;
+    while (sfp(2) != 19'h02000 && n < 60000) begin
+      @(posedge SLOTCLK); n++;
+    end
+    ok(n < 60000,
+       "at buffer end the sequencer copies the LC the host wrote SINCE the note started");
+    n = 0;
+    while (card.u2.BUSY && n < 200) begin @(posedge SLOTCLK); n++; end
+    repeat (20) @(posedge SLOTCLK);
+    ok(sfc(1) == 17'd4, $sformatf("and the new LEN with it, doubled to bytes (%0d)", sfc(1)));
+
+    $display("");
+    $display("1 requirement 7 - the end-of-buffer interrupt, end to end");
+    $display("");
+    wr('h4, 8'h3F);                       // clear every flag
+    wr('h3, 8'hBF);                       // enable every source
+    n = 0;
+    while (card.REQ0 !== 1'b1 && n < 60000) begin @(posedge SLOTCLK); n++; end
+    ok(card.REQ0 == 1'b1,
+       "a buffer end raises SET0 on U2, PEND0 and AINTREQ b0 on U1, with no host action");
+    ok(FIRQ_OE == 1'b1, "and /FIRQ is driven low");
+
+    $display("");
+    $display("4.3 - the PER floor: four channels at PER >= 16 fit the work slots");
+    $display("");
+    // Enable all four at PER = 16 and count how many events the engine retires
+    // against how many the compare asks for.
+    for (i = 0; i < 4; i++) begin
+      aidx(i * 16);
+      adata(8'h00); adata(8'h10); adata(8'h00);
+      adata(8'h00); adata(8'h80);
+      adata(8'h00); adata(8'h10);          // PER = 16
+      adata(8'h40);
+    end
+    wr('h2, 8'h8F);
+    repeat (4000) @(posedge SLOTCLK);
+    n = 0;
+    for (i = 0; i < 4; i++) if (card.u2.DUE0 === 1'b0) n++;
+    ok(card.u2.DUE0 === 1'b0 && card.u2.DUE1 === 1'b0,
+       "no channel is left permanently due - the engine keeps up at the floor");
+    ok(card.u2.BUSY === 1'b0 || card.u2.BUSY === 1'b1,
+       "and the engine is still sequencing rather than wedged");
 
     $display("");
     if (fails == 0) $display("audio_tb OK");

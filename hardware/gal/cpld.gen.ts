@@ -15,7 +15,9 @@ import { writeFileSync } from "fs"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { vaddrSource, vctrlSource } from "./video.cpld"
+import { vsupSource } from "./vsup.cpld"
 import { audioCuplSource } from "./audio.cpld"
+import { aseqCuplSource } from "./aseq.cpld"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const write = (name: string, text: string) => {
@@ -25,4 +27,7 @@ const write = (name: string, text: string) => {
 
 write("vaddr", vaddrSource())
 write("vctrl", vctrlSource())
+write("vsup", vsupSource())
 write("audio", audioCuplSource())
+/* U2, the audio card's sequencer - audio.md 10.2. */
+write("aseq", aseqCuplSource())

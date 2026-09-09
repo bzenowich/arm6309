@@ -19,13 +19,19 @@ module mainboard_tb;
   logic [7:0]  dout = 0;
   wire  [7:0]  din;
   wire e, q, run, n_iosel, n_iopage_bp, pa_valid, pa_conflict, dramsel, romsel;
+  // The top four physical bits, which never leave the board and which nothing
+  // drove at all until 2026-09-09 - machine.md 5 item 14.
+  wire pa_hi_valid, pa_hi_conflict, pa_hi_pulled;
   wire [24:0] pa;
   wire [3:0] ras;
 
   mainboard #(.SIMMS(4)) mb (.*);
 
   int fails = 0;
+  // Counted, not written down.
+  int claims = 0;
   task automatic ok(input bit good, input string claim);
+    claims++;
     if (good) $display("ok    %s", claim);
     else begin fails++; $display("FAIL  %s", claim); end
   endtask
@@ -34,6 +40,7 @@ module mainboard_tb;
   logic [7:0] got;
   logic [24:0] pa_seen;
   logic pa_ok, pa_fight, iosel_seen, iopage_seen, dram_seen, rom_seen;
+  logic pa_hi_ok, pa_hi_fight, pa_hi_park;
   logic [3:0] ras_seen;
 
   task automatic cycle(input logic [15:0] a, input bit write, input logic [7:0] v);
@@ -44,6 +51,7 @@ module mainboard_tb;
     #0;
     pa_seen = pa; pa_ok = pa_valid; pa_fight = pa_conflict; iosel_seen = ~n_iosel;
     iopage_seen = ~n_iopage_bp; dram_seen = dramsel; rom_seen = romsel;
+    pa_hi_ok = pa_hi_valid; pa_hi_fight = pa_hi_conflict; pa_hi_park = pa_hi_pulled;
     ras_seen = ras;
     got = din;
     // 6809 t_DHW: write data is held past E-fall. Without it the TASK '574's
@@ -56,6 +64,72 @@ module mainboard_tb;
 
   int i, n, bad;
   logic [7:0] b;
+  logic [3:0] found, aliased;
+
+  // ---- ram.md 6.4.1's sizing walk, as bus cycles --------------------------
+  //
+  // design-review2.md 3.5: there is no SIMM presence detection anywhere and
+  // none was proposed. A 30-pin SIMM has no presence-detect pins to read -
+  // PD1..PD4 are a 72-pin feature - so sizing is firmware, and this is the
+  // firmware, written as the boot monitor would write it.
+  //
+  // Two things make it harder than "write a byte and read it back":
+  //
+  //   1. AN EMPTY SOCKET DOES NOT READ AS ANYTHING. D0-D7 has no pull-ups, so
+  //      the bus holds whatever it was last driven to - and after a write that
+  //      is the test pattern itself. Every read-back is therefore preceded by
+  //      a read of a KNOWN byte from the boot ROM. In the ROM this is free,
+  //      because the instruction stream is already coming from there; here it
+  //      has to be done on purpose, which is the same thing said out loud.
+  //   2. TWO PATTERNS, not one, so that a bus holding one of them by accident
+  //      cannot pass for memory.
+  //
+  // And the address-line pass afterwards catches ram.md 11 item 7's other
+  // build-time mistake: a 1M x 8 module in a socket wired for 4M x 8 ignores
+  // MA10, so physical A10 falls out of the address and the module aliases
+  // every 1 KB. That is a module which passes the presence test and loses
+  // data, which is worse than one that is absent.
+  task automatic set_entry(input int entry, input logic [7:0] hi, input logic [7:0] lo);
+    cycle(16'hFF90 + entry[15:0], 1, hi);
+    cycle(16'hFFA0 + entry[15:0], 1, lo);
+  endtask
+
+  task automatic walk_full(output logic [3:0] count, output logic [3:0] alias_mask);
+    automatic bit live = 0;
+    count = 0; alias_mask = 0;
+    // Logical block 1 is the known driver: physical 2 MB, the boot ROM, where
+    // byte n reads as n's low byte. $2000 therefore reads $00, which is
+    // neither pattern.
+    set_entry(1, 8'h01, 8'h00);
+    for (int sk = 0; sk < 4; sk++) begin
+      // Logical block 0 over socket sk: physical A24..A21 = 2, 4, 6, 8.
+      set_entry(0, 8'h02 + sk[7:0] * 8'h02, 8'h00);
+      live = 1;
+      cycle(16'h0000, 1, 8'hA5);
+      cycle(16'h2000, 0, 8'h00);
+      cycle(16'h0000, 0, 8'h00);
+      if (got != 8'hA5) live = 0;
+      cycle(16'h0000, 1, 8'h5A);
+      cycle(16'h2000, 0, 8'h00);
+      cycle(16'h0000, 0, 8'h00);
+      if (got != 8'h5A) live = 0;
+      if (live) begin
+        count = count + 4'd1;
+        // Physical A0-A12 are untranslated, so logical $0400 is the same
+        // block one row bit up. A module that ignores MA10 answers both.
+        cycle(16'h0000, 1, 8'h11);
+        cycle(16'h0400, 1, 8'h22);
+        cycle(16'h2000, 0, 8'h00);
+        cycle(16'h0000, 0, 8'h00);
+        if (got != 8'h11) alias_mask[sk] = 1'b1;
+      end
+    end
+  endtask
+
+  task automatic walk(output logic [3:0] count);
+    automatic logic [3:0] ignored;
+    walk_full(count, ignored);
+  endtask
 
   initial begin
     // a recognisable ROM: byte n is n's low byte, with the reset vector at
@@ -253,8 +327,79 @@ module mainboard_tb;
     ok(n == 32, $sformatf("with something driving in every one of them (%0d of 32)", n));
 
     $display("");
-    if (fails == 0) $display("mainboard_tb OK");
-    else $display("mainboard_tb: %0d FAILURES", fails);
+    $display("The high map byte, through the bus rather than the back door");
+    $display("");
+    // ⛔ design-review2.md M-1 was repaired as a DECODE and left as a wiring
+    // hole. The board had U1B's DQ0-DQ3 on physical A24..A21 and on nothing
+    // else - no path to D0-D7 at all - so the byte machine.md 3 documents as
+    // readable and writable was neither, and this testbench did not notice
+    // because it wrote through a model that had a wire the board had not.
+    // U18 is the second '245 and these are the claims that need it.
+    cycle(16'hFF95, 1, 8'h0D);
+    cycle(16'hFFA5, 1, 8'h5E);
+    cycle(16'hFF95, 0, 8'h00);
+    ok(got == 8'h0D,
+       $sformatf("a HIGH block register reads back what was written (got $%02h, want $0D)", got));
+    cycle(16'hFFA5, 0, 8'h00);
+    ok(got == 8'h5E,
+       $sformatf("and so does the LOW one, on the same index (got $%02h, want $5E)", got));
+    ok(mb.map_hi_at(5) == 8'h0D && mb.map_lo_at(5) == 8'h5E,
+       "and both halves are in entry 5 - one entry, two windows");
+    // The four bits above physical A21 are ram.md 3.3's spare flags. They
+    // drive nothing and they are CARRIED, which is why the register is a whole
+    // byte: U1B's DQ4-DQ7 go to U18 and not to noConnect.
+    b = mb.map_hi_at(5);
+    ok(b[7:4] == 4'h0 && b[3:0] == 4'hD,
+       "ram.md 3.3's four spare flags are stored too - the entry is a byte");
+
+    $display("");
+    $display("Exactly one driver on physical A24-A21 as well - item 14");
+    $display("");
+    cycle(16'h0000, 0, 8'h00);
+    ok(pa_hi_ok && !pa_hi_fight, "an ordinary memory cycle: the high map SRAM alone");
+    cycle(16'hFF95, 1, 8'h00);
+    ok(pa_hi_ok && !pa_hi_fight, "a high-byte write: U18 alone, and the SRAM is off");
+    cycle(16'hFF60, 0, 8'h00);
+    ok(!pa_hi_ok && pa_hi_park,
+       {"and an I/O cycle leaves NEITHER driving - four pull-downs park them ",
+        "at zero, which is the whole of machine.md 5 item 14"});
+    ok(pa_seen[24:21] == 4'h0,
+       $sformatf("so the parked physical address is zero top to bottom (got %h)", pa_seen[24:21]));
+
+    $display("");
+    $display("Sizing the bank - ram.md 6.4.1, and nothing in hardware knows");
+    $display("");
+    // A 30-pin SIMM HAS NO PRESENCE-DETECT PINS. PD1..PD4 are a 72-pin SIMM
+    // feature; lib/parts.ts's SIMM30 shows pins 24 and 29 as NC. So the size
+    // of this machine's memory is a firmware fact, and design-review2.md 3.5
+    // is the finding that no document said whose job it was.
+    //
+    // The trap is that an empty socket does not read as anything in
+    // particular: D0-D7 has no pull-ups, so a naive write-then-read-back
+    // passes against an empty socket because THE WRITE ITSELF left the pattern
+    // on the bus. mainboard.v models that - an undriven read returns the last
+    // driven byte - so this walk has to be the real one.
+    for (int pop = 0; pop <= 4; pop++) begin
+      mb.set_simms(pop);
+      walk(found);
+      ok(found == pop,
+         $sformatf("%0d socket(s) populated: the walk finds %0d", pop, found));
+    end
+
+    // And the other build-time mistake: a 1M x 8 module in a 4M x 8 socket.
+    // ram.md 6.3.1 - it ignores MA10, so physical A10 and A21 fall out of the
+    // address and the module aliases. The walk's address-line pass catches it.
+    mb.set_simms(4);
+    mb.set_small(4'b0100);                 // socket 2 holds a 1M x 8
+    walk_full(found, aliased);
+    ok(found == 4 && aliased == 4'b0100,
+       $sformatf("a 1M x 8 module in socket 2 is FOUND and REJECTED (found %0d, aliased %b)",
+                 found, aliased));
+    mb.set_small(4'b0000);
+
+    $display("");
+    if (fails == 0) $display("mainboard_tb OK - %0d claims", claims);
+    else $display("mainboard_tb: %0d FAILURES of %0d claims", fails, claims);
     $finish;
   end
 endmodule

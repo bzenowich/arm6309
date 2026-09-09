@@ -106,11 +106,18 @@ module decode (
   // $FF90-$FF9F is a map entry's high byte and $FFA0-$FFAF its low - two
   // windows since 2026-09-09, because LA3 is the write index's task bit and
   // cannot also pick the SRAM (mmu.pld, design-review2.md M-1).
+  // blkhi is not used by any equation on this part any more - see mapsel - and
+  // it is kept because clkdec_tb drives the same decode from the other side.
+  /* verilator lint_off UNUSEDSIGNAL */
   wire blkhi = iopage & la7 & ~la6 & ~la5 &  la4;
+  /* verilator lint_on UNUSEDSIGNAL */
   wire blklo = iopage & la7 & ~la6 &  la5 & ~la4;
 
-  // A map SRAM is selected for a translation, or for a block-register access.
-  wire mapsel = (run & ~iopage) | blkhi | blklo;
+  // The LOW map SRAM is selected: for a translation, or for a low-byte block
+  // register access. NOT the union of both windows - only U1 drives physical
+  // A20-A13, and since U4 shut for the high window (mmu.v) the union would
+  // leave that net with no driver during a high-byte write.
+  wire mapsel = (run & ~iopage) | blklo;
 
   // The '244 drives physical A20-A13 EXACTLY WHEN THE MAP SRAMs DO NOT, which
   // is this and not a list of modes. clkdec.pld has what the list got wrong:
@@ -118,7 +125,9 @@ module decode (
   // I/O pins (M-3), and off during ordinary I/O cycles, leaving eight
   // backplane lines floating (M-2). The vector page needs no term of its own -
   // $FFC0-$FFFF is an I/O cycle and not a block access, so the SRAMs are
-  // already off there.
+  // already off there. AND IT IS THE LOW SRAM'S CONDITION, not the union: the
+  // buffer drives a net exactly when that net's other driver does not, and
+  // A24-A21's other driver is a different part on a different buffer.
   assign n_bootoe = mapsel;
 
 endmodule

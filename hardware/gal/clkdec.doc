@@ -1,9 +1,9 @@
 clkdec - ARM6309-U6, U6, motherboard
-GAL22V10, 5892 fuses, checksum e4ac
+GAL22V10, 5892 fuses, checksum df05
 
   pin  signal      terms  of   path           polarity
   ---  ----------  -----  ---  -------------  ------------------
-   14  BOOTOE          3    8  combinational  pin follows terms
+   14  BOOTOE          2    8  combinational  pin follows terms
    15  IOSEL           1   10  combinational  pin is complement
    16  C0              2   12  registered     pin follows terms
    17  C1              3   14  registered     pin follows terms
@@ -14,7 +14,7 @@ GAL22V10, 5892 fuses, checksum e4ac
    22  RUN             2   10  registered     pin follows terms
 
   C1: C1 $ C0, expanded
-  BOOTOE: implemented complemented: the 3-term MAPCE union, not its 9-term negation
+  BOOTOE: implemented complemented: the 2-term MAPCE_LO condition, not its negation
 
   9 outputs, 1 macrocell not driven.
   Inputs: 10 used of 12 available (11 dedicated - pin 1 is the clock, 1 free macrocell) - 2 spare.
@@ -146,7 +146,7 @@ GAL22V10, 5892 fuses, checksum e4ac
   L5368 11111111111111111111111111111111111111111111  pin 14 OE  (always)
   L5412 11111110111101111111111111111111111111111111  pin 14 term 0
   L5456 11111111111110110111101101111111101111111111  pin 14 term 1
-  L5500 11111111111110110111101110111111011111111111  pin 14 term 2
+  L5500 00000000000000000000000000000000000000000000  pin 14 term 2  (never)
   L5544 00000000000000000000000000000000000000000000  pin 14 term 3  (never)
   L5588 00000000000000000000000000000000000000000000  pin 14 term 4  (never)
   L5632 00000000000000000000000000000000000000000000  pin 14 term 5  (never)

@@ -93,7 +93,15 @@ const MERGED_OUT = [
   ["framebuffer address A16..A0, one mux output rather than two counter sets", 17],
   ["framebuffer per-chip /WE and a common /OE", 5],
   ["register-file address RA4..RA0, /WE, /OE", 7],
-  ["'165 load, '161 load, PIDX '593 load and count", 4],
+  /* ⛔ THIS LINE WAS A CENSUS OF THINGS THAT DID NOT EXIST until 2026-09-09.
+   * The '165 serialiser and the '161 length counter were "absorbed" by designs
+   * that did not contain them (design-review2.md 1.2), and the palette's index
+   * load and count were never written at all - so the CPU could not write the
+   * palette, on a card whose only colour path is the LUT. All three are fitted
+   * now: the serialiser on vctrl, the length counter and the palette write
+   * path on vsup (graphics.md 9, 10.1.7). PIDX is two '163s rather than a
+   * '593, which is discontinued - 19 item 9. */
+  ["'573 palette latch enables, '163 load and count, LUT /WE, two turnarounds", 8],
   ["posted-write latch output enables, '245 direction and enable", 4],
   ["VRAM read latch clock, VSTAT '244 enable", 2],
 ] as const

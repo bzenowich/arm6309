@@ -12,6 +12,67 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## §5 items 13 and 14, and §3 — the day M-1 was declared fixed twice (2026-09-09)
+
+### ⛔ The trap: a model that is more capable than the hardware cannot fail
+
+This is the third of its kind in one week, and it belongs beside the two
+[`design-review2.md`](design-review2.md) §10 already records — *"a check that holds an
+input constant cannot see a defect in it"* and *"a model that ORs its drivers cannot see
+a bus fight"*. All three are the same shape: **the check and the thing checked disagreed
+about what the machine is, and the check was the more forgiving of the two.**
+
+M-1 — the high byte of every MMU block register unwritable — was diagnosed as a decode
+fault, repaired into `ram.md` §4.3's two windows, checked at the fuse level against
+Atmel's own CUPL, run through `mainboard_tb`'s whole boot sequence, and closed as §5 item
+11. **The high byte was still unwritable**, because `mainboard.circuit.tsx` wired U1B's
+`DQ0`–`DQ3` to physical `A24`–`A21` and to nothing else. There is no wire from `D0`–`D7`
+to the high map SRAM on that board at all.
+
+Three things had to line up for that to pass:
+
+| | |
+|---|---|
+| ⛔ **The simulation had a wire the board does not** | `mainboard.v` wrote `map_hi[…] <= dout` — the CPU's write data, straight into the array. On the board that byte has nowhere to travel. **The model was more capable than the hardware, so the testbench could not fail** |
+| **The netlist check asserted everything except the one thing** | `netlist.check.ts` asserted U1B's chip enable, its shared output enable, and all four of its physical address outputs. It never asked whether its data pins went anywhere |
+| **And the wrong claim was in a cost table** | `ram.md` §3.1: *"Isolation `'245`: **0** — both SRAMs sit on the same `D0`–`D7`; the address picks which is written"*. Two common-I/O SRAMs cannot: each drives its own `DQ` pins for the whole of every translation |
+
+⚠ **A stub check would not have caught it, and that is worth saying because it is the
+obvious check to reach for.** U1B's `DQ` pins were on a net with U9, U10 and a `'157` on
+it — they were never dangling. They were connected to the wrong thing. The assertion that
+catches it is the one about **reachability**: *every data pin on every memory or register
+part reaches `D0`–`D7`, directly or across a buffer*, and `netlist.check.ts` walks the
+netlist for it now, finding the buffers by shape rather than by name.
+
+**Cost of the repair: +1 IC (U18) and U3's last pin.** The motherboard is 19.
+
+### §5 item 13 — "nothing sizes memory, and no document says who should"
+
+> 13. **⚠ OPEN 2026-09-09 — nothing sizes memory, and no document says who should.**
+>     There is no SIMM presence detection anywhere and none is proposed; a read from an
+>     empty socket returns whatever the bus floats to. That is period-normal, and it makes
+>     memory sizing a **boot-monitor obligation** that neither §7.2's sequence nor
+>     `ram.md` §6.4's carries. ⚠ And `ram.md` §6.3.1 shows only **4M×8** modules work in
+>     the `'157` mapping as drawn, so the machine is 4, 8, 12 or 16 MB and never 1, 2
+>     or 3.
+
+Closed the same day by `ram.md` §6.4.1: a stackless firmware walk in the boot monitor, at
+zero ICs and zero pins. **Hardware detection was refused on a device fact rather than on
+cost** — a 30-pin SIMM has no presence-detect pins at all, `PD1`–`PD4` being a 72-pin
+feature — so anything calling itself hardware detection is a jumper a human sets.
+
+### §5 item 14 — "physical `A24`–`A21` still float"
+
+> 14. **⚠ OPEN 2026-09-09 — physical `A24`–`A21` still float, and only on the
+>     motherboard.** … It is four CMOS inputs held at neither rail. **Four pull-down
+>     resistors**, which are passives and not a package.
+
+Closed the same day, by exactly the four pull-downs it proposed: 10 kΩ, and **down** so
+the parked physical address is zero top to bottom and agrees with the `'244` that parks
+`A20`–`A13`.
+
+---
+
 ## §0 / §3 / §7.2 — boot: the CPU module's shadow ROM → a 1 MB ROM on the motherboard (2026-09-08)
 
 §0's boot row read **"the CPU module serves an ~8 KB shadow ROM and the vector page

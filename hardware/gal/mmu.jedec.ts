@@ -51,9 +51,25 @@ export const mmuDesign: Design = {
 
     /* E-high only, read or write. Turning the '245 on at E-rise rather than
      * Q-rise is what makes break-before-make comfortable: MAPOE has been away
-     * since address time, so the margin is ~174 ns rather than ~9. */
-    { pin: 19, name: "ISOOE", assertedLow: true, s0: 0,
-      terms: [`${BLK_HI} & E`, `${BLK_LO} & E`] },
+     * since address time, so the margin is ~174 ns rather than ~9.
+     *
+     * ⛔ ONE ENABLE BECAME TWO ON 2026-09-09, and it is the second half of
+     * design-review2.md M-1. That finding fixed the DECODE - the high byte got
+     * its own window - and the board still had no wire from D0-D7 to the high
+     * map SRAM at all: mainboard.circuit.tsx wired U1B's DQ0-DQ3 straight to
+     * physical A24..A21 and nothing else, so the high byte was writable in the
+     * simulation and unwritable on the board. ram.md 3.1's cost table said
+     * "Isolation '245: 0 - both SRAMs sit on the same D0-D7", and two
+     * common-I/O SRAMs cannot: they both drive their own pins during every
+     * translation, so they need two buffers and the buffers need two enables.
+     *
+     * ONE PRODUCT TERM EACH, where the single output was two - the split is
+     * free in terms and costs this part its last spare pin. Sharing one enable
+     * would put both '245s on D0-D7 for the whole of any block READ, and the
+     * deselected SRAM's buffer would be driving from a floating node. */
+    { pin: 19, name: "ISOOE_LO", assertedLow: true, s0: 0,
+      why: "U4, the low byte's '245 - $FFA0-$FFAF only",
+      terms: [`${BLK_LO} & E`] },
 
     /* Inside that window and a further quarter cycle later, so the buffer is
      * already driving. Releases at E-fall, before the buffer does. */
@@ -102,13 +118,17 @@ export const mmuDesign: Design = {
      * and the PIN is the complement - it falls at E-rise, which the '574
      * ignores, and rises at E-fall, which is the edge. */
     { pin: 22, name: "CTRLCP", assertedLow: true, s0: 0, terms: [`${CTL} & !RW & E`] },
-  ],
 
-  /* PIN 23 IS LEFT UNDRIVEN, and mmu.pld drives it low (`SPARE = 'b'0`).
-   * That difference is the whole pin budget. gal/README.md's table chooses
-   * the row "6 outputs, 16 available inputs, 15 needed, one pin spare" - but
-   * a driven SPARE is a seventh output, which is the row above it: 15
-   * available, 15 needed, nothing left. Undriven, the macrocell holds the pin
-   * at high-Z and it is a sixteenth input if the board ever wants one. */
-  spares: [23],
+    /* ⚠ PIN 23 IS SPENT, 2026-09-09, and it is the last one on this part.
+     * gal/README.md's pin budget had two rows: "6 outputs, 16 available
+     * inputs, 15 needed, one pin spare" and "7 outputs, 15 available, 15
+     * needed, nothing left". The high map byte's '245 needs an enable of its
+     * own, so the part takes the second row and it fits exactly - 15 inputs
+     * on 12 dedicated pins plus macrocells 14/15/16, and 7 outputs on 17-23.
+     *
+     * U18, the high byte's '245 - $FF90-$FF9F only. */
+    { pin: 23, name: "ISOOE_HI", assertedLow: true, s0: 0,
+      why: "U18, the high byte's '245 - $FF90-$FF9F only",
+      terms: [`${BLK_HI} & E`] },
+  ],
 }

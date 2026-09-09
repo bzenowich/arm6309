@@ -63,7 +63,16 @@ const u3 = build((await import("./mmu.jedec")).mmuDesign, "mmu")
   const bad = u3.gal.checkInputPins([14, 15, 16])
   check(bad.length === 0, "E, Q and R/W reach the array as inputs on macrocell pins", bad.join("; "))
 }
-check(u3.gal.undriven(23), "pin 23 is left at high-Z, so it is a spare INPUT and not a driven low")
+/* ⚠ PIN 23 STOPPED BEING SPARE ON 2026-09-09. It carried this claim from the
+ * day the fuse map was first assembled - an undriven macrocell is a spare
+ * INPUT and a driven low is a wasted output - and the high map byte's '245
+ * needs an enable of its own, so the part takes gal/README.md's other budget
+ * row: 7 outputs, 15 available inputs, 15 needed, nothing left. The claim that
+ * replaces it is that the pin is DRIVEN, because an undriven ISOOE_HI is a
+ * '245 that never turns on. */
+check(!u3.gal.undriven(23),
+  "⭐ pin 23 is driven - ISOOE_HI, the high map byte's '245 enable, and this " +
+  "part's last pin")
 
 /* The exhaustive part: the whole 16-bit address space x 4 quadrature phases
  * x R/W, read off the fuse map and compared with the model mmu.check.ts makes
@@ -91,7 +100,8 @@ check(u3.gal.undriven(23), "pin 23 is left at high-Z, so it is a spare INPUT and
         const want: Record<number, number> = {
           17: m.iopage ? 0 : 1,
           18: m.muxsel ? 1 : 0,
-          19: m.isooe ? 0 : 1,
+          19: m.isooeLo ? 0 : 1,
+          23: m.isooeHi ? 0 : 1,
           20: m.mapwe ? 0 : 1,
           21: m.mapoe ? 0 : 1,
           22: m.ctrlcp ? 1 : 0,
@@ -452,23 +462,34 @@ console.log("\n      the boot buffer and the map SRAMs never drive together\n")
         const m = u9({ pa: 0, nIopage, run, la7, la6, la5, la4, rw: 1 })
         const where = `RUN=${run} /IOPAGE=${nIopage} ` +
           `LA7..LA4=${lo.toString(2).padStart(4, "0")}`
-        /* Both asserted low. */
-        if (bootoe === 0 && (m.nMapCeLo === 0 || m.nMapCeHi === 0)) overlap = where
+        /* Both asserted low.
+         *
+         * ⚠ AND THE PAIRING IS WITH MAPCE_LO ALONE since 2026-09-09, not with
+         * the union. The claim is about ONE NET: physical A20-A13, whose two
+         * drivers are U1 and this buffer. U1B drives A24-A21 through U18 and
+         * those four never leave the board - they are machine.md 5 item 14's
+         * pull-downs, checked in netlist.check.ts and mainboard_tb. Testing
+         * the union here would have been the same category error the union in
+         * BOOTOE itself was: a rule about a net, written about a part. */
+        if (bootoe === 0 && m.nMapCeLo === 0) overlap = where
         /* ⭐ AND THE OTHER DIRECTION, which nothing asserted at all: something
          * must always drive physical A20-A13. Neither driving leaves eight
          * backplane lines floating into six cards' inputs - M-2, and it was
          * true for every I/O cycle in the machine. */
-        if (bootoe === 1 && m.nMapCeLo === 1 && m.nMapCeHi === 1) floated = where
+        if (bootoe === 1 && m.nMapCeLo === 1) floated = where
       }
     }
   }
   check(overlap === null,
     "⭐ over every combination of RUN, /IOPAGE and LA7..LA4: the '244's output " +
-    "enable and the map SRAMs' chip enables are never both asserted",
+    "enable and the LOW map SRAM's chip enable are never both asserted",
     overlap ?? "")
   check(floated === null,
     "⭐ and never both DE-asserted either - physical A20-A13 always has exactly " +
-    "one driver, which is what graphics.md 6.3.2 means by 'parked'",
+    "one driver, which is what graphics.md 6.3.2 means by 'parked'. ⚠ A " +
+    "HIGH-byte write is the code this would have caught on 2026-09-09: U4 " +
+    "shut for that window, so pairing the buffer with the UNION of both chip " +
+    "enables left the net undriven sixteen times per boot",
     floated ?? "")
 
   /* And the changeover itself. RUN is set by a write to $FFB1, which is an

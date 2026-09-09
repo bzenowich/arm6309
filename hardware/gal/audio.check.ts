@@ -19,6 +19,8 @@ import {
   PRESCALE, SLOTS_PER_FRAME, isChannel, isDeferred, isFrameEnd, isHost, isTimer,
   nextSlot, setClear,
 } from "./audio.model"
+import { audioCpld } from "./audio.cpld"
+import { aseqCpld } from "./aseq.cpld"
 
 let failures = 0
 const check = (ok: boolean, claim: string, detail = "") => {
@@ -174,6 +176,95 @@ console.log("\nGAL 5, which §9.5 budgets at 12 macrocells on a 10-macrocell par
     "inputs need holes the part has 14 of", split ?? "FITS")
   console.log(`      whole: ${whole}`)
   console.log(`      split: ${split}`)
+}
+
+/* -- the port census, as a check rather than as a report ------------------
+ *
+ * ⭐ THE ONE THAT WOULD HAVE FOUND THREE OF 2026-09-09's FOUR DEFECTS. `SEL`,
+ * the host read-back path and the prefetch latch's output enable were each a
+ * paragraph in audio.md describing a mechanism, and each was a signal the
+ * design READ or a pin the board needed that NOTHING PRODUCED. That is a
+ * property of the term lists, so it can be asserted instead of noticed:
+ * enumerate every literal the merged design reads, subtract what it produces
+ * and what the backplane and the card's own board supply, and require the
+ * remainder to be exactly a list somebody has written down with a reason.
+ *
+ * `npm run census:audio` prints the same set at length. This is the half that
+ * FAILS - design-review2.md's method 1 found eleven unbuilt blocks on the
+ * video card by hand, and a census nobody runs is a census. */
+console.log("\nThe port census - every input has a producer, or a reason\n")
+{
+  const BACKPLANE = new Set([
+    "IOSEL", "E", "RW", "RESET",
+    "A0", "A1", "A2", "A3", "A4", "A5", "A6",
+    "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7",
+  ])
+  const BOARD = new Set(["SLOTCLK"])
+  /* Signals U2 - the sequencer of audio.md §10.2 - owes U1. Every entry is a
+   * signal that is UNBUILT, and the list is here so that adding a twelfth
+   * unproduced input has to be a deliberate act with a line of prose behind
+   * it rather than something a merge does quietly. */
+  const FROM_SEQUENCER: Record<string, string> = {
+    SETA: "8.1's six sources, as a 3-bit code - 10.2.6's lever",
+    SETB: "8.1 sources, bit 1", SETC: "8.1 sources, bit 2",
+    PWBUSY: "9.2 ASTAT b6", PFVALID: "9.2 ASTAT b7",
+  }
+  const produced = new Set(audioCpld.cells.map((c) => c.name))
+  const consumed = new Set<string>()
+  for (const c of audioCpld.cells) {
+    for (const t of [...c.terms, c.oe ?? ""].join(" & ").split("&")) {
+      const n = t.trim().replace(/^!/, "")
+      if (n && /^[A-Za-z_]/.test(n)) consumed.add(n)
+    }
+  }
+  if (audioCpld.clock) consumed.add(audioCpld.clock)
+  if (audioCpld.ar) consumed.add(audioCpld.ar)
+
+  const orphan = [...consumed].filter(
+    (n) => !produced.has(n) && !BACKPLANE.has(n) && !BOARD.has(n)).sort()
+  const u2 = new Set(aseqCpld.cells.filter((c) => aseqCpld.external.has(c.name))
+    .map((c) => c.name))
+  const unexpected = orphan.filter((n) => !(n in FROM_SEQUENCER))
+  const gone = Object.keys(FROM_SEQUENCER).filter((n) => !orphan.includes(n)).sort()
+  check(unexpected.length === 0,
+    `every signal U1 reads is produced, on the backplane, or one of the ` +
+    `${Object.keys(FROM_SEQUENCER).length} U2 owes it`,
+    unexpected.length ? `NOTHING PRODUCES ${unexpected.join(", ")}` : "")
+  check(gone.length === 0,
+    "and the list has no dead entries - a signal that gained a producer leaves it",
+    gone.join(", "))
+  /* ⭐ AND THE OTHER DIRECTION, which is the whole of what "two parts" costs:
+   * every signal U1 owes U2 must actually be an output of U2, and every signal
+   * U2 reads must be an output of U1 or come off the board. A card whose two
+   * dice each fit and do not join is design-review2.md V-3 with a package
+   * boundary through it. */
+  const wanted = Object.keys(FROM_SEQUENCER).filter((n) => !u2.has(n))
+  check(wanted.length === 0, "and U2 actually drives every one of them", wanted.join(", "))
+
+  const u1out = new Set(audioCpld.cells.filter((c) => audioCpld.external.has(c.name))
+    .map((c) => c.name))
+  const BOARDIN = new Set([...BACKPLANE, ...BOARD, "HIT", "ACOUT"])
+  const u2orphan = aseqCpld.inputs.map((i) => i.name)
+    .filter((n) => !u1out.has(n) && !BOARDIN.has(n)).sort()
+  check(u2orphan.length === 0,
+    "and every signal U2 reads is a U1 output, a backplane line, or the '688 " +
+    "and the '283 chain answering it",
+    u2orphan.length ? `NOTHING PRODUCES ${u2orphan.join(", ")}` : "")
+  console.log(`      U1 -> U2  ${aseqCpld.inputs.map((i) => i.name)
+    .filter((n) => u1out.has(n)).length} nets`)
+  console.log(`      U2 -> U1  ${Object.keys(FROM_SEQUENCER).length} nets`)
+  console.log(`      U2 pins   ${u2.size} out, ${aseqCpld.inputs.length} in`)
+
+  /* ⚠ AND THE SEVEN-BIT DECODE. The geographic window is 128 bytes since
+   * 2026-09-08, so a card that matches only A5..A0 answers at its base AND 64
+   * bytes below it - two cards on D0-D7 at once, silently. Every card decode
+   * in this repository has to read A6, and audio's did not read ANY address
+   * bit above A3 until SEL stopped being a pin. */
+  const readsA6 = consumed.has("A6") && consumed.has("A5") && consumed.has("A4")
+  check(readsA6 && produced.has("SEL"),
+    "9.1: the card completes its own decode - SEL is produced here from A6, A5 and A4, " +
+    "not taken as a pin the board does not drive",
+    `${produced.has("SEL") ? "" : "SEL is an input; "}${readsA6 ? "" : "A6/A5/A4 unread"}`)
 }
 
 console.log(failures === 0

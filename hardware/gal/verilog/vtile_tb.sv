@@ -27,6 +27,12 @@ module vtile_tb;
   wire [18:0] WPTR;  wire [1:0] VMODE;  wire VBLANK, HBLANK;
   wire [7:0] RD_o;
 
+  wire [9:2] HSCR; wire LPH_o, LWAIT_o;   // 10.3.2's descriptor engine
+
+  // 9's palette, and 10.3.3's turnaround on the card's internal data bus.
+  wire [15:0] RGB; wire [7:0] PIDX;
+  wire PWE_o, PDOE_o, PIXOE_o, DBUS_FIGHT;
+
   video_card card (.*);
 
   int fails = 0;
@@ -80,7 +86,7 @@ module vtile_tb;
           seen_map.push_back({FBA, card.MAPA1, card.MAPA0});
         end
         if (MAPLD) map_lds++;
-        if (TILESEL && d == 2 && s >= 36 && s <= 195) begin
+        if (TILESEL && d == 2 && s >= 34 && s <= 193) begin
           seen_tile.push_back(FBA);
           // ⭐ MAPQ, not MAP. Since 2026-09-09 the map byte is a two-stage
           // pipeline: MAP is the fetch target and MAPQ is what the address mux

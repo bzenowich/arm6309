@@ -10,6 +10,7 @@ module vctrl (
     input  wire RESET,
     input  wire VSTATWR,
     input  wire TC,
+    input  wire LRUN,
     input  wire IOPAGE,
     input  wire A0,
     input  wire A1,
@@ -28,7 +29,6 @@ module vctrl (
     input  wire LDHS,
     input  wire LDADV,
     input  wire D2,
-    input  wire LRUN,
     input  wire MAPA0,
     input  wire MAPA1,
     input  wire A19,
@@ -292,27 +292,22 @@ module vctrl (
          1'b0;
   // buried
   assign SLOTTICK =
-         (PH1 & PH0);
+         (~PH1 & ~PH0);
   // buried - 5.2.2 - spare first, which is +46.9 ns against video-first's -25.1
   assign SPAREWIN =
          (~PH1);
-  // EXTERNAL
+  // EXTERNAL - one clock for all four chips - 8.2's rank select carries the group choice
   assign FCLK0 =
-         (PH1 & PH0 & ~HS0 & ~HS1)
-         | (~PH1 & ~PH0 & HS0)
-         | (~PH1 & ~PH0 & HS1);
+         (~PH1 & ~PH0);
   // EXTERNAL
   assign FCLK1 =
-         (PH1 & PH0 & ~HS1)
-         | (~PH1 & ~PH0 & HS1);
+         (~PH1 & ~PH0);
   // EXTERNAL
   assign FCLK2 =
-         (~PH1 & ~PH0 & HS0 & HS1)
-         | (PH1 & PH0 & ~HS1)
-         | (PH1 & PH0 & ~HS0);
-  // EXTERNAL - chip 3 is never after the wrap, so it is EARLY for every p
+         (~PH1 & ~PH0);
+  // EXTERNAL
   assign FCLK3 =
-         (PH1 & PH0);
+         (~PH1 & ~PH0);
   // EXTERNAL
   assign MUXSEL0 =
          (PH0 & ~HS0)
@@ -341,8 +336,8 @@ module vctrl (
          | (RETIRE & MASKBIT);
   // EXTERNAL
   assign WROWADV =
-         (SPANEND & WADV0)
-         | (SPANEND & WADV1);
+         (SPANEND & WADV0 & ~LRUN)
+         | (SPANEND & WADV1 & ~LRUN);
   // buried - SRCSEL[n] is this same pin - 5.2.1, not a second macrocell
   assign ACPU0 =
          (VRAMSEL & ~IOPAGE & ~A0 & ~A1);
@@ -410,28 +405,31 @@ module vctrl (
          | (SR7 & WM0);
   // buried
   assign TFETCH =
-         (H5 & H2)
-         | (H5 & H3)
-         | (H5 & H4)
-         | (~H7 & H6)
-         | (H7 & ~H6)
-         | (H6 & ~H2);
-  // buried
-  assign MFETCH =
-         (H5 & H1)
+         (H5 & H1 & H0)
          | (H5 & H2)
          | (H5 & H3)
          | (H5 & H4)
          | (~H7 & H6)
          | (H7 & ~H6)
-         | (H6 & ~H2 & ~H1);
+         | (H6 & ~H2 & ~H1)
+         | (H6 & ~H2 & ~H0);
+  // buried
+  assign MFETCH =
+         (H5 & H0)
+         | (H5 & H1)
+         | (H5 & H2)
+         | (H5 & H3)
+         | (H5 & H4)
+         | (~H7 & H6)
+         | (H7 & ~H6)
+         | (H6 & ~H2 & ~H1 & ~H0);
   // EXTERNAL
   assign FETCH =
          (TFETCH & SLOTTICK);
   // EXTERNAL
   assign HLOAD =
          (~H7 & ~H6 & ~H5)
-         | (~H7 & ~H6 & ~H4 & ~H3 & ~H2 & ~H1);
+         | (~H7 & ~H6 & ~H4 & ~H3 & ~H2 & ~H1 & ~H0);
   // buried
   assign HEND =
          (H7 & H6 & H2 & H1 & H0);
@@ -441,16 +439,16 @@ module vctrl (
          | (~VBLANK & HEND & SLOTTICK & ~V0);
   // buried
   assign MAPREQ =
-         (TILEMODE & MFETCH & ~H0);
+         (TILEMODE & MFETCH & H0);
   // EXTERNAL
   assign MCADV =
-         (TILEMODE & MFETCH & H0 & SLOTTICK);
+         (TILEMODE & MFETCH & ~H0 & SLOTTICK);
   // EXTERNAL
   assign MAPLD =
          (MAPREQ & ~PH1 & PH0);
   // EXTERNAL
   assign CELLTICK =
-         (TILEMODE & MFETCH & H0 & SLOTTICK);
+         (TILEMODE & MFETCH & ~H0 & SLOTTICK);
   // buried
   assign MAPSEL =
          (MAPREQ & ~PH1);

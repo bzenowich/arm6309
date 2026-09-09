@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Board layouts for the arm6309 machine",
   "scripts": {
-    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run place/place.check.ts && bun run gal/mmu.check.ts && bun run gal/jedec.check.ts && bun run gal/sync.check.ts && bun run gal/scan.check.ts && bun run gal/access.check.ts && bun run gal/regfile.check.ts && bun run gal/seqph.check.ts && bun run gal/seqctl.check.ts && bun run gal/tile.check.ts && bun run gal/jedec/cupl.check.ts && bun run gal/vlen.check.ts && bun run gal/audio.check.ts",
+    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run lib/decode.check.ts && bun run place/place.check.ts && bun run gal/mmu.check.ts && bun run gal/jedec.check.ts && bun run gal/sync.check.ts && bun run gal/scan.check.ts && bun run gal/access.check.ts && bun run gal/regfile.check.ts && bun run gal/seqph.check.ts && bun run gal/seqctl.check.ts && bun run gal/tile.check.ts && bun run gal/cadence.check.ts && bun run gal/jedec/cupl.check.ts && bun run gal/vlen.check.ts && bun run gal/pxsel.check.ts && bun run gal/audio.check.ts && bun run lib/docs.check.ts",
     "check:jedec": "bun run gal/jedec.check.ts",
     "check:cupl": "bun run gal/jedec/cupl.check.ts",
     "check:sync": "bun run gal/sync.check.ts",
@@ -29,7 +29,10 @@
     "gen:video": "bun run gal/verilog/gen.ts",
     "check:video": "bun run gal/verilog/gen.ts && sh gal/verilog/run.sh",
     "check:vlen": "bun run gal/vlen.check.ts",
-    "gen:pld": "bun run gal/cpld.gen.ts"
+    "gen:pld": "bun run gal/cpld.gen.ts",
+    "check:pxsel": "bun run gal/pxsel.check.ts",
+    "check:docs": "bun run lib/docs.check.ts",
+    "check:decode": "bun run lib/decode.check.ts"
   },
   "type": "commonjs",
   "dependencies": {

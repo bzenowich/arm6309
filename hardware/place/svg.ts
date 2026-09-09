@@ -62,7 +62,7 @@ export const MB = { W: 272, H: 224, pad: 15, slotL: 91.4, slotW: 10.16, pitch: 2
 
 /** x, y, w, h, label, kind, reserved. Overlap-checked by place.check.ts.
  *
- * hardware/ram.md §6.5: 18 ICs and four 30-pin SIMM sockets. There is no SRAM
+ * hardware/ram.md §6.5: 19 ICs and four 30-pin SIMM sockets. There is no SRAM
  * on this board except the map's own two — §6.2 dropped all four AS6C4008 once
  * the sockets existed, and the '139 the reserved footprints would have needed
  * was never built.
@@ -81,7 +81,7 @@ export const MB_PARTS: [number, number, number, number, string, Kind, boolean][]
   [103, 140, 30.5, 15.24, "U1B map hi", "mem", false],
   [12, 160, 30.5, 7.62, "U3 GAL22V10", "pld", false],
   [12, 170, 30.5, 7.62, "U6 GAL22V10 E/Q", "pld", false],
-  [47, 160, 25.4, 7.62, "U4 245", "bus", false],
+  [47, 160, 25.4, 7.62, "U4 245 map lo", "bus", false],
   [47, 170, 25.4, 7.62, "U2 574", "bus", false],
   [77, 160, 20.3, 7.62, "U5 157", "bus", false],
   [77, 170, 10.2, 7.62, "OSC1", "clk", false],
@@ -103,6 +103,13 @@ export const MB_PARTS: [number, number, number, number, string, Kind, boolean][]
   [105, 182, 41.9, 15.24, "U14 SST39SF040", "mem", false],
   [105, 200, 41.9, 15.24, "U15 SST39SF040", "mem", false],
   [12, 194, 25.4, 7.62, "U16 244 boot addr", "bus", false],
+  /* ⚠ U18, 2026-09-09: the HIGH map byte's isolation '245, and it is the
+   * second half of design-review2.md M-1. U1B's DQ pins went to physical
+   * A24-A21 and to nothing else - no path to D0-D7 at all - so the high byte
+   * was unwritable on the board while the decode for it was correct. Two
+   * common-I/O SRAMs cannot share one buffer: each drives its own DQ pins for
+   * the whole of every translation. ram.md §3.1. */
+  [42, 194, 25.4, 7.62, "U18 245 map hi", "bus", false],
   [190, 160, 32.0, 12.0, "power in", "conn", false],
   [150, 182, 89.0, 8.0, "30-pin SIMM 0", "mem", false],
   [150, 194, 89.0, 8.0, "30-pin SIMM 1", "mem", false],

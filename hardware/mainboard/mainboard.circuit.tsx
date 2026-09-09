@@ -1,11 +1,11 @@
-/* arm6309 motherboard. 18 ICs and four SIMM sockets.
+/* arm6309 motherboard. 19 ICs and four SIMM sockets.
  *
  * docs/machine.md 6 lists "Draw the motherboard" as an open item owned by the
  * machine. This is the board.
  *
  * What lives here, and the section that put it here:
  *   the CPU module's 40-pin socket        machine.md 5 item 5 (decided: socket)
- *   the MMU, six packages                 graphics.md 6.3.1 + ram.md 3.1
+ *   the MMU, SEVEN packages               graphics.md 6.3.1 + ram.md 3.1
  *   the E/Q divider and boot mode, U6     machine.md 1, machine.md 7.2
  *   the 25.175 MHz master oscillator      machine.md 1
  *   the power-on reset supervisor         machine.md 2.1
@@ -16,6 +16,17 @@
  *   a 1 MB boot ROM and its address buffer  machine.md 7.2
  *   the open-drain pull-ups               machine.md 2.1
  *   six expansion slots                   hardware/README.md
+ *
+ * WHAT ARRIVED ON 2026-09-09: U18, the HIGH map byte's isolation '245, and it
+ * is the second half of design-review2.md M-1. That finding gave a map entry's
+ * two bytes two WINDOWS and stopped there; this file still wired U1B's DQ0-DQ3
+ * straight to physical A24..A21 and to nothing else, so the byte machine.md 3
+ * documents as readable and writable had no path to D0-D7 at all. ram.md 3.1
+ * had costed the second SRAM with "Isolation '245: 0 - both SRAMs sit on the
+ * same D0-D7", and TWO COMMON-I/O SRAMs cannot share one buffer: each drives
+ * its own DQ pins for the whole of every translation. Twelve bits of map need
+ * twelve bits of buffer, and a '245 is eight. +1 IC, and U3 spends its last
+ * pin on the second enable.
  *
  * WHAT LEFT ON 2026-09-09: U8, the 512 KB DIP system RAM. ram.md 6.2 replaced
  * it with SIMM sockets on 2026-09-08 and this file kept drawing it for a day -
@@ -135,9 +146,14 @@ export default () => (
         A4: "net.GND", A5: "net.GND", A6: "net.GND", A7: "net.GND",
         A8: "net.GND", A9: "net.GND", A10: "net.GND",
         DQ0: pa(21), DQ1: pa(22), DQ2: pa(23), DQ3: pa(24),
+        /* ram.md 3.3's spare flags. They drive nothing on the board and they
+         * are NOT left unconnected: they go to U18 with the other four, so the
+         * register reads and writes as a whole byte. Four traces, no parts,
+         * and the bits are storable the day 3.3 decides what they mean. */
+        DQ4: "net.MAPHI4", DQ5: "net.MAPHI5",
+        DQ6: "net.MAPHI6", DQ7: "net.MAPHI7",
         nCE: "net.MAP_CE_HI", nOE: "net.MAP_OE", nWE: "net.MAP_WE",
       }}
-      noConnect={["DQ4", "DQ5", "DQ6", "DQ7"]}
     />
 
     {/* U2 - task select. ONE bit of eight, not the three this comment used to
@@ -177,7 +193,16 @@ export default () => (
       * calls load-bearing needs four phases and E alone gives two.
       *
       * /IOSEL is NOT here - it is on U6. With it the part needs 16 inputs and
-      * has 15. ISO_DIR is not here either: it is R/W, and a wire. */}
+      * has 15. ISO_DIR is not here either: it is R/W, and a wire.
+      *
+      * !! PIN 23 IS SPENT SINCE 2026-09-09 and this part has no margin left.
+      * gal/README.md's pin budget had two rows and the board took the first,
+      * "6 outputs, 16 available inputs, 15 needed, one pin spare". The high
+      * map byte's '245 needs an enable of its own - one shared enable would
+      * put U4 and U18 both on D0-D7 for the whole of any block read - so the
+      * part takes the row below: 7 outputs, 15 available, 15 needed, nothing
+      * left. It fits exactly, at one product term for each enable where the
+      * single output cost two. */}
     <chip
       name="U3"
       footprint="dip24_w0.3in"
@@ -185,8 +210,8 @@ export default () => (
         1: "LA15", 2: "LA14", 3: "LA13", 4: "LA12", 5: "LA11", 6: "LA10",
         7: "LA9", 8: "LA8", 9: "LA7", 10: "LA6", 11: "LA5",
         13: "LA4", 14: "E", 15: "Q", 16: "R/W",
-        17: "/IOPAGE_MB", 18: "MUX_SEL", 19: "/ISO_OE", 20: "/MAP_WE",
-        21: "/MAP_OE", 22: "CTRL_CP", 23: "SPARE",
+        17: "/IOPAGE_MB", 18: "MUX_SEL", 19: "/ISO_OE_LO", 20: "/MAP_WE",
+        21: "/MAP_OE", 22: "CTRL_CP", 23: "/ISO_OE_HI",
       }))}
       connections={{
         VCC: "net.V5", GND: "net.GND",
@@ -198,10 +223,10 @@ export default () => (
          * above 2 MB U9 pulls /IOPAGE low, which would then de-qualify the
          * SIMM decode that asserted it. */
         nIOPAGE_MB: "net.nIOPAGE_MB", MUX_SEL: "net.MUX_SEL",
-        nISO_OE: "net.ISO_OE", nMAP_WE: "net.MAP_WE", nMAP_OE: "net.MAP_OE",
+        nISO_OE_LO: "net.ISO_OE_LO", nISO_OE_HI: "net.ISO_OE_HI",
+        nMAP_WE: "net.MAP_WE", nMAP_OE: "net.MAP_OE",
         CTRL_CP: "net.CTRL_CP",
       }}
-      noConnect={["SPARE"]}
     />
 
     {/* U4 - break-before-make isolation between U1's common I/O and D0-D7.
@@ -218,9 +243,54 @@ export default () => (
       pinLabels={labels(HC245)}
       connections={{
         VCC: "net.V5", GND: "net.GND",
-        DIR: "net.R_W", nOE: "net.ISO_OE",
+        DIR: "net.R_W", nOE: "net.ISO_OE_LO",
         A1: pa(13), A2: pa(14), A3: pa(15), A4: pa(16),
         A5: pa(17), A6: pa(18), A7: pa(19), A8: pa(20),
+        ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`B${i + 1}`, d(i)])),
+      }}
+    />
+
+    {/* U18 - the HIGH map byte's isolation '245, and it is the second half of
+      * design-review2.md M-1.
+      *
+      * !! THE HIGH BYTE HAD NO DATA PATH AT ALL until 2026-09-09. M-1 was
+      * diagnosed as a DECODE fault - LA3 was the write index's task bit and
+      * U9's SRAM select at the same instant - and the repair gave the two
+      * bytes two windows ($FF90 high, $FFA0 low). That is correct and it is
+      * not sufficient: this file wired U1B's DQ0-DQ3 to physical A24..A21 and
+      * to NOTHING ELSE, so the byte machine.md 3 documents as readable and
+      * writable could be neither. mainboard.v modelled a write into map_hi
+      * from D0-D7 that no wire on the board could carry, and netlist.check.ts
+      * asserted every property of U1B except the one that mattered.
+      *
+      * ram.md 3.1's cost table is where the assumption lived: "Isolation
+      * '245: 0 - both SRAMs sit on the same D0-D7; the address picks which is
+      * written". TWO COMMON-I/O SRAMs CANNOT SIT ON ONE BUFFER. Each drives
+      * its own DQ pins for the whole of every translation, because that is how
+      * the physical address is formed - so they are two separate nodes, and
+      * twelve bits of map entry need twelve bits of buffer where a '245 has
+      * eight. +1 IC. It is the floor: nothing cheaper carries the bits.
+      *
+      * TWO ENABLES, NOT ONE, and that is the subtle half. Sharing U4's
+      * ISO_OE would open both buffers onto D0-D7 for the whole of any block
+      * read, and the one whose SRAM was deselected would be driving from a
+      * floating node. U3 pin 23 - the part's last - is the second enable, and
+      * gal/mmu.check.ts asserts the two are never asserted together.
+      *
+      * DIR is R/W, exactly as on U4: a read is A-to-B and a write B-to-A. */}
+    <chip
+      name="U18"
+      footprint={HC245.footprint}
+      pinLabels={labels(HC245)}
+      connections={{
+        VCC: "net.V5", GND: "net.GND",
+        DIR: "net.R_W", nOE: "net.ISO_OE_HI",
+        A1: pa(21), A2: pa(22), A3: pa(23), A4: pa(24),
+        /* ram.md 3.3's four spare flags. They drive nothing yet and they are
+         * carried anyway, so the register is a whole byte and the day 3.3
+         * spends a bit is a decode change on some other part, not a trace on
+         * this one. */
+        A5: "net.MAPHI4", A6: "net.MAPHI5", A7: "net.MAPHI6", A8: "net.MAPHI7",
         ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`B${i + 1}`, d(i)])),
       }}
     />
@@ -616,6 +686,44 @@ export default () => (
       footprint="0805"
       connections={{ pin1: "net.V5", pin2: "net.nHALT" }}
     />
+
+    {/* -- and PULL-DOWNS on the four physical address bits that never leave
+      * the board. machine.md 5 item 14, and it is M-2's other half.
+      *
+      * Item 12 parked physical A20-A13 by making U16's enable the exact
+      * complement of U9's map chip enable - those eight reach every slot, so
+      * they had to be driven. A24..A21 come off the SECOND map SRAM, which is
+      * deselected for exactly the same cycles, and nothing was ever proposed
+      * to drive them: item 14 recorded them as "four CMOS inputs held at
+      * neither rail" and left it open.
+      *
+      * It is not a logic hazard and never was - every U9 equation that reads
+      * them is qualified on RUN, and during an I/O cycle U9's own /IOPAGE term
+      * already asserts. It is an electrical one: four inputs on U9, one each
+      * on U10 and U13, sitting at mid-rail through every $FFxx cycle in the
+      * machine, which is CMOS crowbar current.
+      *
+      * A '244 is a package for four bits and there is no half of one; a
+      * pull-down is four passives. 10k against ~25 pF of motherboard trace and
+      * six CMOS inputs is tau = 0.25 us, so they are at a rail well inside two
+      * bus cycles, and 0.5 mA each when the SRAM drives them high is nothing
+      * against a 2-3 A machine.
+      *
+      * DOWN and not up, so that the whole parked physical address is zero, top
+      * to bottom - U16 drives A20-A13 to zero for the same cycles and this
+      * makes A24..A13 agree with it. machine.md 7.2 rejects pull-downs for
+      * VECSEL on settling grounds and that argument does not reach here: these
+      * lines are READ only on cycles where the SRAM is driving them, so the
+      * resistor never has to win a race. */}
+    {[21, 22, 23, 24].map((n, i) => (
+      <resistor
+        key={n}
+        name={`R${i + 7}`}
+        resistance="10k"
+        footprint="0805"
+        connections={{ pin1: `net.A${n}`, pin2: "net.GND" }}
+      />
+    ))}
 
     {/* ------------------------------------------------------- the slots --- */}
     {/* ⚠ Six is a guess. machine.md 5 item 5 has never said how many, and the

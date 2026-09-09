@@ -17,10 +17,12 @@ finding 4. [`gal/`](gal/) holds the motherboard GALs' equations, fitted as `.jed
 checked at the fuse level — fitting them found four defects in the board below
 (history.md).
 
-⚠ **The motherboard file is behind the documents.** [`ram.md`](ram.md) §3.1, §6.2 and
-§6.7 make the board **18 ICs and four SIMM sockets** — two map SRAMs, no DIP system RAM,
-U9/U10 and three `'157`, and a 1 MB boot ROM with its `'541`. `mainboard.circuit.tsx`
-still draws the nine-IC state. **Open item 3.**
+⭐ **The motherboard file matches the documents.** [`ram.md`](ram.md) §3.1, §6.2 and
+§6.7 make the board **19 ICs and four SIMM sockets** — two map SRAMs and **two isolation
+`'245`**, no DIP system RAM, U9/U10 and three `'157`, and a 1 MB boot ROM with its
+`'244`. ⚠ **The nineteenth arrived on 2026-09-09**: the high map byte had no data path
+to `D0`–`D7` at all, because two common-I/O SRAMs cannot share one buffer — `ram.md`
+§3.1 and §11 item 11.
 
 > **The MMU register map is signed off (2026-09-06) and the board implements the
 > equations.** `machine.md` §5 item 3 is closed with it. `npm run check:netlist` asserts
@@ -147,15 +149,32 @@ The backplane carries **5 V only** — the storage card makes its own 3.3 V behi
 | [`vendor/mc6809/`](vendor/mc6809/) | **third-party** — Greg Miller's cycle-accurate MC6809E core, BSD, byte-identical to upstream | |
 
 ```sh
-npm install          # bun comes with it; the tsci CLI needs it
-npm run build        # all six boards -> dist/
-npm run check:place  # every card places on the length it declares
-npm run render:boards # the drawings -> dist/boards.html
-npm run check        # the slot pinout and the $FF map, as arithmetic
-npm run check:netlist  # the motherboard's connectivity claims (needs a build first)
-npm run check:sim      # gal/mmu.v and gal/clkdec.v under Verilator
-npm run check:jedec    # assembles both GALs and checks the fuse maps
+npm install            # bun comes with it; the tsci CLI needs it
+npm run build          # all six boards -> dist/
+npm run render:boards  # the drawings -> dist/boards.html
+
+npm run check          # 480 claims: every GAL and CPLD design against its own
+                       #   model, the live ones against Atmel's own CUPL, the
+                       #   slot pinout, the $FF map, each card's decode, and
+                       #   the documentation's own numbers.  ~40 s
+npm run check:video    # 207 claims: the DESIGNS, run under Verilator rather
+                       #   than their equations - five video testbenches, the
+                       #   audio card and the motherboard.  ~3 min
+npm run check:sim      # 56 claims: gal/mmu.v and gal/clkdec.v, hand-written
+npm run check:netlist  # 123 claims: the motherboard's connectivity (build first)
+npm run check:place    # every card places on the length it declares
+npm run build:all      # all of the above, in order
 ```
+
+**866 claims, and every one of them fails loudly.** The three that guard the
+*documentation* rather than the design are the newest and were added on
+2026-09-09 because stale headline numbers are this repository's oldest recurring
+defect: `check:docs` holds every utilisation figure and IC total in the prose
+against `gal/cpld/*.fit` and `place/parts.ts`, and `check:decode` asserts that
+each card's own logic completes its `$FF` decode. ⚠ **They catch numbers, not
+claims** — a paragraph describing a mechanism the design does not have is still
+`gal/census.ts`'s job, and `docs/design-review2.md` §1.2 is what happens when
+nobody runs it.
 
 `npm run dev` opens tscircuit's viewer.
 
@@ -233,7 +252,7 @@ memory, is in history.md.
 2. **The slot socket footprint is a DIP body.** Pad grid and pin numbering are right, the
    outline is not. It needs a measured footprint once a receptacle is sourced.
 3. **⚠ Nothing is placed.** The board-file half of this item **closed 2026-09-09** —
-   `mainboard.circuit.tsx` draws all 18 ICs and the four SIMM sockets, and
+   `mainboard.circuit.tsx` draws all 19 ICs and the four SIMM sockets, and
    `lib/netlist.check.ts` grew to assert what the new parts are wired to.
 
    **Every board's components still sit at the origin**, so the PCB DRC reports overlaps

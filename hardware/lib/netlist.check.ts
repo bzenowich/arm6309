@@ -195,6 +195,184 @@ check(pinsOn("U1", "MAP_CE_LO").length === 1 && pinsOn("U1B", "MAP_CE_HI").lengt
 check(pinsOn("U1", "MAP_OE").length === 1 && pinsOn("U1B", "MAP_OE").length === 1,
   "and they share U3's output enable, which is untouched by any of this")
 
+/* -- ⛔ AND EACH ONE NEEDS A WAY TO BE WRITTEN, which nothing checked ------
+ *
+ * This block is the second half of design-review2.md M-1, and the reason it
+ * is a separate finding is that every assertion above passed while the high
+ * map byte was unreachable. M-1 was diagnosed as a decode fault, the decode
+ * was repaired into two windows, `mainboard_tb` wrote $FF90 and read it back
+ * happily - and on the board U1B's DQ0-DQ3 went to physical A24..A21 and to
+ * NOTHING ELSE. There was no wire from D0-D7 to the high map SRAM at all.
+ *
+ * ram.md 3.1 is where the assumption lived: "Isolation '245: 0 - both SRAMs
+ * sit on the same D0-D7; the address picks which is written". TWO COMMON-I/O
+ * SRAMs CANNOT SHARE ONE BUFFER - each drives its own DQ pins for the whole
+ * of every translation, because that is how the physical address is formed.
+ * Twelve bits of map entry need twelve bits of buffer and a '245 has eight.
+ *
+ * The claim is therefore about a PATH and not a pin: every bit of every map
+ * SRAM reaches D0-D7 through some buffer. */
+{
+  const buffers = ["U4", "U18"]
+  for (const b of buffers) {
+    const bSide = Array.from({ length: 8 }, (_, i) => pinsOn(b, `D${i}`).length)
+    check(bSide.every((n) => n === 1),
+      `${b}'s B side is on all eight of D0-D7`, `${bSide.filter(Boolean).length}/8`)
+    check(pinsOn(b, "R_W").length === 1,
+      `${b}'s direction is R/W - a wire, not a macrocell`)
+  }
+  /* The two enables, and they must be DIFFERENT nets. One shared enable would
+   * open both buffers onto D0-D7 for the whole of any block read and the one
+   * whose SRAM was deselected would drive from a floating node. */
+  check(pinsOn("U4", "ISO_OE_LO").length === 1 && pinsOn("U18", "ISO_OE_HI").length === 1,
+    "⭐ the two '245s have SEPARATE enables from U3 - one shared enable puts " +
+    "both of them on D0-D7 for the whole of any block read")
+  check(pinsOn("U3", "ISO_OE_LO").length === 1 && pinsOn("U3", "ISO_OE_HI").length === 1,
+    "and U3 produces both - pin 19 and pin 23, the part's last")
+  check(pinsOn("U4", "ISO_OE_HI").length === 0 && pinsOn("U18", "ISO_OE_LO").length === 0,
+    "and neither buffer sees the other's")
+
+  /* THE PATH ITSELF. For each map SRAM, every one of its eight DQ pins must
+   * share a net with a pin of one buffer, and that buffer's other side is
+   * D0-D7 (asserted above). This is the assertion whose absence cost the
+   * machine its high map byte. */
+  const netsOfPin = (comp: string, pin: string) => {
+    const p = ports.find((x) => compName.get(x.source_component_id) === comp && x.name === pin)
+    return p ? [...(portNet.get(p.source_port_id) ?? [])] : []
+  }
+  for (const [sram, buf] of [["U1", "U4"], ["U1B", "U18"]] as const) {
+    const reached = Array.from({ length: 8 }, (_, i) => {
+      const nets = netsOfPin(sram, `DQ${i}`)
+      return nets.some((n) => pinsOn(buf, n).length > 0)
+    })
+    check(reached.every(Boolean),
+      `⭐ every bit of ${sram} reaches D0-D7 through ${buf} - the map entry is ` +
+      `WRITABLE, which is what design-review2.md M-1's repair left undone`,
+      `${reached.filter(Boolean).length}/8 bits`)
+  }
+}
+
+/* -- ⭐ AND THE GENERAL FORM OF IT, which is worth more than the specific ---
+ *
+ * The assertion above names U1B and U18 and it would not have caught the same
+ * mistake on any other part. What actually went wrong is stateable without
+ * naming anything: A DEVICE WITH A DATA BUS HAD THAT BUS CONNECTED TO NOTHING
+ * THAT COULD DRIVE OR READ IT, and every other property of the part was
+ * asserted. This is the same move lib/decode.check.ts makes after the audio
+ * card's SEL - a defect found once becomes a rule, not a row.
+ *
+ * The claim: every data pin on the board reaches at least one OTHER component.
+ * A pin whose net has one member is a stub, and a stub on a data bus is a
+ * register that cannot be written or a device that cannot answer. It is
+ * cheap - it is the netlist it already parsed - and it is exactly the check
+ * whose absence let design-review2.md M-1 be declared fixed. */
+{
+  const DATA = /^(D\d+|DQ\d+|[AB][1-8]|Q[1-8]|D[1-8])$/
+  const stubs: string[] = []
+  for (const p of ports) {
+    const comp = compName.get(p.source_component_id) ?? "?"
+    if (!/^(U\d+B?|SIMM\d|J0)$/.test(comp)) continue
+    if (!DATA.test(p.name ?? "")) continue
+    const nets = [...(portNet.get(p.source_port_id) ?? [])]
+    /* A pin that is explicitly noConnect has no net at all and is a decision;
+     * a pin ON a net that nothing else joins is the defect. */
+    if (nets.length === 0) continue
+    const others = nets.some((n) =>
+      ports.some((q) =>
+        q.source_port_id !== p.source_port_id &&
+        portNet.get(q.source_port_id)?.has(n)))
+    if (!others) stubs.push(`${comp}.${p.name}`)
+  }
+  check(stubs.length === 0,
+    "⭐ no data pin on the board is a stub - every DQ, D and buffer pin that " +
+    "is on a net has something else on that net. The general form of M-1: a " +
+    "device whose data bus goes nowhere is a register that cannot be written",
+    stubs.join(" "))
+}
+
+/* -- ⭐ AND THE ONE THAT WOULD ACTUALLY HAVE CAUGHT IT ---------------------
+ *
+ * ⚠ The stub check above is worth having and it is NOT sufficient, which is
+ * worth saying plainly rather than discovering twice: U1B's DQ0-DQ3 were on
+ * physical A24..A21, a net with U9, U10 and a '157 on it, so they were never
+ * stubs. They were connected to the wrong thing. What was missing is the only
+ * property that matters about a memory-mapped device:
+ *
+ *   ⭐ IF THE CPU IS SUPPOSED TO READ OR WRITE IT, ITS DATA PINS MUST REACH
+ *     D0-D7 - directly, or through a buffer.
+ *
+ * So this walks the netlist for real: a component with both an A1-A8 and a
+ * B1-B8 side is a transparent 8-bit bridge (a '245), and every DQn/Dn pin on a
+ * memory or register part has to reach D0-D7 across zero or more of them. It
+ * is stated about no part in particular, so the next device that arrives on
+ * this board gets it for free. */
+{
+  /* Bridges, found by shape and not by name. */
+  const bridges: { a: string; b: string; comp: string }[] = []
+  for (const c of comps) {
+    const names = new Set(ports
+      .filter((p) => p.source_component_id === c.source_component_id)
+      .map((p) => p.name))
+    for (let i = 1; i <= 8; i++)
+      if (names.has(`A${i}`) && names.has(`B${i}`)) {
+        const an = [...(portNet.get(ports.find((p) =>
+          p.source_component_id === c.source_component_id && p.name === `A${i}`)!.source_port_id) ?? [])][0]
+        const bn = [...(portNet.get(ports.find((p) =>
+          p.source_component_id === c.source_component_id && p.name === `B${i}`)!.source_port_id) ?? [])][0]
+        if (an && bn) bridges.push({ a: an, b: bn, comp: c.name })
+      }
+  }
+  const CPU_BUS = new Set(Array.from({ length: 8 }, (_, i) => `D${i}`))
+  const reaches = (start: string) => {
+    const seen = new Set([start])
+    const q = [start]
+    while (q.length) {
+      const n = q.shift()!
+      if (CPU_BUS.has(n)) return true
+      for (const br of bridges) {
+        for (const [x, y] of [[br.a, br.b], [br.b, br.a]] as const)
+          if (x === n && !seen.has(y)) { seen.add(y); q.push(y) }
+      }
+    }
+    return false
+  }
+  const unreachable: string[] = []
+  for (const c of comps) {
+    const dataPins = ports.filter((p) =>
+      p.source_component_id === c.source_component_id && /^(DQ\d+|D[1-8])$/.test(p.name ?? ""))
+    if (dataPins.length === 0) continue
+    for (const p of dataPins) {
+      const nets = [...(portNet.get(p.source_port_id) ?? [])]
+      if (nets.length === 0) continue               // noConnect is a decision
+      if (!nets.some(reaches)) unreachable.push(`${c.name}.${p.name}=${nets[0]}`)
+    }
+  }
+  check(bridges.length >= 16,
+    "the buffers are found by shape - a part with an A and a B side is a bridge",
+    `${bridges.length} bit-bridges across ${new Set(bridges.map((b) => b.comp)).size} parts`)
+  check(unreachable.length === 0,
+    "⛔ every data pin on every memory or register part reaches D0-D7, through " +
+    "a buffer or directly. THIS is the assertion whose absence let M-1 be " +
+    "declared fixed with the high map byte still unwritable - U1B's DQ pins " +
+    "were on a net with three other parts on it, so they were never stubs; " +
+    "they were connected to the wrong thing",
+    unreachable.join(" "))
+}
+
+/* -- machine.md 5 item 14: A24..A21 are parked, not floating -------------
+ * Item 12 parked physical A20-A13 with U16's buffer, because those eight
+ * reach every slot. The top four come off the second map SRAM, are deselected
+ * for exactly the same cycles, and never leave the board - so nobody drove
+ * them and item 14 recorded "four CMOS inputs held at neither rail". A '244 is
+ * a package for four bits; a pull-down is four passives. */
+for (let i = 21; i <= 24; i++) {
+  const pulled = comps
+    .filter((c) => /^R\d/.test(c.name))
+    .some((c) => pinsOn(c.name, `A${i}`).length > 0 && pinsOn(c.name, "GND").length > 0)
+  check(pulled, `physical A${i} has a pull-DOWN, so the parked address is zero ` +
+    `top to bottom - machine.md 5 item 14`)
+}
+
 /* -- machine.md 5 item 8: /WAIT had a producer and no consumer ------------
  * vctrl.pld drives it open-drain and E/Q are made on U6, which had no /WAIT
  * input at all - so "it holds E" named an effect with no mechanism. This is

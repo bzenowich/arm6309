@@ -28,14 +28,40 @@ export const scrollHolds: Cell[] = [
    * scroll would have landed at four times the column asked for, and the top
    * two bits of a 1024-wide torus would have been unreachable. HS0 and HS1
    * are on vctrl - the mux phase is seqph's. */
+  /* ⭐ EACH OF THESE HAS TWO WRITE PORTS SINCE 2026-09-09, and the second one
+   * is 10.3.2's list engine (19 item 32). The CPU writes through LDxx from the
+   * card's internal data bus D0..D7; a descriptor writes through LWxx from the
+   * PIXEL bus PB0..PB7, which is where the byte the engine just fetched is.
+   *
+   * ⚠ AND IT STAYS ON PB, WHICH WAS TESTED RATHER THAN ASSUMED. 10.3.3 puts
+   * the same byte on D0..D7 through a '244 so that vsup can read the operand,
+   * and sourcing THIS latch from D too would have made one byte instead of
+   * two. The fitter refused it: with D0..D7 feeding the descriptor as well as
+   * the scroll and tile registers, this part's LAB fan-in went over the
+   * ATF1508AS's limit of 40 in every block and all four passes answered
+   * "Grouping fail / Design does not fit". 10.3.3 records what the two
+   * sources cost - one dot, in a case 10.3.1's rule already forbids.
+   *
+   * One extra product term per bit and no macrocell: the load terms are
+   * disjoint by construction (LDxx is `WSTB & <address>` and LWxx is
+   * `LMOVE & <opcode>`, and LMOVE cannot coincide with a CPU register write
+   * because the engine's cycle is a granted VRAM slot), so the hold term
+   * simply carries both negations.
+   *
+   * !! THE ENGINE CANNOT REACH HS0 OR HS1 ON vctrl - it has no input pin left.
+   * 8.2's fine pair on vsup, which is the one the picture uses, IS reachable:
+   * it is written by the same descriptor, in the same dot. */
   ...[2, 3, 4, 5, 6, 7].map((b) => ({
     pin: 0, name: `HS${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: [`LDHS & D${b}`, `HS${b} & !LDHS`],
+    terms: [`LDHS & D${b}`, `LWHSL & PB${b}`, `HS${b} & !LDHS & !LWHSL`],
   })),
   ...[8, 9].map((b) => ({
     pin: 0, name: `HS${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: [`LDHSH & D${b - 8}`, `HS${b} & !LDHSH`],
+    terms: [`LDHSH & D${b - 8}`, `LWHSH & PB${b - 8}`, `HS${b} & !LDHSH & !LWHSH`],
   })),
+  /* !! VSCROLL HAS ONE WRITE PORT. The engine reaching it too was built and
+   * REFUSED - the fitter returned INTERNAL ERROR in pass 1, the same answer it
+   * gives 19 item 31's ten-bit shadow. See 10.3.2. */
   ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({
     pin: 0, name: `VS${b}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [`LDVSL & D${b}`, `VS${b} & !LDVSL`],
@@ -304,25 +330,53 @@ export const tileCadence: Cell[] = [
    * advances on FETCH, and both were listed in census.ts as "produced by the
    * sequencer's unfitted decode half" - nothing generated them. They are two
    * window compares on hgen's counter, which is on this part. */
+  /* ⭐ IT OPENS ONE SLOT BEFORE ACTIVE VIDEO SINCE 2026-09-09, and that slot is
+   * the whole of 19 item 28's fetch lead. 8.2's second latch rank holds the
+   * PREVIOUS group, so the address bus has to run one group ahead of the
+   * picture for the pair to straddle a group boundary.
+   *
+   * !! THE WINDOW MOVES BY TWO SLOTS, AND IT DOES NOT LENGTHEN - 34..193 for
+   * the same 160 slots. Two, not one, because rank B is a series latch and a
+   * series latch holds the OLDER value: during display slot d rank A holds the
+   * fetch from d-1 and rank B the fetch from d-2, so for B to carry the base
+   * group the address has to run two slots ahead of the picture and rank A
+   * then carries base+1. Built with a one-slot lead first, and vaddr_tb's
+   * pixel check is what said so - the ranks were the right way round and the
+   * lead was one short. And two is the shift that keeps H0's cell parity: a
+   * cell is two fetch slots, so an ODD shift swaps every cell's halves.
+   * At HSCROLL[1:0] = 0
+   * every chip reads rank B and the displayed line is bit-identical to what a
+   * one-slot lead produced - which is the invariant vaddr_tb checks. */
   { pin: 0, name: "TFETCH", assertedLow: false, s0: 1, registered: false,
-    terms: rangeTerms({ bits: HB, lo: H.backEnd + 1, hi: H.activeEnd, max: H.last }) },
+    terms: rangeTerms({ bits: HB, lo: H.backEnd, hi: H.activeEnd - 1, max: H.last }) },
   /* Two slots - one cell - earlier, and it ends two slots earlier too: the last
    * cell of a line has no successor to fetch a code for. */
   { pin: 0, name: "MFETCH", assertedLow: false, s0: 1, registered: false,
-    terms: rangeTerms({ bits: HB, lo: H.backEnd - 1, hi: H.activeEnd - 2, max: H.last }) },
+    terms: rangeTerms({ bits: HB, lo: H.backEnd - 2, hi: H.activeEnd - 3, max: H.last }) },
   /* ⚠ AND IT IS SLOTTICK-GATED, because everything here is clocked on DOTCLK.
    * 8's column counter takes this as its ENABLE, so a level asserted for the
    * whole window would advance it four times a slot - once per dot - and put
    * the line four times too far along. Written as a bare level on 2026-09-08
-   * and caught by the frame check the same day: SLOTTICK is one dot wide (dot
-   * 3), so the increment lands on the slot boundary. Every counter enable on
-   * this part carries it; a LOAD does not, because a load is idempotent. */
+   * and caught by the frame check the same day: SLOTTICK is one dot wide, so
+   * the increment lands once a slot. Every counter enable on this part carries
+   * it; a LOAD does not, because a load is idempotent.
+   *
+   * ⚠ THE DOT IS 0, NOT 3, SINCE 2026-09-09 - seqph.jedec.ts has the
+   * measurement. A counter advances on the edge that ENDS the dot its enable
+   * is high in, so dot 0 puts the advance one dot AFTER FCLK's rising edge and
+   * dot 3 puts it on the same edge, under the latch. Measured: dot 3 is 636 of
+   * 640 pixels wrong. */
   { pin: 0, name: "FETCH", assertedLow: false, s0: 1, registered: false,
     terms: ["TFETCH & SLOTTICK"] },
   /* Through the sync pulse and the back porch, up to the slot before MFETCH
    * opens: both column counters take their scroll offset here. */
+  /* ⚠ AND IT CLOSES ONE SLOT EARLIER SINCE 2026-09-09. 8.2's fetch lead moved
+   * MFETCH's opening from 34 to 33, and HLOAD ran to 33 - so for one slot the
+   * column counters were being LOADED while the map fetch was already using
+   * them. cadence.check.ts caught it as an overlap the moment it was taught
+   * about LRUN and put back into `npm run check`. */
   { pin: 0, name: "HLOAD", assertedLow: false, s0: 1, registered: false,
-    terms: rangeTerms({ bits: HB, lo: 0, hi: H.backEnd - 2, max: H.last }) },
+    terms: rangeTerms({ bits: HB, lo: 0, hi: H.backEnd - 3, max: H.last }) },
 
   /* ---- the vertical window, §8 ------------------------------------------ *
    *
@@ -369,10 +423,15 @@ export const tileCadence: Cell[] = [
   /* One map access per cell, in the FIRST slot of the map cell - H0 is the cell
    * phase. The counter steps in the second, so MC names one cell throughout the
    * cell that fetches it. */
+  /* ⭐ AND THE PARITY IS UNTOUCHED BY 8.2's FETCH LEAD, because that lead is
+   * TWO slots and not one. A cell is two fetch slots and H0 is the cell phase,
+   * so an odd shift swaps every cell's two halves for the rest of the line -
+   * vtile_tb reported exactly that, 80 wrong of 160. An even shift cannot:
+   * both windows move by 2 and H0 means what it always meant. */
   { pin: 0, name: "MAPREQ", assertedLow: false, s0: 1, registered: false,
-    terms: ["TILEMODE & MFETCH & !H0"] },
+    terms: ["TILEMODE & MFETCH & H0"] },
   { pin: 0, name: "MCADV", assertedLow: false, s0: 1, registered: false,
-    terms: ["TILEMODE & MFETCH & H0 & SLOTTICK"] },
+    terms: ["TILEMODE & MFETCH & !H0 & SLOTTICK"] },
   /* 5.2.2's spare access is dots 0-1 (SPAREWIN = !PH1) and the display fetch is
    * dots 2-3. The map byte is latched on the boundary between them - true
    * during dot 1, so the register clocks at the dot 1 -> 2 edge. */
@@ -386,7 +445,7 @@ export const tileCadence: Cell[] = [
    * H0 is the cell phase (6.4.9), so the last dot of the odd slot is
    * H0 & SLOTTICK - and MFETCH bounds it to the cells that have a code. */
   { pin: 0, name: "CELLTICK", assertedLow: false, s0: 1, registered: false,
-    terms: ["TILEMODE & MFETCH & H0 & SLOTTICK"] },
+    terms: ["TILEMODE & MFETCH & !H0 & SLOTTICK"] },
 
   /* ---- who owns the address bus ---------------------------------------- *
    *
@@ -603,37 +662,32 @@ export const listEngine: Cell[] = [
   { pin: 0, name: "WINC", assertedLow: false, s0: 1, registered: false,
     terms: ["RETIRE", "LADV"] },
 
-  /* ⚠ THE ENGINE HAS NO POINTER OF ITS OWN - 10.1.6.2's option 2, taken
-   * 2026-09-08 because it is the only thing that makes the engine fit.
+  /* ⚠ AND WINC IS ALL THAT IS LEFT OF THE ENGINE ON THIS PART - 2026-09-09.
    *
-   * It used to carry LIST as 19 registers here (§13, +$0B..+$0D), auto-
-   * incrementing as it walked, and that cost far more than 19 macrocells: 19
-   * more inputs to the address mux and a SIXTH product term on each of its
-   * seventeen bits, past what an ATF15xx macrocell holds before cascading.
-   * With them the fitter did not report a shortage, it reported INTERNAL
-   * ERROR; without them the design fits a PLCC-84.
+   * 10.3.2's descriptor decode - LD, LPH, LWAIT, LSTOP, LRUN, LADV and the
+   * MOVE strobes, sixteen cells - moved to vsup (vsup.parts.ts). Two things
+   * forced it and neither was macrocells:
    *
-   * SO WPTR IS THE LIST POINTER. The span writer and the engine never drive
-   * the address in the same slot, LADV drives WPTR's increment, and the
-   * engine reaches the address bus through the mux's SPNGRANT & WA[n] term
-   * that already exists.
+   *   ⛔ THIS PART WILL NOT TAKE ANOTHER LITERAL. It fits at 124 of 128 cells
+   *      and 160 of 128 nodes with LAB FAN-IN AT 40 OF 40 IN EVERY BLOCK,
+   *      which is the ATF1508AS switch matrix's limit and not a capacity one.
+   *      Three separate one-literal changes to the engine were tried on
+   *      2026-09-09 and the fitter answered "Grouping fail / Design does not
+   *      fit" to two of them and "INTERNAL ERROR" to the third. Fan-in is what
+   *      this family runs out of after cells and pins, and it is what stopped
+   *      the v1 engine on a TQFP-100 as well (features.md 4).
    *
-   * ⚠ THE PRICE IS SOFTWARE'S, and it is not settled here: the engine
-   * CLOBBERS THE CPU'S WRITE POINTER, so anything that starts a list reloads
-   * WPTR afterwards. 10.3 owns that decision; this file only shows it fits. */
-  /* The descriptor byte, and the opcode decode that turns it into a write. */
-  ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({
-    pin: 0, name: `LD${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: [`LFETCH & PB${b}`, `LD${b} & !LFETCH`],
-  })),
-  { pin: 0, name: "LRUN", assertedLow: false, s0: 1, registered: true,
-    terms: ["BCTRLGO", "LRUN & !LSTOP"] },
-  { pin: 0, name: "LSTOP", assertedLow: false, s0: 1, registered: false,
-    terms: ["LRUN & LD7 & LD6 & LD5 & LD4 & LD3 & LD2 & LD1 & LD0"] },
-  { pin: 0, name: "LADV", assertedLow: false, s0: 1, registered: false,
-    terms: ["LRUN & LGRANT"] },
-  { pin: 0, name: "LFETCH", assertedLow: false, s0: 1, registered: false,
-    terms: ["LRUN & LGRANT"] },
-  { pin: 0, name: "LMOVE", assertedLow: false, s0: 1, registered: false,
-    terms: ["LRUN & !LSTOP & LGRANT"] },
+   *   ⭐ AND A SECOND COPY IS WORSE THAN A MOVED ONE. vsup needs the opcode's
+   *      register field to reach 9's palette, so for one afternoon both parts
+   *      carried the latch - vaddr's off the pixel bus, vsup's off the card's
+   *      internal data bus - and vpal_tb proved they could disagree. One home
+   *      for the decode, one net for the byte, and the question does not
+   *      arise.
+   *
+   * What crosses now is three signals in and none of the state: LADV for this
+   * increment, and LWHSL/LWHSH for 8's scroll holds above. LGRANT stopped
+   * crossing to this part in the same move.
+   *
+   * 10.3.1's rule is unchanged and is still the price of 10.1.6.2 option 2:
+   * the engine walks WPTR, so anything that starts a list reloads it after. */
 ]

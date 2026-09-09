@@ -48,3 +48,30 @@ export const WINDOWS: Window[] = [
   { card: "net",     base: 0xff5c, size: 4,  status: "proposed", source: "net/docs/net.md 5.1" },
   { card: "video",   base: 0xff60, size: 32, status: "taken",    source: "video/docs/graphics.md 13" },
 ]
+
+/* -- the MMU's own registers, which are NOT in the geographic window -------
+ *
+ * $FF80-$FFFF is decoded by the MOTHERBOARD and reaches no card: U3 forms
+ * $FF90-$FFBF (machine.md 3) and U9 forms the vector page. Until 2026-09-09
+ * nothing checked these against the geographic window at all - they were
+ * prose in machine.md 3 and a pair of constants in mmu.jedec.ts, and the
+ * 2026-09-09 repair for design-review2.md M-1 moved a window into this range
+ * without a check that could have said whether it collided with anything.
+ *
+ * The four codes of A7..A4 = 10xx are the whole of the MMU's space and one of
+ * them is still free. Sixteen bytes is the machine's LAST unallocated block
+ * outside the card window, so a card that ever needs a motherboard-decoded
+ * register has exactly one place to be.
+ *
+ * !! LEAVE $FF80-$FF8F FREE. machine.md 5 item 15 (decided 2026-09-09, not
+ * implemented) widens /IOPAGE to $FE00-$FFFF and gives every slot a uniform
+ * 32-byte geographic window; under that plan the pressure on this block
+ * disappears, and spending it in the meantime would be spending the machine's
+ * last margin to solve a problem that is already scheduled to go away. */
+export const MMU_WINDOWS: Window[] = [
+  { card: "(free)",   base: 0xff80, size: 16, status: "free",  source: "machine.md 3 - the fourth code of A7..A4 = 10xx" },
+  { card: "mmu-high", base: 0xff90, size: 16, status: "taken", source: "hardware/ram.md 4.3 - block registers, physical A24..A21 + 3.3's flags" },
+  { card: "mmu-low",  base: 0xffa0, size: 16, status: "taken", source: "hardware/ram.md 4.3 - block registers, physical A20..A13" },
+  { card: "control",  base: 0xffb0, size: 16, status: "taken", source: "machine.md 3 - TASK at $FFB0 even, RUN at $FFB1 odd, aliased 8x each" },
+  { card: "vectors",  base: 0xffc0, size: 64, status: "taken", source: "machine.md 7.2 - the boot ROM answers here unconditionally" },
+]

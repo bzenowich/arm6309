@@ -33,9 +33,24 @@ module vsync_tb;
   // "which VMODE is selected" is a claim about three packages now, which is
   // exactly the seam design-review2.md V-1 found the card's registers missing
   // from.
+  wire [9:2] HSCR; wire LPH_o, LWAIT_o;   // 10.3.2's descriptor engine
+  // 9's palette, and 10.3.3's turnaround on the card's internal data bus.
+  wire [15:0] RGB; wire [7:0] PIDX;
+  wire PWE_o, PDOE_o, PIXOE_o, DBUS_FIGHT;
+
   video_card card (.*);
 
   int fails = 0;
+  // ⚠ EVERY `forever` IN THIS FILE CARRIES A BOUND AND FAILS ON EXHAUSTION.
+  // A wait that cannot be satisfied is a HANG, and a hang is worse than a
+  // failure: run.sh's exit code cannot see it, the claim count cannot see it,
+  // and it presents to whoever is watching as "budget more time". This file
+  // spent half an hour of CPU twice on 2026-09-09 because to_frame_start()
+  // waited on `SLOTTICK == 0 && PH == 0` after SLOTTICK moved to PH 0, which
+  // is unsatisfiable. Two frames of dots is the bound - anything this file
+  // waits for happens inside one.
+  localparam int WAIT_MAX = 2 * 525 * 800;
+
   task automatic ok(input bit good, input string claim);
     if (good) $display("ok    %s", claim);
     else begin fails++; $display("FAIL  %s", claim); end
@@ -71,10 +86,25 @@ module vsync_tb;
 
   task automatic to_frame_start();
     // V wraps to 0 at VTC; wait for the transition into line 0 slot 0.
-    forever begin
+    //
+    // ⛔ IT ALSO REQUIRED `SLOTTICK == 0` UNTIL 2026-09-09, AND THAT MADE THIS
+    // TESTBENCH HANG RATHER THAN FAIL. SLOTTICK was `PH1 & PH0` when the line
+    // was written - the LAST dot of a slot - so "PH 0 and no slot tick" named
+    // the first dot. §8.2's rank select moved the whole fetch cadence by one
+    // sub-slot phase and seqph.jedec.ts now reads `!PH1 & !PH0`, which is the
+    // SAME dot as `PH == 0`: the conjunction became unsatisfiable and the loop
+    // spun for ever. It cost two agents half an hour of CPU apiece before
+    // anyone read the phase.
+    //
+    // ⚠ A `forever` with no bound is a hang and not a failure, which is the
+    // worse of the two - run.sh's exit code cannot see it and neither can the
+    // claim count. `PH == 0` alone names the dot, and measure_frame's own
+    // break already tested only that.
+    for (int k = 0; k < WAIT_MAX; k++) begin
       @(posedge DOTCLK); #0;
-      if (vnum() == 0 && hnum() == 0 && SLOTTICK == 0 && PH == 2'd0) return;
+      if (vnum() == 0 && hnum() == 0 && PH == 2'd0) return;
     end
+    ok(0, $sformatf("to_frame_start: V=0, H=0, PH=0 never occurred in %0d dots", WAIT_MAX));
   endtask
 
   // Count one whole frame. Everything is sampled after the clock edge.
@@ -86,7 +116,8 @@ module vsync_tb;
     line_dots = 0;
     begin
       int v_prev = 0;   // we start AT line 0, so do not count entering it
-      forever begin
+      bit wrapped = 0;
+      for (int k = 0; k < WAIT_MAX && !wrapped; k++) begin
         @(posedge DOTCLK); #0;
         dots++;
         line_dots++;
@@ -99,8 +130,9 @@ module vsync_tb;
           if (!VBLANK) active_lines++;
           if (VSYNC == (VMODE[0] ? 1'b0 : 1'b1)) vsync_lines++;
         end
-        if (dots > 1 && vnum() == 0 && hnum() == 0 && PH == 2'd0) break;
+        if (dots > 1 && vnum() == 0 && hnum() == 0 && PH == 2'd0) wrapped = 1;
       end
+      ok(wrapped, $sformatf("measure_frame: the frame closed inside %0d dots", WAIT_MAX));
     end
   endtask
 
@@ -132,10 +164,22 @@ module vsync_tb;
   bit h_level_in_pulse, v_level_in_pulse;
   task automatic sample_polarity();
     // inside HSYNC's window
-    forever begin @(posedge DOTCLK); #0; if (hnum() == 10) break; end
+    begin
+      bit hit = 0;
+      for (int k = 0; k < WAIT_MAX && !hit; k++) begin
+        @(posedge DOTCLK); #0; if (hnum() == 10) hit = 1;
+      end
+      ok(hit, "sample_polarity: the HSYNC window was reached");
+    end
     h_level_in_pulse = HSYNC;
     // inside VSYNC's window
-    forever begin @(posedge DOTCLK); #0; if (vnum() == 1 && hnum() == 100) break; end
+    begin
+      bit hit = 0;
+      for (int k = 0; k < WAIT_MAX && !hit; k++) begin
+        @(posedge DOTCLK); #0; if (vnum() == 1 && hnum() == 100) hit = 1;
+      end
+      ok(hit, "sample_polarity: the VSYNC window was reached");
+    end
     v_level_in_pulse = VSYNC;
   endtask
 

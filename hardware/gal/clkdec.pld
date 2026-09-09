@@ -70,7 +70,7 @@ PIN 11 = LA0 ;       /* $FFB0 even is TASK, $FFB1 odd is BOOT - machine.md
  * RAM's decode until 2026-09-09; the RAM went and LA5/LA4 took the pins. */
 
 /* --- outputs ---------------------------------------------------------- */
-PIN 14 = !BOOTOE ;    /*  8 terms available, 3 used */
+PIN 14 = !BOOTOE ;    /*  8 terms available, 2 used */
 PIN 15 = !IOSEL ;    /* 10, 1 */
 PIN 16 = C0 ;        /* 12, 1 */
 PIN 17 = C1 ;        /* 14, 2 */
@@ -228,9 +228,19 @@ RUN.d = RUN # ctlwr & LA0 ;
  * IMPLEMENTED COMPLEMENTED. The pin is declared !BOOTOE, so the macrocell
  * forms the DE-asserted condition - "a map SRAM is selected" - in three terms
  * where the asserted form is nine. */
+/* !! AND IT IS THE LOW CHIP ENABLE, NOT THE UNION OF BOTH - 2026-09-09, in
+ * the same pass that gave the high map byte a data path of its own. Only U1,
+ * the LOW map SRAM, drives physical A20-A13; U1B drives A24-A21 and those four
+ * never leave the board. The union was correct while ONE '245 served both
+ * windows, because that buffer then drove A20-A13 during a high-byte write
+ * too. With U4 shut for the high window (mmu.pld) the union would leave
+ * A20-A13 with NO driver for the sixteen high-byte writes of every boot -
+ * M-2 again, in a narrower window. mainboard_tb caught it as "16 of 32".
+ *
+ * ** One product term fewer, and the same rule said more exactly: THE BUFFER
+ * DRIVES A NET EXACTLY WHEN THAT NET'S OTHER DRIVER DOES NOT. */
 mapsel = RUN & !IOPAGE                       /* translating                  */
-       # IOPAGE & LA7 & !LA6 &  LA5 & !LA4   /* $FFA0-$FFAF, the low byte    */
-       # IOPAGE & LA7 & !LA6 & !LA5 &  LA4 ; /* $FF90-$FF9F, the high byte   */
+       # IOPAGE & LA7 & !LA6 &  LA5 & !LA4 ; /* $FFA0-$FFAF, the low byte    */
 !BOOTOE = mapsel ;
 
 /* The 22V10's asynchronous reset is one term shared by every registered

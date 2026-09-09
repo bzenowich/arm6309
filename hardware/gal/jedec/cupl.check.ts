@@ -79,8 +79,13 @@ const checkMmu = (label: string, gal: Gal22v10) => {
       }
       const p = gal.evaluate(d), m = mmu(la, ph.e, ph.q, rw)
       const want: Record<number, number> = {
-        17: m.iopage ? 0 : 1, 18: m.muxsel ? 1 : 0, 19: m.isooe ? 0 : 1,
+        17: m.iopage ? 0 : 1, 18: m.muxsel ? 1 : 0, 19: m.isooeLo ? 0 : 1,
         20: m.mapwe ? 0 : 1, 21: m.mapoe ? 0 : 1, 22: m.ctrlcp ? 1 : 0,
+        /* ⭐ Pin 23 since 2026-09-09 - the high map byte's own '245 enable.
+         * design-review2.md M-1 gave the high byte a window and the board
+         * still had no data path to it; two common-I/O SRAMs need two
+         * buffers and two buffers need two enables. */
+        23: m.isooeHi ? 0 : 1,
       }
       for (const [pin, v] of Object.entries(want)) {
         if (p[Number(pin)] !== v) {

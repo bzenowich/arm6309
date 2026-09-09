@@ -21,15 +21,17 @@ module vaddr (
     input  wire D6,
     input  wire D7,
     input  wire WROWADV,
-    input  wire MAPLD,
-    input  wire PB0,
-    input  wire PB1,
+    input  wire LWHSL,
     input  wire PB2,
     input  wire PB3,
     input  wire PB4,
     input  wire PB5,
     input  wire PB6,
     input  wire PB7,
+    input  wire LWHSH,
+    input  wire PB0,
+    input  wire PB1,
+    input  wire MAPLD,
     input  wire CELLTICK,
     input  wire MCADV,
     input  wire WSTB,
@@ -39,7 +41,7 @@ module vaddr (
     input  wire RA1,
     input  wire RA0,
     input  wire RETIRE,
-    input  wire LGRANT,
+    input  wire LADV,
     input  wire SRC1,
     input  wire SRC0,
     output wire SA2,
@@ -141,7 +143,6 @@ module vaddr (
     output wire LDHS,
     output wire LDHSH,
     output wire LDADV,
-    output wire BCTRLGO,
     output wire LDA,
     output wire LDB,
     output wire LDC,
@@ -149,19 +150,6 @@ module vaddr (
     output wire LDFB,
     output wire LDMB,
     output wire WINC,
-    output wire LD0,
-    output wire LD1,
-    output wire LD2,
-    output wire LD3,
-    output wire LD4,
-    output wire LD5,
-    output wire LD6,
-    output wire LD7,
-    output wire LRUN,
-    output wire LSTOP,
-    output wire LADV,
-    output wire LFETCH,
-    output wire LMOVE,
     output wire FBA2,
     output wire FBA3,
     output wire FBA4,
@@ -271,15 +259,6 @@ module vaddr (
   reg  r_MC6;
   reg  r_RP0;
   reg  r_RP1;
-  reg  r_LD0;
-  reg  r_LD1;
-  reg  r_LD2;
-  reg  r_LD3;
-  reg  r_LD4;
-  reg  r_LD5;
-  reg  r_LD6;
-  reg  r_LD7;
-  reg  r_LRUN;
 
   assign SA2 = r_SA2;
   assign SA3 = r_SA3;
@@ -371,15 +350,6 @@ module vaddr (
   assign MC6 = r_MC6;
   assign RP0 = r_RP0;
   assign RP1 = r_RP1;
-  assign LD0 = r_LD0;
-  assign LD1 = r_LD1;
-  assign LD2 = r_LD2;
-  assign LD3 = r_LD3;
-  assign LD4 = r_LD4;
-  assign LD5 = r_LD5;
-  assign LD6 = r_LD6;
-  assign LD7 = r_LD7;
-  assign LRUN = r_LRUN;
 
   // EXTERNAL
   assign MAPA0 =
@@ -408,9 +378,6 @@ module vaddr (
   // buried - 13's +$14 - 7.2's next-row-same-column mode
   assign LDADV =
          (WSTB & RA4 & ~RA3 & RA2 & ~RA1 & ~RA0);
-  // buried - 10.3.1's GO - a strobe, because LRUN is what holds
-  assign BCTRLGO =
-         (WSTB & ~RA4 & RA3 & RA2 & RA1 & ~RA0 & D0);
   // buried - WPTR's three bytes - item 23 offered a '138 for these
   assign LDA =
          (WSTB & ~RA4 & RA3 & ~RA2 & ~RA1 & ~RA0);
@@ -433,18 +400,6 @@ module vaddr (
   assign WINC =
          (RETIRE)
          | (LADV);
-  // buried
-  assign LSTOP =
-         (LRUN & LD7 & LD6 & LD5 & LD4 & LD3 & LD2 & LD1 & LD0);
-  // buried
-  assign LADV =
-         (LRUN & LGRANT);
-  // buried
-  assign LFETCH =
-         (LRUN & LGRANT);
-  // buried
-  assign LMOVE =
-         (LRUN & ~LSTOP & LGRANT);
   // EXTERNAL
   assign FBA2 =
          (~SRC1 & ~SRC0 & SA2)
@@ -642,15 +597,6 @@ module vaddr (
       r_MC6 <= 1'b0;
       r_RP0 <= 1'b0;
       r_RP1 <= 1'b0;
-      r_LD0 <= 1'b0;
-      r_LD1 <= 1'b0;
-      r_LD2 <= 1'b0;
-      r_LD3 <= 1'b0;
-      r_LD4 <= 1'b0;
-      r_LD5 <= 1'b0;
-      r_LD6 <= 1'b0;
-      r_LD7 <= 1'b0;
-      r_LRUN <= 1'b0;
     end else begin
       r_SA2 <=
          (HLOAD & HS2)
@@ -953,28 +899,36 @@ module vaddr (
          | (~LDC & ~WROWADV & WA18);
       r_HS2 <=
          (LDHS & D2)
-         | (HS2 & ~LDHS);
+         | (LWHSL & PB2)
+         | (HS2 & ~LDHS & ~LWHSL);
       r_HS3 <=
          (LDHS & D3)
-         | (HS3 & ~LDHS);
+         | (LWHSL & PB3)
+         | (HS3 & ~LDHS & ~LWHSL);
       r_HS4 <=
          (LDHS & D4)
-         | (HS4 & ~LDHS);
+         | (LWHSL & PB4)
+         | (HS4 & ~LDHS & ~LWHSL);
       r_HS5 <=
          (LDHS & D5)
-         | (HS5 & ~LDHS);
+         | (LWHSL & PB5)
+         | (HS5 & ~LDHS & ~LWHSL);
       r_HS6 <=
          (LDHS & D6)
-         | (HS6 & ~LDHS);
+         | (LWHSL & PB6)
+         | (HS6 & ~LDHS & ~LWHSL);
       r_HS7 <=
          (LDHS & D7)
-         | (HS7 & ~LDHS);
+         | (LWHSL & PB7)
+         | (HS7 & ~LDHS & ~LWHSL);
       r_HS8 <=
          (LDHSH & D0)
-         | (HS8 & ~LDHSH);
+         | (LWHSH & PB0)
+         | (HS8 & ~LDHSH & ~LWHSH);
       r_HS9 <=
          (LDHSH & D1)
-         | (HS9 & ~LDHSH);
+         | (LWHSH & PB1)
+         | (HS9 & ~LDHSH & ~LWHSH);
       r_VS0 <=
          (LDVSL & D0)
          | (VS0 & ~LDVSL);
@@ -1139,33 +1093,6 @@ module vaddr (
          (~RP1 & ~RP0 & WROWADV);
       r_RP1 <=
          (~RP1 & RP0);
-      r_LD0 <=
-         (LFETCH & PB0)
-         | (LD0 & ~LFETCH);
-      r_LD1 <=
-         (LFETCH & PB1)
-         | (LD1 & ~LFETCH);
-      r_LD2 <=
-         (LFETCH & PB2)
-         | (LD2 & ~LFETCH);
-      r_LD3 <=
-         (LFETCH & PB3)
-         | (LD3 & ~LFETCH);
-      r_LD4 <=
-         (LFETCH & PB4)
-         | (LD4 & ~LFETCH);
-      r_LD5 <=
-         (LFETCH & PB5)
-         | (LD5 & ~LFETCH);
-      r_LD6 <=
-         (LFETCH & PB6)
-         | (LD6 & ~LFETCH);
-      r_LD7 <=
-         (LFETCH & PB7)
-         | (LD7 & ~LFETCH);
-      r_LRUN <=
-         (BCTRLGO)
-         | (LRUN & ~LSTOP);
     end
   end
 

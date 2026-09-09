@@ -38,6 +38,14 @@ export interface Cell {
   terms: string[]
   /** output-enable term; omitted means permanently enabled */
   oe?: string
+  /** the cell drives a pin that is ALSO read - a bidirectional I/O macrocell.
+   *  Only meaningful on a CPLD: a GAL22V10 macrocell can do it too, but no
+   *  design here asks it to. It changes nothing in this assembler and one
+   *  thing in verilog/emit.ts, which must model the pin as `inout` so an
+   *  equation that reads the name sees the OUTSIDE world when .oe is off
+   *  rather than this part's own drive. The audio card's D0-D7 are the only
+   *  users (audio.md 9.3's read-back path). */
+  bidir?: boolean
   why?: string
 }
 

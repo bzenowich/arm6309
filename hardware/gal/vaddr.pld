@@ -36,15 +36,17 @@ PIN = D5 ;
 PIN = D6 ;
 PIN = D7 ;
 PIN = WROWADV ;
-PIN = MAPLD ;
-PIN = PB0 ;
-PIN = PB1 ;
+PIN = LWHSL ;
 PIN = PB2 ;
 PIN = PB3 ;
 PIN = PB4 ;
 PIN = PB5 ;
 PIN = PB6 ;
 PIN = PB7 ;
+PIN = LWHSH ;
+PIN = PB0 ;
+PIN = PB1 ;
+PIN = MAPLD ;
 PIN = CELLTICK ;
 PIN = MCADV ;
 PIN = WSTB ;
@@ -54,7 +56,7 @@ PIN = RA2 ;
 PIN = RA1 ;
 PIN = RA0 ;
 PIN = RETIRE ;
-PIN = LGRANT ;
+PIN = LADV ;
 PIN = SRC1 ;
 PIN = SRC0 ;
 
@@ -65,7 +67,6 @@ PIN = MAPA0 ;
 PIN = MAPA1 ;
 PIN = RP0 ;
 PIN = RP1 ;
-PIN = LRUN ;
 PIN = FBA2 ;
 PIN = FBA3 ;
 PIN = FBA4 ;
@@ -171,17 +172,11 @@ PINNODE = MC3 ;
 PINNODE = MC4 ;
 PINNODE = MC5 ;
 PINNODE = MC6 ;
-PINNODE = LD0 ;
-PINNODE = LD1 ;
-PINNODE = LD2 ;
-PINNODE = LD3 ;
-PINNODE = LD4 ;
-PINNODE = LD5 ;
-PINNODE = LD6 ;
-PINNODE = LD7 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * RLDA, RLDB, LDVSL, LDVSH, LDHS, LDHSH, LDADV, BCTRLGO, LDA, LDB, LDC, LDTB, LDFB, LDMB, WINC, LSTOP, LADV, LFETCH, LMOVE */
+ * RLDA, RLDB, LDVSL, LDVSH, LDHS, LDHSH, LDADV, LDA, LDB, LDC, LDTB
+ * LDFB, LDMB, WINC
+ */
 
 /* --- equations ---------------------------------------------------- */
 SA2.d = HLOAD & HS2
@@ -448,21 +443,29 @@ WA18.d = LDC & D2
          # !LDC & WROWADV & !WA18 & WA10 & WA11 & WA12 & WA13 & WA14 & WA15 & WA16 & WA17
          # !LDC & !WROWADV & WA18 ;
 HS2.d = LDHS & D2
-        # HS2 & !LDHS ;
+        # LWHSL & PB2
+        # HS2 & !LDHS & !LWHSL ;
 HS3.d = LDHS & D3
-        # HS3 & !LDHS ;
+        # LWHSL & PB3
+        # HS3 & !LDHS & !LWHSL ;
 HS4.d = LDHS & D4
-        # HS4 & !LDHS ;
+        # LWHSL & PB4
+        # HS4 & !LDHS & !LWHSL ;
 HS5.d = LDHS & D5
-        # HS5 & !LDHS ;
+        # LWHSL & PB5
+        # HS5 & !LDHS & !LWHSL ;
 HS6.d = LDHS & D6
-        # HS6 & !LDHS ;
+        # LWHSL & PB6
+        # HS6 & !LDHS & !LWHSL ;
 HS7.d = LDHS & D7
-        # HS7 & !LDHS ;
+        # LWHSL & PB7
+        # HS7 & !LDHS & !LWHSL ;
 HS8.d = LDHSH & D0
-        # HS8 & !LDHSH ;
+        # LWHSH & PB0
+        # HS8 & !LDHSH & !LWHSH ;
 HS9.d = LDHSH & D1
-        # HS9 & !LDHSH ;
+        # LWHSH & PB1
+        # HS9 & !LDHSH & !LWHSH ;
 VS0.d = LDVSL & D0
         # VS0 & !LDVSL ;
 VS1.d = LDVSL & D1
@@ -590,7 +593,6 @@ LDVSH = WSTB & !RA4 & !RA3 & !RA2 & RA1 & !RA0 ;
 LDHS = WSTB & !RA4 & !RA3 & !RA2 & RA1 & RA0 ;
 LDHSH = WSTB & !RA4 & !RA3 & RA2 & !RA1 & !RA0 ;
 LDADV = WSTB & RA4 & !RA3 & RA2 & !RA1 & !RA0 ;
-BCTRLGO = WSTB & !RA4 & RA3 & RA2 & RA1 & !RA0 & D0 ;
 LDA = WSTB & !RA4 & RA3 & !RA2 & !RA1 & !RA0 ;
 LDB = WSTB & !RA4 & RA3 & !RA2 & !RA1 & RA0 ;
 LDC = WSTB & !RA4 & RA3 & !RA2 & RA1 & !RA0 ;
@@ -599,28 +601,6 @@ LDFB = WSTB & RA4 & RA3 & !RA2 & !RA1 & !RA0 ;
 LDMB = WSTB & RA4 & RA3 & !RA2 & !RA1 & RA0 ;
 WINC = RETIRE
        # LADV ;
-LD0.d = LFETCH & PB0
-        # LD0 & !LFETCH ;
-LD1.d = LFETCH & PB1
-        # LD1 & !LFETCH ;
-LD2.d = LFETCH & PB2
-        # LD2 & !LFETCH ;
-LD3.d = LFETCH & PB3
-        # LD3 & !LFETCH ;
-LD4.d = LFETCH & PB4
-        # LD4 & !LFETCH ;
-LD5.d = LFETCH & PB5
-        # LD5 & !LFETCH ;
-LD6.d = LFETCH & PB6
-        # LD6 & !LFETCH ;
-LD7.d = LFETCH & PB7
-        # LD7 & !LFETCH ;
-LRUN.d = BCTRLGO
-         # LRUN & !LSTOP ;
-LSTOP = LRUN & LD7 & LD6 & LD5 & LD4 & LD3 & LD2 & LD1 & LD0 ;
-LADV = LRUN & LGRANT ;
-LFETCH = LRUN & LGRANT ;
-LMOVE = LRUN & !LSTOP & LGRANT ;
 FBA2 = !SRC1 & !SRC0 & SA2
        # !SRC1 & SRC0 & WA2
        # SRC1 & !SRC0 & SA2
@@ -698,8 +678,7 @@ FBA18 = !SRC1 & !SRC0 & SA18
 [HS5,HS6,HS7,HS8,HS9,VS0,VS1,VS2,VS3,VS4,VS5,VS6,VS7,VS8,TB0].ck = DOTCLK ;
 [TB1,TB2,TB3,TB4,MB0,MB1,MB2,MB3,MB4,MB5,MB6,MAP0,MAP1,MAP2].ck = DOTCLK ;
 [MAP3,MAP4,MAP5,MAP6,MAP7,MAPQ0,MAPQ1,MAPQ2,MAPQ3,MAPQ4].ck = DOTCLK ;
-[MAPQ5,MAPQ6,MAPQ7,MC0,MC1,MC2,MC3,MC4,MC5,MC6,RP0,RP1,LD0].ck = DOTCLK ;
-[LD1,LD2,LD3,LD4,LD5,LD6,LD7,LRUN].ck = DOTCLK ;
+[MAPQ5,MAPQ6,MAPQ7,MC0,MC1,MC2,MC3,MC4,MC5,MC6,RP0,RP1].ck = DOTCLK ;
 
 /* One asynchronous reset for every register, as on the GALs. */
 [SA2,SA3,SA4,SA5,SA6,SA7,SA8,SA9,SA10,SA11,SA12,SA13,SA14].ar = RESET ;
@@ -708,5 +687,4 @@ FBA18 = !SRC1 & !SRC0 & SA18
 [HS5,HS6,HS7,HS8,HS9,VS0,VS1,VS2,VS3,VS4,VS5,VS6,VS7,VS8,TB0].ar = RESET ;
 [TB1,TB2,TB3,TB4,MB0,MB1,MB2,MB3,MB4,MB5,MB6,MAP0,MAP1,MAP2].ar = RESET ;
 [MAP3,MAP4,MAP5,MAP6,MAP7,MAPQ0,MAPQ1,MAPQ2,MAPQ3,MAPQ4].ar = RESET ;
-[MAPQ5,MAPQ6,MAPQ7,MC0,MC1,MC2,MC3,MC4,MC5,MC6,RP0,RP1,LD0].ar = RESET ;
-[LD1,LD2,LD3,LD4,LD5,LD6,LD7,LRUN].ar = RESET ;
+[MAPQ5,MAPQ6,MAPQ7,MC0,MC1,MC2,MC3,MC4,MC5,MC6,RP0,RP1].ar = RESET ;

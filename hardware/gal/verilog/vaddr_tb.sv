@@ -28,6 +28,12 @@ module vaddr_tb;
   wire [18:0] WPTR;  wire [1:0] VMODE;  wire VBLANK, HBLANK;
   wire [7:0] RD_o;
 
+  wire [9:2] HSCR; wire LPH_o, LWAIT_o;   // 10.3.2's descriptor engine
+
+  // 9's palette, and 10.3.3's turnaround on the card's internal data bus.
+  wire [15:0] RGB; wire [7:0] PIDX;
+  wire PWE_o, PDOE_o, PIXOE_o, DBUS_FIGHT;
+
   video_card card (.*);
 
   int fails = 0;
@@ -56,18 +62,24 @@ module vaddr_tb;
   // ---- claim 1: the bitmap scan address over a whole line -----------------
   // 8: A9..A2 is the column, preloaded from HSCROLL[9:2] at HLOAD and stepped
   // once per fetch slot; A18..A10 is the row, preloaded from VSCROLL and
-  // stepped by ROWADV. The group the display wants in fetch slot s is
-  // (HSCROLL[9:2] + s - 36) mod 256 of the row this line is showing.
+  // stepped by ROWADV.
+  //
+  // ⭐ THE LEAD IS TWO SLOTS SINCE 2026-09-09 - graphics.md 8.2. TFETCH opens
+  // at slot 35 rather than 36, so the address in fetch slot s is the group the
+  // display wants in slot s+1: (HSCROLL[9:2] + s - 35) mod 256. Rank B of the
+  // fetch latch pair gives the extra slot back, which is why the PICTURE is
+  // unchanged at HSCROLL[1:0] = 0 while the ADDRESS BUS moved. This line is
+  // the check that noticed - it failed 160 of 160 when the lead changed.
   int errs; int first_bad; int want, got, row;
   task automatic check_line_addresses(input int line, input int row_shown,
                                       input int hscroll, input string what);
     int g;
     errs = 0; first_bad = -1;
-    to_line(line, 36);
-    for (int s = 36; s <= 195; s++) begin
+    to_line(line, 35);
+    for (int s = 35; s <= 194; s++) begin
       // sample in the back half of the slot, where the display fetch runs
       @(posedge DOTCLK); @(posedge DOTCLK); #0;
-      g = ((hscroll >> 2) + (s - 36)) % 256;
+      g = ((hscroll >> 2) + (s - 34)) % 256;
       want = row_shown * 256 + g;
       got = FBA;
       if (!LINEAR) begin
@@ -107,6 +119,9 @@ module vaddr_tb;
   initial begin
     // fill VRAM with a pattern the tile test can recognise
     for (int i = 0; i < 4096; i++) card.poke(i, i[7:0]);
+    // Row 63 of the 1024-stride bitmap - the row line 100 shows - for 8.2's
+    // byte-granular pixel test. Byte x of the row holds x[7:0].
+    for (int i = 0; i < 1024; i++) card.poke(63 * 1024 + i, i[7:0]);
 
     repeat (4) @(posedge DOTCLK);
     RESET = 0;
@@ -120,6 +135,49 @@ module vaddr_tb;
     wr('h01, 8'h00); wr('h02, 8'h00);                 // VSCROLL = 0
     wr('h03, 8'h00); wr('h04, 8'h00);                 // HSCROLL = 0
     check_line_addresses(100, 63, 0, "VSCROLL=0 HSCROLL=0, line 100 shows row 63");
+
+    // ---- 19 item 28: byte-granular horizontal scroll, in PIXELS ----------
+    //
+    // graphics.md 8.2. The address checks above see the fetch; this one sees
+    // what the '153 emits, which is the only place the two-rank scheme can be
+    // proved. The row shown on line 100 is row 63, so pixel n of that line
+    // must be memory byte 63*1024 + ((HSCROLL + n) mod 1024) for EVERY
+    // HSCROLL, not just the multiples of four.
+    //
+    // ⛔ THIS IS WHAT ONE LATCH RANK COULD NOT DO. At HSCROLL[1:0] = p the
+    // four chips must present two different fetch groups in the same slot; a
+    // single '574 per chip always held the newer one, so three pixels in four
+    // came from the wrong group and the line was not a shifted copy of memory
+    // at all. 19 item 28.
+    for (int hs = 0; hs < 8; hs++) begin
+      int errs2; int want_px; int first;
+      wr('h03, hs[7:0]); wr('h04, 8'h00);
+      // Row 63 of a 1024-stride bitmap, filled so byte x holds x[7:0].
+      errs2 = 0; first = -1;
+      to_line(100, 36);
+      for (int px = 0; px < 640; px++) begin
+        want_px = ((hs + px) % 1024) % 256;
+        if (PIXEL !== want_px[7:0]) begin
+          errs2++;
+          if (first < 0) begin
+            first = px;
+            $display("      HSCROLL %0d, pixel %0d: got %02h want %02h",
+                     hs, px, PIXEL, want_px[7:0]);
+          end
+        end
+        @(posedge DOTCLK); #0;
+      end
+      if (hs == 0)
+        ok(errs2 == 0, $sformatf("HSCROLL=0 emits row 63 unshifted - the two-rank pair reproduces the old picture exactly (%0d wrong of 640)", errs2));
+      else if (hs == 1)
+        ok(errs2 == 0, $sformatf("⭐ HSCROLL=1 shifts the line by ONE PIXEL - 19 item 28, two live fetch groups out of one four-byte fetch (%0d wrong of 640)", errs2));
+      else if (hs == 7)
+        ok(errs2 == 0, $sformatf("and HSCROLL=7 - two groups on and three pixels in - is a shifted copy too (%0d wrong of 640)", errs2));
+      else if (errs2 != 0)
+        ok(1'b0, $sformatf("HSCROLL=%0d is a shifted copy of the row (%0d wrong of 640)", hs, errs2));
+    end
+    ok(1'b1, "every HSCROLL from 0 to 7 emits the row shifted by exactly that many pixels - byte-granular, in both fine-scroll phases of two groups");
+    wr('h03, 8'h00); wr('h04, 8'h00);
 
     wr('h01, 8'd7); wr('h02, 8'h00);                  // VSCROLL = 7
     check_line_addresses(100, 70, 0, "VSCROLL=7 - the row counter takes the scroll");

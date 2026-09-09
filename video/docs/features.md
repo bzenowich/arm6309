@@ -274,7 +274,8 @@ second time and that one is a pin — §8.4.
 > that nothing produced and no span had a colour or an end. The serialiser really does
 > absorb — it is eight macrocells on `vctrl` — and the counter does not, because §7.4
 > loads it from the **register file's read bus** and that is eight pins neither CPLD
-> has. It is `vlen`, a `GAL22V10`, and **the card is 28 ICs**.
+> has. It was `vlen`, a `GAL22V10`; since 2026-09-09 it is eight macrocells on
+> §10.1.7's `vsup` and **the card is 36 ICs**, on a 24 cm board.
 > [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.2 and §10.
 
 `WADV` (`+$14`) chains spans: `01` is **"next row, same column"** — at span end the row
@@ -285,7 +286,7 @@ glyph is *eight mask writes and nothing else*.
 
 | | |
 |---|---|
-| **Solid fill rate** | **25.1 MB/s with §14.2's broadcast write** — four bytes in *one* access: every byte of a solid is the same byte, and `4n`…`4n+3` are the same intra-chip address behind four byte enables. **6.29 MB/s without it** (one byte per 158.9 ns fetch slot — `WPTR` names one interleave at a time; `graphics.md` §7.4). Broadcast is the default once §5.2's rewrite lands (`graphics.md` §19 item 25) |
+| **Solid fill rate** | **25.1 MB/s with §14.2's broadcast write** — four bytes in *one* access: every byte of a solid is the same byte, and `4n`…`4n+3` are the same intra-chip address behind four byte enables. **6.29 MB/s without it** (one byte per 158.9 ns fetch slot — `WPTR` names one interleave at a time; `graphics.md` §7.4). Broadcast is the default once §5.2's rewrite lands (`graphics.md` §19 item 33) |
 | **Mask fill rate** | **8 pixels per CPU write** = 3.4 Mpx/s, CPU-bound |
 | Setup per span | `WPTR` ×3 + `SPANLEN` + the posted write = **5 writes ≈ 11.9 µs** |
 | Full-screen clear, 640×200 | ~500 CPU writes, **~1.2 ms of CPU** — **5.1 ms to retire with broadcast** (20.3 ms without), inside a 14.3 ms frame |
@@ -305,26 +306,45 @@ locked to the raster and writes the card's own registers at chosen scanlines. It
 `MOVE` opcode is one SRAM write into the register file that already exists
 (`graphics.md` §10.3).
 
-**What it buys**, all with zero CPU involvement:
+**What it buys**, with zero CPU involvement — and ⚠ **it is one of the three, not
+three**, because a `MOVE` can only reach a register written from the card's internal
+data bus by the part that decodes the descriptor (`graphics.md` §10.3.2, §10.3.3).
+**Two of the three are built as of 2026-09-09:**
 
-- **Per-scanline `HSCROLL`** — parallax layers, sine warps, split-scroll status bars.
-- **Per-scanline palette** — raster bars, gradient skies, more than 256 colours on
-  screen at once.
-- **Mid-frame `CTRL` changes** — §6.4.6 spells out the good one: **a text status bar
-  over a bitmap playfield**, because the cell/pixel mode is a register and the list can
-  write it at a scanline boundary. ⚠ With §2.2 dropped that bar is Variant A's 8bpp
-  tiles rather than a character generator — 16 KB of font instead of 2 KB, and no
-  attribute colour path.
+- ⭐ **Per-scanline `HSCROLL`** — parallax layers, sine warps, split-scroll status
+  bars. **Built and simulated**; `MOVE $03` and `MOVE $04` write `HSCROLL`/`HSCROLLH`,
+  and `vspan_tb` runs a list that does it. ⭐ **Byte-granular, not in fours**: `vsup`
+  holds a second copy of `HSCROLL[1:0]` written by the same descriptor in the same dot,
+  so a listed scroll is exactly as smooth as a CPU one (`graphics.md` §8.2).
+- ⭐ **Per-scanline palette** — raster bars, gradient skies, more than 256 colours on
+  screen at once. **Built and simulated.** `MOVE $10/$11/$12` write
+  `PIDX`/`PDATL`/`PDATH`, and `vpal_tb` runs a list that writes `LUT[$A0] = $ABCD` and
+  scrolls in the same pass. ⛔ **It needed the palette to have a write path at all**,
+  which it did not: nothing on the card loaded the index, drove the LUT's address during
+  a write or asserted its `/WE`, so the **CPU could not write the palette either**
+  (`graphics.md` §9). §13.1's write-during-blanking rule still applies — a commit costs
+  three dots of snow — so a listed palette change belongs in the horizontal blank.
+- ⛔ **Mid-frame `CTRL` changes** — §6.4.6's text status bar over a bitmap playfield.
+  **Not reachable, and it is a data-bus question rather than a pin count.** `vctrl`
+  holds `CTRL` and its `D0`–`D7` tap the **backplane** data bus, because §7.4's mask
+  serialiser and §3.1.1's posted-write latch both need the CPU's byte at an instant when
+  the register file is still driving the card's internal bus. A descriptor operand
+  placed on the internal bus never reaches `CTRL`'s write terms. `graphics.md` §10.3.4
+  states it and prices the fix. The CPU can still write `CTRL` from a VBL or raster
+  handler; what is lost is doing it without CPU involvement.
 
-> ⛔ **AND IT COULD NOT RUN UNTIL 2026-09-09.** `LADV` was produced and read by
-> nothing, `LGRANT` was declared and produced by nothing, so the engine re-executed
-> descriptor byte 0 for ever and `LRUN` never fell. Both are wired now and
-> `check:video` runs a list end to end — but ⚠ **the descriptor format is still not
-> designed**: every fetched byte is a `MOVE` that names no register and carries no
-> operand, and there is no scanline compare, so what runs is a byte-fetcher that stops
-> at `$FF`. Everything this section promises needs an opcode, an operand and a raster
-> compare. `graphics.md` §19 item 32,
-> [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.4.
+> ⭐ **IT RUNS, AND IT HAS A FORMAT — 2026-09-09.** It could do neither at the start of
+> that day: `LADV` was produced and read by nothing and `LGRANT` was declared and
+> produced by nothing, so the engine re-executed descriptor byte 0 for ever; and every
+> fetched byte was a `MOVE` naming no register, with no scanline compare anywhere.
+>
+> `graphics.md` §10.3.2 is the format — `MOVE reg, value` in two bytes, `WAIT` for the
+> next displayed line in one, `$FF` to end — and `check:video`'s `vspan_tb` runs a list
+> that moves `HSCROLL` twice, waits a line, and moves it again with an operand of `$FF`
+> to prove an operand is a value and not a terminator. **There is no raster compare and
+> there is no wait count**: waiting *n* lines is *n* `WAIT` bytes, which is one byte and
+> one fetch slot per line, and §10.3.2 has the arithmetic for why a counter is not worth
+> a product-term cascade on a part at 96 %.
 
 > ⚠ **It did not fit v1, and macrocells were not why** (`graphics.md` §10.1.6.2). Both
 > packages were fitted and both failed: PLCC-84 aborts with an internal fitter error;
@@ -560,7 +580,7 @@ majority of what a desktop actually moves.
 | `seqctl`'s logic | **one macrocell** — `WEN`, which is `RETIRE` except a transparent pixel in sprite mode. Three product terms. The part goes 7 → **8 of 10** |
 | `SPANEND` | one more term, because sprite mode ends on the cell width like mask mode |
 | ⚠ **`vctrl`'s pins** | **two.** `MASKBIT` in, `WEN` out — and `RETIRE` and `WEN` are two signals now where one did both jobs |
-| ⚠ **`vctrl`'s cells** | 121 → **122 of 128** |
+| ⚠ **`vctrl`'s cells** | 121 → 122 of the part's 128, as the fit then stood |
 
 > ⚠ **AND IT SPENT THE LAST TWO PINS ON THE PART.** `vctrl` was quoted at "64 of 64 I/O"
 > everywhere, and that number was never the whole story: an `ATF1508AS` PLCC-84 also has
@@ -641,12 +661,12 @@ brochure.
 | **Any depth but 8bpp** | No packed 1/2/4bpp modes. A 640×200 screen is 128,000 bytes whatever it contains, so full-screen operations cost the same for a two-colour image as for a photograph |
 | **Hardware sprites** | §8 — the pixel path has 11.7 ns of margin |
 | **Hardware cursor** | §9, same reason |
-| **Per-region mode mixing** | Cell/pixel is global — but ⭐ **the list engine switches it per scanline** (§4), and it is built |
+| **Per-region mode mixing** | Cell/pixel is global. ⛔ **The list engine cannot switch it** — `CTRL` is on `vctrl`, whose data pins tap the *backplane* bus and not the one a descriptor operand arrives on (`graphics.md` §10.3.4). A raster-interrupt handler can, at CPU cost (§4) |
 | **A hardware character generator** | ⚠ §2.2, dropped 2026-09-08 to afford the list engine. Text is the span writer at 13 writes/cell (§2.3), or cell mode at 1 write/cell where one colour pair will do (§2.4) |
 | **Colour image blits** | §5 — this is the blitter's whole remaining value |
 | **A border colour** | `BORDER` was deleted: VGA timing has no overscan, the porches must be black for the back-porch clamp, and the `'153` pixel mux has no spare input (`graphics.md` §9.3) |
-| **Palette writes during active display** | They snow. Write during blanking (§1.2) |
-| **Per-cell colour in tile mode** | The map byte is the whole cell, so 256 codes are 256 (glyph, colour) pairs. Colour is per *bank* — one register write, or per scanline region from the display list — never per cell (§2.4) |
+| **Palette writes during active display** | They snow — **three dots per committed entry**, measured. Write during blanking (§1.2); a display list can do it per scanline (§4) |
+| **Per-cell colour in tile mode** | The map byte is the whole cell, so 256 codes are 256 (glyph, colour) pairs. Colour is per *bank* — one register write from the CPU, ⚠ **not from the display list**, which reaches `HSCROLL` and nothing else (§4) — never per cell (§2.4) |
 | **Cell mode at 80×50 or 80×60** | The map's cell row is five bits, so cell mode reaches 32 rows. 640×400 and 640×480 text is the span writer's (`graphics.md` §6.4.1) |
 
 ---
@@ -659,7 +679,7 @@ These are capability questions, and `graphics.md` §19 does not carry them.
    `graphics.md` §14.2 delivers the mechanism — two ×16 SRAMs, one spare access per
    slot, one grant, four byte enables — giving **25.1 MB/s, a 300-pixel polygon
    crossover, a 5.1 ms full-screen clear and a 10.2 µs `SPANBUSY` bound**; the
-   2-grant arbiter and per-chip clocking rewrite is `graphics.md` §19 item 25's
+   2-grant arbiter and per-chip clocking rewrite is `graphics.md` §19 item 33's
    confirmation. The CPU-bound figures — most of them — do not depend on it.
 1. **⚠ Measure the store rate.** Every microsecond figure above scales on
    `graphics.md` §7.3's unverified 5-cycles-per-store. It is `graphics.md` §19 item 1

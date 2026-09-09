@@ -72,11 +72,20 @@ const dotWorld = (slot: number, ph: number, extra: Record<string, number> = {}) 
     /* seqph's, derived here rather than seeded: it is dot 3, and it is what
      * turns a window into a once-per-slot counter enable. */
     ["SLOTTICK", ph === 3 ? 1 : 0],
+    /* 5.2.2's spare half - dots 0 and 1. seqph forms it as !PH1. */
+    ["SPAREWIN", ph < 2 ? 1 : 0],
     /* A displayed line in the middle of the frame: not blanked, V even so the
      * doubled modes advance. The frame section below sweeps V properly. */
     ["VBLANK", 0], ["V0", 0], ["VMODE1", 1],
     ["TILEMODE", 1], ["SPNREQ", 0], ["SPNGRANT", 0],
     ["SPANBUSY", 0], ["RW", 1], ["A0", 0], ["A1", 0],
+    /* ⛔ LRUN WAS MISSING AND THIS FILE THREW RATHER THAN FAILED, from the
+     * day 10.3's engine became SPNREQ's second requester until 2026-09-09.
+     * It threw where nobody looked: check:cadence has a script of its own and
+     * was NOT in `npm run check`, so a whole-line cadence model sat broken
+     * while 400 other claims passed. It is in the suite now. No list is
+     * running in this world - the engine's slot accounting is vspan_tb's. */
+    ["LRUN", 0],
     ["MAPA0", 0], ["MAPA1", 0],
     /* arbDesign's raw CPU grants, renamed on merge (video.cpld.ts). */
     ["ACPU0", 0], ["ACPU1", 0], ["ACPU2", 0], ["ACPU3", 0],
@@ -99,8 +108,10 @@ for (let slot = 0; slot < SLOTS_PER_LINE; slot++) {
     return s.length ? [Math.min(...s), Math.max(...s)] : []
   }
   const [tf0, tf1] = span("TFETCH"), [mf0, mf1] = span("MFETCH")
-  check(tf0 === H.backEnd + 1 && tf1 === H.activeEnd,
-    `TFETCH is the active window, slots ${H.backEnd + 1}..${H.activeEnd}`, `${tf0}..${tf1}`)
+  /* 8.2: the window MOVED one slot earlier, it did not lengthen - 160 slots
+   * either way, because a cell is two of them and 161 misaligns every cell. */
+  check(tf0 === H.backEnd && tf1 === H.activeEnd - 1,
+    `TFETCH is the active window shifted one slot early, ${H.backEnd}..${H.activeEnd - 1} - 8.2's fetch lead`, `${tf0}..${tf1}`)
   check(mf0 === tf0! - 2 && mf1 === tf1! - 2,
     "MFETCH leads it by exactly one cell - two slots - which is 6.4.1's " +
     "\"pipelined one cell ahead\" and the reason MC exists", `${mf0}..${mf1}`)
@@ -156,7 +167,7 @@ for (let slot = 0; slot < SLOTS_PER_LINE; slot++) {
   check(mapld.length === MAP_COLS && mapld.every((d) => d.ph === 1),
     "MAPLD is one dot per cell and it is dot 1 - the boundary between 5.2.2's " +
     "spare half and the display fetch", `${mapld.length} pulses`)
-  const firstTile = H.backEnd + 1
+  const firstTile = H.backEnd
   const leadDots = (firstTile - mapld[0]!.slot) * DOTS_PER_SLOT - mapld[0]!.ph
   check(leadDots >= DOTS_PER_SLOT,
     `the map byte for a cell lands ${leadDots} dots before that cell's first ` +
@@ -206,14 +217,24 @@ for (let slot = 0; slot < SLOTS_PER_LINE; slot++) {
     "SRCSEL muxes each CHIP's source, so the CPU is independent but the map " +
     "fetch, the span writer and the display fetch are not", bad ?? "")
 
-  /* And the span writer is what stands down for it. */
+  /* And the span writer is what stands down for it.
+   *
+   * ⛔ DRIVE SPANBUSY, NOT SPNREQ. SPNREQ is a CELL here (`SPANBUSY & SPAREWIN
+   * # LRUN & SPAREWIN`), so seeding it into the world is overwritten on the
+   * first recompute pass - the request was 0 in both branches and "gated off"
+   * held vacuously. design-review2.md 10's rule, one more time: an input a
+   * check cannot actually drive is an input it cannot see a defect in. The
+   * span writer's request only exists in the spare half, so both filters carry
+   * ph < 2 as well. */
   const contended = line.filter((d) => d.v.get("MAPREQ") === 1 && d.ph < 2)
   const ok = contended.every((d) =>
-    dotWorld(d.slot, d.ph, { SPNREQ: 1 }).get("SPNREQG") === 0)
-  check(ok, "SPNREQ is gated off for the whole of a map slot - one gate, and " +
+    dotWorld(d.slot, d.ph, { SPANBUSY: 1 }).get("SPNREQG") === 0)
+  check(ok && contended.length > 0,
+    "SPNREQ is gated off for the whole of a map slot - one gate, and " +
     "arbDesign is left untouched and still checkable as a GAL22V10")
-  const free = line.filter((d) => d.v.get("MAPREQ") === 0 && d.v.get("MFETCH") === 1)
-  check(free.every((d) => dotWorld(d.slot, d.ph, { SPNREQ: 1 }).get("SPNREQG") === 1),
+  const free = line.filter((d) =>
+    d.v.get("MAPREQ") === 0 && d.v.get("MFETCH") === 1 && d.ph < 2)
+  check(free.length > 0 && free.every((d) => dotWorld(d.slot, d.ph, { SPANBUSY: 1 }).get("SPNREQG") === 1),
     "⚠ and only for a map slot - which is one slot in two, so cell mode costs " +
     "the span writer HALF its spare slots, not 6.4.2's \"roughly an eighth\" " +
     "(that figure is per-chip load, and it is separately right)")
@@ -231,7 +252,7 @@ for (let slot = 0; slot < SLOTS_PER_LINE; slot++) {
         ACPU2: cpuChip === 2 ? 1 : 0, ACPU3: cpuChip === 3 ? 1 : 0,
       }
       /* a dot inside a map slot's spare window */
-      const v = dotWorld(H.backEnd - 1, 0, extra)
+      const v = dotWorld(H.backEnd - 2, 0, extra)
       const granted = [0, 1, 2, 3].filter((n) => v.get(`GCPU${n}`) === 1)
       const held = v.get("MAPHOLD") === 1
       if (mapChip === cpuChip) {
@@ -249,7 +270,7 @@ for (let slot = 0; slot < SLOTS_PER_LINE; slot++) {
     "and raises MAPHOLD exactly there - 2.2's \"video before CPU\"", bad ?? "")
 
   /* /WAIT: 7.4's span backstop keeps its !RW; a map hold defeats it. */
-  const at = (o: Record<string, number>) => dotWorld(H.backEnd - 1, 0, o)
+  const at = (o: Record<string, number>) => dotWorld(H.backEnd - 2, 0, o)
   const same = { MAPA0: 0, MAPA1: 0, A0: 0, A1: 0 }
   const diff = { MAPA0: 1, MAPA1: 0, A0: 0, A1: 0 }
   const waits = (o: Record<string, number>) => {

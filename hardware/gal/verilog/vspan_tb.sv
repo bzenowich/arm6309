@@ -26,6 +26,12 @@ module vspan_tb;
   wire [18:0] WPTR;  wire [1:0] VMODE;  wire VBLANK, HBLANK;
   wire [7:0] RD_o;
 
+  wire [9:2] HSCR; wire LPH_o, LWAIT_o;   // 10.3.2's descriptor engine
+
+  // 9's palette, and 10.3.3's turnaround on the card's internal data bus.
+  wire [15:0] RGB; wire [7:0] PIDX;
+  wire PWE_o, PDOE_o, PIXOE_o, DBUS_FIGHT;
+
   video_card card (.*);
 
 
@@ -91,6 +97,8 @@ module vspan_tb;
   endtask
 
   int i, n, got;
+  int m, waited;
+  logic [7:0] hscr_before_wait;
   logic [7:0] b;
   logic [7:0] mask8 = 8'hB4;
 
@@ -227,22 +235,57 @@ module vspan_tb;
     $display("");
     $display("The display list - graphics.md 10.3, 10.3.1");
     $display("");
-    wreg('h00, 8'h80);          // WMODE 00
+    // 10.3.2's descriptor format, graphics.md 19 item 32. Three MOVEs, one
+    // WAIT and a terminator, in eight bytes:
+    //
+    //   $03 $55   MOVE HSCROLL, $55    HS7..HS2 = $55[7:2] = 6'b010101
+    //   $04 $02   MOVE HSCROLLH, $02   HS9:HS8  = $02[1:0] = 2'b10
+    //   $80       WAIT                 resume at the next HLOAD
+    //   $03 $FF   MOVE HSCROLL, $FF    ** AN OPERAND OF $FF IS A VALUE
+    //   $FF       END
+    wreg('h00, 8'h80);          // WMODE 00, display enabled
     wreg('h14, 8'h00);
-    for (i = 0; i < 8; i++) card.poke(8192 + i, 8'h20 + i[7:0]);
-    card.poke(8192 + 8, 8'hFF); // 10.3's terminator
+    card.poke(8192 + 0, 8'h03); card.poke(8192 + 1, 8'h55);
+    card.poke(8192 + 2, 8'h04); card.poke(8192 + 3, 8'h02);
+    card.poke(8192 + 4, 8'h80);
+    card.poke(8192 + 5, 8'h03); card.poke(8192 + 6, 8'hFF);
+    card.poke(8192 + 7, 8'hFF);
+    wreg('h03, 8'h00); wreg('h04, 8'h00);   // HSCROLL = 0 before the list runs
     set_wptr(8192);
     wreg('h0e, 8'h01);          // BCTRL.GO
-    n = 0;
-    for (i = 0; i < 20000; i++) begin
+    n = 0; m = 0; waited = 0; hscr_before_wait = 8'hxx;
+    for (i = 0; i < 40000; i++) begin
       @(posedge DOTCLK); #0;
       if (card.LMOVE) n++;
+      if (LWAIT_o) begin
+        waited = 1;
+        if (m == 0) begin hscr_before_wait = HSCR; m = 1; end
+      end
       if (i > 40 && !LRUN) break;
     end
     ok(LRUN == 1'b0, "BSTAT b0 LRUN falls when the engine meets the $FF terminator");
-    ok(n == 8, $sformatf("the engine executed one MOVE per data byte and none for the terminator (got %0d, want 8)", n));
-    ok(WPTR == 8192 + 9,
+    ok(n == 3, $sformatf("three MOVEs, one operand cycle each - the opcode bytes and the WAIT are not writes (got %0d)", n));
+    ok(waited == 1, "⭐ the WAIT opcode stalled the engine - LWAIT was asserted");
+    ok(hscr_before_wait == 8'h95,
+       $sformatf("and by then both MOVEs had landed: HSCROLL[9:2] = $95 (got $%02h)", hscr_before_wait));
+    ok(HSCR == 8'hBF,
+       $sformatf("⚠ an operand of $FF is a SCROLL VALUE and not a terminator: $BF after the third MOVE (got $%02h)", HSCR));
+    ok(WPTR == 8192 + 8,
        $sformatf("and it clobbered WPTR, which is 10.3.1's rule (got %0d)", WPTR));
+
+    // 19 item 24: the engine's walk is a plain +1 whatever WADV says.
+    wreg('h14, 8'h02);          // WADV = 10, vertical - the mode that broke it
+    card.poke(8192 + 0, 8'h03); card.poke(8192 + 1, 8'h11);
+    card.poke(8192 + 2, 8'hFF);
+    set_wptr(8192);
+    wreg('h0e, 8'h01);
+    for (i = 0; i < 40000; i++) begin
+      @(posedge DOTCLK); #0;
+      if (i > 40 && !LRUN) break;
+    end
+    ok(WPTR == 8192 + 3,
+       $sformatf("⭐ 19 item 24: a list started with WADV = 10 still steps by one, not by the 1,024 stride (got %0d)", WPTR));
+    wreg('h14, 8'h00);
 
     $display("");
     $display("One strobe per job - design-review2.md V-2");

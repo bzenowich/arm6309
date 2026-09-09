@@ -87,7 +87,18 @@ export const vaddrCpld: Merged = merge(
        * way: MAPA[1:0] = cellCol[1:0]. Two pins out, and three come back below
        * - V0..V2 are no longer imported at all. */
       "MAPA0", "MAPA1",
-      ...(WITH_LIST ? ["LRUN"] : []),  // BSTAT, and the arbiter's third requester
+      /* ⚠ 10.3 EXPORTS NOTHING FROM THIS PART SINCE 2026-09-09. LRUN and LWHSL
+       * were both here; the engine's descriptor half is on vsup now and this
+       * part keeps only WPTR's increment, so the three signals cross the other
+       * way - LADV in for WINC, LWHSL and LWHSH in for 8's scroll holds.
+       *
+       * ⛔ AND IT WAS FAN-IN THAT MOVED IT, not macrocells and not pins. This
+       * part fits at 124 of 128 cells with LAB FAN-IN AT 40 OF 40 IN EVERY
+       * BLOCK - the ATF1508AS switch matrix's limit - and on 2026-09-09 three
+       * separate one-literal changes to the engine were refused: two with
+       * "Grouping fail / Design does not fit" and one with "INTERNAL ERROR".
+       * Each time cpld/vaddr.fit was left at the previous run's contents, so
+       * the md5 comparison is the only thing that saw it. */
       /* 7.2's reload walk, to rfa - which points the register file at WPTR's
        * own bytes for the two dots it lasts. */
       "RP0", "RP1",

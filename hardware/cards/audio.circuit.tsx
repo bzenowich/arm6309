@@ -1,5 +1,8 @@
 /* Audio card - 4-channel 8-bit PCM, Paula-exact, with programmable per-channel
- * panning. 31 ICs, audio/docs/audio.md 10.
+ * panning. 39 ICs, audio/docs/audio.md 10 - and that number moved from 32 on
+ * 2026-09-09, when the sequencer was enumerated (10.2) and turned out to be a
+ * SECOND ATF1508AS plus six datapath packages the chip budget had never
+ * counted. It is an enumeration and not a fit; 16 item 00 is what closes it.
  *
  * Bus interface only. The card's own document is the specification and its
  * 15 step 0 is "freeze the register map", which is ahead of any board.
@@ -12,7 +15,7 @@
 import { Card } from "../lib/Card"
 
 export default () => (
-  <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} length={180} icBudget={32}>
+  <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} length={240} icBudget={45}>
     {/* Y1 - not the backplane's 25.175 MHz. machine.md 1's one-master rule has
       * exactly one exception and this is it. */}
     <crystal
@@ -24,7 +27,8 @@ export default () => (
     />
 
     {/* U1 - ALL of the card's logic, audio.md 10.1. This was five GAL22V10s
-      * when the card was drawn and it is one ATF1508AS now, for a reason that
+      * when the card was drawn and it is TWO ATF1508AS now (10.1, 10.2 - and
+      * only U1 is drawn here), for a reason that
       * is not package-count: 9.5's interrupt block does not fit a GAL22V10
       * whole (13 equations, 10 macrocells) or split (17 inputs, 14 pins), so
       * the GAL allocation was six and rising. The part also absorbs the '273,
@@ -32,8 +36,9 @@ export default () => (
       * ATF1508AS output has a programmable open-collector option and 8.1 needs
       * the wire-OR a GAL's totem-pole pin cannot do.
       *
-      * hardware/gal/cpld/audio.jed is the fitted device: 74,136 fuses, 79 of
-      * 128 logic cells, 50 of 64 I/O. Pin numbers below are the ones the
+      * hardware/gal/cpld/audio.jed is the fitted device: 89 of 128 logic
+      * cells, 57 of 64 I/O, refitted 2026-09-09 with 9.1's decode and 9.3's
+      * read-back path, neither of which had ever been built. Pin numbers below are the ones the
       * fitter chose and they are NOT settled - audio.md 10.1 keeps the
       * datapath pinout open, and fit1508.sh is run with -preassign ignore, so
       * every refit may move them. Only the two the fitter cannot move are

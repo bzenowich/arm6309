@@ -25,6 +25,7 @@ PIN = DOTCLK ;
 PIN = !RESET ;
 PIN = VSTATWR ;
 PIN = TC ;
+PIN = LRUN ;
 PIN = !IOPAGE ;
 PIN = A0 ;
 PIN = A1 ;
@@ -43,7 +44,6 @@ PIN = RW ;
 PIN = LDHS ;
 PIN = LDADV ;
 PIN = D2 ;
-PIN = LRUN ;
 PIN = MAPA0 ;
 PIN = MAPA1 ;
 PIN = A19 ;
@@ -134,7 +134,11 @@ PINNODE = SR1 ;
 PINNODE = SR0 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * VTC, SLOTTICK, SPAREWIN, SPANEND, ACPU0, ACPU1, ACPU2, ACPU3, SPNGRANT, M0, HPOL, TILEMODE, WSTBV, TFETCH, MFETCH, HEND, MAPREQ, MAPSEL, TILESEL, LINEAR, SPNREQG, SPNREQ, SPNTICK, GMAP0, GMAP1, GMAP2, GMAP3, MAPHOLD, WAITSRC, WAITRW */
+ * VTC, SLOTTICK, SPAREWIN, SPANEND, ACPU0, ACPU1, ACPU2, ACPU3
+ * SPNGRANT, M0, HPOL, TILEMODE, WSTBV, TFETCH, MFETCH, HEND, MAPREQ
+ * MAPSEL, TILESEL, LINEAR, SPNREQG, SPNREQ, SPNTICK, GMAP0, GMAP1
+ * GMAP2, GMAP3, MAPHOLD, WAITSRC, WAITRW
+ */
 
 /* --- equations ---------------------------------------------------- */
 H0.d = SLOTTICK & !H0
@@ -343,17 +347,12 @@ IRQ.oe = VBLPEND & IRQEN ;
 PH0.d = !PH0 ;
 PH1.d = PH1 & !PH0
         # !PH1 & PH0 ;
-SLOTTICK = PH1 & PH0 ;
+SLOTTICK = !PH1 & !PH0 ;
 SPAREWIN = !PH1 ;
-FCLK0 = PH1 & PH0 & !HS0 & !HS1
-        # !PH1 & !PH0 & HS0
-        # !PH1 & !PH0 & HS1 ;
-FCLK1 = PH1 & PH0 & !HS1
-        # !PH1 & !PH0 & HS1 ;
-FCLK2 = !PH1 & !PH0 & HS0 & HS1
-        # PH1 & PH0 & !HS1
-        # PH1 & PH0 & !HS0 ;
-FCLK3 = PH1 & PH0 ;
+FCLK0 = !PH1 & !PH0 ;
+FCLK1 = !PH1 & !PH0 ;
+FCLK2 = !PH1 & !PH0 ;
+FCLK3 = !PH1 & !PH0 ;
 MUXSEL0 = PH0 & !HS0
           # !PH0 & HS0 ;
 MUXSEL1 = PH1 & !HS1 & !PH0
@@ -381,8 +380,8 @@ SPANEND = RETIRE & !WM1 & !WM0
 WEN = RETIRE & !WM1
       # RETIRE & !WM0
       # RETIRE & MASKBIT ;
-WROWADV = SPANEND & WADV0
-          # SPANEND & WADV1 ;
+WROWADV = SPANEND & WADV0 & !LRUN
+          # SPANEND & WADV1 & !LRUN ;
 ACPU0 = VRAMSEL & !IOPAGE & !A0 & !A1 ;
 GSPN0 = SPNREQG & !SPNA0 & !SPNA1 & !VRAMSEL
         # SPNREQG & !SPNA0 & !SPNA1 & IOPAGE
@@ -464,29 +463,32 @@ SR0.d = WSTBV & D0
 MASKBIT = WM1 & !WM0
           # SR7 & !WM1
           # SR7 & WM0 ;
-TFETCH = H5 & H2
-         # H5 & H3
-         # H5 & H4
-         # !H7 & H6
-         # H7 & !H6
-         # H6 & !H2 ;
-MFETCH = H5 & H1
+TFETCH = H5 & H1 & H0
          # H5 & H2
          # H5 & H3
          # H5 & H4
          # !H7 & H6
          # H7 & !H6
-         # H6 & !H2 & !H1 ;
+         # H6 & !H2 & !H1
+         # H6 & !H2 & !H0 ;
+MFETCH = H5 & H0
+         # H5 & H1
+         # H5 & H2
+         # H5 & H3
+         # H5 & H4
+         # !H7 & H6
+         # H7 & !H6
+         # H6 & !H2 & !H1 & !H0 ;
 FETCH = TFETCH & SLOTTICK ;
 HLOAD = !H7 & !H6 & !H5
-        # !H7 & !H6 & !H4 & !H3 & !H2 & !H1 ;
+        # !H7 & !H6 & !H4 & !H3 & !H2 & !H1 & !H0 ;
 HEND = H7 & H6 & H2 & H1 & H0 ;
 ROWADV = !VBLANK & HEND & SLOTTICK & VMODE1
          # !VBLANK & HEND & SLOTTICK & !V0 ;
-MAPREQ = TILEMODE & MFETCH & !H0 ;
-MCADV = TILEMODE & MFETCH & H0 & SLOTTICK ;
+MAPREQ = TILEMODE & MFETCH & H0 ;
+MCADV = TILEMODE & MFETCH & !H0 & SLOTTICK ;
 MAPLD = MAPREQ & !PH1 & PH0 ;
-CELLTICK = TILEMODE & MFETCH & H0 & SLOTTICK ;
+CELLTICK = TILEMODE & MFETCH & !H0 & SLOTTICK ;
 MAPSEL = MAPREQ & !PH1 ;
 TILESEL = TILEMODE & PH1 & !SPNGRANT ;
 LINEAR = !TILEMODE & PH1 & !SPNGRANT ;

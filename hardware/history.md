@@ -8,6 +8,84 @@ kept verbatim or lightly trimmed, because the archive is the record.
 
 ---
 
+## `ram.md` §3.1 — "Isolation `'245`: 0 — both SRAMs sit on the same `D0`–`D7`" (2026-09-09)
+
+§3.1's cost table for the second map SRAM carried this row:
+
+> | Isolation `'245` | **0** — both SRAMs sit on the same `D0`–`D7`; the address picks which is written |
+
+and the "Address path alone" line below it read **"9 ICs → 10 — §8 has the whole
+motherboard at 17"**. §8's own table had a matching row, *"U3 high-byte write strobe: 0 —
+pin 23 is free"*, and `mainboard.circuit.tsx` was drawn to the table: U1B's `DQ0`–`DQ3`
+went to physical `A24`–`A21`, `DQ4`–`DQ7` were `noConnect`, and **no pin of the high map
+SRAM touched `D0`–`D7` anywhere on the board.**
+
+**Two common-I/O SRAMs cannot share one buffer.** A common-I/O SRAM drives its own `DQ`
+pins for the whole of every translation, because on this board those pins *are* the
+physical address. So the two parts are two separate nodes — `A20`–`A13` and `A24`–`A21`
+— and twelve bits of map entry need twelve bits of buffer where a `'245` has eight.
+
+⛔ **The consequence is `design-review2.md` M-1's own, surviving M-1's own repair.** M-1
+was diagnosed as a decode fault — `LA3` doing two jobs — and repaired into §4.3's two
+windows, and the high byte of every map register stayed **unwritable and unreadable**
+because there was nothing to write it through. Everything above physical 2 MB was still
+out of reach.
+
+**Repaired at +1 IC (U18) and U3's last pin (`ISOOE_HI`).** ⚠ And it narrowed U6: see
+the `clkdec.pld` entry below.
+
+## `gal/README.md` / `ram.md` §11 item 5 — U3 pin 23 as a spare input (2026-09-09)
+
+The pin budget chose the row *"6 outputs, 16 available inputs, 15 needed, one pin
+spare"*, and `mmu.jedec.ts` left pin 23 undriven on purpose so the macrocell held it at
+high-Z:
+
+> **PIN 23 IS DELIBERATELY NOT DECLARED**, and that is two spare INPUTS rather than two
+> driven lows… Undriven, the macrocell holds the pin at high-Z and it is a sixteenth
+> input if the board ever wants one.
+
+`ram.md` §11 item 5 closed on the same reasoning: *"U3 needs no second write strobe and
+is untouched… pin 23 stays a spare **input**."* That is still true of a write **strobe**
+and it was never true of an output **enable**. The part takes the budget's other row now
+— **7 outputs, 15 available inputs, 15 needed, nothing left** — and **U3 is full.**
+
+## `gal/clkdec.pld` — `BOOTOE` as the complement of the map-SRAM chip-enable UNION (2026-09-09)
+
+Fixed the same morning as `design-review2.md` M-2 and M-3, and wrong by lunchtime:
+
+```
+mapsel = RUN & !IOPAGE                       /* translating                  */
+       # IOPAGE & LA7 & !LA6 &  LA5 & !LA4   /* $FFA0-$FFAF, the low byte    */
+       # IOPAGE & LA7 & !LA6 & !LA5 &  LA4 ; /* $FF90-$FF9F, the high byte   */
+!BOOTOE = mapsel ;
+```
+
+described as *"the '244 drives physical `A20`–`A13` exactly when the map SRAMs do not"*,
+at three product terms.
+
+⚠ **It is a rule about a NET, written about a PART.** Physical `A20`–`A13` has exactly
+two drivers: U1, and this buffer. U1B drives `A24`–`A21` and those never leave the board.
+The union was correct only while **one** `'245` served both windows, because that buffer
+then drove `A20`–`A13` during a high-byte write as well. The moment U4 shut for the high
+window, the union left `A20`–`A13` with **no driver at all** for the sixteen high-byte
+writes of every boot — M-2 again, in a narrower window. `mainboard_tb` reported it as
+*"16 of 32"*.
+
+It is `MAPCE_LO` alone now, at **two** product terms, and the rule is stated about the
+net: ⭐ **the buffer drives a net exactly when that net's other driver does not.**
+
+## `ram.md` §11 item 3 — "Layout A or B… the only genuinely open part of §3" (2026-09-09)
+
+> 3. **⚠ Layout A or B** (§4) — a NitrOS-9 cost question, not a hardware one, and
+>    the only genuinely open part of §3.
+
+Superseded by §4.3's Layout C, and the item's own framing is the thing worth keeping:
+calling it *"a cost question, not a hardware one"* is what let the board take Layout B's
+index and Layout A's byte select, which is neither, and put everything above physical
+2 MB out of reach. [`../docs/design-review2.md`](../docs/design-review2.md) §3.3.
+
+---
+
 ## `ram.md` §6.3 — "refresh needs no counter", and the package that hid behind it (2026-09-09)
 
 The bank's parts list was **+5 ICs**: four sockets, U9, U10 and three `'157`. Under it:

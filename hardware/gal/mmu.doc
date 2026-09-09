@@ -1,26 +1,28 @@
 mmu - ARM6309-U3, U3, motherboard
-GAL22V10, 5892 fuses, checksum 6b14
+GAL22V10, 5892 fuses, checksum 7059
 
   pin  signal      terms  of   path           polarity
   ---  ----------  -----  ---  -------------  ------------------
    17  IOPAGE          1   14  combinational  pin is complement
    18  MUXSEL          2   16  combinational  pin follows terms
-   19  ISOOE           2   16  combinational  pin is complement
+   19  ISOOE_LO        1   16  combinational  pin is complement
    20  MAPWE           2   14  combinational  pin is complement
    21  MAPOE           6   12  combinational  pin follows terms
    22  CTRLCP          1   10  combinational  pin is complement
-   23  (spare)         -    8  undriven       usable as an input
+   23  ISOOE_HI        1    8  combinational  pin is complement
 
+  ISOOE_LO: U4, the low byte's '245 - $FFA0-$FFAF only
   MAPOE: implemented complemented: 6 terms rather than 10
+  ISOOE_HI: U18, the high byte's '245 - $FF90-$FF9F only
 
-  6 outputs, 4 macrocells not driven.
-  Inputs: 15 used of 16 available (12 dedicated, 4 free macrocells) - 1 spare.
+  7 outputs, 3 macrocells not driven.
+  Inputs: 15 used of 15 available (12 dedicated, 3 free macrocells) - 0 spare.
 
   fuse map - 0 is an intact link, so an all-zero row is never true
 
   L0000 00000000000000000000000000000000000000000000  AR  asynchronous reset  (never)
-  L0044 00000000000000000000000000000000000000000000  pin 23 OE  (never)
-  L0088 00000000000000000000000000000000000000000000  pin 23 term 0  (never)
+  L0044 11111111111111111111111111111111111111111111  pin 23 OE  (always)
+  L0088 01110111011101110111011101110111011110011001  pin 23 term 0
   L0132 00000000000000000000000000000000000000000000  pin 23 term 1  (never)
   L0176 00000000000000000000000000000000000000000000  pin 23 term 2  (never)
   L0220 00000000000000000000000000000000000000000000  pin 23 term 3  (never)
@@ -68,8 +70,8 @@ GAL22V10, 5892 fuses, checksum 6b14
   L2068 00000000000000000000000000000000000000000000  pin 20 term 12  (never)
   L2112 00000000000000000000000000000000000000000000  pin 20 term 13  (never)
   L2156 11111111111111111111111111111111111111111111  pin 19 OE  (always)
-  L2200 01110111011101110111011101110111011110011001  pin 19 term 0
-  L2244 01110111011101110111011101110111011110010110  pin 19 term 1
+  L2200 01110111011101110111011101110111011110010110  pin 19 term 0
+  L2244 00000000000000000000000000000000000000000000  pin 19 term 1  (never)
   L2288 00000000000000000000000000000000000000000000  pin 19 term 2  (never)
   L2332 00000000000000000000000000000000000000000000  pin 19 term 3  (never)
   L2376 00000000000000000000000000000000000000000000  pin 19 term 4  (never)
@@ -150,5 +152,5 @@ GAL22V10, 5892 fuses, checksum 6b14
   L5676 00000000000000000000000000000000000000000000  pin 14 term 6  (never)
   L5720 00000000000000000000000000000000000000000000  pin 14 term 7  (never)
   L5764 00000000000000000000000000000000000000000000  SP  synchronous preset  (never)
-  L5808 11011101011101111111  S0,S1 per macrocell, pin 14 first
+  L5808 01011101011101111111  S0,S1 per macrocell, pin 14 first
   L5828 0100000100110110001100110011000000111001010101010011001100000000  user signature "A6309U3"

@@ -32,6 +32,7 @@ const drive = (io: SpanIn): Record<number, 0 | 1> => ({
   8: (io.wadv & 1) as 0 | 1, 9: ((io.wadv >> 1) & 1) as 0 | 1,
   10: io.maskbit ? 1 : 0,
   13: io.spntick === false ? 0 : 1,
+  11: io.lrun ? 1 : 0,
 })
 const readState = (): SpanState => ({
   busy: gal.regs.get(pin("SPANBUSY"))! as 0 | 1,
@@ -57,16 +58,45 @@ const readState = (): SpanState => ({
   void busy
 }
 
+/* -- 19 item 24: the list engine's walk is a plain +1 -------------------- */
+{
+  /* 10.3.1 shares WPTR between the span writer and the list engine, and 13's
+   * +$14 changes what an increment does. A driver that leaves WADV in vertical
+   * mode and then starts a list would have the engine step by the 1,024-byte
+   * stride instead of by one descriptor. The gate is on WROWADV, which is the
+   * only signal WADV acts through. */
+  const at = (wadv: number, lrun: boolean) => {
+    gal.reset()
+    gal.regs.set(pin("SPANBUSY"), 1)
+    for (const n of ["MC0", "MC1", "MC2"]) gal.regs.set(pin(n), 1)
+    /* busy, at the last byte, with the grant and the tick: this is SPANEND. */
+    return gal.evaluate(drive({
+      wstb: false, wmode: 1, spngrant: true, tc: true, wadv, spntick: true,
+      maskbit: true, lrun,
+    }))[pin("WROWADV")]
+  }
+  check(at(1, false) === 1 && at(2, false) === 1,
+    "WADV 01 and 10 advance WPTR's row at span end - unchanged with no list running")
+  check(at(1, true) === 0 && at(2, true) === 0,
+    "\u2b50 and neither does while LRUN: 19 item 24, so a list started with WADV left in vertical mode still walks by one")
+  check(at(0, false) === 0 && at(0, true) === 0,
+    "WADV 00 advances nothing either way - the gate adds no case of its own")
+}
+
 /* -- exhaustive over every state and every input ------------------------- */
 {
   let bad: string | null = null
   for (let st = 0; st < 16 && !bad; st++) {
-    for (let inb = 0; inb < 256 && !bad; inb++) {
+    for (let inb = 0; inb < 512 && !bad; inb++) {
       const s: SpanState = { busy: (st & 1) as 0 | 1, mc: st >> 1 }
       const io: SpanIn = {
         wstb: !!(inb & 1), spngrant: !!(inb & 2), tc: !!(inb & 4),
         wmode: (inb >> 3) & 3, wadv: (inb >> 5) & 3,
         maskbit: !!(inb & 128),
+        /* 19 item 24. Swept rather than held at 0, because design-review2.md
+         * 10's own lesson is that an input a check pins to a constant is an
+         * input the check cannot see a defect in. */
+        lrun: !!(inb & 256),
       }
       /* force the part into this state */
       gal.reset()
@@ -93,7 +123,7 @@ const readState = (): SpanState => ({
     }
   }
   check(bad === null,
-    "the fuses match the state machine over all 16 states x 256 input combinations", bad ?? "")
+    "the fuses match the state machine over all 16 states x 512 input combinations", bad ?? "")
 }
 
 /* -- a span, run end to end, in each mode --------------------------------- */

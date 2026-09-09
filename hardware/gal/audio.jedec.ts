@@ -36,19 +36,15 @@ const aseqCells: Cell[] = [
   { pin: 0, name: "TMRSLOT", assertedLow: false, s0: 1, registered: false, terms: ["S2 & !S1 & !S0"] },
   { pin: 0, name: "HOSTSLOT", assertedLow: false, s0: 1, registered: false, terms: ["S2 & !S1 & S0"] },
   { pin: 0, name: "DEFSLOT", assertedLow: false, s0: 1, registered: false, terms: ["S2 & S1"] },
-  /* The deferred-work queue. §3.1 gives it a 56x margin: at most 126,000
-   * pointer updates a second against 7.1 M deferred slots. */
-  { pin: 0, name: "DEFREQ", assertedLow: false, s0: 1, registered: true,
-    terms: ["NEWREQ", "DEFREQ & !DEFACK"] },
-  { pin: 0, name: "DEFACK", assertedLow: false, s0: 1, registered: false,
-    terms: ["DEFREQ & S2 & S1"] },
+  /* ⚠ The deferred-work queue moved to U2 on 2026-09-09 - it is the work
+   * scheduler of 10.2.3 and it needs the microprogram beside it. */
 ]
 const aseqPins = place(aseqCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
 export const aseqDesign: Design = {
   name: "aseq", partNo: "ARM6309-UA1", location: "audio card - slot sequencer",
   supersededBy: "audio.md 10.1 - the audio card is 1 x ATF1508AS",
   signature: "A6309A1", clockPin: 1,
-  inputs: [{ name: "RESET", pin: 2, activeLow: true }, { name: "NEWREQ", pin: 3 }],
+  inputs: [{ name: "RESET", pin: 2, activeLow: true }],
   cells: aseqCells.map((c) => ({ ...c, pin: aseqPins[c.name] })), ar: "RESET",
 }
 
@@ -66,10 +62,18 @@ const adecCells: Cell[] = [
   { pin: 0, name: "WCTRL", assertedLow: false, s0: 1, registered: false, terms: [`${reg(0x5)} & !RW`] },
   { pin: 0, name: "RINTREQ", assertedLow: false, s0: 1, registered: false, terms: [`${reg(0x4)} & RW`] },
   { pin: 0, name: "RASTAT", assertedLow: false, s0: 1, registered: false, terms: [`${reg(0xa)} & RW`] },
-  { pin: 0, name: "SFCE", assertedLow: true, s0: 0, registered: false, terms: [`${reg(0x1)}`] },
-  { pin: 0, name: "SRCE", assertedLow: true, s0: 0, registered: false, terms: [`${reg(0x9)}`] },
-  /* One pulse per host access, for the two-flop synchronisers of §9.4.4. */
-  { pin: 0, name: "HOSTREQ", assertedLow: false, s0: 1, registered: false, terms: ["SEL & E"] },
+  /* HOST ACCESS REQUESTS, NOT CHIP ENABLES. These were `SFCE`/`SRCE`, active
+   * low, until 2026-09-09 - two names that read as "state-file chip enable"
+   * and "sample-RAM chip enable" on a card whose sequencer drives both
+   * memories every slot. Two drivers on one /CE is design-review2.md V-2's
+   * shape exactly (one name, two meanings), so they are renamed to what they
+   * are: the host is asking for an access, and the sequencer retires it in
+   * slot 5 (audio.md 9.3). Active high, because nothing downstream of them is
+   * a memory pin. */
+  /* ⚠ `HSFREQ`, `HSRREQ` and `HOSTREQ` left on 2026-09-09. U2 decodes +$1 and
+   * +$9 for itself out of the offset it latches at 9.4.4's leading edge, which
+   * is the only capture on the card that happens while the address is still
+   * there. audio.md 10.2. */
 ]
 const adecPins = place(adecCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
 export const adecDesign: Design = {

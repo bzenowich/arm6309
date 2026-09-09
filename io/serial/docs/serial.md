@@ -53,7 +53,7 @@ nobody has measured yet. §5.
 **Net: 3 ICs**, against PS/2's 11 (`ps2.md` §9), audio's (`audio.md` §10) and the video
 card's (`graphics.md` §14).
 
-> ⭐ **The card is 3 ICs and 115,200 baud, and the part is a `TL16C550C`** — §9.1,
+> ⭐ **The serial section is 3 ICs and 115,200 baud, and the part is a `TL16C550C`** — §9.1,
 > decided 2026-09-09. **§3 and §5 are written against the 6551 and are the reasoning
 > that produced that change, not the card**: read them for the argument and §7, §9 and
 > §10 for the design. §13 item 7's ring buffer is the one tier still open.
@@ -764,9 +764,14 @@ which is §2's modem row.
 > null-modem crossover** (2↔3, 7↔8 for `/RTS`/`/CTS`, 5 straight through), and the bench
 > should have one before §12 step 5. A straight-through cable is for the modem.
 
-> **Full modem control needs a second package.** `/DTR` out plus `/DCD` and `/DSR` in do
+> ⚠ **"The card" here means the SERIAL SECTION, not a card.** PS/2 and serial were
+separate cards until 2026-09-08 and this document still carried the older word; they
+are one **I/O card of 14 ICs** now (`hardware/place/parts.ts`, `ps2.md` §9 + §9 here).
+Counts in this file are the section's contribution.
+
+**Full modem control needs a second package.** `/DTR` out plus `/DCD` and `/DSR` in do
 > not fit the first `MAX232`'s two-and-two. Add a second `MAX232` (or one `MAX238`) **if
-> §2's modem row matters**, and the card is 4 ICs.
+> §2's modem row matters**, and the serial section is 4 ICs.
 >
 > ⚠ **If they are left off, tie the 6551's `/DCD` and `/DSR` inputs *low* (asserted), not
 > high.** They are active-low "the far end is there" inputs; deasserting them can leave the

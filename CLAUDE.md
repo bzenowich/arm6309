@@ -106,7 +106,7 @@ matrix, product-term cascading and placement are `fit1508.exe`'s business and
 phase *at all* is logic, not delay, and this model does see that — which is
 where two of `design-review2.md`'s findings came from.
 
-### Three traps this repository has already paid for
+### Five traps this repository has already paid for
 
 - **A failed CPLD fit leaves the previous `.fit` in place.** A stale
   utilisation report reads exactly like a passing one. Compare the file's hash
@@ -119,3 +119,21 @@ where two of `design-review2.md`'s findings came from.
 - **A check that holds an input constant cannot see a defect in it**, and a
   model that ORs its drivers cannot see a bus fight. Both cost a real defect on
   2026-09-09; `design-review2.md` §10 has them.
+- **A model that is more capable than the hardware cannot fail.** `mainboard.v`
+  wrote the high map byte into `map_hi` from `dout` — through a wire
+  `mainboard.circuit.tsx` does not have — so `mainboard_tb` verified a register
+  the machine could not reach, and **M-1 was closed twice**. The netlist is the
+  arbiter of what exists; a Verilog model is a model of the *design*, and the
+  two are the same thing only if something checks it. ⚠ **A stub check is not
+  the fix** — U1B's `DQ` pins were never dangling, they were on a net with three
+  other parts and connected to the wrong one. `lib/netlist.check.ts` asserts
+  **reachability**: every data pin on every memory or register part reaches
+  `D0`–`D7`, across a buffer or directly.
+- **A hang is worse than a failure.** `vsync_tb` waited on
+  `SLOTTICK == 0 && PH == 0`; `SLOTTICK` later moved phase, the conjunction
+  became unsatisfiable, and the `forever` spun for half an hour. **`run.sh`'s
+  exit code cannot see a hang and the claim count cannot see it** — it presents
+  as "budget more time", which is exactly how it was misdiagnosed. Every
+  unbounded wait in a testbench carries an iteration bound and calls
+  `ok(0, …)` on exhaustion; the bounds are themselves claims, and adding them
+  took `vsync_tb` from 26 to 37.

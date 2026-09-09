@@ -140,13 +140,24 @@ export const clkdecDesign: Design = {
      * IMPLEMENTED COMPLEMENTED, like mmu.jedec.ts's MAPOE: the pin is active
      * low and S0 = 1, so the macrocell forms "a map SRAM is selected" in three
      * terms where the asserted form is nine. Pin 14 holds eight. */
+    /* ⚠ AND IT IS THE **LOW** CHIP ENABLE, NOT THE UNION - 2026-09-09, in the
+     * same pass that gave the high map byte a data path. Only U1, the LOW map
+     * SRAM, drives physical A20-A13; U1B drives A24-A21, which never leave the
+     * board. The union was right while ONE '245 served both windows, because
+     * that buffer then drove A20-A13 during a high-byte write. With U4 shut
+     * for the high window (mmu.jedec.ts) the union left A20-A13 with no driver
+     * at all for the sixteen high-byte writes of every boot - M-2 again, in a
+     * narrower window, and mainboard_tb caught it as "16 of 32".
+     *
+     * ⭐ It is one product term FEWER, and it is the same rule stated more
+     * exactly: THE BUFFER DRIVES A NET EXACTLY WHEN THAT NET'S OTHER DRIVER
+     * DOES NOT. */
     {
       pin: 14, name: "BOOTOE", assertedLow: true, s0: 1,
-      why: "implemented complemented: the 3-term MAPCE union, not its 9-term negation",
+      why: "implemented complemented: the 2-term MAPCE_LO condition, not its negation",
       terms: [
         "RUN & !IOPAGE",
         "IOPAGE & LA7 & !LA6 & LA5 & !LA4",
-        "IOPAGE & LA7 & !LA6 & !LA5 & LA4",
       ],
     },
   ],

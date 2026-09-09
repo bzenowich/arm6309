@@ -10,8 +10,8 @@
 set -e
 cd "$(dirname "$0")"
 V="verilator --binary --timing -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC"
-CARD="video_card.v vctrl.v vaddr.v rfa.v vlen.v"
-TBS=${TBS:-"vsync vaddr vtile vspan audio mainboard"}
+CARD="video_card.v vctrl.v vaddr.v vsup.v"
+TBS=${TBS:-"vsync vaddr vtile vspan vpal audio mainboard"}
 out=$(mktemp)
 trap 'rm -f "$out"' EXIT
 

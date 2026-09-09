@@ -14,7 +14,8 @@
  * "Exhaustively" is the whole 16-bit address space x 4 quadrature phases x
  * R/W - 524,288 evaluations, which is nothing. There is no sampling here.
  *
- * Keep in step with mmu.pld by hand. Seven equations.
+ * Keep in step with mmu.pld by hand. Eight equations since 2026-09-09,
+ * when the isolation enable split in two - see Out.isooeLo/isooeHi.
  */
 
 /* -- the four quadrature phases, in the order a cycle visits them -------- */
@@ -29,7 +30,15 @@ export const PHASES = [
 export interface Out {
   iopage: boolean   // asserted (the pin is inverted)
   muxsel: boolean
-  isooe: boolean    // asserted
+  /* ⛔ TWO ISOLATION ENABLES SINCE 2026-09-09, one per map SRAM. A common-I/O
+   * SRAM drives its own DQ pins for the whole of every translation, so the two
+   * map bytes cannot share one '245 - and the board's answer until today was
+   * to connect the high SRAM's data to NOTHING, which made the high byte
+   * unwritable on silicon while the simulation wrote it happily.
+   * design-review2.md M-1, second half. */
+  isooeLo: boolean  // asserted - U4, $FFA0-$FFAF
+  isooeHi: boolean  // asserted - U18, $FF90-$FF9F
+  isooe: boolean    // asserted - either, which is what the orderings are about
   mapwe: boolean    // asserted
   mapoe: boolean    // asserted
   ctrlcp: boolean   // the PIN level, not the term - high is the idle state
@@ -51,6 +60,8 @@ export const mmu = (la: number, e: number, q: number, rw: number): Out => {
   return {
     iopage,
     muxsel: blksel,
+    isooeLo: blklo && !!e,
+    isooeHi: blkhi && !!e,
     isooe: blksel && !!e,
     mapwe: blksel && !rw && !!e && !q,
     mapoe: !iopage || (blksel && !!rw && !!e),

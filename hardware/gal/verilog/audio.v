@@ -8,27 +8,21 @@
 module audio (
     input  wire SLOTCLK,
     input  wire RESET,
-    input  wire SEL,
     input  wire A0,
     input  wire A1,
     input  wire A2,
     input  wire A3,
     input  wire RW,
     input  wire E,
-    input  wire D0,
-    input  wire D1,
-    input  wire D2,
-    input  wire D3,
-    input  wire D7,
-    input  wire D4,
-    input  wire D5,
-    input  wire SET0,
-    input  wire SET1,
-    input  wire SET2,
-    input  wire SET3,
-    input  wire SET4,
-    input  wire SET5,
-    input  wire D6,
+    input  wire SETC,
+    input  wire SETB,
+    input  wire SETA,
+    input  wire IOSEL,
+    input  wire A6,
+    input  wire A5,
+    input  wire A4,
+    input  wire PWBUSY,
+    input  wire PFVALID,
     output wire S0,
     output wire S1,
     output wire S2,
@@ -37,8 +31,6 @@ module audio (
     output wire TMRSLOT,
     output wire HOSTSLOT,
     output wire DEFSLOT,
-    output wire DEFREQ,
-    output wire DEFACK,
     output wire WAIDX,
     output wire WDMACON,
     output wire WINTENA,
@@ -46,9 +38,6 @@ module audio (
     output wire WCTRL,
     output wire RINTREQ,
     output wire RASTAT,
-    output wire SFCE,
-    output wire SRCE,
-    output wire HOSTREQ,
     output wire DMAEN0,
     output wire DMAEN1,
     output wire DMAEN2,
@@ -84,22 +73,40 @@ module audio (
     output wire CTRL5,
     output wire CTRL6,
     output wire CTRL7,
-    output wire SYNCH1,
-    output wire SYNCH2,
+    output wire SET0,
+    output wire SET1,
+    output wire SET2,
+    output wire SET3,
+    output wire SET4,
+    output wire SET5,
     output wire SYNCR1,
     output wire SYNCR2,
-    output wire SYNCS1,
-    output wire SYNCS2,
     output wire MERGE,
     output wire FIRQANY,
-    output wire NEWREQ,
-    output wire FIRQ_OE
+    output wire SEL,
+    output wire HRD,
+    inout  wire D0,
+    inout  wire D1,
+    inout  wire D2,
+    inout  wire D3,
+    inout  wire D4,
+    inout  wire D5,
+    inout  wire D6,
+    inout  wire D7,
+    output wire FIRQ_OE,
+    output wire D0_OE,
+    output wire D1_OE,
+    output wire D2_OE,
+    output wire D3_OE,
+    output wire D4_OE,
+    output wire D5_OE,
+    output wire D6_OE,
+    output wire D7_OE
 );
 
   reg  r_S0;
   reg  r_S1;
   reg  r_S2;
-  reg  r_DEFREQ;
   reg  r_DMAEN0;
   reg  r_DMAEN1;
   reg  r_DMAEN2;
@@ -133,17 +140,12 @@ module audio (
   reg  r_CTRL5;
   reg  r_CTRL6;
   reg  r_CTRL7;
-  reg  r_SYNCH1;
-  reg  r_SYNCH2;
   reg  r_SYNCR1;
   reg  r_SYNCR2;
-  reg  r_SYNCS1;
-  reg  r_SYNCS2;
 
   assign S0 = r_S0;
   assign S1 = r_S1;
   assign S2 = r_S2;
-  assign DEFREQ = r_DEFREQ;
   assign DMAEN0 = r_DMAEN0;
   assign DMAEN1 = r_DMAEN1;
   assign DMAEN2 = r_DMAEN2;
@@ -177,31 +179,24 @@ module audio (
   assign CTRL5 = r_CTRL5;
   assign CTRL6 = r_CTRL6;
   assign CTRL7 = r_CTRL7;
-  assign SYNCH1 = r_SYNCH1;
-  assign SYNCH2 = r_SYNCH2;
   assign SYNCR1 = r_SYNCR1;
   assign SYNCR2 = r_SYNCR2;
-  assign SYNCS1 = r_SYNCS1;
-  assign SYNCS2 = r_SYNCS2;
 
   // EXTERNAL
   assign CCLK =
          (S2 & S1 & S0);
-  // EXTERNAL
+  // buried
   assign CHANSLOT =
          (~S2);
-  // EXTERNAL
+  // buried
   assign TMRSLOT =
          (S2 & ~S1 & ~S0);
-  // EXTERNAL
+  // buried
   assign HOSTSLOT =
          (S2 & ~S1 & S0);
-  // EXTERNAL
+  // buried
   assign DEFSLOT =
          (S2 & S1);
-  // buried
-  assign DEFACK =
-         (DEFREQ & S2 & S1);
   // buried
   assign WAIDX =
          (SEL & ~A3 & ~A2 & ~A1 & ~A0 & ~RW);
@@ -220,24 +215,33 @@ module audio (
   // buried
   assign RINTREQ =
          (SEL & ~A3 & A2 & ~A1 & ~A0 & RW);
-  // EXTERNAL
+  // buried
   assign RASTAT =
          (SEL & A3 & ~A2 & A1 & ~A0 & RW);
-  // EXTERNAL
-  assign SFCE =
-         (SEL & ~A3 & ~A2 & ~A1 & A0);
-  // EXTERNAL
-  assign SRCE =
-         (SEL & A3 & ~A2 & ~A1 & A0);
-  // buried
-  assign HOSTREQ =
-         (SEL & E);
   // EXTERNAL
   assign CIACLK =
          (CCLK & P2);
   // EXTERNAL
   assign FIRQ =
          1'b0;
+  // buried
+  assign SET0 =
+         (~SETC & ~SETB & ~SETA);
+  // buried
+  assign SET1 =
+         (~SETC & ~SETB & SETA);
+  // buried
+  assign SET2 =
+         (~SETC & SETB & ~SETA);
+  // buried
+  assign SET3 =
+         (~SETC & SETB & SETA);
+  // buried
+  assign SET4 =
+         (SETC & ~SETB & ~SETA);
+  // buried
+  assign SET5 =
+         (SETC & ~SETB & SETA);
   // buried - 9.4.5: every colour clock EXCEPT while a host read is in flight
   assign MERGE =
          (CCLK & ~SYNCR2 & ~SYNCR1);
@@ -249,14 +253,79 @@ module audio (
          | (REQ3 & ENA3)
          | (REQ4 & ENA4)
          | (REQ5 & ENA5);
-  // buried
-  assign NEWREQ =
-         (SYNCH2 & ~SYNCH1);
+  // EXTERNAL - 9.1: $FF40-$FF4F out of the 128-byte geographic window - SEVEN bits
+  assign SEL =
+         (IOSEL & A6 & ~A5 & ~A4);
+  // buried - a host read this part answers: AINTREQ or ASTAT, inside E
+  assign HRD =
+         (RINTREQ & E)
+         | (RASTAT & E);
+  // EXTERNAL, bidirectional
+  assign D0 = ((HRD)) ?
+         (RINTREQ & REQ0)
+         | (RASTAT & DMAEN0) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign D1 = ((HRD)) ?
+         (RINTREQ & REQ1)
+         | (RASTAT & DMAEN1) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign D2 = ((HRD)) ?
+         (RINTREQ & REQ2)
+         | (RASTAT & DMAEN2) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign D3 = ((HRD)) ?
+         (RINTREQ & REQ3)
+         | (RASTAT & DMAEN3) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign D4 = ((HRD)) ?
+         (RINTREQ & REQ4)
+         | (RASTAT & CTRL6) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign D5 = ((HRD)) ?
+         (RINTREQ & REQ5) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign D6 = ((HRD)) ?
+         (RASTAT & PWBUSY) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign D7 = ((HRD)) ?
+         (RASTAT & PFVALID) : 1'bz;
 
   // FIRQ is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FIRQ_OE =
          (FIRQANY);
+  // D0 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign D0_OE =
+         (HRD);
+  // D1 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign D1_OE =
+         (HRD);
+  // D2 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign D2_OE =
+         (HRD);
+  // D3 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign D3_OE =
+         (HRD);
+  // D4 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign D4_OE =
+         (HRD);
+  // D5 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign D5_OE =
+         (HRD);
+  // D6 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign D6_OE =
+         (HRD);
+  // D7 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign D7_OE =
+         (HRD);
 
   wire AR_ = (RESET);
   always @(posedge SLOTCLK or posedge AR_) begin
@@ -264,7 +333,6 @@ module audio (
       r_S0 <= 1'b0;
       r_S1 <= 1'b0;
       r_S2 <= 1'b0;
-      r_DEFREQ <= 1'b0;
       r_DMAEN0 <= 1'b0;
       r_DMAEN1 <= 1'b0;
       r_DMAEN2 <= 1'b0;
@@ -298,12 +366,8 @@ module audio (
       r_CTRL5 <= 1'b0;
       r_CTRL6 <= 1'b0;
       r_CTRL7 <= 1'b0;
-      r_SYNCH1 <= 1'b0;
-      r_SYNCH2 <= 1'b0;
       r_SYNCR1 <= 1'b0;
       r_SYNCR2 <= 1'b0;
-      r_SYNCS1 <= 1'b0;
-      r_SYNCS2 <= 1'b0;
     end else begin
       r_S0 <=
          (~S0);
@@ -314,9 +378,6 @@ module audio (
          (S2 & ~S0)
          | (S2 & ~S1)
          | (~S2 & S0 & S1);
-      r_DEFREQ <=
-         (NEWREQ)
-         | (DEFREQ & ~DEFACK);
       r_DMAEN0 <=
          (WDMACON & D7 & D0)
          | (DMAEN0 & ~WDMACON)
@@ -455,18 +516,10 @@ module audio (
       r_CTRL7 <=
          (WCTRL & D7)
          | (CTRL7 & ~WCTRL);
-      r_SYNCH1 <=
-         (HOSTREQ);
-      r_SYNCH2 <=
-         (SYNCH1);
       r_SYNCR1 <=
          (RINTREQ);
       r_SYNCR2 <=
          (SYNCR1);
-      r_SYNCS1 <=
-         (SFCE);
-      r_SYNCS2 <=
-         (SYNCS1);
     end
   end
 

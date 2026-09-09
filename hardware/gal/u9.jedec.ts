@@ -13,15 +13,24 @@
  *     in A23:A22 alone. U10 takes physical A23 and A22 as inputs and picks its
  *     own RAS; U9 says only WHETHER a SIMM answers. Three outputs became one.
  *   - TWO MAP-SRAM CHIP ENABLES ARE. They were not on the list at all. ram.md
- *     3.1 says "both SRAMs sit on the same D0-D7; the address picks which is
- *     written", and nothing had said what forms that. It is LA3, here.
+ *     3.1 said "both SRAMs sit on the same D0-D7; the address picks which is
+ *     written", and nothing had said what forms that. It is the WINDOW, since
+ *     2026-09-09 - see MAPCE_LO/MAPCE_HI below.
+ *     !! AND THE REST OF THAT SENTENCE WAS ALSO WRONG. The two SRAMs do not
+ *     sit on the same D0-D7 and cannot: each drives its own DQ pins for the
+ *     whole of every translation, because those pins ARE the physical address.
+ *     They are two nodes and they need two isolation '245s - which is +1 IC
+ *     (U18) and U3's last pin, and until it was noticed the high map byte had
+ *     no path to D0-D7 at all. ram.md 3.1, 11 item 11.
  *   - BOOT AND VECSEL WENT TO U6, which already had CLK25 on pin 1, /RESET in
  *     the array and LA7/LA6 on pins. A 22V10 has one clock and one reset; a
  *     part that needs a registered mode bit either has them already or pays
  *     three pins for them.
  *
- * Net: six outputs, fourteen inputs, and the widest equation is five terms on
- * a macrocell that holds sixteen.
+ * Net: six outputs, thirteen inputs, and the widest equation is five terms on
+ * a macrocell that holds sixteen. LA3 left the part on 2026-09-09 with ram.md
+ * 4.3's two windows, so it has THREE spare macrocells where it had two, and
+ * pin 14 is a free input.
  */
 
 import type { Design } from "./jedec/assemble"
@@ -89,7 +98,10 @@ export const u9Design: Design = {
      *
      * Two windows instead, from the 32 bytes at $FF80-$FF9F that decode
      * nowhere - outside the $FF00-$FF7F geographic window, so no card loses a
-     * byte. Same term count, and this part gives back pin 14. */
+     * byte. Same term count, and this part gives back pin 14.
+     *
+     * !! The DECODE was only half of M-1's repair - the board had no wire from
+     * D0-D7 to the high map SRAM at all. ram.md 11 item 11. */
     {
       pin: 15, name: "MAPCE_LO", assertedLow: true, s0: 0,
       terms: ["RUN & !IOPAGE", "IOPAGE & LA7 & !LA6 & LA5 & !LA4"],
@@ -145,7 +157,7 @@ export const u9Design: Design = {
      * deselected and A24..A21 float. An ungated compare would assert /IOPAGE
      * at random - and /IOSEL is /IOPAGE AND /A7 (clkdec.pld), so a random
      * assertion makes every card in the machine decode a boot fetch against
-     * its jumpered base and drive D0-D7. Five terms instead of four, and it
+     * its own base and drive D0-D7. Five terms instead of four, and it
      * is the difference between a machine that boots and one that does not.
      *
      * Sixteen product terms on pin 18, five used - this is the widest

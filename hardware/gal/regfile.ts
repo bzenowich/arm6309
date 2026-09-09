@@ -38,13 +38,24 @@ export const REGS = {
    * a fiction that invites exactly the bug 10.3.1 exists to warn about. A list
    * is started by loading WPTR at $08-$0A and writing BCTRL. $0B-$0D are free. */
   BCTRL: 0x0e,
+  /* 9's palette port. ⛔ These three were in 13's table from the beginning and
+   * had no decode, no strobe and no counter behind them until 2026-09-09 -
+   * vsup.parts.ts has the census. They are decoded on vsup, which is the part
+   * that holds PIDX and drives the LUT's two buses. */
+  PIDX: 0x10, PDATL: 0x11, PDATH: 0x12,
   WADV: 0x14,
   TILEBASE: 0x17, FONTBASE: 0x18, MAPBASE: 0x19,
 } as const
 
 /** A 5-bit equality against RA4..RA0, as one product term. */
-export const isReg = (off: number) =>
-  [4, 3, 2, 1, 0].map((b) => `${(off >> b) & 1 ? "" : "!"}RA${b}`).join(" & ")
+export const isReg = (off: number) => isRegOn("RA", off)
+
+/** The same equality against any five-bit field. 10.3.2's descriptor carries
+ *  the register number in its low five bits, so vsup decodes a list MOVE from
+ *  LD4..LD0 with the identical arithmetic - and 13's offsets stay in one
+ *  table rather than being written out twice in two notations. */
+export const isRegOn = (prefix: string, off: number) =>
+  [4, 3, 2, 1, 0].map((b) => `${(off >> b) & 1 ? "" : "!"}${prefix}${b}`).join(" & ")
 
 const comb = (name: string, terms: string[], why?: string): Cell =>
   ({ pin: 0, name, assertedLow: false, s0: 1, registered: false, terms, why })
@@ -86,11 +97,11 @@ export const writeStrobes: Cell[] = [
    * all (design-review2.md V-1). It goes out to vctrl, which holds the two
    * bits beside the span control that reads them. */
   strobe("LDADV", REGS.WADV, "13's +$14 - 7.2's next-row-same-column mode"),
-  /* ⭐ 13's +$0E b0. The list engine's LRUN took BCTRLGO as an input and
-   * nothing produced it, so the engine could not be started either. It is a
-   * strobe and not a register: LRUN latches, and 10.3.1's GO is the write. */
-  comb("BCTRLGO", [`WSTB & ${isReg(REGS.BCTRL)} & D0`],
-    "10.3.1's GO - a strobe, because LRUN is what holds"),
+  /* ⚠ BCTRLGO IS NOT DECODED HERE ANY MORE - 2026-09-09. 13's +$0E b0 is the
+   * display list's GO, and the whole descriptor half of the engine moved to
+   * vsup when vaddr ran out of LAB fan-in (vsup.parts.ts). LRUN is what the
+   * strobe sets, so the strobe went with it; this part takes LADV back and
+   * nothing else. */
   strobe("LDA", REGS.WPTRA, "WPTR's three bytes - item 23 offered a '138 for these"),
   strobe("LDB", REGS.WPTRB), strobe("LDC", REGS.WPTRC),
   strobe("LDTB", REGS.TILEBASE), strobe("LDFB", REGS.FONTBASE),

@@ -125,11 +125,45 @@ high byte drives `A23..A21` and five flags.
 | | Cost |
 |---|---|
 | Second `CY7C128A` map SRAM | **+1 IC** |
-| High-byte write strobe | **+1 output on U3** — and pin 23 is deliberately free (`mmu.pld`) |
+| High-byte write strobe | **0** — `MAPWE` is common to both parts and the **chip enable** decides where a byte lands (§4.3, `u9.pld`) |
 | `A21`–`A24` to the backplane | **0** — §5.3 keeps them on the motherboard and pulls `/IOPAGE` instead |
-| Isolation `'245` | **0** — both SRAMs sit on the same `D0`–`D7`; the address picks which is written |
+| ⛔ **Second isolation `'245`** | **+1 IC** — **U18**, and this row said `0` until 2026-09-09 |
+| ⛔ **Second isolation enable** | **+1 output on U3**, its last pin (`mmu.pld` pin 23) |
 | Address mux `'157` | **0** — §3.2 |
-| **Address path alone** | **9 ICs → 10** — §8 has the whole motherboard at 17 |
+| **Address path alone** | **9 ICs → 11** — §8 has the whole motherboard at 19 |
+
+> ⛔ **Two common-I/O SRAMs cannot share one buffer, and assuming they could
+> cost the machine its high map byte for a day.** This table used to read
+> *"Isolation `'245`: **0** — both SRAMs sit on the same `D0`–`D7`; the address
+> picks which is written"*, and the board was drawn to match it: U1B's
+> `DQ0`–`DQ3` went to physical `A24`–`A21` **and to nothing else**. There was no
+> wire from `D0`–`D7` to the high map SRAM at all, so the register `machine.md`
+> §3 documents as readable and writable was **neither** — the same consequence
+> `design-review2.md` M-1 found in the decode, surviving its repair in the
+> netlist.
+>
+> **The reason the assumption is wrong is the reason there are two parts.** A
+> common-I/O SRAM drives its own `DQ` pins for the whole of every translation,
+> because those pins *are* the physical address (`mainboard.circuit.tsx`). So
+> the two SRAMs are two separate nodes, not one bus: `A20`–`A13` and
+> `A24`–`A21`. **Twelve bits of map entry need twelve bits of buffer, and a
+> `'245` is eight.** +1 IC is the floor; nothing cheaper carries the bits.
+>
+> ⚠ **And the two buffers need two enables**, which is the half that is easy to
+> miss. One shared enable would open U4 and U18 onto `D0`–`D7` together for the
+> whole of any block **read**, and the one whose SRAM was deselected would be
+> driving from a floating node. U3 pin 23 — the part's last spare — is the
+> second enable, at **one product term each where the single output cost two**.
+> `mmu.check.ts` asserts they are never asserted together, exhaustively.
+>
+> ⚠ **It also narrowed U6.** `BOOTOE` was the complement of the *union* of both
+> map chip enables (§6.7.2, `machine.md` §5 item 12). With U4 shut for the high
+> window that leaves physical `A20`–`A13` with **no driver at all** during the
+> sixteen high-byte writes of every boot — M-2 again, in a narrower window, and
+> `mainboard_tb` caught it as *"16 of 32"*. It is the complement of `MAPCE_LO`
+> alone now, which is one product term **fewer** and the same rule said more
+> exactly: **the buffer drives a net exactly when that net's other driver does
+> not.**
 
 **Both bytes must be read in the same access**, which is why this is two
 byte-wide parts and not one wider one: translation needs `A23..A13`
@@ -422,7 +456,7 @@ things, and only one of them was a cost:
 |---|---|
 | ⭐ **The mux select is `E`** | and not an output. `E` is high for counts 6–11 of U6's divider, which is **exactly** the column window, so the three `'157` take a wire from the backplane. **That is the macrocell that made a nine-output design fit** — and it is what a 1970s DRAM controller on a 6800-family bus would have done anyway |
 | ⭐ **`/WAIT` is not needed** | §6.3's line item lists it. A bus cycle is twelve `CLK25` counts, the access owns six of them, and a refresh burst is four — **so it fits in the gap and the DRAM controller never stalls the CPU.** ⚠ §6.6's "well under 1 % of the bus" is now **zero bus cycles**, and the thing it was worried about does not exist |
-| ⚠ **The refresh timebase is a package** | above. +1 IC, and the motherboard is **18** |
+| ⚠ **The refresh timebase is a package** | above. +1 IC, and the motherboard was **18** at that point — §6.5 has it at **19** since U18 |
 
 #### The cycle, in counts of 39.7 ns from E-fall
 
@@ -522,20 +556,123 @@ to the sequence above.
 > paralleled the shadow ROM exactly. **It is not needed, and it was the last thing
 > keeping boot inside the CPU module.** Archived in [history.md](history.md).
 
+### 6.4.1 ⭐ Sizing the bank — a firmware walk, decided 2026-09-09
+
+**Nothing in this machine knows how much memory it has.** U9 asserts `DRAMSEL` for any
+address in 4–20 MB and U10 turns it into a `RAS` whether or not a module is in the
+socket; a read from an empty socket returns whatever the bus was last driven to.
+[`../docs/design-review2.md`](../docs/design-review2.md) §3.5 found that there was no
+presence detection **and no proposal for one**, and `machine.md` §5 item 13 recorded that
+no document said whose job it was. **It is the boot monitor's, and this is the design.**
+
+#### Why it cannot be hardware
+
+⛔ **A 30-pin SIMM has no presence-detect pins.** `PD1`–`PD4` are a **72-pin** module's
+feature. On a 30-pin module the corresponding positions are pins 24 and 29 and they are
+**not connected** — [`lib/parts.ts`](lib/parts.ts)'s `SIMM30` is written from the pinout
+and shows them as `NC`. There is nothing on the module to read.
+
+So "hardware presence detect" can only mean a **jumper block or DIP switch** that a human
+sets, read through spare GAL inputs. It was costed and refused:
+
+| | |
+|---|---|
+| What it needs | four bits, and they have to reach the part that *gates* the access. **U10 forms `RAS` and has two free pins.** U9 has three spare macrocells, any of which can be an input — but U9 only says *whether* a SIMM answers, not which. Four bits, and the part that could use them has two |
+| **Cost** | **+1 package**, or a rewire, for the fourth bit |
+| **What it buys** | the same number the walk derives — from a switch that can be set wrong, and then is wrong until someone opens the case |
+| Verdict | ⛔ **refused.** It moves the obligation from firmware to a human and adds a way to be wrong |
+
+⚠ **And it would still not be sufficient**, which is the argument that settles it: a
+jumper says a socket is *occupied*. It cannot say the module is the right **size** — and
+§6.3.1 shows a 1M × 8 module in this socket wiring is a module that answers, passes any
+presence test, and loses data. The walk detects that; a jumper cannot.
+
+#### The walk
+
+Run before `LDS`, so it is stackless — no `JSR`, the same constraint §6.4's sequence
+already has. Per socket *n* at physical 4·(n+1) MB:
+
+```
+    ; block 0 -> socket n's base:  $FF90+0 = (n+1)*2   $FFA0+0 = $00
+    ; block 1 -> the boot ROM:     $FF91   = $01       $FFA1   = $00
+    sta   $0000            ; write $A5
+    lda   $2000            ; a ROM byte - see below. THIS IS THE STEP
+    lda   $0000            ; read back:  $A5 ?
+    ...                    ; and again with $5A
+    ; present. Now the address-line pass:
+    sta   $0000            ; $11
+    stb   $0400            ; $22 - physical A10, which a 1M x 8 ignores
+    lda   $2000
+    lda   $0000            ; still $11 ? if not, the module aliases
+```
+
+⚠ **`LDA $2000` is the whole difficulty of this, and it is one instruction.** `D0`–`D7`
+has **no pull-ups** — `mainboard.circuit.tsx` pulls only the five open-drain control
+lines — so an empty socket does not read as `$FF`, or as `$00`, or as anything in
+particular: **it reads as whatever the bus was last driven to.** After `STA $0000` that is
+`$A5`, so the naive write-then-read-back **passes against an empty socket.** Reading a
+known ROM byte in between is what kills it, and two complementary patterns are what stop
+a bus that happens to hold one of them passing for memory.
+
+> ⭐ **In the ROM this is free and that is the trap.** The boot monitor executes from
+> flash, so every opcode fetch between the store and the load already drives the bus with
+> a ROM byte and the walk works without the explicit read. **It stops working the moment
+> the routine is copied into RAM**, which is exactly the sort of optimisation a later
+> pass makes. The `LDA $2000` is written in so the property does not depend on where the
+> code lives; `mainboard_tb` has no instruction fetches at all, which is why the
+> simulation needed it stated.
+
+#### What it costs
+
+| | |
+|---|---|
+| **ICs** | **0** |
+| **Backplane pins** | **0** |
+| GAL macrocells | **0** |
+| Boot ROM | ~120 bytes of 6809, run once |
+| **Time** | 4 sockets × ~10 bus cycles ≈ **40 cycles, under 20 µs** |
+| ⚠ **What it cannot do** | tell a **faulty** module from an absent one. Both read back wrong and both are reported absent, which is the right failure for a boot monitor and the wrong one for a diagnostic |
+
+**No socket is mandatory.** The walk is stackless, so it runs before there is anywhere to
+put a stack, and the stack then goes at the top of the **lowest populated** socket —
+which means the machine boots on any one module in any one socket, not only on socket 0.
+`machine.md` §7.2's sequence carries it.
+
+⭐ **And the answer has to be handed on.** The monitor leaves a **memory descriptor** —
+a socket-populated bitmap and a total in 8 KB blocks — at a fixed offset in the first
+populated socket, and NitrOS-9's boot reads it there rather than probing again. The
+format is `software/` work and belongs with §11 item 10's "nothing burns the ROM yet";
+what is decided here is that **the hardware will never tell anybody, so something in the
+ROM must.**
+
+#### It is simulated, not asserted
+
+`gal/verilog/mainboard_tb.sv` runs the walk as bus cycles against `mainboard.v`, which
+models an empty socket as **a bus holding the last driven byte** rather than a
+convenient rail — the model has to be pessimistic here or the walk proves nothing. The
+walk is run for **0, 1, 2, 3 and 4** populated sockets and reports each correctly, and
+then against a socket modelled as a **1M × 8** module — ten row and ten column bits,
+`MA10` unconnected, so physical `A10` and `A21` fall out of the address — where it
+**finds the module and rejects it**. ⚠ `mainboard.v` also had to learn to *write* DRAM
+through U10's own `/RAS`, `/CAS` and `/WE`: until 2026-09-09 the array was written only
+through a back door, so no testbench could ask whether a byte survives the round trip.
+
 ### 6.5 The motherboard, assembled
 
 | | ICs |
 |---|---|
-| the board as drawn in `mainboard.circuit.tsx` | 9 |
+| the board as drawn before 2026-09-08 | 9 |
 | − the DIP system RAM, removed (§6.2) | −1 |
 | + second map SRAM, 16-bit entries (§3.1) | +1 |
+| + **U18, the second isolation `'245`** (§3.1) | **+1** |
 | + U9 space decode, U10 SIMM timing, 3 × `'157`, U17 refresh timebase | +6 |
 | + **the boot ROM: 2 × `SST39SF040` and the `'244`** (§6.7) | **+3** |
-| **total** | **18 ICs + 4 SIMM sockets** |
+| **total** | **19 ICs + 4 SIMM sockets** |
 
-⚠ **`mainboard.circuit.tsx` still draws the nine.** The board file is a schematic of the
-state before §3.1, §6.2 and §6.7, and closing that gap is `hardware/README.md` open
-item 3 — it is a drawing job, not a design one.
+⭐ **`mainboard.circuit.tsx` draws all nineteen**, and `npm run check:netlist` asserts
+the connectivity rather than the count. ⚠ **U18 is the newest and it is the one to read
+§3.1 about**: it is not an optional companion to the second map SRAM, it is what makes
+that SRAM reachable at all.
 
 ### 6.6 ⭐ Refresh against stretched cycles — settled
 
@@ -609,11 +746,22 @@ between a machine that boots and one that does not.
 
 ### 6.7.2 The changeover is free, and that is checked rather than argued
 
-The buffer and the map SRAMs must never drive the physical address together. They are
-**complements of the same two conditions on two different parts** — U6 forms
-`/RUN # vecsel` for the buffer, U9 forms `RUN & !IOPAGE # blksel` for the SRAMs — and
-`check:jedec` asserts over every combination of `RUN`, `/IOPAGE`, `LA7` and `LA6` that
-the two are never both asserted.
+The buffer and the low map SRAM must never drive physical `A20`–`A13` together, **and
+never both stand off it either.** They are exact complements on two different parts —
+U6 forms `!( RUN & !IOPAGE # blklo )` for the buffer, U9 forms `RUN & !IOPAGE # blklo`
+for the SRAM's chip enable — and `check:jedec` asserts **both directions** over every
+combination of `RUN`, `/IOPAGE` and `LA7`–`LA4`.
+
+⚠ **Sweeping `LA5` and `LA4` is the whole difference between that check and a check
+that could fail.** Holding them at zero is the one code that never reaches the SRAMs'
+third select condition, which is why the old sweep passed while the boot sequence fought
+itself sixteen times ([`../docs/design-review2.md`](../docs/design-review2.md) §10).
+
+⚠ **And it pairs with `MAPCE_LO` alone, not with the union of both chip enables** — the
+rule is about a *net*, and `A24`–`A21` are a different net with a different pair of
+drivers (§3.1). Writing it about the *parts* is what left `A20`–`A13` undriven for the
+sixteen high-byte writes of every boot for as long as it took `mainboard_tb` to say
+"16 of 32".
 
 ⭐ **The handover edge is free as well, and by construction rather than by timing.**
 `RUN` is set by a write to `$FFB1`, which is an `$FFxx` cycle — and the map SRAMs are
@@ -621,9 +769,8 @@ deselected for **every** `$FFxx` cycle, for an independent reason. So there is n
 at which one turns on as the other turns off; the changeover happens inside a cycle where
 the SRAM is already off.
 
-**⚠ What is still owed is U10.** It carries the RAS/CAS state machine, refresh
-arbitration and `/WAIT`, and it has not been written. It is the only piece of logic on
-the motherboard that is not fitted at the fuse level — §11 item 6.
+**⭐ Nothing is owed here any more.** U10 was written and fitted on 2026-09-09 (§6.3.1),
+and §11 item 6 closes with it: there is no unwritten logic on the motherboard.
 
 ## 7. The backplane — zero new pins (§5.3)
 
@@ -648,19 +795,21 @@ see. **Zero new pins.**
 | | ICs | Notes |
 |---|---|---|
 | Second map SRAM | +1 | `CY7C128A`, §3.1 — **and it is what lets the SIMMs be addressed at all** (§5.1) |
-| U3 high-byte write strobe | 0 | pin 23 is free |
+| ⛔ **Its isolation `'245`, U18** | **+1** | §3.1 — **two common-I/O SRAMs cannot share one buffer.** This row said `0` until 2026-09-09 and the board was drawn to match it, so the high map byte had no path to `D0`–`D7` at all |
+| U3 high-byte write strobe | 0 | `MAPWE` is common to both parts; the chip enable decides where the byte lands (§4.3) |
+| ⚠ **U3's second isolation enable** | **0 ICs, and U3's last pin** | pin 23. The part is now **7 outputs, 15 inputs, nothing spare** — `gal/README.md`'s other budget row. **Anything else the motherboard's decode ever wants is a new package** |
 | `TASK` widened to 8 bits | 0 | seven unused bits of an existing `'574`, §3.2 |
 | The DIP system RAM, removed | −1 | **no DIP SRAM at all — §6.2** |
 | U9 space decode | +1 | §6.3 |
 | U10 SIMM timing + 3 × `'157` + U17 refresh timebase | +5 | §6.3, §6.3.1 |
 | **Boot ROM: 2 × `SST39SF040` + `'244`** | **+3** | §6.7 |
-| **Motherboard** | **9 → 18** | plus four SIMM sockets |
+| **Motherboard** | **9 → 19** | plus four SIMM sockets |
 | Backplane | **0 pins** | §5.3, §6.7 |
 | Cards | **0 changes** | one jumper position on storage and net, §5.2 |
 
-**Up to 16 MB of DRAM for five packages, a bootable machine for three more, and no card
-re-specification.** The map widening is the load-bearing part and it is one of the
-five. ⚠ **The machine has no SRAM outside the map**, which was §6.4's boot problem until
+**Up to 16 MB of DRAM for six packages, a bootable machine for three more, and no card
+re-specification.** The map widening is the load-bearing part and it is two of the
+six — the second SRAM and the buffer that reaches it. ⚠ **The machine has no SRAM outside the map**, which was §6.4's boot problem until
 §6.7 made boot a sequence of stores.
 
 ## 9. ⚠ The ceiling that is not hardware
@@ -729,18 +878,31 @@ of ROM registers-only, which is exactly what §6.4's sequence is.
    is qualified on `VRAMSEL`, so the DRAM bus is idle for the whole 40.7 µs and refresh
    never contends. What remains is `machine.md` §5 item 10's rule, which U10 obeys by
    construction.
-3. **⚠ Layout A or B** (§4) — a NitrOS-9 cost question, not a hardware one, and
-   the only genuinely open part of §3.
+3. **CLOSED 2026-09-09 — §4.3's Layout C, two windows.** This item said *"Layout A or
+   B — a NitrOS-9 cost question, not a hardware one, and the only genuinely open part
+   of §3"*, and **not choosing cost the machine its memory**: the board had taken
+   Layout B's index and Layout A's byte select, which is neither, and nothing above
+   physical 2 MB was reachable. The answer is a third layout that spends an address
+   window rather than an address bit. §4.3,
+   [`../docs/design-review2.md`](../docs/design-review2.md) §3.3.
+
+   What is left of the question is §3.2's — **two resident tasks or 256 contexts** —
+   and that one really is a software cost.
 4. **CLOSED 2026-09-08 — the boot path is stackless and it is eighteen instructions**
    (§6.4). `machine.md` §7.2's motherboard ROM serves page 0 behind every logical block
    out of reset, refresh free-runs, and the map is written with stores. The
    scratch-RAM-in-the-CPU-module proposal is withdrawn.
-5. **CLOSED 2026-09-09 — U3 needs no second write strobe and is untouched.** The
-   question was whether pin 23 could become the high byte's write strobe. It does not
-   have to: **U9 gives each map SRAM its own chip enable**, split by `LA3`, so U3's single
-   `MAPWE` reaches both parts and the chip enable decides where the byte lands (§6.7.1).
-   U3's fuse map, its 23 checks and its Verilog testbench are unchanged by any of this —
-   pin 23 stays a spare **input**.
+5. **⚠ CLOSED 2026-09-09, and then REOPENED AND CLOSED AGAIN THE SAME DAY — U3 needs no
+   second write **strobe**, and it does need a second **output enable**.** The original
+   question was whether pin 23 could become the high byte's write strobe, and the answer
+   is still no: `MAPWE` is common to both parts and **U9 gives each map SRAM its own chip
+   enable**, split by the *window* (§4.3), so the chip enable decides where a byte lands.
+
+   ⛔ **What that answer hid is that the high SRAM had no data path at all.** Getting a
+   byte to a part needs a strobe *and* a bus, and the second was never costed — §3.1's
+   table said the two SRAMs shared one `'245`, which two common-I/O parts cannot. Pin 23
+   is now `ISOOE_HI`, U18's enable. **U3 is full: 7 outputs, 15 inputs, no spare pin.**
+   §3.1.
 6. **CLOSED 2026-09-09 — U9 and U10 are both fitted, and there is no unwritten logic
    on the motherboard.** This item said U9 might not fit — *"ten outputs on a
    `GAL22V10`'s ten, before counting inputs"* — and that U10 *"has not been counted at
@@ -748,7 +910,7 @@ of ROM registers-only, which is exactly what §6.4's sequence is.
 
    | | said | is |
    |---|---|---|
-   | **U9** | may not fit | **6 outputs of 10**, 14 inputs, 2 spare macrocells — §6.7.1 |
+   | **U9** | may not fit | **6 outputs of 10**, 13 inputs, **3** spare macrocells — §6.7.1. `LA3` left the part with §4.3 |
    | **U10** | never counted | **9 outputs of 10**, 11 inputs, 2 spare pins — §6.3.1 |
 
    Both are checked at the fuse level against a behavioural model **and** against Atmel's
@@ -771,6 +933,13 @@ of ROM registers-only, which is exactly what §6.4's sequence is.
 
    ⭐ **1 MB modules are still buildable**, at the cost of the mapping and 4 MB total.
    Nothing about U10 changes.
+
+   ⭐ **And the wrong one is now DETECTED rather than trusted.** §6.4.1's boot walk
+   ends with an address-line pass — write two bytes one physical `A10` apart and re-read
+   the first — which is exactly the bit a 1M × 8 module drops. `mainboard_tb` models
+   such a module and the walk finds it and rejects it. A module that answers and loses
+   data is worse than one that is absent, and this is the difference between the two
+   being a boot message and being a corrupted file system.
 8. **Period audit.** 30-pin SIMMs are 1987 and in period. **16 MB in 1989 was a
    workstation** and a 2 MB CoCo 3 was exotic, so the *capacity* is a stretch
    even though every part is not. ⚠ **The boot ROM is the weaker claim**: an 8 Mbit
@@ -787,13 +956,28 @@ of ROM registers-only, which is exactly what §6.4's sequence is.
     exist. [`../docs/drivewire.md`](../docs/drivewire.md) §6.1 is one of its callers,
     and `machine.md` §7.2 is what it has to satisfy.
 
+11. **⛔ CLOSED 2026-09-09 — the high map byte had no data path, and every other
+    property of it was checked.** [`../docs/design-review2.md`](../docs/design-review2.md)
+    M-1 was diagnosed as a decode fault, repaired into §4.3's two windows, and declared
+    fixed. The board still wired U1B's `DQ0`–`DQ3` to physical `A24`–`A21` **and to
+    nothing else** — no wire from `D0`–`D7` to the high map SRAM anywhere — so the
+    register `machine.md` §3 documents as readable and writable was neither, which is
+    M-1's own consequence surviving M-1's own repair.
+
+    | | |
+    |---|---|
+    | **Where the wrong claim lived** | §3.1's cost table: *"Isolation `'245`: **0** — both SRAMs sit on the same `D0`–`D7`"*. **Two common-I/O SRAMs cannot** — each drives its own `DQ` pins for the whole of every translation, because those pins *are* the physical address |
+    | **Why nothing caught it** | `netlist.check.ts` asserted U1B's chip enable, its output enable and all four of its address outputs, and never that its data went anywhere. ⛔ **And `mainboard.v` modelled a write into `map_hi` from `dout` through a wire the board does not have** — the model was more capable than the hardware, so the testbench could not fail |
+    | **Repair** | **+1 IC** (U18) and **U3's last pin** (`ISOOE_HI`). §3.1 |
+    | **The check that would have caught it** | `netlist.check.ts` now walks the netlist: **every data pin on every memory or register part reaches `D0`–`D7`, directly or across a buffer found by shape.** ⚠ A stub check is *not* enough — U1B's `DQ` pins were on a net with three other parts on it, so they were never stubs; they were connected to the wrong thing |
+
 ## 12. Cross-references
 
 | | |
 |---|---|
 | [`gal/README.md`](gal/README.md) | the MMU's register map, the entry format, and the "16 of 2048" line §3.2 turns into a capability |
 | [`../docs/machine.md`](../docs/machine.md) | §5 item 1 the second megabyte, §5 item 5 the connector, §5 item 7 the card regions, §5 item 8 `/WAIT`, §5 item 10 stretched cycles, §7.1 system RAM and **§7.2 the boot ROM, which §6.7 is the parts list for** |
-| [`place/`](place/) | the placement study — `svg.ts` draws the motherboard at **18 ICs**, four SIMM sockets and the boot ROM, with no SRAM outside the map |
-| [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx) | the `'574` with seven unused bits, and U3's free pin 23 |
+| [`place/`](place/) | the placement study — `svg.ts` draws the motherboard at **19 ICs**, four SIMM sockets and the boot ROM, with no SRAM outside the map |
+| [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx) | the `'574` with seven unused bits — and U3's pin 23 is **spent** since 2026-09-09 (§11 item 11) |
 | [`../audio/docs/audio.md`](../audio/docs/audio.md) §5.2 | the other card that asked to put its memory in the physical map, and the arithmetic that said no |
 | [`../docs/drivewire.md`](../docs/drivewire.md) | what the boot ROM's spare megabyte is *not* for, and how a new one gets onto the machine |

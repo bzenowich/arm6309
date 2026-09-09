@@ -143,8 +143,17 @@ export const toCupl = (m: Merged): string => {
   out.push("/* --- buried registers: state that used to cross a package boundary - */")
   for (const c of buriedRegs) out.push(`PINNODE = ${c.assertedLow ? "!" : ""}${c.name} ;`)
   out.push("")
+  /* ⚠ WRAPPED, and it is not cosmetic. CUPL's lexer has a maximum source line
+   * length and it applies to COMMENTS: the sequencer has sixty combinational
+   * internals, the list ran past the bound, and cupl.exe stopped with
+   * "line exceeds maximum length" and wrote no .tt2 at all - which
+   * fit1508.sh's own guard then reported as "CUPL produced no .tt2". The same
+   * bound already chunks the .ck and .ar register lists below. */
   out.push("/* Combinational internals are left undeclared - CUPL substitutes them:")
-  out.push(` * ${buriedComb.map((c) => c.name).join(", ")} */`)
+  for (const chunk of wrap(buriedComb.map((c) => c.name), 60)) {
+    out.push(` * ${chunk.join(", ")}`)
+  }
+  out.push(" */")
   out.push("")
 
   out.push("/* --- equations ---------------------------------------------------- */")

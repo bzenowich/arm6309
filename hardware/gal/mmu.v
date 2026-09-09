@@ -3,7 +3,7 @@
 // A model of a GAL22V10, not a design to synthesise. It exists so that the
 // orderings graphics.md 6.3.1 calls load-bearing can be asserted mechanically,
 // which a fitter checks nothing about - see mmu_tb.sv. Keep it in step with
-// mmu.pld by hand; there are seven equations and they are the deliverable.
+// mmu.pld by hand; there are eight equations and they are the deliverable.
 `default_nettype none
 
 module mmu (
@@ -20,7 +20,15 @@ module mmu (
     output wire        blklo,      //   on the board; exported here for the sim
     output wire        n_iopage,
     output wire        muxsel,
-    output wire        n_isooe,
+    // TWO ISOLATION ENABLES since 2026-09-09. A common-I/O SRAM drives its own
+    // DQ pins for the whole of every translation, so the map's two byte-wide
+    // parts are two nodes and each needs its own '245 - and one shared enable
+    // would put both buffers on D0-D7 for the whole of any block read, one of
+    // them driving from a floating node. design-review2.md M-1, second half:
+    // the decode had two windows and the BOARD had no data path to the high
+    // SRAM at all.
+    output wire        n_isooe_lo,  // U4  - $FFA0-$FFAF, physical A20..A13
+    output wire        n_isooe_hi,  // U18 - $FF90-$FF9F, physical A24..A21
     output wire        n_mapwe,
     output wire        n_mapoe,
     output wire        n_ctrlcp   // '574 CP: rises at E-fall, once per write
@@ -41,7 +49,8 @@ module mmu (
 
   assign n_iopage = ~iopage;
   assign muxsel   =  blksel;
-  assign n_isooe  = ~(blksel & e);
+  assign n_isooe_lo = ~(blklo & e);
+  assign n_isooe_hi = ~(blkhi & e);
   assign n_mapwe  = ~(blksel & ~rw & e & ~q);
   assign n_mapoe  = ~(~iopage | (blksel & rw & e));
   assign n_ctrlcp = ~(ctlsel & ~rw & e);

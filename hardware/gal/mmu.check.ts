@@ -73,12 +73,50 @@ claim("the map SRAM never drives during a block write",
 claim("/WE is only ever asserted while the '245 is enabled",
   (la, p, rw) => { const o = mmu(la, p.e, p.q, rw); return !o.mapwe || o.isooe })
 
+/* -- TWO '245s since 2026-09-09, and the claim is that they never collide --
+ *
+ * design-review2.md M-1 fixed the DECODE - a map entry's two bytes got two
+ * windows - and left the board with no data path to the high SRAM at all:
+ * mainboard.circuit.tsx wired U1B's DQ0-DQ3 to physical A24..A21 and to
+ * nothing else, so the byte machine.md 3 documents as readable and writable
+ * could be neither. ram.md 3.1 had costed the second SRAM with "Isolation
+ * '245: 0 - both SRAMs sit on the same D0-D7", and TWO COMMON-I/O SRAMS
+ * CANNOT: each drives its own DQ pins for the whole of every translation, so
+ * they are two nodes, two buffers and - this is the part that needs asserting
+ * - two enables. One shared enable would put both '245s on D0-D7 for the
+ * whole of any block read, one of them driving from a floating node. */
+claim("⭐ the two '245s are never enabled at the same instant - one D0-D7 driver",
+  (la, p, rw) => { const o = mmu(la, p.e, p.q, rw); return !(o.isooeLo && o.isooeHi) })
+
+claim("and 'either' is exactly what the orderings above were asserted about",
+  (la, p, rw) => { const o = mmu(la, p.e, p.q, rw)
+                   return o.isooe === (o.isooeLo || o.isooeHi) })
+
+claim("the high '245 is enabled only in $FF90-$FF9F",
+  (la, p, rw) => !mmu(la, p.e, p.q, rw).isooeHi || (la >= 0xff90 && la <= 0xff9f))
+
+claim("the low '245 is enabled only in $FFA0-$FFAF",
+  (la, p, rw) => !mmu(la, p.e, p.q, rw).isooeLo || (la >= 0xffa0 && la <= 0xffaf))
+
+
 /* -- the same two, as sequences rather than as instants ------------------ */
 const seq = (la: number, rw: number, pick: (o: Out) => boolean) =>
   PHASES.map((p) => (pick(mmu(la, p.e, p.q, rw)) ? "1" : "0")).join("")
 
 check(seq(0xffa0, 0, (o) => o.isooe) === "0011",
   "a block write enables the '245 at E-rise, not at Q-rise", seq(0xffa0, 0, (o) => o.isooe))
+check(seq(0xff90, 0, (o) => o.isooeHi) === "0011" &&
+      seq(0xff90, 0, (o) => o.isooeLo) === "0000",
+  "a HIGH-byte write opens U18 and leaves U4 shut",
+  `${seq(0xff90, 0, (o) => o.isooeHi)} / ${seq(0xff90, 0, (o) => o.isooeLo)}`)
+check(seq(0xffa0, 1, (o) => o.isooeLo) === "0011" &&
+      seq(0xffa0, 1, (o) => o.isooeHi) === "0000",
+  "and a LOW-byte read opens U4 and leaves U18 shut - the case a shared " +
+  "enable would have put two buffers on D0-D7 for",
+  `${seq(0xffa0, 1, (o) => o.isooeLo)} / ${seq(0xffa0, 1, (o) => o.isooeHi)}`)
+check(seq(0xff90, 0, (o) => o.mapwe) === "0001",
+  "/WE reaches the high SRAM too - it is common to both windows",
+  seq(0xff90, 0, (o) => o.mapwe))
 check(seq(0xffa0, 0, (o) => o.mapwe) === "0001",
   "/WE is one phase wide and starts a quarter cycle after the buffer", seq(0xffa0, 0, (o) => o.mapwe))
 check(seq(0xffa0, 0, (o) => o.muxsel) === "1111",

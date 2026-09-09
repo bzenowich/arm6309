@@ -44,6 +44,10 @@ export interface SpanIn {
    *  the request is. 7.4's whole timing model is one byte per 158.9 ns.
    *  docs/design-review2.md V-4. */
   spntick?: boolean
+  /* 19 item 24: the list engine owns WPTR while this is high, so WADV's row
+   * advance is withheld - the engine's walk is a plain +1. Defaults to false,
+   * which is "no list running" and every pre-2026-09-09 case. */
+  lrun?: boolean
   /** the '161 pair's terminal count - span-solid only */
   tc: boolean
   /** WADV[1:0] */
@@ -84,5 +88,5 @@ export const outputs = (s: SpanState, io: SpanIn) => ({
   retire: retiring(s, io) ? 1 : 0,
   wen: writing(s, io) ? 1 : 0,
   spanend: ending(s, io) ? 1 : 0,
-  wrowadv: ending(s, io) && io.wadv !== 0 ? 1 : 0,
+  wrowadv: ending(s, io) && io.wadv !== 0 && !io.lrun ? 1 : 0,
 })

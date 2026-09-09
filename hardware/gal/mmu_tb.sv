@@ -14,16 +14,25 @@ module mmu_tb;
 
   logic [15:4] la;
   logic        e, q, rw;
-  logic        n_iopage, muxsel, n_isooe, n_mapwe, n_mapoe, n_ctrlcp;
+  logic        n_iopage, muxsel, n_isooe_lo, n_isooe_hi, n_mapwe, n_mapoe, n_ctrlcp;
+  // 'either buffer', which is what the break-before-make orderings below
+  // were always about - the enable split in two on 2026-09-09.
+  wire         n_isooe = n_isooe_lo & n_isooe_hi;
 
   logic blkhi, blklo;
   mmu dut (.la(la), .e(e), .q(q), .rw(rw), .blkhi(blkhi), .blklo(blklo),
-           .n_iopage(n_iopage), .muxsel(muxsel), .n_isooe(n_isooe),
+           .n_iopage(n_iopage), .muxsel(muxsel),
+           .n_isooe_lo(n_isooe_lo), .n_isooe_hi(n_isooe_hi),
            .n_mapwe(n_mapwe), .n_mapoe(n_mapoe), .n_ctrlcp(n_ctrlcp));
 
   int fails = 0;
+  // Counted, not written down: the literal that used to be here said 16 while
+  // the bench made 26, which is the smallest possible version of the mistake
+  // this whole review is about.
+  int claims = 0;
 
   task automatic ok(input bit good, input string claim);
+    claims++;
     if (good) $display("ok    %s", claim);
     else begin fails++; $display("FAIL  %s", claim); end
   endtask
@@ -54,7 +63,9 @@ module mmu_tb;
       case (sig)
         0: s = {s, n_iopage ? "0" : "1"};
         1: s = {s, muxsel   ? "1" : "0"};
-        2: s = {s, n_isooe  ? "0" : "1"};
+        2: s = {s, n_isooe    ? "0" : "1"};
+        6: s = {s, n_isooe_lo ? "0" : "1"};
+        7: s = {s, n_isooe_hi ? "0" : "1"};
         3: s = {s, n_mapwe  ? "0" : "1"};
         4: s = {s, n_mapoe  ? "0" : "1"};
         5: s = {s, n_ctrlcp ? "1" : "0"};   // the PIN level, high is idle
@@ -64,6 +75,7 @@ module mmu_tb;
   /* verilator lint_on UNUSEDSIGNAL */
 
   bit dec_hi, dec_lo, dec_page, dec_blk, dec_wr, dec_rd, bbm, wr_in_buf, ctl_out;
+  bit one_buf, buf_hi, buf_lo;
   string t;
   int edges;
   bit prev, cur;
@@ -71,6 +83,7 @@ module mmu_tb;
   initial begin
     dec_page = 1; dec_blk = 1; dec_wr = 1; dec_rd = 1; dec_hi = 1; dec_lo = 1;
     bbm = 1; wr_in_buf = 1; ctl_out = 1;
+    one_buf = 1; buf_hi = 1; buf_lo = 1;
 
     // Exhaustive: 65536 addresses x 4 phases x R/W.
     for (int a = 0; a < 65536; a++)
@@ -97,6 +110,13 @@ module mmu_tb;
           if (!n_mapoe && !n_isooe && r == 0)         bbm       = 0;
           if (!n_mapwe && n_isooe)                    wr_in_buf = 0;
           if (!n_mapoe && !n_mapwe)                   dec_rd    = 0;
+          // TWO '245s since 2026-09-09, and the whole point of splitting the
+          // enable is that they never drive D0-D7 together. A shared enable
+          // would open both for the entirety of any block read, and one of
+          // them would be driving from a floating node.
+          if (!n_isooe_lo && !n_isooe_hi)             one_buf   = 0;
+          if (!n_isooe_hi && !in_hi)                  buf_hi    = 0;
+          if (!n_isooe_lo && !in_lo)                  buf_lo    = 0;
         end
 
     ok(dec_page,  "/IOPAGE is asserted for $FF00-$FFFF and nowhere else");
@@ -108,6 +128,9 @@ module mmu_tb;
     ok(bbm,       "break before make: nothing drives the map SRAM's pins while it drives");
     ok(wr_in_buf, "/WE is only ever asserted while the '245 is enabled");
     ok(dec_rd,    "the map SRAM never drives during a block write");
+    ok(one_buf,   "the two '245s are never enabled at the same instant - one D0-D7 driver");
+    ok(buf_hi,    "U18 opens only in $FF90-$FF9F");
+    ok(buf_lo,    "U4 opens only in $FFA0-$FFAF");
 
     trace(16'hFFA0, 1'b0, 2, t); ok(t == "0011", "a block write enables the '245 at E-rise");
     trace(16'hFFA0, 1'b0, 3, t); ok(t == "0001", "/WE is one phase wide, a quarter cycle behind it");
@@ -116,6 +139,13 @@ module mmu_tb;
     trace(16'hFFA0, 1'b1, 4, t); ok(t == "0011", "a block read turns the map SRAM back on, E-high only");
     trace(16'h1234, 1'b0, 4, t); ok(t == "1111", "translation is live through an ordinary memory cycle");
     trace(16'hFFB0, 1'b0, 5, t); ok(t == "1100", "the '574 clock falls at E-rise and rises at E-fall");
+
+    // The high byte's own path, which the board did not have until today.
+    trace(16'hFF90, 1'b0, 7, t); ok(t == "0011", "a HIGH-byte write opens U18");
+    trace(16'hFF90, 1'b0, 6, t); ok(t == "0000", "and leaves U4 shut");
+    trace(16'hFFA0, 1'b1, 6, t); ok(t == "0011", "a LOW-byte read opens U4");
+    trace(16'hFFA0, 1'b1, 7, t); ok(t == "0000", "and leaves U18 shut - two buffers, one bus");
+    trace(16'hFF90, 1'b0, 3, t); ok(t == "0001", "/WE reaches the high SRAM too - it is common to both windows");
 
     // Exactly one rising edge per control write - the bug the first draft had.
     edges = 0;
@@ -136,7 +166,7 @@ module mmu_tb;
     end
     ok(edges == 0, "no rising edge on a control read");
 
-    if (fails == 0) $display("\nmmu.v OK - 16 claims, exhaustive over the address space");
+    if (fails == 0) $display("\nmmu.v OK - %0d claims, exhaustive over the address space", claims);
     else            $display("\n%0d FAILED", fails);
     if (fails != 0) $fatal(1);
     $finish;

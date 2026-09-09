@@ -65,13 +65,16 @@ export const FINGER_H = 11
 
 export const CARDS: Record<string, CardSpec> = {
   video: {
-    title: "Video", length: 180, ics: 27, source: "video/docs/graphics.md 14.1",
+    title: "Video", length: 240, ics: 36, source: "video/docs/graphics.md 14.1",
     note: "640x200 x 256 colours, VGA out",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
     parts: [
-      pkg(33, 33, "ATF1508AS vaddr/vctrl", "pld", 2, "1508"),
-      dip(24, 0.3, "GAL22V10 rfa", "pld"),
+      /* ⭐ THREE ATF1508AS SINCE 2026-09-09 - graphics.md 10.1.7. vsup absorbs
+       * the three GAL22V10s (rfa, vlen, pxsel) and carries 9's palette write
+       * path and 10.3.3's list register port, neither of which had anywhere to
+       * live on a card of two CPLDs. Three GALs out, one CPLD in: -2. */
+      pkg(33, 33, "ATF1508AS vaddr/vctrl/vsup", "pld", 3, "1508"),
       /* 14.2: two x16 parts feed the dot clock where four x8 did, and one
        * holds the whole 16-bit palette. TSOP-44 II is a 10.16 x 18.42 mm body
        * with the leads on the short ends; 11.8 includes them, which is the
@@ -79,11 +82,27 @@ export const CARDS: Record<string, CardSpec> = {
       pkg(18.4, 11.8, "AS6C8016 512Kx16", "mem", 2, "8016"),
       pkg(18.4, 11.8, "IS61C6416 64Kx16 LUT", "mem", 1, "6416"),
       dip(28, 0.6, "32Kx8 regfile", "mem"),
-      dip(20, 0.3, "74AHCT574 fetch", "bus", 4),
+      /* ⭐ EIGHT, IN TWO RANKS - graphics.md 8.2, 19 item 28. Byte-granular
+       * horizontal scroll needs two fetch groups live at once and one rank of
+       * latches provably cannot hold them; the rank select is an output enable
+       * because `c < HSCROLL[1:0]` is constant for a whole line. */
+      dip(20, 0.3, "74AHCT574 fetch", "bus", 8),
       dip(16, 0.3, "74AHCT153 mux", "bus", 4),
       dip(20, 0.3, "74AHCT574 index", "bus"),
       dip(20, 0.3, "74AHCT273 out", "bus", 2),
-      dip(20, 0.3, "74HC593 PIDX", "bus"),
+      /* ⭐ 9's PALETTE WRITE PATH, and none of it existed before 2026-09-09 -
+       * design-review2.md's defect class, found again. 19 item 9 closed at the
+       * same time: the 74HC593 the parts list carried is DISCONTINUED, so PIDX
+       * is two loadable '163s with ordinary outputs plus a '244 onto 13.1's
+       * LUT address bus, and the two '573s are 13's +$11/+$12 - the 16-bit
+       * entry a card with an 8-bit bus has to assemble somewhere. */
+      dip(16, 0.3, "74AHCT163A PIDX", "bus", 2),
+      dip(20, 0.3, "74AHCT244 pidx-oe", "bus"),
+      dip(20, 0.3, "74HC573 PDAT", "bus", 2),
+      /* 10.3.3: the display list's descriptor byte, from the pixel bus onto
+       * the card's internal data bus, for the dot a granted engine slot lasts.
+       * It is what makes a list MOVE reach a register at all. */
+      dip(20, 0.3, "74HC244 lbyte", "bus"),
       dip(20, 0.3, "74HC574 pw-data", "bus"),
       dip(20, 0.3, "74HC574 pw-addr", "bus", 3),
       dip(20, 0.3, "74HC245 rdbk", "bus"),
@@ -93,7 +112,7 @@ export const CARDS: Record<string, CardSpec> = {
     ],
   },
   audio: {
-    title: "Audio", length: 180, ics: 32, source: "audio/docs/audio.md 10",
+    title: "Audio", length: 240, ics: 45, source: "audio/docs/audio.md 10",
     note: "4-channel 8-bit PCM, Paula-exact, panned",
     /* audio.md 7.1: the output is line level on a 3.5 mm stereo jack at the
      * rear edge, in parallel with the backplane's AUDIO_L/R pair. Nothing
@@ -102,7 +121,12 @@ export const CARDS: Record<string, CardSpec> = {
     rear: [{ w: 47, h: 24, label: "analogue out + filters", kind: "analog" },
            { w: 14, h: 13, label: "3.5 mm hp", kind: "conn" }],
     parts: [
-      pkg(33, 33, "ATF1508AS", "pld", 1, "1508"),
+      /* 10.1: TWO, since 2026-09-09. U1 is the host register block and is
+       * fitted at 89 of 128 logic cells and 57 of 64 I/O; U2 is the sequencer
+       * of 10.2, ~69 I/O, and its package is that section's open decision -
+       * a PLCC-84 is one pin short before any of its three levers. Drawn as
+       * two PLCC-84 because that is the choice this footprint has to make. */
+      pkg(33, 33, "ATF1508AS", "pld", 2, "1508"),
       pkg(20.3, 12.7, "28.375 MHz osc", "clk", 1, "OSC"),
       /* 5: 512 KB in one package, the part the motherboard stopped using when
        * ram.md 6.2 went to SIMM sockets. 5.3: the state file is two x16 parts
@@ -113,8 +137,29 @@ export const CARDS: Record<string, CardSpec> = {
       dip(16, 0.3, "74HC590 counter", "bus", 2),
       dip(20, 0.3, "74HC688 compare", "bus", 2),
       dip(16, 0.3, "74HC283 adder", "bus", 4),
-      dip(20, 0.3, "74HC574 pipeline", "bus", 3),
-      dip(20, 0.3, "74HC574 conv port", "bus", 2),
+      /* 10.2.2: the datapath, enumerated on 2026-09-09. The three "pipeline
+       * latches" this list carried were never the adder's operand registers,
+       * and nothing here had counted the $FFFF constant or the three-state
+       * path from the sum back onto the state file's data bus. Six packages,
+       * and none of them is new design - every one is required by the
+       * datapath 3.2, 4.2 and 9.5 already describe. */
+      dip(20, 0.3, "74HC574 ALAT", "bus", 2),
+      dip(20, 0.3, "74HC574 BLAT", "bus", 2),
+      dip(20, 0.3, "74HC244 B=$FFFF", "bus", 2),
+      dip(20, 0.3, "74HC244 sum OE", "bus", 2),
+      dip(20, 0.3, "74HC574 sample hold", "bus", 1),
+      /* 6.2's windows collide with the walk order at two registers per side -
+       * ch0's byte is on the bus in slot 0 and ch3's in slot 3, and one
+       * register cannot hold both across two four-slot windows. One per
+       * channel, three-stated onto the package port each shares. */
+      dip(20, 0.3, "74HC574 conv port", "bus", 4),
+      /* 10.2.6's lever, pulled: four port-register clocks and three chip
+       * selects are mutually exclusive, so they are one 3-bit code and eight
+       * decoder outputs with nothing left over. */
+      dip(16, 0.3, "74HC138 conv ctl", "bus", 1),
+      /* The state file's byte-lane write enables, gated with the slot clock's
+       * second half - an inverter and three gates, exactly. */
+      dip(14, 0.3, "74HC00 /WE gate", "bus", 1),
       /* 11.1: twelve halves - one sample and TWO volume converters per
        * channel - and the fourth TL07x that a per-die I/V needs. */
       dip(20, 0.3, "AD7528 dual MDAC", "analog", 6),
@@ -127,7 +172,10 @@ export const CARDS: Record<string, CardSpec> = {
        * not beside the CPLD. */
       dip(8, 0.3, "NJM4556A hp drv", "analog"),
       dip(20, 0.3, "74HC574 pw", "bus"),
-      dip(20, 0.3, "74HC574 prefetch", "bus"),
+      /* 9.3's read-back path is one '574 per state-file byte lane, and which
+       * lane a host byte lives on is a function of AIDX. Three lanes, three
+       * latches; lane 3 is unpopulated, which is what stops it being four. */
+      dip(20, 0.3, "74HC574 prefetch", "bus", 3),
     ],
   },
   net: {

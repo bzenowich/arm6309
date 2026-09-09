@@ -35,14 +35,18 @@ module clkdec_tb;
                .n_iosel(d_iosel), .n_bootoe(d_bootoe));
 
   int fails = 0;
+  // Counted, not written down - a hand-maintained claim count goes stale the
+  // first time a claim is added, and one was on 2026-09-09.
+  int claims = 0;
   task automatic ok(input bit good, input string claim);
+    claims++;
     if (good) $display("ok    %s", claim);
     else begin fails++; $display("FAIL  %s", claim); end
   endtask
 
   int period, high, lead, e_rise, q_rise, prev_rise, t;
   bit pe, pq;
-  bit wired, iosel_ok, bootoe_ok, excl_ok, vec_ok, held_ok, run_ok;
+  bit wired, iosel_ok, bootoe_ok, excl_ok, vec_ok, held_ok, run_ok, hi_park_ok;
   bit boot_blk_ok, io_park_ok;
   logic [3:0] hold_cnt; logic hold_e, hold_q;
   bit want;
@@ -143,6 +147,7 @@ module clkdec_tb;
     // writes, fighting U4 for the SRAM's own I/O pins, and OFF during ordinary
     // I/O cycles, floating eight backplane lines. design-review2.md M-2, M-3.
     bootoe_ok = 1; excl_ok = 1; vec_ok = 1; boot_blk_ok = 1; io_park_ok = 1;
+    hi_park_ok = 1;
     for (int p = 0; p < 2; p++)
       for (int a7 = 0; a7 < 2; a7++)
         for (int a6 = 0; a6 < 2; a6++)
@@ -152,7 +157,12 @@ module clkdec_tb;
                 automatic bit iop = (p == 0);
                 automatic bit blkhi = iop && a7 == 1 && a6 == 0 && a5 == 0 && a4 == 1;
                 automatic bit blklo = iop && a7 == 1 && a6 == 0 && a5 == 1 && a4 == 0;
-                automatic bit mapsel = (r == 1 && !iop) || blkhi || blklo;
+                // ⚠ THE LOW SRAM'S CONDITION, not the union - 2026-09-09.
+                // Only U1 drives physical A20-A13; U1B drives A24-A21 and
+                // those never leave the board. With U4 shut for the high
+                // window (mmu.pld) the union would leave A20-A13 undriven for
+                // the sixteen high-byte writes of every boot.
+                automatic bit mapsel = (r == 1 && !iop) || blklo;
                 d_iopage = p[0]; d_la7 = a7[0]; d_la6 = a6[0];
                 d_la5 = a5[0]; d_la4 = a4[0]; d_run = r[0]; #1;
                 // the buffer drives if and only if no map SRAM is selected
@@ -160,10 +170,11 @@ module clkdec_tb;
                 // M-3: never both, and a boot-mode block write is the case
                 // that used to be both, sixteen times per boot.
                 if (!d_bootoe && mapsel) boot_blk_ok = 0;
+                if (blkhi && d_bootoe) hi_park_ok = 0;
                 // M-2: an ordinary I/O cycle parks the address rather than
                 // floating it - the buffer is on for every $FFxx that is not a
                 // block access, in either mode.
-                if (iop && !blkhi && !blklo && d_bootoe) io_park_ok = 0;
+                if (iop && !blklo && d_bootoe) io_park_ok = 0;
                 // The '244 and /IOSEL must never assert together for the
                 // vector page: /IOSEL means a card is addressed, and no card
                 // may see a vector fetch.
@@ -173,9 +184,10 @@ module clkdec_tb;
                 // general rule covers it with no term of its own.
                 if (iop && a7 == 1 && a6 == 1 && d_bootoe) vec_ok = 0;
               end
-    ok(bootoe_ok,   "the buffer drives if and only if neither map SRAM is selected");
+    ok(bootoe_ok,   "the buffer drives if and only if the LOW map SRAM is not selected - the net's other driver");
     ok(boot_blk_ok, "so it is OFF for a block-register access in BOOT mode - the sixteen writes of machine.md 7.2's boot sequence no longer fight U4");
-    ok(io_park_ok,  "and ON for every other $FFxx cycle, so physical A20-A13 are parked and not floating");
+    ok(io_park_ok,  "and ON for every other $FFxx cycle INCLUDING a high-byte write, so physical A20-A13 are parked and never floating");
+    ok(hi_park_ok, "⭐ and a HIGH-byte write parks them too - U4 is shut for that window since 2026-09-09, so the union of both chip enables would have left them floating sixteen times per boot");
     ok(vec_ok,  "the vector page asserts it forever, boot mode or not - which is what makes $FFFE a reset vector");
     ok(excl_ok, "and /IOSEL never fires for $FFC0-$FFFF, so no card ever sees a vector fetch");
 
@@ -267,13 +279,43 @@ module clkdec_tb;
     ok(e === (((hold_cnt == 4'd11) ? 4'd0 : hold_cnt + 4'd1) >= 4'd6),
        "E resumes in phase - a wait stretches a cycle, it does not skip one");
 
+    // *** AND THAT IS EXACTLY WHY THE VIDEO CARD'S SUB-SLOT PHASE MOVES.
+    // graphics.md 19 item 6. E is held; the video card's dot-phase counter is
+    // NOT - it is clocked by CLK25 on the card and knows nothing about /WAIT -
+    // so a stretch of N master clocks slides E against the fetch slot by
+    // N mod 4. The claim above is the mechanism, stated from the other side:
+    // "resumes the exact count" and "the phase survives" are about E's OWN
+    // sequence, not about its alignment to anything free-running.
+    //
+    // A 40-tick hold is 40 mod 4 = 0, so the run above happens to preserve the
+    // alignment. This one holds for 41 and shows it does not.
+    begin
+      int unsigned phase_before, phase_after, dot;
+      dot = 0;
+      n_reset = 0; @(posedge clk25); #1; n_reset = 1;
+      repeat (7) @(posedge clk25); #1;
+      dot = 7 % 4;
+      hold_cnt = cnt;
+      phase_before = dot;
+      wait_i = 1;
+      repeat (41) begin @(posedge clk25); dot = (dot + 1) % 4; end
+      #1; wait_i = 0;
+      @(posedge clk25); dot = (dot + 1) % 4; #1;
+      phase_after = dot;
+      ok(cnt === ((hold_cnt == 4'd11) ? 4'd0 : hold_cnt + 4'd1),
+         "a 41-tick hold still resumes the exact count - the divider does not care how long it was held");
+      ok(phase_after !== phase_before,
+         $sformatf("⚠ but the free-running dot phase moved under it: %0d -> %0d. 19 item 6 - a /WAIT of a length that is not a multiple of 4 RE-ALIGNS E against the video card's fetch slot, and 11's read budget is computed from a fixed alignment",
+                   phase_before, phase_after));
+    end
+
     // /RESET must still win over /WAIT: an asynchronous clear that a card
     // could veto by holding a wire low would be a machine that cannot be reset.
     wait_i = 1; n_reset = 0; @(posedge clk25); #1;
     ok(cnt == 0 && e == 0 && q == 0, "/RESET beats /WAIT - the clear is asynchronous");
     n_reset = 1; wait_i = 0;
 
-    if (fails == 0) $display("\nclkdec.v OK - 25 claims");
+    if (fails == 0) $display("\nclkdec.v OK - %0d claims", claims);
     else            $display("\n%0d FAILED", fails);
     if (fails != 0) $fatal(1);
     $finish;

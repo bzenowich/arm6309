@@ -45,12 +45,39 @@ const cells: Cell[] = [
     terms: phase[i],
   })),
 
-  /* The slot tick. hgen's slot counter and hadr's column counter both
-   * advance on it, so it is the boundary of the 158.9 ns fetch slot and it
-   * must not move with scroll. */
+  /* The slot tick. hgen's slot counter and hadr's column counter both advance
+   * on it, so it is the boundary of the 158.9 ns fetch slot and it must not
+   * move with scroll.
+   *
+   * ⭐ IT IS DOT 0, AND THAT IS A DECISION AS OF 2026-09-09 - it reached this
+   * value by accident (an unguarded whole-file replace while 8.2's FCLK was
+   * being rewritten caught `PH1 & PH0` here too) and it is kept on the merits.
+   *
+   * ⚠ IT WAS `PH1 & PH0` - dot 3 - AND DOT 3 DOES NOT WORK. Put back and
+   * measured: vaddr_tb's pixel check reported 636 OF 640 PIXELS WRONG at
+   * HSCROLL 0 and 159 of 160 tile addresses wrong in vtile_tb. The reason is
+   * ordering. SLOTTICK is a counter ENABLE, so a counter advances on the edge
+   * that ENDS the dot it is high in:
+   *
+   *   dot 0   the scan column advances at the PH 0 -> 1 boundary, one dot
+   *           AFTER the fetch latches clock, so the address the memory was
+   *           presenting is safely captured before it moves
+   *   dot 3   it advances on the PH 3 -> 0 boundary, which is the SAME edge
+   *           FCLK rises on - the address moves under the latch
+   *
+   * The old per-chip FCLK scheme (19 item 23(a), deleted with 8.2) hid that by
+   * clocking two of the four chips a dot later. With one clock for all four
+   * there is nothing left to hide it, and dot 0 is the phase that orders the
+   * two edges correctly.
+   *
+   * ⚠ AND IT IS ALSO WHY vsync_tb HUNG. Its frame-start wait read
+   * `SLOTTICK == 0 && PH == 0`, which named the first dot of a slot while the
+   * tick was at dot 3 and is UNSATISFIABLE now. A `forever` with no bound is a
+   * hang and not a failure: run.sh's exit code cannot see it and neither can
+   * the claim count. The condition is `PH == 0` alone. */
   {
     pin: 0, name: "SLOTTICK", assertedLow: false, s0: 1, registered: false,
-    terms: ["PH1 & PH0"],
+    terms: ["!PH1 & !PH0"],
   },
 
   /* 5.2.2: the spare access occupies the FRONT half of the slot and the
@@ -91,25 +118,34 @@ const cells: Cell[] = [
    * Nine product terms across four macrocells that were already budgeted, and
    * seqph.check.ts now computes the emitted byte sequence for every p and
    * asserts it is right - where before it could only assert it was wrong. */
-  ...[0, 1, 2, 3].map((n) => {
-    /* chip n is emitted before the wrap exactly when n >= p */
-    const early: string[] = [], late: string[] = []
-    for (let p = 0; p < 4; p++) {
-      const q = `${p & 1 ? "" : "!"}HS0 & ${p & 2 ? "" : "!"}HS1`
-      ;(n >= p ? early : late).push(q)
-    }
-    const guard = (ts: string[], edge: string) => ts.map((t) => `${edge} & ${t}`)
-    return {
-      pin: 0, name: `FCLK${n}`, assertedLow: false, s0: 1 as const, registered: false,
-      /* Enumerated over p and then minimised, because enumerating is the only
-       * way to write this that is obviously right and it produces exactly the
-       * A&B # A&!B shape jedec/minimise.ts cannot reduce. FCLK3 comes out as
-       * one term, which is the arithmetic saying chip 3 is never after the
-       * wrap. */
-      terms: minimalSop([...guard(early, "PH1 & PH0"), ...guard(late, "!PH1 & !PH0")]),
-      why: n === 3 ? "chip 3 is never after the wrap, so it is EARLY for every p" : undefined,
-    }
-  }),
+  /* ⛔ ONE CLOCK, NOT FOUR EQUATIONS - 2026-09-09, and 19 item 23(a)'s
+   * per-chip early/late scheme is deleted with it.
+   *
+   * 23(a) tried to make one latch rank hold two groups by clocking chips
+   * `p..3` at the PH 2->3 boundary and `0..p-1` at PH 3->0, "so a chip clocked
+   * LATE holds exactly one group more than a chip clocked EARLY". 19 item 28
+   * is the arithmetic that says it cannot work - a latch clocked once per slot
+   * always holds the most recent fetch, whichever edge you pick - and 8.2 is
+   * what does work: a SECOND RANK in series, selected per chip by an output
+   * enable. With the rank select carrying the group choice there is nothing
+   * left for the clock phase to carry, and HS0/HS1 leave this equation
+   * entirely.
+   *
+   * ⚠ AND THE OLD SCHEME WAS ACTIVELY WRONG ONCE THE RANKS EXISTED. vaddr_tb's
+   * pixel check reported chip 3 alone wrong at HSCROLL[1:0] = 0 - it was the
+   * one chip the p-dependent phase still moved. Nine product terms across four
+   * macrocells, deleted; the four clocks are now the same signal.
+   *
+   * 5.2.2 puts the edge at the PH 3 -> 0 boundary: after this slot's fetch has
+   * landed on the pixel bus, and after the phase-3 pixel has been emitted from
+   * the OLD contents. Clocking a dot earlier - inside PH 3 - makes the chip
+   * displayed at phase 3 read this slot's fetch instead of last slot's, which
+   * vaddr_tb reports as exactly one pixel in four wrong at every scroll value. */
+  ...[0, 1, 2, 3].map((n) => ({
+    pin: 0, name: `FCLK${n}`, assertedLow: false, s0: 1 as const, registered: false,
+    terms: ["!PH1 & !PH0"],
+    why: n === 0 ? "one clock for all four chips - 8.2's rank select carries the group choice" : undefined,
+  })),
 
   /* Which of the four latched bytes the '153 mux emits. This is the only
    * thing HSCROLL[1:0] touches. */

@@ -44,16 +44,18 @@ PIN 16 = RW ;       /* 6809 R/W: high = read                               */
 /* --- outputs ---------------------------------------------------------- */
 PIN 17 = !IOPAGE ;  /* to the backplane; gates every physical decode       */
 PIN 18 = MUXSEL ;   /* U5 '157 select: high = A3..A0, the write index      */
-PIN 19 = !ISOOE ;   /* U4 '245 output enable                               */
+PIN 19 = !ISOOE_LO ;/* U4  '245 output enable - the LOW  map byte          */
 PIN 20 = !MAPWE ;   /* U1 map SRAM write strobe                            */
 PIN 21 = !MAPOE ;   /* U1 map SRAM output enable                           */
 PIN 22 = !CTRLCP ;  /* U2 '574 clock - see the equation; edge at E-fall     */
-/* PIN 23 IS DELIBERATELY NOT DECLARED. It was `SPARE`, driven to 'b'0, and
- * that spends the pin the budget in gal/README.md counts as spare: a driven
- * output is a seventh macrocell, which drops available inputs from 16 to 15
- * against 15 needed. Undeclared, the macrocell stays at high-Z and the pin is
- * an input if the board ever wants one. Found by assembling the fuse map -
- * see jedec.check.ts. */
+PIN 23 = !ISOOE_HI ;/* U18 '245 output enable - the HIGH map byte           */
+/* !! PIN 23 IS SPENT, 2026-09-09, and it was the last one on this part.
+ * It was `SPARE`, driven to 'b'0, and then undeclared so the macrocell held
+ * the pin at high-Z and the budget in gal/README.md could count it as spare:
+ * "6 outputs, 16 available inputs, 15 needed, one pin spare". The high map
+ * byte's '245 needs an enable of its own, so the part now takes the row below
+ * it - "7 outputs, 15 available, 15 needed, nothing left" - and it fits
+ * exactly. See the ISOOE equations. */
 
 /* --- intermediate terms ----------------------------------------------- */
 FIELD page = [LA15..LA8] ;
@@ -96,10 +98,25 @@ IOPAGE = iopage ;
  * none. */
 MUXSEL = blksel ;
 
-/* The '245 is enabled for E-high only, read or write. Turning it on at
+/* The '245s are enabled for E-high only, read or write. Turning them on at
  * E-rise instead of Q-rise is what makes break-before-make comfortable
- * rather than marginal: MAPOE has been away since address time. */
-ISOOE = blksel & E ;
+ * rather than marginal: MAPOE has been away since address time.
+ *
+ * !! ONE ENABLE BECAME TWO ON 2026-09-09, and it is the second half of
+ * design-review2.md M-1. That finding gave the high map byte its own WINDOW
+ * and the board still had no wire from D0-D7 to the high map SRAM: U1B's
+ * DQ0-DQ3 went straight to physical A24..A21 and nowhere else, so the high
+ * byte was writable in simulation and unwritable on silicon.
+ *
+ * ram.md 3.1 costed the second SRAM with "Isolation '245: 0 - both SRAMs sit
+ * on the same D0-D7", and two common-I/O SRAMs cannot: each drives its own DQ
+ * pins for the whole of every translation, so they are two separate nodes and
+ * each needs its own buffer. Two buffers on one enable would BOTH drive
+ * D0-D7 for the whole of any block read, one of them from a floating node -
+ * so the enables split with the windows. One product term each, where the
+ * single output was two. */
+ISOOE_LO = blklo & E ;   /* U4  - $FFA0-$FFAF, physical A20..A13 */
+ISOOE_HI = blkhi & E ;   /* U18 - $FF90-$FF9F, physical A24..A21 + 3.3 flags */
 
 /* Inside that window, and started a further quarter cycle later, so the
  * buffer is already driving. Releases at E-fall, before the buffer does. */

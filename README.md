@@ -56,15 +56,22 @@ count, and a measurement in place of an estimate wherever one can be taken.
 >
 > **What the repairs cost:** the MMU's two map bytes get **two windows** instead of
 > sharing an address bit with the task index, out of 32 bytes that decoded nowhere —
-> U9 gives back a pin and U3's decode is the same size. The video card gains **one
-> `GAL22V10`** for the span length counter, which is the one "absorbed" package that
-> genuinely could not be, and is **28 ICs**; the room for the rest came from encoding
-> its address-mux selects as two bits, which took `vctrl` from 122 macrocells to 104.
+> U9 gives back a pin and U3's decode is the same size. The video card ends the day at
+> **36 ICs on a 24 cm board**, and eight of those packages arrived on 2026-09-09: seven
+> of them are features that were **specified and had no hardware behind them** —
+> byte-granular horizontal scroll, the palette *write path*, and the display list's
+> register port — and the eighth is a third `ATF1508AS`, which **reduced** the count by
+> absorbing all three of the card's `GAL22V10`s (`graphics.md` §10.1.7, §14.1).
 >
-> ⚠ **Two things are open and both are specification rather than wiring**: byte-granular
-> horizontal scroll needs two fetch groups live at once and one latch rank cannot hold
-> them (`graphics.md` §19 item 28), and the display list has no descriptor format
-> (item 32).
+> ⭐ **The display list has a descriptor format since 2026-09-09** — `MOVE`, `WAIT`,
+> `$FF` to end (`graphics.md` §10.3.2) — and it reaches **`HSCROLL`, `HSCROLLH` and the
+> whole palette port**, so per-scanline gradients and split palettes are hardware and
+> not a raster interrupt. ⛔ **`CTRL` is the one it cannot reach, and the reason is
+> which data bus `vctrl` taps rather than a pin count** (§10.3.4). ⭐ **Byte-granular
+> horizontal scroll closed the same day** (§19 item 28, §8.2): two ranks of fetch latch
+> in series with an output-enable select, +4 packages against the +12 the item
+> estimated, and `vaddr_tb` emits a whole 640-pixel line at every `HSCROLL` from 0 to 7
+> and gets **0 wrong of 640** at all eight.
 
 ---
 
@@ -73,8 +80,8 @@ count, and a measurement in place of an estimate wherever one can be taken.
 | | What | Status | Start here |
 |---|---|---|---|
 | [`cpu/`](cpu/) | HD6309E on an **STM32G431CBU6**, 40-pin drop-in. One UFQFPN48 SKU for the CoCo 3 and this machine, running **byte-identical firmware on both** — the MMU is on the motherboard and so, since 2026-09-08, is the boot ROM. | **Phase 1 — timing spike written, not yet measured on silicon** | [`cpu/README.md`](cpu/README.md), [`cpu/docs/plan.md`](cpu/docs/plan.md) |
-| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, smooth scroll, span writer. **28 ICs** — 2 `ATF1508AS`, 2 `GAL22V10`, both CPLDs fitted with JTAG. | **Specified; simulated 2026-09-09, and repaired — 28 ICs, two open items** | [`video/README.md`](video/README.md), [`video/docs/graphics.md`](video/docs/graphics.md), [`video/docs/features.md`](video/docs/features.md) |
-| [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula, **with programmable panning**, 512 KB of samples in one package and a headphone-driven jack. **32 ICs** — one `ATF1508AS` PLCC-84 holds all the logic; whether the analogue section fits the same card is open. Host reference model **builds and passes**. | ⛔ **Register block specified and fitted; the sequencer is not designed** | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
+| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, byte-granular scroll, span writer, a display list that writes the palette per scanline. **36 ICs** on a 24 cm board — 3 `ATF1508AS` and no GALs, all three fitted with JTAG. | **Specified; simulated 2026-09-09 and repaired — 36 ICs, two open items** | [`video/README.md`](video/README.md), [`video/docs/graphics.md`](video/docs/graphics.md), [`video/docs/features.md`](video/docs/features.md) |
+| [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula, **with programmable panning**, 512 KB of samples in one package and a headphone-driven jack. **45 ICs on a 24 cm card** — **two** `ATF1508AS`, both fitted, plus twelve datapath packages the budget had never counted; whether the analogue section fits the same card is open. Host reference model **builds and passes**. | ⭐ **Both CPLDs fitted, and the sequencer exactly fills its part; the card is simulated end to end — a sample byte reaches an `AD7528` and a buffer reloads from its shadow.** The analogue half is still unmeasured | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
 | [`io/`](io/) | PS/2 keyboard and mouse — **11 ICs** of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does, and since 2026-09-09 it is a **`TL16C550C` at 115,200 baud with 16-byte FIFOs**. One 14-IC card. | **Both specified** | [`io/README.md`](io/README.md), [`io/ps2/docs/ps2.md`](io/ps2/docs/ps2.md), [`io/serial/docs/serial.md`](io/serial/docs/serial.md) |
 | [`storage/`](storage/) | SD card interface — **14 ICs**, **681 KiB/s sustained**, an SPI burst started by the bus read strobe into a block buffer the host reads as memory. ⚠ The `TFM` hazard is retired, not mitigated. | **Specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |
 | [`net/`](net/) | 10BASE-T with no MAC or PHY chip — **12 ICs**, two `ATF1508AS`, ported from `~/code/applenet`. ⚠ The host takes **56 % of the wire**; its sixteen-frame ring lives in the machine's new physical space. | **Specified** | [`net/README.md`](net/README.md), [`net/docs/net.md`](net/docs/net.md) |
@@ -141,9 +148,10 @@ npm run check:sim     # the motherboard's two hand-written Verilog models
 npm run check:video   # ⛔ the cards and the motherboard, generated and simulated
 ```
 
-`check:video` reports **140 ok and no failures** as of 2026-09-09. It reported 122 and
-16 before the repairs of that day, and [`docs/design-review2.md`](docs/design-review2.md)
-§10 says what each one turned into.
+`check:video` reports **144 ok and no failures** as of 2026-09-09 — 140 after that
+day's repairs, plus four for `graphics.md` §10.3.2's descriptor format. It reported 122
+and 16 before the repairs, and [`docs/design-review2.md`](docs/design-review2.md) §10
+says what each one turned into.
 
 ### Firmware — `cpu/` only
 

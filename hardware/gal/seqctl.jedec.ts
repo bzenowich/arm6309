@@ -142,10 +142,36 @@ const cells: Cell[] = [
   /* 13's WADV: 00 continue, 01 next row same column, 10 vertical. Both
    * non-zero modes advance WPTR's row at the end of the span; 01 also
    * reloads the column from 7.2's register-file shadow, which is the other
-   * sequencer part's business because it drives the register-file address. */
+   * sequencer part's business because it drives the register-file address.
+   *
+   * ** !LRUN IS 19 ITEM 24, CLOSED 2026-09-09, AND IT IS FREE.
+   *
+   * 10.3.1: the list engine has no pointer of its own - WPTR is the list
+   * pointer - and the engine's walk is a plain +1. WADV changes what an
+   * increment DOES, so a driver that left WADV in vertical mode and then
+   * started a list got an engine that stepped by 1,024. The item costed the
+   * fix as "one product term on vctrl: BCTRL.GO forces WADV to 00".
+   *
+   * ** GATING HERE IS CHEAPER THAN CLEARING THE REGISTER, and it is also the
+   * better semantics:
+   *
+   *   - ZERO product terms and zero macrocells. WADV acts on nothing except
+   *     this signal, so one literal on each of two existing terms is the
+   *     whole of it. Clearing the WADV register instead would have needed
+   *     BCTRLGO as an input pin on vctrl, WHICH IS AT 64 OF 64 I/O.
+   *   - LRUN rather than BCTRLGO, so it holds for the WHOLE walk and not just
+   *     the instant it starts. A mid-list write to +$14 cannot break the walk
+   *     either, which BCTRL.GO alone did not cover.
+   *   - THE REGISTER IS NOT DESTROYED. Software's WADV survives the list, so
+   *     10.3.1's reload rule stays "reload WPTR" and does not grow a second
+   *     clause. Clearing the register would have added one.
+   *
+   * LRUN is already a pin on vctrl (vctrl.pld) because 10.3's BSTAT b0 reads
+   * it back, so on the merged part this costs nothing at all; on the
+   * standalone GAL it is pin 11, which was free. */
   {
     pin: 0, name: "WROWADV", assertedLow: false, s0: 1, registered: false,
-    terms: ["SPANEND & WADV0", "SPANEND & WADV1"],
+    terms: ["SPANEND & WADV0 & !LRUN", "SPANEND & WADV1 & !LRUN"],
   },
 ]
 
@@ -174,6 +200,9 @@ export const seqctlDesign: Design = {
     { name: "MASKBIT", pin: 10 },
     /* One dot per fetch slot, at the end of 5.2.2's spare window. */
     { name: "SPNTICK", pin: 13 },
+    /* 19 item 24: the list engine owns WPTR while this is high, and its walk
+     * is a plain +1. See WROWADV. */
+    { name: "LRUN", pin: 11 },
   ],
   cells: cells.map((c) => ({ ...c, pin: pins[c.name] })),
   spares: [18, 19],
