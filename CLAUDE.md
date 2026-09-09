@@ -50,3 +50,72 @@ is marked, not deleted" convention — see the root `README.md` Conventions sect
   `README.md`, and other cards' comparison tables usually quote it.
 - History entries preserve the technical content verbatim or lightly trimmed —
   the archive is the record, not a summary.
+
+## Running the checks
+
+**Everything runs from `hardware/`.** `bun` is a `devDependency` and lives in
+`node_modules/.bin`, so invoke these as npm scripts — `bun run …` from a shell
+will not find it. The Verilator tests need `verilator` on `PATH` (5.020
+verified); the CPLD fitter additionally needs `wine` and the WinCUPL extraction
+under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
+
+| | |
+|---|---|
+| `npm run check` | every GAL design against its own model, and the live ones against Atmel's CUPL. **391 claims, ~36 s** |
+| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs six testbenches. **140 claims, ~2 min 40 s** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
+| `npm run check:sim` | the two *hand-written* Verilog models, `gal/mmu.v` and `gal/clkdec.v`, with their own testbenches. Older and separate from `check:video` |
+| `npm run check:netlist` | the motherboard's connectivity, against `dist/mainboard/mainboard/circuit.json` — **a build artefact**, so run `npm run build` first if a `.circuit.tsx` changed |
+| `npm run gen:pld` | writes `gal/{vaddr,vctrl,audio}.pld` from the term lists |
+| `npm run build` | renders every `.circuit.tsx` to `dist/` with `tsci` |
+| `npm run build:all` | all of the above in order — `gen:pld`, `build`, `check`, `check:netlist`, `check:sim`, `check:video` |
+
+### The Verilator tests
+
+`npm run check:video` is the one that runs the *design* rather than its
+equations. It ends with a line like `140 claims, 0 failed`, and **its exit code
+is the answer** — a testbench prints a failed claim and then calls `$finish`,
+which exits 0, so the count is what decides the status. Read the `FAIL` lines;
+each names the claim and the observed value.
+
+One testbench at a time, from `hardware/gal/verilog/`:
+
+```sh
+TBS=vtile sh run.sh          # one; TBS="vsync vaddr" for several
+```
+
+| Testbench | Parts instantiated | What it asserts |
+|---|---|---|
+| `vsync_tb` | the whole video card | raster geometry in all four `VMODE` codes, sync widths and **polarity**, blanking |
+| `vaddr_tb` | " | the bitmap scan address over whole lines, both scroll axes, both ring wraps, line doubling, who owns the internal address bus |
+| `vtile_tb` | " | the cell fetch cadence, both address concatenations, cell-mode scroll in both axes, the 32-row ring |
+| `vspan_tb` | " | all four `WMODE`s, the retire rate, `/WAIT`'s read/write rule, `WADV` chaining, the display list, the VBL interrupt |
+| `audio_tb` | the audio CPLD | the slot walk, the ÷5 CIA clock, Paula's set/clear, open-drain `/FIRQ`, §9.4.5's merge |
+| `mainboard_tb` | U3, U6, U9, U10 + the map SRAMs, `'157`, `'574`, boot `'244`, flash and SIMMs | the boot sequence, the 32 MB map, the four SIMM windows, `/IOPAGE`, and that exactly one thing drives physical `A20`–`A13` |
+
+**What is generated and what is written.** `verilog/emit.ts` turns a `Merged`
+or a `Design` into Verilog from **the same `Cell` term lists `jedec/cupl.ts`
+compiles for the fitter** — so `vaddr.v`, `vctrl.v`, `rfa.v`, `vlen.v`,
+`audio.v`, `u9.v` and `u10.v` are build outputs and ⚠ **must not be edited**;
+change the `.jedec.ts` and re-run. The card and board wrappers
+(`video_card.v`, `mainboard.v`) and every `*_tb.sv` are hand-written.
+`verilog/README.md` has the rest.
+
+⚠ **It models the logic and not the timing.** Propagation delay, the switch
+matrix, product-term cascading and placement are `fit1508.exe`'s business and
+`cpld/*.fit` is where they are recorded. Whether a signal carries the sub-slot
+phase *at all* is logic, not delay, and this model does see that — which is
+where two of `design-review2.md`'s findings came from.
+
+### Three traps this repository has already paid for
+
+- **A failed CPLD fit leaves the previous `.fit` in place.** A stale
+  utilisation report reads exactly like a passing one. Compare the file's hash
+  across the run, or grep the fitter's output for `INTERNAL ERROR` /
+  `does not fit`. `gal/prjbureau/fit1508.sh` records the same trap for CUPL's
+  `.tt2`.
+- **Every `.pld` must be 7-bit ASCII.** Atmel's CUPL is an MS-DOS program and
+  its lexer aborts on the `⚠`/`⭐`/`⛔` this repository's prose is made of —
+  `illegal character: ASCII code 226`. `jedec.check.ts` asserts it.
+- **A check that holds an input constant cannot see a defect in it**, and a
+  model that ORs its drivers cannot see a bus fight. Both cost a real defect on
+  2026-09-09; `design-review2.md` §10 has them.
