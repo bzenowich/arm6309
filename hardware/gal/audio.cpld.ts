@@ -45,11 +45,29 @@ const merged: Cell[] = [
   ...sync("SYNCH", "HOSTREQ"),   // the posted write / prefetch request
   ...sync("SYNCR", "RINTREQ"),   // the AINTREQ read strobe
   ...sync("SYNCS", "SFCE"),      // state-file access
-  /* §9.4.5: request bits merge into INTREQ on the colour clock AFTER the
-   * synchronised read strobe deasserts, so a set arriving during a host read
-   * is neither lost nor half-seen. */
+  /* §9.4.5: a request bit set by the slot logic merges into INTREQ on a colour
+   * clock, and NOT while a host read of AINTREQ is in flight - so a set
+   * arriving during a read is neither lost nor half-seen.
+   *
+   * ⛔ IT READ `CCLK & SYNCR2 & !SYNCR1` UNTIL 2026-09-09, which is the
+   * TRAILING EDGE of a host read rather than the absence of one, and it made
+   * the card's interrupts undeliverable in two independent ways:
+   *
+   *   - nothing merged unless the host READ AINTREQ. A channel that exhausted
+   *     its buffer set PENDn, PENDn stayed set, REQn never rose, FIRQANY never
+   *     saw it and /FIRQ was never asserted. §1 requirement 7 - the per-channel
+   *     end-of-buffer interrupt - was not delivered at all;
+   *   - and even then only by coincidence. `SYNCR2 & !SYNCR1` is one slot wide
+   *     and CCLK is one slot in eight, so whether a read merged anything
+   *     depended on which slot it happened to deassert on. Measured over the
+   *     phase: 2 of 16.
+   *
+   * docs/design-review2.md A-2. The repair is one literal, and it is what
+   * §9.4.5's own wording describes: merge on the colour clock, suppressed
+   * while a read is in flight. */
   { pin: 0, name: "MERGE", assertedLow: false, s0: 1, registered: false,
-    terms: ["CCLK & SYNCR2 & !SYNCR1"] },
+    why: "9.4.5: every colour clock EXCEPT while a host read is in flight",
+    terms: ["CCLK & !SYNCR2 & !SYNCR1"] },
   /* §8.1's condition, which the GAL split could not form. */
   { pin: 0, name: "FIRQANY", assertedLow: false, s0: 1, registered: false,
     terms: [0, 1, 2, 3, 4, 5].map((i) => `REQ${i} & ENA${i}`) },

@@ -1,0 +1,104 @@
+Name       vlen ;
+PartNo     ARM6309-UV11 ;
+Date       2026-09-09 ;
+Revision   01 ;
+Designer   arm6309 ;
+Company    - ;
+Assembly   video card - span-solid length counter ;
+Location   UV11, video card ;
+Device     g22v10 ;
+
+/* ------------------------------------------------------------------------
+ * The span-solid length counter - graphics.md 7.4, and the second GAL on the
+ * video card.
+ *
+ * XX WHY IT EXISTS. 10.1.6 lists "the '161 SPANLEN pair" among the packages
+ * the two CPLDs absorbed and 14.1 deletes both from the IC count. No design
+ * file contained the counter, so TC was an input to vctrl that nothing on the
+ * card produced - and seqctl terminates a span-solid on RETIRE & SOLID & TC,
+ * so SPANBUSY latched for ever and /WAIT held the machine on the first fill.
+ * docs/design-review2.md V-1.
+ *
+ * !! AND IT CANNOT GO INSIDE EITHER CPLD. 7.4 loads it from the REGISTER FILE
+ * rather than from the CPU bus, because a span-solid is issued as "WPTR x3 +
+ * the posted write" with SPANLEN written once - 7.3's full-screen clear is 500
+ * spans and one SPANLEN - so the length has to persist across spans, and 19
+ * item 23(b) put it in the file. Loading it is eight pins on the file's read
+ * bus, and vctrl is at 64 of 64 I/O while vaddr is at 61 of 64. Eight pins is
+ * the whole story; the nine macrocells would have fitted either part.
+ *
+ * ** IT COUNTS UP IN THE COMPLEMENT. A down-counter's borrow chain and an
+ * up-counter's carry chain are the same equations on inverted state, so this
+ * part holds ~SPANLEN, loads it through the load term's own inversion (which
+ * is free), and its terminal count is the one everybody wants: SPANLEN = 0 is
+ * ~SPANLEN = 255, ONE product term of eight literals rather than eight terms
+ * of one.
+ *
+ * The equations below are written with CUPL's XOR and a carry conjunction;
+ * vlen.jedec.ts hand-expands the same counter into the sum of products a
+ * 22V10 implements, and jedec/cupl.check.ts sweeps one against the other.
+ * ------------------------------------------------------------------------ */
+
+/* --- inputs ----------------------------------------------------------- */
+PIN 1  = CLK ;        /* DOTCLK - the card's one clock                      */
+PIN 2  = RD0 ;        /* the register file's read bus: SPANLEN while idle */
+PIN 3  = RD1 ;
+PIN 4  = RD2 ;
+PIN 5  = RD3 ;
+PIN 6  = RD4 ;
+PIN 7  = RD5 ;
+PIN 8  = RD6 ;
+PIN 9  = RD7 ;
+PIN 10 = WSTBV ;      /* 3.1.1's posted VRAM write, from vctrl              */
+PIN 11 = SPANBUSY ;   /* so a later edge of the same strobe cannot reload    */
+PIN 13 = RETIRE ;     /* one granted retire, from seqctl                     */
+
+/* --- outputs ---------------------------------------------------------- */
+PIN 14 = NSL0 ;      /* the complement of the remaining length */
+PIN 15 = NSL1 ;      /* the complement of the remaining length */
+PIN 16 = NSL2 ;      /* the complement of the remaining length */
+PIN 17 = NSL3 ;      /* the complement of the remaining length */
+PIN 18 = NSL4 ;      /* the complement of the remaining length */
+PIN 19 = NSL5 ;      /* the complement of the remaining length */
+PIN 20 = NSL6 ;      /* the complement of the remaining length */
+PIN 21 = NSL7 ;      /* the complement of the remaining length */
+PIN 22 = LDLEN ;      /* the load condition, on a pin so it can be probed    */
+PIN 23 = TC ;         /* to seqctl: the span's last byte is retiring         */
+
+/* --- equations -------------------------------------------------------- */
+
+/* !! THE !SPANBUSY LITERAL IS NOT DECORATION. WSTBV is a level over E-high and
+ * SPANBUSY rises on the first dot clock inside it - at which instant rfa
+ * switches the register file from SPANLEN to WFG/WBG (regfile.jedec.ts).
+ * Without this the counter would reload from the colour byte on every later
+ * edge of the same strobe. */
+LDLEN = WSTBV & !SPANBUSY ;
+
+NSL0.D = LDLEN & !RD0
+        # !LDLEN & RETIRE & !NSL0
+        # !LDLEN & !RETIRE & NSL0 ;
+NSL1.D = LDLEN & !RD1
+        # !LDLEN & RETIRE & (NSL1 $ (NSL0))
+        # !LDLEN & !RETIRE & NSL1 ;
+NSL2.D = LDLEN & !RD2
+        # !LDLEN & RETIRE & (NSL2 $ (NSL0 & NSL1))
+        # !LDLEN & !RETIRE & NSL2 ;
+NSL3.D = LDLEN & !RD3
+        # !LDLEN & RETIRE & (NSL3 $ (NSL0 & NSL1 & NSL2))
+        # !LDLEN & !RETIRE & NSL3 ;
+NSL4.D = LDLEN & !RD4
+        # !LDLEN & RETIRE & (NSL4 $ (NSL0 & NSL1 & NSL2 & NSL3))
+        # !LDLEN & !RETIRE & NSL4 ;
+NSL5.D = LDLEN & !RD5
+        # !LDLEN & RETIRE & (NSL5 $ (NSL0 & NSL1 & NSL2 & NSL3 & NSL4))
+        # !LDLEN & !RETIRE & NSL5 ;
+NSL6.D = LDLEN & !RD6
+        # !LDLEN & RETIRE & (NSL6 $ (NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5))
+        # !LDLEN & !RETIRE & NSL6 ;
+NSL7.D = LDLEN & !RD7
+        # !LDLEN & RETIRE & (NSL7 $ (NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6))
+        # !LDLEN & !RETIRE & NSL7 ;
+
+/* ** ONE TERM, and it is the whole argument for the complement. */
+TC = NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6 & NSL7 ;
+

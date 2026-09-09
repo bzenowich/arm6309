@@ -62,7 +62,8 @@ export const u9Design: Design = {
     /* On macrocell pins, which is where inputs belong when the macrocells are
      * the narrow ones: pin 14 and pin 23 hold 8 product terms each and an
      * input costs none. */
-    { name: "LA3", pin: 14 },
+    /* ⚠ LA3 LEFT THIS PART on 2026-09-09 - the window splits the two map
+     * bytes now, not the write index's task bit. Pin 14 is free. */
     { name: "RW", pin: 23 },
   ],
 
@@ -76,18 +77,26 @@ export const u9Design: Design = {
      * The !IOPAGE term already excludes the vector page, because the vector
      * page is inside $FF00-$FFFF. That is why this is two terms and not five.
      *
-     * LA3 splits the block-register window: ram.md 4.1 Layout A puts blocks
-     * 0-7's low byte at $FFA0-$FFA7 and their high byte at $FFA8-$FFAF. U3's
-     * MAPWE is common to both parts and never sees LA3; the chip enable is
-     * what makes a write land in one SRAM and not the other, which is the
-     * cheapest place to put it - U3 has no pin for LA3 and this part does. */
+     * ⚠ THE WINDOW SPLITS THE TWO BYTES, NOT LA3 - 2026-09-09. U3's MAPWE is
+     * common to both parts, so the chip enable is what makes a write land in
+     * one SRAM and not the other; until today that enable was LA3, and LA3 is
+     * already the TASK bit of the write index {TASK, block} that U5's '157
+     * puts on MAPA3..MAPA0. One line, two jobs: a write to $FFA8 meant to set
+     * TASK 0 block 0's high byte landed in entry 8, which is TASK 1's block 0,
+     * while TASK 0's translation read entry 0. No task could have both bytes
+     * of a block set and NOTHING ABOVE PHYSICAL 2 MB WAS REACHABLE.
+     * design-review2.md M-1.
+     *
+     * Two windows instead, from the 32 bytes at $FF80-$FF9F that decode
+     * nowhere - outside the $FF00-$FF7F geographic window, so no card loses a
+     * byte. Same term count, and this part gives back pin 14. */
     {
       pin: 15, name: "MAPCE_LO", assertedLow: true, s0: 0,
-      terms: ["RUN & !IOPAGE", "IOPAGE & LA7 & !LA6 & LA5 & !LA4 & !LA3"],
+      terms: ["RUN & !IOPAGE", "IOPAGE & LA7 & !LA6 & LA5 & !LA4"],
     },
     {
       pin: 16, name: "MAPCE_HI", assertedLow: true, s0: 0,
-      terms: ["RUN & !IOPAGE", "IOPAGE & LA7 & !LA6 & LA5 & !LA4 & LA3"],
+      terms: ["RUN & !IOPAGE", "IOPAGE & LA7 & !LA6 & !LA5 & LA4"],
     },
 
     /* -- the boot ROM ---------------------------------------------------- */

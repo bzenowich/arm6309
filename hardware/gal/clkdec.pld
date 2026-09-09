@@ -70,7 +70,7 @@ PIN 11 = LA0 ;       /* $FFB0 even is TASK, $FFB1 odd is BOOT - machine.md
  * RAM's decode until 2026-09-09; the RAM went and LA5/LA4 took the pins. */
 
 /* --- outputs ---------------------------------------------------------- */
-PIN 14 = !BOOTOE ;    /*  8 terms available, 2 used */
+PIN 14 = !BOOTOE ;    /*  8 terms available, 3 used */
 PIN 15 = !IOSEL ;    /* 10, 1 */
 PIN 16 = C0 ;        /* 12, 1 */
 PIN 17 = C1 ;        /* 14, 2 */
@@ -193,23 +193,45 @@ Q.d = ( !FAST_E & ( !C3 & C1             /* 2, 3, 6, 7  */
 ctlwr = IOPAGE & LA7 & !LA6 & LA5 & LA4 & !RW & E ;
 RUN.d = RUN # ctlwr & LA0 ;
 
-/* The '244 drives physical A20-A13 whenever the map SRAMs do not, and the
- * two conditions are complementary by construction rather than by timing:
+/* ** THE '244 DRIVES PHYSICAL A20-A13 EXACTLY WHEN THE MAP SRAMs DO NOT, and
+ * since 2026-09-09 that is what this equation says rather than what its
+ * comment claimed. It is now the literal complement of U9's MAPCE, one
+ * condition written once:
  *
- *   boot mode          RUN = 0, the whole mode
- *   the vector page    $FFC0-$FFFF, every cycle, forever
+ *     BOOTOE = /( translating # a block-register access )
  *
- * VECSEL IS ONE PRODUCT TERM because /IOPAGE already means "logical
- * $FF00-$FFFF" (mmu.pld) - $FFC0-$FFFF is that page with A7 and A6 both
- * high, and both are already on this part for /IOSEL and the MMU window.
- * A card-style A15..A8 compare here would have cost eight literals and an
- * input pin.
+ * XX WHAT IT WAS: `!RUN # vecsel`, enumerating the two modes in which the
+ * buffer should drive. That list was incomplete in one direction and wrong in
+ * the other, and both mattered:
  *
- * U9 forms the map SRAMs' /CE from the same two conditions, so the changeover
- * is one signal seen by two parts rather than two decodes that have to
- * agree. */
-vecsel = IOPAGE & LA7 & LA6 ;
-BOOTOE = !RUN # vecsel ;
+ *   BOOT MODE AND $FFA0 AT ONCE.  U9 selects a map SRAM for a block-register
+ *   access whatever RUN says, and the '245 then drives the SRAM's common I/O
+ *   - which IS physical A20-A13 (mainboard.circuit.tsx). With !RUN in the
+ *   list the buffer was on as well. The sixteen map writes of machine.md
+ *   7.2's boot sequence are exactly that case: EVERY ONE OF THEM WAS A BUS
+ *   FIGHT between this buffer and U4. design-review2.md M-3.
+ *
+ *   AN ORDINARY I/O CYCLE.  RUN = 1, not a block access, so U9 deselects both
+ *   SRAMs - and the old list did not mention I/O cycles, so the buffer stayed
+ *   off too. Physical A20-A13 FLOATED on the backplane for the whole of every
+ *   register access in the machine, into six cards' inputs. graphics.md 6.3.2
+ *   asks for them "parked at a defined pattern"; nothing parked them.
+ *   design-review2.md M-2.
+ *
+ * ** AND VECSEL DISAPPEARS INTO IT. $FFC0-$FFFF is an I/O cycle and not a
+ * block access, so the map SRAMs are already deselected there and the general
+ * rule covers the vector page without naming it. One equation, three
+ * behaviours, three terms - one FEWER literal than the two-term version it
+ * replaces, because the block windows were already being decoded on this part
+ * for the $FFB1 strobe.
+ *
+ * IMPLEMENTED COMPLEMENTED. The pin is declared !BOOTOE, so the macrocell
+ * forms the DE-asserted condition - "a map SRAM is selected" - in three terms
+ * where the asserted form is nine. */
+mapsel = RUN & !IOPAGE                       /* translating                  */
+       # IOPAGE & LA7 & !LA6 &  LA5 & !LA4   /* $FFA0-$FFAF, the low byte    */
+       # IOPAGE & LA7 & !LA6 & !LA5 &  LA4 ; /* $FF90-$FF9F, the high byte   */
+!BOOTOE = mapsel ;
 
 /* The 22V10's asynchronous reset is one term shared by every registered
  * macrocell, so the counter, E, Q and RUN all land in a defined state

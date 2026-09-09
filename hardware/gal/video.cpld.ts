@@ -17,11 +17,12 @@ import { merge, rename, toCupl, type Merged } from "./jedec/cupl"
 import type { Cell } from "./jedec/assemble"
 import { hgenDesign, vgenDesign, vdecDesign } from "./sync.jedec"
 import { hadrDesign, vadrDesign } from "./scan.jedec"
-import { arbDesign, wcolDesign, wrowDesign } from "./access.jedec"
+import { arbDesign, wcolCellsFor, wcolDesign, wrowDesign } from "./access.jedec"
 import { seqphDesign } from "./seqph.jedec"
 import { seqctlDesign } from "./seqctl.jedec"
 import {
-  addressMux, listEngine, mapColumn, scrollHolds, tileCadence, tileRegisters,
+  addressMux, listEngine, mapColumn, maskSerialiser, scrollHolds, tileCadence,
+  tileRegisters, columnReload,
 } from "./video.parts"
 import { decodeCells, writeStrobes } from "./regfile"
 
@@ -67,10 +68,15 @@ const wptrMap = Object.fromEntries([...Array(19).keys()].map((i) => [`A${i}`, `W
 const mux = addressMux()
 
 export const vaddrCpld: Merged = merge(
+  /* ⚠ wcol IS MERGED WITH 7.2's RELOAD and checked without it - access.jedec.ts
+   * has the arithmetic. Thirteen inputs is not a GAL22V10, and the reload
+   * changes nothing about the counting or the wrap that access.check.ts
+   * exercises. One generator, two forms. */
   [rename(hadrDesign, scanMap), rename(vadrDesign, rowMap),
-   rename(wcolDesign, wptrMap), rename(wrowDesign, wptrMap)],
-  [...scrollHolds, ...tileRegisters, ...mapColumn, ...writeStrobes,
-   ...(WITH_LIST ? listEngine : []), ...mux],
+   rename({ ...wcolDesign, cells: wcolCellsFor(true) }, wptrMap),
+   rename(wrowDesign, wptrMap)],
+  [...scrollHolds, ...tileRegisters, ...mapColumn, ...columnReload,
+   ...writeStrobes, ...(WITH_LIST ? listEngine : []), ...mux],
   {
     name: "vaddr", partNo: "ARM6309-UV0A", location: "video card - address datapath",
     device: "f1508ispplcc84", clock: "DOTCLK",
@@ -82,6 +88,9 @@ export const vaddrCpld: Merged = merge(
        * - V0..V2 are no longer imported at all. */
       "MAPA0", "MAPA1",
       ...(WITH_LIST ? ["LRUN"] : []),  // BSTAT, and the arbiter's third requester
+      /* 7.2's reload walk, to rfa - which points the register file at WPTR's
+       * own bytes for the two dots it lasts. */
+      "RP0", "RP1",
     ]),
   },
 )
@@ -104,21 +113,67 @@ const ctrlBit = (i: number, name: string): Cell => ({
 })
 
 const ctrl: Cell[] = [
-  ctrlBit(0, "VMODE0"), ctrlBit(1, "VMODE1"), ctrlBit(2, "CHAR"),
+  ctrlBit(0, "VMODE0"), ctrlBit(1, "VMODE1"),
+  /* ⚠ b2 CHAR IS NOT BUILT. It went with 6.4.3's Variant B on 2026-09-08 and
+   * nothing has read it since, so the macrocell it cost is spent on the mask
+   * serialiser instead. 13 keeps the bit reserved against a rebuild. */
   ctrlBit(3, "WM0"),    ctrlBit(4, "WM1"),    ctrlBit(5, "CELL"),
   ctrlBit(6, "IRQEN"),  ctrlBit(7, "DISPEN"),
 ]
 
+/* ---- 13's +$14, WADV, and 8's HSCROLL[1:0] ------------------------------
+ *
+ * ⛔ NEITHER EXISTED. Both were inputs to this part that nothing on the card
+ * produced (design-review2.md V-1): WADV0/WADV1 meant 7.2's chaining could not
+ * be selected, and HS0/HS1 meant the mux-phase preload - "sub-pixel horizontal
+ * smoothness costs zero parts, because the phase counter already drives the
+ * 4:1 selection" (8) - had no register behind it.
+ *
+ * They live here rather than beside the other scroll bits on vaddr because
+ * seqph's MUXSEL and FCLK read them at DOT rate, and 10.1.6 forbids a crossing
+ * net on a dot-rate path. What crosses instead is their load strobe, which is
+ * decoded from the register address on the part that has it. */
+const loadable2 = (name: string, strobe: string): Cell[] =>
+  [0, 1].map((b) => ({
+    pin: 0, name: `${name}${b}`, assertedLow: false, s0: 1 as const, registered: true,
+    terms: [`${strobe} & D${b}`, `${name}${b} & !${strobe}`],
+  }))
+
 const comb = (name: string, terms: string[]): Cell =>
   ({ pin: 0, name, assertedLow: false, s0: 1, registered: false, terms })
+
+/* ⛔ 3.1.1'S POSTED VRAM WRITE HAD NO STROBE, and seqctl was reading the
+ * register-file one instead.
+ *
+ * rfa produces WSTB as `REGSEL & /RW & E` - a write to $FF60-$FF7F - which is
+ * exactly right for vaddr's register strobes and exactly wrong for the signal
+ * that starts a span. As wired, WRITING ANY CARD REGISTER STARTED A SPAN and a
+ * posted VRAM write started none: both directions broken by one name meaning
+ * two things. design-review2.md V-2.
+ *
+ * The second strobe is one macrocell on a part that already has all three
+ * literals - VRAMSEL is formed here (regfile.ts) and R/W and E are pins. */
+const vramWriteStrobe: Cell[] = [
+  comb("WSTBV", ["VRAMSEL & !RW & E"]),
+]
 
 const ctrlFanout: Cell[] = [
   /* vdec spells VMODE's low bit M0. */
   comb("M0", ["VMODE0"]),
-  /* Sync polarity is not a register bit and never was: §12's four codes are
-   * 70 Hz at VMODE0 = 0 and 60 Hz at VMODE0 = 1, and the 70 Hz pair is the
-   * positive-H pair. A pin for this was a pin for a NOT gate. */
-  comb("HPOL", ["!VMODE0"]),
+  /* ⛔ HPOL IS A CONSTANT AND THIS READ `!VMODE0` UNTIL 2026-09-09.
+   *
+   * 10.1.6.1 derived it from "the 70 Hz pair is the positive-H pair", and
+   * 6.2.1's own table says the opposite in the row above the one that was
+   * read: HSYNC is NEGATIVE in both families and it is VSYNC that switches.
+   * That is also the VGA standard - 640x400@70 is -H/+V and 640x480@60 is
+   * -H/-V, and there is no standard mode at 31.5 kHz with +H. VMODE 01 and
+   * VMODE 11 were emitted as +H/-V. design-review2.md V-7.
+   *
+   * hgen carries HPOL as an input rather than strapping it in silicon
+   * (sync.jedec.ts) so that an out-of-spec monitor is a re-burn and not a cut
+   * trace; on this part the strap is a constant, and a constant is written as
+   * a tautology because both the 22V10 assembler and CUPL read term lists. */
+  comb("HPOL", ["VMODE0", "!VMODE0"]),
   /* ⚠ CHARMODE went with Variant B on 2026-09-08 - graphics.md 6.4.3. CTRL's
    * CHAR bit stays reserved; nothing reads it. */
   comb("TILEMODE", ["CELL"]),
@@ -187,10 +242,16 @@ export const arbGal = arbGalDesign
  * jedec/cupl.check.ts still sweeps it against Atmel's own compiler over all
  * 1,024 inputs. Merging a design into a CPLD costs no verification here - that
  * is how the sync trio and the scan pair already work. */
+/* seqctl's "a posted write has been latched" is WSTBV and not rfa's register
+ * strobe - design-review2.md V-2, and the comment on vramWriteStrobe. */
+const SPAN_STB: Record<string, string> = { WSTB: "WSTBV" }
+
 export const vctrlCpld: Merged = merge(
   [rename(hgenDesign, SLOT_CE), rename(vgenDesign, SLOT_CE), vdecDesign,
-   seqphDesign, seqctlDesign, arbGalDesign],
-  [...ctrl, ...ctrlFanout, ...tileCadence, ...decodeCells],
+   seqphDesign, rename(seqctlDesign, SPAN_STB), arbGalDesign],
+  [...ctrl, ...ctrlFanout, ...vramWriteStrobe,
+   ...loadable2("HS", "LDHS"), ...loadable2("WADV", "LDADV"),
+   ...maskSerialiser, ...tileCadence, ...decodeCells],
   {
     name: "vctrl", partNo: "ARM6309-UV0B", location: "video card - sync and sequencer",
     /* ⚠ f1508ispplcc84 SINCE 2026-09-08, and it was f1508plcc84 for a day.
@@ -216,9 +277,17 @@ export const vctrlCpld: Merged = merge(
        * WEN is the framebuffer's write strobe, and in WMODE 11 a transparent
        * pixel asserts the first and not the second. Every other mode has them
        * identical, which is why one signal did both jobs until now. */
-      "SLOTTICK", "RETIRE", "WEN",
-      /* §6.4's cadence, out to the address part and the serialiser */
-      "MAPLD", "MAPSEL", "TILESEL", "LINEAR",   // CHARSEL/GLYPHLD/GLYPHSH/LUTPAGE: 6.4.3
+      /* ⚠ SLOTTICK IS NOT EXPORTED, since 2026-09-09. It was, from the days
+       * when hgen took CE as an input pin and this part fed its own output
+       * back in; the rename made that internal and the export outlived it.
+       * Nothing off this part consumes it - the fetch latches take FCLK, the
+       * mux takes MUXSEL, the counters take FETCH and MCADV - and it is the
+       * one pin that bought the column reload its room. */
+      "RETIRE", "WEN",
+      /* §6.4's cadence, out to the address part and the serialiser. ⭐ The four
+       * mux-source selects are two encoded bits since 2026-09-09 - SRC1:SRC0,
+       * video.parts.ts - which is where vctrl's last two pins came from. */
+      "MAPLD", "SRC0", "SRC1",   // CHARSEL/GLYPHLD/GLYPHSH/LUTPAGE: 6.4.3
       /* §6.4's fetch sequence, and §8's two window signals with it - census.ts
        * listed FETCH and HLOAD as "produced by the sequencer's unfitted decode
        * half" and nothing produced them. MCADV steps the map's column counter,
@@ -228,14 +297,24 @@ export const vctrlCpld: Merged = merge(
        * SRCSEL[n] under its own name now that it is not arbDesign's output. */
       "GCPU0", "GCPU1", "GCPU2", "GCPU3",
       /* §10.3's engine holds the address bus through SPNGRANT, so what vctrl
-       * owes it is the grant and nothing else. */
+       * owes it is the grant and nothing else - and since 2026-09-09 it
+       * actually produces it (video.parts.ts). */
       ...(WITH_LIST ? ["LGRANT"] : []),
+      /* ⭐ 7.4's mask bit, to rfa's RA0 - which is the colour path - and the
+       * cell-boundary tick that hands the map byte over on vaddr. */
+      "MASKBIT", "CELLTICK",
+      /* 7.2's row advance. It was produced here and NOT exported, so on
+       * silicon WPTR's row could not advance at all - design-review2.md V-6. */
+      "WROWADV",
       /* ⚠ RA0-RA4, WSTB and REGSEL left this part on 2026-09-08 for
        * regfile.jedec.ts's own GAL22V10 - §10.1.6.3's relief, taken. vaddr
        * still takes the same six signals; only the chip driving them moved.
-       * What goes back is FP0/FP1, so that part can form the read-back
-       * selects itself. Six pins out, two back. */
-      "FP0", "FP1",
+       *
+       * ⭐ FP0/FP1 WENT WITH THEM on 2026-09-09. They carried a read-back walk
+       * that nothing produced and nothing received; 7.4's mask bit does the
+       * job as an address line, which is what that section always said.
+       * regfile.jedec.ts. Two pins and two macrocells deleted rather than
+       * built. */
       "VRAMSEL", "HLOAD", "ROWADV",
       /* ⚠ V0..V2 LEFT THIS LIST ON 2026-09-08. They were exported as "the cell's
        * row inside the 8x8 - the sync counters' own low bits, so they cost pins
@@ -247,11 +326,16 @@ export const vctrlCpld: Merged = merge(
        * vaddr already and is zero-based and VSCROLL-offset by construction.
        * Three pins back, and cell mode gains free vertical scroll with them. */
       /* §5.2.1's arbiter, back on this part. The eight per-chip grants go to
-       * the SRAMs' /WE and the four '153 source selects; SPNGRANT goes to
-       * vaddr's address mux, which is what WRITESEL used to be; /WAIT goes to
-       * the backplane through its open drain. */
+       * the SRAMs' /WE and the four '153 source selects; /WAIT goes to the
+       * backplane through its open drain.
+       *
+       * ⭐ SPNGRANT NO LONGER CROSSES. It was vaddr's mux select - 5.2.1's
+       * "WRITESEL is SPNGRANT" - and the mux takes SRC1:SRC0 now. On this part
+       * it is still read by seqctl's RETIRE and by LGRANT, so it stays a cell;
+       * it just stops being a pin. */
       /* ACPU0..3 are buried: the cadence gates them into GCPU0..3 above. */
-      ...arbGalDesign.cells.map((c) => c.name).filter((n) => !/^ACPU\d$/.test(n)),
+      ...arbGalDesign.cells.map((c) => c.name)
+        .filter((n) => !/^ACPU\d$/.test(n) && n !== "SPNGRANT"),
     ]),
   },
 )

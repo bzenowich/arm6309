@@ -39,9 +39,15 @@ export interface Out {
 export const mmu = (la: number, e: number, q: number, rw: number): Out => {
   const bit = (n: number) => (la >> n) & 1
   const iopage = (la & 0xff00) === 0xff00
-  const mmusel = iopage && !!bit(7) && !bit(6) && !!bit(5)
-  const blksel = mmusel && !bit(4)
-  const ctlsel = mmusel && !!bit(4)
+  const mmusel = iopage && !!bit(7) && !bit(6)
+  /* TWO block windows, 2026-09-09. LA3 is the task bit of the write index
+   * (mmu.pld), so it cannot also choose which of the two map SRAMs a write
+   * lands in - that is what the window does now. $FF90-$FF9F is the high
+   * byte, $FFA0-$FFAF the low, $FFB0-$FFBF control, $FF80-$FF8F free. */
+  const blkhi = mmusel && !bit(5) && !!bit(4)
+  const blklo = mmusel && !!bit(5) && !bit(4)
+  const blksel = blkhi || blklo
+  const ctlsel = mmusel && !!bit(5) && !!bit(4)
   return {
     iopage,
     muxsel: blksel,

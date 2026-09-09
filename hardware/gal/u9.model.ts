@@ -38,7 +38,6 @@ export interface In {
   la6: 0 | 1
   la5: 0 | 1
   la4: 0 | 1
-  la3: 0 | 1
   rw: 0 | 1
 }
 
@@ -71,10 +70,14 @@ export const u9 = (i: In): Out => {
    * the same two pins. machine.md 7.2. */
   const vecsel = iopage && !!i.la7 && !!i.la6
 
-  /* $FFA0-$FFAF, the sixteen block registers. Layout A (ram.md 4.1) puts the
-   * low byte at $FFA0-$FFA7 and the high byte at $FFA8-$FFAF, so LA3 picks
-   * which SRAM a write lands in. Both are selected for a translation. */
-  const blksel = iopage && !!i.la7 && !i.la6 && !!i.la5 && !i.la4
+  /* ⚠ TWO WINDOWS, 2026-09-09 - ram.md 4.3. The write index into the map
+   * SRAMs is LA3..LA0 through U5's '157, so LA3 is the TASK bit; using it to
+   * pick which SRAM a write lands in put the high byte in the other task's
+   * entry and made everything above physical 2 MB unreachable
+   * (design-review2.md M-1). $FF90-$FF9F is the high byte and $FFA0-$FFAF the
+   * low; both are selected for a translation. */
+  const blkhi = iopage && !!i.la7 && !i.la6 && !i.la5 && !!i.la4
+  const blklo = iopage && !!i.la7 && !i.la6 && !!i.la5 && !i.la4
 
   /* A24..A19, shifted so the comparisons read like the map. */
   const above = (n: number) => i.pa >= n >>> 19
@@ -116,7 +119,7 @@ export const u9 = (i: In): Out => {
      * are addressed by the CPU during a block-register access. They are
      * DESELECTED for the whole of boot mode and for the vector page, which is
      * exactly when U6 has the buffer driving instead. */
-    nMapCeLo: not((!!i.run && !iopage) || (blksel && !i.la3)),
-    nMapCeHi: not((!!i.run && !iopage) || (blksel && !!i.la3)),
+    nMapCeLo: not((!!i.run && !iopage) || blklo),
+    nMapCeHi: not((!!i.run && !iopage) || blkhi),
   }
 }

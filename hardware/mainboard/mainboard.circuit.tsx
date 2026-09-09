@@ -242,6 +242,11 @@ export default () => (
         "1A": la(13), "1B": la(0), "1Y": "net.MAPA0",
         "2A": la(14), "2B": la(1), "2Y": "net.MAPA1",
         "3A": la(15), "3B": la(2), "3Y": "net.MAPA2",
+        /* ⚠ 4B IS LA3 AND IT IS THE TASK BIT OF THE WRITE INDEX. machine.md 3:
+         * $FFA0+n is task n>>3, block n&7. Until 2026-09-09 U9 ALSO used LA3
+         * to choose which of the two map SRAMs a write landed in, and one
+         * line cannot do both jobs - design-review2.md M-1. The byte is
+         * chosen by the window now and this wire keeps its one job. */
         "4A": "net.TASK", "4B": la(3), "4Y": "net.MAPA3",
       }}
     />
@@ -340,14 +345,22 @@ export default () => (
       * ⚠ IOPAGE COMES IN FROM U3 AND GOES OUT TO THE BACKPLANE, and they are
       * two nets. Reading back the wire this part drives would be a
       * combinational loop: above 2 MB U9 pulls /IOPAGE low, which would then
-      * de-qualify the SIMM decode that asserted it. */}
+      * de-qualify the SIMM decode that asserted it.
+      *
+      * ⭐ LA3 LEFT THIS PART ON 2026-09-09 and pin 14 is free. It split the
+      * two map bytes - $FFA0-$FFA7 low, $FFA8-$FFAF high - and it is also the
+      * TASK bit of the write index U5 puts on MAPA3, so the high byte landed
+      * in the other task's entry and nothing above physical 2 MB was
+      * reachable. The two bytes have two WINDOWS now, $FF90-$FF9F and
+      * $FFA0-$FFAF, out of 32 bytes that decoded nowhere.
+      * hardware/ram.md 4.3, docs/design-review2.md M-1. */}
     <chip
       name="U9"
       footprint="dip24_w0.3in"
       pinLabels={labels(gal22v10({
         1: "A24", 2: "A23", 3: "A22", 4: "A21", 5: "A20", 6: "A19",
         7: "/IOPAGE_MB", 8: "RUN", 9: "LA7", 10: "LA6", 11: "LA5",
-        13: "LA4", 14: "LA3", 23: "R/W",
+        13: "LA4", 23: "R/W",
         15: "/MAP_CE_LO", 16: "/MAP_CE_HI", 17: "/ROM_CE0",
         18: "/IOPAGE", 19: "DRAM_SEL", 20: "/ROM_CE1",
       }))}
@@ -356,7 +369,7 @@ export default () => (
         A24: pa(24), A23: pa(23), A22: pa(22), A21: pa(21),
         A20: pa(20), A19: pa(19),
         nIOPAGE_MB: "net.nIOPAGE_MB", RUN: "net.RUN",
-        LA7: la(7), LA6: la(6), LA5: la(5), LA4: la(4), LA3: la(3),
+        LA7: la(7), LA6: la(6), LA5: la(5), LA4: la(4),
         R_W: "net.R_W",
         nMAP_CE_LO: "net.MAP_CE_LO", nMAP_CE_HI: "net.MAP_CE_HI",
         nROM_CE0: "net.ROM_CE0", nROM_CE1: "net.ROM_CE1",

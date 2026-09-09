@@ -683,3 +683,45 @@ check's verdict (the video card over budget on a Eurocard) stays in the spec.
 
 The single oversized format lived between the Eurocard and the per-card lengths; the
 spec keeps only the endpoint (`../README.md`'s decisions table).
+
+
+---
+
+## 2026-09-09 — design-review2.md's corrections
+
+### §6.3 — the SIMM module size
+
+**Was:** *"4 | 30-pin SIMM socket | ×8 or ×9, 1 MB or **4 MB** each — **4 to 16 MB**"*.
+
+**Why it moved:** §6.3.1's own mux mapping paragraph, added the same day, says a
+**1M×8 module will not work** in the row `A10`–`A0` / column `A21`–`A11` wiring — it
+has ten row and ten column bits and ignores `MA10`, which drops physical `A10` out of
+the address entirely — and that the correct 1 MB mapping is *"a rewire, not a jumper"*.
+Only 4M×8 works as drawn, so the machine is **4, 8, 12 or 16 MB** and never 1, 2 or 3.
+`machine.md` §0's "4–16 MB" was right by accident.
+
+### §4 — Layout A and Layout B, and what not choosing cost
+
+**Not superseded — extended.** §4 still closes with *"Neither is obviously right … the
+decision belongs to whoever owns the NitrOS-9 port"*, and that remains the state of the
+question. What is added is that **the board took both answers**: `u9.jedec.ts` decodes
+Layout A's `LA3` byte-select while `mainboard.circuit.tsx` wires Layout B's `LA3` task
+index onto the same `MAPA3` line, so no task can have both bytes of a block register
+set. `../docs/design-review2.md` §3.3 (M-1) has the simulation and both repairs.
+
+
+---
+
+## 2026-09-09 — §4's layouts, superseded
+
+**Was:** *"Neither is obviously right. Layout A is cleaner hardware and a bigger
+divergence; Layout B is compatible and awkward. The decision belongs to whoever owns the
+NitrOS-9 port."*
+
+**Why it moved:** the board had taken different halves of the two — `u9.jedec.ts`
+decoded Layout A's `LA3` byte-select while the `'157` carried Layout B's `LA3` task
+index — so no task could have both bytes of a block register set and nothing above
+physical 2 MB was reachable. §4.3 is a third layout that costs neither: two windows out
+of the 32 bytes at `$FF80`–`$FF9F` that decoded nowhere, outside the geographic window,
+with U3 the same size and U9 one pin smaller. §4.1 and §4.2 are kept for what each
+costs, not for what the board does.

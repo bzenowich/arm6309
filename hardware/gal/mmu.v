@@ -16,6 +16,8 @@ module mmu (
     input  wire        q,       // 6809 Q, leading E by 90 degrees
     input  wire        rw,      // high = read
 
+    output wire        blkhi,     // which map SRAM a write lands in - U9's job
+    output wire        blklo,      //   on the board; exported here for the sim
     output wire        n_iopage,
     output wire        muxsel,
     output wire        n_isooe,
@@ -27,10 +29,15 @@ module mmu (
   // $FF00-$FFFF
   wire iopage = &la[15:8];
 
-  // $FFA0-$FFBF, split by A4
-  wire mmusel = iopage & la[7] & ~la[6] & la[5];
-  wire blksel = mmusel & ~la[4];   // $FFA0-$FFAF, 16 block registers
-  wire ctlsel = mmusel &  la[4];   // $FFB0-$FFBF, control, aliased
+  // $FF90-$FFBF, split by A5:A4. TWO block windows since 2026-09-09: the
+  // write index is LA3..LA0 through U5's '157, so LA3 is the TASK bit and
+  // cannot also pick which of the two map SRAMs a write lands in. See
+  // mmu.pld; $FF80-$FF8F is the fourth code and is free.
+  wire mmusel = iopage & la[7] & ~la[6];
+  assign blkhi = mmusel & ~la[5] &  la[4];  // $FF90-$FF9F, high byte
+  assign blklo = mmusel &  la[5] & ~la[4];  // $FFA0-$FFAF, low byte
+  wire blksel  = blkhi | blklo;             // same index, same strobes
+  wire ctlsel = mmusel &  la[5] &  la[4];   // $FFB0-$FFBF, control, aliased
 
   assign n_iopage = ~iopage;
   assign muxsel   =  blksel;

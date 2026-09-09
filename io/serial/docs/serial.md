@@ -41,7 +41,7 @@ nobody has measured yet. §5.
 | ~~**Which 6551, though?**~~ | **Moot** — the part is a `TL16C550C`. §3.3's `W65C51N` trap and §3.4's speed grade both stop existing with it; §9.2. | §9.2 |
 | **Does the card survive the machine's faster E rate?** | ⭐ **Yes, and it no longer has an opinion.** The `16C550` takes no clock from the bus — `machine.md` §1.1's fast-E experiment is not a card-level constraint here any more. | §9.2 |
 | **Baud rates** | **50–460,800** from a 7.3728 MHz crystal; **115,200 is what the card is planned at**, because §8's charge-pump level shifter is specified to 120 kbit/s. | §5, §9.1 |
-| **What actually limits throughput?** | **The FIFO trigger and the dispatch cost.** At 115,200 baud and a 14-byte trigger that is ~1,030 interrupts/s receiving, against the 11,520 a 6551 would have taken. §5 is written against the 6551 and is the argument that produced the part change. | §5, §5.4 |
+| **What actually limits throughput?** | **The FIFO trigger and the dispatch cost.** At 115,200 baud and a 14-byte trigger that is **823** interrupts/s receiving, against the 11,520 a 6551 would have taken. §5 is written against the 6551 and is the argument that produced the part change. | §5, §5.4 |
 | **Practical ceiling** | **115,200**, and it is the level shifter rather than the UART or the CPU. Still pinned to the same unmeasured NitrOS-9 dispatch cost as `ps2.md` §14 item 3. | §5.4, §5.6 |
 | ⭐ **Can that be broken?** | **Taken 2026-09-09: the part is a `16C550`.** A 16-byte FIFO and 115,200 baud, for **zero extra packages** — §9.1. Everything below that describes the 6551 is the reasoning, not the card. | **§4.5, §5.4, §9.1** |
 | ⭐ **And beyond that?** | A ring buffer in the machine's new physical map takes **115,200 to 5 % and 460,800 to 20 %** — the same move storage and net both made. | **§5.4** |
@@ -53,10 +53,10 @@ nobody has measured yet. §5.
 **Net: 3 ICs**, against PS/2's 11 (`ps2.md` §9), audio's (`audio.md` §10) and the video
 card's (`graphics.md` §14).
 
-> ⭐ **The card as specified is 3 ICs and 19,200 baud. §4.5 and §5.4 argue it should be
-> 4 ICs and 115,200**, on the strength of the widened address map. The 6551 design is
-> the specified one and the tiers are proposals with arithmetic — §13 items 6 and 7
-> hold the decision.
+> ⭐ **The card is 3 ICs and 115,200 baud, and the part is a `TL16C550C`** — §9.1,
+> decided 2026-09-09. **§3 and §5 are written against the 6551 and are the reasoning
+> that produced that change, not the card**: read them for the argument and §7, §9 and
+> §10 for the design. §13 item 7's ring buffer is the one tier still open.
 
 ---
 
@@ -88,11 +88,20 @@ Worth stating, because it decides how much of the 6551's capability is wired up.
 
 That last row is why this card is not the Minimal 64x4's (§4.2). Slu4's machine has no disk,
 so serial *is* the mass-storage path and 500 kbps is worth building hardware for. This
-machine boots NitrOS-9 from floppy.
+machine boots NitrOS-9 from the motherboard's own 1 MB ROM disk
+([`machine.md`](../../../docs/machine.md) §7.2), with the SD card
+([`sdcard.md`](../../../storage/docs/sdcard.md)) and DriveWire
+([`drivewire.md`](../../../docs/drivewire.md)) as the writable paths.
 
 ---
 
-## 3. The verdict: a 6551 ACIA
+## 3. The 6551 ACIA — the reasoning, not the part
+
+> ⚠ **§4.5 and §9.1 superseded this section on 2026-09-09: the part is a
+> `TL16C550C`.** Everything below is why a single-package UART beats fourteen packages
+> of logic, and that argument is what §4.5 then applied to a better UART. **Nothing in
+> §3 should be acted on** — §3.3's sourcing trap and §3.4's speed grade both stop
+> existing with the part (§9.2).
 
 ### 3.1 What you get for one package
 
@@ -312,6 +321,9 @@ where the `16550A` is 1989 and inside it.
 
 ## 5. Throughput — the FIFO is what is missing, not the baud rate
 
+> ⚠ **§5.1 to §5.3 are written against the 6551's one-byte buffer and are the argument
+> that produced §4.5's part change.** §5.4 onwards describes the card as built.
+
 **This is the engineering content of the card**, and it is the reason a faster crystal is
 not the upgrade it looks like.
 
@@ -517,7 +529,14 @@ precision. **Past ~115,200 the machine cannot draw the text, let alone a human r
 | | Bound by | Ceiling |
 |---|---|---|
 | **Console / BBS** | ANSI rendering | **~115,200** |
-| **File transfer** | the `TFM` copy and the SD card | **460,800–921,600** |
+| **File transfer** | the `TFM` copy and the SD card | **460,800–921,600** ⚠ |
+
+⚠ **The second row is a CPU ceiling with no level shifter behind it.** §8's `MAX232` is
+specified to **120 kbit/s**, which is what pins the card at 115,200 and is the reason §0
+gives for planning it there. 460,800 needs at least a `MAX232A` (200 kbit/s) and 921,600
+needs neither part. **The card's verified maximum is 115,200**; the rest of this table is
+what the CPU could take if §8 were re-specified.
+[`design-review2.md`](../../../docs/design-review2.md) §4.1.
 
 **One card does both**, which is the point of putting the rate in a register.
 
@@ -1042,9 +1061,12 @@ central one shipped inside a CoCo.
    §12 step 7 measures whichever is chosen, and doing nothing is defensible if 19,200 is
    only ever a burst rate.
 
-12. **`IRQB` open drain is assumed, not read** (§6, §12 step 1). The wire-OR onto a line
-   shared with three other cards depends on it. NMOS parts document it; the part bought
-   may not be one. One datasheet lookup, one diode if the answer is wrong.
+12. **CLOSED 2026-09-09 by item 6, and the answer was no.** The item read *"`IRQB` open
+   drain is assumed, not read"* and was a 6551 question. §9.1 settles it for the part
+   actually bought: **a `16C550`'s `INTR` is active-high and totem-pole**, so it cannot
+   join the wire-OR at all and the card's GAL inverts it through
+   [`machine.md`](../../../docs/machine.md) §5 item 9's open-drain idiom. That macrocell
+   is on the GAL item 4 says is not fitted.
 
 ---
 

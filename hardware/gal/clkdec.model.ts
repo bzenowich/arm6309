@@ -49,6 +49,11 @@ export interface DecodeIn {
   nIopage: 0 | 1 // the PIN level: low when the cycle is $FF00-$FFFF
   la7: 0 | 1
   la6: 0 | 1
+  /* ⚠ LA5 and LA4 reach this decode since 2026-09-09. The buffer's enable is
+   * the complement of U9's map-SRAM chip enable, and that needs the two block
+   * windows - clkdec.pld. */
+  la5: 0 | 1
+  la4: 0 | 1
   run: 0 | 1 // the RUN register's own output - 0 is boot mode
 }
 
@@ -67,15 +72,18 @@ export const setsRun = (i: {
   !i.nIopage && !!i.la7 && !i.la6 && !!i.la5 && !!i.la4 && !!i.la0 && !i.rw && !!i.e
 
 export const decode = (i: DecodeIn): DecodeOut => {
-  /* $FFC0-$FFFF. One term, because /IOPAGE already means "logical
-   * $FF00-$FFFF" - the vector page is that page with A7 and A6 both high. */
-  const vecsel = !i.nIopage && !!i.la7 && !!i.la6
+  const iopage = !i.nIopage
+  /* ⭐ The buffer drives exactly when the map SRAMs do not, which is the
+   * complement of u9.model.ts's nMapCeLo/nMapCeHi and is written as that
+   * rather than as a list of modes - clkdec.pld has what the list got wrong
+   * in both directions. The vector page falls out: $FFC0-$FFFF is an I/O
+   * cycle and not a block access, so the SRAMs are off there already. */
+  const blkhi = iopage && !!i.la7 && !i.la6 && !i.la5 && !!i.la4
+  const blklo = iopage && !!i.la7 && !i.la6 && !!i.la5 && !i.la4
+  const mapsel = (!!i.run && !iopage) || blkhi || blklo
   return {
     /* $FF00-$FF7F: the I/O page with A7 = 0. */
-    nIosel: not(!i.nIopage && !i.la7),
-    /* The '244 drives physical A20-A13 whenever the map SRAMs do not: for
-     * the whole of boot mode, and for the vector page forever. U9 forms the
-     * SRAMs' /CE from the same two conditions. */
-    nBootOe: not(!i.run || vecsel),
+    nIosel: not(iopage && !i.la7),
+    nBootOe: not(!mapsel),
   }
 }

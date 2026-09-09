@@ -42,6 +42,30 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > and the claims each one overturned are preserved in the per-component `history.md`
 > files, per the convention at the bottom of this file.
 
+> ⛔ **And it was reviewed again on 2026-09-09, this time by simulation, and the
+> features added in the intervening five days largely did not work.**
+> [`docs/design-review2.md`](docs/design-review2.md) generates Verilog from the same
+> term lists the CPLD fitter compiles and runs the video card, the audio card and the
+> motherboard over whole frames, whole spans and the boot sequence: **122 claims
+> verified, 16 failures across 10 defects**, plus eleven blocks that a port census
+> found to be described in prose and present in no design file.
+>
+> ⭐ **Eleven of the twelve were repaired the same day**, and the twelfth is the audio
+> sequencer, which is design work rather than a fix. The simulation is **140 claims and
+> no failures**; `docs/design-review2.md` §10 is the disposition.
+>
+> **What the repairs cost:** the MMU's two map bytes get **two windows** instead of
+> sharing an address bit with the task index, out of 32 bytes that decoded nowhere —
+> U9 gives back a pin and U3's decode is the same size. The video card gains **one
+> `GAL22V10`** for the span length counter, which is the one "absorbed" package that
+> genuinely could not be, and is **28 ICs**; the room for the rest came from encoding
+> its address-mux selects as two bits, which took `vctrl` from 122 macrocells to 104.
+>
+> ⚠ **Two things are open and both are specification rather than wiring**: byte-granular
+> horizontal scroll needs two fetch groups live at once and one latch rank cannot hold
+> them (`graphics.md` §19 item 28), and the display list has no descriptor format
+> (item 32).
+
 ---
 
 ## The subsystems
@@ -49,13 +73,13 @@ count, and a measurement in place of an estimate wherever one can be taken.
 | | What | Status | Start here |
 |---|---|---|---|
 | [`cpu/`](cpu/) | HD6309E on an **STM32G431CBU6**, 40-pin drop-in. One UFQFPN48 SKU for the CoCo 3 and this machine, running **byte-identical firmware on both** — the MMU is on the motherboard and so, since 2026-09-08, is the boot ROM. | **Phase 1 — timing spike written, not yet measured on silicon** | [`cpu/README.md`](cpu/README.md), [`cpu/docs/plan.md`](cpu/docs/plan.md) |
-| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, smooth scroll, span writer. **27 ICs** — 2 `ATF1508AS`, 1 `GAL22V10`, both CPLDs fitted. | **Specified, not built** | [`video/README.md`](video/README.md), [`video/docs/graphics.md`](video/docs/graphics.md), [`video/docs/features.md`](video/docs/features.md) |
-| [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula, **with programmable panning**, 512 KB of samples in one package and a headphone-driven jack. **32 ICs** — one `ATF1508AS` PLCC-84 holds all the logic; whether the analogue section fits the same card is open. Host reference model **builds and passes**. | **Specified; reference player validated against libopenmpt** | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
+| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, smooth scroll, span writer. **28 ICs** — 2 `ATF1508AS`, 2 `GAL22V10`, both CPLDs fitted with JTAG. | **Specified; simulated 2026-09-09, and repaired — 28 ICs, two open items** | [`video/README.md`](video/README.md), [`video/docs/graphics.md`](video/docs/graphics.md), [`video/docs/features.md`](video/docs/features.md) |
+| [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula, **with programmable panning**, 512 KB of samples in one package and a headphone-driven jack. **32 ICs** — one `ATF1508AS` PLCC-84 holds all the logic; whether the analogue section fits the same card is open. Host reference model **builds and passes**. | ⛔ **Register block specified and fitted; the sequencer is not designed** | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
 | [`io/`](io/) | PS/2 keyboard and mouse — **11 ICs** of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does, and since 2026-09-09 it is a **`TL16C550C` at 115,200 baud with 16-byte FIFOs**. One 14-IC card. | **Both specified** | [`io/README.md`](io/README.md), [`io/ps2/docs/ps2.md`](io/ps2/docs/ps2.md), [`io/serial/docs/serial.md`](io/serial/docs/serial.md) |
 | [`storage/`](storage/) | SD card interface — **14 ICs**, **681 KiB/s sustained**, an SPI burst started by the bus read strobe into a block buffer the host reads as memory. ⚠ The `TFM` hazard is retired, not mitigated. | **Specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |
 | [`net/`](net/) | 10BASE-T with no MAC or PHY chip — **12 ICs**, two `ATF1508AS`, ported from `~/code/applenet`. ⚠ The host takes **56 % of the wire**; its sixteen-frame ring lives in the machine's new physical space. | **Specified** | [`net/README.md`](net/README.md), [`net/docs/net.md`](net/docs/net.md) |
 | [`software/`](software/) | 6809/6309 code that runs *on* the machine. | Third-party monitor and FORTH, imported | [`software/README.md`](software/README.md) |
-| [`hardware/`](hardware/) | Board layouts in **tscircuit** — the 72-pin backplane pinout as one table, the motherboard, the bus interface of all six cards, and the video card's analogue back end. Plus [`hardware/ram.md`](hardware/ram.md), the memory system: a 32 MB map, four SIMM sockets and a **1 MB boot ROM**. | **Schematic-level; nothing placed or routed** | [`hardware/README.md`](hardware/README.md) |
+| [`hardware/`](hardware/) | Board layouts in **tscircuit** — the 72-pin backplane pinout as one table, the motherboard, the bus interface of all six cards, and the video card's analogue back end. Plus [`hardware/ram.md`](hardware/ram.md), the memory system: a 32 MB map, four SIMM sockets and a **1 MB boot ROM**. | **Schematic-level; boot, the map and all four SIMM windows simulate** | [`hardware/README.md`](hardware/README.md) |
 
 Machine-level material that belongs to no single card — the system map, and the
 comparisons against the two chips this machine stands in the tradition of — is in
@@ -70,6 +94,10 @@ comparisons against the two chips this machine stands in the tradition of — is
 - [`docs/design-review.md`](docs/design-review.md) — the 2026-09-04 review of every
   subsystem, and what it changed. Start here if a document says something this one
   contradicts.
+- [`docs/design-review2.md`](docs/design-review2.md) — ⛔ **the 2026-09-09 review, by
+  simulation.** What the term-list checks could not see, why they could not see it, and
+  the tooling (`npm run check:video`) it leaves behind. Both reviews are frozen dated
+  records.
 - [`docs/coco3_c64.md`](docs/coco3_c64.md) — GIME vs VIC-II, from a CPU-replacement's
   point of view.
 - [`docs/video-comparison.md`](docs/video-comparison.md) — the video card against both
@@ -100,6 +128,22 @@ ctest --test-dir build-host --output-on-failure
 ```
 
 Produces `build-host/refplayer` and the two test binaries.
+
+### Hardware — the design files, the fuse maps and the simulation
+
+Needs `verilator`; `bun` comes from `hardware/`'s own `devDependencies`.
+
+```sh
+cd hardware
+npm ci
+npm run check         # every GAL design against its model, and against Atmel's CUPL
+npm run check:sim     # the motherboard's two hand-written Verilog models
+npm run check:video   # ⛔ the cards and the motherboard, generated and simulated
+```
+
+`check:video` reports **140 ok and no failures** as of 2026-09-09. It reported 122 and
+16 before the repairs of that day, and [`docs/design-review2.md`](docs/design-review2.md)
+§10 says what each one turned into.
 
 ### Firmware — `cpu/` only
 

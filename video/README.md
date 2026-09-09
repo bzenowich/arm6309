@@ -1,7 +1,7 @@
 # `video/` — the 256-colour video card
 
 640×200 in **256 colours**, 80×25 text, a scrolling bitmap and a span writer, out of a
-VGA connector at the standard 25.175 MHz dot clock. **27 ICs** — 23 if the tri-state
+VGA connector at the standard 25.175 MHz dot clock. **28 ICs** — 24 if the tri-state
 pixel bus closes at 39.7 ns and the `'153` mux is not needed — of which the
 programmable logic is **2 × `ATF1508AS` in PLCC-84 plus one `GAL22V10`**, alongside a
 three-transistor analog drive stage. **~0.5–0.85 A at 5 V, 0.65 A nominal.**

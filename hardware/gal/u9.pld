@@ -73,7 +73,9 @@ PIN 9  = LA7 ;
 PIN 10 = LA6 ;
 PIN 11 = LA5 ;
 PIN 13 = LA4 ;
-PIN 14 = LA3 ;       /* on the 8-term macrocell: an input costs no terms     */
+/* PIN 14 WAS LA3 UNTIL 2026-09-09 and is now free - see the block-window
+ * comment below. It is a macrocell pin, so it is a seventh output or a
+ * fifteenth input, whichever the board next wants. */
 PIN 23 = RW ;        /* likewise                                             */
 
 /* --- outputs ---------------------------------------------------------- */
@@ -99,7 +101,22 @@ PIN 20 = !ROMCE1 ;   /* 14, 3 */
 vecsel = IOPAGE & LA7 & LA6 ;
 
 /* $FFA0-$FFAF, the sixteen block registers - the MMU's own window. */
-blksel = IOPAGE & LA7 & !LA6 & LA5 & !LA4 ;
+/* !! TWO BLOCK WINDOWS SINCE 2026-09-09, and LA3 is gone from this part.
+ *
+ * The write index into the map SRAMs is LA3..LA0 through U5's '157, so LA3 is
+ * the TASK bit of machine.md 3's {TASK, block}. Splitting the low and high
+ * bytes on that same LA3 - ram.md 4.1's Layout A, which is what this part did
+ * - made the two uses collide: a write to $FFA8 put the high byte in entry 8,
+ * which is TASK 1's block 0, while TASK 0's translation reads entry 0. No task
+ * could have both bytes of a block register set and nothing above physical
+ * 2 MB was reachable. design-review2.md M-1.
+ *
+ * The window does the splitting now. It costs no terms here and no pins
+ * anywhere: $FF80-$FF9F decoded nowhere, and it is outside the $FF00-$FF7F
+ * geographic window so no card loses a byte. U3 forms the same two decodes
+ * (mmu.pld) and this part frees pin 14. */
+blkhi = IOPAGE & LA7 & !LA6 & !LA5 &  LA4 ;   /* $FF90-$FF9F - the high byte */
+blklo = IOPAGE & LA7 & !LA6 &  LA5 & !LA4 ;   /* $FFA0-$FFAF - the low byte  */
 
 /* The boot ROM's 1 MB at physical 2.0-3.0 M - ram.md 5.2. It went into the
  * 2.0-4.0 M block that was already reserved and that nothing had asked for,
@@ -121,9 +138,9 @@ romspace = !A24 & !A23 & !A22 & A21 & !A20 ;
  * whether U3 could take a second write strobe, and the answer is that it
  * does not need to. */
 MAPCE_LO = RUN & !IOPAGE
-         # blksel & !LA3 ;
+         # blklo ;
 MAPCE_HI = RUN & !IOPAGE
-         # blksel &  LA3 ;
+         # blkhi ;
 
 /* --- the boot ROM ----------------------------------------------------- */
 /* Three ways in, and the first two ignore the physical address entirely -

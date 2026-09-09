@@ -123,16 +123,31 @@ export const clkdecDesign: Design = {
       terms: ["RUN", "IOPAGE & LA7 & !LA6 & LA5 & LA4 & LA0 & !RW & E"],
     },
 
-    /* The '244 drives physical A20-A13 whenever the map SRAMs do not. U9
-     * forms their /CE from the same two conditions, so the changeover is one
-     * signal seen by two parts rather than two decodes that have to agree.
+    /* ⭐ THE '244 DRIVES EXACTLY WHEN THE MAP SRAMs DO NOT - and since
+     * 2026-09-09 the equation says so instead of enumerating modes. clkdec.pld
+     * has the two defects the enumeration carried:
      *
-     * VECSEL is ONE product term because /IOPAGE already means "logical
-     * $FF00-$FFFF" - $FFC0-$FFFF is that page with A7 and A6 both high, and
-     * both are on this part already. */
+     *   - boot mode AND a $FFAx block write are both true at once, and the
+     *     '245 drives the SRAM's common I/O, which IS physical A20-A13. All
+     *     sixteen map writes of machine.md 7.2's boot sequence were a bus
+     *     fight with this buffer (design-review2.md M-3);
+     *   - an ordinary I/O cycle selected neither, so A20-A13 floated on the
+     *     backplane for the whole of every register access (M-2).
+     *
+     * ⭐ The vector page needs no term of its own now: $FFC0-$FFFF is an I/O
+     * cycle and not a block access, so the SRAMs are already off there.
+     *
+     * IMPLEMENTED COMPLEMENTED, like mmu.jedec.ts's MAPOE: the pin is active
+     * low and S0 = 1, so the macrocell forms "a map SRAM is selected" in three
+     * terms where the asserted form is nine. Pin 14 holds eight. */
     {
-      pin: 14, name: "BOOTOE", assertedLow: true, s0: 0,
-      terms: ["!RUN", "IOPAGE & LA7 & LA6"],
+      pin: 14, name: "BOOTOE", assertedLow: true, s0: 1,
+      why: "implemented complemented: the 3-term MAPCE union, not its 9-term negation",
+      terms: [
+        "RUN & !IOPAGE",
+        "IOPAGE & LA7 & !LA6 & LA5 & !LA4",
+        "IOPAGE & LA7 & !LA6 & !LA5 & LA4",
+      ],
     },
   ],
 

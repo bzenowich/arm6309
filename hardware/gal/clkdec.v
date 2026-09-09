@@ -84,33 +84,42 @@ module clkdec (
   // The two combinational outputs are a separate module so that a testbench
   // can sweep them without reaching inside the divider. In the GAL they are
   // simply two more macrocells on the same part.
-  decode dec (.n_iopage(n_iopage), .la7(la7), .la6(la6), .run(run),
-              .n_iosel(n_iosel), .n_bootoe(n_bootoe));
+  decode dec (.n_iopage(n_iopage), .la7(la7), .la6(la6), .la5(la5), .la4(la4),
+              .run(run), .n_iosel(n_iosel), .n_bootoe(n_bootoe));
 
 endmodule
 
 
 module decode (
-    input  wire n_iopage, la7, la6, run,
+    input  wire n_iopage, la7, la6, la5, la4, run,
     output wire n_iosel, n_bootoe
 );
+
+  wire iopage = ~n_iopage;
 
   // $FF00-$FF7F: the I/O page with A7 = 0 - machine.md 2 and 3. /IOPAGE comes
   // from U3. Two independent changes landed on this line on 2026-09-08 - a
   // polarity fix and the widening - and clkdec.pld sets both out.
-  assign n_iosel = ~(~n_iopage & ~la7);
+  assign n_iosel = ~(iopage & ~la7);
 
-  // $FFC0-$FFFF, the vector page. ONE product term, because /IOPAGE already
-  // means "logical $FF00-$FFFF": the vector page is that page with A7 and A6
-  // both high. A card-style A15..A8 compare would have cost eight literals
-  // and an input pin.
-  wire vecsel = ~n_iopage & la7 & la6;
+  // The two block-register windows, the same decode U3 and U9 both form.
+  // $FF90-$FF9F is a map entry's high byte and $FFA0-$FFAF its low - two
+  // windows since 2026-09-09, because LA3 is the write index's task bit and
+  // cannot also pick the SRAM (mmu.pld, design-review2.md M-1).
+  wire blkhi = iopage & la7 & ~la6 & ~la5 &  la4;
+  wire blklo = iopage & la7 & ~la6 &  la5 & ~la4;
 
-  // The '244 drives physical A20-A13 whenever the map SRAMs do not: for the
-  // whole of boot mode, and for the vector page forever. U9 forms the SRAMs'
-  // chip enables from the same two conditions, so the changeover is one
-  // signal seen by two parts rather than two decodes that have to agree.
-  assign n_bootoe = ~(~run | vecsel);
+  // A map SRAM is selected for a translation, or for a block-register access.
+  wire mapsel = (run & ~iopage) | blkhi | blklo;
+
+  // The '244 drives physical A20-A13 EXACTLY WHEN THE MAP SRAMs DO NOT, which
+  // is this and not a list of modes. clkdec.pld has what the list got wrong:
+  // it was on during boot-mode block writes, fighting U4 for the SRAM's own
+  // I/O pins (M-3), and off during ordinary I/O cycles, leaving eight
+  // backplane lines floating (M-2). The vector page needs no term of its own -
+  // $FFC0-$FFFF is an I/O cycle and not a block access, so the SRAMs are
+  // already off there.
+  assign n_bootoe = mapsel;
 
 endmodule
 

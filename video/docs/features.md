@@ -122,7 +122,7 @@ nothing else — no adder, no offset register, no new logic.
 
 | | Horizontal | Vertical |
 |---|---|---|
-| Which cell | `HSCROLL[9:3]` | `VSCROLL[8:3]` |
+| Which cell | `HSCROLL[9:3]` | `VSCROLL[7:3]` — five bits, which is the 32-row ring below |
 | Which pixel within it | `HSCROLL[2:0]` | `VSCROLL[2:0]` |
 | **Ring** | **128 cells — 1024 px** | **⚠ 32 cell rows — 256 px** |
 | Off-screen margin at 80×25 | 48 cells | **7 rows** |
@@ -258,13 +258,24 @@ sequencer retires bytes into VRAM using the memory accesses the display is not u
 |---|---|---|---|
 | `00` | **direct** | one byte | the first byte retires |
 | `01` | **span-mask** | **8 pixels**, each `WFG` or `WBG` per the mask bit | the eighth byte retires |
-| `10` | **span-solid** | **`SPANLEN`+1 pixels**, all one colour | the `'161` pair's terminal count |
+| `10` | **span-solid** | **`SPANLEN`+1 pixels**, all one colour | the length counter's terminal count |
+| `11` | **sprite** | **8 pixels**, and a `0` bit writes nothing | the eighth byte retires — §8.4 |
 
-**The mask bit never enters the sequencer.** The `74HC165`'s serial output is wired
-directly to the register file's address bit 0, so `WFG` sits at `A0 = 0` and `WBG` at
-`A0 = 1` and *choosing the colour per pixel costs no macrocell and no product term*.
-That placement rule **is** the mechanism, and it is why `graphics.md` §13 pins those
-two registers to those two addresses.
+**The mask bit never enters the sequencer's colour path.** The mask serialiser's serial
+output is wired directly to the register file's address bit 0, so `WFG` sits at `A0 = 0`
+and `WBG` at `A0 = 1` and *choosing the colour per pixel costs no macrocell and no
+product term*. That placement rule **is** the mechanism, and it is why `graphics.md` §13
+pins those two registers to those two addresses. ⚠ Sprite mode reads the same bit a
+second time and that one is a pin — §8.4.
+
+> ⭐ **BOTH ARE BUILT SINCE 2026-09-09, and one of them is a package.** `graphics.md`
+> §10.1.6 books the serialiser and the length counter into the CPLDs and §14.1 deletes
+> both from the IC count; neither existed, so `MASKBIT` and `TC` were inputs to `vctrl`
+> that nothing produced and no span had a colour or an end. The serialiser really does
+> absorb — it is eight macrocells on `vctrl` — and the counter does not, because §7.4
+> loads it from the **register file's read bus** and that is eight pins neither CPLD
+> has. It is `vlen`, a `GAL22V10`, and **the card is 28 ICs**.
+> [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.2 and §10.
 
 `WADV` (`+$14`) chains spans: `01` is **"next row, same column"** — at span end the row
 increments and the column reloads from a shadow in the register file. Set it once and a
@@ -281,9 +292,9 @@ glyph is *eight mask writes and nothing else*.
 | Hardware cost | the mask serialiser, `SPANLEN` counter and mask counter live in the CPLDs (`graphics.md` §10.1.6), plus `SPANBUSY` |
 
 **The span writer is why bandwidth is not this machine's constraint.** The card has
-≈32.4 M spare accesses/s against a CPU that can issue ~420,000 writes/s — **77× more
-memory bandwidth than the CPU can consume** (`graphics.md` §2.1). Every drawing figure
-below is a CPU figure.
+≈8.1 M spare accesses/s against a CPU that can issue ~420,000 writes/s — **15× more
+memory bandwidth than the CPU can consume** (`graphics.md` §2.1), each access carrying up
+to four bytes. Every drawing figure below is a CPU figure.
 
 ---
 
@@ -304,6 +315,16 @@ locked to the raster and writes the card's own registers at chosen scanlines. It
   write it at a scanline boundary. ⚠ With §2.2 dropped that bar is Variant A's 8bpp
   tiles rather than a character generator — 16 KB of font instead of 2 KB, and no
   attribute colour path.
+
+> ⛔ **AND IT COULD NOT RUN UNTIL 2026-09-09.** `LADV` was produced and read by
+> nothing, `LGRANT` was declared and produced by nothing, so the engine re-executed
+> descriptor byte 0 for ever and `LRUN` never fell. Both are wired now and
+> `check:video` runs a list end to end — but ⚠ **the descriptor format is still not
+> designed**: every fetched byte is a `MOVE` that names no register and carries no
+> operand, and there is no scanline compare, so what runs is a byte-fetcher that stops
+> at `$FF`. Everything this section promises needs an opcode, an operand and a raster
+> compare. `graphics.md` §19 item 32,
+> [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.4.
 
 > ⚠ **It did not fit v1, and macrocells were not why** (`graphics.md` §10.1.6.2). Both
 > packages were fitted and both failed: PLCC-84 aborts with an internal fitter error;

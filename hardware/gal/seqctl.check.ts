@@ -31,11 +31,31 @@ const drive = (io: SpanIn): Record<number, 0 | 1> => ({
   6: io.spngrant ? 1 : 0, 7: io.tc ? 1 : 0,
   8: (io.wadv & 1) as 0 | 1, 9: ((io.wadv >> 1) & 1) as 0 | 1,
   10: io.maskbit ? 1 : 0,
+  13: io.spntick === false ? 0 : 1,
 })
 const readState = (): SpanState => ({
   busy: gal.regs.get(pin("SPANBUSY"))! as 0 | 1,
   mc: gal.regs.get(pin("MC0"))! | (gal.regs.get(pin("MC1"))! << 1) | (gal.regs.get(pin("MC2"))! << 2),
 })
+
+/* ⭐ ONE RETIRE PER FETCH SLOT, which is 7.4's whole timing model.
+ *
+ * 5.2.1's arbiter is pure combinational grant logic and carries no phase at
+ * all, so SPNGRANT is asserted for every dot of the spare window - and without
+ * SPNTICK this part retired a byte on each of them. Four bytes a slot rather
+ * than one, which is 6.29 MB/s becoming 25 and the 40.7 us SPANBUSY bound
+ * becoming 10. docs/design-review2.md V-4. */
+{
+  const busy: SpanState = { busy: 1, mc: 0 }
+  const io = { wstb: false, wmode: 1, spngrant: true, tc: false, wadv: 0 }
+  gal.reset(); gal.regs.set(pin("SPANBUSY"), 1)
+  const withTick = gal.evaluate(drive({ ...io, spntick: true }))[pin("RETIRE")]
+  const without = gal.evaluate(drive({ ...io, spntick: false }))[pin("RETIRE")]
+  check(withTick === 1 && without === 0,
+    "⭐ RETIRE needs SPNTICK as well as the grant - one byte per fetch slot, " +
+    "not one per dot", `${withTick}/${without}`)
+  void busy
+}
 
 /* -- exhaustive over every state and every input ------------------------- */
 {

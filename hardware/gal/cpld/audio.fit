@@ -1,7 +1,7 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Mon Sep 07 20:38:20 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Wed Sep 09 12:07:19 2026
 
 
-fit1508 audio.tt2 -device P1508C84 -preassign ignore
+fit1508 audio.tt2 -device P1508C84 -preassign ignore -JTAG on
 
 
 ****** Initial fitting strategy and property ******
@@ -606,19 +606,19 @@ P1.D = ((CCLK & P0.Q & !P1.Q & !P2.Q)
 P2.D = ((!CCLK & P2.Q)
 	# (CCLK & P0.Q & P1.Q & !P2.Q));
 
-!PEND2.D = ((!SET2 & CCLK & !SYNCR1.Q & SYNCR2.Q)
+!PEND2.D = ((!SET2 & CCLK & !SYNCR1.Q & !SYNCR2.Q)
 	# (!PEND2.Q & !SET2));
 
-!PEND0.D = ((!SET0 & CCLK & !SYNCR1.Q & SYNCR2.Q)
+!PEND0.D = ((!SET0 & CCLK & !SYNCR1.Q & !SYNCR2.Q)
 	# (!PEND0.Q & !SET0));
 
-!PEND1.D = ((!SET1 & CCLK & !SYNCR1.Q & SYNCR2.Q)
+!PEND1.D = ((!SET1 & CCLK & !SYNCR1.Q & !SYNCR2.Q)
 	# (!PEND1.Q & !SET1));
 
-!PEND3.D = ((!SET3 & CCLK & !SYNCR1.Q & SYNCR2.Q)
+!PEND3.D = ((!SET3 & CCLK & !SYNCR1.Q & !SYNCR2.Q)
 	# (!PEND3.Q & !SET3));
 
-!PEND4.D = ((!SET4 & CCLK & !SYNCR1.Q & SYNCR2.Q)
+!PEND4.D = ((!SET4 & CCLK & !SYNCR1.Q & !SYNCR2.Q)
 	# (!PEND4.Q & !SET4));
 
 REQ1.D = ((A0 & REQ1.Q)
@@ -627,7 +627,7 @@ REQ1.D = ((A0 & REQ1.Q)
 	# (!A0 & !A1 & A2 & !A3 & D1 & D7 & !RW & SEL)
 	# XXL_273);
 
-!PEND5.D = ((!SET5 & CCLK & !SYNCR1.Q & SYNCR2.Q)
+!PEND5.D = ((!SET5 & CCLK & !SYNCR1.Q & !SYNCR2.Q)
 	# (!PEND5.Q & !SET5));
 
 REQ0.D = ((A0 & REQ0.Q)
@@ -776,37 +776,37 @@ XXL_272 = ((ENA1.Q & REQ1.Q)
 	# (ENA4.Q & REQ4.Q)
 	# (ENA5.Q & REQ5.Q));
 
-XXL_273 = ((CCLK & PEND1.Q & !SYNCR1.Q & SYNCR2.Q)
+XXL_273 = ((CCLK & PEND1.Q & !SYNCR1.Q & !SYNCR2.Q)
 	# (!SEL & REQ1.Q)
 	# (A3 & REQ1.Q)
 	# (!A2 & REQ1.Q)
 	# (A1 & REQ1.Q));
 
-XXL_274 = ((CCLK & PEND0.Q & !SYNCR1.Q & SYNCR2.Q)
+XXL_274 = ((CCLK & PEND0.Q & !SYNCR1.Q & !SYNCR2.Q)
 	# (!SEL & REQ0.Q)
 	# (A3 & REQ0.Q)
 	# (!A2 & REQ0.Q)
 	# (A1 & REQ0.Q));
 
-XXL_275 = ((CCLK & PEND2.Q & !SYNCR1.Q & SYNCR2.Q)
+XXL_275 = ((CCLK & PEND2.Q & !SYNCR1.Q & !SYNCR2.Q)
 	# (!SEL & REQ2.Q)
 	# (A3 & REQ2.Q)
 	# (!A2 & REQ2.Q)
 	# (A1 & REQ2.Q));
 
-XXL_276 = ((CCLK & PEND3.Q & !SYNCR1.Q & SYNCR2.Q)
+XXL_276 = ((CCLK & PEND3.Q & !SYNCR1.Q & !SYNCR2.Q)
 	# (!SEL & REQ3.Q)
 	# (A3 & REQ3.Q)
 	# (!A2 & REQ3.Q)
 	# (A1 & REQ3.Q));
 
-XXL_277 = ((CCLK & PEND4.Q & !SYNCR1.Q & SYNCR2.Q)
+XXL_277 = ((CCLK & PEND4.Q & !SYNCR1.Q & !SYNCR2.Q)
 	# (!SEL & REQ4.Q)
 	# (A3 & REQ4.Q)
 	# (!A2 & REQ4.Q)
 	# (A1 & REQ4.Q));
 
-XXL_278 = ((CCLK & PEND5.Q & !SYNCR1.Q & SYNCR2.Q)
+XXL_278 = ((CCLK & PEND5.Q & !SYNCR1.Q & !SYNCR2.Q)
 	# (!SEL & REQ5.Q)
 	# (A3 & REQ5.Q)
 	# (!A2 & REQ5.Q)

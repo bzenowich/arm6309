@@ -30,11 +30,23 @@ const claim = (text: string, pred: Parameters<typeof every>[0]) =>
 claim("/IOPAGE is asserted for $FF00-$FFFF and nowhere else",
   (la, p, rw) => mmu(la, p.e, p.q, rw).iopage === (la >= 0xff00))
 
-claim("the block window is $FFA0-$FFAF and nowhere else",
-  (la, p, rw) => mmu(la, p.e, p.q, rw).muxsel === (la >= 0xffa0 && la <= 0xffaf))
+/* ⭐ TWO BLOCK WINDOWS since 2026-09-09 - $FF90-$FF9F is a map entry's high
+ * byte and $FFA0-$FFAF its low. The write INDEX is LA3..LA0 through U5's '157
+ * and is therefore machine.md 3's {TASK, block} in both, which is the whole
+ * point: splitting the two bytes on LA3 instead made the high byte land in
+ * the other task's entry and put everything above physical 2 MB out of reach.
+ * hardware/ram.md 4.3, docs/design-review2.md M-1. */
+const inBlk = (la: number) =>
+  (la >= 0xff90 && la <= 0xff9f) || (la >= 0xffa0 && la <= 0xffaf)
 
-claim("no map write outside $FFA0-$FFAF",
-  (la, p, rw) => !mmu(la, p.e, p.q, rw).mapwe || (la >= 0xffa0 && la <= 0xffaf))
+claim("the block windows are $FF90-$FF9F and $FFA0-$FFAF, and nowhere else",
+  (la, p, rw) => mmu(la, p.e, p.q, rw).muxsel === inBlk(la))
+
+claim("⭐ and $FF80-$FF8F, the fourth code of that window, is free",
+  (la, p, rw) => la < 0xff80 || la > 0xff8f || !mmu(la, p.e, p.q, rw).muxsel)
+
+claim("no map write outside a block window",
+  (la, p, rw) => !mmu(la, p.e, p.q, rw).mapwe || inBlk(la))
 
 claim("no map write on a read cycle",
   (la, p, rw) => !mmu(la, p.e, p.q, rw).mapwe || rw === 0)
@@ -53,7 +65,7 @@ claim("break before make: nothing drives the map SRAM's pins while it drives",
 
 claim("the '245 is never enabled toward the SRAM outside a block write",
   (la, p, rw) => { const o = mmu(la, p.e, p.q, rw)
-                   return !(o.isooe && rw === 0) || (la >= 0xffa0 && la <= 0xffaf) })
+                   return !(o.isooe && rw === 0) || inBlk(la) })
 
 claim("the map SRAM never drives during a block write",
   (la, p, rw) => { const o = mmu(la, p.e, p.q, rw); return !(o.mapwe && o.mapoe) })

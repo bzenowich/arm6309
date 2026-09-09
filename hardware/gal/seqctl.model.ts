@@ -38,6 +38,12 @@ export interface SpanIn {
   wmode: number
   /** the arbiter gave the span writer a spare access this slot */
   spngrant: boolean
+  /** ⭐ One dot per fetch slot, at the end of 5.2.2's spare window. Without it
+   *  a span retires four bytes a slot: 5.2.1's arbiter is pure combinational
+   *  grant logic and carries no phase, so SPNGRANT is asserted for every dot
+   *  the request is. 7.4's whole timing model is one byte per 158.9 ns.
+   *  docs/design-review2.md V-4. */
+  spntick?: boolean
   /** the '161 pair's terminal count - span-solid only */
   tc: boolean
   /** WADV[1:0] */
@@ -48,7 +54,8 @@ export interface SpanIn {
   maskbit: boolean
 }
 
-export const retiring = (s: SpanState, io: SpanIn) => s.busy === 1 && io.spngrant
+export const retiring = (s: SpanState, io: SpanIn) =>
+  s.busy === 1 && io.spngrant && io.spntick !== false
 
 export const ending = (s: SpanState, io: SpanIn) => {
   if (!retiring(s, io)) return false

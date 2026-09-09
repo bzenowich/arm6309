@@ -820,7 +820,7 @@ capacitor and series resistor into the jack.
 |---|---|
 | Level | 2 V p-p is **0.707 V rms**. Into 32 Ω that is **15.6 mW**, against the 1–5 mW a comfortable listening level wants — headroom, not a compromise |
 | Current | 0.707 / 32 = **22 mA rms**, ~31 mA peak per channel, against the part's **70 mA**. A `TL072` manages ~10 mA short-circuit and would clip into anything below ~200 Ω, which is the whole reason this is a different package |
-| Series `R` | **10 Ω** — short-circuit protection and damping. Into 32 Ω it costs 2.6 dB; into a 10 kΩ line input, nothing |
+| Series `R` | **10 Ω** — short-circuit protection and damping. Into 32 Ω it costs **2.4 dB** (20·log₁₀(32/42)); into a 10 kΩ line input, nothing |
 | Coupling `C` | **470 µF** into 32 Ω is **10.6 Hz**. The line path's 10 µF into 100 kΩ is 0.16 Hz; a headphone load is 3,000× lower and needs the capacitor 47× larger. Getting this wrong is the classic thin-sounding headphone output |
 | Supply | ⚠ **the analogue section's split rails, and this changes §16 item 25.** Ten more mA of quiescent current, and up to **~60 mA** into a low-impedance load on both channels at once — §10's estimate moves to **340–500 mA** |
 
@@ -1224,6 +1224,17 @@ are six registered cells in the CPLD (§10.1.1; on the six-GAL allocation they w
 Two registers change underneath the host: `AINTREQ` (slot logic sets request bits) and
 `ADATA` (slot 5 refills the prefetch latch).
 
+> ⛔ **AND THE FITTED `MERGE` DELIVERS AN INTERRUPT ONE TIME IN EIGHT, AFTER A READ.**
+> `MERGE = CCLK & SYNCR2 & !SYNCR1` is the trailing edge of a host *read* of `AINTREQ`,
+> ANDed with a colour clock that is one slot in eight — so a channel that exhausts its
+> buffer sets `PEND`*n* and **`REQ`*n* never rises unless the host was already polling,
+> and then only if the read happens to deassert on the right slot.** Measured: **2 of 16
+> read phases.** §1 requirement 7 is not delivered. The wording below is the fix —
+> "merge on the colour clock after the read strobe deasserts" means *every* colour clock
+> with a read in flight suppressing it, i.e. `CCLK & !SYNCR2 & !SYNCR1`, which is one
+> literal's difference. [`../../docs/design-review2.md`](../../docs/design-review2.md)
+> §2.2 (A-2).
+
 - **`AINTREQ`.** A set event arriving during a host read must neither be lost nor
   produce a half-updated byte. Request bits are set into a 6-bit **pending** register by
   the slot logic and merged into `AINTREQ` on the colour clock *after* the synchronised
@@ -1316,7 +1327,7 @@ a 16-bit adder chain; the top three bits are a carry-in increment in the sequenc
 | 1 | 74HC4066 | filter select / bypass (§7) |
 | 1 | 74HC574 | posted-write data latch (host → sample RAM) |
 | **1** | **74HC574** | **`ADATA`/`SDATA` read-prefetch latch (§9.3)** |
-| **1** | **`ATF1508AS-…JC84`, PLCC-84, socketed** | **the whole of the card's logic — §10.1 below**: the six-GAL allocation of §9.5, plus the `ACTRL` register, the three host-port synchronisers (§9.4.4) and the open-collector `/FIRQ` stage (§8.1) |
+| **1** | **`ATF1508AS-…JC84`, PLCC-84, socketed** | ⛔ **the six-GAL allocation of §9.5 and nothing else** — the host register block, the slot counter, the ÷5 prescale, the interrupt block, `ACTRL`, the synchronisers and `/FIRQ`. **The sequencer is not in it**; see §10.1.2 |
 | 1 | 28.37516 MHz osc | PAL Amiga master (§4.1) |
 | (1) | (28.63636 MHz osc) | (NTSC, socketed option, §4.1) |
 | — | 3.5 mm stereo jack | **headphone output on the card's rear edge — §7.1.** The backplane pair is the line output and is a different signal |
@@ -1343,6 +1354,33 @@ logic; absorb it and they all become inputs. On a hand-built card carrying four
 **What does not move, and never could:** the three SRAMs, the six `AD7528` multiplying
 DACs, the four op-amps, the `4066`, the oscillator and every passive. This is an
 analogue card with a digital corner, and the CPLD is the corner.
+
+#### ⛔ 10.1.2 What the part does not contain — 2026-09-09
+
+> **The fit is real and the part is two-thirds empty, and the reason is that the audio
+> engine is not designed.** `audio.cpld.ts`'s complete input list is `A0`–`A3`,
+> `D0`–`D7`, `E`, `RW`, `SEL`, `RESET` and `SET0`–`SET5`: address, data, the bus
+> strobes, and six "an interrupt happened" flags. **There is no state-file data, no
+> compare result, no `PER`, no `NEXT`, no `PEND`** — and no state-file address, no
+> state-file `/WE`, no sample-RAM `/WE`, no `AD7528` `CS`/`WR`/`DAC`-select, no `'574`
+> clock and no adder control among the outputs.
+>
+> So the following, each of which this document describes as designed, exists in no
+> design file: §3.2's three-stage pipeline; §3.1's deferred-work scheduler beyond a
+> one-bit handshake; ⛔ **§3.3's `LC`/`LEN` shadow copy at `CNT` = 0**, which §3.3 itself
+> calls *"the single highest-value line in the sequencer GAL"*; §4.2's hit handling and
+> its `PER` clamp; §6.1's `VOLCODE` derivation; §6.2's two converter write windows;
+> §8.2's timer **compare and reload** (only the ÷5 prescale is built); §9.3's `AIDX`
+> and `SPTR` auto-increment; §9.2's `ASTAT`; ⛔ **§9.4.3's normative multi-byte commit**;
+> §11.1's pan multiplexer; §11.3's attach modulation; §11.2's 8-channel mode; and §1
+> requirement 6's `DMACON` restart delay.
+>
+> **So §1's acceptance test cannot be evaluated from the design.** Whether this card
+> plays a `.mod` accurately, whether it is jitter-free and whether panning works are all
+> properties of the sequencer. What *is* verified — the slot walk, the exact ÷5 CIA
+> clock, Paula's set/clear semantics, the open-drain `/FIRQ` and the host synchroniser —
+> is in [`../../docs/design-review2.md`](../../docs/design-review2.md) §2.1, together
+> with the period, tempo and analogue arithmetic, which all re-derive correctly.
 
 #### 10.1.1 Fitted, 2026-09-07
 
@@ -1836,6 +1874,20 @@ specification that has not been tested.
 ---
 
 ## 16. Open items
+
+00. **⛔ THE SEQUENCER IS NOT DESIGNED, and it is the card.** §10.1.2 has the list: the
+    slot pipeline, the hit handling, the `LC`/`LEN` shadow reload, the converter write
+    windows, the timer compare, the multi-byte commit rule, the pan multiplexer and the
+    attach chain are prose in this document and equations in no file. The fitted
+    `ATF1508AS` holds §9.5's six-GAL allocation and stops there, which is why it is at
+    **79 of 128 logic cells** with 27 input pins. **Every item below this one is
+    downstream of it**, and so is §1's acceptance test.
+    [`../../docs/design-review2.md`](../../docs/design-review2.md) §2.1.
+
+0a. **⛔ A channel's end-of-buffer interrupt is not delivered** — §9.4.5's `MERGE` fires
+    only on the trailing edge of a host read of `AINTREQ`, and then only on the one slot
+    in eight where it meets `CCLK`. Measured at 2 of 16 read phases. One literal;
+    §9.4.5 has it.
 
 0. **DECIDED 2026-09-08 — the sample RAM stays card-local and off the physical map.**
    §5.2 has the arithmetic: memory-mapping it needs a second source on the 19-bit

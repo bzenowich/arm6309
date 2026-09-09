@@ -715,3 +715,31 @@ rising staircase of capacity while a 22V10 offers the palindrome 8, 10, 12, 14, 
 sorted pairing fits, and it interleaves the bits across the package. `vgen`, `vadr`
 and (predictably) the `WPTR` pair all land on it. The assembler refuses the naive
 order rather than letting it through, which is how `vadr`'s top bit was caught.
+
+## The generation chain, since 2026-09-09
+
+One origin, three devices, and the `.pld` files were the link with no script
+behind it — which is how `gal/vctrl.pld` and `video.cpld.ts` drifted apart.
+
+```
+  *.jedec.ts / video.parts.ts        the term lists, and the only source
+        |
+        +-- jedec/assemble.ts   -->  *.jed          our fuse map        check:*
+        +-- cpld.gen.ts         -->  vctrl/vaddr/audio.pld
+        |        `-- prjbureau/fit1508.sh  -->  cpld/*.fit, cpld/*.jed
+        +-- verilog/gen.ts      -->  verilog/*.v    Verilator             check:video
+```
+
+`npm run gen:pld` writes the three CPLD sources; `npm run check:video`
+regenerates the Verilog and runs six testbenches over whole frames, whole
+spans and the boot sequence. `npm run build:all` does the lot.
+
+⚠ **Every `.pld` must be 7-bit ASCII.** Atmel's CUPL is an MS-DOS program and
+its lexer aborts on anything else — `illegal character: ASCII code 226`, which
+is what this repository's prose convention is made of. `jedec.check.ts`
+asserts it, because it is a rule worth checking rather than remembering.
+
+⚠ **A failed fit leaves the previous `.fit` in place.** `fit1508.sh`'s own
+header records the same trap for CUPL's `.tt2`; the fitter has it too, and a
+stale utilisation report reads exactly like a passing one. Compare the file's
+hash across the run, or read the log.

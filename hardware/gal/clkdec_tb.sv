@@ -28,9 +28,10 @@ module clkdec_tb;
 
   // A bare instance of the combinational half, so the decode can be swept
   // exhaustively without reaching inside the divider.
-  logic d_iopage, d_la7, d_la6, d_run;
+  logic d_iopage, d_la7, d_la6, d_la5, d_la4, d_run;
   logic d_iosel, d_bootoe;
-  decode ddut (.n_iopage(d_iopage), .la7(d_la7), .la6(d_la6), .run(d_run),
+  decode ddut (.n_iopage(d_iopage), .la7(d_la7), .la6(d_la6),
+               .la5(d_la5), .la4(d_la4), .run(d_run),
                .n_iosel(d_iosel), .n_bootoe(d_bootoe));
 
   int fails = 0;
@@ -42,6 +43,7 @@ module clkdec_tb;
   int period, high, lead, e_rise, q_rise, prev_rise, t;
   bit pe, pq;
   bit wired, iosel_ok, bootoe_ok, excl_ok, vec_ok, held_ok, run_ok;
+  bit boot_blk_ok, io_park_ok;
   logic [3:0] hold_cnt; logic hold_e, hold_q;
   bit want;
   string order;
@@ -110,7 +112,7 @@ module clkdec_tb;
     for (int p = 0; p < 2; p++)
       for (int a7 = 0; a7 < 2; a7++)
         for (int a6 = 0; a6 < 2; a6++) begin
-          d_iopage = p[0]; d_la7 = a7[0]; d_la6 = a6[0]; #1;
+          d_iopage = p[0]; d_la7 = a7[0]; d_la6 = a6[0]; d_la5 = 0; d_la4 = 0; #1;
           if ((!d_iosel) != (p == 0 && a7 == 0)) iosel_ok = 0;
         end
     ok(iosel_ok, "/IOSEL is $FF00-$FF7F: the I/O page with A7 = 0");
@@ -123,7 +125,7 @@ module clkdec_tb;
     iosel_ok = 1;
     for (int p = 0; p < 2; p++)
       for (int a7 = 0; a7 < 2; a7++) begin
-        d_iopage = p[0]; d_la7 = a7[0]; d_la6 = 1'b0; #1;
+        d_iopage = p[0]; d_la7 = a7[0]; d_la6 = 1'b0; d_la5 = 0; d_la4 = 0; #1;
         want = !d_iosel;
         d_la6 = 1'b1; #1;
         if ((!d_iosel) != want) iosel_ok = 0;
@@ -135,25 +137,45 @@ module clkdec_tb;
     // do not, and U9 forms the SRAMs' chip enables from the same two
     // conditions - so this is half of a claim that spans two parts. The other
     // half is in jedec.check.ts, against both fuse maps.
-    bootoe_ok = 1; excl_ok = 1; vec_ok = 1;
+    // ⭐ THE RULE IS ONE SENTENCE SINCE 2026-09-09: the buffer drives exactly
+    // when the map SRAMs do not. The old rule enumerated two modes and was
+    // wrong in both directions - it left the buffer ON during boot-mode block
+    // writes, fighting U4 for the SRAM's own I/O pins, and OFF during ordinary
+    // I/O cycles, floating eight backplane lines. design-review2.md M-2, M-3.
+    bootoe_ok = 1; excl_ok = 1; vec_ok = 1; boot_blk_ok = 1; io_park_ok = 1;
     for (int p = 0; p < 2; p++)
       for (int a7 = 0; a7 < 2; a7++)
         for (int a6 = 0; a6 < 2; a6++)
-          for (int r = 0; r < 2; r++) begin
-            d_iopage = p[0]; d_la7 = a7[0]; d_la6 = a6[0]; d_run = r[0]; #1;
-            // boot mode, or the vector page
-            want = (r == 0) || (p == 0 && a7 == 1 && a6 == 1);
-            if ((!d_bootoe) != want) bootoe_ok = 0;
-            // The '244 and /IOSEL must never assert together: /IOSEL means a
-            // card is being addressed, and the buffer driving means the map is
-            // not translating. They overlap only in boot mode, where the ROM
-            // stands down for $FF00-$FFBF and cards answer normally - so the
-            // pair IS allowed there, and the exclusion is the vector page's.
-            if (p == 0 && a7 == 1 && a6 == 1 && !d_iosel) excl_ok = 0;
-            // The vector page asserts the '244 whether or not boot mode does.
-            if (p == 0 && a7 == 1 && a6 == 1 && d_bootoe) vec_ok = 0;
-          end
-    ok(bootoe_ok,   "the buffer drives for the whole of boot mode and for $FFC0-$FFFF");
+          for (int a5 = 0; a5 < 2; a5++)
+            for (int a4 = 0; a4 < 2; a4++)
+              for (int r = 0; r < 2; r++) begin
+                automatic bit iop = (p == 0);
+                automatic bit blkhi = iop && a7 == 1 && a6 == 0 && a5 == 0 && a4 == 1;
+                automatic bit blklo = iop && a7 == 1 && a6 == 0 && a5 == 1 && a4 == 0;
+                automatic bit mapsel = (r == 1 && !iop) || blkhi || blklo;
+                d_iopage = p[0]; d_la7 = a7[0]; d_la6 = a6[0];
+                d_la5 = a5[0]; d_la4 = a4[0]; d_run = r[0]; #1;
+                // the buffer drives if and only if no map SRAM is selected
+                if ((!d_bootoe) != !mapsel) bootoe_ok = 0;
+                // M-3: never both, and a boot-mode block write is the case
+                // that used to be both, sixteen times per boot.
+                if (!d_bootoe && mapsel) boot_blk_ok = 0;
+                // M-2: an ordinary I/O cycle parks the address rather than
+                // floating it - the buffer is on for every $FFxx that is not a
+                // block access, in either mode.
+                if (iop && !blkhi && !blklo && d_bootoe) io_park_ok = 0;
+                // The '244 and /IOSEL must never assert together for the
+                // vector page: /IOSEL means a card is addressed, and no card
+                // may see a vector fetch.
+                if (iop && a7 == 1 && a6 == 1 && !d_iosel) excl_ok = 0;
+                // The vector page asserts the '244 whether or not boot mode
+                // does - it is an I/O cycle and not a block access, so the
+                // general rule covers it with no term of its own.
+                if (iop && a7 == 1 && a6 == 1 && d_bootoe) vec_ok = 0;
+              end
+    ok(bootoe_ok,   "the buffer drives if and only if neither map SRAM is selected");
+    ok(boot_blk_ok, "so it is OFF for a block-register access in BOOT mode - the sixteen writes of machine.md 7.2's boot sequence no longer fight U4");
+    ok(io_park_ok,  "and ON for every other $FFxx cycle, so physical A20-A13 are parked and not floating");
     ok(vec_ok,  "the vector page asserts it forever, boot mode or not - which is what makes $FFFE a reset vector");
     ok(excl_ok, "and /IOSEL never fires for $FFC0-$FFFF, so no card ever sees a vector fetch");
 
@@ -194,7 +216,8 @@ module clkdec_tb;
       for (int a7 = 0; a7 < 2; a7++)
         for (int a6 = 0; a6 < 2; a6++) begin
           n_iopage = p[0]; la7 = a7[0]; la6 = a6[0];
-          d_iopage = p[0]; d_la7 = a7[0]; d_la6 = a6[0]; d_run = run; #1;
+          d_iopage = p[0]; d_la7 = a7[0]; d_la6 = a6[0];
+          d_la5 = la5; d_la4 = la4; d_run = run; #1;
           if (n_bootoe != d_bootoe || n_iosel != d_iosel) wired = 0;
         end
     n_iopage = 1; la7 = 1'b0; la6 = 1'b0;

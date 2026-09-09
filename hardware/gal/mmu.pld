@@ -33,10 +33,10 @@ PIN 5  = LA11 ;
 PIN 6  = LA10 ;
 PIN 7  = LA9 ;
 PIN 8  = LA8 ;
-PIN 9  = LA7 ;      /* $FFA0-$FFBF window select: A7..A4 = 101x            */
+PIN 9  = LA7 ;      /* $FF90-$FFBF window select: A7..A4 = 1001/101x       */
 PIN 10 = LA6 ;
-PIN 11 = LA5 ;
-PIN 13 = LA4 ;      /* 0 = block registers, 1 = control                    */
+PIN 11 = LA5 ;      /* LA5:LA4 = 01 high bytes, 10 low bytes, 11 control    */
+PIN 13 = LA4 ;      /*           00 is $FF80-$FF8F and is free              */
 PIN 14 = E ;
 PIN 15 = Q ;
 PIN 16 = RW ;       /* 6809 R/W: high = read                               */
@@ -62,11 +62,29 @@ FIELD page = [LA15..LA8] ;
  * that system RAM and VRAM stay inhibited for the whole of any I/O cycle. */
 iopage = LA15 & LA14 & LA13 & LA12 & LA11 & LA10 & LA9 & LA8 ;
 
-/* $FFA0-$FFBF, the MMU's own 32 bytes. Motherboard-decoded, outside the
- * $FF40-$FF7F geographic window - docs/machine.md 3. */
-mmusel = iopage & LA7 & !LA6 & LA5 ;
-blksel = mmusel & !LA4 ;    /* $FFA0-$FFAF - 16 block registers            */
-ctlsel = mmusel &  LA4 ;    /* $FFB0-$FFBF - control, aliased 16 times     */
+/* The MMU's own 48 bytes, motherboard-decoded, outside the $FF40-$FF7F
+ * geographic window - docs/machine.md 3. A7..A4 = 1001, 1010, 1011 and the
+ * fourth code, 1000 ($FF80-$FF8F), is free.
+ *
+ * !! TWO BLOCK WINDOWS SINCE 2026-09-09, and it is what makes the MMU work at
+ * all. A map entry is sixteen bits across two SRAMs (ram.md 3.1) and the two
+ * bytes need two addresses - but the write INDEX comes from LA3..LA0 through
+ * U5's '157, so LA3 is the task bit of machine.md 3's {TASK, block}. Using
+ * that same LA3 to choose which SRAM a write lands in - ram.md 4.1's Layout
+ * A, which is what u9.pld did until today - makes the two uses collide: the
+ * high byte lands in the OTHER task's entry, and no task can have both bytes
+ * of a block register set. Nothing above physical 2 MB was reachable.
+ *
+ * The repair is a second sixteen-byte window rather than a second meaning for
+ * LA3, and it costs nothing: $FF80-$FF9F decodes nowhere ($FF90-$FF9F was the
+ * CPU module's vector RAM until machine.md 7.2 put the vectors in the boot
+ * ROM), it is OUTSIDE the $FF00-$FF7F geographic window so no card loses a
+ * byte, and both windows carry the same {TASK, block} index. ram.md 4.3. */
+mmusel = iopage & LA7 & !LA6 ;
+blkhi  = mmusel & !LA5 &  LA4 ;   /* $FF90-$FF9F - 16 entries, HIGH byte    */
+blklo  = mmusel &  LA5 & !LA4 ;   /* $FFA0-$FFAF - 16 entries, LOW byte     */
+blksel = blkhi # blklo ;          /* either: same index, same strobes       */
+ctlsel = mmusel &  LA5 &  LA4 ;   /* $FFB0-$FFBF - control, aliased 16x     */
 
 /* --- equations -------------------------------------------------------- */
 
@@ -92,11 +110,14 @@ MAPWE = blksel & !RW & E & !Q ;
  * drives during an I/O cycle. Never asserted during a block write.
  *
  * THIS IS NINE PRODUCT TERMS, not one: !iopage is the complement of an
- * eight-way AND and costs eight of them. It is the only equation on this part
- * that is not a single term, and pin 21's macrocell holds 12, so it fits
- * where it is and would NOT fit on pin 14 or pin 23, which hold 8. The
- * complement is cheaper still - !MAPOE is six terms - and that is the form
- * mmu.jedec.ts assembles. A fitter chooses between them silently. */
+ * eight-way AND and costs eight of them, and blksel adds a tenth now that it
+ * is two windows. It is the only equation on this part that is not a single
+ * term, and pin 21's macrocell holds 12, so it fits where it is and would NOT
+ * fit on pin 14 or pin 23, which hold 8. The complement is cheaper still -
+ * !MAPOE is SIX terms and stays six, because !(blkhi # blklo) reduces to
+ * !LA7 # LA6 # LA5&LA4 # !LA5&!LA4 and the two halves that grew cancel the
+ * one that shrank - and that is the form mmu.jedec.ts assembles. A fitter
+ * chooses between them silently. */
 MAPOE = !iopage
       # blksel & RW & E ;
 

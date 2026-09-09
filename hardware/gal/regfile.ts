@@ -38,6 +38,7 @@ export const REGS = {
    * a fiction that invites exactly the bug 10.3.1 exists to warn about. A list
    * is started by loading WPTR at $08-$0A and writing BCTRL. $0B-$0D are free. */
   BCTRL: 0x0e,
+  WADV: 0x14,
   TILEBASE: 0x17, FONTBASE: 0x18, MAPBASE: 0x19,
 } as const
 
@@ -80,6 +81,16 @@ const strobe = (name: string, off: number, why?: string) =>
 export const writeStrobes: Cell[] = [
   strobe("LDVSL", REGS.VSCROLL), strobe("LDVSH", REGS.VSCROLLH),
   strobe("LDHS", REGS.HSCROLL),  strobe("LDHSH", REGS.HSCROLLH),
+  /* ⭐ 13's +$14, and it had no strobe - so WADV0 and WADV1 were inputs to
+   * vctrl that nothing produced and 7.2's chaining could not be selected at
+   * all (design-review2.md V-1). It goes out to vctrl, which holds the two
+   * bits beside the span control that reads them. */
+  strobe("LDADV", REGS.WADV, "13's +$14 - 7.2's next-row-same-column mode"),
+  /* ⭐ 13's +$0E b0. The list engine's LRUN took BCTRLGO as an input and
+   * nothing produced it, so the engine could not be started either. It is a
+   * strobe and not a register: LRUN latches, and 10.3.1's GO is the write. */
+  comb("BCTRLGO", [`WSTB & ${isReg(REGS.BCTRL)} & D0`],
+    "10.3.1's GO - a strobe, because LRUN is what holds"),
   strobe("LDA", REGS.WPTRA, "WPTR's three bytes - item 23 offered a '138 for these"),
   strobe("LDB", REGS.WPTRB), strobe("LDC", REGS.WPTRC),
   strobe("LDTB", REGS.TILEBASE), strobe("LDFB", REGS.FONTBASE),

@@ -1,0 +1,4 @@
+# Verilator's build tree. The generated .v files themselves ARE tracked, the
+# same way the generated .jed files are: one command regenerates them and a
+# reader should be able to look at the design without a toolchain.
+verilog/obj_dir/

@@ -276,3 +276,48 @@ step 1 sources a part.
   file's §7.1 entry; the README keeps only the present window and the `A0`–`A6` hazard.
 - "`docs/serial.md` §8 used to say a straight-through cable to a modern USB-serial
   adapter was what the DE-9 expected" — see the §8 entry.
+
+
+---
+
+## 2026-09-09 — design-review2.md's corrections
+
+### §0 — which design is the specified one
+
+**Was:** *"⭐ The card as specified is 3 ICs and 19,200 baud. §4.5 and §5.4 argue it
+should be 4 ICs and 115,200, on the strength of the widened address map. The 6551 design
+is the specified one and the tiers are proposals with arithmetic — §13 items 6 and 7
+hold the decision."*
+
+**Why it moved:** §13 item 6 closed on 2026-09-09 and §9.1 took the `TL16C550C`, at
+**3 ICs** rather than 4 — the "+1 IC" in that block was the counting error §9.1 records,
+a baud crystal charged against a total that already had one. The same §0 table's own
+rows already said the part had changed, so the block contradicted the table it sat under.
+
+### §0 and `machine.md` §4.1 — the receive interrupt rate
+
+**Was:** *"~1,030 interrupts/s receiving"* at 115,200 baud with a 14-byte FIFO trigger.
+
+**Why it moved:** 115,200 baud 8N1 is 11,520 B/s, and 11,520 ÷ 14 is **823**. 1,030
+implies 11.2 bytes per interrupt, which is not a trigger level the part offers. The
+corrected figure strengthens §4.5's argument rather than weakening it.
+
+### §2 — where the machine's system software comes from
+
+**Was:** *"This machine boots NitrOS-9 from floppy."*
+
+**Why it moved:** `machine.md` §7.2 decided the boot arrangement on 2026-09-08 — a 1 MB
+ROM on the motherboard holding the boot monitor and a read-only ROM disk with the whole
+NitrOS-9 distribution. **There is no floppy controller anywhere in this machine**, and
+the sentence was inherited from the comparison with the Minimal 64x4 that surrounds it.
+
+### §13 item 12 — `IRQB` open drain
+
+**Was:** *"`IRQB` open drain is assumed, not read (§6, §12 step 1). The wire-OR onto a
+line shared with three other cards depends on it. NMOS parts document it; the part
+bought may not be one. One datasheet lookup, one diode if the answer is wrong."*
+
+**Why it moved:** the item was a 6551 question and item 6 changed the part. §9.1 already
+answers it for the `16C550` and the answer is **no** — `INTR` is active-high and
+totem-pole, so the card's GAL inverts it through `machine.md` §5 item 9's open-drain
+idiom. The item is closed with that answer rather than left as a lookup.

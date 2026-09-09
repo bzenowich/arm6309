@@ -186,21 +186,98 @@ export const arbDesign: Design = {
 const WCOL = ["A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9"]
 const WROW = ["A10", "A11", "A12", "A13", "A14", "A15", "A16", "A17", "A18"]
 
-/* The column takes WPTR bytes 0 and 1: D7..D0 -> A7..A0, then D1..D0 ->
- * A9..A8. One strobe per byte, decoded by the sequencer. */
-/* A bit holds through every strobe EXCEPT the one that loads it. Gating the
- * hold on both strobes is wrong and is not subtle: writing byte 1 would then
- * clear bits 7..0, so the CPU could never write a pointer above 255 without
- * the low byte being destroyed by the next write. */
-const wcolTerms = WCOL.map((_, i) => {
+/* ⭐ THE COLUMN LOADS FROM ITS SHADOW AND NOT FROM D0-D7 - 2026-09-09, and it
+ * is what makes 7.2's chaining fit.
+ *
+ * 7.2 buys "13 writes per character cell" instead of 26 with WADV = 01, "next
+ * row, same column": at span end the row advances and THE COLUMN RELOADS FROM
+ * A SHADOW. The row half was built and the column half was not, so a chained
+ * glyph advanced its row and kept the eight columns the span had just retired,
+ * stepping eight pixels right on every row. Every figure in 7.3 and
+ * features.md 2.3 rests on it. docs/design-review2.md V-6.
+ *
+ * ⚠ AND THE OBVIOUS WIRING DOES NOT FIT. Adding the shadow as a THIRD load
+ * source alongside D0-D7 puts ten more signals into the ten macrocells that
+ * already read the data bus, and the ATF1508's switch matrix admits 40 of ~200
+ * per logic block: the fitter aborts with INTERNAL ERROR, which is the same
+ * wall 10.1.6.2 hit with the list engine's own pointer.
+ *
+ * ⭐ SO THE SHADOW IS THE REGISTER FILE, WHICH IS WHAT 7.2 SAID: "a CPU write
+ * to WPTR's low and middle bytes ALSO strobes the register file... at span end
+ * the sequencer takes two deferrable file reads to restore the column. No
+ * latch, no mux." The file already stores every register the CPU writes, and
+ * the '245 of 3.2 already puts its output on the same internal data bus the
+ * CPU's writes arrive on - so the reload uses THIS PART'S EXISTING LOAD PATH
+ * with a second pair of strobes, and costs ten macrocells nowhere.
+ *
+ * RLDA and RLDB are those strobes. video.parts.ts sequences them: WROWADV
+ * starts a two-dot walk, rfa points the file at $08 and then $09, and each
+ * byte lands on the load path the CPU's own write already uses.
+ *
+ * ⚠ WHAT DOES NOT WORK is the obvious thing, and it is worth recording. Ten
+ * shadow REGISTERS on vaddr - loaded beside this counter, read back into it -
+ * is the same repair with no sequencer, and the fitter refuses it: vaddr is at
+ * 118 of 128 logic cells and ten more will not GROUP, whether they arrive as a
+ * third load source (INTERNAL ERROR, which is 10.1.6.2's fan-in wall) or as
+ * the only one (Grouping fail). The two-cycle read is not the cheap option
+ * chosen over an elegant one; it is the one that fits.
+ *
+ * ⚠ AND BOTH CHAINING MODES RELOAD. 13's WADV = 10 is "advance by the stride",
+ * a vertical line at one pixel per span - so its column advances by one and
+ * has to come back too. WROWADV is already SPANEND & (WADV0 # WADV1). */
+/* ⭐ THREE LOAD SOURCES SINCE 2026-09-09, and the third is 7.2's whole text
+ * engine.
+ *
+ * 7.2 buys "13 writes per character cell" instead of 26 with WADV = 01, "next
+ * row, same column": at span end the row advances and THE COLUMN RELOADS FROM
+ * A SHADOW. The row half was built; the column half was not, and wcol's only
+ * load path was the CPU's own register write - so a chained glyph advanced its
+ * row and kept the eight columns the span had just retired, stepping eight
+ * pixels right on every row. Every figure in 7.3 and features.md 2.3 rests on
+ * it. docs/design-review2.md V-6.
+ *
+ * The shadow is `wcolShadow` in video.parts.ts - ten registers loaded on
+ * exactly the strobes that load this counter, so software writes WPTR once and
+ * the shadow follows for free, which is what 7.2 means by "the shadow is
+ * free". WROWADV is the reload, because it is already the signal that says a
+ * span ended in a chaining mode, and it already crosses to this part. */
+/** The column counter's terms, with or without 7.2's reload.
+ *
+ * ⚠ TWO FORMS, ONE GENERATOR, and the reason is a pin budget rather than a
+ * choice - the same shape audio.jedec.ts uses for its interrupt block.
+ *
+ * WITH the reload this is thirteen inputs (D0-D7, both CPU strobes, both
+ * reload strobes, WINC) on a part with eleven pins, so it is not a GAL22V10
+ * design any more. WITHOUT it, it is the ten-macrocell eleven-input fit item
+ * 12's answer rests on - and the reload changes nothing about the counting or
+ * the wrap, which is what access.check.ts is for. So the check builds the
+ * standalone form and video.cpld.ts merges the other.
+ *
+ * ⚠ AND ORing THE STROBES DOES NOT WORK, which is worth recording because it
+ * is the obvious escape. `LDCA = LDA # RLDA` keeps the part at eleven inputs -
+ * and CUPL substitutes combinational intermediates, so every hold term becomes
+ * `!(LDA # RLDA)` = `!LDA & (!RP0 # RP1)`, two terms where there was one,
+ * across all ten macrocells. The ATF1508 fitter aborts with INTERNAL ERROR. */
+export const wcolTermsFor = (withReload: boolean) => WCOL.map((_, i) => {
   const counted = counterTerms({ bits: WCOL, enable: "WINC" })[i]
-  const mine = i < 8 ? "LDA" : "LDB"
-  const load = i < 8 ? `LDA & D${i}` : `LDB & D${i - 8}`
-  return [load, ...counted.map((t) => `!${mine} & ${t}`)]
+  const cpu = i < 8 ? "LDA" : "LDB"
+  const rld = i < 8 ? "RLDA" : "RLDB"
+  const d = i < 8 ? `D${i}` : `D${i - 8}`
+  const srcs = withReload ? [cpu, rld] : [cpu]
+  const hold = srcs.map((m) => `!${m}`).join(" & ")
+  return [
+    ...srcs.map((m) => `${m} & ${d}`),
+    ...counted.map((t) => `${hold} & ${t}`),
+  ]
 })
-const wcolCells: Cell[] = WCOL.map((name, i) => ({
-  pin: 0, name, assertedLow: false, s0: 1, registered: true, terms: wcolTerms[i],
-}))
+
+export const wcolCellsFor = (withReload: boolean): Cell[] =>
+  WCOL.map((name, i) => ({
+    pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
+    terms: wcolTermsFor(withReload)[i],
+  }))
+
+const wcolCells = wcolCellsFor(false)
 const wcolPins = place(wcolCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
 
 export const wcolDesign: Design = {

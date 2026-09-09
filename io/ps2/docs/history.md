@@ -248,3 +248,18 @@ the 2026-09-04 design review… 9 → 11"). Both replaced by present-tense state
   rate and 40 was chosen from a menu that omitted it.)" — see the §5.2 entry.
 - "which is the part the first three revisions left out" (of the masked transmit) — see
   the §7.1 entry.
+
+
+---
+
+## 2026-09-09 — design-review2.md's correction
+
+### §0 — where the card moved from
+
+**Was:** *"⚠ Moved from `$FF30` on 2026-09-09"*, in a row whose answer is
+`$FF30`–`$FF33`.
+
+**Why it moved:** the merged I/O card moved **to** `$FF30`, from `$FF50`, when
+`serial.md` §4.5's `16C550` needed eight registers where a 6551 had four
+(`serial.md` §7.1, `machine.md` §3). The row said the card had moved away from the
+address it had just moved to.

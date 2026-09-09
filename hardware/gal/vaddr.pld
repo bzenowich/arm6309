@@ -35,7 +35,6 @@ PIN = D4 ;
 PIN = D5 ;
 PIN = D6 ;
 PIN = D7 ;
-PIN = WINC ;
 PIN = WROWADV ;
 PIN = MAPLD ;
 PIN = PB0 ;
@@ -46,6 +45,7 @@ PIN = PB4 ;
 PIN = PB5 ;
 PIN = PB6 ;
 PIN = PB7 ;
+PIN = CELLTICK ;
 PIN = MCADV ;
 PIN = WSTB ;
 PIN = RA4 ;
@@ -53,18 +53,18 @@ PIN = RA3 ;
 PIN = RA2 ;
 PIN = RA1 ;
 PIN = RA0 ;
-PIN = BCTRLGO ;
+PIN = RETIRE ;
 PIN = LGRANT ;
-PIN = LINEAR ;
-PIN = SPNGRANT ;
-PIN = TILESEL ;
-PIN = MAPSEL ;
+PIN = SRC1 ;
+PIN = SRC0 ;
 
 /* --- outputs ------------------------------------------------------ */
 PIN = WA0 ;
 PIN = WA1 ;
 PIN = MAPA0 ;
 PIN = MAPA1 ;
+PIN = RP0 ;
+PIN = RP1 ;
 PIN = LRUN ;
 PIN = FBA2 ;
 PIN = FBA3 ;
@@ -156,6 +156,14 @@ PINNODE = MAP4 ;
 PINNODE = MAP5 ;
 PINNODE = MAP6 ;
 PINNODE = MAP7 ;
+PINNODE = MAPQ0 ;
+PINNODE = MAPQ1 ;
+PINNODE = MAPQ2 ;
+PINNODE = MAPQ3 ;
+PINNODE = MAPQ4 ;
+PINNODE = MAPQ5 ;
+PINNODE = MAPQ6 ;
+PINNODE = MAPQ7 ;
 PINNODE = MC0 ;
 PINNODE = MC1 ;
 PINNODE = MC2 ;
@@ -173,7 +181,7 @@ PINNODE = LD6 ;
 PINNODE = LD7 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * LDVSL, LDVSH, LDHS, LDHSH, LDA, LDB, LDC, LDTB, LDFB, LDMB, LSTOP, LADV, LFETCH, LMOVE */
+ * RLDA, RLDB, LDVSL, LDVSH, LDHS, LDHSH, LDADV, BCTRLGO, LDA, LDB, LDC, LDTB, LDFB, LDMB, WINC, LSTOP, LADV, LFETCH, LMOVE */
 
 /* --- equations ---------------------------------------------------- */
 SA2.d = HLOAD & HS2
@@ -292,80 +300,90 @@ SA18.d = VBLANK & VS8
          # !VBLANK & ROWADV & !SA18 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15 & SA16 & SA17
          # !VBLANK & !ROWADV & SA18 ;
 WA0.d = LDA & D0
-        # !LDA & WINC & !WA0
-        # !LDA & !WINC & WA0 ;
+        # RLDA & D0
+        # !LDA & !RLDA & WINC & !WA0
+        # !LDA & !RLDA & !WINC & WA0 ;
 WA1.d = LDA & D1
-        # !LDA & WINC & WA1 & !WA0
-        # !LDA & WINC & !WA1 & WA0
-        # !LDA & !WINC & WA1 ;
+        # RLDA & D1
+        # !LDA & !RLDA & WINC & WA1 & !WA0
+        # !LDA & !RLDA & WINC & !WA1 & WA0
+        # !LDA & !RLDA & !WINC & WA1 ;
 WA2.d = LDA & D2
-        # !LDA & WINC & WA2 & !WA0
-        # !LDA & WINC & WA2 & !WA1
-        # !LDA & WINC & !WA2 & WA0 & WA1
-        # !LDA & !WINC & WA2 ;
+        # RLDA & D2
+        # !LDA & !RLDA & WINC & WA2 & !WA0
+        # !LDA & !RLDA & WINC & WA2 & !WA1
+        # !LDA & !RLDA & WINC & !WA2 & WA0 & WA1
+        # !LDA & !RLDA & !WINC & WA2 ;
 WA3.d = LDA & D3
-        # !LDA & WINC & WA3 & !WA0
-        # !LDA & WINC & WA3 & !WA1
-        # !LDA & WINC & WA3 & !WA2
-        # !LDA & WINC & !WA3 & WA0 & WA1 & WA2
-        # !LDA & !WINC & WA3 ;
+        # RLDA & D3
+        # !LDA & !RLDA & WINC & WA3 & !WA0
+        # !LDA & !RLDA & WINC & WA3 & !WA1
+        # !LDA & !RLDA & WINC & WA3 & !WA2
+        # !LDA & !RLDA & WINC & !WA3 & WA0 & WA1 & WA2
+        # !LDA & !RLDA & !WINC & WA3 ;
 WA4.d = LDA & D4
-        # !LDA & WINC & WA4 & !WA0
-        # !LDA & WINC & WA4 & !WA1
-        # !LDA & WINC & WA4 & !WA2
-        # !LDA & WINC & WA4 & !WA3
-        # !LDA & WINC & !WA4 & WA0 & WA1 & WA2 & WA3
-        # !LDA & !WINC & WA4 ;
+        # RLDA & D4
+        # !LDA & !RLDA & WINC & WA4 & !WA0
+        # !LDA & !RLDA & WINC & WA4 & !WA1
+        # !LDA & !RLDA & WINC & WA4 & !WA2
+        # !LDA & !RLDA & WINC & WA4 & !WA3
+        # !LDA & !RLDA & WINC & !WA4 & WA0 & WA1 & WA2 & WA3
+        # !LDA & !RLDA & !WINC & WA4 ;
 WA5.d = LDA & D5
-        # !LDA & WINC & WA5 & !WA0
-        # !LDA & WINC & WA5 & !WA1
-        # !LDA & WINC & WA5 & !WA2
-        # !LDA & WINC & WA5 & !WA3
-        # !LDA & WINC & WA5 & !WA4
-        # !LDA & WINC & !WA5 & WA0 & WA1 & WA2 & WA3 & WA4
-        # !LDA & !WINC & WA5 ;
+        # RLDA & D5
+        # !LDA & !RLDA & WINC & WA5 & !WA0
+        # !LDA & !RLDA & WINC & WA5 & !WA1
+        # !LDA & !RLDA & WINC & WA5 & !WA2
+        # !LDA & !RLDA & WINC & WA5 & !WA3
+        # !LDA & !RLDA & WINC & WA5 & !WA4
+        # !LDA & !RLDA & WINC & !WA5 & WA0 & WA1 & WA2 & WA3 & WA4
+        # !LDA & !RLDA & !WINC & WA5 ;
 WA6.d = LDA & D6
-        # !LDA & WINC & WA6 & !WA0
-        # !LDA & WINC & WA6 & !WA1
-        # !LDA & WINC & WA6 & !WA2
-        # !LDA & WINC & WA6 & !WA3
-        # !LDA & WINC & WA6 & !WA4
-        # !LDA & WINC & WA6 & !WA5
-        # !LDA & WINC & !WA6 & WA0 & WA1 & WA2 & WA3 & WA4 & WA5
-        # !LDA & !WINC & WA6 ;
+        # RLDA & D6
+        # !LDA & !RLDA & WINC & WA6 & !WA0
+        # !LDA & !RLDA & WINC & WA6 & !WA1
+        # !LDA & !RLDA & WINC & WA6 & !WA2
+        # !LDA & !RLDA & WINC & WA6 & !WA3
+        # !LDA & !RLDA & WINC & WA6 & !WA4
+        # !LDA & !RLDA & WINC & WA6 & !WA5
+        # !LDA & !RLDA & WINC & !WA6 & WA0 & WA1 & WA2 & WA3 & WA4 & WA5
+        # !LDA & !RLDA & !WINC & WA6 ;
 WA7.d = LDA & D7
-        # !LDA & WINC & WA7 & !WA0
-        # !LDA & WINC & WA7 & !WA1
-        # !LDA & WINC & WA7 & !WA2
-        # !LDA & WINC & WA7 & !WA3
-        # !LDA & WINC & WA7 & !WA4
-        # !LDA & WINC & WA7 & !WA5
-        # !LDA & WINC & WA7 & !WA6
-        # !LDA & WINC & !WA7 & WA0 & WA1 & WA2 & WA3 & WA4 & WA5 & WA6
-        # !LDA & !WINC & WA7 ;
+        # RLDA & D7
+        # !LDA & !RLDA & WINC & WA7 & !WA0
+        # !LDA & !RLDA & WINC & WA7 & !WA1
+        # !LDA & !RLDA & WINC & WA7 & !WA2
+        # !LDA & !RLDA & WINC & WA7 & !WA3
+        # !LDA & !RLDA & WINC & WA7 & !WA4
+        # !LDA & !RLDA & WINC & WA7 & !WA5
+        # !LDA & !RLDA & WINC & WA7 & !WA6
+        # !LDA & !RLDA & WINC & !WA7 & WA0 & WA1 & WA2 & WA3 & WA4 & WA5 & WA6
+        # !LDA & !RLDA & !WINC & WA7 ;
 WA8.d = LDB & D0
-        # !LDB & WINC & WA8 & !WA0
-        # !LDB & WINC & WA8 & !WA1
-        # !LDB & WINC & WA8 & !WA2
-        # !LDB & WINC & WA8 & !WA3
-        # !LDB & WINC & WA8 & !WA4
-        # !LDB & WINC & WA8 & !WA5
-        # !LDB & WINC & WA8 & !WA6
-        # !LDB & WINC & WA8 & !WA7
-        # !LDB & WINC & !WA8 & WA0 & WA1 & WA2 & WA3 & WA4 & WA5 & WA6 & WA7
-        # !LDB & !WINC & WA8 ;
+        # RLDB & D0
+        # !LDB & !RLDB & WINC & WA8 & !WA0
+        # !LDB & !RLDB & WINC & WA8 & !WA1
+        # !LDB & !RLDB & WINC & WA8 & !WA2
+        # !LDB & !RLDB & WINC & WA8 & !WA3
+        # !LDB & !RLDB & WINC & WA8 & !WA4
+        # !LDB & !RLDB & WINC & WA8 & !WA5
+        # !LDB & !RLDB & WINC & WA8 & !WA6
+        # !LDB & !RLDB & WINC & WA8 & !WA7
+        # !LDB & !RLDB & WINC & !WA8 & WA0 & WA1 & WA2 & WA3 & WA4 & WA5 & WA6 & WA7
+        # !LDB & !RLDB & !WINC & WA8 ;
 WA9.d = LDB & D1
-        # !LDB & WINC & WA9 & !WA0
-        # !LDB & WINC & WA9 & !WA1
-        # !LDB & WINC & WA9 & !WA2
-        # !LDB & WINC & WA9 & !WA3
-        # !LDB & WINC & WA9 & !WA4
-        # !LDB & WINC & WA9 & !WA5
-        # !LDB & WINC & WA9 & !WA6
-        # !LDB & WINC & WA9 & !WA7
-        # !LDB & WINC & WA9 & !WA8
-        # !LDB & WINC & !WA9 & WA0 & WA1 & WA2 & WA3 & WA4 & WA5 & WA6 & WA7 & WA8
-        # !LDB & !WINC & WA9 ;
+        # RLDB & D1
+        # !LDB & !RLDB & WINC & WA9 & !WA0
+        # !LDB & !RLDB & WINC & WA9 & !WA1
+        # !LDB & !RLDB & WINC & WA9 & !WA2
+        # !LDB & !RLDB & WINC & WA9 & !WA3
+        # !LDB & !RLDB & WINC & WA9 & !WA4
+        # !LDB & !RLDB & WINC & WA9 & !WA5
+        # !LDB & !RLDB & WINC & WA9 & !WA6
+        # !LDB & !RLDB & WINC & WA9 & !WA7
+        # !LDB & !RLDB & WINC & WA9 & !WA8
+        # !LDB & !RLDB & WINC & !WA9 & WA0 & WA1 & WA2 & WA3 & WA4 & WA5 & WA6 & WA7 & WA8
+        # !LDB & !RLDB & !WINC & WA9 ;
 WA10.d = LDB & D2
          # !LDB & WROWADV & !WA10
          # !LDB & !WROWADV & WA10 ;
@@ -503,6 +521,22 @@ MAP6.d = MAPLD & PB6
          # MAP6 & !MAPLD ;
 MAP7.d = MAPLD & PB7
          # MAP7 & !MAPLD ;
+MAPQ0.d = CELLTICK & MAP0
+          # MAPQ0 & !CELLTICK ;
+MAPQ1.d = CELLTICK & MAP1
+          # MAPQ1 & !CELLTICK ;
+MAPQ2.d = CELLTICK & MAP2
+          # MAPQ2 & !CELLTICK ;
+MAPQ3.d = CELLTICK & MAP3
+          # MAPQ3 & !CELLTICK ;
+MAPQ4.d = CELLTICK & MAP4
+          # MAPQ4 & !CELLTICK ;
+MAPQ5.d = CELLTICK & MAP5
+          # MAPQ5 & !CELLTICK ;
+MAPQ6.d = CELLTICK & MAP6
+          # MAPQ6 & !CELLTICK ;
+MAPQ7.d = CELLTICK & MAP7
+          # MAPQ7 & !CELLTICK ;
 MC0.d = HLOAD & HS3
         # !HLOAD & MCADV & !MC0
         # !HLOAD & !MCADV & MC0 ;
@@ -547,16 +581,24 @@ MC6.d = HLOAD & HS9
         # !HLOAD & !MCADV & MC6 ;
 MAPA0 = MC0 ;
 MAPA1 = MC1 ;
+RP0.d = !RP1 & !RP0 & WROWADV ;
+RP1.d = !RP1 & RP0 ;
+RLDA = RP0 & !RP1 ;
+RLDB = RP1 & !RP0 ;
 LDVSL = WSTB & !RA4 & !RA3 & !RA2 & !RA1 & RA0 ;
 LDVSH = WSTB & !RA4 & !RA3 & !RA2 & RA1 & !RA0 ;
 LDHS = WSTB & !RA4 & !RA3 & !RA2 & RA1 & RA0 ;
 LDHSH = WSTB & !RA4 & !RA3 & RA2 & !RA1 & !RA0 ;
+LDADV = WSTB & RA4 & !RA3 & RA2 & !RA1 & !RA0 ;
+BCTRLGO = WSTB & !RA4 & RA3 & RA2 & RA1 & !RA0 & D0 ;
 LDA = WSTB & !RA4 & RA3 & !RA2 & !RA1 & !RA0 ;
 LDB = WSTB & !RA4 & RA3 & !RA2 & !RA1 & RA0 ;
 LDC = WSTB & !RA4 & RA3 & !RA2 & RA1 & !RA0 ;
 LDTB = WSTB & RA4 & !RA3 & RA2 & RA1 & RA0 ;
 LDFB = WSTB & RA4 & RA3 & !RA2 & !RA1 & !RA0 ;
 LDMB = WSTB & RA4 & RA3 & !RA2 & !RA1 & RA0 ;
+WINC = RETIRE
+       # LADV ;
 LD0.d = LFETCH & PB0
         # LD0 & !LFETCH ;
 LD1.d = LFETCH & PB1
@@ -579,74 +621,74 @@ LSTOP = LRUN & LD7 & LD6 & LD5 & LD4 & LD3 & LD2 & LD1 & LD0 ;
 LADV = LRUN & LGRANT ;
 LFETCH = LRUN & LGRANT ;
 LMOVE = LRUN & !LSTOP & LGRANT ;
-FBA2 = LINEAR & SA2
-       # SPNGRANT & WA2
-       # TILESEL & SA2
-       # MAPSEL & MC2 ;
-FBA3 = LINEAR & SA3
-       # SPNGRANT & WA3
-       # TILESEL & SA10
-       # MAPSEL & MC3 ;
-FBA4 = LINEAR & SA4
-       # SPNGRANT & WA4
-       # TILESEL & SA11
-       # MAPSEL & MC4 ;
-FBA5 = LINEAR & SA5
-       # SPNGRANT & WA5
-       # TILESEL & SA12
-       # MAPSEL & MC5 ;
-FBA6 = LINEAR & SA6
-       # SPNGRANT & WA6
-       # TILESEL & MAP0
-       # MAPSEL & MC6 ;
-FBA7 = LINEAR & SA7
-       # SPNGRANT & WA7
-       # TILESEL & MAP1
-       # MAPSEL & SA13 ;
-FBA8 = LINEAR & SA8
-       # SPNGRANT & WA8
-       # TILESEL & MAP2
-       # MAPSEL & SA14 ;
-FBA9 = LINEAR & SA9
-       # SPNGRANT & WA9
-       # TILESEL & MAP3
-       # MAPSEL & SA15 ;
-FBA10 = LINEAR & SA10
-        # SPNGRANT & WA10
-        # TILESEL & MAP4
-        # MAPSEL & SA16 ;
-FBA11 = LINEAR & SA11
-        # SPNGRANT & WA11
-        # TILESEL & MAP5
-        # MAPSEL & SA17 ;
-FBA12 = LINEAR & SA12
-        # SPNGRANT & WA12
-        # TILESEL & MAP6
-        # MAPSEL & MB0 ;
-FBA13 = LINEAR & SA13
-        # SPNGRANT & WA13
-        # TILESEL & MAP7
-        # MAPSEL & MB1 ;
-FBA14 = LINEAR & SA14
-        # SPNGRANT & WA14
-        # TILESEL & TB0
-        # MAPSEL & MB2 ;
-FBA15 = LINEAR & SA15
-        # SPNGRANT & WA15
-        # TILESEL & TB1
-        # MAPSEL & MB3 ;
-FBA16 = LINEAR & SA16
-        # SPNGRANT & WA16
-        # TILESEL & TB2
-        # MAPSEL & MB4 ;
-FBA17 = LINEAR & SA17
-        # SPNGRANT & WA17
-        # TILESEL & TB3
-        # MAPSEL & MB5 ;
-FBA18 = LINEAR & SA18
-        # SPNGRANT & WA18
-        # TILESEL & TB4
-        # MAPSEL & MB6 ;
+FBA2 = !SRC1 & !SRC0 & SA2
+       # !SRC1 & SRC0 & WA2
+       # SRC1 & !SRC0 & SA2
+       # SRC1 & SRC0 & MC2 ;
+FBA3 = !SRC1 & !SRC0 & SA3
+       # !SRC1 & SRC0 & WA3
+       # SRC1 & !SRC0 & SA10
+       # SRC1 & SRC0 & MC3 ;
+FBA4 = !SRC1 & !SRC0 & SA4
+       # !SRC1 & SRC0 & WA4
+       # SRC1 & !SRC0 & SA11
+       # SRC1 & SRC0 & MC4 ;
+FBA5 = !SRC1 & !SRC0 & SA5
+       # !SRC1 & SRC0 & WA5
+       # SRC1 & !SRC0 & SA12
+       # SRC1 & SRC0 & MC5 ;
+FBA6 = !SRC1 & !SRC0 & SA6
+       # !SRC1 & SRC0 & WA6
+       # SRC1 & !SRC0 & MAPQ0
+       # SRC1 & SRC0 & MC6 ;
+FBA7 = !SRC1 & !SRC0 & SA7
+       # !SRC1 & SRC0 & WA7
+       # SRC1 & !SRC0 & MAPQ1
+       # SRC1 & SRC0 & SA13 ;
+FBA8 = !SRC1 & !SRC0 & SA8
+       # !SRC1 & SRC0 & WA8
+       # SRC1 & !SRC0 & MAPQ2
+       # SRC1 & SRC0 & SA14 ;
+FBA9 = !SRC1 & !SRC0 & SA9
+       # !SRC1 & SRC0 & WA9
+       # SRC1 & !SRC0 & MAPQ3
+       # SRC1 & SRC0 & SA15 ;
+FBA10 = !SRC1 & !SRC0 & SA10
+        # !SRC1 & SRC0 & WA10
+        # SRC1 & !SRC0 & MAPQ4
+        # SRC1 & SRC0 & SA16 ;
+FBA11 = !SRC1 & !SRC0 & SA11
+        # !SRC1 & SRC0 & WA11
+        # SRC1 & !SRC0 & MAPQ5
+        # SRC1 & SRC0 & SA17 ;
+FBA12 = !SRC1 & !SRC0 & SA12
+        # !SRC1 & SRC0 & WA12
+        # SRC1 & !SRC0 & MAPQ6
+        # SRC1 & SRC0 & MB0 ;
+FBA13 = !SRC1 & !SRC0 & SA13
+        # !SRC1 & SRC0 & WA13
+        # SRC1 & !SRC0 & MAPQ7
+        # SRC1 & SRC0 & MB1 ;
+FBA14 = !SRC1 & !SRC0 & SA14
+        # !SRC1 & SRC0 & WA14
+        # SRC1 & !SRC0 & TB0
+        # SRC1 & SRC0 & MB2 ;
+FBA15 = !SRC1 & !SRC0 & SA15
+        # !SRC1 & SRC0 & WA15
+        # SRC1 & !SRC0 & TB1
+        # SRC1 & SRC0 & MB3 ;
+FBA16 = !SRC1 & !SRC0 & SA16
+        # !SRC1 & SRC0 & WA16
+        # SRC1 & !SRC0 & TB2
+        # SRC1 & SRC0 & MB4 ;
+FBA17 = !SRC1 & !SRC0 & SA17
+        # !SRC1 & SRC0 & WA17
+        # SRC1 & !SRC0 & TB3
+        # SRC1 & SRC0 & MB5 ;
+FBA18 = !SRC1 & !SRC0 & SA18
+        # !SRC1 & SRC0 & WA18
+        # SRC1 & !SRC0 & TB4
+        # SRC1 & SRC0 & MB6 ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
@@ -655,7 +697,8 @@ FBA18 = LINEAR & SA18
 [WA10,WA11,WA12,WA13,WA14,WA15,WA16,WA17,WA18,HS2,HS3,HS4].ck = DOTCLK ;
 [HS5,HS6,HS7,HS8,HS9,VS0,VS1,VS2,VS3,VS4,VS5,VS6,VS7,VS8,TB0].ck = DOTCLK ;
 [TB1,TB2,TB3,TB4,MB0,MB1,MB2,MB3,MB4,MB5,MB6,MAP0,MAP1,MAP2].ck = DOTCLK ;
-[MAP3,MAP4,MAP5,MAP6,MAP7,MC0,MC1,MC2,MC3,MC4,MC5,MC6,LD0].ck = DOTCLK ;
+[MAP3,MAP4,MAP5,MAP6,MAP7,MAPQ0,MAPQ1,MAPQ2,MAPQ3,MAPQ4].ck = DOTCLK ;
+[MAPQ5,MAPQ6,MAPQ7,MC0,MC1,MC2,MC3,MC4,MC5,MC6,RP0,RP1,LD0].ck = DOTCLK ;
 [LD1,LD2,LD3,LD4,LD5,LD6,LD7,LRUN].ck = DOTCLK ;
 
 /* One asynchronous reset for every register, as on the GALs. */
@@ -664,5 +707,6 @@ FBA18 = LINEAR & SA18
 [WA10,WA11,WA12,WA13,WA14,WA15,WA16,WA17,WA18,HS2,HS3,HS4].ar = RESET ;
 [HS5,HS6,HS7,HS8,HS9,VS0,VS1,VS2,VS3,VS4,VS5,VS6,VS7,VS8,TB0].ar = RESET ;
 [TB1,TB2,TB3,TB4,MB0,MB1,MB2,MB3,MB4,MB5,MB6,MAP0,MAP1,MAP2].ar = RESET ;
-[MAP3,MAP4,MAP5,MAP6,MAP7,MC0,MC1,MC2,MC3,MC4,MC5,MC6,LD0].ar = RESET ;
+[MAP3,MAP4,MAP5,MAP6,MAP7,MAPQ0,MAPQ1,MAPQ2,MAPQ3,MAPQ4].ar = RESET ;
+[MAPQ5,MAPQ6,MAPQ7,MC0,MC1,MC2,MC3,MC4,MC5,MC6,RP0,RP1,LD0].ar = RESET ;
 [LD1,LD2,LD3,LD4,LD5,LD6,LD7,LRUN].ar = RESET ;

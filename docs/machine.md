@@ -43,12 +43,12 @@ undecided, or that this document has had to decide itself.
 | **System master clock** | one 25.175 MHz oscillator, **on the motherboard** — §1 |
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
-| **Video** | 640×200 × 256 colours, VGA out, **8×8 tile mode and a display list** — **27 ICs**, the programmable logic being **2 × `ATF1508AS` PLCC-84 + 1 × `GAL22V10`** ([`video/`](../video/), `graphics.md` §14.1) |
+| **Video** | 640×200 × 256 colours, VGA out, **8×8 tile mode and a display list** — **28 ICs**, the programmable logic being **2 × `ATF1508AS` PLCC-84 + 2 × `GAL22V10`** ([`video/`](../video/), `graphics.md` §14.1) |
 | **Audio** | 4-channel 8-bit PCM, Paula-exact, **with programmable per-channel panning** — **32 ICs**, one `ATF1508AS` PLCC-84 ([`audio/`](../audio/), `audio.md` §10.1). A **headphone-driven 3.5 mm stereo jack** on the card's own rear edge, and a line-level pair on the backplane |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** — a **`TL16C550C` at 115,200 baud with 16-byte FIFOs** ([`io/serial/`](../io/serial/)). One 14-IC card at `$FF30`–`$FF3F`. Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **14 ICs**, **681 KiB/s** sustained — **specified** ([`storage/`](../storage/)). Its block buffer lives in `A20 = 1` (§5 item 7), which is what retired the `TFM` re-read hazard. ⚠ The first of the machine's two period exceptions |
 | **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs**, two of them `ATF1508AS` — **specified** ([`net/`](../net/)). The second period exception. ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | **117 ICs** — **99 on cards**, **18** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8 |
+| **Total silicon** | **118 ICs** — **100 on cards**, **18** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8. ⚠ **Video went 27 → 28 on 2026-09-09** ([`design-review2.md`](design-review2.md) §1.2): three of §10.1.6's four absorptions are real and the `SPANLEN` counter is not, because it loads from the register file. ⛔ **Audio's 32 is still for a card whose sequencer is not designed** — §2.1 there |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -207,6 +207,26 @@ quadrants above it are decoded by a motherboard GAL (`ram.md` §6.2).
 >   defined value during I/O cycles instead of carrying a stale translation. This also
 >   answers what those lines carry during a map-write cycle.
 >
+> ⭐ **AND "PARKED" IS NOW WHAT THE BOARD DOES.** Fixed 2026-09-09. U6's boot buffer
+> enable was a list of two modes — boot, and the vector page — and a list is the wrong
+> shape for it. It is now the literal complement of U9's map-SRAM chip enable:
+>
+> ```
+>   BOOT_OE = /( translating # a block-register access )
+> ```
+>
+> **one equation, three behaviours, three product terms** — one fewer literal than the
+> two-term version it replaced, because U6 was already decoding the block windows for
+> the `$FFB1` strobe. The list was wrong in both directions and
+> [`design-review2.md`](design-review2.md) §3.4 has both: it left the buffer ON during
+> boot-mode block writes, fighting U4 for the map SRAM's own I/O pins on all sixteen
+> writes of §7.2's boot sequence, and OFF during ordinary I/O cycles, leaving eight
+> backplane lines floating into six cards' inputs. ⭐ **The vector page needs no term of
+> its own any more**: `$FFC0`–`$FFFF` is an I/O cycle and not a block access, so the
+> general rule covers it. `jedec.check.ts` now sweeps `LA5` and `LA4` as well as `LA7`
+> and `LA6` — holding them at zero is precisely why the old check passed — and asserts
+> both directions: never both drivers, and never neither.
+>
 > No card could compute this inhibit for itself, because §2 keeps logical A13–A15 on the
 > motherboard and off every slot. One wire, one sentence — **and a wrong board without
 > it.**
@@ -279,9 +299,48 @@ Geographic decode spans **`$FF00`–`$FF7F`** (§5 item 1 A): `/IOSEL` is
 | `$FF58`–`$FF5B` | 4 B | **SD card storage** | *proposed* — `storage/docs/sdcard.md` §6.1 |
 | `$FF5C`–`$FF5F` | 4 B | **network** | *proposed* — [`net/docs/net.md`](../net/docs/net.md) §5.1 |
 | `$FF60`–`$FF7F` | 32 B | **video** | *taken* — `graphics.md` §13 |
-| `$FFA0`–`$FFAF` | 16 B | **MMU block registers** | 16 entries, index = `A3..A0` = `{TASK, block}`. Bits 7–0 are physical `A20..A13` — `hardware/gal/README.md` |
+| **`$FF90`–`$FF9F`** | **16 B** | ⭐ **MMU block registers, HIGH byte** | physical `A24..A21` + `ram.md` §3.3's flags. **New 2026-09-09** — `ram.md` §4.3 |
+| `$FFA0`–`$FFAF` | 16 B | **MMU block registers, LOW byte** | 16 entries, index = `A3..A0` = `{TASK, block}`. Bits 7–0 are physical `A20..A13` — `hardware/gal/README.md` |
 | `$FFB0`–`$FFBF` | 16 B | **MMU and boot control** | **two bytes, aliased 8× each on the address's parity**: `$FFB0` even is `TASK`, `$FFB1` odd is the **`RUN`** strobe (§7.2). One literal — `A0` — and no more; decoding the sixteen bytes apart would cost four GAL inputs U6 has not got. ⚠ **`$FFB1` is a strobe, not a register**: the value written is ignored, and it is one-way per reset |
 | `$FFC0`–`$FFFF` | 64 B | ⭐ **the boot ROM's vector page** | §7.2 — the ROM answers here unconditionally, so `$FFFE` is a reset vector and not an undriven bus. **The one region of the I/O page that is not I/O** |
+
+> ### ⭐ A map entry is sixteen bits and it takes two windows
+>
+> **Fixed 2026-09-09.** [`design-review2.md`](design-review2.md) §3.3 found the
+> machine unable to reach its own RAM, and the cause was one line doing two
+> jobs: `mainboard.circuit.tsx` wires the `'157`'s fourth bit as
+> `4A = TASK, 4B = LA3`, so during a map write `MAPA3` is **`LA3`** — the task
+> index of this section's `{TASK, block}` — and `u9.jedec.ts` used **the same
+> `LA3`** to choose which of the two map SRAMs was written (`ram.md` §4.1's
+> Layout A). A write meant for task 0's high byte landed in task 1's entry, so
+> **no task could have both bytes of a block register set** and nothing above
+> physical 2 MB was reachable: all four SIMMs, all of system RAM, and every
+> megabyte of §7.2's ROM disk above the first.
+>
+> ⭐ **The two bytes have two WINDOWS now, and it cost nothing.**
+> `$FF80`–`$FF9F` decoded nowhere — `$FF90`–`$FF9F` was the CPU module's vector
+> RAM until §7.2 put the vectors in the boot ROM — and it is **outside the
+> `$FF00`–`$FF7F` geographic window**, so the machine's 56 free bytes are
+> untouched and no card loses one. Both windows carry the same `{TASK, block}`
+> index, so `$FF90+n` and `$FFA0+n` are the two halves of one entry:
+>
+> | `A7..A4` | Window | |
+> |---|---|---|
+> | `1000` | `$FF80`–`$FF8F` | **free** — the fourth code |
+> | `1001` | `$FF90`–`$FF9F` | block registers, **high byte** |
+> | `1010` | `$FFA0`–`$FFAF` | block registers, **low byte** |
+> | `1011` | `$FFB0`–`$FFBF` | control — `TASK` and `RUN` |
+>
+> **U3's decode is the same size** (`mmu.jedec.ts`: `!MAPOE` stays six terms,
+> because `!(blkhi # blklo)` grows by exactly what the union shrank), and
+> ⭐ **U9 gives back a pin** — `LA3` left that part entirely, so it has three
+> spare macrocells where it had two. `mmu_tb.sv` sweeps both windows over the
+> whole 16-bit address space and `jedec.check.ts` over both fuse maps.
+>
+> ⚠ **`ram.md` §4's Layout A and Layout B are both superseded by this**, and
+> the reason to record it rather than pick one is that the board had taken
+> *different halves of the two* — which is a failure mode neither document
+> could see on its own.
 
 > **`$FFA0`–`$FFAF` holds the sixteen block registers and nothing else**
 > (`hardware/gal/README.md`):
@@ -396,7 +455,7 @@ pure performance question for the first time:
 | video `VSTAT` | side-effect-free | 50–70/s, and it is the system tick |
 | net | side-effect-free (`net.md` §6) | up to ~6,100/s under load |
 | PS/2 `IOSTAT` | side-effect-free (`ps2.md` §8.1) | human rate |
-| **serial `IIR`** | ⭐ **side-effect-free** | ~1,030/s at 115,200 with a 14-byte trigger |
+| **serial `IIR`** | ⭐ **side-effect-free** | **823/s** at 115,200 with a 14-byte trigger — 11,520 B/s ÷ 14 |
 
 ⚠ **The order is NOT re-specified here, and that is deliberate.** The frequency ordering
 would be *net → serial → video → PS/2*, and choosing it needs the one measurement four
@@ -723,6 +782,42 @@ decisions here, because other documents cite them by item number.
     page — so it does not trigger `/WAIT`. **Software that polls it before touching VRAM
     never stalls the machine**, at a cost of one bus cycle against up to 85. `/WAIT`
     goes back to being the backstop `graphics.md` §3.3 calls it.
+
+11. **⭐ CLOSED 2026-09-09 — a map entry is sixteen bits and it takes two windows.**
+    The high byte was unwritable and nothing above physical 2 MB was reachable, because
+    `MAPA3` was the write index's `TASK` bit *and* U9's low/high SRAM select at the same
+    instant. §3 has the repair: `$FF90`–`$FF9F` is the high byte and `$FFA0`–`$FFAF` the
+    low, out of 32 bytes that decoded nowhere and outside the geographic window, so the
+    machine's 56 free bytes are untouched. **U3's decode is the same size and U9 gives
+    back a pin.** [`design-review2.md`](design-review2.md) §3.3.
+
+    > ⚠ **`ram.md` §4's two layouts are both superseded**, and the reason to say so is
+    > that the board had taken different halves of them. Neither document could see that
+    > on its own; running the boot sequence could.
+
+12. **⭐ CLOSED 2026-09-09 — the boot buffer drives exactly when the map SRAMs do not.**
+    U6's enable was a list of two modes and is now the complement of U9's chip enable —
+    three product terms where the list was two, and it fixes both directions at once:
+    the buffer no longer fights U4 during the sixteen block writes of §7.2's boot
+    sequence, and physical `A20`–`A13` are parked rather than floating for every I/O
+    cycle in the machine. §2 has the equation.
+    [`design-review2.md`](design-review2.md) §3.4.
+
+13. **⚠ OPEN 2026-09-09 — nothing sizes memory, and no document says who should.**
+    There is no SIMM presence detection anywhere and none is proposed; a read from an
+    empty socket returns whatever the bus floats to. That is period-normal, and it makes
+    memory sizing a **boot-monitor obligation** that neither §7.2's sequence nor
+    `ram.md` §6.4's carries. ⚠ And `ram.md` §6.3.1 shows only **4M×8** modules work in
+    the `'157` mapping as drawn, so the machine is 4, 8, 12 or 16 MB and never 1, 2
+    or 3.
+
+14. **⚠ OPEN 2026-09-09 — physical `A24`–`A21` still float, and only on the
+    motherboard.** Item 12 parks `A20`–`A13`, which are the eight that reach a slot. The
+    top four come from the *second* map SRAM, which is deselected for the same cycles,
+    and they never leave the board — every U9 equation that reads them is qualified on
+    `RUN` and none is read during an I/O cycle, so it is not a logic hazard. It is four
+    CMOS inputs held at neither rail. **Four pull-down resistors**, which are passives
+    and not a package.
 
 ---
 

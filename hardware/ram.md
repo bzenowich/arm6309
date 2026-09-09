@@ -217,9 +217,58 @@ selected one. That is confusing in exactly the way that produces a bug at
 3 a.m., and it forecloses §3.2's 256 contexts.
 
 **Neither is obviously right.** Layout A is cleaner hardware and a bigger
-divergence; Layout B is compatible and awkward. **The decision belongs to
-whoever owns the NitrOS-9 port**, because it is a software-cost question
-wearing a hardware costume.
+divergence; Layout B is compatible and awkward.
+
+### 4.3 ⭐ Layout C — two windows, decided 2026-09-09
+
+**Taken.** The two layouts above both spend an address bit the board had
+already spent, and §4.1's own note is the tell: *"LA3 picks which SRAM a write
+lands in"* — while the `'157` puts **that same `LA3`** on `MAPA3` as the task
+index of `machine.md` §3's `{TASK, block}`. One line, two jobs, and the result
+was a machine that boots and cannot find its RAM.
+
+**Give the high byte its own window instead.**
+
+| `A7..A4` | Window | Contents |
+|---|---|---|
+| `1000` | `$FF80`–`$FF8F` | **free** |
+| `1001` | **`$FF90`–`$FF9F`** | **16 entries, high byte** — `A24..A21` + §3.3's flags |
+| `1010` | `$FFA0`–`$FFAF` | 16 entries, **low byte** — `A20..A13` |
+| `1011` | `$FFB0`–`$FFBF` | control — `TASK`, `RUN` |
+
+**What it costs is nothing, and that is three separate accidents:**
+
+| | |
+|---|---|
+| **The address space** | `$FF80`–`$FF9F` decoded nowhere. `$FF90`–`$FF9F` was the CPU module's vector RAM until `machine.md` §7.2 put the vectors in the boot ROM, and it is **outside the `$FF00`–`$FF7F` geographic window** — so the machine's 56 free bytes are untouched and no card loses one |
+| **U3** | the same size. `MUXSEL`, `ISOOE` and `MAPWE` go from one term to two, and `!MAPOE` **stays at six**: `!(blkhi # blklo)` is `!LA7 + LA6 + LA5&LA4 + !LA5&!LA4`, which grows by exactly what the union shrank |
+| ⭐ **U9** | **smaller.** `LA3` leaves the part entirely, so it has **three** spare macrocells where it had two |
+
+**And it keeps the GIME's shape**, which is what Layout A gave up: `$FFA0+n`
+and `$FF90+n` are the two halves of entry `n`, and entry `n` is task `n>>3`,
+block `n&7` — so **task 0 can write task 1's whole map without switching to
+it**, which is what a Level 2 task switch does. `mainboard_tb` asserts exactly
+that.
+
+⚠ **§3.2's 256-context widening still works** and still wants `MAPA3` strapped
+to `TASK`: with an 8-bit `TASK` the write index becomes `{TASK, block[2:0]}`
+and only three bits are muxed. Both windows carry it, so the widening is a
+wiring change and not a map change.
+
+**What is left of the original question** is what it always should have been:
+whether the *machine* wants two tasks resident or 256 contexts (§3.2), which
+is a software-cost question. **It is no longer a question about where the high
+byte lives.**
+
+> ⛔ **AND NOT CHOOSING COST THE MACHINE ITS MEMORY, until 2026-09-09.**
+> `u9.jedec.ts` implemented **Layout A** — `LA3` picks which map SRAM a write lands in
+> — while `mainboard.circuit.tsx`'s `'157` puts `LA3` on `MAPA3`, which is **Layout B's
+> task index**. One line doing both jobs put the high byte in the *other task's* entry,
+> so no task could have both bytes of a block register set and nothing above physical
+> 2 MB was reachable. [`../docs/design-review2.md`](../docs/design-review2.md) §3.3.
+>
+> ⭐ **§4.3 is the answer and it is neither of these two.** Both layouts are superseded;
+> read them for what they cost, not for what the board does.
 
 ---
 
@@ -339,7 +388,7 @@ left**: 2 MB of SRAM against 4–16 MB of DRAM in four sockets, for four package
 
 | | Part | Role |
 |---|---|---|
-| 4 | **30-pin SIMM socket** | ×8 or ×9, 1 MB or **4 MB** each — **4 to 16 MB** |
+| 4 | **30-pin SIMM socket** | ×8 or ×9, **4 MB** each — **4, 8, 12 or 16 MB**. ⚠ **not 1 MB**: §6.3.1's mux mapping does not address a 1M×8 module, and rewiring for one is a build-time choice |
 | 1 | **`GAL22V10` U9** | space decode: the four SIMM windows, and §5.3's open-drain `/IOPAGE` pull |
 | 1 | **`GAL22V10` U10** | SIMM timing — `RAS0`–`RAS3`, `CAS`, `/WE`, the mux select, refresh request and `/WAIT` |
 | 3 | **`74HC157`** | RAS/CAS address mux, 11 bits — **row is physical `A10`–`A0`, column `A21`–`A11`**, and the select is `E` itself rather than a GAL output (§6.3.1) |

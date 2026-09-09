@@ -70,6 +70,72 @@ export const tileRegisters: Cell[] = [
     pin: 0, name: `MAP${b}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [`MAPLD & PB${b}`, `MAP${b} & !MAPLD`],
   })),
+
+  /* ⭐ AND A SECOND RANK, 2026-09-09, because ONE REGISTER PROVABLY CANNOT DO
+   * IT and the card displayed every cell's right-hand neighbour.
+   *
+   * 6.4.9's diagram is right and the equation under it was not: in slot 2k the
+   * spare access fetches map[N+1] WHILE THE DISPLAY FETCH IS STILL USING
+   * code[N]. So the code the tile address reads must be held from before slot
+   * 2k until after slot 2k+1 - two slots - while a new byte arrives every two
+   * slots, in the front half of slot 2k. The two windows overlap, and no
+   * choice of latch instant separates them: the map data is on the bus only
+   * during its own half-slot, and every other half-slot belongs to the display
+   * fetch. Simulated, 158 of 160 tile fetches on a line carried the next
+   * cell's code. design-review2.md V-5.
+   *
+   * MAP is the fetch target and MAPQ is what the address mux reads, handed
+   * over at the CELL boundary - which is where 6.4.9's "pipelined one cell
+   * ahead" was always describing. Eight macrocells on the part that has them:
+   * vaddr was at 109 of 128. */
+  ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({
+    pin: 0, name: `MAPQ${b}`, assertedLow: false, s0: 1 as const, registered: true,
+    terms: [`CELLTICK & MAP${b}`, `MAPQ${b} & !CELLTICK`],
+  })),
+]
+
+/* ---- 7.4's mask serialiser, and the sentinel that deleted a counter ---- *
+ *
+ * ⛔ IT WAS BOOKED AS ABSORBED AND NEVER WRITTEN. 10.1.6 lists "the '165
+ * span-mask serialiser" among the packages the CPLDs took and 14.1 deletes it
+ * from the IC count; no design file contained it, so MASKBIT was an input to
+ * vctrl that nothing on the card produced - and with it went span-mask's
+ * colour selection, sprite mode's transparency, and the register-file address
+ * bit 7.4 calls "the whole mechanism". design-review2.md V-1.
+ *
+ * Eight bits, MSB first, and MASKBIT goes to two places: seqctl, for
+ * features.md 8.4's sprite mode, and rfa's RA0, which is 7.4's "choosing the
+ * colour per pixel costs no macrocell and no product term - it is an address
+ * line".
+ *
+ * It loads from D0-D7 at the POSTED VRAM WRITE, which is where the mask byte
+ * is: the CPU's data on the write that started the span. Not from the '574
+ * data latch, which holds the same byte one gate later. */
+export const maskSerialiser: Cell[] = [
+  ...[7, 6, 5, 4, 3, 2, 1].map((n) => ({
+    pin: 0, name: `SR${n}`, assertedLow: false, s0: 1 as const, registered: true,
+    terms: [
+      `WSTBV & D${n}`,
+      `!WSTBV & RETIRE & SR${n - 1}`,
+      `!WSTBV & !RETIRE & SR${n}`,
+    ],
+  })),
+  { pin: 0, name: "SR0", assertedLow: false, s0: 1, registered: true,
+    terms: [`WSTBV & D0`, "!WSTBV & !RETIRE & SR0"] },
+
+  /* ⚠ AND SPAN-SOLID FORCES IT HIGH, which is the one place the mask bit is
+   * not the mask. 7.4: solid is "SPANLEN + 1 pixels, all one colour", and the
+   * colour is WFG - but the file's address bit is this signal, so without the
+   * force a solid span would paint whatever byte the CPU happened to write as
+   * the posted data, alternating WFG and WBG down the run. Simulated: 31 of 32
+   * bytes wrong.
+   *
+   * Direct mode needs no such term - its byte comes from 3.1.1's data latch
+   * and never from the file - and sprite mode must NOT have one, because a
+   * transparent pixel is exactly a zero here. */
+  { pin: 0, name: "MASKBIT", assertedLow: false, s0: 1, registered: false,
+    why: "the serialiser's top bit, except that span-solid is always WFG",
+    terms: ["WM1 & !WM0", "SR7 & !WM1", "SR7 & WM0"] },
 ]
 
 /* ---- the map fetch's own cell column, 6.4.1's "one cell ahead" ---------- *
@@ -140,7 +206,7 @@ export const addressMux = (): Cell[] => {
    * construction - and scrolled, which is what makes VSCROLL work in cell mode
    * at all (graphics.md 6.4.8). */
   const tileSrc = (bit: number) =>
-    bit >= 14 ? `TB${bit - 14}` : bit >= 6 ? `MAP${bit - 6}` : bit >= 3 ? `SA${bit + 7}` : "SA2"
+    bit >= 14 ? `TB${bit - 14}` : bit >= 6 ? `MAPQ${bit - 6}` : bit >= 3 ? `SA${bit + 7}` : "SA2"
   /* The map's own address - base, cell row, cell column - which the mux did
    * not have at all, so MAPLD was latching a byte from an address nothing
    * generated. §19 item 16 lives here and it costs nothing: the intra-cell
@@ -193,11 +259,13 @@ export const addressMux = (): Cell[] => {
        * nineteen-bit pointer was not just 19 registers: it was 19 more mux
        * inputs and a SIXTH product term on every one of these seventeen
        * macrocells, and an ATF15xx macrocell holds five before it cascades. */
+      /* SRC1:SRC0 names the source - tileCadence's encoding, decoded here for
+       * nothing, which is two crossing nets rather than four. */
       terms: [
-        `LINEAR & SA${bit}`,
-        `SPNGRANT & WA${bit}`,
-        `TILESEL & ${tileSrc(bit)}`,
-        `MAPSEL & ${mapSrc(bit)}`,
+        `!SRC1 & !SRC0 & SA${bit}`,
+        `!SRC1 & SRC0 & WA${bit}`,
+        `SRC1 & !SRC0 & ${tileSrc(bit)}`,
+        `SRC1 & SRC0 & ${mapSrc(bit)}`,
       ],
     }
   })
@@ -310,6 +378,15 @@ export const tileCadence: Cell[] = [
    * during dot 1, so the register clocks at the dot 1 -> 2 edge. */
   { pin: 0, name: "MAPLD", assertedLow: false, s0: 1, registered: false,
     terms: ["MAPREQ & !PH1 & PH0"] },
+  /* ⭐ THE CELL BOUNDARY - the second half of V-5's repair. MAPLD fills the
+   * fetch rank in the front half of the cell's FIRST slot; this hands it to
+   * the rank the address mux reads, at the end of the cell's LAST slot, where
+   * nothing is using the old value any more. One dot per cell.
+   *
+   * H0 is the cell phase (6.4.9), so the last dot of the odd slot is
+   * H0 & SLOTTICK - and MFETCH bounds it to the cells that have a code. */
+  { pin: 0, name: "CELLTICK", assertedLow: false, s0: 1, registered: false,
+    terms: ["TILEMODE & MFETCH & H0 & SLOTTICK"] },
 
   /* ---- who owns the address bus ---------------------------------------- *
    *
@@ -321,10 +398,46 @@ export const tileCadence: Cell[] = [
    * the tile address has it the rest of the time. */
   { pin: 0, name: "MAPSEL", assertedLow: false, s0: 1, registered: false,
     terms: ["MAPREQ & !PH1"] },
+  /* ⚠ AND THE DISPLAY SOURCES CARRY THE PHASE TOO, since 2026-09-09. 5.2.2 is
+   * a specification sentence - "the CPU/spare access occupies the FRONT half
+   * of the slot, the display fetch the back half" - and 11's read budget
+   * closes at +46.9 ns because of it and misses by -25.1 ns without it.
+   * seqph forms SPAREWIN = !PH1 faithfully and NOTHING READ IT: MAPSEL was
+   * phase-qualified and these two were not, so the display address held the
+   * card's one internal bus for all four dots of every slot and there was no
+   * spare window for the CPU or the span writer to use at all. The other
+   * direction was worse: SPNGRANT has no phase term either, so a granted span
+   * took the bus for the WHOLE slot and the display fetch got nothing - a
+   * span-solid running through active video blanked the picture for up to
+   * 40.7 us. design-review2.md V-4.
+   *
+   * PH1 is the back half. One literal each, and it is the difference between
+   * 2.1's access budget being a budget and being arithmetic about a card that
+   * does something else. */
   { pin: 0, name: "TILESEL", assertedLow: false, s0: 1, registered: false,
-    terms: ["TILEMODE & !MAPSEL & !SPNGRANT"] },
+    terms: ["TILEMODE & PH1 & !SPNGRANT"] },
   { pin: 0, name: "LINEAR", assertedLow: false, s0: 1, registered: false,
-    terms: ["!TILEMODE & !SPNGRANT"] },
+    terms: ["!TILEMODE & PH1 & !SPNGRANT"] },
+
+  /* ⭐ FOUR SOURCES, TWO PINS - 2026-09-09, and it is what bought the column
+   * reload its last hole.
+   *
+   * The address mux on vaddr has exactly four sources and this part was
+   * exporting all four selects as separate signals. They are mutually
+   * exclusive by construction, so two bits name them and vaddr decodes them
+   * back for nothing - a combinational intermediate on a CPLD costs no
+   * macrocell and no pin, which is the same fact 10.1.6.1 used to keep CTRL
+   * on this part.
+   *
+   *   00 linear   01 the write pointer   10 tile   11 map
+   *
+   * SPNGRANT stops crossing with them. It is read on this part by seqctl's
+   * RETIRE and by LGRANT, and off it only by the mux - so the encoding is the
+   * whole of its export. */
+  { pin: 0, name: "SRC0", assertedLow: false, s0: 1, registered: false,
+    terms: ["SPNGRANT", "MAPSEL"] },
+  { pin: 0, name: "SRC1", assertedLow: false, s0: 1, registered: false,
+    terms: ["TILESEL", "MAPSEL"] },
 
   /* ---- the arbiter's fourth requester ----------------------------------- *
    *
@@ -347,6 +460,32 @@ export const tileCadence: Cell[] = [
    * correction. */
   { pin: 0, name: "SPNREQG", assertedLow: false, s0: 1, registered: false,
     terms: ["SPNREQ & !MAPREQ"] },
+
+  /* ⭐ AND SPNREQ ITSELF, which nothing produced. 5.2.1's arbiter takes it as
+   * an input and no cell on the card formed it, so the span writer never
+   * asked for an access and no span ever retired a byte (design-review2.md
+   * V-1). It is the request, and it is where 5.2.2's front half is imposed:
+   * the spare access is dots 0-1 and the display fetch dots 2-3.
+   *
+   * ⭐ AND IT CARRIES THE LIST ENGINE. 10.3's engine reaches the framebuffer
+   * "through the arbiter and the address path that already exist", which means
+   * through this request and through the mux's SPNGRANT term - so one requester
+   * covers both, and the span writer outranks the engine because a span in
+   * flight cannot be interrupted. */
+  { pin: 0, name: "SPNREQ", assertedLow: false, s0: 1, registered: false,
+    terms: ["SPANBUSY & SPAREWIN", "LRUN & SPAREWIN"] },
+  /* One dot per slot, at the END of the spare window - the access has
+   * completed by then. seqctl's RETIRE and the engine's LADV both take it,
+   * which is what makes the retire rate 7.4's one byte per 158.9 ns fetch
+   * slot rather than one per dot. */
+  { pin: 0, name: "SPNTICK", assertedLow: false, s0: 1, registered: false,
+    terms: ["!PH1 & PH0"] },
+  /* 10.3's grant. vctrl declared it external and produced no cell, so LADV,
+   * LFETCH and LMOVE - all LRUN & LGRANT - were dead on silicon and the engine
+   * re-executed descriptor byte 0 for ever. The span writer has priority: a
+   * span in flight owns the pointer they share. */
+  { pin: 0, name: "LGRANT", assertedLow: false, s0: 1, registered: false,
+    terms: ["LRUN & !SPANBUSY & SPNGRANT & SPNTICK"] },
   /* THE CPU collides per CHIP, because its address path is its own. GMAP is the
    * map's chip and the CPU's grant - which is 5.2.1's SRCSEL[n], the thing that
    * would otherwise point that chip at the CPU's address - is withdrawn for it.
@@ -399,6 +538,52 @@ export const tileCadence: Cell[] = [
    * than being deleted: with no char mode, TILEMODE alone says which it is. */
 ]
 
+/* ---- 7.2's column reload, and the text engine's other half -------------- *
+ *
+ * ⛔ WADV = 01 ADVANCED THE ROW AND KEPT THE COLUMN. 7.2 is the section that
+ * takes a character cell from 26 CPU writes to 13 - "set it once and a glyph
+ * becomes eight mask writes and nothing else" - and it does that by reloading
+ * WPTR's column from a shadow at span end. wcol's only load path was the CPU's
+ * own three-byte register write, so a chained glyph stepped eight pixels right
+ * on every row and every figure in 7.3 and features.md 2.3 was against
+ * hardware that did not exist. docs/design-review2.md V-6.
+ *
+ * ⭐ AND 7.2's "the shadow is free" IS TRUE, just not in the way it said. That
+ * section puts the shadow in the register file and spends "two deferrable file
+ * reads" restoring it - which needs a two-cycle sequencer, a second set of
+ * load strobes that wcol can distinguish from wrow's, and two pins on a part
+ * that has none. Ten registers on vaddr cost ten macrocells and NOTHING ELSE:
+ * they load on exactly the strobes that load the counter, so software writes
+ * WPTR once and the shadow follows, and the reload is WROWADV, which already
+ * crosses to this part for the row.
+ *
+ * ⚠ BOTH CHAINING MODES RELOAD IT. 13's WADV = 10 is "advance by the stride",
+ * which is a vertical line: one pixel per span, so the column advances by one
+ * and has to come back too. WROWADV is already SPANEND & (WADV0 # WADV1). */
+export const columnReload: Cell[] = [
+  /* A two-dot walk, started by the row advance and returning to idle on its
+   * own. State 01 points the file at WPTR's low byte and loads it; state 10
+   * does the same for the middle byte; 00 is idle.
+   *
+   * ⚠ ONE DOT PER BYTE, and the address leads the load by a whole dot: rfa
+   * switches the file's address on the edge that ENTERS a state and this part
+   * loads on the edge that LEAVES it, so the 20 ns register file and rfa's
+   * ~10 ns have 39.7 ns to settle in. That is the same order as 6.1's index ->
+   * LUT -> output chain and it is on a path used once per span rather than
+   * once per dot. */
+  { pin: 0, name: "RP0", assertedLow: false, s0: 1, registered: true,
+    terms: ["!RP1 & !RP0 & WROWADV"] },
+  { pin: 0, name: "RP1", assertedLow: false, s0: 1, registered: true,
+    terms: ["!RP1 & RP0"] },
+  /* ⚠ TWO STROBES AND NOT ONE, and wrow is why: its own LDB loads the row's
+   * low six bits, so a reload that reused the CPU's strobe would undo the row
+   * advance the same span just made. */
+  { pin: 0, name: "RLDA", assertedLow: false, s0: 1, registered: false,
+    terms: ["RP0 & !RP1"] },
+  { pin: 0, name: "RLDB", assertedLow: false, s0: 1, registered: false,
+    terms: ["RP1 & !RP0"] },
+]
+
 /* ---- §10.3's list engine ------------------------------------------------ *
  *
  * "Its MOVE opcode is one SRAM write into the register file, and the palette
@@ -406,6 +591,18 @@ export const tileCadence: Cell[] = [
  * of macrocells: it reads VRAM through the arbiter and the address path that
  * are already here, and writes the register file through one that is too. */
 export const listEngine: Cell[] = [
+  /* ⭐ WPTR'S INCREMENT, which is the defect that made the engine a loop.
+   * video.parts.ts said "LADV drives WPTR's increment" and wcol's counter
+   * enable is WINC - an input to vaddr that nothing renamed onto LADV, so the
+   * pointer never moved, the same descriptor byte was re-fetched for ever,
+   * LSTOP never saw $FF and LRUN never fell (design-review2.md V-3).
+   *
+   * One cell, and it is the right shape: the span writer and the engine share
+   * the pointer by construction (10.1.6.2) and never drive it in the same
+   * slot, so they share its enable too. */
+  { pin: 0, name: "WINC", assertedLow: false, s0: 1, registered: false,
+    terms: ["RETIRE", "LADV"] },
+
   /* ⚠ THE ENGINE HAS NO POINTER OF ITS OWN - 10.1.6.2's option 2, taken
    * 2026-09-08 because it is the only thing that makes the engine fit.
    *

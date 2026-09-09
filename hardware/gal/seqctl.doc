@@ -1,6 +1,6 @@
 seqctl - ARM6309-UV10, video card - span writer control
 *** SUPERSEDED - DO NOT PROGRAM *** graphics.md 10.1.6 - the video card is 2 x ATF1508AS
-GAL22V10, 5892 fuses, checksum a13e
+GAL22V10, 5892 fuses, checksum a0fe
 
   pin  signal      terms  of   path           polarity
   ---  ----------  -----  ---  -------------  ------------------
@@ -15,11 +15,11 @@ GAL22V10, 5892 fuses, checksum a13e
    18  (spare)         -   16  undriven       usable as an input
    19  (spare)         -   16  undriven       usable as an input
 
-  RETIRE: also WPTR.WINC, the '165 shift and the '161 count enable
+  RETIRE: also WPTR's WINC, the serialiser's shift and the length counter's enable
   WEN: RETIRE, except a transparent pixel in sprite mode
 
   8 outputs, 2 macrocells not driven.
-  Inputs: 9 used of 13 available (11 dedicated - pin 1 is the clock, 2 free macrocells) - 4 spare.
+  Inputs: 10 used of 13 available (11 dedicated - pin 1 is the clock, 2 free macrocells) - 3 spare.
 
   fuse map - 0 is an intact link, so an all-zero row is never true
 
@@ -146,7 +146,7 @@ GAL22V10, 5892 fuses, checksum a13e
   L5280 00000000000000000000000000000000000000000000  pin 15 term 8  (never)
   L5324 00000000000000000000000000000000000000000000  pin 15 term 9  (never)
   L5368 11111111111111111111111111111111111111111111  pin 14 OE  (always)
-  L5412 11101111111111111111011111111111111111111111  pin 14 term 0
+  L5412 11101111111111111111011111111111111111111101  pin 14 term 0
   L5456 00000000000000000000000000000000000000000000  pin 14 term 1  (never)
   L5500 00000000000000000000000000000000000000000000  pin 14 term 2  (never)
   L5544 00000000000000000000000000000000000000000000  pin 14 term 3  (never)

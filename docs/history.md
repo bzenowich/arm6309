@@ -816,3 +816,56 @@ vertical half of what `census.ts` calls the sequencer's unfitted decode half, an
 until they exist the row counter does not step in *either* mode. §6.4.9 produced
 `FETCH` and `HLOAD`, the horizontal half, on its way past. The second new row records
 that both video CPLDs are now out of pins and cells.
+
+
+---
+
+## 2026-09-09 — design-review2.md's correction
+
+### §4.1 — the serial receive interrupt rate
+
+**Was:** *"serial `IIR` | side-effect-free | ~1,030/s at 115,200 with a 14-byte
+trigger"*.
+
+**Why it moved:** 115,200 baud 8N1 is 11,520 B/s and 11,520 ÷ 14 is **823**. Copied from
+`serial.md` §0, which had the same slip; both are corrected.
+
+### §3 — the MMU block-register window
+
+**Not superseded — the defect is live.** `$FFA0`–`$FFAF`'s description here is
+`ram.md` §4's **Layout B** and `hardware/gal/u9.jedec.ts` implements **Layout A**, with
+`mainboard.circuit.tsx`'s `'157` wired for B. §3 now carries the ⛔ block that says so;
+[`design-review2.md`](design-review2.md) §3.3 (M-1) has the simulation and the two
+repairs. **This document's text becomes correct if Layout B is taken and must be
+rewritten if Layout A is.**
+
+
+---
+
+## 2026-09-09 — the MMU repair
+
+### §3 — the block-register window
+
+**Was:** one sixteen-byte window at `$FFA0`–`$FFAF`, with `LA3` splitting the two map
+SRAMs (`ram.md` §4.1's Layout A) *and* carrying the task index of `{TASK, block}`
+through U5's `'157`.
+
+**Why it moved:** one line cannot do both jobs, and doing both put every high byte in
+the other task's entry — so no task could have both halves of a block register set and
+nothing above physical 2 MB was reachable. `design-review2.md` §3.3 ran the boot
+sequence and found it. The two bytes have two windows now, `$FF90`–`$FF9F` and
+`$FFA0`–`$FFAF`, out of 32 bytes that decoded nowhere and outside the geographic
+window; `ram.md` §4.3 is the decision.
+
+### §2 — the boot buffer's enable
+
+**Was:** *"The '244 drives physical A20-A13 whenever the map SRAMs do not, and the two
+conditions are complementary by construction: boot mode, and the vector page."*
+
+**Why it moved:** the first sentence is the rule and the second is a list, and the list
+was not the rule. U9 selects a map SRAM for a block-register access **whatever RUN
+says**, so in boot mode the buffer and the isolation `'245` drove the same net — all
+sixteen map writes of §7.2's boot sequence were a bus fight. And an ordinary I/O cycle
+selected neither, so eight backplane lines floated into six cards' inputs. The enable is
+now the literal complement of U9's chip enable, three product terms, and the vector page
+falls out of it with no term of its own. `design-review2.md` §3.4.

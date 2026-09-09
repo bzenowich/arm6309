@@ -12,8 +12,9 @@ is marked, not deleted" convention — see the root `README.md` Conventions sect
 - **Each component has a `history.md` beside its spec** archiving superseded
   claims, with dates and the reason each number moved. Machine-level history is
   `docs/history.md`; the hardware area shares one `hardware/history.md`.
-- **`docs/design-review.md` is a frozen dated record** (the 2026-09-04 review).
-  Never update its findings; the specs and history files carry what changed since.
+- **`docs/design-review.md` and `docs/design-review2.md` are frozen dated records**
+  (the 2026-09-04 review, and the 2026-09-09 simulation review). Never update their
+  findings; the specs and history files carry what changed since.
 
 ### Reading rules
 
@@ -24,6 +25,11 @@ is marked, not deleted" convention — see the root `README.md` Conventions sect
   (`hardware/gal/*.jedec.ts` / `*.pld` / `cpld/*.fit`, `hardware/cards/*.circuit.tsx`,
   `hardware/place/parts.ts`, `cpu/src/`, `cpu/include/`), then the latest-dated doc
   statement, then older ones.
+- ⛔ **A design output can be absent, and prose does not notice.** `design-review2.md`
+  (2026-09-09) found eleven blocks described as fitted with no cell behind them. Before
+  citing a spec's "built" or "fitted", check that something *produces* the signal: the
+  port census in `hardware/gal/verilog/` is what does it, and `npm run check:video`
+  runs the design rather than its equations.
 - Cross-document claims cite section numbers (`graphics.md §14.1`). Section numbers
   are stable — see the maintenance rules — so citations can be followed literally.
 

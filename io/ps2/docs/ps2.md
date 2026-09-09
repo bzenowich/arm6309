@@ -51,7 +51,7 @@ driver bit-bangs it through two control bits and the whole transmit engine disap
 | **Why is the mouse set to 60 samples/s?** | You cannot display a pointer faster than the 70.09 Hz frame rate, and **60 /s is the largest standard PS/2 rate below it**. | §5.2 |
 | **Does the card check parity?** | **No.** 30 cm of shielded cable at 16 kHz, and the only recovery costs a round trip worth more than the error. Slu4 checks nothing either. | §6.2 |
 | **Does the card need to transmit?** | **Yes** — a mouse is silent until `F4`. **In software**, through two control bits and a `7407`. | §7 |
-| **Where does it live in the `$FF` map?** | **`$FF30`–`$FF33`, four bytes** — the bottom of the merged I/O card's **sixteen**-byte window. ⚠ Moved from `$FF30` on 2026-09-09; §3.2. | §3.2 |
+| **Where does it live in the `$FF` map?** | **`$FF30`–`$FF33`, four bytes** — the bottom of the merged I/O card's **sixteen**-byte window. ⚠ The merged card moved from `$FF50` on 2026-09-09; §3.2. | §3.2 |
 | **Does it decode scan codes?** | **No.** Raw set-2 bytes; translation is the driver's job. | §11.1 |
 | **Emulate the CoCo's PIA0 keyboard matrix so stock NitrOS-9 drivers work?** | **No** — it would cost more than the entire card. | §10 |
 | **IC count** | **11.** | §9 |

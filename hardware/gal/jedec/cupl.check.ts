@@ -37,6 +37,7 @@ import { hgenDesign, vgenDesign, vdecDesign } from "../sync.jedec"
 import { hadrDesign, vadrDesign } from "../scan.jedec"
 import { arbDesign, wcolDesign, wrowDesign } from "../access.jedec"
 import { rfaDesign } from "../regfile.jedec"
+import { vlenDesign } from "../vlen.jedec"
 import { seqphDesign } from "../seqph.jedec"
 import { seqctlDesign } from "../seqctl.jedec"
 import { aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign } from "../audio.jedec"
@@ -271,24 +272,27 @@ const checkRfa = (label: string, gal: Gal22v10) => {
   const names = ["WSTB", "RA0", "RA1", "RA2", "RA3", "RA4"]
   const pinOf = Object.fromEntries(
     names.map((n) => [n, rfaAsm.usage.find((u) => u.name === n)!.pin]))
-  /* Thirteen inputs is 8,192 combinations - small enough to be exhaustive,
-   * which is the only kind of sweep worth writing for a decode. */
+  /* ⭐ FOURTEEN inputs since 2026-09-09 - 16,384 combinations, still small
+   * enough to be exhaustive, which is the only kind of sweep worth writing for
+   * a decode. RP0 and RP1 are 7.2's column-reload walk (regfile.jedec.ts) and
+   * they land on pins 22 and 23, the two macrocells this part keeps free. */
   let bad: string | null = null
-  for (let bits = 0; bits < 8192 && !bad; bits++) {
+  const pins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 22, 23]
+  for (let bits = 0; bits < (1 << pins.length) && !bad; bits++) {
     const inputs: Record<number, 0 | 1> = {}
-    const pins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 23]
     pins.forEach((p, i) => { inputs[p] = ((bits >> i) & 1) as 0 | 1 })
     const ours = ourRfa.evaluate(inputs)
     const theirs = gal.evaluate(inputs)
     for (const n of names) {
       if (ours[pinOf[n]] !== theirs[pinOf[n]]) {
-        bad = `${n} at ${bits.toString(2).padStart(13, "0")}: ` +
+        bad = `${n} at ${bits.toString(2).padStart(pins.length, "0")}: ` +
           `ours ${ours[pinOf[n]]}, CUPL ${theirs[pinOf[n]]}`
         break
       }
     }
   }
-  check(bad === null, `${label}: matches our fuse map over all 8,192 inputs`, bad ?? "")
+  check(bad === null,
+    `${label}: matches our fuse map over all ${1 << pins.length} inputs`, bad ?? "")
 }
 checkRfa("CUPL rfa.jed", load("reference/rfa.cupl.jed"))
 
@@ -340,6 +344,12 @@ const REGISTRY: Part[] = [
   /* rfa split off vctrl on 2026-09-08 - graphics.md 10.1.6.3's relief, taken
    * so 7.4's broadcast write has pins to signal through. */
   { design: rfaDesign, reference: "reference/rfa.cupl.jed" },
+  /* vlen - the span-solid length counter, 2026-09-09. The card's SECOND live
+   * GAL: 10.1.6 booked the '161 pair as absorbed and 14.1 deleted both from
+   * the IC count, and no design file contained the counter (design-review2.md
+   * V-1). It cannot live in either CPLD because 7.4 loads it from the register
+   * file's read bus and that is eight pins neither part has. */
+  { design: vlenDesign, reference: "reference/vlen.cupl.jed" },
   { design: wcolDesign, reference: null }, { design: wrowDesign, reference: null },
   { design: seqphDesign, reference: null }, { design: seqctlDesign, reference: null },
   /* The audio five were missing from this list until 2026-09-07, which is the

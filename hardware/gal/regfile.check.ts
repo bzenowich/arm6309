@@ -79,24 +79,61 @@ const cpu = (reg: number, rw: 0 | 1, e: 0 | 1 = 1) => run({
   }
 }
 
-/* -- 3. outside the window, the fetch phase owns the address -------------- */
+/* -- 3. outside the window, the SPAN WRITER owns the address -------------- *
+ *
+ * ⭐ REWRITTEN 2026-09-09. This used to check a two-bit walk on FP1:FP0 that
+ * presented SPANLEN, WFG and WBG in turn while the span writer was IDLE - and
+ * nothing on the card produced FP0 or FP1, nothing received the three values,
+ * and every term carried !SPANBUSY, so DURING a span the file address was $00
+ * and the span writer would have retired CTRL's byte into the framebuffer.
+ * design-review2.md V-1.
+ *
+ * What replaces it is 7.4's own sentence: "the serialiser's serial output is
+ * wired to the register file's address bit 0, which is why 13 requires WFG at
+ * A0 = 0 and WBG at A0 = 1". The file is addressed LIVE, and the mask bit is
+ * the address line. */
 {
-  /* graphics.md 13: the span writer reads its length, foreground and
-   * background out of the register file in fetch phases 0, 1 and 2. The
-   * addresses are the register numbers those three live at. */
   const SPANLEN = 0x05, WFG = 0x06, WBG = 0x07
-  const idle = (fp: number) => run({ SPANBUSY: 0, FP0: (fp & 1) as 0 | 1, FP1: ((fp >> 1) & 1) as 0 | 1 })
-  check(idle(0).ra === SPANLEN, "fetch phase 0 addresses SPANLEN", `${idle(0).ra}`)
-  check(idle(1).ra === WFG, "fetch phase 1 addresses WFG", `${idle(1).ra}`)
-  check(idle(2).ra === WBG, "fetch phase 2 addresses WBG", `${idle(2).ra}`)
-  check([0, 1, 2].every((fp) => idle(fp).wstb === 0),
-    "read-back never asserts WSTB - the register file is only written by the CPU")
 
-  /* SPANBUSY gates the read-back: while a span is retiring the register file
-   * is not being re-read, so the address parks rather than cycling. */
-  const busy = [0, 1, 2].map((fp) =>
-    run({ SPANBUSY: 1, FP0: (fp & 1) as 0 | 1, FP1: ((fp >> 1) & 1) as 0 | 1 }).ra)
-  check(busy.every((v) => v === 0), "SPANBUSY parks the read-back address", busy.join(","))
+  /* Idle: the file holds SPANLEN, which is what vlen loads at the posted
+   * write - no walk, no phase, no state. */
+  check(run({ SPANBUSY: 0 }).ra === SPANLEN,
+    "idle, the file addresses SPANLEN - which is how the length counter is " +
+    "loaded without a phase of its own", `${run({ SPANBUSY: 0 }).ra}`)
+
+  /* Running: the mask bit picks the colour, one address line and no logic. */
+  check(run({ SPANBUSY: 1, MASKBIT: 0 }).ra === WBG,
+    "⭐ during a span a 0 mask bit addresses WBG - 7.4's table",
+    `${run({ SPANBUSY: 1, MASKBIT: 0 }).ra}`)
+  check(run({ SPANBUSY: 1, MASKBIT: 1 }).ra === WFG,
+    "⭐ and a 1 addresses WFG - a glyph's set bits are its ink, and the whole " +
+    "mechanism is one address line",
+    `${run({ SPANBUSY: 1, MASKBIT: 1 }).ra}`)
+
+  check([0, 1].every((m) => run({ SPANBUSY: 1, MASKBIT: m as 0 | 1 }).wstb === 0) &&
+        run({ SPANBUSY: 0 }).wstb === 0,
+    "and none of it asserts WSTB - the register file is only written by the CPU")
+
+  /* 13 pins WFG and WBG to $06 and $07 for exactly this reason: they must be
+   * adjacent and differ in bit 0 alone, or the mask bit is not an address. */
+  check((WFG ^ WBG) === 1 && (WFG & ~1) === (WBG & ~1),
+    "13's WFG at A0 = 0 and WBG at A0 = 1 is a PLACEMENT RULE and this is it")
+
+  /* ⭐ 7.2's column reload, which is the other thing this part does with the
+   * file. vaddr walks RP1:RP0 through 01 and 10 at span end and this part
+   * points the file at WPTR's own bytes for those two dots, so the counter
+   * reloads through the load path the CPU's write already uses.
+   * design-review2.md V-6. */
+  const WPTRA = 0x08, WPTRB = 0x09
+  check(run({ RP0: 1 }).ra === WPTRA,
+    "⭐ reload dot 1 addresses WPTR's low byte at +$08", `${run({ RP0: 1 }).ra}`)
+  check(run({ RP1: 1 }).ra === WPTRB,
+    "⭐ and dot 2 its middle byte at +$09 - 7.2's two deferrable file reads",
+    `${run({ RP1: 1 }).ra}`)
+  check(run({ RP0: 1 }).wstb === 0 && run({ RP1: 1 }).wstb === 0,
+    "and neither asserts WSTB - the reload READS the file")
+  check(run({ SPANBUSY: 0, RP0: 0, RP1: 0 }).ra === SPANLEN,
+    "and the walk returns the file to SPANLEN when it ends")
 }
 
 /* -- 4. the CPU wins the address while it is accessing the window --------- */
@@ -107,22 +144,34 @@ const cpu = (reg: number, rw: 0 | 1, e: 0 | 1 = 1) => run({
    * read-back term, so this is a real claim about that gating. */
   let bad: string | null = null
   for (let reg = 0; reg < 32 && !bad; reg++) {
-    for (let fp = 0; fp < 3; fp++) {
-      const r = run({
-        IOSEL: 1, A6: 1, A5: 1, RW: 1, E: 1, SPANBUSY: 0,
-        FP0: (fp & 1) as 0 | 1, FP1: ((fp >> 1) & 1) as 0 | 1,
-        A0: (reg & 1) as 0 | 1, A1: ((reg >> 1) & 1) as 0 | 1, A2: ((reg >> 2) & 1) as 0 | 1,
-        A3: ((reg >> 3) & 1) as 0 | 1, A4: ((reg >> 4) & 1) as 0 | 1,
-      })
-      if (r.ra !== reg) bad = `+$${reg.toString(16)} during fetch phase ${fp} -> RA=${r.ra}`
+    for (const busy of [0, 1] as const) {
+      for (const mask of [0, 1] as const) {
+        const r = run({
+          IOSEL: 1, A6: 1, A5: 1, RW: 1, E: 1, SPANBUSY: busy, MASKBIT: mask,
+          A0: (reg & 1) as 0 | 1, A1: ((reg >> 1) & 1) as 0 | 1, A2: ((reg >> 2) & 1) as 0 | 1,
+          A3: ((reg >> 3) & 1) as 0 | 1, A4: ((reg >> 4) & 1) as 0 | 1,
+        })
+        if (r.ra !== reg) {
+          bad = `+$${reg.toString(16)} with SPANBUSY=${busy} MASKBIT=${mask} -> RA=${r.ra}`
+        }
+      }
     }
   }
-  check(bad === null, "a CPU access beats the read-back in every fetch phase", bad ?? "")
+  check(bad === null,
+    "a CPU access beats the span writer's own address, span running or not", bad ?? "")
 }
 
-/* Twelve dedicated inputs (1-11, 13) plus pin 23's macrocell used as an input,
- * which is legal and is where FP1 lands. */
+/* ⭐ Twelve dedicated inputs (1-11, 13) and nothing on a macrocell pin: FP0 and
+ * FP1 went, MASKBIT came, and the two strobes vctrl could not decode moved
+ * here. Eight macrocells of ten, pins 22 and 23 free. */
+{
+  const widest = a.usage.reduce((m, u) => Math.max(m, u.used), 0)
+  check(a.usage.length === 8,
+    "⭐ eight macrocells of ten - WSTB, RA4..RA0, and CTRL's and VSTAT's write " +
+    "strobes, which vctrl gave up the address lines to decode", `${a.usage.length}`)
+  check(widest <= 16, "and the widest equation fits its macrocell", `${widest}`)
+}
 console.log(`\nrfa: ${a.usage.length} macrocells of 10, ` +
-  `${rfaDesign.inputs.length} inputs on 12 dedicated pins + pin 23`)
+  `${rfaDesign.inputs.length} inputs on 12 dedicated pins`)
 if (failures) { console.error(`\n${failures} FAILED`); process.exit(1) }
 console.log("rfa OK")

@@ -171,25 +171,34 @@ for (const fastE of [false, true]) {
     }
     if (got.e) sawE1 = true; else sawE0 = true
 
-    /* Every combination of the four decode inputs, at this phase: /IOPAGE,
-     * LA7, LA6 and RUN's own feedback. */
-    for (let bits = 0; bits < 8 && !bad; bits++) {
+    /* Every combination of the FIVE decode inputs, at this phase: /IOPAGE,
+     * LA7, LA6, LA5, LA4 and RUN's own feedback.
+     *
+     * ⚠ IT WAS THREE UNTIL 2026-09-09 and LA5/LA4 sat at whatever the counter
+     * sweep left on pins 7 and 9. The buffer's enable is the complement of a
+     * decode that reads them (clkdec.pld), so three inputs could not see the
+     * two defects design-review2.md M-2 and M-3 name. */
+    for (let bits = 0; bits < 32 && !bad; bits++) {
       const d = { ...base,
-        4: ((bits >> 2) & 1) as 0 | 1, 5: ((bits >> 1) & 1) as 0 | 1,
-        6: (bits & 1) as 0 | 1 }
+        4: ((bits >> 4) & 1) as 0 | 1, 5: ((bits >> 3) & 1) as 0 | 1,
+        6: ((bits >> 2) & 1) as 0 | 1, 7: ((bits >> 1) & 1) as 0 | 1,
+        9: (bits & 1) as 0 | 1 }
       const pins = u6.gal.evaluate(d)
-      const want = decode({ nIopage: d[4], la7: d[5], la6: d[6], run: got.run })
+      const want = decode({
+        nIopage: d[4], la7: d[5], la6: d[6], la5: d[7], la4: d[9], run: got.run,
+      })
       const got2 = { nIosel: pins[15], nBootOe: pins[14] }
       for (const k of ["nIosel", "nBootOe"] as const) {
         if (got2[k] !== want[k]) {
           bad = `${k} = ${got2[k]}, expected ${want[k]} with ` +
-            `/IOPAGE=${d[4]} LA7=${d[5]} LA6=${d[6]} RUN=${got.run}`
+            `/IOPAGE=${d[4]} LA7=${d[5]} LA6=${d[6]} LA5=${d[7]} LA4=${d[9]} ` +
+            `RUN=${got.run}`
         }
       }
     }
   }
   check(bad === null, `${label}: the fuse map matches clkdec.model.ts for ${period * 8} edges ` +
-    `and all 8 decode inputs at each`, bad ?? "")
+    `and all 32 decode inputs at each`, bad ?? "")
   check(sawE0 && sawE1, `${label}: the decode sweep covered E low and E high`)
 }
 
@@ -258,18 +267,43 @@ console.log("\n      boot mode - machine.md 7.2\n")
 }
 
 /* ======================================================================== */
+/* Atmel's CUPL is an MS-DOS program and its lexer is 7-bit: a `!!` in a
+ * comment aborts the compile with "illegal character: ASCII code 226", which
+ * is how three of these files stopped having a reference for twenty minutes on
+ * 2026-09-09. The repository's prose convention uses those characters
+ * everywhere else, so the rule is worth a check rather than a memory. */
+{
+  const { readFileSync, readdirSync } = await import("node:fs")
+  const dir = new URL(".", import.meta.url).pathname
+  const bad: string[] = []
+  for (const f of readdirSync(dir).filter((n) => n.endsWith(".pld"))) {
+    const text = readFileSync(join(dir, f), "utf8")
+    text.split("\n").forEach((line, i) => {
+      // eslint-disable-next-line no-control-regex
+      if (/[^\x00-\x7F]/.test(line)) bad.push(`${f}:${i + 1}`)
+    })
+  }
+  check(bad.length === 0,
+    "every .pld is 7-bit ASCII - Atmel's CUPL lexer aborts on anything else, " +
+    "and this repository's prose convention is full of things it aborts on",
+    bad.join(" "))
+}
+
+/* ======================================================================== */
 console.log("\nU9 - the physical space decode\n")
 const u9g = build((await import("./u9.jedec")).u9Design, "u9")
 
 {
-  const bad = u9g.gal.checkInputPins([14, 23])
+  const bad = u9g.gal.checkInputPins([23])
   check(bad.length === 0,
-    "LA3 and R/W reach the array as inputs on macrocell pins 14 and 23 - the " +
-    "two 8-term macrocells, where an input costs nothing and an output would " +
-    "have had the least room", bad.join("; "))
+    "R/W reaches the array as an input on macrocell pin 23 - an 8-term " +
+    "macrocell, where an input costs nothing and an output would have had " +
+    "the least room", bad.join("; "))
 }
-check(u9g.gal.undriven(21) && u9g.gal.undriven(22),
-  "pins 21 and 22 are left at high-Z - two spare INPUTS, not two driven lows")
+check(u9g.gal.undriven(14) && u9g.gal.undriven(21) && u9g.gal.undriven(22),
+  "⭐ pins 14, 21 and 22 are left at high-Z - THREE spare macrocells now. " +
+  "Pin 14 was LA3 until 2026-09-09, when the two map bytes stopped being " +
+  "split on the write index's task bit (design-review2.md M-1)")
 
 /* The exhaustive part: every value of the six physical address lines this
  * part sees, x every logical decode input, x R/W x RUN x /IOPAGE. 64 x 32 x 8
@@ -278,22 +312,21 @@ check(u9g.gal.undriven(21) && u9g.gal.undriven(22),
   let bad: string | null = null
   outer:
   for (let pa = 0; pa < 64; pa++) {
-    for (let lo = 0; lo < 32; lo++) {
+    for (let lo = 0; lo < 16; lo++) {
       for (const rw of [0, 1] as const) {
         for (const run of [0, 1] as const) {
           for (const nIopage of [0, 1] as const) {
-            const la7 = ((lo >> 4) & 1) as 0 | 1, la6 = ((lo >> 3) & 1) as 0 | 1
-            const la5 = ((lo >> 2) & 1) as 0 | 1, la4 = ((lo >> 1) & 1) as 0 | 1
-            const la3 = (lo & 1) as 0 | 1
+            const la7 = ((lo >> 3) & 1) as 0 | 1, la6 = ((lo >> 2) & 1) as 0 | 1
+            const la5 = ((lo >> 1) & 1) as 0 | 1, la4 = (lo & 1) as 0 | 1
             const driven: Record<number, 0 | 1> = {
               1: ((pa >> 5) & 1) as 0 | 1, 2: ((pa >> 4) & 1) as 0 | 1,
               3: ((pa >> 3) & 1) as 0 | 1, 4: ((pa >> 2) & 1) as 0 | 1,
               5: ((pa >> 1) & 1) as 0 | 1, 6: (pa & 1) as 0 | 1,
               7: nIopage, 8: run, 9: la7, 10: la6, 11: la5, 13: la4,
-              14: la3, 23: rw,
+              23: rw,
             }
             const pins = u9g.gal.evaluate(driven)
-            const m = u9({ pa, nIopage, run, la7, la6, la5, la4, la3, rw })
+            const m = u9({ pa, nIopage, run, la7, la6, la5, la4, rw })
             const want: Record<number, number> = {
               15: m.nMapCeLo, 16: m.nMapCeHi, 17: m.nRomCe0,
               18: m.nIopageBp, 19: m.dramSel, 20: m.nRomCe1,
@@ -302,7 +335,7 @@ check(u9g.gal.undriven(21) && u9g.gal.undriven(22),
               if (pins[Number(pin)] !== v) {
                 bad = `pin ${pin} = ${pins[Number(pin)]}, expected ${v} at ` +
                   `A24..A19=${pa.toString(2).padStart(6, "0")} ` +
-                  `LA7..LA3=${lo.toString(2).padStart(5, "0")} ` +
+                  `LA7..LA4=${lo.toString(2).padStart(4, "0")} ` +
                   `R/W=${rw} RUN=${run} /IOPAGE=${nIopage}`
                 break outer
               }
@@ -313,14 +346,14 @@ check(u9g.gal.undriven(21) && u9g.gal.undriven(22),
     }
   }
   check(bad === null,
-    "the fuse map matches u9.model.ts over all 64 physical x 32 logical x " +
-    "R/W x RUN x /IOPAGE - 16,384 evaluations", bad ?? "")
+    "the fuse map matches u9.model.ts over all 64 physical x 16 logical x " +
+    "R/W x RUN x /IOPAGE - 8,192 evaluations", bad ?? "")
 }
 
 /* The claims that are worth naming rather than leaving inside the sweep. */
 {
   const at = (byte: number, o: Partial<Parameters<typeof u9>[0]> = {}) =>
-    u9({ pa: paOf(byte), nIopage: 1, run: 1, la7: 0, la6: 0, la5: 0, la4: 0, la3: 0, rw: 1, ...o })
+    u9({ pa: paOf(byte), nIopage: 1, run: 1, la7: 0, la6: 0, la5: 0, la4: 0, rw: 1, ...o })
 
   check(at(MAP.romBase).nRomCe0 === 0 && at(MAP.romBase).nRomCe1 === 1,
     "physical 2.0 M reads the ROM's first device")
@@ -365,58 +398,89 @@ check(u9g.gal.undriven(21) && u9g.gal.undriven(22),
   check(at(0, { nIopage: 0 }).nIopageBp === 0,
     "and U3's own term passes through, boot or not")
 
-  const blk = { nIopage: 0 as const, la7: 1 as const, la6: 0 as const, la5: 1 as const, la4: 0 as const }
-  check(at(0, { ...blk, la3: 0, rw: 0 }).nMapCeLo === 0 &&
-        at(0, { ...blk, la3: 0, rw: 0 }).nMapCeHi === 1,
-    "$FFA0-$FFA7 selects the LOW map SRAM alone - ram.md 4.1 Layout A, and " +
-    "the chip enable is what splits it because U3's MAPWE never sees LA3")
-  check(at(0, { ...blk, la3: 1, rw: 0 }).nMapCeHi === 0 &&
-        at(0, { ...blk, la3: 1, rw: 0 }).nMapCeLo === 1,
-    "and $FFA8-$FFAF the HIGH one")
+  /* ⭐ TWO WINDOWS since 2026-09-09, and this is the claim M-1 was the
+   * absence of: the write INDEX is LA3..LA0 through U5's '157, so LA3 is the
+   * TASK bit and cannot also choose the SRAM. ram.md 4.3. */
+  const blkLo = { nIopage: 0 as const, la7: 1 as const, la6: 0 as const, la5: 1 as const, la4: 0 as const }
+  const blkHi = { nIopage: 0 as const, la7: 1 as const, la6: 0 as const, la5: 0 as const, la4: 1 as const }
+  check(at(0, { ...blkLo, rw: 0 }).nMapCeLo === 0 &&
+        at(0, { ...blkLo, rw: 0 }).nMapCeHi === 1,
+    "$FFA0-$FFAF selects the LOW map SRAM alone - all sixteen entries, index " +
+    "{TASK, block} from LA3..LA0")
+  check(at(0, { ...blkHi, rw: 0 }).nMapCeHi === 0 &&
+        at(0, { ...blkHi, rw: 0 }).nMapCeLo === 1,
+    "⭐ and $FF90-$FF9F selects the HIGH one, over the SAME sixteen entries - " +
+    "which is what makes both bytes of every task's every block writable " +
+    "(design-review2.md M-1)")
+  check(at(0, { nIopage: 0, la7: 1, la6: 0, la5: 1, la4: 1 }).nMapCeLo === 1 &&
+        at(0, { nIopage: 0, la7: 1, la6: 0, la5: 0, la4: 0 }).nMapCeLo === 1,
+    "and the other two codes of that window - $FFB0 control and $FF80, free - " +
+    "select neither")
   check(at(0).nMapCeLo === 0 && at(0).nMapCeHi === 0,
     "both are selected for an ordinary cycle - translation needs A24..A13 at once")
   check(at(0, { run: 0 }).nMapCeLo === 1 && at(0, { run: 0 }).nMapCeHi === 1,
-    "⭐ and both are deselected for the whole of boot mode, which is exactly " +
-    "when U6 has the buffer driving instead - the two conditions are the same " +
-    "two conditions, on two parts")
+    "and both are deselected for an ordinary BOOT-mode cycle, which is when " +
+    "U6 has the buffer driving instead")
+  check(at(0, { ...blkLo, run: 0, rw: 0 }).nMapCeLo === 0,
+    "⚠ but NOT for a block write in boot mode - that is the whole of the boot " +
+    "sequence, and U6's buffer has to stand down for it (M-3, below)")
   check(at(0, { nIopage: 0, la7: 1, la6: 1 }).nMapCeLo === 1,
-    "and for the vector page, for the same reason")
+    "and neither answers for the vector page")
 }
 
 /* U6 and U9 have to agree about the changeover, and they are different parts
  * with different equations. This is the one claim that spans them. */
 console.log("\n      the boot buffer and the map SRAMs never drive together\n")
 {
+  /* ⚠ THIS SWEEP USED TO HOLD LA5 AND LA4 AT ZERO, and that is exactly why it
+   * passed while the boot sequence fought itself. The map SRAMs' chip enable
+   * has a THIRD condition - a block-register access - which is true in boot
+   * mode as well, and holding LA5:LA4 at 00 is the one code that never reaches
+   * it. All sixteen map writes of machine.md 7.2's boot sequence had the '244
+   * and U4 driving the SRAM's common I/O at once. design-review2.md M-3.
+   *
+   * Sweeping LA5 and LA4 is four times the work and it is the difference
+   * between a check and a check that could fail. */
   let overlap: string | null = null
+  let floated: string | null = null
   for (const run of [0, 1] as const) {
     for (const nIopage of [0, 1] as const) {
-      for (let lo = 0; lo < 4; lo++) {
-        const la7 = ((lo >> 1) & 1) as 0 | 1, la6 = (lo & 1) as 0 | 1
-        const bootoe = decode({ nIopage, la7, la6, run }).nBootOe
-        const m = u9({ pa: 0, nIopage, run, la7, la6, la5: 0, la4: 0, la3: 0, rw: 1 })
-        /* Both asserted low. The map SRAM also needs U3's /MAPOE, which is
-         * deasserted for the whole of any $FFxx cycle - so this is the
-         * conservative test: /CE alone against the buffer. */
-        if (bootoe === 0 && (m.nMapCeLo === 0 || m.nMapCeHi === 0)) {
-          overlap = `RUN=${run} /IOPAGE=${nIopage} LA7=${la7} LA6=${la6}`
-        }
+      for (let lo = 0; lo < 16; lo++) {
+        const la7 = ((lo >> 3) & 1) as 0 | 1, la6 = ((lo >> 2) & 1) as 0 | 1
+        const la5 = ((lo >> 1) & 1) as 0 | 1, la4 = (lo & 1) as 0 | 1
+        const bootoe = decode({ nIopage, la7, la6, la5, la4, run }).nBootOe
+        const m = u9({ pa: 0, nIopage, run, la7, la6, la5, la4, rw: 1 })
+        const where = `RUN=${run} /IOPAGE=${nIopage} ` +
+          `LA7..LA4=${lo.toString(2).padStart(4, "0")}`
+        /* Both asserted low. */
+        if (bootoe === 0 && (m.nMapCeLo === 0 || m.nMapCeHi === 0)) overlap = where
+        /* ⭐ AND THE OTHER DIRECTION, which nothing asserted at all: something
+         * must always drive physical A20-A13. Neither driving leaves eight
+         * backplane lines floating into six cards' inputs - M-2, and it was
+         * true for every I/O cycle in the machine. */
+        if (bootoe === 1 && m.nMapCeLo === 1 && m.nMapCeHi === 1) floated = where
       }
     }
   }
   check(overlap === null,
-    "over every combination of RUN, /IOPAGE, LA7 and LA6: the '244's output " +
+    "⭐ over every combination of RUN, /IOPAGE and LA7..LA4: the '244's output " +
     "enable and the map SRAMs' chip enables are never both asserted",
     overlap ?? "")
+  check(floated === null,
+    "⭐ and never both DE-asserted either - physical A20-A13 always has exactly " +
+    "one driver, which is what graphics.md 6.3.2 means by 'parked'",
+    floated ?? "")
 
   /* And the changeover itself. RUN is set by a write to $FFB1, which is an
    * $FFxx cycle - and during ANY $FFxx cycle the map SRAMs are deselected
    * anyway. So the edge that hands the address bus over happens inside a
    * cycle where the SRAM is already off for an independent reason. */
-  const during = u9({ pa: 0, nIopage: 0, run: 0, la7: 1, la6: 0, la5: 1, la4: 1, la3: 0, rw: 0 })
+  const during = u9({ pa: 0, nIopage: 0, run: 0, la7: 1, la6: 0, la5: 1, la4: 1, rw: 0 })
   check(during.nMapCeLo === 1 && during.nMapCeHi === 1,
     "⭐ and the handover edge is free: RUN is set by a write to $FFB1, which " +
-    "is an $FFxx cycle, and the map SRAMs are deselected for every $FFxx " +
-    "cycle - so there is no instant at which one turns on as the other turns off")
+    "is the CONTROL window - not a block window - so the map SRAMs are " +
+    "deselected for the whole of that cycle and there is no instant at which " +
+    "one turns on as the other turns off")
 }
 
 /* ======================================================================== */

@@ -16,7 +16,8 @@ module mmu_tb;
   logic        e, q, rw;
   logic        n_iopage, muxsel, n_isooe, n_mapwe, n_mapoe, n_ctrlcp;
 
-  mmu dut (.la(la), .e(e), .q(q), .rw(rw),
+  logic blkhi, blklo;
+  mmu dut (.la(la), .e(e), .q(q), .rw(rw), .blkhi(blkhi), .blklo(blklo),
            .n_iopage(n_iopage), .muxsel(muxsel), .n_isooe(n_isooe),
            .n_mapwe(n_mapwe), .n_mapoe(n_mapoe), .n_ctrlcp(n_ctrlcp));
 
@@ -62,13 +63,13 @@ module mmu_tb;
   endtask
   /* verilator lint_on UNUSEDSIGNAL */
 
-  bit dec_page, dec_blk, dec_wr, dec_rd, bbm, wr_in_buf, ctl_out;
+  bit dec_hi, dec_lo, dec_page, dec_blk, dec_wr, dec_rd, bbm, wr_in_buf, ctl_out;
   string t;
   int edges;
   bit prev, cur;
 
   initial begin
-    dec_page = 1; dec_blk = 1; dec_wr = 1; dec_rd = 1;
+    dec_page = 1; dec_blk = 1; dec_wr = 1; dec_rd = 1; dec_hi = 1; dec_lo = 1;
     bbm = 1; wr_in_buf = 1; ctl_out = 1;
 
     // Exhaustive: 65536 addresses x 4 phases x R/W.
@@ -76,12 +77,19 @@ module mmu_tb;
       for (int ph = 0; ph < 4; ph++)
         for (int r = 0; r < 2; r++) begin
           automatic bit in_page = (a >= 16'hFF00);
-          automatic bit in_blk  = (a >= 16'hFFA0 && a <= 16'hFFAF);
+          // TWO block windows since 2026-09-09: the high byte at $FF90-$FF9F
+          // and the low at $FFA0-$FFAF, because LA3 is the write index's TASK
+          // bit and cannot also pick the SRAM. mmu.pld, design-review2.md M-1.
+          automatic bit in_hi   = (a >= 16'hFF90 && a <= 16'hFF9F);
+          automatic bit in_lo   = (a >= 16'hFFA0 && a <= 16'hFFAF);
+          automatic bit in_blk  = in_hi || in_lo;
           automatic bit in_ctl  = (a >= 16'hFFB0 && a <= 16'hFFBF);
           drive(a[15:0], ph[1:0], r[0]);
 
           if ((!n_iopage) != in_page)                 dec_page  = 0;
           if (muxsel      != in_blk)                  dec_blk   = 0;
+          if (blkhi       != in_hi)                   dec_hi    = 0;
+          if (blklo       != in_lo)                   dec_lo    = 0;
           if (!n_mapwe && !(in_blk && r == 0))        dec_wr    = 0;
           if (!n_ctrlcp && !in_ctl)                   ctl_out   = 0;
           // Direction-aware: ISO_DIR is R/W, so the '245 drives the SRAM's
@@ -92,8 +100,10 @@ module mmu_tb;
         end
 
     ok(dec_page,  "/IOPAGE is asserted for $FF00-$FFFF and nowhere else");
-    ok(dec_blk,   "the block window is $FFA0-$FFAF and nowhere else");
-    ok(dec_wr,    "/WE only ever asserts inside $FFA0-$FFAF on a write");
+    ok(dec_blk,   "the block windows are $FF90-$FF9F and $FFA0-$FFAF, and nowhere else");
+    ok(dec_hi,    "$FF90-$FF9F selects the HIGH map byte - physical A24..A21");
+    ok(dec_lo,    "$FFA0-$FFAF selects the LOW map byte - physical A20..A13");
+    ok(dec_wr,    "/WE only ever asserts inside a block window on a write");
     ok(ctl_out,   "the control latch never strobes outside $FFB0-$FFBF");
     ok(bbm,       "break before make: nothing drives the map SRAM's pins while it drives");
     ok(wr_in_buf, "/WE is only ever asserted while the '245 is enabled");

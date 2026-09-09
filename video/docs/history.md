@@ -710,3 +710,99 @@ list-engine build) and were cleaned against the entries above. `video/README.md`
 carried "~33 ICs" → "41 with 10 GALs" → **30 ICs** — a count written between the
 28-IC morning and the 27-IC evening of 2026-09-08 that nothing went back to fix —
 now reconciled at **27** (verified against `hardware/place/parts.ts`).
+
+
+---
+
+## 2026-09-09 — design-review2.md's corrections
+
+### features.md §3.2 — the spare-access headline
+
+**Was:** *"The card has ≈32.4 M spare accesses/s against a CPU that can issue ~420,000
+writes/s — **77× more memory bandwidth than the CPU can consume** (`graphics.md`
+§2.1)."*
+
+**Why it moved:** `graphics.md` §14.2 replaced the four `AS6C1008` ×8 framebuffer parts
+with two `AS6C8016` ×16 on 2026-09-08, which is one spare access per slot rather than
+four. §14.2.3 states the new figures — **8.1 M/s and 15×** — and this sentence was not
+updated with it. The accesses are up to four bytes wide, which the replacement says.
+
+### features.md §3.1 — the `WMODE` table and two part numbers
+
+**Was:** a three-row table ending at `WMODE 10`, with span-solid's length coming from
+*"the `'161` pair's terminal count"* and the mask bit from *"the `74HC165`'s serial
+output"*.
+
+**Why it moved:** `features.md` §8.4 added `WMODE 11` (sprite) on 2026-09-09, and
+`graphics.md` §10.1.6 had already booked both discrete parts into the CPLDs on
+2026-09-08. ⚠ **The replacement carries a ⛔ note rather than simply renaming them**,
+because `design-review2.md` §1.2 found that neither block was ever written: the
+packages were deleted from §14.1's count and the logic does not exist.
+
+### graphics.md §6.4.6 and features.md §1.4 — the cell row's width
+
+**Was:** *"Cell | `SA17..SA13` — `VSCROLL[8:3]`"*.
+
+**Why it moved:** `SA17..SA13` is five bits, so the field is `VSCROLL[7:3]`. The same
+tables' *"⚠ 32 cell rows"* is the giveaway; `[8:3]` would be six bits and 64 rows.
+Arithmetic, not a design change.
+
+### graphics.md §14 — the motherboard's census
+
+**Was:** *"the motherboard's own full census … is `hardware/ram.md` §6.5, at **17
+ICs**"*.
+
+**Why it moved:** `ram.md` §6.3.1 added the `74HC4040` refresh timebase on 2026-09-09 —
+*"the refresh timebase is a package, and it was on nobody's list"* — taking the
+motherboard to 18. `machine.md` §0 and `ram.md` both carry 18; this line did not.
+
+
+---
+
+## 2026-09-09 — the repairs
+
+### §10.1.6 and §14.1 — the four absorptions
+
+**Was:** *"`CTRL`'s `'273` (+8), the `'161` `SPANLEN` pair (+10) and the `'165` (+8) fit
+easily"*, booked as **−4 packages** in the 27-IC count.
+
+**Why it moved:** none of the three was written, and one of them cannot be. §7.4 loads
+the length counter from the **register file's read bus** — it has to, because a
+span-solid is issued with `SPANLEN` written once and the length persists across spans —
+and that is eight pins neither CPLD has. `CTRL`'s `'273` and the `'165` are on `vctrl`;
+the `'161` pair is `vlen`, one `GAL22V10`, and the card is **28 ICs**. §14.1's row is
+−3 now, with `vlen` as its own line. `design-review2.md` §1.2 and §10.
+
+### §10.1.6.1 — `HPOL`
+
+**Was:** *"§12's four codes are 70 Hz at `VMODE0 = 0` and 60 Hz at `VMODE0 = 1`, and the
+70 Hz pair is the positive-H pair, so `HPOL = !VMODE0`."*
+
+**Why it moved:** the 70 Hz pair is the positive-**V** pair. §6.2.1's own table has
+HSYNC negative in both families, which is also the VGA standard, and `sync.jedec.ts`
+said so all along. `VMODE 01` and `VMODE 11` were emitted as +H/−V, which is not a
+standard combination at 31.5 kHz.
+
+### §10.1.6 — the partition's headroom
+
+**Was:** *"`vctrl` is at 64 of 64 I/O and 122 of 128 cells, `vaddr` at 61 of 64 and 109
+of 128. Both still fit, JTAG included, and neither has room for the next thing."*
+
+**Why it moved:** it had room for eighteen more cells, and the way to find them was not
+a rewrite. `vaddr`'s address mux has four sources and `vctrl` was exporting all four
+selects; they are mutually exclusive, so `SRC1:SRC0` names them and `vaddr` decodes them
+back for nothing. Two pins, and `vctrl` fell to **104 of 128**. `vaddr` rose to 122 with
+the map pipeline and the reload walk, and is the tight part now.
+
+### §19 item 23(b) — the register file's read-back walk
+
+**Was:** a two-bit walk on `FP1:FP0` presenting `SPANLEN`, `WFG` and `WBG` in turn while
+the span writer was idle — *"two deferrable file reads that fetch all three for the next
+span"*.
+
+**Why it moved:** nothing produced `FP0` or `FP1`, nothing received the three values, and
+every term carried `!SPANBUSY` — so **during** a span the file address was `$00` and the
+span writer would have retired `CTRL`'s byte into the framebuffer. §7.4's own sentence
+replaces it: the file is addressed live and the mask bit is `RA0`. The walk survives for
+the one job it was right for, §7.2's column reload, where it points the file at `+$08`
+and `+$09` for two dots.

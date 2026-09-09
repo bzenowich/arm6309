@@ -22,6 +22,14 @@ import {
 } from "./tile.model"
 import { addressMux, mapColumn } from "./video.parts"
 
+/* ⭐ THE FOUR MUX SELECTS ARE TWO ENCODED BITS since 2026-09-09 - SRC1:SRC0,
+ * video.parts.ts - so a term's guard is a pair of literals rather than one.
+ * 00 linear, 01 the write pointer, 10 tile, 11 map. graphics.md 14.1: two
+ * crossing nets instead of four, and it is what bought vctrl the room for
+ * everything docs/design-review2.md V-1 found missing. */
+const TILE = "SRC1 & !SRC0"
+const MAP = "SRC1 & SRC0"
+
 let failures = 0
 const check = (ok: boolean, claim: string, detail = "") => {
   if (!ok) { failures++; console.error(`FAIL  ${claim}${detail ? `  (${detail})` : ""}`) }
@@ -197,6 +205,14 @@ const check = (ok: boolean, claim: string, detail = "") => {
       case "MB": return (f.mapbase >>> bit) & 1
       case "TB": return (f.tilebase >>> bit) & 1
       case "MAP": return (f.code >>> bit) & 1
+      /* ⭐ MAPQ is the map byte's SECOND rank, 2026-09-09. MAP is the fetch
+       * target and MAPQ is what this mux reads, handed over at the cell
+       * boundary - one register could not hold a code across the two slots
+       * that need it while a new one arrived in the middle, and the card
+       * displayed every cell's right-hand neighbour. Its VALUE for a given
+       * screen cell is that cell's code either way, which is why this check
+       * did not see the defect. docs/design-review2.md V-5. */
+      case "MAPQ": return (f.code >>> bit) & 1
       /* NOT a throw: an unknown source is a FAILING check, not a crash, or a
        * regression takes the rest of the file down with it. */
       default: return -1
@@ -228,7 +244,7 @@ const check = (ok: boolean, claim: string, detail = "") => {
      * vblank and stepped once per displayed row, so it is. Any V in a cell-mode
      * term is the bug of 2026-09-08 coming back. */
     const cellTerms = mux.flatMap((c) =>
-      c.terms.filter((t) => t.startsWith("TILESEL & ") || t.startsWith("MAPSEL & ")))
+      c.terms.filter((t) => t.startsWith(`${TILE} & `) || t.startsWith(`${MAP} & `)))
     const usesV = cellTerms.filter((t) => /\bV\d+$/.test(t))
     check(usesV.length === 0,
       "no cell-mode address bit reads the sync line counter V - the vertical " +
@@ -257,7 +273,7 @@ const check = (ok: boolean, claim: string, detail = "") => {
             const sa = scan(r, ri, c, ci)
             const f = { sa, mapbase: 0x5b, tilebase: 0, code: 0, mc: c }
             const low = c & 3
-            const got = assemble("MAPSEL", low, f)
+            const got = assemble(MAP, low, f)
             const want = mapAddress(0x5b, r, c)
             if (got !== want) {
               bad = `cell (${r},${c}) pixel (${ri},${ci}): mux ${got} vs model ${want}`
@@ -286,7 +302,7 @@ const check = (ok: boolean, claim: string, detail = "") => {
             const sa = scan(r, ri, c, ci)
             const f = { sa, mapbase: 0, tilebase: 0x1d, code }
             const low = ci & 3
-            const got = assemble("TILESEL", low, f)
+            const got = assemble(TILE, low, f)
             const want = tileAddress({ tilebase: 0x1d, code, cellRow: ri, cellCol: ci })
             if (got !== want) {
               bad = `code ${code} px (${ri},${ci}) at cell (${r},${c}): ` +
@@ -375,7 +391,7 @@ const check = (ok: boolean, claim: string, detail = "") => {
         const wantColIn = col % CELL
         const wantRowIn = row % CELL
 
-        const gotMap = addrOf("MAPSEL", sa,
+        const gotMap = addrOf(MAP, sa,
           { mapbase: MAPBASE, tilebase: 0, code: 0, mc: wantCellCol }, wantCellCol & 3)
         if (gotMap !== mapAddress(MAPBASE, wantCellRow, wantCellCol)) {
           bad = `${label}: screen (${x},${y}) -> map cell (${wantCellRow},${wantCellCol}) ` +
@@ -383,7 +399,7 @@ const check = (ok: boolean, claim: string, detail = "") => {
           break
         }
         const code = 0xa7
-        const gotTile = addrOf("TILESEL", sa,
+        const gotTile = addrOf(TILE, sa,
           { mapbase: 0, tilebase: TILEBASE, code, mc: 0 }, col % 4)
         if (gotTile !== tileAddress({ tilebase: TILEBASE, code, cellRow: wantRowIn, cellCol: wantColIn })) {
           bad = `${label}: screen (${x},${y}) -> tile pixel (${wantRowIn},${wantColIn}) ` +

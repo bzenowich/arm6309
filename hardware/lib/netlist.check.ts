@@ -181,7 +181,7 @@ check(pinsOn("U9", "nIOPAGE").length === 1 && pinsOn("U9", "nIOPAGE_MB").length 
     leaked.join(", "))
 }
 
-/* -- ram.md 3.1: the map is two byte-wide parts, split by LA3 ------------ */
+/* -- ram.md 3.1: the map is two byte-wide parts, split by the WINDOW ------ */
 check(comps.filter((c) => /^U1B?$/.test(c.name)).length === 2,
   "two map SRAMs - translation needs A24..A13 in one access, which is why " +
   "this is two byte-wide parts and not one sequential read")
@@ -190,8 +190,8 @@ for (let i = 21; i <= 24; i++) {
 }
 check(pinsOn("U1", "MAP_CE_LO").length === 1 && pinsOn("U1B", "MAP_CE_HI").length === 1,
   "⚠ each map SRAM has its OWN chip enable from U9 - U3's MAP_WE is common to " +
-  "both and never sees LA3, so the chip enable is what makes a write land in " +
-  "one part and not the other (ram.md 4.1 Layout A)")
+  "both, so the chip enable is what makes a write land in one part and not " +
+  "the other (ram.md 4.3)")
 check(pinsOn("U1", "MAP_OE").length === 1 && pinsOn("U1B", "MAP_OE").length === 1,
   "and they share U3's output enable, which is untouched by any of this")
 
@@ -258,9 +258,19 @@ for (const la of ["LA5", "LA4", "LA0"]) {
   check(pinsOn("U6", la).length === 1,
     `U6 takes ${la} - the $FFB1 strobe that leaves boot mode (gal/clkdec.pld)`)
 }
-check(pinsOn("U9", "LA3").length === 1,
-  "U9 takes LA3 - the bit that splits the block-register window between the " +
-  "two map SRAMs, and the one U3 has no pin for")
+/* ⛔ THIS CHECK USED TO ASSERT THE DEFECT. It read "U9 takes LA3 - the bit
+ * that splits the block-register window between the two map SRAMs", and LA3
+ * is ALSO the task bit of the write index U5's '157 puts on MAPA3 (below).
+ * One line, two jobs: a write meant for TASK 0's high byte landed in TASK 1's
+ * entry, and nothing above physical 2 MB was reachable. The two bytes have
+ * two WINDOWS now - $FF90-$FF9F and $FFA0-$FFAF - and LA3 has one job again.
+ * hardware/ram.md 4.3, docs/design-review2.md M-1. */
+check(pinsOn("U9", "LA3").length === 0,
+  "⭐ U9 does NOT take LA3 - the two map bytes are split by the window, not " +
+  "by the write index's task bit")
+check(pinsOn("U5", "LA3").length === 1,
+  "and the '157 still does, which is the one job it has: the task bit of " +
+  "machine.md 3's {TASK, block} write index")
 check(pinsOn("U6", "R_W").length === 1,
   "U6 takes R/W, which is what makes the $FFB1 strobe a write and not a read")
 

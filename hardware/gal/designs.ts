@@ -12,6 +12,8 @@ import { hadrDesign, vadrDesign } from "./scan.jedec"
 import { arbDesign, wcolDesign, wrowDesign } from "./access.jedec"
 import { seqphDesign } from "./seqph.jedec"
 import { seqctlDesign } from "./seqctl.jedec"
+import { vlenDesign } from "./vlen.jedec"
+import { rfaDesign } from "./regfile.jedec"
 import { aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign } from "./audio.jedec"
 
 export const ALL: Design[] = [
@@ -19,7 +21,7 @@ export const ALL: Design[] = [
   hgenDesign, vgenDesign, vdecDesign,
   hadrDesign, vadrDesign,
   arbDesign, wcolDesign, wrowDesign,
-  seqphDesign, seqctlDesign,
+  seqphDesign, seqctlDesign, vlenDesign, rfaDesign,
   aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign,
 ]
 

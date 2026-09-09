@@ -50,7 +50,15 @@ const SPRITE = "WM1 & WM0"
 
 const MC = ["MC0", "MC1", "MC2"]
 /* Zeroed at the start of every span, counting one per retired byte. Three
- * bits is the cell width and nothing else. */
+ * bits is the cell width and nothing else.
+ *
+ * ⚠ AND IT CANNOT BE A SENTINEL IN THE SERIALISER, which is worth recording
+ * because it looks as though it can. Load the mask as {mask[7:0], 1} and shift
+ * left, and the extra 1 does reach bit 7 after seven shifts - but SO DOES
+ * MASK DATA: after k shifts bit 7 holds mask[6-k], and a set bit there fires
+ * the terminator early. Simulated, a $B4 sprite ended after two bytes. A
+ * counter and a shift register look interchangeable until the data is allowed
+ * to be anything, and mask data is exactly that. */
 const mcTerms = counterTerms({ bits: MC, enable: "RETIRE" })
   .map((bit) => bit.map((t) => `!WSTB & ${t}`))
 
@@ -63,13 +71,22 @@ const cells: Cell[] = [
   },
 
   /* The arbiter has already matched the chip, so a grant while busy is
-   * simply "go". One output drives WPTR's column increment, the '165's
-   * shift clock and the '161's count enable: the three things that advance
-   * together by construction. */
+   * simply "go". One output drives WPTR's column increment, the serialiser's
+   * shift and the length counter's enable: the three things that advance
+   * together by construction.
+   *
+   * ⚠ SPNTICK IS NEW - 2026-09-09 - and without it a span retires FOUR bytes
+   * per fetch slot. 5.2.1's arbiter has no phase term at all; it is pure
+   * combinational grant logic, so SPNGRANT is asserted for every dot of the
+   * spare window and RETIRE fired on each. 7.4's entire timing model is one
+   * byte per 158.9 ns slot - 6.29 MB/s, the 40.7 us SPANBUSY bound, the
+   * polygon crossover. SPNTICK is the last dot of the spare half
+   * (video.cpld.ts), so the retire lands after the access has completed and
+   * exactly once per slot. design-review2.md V-4. */
   {
     pin: 0, name: "RETIRE", assertedLow: false, s0: 1, registered: false,
-    why: "also WPTR.WINC, the '165 shift and the '161 count enable",
-    terms: ["SPANBUSY & SPNGRANT"],
+    why: "also WPTR's WINC, the serialiser's shift and the length counter's enable",
+    terms: ["SPANBUSY & SPNGRANT & SPNTICK"],
   },
 
   ...MC.map((name, i) => ({
@@ -133,8 +150,7 @@ const cells: Cell[] = [
 ]
 
 /* Eight macrocells; the widest equation is four product terms. Placed on the
- * leanest eight so the two 16-term macrocells stay free - this part has the
- * most headroom on the card and the sequencer's other half has none. */
+ * leanest eight so the two 16-term macrocells stay free. */
 const pins = place(cells, [14, 15, 16, 17, 20, 21, 22, 23])
 
 export const seqctlDesign: Design = {
@@ -156,6 +172,8 @@ export const seqctlDesign: Design = {
     /* ⚠ NEW, and it is the pin features.md 8.4's proposal turned on. The mask
      * serialiser's current bit - read only by sprite mode. */
     { name: "MASKBIT", pin: 10 },
+    /* One dot per fetch slot, at the end of 5.2.2's spare window. */
+    { name: "SPNTICK", pin: 13 },
   ],
   cells: cells.map((c) => ({ ...c, pin: pins[c.name] })),
   spares: [18, 19],

@@ -653,3 +653,38 @@ The README also summarised the review's three overturned specification claims �
 offset-binary DAC coding (Aud-M1), the latched-then-analogue channel sum (Aud-M2),
 and the 2-pole LED filter (Aud-M4) — and the full IC-count chain; both summaries are
 covered by the entries above.
+
+
+---
+
+## 2026-09-09 — design-review2.md's correction
+
+### §7.1 — the series resistor's insertion loss
+
+**Was:** *"Series `R` | **10 Ω** … Into 32 Ω it costs 2.6 dB"*.
+
+**Why it moved:** 20·log₁₀(32 / (32 + 10)) = **−2.4 dB**. Arithmetic, and it does not
+change the conclusion — 15.6 mW into 32 Ω has headroom for it either way.
+
+### §10 and §9.4.5 — what the fitted CPLD contains
+
+**Not superseded — annotated.** Neither section's text was wrong about what it
+describes; what was wrong was §10's parts-table claim that the `ATF1508AS` holds *"the
+whole of the card's logic"*, when it holds §9.5's six-GAL allocation and none of the
+sequencer. §10.1.2 and §16 item 00 now say so, and `../../docs/design-review2.md` §2.1
+has the census. §9.4.5's ordering rule is right and its fitted equation delivers an
+interrupt one time in eight — §16 item 0a.
+
+
+---
+
+## 2026-09-09 — §9.4.5's merge
+
+**Was:** `MERGE = CCLK & SYNCR2 & !SYNCR1`.
+
+**Why it moved:** that is the trailing edge of a host read of `AINTREQ` rather than the
+absence of one, and it made the card's interrupts undeliverable twice over — nothing
+merged unless the host read the register, and even then only on the one slot in eight
+where the edge met a colour clock (measured: 2 of 16 read phases). §9.4.5's own wording
+is the fix: merge on the colour clock, suppressed while a read is in flight, which is
+`CCLK & !SYNCR2 & !SYNCR1`. `../../docs/design-review2.md` §2.2.

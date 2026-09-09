@@ -26,35 +26,93 @@ import type { Cell, Design } from "./jedec/assemble"
  * RDLEN/RDFG/RDBG are FP1:FP0 = 00/01/10 while the span writer is idle. */
 const REGSEL = "IOSEL & A6 & A5"
 const NOT_REGSEL = ["!IOSEL", "!A6", "!A5"]
-const RD = {
-  LEN: "!SPANBUSY & !FP1 & !FP0",
-  FG: "!SPANBUSY & !FP1 & FP0",
-  BG: "!SPANBUSY & FP1 & !FP0",
-}
-/** `!REGSEL & <rd>`, expanded - three terms, one per literal of !REGSEL. */
-const gated = (rd: string) => NOT_REGSEL.map((n) => `${n} & ${rd}`)
+/** `!REGSEL & <x>`, expanded - three terms, one per literal of !REGSEL. */
+const gated = (x: string) => NOT_REGSEL.map((n) => `${n} & ${x}`)
+
+/* ⭐ REWRITTEN 2026-09-09, and it is 7.4's mechanism rather than a walk
+ * towards it.
+ *
+ * ⛔ WHAT WAS HERE: a two-bit walk on FP1:FP0 that presented SPANLEN, WFG and
+ * WBG in turn while the span writer was IDLE, "fetching all three for the next
+ * span" - and nothing on the card produced FP0 or FP1, nothing received the
+ * three values, and every term of the walk carried !SPANBUSY, so DURING a span
+ * the file address was $00 and the span writer would have retired CTRL's byte
+ * into the framebuffer. design-review2.md V-1.
+ *
+ * ⭐ WHAT REPLACES IT is the sentence 7.4 already wrote: "the serialiser's
+ * serial output is wired to the register file's address bit 0, which is why 13
+ * requires WFG at A0 = 0 and WBG at A0 = 1. Choosing the source colour per
+ * pixel costs no macrocell and no product term - it is an address line." So
+ * the file is addressed LIVE during the span and the mask bit is RA0:
+ *
+ *   REGSEL          the CPU's own access          RA = A4..A0
+ *   span in flight  $06 or $07, per the mask bit  RA = 0011 !MASKBIT
+ *   idle            $05, SPANLEN                  RA = 00101
+ *   reload, dot 1   $08, WPTR's low byte          RA = 01000
+ *   reload, dot 2   $09, its middle byte          RA = 01001
+ *
+ * The idle case is what loads the length counter: the file presents SPANLEN
+ * continuously while no span is running, so the counter's load at the posted
+ * write needs no walk, no phase and no state. FP0, FP1 and the two macrocells
+ * they would have cost on vctrl are all deleted. */
+const SPAN = gated("SPANBUSY")
+/* ⭐ AND A THIRD STATE, 2026-09-09: 7.2's column reload. vaddr walks RP1:RP0
+ * through 01 and 10 at span end (video.parts.ts) and this part points the file
+ * at WPTR's own low and middle bytes for those two dots, so wcol reloads
+ * through the load path the CPU's write already uses. That is what 7.2 means
+ * by "two deferrable file reads to restore the column ... no latch, no mux" -
+ * and it is what makes the text engine's 13 writes per cell real rather than
+ * 26. design-review2.md V-6. */
+const IDLE = gated("!SPANBUSY & !RP0 & !RP1")
+const RELOAD_A = gated("RP0")      // $08, WPTR's low byte
+const RELOAD_B = gated("RP1")      // $09, its middle byte
 
 const cells: Cell[] = [
   { pin: 0, name: "WSTB", assertedLow: false, s0: 1, registered: false,
     why: "E-qualified: a 6809 write is only valid data in the second half",
     terms: [`${REGSEL} & !RW & E`] },
+  /* $05 is 00101 and $06/$07 are 0011x, so bit 0 is 1 when idle and the mask
+   * bit during a span - which is the whole of 7.4's colour selection. */
+  /* ⚠ IT IS THE COMPLEMENT OF THE MASK BIT, and 13's placement is why. WFG
+   * sits at $06 and WBG at $07, so A0 = 0 selects the FOREGROUND - and 7.4's
+   * table says a `0` mask bit writes WBG, which is A0 = 1. A glyph's 1 bits
+   * are its ink. On a '165 that is the /QH pin rather than QH and costs
+   * nothing; here it is one literal. */
   { pin: 0, name: "RA0", assertedLow: false, s0: 1, registered: false,
-    terms: [`${REGSEL} & A0`, ...gated(RD.BG), ...gated(RD.LEN)] },
+    why: "7.4: the mask bit IS the register file's address bit 0, inverted",
+    terms: [`${REGSEL} & A0`, ...gated("SPANBUSY & !MASKBIT"), ...IDLE,
+      ...RELOAD_B] },
   { pin: 0, name: "RA1", assertedLow: false, s0: 1, registered: false,
-    terms: [`${REGSEL} & A1`, ...gated(RD.FG), ...gated(RD.BG)] },
+    terms: [`${REGSEL} & A1`, ...SPAN] },
+  /* Bit 2 is 1 in $05, $06 and $07 alike and 0 in $08/$09. */
   { pin: 0, name: "RA2", assertedLow: false, s0: 1, registered: false,
-    why: "the widest - three read-back sources, each three terms of !REGSEL",
-    terms: [`${REGSEL} & A2`, ...gated(RD.FG), ...gated(RD.LEN), ...gated(RD.BG)] },
+    terms: [`${REGSEL} & A2`, ...gated("!RP0 & !RP1")] },
+  /* Bit 3 is the reload's own, and nothing else's. */
   { pin: 0, name: "RA3", assertedLow: false, s0: 1, registered: false,
-    terms: [`${REGSEL} & A3`] },
+    terms: [`${REGSEL} & A3`, ...RELOAD_A, ...RELOAD_B] },
   { pin: 0, name: "RA4", assertedLow: false, s0: 1, registered: false,
     terms: [`${REGSEL} & A4`] },
+
+  /* ⭐ TWO STROBES THIS PART CAN FORM AND vctrl CANNOT, 2026-09-09. CTRL's
+   * write strobe and VSTAT's were inputs to vctrl that nothing produced - so
+   * CTRL could not be written at all (no VMODE, no WMODE, no CELL, no IRQEN,
+   * no display enable) and the VBL flag could not be cleared, which left /IRQ
+   * asserted for ever after the first frame. design-review2.md V-1.
+   *
+   * They belong here because RA4..RA0 are here: vctrl gave those six signals
+   * up to this part on 2026-09-08 (10.1.6.3) and has no way to decode a
+   * register address any more. Two macrocells on a part that had four free. */
+  { pin: 0, name: "WCTRL", assertedLow: false, s0: 1, registered: false,
+    terms: [`${REGSEL} & !RW & E & !A4 & !A3 & !A2 & !A1 & !A0`] },
+  { pin: 0, name: "VSTATWR", assertedLow: false, s0: 1, registered: false,
+    terms: [`${REGSEL} & !RW & E & A4 & !A3 & !A2 & A1 & A0`] },
 ]
 
-/* RA2 is ten terms, so it wants one of the wide macrocells. place() pairs the
- * widest equation with the widest macrocell still free, which is optimal for a
- * fixed set, and names the equation if it cannot. */
-const pins = place(cells, [14, 15, 16, 17, 18, 19])
+/* RA0 is the widest at seven terms, so it wants one of the wide macrocells.
+ * place() pairs the widest equation with the widest macrocell still free,
+ * which is optimal for a fixed set, and names the equation if it cannot.
+ * Eight macrocells of ten, and pins 22 and 23 stay free. */
+const pins = place(cells, [14, 15, 16, 17, 18, 19, 20, 21])
 
 export const rfaDesign: Design = {
   name: "rfa",
@@ -68,7 +126,14 @@ export const rfaDesign: Design = {
     { name: "RW", pin: 9 }, { name: "E", pin: 10 },
     /* From vctrl: the span-writer state the read-back mux keys off. SPANBUSY
      * is already a vctrl output (VSTAT b7); FP0/FP1 are the two new pins. */
-    { name: "SPANBUSY", pin: 11 }, { name: "FP0", pin: 13 }, { name: "FP1", pin: 23 },
+    { name: "SPANBUSY", pin: 11 },
+    /* ⭐ The serialiser's serial output, and 7.4's whole colour path. It
+     * replaced FP0/FP1, which were two pins carrying a walk nothing produced
+     * and nothing received. */
+    { name: "MASKBIT", pin: 13 },
+    /* 7.2's reload walk, from vaddr. Two macrocell pins used as inputs, which
+     * is what pins 22 and 23 were being kept for. */
+    { name: "RP0", pin: 22 }, { name: "RP1", pin: 23 },
   ],
   cells: cells.map((c) => ({ ...c, pin: pins[c.name] })),
 }

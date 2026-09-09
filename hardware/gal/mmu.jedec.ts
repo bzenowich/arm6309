@@ -9,8 +9,14 @@ import type { Design } from "./jedec/assemble"
 
 /* $FF00-$FFFF - the term machine.md 2 brings to the backplane. */
 const PAGE = "LA15 & LA14 & LA13 & LA12 & LA11 & LA10 & LA9 & LA8"
-/* $FFA0-$FFAF, the 16 block registers. */
-const BLK = `${PAGE} & LA7 & !LA6 & LA5 & !LA4`
+/* TWO block windows since 2026-09-09, and mmu.pld says why at length: a map
+ * entry is sixteen bits across two SRAMs, the write index is LA3..LA0 through
+ * U5's '157, and LA3 is therefore the TASK bit. Using it to pick the SRAM as
+ * well - ram.md 4.1's Layout A - put the high byte in the other task's entry
+ * and made everything above physical 2 MB unreachable. Two windows instead,
+ * out of the 32 bytes at $FF80-$FF9F that decode nowhere. */
+const BLK_HI = `${PAGE} & LA7 & !LA6 & !LA5 & LA4` // $FF90-$FF9F, high byte
+const BLK_LO = `${PAGE} & LA7 & !LA6 & LA5 & !LA4` // $FFA0-$FFAF, low byte
 /* $FFB0-$FFBF, the control register, aliased 16 times. */
 const CTL = `${PAGE} & LA7 & !LA6 & LA5 & LA4`
 
@@ -41,16 +47,21 @@ export const mmuDesign: Design = {
      * write index from t_AD after E-fall - 367 ns of set-up against the
      * CY7C128A-15's 12 ns tAW. Tying this to MAPWE, as the board did, gave
      * it none. */
-    { pin: 18, name: "MUXSEL", assertedLow: false, s0: 1, terms: [BLK] },
+    { pin: 18, name: "MUXSEL", assertedLow: false, s0: 1, terms: [BLK_HI, BLK_LO] },
 
     /* E-high only, read or write. Turning the '245 on at E-rise rather than
      * Q-rise is what makes break-before-make comfortable: MAPOE has been away
      * since address time, so the margin is ~174 ns rather than ~9. */
-    { pin: 19, name: "ISOOE", assertedLow: true, s0: 0, terms: [`${BLK} & E`] },
+    { pin: 19, name: "ISOOE", assertedLow: true, s0: 0,
+      terms: [`${BLK_HI} & E`, `${BLK_LO} & E`] },
 
     /* Inside that window and a further quarter cycle later, so the buffer is
      * already driving. Releases at E-fall, before the buffer does. */
-    { pin: 20, name: "MAPWE", assertedLow: true, s0: 0, terms: [`${BLK} & !RW & E & !Q`] },
+    /* Common to both SRAMs; the chip enable is what makes a write land in one
+     * and not the other (u9.jedec.ts), and since 2026-09-09 that enable is the
+     * WINDOW rather than LA3. */
+    { pin: 20, name: "MAPWE", assertedLow: true, s0: 0,
+      terms: [`${BLK_HI} & !RW & E & !Q`, `${BLK_LO} & !RW & E & !Q`] },
 
     /* MAPOE IS THE ONE EQUATION ON THIS PART THAT IS NOT ONE PRODUCT TERM,
      * and gal/README.md does not say so. As written in mmu.pld it is
@@ -66,16 +77,21 @@ export const mmuDesign: Design = {
      * cheaper, and the pin is declared active low, so the macrocell can form
      * !MAPOE directly and let the polarity bit do nothing:
      *
-     *     !MAPOE = PAGE & (!LA7 + LA6 + !LA5 + LA4 + !RW + !E)
+     *     !MAPOE = PAGE & (!LA7 + LA6 + LA5&LA4 + !LA5&!LA4 + !RW + !E)
      *
-     * Six terms with S0 = 1, against nine with S0 = 0. A fitter picks this
-     * silently; writing the fuses makes it a decision with a reason. */
+     * Six terms with S0 = 1, against ten with S0 = 0. ⭐ It is STILL six with
+     * two block windows: !(blkhi # blklo) is !LA7 + LA6 + LA5&LA4 + !LA5&!LA4,
+     * which is four alternatives where the single window's !LA5 + LA4 was two
+     * - and the two that grew are exactly the two the union deleted. A fitter
+     * picks this silently; writing the fuses makes it a decision with a
+     * reason. */
     {
       pin: 21, name: "MAPOE", assertedLow: true, s0: 1,
-      why: "implemented complemented: 6 terms rather than 9",
+      why: "implemented complemented: 6 terms rather than 10",
       terms: [
-        `${PAGE} & !LA7`, `${PAGE} & LA6`, `${PAGE} & !LA5`,
-        `${PAGE} & LA4`, `${PAGE} & !RW`, `${PAGE} & !E`,
+        `${PAGE} & !LA7`, `${PAGE} & LA6`,
+        `${PAGE} & LA5 & LA4`, `${PAGE} & !LA5 & !LA4`,
+        `${PAGE} & !RW`, `${PAGE} & !E`,
       ],
     },
 
