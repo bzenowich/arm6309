@@ -322,6 +322,33 @@ module audio_tb;
        "and the engine is still sequencing rather than wedged");
 
     $display("");
+    $display("10.2.5 - the margin at PROTRACKER's floor, which is the one that matters");
+    $display("");
+    /* ⚠ 4.3's "PER >= 16" is a HARDWARE floor, not a musical one. A MOD's
+     * period is in the same colour-clock units, and ProTracker's range is
+     * 113 (B-3) to 856 (C-1) - so PER = 113 is the fastest a real module
+     * ever asks for, and PER = 16 is a rate no note uses and the DACs could
+     * not reproduce. Measure the margin where the music actually lives. */
+    for (i = 0; i < 4; i++) begin
+      aidx(i * 16);
+      adata(8'h00); adata(8'h10); adata(8'h00);
+      adata(8'h00); adata(8'h80);
+      adata(8'h00); adata(8'h71);          // PER = 113, ProTracker B-3
+      adata(8'h40);
+    end
+    wr('h2, 8'h8F);
+    repeat (2000) @(posedge SLOTCLK);
+    n = 0; cclks = 0;
+    for (i = 0; i < 8 * 200; i++) begin
+      @(posedge SLOTCLK); #0;
+      if (card.u2.RUN) n++;
+      if (card.u2.WORKSLOT) cclks++;
+    end
+    ok(n > 0 && n * 8 < cclks,
+       $sformatf("⭐ four channels at ProTracker's HIGHEST note use %0d of %0d work slots - a margin of %0d.%0d x, which is the headroom a datapath change actually has to spend",
+                 n, cclks, cclks / n, (cclks * 10 / n) % 10));
+
+    $display("");
     $display("10.2.5 - the work-slot margin, MEASURED, at 4.3's floor");
     $display("");
     // Four channels at PER = 30 - 4.3's extended floor, and the case that
