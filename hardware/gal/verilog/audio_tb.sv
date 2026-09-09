@@ -67,7 +67,36 @@ module audio_tb;
 
   // 9.3's index/data window.
   task automatic aidx(input int v); wr('h0, v[7:0]); endtask
-  task automatic adata(input logic [7:0] v); wr('h1, v); endtask
+  /* ⛔ ADATA IS FLOW-CONTROLLED AND THIS TASK DID NOT HONOUR IT.
+   *
+   * There is ONE posted-write latch. `PWBUSY` (ASTAT b6, 9.2) is high from the
+   * strobe until the sequencer retires the byte, and a second write while it
+   * is high is an OVERRUN - the card drops it and raises 8.1 b5, which is
+   * exactly what FIRE5 = `HSTB & !RW & PWBUSY` is for.
+   *
+   * Writing eight bytes back to back therefore lost most of them, and the
+   * symptom was a channel still playing at the PER a previous block had left
+   * it at. That read as a 1.8x PITCH defect for a while; it was not. The pitch
+   * was exact for the period the hardware actually held, and the card had both
+   * told the host it was busy and flagged the overrun. The host was not
+   * listening.
+   *
+   * The bound is CLAUDE.md's fifth trap: an unbounded wait here would hang the
+   * testbench rather than fail it if PWBUSY ever stuck high. */
+  int pw_wait_max = 0;
+  task automatic adata(input logic [7:0] v);
+    int w;
+    w = 0;
+    while (card.u2.PWBUSY === 1'b1 && w < 4096) begin @(posedge SLOTCLK); w++; end
+    if (w >= 4096) begin
+      $display("      [dbg] PWBUSY stuck: RUN=%b BUSY=%b HDUE=%b WORKSLOT=%b CTRL7=%b DMAEN0=%b",
+               card.u2.RUN, card.u2.BUSY, card.u2.HDUE, card.u2.WORKSLOT,
+               card.u1.CTRL7, card.u2.DMAEN0);
+      ok(1'b0, "PWBUSY cleared within 4096 slots - the host is not wedged");
+    end
+    if (w > pw_wait_max) pw_wait_max = w;
+    wr('h1, v);
+  endtask
   task automatic aread(input int idx); aidx(idx); rd('h1); endtask
 
   // The state file, read the way the design does. Used only to CHECK.
@@ -80,6 +109,7 @@ module audio_tb;
 
   int i, n, cclks, cias;
   int seen[8];
+  int wtc[8];
   bit bad;
   logic [18:0] ptr0;
   logic [16:0] cnt0;
@@ -290,6 +320,66 @@ module audio_tb;
        "no channel is left permanently due - the engine keeps up at the floor");
     ok(card.u2.BUSY === 1'b0 || card.u2.BUSY === 1'b1,
        "and the engine is still sequencing rather than wedged");
+
+    $display("");
+    $display("10.2.5 - the work-slot margin, MEASURED, at 4.3's floor");
+    $display("");
+    // Four channels at PER = 30 - 4.3's extended floor, and the case that
+    // binds. Count the work slots the engine actually consumes against the
+    // work slots that exist, over 200 colour clocks.
+    for (i = 0; i < 4; i++) begin
+      aidx(i * 16);
+      adata(8'h00); adata(8'h10); adata(8'h00);
+      adata(8'h00); adata(8'h80);
+      adata(8'h00); adata(8'h1E);          // PER = 30
+      adata(8'h40);
+    end
+    wr('h2, 8'h8F);
+    repeat (2000) @(posedge SLOTCLK);      // let the restarts drain
+    n = 0; cclks = 0;
+    for (i = 0; i < 6; i++) wtc[i] = 0;
+    for (i = 0; i < 8 * 200; i++) begin
+      @(posedge SLOTCLK); #0;
+      if (card.u2.RUN) begin
+        n++;
+        wtc[{card.u2.WT2, card.u2.WT1, card.u2.WT0}]++;
+      end
+      if (card.u2.WORKSLOT) cclks++;
+    end
+    ok(cclks == 600,
+       $sformatf("200 colour clocks offer %0d work slots - three per colour clock", cclks));
+    ok(n > 0 && n < cclks,
+       $sformatf("the engine uses %0d of them at PER = 30 - a margin of %0d.%0d x",
+                 n, cclks / n, (cclks * 10 / n) % 10));
+    $display("      by work type: W1 %0d  W2 %0d  W6 %0d  W4 %0d  W3 %0d  W5 %0d",
+             wtc[0], wtc[1], wtc[2], wtc[3], wtc[4], wtc[5]);
+    // How often does channel 0 actually tick? 4.1 says once per PER colour
+    // clocks and the pitch IS that rate, so this is 1 requirement 2 measured.
+    n = 0; cclks = 0; bad = 0;
+    for (i = 0; i < 8 * 300; i++) begin
+      @(posedge SLOTCLK); #0;
+      if (card.CCLK) cclks++;
+      if (card.u2.DUE0 && !bad) begin n++; bad = 1; end
+      if (!card.u2.DUE0) bad = 0;
+    end
+    /* ⛔ TWO CLAIMS, BECAUSE THE FIRST MEASUREMENT CONFLATED THEM.
+     *
+     * This block asked "does channel 0 tick once per PER colour clocks" with
+     * PER hard-coded as 30, and reported 18 ticks in 300 - which reads as a
+     * 1.8x PITCH defect. It is not. The state file holds PER = 16 here, and
+     * 300/16 = 18.75, so THE PITCH IS EXACTLY RIGHT for the period the
+     * hardware actually has. What is wrong is that the period the test wrote
+     * two blocks earlier never arrived.
+     *
+     * So: claim one is the pitch, measured against the period the design
+     * really holds. Claim two is the write, and it is the one that fails. */
+    ok(sfl(4) != 0 && n >= (cclks / sfl(4)) - 1 && n <= (cclks / sfl(4)) + 1,
+       $sformatf("⭐ channel 0 ticks once per PER colour clocks - %0d ticks in %0d, at the PER the state file actually holds (%0d)",
+                 n, cclks, sfl(4)));
+    $display("      the host's longest wait for PWBUSY all run: %0d slots", pw_wait_max);
+    ok(sfl(4) == 16'd30,
+       $sformatf("⭐ and the host's write of PER = 30 reached the state file (holds %0d) - a MOD player rewrites a channel's period every row, and it lands WHILE FOUR CHANNELS PLAY",
+                 sfl(4)));
 
     $display("");
     if (fails == 0) $display("audio_tb OK");

@@ -1109,7 +1109,7 @@ module aseq (
          (SDHCAP & SDH2)
          | (SDQ2 & ~SDHCAP);
       r_PWBUSY <=
-         (HSTB & ~RW)
+         (HSTB & ~RW & ~AIDXLD)
          | (PWBUSY & ~HACK);
       r_PFVALID <=
          (PFCK)

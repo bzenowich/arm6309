@@ -454,8 +454,22 @@ const port: Cell[] = [
       ...(l === 0 ? ["SEL & RW & E & A3 & !A2 & !A1 & A0"] : [])] },
   )),
   /* 9.2's two status bits, which had no producer at all before U2. */
+  /* ⛔ `!AIDXLD`, AND WITHOUT IT THE FIRST INDEX WRITE WEDGED THE CARD.
+   *
+   * 9.2's busy flag says "a posted write is waiting for the sequencer to
+   * retire it". An AIDX load is NOT such a write - AIDXLD loads the index
+   * here, and no micro-op is needed - which is exactly why HDUE (the work
+   * REQUEST, above) already carries `!AIDXLD`. This did not, so `wr($00)`
+   * raised busy with nothing asking the engine to run: `HACK` needs `HDUE`,
+   * `HDUE` was never set, and PWBUSY stayed high for ever.
+   *
+   * A host obeying 9.2 then waited on a flag that could not clear, and a host
+   * ignoring 9.2 lost every subsequent byte to the overrun that flag exists to
+   * report. audio_tb caught it as PWBUSY = 1 with HDUE = 0.
+   *
+   * One literal, and it is the same qualification HDUE has always had. */
   { pin: 0, name: "PWBUSY", assertedLow: false, s0: 1, registered: true,
-    terms: ["HSTB & !RW", "PWBUSY & !HACK"] },
+    terms: ["HSTB & !RW & !AIDXLD", "PWBUSY & !HACK"] },
   { pin: 0, name: "PFVALID", assertedLow: false, s0: 1, registered: true,
     terms: ["PFCK", "PFVALID & !AIDXLD & !AINC"] },
 ]
