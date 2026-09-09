@@ -62,7 +62,7 @@ export const MB = { W: 272, H: 224, pad: 15, slotL: 91.4, slotW: 10.16, pitch: 2
 
 /** x, y, w, h, label, kind, reserved. Overlap-checked by place.check.ts.
  *
- * hardware/ram.md §6.5: 17 ICs and four 30-pin SIMM sockets. There is no SRAM
+ * hardware/ram.md §6.5: 18 ICs and four 30-pin SIMM sockets. There is no SRAM
  * on this board except the map's own two — §6.2 dropped all four AS6C4008 once
  * the sockets existed, and the '139 the reserved footprints would have needed
  * was never built.
@@ -92,6 +92,11 @@ export const MB_PARTS: [number, number, number, number, string, Kind, boolean][]
   [139, 160, 20.3, 7.62, "U11 157", "bus", false],
   [139, 170, 20.3, 7.62, "U12 157", "bus", false],
   [163, 160, 20.3, 7.62, "U13 157", "bus", false],
+  /* ⚠ The refresh INTERVAL timer, and it was on nobody's list: ram.md §6.3's
+   * "refresh needs no counter" is about the ROW counter, which CAS-before-RAS
+   * deletes. 15.6 us of CLK25 is 393 counts - nine macrocells on a part with
+   * ten - so it cannot live on U10. ram.md §6.3.1. */
+  [12, 206, 25.4, 7.62, "U17 4040 refresh", "clk", false],
   /* -- the boot ROM: 1 MB and its address buffer (ram.md §6.7) ------------ */
   /* A '244 and not the '541 machine.md §7.2 first named: both are octal
    * three-state buffers, and the '244 has a datasheet in reference/. */

@@ -30,6 +30,7 @@ const drive = (io: SpanIn): Record<number, 0 | 1> => ({
   4: (io.wmode & 1) as 0 | 1, 5: ((io.wmode >> 1) & 1) as 0 | 1,
   6: io.spngrant ? 1 : 0, 7: io.tc ? 1 : 0,
   8: (io.wadv & 1) as 0 | 1, 9: ((io.wadv >> 1) & 1) as 0 | 1,
+  10: io.maskbit ? 1 : 0,
 })
 const readState = (): SpanState => ({
   busy: gal.regs.get(pin("SPANBUSY"))! as 0 | 1,
@@ -40,11 +41,12 @@ const readState = (): SpanState => ({
 {
   let bad: string | null = null
   for (let st = 0; st < 16 && !bad; st++) {
-    for (let inb = 0; inb < 128 && !bad; inb++) {
+    for (let inb = 0; inb < 256 && !bad; inb++) {
       const s: SpanState = { busy: (st & 1) as 0 | 1, mc: st >> 1 }
       const io: SpanIn = {
         wstb: !!(inb & 1), spngrant: !!(inb & 2), tc: !!(inb & 4),
         wmode: (inb >> 3) & 3, wadv: (inb >> 5) & 3,
+        maskbit: !!(inb & 128),
       }
       /* force the part into this state */
       gal.reset()
@@ -55,7 +57,7 @@ const readState = (): SpanState => ({
 
       const pins = gal.evaluate(drive(io))
       const want = outputs(s, io)
-      for (const k of ["retire", "spanend", "wrowadv"] as const) {
+      for (const k of ["retire", "wen", "spanend", "wrowadv"] as const) {
         const got = pins[pin(k.toUpperCase())]
         if (got !== want[k]) {
           bad = `${k} = ${got}, expected ${want[k]} in busy=${s.busy} mc=${s.mc} ` +
@@ -71,24 +73,30 @@ const readState = (): SpanState => ({
     }
   }
   check(bad === null,
-    "the fuses match the state machine over all 16 states x 128 input combinations", bad ?? "")
+    "the fuses match the state machine over all 16 states x 256 input combinations", bad ?? "")
 }
 
 /* -- a span, run end to end, in each mode --------------------------------- */
-const runSpan = (wmode: number, wadv: number, tcAfter: number) => {
+const runSpan = (wmode: number, wadv: number, tcAfter: number, mask = 0xff) => {
   gal.reset()
-  const base: SpanIn = { wstb: false, wmode, spngrant: false, tc: false, wadv }
+  const base: SpanIn = { wstb: false, wmode, spngrant: false, tc: false, wadv, maskbit: true }
   gal.clock(drive({ ...base, wstb: true }))          // the posted write lands
-  let retired = 0, rowAdv = 0, guard = 0, busySlots = 0
+  let retired = 0, written = 0, rowAdv = 0, guard = 0, busySlots = 0
   while (gal.regs.get(pin("SPANBUSY")) === 1 && guard++ < 64) {
-    const io: SpanIn = { ...base, spngrant: true, tc: retired >= tcAfter - 1 }
+    /* The serialiser shifts MSB first, one bit per retired byte - so the bit
+     * this slot sees is the one the '165 is presenting. */
+    const io: SpanIn = {
+      ...base, spngrant: true, tc: retired >= tcAfter - 1,
+      maskbit: ((mask >> (7 - (retired % 8))) & 1) === 1,
+    }
     const pins = gal.evaluate(drive(io))
     if (pins[pin("RETIRE")]) retired++
+    if (pins[pin("WEN")]) written++
     if (pins[pin("WROWADV")]) rowAdv++
     busySlots++
     gal.clock(drive(io))
   }
-  return { retired, rowAdv, busySlots }
+  return { retired, written, rowAdv, busySlots }
 }
 
 {
@@ -107,6 +115,37 @@ const runSpan = (wmode: number, wadv: number, tcAfter: number) => {
 
   const direct = runSpan(0, 0, 99)
   check(direct.retired === 1, "a direct posted write retires exactly one byte", `${direct.retired}`)
+
+  /* -- sprite mode, features.md 8.4 -------------------------------------- */
+  /* WMODE 11: eight bytes like mask, but a zero mask bit advances the pointer
+   * WITHOUT writing. The whole value of the mode is that the pointer keeps
+   * moving - a mode that stalled it would draw the sprite squashed. */
+  const solidMask = runSpan(3, 1, 1, 0xff)
+  check(solidMask.retired === CELL_PIXELS && solidMask.written === CELL_PIXELS,
+    "⭐ sprite mode with an all-ones mask writes all eight - it is span-mask " +
+    "with a gate, not a different span", `${solidMask.written}/${solidMask.retired}`)
+
+  const halfMask = runSpan(3, 1, 1, 0b11110000)
+  check(halfMask.retired === CELL_PIXELS && halfMask.written === 4,
+    "⚠ and with half the bits clear it RETIRES eight and WRITES four - the " +
+    "pointer, the serialiser and the counter all still advance, which is what " +
+    "keeps the shape the right width", `${halfMask.written} written of ${halfMask.retired}`)
+
+  const empty = runSpan(3, 1, 1, 0x00)
+  check(empty.retired === CELL_PIXELS && empty.written === 0,
+    "an all-zero row writes nothing at all and still takes eight slots - " +
+    "transparency costs time, not correctness", `${empty.written}`)
+  check(empty.rowAdv === 1,
+    "and still chains: WADV=01 advances the row whether anything was drawn or not")
+
+  /* The three older modes must be blind to the mask bit. */
+  const maskLow = runSpan(1, 1, 1, 0x00)
+  check(maskLow.written === CELL_PIXELS,
+    "⭐ span-mask is UNCHANGED by the new input - a zero bit still writes WBG " +
+    "through the register file's address line, which is the mechanism 7.4 " +
+    "describes and costs no logic here", `${maskLow.written}`)
+  check(runSpan(2, 0, 5, 0x00).written === 5 && runSpan(0, 0, 99, 0x00).written === 1,
+    "and so are span-solid and the direct write")
 }
 
 /* -- the geometry, and 7.3's headline number ------------------------------ */

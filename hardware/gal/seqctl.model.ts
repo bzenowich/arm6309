@@ -1,7 +1,7 @@
 /* The span writer, as a state machine rather than as product terms.
  *
- * Three modes, one handshake. The only thing that differs between the modes
- * is what ends the span:
+ * FOUR modes, one handshake. The only things that differ between them are what
+ * ends the span and whether every retired byte is written:
  *
  *   direct  (WMODE 00)  one byte - 3.1.1's posted write
  *   mask    (WMODE 01)  EIGHT bytes, because a cell is eight pixels wide.
@@ -9,6 +9,21 @@
  *                       the glyph row (6.1), so there is nothing to truncate
  *                       and nothing to configure.
  *   solid   (WMODE 10)  SPANLEN + 1 bytes, counted by the '161 pair
+ *   sprite  (WMODE 11)  eight bytes like mask, but a ZERO mask bit ADVANCES
+ *                       THE POINTER WITHOUT WRITING. features.md 8.4.
+ *
+ * WHAT SPRITE MODE COSTS THIS PART, AND WHAT IT COSTS THE CARD, ARE DIFFERENT
+ * NUMBERS. Here it is one input and one output: the mask bit has to reach the
+ * sequencer, and a gated write enable has to leave it. On the card the mask
+ * bit is the '165 serialiser's serial output, which goes to the register
+ * file's address bit 0 and NOWHERE ELSE - so bringing it in costs an input pin
+ * on vctrl, which is at 64 of 64. features.md 8.4 carries that arithmetic and
+ * what unblocks it.
+ *
+ * ⭐ THE POINTER STILL ADVANCES ON A TRANSPARENT PIXEL. That is the whole
+ * mode: RETIRE is unchanged, so WPTR steps, the serialiser shifts and the
+ * length counter counts exactly as they do in mask mode. Only the write is
+ * suppressed. A mode that stalled the pointer would draw the sprite squashed.
  */
 
 export const CELL_PIXELS = 8
@@ -27,17 +42,31 @@ export interface SpanIn {
   tc: boolean
   /** WADV[1:0] */
   wadv: number
+  /** the mask serialiser's current bit. Read ONLY by sprite mode - in mask
+   *  mode it selects WFG or WBG through the register file's address, which
+   *  costs no logic here at all (7.4). */
+  maskbit: boolean
 }
 
 export const retiring = (s: SpanState, io: SpanIn) => s.busy === 1 && io.spngrant
 
 export const ending = (s: SpanState, io: SpanIn) => {
   if (!retiring(s, io)) return false
-  if (io.wmode === 0) return true                       // direct: one byte
+  if (io.wmode === 0) return true                        // direct: one byte
   if (io.wmode === 1) return s.mc === CELL_PIXELS - 1    // mask: the cell width
   if (io.wmode === 2) return io.tc                       // solid: SPANLEN
-  return false
+  return s.mc === CELL_PIXELS - 1                        // sprite: the cell width
 }
+
+/** ⭐ The whole of sprite mode, in one line.
+ *
+ * Every other mode writes every byte it retires. Sprite mode retires the
+ * transparent ones and does not write them - so the pointer, the serialiser
+ * and the counter all advance and the framebuffer keeps what was underneath.
+ * That is what deletes save-behind for a masked shape: nothing outside it is
+ * touched, so there is nothing to put back. */
+export const writing = (s: SpanState, io: SpanIn) =>
+  retiring(s, io) && (io.wmode !== 3 || io.maskbit)
 
 export const step = (s: SpanState, io: SpanIn): SpanState => ({
   busy: io.wstb ? 1 : s.busy === 1 && !ending(s, io) ? 1 : 0,
@@ -46,6 +75,7 @@ export const step = (s: SpanState, io: SpanIn): SpanState => ({
 
 export const outputs = (s: SpanState, io: SpanIn) => ({
   retire: retiring(s, io) ? 1 : 0,
+  wen: writing(s, io) ? 1 : 0,
   spanend: ending(s, io) ? 1 : 0,
   wrowadv: ending(s, io) && io.wadv !== 0 ? 1 : 0,
 })

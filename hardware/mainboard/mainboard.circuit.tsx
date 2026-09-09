@@ -1,4 +1,4 @@
-/* arm6309 motherboard. 17 ICs and four SIMM sockets.
+/* arm6309 motherboard. 18 ICs and four SIMM sockets.
  *
  * docs/machine.md 6 lists "Draw the motherboard" as an open item owned by the
  * machine. This is the board.
@@ -11,6 +11,7 @@
  *   the power-on reset supervisor         machine.md 2.1
  *   the space decode, U9                  ram.md 6.3, 6.7
  *   the SIMM controller, U10 + 3 x '157   ram.md 6.3
+ *   the refresh timebase, U17            ram.md 6.3.1 - and it was never counted
  *   four 30-pin SIMM sockets, 4-16 MB     ram.md 6
  *   a 1 MB boot ROM and its address buffer  machine.md 7.2
  *   the open-drain pull-ups               machine.md 2.1
@@ -21,15 +22,15 @@
  * which is what hardware/README.md open item 3 was tracking. The part moved to
  * the audio card (audio.md 5), where it is 512 KB of sample RAM in one package.
  *
- * Schematic-level; placement and routing are not attempted. Three of the
- * board's parts are fitted at the fuse level and checked against Atmel's own
- * CUPL - U3 (gal/mmu.pld), U6 (gal/clkdec.pld) and U9 (gal/u9.pld). U10 is
- * the one piece of logic on this board that is still unwritten.
+ * Schematic-level; placement and routing are not attempted. ALL FOUR of the
+ * board's GALs are now fitted at the fuse level and checked against Atmel's
+ * own CUPL - U3 (gal/mmu.pld), U6 (gal/clkdec.pld), U9 (gal/u9.pld) and U10
+ * (gal/u10.pld). There is no unwritten logic on this board.
  */
 import { SlotSocket } from "../lib/SlotConnector"
 import {
   CPU_SOCKET, MAP_SRAM, HC574, HC245, HC157, HCT244, FLASH_512K, SIMM30,
-  gal22v10, labels,
+  HC4040, gal22v10, labels,
 } from "../lib/parts"
 
 const SLOTS = 6
@@ -302,8 +303,17 @@ export default () => (
         R_W: "net.R_W", nWAIT: "net.nWAIT",
         nIOSEL: "net.nIOSEL", E: "net.E", Q: "net.Q",
         nBOOTOE: "net.BOOT_OE", RUN: "net.RUN",
+        /* ⭐ THE COUNTER BITS ARE A SIGNAL NOW, not four test points. U10
+         * decodes them as the bus phase: RAS at count 4, CAS at 7, both
+         * released at 10 (gal/u10.pld). They were on pins nothing connected
+         * to precisely so they could be probed - and it turned out the DRAM
+         * controller wanted exactly that.
+         *
+         * ⚠ THEY FREEZE WHEN /WAIT FREEZES THEM, which is correct for the
+         * access half and fatal for the refresh half - see U10 and U17. */
+        C0: "net.C0", C1: "net.C1", C2: "net.C2", C3: "net.C3",
       }}
-      noConnect={["C0", "C1", "C2", "C3", "SPARE"]}
+      noConnect={["SPARE"]}
     />
 
     {/* U7 - power-on reset. Every card takes /RESET as an input and no card
@@ -422,52 +432,111 @@ export default () => (
     />
 
     {/* ------------------------------------------------ system memory ----- */}
-    {/* U10 - the SIMM controller: RAS0-RAS3, CAS, /WE, the row/column mux
-      * select, refresh request and /WAIT. ram.md 6.3.
+    {/* U10 - the SIMM controller. gal/u10.pld is the source of truth and
+      * gal/jedec.check.ts checks its fuses against gal/u10.model.ts over 1,920
+      * clock edges; Atmel's own CUPL agrees with them.
       *
-      * ⚠ THE ONE PIECE OF LOGIC ON THIS BOARD THAT IS NOT WRITTEN. U3, U6 and
-      * U9 are fitted at the fuse level and checked against Atmel's own CUPL;
-      * this is a pinout and a promise. ram.md 11 item 6.
+      * ram.md 11 item 6 said this part "has not been counted at all". Counting
+      * it moved three things:
       *
-      * It takes DRAM_SEL from U9 and physical A23/A22 directly - those two
-      * lines already distinguish the four windows, which is why U9 spends one
-      * output here instead of four.
+      *  ⭐ THE MUX SELECT IS `E` AND IS NOT AN OUTPUT. E is high for counts
+      *     6..11 of U6's divider, which is exactly the column window, so U11-U13
+      *     take a wire from the backplane. That is the macrocell that made a
+      *     nine-output design fit - and it is what a 1970s DRAM controller on a
+      *     6800-family bus would have done anyway.
+      *  ⭐ /WAIT IS NOT NEEDED AND IS NOT HERE. A bus cycle is twelve CLK25
+      *     counts; the access owns six (4..9) and a refresh burst is four, which
+      *     fits in the gap. ram.md 6.3's line item lists /WAIT; this part does
+      *     not drive it, and the DRAM controller never stalls the CPU.
+      *  ⚠ THE REFRESH TIMEBASE IS A PACKAGE - U17 below, and it was on nobody's
+      *     list.
       *
-      * ⭐ REFRESH FREE-RUNS FROM CLK25 and needs no initialisation, which is
-      * what makes machine.md 7.2's boot sequence eighteen instructions with no
-      * stack: there is nothing to set up before the first store. machine.md 5
-      * item 10 requires the free-run independently. */}
+      * TWO TIMEBASES. The ACCESS decodes C3..C0, so it stalls when E stalls -
+      * correct, because a stalled cycle's data is not wanted yet. The REFRESH
+      * must not: /WAIT freezes that counter (machine.md 5 item 8) and a frozen
+      * refresh is lost data, so it runs off U17. machine.md 5 item 10 is the
+      * rule and this is the part it was written for. */}
     <chip
       name="U10"
       footprint="dip24_w0.3in"
       pinLabels={labels(gal22v10({
-        2: "DRAM_SEL", 3: "/RESET", 4: "A23", 5: "A22", 6: "E", 7: "Q",
-        8: "R/W", 9: "/IOPAGE", 10: "REF_REQ",
-        14: "/RAS0", 15: "/RAS1", 16: "/RAS2", 17: "/RAS3",
-        18: "/CAS", 19: "/DRAM_WE", 20: "MUX_ROW", 21: "REF_ACK",
-        22: "/WAIT", 23: "SPARE",
+        2: "DRAM_SEL", 3: "A23", 4: "A22", 5: "C0", 6: "C1", 7: "C2", 8: "C3",
+        9: "R/W", 10: "REFCLK", 11: "/RESET",
+        14: "RF1", 15: "REFQ", 16: "RF0",
+        17: "/RAS0", 18: "/CAS", 19: "/RAS1", 20: "/RAS2", 21: "/RAS3",
+        22: "/DRAM_WE", 23: "SPARE",
       }))}
       connections={{
         VCC: "net.V5", GND: "net.GND",
         CLK: "net.CLK25", DRAM_SEL: "net.DRAM_SEL", nRESET: "net.nRESET",
-        A23: pa(23), A22: pa(22), E: "net.E", Q: "net.Q", R_W: "net.R_W",
-        nIOPAGE: "net.nIOPAGE_MB",
+        A23: pa(23), A22: pa(22),
+        C0: "net.C0", C1: "net.C1", C2: "net.C2", C3: "net.C3",
+        R_W: "net.R_W", REFCLK: "net.REFCLK",
         nRAS0: "net.RAS0", nRAS1: "net.RAS1", nRAS2: "net.RAS2",
         nRAS3: "net.RAS3", nCAS: "net.CAS", nDRAM_WE: "net.DRAM_WE",
-        MUX_ROW: "net.MUX_ROW", nWAIT: "net.nWAIT",
       }}
-      noConnect={["REF_REQ", "REF_ACK", "SPARE"]}
+      /* The refresh sequencer's three state bits come out on pins nothing
+       * connects to - free test points on the one thing here that cannot be
+       * observed from the bus, the same call U6 makes for its counter. */
+      noConnect={["RF0", "RF1", "REFQ", "SPARE"]}
+    />
+
+    {/* U17 - the refresh timebase, and it was on nobody's list.
+      *
+      * ⚠ ram.md 6.3's "refresh needs no counter" is about the ROW counter,
+      * which CAS-before-RAS genuinely deletes - the DRAM counts its own row.
+      * The INTERVAL timer is a different thing: 15.6 us of CLK25 is 393 counts,
+      * nine macrocells on a part that has ten.
+      *
+      * Q8 toggles every 256 counts = 10.16 us, and U10 refreshes on every
+      * TRANSITION, so 512 rows take 5.2 ms against the DRAM's 8 ms - 35 % of
+      * margin. Q7 would be 5.08 us and merely wasteful; Q9 would be 20.3 us and
+      * too slow.
+      *
+      * ⚠ FREE-RUNNING ON CLK25, NOT ON E, and that is the whole reason it is a
+      * package. /WAIT holds U6's divider, so a refresh interval taken from the
+      * bus would stop for the 40.7 us the video card can hold it.
+      *
+      * The alternative that was rejected: HSYNC is on the backplane and is
+      * 31.78 us, so two bursts a line would do. But it comes from the video
+      * card, and a machine whose RAM forgets when you pull the video card is
+      * the failure machine.md 1 puts the master oscillator on the motherboard
+      * to avoid - the same argument, one subsystem along. */}
+    <chip
+      name="U17"
+      footprint={HC4040.footprint}
+      pinLabels={labels(HC4040)}
+      connections={{
+        VCC: "net.V5", GND: "net.GND",
+        CLK: "net.CLK25",
+        /* MR is ACTIVE HIGH on a 4040. Tied low: the counter free-runs and its
+         * phase is irrelevant - only the interval between transitions matters,
+         * and U10's REFQ makes the first one after reset a normal request. */
+        MR: "net.GND",
+        Q8: "net.REFCLK",
+      }}
+      noConnect={["Q0", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q9", "Q10", "Q11"]}
     />
 
     {/* U11-U13 - the RAS/CAS address mux, 11 bits. A 4 MB 30-pin SIMM is
-      * 4M x 8: 22 address bits, 11 row and 11 column, multiplexed onto the
-      * same eleven pins. Three quad muxes give twelve lines and eleven are
-      * used. ram.md 6.3.
+      * 4M x 8: 22 address bits, 11 row and 11 column, multiplexed onto eleven
+      * pins. Three quad muxes give twelve lines and eleven are used.
       *
-      * Row is physical A11-A1 and column A22-A12, which puts the SIMM's own
-      * A0 on the CPU's A1 - a 30-pin module is byte-wide and the low address
-      * bit is inside it. MUX_ROW low selects the A inputs, so the row is on
-      * 1A-4A exactly as U5's translate path is. */}
+      * ROW IS PHYSICAL A10..A0 AND COLUMN IS A21..A11. A 30-pin module is
+      * BYTE-wide, so its A0 is the CPU's A0 - there is no low bit hidden
+      * inside it the way there is on a x16 or x32 module.
+      *
+      * ⭐ SEL IS `E`, not a GAL output (gal/u10.pld). A '157's pin 1 is A/B
+      * with the bar over the A, so SEL low selects the A inputs - and E is low
+      * for counts 0..5, which is the row window. One wire.
+      *
+      * ⚠ THE MAPPING IS FOR 4M x 8 MODULES AND A 1M x 8 WILL NOT WORK IN IT.
+      * A 1 MB module has ten row and ten column bits and ignores MA10, which
+      * drops physical A10 out of the address entirely - so its 1 MB would not
+      * be contiguous and would alias. The fix is a different column mapping,
+      * which is board wiring rather than a jumper: it is a build-time choice.
+      * ram.md 11 item 7 recommends 1 MB modules on availability grounds and
+      * was written without this in view. */}
     {[0, 1, 2].map((n) => (
       <chip
         key={n}
@@ -475,12 +544,12 @@ export default () => (
         footprint={HC157.footprint}
         pinLabels={labels(HC157)}
         connections={{
-          VCC: "net.V5", GND: "net.GND", nE: "net.GND", SEL: "net.MUX_ROW",
+          VCC: "net.V5", GND: "net.GND", nE: "net.GND", SEL: "net.E",
           ...Object.fromEntries([0, 1, 2, 3].flatMap((i) => {
             const bit = n * 4 + i
             return bit > 10 ? [] : [
-              [`${i + 1}A`, pa(1 + bit)],
-              [`${i + 1}B`, pa(12 + bit)],
+              [`${i + 1}A`, pa(bit)],
+              [`${i + 1}B`, pa(11 + bit)],
               [`${i + 1}Y`, `net.MA${bit}`],
             ]
           })),

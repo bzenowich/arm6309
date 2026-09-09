@@ -48,7 +48,7 @@ undecided, or that this document has had to decide itself.
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** — a **`TL16C550C` at 115,200 baud with 16-byte FIFOs** ([`io/serial/`](../io/serial/)). One 14-IC card at `$FF30`–`$FF3F`. Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **14 ICs**, **681 KiB/s** sustained — **specified** ([`storage/`](../storage/)). Its block buffer lives in `A20 = 1` (§5 item 7), which is what retired the `TFM` re-read hazard. ⚠ The first of the machine's two period exceptions |
 | **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs**, two of them `ATF1508AS` — **specified** ([`net/`](../net/)). The second period exception. ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | **116 ICs** — **99 on cards**, **17** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8 |
+| **Total silicon** | **117 ICs** — **99 on cards**, **18** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -734,7 +734,7 @@ a cross-card dependency.
 | Owner | Item | Where |
 |---|---|---|
 | **machine** | **Keep a NitrOS-9 divergence ledger** — video registers, interrupt block, MMU, the PIA addresses. Each is priced individually and nothing sums them. ⭐ **It got shorter on 2026-09-08**: §7.2's motherboard ROM put the boot code and the vectors where a CoCo has them, so two entries came off | §5 item 6 |
-| **machine** | **Draw the motherboard.** ⭐ **Drawn 2026-09-09** — [`hardware/`](../hardware/) has the backplane pinout, the motherboard at **17 ICs and four SIMM sockets**, and every card's bus interface, at schematic level. Three of the board's four GALs are fitted at the fuse level and checked against Atmel's own CUPL; ⚠ **U10, the SIMM controller, is the one piece of logic on it that is not written**. Placement waits on that and on a measured slot-socket footprint | §2.1, §7.1, §7.2, [`hardware/README.md`](../hardware/README.md) |
+| **machine** | **Draw the motherboard.** ⭐ **CLOSED 2026-09-09** — [`hardware/`](../hardware/) has the backplane pinout, the motherboard at **18 ICs and four SIMM sockets**, and every card's bus interface, at schematic level. **All four of the board's GALs are fitted at the fuse level and checked against Atmel's own CUPL; there is no unwritten logic on it.** Placement waits on a measured slot-socket footprint and on four unverified pinouts | §2.1, §7.1, §7.2, [`hardware/README.md`](../hardware/README.md) |
 | **machine** | **⚠ RAM expansion — decided, not built.** `hardware/ram.md`: 16-bit map entries, a 32 MB map, four 30-pin SIMM sockets and **no SRAM**, for **five packages, zero backplane pins and zero card changes**. **The boot path it owed is closed** — §7.2's ROM. ⭐ Also: `TASK` widens from 1 bit to 8 **for nothing** — 256 contexts and a one-write process switch | `hardware/ram.md` §5, §6, §10 |
 | cpu | Confirm the GIME accepts a 3.3 V `V_OH` from the level buffers | `cpu/README.md` TODO |
 | cpu | First silicon measurement, against the recorded predictions | `cpu/docs/plan.md` §5 |
@@ -743,7 +743,7 @@ a cross-card dependency.
 | video | Bench the dot path and fit the sequencer GALs *before* layout | `graphics.md` §18 steps 1–2 |
 | ~~video~~ | **CLOSED — the video output stage is specified.** `graphics.md` §9.1 is a 1 kΩ/2 kΩ ladder, three NPN emitter followers on a shared `V_be` reference and a 75 Ω series source, with the arithmetic; §9.2 makes blanking a `74AHCT273` `/MR` for zero packages, and §9.3 deletes `BORDER` because VGA has no overscan. **Drawn** in `hardware/cards/video.circuit.tsx` | `graphics.md` §9.1–§9.3, was `design-review.md` §Vid-M4 |
 | **video** | **⚠ The list engine clobbers `WPTR`, and that is software's rule to keep.** Sharing the write pointer is what made the display list fit; anything that starts a list reloads `+$08`–`$0A` afterwards, three writes. §10.3 owns the semantics | `graphics.md` §10.1.6.2, §13 |
-| **video** | **⚠ Both video CPLDs are out of room.** §6.4.9's cadence and §8.1's window signals took `vctrl` to **64 of 64 I/O — 60 logic pins plus JTAG's four, which the `ATF1508AS` shares with ordinary I/O — and 121 of 128 cells** and `vaddr` to 109 of 128 — both still fit with JTAG reserved, and neither has room for the next thing. §14.2's two ×16 framebuffer parts would return six output pins by making the arbiter 2 grants instead of 8 | `cpld/vctrl.fit`, `graphics.md` §19 item 25 |
+| **video** | **⚠ `vctrl` IS FULL — every pin on the package.** §6.4.9's cadence and §8.1's window signals took it to 64 of 64 I/O, and `features.md` §8.4's sprite mode (2026-09-09) spent the **two dedicated input pins nobody had counted**: the fit is **64/64 I/O *and* 4/4 dedicated, 122 of 128 cells**, JTAG reserved, "Design fits successfully". `vaddr` is 109 of 128 and 61 of 64. **Nothing more can be added to `vctrl` at all** — §14.2's two ×16 framebuffer parts return six output pins by making the arbiter 2 grants instead of 8, and that is now what the card's next feature waits on | `cpld/vctrl.fit`, `graphics.md` §19 item 25 |
 | **video** | **⚠ No hardware character generator, and text is two modes not one.** §6.4.3's Variant B is dropped. Text that mixes with graphics or colours per cell is the span writer in bitmap mode at **13 writes/cell** — a scrolled line is 2.5 ms, **3 % of the CPU at 9600 baud**, and a full 80×25 redraw is 62 ms against the 2–4 s a full ANSI screen takes to arrive over the modem. A **one-colour-pair console** is §6.4.8's cell mode instead, at **1 write/cell**, 0.19 ms per scrolled line and 4.8 ms per screen — bounded by 256 (glyph, colour) pairs, 32 cell rows, and a global mode. **Under NitrOS-9 neither is per-window**: §6.4.6's mode is global | `graphics.md` §6.4.3, §6.4.8 |
 | **video** | **⚠ The framebuffer and palette go surface-mount.** `graphics.md` §14.2 consolidates seven SRAMs into four — 2 × `AS6C8016-55ZIN` and 1 × `IS61C6416AL-12TLI`, both TSOP-44 II, both stocked, ~$14–21 against ~$36–54 and 205–405 mA lighter. **These are the machine's first SMD parts**; everything else is DIP or a socketed PLCC. That is an assembly decision, not an electrical one | `graphics.md` §14.2 |
 | audio | Freeze §9's register map — it is the deliverable, ahead of any board | `audio.md` §15 step 0 |
@@ -938,15 +938,15 @@ motherboard and system RAM owe measured figures at bring-up
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
 | 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The second largest single-card draw after video**, and the only figure on that card that cannot be derived from a datasheet with confidence |
 | 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + **14** | not yet estimated |
-| 5 V | **motherboard**: MMU (5, +1 map SRAM), divider GAL, oscillator, reset supervisor, U9/U10 GALs and 3 × `'157`, **2 × `SST39SF040` boot ROM and the `'244`** — `hardware/ram.md` §6.5 | **17** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load. The ROM adds ~30 mA per part while it is selected and ~10 µA when it is not, which is most of the time |
+| 5 V | **motherboard**: MMU (5, +1 map SRAM), divider GAL, oscillator, reset supervisor, U9/U10 GALs, 3 × `'157`, **the `'4040` refresh timebase**, and 2 × `SST39SF040` boot ROM with its `'244` — `hardware/ram.md` §6.5 | **18** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load. The ROM adds ~30 mA per part while it is selected and ~10 µA when it is not, which is most of the time |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly **1.8–3.0 A** at 5 V across **116 ICs**, plus a 3.3 V
+**The machine is plausibly **1.8–3.0 A** at 5 V across **117 ICs**, plus a 3.3 V
 rail.** The sum, from each card's own document:
 
 | video | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
 |---|---|---|---|---|---|---|---|---|
-| **27** | **32** | 11 | 3 | **14** | **12** | **99** | **17** | **116** |
+| **27** | **32** | 11 | 3 | **14** | **12** | **99** | **18** | **117** |
 
 The backplane-distribution question this used to leave open — **how many power and
 ground pins per slot** — was answered with the connector (§5 item 5): **5 × +5 V and

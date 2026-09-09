@@ -1,0 +1,182 @@
+Name       u10 ;
+PartNo     ARM6309-U10 ;
+Date       2026-09-09 ;
+Revision   01 ;
+Designer   arm6309 ;
+Company    - ;
+Assembly   motherboard ;
+Location   U10 ;
+Device     g22v10 ;
+
+/* ------------------------------------------------------------------------
+ * Motherboard U10 - the SIMM controller. hardware/ram.md 6.3 and 6.6.
+ *
+ * Four 30-pin sockets, 4 to 16 MB, CAS-before-RAS refresh. This was the one
+ * piece of logic on the motherboard that had never been counted (ram.md 11
+ * item 6), and counting it moved three things:
+ *
+ *   - THE ROW/COLUMN MUX SELECT IS `E`, and is not an output of this part.
+ *     E is high for counts 6..11 of U6's divider, which is exactly the column
+ *     window below, so the three '157s take a wire from the backplane. That is
+ *     the macrocell that made a nine-output design fit - and it is also what a
+ *     1970s DRAM controller on a 6800-family bus would have done, for the same
+ *     reason.
+ *
+ *   - /WAIT IS NOT NEEDED AND IS NOT HERE. A bus cycle is twelve CLK25 counts;
+ *     the access owns six of them (4..9) and a refresh burst is four, which
+ *     fits in the gap. ram.md 6.3's line item lists "/WAIT" and this part does
+ *     not drive it: the DRAM controller never stalls the CPU.
+ *
+ *   - THE REFRESH TIMEBASE IS A PACKAGE. ram.md 6.3's "refresh needs no
+ *     counter" is about the ROW counter, which CAS-before-RAS genuinely
+ *     deletes. The INTERVAL timer is a different thing and was never on the
+ *     list: 15.6 us of CLK25 is 393 counts, nine macrocells on a part with ten.
+ *     It is a 74HC4040 free-running on CLK25 - ram.md 6.3.1.
+ *
+ * TWO TIMEBASES, AND THAT IS THE DESIGN:
+ *
+ *   THE ACCESS decodes U6's counter C3..C0 directly. It is host-facing, so it
+ *   stalls when E stalls - which is correct, because a stalled bus cycle is a
+ *   cycle whose data is not wanted yet.
+ *
+ *   THE REFRESH must not touch that counter. machine.md 5 item 10: a card's
+ *   internal realtime scheduling free-runs on CLK25, and only host-facing
+ *   windows may be derived from E. /WAIT holds U6's counter (machine.md 5
+ *   item 8), so a refresh timed from C3..C0 would stop dead for the 40.7 us
+ *   the video card can hold the bus - 2.6 refresh intervals, and the DRAM
+ *   forgets. This is the part that rule was written for.
+ *
+ * THE CYCLE, in counts of 39.7 ns from E-fall (count 0):
+ *
+ *   0..2    address not yet valid - t_AD is 110 ns, which is count 2.77
+ *   4       RAS falls.  48.8 ns of row-address setup
+ *   6       E rises: the '157s switch to the column half.  79 ns of row hold
+ *   7       CAS falls.  40 ns of column setup, and 49 ns of write-data setup
+ *   9       last count with RAS and CAS low - 238 ns of t_RAS
+ *   10..3   released.  238 ns of precharge before the next RAS
+ *
+ * SPECIFIED AT /12 ONLY. At machine.md 1.1's /8 fast-E rate the counter is
+ * eight counts and every decode above moves. This part is a FOURTH subsystem
+ * that would need work at /8, after video's read-back, serial's rating and the
+ * CPU's t_cyc - which is worth knowing about that decision.
+ * ---------------------------------------------------------------------- */
+
+/* --- inputs ----------------------------------------------------------- */
+PIN 1  = CLK25 ;     /* the only clock a 22V10 has, and the refresh sequencer
+                      * below MUST have it - see the two timebases above.  */
+PIN 2  = DRAMSEL ;   /* U9. It already carries /IOPAGE and RUN, so this part
+                      * needs neither - and during boot DRAMSEL is low, which
+                      * means refresh runs from the moment /RESET releases and
+                      * the DRAM is ready before machine.md 7.2's boot
+                      * sequence hands it a stack.                        */
+PIN 3  = A23 ;       /* PHYSICAL. ram.md 5.2 puts the four windows at        */
+PIN 4  = A22 ;       /* A24..A22 = 001, 010, 011, 100, so A23:A22 is 01, 10,
+                      * 11, 00 - already distinct. That is three outputs U9
+                      * does not spend, and two lines the address mux needs
+                      * anyway.                                            */
+PIN 5  = C0 ;        /* U6's divider count - THE BUS PHASE. Host-facing on   */
+PIN 6  = C1 ;        /* purpose: these freeze when /WAIT freezes them, and so
+                      * does the access.                                    */
+PIN 7  = C2 ;
+PIN 8  = C3 ;
+PIN 9  = RW ;
+PIN 10 = REFCLK ;    /* A FREE-RUNNING DIVIDER OF CLK25, NOT OF E - the
+                      * 74HC4040's Q8, one toggle per 256 counts = 10.16 us.
+                      * Every transition is one refresh, so 512 rows take
+                      * 5.2 ms against the DRAM's 8 ms.                    */
+PIN 11 = !RESET ;
+/* PIN 13 IS FREE, and so is pin 23. */
+
+/* --- outputs ---------------------------------------------------------- */
+PIN 14 = RF1 ;       /*  8 terms available, 2 used - REGISTERED */
+PIN 15 = REFQ ;      /* 10, 3 - REGISTERED */
+PIN 16 = RF0 ;       /* 12, 5 - REGISTERED, the widest on the part */
+PIN 17 = !RAS0 ;     /* 14, 3 */
+PIN 18 = !CAS ;      /* 16, 4 */
+PIN 19 = !RAS1 ;     /* 16, 3 */
+PIN 20 = !RAS2 ;     /* 14, 3 */
+PIN 21 = !RAS3 ;     /* 12, 3 */
+PIN 22 = !DWE ;      /* 10, 2 */
+/* PIN 23 IS DELIBERATELY NOT DECLARED. The macrocell stays at high-Z, so the
+ * pin is a spare INPUT and not a driven low - the distinction mmu.pld's pin 23
+ * had to learn the hard way (gal/README.md finding 6). */
+
+/* --- the bus phase ---------------------------------------------------- */
+/* Counts 4..9: 4,5,6,7 = 01xx and 8,9 = 100x. Two terms, and the counter never
+ * reaches 12..15, which is what keeps both partial decodes exact. */
+accwin = !C3 & C2
+       #  C3 & !C2 & !C1 ;
+
+/* Counts 7..9: 7 = 0111 and 8,9 = 100x. */
+caswin = !C3 & C2 & C1 & C0
+       #  C3 & !C2 & !C1 ;
+
+/* Counts 10..11 - the only counts a refresh may start at when the CPU is
+ * using the DRAM this cycle. See `start` below. */
+gap    = C3 & !C2 & C1 ;
+
+/* --- the refresh sequencer -------------------------------------------- */
+/* Four states: 00 idle, 01 CAS low, 10 RAS low, 11 RAS held, back to 00.
+ * CAS-before-RAS - the DRAM counts the row itself, which is what deletes the
+ * row counter and its mux path (ram.md 6.3).
+ *
+ * WHEN A BURST MAY START, and it is the subtle part. It takes four counts and
+ * must finish, with precharge, before the access's RAS falls at count 4.
+ * Starting at 10 puts its RAS low at counts 0..1 and leaves two counts of
+ * precharge; starting at 11 leaves three. Starting at count 0 would put RAS
+ * low at 2..3 and leave NONE, which is why the window is two counts and not
+ * three.
+ *
+ * AND WHEN THIS CYCLE IS NOT A DRAM CYCLE, any count will do - there is no
+ * access to collide with. That second clause is what keeps refresh alive
+ * during a video-card stall: /WAIT freezes C3..C0, but a stalled cycle is a
+ * VRAM write (graphics.md 7.4), so DRAMSEL is low and the burst runs freely.
+ * ram.md 6.6 asserts that property; this is where it comes from.
+ *
+ * A request waits at most twelve counts - 476.7 ns - for a slot, against
+ * 5.4 us of slack between the 10.16 us timebase and the DRAM's 15.6 us. It
+ * cannot be starved. */
+pending = REFCLK $ REFQ ;
+start   = pending & (!DRAMSEL # gap) ;
+
+RF0.d = !RF1 & !RF0 & start
+      #  RF1 & !RF0 ;
+RF1.d = !RF1 &  RF0
+      #  RF1 & !RF0 ;
+
+/* ONE MACROCELL IS BOTH THE EDGE DETECTOR AND THE REQUEST LATCH. REFQ holds
+ * the REFCLK level the last burst consumed, so `REFCLK != REFQ` is "a request
+ * is outstanding" - and it is updated at the END of the burst, so an edge
+ * arriving mid-burst is still seen afterwards rather than lost. A separate
+ * pending flag would have been a tenth macrocell and there is no tenth. */
+REFQ.d = REFQ & !RF1
+       # REFQ & !RF0
+       # REFCLK & RF1 & RF0 ;
+
+[RF0,RF1,REFQ].ar = RESET ;
+[RF0,RF1,REFQ].sp = 'b'0 ;
+
+/* --- the four /RAS ---------------------------------------------------- */
+/* An access asserts one; a refresh asserts all four, because every bank has to
+ * be refreshed and CAS-before-RAS is a broadcast.
+ *
+ * WARNING: RAS IS LOW FOR TWO COUNTS DURING A REFRESH - 79 ns. That is the
+ * tightest number on this part. t_RAS min is about 70 ns on a 70 ns module and
+ * about 60 on a 60 ns one, so the margin is 9 ns or 19 ns. A third count needs
+ * a five-state sequencer and a third macrocell this part has not got, so it is
+ * a speed-grade requirement instead: ram.md 6.3.1. */
+RAS0 = DRAMSEL & !A23 &  A22 & accwin # RF1 ;   /*  4-8 M  */
+RAS1 = DRAMSEL &  A23 & !A22 & accwin # RF1 ;   /*  8-12 M */
+RAS2 = DRAMSEL &  A23 &  A22 & accwin # RF1 ;   /* 12-16 M */
+RAS3 = DRAMSEL & !A23 & !A22 & accwin # RF1 ;   /* 16-20 M */
+
+/* --- /CAS, common to all four sockets --------------------------------- */
+CAS = DRAMSEL & caswin
+    # RF0 # RF1 ;
+
+/* --- the SIMMs' shared /WE -------------------------------------------- */
+/* EARLY WRITE: /WE leads CAS by three counts, so the module takes its data at
+ * CAS-fall and never drives D0-D7 at all. A late write would put the SIMM's
+ * output on the bus during a write cycle, which is the same contention
+ * gal/README.md argues about for the system RAM's /OE. */
+DWE = DRAMSEL & !RW & accwin ;

@@ -40,10 +40,13 @@ import { counterTerms } from "./jedec/counter"
 import { place } from "./jedec/place"
 import type { Cell, Design } from "./jedec/assemble"
 
-/* WMODE[1:0], 13: 00 direct, 01 span-mask, 10 span-solid. */
+/* WMODE[1:0], 13: 00 direct, 01 span-mask, 10 span-solid, 11 sprite. */
 const DIRECT = "!WM1 & !WM0"
 const MASK = "!WM1 & WM0"
 const SOLID = "WM1 & !WM0"
+/* features.md 8.4. Eight bytes like mask, but a zero mask bit advances the
+ * pointer without writing - which is what deletes save-behind for the shape. */
+const SPRITE = "WM1 & WM0"
 
 const MC = ["MC0", "MC1", "MC2"]
 /* Zeroed at the start of every span, counting one per retired byte. Three
@@ -89,7 +92,34 @@ const cells: Cell[] = [
       `RETIRE & ${DIRECT}`,
       `RETIRE & ${MASK} & MC2 & MC1 & MC0`,
       `RETIRE & ${SOLID} & TC`,
+      /* Sprite mode is a cell wide too - it is mask mode with the write
+       * gated, so it ends on the same count. */
+      `RETIRE & ${SPRITE} & MC2 & MC1 & MC0`,
     ],
+  },
+
+  /* ⭐ THE WHOLE OF SPRITE MODE, AND IT IS ONE MACROCELL.
+   *
+   * Every other mode writes every byte it retires, so RETIRE was the write
+   * strobe as well as the advance. Sprite mode splits the two: the pointer,
+   * the serialiser and the counter still step on RETIRE, and only the write
+   * is suppressed on a transparent pixel.
+   *
+   * ⚠ THE POINTER MUST STILL ADVANCE. A mode that stalled it would draw the
+   * sprite squashed - which is the reason this is a second output and not a
+   * qualification of RETIRE.
+   *
+   * ⚠ AND THE MASK BIT HAS TO GET HERE. 7.4 is explicit that it never enters
+   * the sequencer: the '165's serial output is wired to the register file's
+   * address bit 0 and nowhere else, because choosing WFG or WBG per pixel is
+   * an address line rather than logic. Sprite mode needs it in a SECOND place,
+   * and on the card that is an input pin on vctrl - features.md 8.4. */
+  {
+    pin: 0, name: "WEN", assertedLow: false, s0: 1, registered: false,
+    why: "RETIRE, except a transparent pixel in sprite mode",
+    /* RETIRE & (not sprite mode, or the mask bit is set). The complement of
+     * a two-literal AND is two terms, so this is three. */
+    terms: ["RETIRE & !WM1", "RETIRE & !WM0", "RETIRE & MASKBIT"],
   },
 
   /* 13's WADV: 00 continue, 01 next row same column, 10 vertical. Both
@@ -102,10 +132,10 @@ const cells: Cell[] = [
   },
 ]
 
-/* Seven macrocells; the widest equation is four product terms. Placed on the
- * leanest seven so the three 16-term macrocells stay free - this part has the
+/* Eight macrocells; the widest equation is four product terms. Placed on the
+ * leanest eight so the two 16-term macrocells stay free - this part has the
  * most headroom on the card and the sequencer's other half has none. */
-const pins = place(cells, [14, 15, 16, 17, 20, 22, 23])
+const pins = place(cells, [14, 15, 16, 17, 20, 21, 22, 23])
 
 export const seqctlDesign: Design = {
   name: "seqctl",
@@ -123,8 +153,11 @@ export const seqctlDesign: Design = {
     /* The '161 pair's terminal count - span-solid's length. */
     { name: "TC", pin: 7 },
     { name: "WADV0", pin: 8 }, { name: "WADV1", pin: 9 },
+    /* ⚠ NEW, and it is the pin features.md 8.4's proposal turned on. The mask
+     * serialiser's current bit - read only by sprite mode. */
+    { name: "MASKBIT", pin: 10 },
   ],
   cells: cells.map((c) => ({ ...c, pin: pins[c.name] })),
-  spares: [18, 19, 21],
+  spares: [18, 19],
   ar: "RESET",
 }

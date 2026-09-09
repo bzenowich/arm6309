@@ -30,6 +30,7 @@ PIN = WSTB ;
 PIN = TC ;
 PIN = WADV0 ;
 PIN = WADV1 ;
+PIN = MASKBIT ;
 PIN = !IOPAGE ;
 PIN = A0 ;
 PIN = A1 ;
@@ -68,6 +69,7 @@ PIN = MUXSEL0 ;
 PIN = MUXSEL1 ;
 PIN = SPANBUSY ;
 PIN = RETIRE ;
+PIN = WEN ;
 PIN = GSPN0 ;
 PIN = GSPN1 ;
 PIN = GSPN2 ;
@@ -366,7 +368,11 @@ MC2.d = !WSTB & RETIRE & MC2 & !MC0
         # !WSTB & !RETIRE & MC2 ;
 SPANEND = RETIRE & !WM1 & !WM0
           # RETIRE & !WM1 & WM0 & MC2 & MC1 & MC0
-          # RETIRE & WM1 & !WM0 & TC ;
+          # RETIRE & WM1 & !WM0 & TC
+          # RETIRE & WM1 & WM0 & MC2 & MC1 & MC0 ;
+WEN = RETIRE & !WM1
+      # RETIRE & !WM0
+      # RETIRE & MASKBIT ;
 WROWADV = SPANEND & WADV0
           # SPANEND & WADV1 ;
 ACPU0 = VRAMSEL & !IOPAGE & !A0 & !A1 ;

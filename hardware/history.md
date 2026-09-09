@@ -8,6 +8,59 @@ kept verbatim or lightly trimmed, because the archive is the record.
 
 ---
 
+## `ram.md` §6.3 — "refresh needs no counter", and the package that hid behind it (2026-09-09)
+
+The bank's parts list was **+5 ICs**: four sockets, U9, U10 and three `'157`. Under it:
+
+> ⭐ **Refresh needs no counter.** **CAS-before-RAS** makes the DRAM generate its own row
+> address, so the refresh row counter a 1980s design would have carried — a `74HC4040`
+> and its mux path — is **not on this list**. One request every ~15.6 µs, arbitrated by
+> U10.
+
+**Every word of that is true about the ROW counter and false about the INTERVAL timer**,
+and the sentence covers both without distinguishing them. They are different things: one
+supplies an address, the other says *when*. CAS-before-RAS deletes the first outright.
+The second is 15.6 µs of `CLK25` = **393 counts, nine macrocells on a part that has
+ten** — so it cannot live on U10, and nothing else on the board produces it.
+
+It is a `74HC4040` after all, doing the other job. **The bank is +6 ICs and the
+motherboard is 18**, and the naming irony is recorded because it is exactly how a package
+goes missing: the part was *named* in the sentence that said it was not needed.
+
+⚠ **The rejected alternative is worth keeping.** `HSYNC` is on the backplane and a line
+is 31.78 µs, so two bursts a line would refresh 512 rows in 8.1 ms. It comes from the
+video card — and a machine whose RAM forgets when you pull the video card is the failure
+`machine.md` §1 puts the master oscillator on the motherboard to avoid. Same argument,
+one subsystem along.
+
+---
+
+## `ram.md` §6.3 / `mainboard.circuit.tsx` — the SIMM address mux was wired a bit out (2026-09-09)
+
+The board comment read:
+
+> Row is physical A11-A1 and column A22-A12, which puts the SIMM's own A0 on the CPU's
+> A1 - a 30-pin module is byte-wide and the low address bit is inside it.
+
+⚠ **The last clause is backwards.** A 30-pin SIMM is ×8 — *byte*-wide — so its `A0` **is**
+the CPU's `A0`. There is no low bit hidden inside it; that is true of a ×16 or ×32 module,
+where the module's own address counts words. Wired as written, every DRAM access would
+have landed on the wrong address and the bottom bit would have been unreachable.
+
+Corrected to **row = physical `A10`–`A0`, column = `A21`–`A11`**, and
+`lib/netlist.check.ts` asserts both halves so it cannot drift back.
+
+**And the mux select stopped being a GAL output.** It was `MUX_ROW` from U10; it is `E` —
+high for counts 6–11 of U6's divider, which is exactly the column window. One wire, and
+it is the macrocell that let U10's nine-output design fit at all (§6.3.1).
+
+⚠ **The mapping is for 4M × 8 modules and a 1M × 8 will not work in it** — a 10-bit
+module ignores `MA10`, which drops physical `A10` out of the address entirely. §11 item 7
+recommended 1 MB modules on availability grounds and was written without that in view; it
+now carries three attributes to match instead of one.
+
+---
+
 ## `gal/clkdec.pld` — the system RAM's control lines, and the three macrocells boot mode took (2026-09-09)
 
 U6 carried a third job until 2026-09-09: `ramsel`, `RAM_CE`, `RAM_OE` and `RAM_WE`,

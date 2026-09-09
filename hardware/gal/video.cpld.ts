@@ -211,7 +211,12 @@ export const vctrlCpld: Merged = merge(
       "IRQ",
       "FCLK0", "FCLK1", "FCLK2", "FCLK3",
       "MUXSEL0", "MUXSEL1",
-      "SLOTTICK", "RETIRE",
+      /* ⚠ RETIRE AND WEN ARE TWO SIGNALS SINCE features.md 8.4's sprite mode.
+       * RETIRE advances the pointer, the serialiser and the length counter;
+       * WEN is the framebuffer's write strobe, and in WMODE 11 a transparent
+       * pixel asserts the first and not the second. Every other mode has them
+       * identical, which is why one signal did both jobs until now. */
+      "SLOTTICK", "RETIRE", "WEN",
       /* §6.4's cadence, out to the address part and the serialiser */
       "MAPLD", "MAPSEL", "TILESEL", "LINEAR",   // CHARSEL/GLYPHLD/GLYPHSH/LUTPAGE: 6.4.3
       /* §6.4's fetch sequence, and §8's two window signals with it - census.ts

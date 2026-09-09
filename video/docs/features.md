@@ -486,29 +486,83 @@ or 4–6 at a sane 30 %.** Save-behind is 90 % of that, which is the number to a
 at zero CPU, so nothing needs saving behind — but the sprite cannot then be composited
 into it, because in tile mode the map *is* the display.
 
-### 8.4 ⭐ One change would make the span writer a real sprite engine
+### 8.4 ⭐ `WMODE 11` — sprite mode, and the span writer becomes a sprite engine
 
-**Proposal, not specification.** Add a fourth `WMODE`: **span-mask-transparent**, where
-a `0` mask bit **advances the pointer without asserting `/WE`** instead of writing
-`WBG`.
+> **BUILT 2026-09-09.** This section was a proposal with an open question at its centre —
+> *"whether the mask bit is available at the sequencer"* — and `graphics.md` §7.4 was
+> explicit that it is not. Fitting it answered the question: **the mask bit becomes a
+> pin, and the part had exactly enough left.** `hardware/gal/seqctl.jedec.ts`,
+> `npm run check:seqctl`, and `gal/cpld/vctrl.fit`.
 
-- **What it buys:** 1bpp masked sprites and icons at **8 pixels per CPU write, composited
-  over whatever is underneath** — and it deletes save-behind for the *mask* case, because
-  nothing outside the shape is touched. A 16×16 masked sprite becomes ~95 µs against
-  ~1,000 µs, an order of magnitude.
-- **What it costs:** the retire logic already computes `RETIRE = SPANBUSY · SPNGRANT`
-  and already routes the mask bit to the register file's `A0`. Suppressing `/WE` on a
-  `0` bit is **one product term on an existing output plus one `CTRL` code** — `WMODE`
-  has a free encoding at `11`, and `seqctl` is the roomiest GAL on the card at **7
-  macrocells of 10 and 8 of 14 input pins**.
-- ⚠ **What is unknown:** whether the mask bit is available at the sequencer at the right
-  moment. §7.4 is explicit that *"the mask bit never enters the sequencer"* — it goes
-  straight to the register file's address pin — so this proposal **needs it in a second
-  place**, and that is a real input-pin and timing question, not a formality. **Fit it
-  before believing this paragraph.**
+**A fourth `WMODE`. In `11`, a `0` mask bit advances the pointer without asserting the
+write strobe**, instead of writing `WBG`.
 
-This is the highest-value cheap change this document found, and it is recorded as an
-open item rather than a decision.
+| `WMODE` | Mode | Length | A `0` mask bit |
+|---|---|---|---|
+| `00` | direct | 1 byte | — |
+| `01` | span-mask | 8 | writes `WBG` |
+| `10` | span-solid | `SPANLEN`+1 | — |
+| **`11`** | **sprite** | **8** | **writes nothing** |
+
+⭐ **The pointer still advances, and that is the whole mode.** `RETIRE` is unchanged, so
+`WPTR` steps, the serialiser shifts and the length counter counts exactly as in mask
+mode — only the write is suppressed. A mode that stalled the pointer on a transparent
+pixel would draw the sprite squashed, and `check:seqctl` asserts the eight-retired /
+four-written case directly.
+
+#### What it buys
+
+**1bpp masked sprites and icons at 8 pixels per CPU write, composited over whatever is
+underneath** — and it deletes save-behind for the *mask* case, because nothing outside
+the shape is touched.
+
+| 16 × 16 masked sprite | before | **with `WMODE 11`** |
+|---|---|---|
+| draw | 95 µs (span-mask, but it paints the background too) | **95 µs** |
+| save behind | 412 µs | **0** |
+| restore | 412 µs | **0** |
+| **per move** | **~919 µs** | **~95 µs** |
+
+**An order of magnitude**, and §9's mouse cursor is the case that feels it: 0.92 ms per
+move becomes 0.095 ms, so dragging at 70 Hz falls from **6.4 % of the CPU to 0.7 %**.
+
+⚠ **It does not delete save-behind for everything.** A sprite drawn over a *moving*
+background still needs the background redrawn, and §5's blitter is still what a general
+one wants. What it deletes is the save-and-restore pair for a shape over a **static**
+background, which is the mouse cursor, the text caret, icons, and the overwhelming
+majority of what a desktop actually moves.
+
+#### What it cost
+
+| | |
+|---|---|
+| `seqctl`'s logic | **one macrocell** — `WEN`, which is `RETIRE` except a transparent pixel in sprite mode. Three product terms. The part goes 7 → **8 of 10** |
+| `SPANEND` | one more term, because sprite mode ends on the cell width like mask mode |
+| ⚠ **`vctrl`'s pins** | **two.** `MASKBIT` in, `WEN` out — and `RETIRE` and `WEN` are two signals now where one did both jobs |
+| ⚠ **`vctrl`'s cells** | 121 → **122 of 128** |
+
+> ⚠ **AND IT SPENT THE LAST TWO PINS ON THE PART.** `vctrl` was quoted at "64 of 64 I/O"
+> everywhere, and that number was never the whole story: an `ATF1508AS` PLCC-84 also has
+> **four dedicated input pins** that are not I/O, and two of them were free. The fit is
+> now **64/64 I/O *and* 4/4 dedicated** — `cpld/vctrl.fit`, "Design fits successfully".
+>
+> **Nothing else can be added to `vctrl` at all.** §14.2's consolidation is what returns
+> pins: two ×16 framebuffer parts make the arbiter 2 grants instead of 8 and hand back
+> six outputs. That was already worth doing; it is now the thing standing between this
+> card and its next feature.
+
+#### The question this answered, and it was the right question to ask
+
+§7.4 says the mask bit *"never enters the sequencer"* — the serialiser's serial output is
+wired to the register file's address bit 0, and choosing `WFG` or `WBG` per pixel is an
+**address line** rather than logic. That is what makes span-mask free.
+
+**Sprite mode needs the same bit in a second place, and a second place is a pin.** The
+proposal that stood here estimated "one product term on an existing output plus one
+`CTRL` code" and marked the pin question as unknown; the product-term estimate was
+right, and the pin question was the whole cost. ⭐ **`check:seqctl` also asserts that
+span-mask is *unchanged* by the new input** — a `0` bit still writes `WBG` through the
+address line, so the mechanism §7.4 describes is intact and the new mode sits beside it.
 
 ---
 

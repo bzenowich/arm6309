@@ -23,6 +23,7 @@ import { TOTAL_FUSES } from "./jedec/gal22v10"
 import { PHASES, mmu } from "./mmu.model"
 import { RESET_STATE, decode, setsRun, step, type Counter } from "./clkdec.model"
 import { MAP, paOf, u9 } from "./u9.model"
+import { BANK, RESET_STATE as U10_RESET, accessWindow, casWindow, out as u10out, refreshSafe, step as u10step, type State as U10State } from "./u10.model"
 
 let failures = 0
 const check = (ok: boolean, claim: string, detail = "") => {
@@ -419,8 +420,145 @@ console.log("\n      the boot buffer and the map SRAMs never drive together\n")
 }
 
 /* ======================================================================== */
+console.log("\nU10 - the SIMM controller\n")
+const u10g = build((await import("./u10.jedec")).u10Design, "u10")
+
+check(u10g.gal.undriven(23),
+  "pin 23 is left at high-Z - a spare INPUT, and with pin 13 that is two")
+
+/* The registered half. The refresh sequencer is the only state on this part
+ * and it is what machine.md 5 item 10's rule exists for, so it is swept
+ * against the model over a whole refresh period at every bus phase. */
+const RF_PINS = { 16: 0, 14: 1 } as const
+const readU10 = (pins: Int8Array): U10State => ({
+  rf: (pins[16] << 0) | (pins[14] << 1),
+  refq: pins[15] as 0 | 1,
+})
+
+{
+  /* Drive: DRAMSEL, A23, A22, C0-C3, R/W, REFCLK, /RESET. */
+  const drive = (o: Partial<Record<string, 0 | 1>> & { count: number }) => ({
+    2: (o.dramsel ?? 0) as 0 | 1, 3: (o.a23 ?? 0) as 0 | 1, 4: (o.a22 ?? 0) as 0 | 1,
+    5: ((o.count >> 0) & 1) as 0 | 1, 6: ((o.count >> 1) & 1) as 0 | 1,
+    7: ((o.count >> 2) & 1) as 0 | 1, 8: ((o.count >> 3) & 1) as 0 | 1,
+    9: (o.rw ?? 1) as 0 | 1, 10: (o.refclk ?? 0) as 0 | 1, 11: 1 as const,
+  })
+
+  u10g.gal.evaluate({ ...drive({ count: 0 }), 11: 0 })
+  u10g.gal.clock({ ...drive({ count: 0 }), 11: 0 })
+  const r = readU10(u10g.gal.evaluate(drive({ count: 0 })))
+  check(r.rf === 0 && r.refq === 0,
+    "out of reset the refresh sequencer is idle with no request outstanding")
+
+  /* A whole refresh period at every phase of the bus cycle, with the DRAM
+   * being accessed and not, in both R/W directions - 12 counts x 2 x 2 x the
+   * REFCLK toggle. The model and the fuses step together. */
+  let model: U10State = { ...U10_RESET }
+  let bad: string | null = null
+  let sawRefresh = false, sawAccess = false
+  for (let t = 0; t < 12 * 4 * 40 && !bad; t++) {
+    const count = t % 12
+    /* REFCLK toggles every 256 CLK25 counts; compress it here so the sweep
+     * exercises many bursts without running 256 x 512 edges. */
+    const refclk = (Math.floor(t / 9) & 1) as 0 | 1
+    const dramsel = (Math.floor(t / 12) % 2) as 0 | 1
+    const a23 = (Math.floor(t / 24) % 2) as 0 | 1
+    const a22 = (Math.floor(t / 48) % 2) as 0 | 1
+    const rw = (Math.floor(t / 96) % 2) as 0 | 1
+    const i = { count, dramsel, a23, a22, rw, refclk }
+    const d = drive(i as never)
+
+    const pins = u10g.gal.evaluate(d)
+    const want = u10out(model, i)
+    const got = {
+      nRas: [pins[17], pins[19], pins[20], pins[21]],
+      nCas: pins[18], nWe: pins[22],
+    }
+    for (let n = 0; n < 4; n++) {
+      if (got.nRas[n] !== want.nRas[n]) {
+        bad = `/RAS${n} = ${got.nRas[n]}, expected ${want.nRas[n]} at count ${count} ` +
+          `DRAMSEL=${dramsel} A23:A22=${a23}${a22} rf=${model.rf}`
+      }
+    }
+    if (!bad && got.nCas !== want.nCas) bad = `/CAS = ${got.nCas}, expected ${want.nCas} at count ${count} rf=${model.rf}`
+    if (!bad && got.nWe !== want.nWe) bad = `/WE = ${got.nWe}, expected ${want.nWe} at count ${count} R/W=${rw}`
+    if (model.rf !== 0) sawRefresh = true
+    if (dramsel && accessWindow(count)) sawAccess = true
+
+    u10g.gal.clock(d)
+    model = u10step(model, i)
+    const stepped = readU10(u10g.gal.evaluate(d))
+    if (!bad && (stepped.rf !== model.rf || stepped.refq !== model.refq)) {
+      bad = `state: fuses rf=${stepped.rf} refq=${stepped.refq}, ` +
+        `model rf=${model.rf} refq=${model.refq} at count ${count}`
+    }
+  }
+  check(bad === null,
+    "the fuse map matches u10.model.ts over 1,920 clock edges - every bus " +
+    "phase, DRAM cycle and not, both R/W directions, across many refresh bursts",
+    bad ?? "")
+  check(sawRefresh && sawAccess, "and the sweep covered both a refresh burst and an access")
+}
+
+/* The claims worth naming, against the model. */
+{
+  const at = (o: Partial<Parameters<typeof u10out>[1]> & { count: number }, rf = 0, refq: 0 | 1 = 0) =>
+    u10out({ rf, refq }, { dramsel: 1, a23: 0, a22: 1, rw: 1, refclk: 0, ...o } as never)
+
+  check(at({ count: 3 }).nRas[0] === 1 && at({ count: 4 }).nRas[0] === 0,
+    "RAS falls at count 4 - 158.8 ns, which is 48.8 ns after the address goes " +
+    "valid at the 6809's t_AD of 110 ns")
+  check(at({ count: 6 }).nCas === 1 && at({ count: 7 }).nCas === 0,
+    "and CAS at count 7 - 79 ns of row hold after RAS, and 49 ns of write-data " +
+    "setup, because 6809 write data is valid at 229 ns")
+  check(at({ count: 9 }).nRas[0] === 0 && at({ count: 10 }).nRas[0] === 1 &&
+        at({ count: 10 }).nCas === 1,
+    "both release at count 10 - 238 ns of t_RAS, and 238 ns of precharge")
+
+  check([0, 1, 2, 3].every((n) =>
+    at({ count: 5, a23: (n === 1 || n === 2 ? 1 : 0), a22: (n === 0 || n === 2 ? 1 : 0) } as never)
+      .nRas.filter((v) => v === 0).length === 1),
+    "⭐ exactly one /RAS per access, and A23:A22 alone picks it - which is why " +
+    "U9 spends ONE output on DRAMSEL and not four on selects")
+  check(BANK(0, 1) === 0 && BANK(1, 0) === 1 && BANK(1, 1) === 2 && BANK(0, 0) === 3,
+    "and the four windows at physical A24..A22 = 001/010/011/100 map to four " +
+    "distinct A23:A22 codes - NOT in numeric order")
+
+  check(at({ count: 5, dramsel: 0 }).nRas.every((v) => v === 1) &&
+        at({ count: 5, dramsel: 0 }).nCas === 1,
+    "no DRAMSEL, no access - U9's decode is the only thing that starts one")
+  check(at({ count: 5, rw: 0 }).nWe === 0 && at({ count: 7, rw: 0 }).nCas === 0,
+    "⚠ EARLY WRITE: /WE leads CAS by three counts, so the module takes its data " +
+    "at CAS-fall and never drives D0-D7")
+  check(at({ count: 5, rw: 1 }).nWe === 1, "and a read never asserts it")
+
+  /* Refresh. */
+  check(at({ count: 5, dramsel: 0 }, 1).nCas === 0 && at({ count: 5, dramsel: 0 }, 1).nRas[0] === 1,
+    "⭐ CAS-BEFORE-RAS: the burst's first state drops CAS with RAS still high, " +
+    "which is the command that makes the DRAM count its own row - and is why " +
+    "ram.md 6.3 has no row counter and no mux path for one")
+  check(at({ count: 5, dramsel: 0 }, 2).nRas.every((v) => v === 0),
+    "and its second drops ALL FOUR /RAS, because every bank has to be refreshed")
+  check(at({ count: 5, dramsel: 0 }, 3).nRas.every((v) => v === 0) &&
+        at({ count: 5, dramsel: 0 }, 0).nRas.every((v) => v === 1),
+    "⚠ RAS is low for exactly TWO counts - 79 ns against a t_RAS min of ~70 ns " +
+    "on a 70 ns module. A third needs a five-state sequencer and a macrocell " +
+    "this part has not got, so it is a speed-grade requirement instead")
+
+  check(refreshSafe({ count: 10, dramsel: 1 } as never) &&
+        refreshSafe({ count: 11, dramsel: 1 } as never) &&
+        !refreshSafe({ count: 0, dramsel: 1 } as never),
+    "a burst may start at count 10 or 11 of a DRAM cycle and NOT at 0 - four " +
+    "counts from 0 would put its RAS at 2..3 and leave the access no precharge")
+  check([0, 3, 5, 9].every((count) => refreshSafe({ count, dramsel: 0 } as never)),
+    "⭐ and at any count when the cycle is not a DRAM cycle - which is what " +
+    "keeps refresh alive through a 40.7 us video stall, because a stalled " +
+    "cycle is a VRAM write and DRAMSEL is low (machine.md 5 item 10)")
+}
+
+/* ======================================================================== */
 console.log("\nThe fitting, which is the thing that had never been done\n")
-for (const { design, assembly } of [u3, u6, u9g]) {
+for (const { design, assembly } of [u3, u6, u9g, u10g]) {
   for (const u of [...assembly.usage].sort((a, b) => a.pin - b.pin)) {
     console.log(`      ${design.partNo} pin ${String(u.pin).padStart(2)}  ` +
       `${u.name.padEnd(7)} ${String(u.used).padStart(2)}/${String(u.available).padEnd(2)} terms`)
@@ -432,6 +570,6 @@ for (const { design, assembly } of [u3, u6, u9g]) {
 }
 
 console.log(failures === 0
-  ? "\nAll three motherboard GALs assemble, fit, and their fuse maps match the models"
+  ? "\nAll four motherboard GALs assemble, fit, and their fuse maps match the models"
   : `\n${failures} FAILED`)
 if (failures) process.exit(1)

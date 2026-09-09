@@ -1085,7 +1085,7 @@ switch between a linear scan address and the concatenated tile address, tri-stat
 its low outputs during the tile fetch. Both are absorbed by the CPLD partition —
 §10.1.6's `vaddr`/`vctrl` fit carries the whole of §6.4 — addressing and cadence
 both — at **zero packages**. §6.4.9 is the sequence and §19 item 15(c) is closed. What
-it did cost is headroom: `vctrl` went to **64 of 64 I/O and 121 of 128 cells**, and
+it did cost is headroom: `vctrl` went to **64 of 64 I/O and 122 of 128 cells**, and
 `vaddr` to 109 of 128, so both still take JTAG and neither has room for the next
 thing (§10.1.6.3).
 
@@ -1419,10 +1419,15 @@ mode needed it, a cell would be **14** writes and every text figure in §7.3 wou
 | `SPANBUSY` | 1 macrocell | `VSTAT` b7, and the `/WAIT` condition |
 | the pointer | `wcol` / `wrow` | §19 item 12 |
 
-**The mask bit never enters the sequencer.** The serialiser's serial output is wired
-to the register file's address bit 0, which is why §13 requires `WFG` at `A0 = 0` and `WBG` at
-`A0 = 1`. Choosing the source colour per pixel costs no macrocell and no product term
-— it is an address line, and that placement rule *is* the mechanism.
+**The mask bit does not enter the sequencer's *colour* path.** The serialiser's serial
+output is wired to the register file's address bit 0, which is why §13 requires `WFG` at
+`A0 = 0` and `WBG` at `A0 = 1`. Choosing the source colour per pixel costs no macrocell
+and no product term — it is an address line, and that placement rule *is* the mechanism.
+
+⚠ **Sprite mode reads the same bit a second time, and that one is a pin.** `WMODE 11`
+gates the write on it, which the address line cannot do, so `MASKBIT` is an input to
+`vctrl` — the cost `features.md` §8.4 records. **Span-mask is unchanged by it**:
+`check:seqctl` asserts that a `0` bit still writes `WBG` in `WMODE 01`.
 
 #### One handshake, three terminations
 
@@ -1438,11 +1443,22 @@ to the register file's address bit 0, which is why §13 requires `WFG` at `A0 = 
   SPANEND   the last byte retired -> apply WADV, clear SPANBUSY
 ```
 
-| `WMODE` | Mode | Ends when |
-|---|---|---|
-| `00` | direct | the **first** byte retires — §3.1.1's posted write |
-| `01` | span-mask | the **eighth** byte retires — the cell width |
-| `10` | span-solid | the `SPANLEN` counter's terminal count — `SPANLEN` + 1 bytes |
+| `WMODE` | Mode | Ends when | A `0` mask bit |
+|---|---|---|---|
+| `00` | direct | the **first** byte retires — §3.1.1's posted write | — |
+| `01` | span-mask | the **eighth** byte retires — the cell width | writes `WBG` |
+| `10` | span-solid | the `SPANLEN` counter's terminal count — `SPANLEN` + 1 bytes | — |
+| **`11`** | **sprite** | the **eighth**, as mask | ⭐ **writes nothing** — `features.md` §8.4 |
+
+**`RETIRE` and `WEN` are two signals since 2026-09-09**, and in the first three modes
+they are identical. Sprite mode splits them: a transparent pixel asserts `RETIRE` — so
+`WPTR` steps, the serialiser shifts and the counter counts — and does **not** assert the
+framebuffer's write strobe. ⚠ **The pointer must advance**, or the shape draws squashed;
+`check:seqctl` asserts the eight-retired/four-written case.
+
+⚠ **And that is what made the mask bit a pin.** The paragraph below says it never enters
+the sequencer, which is what makes span-mask free; sprite mode needs it in a *second*
+place, and a second place costs `vctrl` an input. `features.md` §8.4 has what that spent.
 
 Loading the `SPANLEN` counter in mask mode is harmless, and that is what lets `WSTB` drive
 both loads with no mode qualification: mask mode terminates on its own counter and
@@ -1544,6 +1560,13 @@ a fetch slot is 158.9 ns.
 | `00` direct | 1 | **159 ns** | one posted write |
 | `01` span-mask | 8 | **1.27 µs** | a glyph row — the cell width, §7.4 |
 | `10` span-solid | **up to 256** | **up to 40.7 µs** | `SPANLEN` is **eight bits** |
+| `11` sprite | 8 | **1.27 µs** | ⚠ **the same as mask, whatever the mask is** — a transparent pixel still costs its slot |
+
+⚠ **Sprite mode's cost does not fall with its coverage.** It retires eight bytes and
+suppresses some of the writes, so an all-transparent row takes exactly as long as an
+opaque one: **transparency costs time, not correctness.** `check:seqctl` asserts it. That
+is still an order of magnitude better than save-behind (`features.md` §8.4), and it means
+a mostly-empty sprite is not cheaper than a full one.
 
 **40.7 µs is the number, and it is longer than a scanline.** Against the rest of the
 machine: 85 bus cycles, 2.6 DRAM refresh intervals, 51 net framer byte-times, and just
@@ -2046,7 +2069,7 @@ archived in [history.md](history.md).)
 pins are fitted; `check:tile` asserts what they compute, including both axes of scroll
 (§6.4.6 limit 2); and `check:cadence` runs the second fetch cadence over a whole line
 (§6.4.9). ⚠ The package decision is unchanged but its **headroom is gone**: the
-cadence took `vctrl` to 64 of 64 I/O and 121 of 128 cells.
+cadence took `vctrl` to 64 of 64 I/O and 122 of 128 cells.
 
 **What §7 keeps.** The span writer is not deleted — it is the text engine, the fill
 and clear engine, and §6.4.6's limit 1 means bitmap regions need it regardless.
@@ -2118,7 +2141,7 @@ list — the whole of v1:
 | | Package | Holds | Logic cells | I/O pins |
 |---|---|---|---|---|
 | **`vaddr`** | PLCC-84 | scan and `WPTR` counters (`WPTR` doubling as the list engine's pointer, §10.3.1), scroll and tile registers, the write-strobe decode, the four-source address mux, the list engine | **109 of 128** | **61 of 64** |
-| **`vctrl`** | PLCC-84 | sync trio, sequencer, span control, `CTRL`, §6.4's fetch cadence, the register decode, **the spare-access arbiter** (§10.1.6.3) | **121 of 128** | **64 of 64** |
+| **`vctrl`** | PLCC-84 | sync trio, sequencer, span control, `CTRL`, §6.4's fetch cadence, the register decode, **the spare-access arbiter** (§10.1.6.3) | **122 of 128** | **64 of 64** |
 | **`rfa`** | **`GAL22V10`** | the register-file address — `RA0`–`RA4`, `WSTB`, the span-source walk (§10.1.6.3) | 6 of 10 | — |
 
 The three-line table is the whole card's programmable logic. `DOTCLK` lands on a
@@ -2256,7 +2279,7 @@ Both report "Design fits successfully" with the four reserved
 *exactly* full: 60 + 4 = 64, nothing spare.
 
 ⚠ **And that is the end of the headroom.** §6.4.9's cadence spent what §6.4.1's
-correction returned: `vctrl` is at **64 of 64 I/O and 121 of 128 cells**, `vaddr` at
+correction returned: `vctrl` is at **64 of 64 I/O and 122 of 128 cells**, `vaddr` at
 61 of 64 and 109 of 128. Both still fit, JTAG included, and **neither has room for
 the next thing.** §14.2's two ×16 framebuffer parts are the relief that exists on
 paper — 2 grants instead of 8, six output pins — and it is a §5.2 rewrite (§19 item
@@ -2587,7 +2610,7 @@ tables are shared between both projects.
 |---|---|---|---|---|
 | `+$00` | `CTRL` | b1..0 `VMODE` | 00 640×200/70, 01 640×240/60, 10 640×400/70, 11 640×480/60 | **new** (was `BANK`) |
 | | | b2 `CHAR` | with `CELL`: 0 tile (8×8 colour), 1 character (1bpp glyph) | **new**, §10.1.6.1 |
-| | | b4..3 `WMODE` | 00 direct, 01 span-mask, 10 span-solid | moved |
+| | | b4..3 `WMODE` | 00 direct, 01 span-mask, 10 span-solid, **11 sprite** (`features.md` §8.4) | moved; **`11` new 2026-09-09** |
 | | | b5 `CELL` | 1 = §6.4 cell fetch, 0 = linear | **new**, was reserved |
 | | | b6 | VBL IRQ enable | **new** |
 | | | b7 | display enable | — |
@@ -2685,7 +2708,7 @@ against colormin's 39 (35). (The GAL-build table this section used to carry — 
 | **2** | **74AHCT273** | **post-LUT output register — `/MR` is blank-to-black (§9.2)** | = (was `'574`) |
 | 1 | 74HC593 | `PIDX` counter (sourcing flag, §9) | = |
 | 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vaddr`** — scan address, `WPTR`/span pointer, tile/list address sources. **61 of 64 I/O, 109 of 128 cells** (`hardware/gal/cpld/vaddr.fit`) | |
-| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, `SPANLEN`, span-mask handling. **64 of 64 I/O, 121 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) | |
+| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, `SPANLEN`, span-mask handling. **64 of 64 I/O, 122 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) | |
 | 1 | GAL22V10-15 | **`rfa`** — the register-file address (§10.1.6.3), which is what bought `vctrl` its fourteen pins back | |
 | 1 | 74HC574 | posted-write **data** latch | = |
 | **3** | **74HC574** | **posted-write address + control latches — 19 address + VRAMSEL + R/W + `WMODE[1:0]` = 23 bits (§3.1.1)** | **+3** |
@@ -3380,7 +3403,7 @@ unchanged from minimal256.md §11 and are not restated in full.
     I/O load briefly pushed `vctrl` toward a TQFP-100; splitting the register-file
     *address* onto its own `GAL22V10` (`rfa` — `hardware/gal/rfa.pld`) bought
     fourteen pins back, and both CPLDs are PLCC-84: `vctrl` at 64 of 64 I/O and
-    121 of 128 cells, `vaddr` at 61 of 64 and 109 of 128 (§10.1.6.3, §14, the
+    122 of 128 cells, `vaddr` at 61 of 64 and 109 of 128 (§10.1.6.3, §14, the
     `hardware/gal/cpld/*.fit` files).
 
 22. **Verify the sync-polarity table against the actual monitors** (§6.2.1), CRT, LCD

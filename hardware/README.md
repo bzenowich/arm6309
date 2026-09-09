@@ -18,7 +18,7 @@ checked at the fuse level — fitting them found four defects in the board below
 (history.md).
 
 ⚠ **The motherboard file is behind the documents.** [`ram.md`](ram.md) §3.1, §6.2 and
-§6.7 make the board **17 ICs and four SIMM sockets** — two map SRAMs, no DIP system RAM,
+§6.7 make the board **18 ICs and four SIMM sockets** — two map SRAMs, no DIP system RAM,
 U9/U10 and three `'157`, and a 1 MB boot ROM with its `'541`. `mainboard.circuit.tsx`
 still draws the nine-IC state. **Open item 3.**
 
@@ -233,7 +233,7 @@ memory, is in history.md.
 2. **The slot socket footprint is a DIP body.** Pad grid and pin numbering are right, the
    outline is not. It needs a measured footprint once a receptacle is sourced.
 3. **⚠ Nothing is placed.** The board-file half of this item **closed 2026-09-09** —
-   `mainboard.circuit.tsx` draws all 17 ICs and the four SIMM sockets, and
+   `mainboard.circuit.tsx` draws all 18 ICs and the four SIMM sockets, and
    `lib/netlist.check.ts` grew to assert what the new parts are wired to.
 
    **Every board's components still sit at the origin**, so the PCB DRC reports overlaps

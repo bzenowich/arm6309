@@ -342,12 +342,92 @@ left**: 2 MB of SRAM against 4–16 MB of DRAM in four sockets, for four package
 | 4 | **30-pin SIMM socket** | ×8 or ×9, 1 MB or **4 MB** each — **4 to 16 MB** |
 | 1 | **`GAL22V10` U9** | space decode: the four SIMM windows, and §5.3's open-drain `/IOPAGE` pull |
 | 1 | **`GAL22V10` U10** | SIMM timing — `RAS0`–`RAS3`, `CAS`, `/WE`, the mux select, refresh request and `/WAIT` |
-| 3 | **`74HC157`** | RAS/CAS address mux, 11 bits (a 4 MB 30-pin SIMM is 4M×8 — 22 bits, 11 row + 11 column) |
-| **+5 ICs and 4 sockets** | | **all** of the machine's memory, against 32 packages for 16 MB of SRAM |
+| 3 | **`74HC157`** | RAS/CAS address mux, 11 bits — **row is physical `A10`–`A0`, column `A21`–`A11`**, and the select is `E` itself rather than a GAL output (§6.3.1) |
+| **1** | **`74HC4040`** | ⚠ **the refresh timebase, and it was on nobody's list** — §6.3.1 |
+| **+6 ICs and 4 sockets** | | **all** of the machine's memory, against 32 packages for 16 MB of SRAM |
 
-⭐ **Refresh needs no counter.** **CAS-before-RAS** makes the DRAM generate its own row
-address, so the refresh row counter a 1980s design would have carried — a `74HC4040` and
-its mux path — is **not on this list**. One request every ~15.6 µs, arbitrated by U10.
+⭐ **Refresh needs no ROW counter.** **CAS-before-RAS** makes the DRAM generate its own
+row address, so the refresh row counter a 1980s design would have carried — a `74HC4040`
+**and its mux path** — is not needed for that job.
+
+> ⚠ **And that sentence hid a package for a day.** It used to end "…is **not on this
+> list**", which is true of the *row* counter and false of the **interval** timer. They
+> are different things: one supplies an address, the other says *when*. 15.6 µs of
+> `CLK25` is 393 counts — **nine macrocells on a part that has ten** — so the interval
+> cannot live on U10 and cannot come from anything else already on the board. It is a
+> `74HC4040` after all, doing the other job. §6.3.1.
+
+### 6.3.1 ⭐ U10 is fitted, and it moved three things
+
+> **2026-09-09.** [`gal/u10.pld`](gal/u10.pld), [`gal/u10.jedec.ts`](gal/u10.jedec.ts)
+> and [`gal/u10.model.ts`](gal/u10.model.ts). `npm run check:jedec` steps the fuses and
+> the model together over **1,920 clock edges** — every bus phase, DRAM cycle and not,
+> both `R/W` directions, across many refresh bursts — and `npm run check:cupl` runs
+> **Atmel's own CUPL output** through the same sweep. It fits at **9 macrocells of 10**,
+> 11 inputs, two spare pins, widest equation five terms.
+
+§11 item 6 said this part *"has not been counted at all"*. Counting it moved three
+things, and only one of them was a cost:
+
+| | |
+|---|---|
+| ⭐ **The mux select is `E`** | and not an output. `E` is high for counts 6–11 of U6's divider, which is **exactly** the column window, so the three `'157` take a wire from the backplane. **That is the macrocell that made a nine-output design fit** — and it is what a 1970s DRAM controller on a 6800-family bus would have done anyway |
+| ⭐ **`/WAIT` is not needed** | §6.3's line item lists it. A bus cycle is twelve `CLK25` counts, the access owns six of them, and a refresh burst is four — **so it fits in the gap and the DRAM controller never stalls the CPU.** ⚠ §6.6's "well under 1 % of the bus" is now **zero bus cycles**, and the thing it was worried about does not exist |
+| ⚠ **The refresh timebase is a package** | above. +1 IC, and the motherboard is **18** |
+
+#### The cycle, in counts of 39.7 ns from E-fall
+
+| count | | why |
+|---|---|---|
+| 0–2 | address not yet valid | the 6809's `t_AD` is 110 ns, which is count 2.77 |
+| **4** | **`/RAS` falls** | 158.8 ns — **48.8 ns of row-address setup** |
+| **6** | `E` rises: the `'157` switch to the column half | 79 ns of row hold after `/RAS` |
+| **7** | **`/CAS` falls** | 40 ns of column setup — and **49 ns of write-data setup**, because 6809 write data is valid at 229 ns |
+| **10** | both released | **238 ns of `t_RAS`**, and 238 ns of precharge before the next |
+
+**`/WE` leads `/CAS` by three counts — an early write**, so the module takes its data at
+`/CAS`-fall and never drives `D0`–`D7` at all. A late write would put the SIMM's output
+on the bus during a write cycle, which is the contention `gal/README.md` argues about for
+the system RAM's `/OE`.
+
+#### ⭐ Two timebases, and that is the whole design
+
+| | derived from | why |
+|---|---|---|
+| **the access** | **U6's counter `C3..C0`** | host-facing, so it *should* stall when `E` stalls — a stalled bus cycle is one whose data is not wanted yet |
+| **the refresh** | **`CLK25`, through U17** | ⚠ it must not touch that counter. `/WAIT` holds U6's divider (`machine.md` §5 item 8), so a refresh timed from the bus **would stop dead for the 40.7 µs the video card can hold it** — 2.6 refresh intervals, and the DRAM forgets |
+
+**`machine.md` §5 item 10 is the rule and this is the part it was written for.** §6.6
+asserts that refresh and the video stall never contend; the mechanism is that a stalled
+cycle is a VRAM *write*, so `DRAMSEL` is low — and a burst may start at **any** count when
+the cycle is not a DRAM cycle. During a stall, refresh runs freely.
+
+When the CPU *is* using the DRAM, a burst may start only at **count 10 or 11**: it takes
+four counts and must finish, with precharge, before the access's `/RAS` falls at count 4.
+Starting at count 0 would put its `/RAS` at counts 2–3 and leave **none**. A request waits
+at most twelve counts — 476.7 ns — against 5.4 µs of slack, so **it cannot be starved.**
+
+> ⚠ **The tightest number on the part: `/RAS` is low for two counts during a refresh —
+> 79 ns.** `t_RAS` min is about 70 ns on a 70 ns module and about 60 on a 60 ns one, so
+> the margin is 9 ns or 19. A third count needs a five-state sequencer and a third
+> macrocell U10 has not got, **so it is a speed-grade requirement instead: buy 60 ns
+> modules.** §11 item 7 now has two attributes to match, not one.
+
+#### ⚠ And the mux mapping is for 4M × 8 modules only
+
+Row is physical `A10`–`A0`, column `A21`–`A11`. A 30-pin SIMM is **byte-wide**, so its
+`A0` is the CPU's `A0` — there is no low address bit hidden inside it the way there is on
+a ×16 or ×32 module.
+
+**A 1M × 8 module will not work in that mapping.** It has ten row and ten column bits and
+ignores `MA10`, which drops physical `A10` out of the address entirely — so its megabyte
+would be neither contiguous nor unaliased. The correct 1 MB mapping is row `A9`–`A0`,
+column `A19`–`A10`, and the two differ in **which physical lines feed the `'157` B
+inputs**: it is a rewire, not a jumper, so it is a build-time choice.
+
+⚠ **§11 item 7 recommends 1 MB modules on availability grounds and was written without
+this in view.** Either the board is wired for the size that is bought, or three more
+`'157` buy the choice at run time.
 
 ### 6.4 ⭐ The boot path — stackless, and shorter than it sounds
 
@@ -400,9 +480,9 @@ to the sequence above.
 | the board as drawn in `mainboard.circuit.tsx` | 9 |
 | − the DIP system RAM, removed (§6.2) | −1 |
 | + second map SRAM, 16-bit entries (§3.1) | +1 |
-| + U9 space decode, U10 SIMM timing, 3 × `'157` | +5 |
+| + U9 space decode, U10 SIMM timing, 3 × `'157`, U17 refresh timebase | +6 |
 | + **the boot ROM: 2 × `SST39SF040` and the `'244`** (§6.7) | **+3** |
-| **total** | **17 ICs + 4 SIMM sockets** |
+| **total** | **18 ICs + 4 SIMM sockets** |
 
 ⚠ **`mainboard.circuit.tsx` still draws the nine.** The board file is a schematic of the
 state before §3.1, §6.2 and §6.7, and closing that gap is `hardware/README.md` open
@@ -523,9 +603,9 @@ see. **Zero new pins.**
 | `TASK` widened to 8 bits | 0 | seven unused bits of an existing `'574`, §3.2 |
 | The DIP system RAM, removed | −1 | **no DIP SRAM at all — §6.2** |
 | U9 space decode | +1 | §6.3 |
-| U10 SIMM timing + 3 × `'157` | +4 | §6.3 |
+| U10 SIMM timing + 3 × `'157` + U17 refresh timebase | +5 | §6.3, §6.3.1 |
 | **Boot ROM: 2 × `SST39SF040` + `'244`** | **+3** | §6.7 |
-| **Motherboard** | **9 → 17** | plus four SIMM sockets |
+| **Motherboard** | **9 → 18** | plus four SIMM sockets |
 | Backplane | **0 pins** | §5.3, §6.7 |
 | Cards | **0 changes** | one jumper position on storage and net, §5.2 |
 
@@ -577,7 +657,7 @@ and tried to make the OS use all of it.
 |---|---|---|---|
 | **0** | **Widen `TASK` to 8 bits** (§3.2) | **0 ICs** | 256 resident contexts; a process switch becomes one write. Independent of everything below and the only step that helps software that exists today |
 | **1** | **Second map SRAM, 16-bit entries** (§3.1, §4) | +1 IC | the 32 MB address path — ⚠ **and the precondition for step 2**, which §5.1 is about |
-| **2** | **U9 and the SIMM bank** — 4 sockets, U10, 3 × `'157` (§6.3) | +5 ICs | **4–16 MB of DRAM: all of the machine's memory** |
+| **2** | **U9 and the SIMM bank** — 4 sockets, U10, 3 × `'157`, U17 (§6.3) | +6 ICs | **4–16 MB of DRAM: all of the machine's memory** |
 | **3** | **The boot ROM** — 2 flash + a `'244` (§6.7) | +3 ICs | ⭐ **a machine that boots standalone**, and the `$FFC0`–`$FFFF` vectors. Independent of steps 1 and 2 in hardware, and **required before either can be tested**, because nothing else puts an instruction in front of the CPU |
 | **4** | A bank-register window (§2.1) | +2 ICs | the space above the OS ceiling as an unmanaged store, without a memory-manager port |
 
@@ -612,20 +692,36 @@ of ROM registers-only, which is exactly what §6.4's sequence is.
    `MAPWE` reaches both parts and the chip enable decides where the byte lands (§6.7.1).
    U3's fuse map, its 23 checks and its Verilog testbench are unchanged by any of this —
    pin 23 stays a spare **input**.
-6. **⚠ U9 IS FITTED (2026-09-09); U10 IS NOT.** This item said U9 might not fit —
-   *"ten outputs on a `GAL22V10`'s ten, before counting inputs"* — and §6.7.1 has why
-   that was wrong in both directions: the four SIMM selects collapse to one, and two
-   map-SRAM chip enables nobody had counted appeared. **Six outputs, fourteen inputs, two
-   spare macrocells, widest equation five terms of sixteen**, checked at the fuse level
-   against a model and against Atmel's own CUPL.
+6. **CLOSED 2026-09-09 — U9 and U10 are both fitted, and there is no unwritten logic
+   on the motherboard.** This item said U9 might not fit — *"ten outputs on a
+   `GAL22V10`'s ten, before counting inputs"* — and that U10 *"has not been counted at
+   all"*. Both are wrong in the same direction:
 
-   **U10 remains the one piece of logic on this board that is not written.** It carries
-   the RAS/CAS state machine, refresh arbitration and `/WAIT`, and it has never been
-   counted. ⚠ **§8's totals assume it fits a `GAL22V10`** and nothing has tested that. It
-   now takes `DRAMSEL` plus physical `A23`/`A22`, which is what U9's fit chose for it.
-7. **Source the SIMMs.** 4 MB 30-pin modules were made and are not
-   current-production; this is `net.md` §13.6's lesson again — **availability is
-   the first question about a part.** 1 MB modules are commoner and give 4 MB.
+   | | said | is |
+   |---|---|---|
+   | **U9** | may not fit | **6 outputs of 10**, 14 inputs, 2 spare macrocells — §6.7.1 |
+   | **U10** | never counted | **9 outputs of 10**, 11 inputs, 2 spare pins — §6.3.1 |
+
+   Both are checked at the fuse level against a behavioural model **and** against Atmel's
+   own CUPL. ⚠ **What counting U10 found was a package nobody had listed** — the refresh
+   *interval* timer, which §6.3's "refresh needs no counter" had quietly conflated with
+   the *row* counter CAS-before-RAS genuinely deletes.
+
+7. **⚠ Source the SIMMs, and there are now THREE attributes to match.** 4 MB 30-pin
+   modules were made and are not current-production; this is `net.md` §13.6's lesson
+   again — **availability is the first question about a part.**
+
+   - **4M × 8 or ×9**, because §6.3.1's mux mapping is for eleven row and eleven column
+     bits. ⚠ **A 1M × 8 module does not work in it** — it ignores `MA10`, which drops
+     physical `A10` out of the address. The 1 MB mapping is a *rewire* of the `'157` B
+     inputs, so it is a build-time choice; this item used to recommend 1 MB modules and
+     was written without that in view.
+   - **60 ns or faster.** §6.3.1's refresh burst holds `/RAS` low for 79 ns against a
+     `t_RAS` min of ~70 ns on a 70 ns part — 9 ns of margin, against 19 at 60 ns.
+   - **All four the same size**, since the mapping is one wiring.
+
+   ⭐ **1 MB modules are still buildable**, at the cost of the mapping and 4 MB total.
+   Nothing about U10 changes.
 8. **Period audit.** 30-pin SIMMs are 1987 and in period. **16 MB in 1989 was a
    workstation** and a 2 MB CoCo 3 was exotic, so the *capacity* is a stretch
    even though every part is not. ⚠ **The boot ROM is the weaker claim**: an 8 Mbit
@@ -648,7 +744,7 @@ of ROM registers-only, which is exactly what §6.4's sequence is.
 |---|---|
 | [`gal/README.md`](gal/README.md) | the MMU's register map, the entry format, and the "16 of 2048" line §3.2 turns into a capability |
 | [`../docs/machine.md`](../docs/machine.md) | §5 item 1 the second megabyte, §5 item 5 the connector, §5 item 7 the card regions, §5 item 8 `/WAIT`, §5 item 10 stretched cycles, §7.1 system RAM and **§7.2 the boot ROM, which §6.7 is the parts list for** |
-| [`place/`](place/) | the placement study — `svg.ts` draws the motherboard at **17 ICs**, four SIMM sockets and the boot ROM, with no SRAM outside the map |
+| [`place/`](place/) | the placement study — `svg.ts` draws the motherboard at **18 ICs**, four SIMM sockets and the boot ROM, with no SRAM outside the map |
 | [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx) | the `'574` with seven unused bits, and U3's free pin 23 |
 | [`../audio/docs/audio.md`](../audio/docs/audio.md) §5.2 | the other card that asked to put its memory in the physical map, and the arithmetic that said no |
 | [`../docs/drivewire.md`](../docs/drivewire.md) | what the boot ROM's spare megabyte is *not* for, and how a new one gets onto the machine |

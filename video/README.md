@@ -45,12 +45,15 @@ monitor's 75 Ω, and blanking by `74AHCT273` `/MR` for zero packages. **No ICs**
 transistors, a diode and fifteen resistors — which is what closed `design-review.md`
 §Vid-M4. It is still what step 1 has to measure.
 
-⚠ **Both CPLDs are full in the dimension that matters — logic cells.** `vaddr` is
-**109 of 128** and `vctrl` **121 of 128**; anything added to either displaces
-something else. Pins are binding too, now: `vaddr` is 61 of 64 and `vctrl`
-**64 of 64**, and those totals **include JTAG's four** — the `ATF1508AS` shares
-`TMS`/`TDI`/`TDO`/`TCK` with ordinary I/O, so `vctrl` is 60 logic pins plus four and
-has nothing spare. Both are programmed in circuit (`graphics.md` §10.1.6.3).
+⚠ **`vctrl` is full in every dimension.** `vaddr` is **109 of 128** logic cells and
+61 of 64 I/O; `vctrl` is **122 of 128** and **64 of 64 I/O — plus 4 of 4 dedicated
+inputs**, which `features.md` §8.4's sprite mode spent on 2026-09-09. Those totals
+**include JTAG's four**, because the `ATF1508AS` shares `TMS`/`TDI`/`TDO`/`TCK` with
+ordinary I/O, and both parts are still programmed in circuit (`graphics.md` §10.1.6.3).
+
+**Nothing further can be added to `vctrl`.** §14.2's two ×16 framebuffer parts return six
+output pins by making the arbiter 2 grants instead of 8 — already worth doing, and now
+the thing the card's next feature waits on.
 
 **Specified at ÷12 only.** E = 25.175/12 = 2.0979 MHz is the rate this card is
 specified at. The ÷8 rate — fast-E mode, 3.1469 MHz — is **experimental and not

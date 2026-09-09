@@ -98,6 +98,51 @@ check(pinsOn("U10", "A23").length === 1 && pinsOn("U10", "A22").length === 1,
   "distinguish the four windows, which is why U9 spends ONE output here and " +
   "not four (gal/u9.pld)")
 
+/* -- ram.md 6.3.1: U10's two timebases, and they are different nets ------ */
+{
+  const bits = ["C0", "C1", "C2", "C3"]
+  const fromU6 = bits.filter((c) => pinsOn("U6", c).length === 1)
+  const toU10 = bits.filter((c) => pinsOn("U10", c).length === 1)
+  check(fromU6.length === 4 && toU10.length === 4,
+    "⭐ U6's divider count reaches U10 - the ACCESS half decodes the bus phase " +
+    "from it, so RAS and CAS stall when E stalls, which is correct because a " +
+    "stalled cycle's data is not wanted yet", `U6:[${fromU6}] U10:[${toU10}]`)
+}
+check(pinsOn("U17", "CLK25").length === 1,
+  "⚠ and the REFRESH half does NOT - U17 counts CLK25 directly. /WAIT holds " +
+  "U6's divider (machine.md 5 item 8), so a refresh timed from the bus would " +
+  "stop for the 40.7 us the video card can hold it: 2.6 refresh intervals, and " +
+  "the DRAM forgets. machine.md 5 item 10 is the rule and this is the wire")
+check(pinsOn("U17", "REFCLK").length === 1 && pinsOn("U10", "REFCLK").length === 1,
+  "REFCLK runs from U17's Q8 to U10 - one toggle per 256 counts = 10.16 us, " +
+  "and every transition is a refresh, so 512 rows take 5.2 ms of the DRAM's 8")
+check(pinsOn("U10", "nWAIT").length === 0,
+  "⭐ U10 does not drive /WAIT. A bus cycle is twelve CLK25 counts, the access " +
+  "owns six and a refresh burst is four, so it fits in the gap - the DRAM " +
+  "controller never stalls the CPU (gal/u10.pld)")
+
+/* -- gal/u10.pld: the row/column mux select is E, and not a GAL output --- */
+for (const mux of ["U11", "U12", "U13"]) {
+  check(pinsOn(mux, "E").includes("SEL"),
+    `⭐ ${mux}'s select is E itself, not a macrocell - E is high for counts ` +
+    `6..11, which is exactly the column window. That is the macrocell that ` +
+    `made U10's nine-output design fit`, pinsOn(mux, "E").join(","))
+  check(pinsOn(mux, "MUX_ROW").length === 0,
+    `and ${mux} does not take a MUX_ROW output that no longer exists`)
+}
+{
+  /* Row is physical A10..A0, column A21..A11 - a 30-pin SIMM is BYTE wide, so
+   * its A0 is the CPU's A0 and there is no low bit hidden inside it. */
+  const rowOk = Array.from({ length: 11 }, (_, i) =>
+    ["U11", "U12", "U13"].some((m) => pinsOn(m, `A${i}`).length > 0))
+  const colOk = Array.from({ length: 11 }, (_, i) =>
+    ["U11", "U12", "U13"].some((m) => pinsOn(m, `A${11 + i}`).length > 0))
+  check(rowOk.every(Boolean) && colOk.every(Boolean),
+    "the mux takes physical A0-A10 as the row and A11-A21 as the column - a " +
+    "30-pin SIMM is byte-wide, so its A0 is the CPU's A0",
+    `row ${rowOk.filter(Boolean).length}/11, col ${colOk.filter(Boolean).length}/11`)
+}
+
 /* -- machine.md 7.2: the boot ROM, and the two nets that make it work ---- */
 check(comps.filter((c) => /^U1[45]$/.test(c.name)).length === 2,
   "two flash packages - 1 MB, because no 5 V 1M x 8 comes in a DIP")

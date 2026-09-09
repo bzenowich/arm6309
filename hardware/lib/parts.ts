@@ -226,8 +226,36 @@ export const SIMM30: PartDef = {
   },
 }
 
+/* -- the refresh timebase, hardware/ram.md 6.3.1 ------------------------- */
+/** 74HC4040 - 12-stage ripple counter, free-running on CLK25. Q8 toggles every
+ * 256 counts = 10.16 us, and U10 refreshes on every transition, so 512 rows
+ * take 5.2 ms against the DRAM's 8 ms.
+ *
+ * ⚠ IT MUST BE CLK25 AND NOT E. machine.md 5 item 10: /WAIT holds U6's divider
+ * (machine.md 5 item 8), so a refresh timed from the bus would stop dead for
+ * the 40.7 us the video card can hold it - 2.6 refresh intervals, and the DRAM
+ * forgets. This package exists because that interval cannot come from anything
+ * already on the board.
+ *
+ * ⚠ UNVERIFIED. There is no 74HC4040 datasheet in reference/datasheets/ and the
+ * numbering below is the standard 4040 pinout written from familiarity - the
+ * failure mode hardware/history.md finding 4 records. The Q outputs are NOT in
+ * pin order on this part, which is exactly what gets written from memory
+ * wrongly: check Q0-Q11 individually, and check that MR is ACTIVE HIGH - it is
+ * on a 4040, unlike almost everything else on this board. */
+export const HC4040: PartDef = {
+  provenance: "unverified",
+  footprint: "dip16_w0.3in",
+  pins: {
+    1: "Q11", 2: "Q5", 3: "Q4", 4: "Q6", 5: "Q3", 6: "Q2", 7: "Q1", 8: "GND",
+    9: "Q0", 10: "CLK", 11: "MR", 12: "Q10", 13: "Q8", 14: "Q9", 15: "Q7",
+    16: "VCC",
+  },
+}
+
 export const PARTS: Record<string, PartDef> = {
-  CPU_SOCKET, MAP_SRAM, HC574, HC245, HC157, SRAM_512K, HCT244, FLASH_512K, SIMM30,
+  CPU_SOCKET, MAP_SRAM, HC574, HC245, HC157, SRAM_512K, HCT244, FLASH_512K,
+  SIMM30, HC4040,
 }
 
 /** Derived, so it cannot go stale the way the hand-written list did. Empty

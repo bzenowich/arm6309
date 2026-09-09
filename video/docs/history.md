@@ -9,6 +9,59 @@ to `graphics.md` unless marked otherwise. "Vid-*" identifiers are findings of th
 
 ---
 
+## `features.md` §8.4 / `graphics.md` §7.4, §13 — sprite mode was a proposal with an open question (built 2026-09-09)
+
+§8.4 was headed **"One change would make the span writer a real sprite engine"** and was
+explicit that it was *"Proposal, not specification"*. Its cost estimate:
+
+> - **What it costs:** the retire logic already computes `RETIRE = SPANBUSY · SPNGRANT`
+>   and already routes the mask bit to the register file's `A0`. Suppressing `/WE` on a
+>   `0` bit is **one product term on an existing output plus one `CTRL` code** — `WMODE`
+>   has a free encoding at `11`, and `seqctl` is the roomiest GAL on the card at **7
+>   macrocells of 10 and 8 of 14 input pins**.
+> - ⚠ **What is unknown:** whether the mask bit is available at the sequencer at the right
+>   moment. §7.4 is explicit that *"the mask bit never enters the sequencer"* — it goes
+>   straight to the register file's address pin — so this proposal **needs it in a second
+>   place**, and that is a real input-pin and timing question, not a formality. **Fit it
+>   before believing this paragraph.**
+>
+> This is the highest-value cheap change this document found, and it is recorded as an
+> open item rather than a decision.
+
+**Fitting it settled both halves, and the estimate was right about the cheap one and
+silent about the expensive one.**
+
+| | estimated | actual |
+|---|---|---|
+| logic | "one product term on an existing output" | **one macrocell** — `WEN`, three terms, plus one more on `SPANEND`. `seqctl` 7 → 8 of 10 |
+| the `CTRL` code | one | one — `WMODE 11`, §13 |
+| ⚠ **the mask bit** | *unknown* | **an input pin on `vctrl`**, and `WEN` an output pin beside it |
+
+⭐ **And the answer to "is it available at the sequencer" is no, so it became a pin — and
+the part had exactly two left.** `vctrl` had been quoted at "64 of 64 I/O" in six
+documents, and that was never the whole package: an `ATF1508AS` PLCC-84 also carries
+**four dedicated input pins** that are not I/O, and two were free. The fit is now
+**64/64 I/O *and* 4/4 dedicated, 122 of 128 cells**, still with JTAG reserved, still
+"Design fits successfully".
+
+**The estimate's "seqctl is the roomiest GAL on the card" was also true and beside the
+point.** `seqctl` is a *superseded* GAL design kept as derivation (`gal/README.md`); the
+card is two `ATF1508AS`, and headroom on the GAL says nothing about headroom on the die
+it merged into. That is the second time this project has priced something against the
+GAL partition after the CPLD build replaced it.
+
+**What did not change**, and `check:seqctl` asserts it: **span-mask is unaffected**. A
+`0` bit still writes `WBG` through the register file's address line, which is §7.4's
+mechanism and costs no logic. Sprite mode reads the same bit a *second* time, for a
+different purpose, and that is the entire difference.
+
+**Two claims in §7.4 were rewritten with it.** *"The mask bit never enters the
+sequencer"* became "does not enter the sequencer's **colour** path", and `RETIRE` stopped
+being both the advance and the write strobe — they are two signals now, identical in
+three modes of four.
+
+---
+
 ## §0 / §14 — the IC count: ~33 → 36 → 41 → 31 → 28 → 27
 
 The headline was wrong twice over before it was ever right. §0 claimed **"~33 ICs

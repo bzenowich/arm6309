@@ -32,6 +32,7 @@ import { assemble, toJedec } from "./assemble"
 import { mmuDesign } from "../mmu.jedec"
 import { clkdecDesign } from "../clkdec.jedec"
 import { u9Design } from "../u9.jedec"
+import { u10Design } from "../u10.jedec"
 import { hgenDesign, vgenDesign, vdecDesign } from "../sync.jedec"
 import { hadrDesign, vadrDesign } from "../scan.jedec"
 import { arbDesign, wcolDesign, wrowDesign } from "../access.jedec"
@@ -43,6 +44,7 @@ import { ALL } from "../designs"
 import { PHASES, mmu } from "../mmu.model"
 import { RESET_STATE, decode, step, type Counter } from "../clkdec.model"
 import { u9 } from "../u9.model"
+import { RESET_STATE as U10_RESET, out as u10out, step as u10step, type State as U10State } from "../u10.model"
 
 /* Assembled here so the sweeps know where each equation landed. */
 const arbAsm = assemble(arbDesign)
@@ -190,6 +192,52 @@ const checkU9 = (label: string, gal: Gal22v10) => {
 }
 checkU9("CUPL u9.jed", load("reference/u9.cupl.jed"))
 
+/* -- U10, registered: the SIMM controller's two timebases ----------------- */
+const checkU10 = (label: string, gal: Gal22v10) => {
+  const drive = (o: { count: number; dramsel: 0 | 1; a23: 0 | 1; a22: 0 | 1; rw: 0 | 1; refclk: 0 | 1 }) => ({
+    2: o.dramsel, 3: o.a23, 4: o.a22,
+    5: ((o.count >> 0) & 1) as 0 | 1, 6: ((o.count >> 1) & 1) as 0 | 1,
+    7: ((o.count >> 2) & 1) as 0 | 1, 8: ((o.count >> 3) & 1) as 0 | 1,
+    9: o.rw, 10: o.refclk, 11: 1 as const,
+  })
+  gal.evaluate({ ...drive({ count: 0, dramsel: 0, a23: 0, a22: 0, rw: 1, refclk: 0 }), 11: 0 })
+  gal.reset()
+
+  let model: U10State = { ...U10_RESET }
+  let bad: string | null = null
+  for (let t = 0; t < 12 * 4 * 40 && !bad; t++) {
+    const i = {
+      count: t % 12,
+      refclk: (Math.floor(t / 9) & 1) as 0 | 1,
+      dramsel: (Math.floor(t / 12) % 2) as 0 | 1,
+      a23: (Math.floor(t / 24) % 2) as 0 | 1,
+      a22: (Math.floor(t / 48) % 2) as 0 | 1,
+      rw: (Math.floor(t / 96) % 2) as 0 | 1,
+    }
+    const d = drive(i)
+    const p = gal.evaluate(d)
+    const want = u10out(model, i)
+    if (p[17] !== want.nRas[0] || p[19] !== want.nRas[1] ||
+        p[20] !== want.nRas[2] || p[21] !== want.nRas[3] ||
+        p[18] !== want.nCas || p[22] !== want.nWe) {
+      bad = `outputs differ at count ${i.count}, rf=${model.rf}`
+      break
+    }
+    gal.clock(d)
+    model = u10step(model, i)
+    const rf = (p2: Int8Array) => (p2[16] << 0) | (p2[14] << 1)
+    const p2 = gal.evaluate(d)
+    if (rf(p2) !== model.rf || p2[15] !== model.refq) {
+      bad = `state differs at count ${i.count}: fuses rf=${rf(p2)} refq=${p2[15]}, ` +
+        `model rf=${model.rf} refq=${model.refq}`
+    }
+  }
+  check(bad === null,
+    `${label}: matches u10.model.ts over 1,920 clock edges - every bus phase, ` +
+    `DRAM cycle and not, across many refresh bursts`, bad ?? "")
+}
+checkU10("CUPL u10.jed", load("reference/u10.cupl.jed"))
+
 /* -- U-V6, the arbiter: combinational, so it is swept rather than clocked --- */
 const checkArb = (label: string, gal: Gal22v10) => {
   const names = ["GCPU0", "GSPN0", "GCPU1", "GSPN1", "GCPU2", "GSPN2",
@@ -277,6 +325,9 @@ const REGISTRY: Part[] = [
   /* U9 - the space decode, fitted 2026-09-09. ram.md 11 item 6 said it might
    * not fit a 22V10; it fits at 6 macrocells of 10 and 5 terms of 16. */
   { design: u9Design, reference: "reference/u9.cupl.jed" },
+  /* U10 - the SIMM controller, fitted 2026-09-09. ram.md 11 item 6 said it had
+   * "not been counted at all"; it fits at 9 macrocells of 10. */
+  { design: u10Design, reference: "reference/u10.cupl.jed" },
   { design: hgenDesign, reference: null }, { design: vgenDesign, reference: null },
   { design: vdecDesign, reference: null }, { design: hadrDesign, reference: null },
   { design: vadrDesign, reference: null },
