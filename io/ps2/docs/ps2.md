@@ -51,7 +51,7 @@ driver bit-bangs it through two control bits and the whole transmit engine disap
 | **Why is the mouse set to 60 samples/s?** | You cannot display a pointer faster than the 70.09 Hz frame rate, and **60 /s is the largest standard PS/2 rate below it**. | §5.2 |
 | **Does the card check parity?** | **No.** 30 cm of shielded cable at 16 kHz, and the only recovery costs a round trip worth more than the error. Slu4 checks nothing either. | §6.2 |
 | **Does the card need to transmit?** | **Yes** — a mouse is silent until `F4`. **In software**, through two control bits and a `7407`. | §7 |
-| **Where does it live in the `$FF` map?** | **`$FF50`–`$FF53`, four bytes** — the lower half of the merged I/O card's eight-byte window. | §3.2 |
+| **Where does it live in the `$FF` map?** | **`$FF30`–`$FF33`, four bytes** — the bottom of the merged I/O card's **sixteen**-byte window. ⚠ Moved from `$FF30` on 2026-09-09; §3.2. | §3.2 |
 | **Does it decode scan codes?** | **No.** Raw set-2 bytes; translation is the driver's job. | §11.1 |
 | **Emulate the CoCo's PIA0 keyboard matrix so stock NitrOS-9 drivers work?** | **No** — it would cost more than the entire card. | §10 |
 | **IC count** | **11.** | §9 |
@@ -196,28 +196,43 @@ consume what it finds. This card is deliberately in the middle: §8.1's `IOSTAT`
 **no side effects at all**, so an early handler in the chain may read it as often as it
 likes, and the byte is not consumed until `KDATA`/`MDATA` is read.
 
-### 3.2 `$FF50`–`$FF53` — four bytes
+### 3.2 `$FF30`–`$FF33` — four bytes, and the card moved on 2026-09-09
 
 The geographic decode spans `$FF00`–`$FF7F` (`machine.md` §2; `hardware/cards/windows.ts`
-is the map as data). Video has `$FF60`–`$FF7F`, `audio.md` §9.1 proposes `$FF40`–`$FF4F`,
-storage holds `$FF58`–`$FF5B` and net `$FF5C`–`$FF5F`.
+is the map as data). **This half takes four bytes** — enough because §8 has exactly four
+registers, and it has four because §5 has no FIFO to index and §7 has no transmit engine
+to command. (A WD1773 disk controller, for comparison, is four registers plus the
+drive-select latch every CoCo-style board adds beside it — `machine.md` §3.)
 
-**Propose `$FF50`–`$FF53` — four bytes** — with serial's `$FF54`–`$FF57` immediately
-above it. Four is enough because §8 has exactly four registers, and it has four
-registers because §5 has no FIFO to index and §7 has no transmit engine to command.
-(A WD1773 disk controller, for comparison, is four registers plus the drive-select
-latch every CoCo-style board adds beside it — `machine.md` §3.)
+> ⚠ **The address changed and no property of this card did.** It was `$FF30`–`$FF33`
+> until 2026-09-09, when `serial.md` §4.5's `16C550` was taken: eight registers where the
+> 6551 had four takes the merged card to twelve bytes, and the eight it held at `$FF30`
+> were wedged between audio at `$FF40` and storage at `$FF58`. **The card took a 16-byte
+> window at `$FF30` instead of displacing two other cards**, and this half is its bottom
+> four bytes. `serial.md` §7.1 carries that argument.
 
 Decode is from the backplane's `/IOSEL` — the `$FF00`–`$FF7F` window strobe, common to
 every slot — so the base is a jumper, and the card matches **`A0`–`A6`** against it.
 ⚠ **`A6` is load-bearing**: it is not implied by the strobe, and a six-bit match answers
-at `$FF50` *and* `$FF10` ([`machine.md`](../../../docs/machine.md) §2).
+at the base *and* 64 bytes below it ([`machine.md`](../../../docs/machine.md) §2).
+
+> ⚠ **`A6` WAS MISSING FROM THIS CARD'S DECODE ENTIRELY** until that same pass —
+> `hardware/cards/io.circuit.tsx` compared `A2`–`A5` and nothing else, which is the
+> silent two-cards-on-`D0`–`D7` failure `machine.md` §2 warns about, on the one card in
+> the machine that carries the warning in two of its own documents.
+
+> ⭐ **This half does not compare the base at all any more.** The serial GAL does it once
+> for the whole card and hands over `CARD_SEL`; this one adds `A3` (0 = PS/2, 1 = serial)
+> and `A1:A0`. **Two inputs instead of four** — which matters because §9 already calls
+> this card's GAL the fitting risk at roughly ten macrocells of ten, and a 16-byte window
+> would otherwise have cost it `A4`, `A5` and `A6` as well.
 
 > ⚠ **This card shares a board with the serial card** —
-> `hardware/cards/io.circuit.tsx`, 14 ICs on a 12 cm card. The two windows are
-> contiguous, so the merged card decodes `$FF50`–`$FF57` as eight bytes. The card's
-> logic, its 11 packages and its interrupt behaviour are unchanged by the merge, and
-> `machine.md` §4.1 still polls it ahead of serial.
+> `hardware/cards/io.circuit.tsx`, 14 ICs on a 12 cm card. The card's logic, its
+> 11 packages and its interrupt behaviour are unchanged by the merge and by the move.
+> ⭐ **What did change is `machine.md` §4.1**: this card no longer has to sit ahead of
+> serial in the polling chain, because a `16C550`'s `IIR` can be probed without being
+> serviced where a 6551's `STATUS` could not (`serial.md` §7.3).
 
 ---
 
@@ -810,7 +825,7 @@ driven from the ISR, and the ISR is precisely what is not running (`serial.md` �
 
 ---
 
-## 8. Register map — four bytes at `$FF50`
+## 8. Register map — four bytes at `$FF30`
 
 | Off | Name | R/W | Function |
 |---|---|---|---|
@@ -902,7 +917,9 @@ This card sits **mid-chain** on the shared `/IRQ` — after video's `VSTAT` and 
         beq   ChkMouse
         lda   KDATA           ; the read clears KDR
         ...
-ChkSer  lda   SERSTAT         ; serial LAST - this read clears its IRQ and
+ChkSer  lda   SERIIR          ; serial LAST - it no longer has to be (16C550,
+                                ; serial.md 7.3), but this handler still is.
+                                ; A 6551's STATUS read cleared its IRQ and
         ...                   ; returns its error bits; they must be consumed here
 ```
 
@@ -1133,7 +1150,7 @@ needs the `AD7545A` → `LTC7545A` substitution.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | **Settle `machine.md` §5 items 1 and 2** — `$FF50`–`$FF53`, and `/IRQ` as an added source | `machine.md` records both as taken rather than proposed (`hardware/cards/windows.ts` still carries the window as proposed) |
+| 0 | **Settle `machine.md` §5 items 1 and 2** — `$FF30`–`$FF33` (moved from `$FF30` 2026-09-09, §3.2), and `/IRQ` as an added source | `machine.md` records both as taken rather than proposed (`hardware/cards/windows.ts` still carries the window as proposed) |
 | 1 | **Measure the protocol.** Scope a real keyboard and mouse: clock rate, half-periods, **rise/fall times (§4.2)**, request-to-first-clock, and — **the number §5's whole no-FIFO argument turns on — the inter-byte gap *inside* a 3-byte mouse packet**, at 60 /s and at 200 /s, on every mouse to hand | §2.2's ⚠ table replaced with measured numbers; a PS/2 reference added to `reference/`; **the intra-packet gap recorded as a number, because if it is comfortably longer than a frame time then §5.1's `'574`s are insurance rather than a fix, and if it is 150 µs then they are the card** |
 | 2 | **Breadboard the Minimal 64x4 receiver verbatim** — one `'595`, one `'193`, one `'HCT132`, one port, real keyboard — **with the preset strapped to 10 and `~TCD` looped to `/PL`** (§6.1) | raw set-2 codes read out correctly, **including the reversed bit order and the `Q0`→`RCLK` timing**; a preset of 11 demonstrably reads the wrong eight bits, which is what confirms the value rather than assuming it. Then add the `'574` and show that a byte survives the next frame's start bit. This step exists to confirm §4.1 and falsify §6.1 before generalising either. |
 | 3 | **Software transmit** on the same breadboard, `7407` and two GPIO lines | `FF` returns `FA` then `AA`; `ED` visibly lights the keyboard LEDs |
@@ -1157,7 +1174,7 @@ to the owner.**
    recalled. Add Chapweske's protocol document or an IBM PS/2 technical reference, and
    re-grade §1. **Blocks §13 step 4.**
 
-2. **`$FF50`–`$FF53` is still a proposal** (§3.2) — `hardware/cards/windows.ts` carries
+2. **`$FF30`–`$FF33` is still a proposal** (§3.2) — `hardware/cards/windows.ts` carries
    it as proposed, not taken. Raise it in `machine.md` before the backplane is laid out.
 
 3. **NitrOS-9's interrupt dispatch cost is a guess**, and §3.1's entire budget rests on

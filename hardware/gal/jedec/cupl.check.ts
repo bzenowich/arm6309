@@ -31,6 +31,7 @@ import type { Design } from "./assemble"
 import { assemble, toJedec } from "./assemble"
 import { mmuDesign } from "../mmu.jedec"
 import { clkdecDesign } from "../clkdec.jedec"
+import { u9Design } from "../u9.jedec"
 import { hgenDesign, vgenDesign, vdecDesign } from "../sync.jedec"
 import { hadrDesign, vadrDesign } from "../scan.jedec"
 import { arbDesign, wcolDesign, wrowDesign } from "../access.jedec"
@@ -41,6 +42,7 @@ import { aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign } from 
 import { ALL } from "../designs"
 import { PHASES, mmu } from "../mmu.model"
 import { RESET_STATE, decode, step, type Counter } from "../clkdec.model"
+import { u9 } from "../u9.model"
 
 /* Assembled here so the sweeps know where each equation landed. */
 const arbAsm = assemble(arbDesign)
@@ -88,13 +90,17 @@ const checkMmu = (label: string, gal: Gal22v10) => {
   check(bad === null, `${label}: matches mmu.model.ts over all 524,288 inputs`, bad ?? "")
 }
 
-/* -- U6, registered: the divider and the decodes -------------------------- */
+/* -- U6, registered: the divider, /IOSEL and boot mode --------------------- */
 const CNT = { 16: 0, 17: 1, 20: 2, 21: 3 } as const
 const checkClkdec = (label: string, gal: Gal22v10) => {
   for (const fastE of [false, true]) {
+    /* Pins 5..9 and 11 are LA7, LA6, LA5, R/W, LA4 and LA0 since 2026-09-09 -
+     * physical A19 and A20 left with the system RAM. The base is not a $FFB1
+     * write, so RUN stays where reset put it and the divider is what is
+     * being swept. */
     const base = { 2: (fastE ? 1 : 0) as 0 | 1, 3: 1 as const, 4: 1 as const,
                    5: 0 as const, 6: 0 as const, 7: 0 as const, 8: 1 as const,
-                   9: 0 as const, 10: 0 as const }
+                   9: 0 as const, 10: 0 as const, 11: 0 as const }
     gal.evaluate({ ...base, 3: 0 }); gal.reset()
     let model: Counter = { ...RESET_STATE }, bad: string | null = null
     const edges = fastE ? 64 : 96
@@ -102,18 +108,40 @@ const checkClkdec = (label: string, gal: Gal22v10) => {
       gal.clock(base); model = step(model, fastE)
       const p = gal.evaluate(base)
       const cnt = Object.entries(CNT).reduce((n, [pin, b]) => n | (p[Number(pin)] << b), 0)
-      if (cnt !== model.cnt || p[18] !== model.e || p[19] !== model.q) {
-        bad = `edge ${i}: fuses cnt=${cnt} e=${p[18]} q=${p[19]}, ` +
-          `model cnt=${model.cnt} e=${model.e} q=${model.q}`
+      if (cnt !== model.cnt || p[18] !== model.e || p[19] !== model.q || p[22] !== model.run) {
+        bad = `edge ${i}: fuses cnt=${cnt} e=${p[18]} q=${p[19]} run=${p[22]}, ` +
+          `model cnt=${model.cnt} e=${model.e} q=${model.q} run=${model.run}`
         break
       }
-      const want = decode({ nIopage: 1, la7: 0, la6: 0, a19: 0, a20: 0, rw: 1, e: model.e })
-      if (p[15] !== want.nIosel || p[22] !== want.nRamCe ||
-          p[14] !== want.nRamOe || p[23] !== want.nRamWe) bad = `decode differs at edge ${i}`
+      const want = decode({ nIopage: 1, la7: 0, la6: 0, run: model.run })
+      if (p[15] !== want.nIosel || p[14] !== want.nBootOe) bad = `decode differs at edge ${i}`
     }
     check(bad === null, `${label}: ${fastE ? "/8 " : "/12"} matches clkdec.model.ts for ${edges} edges`,
       bad ?? "")
   }
+
+  /* Boot mode, in Atmel's own fuses. RUN out of reset is the claim that
+   * decides whether the machine executes an instruction at all, and it rests
+   * on the 22V10's shared asynchronous reset resetting to ZERO - which is a
+   * device fact, and therefore exactly the kind our own device description
+   * could be wrong about on its own. */
+  const idle = { 2: 0 as const, 3: 1 as const, 4: 1 as const, 5: 0 as const,
+                 6: 0 as const, 7: 0 as const, 8: 1 as const, 9: 0 as const,
+                 10: 0 as const, 11: 0 as const }
+  gal.evaluate({ ...idle, 3: 0 }); gal.reset()
+  check(gal.evaluate(idle)[22] === 0,
+    `${label}: RUN comes out of reset at 0 - boot mode, before the first fetch`)
+  check(gal.evaluate(idle)[14] === 0,
+    `${label}: and the boot buffer's output enable is asserted with it, so physical ` +
+    `A20-A13 are driven and not floating`)
+
+  /* $FFB1 write: /IOPAGE low, LA7=1 LA6=0 LA5=1 LA4=1 LA0=1, R/W low, E high. */
+  for (let i = 0; i < 24 && gal.evaluate(idle)[18] === 0; i++) gal.clock(idle)
+  gal.clock({ ...idle, 4: 0, 5: 1, 6: 0, 7: 1, 8: 0, 9: 1, 11: 1 })
+  check(gal.evaluate(idle)[22] === 1,
+    `${label}: and one write to $FFB1 sets it`)
+  check(gal.evaluate(idle)[14] === 1,
+    `${label}: which releases the '244 and hands the address bus to the map`)
 }
 
 console.log("Atmel CUPL 5.0a's own output, executed on our fuse map\n")
@@ -121,6 +149,46 @@ const cuplMmu = load("reference/mmu.cupl.jed")
 const cuplClk = load("reference/clkdec.cupl.jed")
 checkMmu("CUPL mmu.jed", cuplMmu)
 checkClkdec("CUPL clkdec.jed", cuplClk)
+
+/* -- U9, combinational: the whole decode space against the model ----------- */
+const checkU9 = (label: string, gal: Gal22v10) => {
+  let bad: string | null = null
+  outer:
+  for (let pa = 0; pa < 64; pa++) {
+    for (let lo = 0; lo < 32; lo++) {
+      for (const rw of [0, 1] as const) for (const run of [0, 1] as const) {
+        for (const nIopage of [0, 1] as const) {
+          const la7 = ((lo >> 4) & 1) as 0 | 1, la6 = ((lo >> 3) & 1) as 0 | 1
+          const la5 = ((lo >> 2) & 1) as 0 | 1, la4 = ((lo >> 1) & 1) as 0 | 1
+          const la3 = (lo & 1) as 0 | 1
+          const p = gal.evaluate({
+            1: ((pa >> 5) & 1) as 0 | 1, 2: ((pa >> 4) & 1) as 0 | 1,
+            3: ((pa >> 3) & 1) as 0 | 1, 4: ((pa >> 2) & 1) as 0 | 1,
+            5: ((pa >> 1) & 1) as 0 | 1, 6: (pa & 1) as 0 | 1,
+            7: nIopage, 8: run, 9: la7, 10: la6, 11: la5, 13: la4, 14: la3, 23: rw,
+          })
+          const m = u9({ pa, nIopage, run, la7, la6, la5, la4, la3, rw })
+          const want: Record<number, number> = {
+            15: m.nMapCeLo, 16: m.nMapCeHi, 17: m.nRomCe0,
+            18: m.nIopageBp, 19: m.dramSel, 20: m.nRomCe1,
+          }
+          for (const [pin, v] of Object.entries(want)) {
+            if (p[Number(pin)] !== v) {
+              bad = `pin ${pin} = ${p[Number(pin)]}, expected ${v} at ` +
+                `A24..A19=${pa.toString(2).padStart(6, "0")} ` +
+                `LA7..LA3=${lo.toString(2).padStart(5, "0")} ` +
+                `R/W=${rw} RUN=${run} /IOPAGE=${nIopage}`
+              break outer
+            }
+          }
+        }
+      }
+    }
+  }
+  check(bad === null,
+    `${label}: matches u9.model.ts over all 16,384 input combinations`, bad ?? "")
+}
+checkU9("CUPL u9.jed", load("reference/u9.cupl.jed"))
 
 /* -- U-V6, the arbiter: combinational, so it is swept rather than clocked --- */
 const checkArb = (label: string, gal: Gal22v10) => {
@@ -206,6 +274,9 @@ interface Part { design: Design; reference: string | null }
 const REGISTRY: Part[] = [
   { design: mmuDesign, reference: "reference/mmu.cupl.jed" },
   { design: clkdecDesign, reference: "reference/clkdec.cupl.jed" },
+  /* U9 - the space decode, fitted 2026-09-09. ram.md 11 item 6 said it might
+   * not fit a 22V10; it fits at 6 macrocells of 10 and 5 terms of 16. */
+  { design: u9Design, reference: "reference/u9.cupl.jed" },
   { design: hgenDesign, reference: null }, { design: vgenDesign, reference: null },
   { design: vdecDesign, reference: null }, { design: hadrDesign, reference: null },
   { design: vadrDesign, reference: null },

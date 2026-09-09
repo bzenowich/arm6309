@@ -1,4 +1,4 @@
-/* U6 - the E/Q divider, /IOSEL, and the system RAM's control lines.
+/* U6 - the E/Q divider, /IOSEL, and boot mode.
  *
  * The same logic as clkdec.pld, with the equations hand-expanded into the sum
  * of products a 22V10 implements. That expansion is the error-prone step and
@@ -31,16 +31,19 @@ export const clkdecDesign: Design = {
     { name: "IOPAGE", pin: 4, activeLow: true },
     { name: "LA7", pin: 5 },
     { name: "LA6", pin: 6 },
-    /* PHYSICAL A19, out of the map SRAM, not off the CPU. */
-    { name: "A19", pin: 7 },
+    /* LA5 and LA4 select $FFA0-$FFBF and then its two halves. They took the
+     * pins physical A19 and A20 held for the system RAM's decode until
+     * 2026-09-09 - hardware/ram.md 6.2 deleted that part a day earlier. */
+    { name: "LA5", pin: 7 },
     { name: "RW", pin: 8 },
-    /* PHYSICAL A20 - the map SRAM's eighth output bit, which was stored and
-     * read back and drove nothing until 2026-09-08. machine.md 5 item 1 D. */
-    { name: "A20", pin: 9 },
+    { name: "LA4", pin: 9 },
     /* /WAIT from the backplane, active high after the slot's open-drain
      * inversion. It holds every registered macrocell below - machine.md 5
      * item 8, and clkdec.pld carries the two rules that go with it. */
     { name: "WAIT", pin: 10 },
+    /* $FFB0 even is TASK, $FFB1 odd is BOOT - machine.md 3. One literal, and
+     * it is what lets boot code write TASK without leaving boot mode. */
+    { name: "LA0", pin: 11 },
   ],
 
   cells: [
@@ -101,29 +104,42 @@ export const clkdecDesign: Design = {
     },
 
     /* -- the two decodes ------------------------------------------------ */
-    /* $FF40-$FF7F, common to every slot - machine.md 2, corrected from
-     * "geographic, per slot". */
     /* $FF00-$FF7F. One literal: the widening in clkdec.pld deleted LA6. */
     { pin: 15, name: "IOSEL", assertedLow: true, s0: 0, terms: ["IOPAGE & !LA7"] },
 
-    /* System RAM is physical A20 = 0 AND A19 = 0, and never during an I/O
-     * cycle - the /IOPAGE term is why that signal had to reach the backplane
-     * at all. A20 arrived 2026-09-08 with the 2 MB map. */
-    { pin: 22, name: "RAM_CE", assertedLow: true, s0: 0, terms: ["!IOPAGE & !A19 & !A20"] },
+    /* -- boot mode, 2026-09-09 ------------------------------------------ */
+    /* machine.md 7.2. RUN = 0 is boot mode and it is zero AT RESET, which is
+     * not a preference: a 22V10 has one asynchronous reset term shared by
+     * every registered macrocell and it resets to ZERO. A bit that had to
+     * come up SET could not live on this part, so the register holds /BOOT
+     * and the board carries RUN.
+     *
+     * Set by one write to $FFB1, cleared by nothing but /RESET - so a wild
+     * store cannot put the machine back into boot mode over live RAM. $FFB0
+     * (LA0 = 0) is TASK and does not set it, which is what lets boot code
+     * write TASK, then the map, then $FFB1, in that order. */
+    {
+      pin: 22, name: "RUN", assertedLow: false, s0: 1, registered: true,
+      terms: ["RUN", "IOPAGE & LA7 & !LA6 & LA5 & LA4 & LA0 & !RW & E"],
+    },
 
-    /* /OE qualified by R/W, which is not decoration: with /OE tied low the
-     * SRAM drives D0-D7 from /CE time until /WE asserts while the CPU is also
-     * driving write data - about 90 ns of contention on every write. */
-    { pin: 14, name: "RAM_OE", assertedLow: true, s0: 0, terms: ["!IOPAGE & !A19 & !A20 & RW"] },
-
-    /* E-qualified, and decode-qualified as well. The decode is redundant - a
-     * write needs CE# and WE# both low - but it keeps a glitch on /CE from
-     * becoming a write. E here is this part's own output, fed back. */
-    { pin: 23, name: "RAM_WE", assertedLow: true, s0: 0, terms: ["!IOPAGE & !A19 & !A20 & !RW & E"] },
+    /* The '244 drives physical A20-A13 whenever the map SRAMs do not. U9
+     * forms their /CE from the same two conditions, so the changeover is one
+     * signal seen by two parts rather than two decodes that have to agree.
+     *
+     * VECSEL is ONE product term because /IOPAGE already means "logical
+     * $FF00-$FFFF" - $FFC0-$FFFF is that page with A7 and A6 both high, and
+     * both are on this part already. */
+    {
+      pin: 14, name: "BOOTOE", assertedLow: true, s0: 0,
+      terms: ["!RUN", "IOPAGE & LA7 & LA6"],
+    },
   ],
 
   /* The 22V10's asynchronous reset is ONE product term shared by every
-   * registered macrocell, so the counter, E and Q all land together. There is
-   * no other way to reset them on this part and no need for one. */
+   * registered macrocell, so the counter, E, Q and RUN all land together.
+   * There is no other way to reset them on this part and no need for one -
+   * and RUN = 0 IS boot mode, which is why the register holds that sense
+   * rather than its complement. */
   ar: "RESET",
 }

@@ -24,11 +24,11 @@ already exists on paper (`io/serial/`), the software does not, and §7 is the or
 |---|---|
 | **What it is** | NitrOS-9's virtual-disk protocol: the machine asks a host PC for 256-byte sectors over a serial link, and the host serves them out of `.dsk` images |
 | **Hardware cost** | **zero ICs.** It is the I/O card's serial half (`io/serial/docs/serial.md`), a null-modem cable, and nothing else |
-| **⭐ Which part decides everything** | **`serial.md` §4.5's `16C550`, not the 6551.** At 19,200 baud a 256-byte sector takes 145 ms and DriveWire is a curiosity; at 115,200 it takes 24 ms and it is a working disk. **This document is the strongest single argument for `machine.md` §6's open tier decision** |
+| **⭐ Which part decides everything** | **`serial.md` §4.5's `16C550`, and it was taken on 2026-09-09.** At 19,200 baud a 256-byte sector takes 145 ms and DriveWire is a curiosity; at 115,200 it takes 24 ms and it is a working disk. **This document was the strongest single argument for that decision**, and `serial.md` §9.1 then found the tier cost no packages at all |
 | **Throughput** | **~11.0 KiB/s** at 115,200 baud, ~22 KiB/s at 230,400 — against `sdcard.md`'s **681 KiB/s**, so **62× slower** and it is not a storage answer |
 | ⭐ **What only it can do** | **give the machine a wall clock.** There is no RTC anywhere in this design — not on the motherboard, not on a card, not in the CPU module. `OP_TIME` returns the host's date and time for **zero parts**, and NitrOS-9 already asks for it |
 | **⚠ What changed** | **it is no longer the boot path.** §1's 1 MB boot ROM holds NitrOS-9, so the machine boots standalone. DriveWire becomes the **development** link — the thing that gets a *new* system onto the machine — which is what it is actually best at |
-| **Software cost** | a NitrOS-9 `dwio`-class low-level driver plus the `RBF` descriptors, and a boot-ROM loader for the bare-metal case. **Nobody has looked at whether the CoCo drivers port** — §8 item 1, the same shape of unknown as `serial.md`'s `sc6551` |
+| **Software cost** | a NitrOS-9 `dwio`-class low-level driver plus the `RBF` descriptors, and a boot-ROM loader for the bare-metal case. **Nobody has looked at whether the CoCo drivers port** — §8 item 1, and ⚠ the part change makes `serial.md`'s `sc6551` question the *same* question |
 
 ---
 
@@ -127,9 +127,9 @@ plus one host turnaround. At 8N1 a byte is 10 bit times.
 
 | Baud | Byte time | 256-byte sector | **Sustained** | vs `sdcard.md`'s 681 KiB/s |
 |---|---|---|---|---|
-| **19,200** — `serial.md` §3.1's 6551 today | 521 µs | **145 ms** | **1.8 KiB/s** | 388× slower |
+| 19,200 — the 6551 this card no longer has | 521 µs | **145 ms** | **1.8 KiB/s** | 388× slower |
 | 38,400 | 260 µs | 72 ms | 3.5 KiB/s | 194× |
-| **115,200** — §4.5's `16C550`, tier 1 | 86.8 µs | **24 ms** | **11.0 KiB/s** | **62×** |
+| **115,200** — the `TL16C550C`, **taken** | 86.8 µs | **24 ms** | **11.0 KiB/s** | **62×** |
 | 230,400 — what a CoCo 3 runs | 43.4 µs | 12 ms | 22.0 KiB/s | 31× |
 
 **The CPU cost is the other half and it is where the 6551 really fails.** With no FIFO
@@ -139,16 +139,18 @@ direction of a 19,200-baud link that is already too slow to be useful.
 
 | | ICs | interrupts per sector | CPU during a transfer, at 400 cycles |
 |---|---|---|---|
-| **6551 @ 19,200** | 3 | 261 | **37 %**, for 1.8 KiB/s |
-| **`16C550` @ 115,200**, FIFO trigger 14 | **4** | **19** | **~16 %**, for 11.0 KiB/s |
-| `16C550` @ 230,400 | 4 | 19 | ~31 %, for 22.0 KiB/s |
-| `16C550` + `serial.md` §5.4 tier 2's ring | ~9 | **1** | ~2 % |
+| 6551 @ 19,200 | 3 | 261 | **37 %**, for 1.8 KiB/s |
+| **`16C550` @ 115,200**, FIFO trigger 14 | **3** | **19** | **~16 %**, for 11.0 KiB/s |
+| `16C550` @ 230,400 | 3 | 19 | ~31 %, for 22.0 KiB/s |
+| `16C550` + `serial.md` §5.4 tier 2's ring | ~8 | **1** | ~2 % |
 
-> ⭐ **This is the clearest case anywhere in the repository for
-> `machine.md` §6's tier decision.** The `16C550` is **+1 IC** and it moves DriveWire
-> from 1.8 KiB/s at 37 % of the CPU to 11.0 KiB/s at 16 % — a **6× throughput gain and
-> a 2.3× cost reduction at the same time**, on the card the machine already has. Tier 2's
-> ring buffer is not needed for DriveWire and should not be justified by it.
+> ⭐ **This was the clearest case anywhere in the repository for that decision, and it
+> carried it.** The `16C550` moves DriveWire from 1.8 KiB/s at 37 % of the CPU to
+> 11.0 KiB/s at 16 % — a **6× throughput gain and a 2.3× cost reduction at the same
+> time** — and `serial.md` §9.1 then found it cost **zero packages**, because the "+1 IC"
+> the tier had been priced at counted the baud crystal in one row where the base total
+> did not. Tier 2's ring buffer is not needed for DriveWire and should not be justified
+> by it.
 
 ⚠ **230,400 baud is not free on the `16C550`.** It needs a `1.8432 MHz × 8` crystal or
 the part's higher-speed grade, and `serial.md` §8's level shifter has to carry it —
@@ -257,7 +259,7 @@ because everything else is priced against it.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| **0** | **⭐ Decide `serial.md` §5.4's tier** — `machine.md` §6 has it open, and §3 above is the argument | the I/O card is 4 ICs with a `16C550`, or DriveWire is planned at 1.8 KiB/s and this document is mostly moot |
+| **0** | **CLOSED 2026-09-09 — tier 1 is taken**, and §3 above was the argument | the I/O card is 14 ICs with a `TL16C550C`, and everything below is planned at 115,200 |
 | 1 | **Get the DriveWire 4 protocol specification into [`reference/`](../reference/)** | §2's ⚠ table is read off a document rather than recalled |
 | 2 | **Host end first, against a terminal emulator** | `pyDriveWire` answers an `OP_NOP` and an `OP_TIME` typed by hand |
 | 3 | **§6.1's boot-ROM loader**, on the bench, with the ROM socketed | a 256-byte sector arrives, checksum matches, at 115,200 |
@@ -272,9 +274,12 @@ because everything else is priced against it.
 
 1. **⚠ Does NitrOS-9's DriveWire client port to a FIFO UART?** §6.2. The protocol and
    `RBF` layers should; the byte layer is a software UART and will not. **The largest
-   unknown in this document**, and the same shape as `serial.md` §13 item 2's `sc6551`
-   question — which should be answered in the same sitting, because both are "read the
-   NitrOS-9 source once".
+   unknown in this document.**
+
+   ⚠ **The part change made this and `serial.md` §13 item 2 the same question.** That
+   item asks whether NitrOS-9's `sc6551` driver exists and matches the register map — and
+   the card is not a 6551 any more, so it does not. **Both drivers now need their byte
+   layer rewritten around a `16C550`**: the same work twice unless it is done once.
 2. **The protocol specification is not in `reference/`.** §2's opcode table is recalled.
    Build order step 1.
 3. **⚠ The PS/2 interrupt collision of §2.1 is unmeasured** and the margin is one byte

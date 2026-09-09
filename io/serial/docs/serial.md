@@ -36,18 +36,18 @@ nobody has measured yet. §5.
 | Question | Answer | § |
 |---|---|---|
 | **Discrete logic, like the other cards?** | **No.** The other cards are discrete because no period chip does what they need. For serial, one does — and it is *older* than most of the 74HC parts around it. | §3, §4 |
-| **Which part?** | **6551 ACIA.** Four registers, on-chip baud generator, crystal is the only external component, full modem control, `/IRQ` out. | §3.1 |
+| **Which part?** | ⭐ **`TL16C550C`, decided 2026-09-09.** Eight registers, **16-byte FIFOs each way**, on-chip baud generator, crystal is the only external component, full modem control. The 6551 §3 argues for is what it replaced, one package for one — §9.1. | §4.5, §9 |
 | **Is a 6502-family part sane on a 6809 bus?** | **It shipped.** The CoCo's own Deluxe RS-232 Pak is a 6551 decoding four ports on a 6809 bus, interrupting through `*CART`. | §3.2 |
-| **Which 6551, though?** | ⚠ **Not the current-production `W65C51N`** — two documented defects make both polling *and* interrupts unsafe. `R6551A` or a CMOS `G65SC51`, and **a 4 MHz grade if fast-E mode is ever wanted.** | §3.3, §3.4 |
-| **Does the card survive the machine's faster E rate?** | **Only with a 4 MHz `G65SC51`.** The card is specified at ÷12 (E = 2.0979 MHz). ÷8 "fast-E" mode puts 3.1469 MHz on `φ2` — 57 % over a 2 MHz part. | §3.4 |
-| **Baud rates** | 50–19,200 from the standard crystal. A 2× crystal doubles them and **buys nothing usable** — see below. | §5 |
-| **What actually limits throughput?** | **No FIFO ⇒ one interrupt per byte.** At 19,200 baud that is 1,920 interrupts/s receiving — 9 % of the CPU optimistically, 37 % pessimistically — and **double that full duplex.** | §5 |
-| **Practical ceiling** | **4800–19,200 baud**, pinned by the same unmeasured NitrOS-9 dispatch cost as `ps2.md` §14 item 3. One measurement settles both. | §5 |
-| ⭐ **Can that be broken?** | **Yes, and it needs a different part rather than more logic around this one.** A **`16C550`** has a 16-byte FIFO and reaches 115,200 — and **38,400 then costs less CPU than 19,200 does today.** It needs 8 addresses, and the widened `$FF00`–`$FF7F` window has them. | **§4.5, §5.4** |
+| ~~**Which 6551, though?**~~ | **Moot** — the part is a `TL16C550C`. §3.3's `W65C51N` trap and §3.4's speed grade both stop existing with it; §9.2. | §9.2 |
+| **Does the card survive the machine's faster E rate?** | ⭐ **Yes, and it no longer has an opinion.** The `16C550` takes no clock from the bus — `machine.md` §1.1's fast-E experiment is not a card-level constraint here any more. | §9.2 |
+| **Baud rates** | **50–460,800** from a 7.3728 MHz crystal; **115,200 is what the card is planned at**, because §8's charge-pump level shifter is specified to 120 kbit/s. | §5, §9.1 |
+| **What actually limits throughput?** | **The FIFO trigger and the dispatch cost.** At 115,200 baud and a 14-byte trigger that is ~1,030 interrupts/s receiving, against the 11,520 a 6551 would have taken. §5 is written against the 6551 and is the argument that produced the part change. | §5, §5.4 |
+| **Practical ceiling** | **115,200**, and it is the level shifter rather than the UART or the CPU. Still pinned to the same unmeasured NitrOS-9 dispatch cost as `ps2.md` §14 item 3. | §5.4, §5.6 |
+| ⭐ **Can that be broken?** | **Taken 2026-09-09: the part is a `16C550`.** A 16-byte FIFO and 115,200 baud, for **zero extra packages** — §9.1. Everything below that describes the 6551 is the reasoning, not the card. | **§4.5, §5.4, §9.1** |
 | ⭐ **And beyond that?** | A ring buffer in the machine's new physical map takes **115,200 to 5 % and 460,800 to 20 %** — the same move storage and net both made. | **§5.4** |
 | ⚠ **So what is the real ceiling?** | **Not the wire.** ~115,200 for a console, because ANSI rendering on a 2 MHz 6309 is ~22 % of the CPU at that rate; **460,800–921,600 for file transfer**, where nothing renders. | **§5.6** |
-| **Where in the `$FF` map?** | **`$FF54`–`$FF57`, four bytes**, inside the merged I/O card's eight-byte window. ⚠ **The decode is `A0`–`A6`.** | §7.1 |
-| **Is `/RTS` flow control automatic?** | **No — not on a 6551.** `/RTS` is a command-register bit the ISR drives at a ring-buffer high-water mark. `/CTS` *is* automatic, so the transmit direction is fine. | §5.1 |
+| **Where in the `$FF` map?** | **`$FF38`–`$FF3F`, eight bytes**, the upper half of the merged I/O card's **sixteen**-byte window at `$FF30`. The card moved on 2026-09-09 because eight registers would not fit where four did. ⚠ **The decode is `A0`–`A6`.** | §7.1 |
+| **Is `/RTS` flow control automatic?** | **No, and it is not on a 16C550 either** — `/RTS` is an MCR bit the ISR drives at a ring-buffer high-water mark. `/CTS` gates the transmitter automatically, so that direction is fine. ⭐ **The FIFO makes the high-water mark far less urgent**: 16 bytes of slack against one. | §5.1 |
 | **IC count** | **3** — ACIA, `MAX232`, decode GAL. Plus a crystal and a DE-9. | §9 |
 
 **Net: 3 ICs**, against PS/2's 11 (`ps2.md` §9), audio's (`audio.md` §10) and the video
@@ -542,112 +542,178 @@ Straightforward, and §3.2 is the reason to expect it to be.
 
 | 6551 pin | Connect to |
 |---|---|
-| `φ2` | backplane `E` — **and this is why §3.4's speed grade is a card-level constraint**: the part is clocked by whatever rate the machine is running at |
+| ~~`φ2`~~ | ⭐ **there is no bus clock pin.** The `16C550` takes `/RD` and `/WR` strobes, which the GAL forms from `E` and `R/W` — one product term each. §3.4's speed grade stops being a card-level constraint, and so does `machine.md` §1.1's fast-E experiment |
 | `R/W` | backplane `R/W` |
-| `CS0`, `/CS1` | the decode GAL, from the `/IOSEL` window strobe **and `A2`–`A6`** — ⚠ **`A6` is load-bearing**: it is not implied by the strobe, and without it this card answers at `$FF54` *and* `$FF14` ([`machine.md`](../../../docs/machine.md) §2) |
-| `RS0`, `RS1` | `A0`, `A1` |
+| `CS0`, `CS1`, `/CS2` | the decode GAL. `CS0`/`CS1` tie high; `/CS2` is the card's window AND `A3` — ⚠ **`A6` is load-bearing**: it is not implied by the strobe, and without it the card answers at its base *and* 64 bytes below ([`machine.md`](../../../docs/machine.md) §2) |
+| `A0`, `A1`, `A2` | backplane `A0`–`A2` — **eight registers, so three lines**, §7.2 |
 | `D0`–`D7` | backplane `D0`–`D7` |
-| `/IRQ` | backplane `/IRQ`, **open-drain — confirm this on the datasheet, §12 step 1** — the last of the line's sources, after video, net and PS/2 |
-| `/RES` | backplane `/RESET` — **the whole card comes up in a defined state from one pin**, which is the property `ps2.md` §8.4 had to add two changes to acquire |
-| `XTLI`, `XTLO` | 1.8432 MHz crystal + two load capacitors |
+| ⚠ `INTR` | **active-high and TOTEM-POLE.** It cannot wire-OR onto the shared line; the GAL inverts it through an open-drain macrocell (`machine.md` §5 item 9's idiom). ⭐ **And it need not be the last source any more** — §7.3 |
+| ⚠ `MR` | **ACTIVE HIGH**, where the backplane's `/RESET` is not — so it comes from the GAL inverted, one macrocell. The 6551 took `/RESET` straight through and this row used to say so; that convenience is what the part change spent |
+| `XIN`, `XOUT` | **7.3728 MHz** crystal + two load capacitors — 115,200 is divisor 4 and 460,800 divisor 1 |
+| `/BAUDOUT` → `RCLK` | tied together: receive and transmit share one rate |
+| `ADS` | tied low — the 6809 holds its address for the whole cycle, so there is nothing to latch |
 
-The 6551 decodes its own four registers from `RS0`/`RS1`, so the GAL only has to select the
-four-byte window inside the slot — a handful of terms, and the base address becomes a
-jumper like every other card's.
+The part decodes its own eight registers from `A0`–`A2`, so the GAL selects the window
+and nothing finer — and since 2026-09-09 it selects the **card's** sixteen-byte window
+once and lets `A3` split PS/2 from serial (§7.1). The base address is a jumper like every
+other card's.
 
-**Reset is worth one sentence, because it is free here and was not free elsewhere.** The
-6551's programmed reset (§10.3 step 1) and its hardware `/RES` both leave the transmitter
-and receiver disabled and the interrupt cleared, so a `/RESET` pulse cannot leave this card
-holding the shared `/IRQ` low. That is the failure `ps2.md` §8.4 documents on the card next
-door, and the reason this row exists in the table rather than being assumed.
+⚠ **Reset was free here and is not any more.** The 6551's hardware `/RES` was backplane
+`/RESET` with no logic between them; the `16C550`'s `MR` is active high, so it goes
+through the GAL. The *property* survives — `MR` clears the FIFOs, disables the interrupts
+and releases `INTR`, so a `/RESET` pulse cannot leave this card holding the shared `/IRQ`
+low — but it now depends on one macrocell being right rather than on a wire being short.
+That is the failure `ps2.md` §8.4 documents on the card next door, one indirection
+further away.
 
-**This card is LAST in the shared-`/IRQ` polling chain**, after video's `VSTAT`, net's
-`NRXST` and PS/2's `IOSTAT` — `machine.md` §4.1 records the order, and §7.3 explains why it has to be this way
-round. The short version: **reading `STATUS` clears the interrupt and returns the error
-bits in the same read**, so this card's handler cannot be a cheap probe. Every other
-source on the line can be looked at and passed over; this one cannot be looked at without
-being serviced.
+⭐ **This card is no longer forced to be LAST in the shared-`/IRQ` polling chain.**
+`machine.md` §4.1 put it there because reading a 6551's `STATUS` clears the interrupt and
+returns the error bits in the same read, so its handler could not be a cheap probe. **A
+`16C550`'s `IIR` can be**: it names the source, or says there is none, and destroys
+nothing. §7.3 has what that changes and what survives — `LSR`'s error bits are still
+read-to-clear, and are still read only when `IIR` has said to.
 
 ---
 
 ## 7. Register map
 
-### 7.1 Placement — `$FF54`–`$FF57`, inside the merged card's window
+### 7.1 Placement — `$FF38`–`$FF3F`, and the card moved to make room
 
-> ⚠ **This card shares a board with PS/2** —
-> `hardware/cards/io.circuit.tsx`, 14 ICs on a 12 cm card, decoding `$FF50`–`$FF57` as
-> one eight-byte window. Nothing about the 6551 changes with the merge: §5's ceiling is
-> what it is, and §4.5's `16C550` proposal applies to the merged card exactly as to a
-> separate one — it would want the same eight addresses out of the card's eight, which
-> is the one thing the merge makes tighter rather than looser.
+> ⚠ **This card shares a board with PS/2** — `hardware/cards/io.circuit.tsx`, 14 ICs on
+> a 12 cm card. **The merged card's window moved on 2026-09-09**, and §4.5's part is
+> why: a `16C550` has **eight** registers where a 6551 has four, so the card needs twelve
+> bytes — and the eight it held at `$FF50` were wedged between audio at `$FF40` and
+> storage at `$FF58`.
 
-**Propose `$FF54`–`$FF57`**, the four bytes immediately above PS/2, inside the
-`$FF00`–`$FF7F` geographic window (`machine.md` §2; `hardware/cards/windows.ts` is the
-map as data):
+**The card takes `$FF30`–`$FF3F` — sixteen bytes, one aligned base** — and serial is the
+upper half of it. `hardware/cards/windows.ts` is the map as data:
 
 | Window | Size | Owner |
 |---|---|---|
-| `$FF00`–`$FF3F` | 64 | **free** |
+| `$FF00`–`$FF2F` | 48 | **free** |
+| **`$FF30`–`$FF33`** | **4** | PS/2 — `ps2.md` §3.2 |
+| `$FF34`–`$FF37` | 4 | *reserved to this card* |
+| **`$FF38`–`$FF3F`** | **8** | **serial — this document** |
 | `$FF40`–`$FF4F` | 16 | audio — `audio.md` §9.1 |
-| `$FF50`–`$FF53` | 4 | PS/2 — `ps2.md` §3.2 |
-| **`$FF54`–`$FF57`** | **4** | **serial — this document** |
+| `$FF50`–`$FF57` | **8** | **free** — vacated by this card |
 | `$FF58`–`$FF5B` | 4 | storage — `storage/docs/sdcard.md` §6.1 |
 | `$FF5C`–`$FF5F` | 4 | net — `net/docs/net.md` §5.1 |
 | `$FF60`–`$FF7F` | 32 | video — `graphics.md` §13 |
-| | **128** | |
+| | **128**, 56 free | |
 
-⚠ **Two consequences of the widened window, and the first is a bug if it is missed:**
+**Why move rather than widen in place.** Widening at `$FF50` meant relocating **storage
+and net** to make room — two more card documents, neither of which had asked to move.
+Moving this one touches two documents and nothing else, and it keeps the property
+`machine.md` §2 assumes throughout: **one card, one aligned base, one jumper.** `A3`
+splits the window internally, which is a wire rather than a second decode.
 
-- **The decode is `A0`–`A6`, seven bits.** `A6` is not implied by the window strobe, so
-  `A2`–`A5` alone answers at `$FF54` **and** `$FF14`. §6's `CS0`/`/CS1` row carries it;
-  the GAL has not been refitted (§13 item 4).
-- **Addresses are no longer the scarce currency.** §4 rejects every alternative on
-  address cost, and §4.5 is the alternative that rejection was hiding.
+⚠ **The machine gave up eight bytes of margin** — 64 free became 56. `npm run check`
+prints the figure and `hardware/lib/cards.check.ts` is what stops two windows overlapping.
 
-### 7.2 The four registers
+⚠ **Two consequences of the window, and the first was a live bug until 2026-09-09:**
 
-⚠ **Recalled layouts — §13 item 1.** Correct against a datasheet before cutting a board.
+- **The decode is `A0`–`A6`, seven bits.** `A6` is not implied by the window strobe, so a
+  card matching fewer answers at its base **and 64 bytes below it**. `A6` was missing
+  from this card's decode entirely — `hardware/cards/io.circuit.tsx` compared `A2`–`A5`
+  and nothing else. It is on the serial GAL now, once for the whole card. ⚠ **Neither
+  GAL is fitted** (§13 item 4).
+- **Addresses are no longer the scarce currency** — but they are not free either. §4
+  rejects every alternative on address cost and §4.5 is the alternative that rejection
+  was hiding; this card's move to a 16-byte window spent eight bytes of the machine's
+  margin to take it.
+
+### 7.2 The registers — eight, not four
+
+> **Rewritten 2026-09-09 for §4.5's part.** The 6551's four-register map is archived in
+> [history.md](history.md), and it is what §10.1's `sc6551` driver expects.
+
+⚠ **Recalled layouts — §13 item 1.** Correct against a datasheet before cutting a board;
+the part's own pinout is unverified for the same reason (§9.2).
 
 | Off | Name | R/W | Function |
 |---|---|---|---|
-| `+$0` | `DATA` | R/W | read: received byte, clears `RDRF`. write: transmit byte, clears `TDRE` |
-| `+$1` | `STATUS` | R | §7.3 |
-| `+$1` | `RESET` | W | programmed reset — the written value is ignored |
-| `+$2` | `COMMAND` | R/W | parity mode, echo, transmitter interrupt control and `/RTS` state, receiver interrupt disable, `/DTR` state |
-| `+$3` | `CONTROL` | R/W | baud rate select, receiver clock source, data-word length, stop bits |
+| `+$0` | `RBR` / `THR` | R / W | received byte, transmit byte. **The end of a FIFO, not a register** — up to 16 deep each way |
+| `+$0` | `DLL` | R/W | baud divisor, low — **only while `LCR` bit 7 is set** |
+| `+$1` | `IER` | R/W | interrupt enables: received data, transmit empty, line status, modem status |
+| `+$1` | `DLM` | R/W | baud divisor, high — same `LCR` bit 7 window |
+| `+$2` | `IIR` | R | ⭐ **which interrupt, non-destructively** — §7.3 |
+| `+$2` | `FCR` | W | FIFO enable, trigger level (1/4/8/**14**), and the two FIFO resets |
+| `+$3` | `LCR` | R/W | word length, stop bits, parity, break — **and bit 7, which swaps `DLL`/`DLM` in over `+$0`/`+$1`** |
+| `+$4` | `MCR` | R/W | `/DTR`, `/RTS`, `OUT1`, `OUT2`, loopback |
+| `+$5` | `LSR` | R | line status: data ready, overrun, parity, framing, break, transmitter empty |
+| `+$6` | `MSR` | R | modem status and its four delta bits |
+| `+$7` | `SCR` | R/W | scratch — no function at all, and the standard way to probe whether the part is fitted |
 
-### 7.3 `STATUS`
+⚠ **`LCR` bit 7 is a mode bit spanning two addresses**, and it is the one thing in this
+map that bites. With it set, `+$0` and `+$1` are the baud divisor and **not** the data
+and interrupt-enable registers — so an interrupt taken between setting it and clearing it
+reaches a handler that thinks `+$0` is `RBR`. **The initialisation sequence must run with
+interrupts masked**, which §10.3 now has to say and did not before.
+
+### 7.3 ⭐ `IIR` and `LSR` — and the reason this card was polled last is gone
+
+> **Rewritten 2026-09-09.** The 6551's `STATUS` register and the argument built on it are
+> archived in [history.md](history.md). **They are the strongest single consequence of
+> §4.5's part change, and they reach outside this card.**
+
+**`LSR` — line status, read to service, and it does clear things:**
 
 | Bit | Meaning |
 |---|---|
-| 0 | parity error |
-| 1 | framing error |
-| 2 | **overrun** — a byte arrived before the last was read. §5's failure mode |
-| 3 | `RDRF` — receive data register full |
-| 4 | `TDRE` — transmit data register empty. ⚠ **broken on the `W65C51N`, §3.3** |
-| 5 | `/DCD` state |
-| 6 | `/DSR` state |
-| 7 | interrupt pending — **reading `STATUS` clears it** |
+| 0 | `DR` — data ready, at least one byte in the receive FIFO |
+| 1 | **overrun** — a byte arrived with the FIFO full. §5's failure mode |
+| 2 | parity error |
+| 3 | framing error |
+| 4 | break interrupt |
+| 5 | `THRE` — transmit holding register empty |
+| 6 | transmitter empty — holding register *and* shift register |
+| 7 | **an error somewhere in the receive FIFO** |
 
-Reading `STATUS` clears the interrupt, so the `/IRQ` handler's first action on this card is
-a `STATUS` read, and the error bits it carries must be consumed in that same read.
+Reading `LSR` clears bits 1–4 and 7, exactly as the 6551's `STATUS` cleared its error
+bits. **That much did not change.**
 
-**That single property fixes this card's position in the shared-`/IRQ` chain: last.**
-`machine.md` §4.1 records the order as **video `VSTAT` → net `NRXST` → PS/2 `IOSTAT` →
-serial `STATUS`**, and the reasoning is asymmetric rather than a matter of priority:
+**What changed is that reading `LSR` is no longer how you find out whether this card
+interrupted.** `IIR` is:
 
-| Source | Can its status be read speculatively? | |
+| `IIR` bits 3–1 | Source | Cleared by |
 |---|---|---|
-| Video `VSTAT` | yes | and it is the system tick, so it is the most frequent source — first for speed, not for correctness |
-| Net `NRXST` | yes — no side effects (`machine.md` §4.1, `net.md` §6) | second, because under load it is the most frequent source after VBL |
-| PS/2 `IOSTAT` | yes — **no side effects at all** (`ps2.md` §8.1) | can sit anywhere; sits in the middle |
-| **Serial `STATUS`** | **no** — the read clears `/IRQ` and consumes `RDRF`, the overrun bit, the parity and framing bits and the `/DSR`/`/DCD` bits in one go | **must be last, and must be serviced where it is read** |
+| `000` | modem status | reading `MSR` |
+| `001` | transmit holding register empty | reading `IIR`, or writing `THR` |
+| `010` | received data available | reading down to below the trigger level |
+| `011` | **receiver line status** — an error | reading `LSR` |
+| `110` | character timeout — data sat in the FIFO unread | reading `RBR` |
 
-**The consequence for §10.2's handler: no probe-and-defer.** A handler that reads `STATUS`
-to decide "not mine" and returns has already destroyed the error bits and dropped the
-interrupt; the byte it did not take is still in the receive register and the overrun that
-follows is unattributable. Read it once, at the end of the chain, and act on everything it
-returns.
+⭐ **And `IIR` bit 0 is "no interrupt pending", which is a non-destructive probe.**
+Reading `IIR` when this card did not interrupt tells you so and destroys nothing.
+
+#### What that does to `machine.md` §4.1
+
+**`machine.md` §4.1 pins the shared-`/IRQ` polling order — video → net → PS/2 → serial —
+and says so as a correctness matter rather than a performance one**, because the 6551's
+`STATUS` read *"clears the interrupt and returns the error bits in the same read"*: a
+dispatcher that probed serial early, decided it was not the source and moved on had
+already destroyed the overrun and framing bits the serial handler needed. That section
+also records the cost, plainly: ⚠ *"This order is correctness-driven, not
+frequency-driven, and the two orders disagree"* — the frequency ordering would be nearly
+the reverse.
+
+⭐ **The constraint is gone. `IIR` can be probed and passed over.**
+
+| | 6551 | **`16C550`** |
+|---|---|---|
+| Probe without servicing? | **no** | **yes** — `IIR` bit 0 |
+| Must be last in the chain? | **yes** | **no** |
+| Where the error bits live | in the same read as the probe | in `LSR`, read only when `IIR` says `011` |
+
+**This document does not re-order the chain** — that belongs to `machine.md` §4.1, and
+the ordering it should take is a measurement question (`ps2.md` §14 item 3) rather than a
+correctness one now. What this section can say is that **the thing that forbade the
+frequency ordering has been deleted**, and that a dispatcher may now probe this card
+wherever it likes.
+
+⚠ **One property survives and the handler still has to keep it**: `LSR` bits 1–4 are
+read-to-clear, so when `IIR` reports `011` the handler must consume the error in that
+read. The difference is that it only ever reads `LSR` when something has told it to.
 
 ---
 
@@ -707,41 +773,69 @@ which is §2's modem row.
 
 | # | Part | Function |
 |---|---|---|
-| 1 | `G65SC51` (or `R6551A`) | the ACIA — **not `W65C51N`**, §3.3. **Speed grade is part of the specification, not a preference: 2 MHz minimum for ÷12, 4 MHz for fast-E — §3.4** |
+| 1 | **`TL16C550C`** | the UART — §4.5's tier 1, **taken 2026-09-09**. 16-byte FIFOs, 115,200 baud, clocked by its own crystal |
 | 2 | `MAX232` | RS-232 levels for `TxD`/`RxD`/`/RTS`/`/CTS`, +5 V only |
-| 3 | GAL22V10 | four-byte window decode from geographic `/IOSEL`, base-address jumper |
+| 3 | GAL22V10 | the card's window decode, the Intel-style strobes, `MR`, and `/IRQ` — shared with the PS/2 half, §7.1 |
 
-**Total: 3.** Plus a 1.8432 MHz crystal, two load capacitors, four charge-pump capacitors,
-a DE-9 — and **a null-modem crossover cable in the bench kit**, §8.
+**Total: 3.** Plus a 7.3728 MHz crystal, two load capacitors, four charge-pump
+capacitors, a DE-9 — and **a null-modem crossover cable in the bench kit**, §8.
 
-**4** with §8's second `MAX232` for full modem control. **5** with §5's `CD40105B` FIFO
-pair, and only if §12 step 2 says so.
+**4** with §8's second `MAX232` for full modem control.
 
-### 9.1 ⭐ And what §4.5's tiers cost
+### 9.1 ⭐ Tier 1 is taken, and it cost nothing in packages
+
+> **Decided 2026-09-09.** The `16C550` replaces the 6551 **one for one**. Two DIPs and a
+> GAL before; two DIPs and a GAL after.
+
+⚠ **This section and §5.4 both priced the tier at "+1 IC", and that was a counting
+error** — the tier table counted the **baud crystal** as a package where the total above
+it did not. There is a crystal either way; only its frequency changes.
 
 | | # | Parts |
 |---|---|---|
-| **Tier 1 — `16C550`** | **4** | `16C550`, `MAX232`, GAL22V10, **7.3728 MHz crystal** in place of 1.8432. The GAL grows by two product terms — `RD` = `E · R/W · CS`, `WR` = `E · /R/W · CS` — and by three address bits, since the part decodes eight registers from `A0`–`A2` |
-| **Tier 2 — + ring** | **~9** | + `6264` 8K×8 ring, `74HC244` ×2 for the region's address, `74HCT245` for its data, and a second GAL for the fill engine and the `machine.md` §5 item 7 bus phase |
+| **Tier 1 — `16C550`, taken** | **3** | `16C550`, `MAX232`, GAL22V10, and a **7.3728 MHz** crystal in place of 1.8432. The card decodes eight registers from `A0`–`A2` where the 6551 used four from `A0`–`A1` |
+| **Tier 2 — + ring** | **~8** | + `6264` 8K×8 ring, `74HC244` ×2 for the region's address, `74HCT245` for its data, and a second GAL for the fill engine and `machine.md` §5 item 7's bus phase |
 
-**Tier 1 deletes this section's sourcing note.** A `TL16C550C` is a current-production
-Texas Instruments part with no defective sibling to avoid and no speed grade to match,
-because §4.5's part is clocked by its own crystal rather than by backplane `E`. **The
-one genuinely hard-to-buy component on this card is the reason Tier 1 is worth more than
-its throughput.**
+**What the GAL actually grows by**, because "two product terms" understated it:
+
+| | |
+|---|---|
+| `RD` / `WR` | Intel-style strobes from `E` and `R/W` — **one product term each**, as §5.4 said |
+| ⚠ **`MR`** | **the 16C550's master reset is ACTIVE HIGH** and the backplane's `/RESET` is not. §6 called wiring `/RESET` straight to the part a property this card had for free; it costs **one macrocell** now |
+| ⚠ **`/IRQ`** | **`INTR` is active-high and totem-pole.** The 6551's `/IRQ` was open-drain and wire-ORed onto the shared line directly; **this part cannot.** One open-drain macrocell inverts it — `machine.md` §5 item 9's idiom: drive a constant, put the condition on the output enable |
+| the window | **`A0`–`A6` against the jumpered base**, §7.1 — and `A6` was missing from this card's decode entirely until this pass |
+
+**None of it needs a package.** The merged card carries two GALs
+(`hardware/cards/io.circuit.tsx`) and they split the work: the serial one compares the
+base **once for the whole card** and hands `CARD_SEL` over, so PS/2's — which `ps2.md` §9
+calls the fitting risk at roughly ten macrocells of ten — takes that plus `A3` instead of
+four more address bits. ⚠ **Neither is fitted**; §13 item 4.
 
 ⚠ **Tier 2's five extra packages are the same five `sdcard.md` §8 pays** — address and
 data plumbing to make a card buffer reachable as memory — and `sdcard.md` §8.1 notes
-that one `ATF1508AS` absorbs them all. **The same option and the same house-rule
-objection apply here**, and this card has even less claim on an exception than that one.
+that one `ATF1508AS` absorbs them all. **The same option applies here**, and the
+house-rule objection that used to go with it is retired (root `README.md`).
 
-**Sourcing note, and it belongs here rather than in §13:** row 1 is the only part on this
-card that cannot be substituted with a jellybean, and it now has **two** attributes to
-match, not one — *not* a `W65C51N` (§3.3), **and** a speed grade adequate for the E rate
-the machine will actually run at (§3.4). A `G65SC51P-2` covers the specified ÷12 rate and
-**does not cover fast-E mode**; only a genuine 4 MHz grade does. Record which grade was
-bought, because the difference is invisible on the bench at ÷12 and shows up as occasional
-corrupted bytes at ÷8.
+### 9.2 ⭐ What stopped existing with the part
+
+**Three of this document's problems are no longer this card's.** The sections that argue
+them are kept, because the reasoning is how the decision was reached — but nothing should
+be acted on from them:
+
+| | |
+|---|---|
+| **§3.3's `W65C51N` trap** | the transmit-empty defect that makes polling *and* interrupts unsafe on the current-production 6551, and the hunt for an `R6551A` or `G65SC51` it forces. **Gone** — `TL16C550C` is current production with no defective sibling |
+| **§3.4's speed grade** | 2 MHz for ÷12 and 4 MHz for fast-E, invisible on the bench at ÷12 and showing up as occasional corrupted bytes at ÷8. **Gone** — the part takes no clock from the bus, so `machine.md` §1.1's fast-E experiment stops being a card-level constraint entirely |
+| **§5's ceiling** | 19,200 baud at one interrupt per byte. **Gone** — 115,200 at a 14-byte FIFO trigger is one interrupt per fourteen |
+
+⭐ **The sourcing note this section used to carry is deleted rather than updated.** It
+said row 1 was "the only part on this card that cannot be substituted with a jellybean"
+and had **two** attributes to match. It has one — buy a `TL16C550C` — and
+⚠ **the remaining question is the package.** TI's current catalogue lists `FN` (PLCC-44)
+and `PT` (TQFP-48); whether the **PDIP-40** is still made is the first question about the
+part (`net.md` §13.6). `hardware/lib/parts.ts` has no entry for it and
+`hardware/cards/io.circuit.tsx` marks the pinout **unverified** until a datasheet is in
+`reference/datasheets/`.
 
 For scale: PS/2 is 11 (`ps2.md` §9), audio's count is in `audio.md` §10 and the video
 card's in `graphics.md` §14; serial is **3**. The card is small because the problem was
@@ -838,14 +932,14 @@ central one shipped inside a CoCo.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | **Decide §5.4's tier** (§13 item 6), because Tier 1 changes which part step 1 sources. The window question is settled: `$FF00`–`$FF7F`, 64 bytes free, ⚠ and this card's decode is `A0`–`A6` | the tier is recorded and step 1 sources the right part |
-| 1 | **Get a datasheet** and correct §7.2/§7.3 against it; source an `R6551A` or `G65SC51`, **not a `W65C51N`**, in a grade §3.4 allows. Four things to look up specifically: **(a) `IRQB` output structure = open drain** — §6 wire-ORs it as the fourth source on a shared line that touches three other cards, and the NMOS parts document it, but the part actually bought will come from one of two out-of-production families; a push-pull variant needs a series diode, and nobody will find that out except by looking. **(b)** the `COMMAND` 2-bit `/RTS`/transmit-interrupt field (§5.1 point 2). **(c)** the `/DSR`/`/DCD` transition interrupt and its absence of an enable bit (§8, §10.2). **(d)** the maximum `φ2` for the exact grade in hand (§3.4) | §13 items 1 and 5 closed; the four lookups recorded in §7.2/§7.3/§3.4 with the datasheet cited |
+| 0 | **CLOSED 2026-09-09 — tier 1 is taken** (§9.1). The `16C550` replaces the 6551 one for one; the "+1 IC" was a counting error. The window moved with it: `$FF30`–`$FF3F` for the card, `$FF38`–`$FF3F` for this half, ⚠ and the decode is `A0`–`A6` | done |
+| 1 | **Get a `TL16C550C` datasheet** into `reference/datasheets/` and correct §7.2, §7.3 and the pinout against it. ⚠ **The pinout is unverified and it is the only unverified part on this card** — `hardware/cards/io.circuit.tsx` carries it from familiarity. Three things to look up specifically: **(a) is the PDIP-40 still made?** TI's catalogue lists PLCC-44 and TQFP-48, and availability is the first question about a part (`net.md` §13.6). **(b)** the `FCR` trigger-level encoding, since §5.4's arithmetic assumes 14. **(c)** the `IIR` character-timeout condition, which is what stops a partial FIFO sitting unread | §13 items 1 and 5 closed; the pinout `confirmed` in `hardware/lib/parts.ts`; the three lookups recorded with the datasheet cited |
 | 2 | **Measure NitrOS-9's interrupt dispatch cost** — shared with `ps2.md` §13 step 8 | §5's ceiling becomes a number; the FIFO question is settled for both cards |
-| 3 | **Breadboard the ACIA on the bus exerciser** (`graphics.md` §16.1) — no 6309 core needed | registers read back; the baud generator runs; `TDRE` behaves, confirming the part is not a `W65C51N` |
+| 3 | **Breadboard the UART on the bus exerciser** (`graphics.md` §16.1) — no 6309 core needed | `SCR` reads back what was written (the standard is-it-there probe); the divisor latches work and `LCR` bit 7 swaps them in and out; `IIR` reports "no interrupt" without side effects — §7.3's claim, on silicon |
 | 4 | **Loopback at 9600**, `TxD` to `RxD` | a byte written appears in the receive register with no framing or parity error |
 | 5 | **A real terminal** over a **null-modem cable** (§8), then a real modem over a straight-through one | characters both ways; `/CTS` observed to stop the transmitter on its own; **ISR-driven `/RTS` observed to throttle at the ring-buffer high-water mark** — §5.1, and confirm the far end still delivers 1–2 characters after `/RTS` drops |
 | 6 | **NitrOS-9 driver** — `sc6551` if it exists, else write one | a login shell on `/t2` under a running replayer, with **no lost replayer ticks at the §5 rate** |
-| 7 | **Sustained transfer at the §5 ceiling, full duplex, with the PS/2 card in the backplane and LED updates being sent** (`ps2.md` §7.1, §13 step 9) | measured overrun count with flow control on, and a recorded CPU cost — **and an honest count of the overruns caused by PS/2's masked transmit window, which flow control cannot prevent (§5.1 point 4)**. Zero is not the expected answer at 19,200 |
+| 7 | **Sustained transfer at 115,200 full duplex, with the PS/2 card in the backplane and LED updates being sent** (`ps2.md` §7.1, §13 step 9) | measured overrun count with flow control on, and a recorded CPU cost — **and an honest count of the overruns caused by PS/2's masked transmit window, which flow control cannot prevent (§5.1 point 4)**. ⚠ `drivewire.md` §2.1 makes this the same measurement DriveWire needs: 0.8–1.3 ms of masked `/IRQ` is 9–15 byte times at 115,200 against a 16-byte FIFO, so **the margin is one byte to seven** |
 
 **Step 2 gates step 6**, and it is the same measurement the PS/2 card is waiting on.
 **Step 7 is shared with `ps2.md` §13 step 9** and cannot be run on either card alone.
@@ -874,31 +968,40 @@ central one shipped inside a CoCo.
    ceiling rests on it — 19,200 baud is either 9 % of the CPU or 37 %. **Shared with
    `ps2.md` §14 item 3; one measurement closes both.**
 
-4. **The decode is seven bits, and the GAL has not been refitted.** ⚠ The
-   `$FF00`–`$FF7F` window does not imply `A6`, so `A2`–`A5` alone answers at `$FF54`
-   *and* `$FF14`; §6's `CS0`/`/CS1` row carries the seven-bit decode, and the GAL
-   equations still owe it.
+4. **⚠ NEITHER OF THE CARD'S GALs IS FITTED, and they have more to carry than they did.**
+   The `$FF00`–`$FF7F` window does not imply `A6`, so a card matching fewer bits answers
+   at its base *and* 64 bytes below — and `A6` was missing from
+   `hardware/cards/io.circuit.tsx` entirely until 2026-09-09. It is on the serial GAL
+   now, along with the Intel strobes, the active-high `MR` and the open-drain `/IRQ`
+   inversion `INTR` needs (§9.1); PS/2's takes `CARD_SEL` and `A3` instead of four
+   address bits, which is what keeps it inside a part `ps2.md` §9 already calls the
+   card's fitting risk. **Fit both before laying out the board** — `gal/README.md` lists
+   them among the decodes still unwritten, and the motherboard's three are the model.
 
-   > **The widened window is also what makes §4.5 possible**, which is the more
-   > interesting consequence: eight addresses for a `16C550` did not exist when §4
-   > rejected every alternative on address cost.
+   > **The widened window is what made §4.5 possible**, which is the more interesting
+   > consequence: eight addresses for a `16C550` did not exist when §4 rejected every
+   > alternative on address cost. Taking them cost the machine eight bytes of margin
+   > (`machine.md` §3).
 
-5. **Part sourcing.** `R6551A` and `G65SC51` are out of production; the in-production
-   `W65C51N` is defective for this use (§3.3). Confirm a source before committing, and
-   record it — this is the one part on the card that cannot be substituted with a
-   jellybean.
+5. **⚠ CHANGED 2026-09-09 — the sourcing question is a package question now.** The item
+   read: *"`R6551A` and `G65SC51` are out of production; the in-production `W65C51N` is
+   defective for this use (§3.3). Confirm a source before committing."* Item 6 took the
+   `16C550` and that is gone — but it is not replaced by nothing. **Is the `TL16C550C`
+   still made in PDIP-40?** TI's catalogue lists PLCC-44 and TQFP-48; a PLCC needs a
+   socket this card has not budgeted and a TQFP is not a through-hole board.
+   `net.md` §13.6's lesson holds either way: **availability is the first question about
+   a part.**
 
-   > ⚠ **This item is itself an argument for §4.5.** `net.md` §13.6 learned the same
-   > lesson the hard way:
-   > **availability is the first question about a part and the I/O budget is the
-   > second.** A `TL16C550C` is in production, has no defective sibling and no speed
-   > grade to match — so **Tier 1 closes this item and item 9 outright**, which is worth
-   > more than the throughput.
+6. **CLOSED 2026-09-09 — the `16C550`, and it cost no packages** (§9.1). The tier was
+   priced at "+1 IC" here and in §5.4; that was a counting error — the tier table counted
+   the baud crystal where the base total did not. Two DIPs and a GAL before, two DIPs and
+   a GAL after, for 6× the baud rate at a fraction of the CPU.
 
-6. **⭐ Decide between the 6551 and a `16C550`** (§4.5, §5.4). Tier 1 is
-   +1 IC for 6× the baud rate at less CPU than today, and it closes items 5 and 9. The
-   option did not exist while the `$FF` map had only four bytes free. **A
-   decision, not a measurement — and it should be made before §12 step 1 buys a part.**
+   > **It closed more than its own item.** Item 9's speed grade, §3.3's `W65C51N` trap
+   > and — the one nobody costed — ⭐ **`machine.md` §4.1's polling constraint** (§7.3):
+   > a `16C550` can be probed without being serviced, so this card is no longer pinned to
+   > the end of the shared-`/IRQ` chain. What it spent was **eight bytes of the machine's
+   > `$FF` margin**, because eight registers would not fit where four did (§7.1).
 
 7. **⭐ And then whether to add the ring** (§5.4 Tier 2). +5 ICs for
    115,200 at 5 % and 460,800 at 20 %, using the machine's new physical map
@@ -911,8 +1014,9 @@ central one shipped inside a CoCo.
    measured alongside §12 step 2, and the video card's `docs/features.md` §2 has the
    span-writer figures it would be measured against.
 
-9. **Speed grade, and the fast-E question** (§3.4). ⭐ **Moot if item 6 takes Tier
-   1**, because a `16C550` takes its timing from its own crystal and never sees `φ2`.
+9. **CLOSED 2026-09-09 by item 6.** Speed grade and the fast-E question (§3.4) were a
+   6551 problem: a `16C550` takes its timing from its own crystal and never sees `φ2`, so
+   `machine.md` §1.1's ÷8 experiment has one fewer subsystem objecting to it.
    For the 6551: `E` at ÷12 is 2.0979 MHz — 5 % over a
    2 MHz `R6551A`; prefer CMOS. **At ÷8 it is 3.1469 MHz, 57 % over, and only a 4 MHz
    `G65SC51` covers it.** The card is specified at ÷12 and fast-E is experimental

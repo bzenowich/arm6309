@@ -93,14 +93,14 @@ export const CARDS: Record<string, CardSpec> = {
     ],
   },
   audio: {
-    title: "Audio", length: 180, ics: 31, source: "audio/docs/audio.md 10",
+    title: "Audio", length: 180, ics: 32, source: "audio/docs/audio.md 10",
     note: "4-channel 8-bit PCM, Paula-exact, panned",
     /* audio.md 7.1: the output is line level on a 3.5 mm stereo jack at the
      * rear edge, in parallel with the backplane's AUDIO_L/R pair. Nothing
      * consumed that pair - there is no chassis and no rear panel - and this
      * is what makes the card testable with no backplane at all. */
     rear: [{ w: 47, h: 24, label: "analogue out + filters", kind: "analog" },
-           { w: 14, h: 13, label: "3.5 mm", kind: "conn" }],
+           { w: 14, h: 13, label: "3.5 mm hp", kind: "conn" }],
     parts: [
       pkg(33, 33, "ATF1508AS", "pld", 1, "1508"),
       pkg(20.3, 12.7, "28.375 MHz osc", "clk", 1, "OSC"),
@@ -121,6 +121,11 @@ export const CARDS: Record<string, CardSpec> = {
       dip(14, 0.3, "TL074", "analog", 3),
       dip(8, 0.3, "TL072", "analog"),
       dip(14, 0.3, "74HC4066", "analog"),
+      /* 7.1: the jack is a headphone output and the backplane pair is a line
+       * output - two signals, not one. 70 mA into 32 ohm where a TL072 would
+       * clip below ~200. It belongs beside the jack in the analogue section,
+       * not beside the CPLD. */
+      dip(8, 0.3, "NJM4556A hp drv", "analog"),
       dip(20, 0.3, "74HC574 pw", "bus"),
       dip(20, 0.3, "74HC574 prefetch", "bus"),
     ],
@@ -172,9 +177,13 @@ export const CARDS: Record<string, CardSpec> = {
     parts: [
       dip(24, 0.3, "GAL22V10 ps2", "pld"),
       dip(24, 0.3, "GAL22V10 serial", "pld"),
-      dip(28, 0.6, "G65SC51 ACIA", "pld"),
+      /* serial.md 4.5 tier 1, taken 2026-09-09: a 16C550 replaces the 6551
+       * ONE FOR ONE. The "+1 IC" that tier was priced at counted the baud
+       * crystal in one row and not the other (serial.md 9.1). It is a bigger
+       * package - DIP-40 against DIP-28 - and that is the real cost here. */
+      dip(40, 0.6, "TL16C550C UART", "pld"),
       dip(16, 0.3, "MAX232", "analog"),
-      uncounted(pkg(11.5, 4.7, "1.8432 MHz xtal", "clk", 1, "XTAL")),
+      uncounted(pkg(11.5, 4.7, "7.3728 MHz xtal", "clk", 1, "XTAL")),
       dip(20, 0.3, "74HC273 IOCTRL", "bus"),
       dip(20, 0.3, "74HC244 IOSTAT", "bus"),
       dip(14, 0.3, "7407 open-coll", "glue"),

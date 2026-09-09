@@ -1,30 +1,39 @@
-/* arm6309 motherboard.
+/* arm6309 motherboard. 17 ICs and four SIMM sockets.
  *
  * docs/machine.md 6 lists "Draw the motherboard" as an open item owned by the
- * machine, with no document behind it. This is the first pass at it.
+ * machine. This is the board.
  *
  * What lives here, and the section that put it here:
  *   the CPU module's 40-pin socket        machine.md 5 item 5 (decided: socket)
- *   the MMU, five packages                graphics.md 6.3.1
- *   the E/Q divider, one GAL              machine.md 1
+ *   the MMU, six packages                 graphics.md 6.3.1 + ram.md 3.1
+ *   the E/Q divider and boot mode, U6     machine.md 1, machine.md 7.2
  *   the 25.175 MHz master oscillator      machine.md 1
  *   the power-on reset supervisor         machine.md 2.1
- *   512 KB of system SRAM                 machine.md 7.1
+ *   the space decode, U9                  ram.md 6.3, 6.7
+ *   the SIMM controller, U10 + 3 x '157   ram.md 6.3
+ *   four 30-pin SIMM sockets, 4-16 MB     ram.md 6
+ *   a 1 MB boot ROM and its address buffer  machine.md 7.2
  *   the open-drain pull-ups               machine.md 2.1
- *   six expansion slots                   machine.md 5 item 5 (still open)
+ *   six expansion slots                   hardware/README.md
  *
- * Schematic-level. Placement and routing are not attempted yet. Two of the
- * three blockers have moved: every package pinout is datasheet-verified
- * (lib/parts.ts, and U1's was wrong), and U3's equations are written
- * (gal/mmu.pld, and four things here were wrong). U6 is still unwritten, and
- * the system RAM's control lines still have no source - see U8.
+ * WHAT LEFT ON 2026-09-09: U8, the 512 KB DIP system RAM. ram.md 6.2 replaced
+ * it with SIMM sockets on 2026-09-08 and this file kept drawing it for a day -
+ * which is what hardware/README.md open item 3 was tracking. The part moved to
+ * the audio card (audio.md 5), where it is 512 KB of sample RAM in one package.
+ *
+ * Schematic-level; placement and routing are not attempted. Three of the
+ * board's parts are fitted at the fuse level and checked against Atmel's own
+ * CUPL - U3 (gal/mmu.pld), U6 (gal/clkdec.pld) and U9 (gal/u9.pld). U10 is
+ * the one piece of logic on this board that is still unwritten.
  */
 import { SlotSocket } from "../lib/SlotConnector"
 import {
-  CPU_SOCKET, MAP_SRAM, HC574, HC245, HC157, SRAM_512K, gal22v10, labels,
+  CPU_SOCKET, MAP_SRAM, HC574, HC245, HC157, HCT244, FLASH_512K, SIMM30,
+  gal22v10, labels,
 } from "../lib/parts"
 
 const SLOTS = 6
+const SIMMS = 4
 
 /* Logical A0-A15 come off the CPU socket and stay on the motherboard: A13-A15
  * are the map SRAM's address inputs and nothing on a card may see them
@@ -94,8 +103,40 @@ export default () => (
          * It drove nothing. It now drives slot A34. Zero ICs. */
         DQ0: pa(13), DQ1: pa(14), DQ2: pa(15), DQ3: pa(16),
         DQ4: pa(17), DQ5: pa(18), DQ6: pa(19), DQ7: pa(20),
-        nCE: "net.GND", nOE: "net.MAP_OE", nWE: "net.MAP_WE",
+        /* ⚠ /CE WAS TIED LOW until 2026-09-09 and is U9's now. Boot mode has
+         * to take the map off the physical address bus so the '244 can drive
+         * it, and /OE cannot do that job: U3's MAP_OE is asserted for every
+         * non-$FFxx cycle, which is most of boot. One net, no parts, and it
+         * is what makes the buffer and the SRAMs exact complements
+         * (gal/u9.pld, gal/jedec.check.ts). */
+        nCE: "net.MAP_CE_LO", nOE: "net.MAP_OE", nWE: "net.MAP_WE",
       }}
+    />
+
+    {/* U1B - the HIGH map byte, ram.md 3.1. Read in parallel with U1 on the
+      * same address and the same D0-D7: translation needs A24..A13 at once,
+      * which is why this is two byte-wide parts and not one sequential read
+      * inside a 110 ns t_AD budget that already has 15 ns of SRAM in it.
+      *
+      * Four of its eight bits are physical A24..A21; the other four are
+      * ram.md 3.3's spare flags and drive nothing yet.
+      *
+      * ⚠ A24..A21 NEVER REACH A SLOT. That is ram.md 5.3: a card decodes
+      * A0-A20 and U9 pulls /IOPAGE for everything above 2 MB, so the four
+      * backplane pins the map would otherwise need cost nothing at all. */}
+    <chip
+      name="U1B"
+      footprint={MAP_SRAM.footprint}
+      pinLabels={labels(MAP_SRAM)}
+      connections={{
+        VCC: "net.V5", GND: "net.GND",
+        A0: "net.MAPA0", A1: "net.MAPA1", A2: "net.MAPA2", A3: "net.MAPA3",
+        A4: "net.GND", A5: "net.GND", A6: "net.GND", A7: "net.GND",
+        A8: "net.GND", A9: "net.GND", A10: "net.GND",
+        DQ0: pa(21), DQ1: pa(22), DQ2: pa(23), DQ3: pa(24),
+        nCE: "net.MAP_CE_HI", nOE: "net.MAP_OE", nWE: "net.MAP_WE",
+      }}
+      noConnect={["DQ4", "DQ5", "DQ6", "DQ7"]}
     />
 
     {/* U2 - task select. ONE bit of eight, not the three this comment used to
@@ -143,14 +184,19 @@ export default () => (
         1: "LA15", 2: "LA14", 3: "LA13", 4: "LA12", 5: "LA11", 6: "LA10",
         7: "LA9", 8: "LA8", 9: "LA7", 10: "LA6", 11: "LA5",
         13: "LA4", 14: "E", 15: "Q", 16: "R/W",
-        17: "/IOPAGE", 18: "MUX_SEL", 19: "/ISO_OE", 20: "/MAP_WE",
+        17: "/IOPAGE_MB", 18: "MUX_SEL", 19: "/ISO_OE", 20: "/MAP_WE",
         21: "/MAP_OE", 22: "CTRL_CP", 23: "SPARE",
       }))}
       connections={{
         VCC: "net.V5", GND: "net.GND",
         ...busConnections("LA", 12, la, 4),
         E: "net.E", Q: "net.Q", R_W: "net.R_W",
-        nIOPAGE: "net.nIOPAGE", MUX_SEL: "net.MUX_SEL",
+        /* ⚠ THE MOTHERBOARD'S TERM, NOT THE BACKPLANE'S, since 2026-09-09.
+         * U9 drives the backplane's /IOPAGE as this term OR "above 2 MB"
+         * (ram.md 5.3). Merging the two nets would be a combinational loop:
+         * above 2 MB U9 pulls /IOPAGE low, which would then de-qualify the
+         * SIMM decode that asserted it. */
+        nIOPAGE_MB: "net.nIOPAGE_MB", MUX_SEL: "net.MUX_SEL",
         nISO_OE: "net.ISO_OE", nMAP_WE: "net.MAP_WE", nMAP_OE: "net.MAP_OE",
         CTRL_CP: "net.CTRL_CP",
       }}
@@ -211,32 +257,30 @@ export default () => (
       noConnect={["pin2", "pin3", "pin6", "pin7"]}
     />
 
-    {/* U6 - the divider. 25.175 / 12 = 2.0979 MHz, and that is the machine's
-      * rate (machine.md 1.1). The /8 path exists but is an experiment a builder
-      * opts into: it breaks the video read-back, takes the 6551 57 % over its
-      * rating, and is below the real HD63C09E's t_cyc minimum.
+    {/* U6 - the divider and boot mode. 25.175 / 12 = 2.0979 MHz, and that is
+      * the machine's rate (machine.md 1.1). The /8 path exists but is an
+      * experiment a builder opts into: it breaks the video read-back, takes
+      * the serial part 57 % over its rating, and is below the real HD63C09E's
+      * t_cyc minimum.
       *
-      * gal/clkdec.pld is the source of truth for these pins. It carries three
-      * jobs: the divider, /IOSEL, and the system RAM's control lines.
+      * gal/clkdec.pld is the source of truth for these pins. Three jobs:
       *
-      * /IOSEL is /IOPAGE AND A7 = 0 - $FF00-$FF7F, widened from $FF40 on
-      * 2026-09-08 (machine.md 5 item 1 A), which DELETED the LA6 term rather
-      * than adding one. LA6 stays wired to pin 6 driving nothing, so
-      * $FF80-$FF8F remains a one-line change. Pin 9 took physical A20 in the
-      * same pass. gal/clkdec.pld is the source of truth and it records that
-      * this equation also had its polarity wrong until that day.
+      *   1. the E/Q divider, with the /WAIT hold of machine.md 5 item 8
+      *   2. /IOSEL - /IOPAGE AND A7 = 0, $FF00-$FF7F. It is here and not on
+      *      U3 because U3 does not fit with it. /IOPAGE stays on U3: routing
+      *      it through here would put a second GAL delay ahead of MAP_OE, the
+      *      edge the break-before-make margin is measured from
+      *   3. BOOT MODE - the RUN latch and the '244's output enable
       *
-      * /IOSEL is a machine-level backplane
-      * signal rather than MMU sequencing, and it is here because U3 does not
-      * fit with it. /IOPAGE stays on U3: routing it through here would put a
-      * second GAL delay ahead of MAP_OE, the edge the break-before-make
-      * margin is measured from.
+      * ⚠ RAM_CE, RAM_OE and RAM_WE ARE GONE (2026-09-09). They drove U8, which
+      * left the board with ram.md 6.2. Boot mode moved into two of the three
+      * macrocells they vacated and the third is left as a spare INPUT - the
+      * first spare pin this part has ever had.
       *
-      * RAM_CE/OE/WE are here because U3 cannot take them either - it has one
-      * free pin and /CE alone needs two (A19 in, /CE out). They were driven
-      * by NOTHING until 2026-09-06; see hardware/README.md open item 4. Note
-      * A19 is PHYSICAL, so this decode is downstream of the map SRAM: t_AD
-      * 110 + map 15 + GAL 10 + RAM 55 = 190 ns against ~437 available.
+      * RUN = 0 IS BOOT MODE and it is zero at reset, which is not a
+      * preference: a 22V10 has one asynchronous reset shared by every
+      * registered macrocell and it resets to ZERO. A bit that had to come up
+      * SET could not live on this part at all.
       *
       * The four counter bits come out on pins nothing connects to. That is
       * deliberate - they are free test points on the signal that is hardest
@@ -246,19 +290,20 @@ export default () => (
       footprint="dip24_w0.3in"
       pinLabels={labels(gal22v10({
         2: "FAST_E", 3: "/RESET", 4: "/IOPAGE", 5: "LA7", 6: "LA6",
-        7: "A19", 8: "R/W", 9: "A20", 10: "/WAIT",
-        14: "/RAM_OE", 15: "/IOSEL", 16: "C0", 17: "C1", 18: "E", 19: "Q",
-        20: "C2", 21: "C3", 22: "/RAM_CE", 23: "/RAM_WE",
+        7: "LA5", 8: "R/W", 9: "LA4", 10: "/WAIT", 11: "LA0",
+        14: "/BOOTOE", 15: "/IOSEL", 16: "C0", 17: "C1", 18: "E", 19: "Q",
+        20: "C2", 21: "C3", 22: "RUN", 23: "SPARE",
       }))}
       connections={{
         VCC: "net.V5", GND: "net.GND",
         CLK: "net.CLK25", FAST_E: "net.GND", nRESET: "net.nRESET",
-        nIOPAGE: "net.nIOPAGE", LA7: la(7), LA6: la(6),
-        A19: pa(19), A20: pa(20), R_W: "net.R_W", nWAIT: "net.nWAIT",
+        nIOPAGE: "net.nIOPAGE_MB", LA7: la(7), LA6: la(6),
+        LA5: la(5), LA4: la(4), LA0: la(0),
+        R_W: "net.R_W", nWAIT: "net.nWAIT",
         nIOSEL: "net.nIOSEL", E: "net.E", Q: "net.Q",
-        nRAM_CE: "net.RAM_CE", nRAM_OE: "net.RAM_OE", nRAM_WE: "net.RAM_WE",
+        nBOOTOE: "net.BOOT_OE", RUN: "net.RUN",
       }}
-      noConnect={["C0", "C1", "C2", "C3"]}
+      noConnect={["C0", "C1", "C2", "C3", "SPARE"]}
     />
 
     {/* U7 - power-on reset. Every card takes /RESET as an input and no card
@@ -270,30 +315,205 @@ export default () => (
       connections={{ GND: "net.GND", VCC: "net.V5", nRST: "net.nRESET" }}
     />
 
-    {/* -------------------------------------------------- system RAM ------- */}
-    {/* ⚠ ONE part, not the four machine.md 7.1 asks for. 512K x 8 is 512 KB,
-      * so four of them is 2 MB - against a 512 KB requirement, in a 1 MB
-      * physical map that allots system RAM exactly A19 = 0, i.e. A0-A18.
-      * Nineteen address lines is exactly this part. The "and a decode" in the
-      * same sentence goes with the other three. See hardware/README.md finding 1.
+    {/* ------------------------------------------- the space decode ------- */}
+    {/* U9 - which memory, if any, is this? gal/u9.pld is the source of truth
+      * and gal/jedec.check.ts checks its fuses against gal/u9.model.ts over
+      * all 16,384 input combinations; Atmel's own CUPL agrees with them.
       *
-      * RAM_CE, RAM_OE and RAM_WE come from U6 (gal/clkdec.pld). They were
-      * driven by nothing at all until 2026-09-06, behind a comment claiming
-      * "/CE is the A19 = 0 AND /IOPAGE term, which U3 already forms" - U3
-      * forms no such term. /OE is qualified by R/W rather than tied low,
-      * which is what keeps the SRAM and the CPU off D0-D7 together on a
-      * write. hardware/README.md open item 4, closed. */}
+      * ram.md 11 item 6 said this part might not fit a GAL22V10 - ten outputs
+      * counted against ten, before inputs. It fits at SIX outputs and fourteen
+      * inputs, with two macrocells left as spare inputs, because two of the
+      * counts were wrong: the four SIMM selects collapse to one (U10 takes
+      * physical A23/A22 and picks its own RAS), and the two map-SRAM chip
+      * enables were never on the list at all.
+      *
+      * ⚠ IOPAGE COMES IN FROM U3 AND GOES OUT TO THE BACKPLANE, and they are
+      * two nets. Reading back the wire this part drives would be a
+      * combinational loop: above 2 MB U9 pulls /IOPAGE low, which would then
+      * de-qualify the SIMM decode that asserted it. */}
     <chip
-      name="U8"
-      footprint={SRAM_512K.footprint}
-      pinLabels={labels(SRAM_512K)}
+      name="U9"
+      footprint="dip24_w0.3in"
+      pinLabels={labels(gal22v10({
+        1: "A24", 2: "A23", 3: "A22", 4: "A21", 5: "A20", 6: "A19",
+        7: "/IOPAGE_MB", 8: "RUN", 9: "LA7", 10: "LA6", 11: "LA5",
+        13: "LA4", 14: "LA3", 23: "R/W",
+        15: "/MAP_CE_LO", 16: "/MAP_CE_HI", 17: "/ROM_CE0",
+        18: "/IOPAGE", 19: "DRAM_SEL", 20: "/ROM_CE1",
+      }))}
       connections={{
         VCC: "net.V5", GND: "net.GND",
-        ...busConnections("A", 19, pa),
-        ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`DQ${i}`, d(i)])),
-        nCE: "net.RAM_CE", nOE: "net.RAM_OE", nWE: "net.RAM_WE",
+        A24: pa(24), A23: pa(23), A22: pa(22), A21: pa(21),
+        A20: pa(20), A19: pa(19),
+        nIOPAGE_MB: "net.nIOPAGE_MB", RUN: "net.RUN",
+        LA7: la(7), LA6: la(6), LA5: la(5), LA4: la(4), LA3: la(3),
+        R_W: "net.R_W",
+        nMAP_CE_LO: "net.MAP_CE_LO", nMAP_CE_HI: "net.MAP_CE_HI",
+        nROM_CE0: "net.ROM_CE0", nROM_CE1: "net.ROM_CE1",
+        nIOPAGE: "net.nIOPAGE", DRAM_SEL: "net.DRAM_SEL",
       }}
     />
+
+    {/* --------------------------------------------- the boot ROM --------- */}
+    {/* machine.md 7.2, 1 MB at physical 2.0-3.0 M. It holds the boot monitor
+      * in its first 8 KB - including the $FFC0-$FFFF vector table, which is
+      * why a real HD63C09E is a valid part for the socket again - and a
+      * read-only NitrOS-9 ROM disk in the rest.
+      *
+      * Two packages because no 5 V 1M x 8 part comes in a DIP. Physical A19
+      * picks between them, and during boot and vector cycles U16 drives it
+      * low, so both land in device 0's first 8 KB.
+      *
+      * ⚠ THE PINOUT IS UNVERIFIED - lib/parts.ts FLASH_512K names the two
+      * pins that differ from the SRAM sitting next to it in that file, and
+      * `npm run check` lists this part until a datasheet is fetched. It is
+      * the first unverified pinout on this board since 2026-09-06, and
+      * hardware/history.md finding 4 is what happened last time.
+      *
+      * /OE is tied low and R/W rides in the chip enable (gal/u9.pld) - so a
+      * stray write to ROM space selects nothing instead of fighting the CPU
+      * for the whole of E-high. /WE is tied high: these are programmed in a
+      * socket, not in circuit. */}
+    {[0, 1].map((n) => (
+      <chip
+        key={n}
+        name={`U1${4 + n}`}
+        footprint={FLASH_512K.footprint}
+        pinLabels={labels(FLASH_512K)}
+        connections={{
+          VCC: "net.V5", GND: "net.GND",
+          ...busConnections("A", 19, pa),
+          ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`DQ${i}`, d(i)])),
+          nCE: `net.ROM_CE${n}`, nOE: "net.GND", nWE: "net.V5",
+        }}
+      />
+    ))}
+
+    {/* U16 - the boot address buffer. It drives physical A20-A13 to zero
+      * whenever the map SRAMs are deselected: for the whole of boot mode, and
+      * for the vector page forever.
+      *
+      * ⚠ EIGHT BITS, NOT SEVEN, and A20 is why. The ROM needs A19-A13 above
+      * the untranslated A12-A0 - but A20 also goes to the BACKPLANE, and a
+      * floating A20 during a boot fetch would let the video card's VRAM
+      * select (A20 = 0, A19 = 1) answer at random. Driving all eight to zero
+      * puts every card's memory decode out of range by construction.
+      *
+      * A24-A21 still float during boot, and that is deliberate rather than
+      * overlooked: they never leave the motherboard, and every U9 equation
+      * that reads them is qualified on RUN.
+      *
+      * ⭐ A '244 AND NOT THE '541 machine.md 7.2 first named. Both are octal
+      * three-state buffers; the '244's datasheet is in the repository and the
+      * '541's is not, so the '244 is the one whose pin numbering is read
+      * rather than remembered. Its two enables tie together. */}
+    <chip
+      name="U16"
+      footprint={HCT244.footprint}
+      pinLabels={labels(HCT244)}
+      connections={{
+        VCC: "net.V5", GND: "net.GND",
+        n1OE: "net.BOOT_OE", n2OE: "net.BOOT_OE",
+        "1A1": "net.GND", "1A2": "net.GND", "1A3": "net.GND", "1A4": "net.GND",
+        "2A1": "net.GND", "2A2": "net.GND", "2A3": "net.GND", "2A4": "net.GND",
+        "1Y1": pa(20), "1Y2": pa(19), "1Y3": pa(18), "1Y4": pa(17),
+        "2Y1": pa(16), "2Y2": pa(15), "2Y3": pa(14), "2Y4": pa(13),
+      }}
+    />
+
+    {/* ------------------------------------------------ system memory ----- */}
+    {/* U10 - the SIMM controller: RAS0-RAS3, CAS, /WE, the row/column mux
+      * select, refresh request and /WAIT. ram.md 6.3.
+      *
+      * ⚠ THE ONE PIECE OF LOGIC ON THIS BOARD THAT IS NOT WRITTEN. U3, U6 and
+      * U9 are fitted at the fuse level and checked against Atmel's own CUPL;
+      * this is a pinout and a promise. ram.md 11 item 6.
+      *
+      * It takes DRAM_SEL from U9 and physical A23/A22 directly - those two
+      * lines already distinguish the four windows, which is why U9 spends one
+      * output here instead of four.
+      *
+      * ⭐ REFRESH FREE-RUNS FROM CLK25 and needs no initialisation, which is
+      * what makes machine.md 7.2's boot sequence eighteen instructions with no
+      * stack: there is nothing to set up before the first store. machine.md 5
+      * item 10 requires the free-run independently. */}
+    <chip
+      name="U10"
+      footprint="dip24_w0.3in"
+      pinLabels={labels(gal22v10({
+        2: "DRAM_SEL", 3: "/RESET", 4: "A23", 5: "A22", 6: "E", 7: "Q",
+        8: "R/W", 9: "/IOPAGE", 10: "REF_REQ",
+        14: "/RAS0", 15: "/RAS1", 16: "/RAS2", 17: "/RAS3",
+        18: "/CAS", 19: "/DRAM_WE", 20: "MUX_ROW", 21: "REF_ACK",
+        22: "/WAIT", 23: "SPARE",
+      }))}
+      connections={{
+        VCC: "net.V5", GND: "net.GND",
+        CLK: "net.CLK25", DRAM_SEL: "net.DRAM_SEL", nRESET: "net.nRESET",
+        A23: pa(23), A22: pa(22), E: "net.E", Q: "net.Q", R_W: "net.R_W",
+        nIOPAGE: "net.nIOPAGE_MB",
+        nRAS0: "net.RAS0", nRAS1: "net.RAS1", nRAS2: "net.RAS2",
+        nRAS3: "net.RAS3", nCAS: "net.CAS", nDRAM_WE: "net.DRAM_WE",
+        MUX_ROW: "net.MUX_ROW", nWAIT: "net.nWAIT",
+      }}
+      noConnect={["REF_REQ", "REF_ACK", "SPARE"]}
+    />
+
+    {/* U11-U13 - the RAS/CAS address mux, 11 bits. A 4 MB 30-pin SIMM is
+      * 4M x 8: 22 address bits, 11 row and 11 column, multiplexed onto the
+      * same eleven pins. Three quad muxes give twelve lines and eleven are
+      * used. ram.md 6.3.
+      *
+      * Row is physical A11-A1 and column A22-A12, which puts the SIMM's own
+      * A0 on the CPU's A1 - a 30-pin module is byte-wide and the low address
+      * bit is inside it. MUX_ROW low selects the A inputs, so the row is on
+      * 1A-4A exactly as U5's translate path is. */}
+    {[0, 1, 2].map((n) => (
+      <chip
+        key={n}
+        name={`U1${1 + n}`}
+        footprint={HC157.footprint}
+        pinLabels={labels(HC157)}
+        connections={{
+          VCC: "net.V5", GND: "net.GND", nE: "net.GND", SEL: "net.MUX_ROW",
+          ...Object.fromEntries([0, 1, 2, 3].flatMap((i) => {
+            const bit = n * 4 + i
+            return bit > 10 ? [] : [
+              [`${i + 1}A`, pa(1 + bit)],
+              [`${i + 1}B`, pa(12 + bit)],
+              [`${i + 1}Y`, `net.MA${bit}`],
+            ]
+          })),
+        }}
+        noConnect={n === 2 ? ["4A", "4B", "4Y"] : []}
+      />
+    ))}
+
+    {/* Four 30-pin SIMM sockets - 4 to 16 MB, and ALL of the machine's RAM
+      * (ram.md 6). They are at physical 4-20 M, which is above everything a
+      * card can see, so nothing on a slot ever decodes them.
+      *
+      * ⚠ THE FOOTPRINT IS A PIN ROW, not a SIMM socket: the pad grid and the
+      * numbering are right and the outline is not, the same caveat the slot
+      * socket carries (hardware/README.md open item 2).
+      *
+      * DQ8 is the parity bit on a x9 module and is left unconnected - this
+      * machine does not check parity, and a x8 module has no such pin. */}
+    {Array.from({ length: SIMMS }, (_, n) => (
+      <chip
+        key={n}
+        name={`SIMM${n}`}
+        footprint={SIMM30.footprint}
+        pinLabels={labels(SIMM30)}
+        connections={{
+          VCC: "net.V5", GND: "net.GND",
+          ...Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`A${i}`, `net.MA${i}`])),
+          ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`DQ${i}`, d(i)])),
+          nRAS: `net.RAS${n}`, nCAS: "net.CAS", nWE: "net.DRAM_WE",
+        }}
+        noConnect={["DQ8", "nCASP", "NC"]}
+      />
+    ))}
 
     {/* -------------------------------------------- backplane pull-ups ----- */}
     {/* machine.md 2.1: four cards declare open-drain outputs and no document

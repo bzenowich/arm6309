@@ -1,10 +1,20 @@
 /* I/O card - PS/2 keyboard and mouse, and RS-232. 14 ICs, 12 cm.
  *
  * TWO CARDS UNTIL 2026-09-08, and what merges them is the $FF map rather than
- * the logic: ps2.md 3.2 takes $FF50-$FF53 and serial.md 7.1 takes
- * $FF54-$FF57, which are contiguous. One card decodes eight bytes where two
- * decoded four each, and the machine gets a slot back - six cards became five
- * against six slots (hardware/README.md).
+ * the logic: ps2.md 3.2 takes four bytes and serial.md 7.1 the four above it.
+ * One card decodes one window where two decoded two, and the machine gets a
+ * slot back - six cards became five against six slots (hardware/README.md).
+ *
+ * SERIAL'S PART CHANGED ON 2026-09-09 and the count did not: serial.md 4.5's
+ * 16C550 replaced the 6551 one-for-one. serial.md 5.4 and 9.1 both priced the
+ * tier at "+1 IC" and that was a COUNTING ERROR - the tier table counted the
+ * baud crystal as a package and the base count did not. Two DIPs and a GAL
+ * before, two DIPs and a GAL after.
+ *
+ * The window moved to $FF30-$FF3F and doubled to sixteen bytes with it,
+ * because a 16C550 has EIGHT registers where a 6551 has four and the eight
+ * bytes this card held at $FF50 were wedged between audio at $FF40 and
+ * storage at $FF58. cards/windows.ts carries that argument.
  *
  * 14 is 11 + 3 with nothing shared, which is the honest count and not the
  * cheapest one. The obvious saving is the second GAL22V10, and it is not free:
@@ -81,24 +91,36 @@ const Port = ({ id }: { id: "KB" | "MS" }) => (
 )
 
 export default () => (
-  <Card name="arm6309-io" ioBase={0xff50} ioSize={8} icBudget={14} length={120}>
+  <Card name="arm6309-io" ioBase={0xff30} ioSize={16} icBudget={14} length={120}>
     {/* ---------------------------------------------------- PS/2 half --- */}
 
-    {/* U1 - decode, four register strobes, the two DR latches, the two /PL
-      * terms, and open-drain /IRQ. */}
+    {/* U1 - the PS/2 half: four register strobes, the two DR latches, the two
+      * /PL terms, and open-drain /IRQ.
+      *
+      * ⭐ IT DOES NOT COMPARE THE BASE. U14 does that once for the whole card
+      * and hands over CARD_SEL; this part adds A3 (0 = PS/2, 1 = serial) and
+      * A1:A0. Two inputs instead of four, on a part ps2.md 9 already calls the
+      * card's fitting risk at roughly ten macrocells of ten - and the window
+      * moving to sixteen bytes on 2026-09-09 would otherwise have cost it
+      * A4, A5 and A6 as well.
+      *
+      * ⚠ A6 was missing from this card's decode entirely until that pass;
+      * the strobe is /IOPAGE AND /A7, so A6 is not implied by it and a
+      * six-bit match answers 64 bytes below the base too (machine.md 2). It
+      * is on U14 now, once. */}
     <chip
       name="U1"
       footprint="dip24_w0.3in"
       pinLabels={{
-        pin1: "CLK", pin2: "nIOSEL", pin3: "A0", pin4: "A1", pin5: "E",
+        pin1: "CLK", pin2: "CARD_SEL", pin3: "A0", pin4: "A1", pin5: "E",
         pin6: "R_W", pin7: "nRESET", pin8: "KB_TCD", pin9: "MS_TCD",
-        pin12: "GND",
+        pin10: "A3", pin12: "GND",
         pin18: "KB_PL", pin19: "MS_PL", pin20: "KB_DR", pin21: "MS_DR",
         pin22: "KB_RD", pin23: "nIRQ", pin24: "VCC",
       }}
       connections={{
         VCC: "net.V5", GND: "net.GND",
-        nIOSEL: "net.nIOSEL", A0: "net.A0", A1: "net.A1",
+        CARD_SEL: "net.CARD_SEL", A0: "net.A0", A1: "net.A1", A3: "net.A3",
         E: "net.E", R_W: "net.R_W",
         /* ⚠ New since the 2026-09-04 review. This card had no power-on reset
          * path at all until design-review.md IO-P3; the serial card already
@@ -167,75 +189,87 @@ export default () => (
 
     {/* -------------------------------------------------- serial half --- */}
 
-    {/* U12 - the ACIA. Four registers, which is exactly why the card asks for
-      * four bytes. /IRQ is the fourth source on the shared line, and it is
-      * polled last: reading STATUS clears the interrupt and returns the error
-      * bits in the same read (machine.md 4.1). */}
+    {/* U12 - the UART. A TL16C550C, not the 6551 this card carried until
+      * 2026-09-09 - serial.md 4.5's tier 1, taken.
+      *
+      * THREE OF THIS CARD'S PROBLEMS STOP EXISTING with the part:
+      *   - no FIFO. A 6551 takes one interrupt per byte; this takes one per
+      *     fourteen, which is what moves DriveWire from 37 % of the CPU to
+      *     16 % (drivewire.md 3)
+      *   - 19,200 baud. This reaches 115,200 from the same crystal
+      *   - the sourcing trap AND the speed grade. serial.md 3.3's W65C51N
+      *     defect and 3.4's fast-E rating both go: this part is clocked by
+      *     its own crystal and never sees backplane E at all
+      *
+      * ⚠ THE PINOUT IS UNVERIFIED. There is no TL16C550C datasheet in
+      * reference/datasheets/ and the numbering below is written from
+      * familiarity - the failure mode hardware/history.md finding 4 records.
+      * Check the PDIP-40 package specifically: TI's current catalogue lists
+      * FN (PLCC-44) and PT (TQFP-48), and whether the DIP is still made is
+      * the first question about the part (net.md 13.6).
+      *
+      * ⚠ INTR IS ACTIVE HIGH AND TOTEM-POLE. The 6551's /IRQ was open-drain
+      * and wire-ORed onto the backplane directly; THIS PART CANNOT. It goes
+      * to U14, which inverts it onto the shared line through an open-drain
+      * macrocell - machine.md 5 item 9's idiom, and one macrocell.
+      *
+      * ADS is tied low (no address latching - the 6809 bus holds its address
+      * for the whole cycle) and BAUDOUT feeds RCLK, which is the standard
+      * arrangement when receive and transmit share one rate. */}
     <chip
       name="U12"
-      manufacturerPartNumber="R6551A"
-      footprint="dip28_w0.6in"
+      manufacturerPartNumber="TL16C550CN"
+      footprint="dip40_w0.6in"
       pinLabels={{
-        pin1: "GND", pin2: "CS0", pin3: "nCS1", pin4: "nRES", pin5: "RxC",
-        pin6: "XTLI", pin7: "XTLO", pin8: "nRTS", pin9: "nCTS", pin10: "TxD",
-        pin11: "nDTR", pin12: "RxD", pin13: "RS0", pin14: "RS1",
-        pin15: "VCC", pin16: "nDCD", pin17: "nDSR",
-        pin18: "D0", pin19: "D1", pin20: "D2", pin21: "D3",
-        pin22: "D4", pin23: "D5", pin24: "D6", pin25: "D7",
-        pin26: "nIRQ", pin27: "PHI2", pin28: "R_W",
+        pin1: "D0", pin2: "D1", pin3: "D2", pin4: "D3", pin5: "D4",
+        pin6: "D5", pin7: "D6", pin8: "D7", pin9: "RCLK", pin10: "SIN",
+        pin11: "SOUT", pin12: "CS0", pin13: "CS1", pin14: "nCS2",
+        pin15: "nBAUDOUT", pin16: "XIN", pin17: "XOUT", pin18: "nWR",
+        pin19: "WR", pin20: "GND", pin21: "RD", pin22: "nRD", pin23: "nDDIS",
+        pin24: "nTXRDY", pin25: "ADS", pin26: "A2", pin27: "A1", pin28: "A0",
+        pin29: "nRXRDY", pin30: "INTR", pin31: "nOUT2", pin32: "nRTS",
+        pin33: "nDTR", pin34: "nOUT1", pin35: "MR", pin36: "nCTS",
+        pin37: "nDSR", pin38: "nDCD", pin39: "nRI", pin40: "VCC",
       }}
       connections={{
         VCC: "net.V5", GND: "net.GND",
         D0: "net.D0", D1: "net.D1", D2: "net.D2", D3: "net.D3",
         D4: "net.D4", D5: "net.D5", D6: "net.D6", D7: "net.D7",
-        RS0: "net.A0", RS1: "net.A1",
-        R_W: "net.R_W", PHI2: "net.E",
-        /* serial.md 6 wires backplane /RESET straight to the ACIA - the card
-         * ps2.md 950 holds up as getting this right. */
-        nRES: "net.nRESET",
-        nIRQ: "net.nIRQ",
-        nCS1: "net.SER_CS",
-        XTLI: "net.BAUD_XTAL",
+        /* Eight registers, so THREE address lines where the 6551 needed two.
+         * That is what moved the card's window - windows.ts. */
+        A0: "net.A0", A1: "net.A1", A2: "net.A2",
+        /* Intel-style strobes, synthesised from E and R/W on U14 - one
+         * product term each (serial.md 9.1). The active-high halves are
+         * tied off. */
+        nRD: "net.SER_RD", nWR: "net.SER_WR", RD: "net.GND", WR: "net.GND",
+        CS0: "net.V5", CS1: "net.V5", nCS2: "net.SER_CS",
+        ADS: "net.GND",
+        /* MR is ACTIVE HIGH where backplane /RESET is active low, so it comes
+         * from U14 inverted. The 6551 took /RESET straight through, which
+         * serial.md 6 called out as a property this card had for free; it
+         * costs one macrocell now. */
+        MR: "net.SER_MR",
+        INTR: "net.SER_INTR",
+        XIN: "net.BAUD_XTAL",
+        /* Receive and transmit share one rate. */
+        nBAUDOUT: "net.BAUDOUT", RCLK: "net.BAUDOUT",
       }}
+      noConnect={["nTXRDY", "nRXRDY", "nDDIS", "nOUT1", "nOUT2", "nRI", "XOUT"]}
     />
 
-    {/* U13 - RS-232 levels for TxD/RxD//RTS//CTS, +5 V only. A second one buys
-      * full modem control and takes the card to 4 (serial.md 8). */}
-    <chip
-      name="U13"
-      manufacturerPartNumber="MAX232"
-      footprint="dip16_w0.3in"
-      pinLabels={{
-        pin1: "C1P", pin2: "V+", pin3: "C1N", pin4: "C2P", pin5: "C2N",
-        pin6: "V-", pin7: "T2OUT", pin8: "R2IN", pin9: "R2OUT", pin10: "T2IN",
-        pin11: "T1IN", pin12: "R1OUT", pin13: "R1IN", pin14: "T1OUT",
-        pin15: "GND", pin16: "VCC",
-      }}
-      connections={{ VCC: "net.V5", GND: "net.GND" }}
-    />
-
-    {/* U14 - the four-byte window decode from geographic /IOSEL, with the
-      * base-address jumper. */}
-    <chip
-      name="U14"
-      footprint="dip24_w0.3in"
-      pinLabels={{
-        pin1: "CLK", pin2: "nIOSEL", pin3: "A2", pin4: "A3", pin5: "A4",
-        pin6: "A5", pin7: "E", pin12: "GND", pin23: "SER_CS", pin24: "VCC",
-      }}
-      connections={{
-        VCC: "net.V5", GND: "net.GND",
-        nIOSEL: "net.nIOSEL", E: "net.E",
-        A2: "net.A2", A3: "net.A3", A4: "net.A4", A5: "net.A5",
-        SER_CS: "net.SER_CS",
-      }}
-      noConnect={["CLK"]}
-    />
-
-    {/* 1.8432 MHz, and it is the ACIA's own. Not the backplane master. */}
+    {/* 7.3728 MHz, and it is the UART's own - not the backplane master.
+      *
+      * ⭐ FOUR TIMES THE 6551's 1.8432 MHz, and it costs the same. 115,200 is
+      * then divisor 4 and 460,800 is divisor 1, so the rate this machine plans
+      * against (drivewire.md 3) and the one it might want later come off one
+      * can. serial.md 9.1 specified it with the tier.
+      *
+      * ⚠ THE LEVEL SHIFTER IS THE CEILING, not the crystal: an MAX232-class
+      * charge pump is specified to 120 kbit/s, so 230,400 and above need U13
+      * reconsidered (serial.md 8). 115,200 is what the card is planned at. */}
     <crystal
       name="Y1"
-      frequency="1.8432MHz"
+      frequency="7.3728MHz"
       loadCapacitance="18pF"
       footprint="hc49"
       connections={{ pin1: "net.BAUD_XTAL", pin2: "net.GND" }}

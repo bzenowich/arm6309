@@ -10,12 +10,19 @@ motherboard.
 
 ## What here is a deliverable, and what is derivation
 
-**Three GALs are live and get burned into silicon:** the motherboard's `U3` (the MMU
-sequencer) and `U6` (the E/Q divider), and the video card's `rfa` (the register-file
-address decode, split off `vctrl` — [`regfile.jedec.ts`](regfile.jedec.ts)). `mmu.jed`,
-`clkdec.jed` and `rfa.jed` are the files a programmer takes. The decode GALs on serial,
-storage and PS/2 — and the motherboard's U9 and U10 ([`../ram.md`](../ram.md) §6.3) —
-are still unwritten and will join them.
+**Four GALs are live and get burned into silicon:** the motherboard's `U3` (the MMU
+sequencer), `U6` (the divider, `/IOSEL` and boot mode) and **`U9` (the physical space
+decode, added 2026-09-09)**, and the video card's `rfa` (the register-file address
+decode, split off `vctrl` — [`regfile.jedec.ts`](regfile.jedec.ts)). `mmu.jed`,
+`clkdec.jed`, `u9.jed` and `rfa.jed` are the files a programmer takes.
+
+**Two are still unwritten**: the motherboard's **U10** (the SIMM controller —
+[`../ram.md`](../ram.md) §6.3, and the only logic on that board that is not fitted) and
+**the I/O card's pair** ([`../cards/io.circuit.tsx`](../cards/io.circuit.tsx)), which
+grew on 2026-09-09 with `serial.md` §4.5's `16C550`: Intel-style `/RD`/`/WR` strobes, an
+**active-high** `MR` where the backplane's reset is not, and an open-drain inversion of
+`INTR`, which is active-high totem-pole and cannot wire-OR the way a 6551's `/IRQ` could.
+Storage's is unwritten too.
 
 **The audio card's six and the video card's ten are all superseded** — `audio.md`
 §10.1 makes that card one `ATF1508AS` and `graphics.md` §10.1.6 makes the video card
@@ -29,8 +36,8 @@ the argument.
 
 | | Live | Superseded |
 |---|---|---|
-| designs | `mmu`, `clkdec`, `rfa` | `hgen` `vgen` `vdec` `hadr` `vadr` `arb` `wcol` `wrow` `seqph` `seqctl` |
-| checked against Atmel's CUPL | **all three** | not required |
+| designs | `mmu`, `clkdec`, **`u9`**, `rfa` | `hgen` `vgen` `vdec` `hadr` `vadr` `arb` `wcol` `wrow` `seqph` `seqctl` |
+| checked against Atmel's CUPL | **all four** | not required |
 
 **The rule, and it is enforced:** a GAL does not ship without a CUPL reference.
 `jedec/cupl.check.ts` carries a registry of every design and **fails the build if a
@@ -54,13 +61,15 @@ there and never exercised it. It is read-back data and nothing depends on it.
 | [`mmu_tb.sv`](mmu_tb.sv) | 16 claims against `mmu.v` under **Verilator** — `npm run check:sim` |
 | [`mmu.model.ts`](mmu.model.ts) | the same seven equations as arithmetic |
 | [`mmu.check.ts`](mmu.check.ts) | 23 claims against that model — `npm run check` |
-| [`clkdec.pld`](clkdec.pld) | **U6** — the E/Q divider, `/IOSEL`, and the system RAM's control lines |
+| [`clkdec.pld`](clkdec.pld) | **U6** — the E/Q divider, `/IOSEL`, and **boot mode**: the `RUN` latch and the boot buffer's output enable |
 | [`clkdec.v`](clkdec.v) + [`clkdec_tb.sv`](clkdec_tb.sv) | the same, and 15 claims under Verilator |
 | [`clkdec.model.ts`](clkdec.model.ts) | U6's behaviour, *not* as a sum of products — the reference the expansion is checked against |
 | [`mmu.jedec.ts`](mmu.jedec.ts), [`clkdec.jedec.ts`](clkdec.jedec.ts) | the terms, placed in macrocells |
 | [`jedec/`](jedec/) | **the fitter** — assembler, fuse-map simulator, and the device description both depend on |
 | [`jedec.check.ts`](jedec.check.ts) | assembles both parts and checks **the fuses** against the models — `npm run check:jedec` |
-| `mmu.jed`, `clkdec.jed` + `.doc` | the output: what a programmer burns, and the fitter's report |
+| [`u9.pld`](u9.pld) | **U9, added 2026-09-09** — the physical space decode: the boot ROM, the four SIMM windows, the backplane's `/IOPAGE`, and the two map SRAMs' chip enables |
+| [`u9.jedec.ts`](u9.jedec.ts) + [`u9.model.ts`](u9.model.ts) | the terms placed in macrocells, and the same decode as ranges and comparisons |
+| `mmu.jed`, `clkdec.jed`, `u9.jed` + `.doc` | the output: what a programmer burns, and the fitter's report |
 
 **The video card's sync section**, which is where the fitter earned its keep —
 `graphics.md` §19 item 8 said the sync pair did not fit and left the choice of escape
@@ -247,10 +256,18 @@ before it needs RAM. The identity map is a sequence of stores, not a hardware st
 
 **Dropped.** It is one input and one macrocell back, and the `'574` falls to one live bit.
 
-> ⚠ **`BOOT` is not on U3.** It is on U9 with the rest of the space decode
-> ([`../ram.md`](../ram.md) §6.7), because it gates the ROM's chip selects and the
-> `'541`/`'245` enable pair and none of those are U3's business. **U9 may not fit** —
-> `ram.md` §11 item 6.
+> ⭐ **`RUN` is not on U3 or U9 — it is on U6**, and the reason is a device fact rather
+> than a partition preference. A `GAL22V10` has **one** clock and **one** asynchronous
+> reset; U6 has `CLK25` on pin 1 and `/RESET` in the array because it is the divider, and
+> it had just lost three macrocells to `ram.md` §6.2's departed system RAM. U9 would have
+> paid three pins for what U6 already had. **U9 takes `RUN` as an input** and forms the
+> ROM's chip selects and the map SRAMs' chip enables from it (`u9.pld`).
+>
+> ⚠ **And the polarity is forced.** The shared reset resets to **zero** with no
+> per-macrocell preset, so the register has to hold the sense that is zero at reset — "not
+> running yet". `BOOT` is `/RUN`. A bit that had to come up **set** could not live on that
+> part at all, and finding that out after layout is the kind of thing `clkdec.pld` exists
+> to prevent.
 
 ### 2. The `'157` select was tied to `MAP_WE`, giving the SRAM no address set-up
 
@@ -595,9 +612,24 @@ the two claims it is making.
    share `jedec/gal22v10.ts`, so they cannot catch an error in it. Compiling one `.pld`
    with galette or CUPL and diffing the fuse array would retire this permanently; it
    needs the tool once, not as a dependency.
-3. **The decode GALs on serial, storage and PS/2 are unwritten**, as are the
-   motherboard's U9 and U10 ([`../ram.md`](../ram.md) §11 item 6). Every design the
-   video and audio cards need is fitted — as CPLD input or as the live `rfa`.
+3. **⚠ Three decodes are unwritten, and two of them grew on 2026-09-09.**
+
+   - **the motherboard's U10** — the SIMM controller. The only logic on that board that
+     is not fitted, and `../ram.md` §11 item 6 is where it lives. U9's fit chose part of
+     its interface for it: `DRAMSEL` plus physical `A23`/`A22`, because those two lines
+     already distinguish the four windows.
+   - **the I/O card's pair** ([`../cards/io.circuit.tsx`](../cards/io.circuit.tsx)).
+     `serial.md` §4.5's `16C550` added Intel-style `/RD`/`/WR` strobes, an **active-high**
+     `MR` where the backplane's reset is not, and an **open-drain inversion of `INTR`**,
+     which is active-high totem-pole and cannot wire-OR the way a 6551's `/IRQ` could. The
+     serial half also compares the card's sixteen-byte window **once** and hands
+     `CARD_SEL` to the PS/2 half, which `ps2.md` §9 calls the card's fitting risk at
+     roughly ten macrocells of ten. ⚠ **`A6` was missing from that decode entirely**
+     until the same pass — the silent answers-twice failure `machine.md` §2 warns about.
+   - **storage's**, unchanged.
+
+   Every design the video and audio cards need is fitted — as CPLD input or as the live
+   `rfa`.
 
 4. **CLOSED** — every fit scare on the video card is resolved: the scan-address pair is
    17 of 20 with three spare (nothing decodes the scan address, so the sync fit's rule

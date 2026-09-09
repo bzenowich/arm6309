@@ -18,8 +18,20 @@ Device     g22v10 ;
  *      here and not on U3 because U3 does not fit with it (gal/README.md).
  *      TWO changes landed on this one equation on 2026-09-08 and they are
  *      separate findings - see the equation itself
- *   3. the system RAM's /CE, /OE and /WE - hardware/README.md open item 4,
- *      which were connected to nothing at all until 2026-09-06
+ *   3. BOOT MODE - machine.md 7.2, added 2026-09-09. The RUN latch and the
+ *      '244's output enable. It is here and not on U9 for one reason: a
+ *      22V10 has exactly one clock and one asynchronous reset, and this is
+ *      the only part on the motherboard that already has CLK25 on pin 1 and
+ *      /RESET in the array. Putting the latch on U9 would have cost U9 both
+ *      of those plus the eight literals of the $FFB1 decode, all of which
+ *      this part carries anyway.
+ *
+ * WHAT LEFT, 2026-09-09: the system RAM's /CE, /OE and /WE. There is no
+ * system RAM - hardware/ram.md 6.2 dropped the DIP SRAM for four SIMM
+ * sockets on 2026-09-08, and these three outputs had been driving a part
+ * that was no longer on the board. They are the three macrocells boot mode
+ * moved into, and one of them is left SPARE. The equations are archived in
+ * hardware/history.md.
  *
  * PIN PLACEMENT IS DELIBERATE. A 22V10's macrocells do not have equal
  * product-term capacity - 8, 10, 12, 14, 16, 16, 14, 12, 10, 8 across pins
@@ -36,23 +48,29 @@ PIN 2  = FAST_E ;    /* high = /8. Tied low on the board; machine.md 1.1  */
 PIN 3  = !RESET ;
 PIN 4  = !IOPAGE ;   /* from U3 - this part does not form it              */
 PIN 5  = LA7 ;
-PIN 6  = LA6 ;      /* KEPT WIRED, USED BY NOTHING. The window widened to
-                     * $FF00-$FF7F and LA6 fell out of the decode. The trace
-                     * stays because $FF80-$FF8F (machine.md 5 item 1's option
-                     * A+) is then a one-line change rather than a respin, and
-                     * removing a trace to gain nothing is not a saving. */
-PIN 7  = A19 ;       /* PHYSICAL A19, out of the map SRAM, not the CPU    */
+PIN 6  = LA6 ;      /* WAS WIRED AND USED BY NOTHING for a day: the window
+                     * widened to $FF00-$FF7F on 2026-09-08 and LA6 fell out
+                     * of /IOSEL. The trace was kept anyway, on the argument
+                     * that $FF80-$FF8F would then be a one-line change
+                     * rather than a respin. Boot mode is what came instead -
+                     * both `vecsel` and `ctlwr` read it (2026-09-09), and
+                     * this is the second time on this part that a trace kept
+                     * for no reason turned out to have one. */
+PIN 7  = LA5 ;       /* $FFA0-$FFBF window select, with LA7/LA6.          */
 PIN 8  = RW ;
+PIN 9  = LA4 ;       /* 0 = $FFA0-$FFAF block registers, 1 = $FFB0-$FFBF  */
 PIN 10 = WAIT ;      /* /WAIT from the backplane, ACTIVE HIGH here (the pin
                       * is open-drain low on the slot and inverted by the
                       * 3.3k pull-up + this declaration). It HOLDS the whole
                       * divider - see the counter below. machine.md 5 item 8 */
-PIN 9  = A20 ;       /* PHYSICAL A20, the map SRAM's eighth output bit -
-                      * machine.md 5 item 1 option D, 2026-09-08. It was
-                      * stored and read back and drove nothing.           */
+PIN 11 = LA0 ;       /* $FFB0 even is TASK, $FFB1 odd is BOOT - machine.md
+                      * 3. One literal, and it is what lets boot code set
+                      * TASK without leaving boot mode.                    */
+/* PIN 13 IS FREE. Pins 7 and 9 carried physical A19 and A20 for the system
+ * RAM's decode until 2026-09-09; the RAM went and LA5/LA4 took the pins. */
 
 /* --- outputs ---------------------------------------------------------- */
-PIN 14 = !RAM_OE ;   /*  8 terms available, 1 used */
+PIN 14 = !BOOTOE ;    /*  8 terms available, 2 used */
 PIN 15 = !IOSEL ;    /* 10, 1 */
 PIN 16 = C0 ;        /* 12, 1 */
 PIN 17 = C1 ;        /* 14, 2 */
@@ -60,8 +78,12 @@ PIN 18 = E ;         /* 16, 7 - the widest */
 PIN 19 = Q ;         /* 16, 5 */
 PIN 20 = C2 ;        /* 14, 4 */
 PIN 21 = C3 ;        /* 12, 3 */
-PIN 22 = !RAM_CE ;   /* 10, 1 */
-PIN 23 = !RAM_WE ;   /*  8, 1 */
+PIN 22 = RUN ;       /* 10, 2 - REGISTERED. See boot mode below.          */
+/* PIN 23 IS DELIBERATELY NOT DECLARED. It held RAM_WE; with the system RAM
+ * gone the macrocell is left at high-Z, which makes the pin a spare INPUT
+ * rather than a driven output. Same reasoning as mmu.pld's pin 23, and the
+ * same arithmetic: a driven output is a macrocell AND a pin, and this part
+ * has never had either to spare. jedec.check.ts asserts it. */
 
 /* --- the counter ------------------------------------------------------ */
 /* Terminal count. 11 = 1011 and 7 = 0111, and both PARTIAL decodes below
@@ -139,11 +161,62 @@ Q.d = ( !FAST_E & ( !C3 & C1             /* 2, 3, 6, 7  */
                   # !C3 & C2 & !C1 & !C0 ) ) & !hold  /* 4 */
     # Q & hold ;
 
+/* --- boot mode, added 2026-09-09 --------------------------------------
+ * machine.md 7.2. Out of reset the machine has a 1 MB ROM behind every
+ * logical block and no valid MMU map, because the map SRAM's contents at
+ * power-up are whatever they are. RUN is the bit that says the map is
+ * trustworthy.
+ *
+ * THE POLARITY IS NOT A PREFERENCE. A 22V10 has ONE asynchronous reset term
+ * shared by every registered macrocell and it resets to ZERO - there is no
+ * per-macrocell preset. So the register has to hold the sense that is zero
+ * at reset, which is "not running yet". BOOT is /RUN and the board carries
+ * RUN; a register that had to come up SET could not live on this part at
+ * all, and finding that out after layout is the kind of thing this file
+ * exists to prevent.
+ *
+ *   RUN = 0   boot mode: the buffer drives physical A20-A13, the map SRAMs
+ *             are deselected (U9), and the ROM answers every cycle except
+ *             $FF00-$FFBF
+ *   RUN = 1   normal: the map drives, the ROM is ordinary memory at
+ *             physical 2.0-3.0 M
+ *
+ * ONE WRITE TO $FFB1 SETS IT, and nothing clears it but /RESET. A wild store
+ * cannot put the machine back into boot mode over live RAM - the same
+ * one-way property machine.md's superseded shadow-ROM disable had, for the
+ * same reason. The value written is ignored; $FFB1 is a strobe, like the
+ * 6551's programmed reset.
+ *
+ * $FFB0 (LA0 = 0) is TASK and does NOT set RUN, which is what lets boot code
+ * write TASK, then the sixteen map entries, then $FFB1 - in that order, and
+ * the order matters because the map index is {TASK, block}. */
+ctlwr = IOPAGE & LA7 & !LA6 & LA5 & LA4 & !RW & E ;
+RUN.d = RUN # ctlwr & LA0 ;
+
+/* The '244 drives physical A20-A13 whenever the map SRAMs do not, and the
+ * two conditions are complementary by construction rather than by timing:
+ *
+ *   boot mode          RUN = 0, the whole mode
+ *   the vector page    $FFC0-$FFFF, every cycle, forever
+ *
+ * VECSEL IS ONE PRODUCT TERM because /IOPAGE already means "logical
+ * $FF00-$FFFF" (mmu.pld) - $FFC0-$FFFF is that page with A7 and A6 both
+ * high, and both are already on this part for /IOSEL and the MMU window.
+ * A card-style A15..A8 compare here would have cost eight literals and an
+ * input pin.
+ *
+ * U9 forms the map SRAMs' /CE from the same two conditions, so the changeover
+ * is one signal seen by two parts rather than two decodes that have to
+ * agree. */
+vecsel = IOPAGE & LA7 & LA6 ;
+BOOTOE = !RUN # vecsel ;
+
 /* The 22V10's asynchronous reset is one term shared by every registered
- * macrocell, so the counter, E and Q all land in a defined state together.
- * There is no other way to reset them on this part, and no need for one. */
-[C0,C1,C2,C3,E,Q].ar = RESET ;
-[C0,C1,C2,C3,E,Q].sp = 'b'0 ;
+ * macrocell, so the counter, E, Q and RUN all land in a defined state
+ * together. There is no other way to reset them on this part, and no need
+ * for one. RUN = 0 IS BOOT MODE - see above. */
+[C0,C1,C2,C3,E,Q,RUN].ar = RESET ;
+[C0,C1,C2,C3,E,Q,RUN].sp = 'b'0 ;
 
 /* --- the two decodes -------------------------------------------------- */
 /* $FF00-$FF7F, common to every slot - machine.md 2, corrected 2026-09-06
@@ -169,27 +242,14 @@ Q.d = ( !FAST_E & ( !C3 & C1             /* 2, 3, 6, 7  */
  * where that rule lives. */
 IOSEL = IOPAGE & !LA7 ;
 
-/* Never during an I/O cycle - that term is why /IOPAGE had to reach the
- * backplane at all (machine.md 2).
+/* --- what is NOT here any more ----------------------------------------
+ * ramsel, RAM_CE, RAM_OE and RAM_WE decoded one AS6C4008 at physical
+ * A20 = 0, A19 = 0. hardware/ram.md 6.2 removed that part from the design on
+ * 2026-09-08 and this file kept driving it for a day. The equations are in
+ * hardware/history.md, including the /OE-qualified-by-R/W argument, which is
+ * worth keeping because U9's ROM decode makes the same move for the same
+ * reason (gal/README.md).
  *
- * SYSTEM RAM IS A20 = 0 AND A19 = 0, since 2026-09-08 - machine.md 5 item 1
- * option D. The physical map is 2 MB now, and system RAM is the bottom
- * quarter of it: A20 = 0 keeps the top megabyte for card buffers, which is
- * what the option exists to provide (storage's 512-byte block buffer,
- * net's ring). One more literal on three terms, on a pin this part had
- * spare - a 22V10 has 12 dedicated inputs and this design used 7. */
-ramsel = !IOPAGE & !A19 & !A20 ;
-
-RAM_CE = ramsel ;
-
-/* /OE is qualified by R/W, and that is not decoration. With /OE tied low the
- * SRAM drives D0-D7 from /CE time (~140 ns) until /WE asserts at E-rise
- * (~238 ns) while the CPU is also driving write data from ~229 ns - about
- * 90 ns of contention on every write. The AS6C4008's truth table permits the
- * tied-low arrangement; this machine's bus timing does not. */
-RAM_OE = ramsel & RW ;
-
-/* E-qualified, and decode-qualified as well. The decode is redundant - a
- * write needs CE# and WE# both low - but it costs nothing here and keeps a
- * glitch on /CE from turning into a write. */
-RAM_WE = ramsel & !RW & E ;
+ * WHAT REPLACED THEM IS NOT A SUBSTITUTE. The SIMM windows are decoded on U9
+ * and timed on U10; nothing about a DRAM bank fits on the part that also
+ * makes E and Q. */

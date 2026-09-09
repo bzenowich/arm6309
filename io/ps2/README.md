@@ -66,9 +66,10 @@ real-time replayer.** §4.5 evaluates and rejects the 6522 route it suggests, on
   standard PS/2 rate below the 70.09 Hz frame rate, and you cannot display a pointer faster
   than that. (The card asked for 40 /s until the design review pointed out that 60 is a
   standard rate and 40 was chosen from a menu that omitted it.) **The line is shared and
-  the polling order is fixed:** video `VSTAT`, then this card, then serial last —
+  the polling order was fixed:** video `VSTAT`, then this card, then serial last —
   `docs/ps2.md` §3.1.
-- **`$FF50`–`$FF53`, four bytes**, leaving twelve for the disk controller.
+- **`$FF30`–`$FF33`, four bytes** — the bottom of the merged I/O card's sixteen-byte
+  window, moved there 2026-09-09 when the serial half took a `16C550` (`ps2.md` §3.2).
 
 **Transmit is software.** It happens twice at boot and on caps-lock, at ~1 ms per frame —
 absurd to spend a shift register, a sequencer and a timer on. Two control bits drive the

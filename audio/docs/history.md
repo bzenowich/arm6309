@@ -9,6 +9,43 @@ to say, and why each claim changed. Section numbers refer to `audio.md`. "Aud-*"
 
 ---
 
+## §7.1 / §10 / §16 item 29 — the jack got a driver (2026-09-09)
+
+§7.1 put a **line-level** signal on a 3.5 mm connector and flagged the consequence
+itself:
+
+> ⚠ **It is a line output on a headphone-shaped connector, and that will surprise
+> somebody.** 2 V p-p through 100 Ω into 32 Ω headphones is about 0.5 V p-p at the
+> transducer — audible, and much quieter than any other source they will plug in. The
+> card drives a line input correctly and headphones badly.
+>
+> **The fix is priced and not taken: +1 IC.** … **It is refused for the same reason the
+> original text refuses a speaker amp** — whatever drives the machine's speakers should
+> not sit on a board carrying three digital SRAMs and a 28 MHz clock.
+
+**Taken 2026-09-09.** An `NJM4556AD` — dual, 70 mA, DIP-8 — buffers §6.2's summing
+amplifiers into the jack through 470 µF and 10 Ω, and **the backplane pair stays line
+level**. The two outputs stop pretending to be one signal, which is the part the original
+framing got wrong: it was not a choice between two levels but a failure to notice there
+were two loads.
+
+**The objection is not overturned, it is outweighed and then answered by placement.** A
+headphone amplifier still does not belong next to a CPLD; it belongs next to the jack, in
+the analogue section §10 already wants physically separate. What tipped it is that the
+alternative was a connector that silently underdrives everything anybody plugs into it,
+and a card that cannot be listened to on a bench without an external amplifier.
+
+**The count went 31 → 32**, §10's power estimate 330–440 mA → **340–500 mA**, and the
+"where it will grow" list lost its last entry — every growth line that list has ever
+carried is now spent.
+
+⚠ **What the item leaves open is the ground**, and it is the sharper half of the original
+worry: the jack is the one node on this card that leaves the board into something a person
+touches, and a shell bonded to a chassis is a second ground path where §10 allows exactly
+one.
+
+---
+
 ## §5 / §5.3 / §10 / §11.1 / §16 items 0 and 19 — the memory consolidated and panning was built (2026-09-08)
 
 Three changes landed together and the count went **29 → 31**. They are one entry

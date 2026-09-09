@@ -1,5 +1,5 @@
-// Testbench for U6 - the divider's frequency, duty and quadrature, and the
-// two decodes that ride with it. Run with `npm run check:sim` from hardware/.
+// Testbench for U6 - the divider's frequency, duty and quadrature, the
+// /IOSEL decode, and boot mode. Run with `npm run check:sim` from hardware/.
 //
 // The claims that matter are the ones about Q's phase: gal/mmu.pld's entire
 // map-write sequence assumes E and Q are in quadrature in that order, and
@@ -15,23 +15,23 @@ module clkdec_tb;
   always #5 clk25 <= ~clk25;
 
   logic n_reset = 0, fast_e = 0;
-  logic n_iopage = 1, la7 = 0, la6 = 0, a19 = 0, a20 = 0, rw = 1, wait_i = 0;
+  logic n_iopage = 1, la7 = 0, la6 = 0, la5 = 0, la4 = 0, la0 = 0;
+  logic rw = 1, wait_i = 0;
   logic [3:0] cnt;
-  logic e, q, n_iosel, n_ram_ce, n_ram_oe, n_ram_we;
+  logic e, q, run, n_iosel, n_bootoe;
 
   clkdec dut (.clk25(clk25), .n_reset(n_reset), .fast_e(fast_e),
-              .n_iopage(n_iopage), .la7(la7), .la6(la6), .a19(a19), .a20(a20),
-              .wait_i(wait_i), .rw(rw),
-              .cnt(cnt), .e(e), .q(q), .n_iosel(n_iosel),
-              .n_ram_ce(n_ram_ce), .n_ram_oe(n_ram_oe), .n_ram_we(n_ram_we));
+              .n_iopage(n_iopage), .la7(la7), .la6(la6), .la5(la5),
+              .la4(la4), .la0(la0), .wait_i(wait_i), .rw(rw),
+              .cnt(cnt), .e(e), .q(q), .run(run),
+              .n_iosel(n_iosel), .n_bootoe(n_bootoe));
 
   // A bare instance of the combinational half, so the decode can be swept
   // exhaustively without reaching inside the divider.
-  logic d_iopage, d_la7, d_la6, d_a19, d_a20, d_rw, d_e;
-  logic d_iosel, d_ce, d_oe, d_we;
-  decode ddut (.n_iopage(d_iopage), .la7(d_la7), .la6(d_la6), .a19(d_a19),
-               .a20(d_a20), .rw(d_rw), .e(d_e), .n_iosel(d_iosel),
-               .n_ram_ce(d_ce), .n_ram_oe(d_oe), .n_ram_we(d_we));
+  logic d_iopage, d_la7, d_la6, d_run;
+  logic d_iosel, d_bootoe;
+  decode ddut (.n_iopage(d_iopage), .la7(d_la7), .la6(d_la6), .run(d_run),
+               .n_iosel(d_iosel), .n_bootoe(d_bootoe));
 
   int fails = 0;
   task automatic ok(input bit good, input string claim);
@@ -41,7 +41,7 @@ module clkdec_tb;
 
   int period, high, lead, e_rise, q_rise, prev_rise, t;
   bit pe, pq;
-  bit sel_ok, oe_ok, we_ok, never_io, never_both, wired, iosel_ok, top_ok;
+  bit wired, iosel_ok, bootoe_ok, excl_ok, vec_ok, held_ok, run_ok;
   logic [3:0] hold_cnt; logic hold_e, hold_q;
   bit want;
   string order;
@@ -130,43 +130,74 @@ module clkdec_tb;
       end
     ok(iosel_ok, "A6 does not appear in /IOSEL - the window is 128 bytes");
 
-    // ---- the system RAM decode, exhaustive ------------------------------
-    sel_ok = 1; oe_ok = 1; we_ok = 1; never_io = 1; never_both = 1; top_ok = 1;
+    // ---- boot mode's combinational half, exhaustive ---------------------
+    // machine.md 7.2. The '244 drives physical A20-A13 whenever the map SRAMs
+    // do not, and U9 forms the SRAMs' chip enables from the same two
+    // conditions - so this is half of a claim that spans two parts. The other
+    // half is in jedec.check.ts, against both fuse maps.
+    bootoe_ok = 1; excl_ok = 1; vec_ok = 1;
     for (int p = 0; p < 2; p++)
-      for (int a = 0; a < 2; a++)
-        for (int a2 = 0; a2 < 2; a2++)
-          for (int r = 0; r < 2; r++)
-            for (int ee = 0; ee < 2; ee++) begin
-              // not the I/O page, A20 = 0 and A19 = 0
-              want = (p == 1 && a == 0 && a2 == 0);
-              d_iopage = p[0]; d_a19 = a[0]; d_a20 = a2[0];
-              d_rw = r[0]; d_e = ee[0]; #1;
-              if ((!d_ce) != want)                        sel_ok     = 0;
-              if ((!d_oe) != (want && r == 1))            oe_ok      = 0;
-              if ((!d_we) != (want && r == 0 && ee == 1)) we_ok      = 0;
-              if (p == 0 && (!d_ce || !d_we))             never_io   = 0;
-              if (!d_oe && !d_we)                         never_both = 0;
-              if (a2 == 1 && (!d_ce || !d_oe || !d_we))   top_ok     = 0;
-            end
-    ok(sel_ok,     "system RAM is selected by A20 = 0 and A19 = 0, outside the I/O page");
-    ok(top_ok,     "system RAM is silent throughout A20 = 1 - the megabyte cards may claim");
-    ok(oe_ok,      "RAM /OE is qualified by R/W - no bus fight on a write");
-    ok(we_ok,      "RAM /WE is the decode, R/W low and E high");
-    ok(never_io,   "the system RAM is never selected or written during an I/O cycle");
-    ok(never_both, "RAM /OE and /WE are never asserted together");
+      for (int a7 = 0; a7 < 2; a7++)
+        for (int a6 = 0; a6 < 2; a6++)
+          for (int r = 0; r < 2; r++) begin
+            d_iopage = p[0]; d_la7 = a7[0]; d_la6 = a6[0]; d_run = r[0]; #1;
+            // boot mode, or the vector page
+            want = (r == 0) || (p == 0 && a7 == 1 && a6 == 1);
+            if ((!d_bootoe) != want) bootoe_ok = 0;
+            // The '244 and /IOSEL must never assert together: /IOSEL means a
+            // card is being addressed, and the buffer driving means the map is
+            // not translating. They overlap only in boot mode, where the ROM
+            // stands down for $FF00-$FFBF and cards answer normally - so the
+            // pair IS allowed there, and the exclusion is the vector page's.
+            if (p == 0 && a7 == 1 && a6 == 1 && !d_iosel) excl_ok = 0;
+            // The vector page asserts the '244 whether or not boot mode does.
+            if (p == 0 && a7 == 1 && a6 == 1 && d_bootoe) vec_ok = 0;
+          end
+    ok(bootoe_ok,   "the buffer drives for the whole of boot mode and for $FFC0-$FFFF");
+    ok(vec_ok,  "the vector page asserts it forever, boot mode or not - which is what makes $FFFE a reset vector");
+    ok(excl_ok, "and /IOSEL never fires for $FFC0-$FFFF, so no card ever sees a vector fetch");
+
+    // ---- the RUN latch --------------------------------------------------
+    // Set by ONE write to $FFB1, cleared by nothing but /RESET. $FFB0 is TASK
+    // and must not set it, because boot code writes TASK first and the map
+    // index is {TASK, block}.
+    n_reset = 0; @(posedge clk25); #1;
+    ok(run == 1'b0, "RUN comes out of reset at 0 - the machine is in boot mode before it fetches anything");
+    n_reset = 1;
+
+    // $FFB0, a write: TASK. Must not set RUN.
+    la7 = 1; la6 = 0; la5 = 1; la4 = 1; la0 = 0; rw = 0; n_iopage = 0;
+    repeat (24) @(posedge clk25);
+    #1; ok(run == 1'b0, "a write to $FFB0 sets TASK and does NOT leave boot mode");
+
+    // A read of $FFB1. Must not set RUN.
+    la0 = 1; rw = 1;
+    repeat (24) @(posedge clk25);
+    #1; ok(run == 1'b0, "and a READ of $FFB1 does not either - the strobe is a write");
+
+    // $FFB1, a write.
+    rw = 0;
+    repeat (24) @(posedge clk25);
+    #1; ok(run == 1'b1, "one write to $FFB1 sets RUN - the last instruction of machine.md 7.2's boot sequence");
+
+    // Nothing clears it but /RESET.
+    n_iopage = 1; la7 = 0; la6 = 0; la5 = 0; la4 = 0; la0 = 0; rw = 1;
+    repeat (48) @(posedge clk25);
+    #1; ok(run == 1'b1, "and nothing clears it - a wild store cannot put the machine back into boot mode over live RAM");
+    n_reset = 0; #1;
+    ok(run == 1'b0, "but /RESET does, asynchronously - the only reset a 22V10 has");
+    n_reset = 1; @(posedge clk25);
 
     // ---- the divider instance carries the same decode -------------------
     wired = 1;
     for (int p = 0; p < 2; p++)
-      for (int a = 0; a < 2; a++)
-        for (int r = 0; r < 2; r++) begin
-          n_iopage = p[0]; a19 = a[0]; rw = r[0]; la7 = 1'b0; la6 = 1'b0;
-          a20 = 1'b0;
-          d_iopage = p[0]; d_a19 = a[0]; d_rw = r[0]; d_e = e;
-          d_la7 = 1'b0; d_la6 = 1'b0; d_a20 = 1'b0; #1;
-          if (n_ram_ce != d_ce || n_ram_oe != d_oe
-              || n_ram_we != d_we || n_iosel != d_iosel) wired = 0;
+      for (int a7 = 0; a7 < 2; a7++)
+        for (int a6 = 0; a6 < 2; a6++) begin
+          n_iopage = p[0]; la7 = a7[0]; la6 = a6[0];
+          d_iopage = p[0]; d_la7 = a7[0]; d_la6 = a6[0]; d_run = run; #1;
+          if (n_bootoe != d_bootoe || n_iosel != d_iosel) wired = 0;
         end
+    n_iopage = 1; la7 = 1'b0; la6 = 1'b0;
     ok(wired, "U6's own decode outputs match a bare decode on the same inputs");
 
     // ---- /WAIT holds the divider -----------------------------------------
@@ -177,12 +208,26 @@ module clkdec_tb;
     repeat (7) @(posedge clk25); #1;          // land somewhere mid-cycle
     hold_cnt = cnt; hold_e = e; hold_q = q;
     wait_i = 1;
-    top_ok = 1;
+    held_ok = 1;
     repeat (40) begin
       @(posedge clk25); #1;
-      if (cnt !== hold_cnt || e !== hold_e || q !== hold_q) top_ok = 0;
+      if (cnt !== hold_cnt || e !== hold_e || q !== hold_q) held_ok = 0;
     end
-    ok(top_ok, "/WAIT holds the counter, E and Q for as long as it is asserted");
+    ok(held_ok, "/WAIT holds the counter, E and Q for as long as it is asserted");
+
+    // RUN is NOT held by /WAIT, and that is deliberate: it is a mode bit that
+    // happens to live on this part, not part of the divider. Holding it would
+    // mean a $FFB1 write during a stretched cycle did nothing - and the video
+    // card can stretch a cycle by up to 40.7 us (graphics.md 7.4).
+    run_ok = 0;
+    n_iopage = 0; la7 = 1; la6 = 0; la5 = 1; la4 = 1; la0 = 1; rw = 0;
+    repeat (4) begin @(posedge clk25); #1; if (run) run_ok = 1; end
+    ok(run_ok, "and /WAIT does NOT hold RUN - a $FFB1 write lands during a stretched cycle");
+    n_iopage = 1; la7 = 0; la6 = 0; la5 = 0; la4 = 0; la0 = 0; rw = 1;
+    n_reset = 0; @(posedge clk25); #1; n_reset = 1;
+    repeat (7) @(posedge clk25); #1;
+    hold_cnt = cnt; hold_e = e; hold_q = q;
+    wait_i = 1; repeat (40) @(posedge clk25); #1;
 
     // Releasing it must resume the sequence, not restart or skip it: the next
     // count is exactly the one the counter would have produced with no wait at
@@ -205,7 +250,7 @@ module clkdec_tb;
     ok(cnt == 0 && e == 0 && q == 0, "/RESET beats /WAIT - the clear is asynchronous");
     n_reset = 1; wait_i = 0;
 
-    if (fails == 0) $display("\nclkdec.v OK - 21 claims");
+    if (fails == 0) $display("\nclkdec.v OK - 25 claims");
     else            $display("\n%0d FAILED", fails);
     if (fails != 0) $fatal(1);
     $finish;

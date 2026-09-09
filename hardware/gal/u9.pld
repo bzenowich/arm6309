@@ -1,0 +1,183 @@
+Name       u9 ;
+PartNo     ARM6309-U9 ;
+Date       2026-09-09 ;
+Revision   01 ;
+Designer   arm6309 ;
+Company    - ;
+Assembly   motherboard ;
+Location   U9 ;
+Device     g22v10 ;
+
+/* ------------------------------------------------------------------------
+ * Motherboard U9 - the physical space decode. hardware/ram.md 6.3 and 6.7.
+ *
+ * One question about every bus cycle: WHICH MEMORY, IF ANY, IS THIS? The
+ * 32 MB map of ram.md 5.2 has four inhabited regions and this part decodes
+ * three of them - the boot ROM, the four SIMM windows, and the two map SRAMs
+ * that answer the question in the first place. The video ring and the card
+ * buffers are decoded on the cards, which is what /IOPAGE is for.
+ *
+ * WHAT THE FIT FOUND, and ram.md 11 item 6 had it wrong in both directions:
+ *
+ *   - FOUR SIMM SELECTS ARE NOT NEEDED. The windows are at physical
+ *     A24..A22 = 001, 010, 011, 100 and those four codes are already
+ *     distinct in A23:A22 alone. U10 takes A23 and A22 directly - it needs
+ *     them for its RAS/CAS mux anyway - and this part says only WHETHER a
+ *     SIMM answers. Three outputs saved.
+ *   - TWO MAP-SRAM CHIP ENABLES ARE, and they were not on anyone's list.
+ *     ram.md 3.1 says "both SRAMs sit on the same D0-D7; the address picks
+ *     which is written" and nothing said what forms that. It is LA3.
+ *   - BOOT AND VECSEL BELONG ON U6, not here. A 22V10 has exactly one clock
+ *     and one asynchronous reset. U6 has CLK25 on pin 1 and /RESET in the
+ *     array because it is the divider; this part would have had to buy both,
+ *     plus the eight literals of the $FFB1 decode.
+ *
+ * Net: six outputs, fourteen inputs, widest equation five terms on a
+ * macrocell that holds sixteen. Two macrocells left undeclared as spare
+ * inputs, which is what U10 is likely to want.
+ *
+ * THIS FILE IS ASCII, and that is a rule rather than a habit: Atmel's CUPL
+ * preprocessor stops without a diagnostic on a non-ASCII byte, leaving a
+ * truncated .mx and no .jed. The repository's prose uses a warning glyph for
+ * live hazards; a .pld cannot. Spell it out instead.
+ *
+ * PIN PLACEMENT IS DELIBERATE, as on U6. A 22V10's macrocells hold 8, 10,
+ * 12, 14, 16, 16, 14, 12, 10, 8 terms across pins 14..23. The two inputs sit
+ * on the 8-term macrocells (14 and 23), where an input costs nothing and an
+ * output would have had the least room; /IOPAGE, the widest equation, sits
+ * on a 16.
+ * ---------------------------------------------------------------------- */
+
+/* --- inputs ----------------------------------------------------------- */
+/* Pin 1 is the only clock a 22V10 has and this part is combinational, so it
+ * carries an address line instead - the same call mmu.pld makes. */
+PIN 1  = A24 ;
+PIN 2  = A23 ;
+PIN 3  = A22 ;
+PIN 4  = A21 ;
+PIN 5  = A20 ;
+PIN 6  = A19 ;
+
+/* NOTE: A24..A21 COME OFF THE HIGH MAP SRAM and float while boot mode has it
+ * deselected. Every equation that reads them is qualified on RUN, and the
+ * /IOPAGE equation below is where that matters most. */
+
+PIN 7  = !IOPAGE ;   /* U3's TERM, not the backplane wire. This part drives
+                      * the backplane's /IOPAGE, so reading it back would be
+                      * a combinational loop: above 2 MB U9 pulls it low,
+                      * which would de-qualify the SIMM decode that asserted
+                      * it. Two nets, and netlist.check.ts keeps them apart. */
+PIN 8  = RUN ;       /* U6's register. 0 IS BOOT MODE - clkdec.pld carries
+                      * the argument for that sense rather than the other. */
+PIN 9  = LA7 ;
+PIN 10 = LA6 ;
+PIN 11 = LA5 ;
+PIN 13 = LA4 ;
+PIN 14 = LA3 ;       /* on the 8-term macrocell: an input costs no terms     */
+PIN 23 = RW ;        /* likewise                                             */
+
+/* --- outputs ---------------------------------------------------------- */
+PIN 15 = !MAPCE_LO ; /* 10 terms available, 2 used */
+PIN 16 = !MAPCE_HI ; /* 12, 2 */
+PIN 17 = !ROMCE0 ;   /* 14, 3 */
+PIN 18 = !IOPAGE_BP ;/* 16, 5 - the widest */
+PIN 19 = DRAMSEL ;   /* 16, 4 */
+PIN 20 = !ROMCE1 ;   /* 14, 3 */
+/* PINS 21 AND 22 ARE DELIBERATELY NOT DECLARED. The macrocells stay at
+ * high-Z, which makes them spare INPUTS rather than driven lows - the
+ * distinction mmu.pld's pin 23 had to learn the hard way (gal/README.md
+ * finding 6). U10 is unfitted and this is the part next to it. */
+
+/* --- intermediate terms ----------------------------------------------- */
+
+/* $FFC0-$FFFF, the vector page. ONE PRODUCT TERM, because /IOPAGE already
+ * means "logical $FF00-$FFFF" (mmu.pld): the vector page is that page with
+ * A7 and A6 both high. U6 forms the identical condition for the '244's
+ * output enable from the identical two pins, which is what makes the
+ * changeover one signal seen by two parts rather than two decodes that have
+ * to agree. */
+vecsel = IOPAGE & LA7 & LA6 ;
+
+/* $FFA0-$FFAF, the sixteen block registers - the MMU's own window. */
+blksel = IOPAGE & LA7 & !LA6 & LA5 & !LA4 ;
+
+/* The boot ROM's 1 MB at physical 2.0-3.0 M - ram.md 5.2. It went into the
+ * 2.0-4.0 M block that was already reserved and that nothing had asked for,
+ * which is why it cost no re-carving. */
+romspace = !A24 & !A23 & !A22 & A21 & !A20 ;
+
+/* --- the map SRAMs ---------------------------------------------------- */
+/* Selected for translation on every ordinary cycle, and by the CPU during a
+ * block-register access. DESELECTED for the whole of boot mode and for the
+ * vector page - exactly when U6 has the buffer driving the physical address
+ * instead. The !IOPAGE term already excludes the vector page, because the
+ * vector page is inside $FF00-$FFFF; that is why this is two terms.
+ *
+ * LA3 splits the window: ram.md 4.1 Layout A puts blocks 0-7's low byte at
+ * $FFA0-$FFA7 and their high byte at $FFA8-$FFAF. U3's MAPWE is common to
+ * both parts and never sees LA3, so THE CHIP ENABLE IS WHAT MAKES A WRITE
+ * LAND IN ONE SRAM AND NOT THE OTHER. It is here rather than on U3 because
+ * U3 has no spare pin for LA3 and this part does - ram.md 11 item 5 asked
+ * whether U3 could take a second write strobe, and the answer is that it
+ * does not need to. */
+MAPCE_LO = RUN & !IOPAGE
+         # blksel & !LA3 ;
+MAPCE_HI = RUN & !IOPAGE
+         # blksel &  LA3 ;
+
+/* --- the boot ROM ----------------------------------------------------- */
+/* Three ways in, and the first two ignore the physical address entirely -
+ * which is the point, because at reset the map SRAM holds whatever it
+ * powered up holding and a decode that trusted it could not work.
+ *
+ *   RUN = 0 outside $FF00-$FFBF   boot mode
+ *   $FFC0-$FFFF                   the vector page, forever
+ *   physical 2.0-3.0 M            ordinary read-only memory
+ *
+ * Physical A19 picks the device. During the first two the buffer drives it low,
+ * so both land in device 0's first 8 KB - which is where the boot monitor and
+ * the $FFC0-$FFFF vector table live.
+ *
+ * R/W IS IN THE CHIP ENABLE and /OE is tied low on both devices. Same move
+ * gal/README.md argues for the system RAM's /OE and for the same reason: a
+ * part that drives during a write cycle fights the CPU for the whole of
+ * E-high. Here it also makes a stray write to ROM space a no-op instead of a
+ * bus fight. */
+romsel = !RUN & !IOPAGE
+       # vecsel
+       # romspace & !IOPAGE ;
+
+ROMCE0 = romsel & !A19 & RW ;
+ROMCE1 = romsel &  A19 & RW ;
+
+/* --- the backplane's /IOPAGE ------------------------------------------ */
+/* U3's term, plus every access above the bottom 2 MB. ram.md 5.3: a card
+ * decodes A0-A20, so an access at 2.5 MB would look to it exactly like one at
+ * 0.5 MB. The motherboard silences them all instead of giving every slot four
+ * more address pins the connector has not got - zero pins, one open-drain
+ * output, and no card changes.
+ *
+ * GATED ON RUN, AND THAT IS THE SUBTLE ONE. During boot the high map SRAM
+ * is deselected and A24..A21 float. An ungated compare would assert /IOPAGE
+ * at random - and /IOSEL is /IOPAGE AND /A7 (clkdec.pld), so a random
+ * assertion makes every card in the machine decode a boot fetch against its
+ * jumpered base and drive D0-D7. One literal on four terms, and it is the
+ * difference between a machine that boots and one that does not. */
+IOPAGE_BP = IOPAGE
+          # RUN & A24
+          # RUN & A23
+          # RUN & A22
+          # RUN & A21 ;
+
+/* --- the SIMM windows ------------------------------------------------- */
+/* Four 4 MB windows at 4-20 M: physical A24..A22 = 001, 010, 011, 100.
+ * WHICH window is not encoded here - those four codes are already distinct in
+ * A23:A22, so U10 takes those two lines directly and picks its own RAS. That
+ * is three outputs this part does not spend and two inputs U10 needs anyway.
+ *
+ * Qualified on RUN for the same reason /IOPAGE is: during boot, A24..A22
+ * float and no SIMM may answer. */
+DRAMSEL = !IOPAGE & RUN & !A24 & !A23 &  A22    /* 4-8 M   */
+        # !IOPAGE & RUN & !A24 &  A23 & !A22    /* 8-12 M  */
+        # !IOPAGE & RUN & !A24 &  A23 &  A22    /* 12-16 M */
+        # !IOPAGE & RUN &  A24 & !A23 & !A22 ;  /* 16-20 M */

@@ -5,6 +5,7 @@
 import type { Design } from "./jedec/assemble"
 import { mmuDesign } from "./mmu.jedec"
 import { clkdecDesign } from "./clkdec.jedec"
+import { u9Design } from "./u9.jedec"
 import { hgenDesign, vgenDesign, vdecDesign } from "./sync.jedec"
 import { hadrDesign, vadrDesign } from "./scan.jedec"
 import { arbDesign, wcolDesign, wrowDesign } from "./access.jedec"
@@ -13,7 +14,7 @@ import { seqctlDesign } from "./seqctl.jedec"
 import { aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign } from "./audio.jedec"
 
 export const ALL: Design[] = [
-  mmuDesign, clkdecDesign,
+  mmuDesign, clkdecDesign, u9Design,
   hgenDesign, vgenDesign, vdecDesign,
   hadrDesign, vadrDesign,
   arbDesign, wcolDesign, wrowDesign,

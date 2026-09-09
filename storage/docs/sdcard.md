@@ -451,8 +451,8 @@ which this card uses 2 KB.
 |---|---|---|
 | `$FF00`–`$FF3F` | 64 | *free* |
 | `$FF40`–`$FF4F` | 16 | audio |
-| `$FF50`–`$FF53` | 4 | PS/2 |
-| `$FF54`–`$FF57` | 4 | serial |
+| `$FF30`–`$FF3F` | 16 | I/O — PS/2 and serial, one card (moved 2026-09-09) |
+| `$FF50`–`$FF57` | 8 | **free** — vacated by it |
 | **`$FF58`–`$FF5B`** | **4** | **storage — this document** |
 | `$FF5C`–`$FF5F` | 4 | net |
 | `$FF60`–`$FF7F` | 32 | video |

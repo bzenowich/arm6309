@@ -529,17 +529,19 @@ Three maskable sources:
 
 **Proposed polling order: video `VSTAT` → net `NRXST` → PS/2 `IOSTAT` → serial `STATUS`.**
 
-`machine.md` §4.1's order has exactly one hard constraint — **serial last**, because
+`machine.md` §4.1's order had exactly one hard constraint — **serial last** — because
 reading the 6551's `STATUS` clears the interrupt and returns the error bits in the same
 read. Net goes second because its status read has no side effects at all, and because
 under load it is the most frequent source in the machine after (and sometimes ahead of)
 VBL.
 
-> ⚠ **This card makes `machine.md` §4.1's order correctness-driven rather than
-> frequency-driven, and that is worth saying out loud.** At §3.4's rates net can raise
-> 9,600 interrupts/s and serial 1,920, against VBL's 50–70. The frequency ordering is
-> now *serial, net, video, PS/2* and the specified order is *video, net, PS/2, serial* —
-> they are nearly reversed. The specified order is still right, because the 6551's
+> ⚠ **This card made `machine.md` §4.1's order correctness-driven rather than
+> frequency-driven, and ⭐ 2026-09-09 undid the correctness half.** At §3.4's rates net
+> can raise 9,600 interrupts/s and serial 1,920, against VBL's 50–70, so the frequency
+> ordering is nearly the reverse of the specified one. **The `16C550` that replaced the
+> 6551 can be probed without being serviced** (`serial.md` §7.3), so nothing forbids the
+> frequency ordering any more — `machine.md` §4.1 keeps the old one until the dispatch
+> cost is measured, and says so. What follows is the argument as it stood: the 6551's
 > destructive read is a correctness matter and polling cost is not.
 
 **Ack-window race.** `review.md` §7.2's finding carries: an event landing during the ack

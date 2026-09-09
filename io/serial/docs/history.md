@@ -6,6 +6,119 @@ this file records what earlier revisions of it said, what the 2026-09-04 design 
 the `$FF`-map narrative this card sat in the middle of, and what replaced each claim.
 Entries are ordered by the spec section they came from.
 
+## §0 / §6 / §7 / §9 / §12 / §13 — the 6551 became a `16C550` (2026-09-09)
+
+**§4.5's tier 1 was taken.** The card is a `TL16C550C`, and what follows is the part it
+replaced. §4, §5 and §5.4 stay live in the spec because they are the *argument* that
+produced the change rather than a description of the card.
+
+### §9 — "Total: 3", and the tier priced at "+1 IC"
+
+The budget's first row was:
+
+> | 1 | `G65SC51` (or `R6551A`) | the ACIA — **not `W65C51N`**, §3.3. **Speed grade is part of the specification, not a preference: 2 MHz minimum for ÷12, 4 MHz for fast-E — §3.4** |
+
+and §9.1's tier table put **Tier 1 at 4 ICs** against a base of 3 — a figure §5.4
+repeated.
+
+⚠ **That was a counting error and it survived in two tables.** The base total read
+*"Total: 3. Plus a 1.8432 MHz crystal…"*, with the crystal deliberately **not** a
+package; the tier row listed *"`16C550`, `MAX232`, GAL22V10, **7.3728 MHz crystal**"* and
+counted four. There is a crystal either way and only its frequency changes. **The
+`16C550` replaces the 6551 one for one**, and the decision was easier than the document
+made it look for as long as the error stood.
+
+The sourcing note that went with the row, kept because it states a problem this card no
+longer has:
+
+> row 1 is the only part on this card that cannot be substituted with a jellybean, and it
+> now has **two** attributes to match, not one — *not* a `W65C51N` (§3.3), **and** a speed
+> grade adequate for the E rate the machine will actually run at (§3.4). A `G65SC51P-2`
+> covers the specified ÷12 rate and **does not cover fast-E mode**; only a genuine 4 MHz
+> grade does. Record which grade was bought, because the difference is invisible on the
+> bench at ÷12 and shows up as occasional corrupted bytes at ÷8.
+
+### §7.2 — the four registers
+
+| Off | Name | R/W | Function |
+|---|---|---|---|
+| `+$0` | `DATA` | R/W | read: received byte, clears `RDRF`. write: transmit byte, clears `TDRE` |
+| `+$1` | `STATUS` | R | below |
+| `+$1` | `RESET` | W | programmed reset — the written value is ignored |
+| `+$2` | `COMMAND` | R/W | parity mode, echo, transmitter interrupt control and `/RTS` state, receiver interrupt disable, `/DTR` state |
+| `+$3` | `CONTROL` | R/W | baud rate select, receiver clock source, data-word length, stop bits |
+
+**This is the map NitrOS-9's `sc6551` expects** (§10.1), which is why it is kept whole
+rather than summarised: the driver question changed with the part.
+
+### §7.3 — `STATUS`, and the argument that reached three other documents
+
+| Bit | Meaning |
+|---|---|
+| 0 | parity error |
+| 1 | framing error |
+| 2 | **overrun** — a byte arrived before the last was read |
+| 3 | `RDRF` — receive data register full |
+| 4 | `TDRE` — transmit data register empty. ⚠ broken on the `W65C51N` |
+| 5 | `/DCD` state |
+| 6 | `/DSR` state |
+| 7 | interrupt pending — **reading `STATUS` clears it** |
+
+> Reading `STATUS` clears the interrupt, so the `/IRQ` handler's first action on this
+> card is a `STATUS` read, and the error bits it carries must be consumed in that same
+> read.
+>
+> **That single property fixes this card's position in the shared-`/IRQ` chain: last.**
+> … **The consequence for §10.2's handler: no probe-and-defer.** A handler that reads
+> `STATUS` to decide "not mine" and returns has already destroyed the error bits and
+> dropped the interrupt.
+
+⭐ **This is the most consequential thing the part change deleted.** `machine.md` §4.1
+built the machine's polling order on it — *video → net → PS/2 → serial (last, always)* —
+and recorded as a live cost that **the correctness ordering and the frequency ordering
+disagreed, and the disagreement was paid on every dispatch.** A `16C550`'s `IIR` names the
+interrupting source, or says there is none, **and destroys nothing**; the error bits moved
+to `LSR`, read only when `IIR` has said to. `machine.md` §4.1 keeps the order for now and
+says plainly that it is a preference rather than a rule.
+
+### §6 — two rows that were properties this card had for free
+
+> | `φ2` | backplane `E` — **and this is why §3.4's speed grade is a card-level
+> constraint**: the part is clocked by whatever rate the machine is running at |
+>
+> | `/RES` | backplane `/RESET` — **the whole card comes up in a defined state from one
+> pin**, which is the property `ps2.md` §8.4 had to add two changes to acquire |
+
+The first is gone entirely: a `16C550` has no bus clock pin, which takes §3.4 *and*
+`machine.md` §1.1's fast-E experiment off this card's plate. **The second is gone as a
+freebie and survives as a requirement** — `MR` is active *high*, so it goes through the
+GAL, and the property now depends on one macrocell being right rather than on a wire
+being short.
+
+> | `/IRQ` | backplane `/IRQ`, **open-drain — confirm this on the datasheet** |
+
+⚠ **`INTR` is active-high and totem-pole.** It cannot wire-OR at all; the GAL inverts it
+through an open-drain macrocell. The datasheet question this row raised was the right
+question, and the answer turned out to be "no".
+
+### §7.1 — the window was `$FF54`–`$FF57`
+
+Four bytes immediately above PS/2's four, in a merged card decoding `$FF50`–`$FF57`.
+**Eight registers do not fit where four did**, and those eight bytes were wedged between
+audio at `$FF40` and storage at `$FF58` — so the card moved to a sixteen-byte window at
+`$FF30` rather than displacing two other cards, and handed `$FF50`–`$FF57` back. The
+machine's `$FF` margin went from 64 free to **56**.
+
+### §12 step 0 and §13 items 6 and 9
+
+Step 0 was *"Decide §5.4's tier, because Tier 1 changes which part step 1 sources"*;
+items 6 and 9 were that decision and the speed grade hanging on it. All three are closed
+by the part change. **Item 5 is not** — it changed from "which 6551, and is it in
+production" to ⚠ **"is the `TL16C550C` still made in PDIP-40?"**, because TI's catalogue
+lists PLCC-44 and TQFP-48. `net.md` §13.6's lesson holds either way.
+
+---
+
 ## §(intro) The README framing this document superseded
 
 Archived text:

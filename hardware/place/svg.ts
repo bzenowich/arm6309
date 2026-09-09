@@ -73,9 +73,12 @@ export const MB = { W: 272, H: 224, pad: 15, slotL: 91.4, slotW: 10.16, pitch: 2
  * off. Boot is sixteen stores, a CLR and an LDS - no stack needed. */
 export const MB_PARTS: [number, number, number, number, string, Kind, boolean][] = [
   /* -- the MMU, two map SRAMs for 16-bit entries (ram.md §3.1) ------------ */
+  /* Each SRAM has its OWN chip enable from U9: U3's MAP_WE is common to both
+   * and never sees LA3, so the chip enable is what makes a write land in one
+   * part and not the other (ram.md §4.1 Layout A, gal/u9.pld). */
   [12, 140, 50.8, 15.24, "J0 6309 socket", "pld", false],
   [68, 140, 30.5, 15.24, "U1 map lo", "mem", false],
-  [103, 140, 30.5, 15.24, "U1b map hi", "mem", false],
+  [103, 140, 30.5, 15.24, "U1B map hi", "mem", false],
   [12, 160, 30.5, 7.62, "U3 GAL22V10", "pld", false],
   [12, 170, 30.5, 7.62, "U6 GAL22V10 E/Q", "pld", false],
   [47, 160, 25.4, 7.62, "U4 245", "bus", false],
@@ -89,10 +92,12 @@ export const MB_PARTS: [number, number, number, number, string, Kind, boolean][]
   [139, 160, 20.3, 7.62, "U11 157", "bus", false],
   [139, 170, 20.3, 7.62, "U12 157", "bus", false],
   [163, 160, 20.3, 7.62, "U13 157", "bus", false],
-  /* -- the boot ROM: 1 MB and its address driver (ram.md §6.7) ------------ */
+  /* -- the boot ROM: 1 MB and its address buffer (ram.md §6.7) ------------ */
+  /* A '244 and not the '541 machine.md §7.2 first named: both are octal
+   * three-state buffers, and the '244 has a datasheet in reference/. */
   [105, 182, 41.9, 15.24, "U14 SST39SF040", "mem", false],
   [105, 200, 41.9, 15.24, "U15 SST39SF040", "mem", false],
-  [12, 194, 25.4, 7.62, "U16 541 boot addr", "bus", false],
+  [12, 194, 25.4, 7.62, "U16 244 boot addr", "bus", false],
   [190, 160, 32.0, 12.0, "power in", "conn", false],
   [150, 182, 89.0, 8.0, "30-pin SIMM 0", "mem", false],
   [150, 194, 89.0, 8.0, "30-pin SIMM 1", "mem", false],

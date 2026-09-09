@@ -359,25 +359,34 @@ a stack**, and there is nowhere to put one.
 **The answer is that the sequence that fixes it contains no `JSR`.** In full:
 
 ```
-        ; BOOT = 1 out of reset.  Every logical block reads ROM page 0.
-        ; No RAM, no stack, no subroutine calls in this block.
+        ; RUN = 0 out of reset: boot mode.  Every logical block reads ROM
+        ; page 0.  No RAM, no stack, no subroutine calls in this block.
+        clra
+        sta   $FFB0               ; TASK := 0 - and $FFB0 is EVEN, so it does
+                                  ; NOT leave boot mode
         lda   #$xx                ; physical page holding the ROM's own page 0
-        sta   $FFA0 + n           ; ... one store per block, sixteen of them
+        sta   $FFA0               ; ... one store per block, sixteen of them
         ...
-        clr   $FFB1               ; BOOT = 0.  The map takes over.
-        lds   #stacktop           ; the first SIMM answers; ordinary code from here
+        sta   $FFB1               ; RUN := 1.  The map takes over.
+        lds   #stacktop           ; the first SIMM answers; ordinary code
 ```
 
-Sixteen stores, one `CLR` and an `LDS`. **Refresh needs nothing at all**, because
-U10's refresh timer free-runs off `CLK25` from reset — `machine.md` §5 item 10's rule
-requires that of it independently, so it is not a favour asked of the DRAM controller
-but a property it has to have anyway.
+Eighteen stores and an `LDS`. **Refresh needs nothing at all**, because U10's refresh
+timer free-runs off `CLK25` from reset — `machine.md` §5 item 10's rule requires that of
+it independently, so it is not a favour asked of the DRAM controller but a property it
+has to have anyway.
 
-⚠ **The one real constraint is that the block the code is executing from must survive
-the `CLR`.** Point one map entry at physical 2.0 MB — the same ROM page 0 the code is
-already running out of — and clearing `BOOT` does not move the instruction stream.
-That is a rule about the boot code, not about the hardware, and it belongs in the ROM's
-source next to the sequence above.
+⭐ **`TASK` first, then the map, then `$FFB1` — and the address parity is what allows
+that order.** The map index is `{TASK, block}`, so writing sixteen entries before `TASK`
+is set puts them under whatever the `'574` powered up holding. A control window that left
+boot mode on *any* write would have made the correct order impossible; one literal on
+`A0` splits `$FFB0` (TASK) from `$FFB1` (the strobe). `gal/clkdec.pld`.
+
+⚠ **The one real constraint is that the block the code is executing from must survive the
+last store.** Point one map entry at physical 2.0 MB — the same ROM page 0 the code is
+already running out of — and setting `RUN` does not move the instruction stream. That is a
+rule about the boot code, not about the hardware, and it belongs in the ROM's source next
+to the sequence above.
 
 > **What was proposed instead, and is withdrawn.** Until §6.7 the recommendation was
 > that the CPU module serve 2 KB of its own SRAM as a logical window — zero ICs, and it
@@ -392,7 +401,7 @@ source next to the sequence above.
 | − the DIP system RAM, removed (§6.2) | −1 |
 | + second map SRAM, 16-bit entries (§3.1) | +1 |
 | + U9 space decode, U10 SIMM timing, 3 × `'157` | +5 |
-| + **the boot ROM: 2 × `SST39SF040` and the `'541`** (§6.7) | **+3** |
+| + **the boot ROM: 2 × `SST39SF040` and the `'244`** (§6.7) | **+3** |
 | **total** | **17 ICs + 4 SIMM sockets** |
 
 ⚠ **`mainboard.circuit.tsx` still draws the nine.** The board file is a schematic of the
@@ -432,29 +441,60 @@ it that is a motherboard parts list.
 | Qty | Part | Role |
 |---|---|---|
 | **2** | **`SST39SF040`** — 512K×8, 5 V, 70 ns, PDIP-32 | 1 MB at physical **2.0–3.0 MB**. Physical `A19` selects between them — one literal on U9 |
-| **1** | **`74HCT541`** | drives physical `A19`–`A13` to zero while `BOOT` or `VECSEL` is asserted, so the ROM's page 0 is reachable with the map switched off |
+| **1** | **`74HCT244`** | drives physical `A20`–`A13` to zero while boot mode or the vector page has the map SRAMs deselected. ⭐ **A `'244` and not the `'541` §7.2 first named**: both are octal three-state buffers, and the `'244` has a datasheet in `reference/datasheets/` where the `'541` does not — so it is the one whose pin numbering is read rather than remembered. ⚠ **Eight bits, not seven**: `A20` reaches the backplane, and a floating `A20` during a boot fetch would let the video card's VRAM select answer at random
 
 **What it needs from the logic on this board**, and none of it is a new part:
 
 | Signal | Where | Cost |
 |---|---|---|
-| `BOOT` — set by `/RESET`, cleared by a write to `$FFB1` | a registered macrocell on **U9** | 1 macrocell |
-| `VECSEL` — logical `$FFC0`–`$FFFF` | **U9**, from the logical lines that never leave this board (`machine.md` §2) | 1 term |
-| ROM `/CE` | **U9** — `BOOT · /($FF00–$FFBF)` **+** `VECSEL` **+** the physical 2.0–3.0 MB compare | 3 terms |
-| `'541` `/OE` and the map `'245`'s enable | **U9**, and they are complements of one another | 1 term |
-| ⚠ SIMM selects and the `/IOPAGE` pull, **gated off by `BOOT` and `VECSEL`** | **U9** — `A24`–`A20` float in both forced modes, so no decode above `A19` may be trusted during one | 1 literal each |
-| ROM `/OE` | `R/W`, exactly as §"`/OE` is qualified by `R/W`" argues for the SIMMs | — |
+| `RUN` — cleared by `/RESET`, set by a write to `$FFB1` | a registered macrocell on **U6** | 1 macrocell, 2 terms |
+| `/BOOTOE` — the buffer's output enable, `/RUN` or the vector page | **U6** | 1 macrocell, 2 terms |
+| `ROM /CE0`, `/CE1` | **U9** — boot mode, the vector page, or the 2.0–3.0 M compare, each ANDed with `R/W` and physical `A19` | 2 macrocells, 3 terms each |
+| the backplane's `/IOPAGE` | **U9** — U3's term, plus above-2 MB **gated on `RUN`** | 1 macrocell, 5 terms |
+| `MAP_CE_LO`, `MAP_CE_HI` | **U9** — and `LA3` is what splits a block-register write between the two SRAMs | 2 macrocells, 2 terms each |
 
-⚠ **U9 was "comfortably inside a `GAL22V10`" and is no longer obviously so.** It now
-carries four SIMM window selects, the `/IOPAGE` pull of §5.3, two ROM chip selects,
-`BOOT`, `VECSEL` and the `'541`/`'245` enable pair — **ten outputs on a part that has
-ten**, before counting inputs. §11 item 6 is where that gets fitted, and the fallback
-is that `BOOT`/`VECSEL` and the enables move to U10, which carries a state machine and
-is going to be an `ATF16V8`-or-larger anyway.
+### 6.7.1 ⭐ U9 is fitted, and §11 item 6 had the count wrong in both directions
 
-**Why `BOOT` closes §6.4 rather than adding to it** is that the ROM is the *only* thing
-the machine needs before there is RAM, and it needs no configuration to serve it: reset
-asserts `BOOT`, `BOOT` maps the ROM everywhere, and everything after that is stores.
+> **2026-09-09.** [`gal/u9.pld`](gal/u9.pld), [`gal/u9.jedec.ts`](gal/u9.jedec.ts) and
+> [`gal/u9.model.ts`](gal/u9.model.ts); `npm run check:jedec` evaluates the fuses against
+> the model over all 16,384 input combinations and `npm run check:cupl` runs **Atmel's own
+> CUPL output** through the same sweep.
+
+§11 item 6 said this part was *"no longer obviously comfortable"* — **ten outputs on a
+part that has ten, before counting inputs.** It fits at **six outputs and fourteen
+inputs**, with two macrocells left as spare inputs and the widest equation at five product
+terms of sixteen. Two of the counts were wrong:
+
+| | counted | actual | why |
+|---|---|---|---|
+| SIMM window selects | 4 | **1** | The four windows are at physical `A24..A22` = 001, 010, 011, 100 — and those four codes are **already distinct in `A23:A22` alone**. U10 takes those two lines directly (it needs them for its RAS/CAS mux anyway) and picks its own RAS; U9 says only *whether* a SIMM answers |
+| map-SRAM chip enables | 0 | **2** | Not on anyone's list. §3.1 says *"both SRAMs sit on the same `D0`–`D7`; the address picks which is written"* and **nothing said what forms that.** It is `LA3`, and it closes §11 item 5 by making U3's second write strobe unnecessary |
+| `BOOT`, `VECSEL`, the enables | 3 | **0** | They went to **U6**. A 22V10 has exactly one clock and one asynchronous reset; U6 has `CLK25` on pin 1 and `/RESET` in the array because it is the divider, and it had just lost three macrocells to §6.2's departed system RAM. U9 would have paid three pins for what U6 had already |
+
+⚠ **And the fit found one real defect.** The `/IOPAGE` pull has to be **gated on `RUN`**:
+during boot the high map SRAM is deselected and `A24`–`A21` float, so an ungated
+above-2 MB compare asserts `/IOPAGE` at random — and `/IOSEL` is `/IOPAGE · /A7`, so a
+random assertion makes **every card in the machine decode a boot fetch** against its
+jumpered base and drive `D0`–`D7`. One literal on four terms, and it is the difference
+between a machine that boots and one that does not.
+
+### 6.7.2 The changeover is free, and that is checked rather than argued
+
+The buffer and the map SRAMs must never drive the physical address together. They are
+**complements of the same two conditions on two different parts** — U6 forms
+`/RUN # vecsel` for the buffer, U9 forms `RUN & !IOPAGE # blksel` for the SRAMs — and
+`check:jedec` asserts over every combination of `RUN`, `/IOPAGE`, `LA7` and `LA6` that
+the two are never both asserted.
+
+⭐ **The handover edge is free as well, and by construction rather than by timing.**
+`RUN` is set by a write to `$FFB1`, which is an `$FFxx` cycle — and the map SRAMs are
+deselected for **every** `$FFxx` cycle, for an independent reason. So there is no instant
+at which one turns on as the other turns off; the changeover happens inside a cycle where
+the SRAM is already off.
+
+**⚠ What is still owed is U10.** It carries the RAS/CAS state machine, refresh
+arbitration and `/WAIT`, and it has not been written. It is the only piece of logic on
+the motherboard that is not fitted at the fuse level — §11 item 6.
 
 ## 7. The backplane — zero new pins (§5.3)
 
@@ -484,7 +524,7 @@ see. **Zero new pins.**
 | The DIP system RAM, removed | −1 | **no DIP SRAM at all — §6.2** |
 | U9 space decode | +1 | §6.3 |
 | U10 SIMM timing + 3 × `'157` | +4 | §6.3 |
-| **Boot ROM: 2 × `SST39SF040` + `'541`** | **+3** | §6.7 |
+| **Boot ROM: 2 × `SST39SF040` + `'244`** | **+3** | §6.7 |
 | **Motherboard** | **9 → 17** | plus four SIMM sockets |
 | Backplane | **0 pins** | §5.3, §6.7 |
 | Cards | **0 changes** | one jumper position on storage and net, §5.2 |
@@ -538,7 +578,7 @@ and tried to make the OS use all of it.
 | **0** | **Widen `TASK` to 8 bits** (§3.2) | **0 ICs** | 256 resident contexts; a process switch becomes one write. Independent of everything below and the only step that helps software that exists today |
 | **1** | **Second map SRAM, 16-bit entries** (§3.1, §4) | +1 IC | the 32 MB address path — ⚠ **and the precondition for step 2**, which §5.1 is about |
 | **2** | **U9 and the SIMM bank** — 4 sockets, U10, 3 × `'157` (§6.3) | +5 ICs | **4–16 MB of DRAM: all of the machine's memory** |
-| **3** | **The boot ROM** — 2 flash + a `'541` (§6.7) | +3 ICs | ⭐ **a machine that boots standalone**, and the `$FFC0`–`$FFFF` vectors. Independent of steps 1 and 2 in hardware, and **required before either can be tested**, because nothing else puts an instruction in front of the CPU |
+| **3** | **The boot ROM** — 2 flash + a `'244` (§6.7) | +3 ICs | ⭐ **a machine that boots standalone**, and the `$FFC0`–`$FFFF` vectors. Independent of steps 1 and 2 in hardware, and **required before either can be tested**, because nothing else puts an instruction in front of the CPU |
 | **4** | A bank-register window (§2.1) | +2 ICs | the space above the OS ceiling as an unmanaged store, without a memory-manager port |
 
 ⚠ **Step 1 before step 2 is not a preference.** The SIMM windows are at 4–20 MB and an
@@ -566,15 +606,23 @@ of ROM registers-only, which is exactly what §6.4's sequence is.
    (§6.4). `machine.md` §7.2's motherboard ROM serves page 0 behind every logical block
    out of reset, refresh free-runs, and the map is written with stores. The
    scratch-RAM-in-the-CPU-module proposal is withdrawn.
-5. **Does U3 fit the second write strobe?** Pin 23 is free and `gal/README.md`
-   says the part fits *"with one pin spare"*. One output costs a macrocell
-   **and** a pin. **Fit it before believing §8's "+1 IC".**
-6. **⚠ Fit U9 and U10, and U9 is no longer comfortable.** The four SRAM chip selects
-   went with the SRAM, but §6.7 put the boot ROM's two selects, `BOOT`, `VECSEL` and the
-   `'541`/`'245` enable pair back — **ten outputs on a `GAL22V10`'s ten**, before
-   counting inputs. U10 carries the RAS/CAS state machine, refresh arbitration and
-   `/WAIT`, and has not been counted at all. **Fit both before believing §8's totals**;
-   the fallback is that the boot terms move to U10.
+5. **CLOSED 2026-09-09 — U3 needs no second write strobe and is untouched.** The
+   question was whether pin 23 could become the high byte's write strobe. It does not
+   have to: **U9 gives each map SRAM its own chip enable**, split by `LA3`, so U3's single
+   `MAPWE` reaches both parts and the chip enable decides where the byte lands (§6.7.1).
+   U3's fuse map, its 23 checks and its Verilog testbench are unchanged by any of this —
+   pin 23 stays a spare **input**.
+6. **⚠ U9 IS FITTED (2026-09-09); U10 IS NOT.** This item said U9 might not fit —
+   *"ten outputs on a `GAL22V10`'s ten, before counting inputs"* — and §6.7.1 has why
+   that was wrong in both directions: the four SIMM selects collapse to one, and two
+   map-SRAM chip enables nobody had counted appeared. **Six outputs, fourteen inputs, two
+   spare macrocells, widest equation five terms of sixteen**, checked at the fuse level
+   against a model and against Atmel's own CUPL.
+
+   **U10 remains the one piece of logic on this board that is not written.** It carries
+   the RAS/CAS state machine, refresh arbitration and `/WAIT`, and it has never been
+   counted. ⚠ **§8's totals assume it fits a `GAL22V10`** and nothing has tested that. It
+   now takes `DRAMSEL` plus physical `A23`/`A22`, which is what U9's fit chose for it.
 7. **Source the SIMMs.** 4 MB 30-pin modules were made and are not
    current-production; this is `net.md` §13.6's lesson again — **availability is
    the first question about a part.** 1 MB modules are commoner and give 4 MB.

@@ -12,7 +12,7 @@
 import { Card } from "../lib/Card"
 
 export default () => (
-  <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} length={180} icBudget={31}>
+  <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} length={180} icBudget={32}>
     {/* Y1 - not the backplane's 25.175 MHz. machine.md 1's one-master rule has
       * exactly one exception and this is it. */}
     <crystal
@@ -91,16 +91,81 @@ export default () => (
       * offsets - tens of millivolts, not half of full scale. 10 uF into 100k is
       * 0.16 Hz, four decades below anything a module contains.
       *
-      * ⚠ It is a LINE output on a headphone-shaped connector: ~2 V p-p through
-      * 100 ohm into 32 ohm headphones is about a quarter of the level anything
-      * else they plug in will give. 7.1 prices a driver at +1 IC and refuses
-      * it - audio.md 16 item 29 decides at bring-up. */}
+      * ⚠ THE BACKPLANE PAIR IS LINE LEVEL AND THE JACK IS NOT, and that is
+      * the resolution of audio.md 16 item 29: a line signal on a 3.5 mm
+      * connector reaches headphones at about a quarter of the level anything
+      * else they plug in gives. U9 buffers the same two nodes for the jack. */}
     {["L", "R"].map((side, i) => (
       <group key={side}>
         <capacitor name={`C${i + 1}`} capacitance="10uF" footprint="1206" polarized
           connections={{ pin1: `net.SUM_${side}`, pin2: `net.OUT_${side}` }} />
         <resistor name={`R${i + 1}`} resistance="100" footprint="0805"
           connections={{ pin1: `net.OUT_${side}`, pin2: `net.AUDIO_${side}` }} />
+      </group>
+    ))}
+
+    {/* U9 - the headphone driver, added 2026-09-09 (audio.md 7.1, 16 item 29).
+      *
+      * An NJM4556AD: dual, 70 mA output, DIP-8, and a 1980s JRC part rather
+      * than a modern one. It taps SUM_L/SUM_R - the SAME nodes the line output
+      * takes, ahead of that path's DC block - as a unity-gain follower, then
+      * its own coupling capacitor and a series resistor into the jack.
+      *
+      * THE ARITHMETIC, because "add a buffer" is not a specification:
+      *   2 V p-p is 0.707 V rms; into 32 ohm that is 22 mA rms and ~31 mA
+      *   peak per channel, against the part's 70 mA. 0.707^2 / 32 = 15.6 mW,
+      *   where a comfortable listening level is 1-5 mW - so there is headroom
+      *   rather than a compromise.
+      *   10 ohm in series is short-circuit protection and damping, not a
+      *   divider: into 32 ohm it costs 2.6 dB and into a 10 kohm line input
+      *   nothing at all.
+      *   470 uF into 32 ohm is 10.6 Hz, three decades below anything a module
+      *   contains. The line path's 10 uF into 100 kohm is 0.16 Hz; a headphone
+      *   load is 3,000 times lower and needs the capacitor 47 times larger.
+      *
+      * ⚠ IT IS A SEPARATE PATH, NOT A REPLACEMENT. The backplane pair stays
+      * line level, because that is what a chassis jack or a mixer wants and
+      * this machine has no chassis yet (hardware/README.md).
+      *
+      * ⚠ ANALOGUE GROUND, and it matters more here than anywhere else on the
+      * card: this is the one node that leaves the board into something a
+      * person touches, and audio.md 10 requires analogue and digital grounds
+      * to meet at exactly ONE point. A jack shell bonded to a chassis is the
+      * classic way to make a second. */}
+    <chip
+      name="U9"
+      manufacturerPartNumber="NJM4556AD"
+      footprint="dip8_w0.3in"
+      pinLabels={{
+        pin1: "OUT_A", pin2: "nIN_A", pin3: "IN_A", pin4: "VEE",
+        pin5: "IN_B", pin6: "nIN_B", pin7: "OUT_B", pin8: "VCC",
+      }}
+      connections={{
+        /* ⚠ THE ANALOGUE SECTION'S SPLIT RAILS, not +5 and ground. audio.md
+         * 16 item 25: with 6.3's pedestal blocked rather than cancelled, the
+         * signal between the I/V stage and the output capacitor lives between
+         * 0 and -V_REF, so the analogue side needs a VSS below -V_REF and this
+         * part rides the same pair.
+         *
+         * ⚠ AND IT CHANGES THAT ITEM. Item 25 is a rail decision that "costs
+         * no packages" because everything on those rails is an op-amp signal
+         * path drawing milliamps. This part draws up to ~60 mA into a
+         * low-impedance load on both channels, from rails sized for
+         * microamps - so the negative rail now needs current capability, not
+         * just a voltage. audio.md 7.1. */
+        VCC: "net.VA_POS", VEE: "net.VA_NEG",
+        /* Unity-gain followers: output tied to the inverting input, signal
+         * on the non-inverting one. No gain to set and no resistors to match. */
+        IN_A: "net.SUM_L", nIN_A: "net.HP_L", OUT_A: "net.HP_L",
+        IN_B: "net.SUM_R", nIN_B: "net.HP_R", OUT_B: "net.HP_R",
+      }}
+    />
+    {["L", "R"].map((side, i) => (
+      <group key={`hp${side}`}>
+        <capacitor name={`C${i + 3}`} capacitance="470uF" footprint="1210" polarized
+          connections={{ pin1: `net.HP_${side}`, pin2: `net.HPO_${side}` }} />
+        <resistor name={`R${i + 3}`} resistance="10" footprint="0805"
+          connections={{ pin1: `net.HPO_${side}`, pin2: `net.JACK_${side}` }} />
       </group>
     ))}
 
@@ -117,14 +182,15 @@ export default () => (
       * ⚠ FOOTPRINT: "pinrow3" is a 3-pin header, not a 3.5 mm receptacle - the
       * netlist is right and the outline is not, the same caveat the slot socket
       * carries (hardware/README.md open item 2). Tip = left, ring = right,
-      * sleeve = AGND, and the sleeve goes to the ANALOGUE ground: audio.md 10
-      * requires analogue and digital grounds to meet at exactly one point, and
-      * a jack shell bonded to a chassis is the classic way to make a second. */}
+      * sleeve = AGND.
+      *
+      * DRIVEN BY U9, not by the line output: audio.md 7.1 and 16 item 29. The
+      * backplane pair is line level and this is not. */}
     <chip
       name="J2"
       footprint="pinrow3"
       pinLabels={{ pin1: "TIP", pin2: "RING", pin3: "SLEEVE" }}
-      connections={{ TIP: "net.AUDIO_L", RING: "net.AUDIO_R", SLEEVE: "net.AGND" }}
+      connections={{ TIP: "net.JACK_L", RING: "net.JACK_R", SLEEVE: "net.AGND" }}
     />
 
     <netlabel net="AUDIO_L" anchorSide="left" schX={4} schY={2} />

@@ -3037,7 +3037,7 @@ Brief, because it is not the video question — but the backplane spec has to be
 frozen before the video card is laid out, and the sound card is the other consumer.
 
 > **The sound card has its own document: [`audio.md`](../../audio/docs/audio.md)** — a
-> 4-channel PCM card modelled on the Amiga's Paula, **31 ICs**, whose acceptance test
+> 4-channel PCM card modelled on the Amiga's Paula, **32 ICs**, whose acceptance test
 > is playing existing OCS tracker modules unmodified, with the loader and
 > replayer that do that in [`modplayer.md`](../../audio/docs/modplayer.md). **It supersedes this
 > section's original Ensoniq 5503 DOC assumption**; the bullets below are what
@@ -3056,8 +3056,7 @@ frozen before the video card is laid out, and the sound card is the other consum
   | Range | Size | Owner |
   |---|---|---|
   | `$FF40`–`$FF4F` | 16 B | audio — `audio/docs/audio.md` §9.1 |
-  | `$FF50`–`$FF53` | 4 B | PS/2 keyboard + mouse — `io/ps2/docs/ps2.md` §3.2 |
-  | `$FF54`–`$FF57` | 4 B | RS-232 serial — `io/serial/docs/serial.md` §7.1 |
+  | `$FF30`–`$FF3F` | 16 B | I/O — PS/2 and RS-232, one card — `ps2.md` §3.2 + `serial.md` §7.1 |
   | `$FF58`–`$FF5B` | 4 B | SD card storage — `storage/docs/sdcard.md` §6.1 |
   | `$FF5C`–`$FF5F` | 4 B | network — `net/docs/net.md` §5.1 |
   | `$FF60`–`$FF7F` | 32 B | video — §13 |

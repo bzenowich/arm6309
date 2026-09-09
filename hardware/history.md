@@ -8,6 +8,101 @@ kept verbatim or lightly trimmed, because the archive is the record.
 
 ---
 
+## `gal/clkdec.pld` — the system RAM's control lines, and the three macrocells boot mode took (2026-09-09)
+
+U6 carried a third job until 2026-09-09: `ramsel`, `RAM_CE`, `RAM_OE` and `RAM_WE`,
+decoding one `AS6C4008` at physical `A20 = 0, A19 = 0`. `ram.md` §6.2 removed that part
+from the design on 2026-09-08 and **this file kept driving it for a day** — three outputs
+and two input pins on the machine's tightest GAL, all of them going to a package that was
+no longer on the board.
+
+The equations, kept because U9's ROM decode makes the same `/OE`-versus-`/CE` move for
+the same reason:
+
+```
+ramsel = !IOPAGE & !A19 & !A20 ;
+RAM_CE = ramsel ;
+RAM_OE = ramsel & RW ;
+RAM_WE = ramsel & !RW & E ;
+```
+
+> **`/OE` is qualified by `R/W`, and that is not decoration.** With `/OE` tied low the
+> SRAM drives `D0`–`D7` from `/CE` time (~140 ns) until `/WE` asserts at E-rise (~238 ns)
+> while the CPU is also driving write data from ~229 ns — about **90 ns of contention on
+> every write.** The `AS6C4008`'s truth table permits the tied-low arrangement; this
+> machine's bus timing does not.
+
+⭐ **What replaced them is boot mode**, and it fitted exactly: `RUN` on pin 22 and the
+boot buffer's output enable on pin 14, with **pin 23 left undeclared as a spare input —
+the first spare pin this part has ever had.** Inputs `A19` (pin 7) and `A20` (pin 9) went
+with the decode and became `LA5` and `LA4`; `LA0` took pin 11.
+
+The `netlist.check.ts` assertions that went with them — *"`RAM_CE` runs from U6 to the
+system RAM"* and the two beside it, which closed `README.md` open item 4 on 2026-09-06 —
+are replaced by their inverses: **U6 no longer drives them and U8 is not on the board.**
+
+⚠ **`clkdec.pld`'s pin 6 comment was wrong for a day in the other direction.** It read
+*"`LA6` — KEPT WIRED, USED BY NOTHING"*, on the argument that keeping the trace made
+`$FF80`–`$FF8F` a one-line change rather than a respin. Boot mode reads `LA6` twice, in
+`vecsel` and in `ctlwr`. **That is the second time on this part that a trace kept for no
+reason turned out to have one.**
+
+---
+
+## `ram.md` §11 items 5 and 6 — "U9 may not fit", and it fits at six of ten (2026-09-09)
+
+Item 6 read:
+
+> **⚠ Fit U9 and U10, and U9 is no longer comfortable.** The four SRAM chip selects went
+> with the SRAM, but §6.7 put the boot ROM's two selects, `BOOT`, `VECSEL` and the
+> `'541`/`'245` enable pair back — **ten outputs on a `GAL22V10`'s ten**, before counting
+> inputs.
+
+and `machine.md` §7.2 and `hardware/README.md` open item 8 both carried the warning.
+**Fitting the part found the count wrong in both directions**, which is the whole reason
+`gal/` exists:
+
+| | counted | actual |
+|---|---|---|
+| SIMM window selects | 4 | **1** — the four windows are `A24..A22` = 001/010/011/100, and those codes are already distinct in `A23:A22` alone. U10 takes those two lines directly and picks its own RAS |
+| map-SRAM chip enables | 0 | **2** — nobody had counted them. §3.1 said *"the address picks which is written"* and nothing said what forms that. It is `LA3` |
+| `BOOT`, `VECSEL`, the enable pair | 3 | **0** — they went to U6, which already had the clock and the reset a registered mode bit needs |
+
+**Six outputs, fourteen inputs, two spare macrocells, widest equation five terms of
+sixteen.**
+
+**Item 5 — *"Does U3 fit the second write strobe?"* — is closed by not needing one.** It
+asked whether U3's free pin 23 could become the high map byte's `/WE`. U9's two chip
+enables make U3's single `MAPWE` reach both parts with the chip enable deciding where the
+byte lands, so **U3 is untouched by the entire memory system**: same fuse map, same 23
+checks, same testbench, and pin 23 still a spare input.
+
+⚠ **And the fit found a defect nobody had written down.** The `/IOPAGE` pull has to be
+gated on `RUN`: during boot the high map SRAM is deselected and `A24`–`A21` float, so an
+ungated above-2 MB compare asserts `/IOPAGE` at random — and `/IOSEL` is `/IOPAGE · /A7`,
+so a random assertion makes every card decode a boot fetch and drive `D0`–`D7`. One
+literal on four terms, between a machine that boots and one that does not.
+
+---
+
+## `machine.md` §7.2 / `ram.md` §6.7 — the boot address buffer was a `'541` (2026-09-09)
+
+Both documents specified a **`74HCT541`** driving physical `A19`–`A13`, and
+`hardware/README.md` open item 8 quoted it. Two things changed when the board was drawn:
+
+- **It is a `74HCT244`.** Both are octal three-state buffers and either does the job;
+  the `'244`'s datasheet is in `reference/datasheets/` and the `'541`'s is not, so the
+  `'244` is the one whose pin numbering is **read** rather than remembered. That is
+  `hardware/README.md` open item 1 deciding a part choice, which is what it is for — and
+  `hardware/history.md`'s finding 4 is what happens when it does not.
+- ⚠ **It drives eight bits, not seven.** The ROM needs `A19`–`A13` above the untranslated
+  `A12`–`A0`; `A20` is on the list because **it reaches the backplane**, and a floating
+  `A20` during a boot fetch would let the video card's VRAM select (`A20 = 0, A19 = 1`)
+  answer at random. Driving all eight to zero puts every card's memory decode out of
+  range by construction.
+
+---
+
 ## `ram.md` — the header, §0 and §1: "512 KB to 16 MB" (rewritten 2026-09-08)
 
 The document was titled **"RAM Expansion — 512 KB to 16 MB, and the Three Ceilings That

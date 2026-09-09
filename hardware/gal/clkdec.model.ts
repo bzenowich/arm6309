@@ -1,4 +1,5 @@
-/* U6's behaviour, stated the way clkdec.v states it.
+/* U6's behaviour - the divider, /IOSEL and boot mode - stated the way
+ * clkdec.v states it.
  *
  * Deliberately NOT a sum of products. clkdec.pld holds the equations in the
  * hand-expanded form a 22V10 can implement - C1 as an XOR pair, C2 as four
@@ -12,19 +13,28 @@
  * this is a transcription of that module's behavioural half.
  */
 
-export interface Counter { cnt: number; e: 0 | 1; q: 0 | 1 }
+/* RUN rides with the counter because it is a registered macrocell on the same
+ * part, sharing the same clock and the same asynchronous reset. RUN = 0 is
+ * BOOT MODE, and it is zero at reset because a 22V10 resets to zero and has
+ * no per-macrocell preset - machine.md 7.2 and clkdec.pld. */
+export interface Counter { cnt: number; e: 0 | 1; q: 0 | 1; run: 0 | 1 }
 
-export const RESET_STATE: Counter = { cnt: 0, e: 0, q: 0 }
+export const RESET_STATE: Counter = { cnt: 0, e: 0, q: 0, run: 0 }
 
 /** One rising edge of the 25.175 MHz master. */
 /* /WAIT holds every registered macrocell - machine.md 5 item 8. It is a
  * third argument rather than a field of Counter because it is an input to the
  * part, not state inside it. */
-export const step = (s: Counter, fastE: boolean, wait = false): Counter => {
-  if (wait) return { ...s }
+export const step = (s: Counter, fastE: boolean, wait = false, setRun = false): Counter => {
+  /* RUN is NOT held by /WAIT. It is not part of the divider; it is a mode bit
+   * that happens to live on the same part, and holding it would mean a $FFB1
+   * write during a stretched cycle did nothing. */
+  const run = (s.run || setRun ? 1 : 0) as 0 | 1
+  if (wait) return { ...s, run }
   const nxt = (fastE ? s.cnt === 7 : s.cnt === 11) ? 0 : s.cnt + 1
   return {
     cnt: nxt,
+    run,
     /* E and Q are decoded from the NEXT count, not the current one - a
      * combinational decode of the counter glitches where several bits change
      * together, and this output is the machine's clock. */
@@ -39,31 +49,33 @@ export interface DecodeIn {
   nIopage: 0 | 1 // the PIN level: low when the cycle is $FF00-$FFFF
   la7: 0 | 1
   la6: 0 | 1
-  a19: 0 | 1 // PHYSICAL A19, out of the map SRAM
-  a20: 0 | 1 // PHYSICAL A20, likewise - the map SRAM's eighth output bit
-  rw: 0 | 1
-  e: 0 | 1
+  run: 0 | 1 // the RUN register's own output - 0 is boot mode
 }
 
 export interface DecodeOut {
   nIosel: 0 | 1
-  nRamCe: 0 | 1
-  nRamOe: 0 | 1
-  nRamWe: 0 | 1
+  nBootOe: 0 | 1
 }
 
 const not = (b: boolean): 0 | 1 => (b ? 0 : 1)
 
+/** $FFB1, the strobe that sets RUN. Level, over E-high, on a write. */
+export const setsRun = (i: {
+  nIopage: 0 | 1; la7: 0 | 1; la6: 0 | 1; la5: 0 | 1; la4: 0 | 1; la0: 0 | 1
+  rw: 0 | 1; e: 0 | 1
+}): boolean =>
+  !i.nIopage && !!i.la7 && !i.la6 && !!i.la5 && !!i.la4 && !!i.la0 && !i.rw && !!i.e
+
 export const decode = (i: DecodeIn): DecodeOut => {
-  /* A20 = 0 as well: the map is 2 MB and system RAM is its bottom quarter. */
-  const ramsel = !!i.nIopage && !i.a19 && !i.a20
+  /* $FFC0-$FFFF. One term, because /IOPAGE already means "logical
+   * $FF00-$FFFF" - the vector page is that page with A7 and A6 both high. */
+  const vecsel = !i.nIopage && !!i.la7 && !!i.la6
   return {
-    /* $FF00-$FF7F: the I/O page with A7 = 0. la6 is unused - clkdec.pld. */
+    /* $FF00-$FF7F: the I/O page with A7 = 0. */
     nIosel: not(!i.nIopage && !i.la7),
-    nRamCe: not(ramsel),
-    /* /OE is qualified by R/W: with it tied low the SRAM drives D0-D7 from
-     * /CE time until /WE asserts, about 90 ns of contention on every write. */
-    nRamOe: not(ramsel && !!i.rw),
-    nRamWe: not(ramsel && !i.rw && !!i.e),
+    /* The '244 drives physical A20-A13 whenever the map SRAMs do not: for
+     * the whole of boot mode, and for the vector page forever. U9 forms the
+     * SRAMs' /CE from the same two conditions. */
+    nBootOe: not(!i.run || vecsel),
   }
 }

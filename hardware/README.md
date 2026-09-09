@@ -184,8 +184,9 @@ A19.
 ⚠ **Two days later there is no DIP SRAM on the board at all.** [`ram.md`](ram.md) §6.2
 dropped it for four 30-pin SIMM sockets, and the part went to the audio card
 (`audio.md` §5). **The finding stands as a finding** — drawing the board is what showed
-the four-part decode was imaginary — and it no longer describes the design. The board
-file still draws the 9-IC state; open item 3.
+the four-part decode was imaginary — and it no longer describes the design. **The board
+file caught up on 2026-09-09** and `lib/netlist.check.ts` now asserts the *absence* of
+the part this finding was about.
 
 ### 2. `/IOSEL` is the `$FF00`–`$FF7F` window strobe, not geographic (applied 2026-09-06; see history.md)
 
@@ -231,23 +232,23 @@ memory, is in history.md.
 
 2. **The slot socket footprint is a DIP body.** Pad grid and pin numbering are right, the
    outline is not. It needs a measured footprint once a receptacle is sourced.
-3. **⚠ Nothing is placed, and `mainboard.circuit.tsx` is behind the design.** Two
-   separate gaps:
+3. **⚠ Nothing is placed.** The board-file half of this item **closed 2026-09-09** —
+   `mainboard.circuit.tsx` draws all 17 ICs and the four SIMM sockets, and
+   `lib/netlist.check.ts` grew to assert what the new parts are wired to.
 
-   - **The board file draws 9 ICs; the design is 17** ([`ram.md`](ram.md) §6.5). Missing:
-     the second map SRAM (§3.1), U9 and U10 and three `'157` and the four SIMM sockets
-     (§6.3), and the 1 MB boot ROM with its `'541` (§6.7). Present and wrong: U8, the
-     DIP system RAM, which §6.2 deleted. **This is a drawing job, not a design one** —
-     every part and every decode is specified.
-   - **Every board's components sit at the origin**, so the PCB DRC reports overlaps that
-     mean nothing yet — **299 plated-hole clearance errors on the motherboard alone**. It
-     becomes a real number the moment placement starts and not before. Placement waits on
-     open item 2 and on the GAL fitting `graphics.md` §18 step 0 requires — the
-     motherboard's two *existing* parts are fitted ([`gal/jedec/`](gal/jedec/)), U9 and
-     U10 are not ([`ram.md`](ram.md) §11 item 6), and the video card's two CPLDs and its
-     `rfa` GAL are ([`gal/cpld/`](gal/cpld/), `gal/rfa.jed`).
-4. **Closed 2026-09-06** — the system RAM's control lines are driven: `RAM_CE`, `RAM_OE`
-   and `RAM_WE` come from **U6** ([`gal/clkdec.pld`](gal/clkdec.pld)), with `/OE`
+   **Every board's components still sit at the origin**, so the PCB DRC reports overlaps
+   that mean nothing yet — it was **299 plated-hole clearance errors on the motherboard**
+   and the new parts make it many more. It becomes a real number the moment placement
+   starts and not before. Placement waits on open item 2 and on the GAL fitting
+   `graphics.md` §18 step 0 requires — the motherboard's **three** GALs are fitted
+   ([`gal/jedec/`](gal/jedec/)), **U10 is not** ([`ram.md`](ram.md) §11 item 6), and the
+   video card's two CPLDs and its `rfa` GAL are ([`gal/cpld/`](gal/cpld/),
+   `gal/rfa.jed`).
+4. **Closed 2026-09-06, and moot since 2026-09-09** — the system RAM's control lines
+   were driven by nothing at all until this item; then [`ram.md`](ram.md) §6.2 removed the
+   part they drove. U6's three macrocells went to boot mode and the equations are in
+   [history.md](history.md). The finding stands as a finding. What it said: `RAM_CE`,
+   `RAM_OE` and `RAM_WE` come from **U6** ([`gal/clkdec.pld`](gal/clkdec.pld)), with `/OE`
    qualified by `R/W` rather than tied low — which removes ~90 ns of SRAM-versus-CPU
    contention on every write. `check:netlist` asserts all three run from U6 to U8. (The
    defect this closed is archived in history.md.)
@@ -262,10 +263,28 @@ memory, is in history.md.
    is still a table. ([`ram.md`](ram.md) §5.2 has since re-carved the map to 32 MB; the
    `$FF` window is unchanged.)
 
-8. **⚠ NEW — U9 may not fit a `GAL22V10`.** [`ram.md`](ram.md) §6.7 put the boot ROM's
-   two chip selects, `BOOT`, `VECSEL` and the `'541`/`'245` enable pair onto a part that
-   already carries four SIMM window selects and the `/IOPAGE` pull — **ten outputs on a
-   part with ten**. `ram.md` §11 item 6.
+8. **CLOSED 2026-09-09 — U9 fits at six outputs of ten**, two macrocells left as spare
+   inputs, widest equation five product terms of sixteen
+   ([`gal/u9.pld`](gal/u9.pld)) — checked at the fuse level against a model and against
+   Atmel's own CUPL. This item said it might not fit; **the count was wrong in both
+   directions**, and [`ram.md`](ram.md) §6.7.1 has why: four SIMM selects collapse to
+   one, two map-SRAM chip enables nobody had counted appeared, and the boot-mode latch
+   belonged on U6, which already had the clock and the reset a registered bit needs.
+
+9. **⚠ NEW — three pinouts in the machine are unverified**, and `npm run check` lists
+   them because `UNVERIFIED_PARTS` is derived from the field rather than
+   hand-maintained: the **`SST39SF040`** boot ROM and the **30-pin SIMM socket** on this
+   board, and the **`TL16C550C`** on the I/O card. Open item 1 closed on 2026-09-06 with
+   *"every motherboard pinout is read off a datasheet"*, and this reopens it —
+   **finding 4 below is what happened last time a pinout was written from familiarity**,
+   on a part whose numbering was equally obvious. `lib/parts.ts` names the specific pins
+   to check on each.
+
+10. **⚠ NEW — the I/O card's two GALs are unwritten and they grew.** `serial.md` §4.5's
+    `16C550` added Intel-style strobes, an active-high `MR` and an open-drain inversion
+    of `INTR`, and the card's window moved to `$FF30`–`$FF3F` — **and `A6` was missing
+    from its decode entirely** until 2026-09-09, which is the silent answers-twice
+    failure `machine.md` §2 warns about. [`gal/README.md`](gal/README.md) open item 3.
 
 ---
 

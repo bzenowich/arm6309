@@ -65,15 +65,90 @@ for (let i = 0; i < 8; i++) {
 const aSide = [13, 14, 15, 16, 17, 18, 19, 20].map((n) => pinsOn("U4", `A${n}`).length)
 check(aSide.every((n) => n === 1), "isolation buffer A side is on physical A13-A20")
 
-/* -- machine.md 7.1: 512 KB is one part, addressed A0-A18 ---------------- */
-const rams = comps.filter((c) => c.name === "U8")
-check(rams.length === 1, "one system RAM package")
-const ramAddr = Array.from({ length: 19 }, (_, i) => pinsOn("U8", `A${i}`).length)
-check(ramAddr.every((n) => n === 1), "system RAM takes physical A0-A18", `${ramAddr.filter(Boolean).length}/19`)
-check(pinsOn("U8", "A19").length === 0, "system RAM does not see A19 (it is the RAM/VRAM selector)")
-check(pinsOn("U8", "A20").length === 0, "system RAM does not see A20 (it selects the card megabyte)")
-check(pinsOn("U6", "A20").length === 1,
-  "U6 takes physical A20 - system RAM is A20 = 0 as well as A19 = 0")
+/* -- ram.md 6.2: there is no DIP system RAM, and U8 is gone -------------- */
+check(comps.filter((c) => c.name === "U8").length === 0,
+  "no DIP system RAM package - ram.md 6.2 replaced it with SIMM sockets on " +
+  "2026-09-08 and this file kept drawing it for a day")
+for (const net of ["RAM_CE", "RAM_OE", "RAM_WE"]) {
+  check(pinsOn("U6", net).length === 0,
+    `U6 no longer drives ${net} - the macrocell went to boot mode (gal/clkdec.pld)`)
+}
+
+/* -- ram.md 6: four SIMM sockets are all of the machine's RAM ------------ */
+const simms = comps.map((c) => c.name).filter((n) => /^SIMM[0-9]$/.test(n))
+check(simms.length === 4, "four 30-pin SIMM sockets", simms.join(" "))
+for (const s0 of simms) {
+  const row = Array.from({ length: 11 }, (_, i) => pinsOn(s0, `MA${i}`).length)
+  check(row.every((n) => n === 1), `${s0} takes the muxed row/column address MA0-MA10`,
+    `${row.filter(Boolean).length}/11`)
+  check(pinsOn(s0, "CAS").length === 1 && pinsOn(s0, "DRAM_WE").length === 1,
+    `${s0} shares /CAS and /WE with the bank`)
+}
+{
+  /* One RAS each and no two alike - the whole point of four sockets. */
+  const ras = simms.map((s0) => [0, 1, 2, 3].filter((n) => pinsOn(s0, `RAS${n}`).length === 1))
+  check(ras.every((r) => r.length === 1) && new Set(ras.flat()).size === 4,
+    "each socket has its own /RAS and no two share one",
+    ras.map((r, i) => `SIMM${i}:${r}`).join(" "))
+}
+check(pinsOn("U9", "DRAM_SEL").length === 1 && pinsOn("U10", "DRAM_SEL").length === 1,
+  "DRAM_SEL runs from U9's space decode to U10's timing")
+check(pinsOn("U10", "A23").length === 1 && pinsOn("U10", "A22").length === 1,
+  "⭐ and U10 takes physical A23/A22 directly - those two lines already " +
+  "distinguish the four windows, which is why U9 spends ONE output here and " +
+  "not four (gal/u9.pld)")
+
+/* -- machine.md 7.2: the boot ROM, and the two nets that make it work ---- */
+check(comps.filter((c) => /^U1[45]$/.test(c.name)).length === 2,
+  "two flash packages - 1 MB, because no 5 V 1M x 8 comes in a DIP")
+for (const n of [0, 1]) {
+  check(pinsOn(`U1${4 + n}`, `ROM_CE${n}`).length === 1,
+    `U1${4 + n} takes its own chip enable from U9 - physical A19 picks the device`)
+  check(pinsOn(`U1${4 + n}`, "GND").includes("nOE"),
+    `and its /OE is tied low: R/W rides in the chip enable, so a stray write ` +
+    `to ROM space selects nothing instead of fighting the CPU (gal/u9.pld)`)
+}
+{
+  /* EIGHT bits, not seven. The ROM needs A19-A13; A20 is on the list because
+   * it reaches the BACKPLANE, and a floating A20 during a boot fetch would let
+   * the video card's VRAM select (A20 = 0, A19 = 1) answer at random. */
+  const driven = [13, 14, 15, 16, 17, 18, 19, 20].filter((n) => pinsOn("U16", `A${n}`).length === 1)
+  check(driven.length === 8,
+    "⚠ the boot buffer drives physical A20-A13 - EIGHT bits, and A20 is why: " +
+    "it reaches the backplane, and a floating A20 during a boot fetch would " +
+    "let VRAM answer at random", driven.join(","))
+  check(pinsOn("U16", "BOOT_OE").length === 2,
+    "and both its halves share one enable, from U6")
+}
+
+/* ⚠ THE TWO /IOPAGE NETS. U3's term goes to U6, U9 and U10; U9 drives the
+ * backplane's. Merging them would be a combinational loop - above 2 MB U9
+ * pulls /IOPAGE low, which would de-qualify the SIMM decode that asserted it. */
+check(pinsOn("U3", "nIOPAGE_MB").length === 1 && pinsOn("U3", "nIOPAGE").length === 0,
+  "U3 drives the motherboard's /IOPAGE term and NOT the backplane's")
+check(pinsOn("U9", "nIOPAGE").length === 1 && pinsOn("U9", "nIOPAGE_MB").length === 1,
+  "U9 takes U3's term and drives the backplane - two nets, no loop")
+{
+  const leaked = slotNames.flatMap((s) => pinsOn(s, "nIOPAGE_MB"))
+  check(leaked.length === 0,
+    "and the motherboard's term reaches no slot - a card sees the one that " +
+    "includes ram.md 5.3's above-2 MB pull, or it decodes 2.5 MB as 0.5 MB",
+    leaked.join(", "))
+}
+
+/* -- ram.md 3.1: the map is two byte-wide parts, split by LA3 ------------ */
+check(comps.filter((c) => /^U1B?$/.test(c.name)).length === 2,
+  "two map SRAMs - translation needs A24..A13 in one access, which is why " +
+  "this is two byte-wide parts and not one sequential read")
+for (let i = 21; i <= 24; i++) {
+  check(pinsOn("U1B", `A${i}`).length === 1, `physical A${i} comes from the high map byte`)
+}
+check(pinsOn("U1", "MAP_CE_LO").length === 1 && pinsOn("U1B", "MAP_CE_HI").length === 1,
+  "⚠ each map SRAM has its OWN chip enable from U9 - U3's MAP_WE is common to " +
+  "both and never sees LA3, so the chip enable is what makes a write land in " +
+  "one part and not the other (ram.md 4.1 Layout A)")
+check(pinsOn("U1", "MAP_OE").length === 1 && pinsOn("U1B", "MAP_OE").length === 1,
+  "and they share U3's output enable, which is untouched by any of this")
 
 /* -- machine.md 5 item 8: /WAIT had a producer and no consumer ------------
  * vctrl.pld drives it open-drain and E/Q are made on U6, which had no /WAIT
@@ -110,7 +185,9 @@ check(pinsOn("U3", "Q").length === 1,
 const u3addr = Array.from({ length: 12 }, (_, i) => pinsOn("U3", `LA${i + 4}`).length)
 check(u3addr.every((n) => n === 1), "U3 takes LA4-LA15", `${u3addr.filter(Boolean).length}/12`)
 
-check(pinsOn("U3", "nIOPAGE").length === 1, "U3 still drives /IOPAGE")
+check(pinsOn("U3", "nIOPAGE_MB").length === 1,
+  "U3 still forms the /IOPAGE term - it is the motherboard's net now, and U9 " +
+  "drives the backplane's from it (see above)")
 check(pinsOn("U3", "nIOSEL").length === 0, "/IOSEL has left U3 - the part does not fit with it")
 check(pinsOn("U6", "nIOSEL").length === 1, "U6 drives /IOSEL")
 check(pinsOn("U6", "LA7").length === 1 && pinsOn("U6", "LA6").length === 1,
@@ -125,22 +202,22 @@ check(pinsOn("U5", "MAP_WE").length === 0,
 
 check(pinsOn("U2", "TASK").length === 1, "the '574 holds TASK, and TASK is all it holds")
 
-/* -- gal/clkdec.pld: U6 gains the system RAM decode, 2026-09-06 ---------- */
-/* Open item 4: these three reached U8 and nothing else, behind a comment
- * claiming U3 formed the term. U3 forms no such term and has one free pin,
- * which is one short of the two /CE needs. */
-for (const net of ["RAM_CE", "RAM_OE", "RAM_WE"]) {
-  const driver = pinsOn("U6", net)
-  const load = pinsOn("U8", net)
-  check(driver.length === 1 && load.length === 1,
-    `${net} runs from U6 to the system RAM`, `U6:[${driver}] U8:[${load}]`)
+/* -- machine.md 7.2: boot mode spans two parts and they have to agree ---- */
+check(pinsOn("U6", "RUN").length === 1 && pinsOn("U9", "RUN").length === 1,
+  "RUN runs from U6's latch to U9's decode - one register, two consumers")
+check(pinsOn("U6", "BOOT_OE").length === 1 && pinsOn("U16", "BOOT_OE").length === 2,
+  "and U6 drives the boot buffer's enable directly, so the buffer and the " +
+  "map SRAMs are complements of one condition rather than two decodes that " +
+  "have to agree")
+for (const la of ["LA5", "LA4", "LA0"]) {
+  check(pinsOn("U6", la).length === 1,
+    `U6 takes ${la} - the $FFB1 strobe that leaves boot mode (gal/clkdec.pld)`)
 }
-check(pinsOn("U6", "A19").length === 1,
-  "U6 takes physical A19 - the decode is downstream of the map SRAM")
+check(pinsOn("U9", "LA3").length === 1,
+  "U9 takes LA3 - the bit that splits the block-register window between the " +
+  "two map SRAMs, and the one U3 has no pin for")
 check(pinsOn("U6", "R_W").length === 1,
-  "U6 takes R/W, which is what qualifies RAM /OE")
-check(pinsOn("U1", "A19").length === 1 && pinsOn("U6", "A19").length === 1,
-  "A19 is the map SRAM's output and U6's input - not a CPU pin")
+  "U6 takes R/W, which is what makes the $FFB1 strobe a write and not a read")
 
 console.log(failures === 0 ? "\nmainboard netlist OK" : `\n${failures} failure(s)`)
 process.exit(failures === 0 ? 0 : 1)

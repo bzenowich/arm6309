@@ -1,15 +1,16 @@
 # `io/serial/` — RS-232 serial
 
-One port, **3 ICs**: a 6551 ACIA, a `MAX232`, and a decode GAL. ⭐ **And an open
-proposal to make it four and six times faster** — `docs/serial.md` §4.5.
+One port, **3 ICs**: a **`TL16C550C`**, a `MAX232`, and a decode GAL shared with the
+PS/2 half. **115,200 baud, 16-byte FIFOs each way** — `docs/serial.md` §4.5, taken
+2026-09-09.
 
 Paths below are relative to this directory.
 
 | | |
 |---|---|
-| [`docs/serial.md`](docs/serial.md) | the card — part choice, the alternatives, the throughput ceiling, register map. **§4.5 and §5.4 are the 2026-09-08 revisit** |
+| [`docs/serial.md`](docs/serial.md) | the card — part choice, the alternatives, the throughput ceiling, register map. **§4.5 and §5.4 are the revisit that changed the part; §9.1 and §9.2 are what it cost and what it deleted** |
 
-## ⭐ The revisit, 2026-09-08
+## ⭐ The revisit, 2026-09-08 — and the part change, 2026-09-09
 
 **The card is bound by one interrupt per byte, not by the baud rate**, and §5 has always
 said so: 19,200 full duplex is 3,840 interrupts/s and **73 % of a 2.098 MHz CPU** at the
@@ -25,24 +26,39 @@ free, and the machine has a megabyte of physical space for card buffers. So:
 
 | | ICs | 19,200 fd | 38,400 fd | 115,200 fd | 460,800 fd |
 |---|---|---|---|---|---|
-| **6551 — today** | 3 | **75 %** | impossible | *part caps at 19,200* | — |
-| **Tier 1 — `16C550`** | **4** | 7 % | **13 %** | **40 %** | — |
-| **Tier 2 — + a ring in `A20 = 1`** | ~9 | 1 % | 2 % | **5 %** | **20 %** |
+| 6551 — what the card was | 3 | **75 %** | impossible | *part caps at 19,200* | — |
+| ⭐ **Tier 1 — `16C550`, TAKEN** | **3** | 7 % | **13 %** | **40 %** | — |
+| Tier 2 — + a ring in `A20 = 1` | ~8 | 1 % | 2 % | **5 %** | **20 %** |
 
-**Tier 1 is the recommendation**: one extra IC, 6× the baud rate, and **38,400 costs less
-CPU than 19,200 does today.** It also closes two of the card's oldest open items — the
-`W65C51N` sourcing trap and the fast-E speed grade — because a `16C550` is
-current-production and is clocked by its own crystal rather than by backplane `E`.
-**That is worth more than the throughput**, and it is `net.md` §13.6's lesson applied:
+**Tier 1 was taken on 2026-09-09, and it cost no packages at all.** Both this table and
+`docs/serial.md` §9.1 priced it at "+1 IC"; ⚠ **that was a counting error** — the tier row
+counted the baud crystal where the base total did not. Two DIPs and a GAL before, two DIPs
+and a GAL after, for 6× the baud rate and **38,400 costing less CPU than 19,200 did.**
+
+**What it closed is worth more than the throughput.** The `W65C51N` sourcing trap and the
+fast-E speed grade both stop existing, because a `16C550` is current-production and is
+clocked by its own crystal rather than by backplane `E` — `net.md` §13.6's lesson applied:
 availability is the first question about a part, the I/O budget the second.
+
+⭐ **And one thing nobody had costed: `machine.md` §4.1's polling order.** This card was
+pinned to the end of the shared-`/IRQ` chain because reading a 6551's `STATUS` clears the
+interrupt and consumes the error bits in the same read, so it could not be probed
+speculatively. **A `16C550`'s `IIR` can be** — `docs/serial.md` §7.3. The machine's
+polling order is a preference now rather than a rule.
+
+⚠ **What it spent: eight bytes of the `$FF` map**, and the card's window moved to
+`$FF30`–`$FF3F` — below.
 
 ⚠ **The real ceiling is not the wire.** At 115,200 you receive 5.8 screens of text a
 second, and ANSI rendering on a 2 MHz 6309 is an estimated 22 % of the CPU at that rate.
 **~115,200 for a console; 460,800–921,600 for file transfer**, where nothing renders.
 §5.6.
 
-**Neither tier is built and §3's verdict is unchanged.** They are proposals with
-arithmetic — §13 items 6 and 7.
+**Tier 1 is the card. Tier 2 is not built** — §13 item 7, and `docs/drivewire.md` §3 is
+explicit that DriveWire does not need it. ⚠ **Neither of the card's two GALs is fitted**,
+and the serial one grew with the part: Intel-style strobes, an active-high `MR`, and an
+open-drain inversion of `INTR`, which is totem-pole and cannot wire-OR the way the 6551's
+`/IRQ` could.
 
 ## Don't build this one out of logic
 
@@ -106,17 +122,26 @@ LED is updated (`../ps2/docs/ps2.md` §7.1). One byte time at 19,200 baud is 521
 window **guarantees an overrun** and no flow-control arrangement on this card can prevent
 it — the ISR that would deassert `/RTS` is precisely what is not running. §5.1 point 4.
 
-## This card closed the `$FF` map
+## This card closed the `$FF` map, and then spent eight bytes of it
 
-`$FF54`–`$FF57`, four bytes — and with them the `$FF40`–`$FF7F` geographic decode was
-**exactly full**. [`../../storage/`](../../storage/) then returned four, needing only half
-the disk-controller reservation; [`../../net/`](../../net/) spent those on 2026-09-07; and
-**that is what finally closed `machine.md` §5 item 1 on 2026-09-08.** The window is
-`$FF00`–`$FF7F` now — 128 bytes, 64 free — and `/IOSEL` got *cheaper* in the process.
+Four bytes at the top of the original window — and with them the `$FF40`–`$FF7F`
+geographic decode was **exactly full**. [`../../storage/`](../../storage/) then returned
+four, needing only half the disk-controller reservation;
+[`../../net/`](../../net/) spent those on 2026-09-07; and **that is what finally closed
+`machine.md` §5 item 1 on 2026-09-08.** The window became `$FF00`–`$FF7F` — 128 bytes,
+64 free — and `/IOSEL` got *cheaper* in the process.
 
-⚠ **This card's decode is `A0`–`A6`, not `A0`–`A5`.** §6's "`CS0`/`/CS1` from geographic
-`/IOSEL` and `A2`–`A5`" needs `A6` as well: `A6` left the strobe with the widening, and a
-six-bit match answers at `$FF54` **and** `$FF14`.
+⭐ **Then this card spent eight of them, on 2026-09-09, and got a six-times-faster port
+for it.** `docs/serial.md` §4.5's `16C550` has **eight** registers where a 6551 has four,
+which the widened map made affordable and the original 64-byte one did not. The merged
+I/O card moved to a sixteen-byte window at **`$FF30`–`$FF3F`** rather than displacing
+storage and net, and handed `$FF50`–`$FF57` back: **56 bytes free, not 64.** That is the
+margin doing exactly what §5 item 1 widened it to do.
+
+⚠ **This card's decode is `A0`–`A6`, not `A0`–`A5`** — `A6` left the strobe with the
+widening, so a six-bit match answers at the base **and 64 bytes below it**. It was
+missing from `hardware/cards/io.circuit.tsx` entirely until the same pass, and it is on
+the serial GAL now, compared once for the whole card.
 
 `graphics.md` §17's "widen the window now" has stopped being prudent advice and become
 blocking; see [`../../docs/machine.md`](../../docs/machine.md) §5 item 1, which now also

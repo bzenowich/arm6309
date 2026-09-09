@@ -142,8 +142,92 @@ export const SRAM_512K: PartDef = {
   },
 }
 
+/* -- the boot address buffer, docs/machine.md 7.2 ------------------------ */
+/** 74HCT244 - octal buffer. It drives physical A20-A13 to zero while boot mode
+ * or the vector page has the map SRAMs deselected (gal/u9.pld, gal/clkdec.pld).
+ *
+ * ⭐ A '541 WAS SPECIFIED AND A '244 IS FITTED, and the reason is this file's
+ * own rule. Both are octal three-state buffers and either does the job; the
+ * '244 has a datasheet in reference/datasheets/ and the '541 does not, so the
+ * '244 is the one whose pin numbering is read rather than remembered. That is
+ * hardware/README.md open item 1 deciding a part choice, which is what it is
+ * for.
+ *
+ * The two halves' enables are tied together - one signal, eight bits. Pin
+ * names are the datasheet's except that /1OE and /2OE are written /1G and /2G
+ * there. */
+export const HCT244: PartDef = {
+  provenance: "confirmed",
+  source: "reference/datasheets/sn74hc244.pdf p.1 (SCLS243D, N package)",
+  footprint: "dip20_w0.3in",
+  pins: {
+    1: "/1OE", 2: "1A1", 3: "2Y4", 4: "1A2", 5: "2Y3", 6: "1A3", 7: "2Y2",
+    8: "1A4", 9: "2Y1", 10: "GND", 11: "2A1", 12: "1Y4", 13: "2A2",
+    14: "1Y3", 15: "2A3", 16: "1Y2", 17: "2A4", 18: "1Y1", 19: "/2OE",
+    20: "VCC",
+  },
+}
+
+/* -- the boot ROM, docs/machine.md 7.2 ----------------------------------- */
+/** SST39SF040 512K x 8 flash, 70 ns, PDIP-32. Two of them are the 1 MB boot
+ * ROM at physical 2.0-3.0 M; physical A19 picks between them (gal/u9.pld).
+ *
+ * ⚠ UNVERIFIED, AND THIS IS THE FIRST PART ON THE BOARD THAT IS SINCE
+ * 2026-09-06. There is no SST39SF040 datasheet in reference/datasheets/, so the
+ * numbering below is the JEDEC 32-pin byte-wide flash pinout written from
+ * familiarity - which is EXACTLY the failure mode hardware/history.md's
+ * finding 4 records for the map SRAM, on a part whose pinout is equally
+ * "obvious".
+ *
+ * TWO THINGS TO CHECK, and they are the two that differ from the AS6C4008
+ * sitting above it in this file:
+ *   1. pin 1 is A18 on both, but pin 3 is A15 on 4 Mbit FLASH and A14 on the
+ *      4 Mbit SRAM - the address block is NOT the same permutation
+ *   2. pin 31 is /WE on flash and A15 on the SRAM
+ * Getting either wrong swaps address lines and the ROM reads as noise.
+ *
+ * UNVERIFIED_PARTS below is derived from this field, so it reappears in
+ * `npm run check` until a datasheet is fetched. hardware/README.md open item 1.
+ */
+export const FLASH_512K: PartDef = {
+  provenance: "unverified",
+  footprint: "dip32_w0.6in",
+  pins: {
+    1: "A18", 2: "A16", 3: "A15", 4: "A12", 5: "A7", 6: "A6", 7: "A5", 8: "A4",
+    9: "A3", 10: "A2", 11: "A1", 12: "A0",
+    ...range(13, ["DQ0","DQ1","DQ2"]),
+    16: "GND",
+    ...range(17, ["DQ3","DQ4","DQ5","DQ6","DQ7"]),
+    22: "/CE", 23: "A10", 24: "/OE", 25: "A11", 26: "A9", 27: "A8", 28: "A13",
+    29: "A14", 30: "A17", 31: "/WE", 32: "VCC",
+  },
+}
+
+/* -- system memory, hardware/ram.md 6 ------------------------------------ */
+/** 30-pin SIMM socket, x8 or x9. Four of them are all of the machine's RAM -
+ * 4 to 16 MB of DRAM (ram.md 6.3).
+ *
+ * ⚠ UNVERIFIED. A 30-pin SIMM's pinout is a JEDEC standard and this is it from
+ * familiarity, not from a document; the socket itself also has no measured
+ * footprint (hardware/README.md open item 2 covers the slot socket and this is
+ * the same problem). Names are the JEDEC signal names.
+ *
+ * A 4 MB module is 4M x 8: 11 row and 11 column address lines, which is A0-A10
+ * plus the A11 that only 16 MB modules use. Both are brought out. */
+export const SIMM30: PartDef = {
+  provenance: "unverified",
+  footprint: "pinrow30",
+  pins: {
+    1: "VCC", 2: "/CAS", 3: "DQ0", 4: "A0", 5: "A1", 6: "DQ1", 7: "A2",
+    8: "A3", 9: "GND", 10: "DQ2", 11: "A4", 12: "A5", 13: "DQ3", 14: "A6",
+    15: "A7", 16: "DQ4", 17: "A8", 18: "A9", 19: "A10", 20: "DQ5",
+    21: "/WE", 22: "GND", 23: "DQ6", 24: "NC", 25: "DQ7", 26: "DQ8",
+    27: "/RAS", 28: "/CASP", 29: "NC", 30: "VCC",
+  },
+}
+
 export const PARTS: Record<string, PartDef> = {
-  CPU_SOCKET, MAP_SRAM, HC574, HC245, HC157, SRAM_512K,
+  CPU_SOCKET, MAP_SRAM, HC574, HC245, HC157, SRAM_512K, HCT244, FLASH_512K, SIMM30,
 }
 
 /** Derived, so it cannot go stale the way the hand-written list did. Empty

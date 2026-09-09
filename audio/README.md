@@ -2,15 +2,17 @@
 
 A **Paula**, not a Paula-alike: 4 channels of 8-bit signed PCM, built from pre-1990
 parts, whose acceptance test is playing existing Amiga OCS tracker modules **correctly**.
-**31 ICs** — one `ATF1508AS` CPLD in a PLCC-84 socket holds all the logic
+**32 ICs** — one `ATF1508AS` CPLD in a PLCC-84 socket holds all the logic
 ([`docs/audio.md`](docs/audio.md) §10.1) — **512 KB of card-local sample SRAM in one
 package**, no bus mastering, and **no digital multiply and no digital sum anywhere**:
-volume, panning and mixing all happen in the converters, the way Paula does it. Output
-is line level on a **3.5 mm stereo jack** at the card's rear edge (§7.1).
+volume, panning and mixing all happen in the converters, the way Paula does it. Two
+outputs, and they are different signals: a **headphone-driven 3.5 mm stereo jack** at the
+card's rear edge, and a **line-level** pair on the backplane (§7.1).
 
 > The IC count's path from the first tally of 35 through 57, 54, 45 and 36 to 29, and
-> then to **31** on 2026-09-08 when programmable panning was built and the memory
-> consolidated, is archived, itemised, in [docs/history.md](docs/history.md).
+> then to 31 on 2026-09-08 when programmable panning was built and the memory
+> consolidated, and to **32** on 2026-09-09 with the headphone driver, is archived,
+> itemised, in [docs/history.md](docs/history.md).
 
 **Unaffected by the machine's E rate.** Everything on the card is referred to its own
 28.37516 MHz crystal, and §9.3's prefetch means there is no `/WAIT` path to close, so the

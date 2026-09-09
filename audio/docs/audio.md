@@ -45,7 +45,7 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 
 | Question | Answer | § |
 |---|---|---|
-| **Discrete card, real Paula, a period sound chip, or an MCU?** | **Discrete card.** **31 ICs** (§10), one `ATF1508AS` PLCC-84 for the logic, on one 100 × 180 mm card with a physically separate analogue section. | §12, §10.1 |
+| **Discrete card, real Paula, a period sound chip, or an MCU?** | **Discrete card.** **32 ICs** (§10), one `ATF1508AS` PLCC-84 for the logic, on one 100 × 180 mm card with a physically separate analogue section. | §12, §10.1 |
 | **Where does the sample data live?** | **Card-local SRAM, 512 KB in one `AS6C4008`.** The card never touches the bus for audio, and it cannot — there is no DMA pair on the backplane. | §5, §5.1 |
 | **How are the four channels implemented?** | **One time-multiplexed datapath**, 8 slots per colour clock, state in a 32-bit-wide SRAM file. | §3 |
 | **How is per-channel pitch generated?** | **Compare-against-a-free-running-counter**, not four down-counters. Kills 12+ ICs. | §4.2 |
@@ -57,10 +57,10 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 | **Where does mod tempo come from?** | **An on-card 16-bit timer clocked at colourclock/5 = 709.379 kHz — the Amiga's CIA clock exactly**, so `Fxx` BPM values are CIA-B-identical. Costs one slot, zero ICs. | §8.2 |
 | **Which interrupt line?** | **`/FIRQ`.** Video's VBL owns `/IRQ`. A 6809 `FIRQ` is what a replayer tick should be. | §8.1 |
 | **What does mod playback cost the 6309?** | **~2.7 % of a 2.098 MHz CPU** for the replayer, with a 19× worst-case margin; **~738 ms once** to upload 128 KB of samples — a ~500 ms `EORD` pass converting them to offset binary (§6.1, §16 item 27) plus a 238 ms chunked `TFM X+,Y` (§13.2). The `TFM` alone is 187 ms. | §13, [`modplayer.md`](modplayer.md) §7 |
-| ⭐ **Where does the sound come out?** | **A 3.5 mm stereo jack on the card's rear edge**, line level, and the backplane's `AUDIO_L`/`AUDIO_R` pair in parallel. | §7.1 |
+| ⭐ **Where does the sound come out?** | **Two places, and they are different signals.** A **headphone-driven** 3.5 mm stereo jack on the card's rear edge (an `NJM4556AD`, 70 mA), and a **line-level** pair on the backplane. | §7.1 |
 | **What does this card do that Paula cannot?** | **Programmable per-channel panning, built** (§11.1); no minimum period; 8 channels at half period resolution; a programmable volume curve (host software — §6.1). | §11 |
 
-**Net: 31 ICs** — the logic is one `ATF1508AS` PLCC-84 (§10.1), fitted at 79 of 128
+**Net: 32 ICs** — the logic is one `ATF1508AS` PLCC-84 (§10.1), fitted at 79 of 128
 logic cells and 50 of 64 I/O, and ⚠ **the fit predates §11.1's panning and §5.3's state
 file**, both of which add terms and neither of which adds a pin (§16 item 30). One
 oscillator, **one internal clock
@@ -154,7 +154,7 @@ argument above is sound — 126,000 accesses per second against 18 M/s is not a 
 system. What it does *not* price is **state**: the per-channel pointers, the
 host-visible counters, the converter port registers and the host-boundary staging,
 which is where §10's honest package count actually goes. A card can be enormously
-oversupplied in time and still cost 31 packages, and this one does.
+oversupplied in time and still cost 32 packages, and this one does.
 
 ---
 
@@ -797,43 +797,71 @@ amplifier channels, thirteen used**:
 The `TL074` is the same part in a quad package; an `NE5532` is the better op-amp and
 equally period, and `TL07x` is specified here for supply-rail simplicity.
 
-### 7.1 The output — line level, on a 3.5 mm stereo jack
+### 7.1 The output — two of them, and only one is line level
 
-**~2 V p-p per side, DC-blocked, 100 Ω series**, into a **3.5 mm stereo jack on the
-card's own rear edge** and, in parallel, onto the backplane's `AUDIO_L`/`AUDIO_R` pair.
+> ⭐ **Decided 2026-09-09.** §16 item 29 asked whether a line signal on a 3.5 mm
+> connector was the right call. It is not, and the answer is **+1 IC**: the jack gets a
+> headphone driver and the backplane keeps the line output. The two are different
+> signals for different loads, which is what the single output was pretending not to be.
 
-The blocking capacitor is good manners rather than load-bearing: §6.3 cancels the sample
-converters' pedestal upstream of the volume stage, so the card's output is already
-centred and is exactly zero when every channel is silent. What the capacitor still
-removes is the converters' zero-code leakage and the amplifiers' own offsets — tens of
-millivolts, not half of full scale. Size it against the following load — 10 µF into
-100 kΩ is 0.16 Hz, four decades below anything a module contains.
+| | drives | level | path |
+|---|---|---|---|
+| **backplane `AUDIO_L`/`AUDIO_R`** | a line input, a mixer, a chassis jack | **~2 V p-p**, DC-blocked, 100 Ω series | straight off §6.2's summing amplifiers |
+| ⭐ **3.5 mm stereo jack, rear edge** | **headphones, 16–300 Ω** | the same ~2 V p-p, at **70 mA of drive** | the same nodes, through the buffer below |
 
-**Why a jack on the card, decided 2026-09-08.** `graphics.md` §17 put `AUDIO_L`,
-`AUDIO_R` and two dedicated `AGND` returns on the backplane, and
-[`hardware/lib/slot.ts`](../../hardware/lib/slot.ts) carries them at B32–B35 — but
-**nothing in the machine consumes them.** There is no chassis, no rear panel and no
-document that says where the pair terminates. A 3.5 mm jack on the card's rear edge is
-the connector every other output on this machine's cards already is (`place/parts.ts`
-gives video a DE-15 and the I/O card its DE-9 and mini-DINs), it costs **one part and no
-ICs**, and it makes the card testable on a bench with no backplane at all.
+**The buffer: one `NJM4556AD`** — dual, **70 mA output**, DIP-8, and a JRC part from the
+early 1980s rather than a modern one. It takes §6.2's two summing-amplifier outputs as
+unity-gain followers, ahead of the line path's DC block, and gets its own coupling
+capacitor and series resistor into the jack.
+
+**The arithmetic, because "add a buffer" is not a specification:**
 
 | | |
 |---|---|
-| Part | **3.5 mm stereo PCB jack**, switched or plain, on the rear edge beside the analogue section |
-| ICs | **0** |
-| The backplane pair | **kept, unchanged.** It is the same two nodes, wired to two more places. If the connector is ever re-specified (`machine.md` §5 item 5) those four positions are the first candidates to reclaim — but that is a note, not a plan |
+| Level | 2 V p-p is **0.707 V rms**. Into 32 Ω that is **15.6 mW**, against the 1–5 mW a comfortable listening level wants — headroom, not a compromise |
+| Current | 0.707 / 32 = **22 mA rms**, ~31 mA peak per channel, against the part's **70 mA**. A `TL072` manages ~10 mA short-circuit and would clip into anything below ~200 Ω, which is the whole reason this is a different package |
+| Series `R` | **10 Ω** — short-circuit protection and damping. Into 32 Ω it costs 2.6 dB; into a 10 kΩ line input, nothing |
+| Coupling `C` | **470 µF** into 32 Ω is **10.6 Hz**. The line path's 10 µF into 100 kΩ is 0.16 Hz; a headphone load is 3,000× lower and needs the capacitor 47× larger. Getting this wrong is the classic thin-sounding headphone output |
+| Supply | ⚠ **the analogue section's split rails, and this changes §16 item 25.** Ten more mA of quiescent current, and up to **~60 mA** into a low-impedance load on both channels at once — §10's estimate moves to **340–500 mA** |
 
-> ⚠ **It is a line output on a headphone-shaped connector, and that will surprise
-> somebody.** 2 V p-p through 100 Ω into 32 Ω headphones is about 0.5 V p-p at the
-> transducer — audible, and much quieter than any other source they will plug in. The
-> card drives a line input correctly and headphones badly.
->
-> **The fix is priced and not taken: +1 IC.** An `NJM4556AD` (dual, 70 mA output,
-> DIP-8) after the coupling caps, or a period-honest `TL072` with a `BC547`/`BC557`
-> diamond buffer per side. **It is refused for the same reason the original text
-> refuses a speaker amp** — whatever drives the machine's speakers should not sit on a
-> board carrying three digital SRAMs and a 28 MHz clock. §16 item 29.
+⚠ **The rails are not the digital card's.** §6.3 blocks the sample converters' pedestal
+rather than cancelling it downstream, so the signal between the I/V stage and the output
+capacitor lives between 0 and −`V_REF` — which is why §16 item 25 exists at all. **This
+part rides the same split pair**, and it makes that item bigger rather than merely adding
+a consumer to it: item 25 calls the rail choice *"a rail decision that costs no
+packages"* because everything on those rails is an op-amp signal path drawing
+milliamps. **A 70 mA driver is not.** The negative rail now needs *current capability*
+and not only a voltage, which is a regulator question rather than a reference question.
+
+⚠ **The grounds meet at one point and this is the node that tests it.** `audio.md` §10
+requires analogue and digital ground to meet exactly once; the jack is the one connection
+on this card that leaves the board into something a person touches, and **a jack shell
+bonded to a chassis is the classic way to make a second ground path.** Use an isolated
+(plastic-bushing) jack, or bond the chassis at the same single point.
+
+⚠ **What is given up.** A headphone amplifier on a board carrying three digital SRAMs, a
+28 MHz oscillator and a CPLD is exactly what §7's earlier text refused — *"whatever drives
+the machine's speakers is a separate concern and should not be on a card carrying digital
+SRAMs"*. **That objection is not wrong; it is outweighed.** The alternative was a
+connector that silently underdrives everything anybody plugs into it, and a card that
+cannot be listened to on a bench without an external amplifier. The mitigation is
+placement: the driver belongs in the analogue section §10 already wants physically
+separate, next to the jack, not next to the CPLD.
+
+**Why a jack on the card at all, decided 2026-09-08.** `graphics.md` §17 put `AUDIO_L`,
+`AUDIO_R` and two dedicated `AGND` returns on the backplane, and
+[`hardware/lib/slot.ts`](../../hardware/lib/slot.ts) carries them at B32–B35 — but
+**nothing in the machine consumes them.** There is no chassis, no rear panel and no
+document that says where the pair terminates. A jack on the card's rear edge is the
+connector every other output on this machine already is (`place/parts.ts` gives video a
+DE-15 and the I/O card its DE-9 and mini-DINs), and it makes the card testable on a bench
+with no backplane at all. **The backplane pair is kept, unchanged** — it is the line
+output now rather than the only output, and if the connector is ever re-specified
+(`machine.md` §5 item 5) those four positions are the first candidates to reclaim.
+
+⚠ **The footprint is a placeholder** — `hardware/cards/audio.circuit.tsx` draws a 3-pin
+header, so the netlist is right and the outline is not. Same caveat as the slot socket,
+`hardware/README.md` open item 2.
 
 ---
 
@@ -1291,9 +1319,10 @@ a 16-bit adder chain; the top three bits are a carry-in increment in the sequenc
 | **1** | **`ATF1508AS-…JC84`, PLCC-84, socketed** | **the whole of the card's logic — §10.1 below**: the six-GAL allocation of §9.5, plus the `ACTRL` register, the three host-port synchronisers (§9.4.4) and the open-collector `/FIRQ` stage (§8.1) |
 | 1 | 28.37516 MHz osc | PAL Amiga master (§4.1) |
 | (1) | (28.63636 MHz osc) | (NTSC, socketed option, §4.1) |
-| — | 3.5 mm stereo jack | **line output on the card's rear edge — §7.1**, in parallel with the backplane pair |
+| — | 3.5 mm stereo jack | **headphone output on the card's rear edge — §7.1.** The backplane pair is the line output and is a different signal |
 | — | R-2R / passives | filter networks, offset-injection resistors (§6.3), output stage |
-| **31** | | **(32 with the NTSC can)** |
+| **1** | **NJM4556AD** | **headphone driver for the 3.5 mm jack — dual, 70 mA output, DIP-8 (§7.1)** |
+| **32** | | **(33 with the NTSC can)** |
 
 ### 10.1 One CPLD, and why the counter and comparator stay outside
 
@@ -1380,12 +1409,14 @@ packages of each other. The path from this document's first tally of 35 through 
 
 **Where it will grow:**
 - **+1 `TL072`** if a DC-coupled output is ever wanted.
-- **+1** for a headphone driver behind §7.1's jack, if the line level is judged wrong.
-- **+0** for 512 KB of sample RAM and **+0** for panning — both are in the table above.
-  The two growth lines this list used to carry are spent.
+- **+0** for 512 KB of sample RAM, **+0** for panning and **+0** for the headphone
+  driver — all three are in the table above. **Every growth line this list has ever
+  carried is now spent**, which is worth saying plainly: the next package this card takes
+  will be one nobody has anticipated.
 
-**Power.** Three SRAMs, one `ATF1508AS`, ~16 HC packages, **thirteen op-amp channels
-and six `AD7528`** at 2 mA each: estimate **330–440 mA**, and the CPLD is the term least
+**Power.** Three SRAMs, one `ATF1508AS`, ~16 HC packages, **thirteen op-amp channels and
+six `AD7528`** at 2 mA each, plus §7.1's headphone driver — ~10 mA quiescent and up to
+~60 mA into a low-impedance load on both channels: estimate **340–500 mA**, and the CPLD is the term least
 worth trusting — a 128-macrocell part with ~100 registers toggling at 28 MHz is not
 obviously cheaper than the six GALs it replaces, whatever the package count says. §16
 wants this measured. ⭐ **The consolidation of §5 is roughly power-neutral rather than a
@@ -1396,8 +1427,9 @@ and digital grounds must meet at exactly one point, and the `AD7528` reference m
 share a rail with the SRAMs. That is the only layout constraint on this card that the
 video card does not also have, and it is the one that decides whether it sounds clean.
 
-**Area.** 31 packages — one DIP-32 SRAM, **two TSOP-44 SRAMs**, one socketed PLCC-84,
-**six DIP-20 converters**, four op-amp packages and the rest DIP-14/16/20 logic.
+**Area.** 32 packages — one DIP-32 SRAM, **two TSOP-44 SRAMs**, one socketed PLCC-84,
+**six DIP-20 converters**, four op-amp packages, a DIP-8 headphone driver and the rest
+DIP-14/16/20 logic.
 ⚠ **The analogue section is now twelve converter halves and thirteen amplifier
 channels**, half again what the original one-board assertion was made about — and that
 assertion was about a **Eurocard**, which the machine stopped using on 2026-09-08
@@ -1918,7 +1950,7 @@ specification that has not been tested.
     the corner (Aud-M4 was exactly that — history.md §7). Until the probe exists,
     "both Amiga filters, switchable" is an unverified claim about the half of §7 the
     acceptance test can hear.
-19. **⚠ Confirm the card fits its envelope at 31 packages** (§10, §7.1). The one-board
+19. **⚠ Confirm the card fits its envelope at 32 packages** (§10, §7.1). The one-board
     fit has been asserted and never measured, and the card's shape is digital-light and
     analogue-heavy — **twelve converter halves and thirteen amplifier channels** since
     §11.1's panning, against the eight and ten this item was first written about. (The
@@ -1968,13 +2000,20 @@ specification that has not been tested.
     becomes a gain error on that channel alone — the same failure as item 23, arriving
     through the reference instead of the feedback. Star-distribute from a buffer, and
     measure the level of each channel with the other three at full scale to catch it.
-25. **Rails for the analogue switch and the LED stage** (§6.3). With the pedestal
-    blocked rather than cancelled, the signal between the I/V stage and the output
-    capacitor lives between 0 and −`V_REF`. The `74HC4066` and the Sallen-Key stage must
-    be powered to pass it, which means split rails and a `VSS` below −`V_REF`. It is a
-    rail decision and costs no packages, but it is not the single-5 V card the digital
-    section is, and it should be in the schematic before the mezzanine question of item
-    19 is answered.
+25. **⚠ Rails for the analogue switch, the LED stage — and now the headphone driver**
+    (§6.3, §7.1). With the pedestal blocked rather than cancelled, the signal between the
+    I/V stage and the output capacitor lives between 0 and −`V_REF`. The `74HC4066` and
+    the Sallen-Key stage must be powered to pass it, which means split rails and a `VSS`
+    below −`V_REF`. It is not the single-5 V card the digital section is, and it should
+    be in the schematic before the mezzanine question of item 19 is answered.
+
+    ⚠ **This item got bigger on 2026-09-09, and it is no longer "costs no packages".** It
+    was a rail *voltage* question because everything on those rails was an op-amp signal
+    path drawing milliamps. §7.1's `NJM4556AD` draws up to **~60 mA into a low-impedance
+    load on both channels at once**, from the same pair. **The negative rail now needs
+    current capability**, which is a regulator or charge-pump question rather than a
+    reference-divider one — and that is the difference between a rail that can be derived
+    and one that has to be built.
 26. **Confirm the prefetch `'574` can drive the backplane alone** (§9.3). Deleting the
     `74HC245` puts a `74HC` flip-flop's outputs directly on the host data bus. `74HC`
     sources 6 mA, which is what the `'245` sourced, so the loading rule is the one the
@@ -2008,13 +2047,19 @@ specification that has not been tested.
     could shrink"). The second is worth an hour: `PEND`'s six pending bits are already
     half in the CPLD (§9.5) and the part is at 61 of 128 macrocells.
 
-29. **⚠ NEW — is a line output on a 3.5 mm jack the right call?** §7.1 puts a
-    line-level signal on the connector most people associate with headphones. It drives
-    a line input correctly and headphones at about a quarter of the level they expect.
-    **+1 IC buys a headphone driver** (`NJM4556AD`, or a discrete diamond buffer), and
-    the argument against is that a speaker/headphone amplifier does not belong on a
-    board with three digital SRAMs and a 28 MHz clock. **Decide it at bring-up, with the
-    card actually plugged into something.**
+29. **CLOSED 2026-09-09 — the jack gets a driver and the backplane keeps the line
+    output.** §7.1. An `NJM4556AD` at +1 IC, and the two outputs stop pretending to be
+    one signal. The objection this item recorded — that a headphone amplifier does not
+    belong on a board with three digital SRAMs and a 28 MHz clock — **is not wrong and is
+    outweighed**: the alternative was a connector that silently underdrives everything
+    plugged into it. It is answered by placement rather than by argument, in the analogue
+    section §10 already wants physically separate.
+
+    ⚠ **What is still open is the ground.** The jack is the one node on this card that
+    leaves the board into something a person touches, and a shell bonded to a chassis is
+    a second ground path where §10 allows exactly one. Isolated bushing, or bond the
+    chassis at the same single point — **and check it on the bench, because it is
+    inaudible on a scope and obvious in headphones.**
 
 30. **⚠ NEW — refit the CPLD.** `cpld/audio.jed` was fitted 2026-09-07 at 79 of 128
     logic cells and 50 of 64 I/O. Since then §11.1 added the `PAN` field, the `ACTRL`

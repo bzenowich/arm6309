@@ -15,7 +15,7 @@ nothing is built. Superseded material from these docs is archived in
 > `hardware/cards/io.circuit.tsx`, **14 ICs on a 12 cm card**.
 >
 > **What merges them is this directory's own subject: the `$FF` map.** PS/2 holds
-> `$FF50`–`$FF53` and serial `$FF54`–`$FF57`, and they are contiguous, so one card
+> four bytes each and contiguous, so one card
 > decodes eight bytes where two decoded four each. The machine gets a slot back — six
 > cards became five against six slots.
 >
@@ -27,9 +27,11 @@ nothing is built. Superseded material from these docs is archived in
 > house rule no longer forbids. **Neither is specified.**
 >
 > ⚠ **The merge does not merge the interrupt handlers.** `docs/machine.md` §4.1 still
-> polls video, net, PS/2, then **serial last**, because reading the 6551's `STATUS`
-> clears the interrupt and returns the error bits in the same read. One card, two
-> sources, unchanged order.
+> polls video, net, PS/2, then **serial last** — but ⭐ **that stopped being a rule on
+> 2026-09-09.** It was one while the serial part was a 6551, because reading its
+> `STATUS` clears the interrupt and returns the error bits in the same read; a
+> `16C550`'s `IIR` can be probed without being serviced (`serial.md` §7.3). One card,
+> two sources, and an order that is now a preference waiting on one measurement.
 
 **The two cards answer the "discrete or a chip?" question differently, and both are
 right.** PS/2 is eleven packages of 74-series logic because no period chip decodes PS/2 —
@@ -43,13 +45,15 @@ whether it can still be bought, and whether it fits the I/O budget — in that o
 
 [`../docs/machine.md`](../docs/machine.md) §5 open items 1 and 2 are, specifically, the
 two things an I/O card runs into first. **[`ps2/docs/ps2.md`](ps2/docs/ps2.md) §3 answers
-both** — take `/IRQ` as a third source, and take `$FF50`–`$FF53` — and a serial card should
+both** — take `/IRQ` as a third source, and take four bytes of the `$FF` map — and a serial card should
 either adopt those answers or argue with them, not rediscover the problem:
 
 - **There are 64 free bytes at `$FF00`–`$FF3F`**,
   and they are the whole of the 2026-09-08 widening. The geographic decode spans
   `$FF00`–`$FF7F`; video has `$FF60`–`$FF7F`, audio proposes `$FF40`–`$FF4F`, and
   `$FF50`–`$FF5F` went to PS/2, serial, storage and the net card, four bytes each.
+  ⚠ **The I/O card has since moved to `$FF30`–`$FF3F`** — sixteen bytes, because
+  `serial.md` §4.5's `16C550` has eight registers where the 6551 had four.
 - **Both maskable interrupt lines are claimed.** `/IRQ` is video's VBL — which is also
   NitrOS-9's system tick — and `audio.md` §8.1 takes `/FIRQ` as the *sole* source on
   purpose. Polling a keyboard from the VBL tick is a genuine option at 50–70 Hz, but it
@@ -67,7 +71,8 @@ escalates `graphics.md` §17's "widen the window now" from advice to a blocker, 
 
 `ps2/docs/ps2.md` §3.1 takes **`/IRQ` as a third source** — it is open-drain, already
 carries VBL and raster compare, and only `/FIRQ` is exclusive — and §3.2 takes
-`$FF50`–`$FF53`. Both are still **proposals** until `docs/machine.md` records them as
+the bottom four bytes of the card's window. Both are still **proposals** until
+`docs/machine.md` records them as
 taken. [`../net/`](../net/) has since joined `/IRQ` as a **fifth** source, and it is the
 first one that can out-rate video's VBL (`net/docs/net.md` §3.4).
 
