@@ -129,9 +129,12 @@ CPLD here buys packages rather than capability, and it costs the fuse-level veri
 
 **Specified, nothing built.** The deliverable is the document.
 
-`docs/sdcard.md` §12 gives the build order. Step 0 gets a filesystem onto the machine over
-DriveWire before any of this exists. **Step 1 is the silicon capture that decides what the
-write path may drop — and what the core should do about `TFM`.** Step 4 — 10⁵ blocks
+`docs/sdcard.md` §12 gives the build order. Step 0 got a filesystem onto the machine over
+DriveWire before any of this existed; since 2026-09-08 the machine boots NitrOS-9 out of
+its own 1 MB ROM (`machine.md` §7.2) and DriveWire is the *development* link rather than
+the bootstrap — [`docs/drivewire.md`](../docs/drivewire.md). **Step 1 is the silicon
+capture that decides what the write path may drop — and what the core should do about
+`TFM`.** Step 4 — 10⁵ blocks
 byte-exact with every other card's interrupts running — is the only step that can prove
 the read pipeline closes, and step 7 is the only one that measures a rate anyone will
 experience.

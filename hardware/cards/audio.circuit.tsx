@@ -1,4 +1,5 @@
-/* Audio card - 4-channel 8-bit PCM, Paula-exact. 29 ICs, audio/docs/audio.md 10.
+/* Audio card - 4-channel 8-bit PCM, Paula-exact, with programmable per-channel
+ * panning. 31 ICs, audio/docs/audio.md 10.
  *
  * Bus interface only. The card's own document is the specification and its
  * 15 step 0 is "freeze the register map", which is ahead of any board.
@@ -11,7 +12,7 @@
 import { Card } from "../lib/Card"
 
 export default () => (
-  <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} length={180} icBudget={29}>
+  <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} length={180} icBudget={31}>
     {/* Y1 - not the backplane's 25.175 MHz. machine.md 1's one-master rule has
       * exactly one exception and this is it. */}
     <crystal
@@ -76,12 +77,56 @@ export default () => (
       }}
     />
 
-    {/* The analogue pair leaves by the backplane, hard-panned. audio.md 1
-      * requirement 5: Paula's channels are 0 and 3 left, 1 and 2 right, and
-      * summing them to mono does not make a module quieter, it makes it wrong.
+    {/* ------------------------------------------------- the output, 7.1 --- */}
+    {/* Two channels, and they must stay two. audio.md 1 requirement 5: Paula's
+      * channels are 0 and 3 left, 1 and 2 right, and summing them to mono does
+      * not make a module quieter, it makes it WRONG. Since 11.1's panning the
+      * assignment is a mode bit rather than a wire (ACTRL b5), and the default
+      * is still Paula's hard pan exactly.
       *
-      * audio.md 10 wants the analogue section physically separate; that is a
-      * placement decision and this file has taken none yet. */}
+      * The DC block is good manners rather than load-bearing: 6.3 cancels the
+      * sample converters' pedestal UPSTREAM of the volume stage, so the card's
+      * output is already centred and is exactly zero when every channel is
+      * silent. What the capacitor removes is zero-code leakage and amplifier
+      * offsets - tens of millivolts, not half of full scale. 10 uF into 100k is
+      * 0.16 Hz, four decades below anything a module contains.
+      *
+      * ⚠ It is a LINE output on a headphone-shaped connector: ~2 V p-p through
+      * 100 ohm into 32 ohm headphones is about a quarter of the level anything
+      * else they plug in will give. 7.1 prices a driver at +1 IC and refuses
+      * it - audio.md 16 item 29 decides at bring-up. */}
+    {["L", "R"].map((side, i) => (
+      <group key={side}>
+        <capacitor name={`C${i + 1}`} capacitance="10uF" footprint="1206" polarized
+          connections={{ pin1: `net.SUM_${side}`, pin2: `net.OUT_${side}` }} />
+        <resistor name={`R${i + 1}`} resistance="100" footprint="0805"
+          connections={{ pin1: `net.OUT_${side}`, pin2: `net.AUDIO_${side}` }} />
+      </group>
+    ))}
+
+    {/* J2 - 3.5 mm stereo, on the card's rear edge, added 2026-09-08.
+      *
+      * graphics.md 17 put AUDIO_L/AUDIO_R and two dedicated AGND returns on the
+      * backplane and lib/slot.ts carries them at B32-B35 - and NOTHING in the
+      * machine consumes them. There is no chassis, no rear panel and no
+      * document that says where the pair terminates. The jack is the same two
+      * nodes wired to two more places, it costs no ICs, and it makes the card
+      * testable on a bench with no backplane at all. The backplane pair is
+      * kept unchanged.
+      *
+      * ⚠ FOOTPRINT: "pinrow3" is a 3-pin header, not a 3.5 mm receptacle - the
+      * netlist is right and the outline is not, the same caveat the slot socket
+      * carries (hardware/README.md open item 2). Tip = left, ring = right,
+      * sleeve = AGND, and the sleeve goes to the ANALOGUE ground: audio.md 10
+      * requires analogue and digital grounds to meet at exactly one point, and
+      * a jack shell bonded to a chassis is the classic way to make a second. */}
+    <chip
+      name="J2"
+      footprint="pinrow3"
+      pinLabels={{ pin1: "TIP", pin2: "RING", pin3: "SLEEVE" }}
+      connections={{ TIP: "net.AUDIO_L", RING: "net.AUDIO_R", SLEEVE: "net.AGND" }}
+    />
+
     <netlabel net="AUDIO_L" anchorSide="left" schX={4} schY={2} />
     <netlabel net="AUDIO_R" anchorSide="left" schX={4} schY={1} />
   </Card>

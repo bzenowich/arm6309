@@ -353,15 +353,21 @@ PC13        /NMI         in     PC13-15 are input-only here: limited output driv
 PC14        /IRQ         in
 PC15        /FIRQ        in
 PF0         LED          out    status
-PF1         STRAP        in     §4.5 machine-mode strap — the last pin
+PF1         —            —      SPARE. Was §4.5's machine-mode strap until the
+                                  boot ROM moved to the motherboard 2026-09-08
 PG10        NRST
 ```
 
 Totals: 20 outputs (`A0-15`, `R/W`, `BUS_OE`, `BA`, `BS`), 8 bidirectional (`D0-7`),
 8 inputs (`E`, `Q`, `/RESET`, `/HALT`, `/NMI`, `/IRQ`, `/FIRQ`, `UART_RX`), plus
-`UART_TX` and `LED`, plus the `PF1` strap. **39 of 39, none spare** — on the UFQFPN48;
-the same map needs 39 pins of the LQFP48's 35, i.e. it does not fit (§3.1). The last
-spare pin goes to §4.5's machine-mode strap on `PF1`.
+`UART_TX` and `LED`. **38 of 39, one spare** — on the UFQFPN48; the same map needs 38
+pins of the LQFP48's 35, i.e. it does not fit (§3.1).
+
+⭐ **`PF1` came back on 2026-09-08.** It was §4.5's machine-mode strap, selecting the
+shadow ROM off for the CoCo 3 and on for the homebrew machine; `docs/machine.md` §7.2
+put the boot ROM on the motherboard and there is no mode to select. **The pinout has a
+spare pin for the first time since it was drawn**, and §10.7's strap-versus-build-flag
+question is closed by not existing.
 
 **`PB8` is `A8` and it is also `BOOT0`. That is a provisioning obligation, not a
 pinout problem.** On the STM32G431 `BOOT0` shares `PB8`, and with the shipping default
@@ -402,23 +408,26 @@ settled the *other* target's architecture, so record the arithmetic here where i
 | `BUS_OE` | 1 | 1 | 1 |
 | `BA`, `BS` | 2 | — | — |
 | HSYNC, VSYNC in — `graphics.md` §12.2 | — | 2 | 2 |
-| Machine strap `PF1` — §4.5 | 1 | 1 | 1 |
+| ~~Machine strap `PF1`~~ — §4.5, **retired 2026-09-08** | — | — | — |
 | UART ×2, LED | 3 | 1 — LED only, no room for the UART | 3 |
-| **of 39** | **39**, none spare | **41 — does not fit** | **39**, none spare |
+| **of 39** | **38**, ⭐ **one spare** | **40 — does not fit** | **38**, one spare |
 
-> ⚠ **Both target columns stand at exactly 39 of 39 — nothing is left over on either.**
-> Two rows are easy to miss because they come from elsewhere:
+> **Both target columns stand at 38 of 39 — one spare, and it arrived by deletion.**
+> One row is easy to miss because it comes from elsewhere:
 >
 > - **VSYNC.** Counting HSYNC pulses yields a line number *with no origin* — the
 >   raster-compare timer needs a frame reset too, and resynchronising in the VBL handler
 >   jitters by interrupt-dispatch latency (1–6 lines). VSYNC is therefore a hardware
 >   input (`graphics.md` §12.2).
-> - **The `PF1` machine strap**, which §4.5's shadow ROM needs in order to keep the
->   "one firmware, three machines" property. It is the pinout's last spare pin.
 >
-> The next CPU-side signal anyone wants costs the debug UART, and it should be a
-> deliberate trade rather than a discovery during layout. §10.7's strap-versus-build-flag
-> question is also a pin question: the build-flag alternative is what buys the spare back.
+> ⭐ **And one row that used to be here is gone.** The `PF1` machine strap existed so
+> that one firmware image could serve three machines with §4.5's shadow ROM on for one of
+> them and off for the other two. §4.5 is retired; the image is now identical on all
+> three with no strap at all, which is a *stronger* form of the property the strap was
+> protecting. §10.7 closes with it.
+>
+> The next CPU-side signal anyone wants is free, and the one after it costs the debug
+> UART.
 >
 > **The in-CPU MMU column does not fit at all** — 41 pins against 39. It is also rejected
 > on one-SKU grounds (below), so the question is retired rather than merely settled.
@@ -1312,84 +1321,48 @@ Freestanding **C11**, bus interface behind a narrow `read8`/`write8`/`cycle_tick
 interface. Must build and run identically on desktop and on the MCU. Non-negotiable — the
 validation strategy (§6) and the escape hatch (§3.4(5)) both depend on it.
 
-### 4.5 Boot — the shadow ROM and vector page live in the CPU module
+### 4.5 Boot — RETIRED 2026-09-08; the boot ROM is on the motherboard
 
-**Machine-wide decision D1.** Without this mechanism the homebrew machine cannot boot:
-no ROM chip exists anywhere in its physical map, and the reset vector at `$FFFE` lands
-inside the I/O page — which overrides MMU translation by design — so nothing decodes
-there (`docs/machine.md`). The resolution puts the boot ROM **in this module**, served
-from STM32 flash with no bus cycle at all, because that is the one place in the machine
-that already has non-volatile storage and an address decoder.
+> **This section specified a mechanism this module no longer implements.** The full
+> text — what the module served, the three rules, the disable bit, the `PF1` machine
+> strap and the per-cycle cost — is archived in [history.md](history.md).
 
-**This is specification, not implementation.** Phase 1 is a timing spike and has no
-shadow ROM; the mechanism lands with the core, in Phase 6b (§7).
+**Machine-wide decision D1 said that without a shadow ROM in this module the homebrew
+machine could not boot**, because no ROM chip existed anywhere in its physical map and
+the reset vector at `$FFFE` lands inside the I/O page, which overrides MMU translation
+by design. That was true of the 1 MB physical map it was written against.
 
-#### 4.5.1 What the module serves
+**`hardware/ram.md` §5.2 re-carved the map to 32 MB on 2026-09-08 and
+`docs/machine.md` §7.2 put a 1 MB ROM on the motherboard at physical 2.0–3.0 MB.** The
+alternative D1 recorded — *"an 8 KB EPROM plus decode on the motherboard — 2 ICs, no CPU
+divergence"* — is the one that was taken, at three packages and a megabyte.
 
-| Logical range | Served from | When |
+#### 4.5.1 What this module serves now: nothing
+
+| Logical range | Served from | Note |
 |---|---|---|
-| `$E000`–`$FEFF` | STM32 flash, **shadow ROM** | from reset until the OS clears the disable bit |
-| `$FF00`–`$FFBF` | **nothing — decodes normally** | always: cards and the MMU answer here |
-| `$FFC0`–`$FFEF` | STM32 flash, shadow ROM | same as `$E000`–`$FEFF` |
-| `$FFF0`–`$FFFF` | 16-byte internal **vector RAM** | **always**, disable bit or not |
+| `$E000`–`$FEFF` | **the bus** | the motherboard's ROM while `BOOT` is set, ordinary mapped memory after |
+| `$FF00`–`$FFBF` | **the bus** | cards and the MMU, exactly as before |
+| `$FFC0`–`$FFFF` | **the bus** | the motherboard ROM answers here unconditionally — `machine.md` §7.2's `VECSEL` |
 
-Three rules, and the second is the one that is easy to get wrong:
+**Every fetch is a bus cycle again**, which is the property this section spent and has
+now bought back.
 
-1. **A shadowed read never becomes a bus cycle.** The emulator resolves the address
-   internally and supplies the byte from flash. Externally the cycle still happens — E, Q
-   and the address are the host's, and cycle accuracy is unaffected — but the module
-   ignores `D0..D7` and drives `BUS_OE`/`R/W` as it would for any read. Nothing on the
-   backplane responds, because nothing is decoded there while the shadow is on.
-2. **`$FF00`–`$FFBF` is carved out and must keep decoding normally.** The boot code has to
-   talk to the MMU, the video card and storage while it is running, and all of that lives
-   in the I/O page. A shadow that covered the whole of `$FF00`–`$FFFF` would work exactly
-   until the first register access.
-3. **Vector service is unconditional.** `$FFF0`–`$FFFF` comes from the vector RAM whether
-   the shadow ROM is enabled or not, which is what lets the OS retarget the vectors after
-   it has switched the shadow off. The RAM is initialised from flash at reset to point
-   into the shadow ROM, so the reset vector is valid on the first fetch.
+#### 4.5.2 What that is worth to this module
 
-#### 4.5.2 Control, and turning the whole thing off
-
-- **Disable bit** — one bit in the MMU control window (`docs/machine.md` and D3's
-  74HC574 own the exact register and bit; this module reads the same write). Setting it
-  retires `$E000`–`$FEFF` and `$FFC0`–`$FFEF`, freeing that logical space for RAM once
-  NitrOS-9 is up. It is a one-way switch per reset by design: nothing re-enables the
-  shadow except a reset, so a wild store cannot bring the ROM back over live RAM.
-- **Vector RAM is writable through the MMU window**, 16 bytes, so the OS installs its own
-  vectors and the shadow ROM's are only the bootstrap set.
-- **Machine-mode gating.** On the **CoCo 3 and the Dragon 64 the entire mechanism is
-  off** — those machines have their own ROM in the socket's address space, and a module
-  that answered `$E000`–`$FFEF` from flash would be a drop-in that boots something else.
-  Mode is read once at reset from the **`PF1` strap** (§3.2's remaining spare pin: pulled
-  up = drop-in, tied low on the homebrew motherboard), which keeps one firmware image
-  serving all three machines as §3.2 intends. **Recorded alternative:** a build-time flag
-  and two images, which costs nothing electrically and gives up the single-image
-  property. *Owner's call; the strap is what this document specifies.*
-- **Recorded alternative to the whole feature** (D1): an 8 KB EPROM plus decode on the
-  motherboard — 2 ICs, no CPU divergence, but the `$FF00`–`$FFBF` carve-out has to be
-  drawn in real logic instead of being a range test in firmware. If that is taken
-  instead, this section becomes dead and the drop-in property below is restored.
-
-> ⚠ **Consequence for the drop-in claim.** `video/docs/graphics.md` §16.8's "you can drop
-> a real HD63C09E into the homebrew machine" property **does not hold** with the shadow
-> ROM in the CPU: a real 6309 has no flash and the machine has no boot ROM without it.
-> The property survives only under the EPROM alternative; the trade is live (§10.8).
-
-#### 4.5.3 Cost
-
-| Item | Cost |
+| | |
 |---|---|
-| Shadow ROM image | **~8 KB of the 128 KB** internal flash (6.3 %) |
-| Vector RAM | 16 bytes of SRAM, plus 16 bytes of flash for the reset image |
-| Per-cycle cost | one range test on the address the microcode is about to drive |
-| Pins | one, `PF1`, the last spare — or zero, under the build-flag alternative |
+| **Firmware** | ⭐ **the per-address range test is gone.** It landed in the microcode step measured by §3.3(d) — one comparison on every formed address — and it is now not there at all |
+| **Flash** | ~8 KB back of 128 KB, and the 16-byte vector image with it |
+| **Pins** | ⭐ **`PF1` is spare again.** §3.2's last free pin was spent on the machine strap that selected shadow-ROM off for the CoCo 3 and Dragon 64; there is no mode to select |
+| **One image, three machines** | **unconditionally**, rather than by a strap read at reset. The drop-in SKU and the homebrew SKU now differ in *no* firmware behaviour at all |
+| ⭐ **The drop-in claim** | `video/docs/graphics.md` §16 item 8's *"you can drop a real HD63C09E into the homebrew machine"* **holds again** — the machine's boot ROM is on the bus, so a part with no flash boots from it |
 
-The flash budget is comfortable: Phase 1 links at ~4 KB and the core is not expected to
-approach 100 KB, so an 8 KB guest-code region does not compete with anything. The
-per-cycle cost is the term to watch — it lands in the microcode step measured in
-§3.3(d), not in the `t_AD` path, because the decision "does this read come from flash?"
-is made when the address is *formed*, one step before it is driven.
+⚠ **What this module still owes boot is nothing, and that is worth stating**, because
+three other documents were written against the old arrangement and one of them —
+`hardware/ram.md` §6.4 — proposed serving 2 KB of STM32 SRAM as a boot scratch window.
+**That proposal is withdrawn too**: `machine.md` §7.2's boot sequence is sixteen stores,
+a `CLR` and an `LDS`, and needs no stack.
 
 ---
 
@@ -1561,21 +1534,22 @@ Real core into the Phase 1 bus loop. Hot loop in CCM SRAM, interrupts off.
 |---|---|---|
 | Option bytes `nSWBOOT0` / `nBOOT0` | **0** / **1** | `BOOT0` is `PB8` is `A8` (§3.2). With the factory default the part samples the address bus at every reset and boots the system bootloader on some of them. |
 | Read back and verify the option bytes | — | They are programmed through a separate flash controller sequence and a failed write is silent. |
-| Machine strap `PF1` | pulled up on a drop-in carrier, tied low on the homebrew motherboard | Selects the §4.5 shadow ROM off/on. |
+| ~~Machine strap `PF1`~~ | — | **Retired 2026-09-08 with §4.5.** The pin is spare; leave it unconnected. |
 
 **Exit:** option bytes verified on every module in circulation; worst-case DWT within
 budget at 1.79 MHz with ≥20% margin. Confirm the real core did not blow the Phase 1
 numbers.
 
-### Phase 6b — Shadow boot ROM and vector page (3–5 days, homebrew target only)
-§4.5. Shadow-ROM window served from internal flash, the 16-byte vector RAM, the
-disable bit read off the MMU window's write, and the `PF1` machine gating that turns all
-of it off for the CoCo 3 and the Dragon 64. The guest-side boot image is `software/`'s
-problem; this phase is the mechanism that serves it.
-**Exit:** the homebrew machine fetches its reset vector and executes from `$E000` with no
-motherboard ROM; the disable bit frees `$E000`–`$FEFF` for RAM and the machine keeps
-running; `$FF00`–`$FFBF` decodes to cards throughout; a module strapped for the CoCo 3
-serves nothing and boots Color BASIC from the machine's own ROM exactly as in §6.3(a).
+### Phase 6b — DELETED 2026-09-08 (§4.5)
+This phase built the shadow-ROM window, the 16-byte vector RAM, the disable bit and the
+`PF1` machine gating. **`docs/machine.md` §7.2 put the boot ROM on the motherboard**, so
+there is no mechanism for this module to implement and nothing here to build or test.
+The phase is left in place rather than renumbered; the schedule is 3–5 days shorter.
+
+**What replaced its exit criterion** belongs to the motherboard: the machine fetches its
+reset vector from ROM `$1FFE`, boot code writes the map and clears `BOOT` at `$FFB1`, and
+`$FF00`–`$FFBF` decodes to cards throughout. **A module in a CoCo 3 was always meant to
+do nothing here, and now it does nothing on both targets** — same firmware, no strap.
 
 ### Phase 7 — PCB and CoCo 3 integration (3–4 weeks)
 40-pin DIP-footprint carrier: **G431CBU6 (UFQFPN48)**, 74LVC541 ×2 (address), 74LVC574
@@ -1607,7 +1581,7 @@ contribute upstream.
 | Native-mode cycle counts wrong | **High** | NitrOS-9 runs native, and MAME is known-buggy exactly there. Silicon capture (§6.2(1)) is the oracle. |
 | **Interrupt recognition shifts by one bus cycle** | Medium | §4.1 rule 3 AND-folds the control inputs at an undefined instant in the cycle; silicon samples at a defined point with `t_PCS` setup. Never loses an assertion, can notice one a cycle early or late. Pin against the §6.2(1) silicon capture; a trace diff is the only thing that sees it. |
 | Option bytes not programmed on a module | **High** | `BOOT0` = `PB8` = `A8`: a factory-default part boots the bootloader on a random subset of resets (§3.2). Gate in §7 Phase 6, verified by read-back, not by "it booted once". |
-| §4.5 shadow ROM competes for microcode budget | Low | One range test per formed address, in the step measured by §3.3(d), not on the `t_AD` path. Re-run `cpu/tools/microstate-probe/` once it is written. |
+| ~~§4.5 shadow ROM competes for microcode budget~~ | **gone** | **Retired 2026-09-08.** The boot ROM is on the motherboard, so there is no per-address range test to budget for. |
 | fast-E (3.1469 MHz) has no silicon reference | Medium | `t_cyc` 317.8 ns < the HD63C09E's 333 ns minimum, so §6.2(1)'s A/B capture cannot be taken there at all (§3.3(e)). Per D5 the machine is specified at 2.0979 MHz; fast-E is a probe and is validated against our own model only. |
 | Mechanical fit under the RF shield | Medium | Measure in Phase 2; constrains component height and PCB stack-up. |
 | CPU soldered, not socketed | Medium | Budget desoldering and a machined-pin socket. |
@@ -1668,17 +1642,22 @@ contribute upstream.
 5. **Height available under the RF shield?**
 6. **NitrOS-9 build** — Curtis Boyle's "Ease of Use" distribution, or a stock upstream
    build? Affects how much 6309-specific code is exercised.
-7. **§4.5 machine gating: `PF1` strap, or a build-time flag and two images?** The strap
-   keeps the "one firmware serves all three machines" property of §3.2 and spends the
-   last spare pin; the flag keeps the pin and gives up the property. This document
-   specifies the strap. **Owner's call**, and it wants making before the Phase 7 carrier
-   is drawn, because the strap needs a pull-up on the drop-in carrier and a ground on the
-   homebrew motherboard.
-8. **§4.5 or the EPROM alternative?** D1 records both. Taking the EPROM restores
-   `graphics.md` §16.8's real-6309-drop-in property for the homebrew machine and costs 2
-   ICs plus an `$FF00`–`$FFBF` carve-out drawn in logic. Taking §4.5 costs ~8 KB of flash
-   and a pin. Recorded here because the decision belongs to the machine, not to this
-   module, and this module implements whichever wins.
+7. **CLOSED 2026-09-08 by item 8 — there is no machine gating to specify.** The
+   question was `PF1` strap versus a build-time flag and two images: the strap kept
+   §3.2's "one firmware serves all three machines" property and spent the last spare pin,
+   the flag kept the pin and gave up the property. **§4.5's retirement gives both** — the
+   image is identical on all three machines with no strap and no flag, and `PF1` is
+   spare. Nothing needs deciding before the Phase 7 carrier is drawn.
+8. **DECIDED 2026-09-08 — the EPROM alternative, and it is a 1 MB flash.** D1 recorded
+   both, and the machine took the motherboard ROM: `docs/machine.md` §7.2, three packages
+   at physical 2.0–3.0 MB, with a `BOOT` latch and an unconditional `$FFC0`–`$FFFF`
+   decode. It restores `graphics.md` §16 item 8's real-6309-drop-in property, and the
+   `$FF00`–`$FFBF` carve-out it needed drawn in logic is one term on U9 rather than the
+   range test §4.5 spent on every formed address.
+
+   > **The decision belonged to the machine and the machine made it.** What this module
+   > gets back is ~8 KB of flash, a pin, one microcode step, and the property that the
+   > drop-in SKU and the homebrew SKU run byte-identical firmware.
 
 ---
 

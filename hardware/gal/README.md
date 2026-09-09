@@ -239,12 +239,18 @@ board** — the map SRAM's outputs *are* physical `A13–A19`, with nothing in b
 "MMU disabled" could only mean floating the address bus. It is not a function this
 hardware can perform.
 
-It is also unnecessary, because of `machine.md` §7.2: the shadow ROM serves `$E000`–`$FFFF`
-**from inside the CPU module without a bus cycle**, so boot code runs with no memory access
-at all and can write all 16 entries through `$FFA0`–`$FFAF` before it ever needs RAM. The
-identity map is a firmware loop, not a hardware state.
+It is also unnecessary. `machine.md` §7.2's `BOOT` mode **is** the bypass, and it lives
+where a bypass has to live — outside the map, driving the address bus in the map's place
+with a `74HCT541` while the isolation `'245` is off. Boot code runs out of the ROM's
+page 0 behind every logical block and writes all 16 entries through `$FFA0`–`$FFAF`
+before it needs RAM. The identity map is a sequence of stores, not a hardware state.
 
 **Dropped.** It is one input and one macrocell back, and the `'574` falls to one live bit.
+
+> ⚠ **`BOOT` is not on U3.** It is on U9 with the rest of the space decode
+> ([`../ram.md`](../ram.md) §6.7), because it gates the ROM's chip selects and the
+> `'541`/`'245` enable pair and none of those are U3's business. **U9 may not fit** —
+> `ram.md` §11 item 6.
 
 ### 2. The `'157` select was tied to `MAP_WE`, giving the SRAM no address set-up
 
@@ -256,13 +262,21 @@ asserted on address decode, which buys 367 ns against a 12 ns requirement.
 ### 3. `SHADOW_DIS` is latched on the motherboard and reaches nothing
 
 `U2` `Q3` drives `net.SHADOW_DIS` and **no other pin in the design connects to it.** It
-cannot ever work: the shadow ROM is inside the CPU module (§7.2), the module's connection
-to the motherboard is a 6809E 40-pin socket, and every one of those 40 pins is defined.
-There is no wire for this bit and there is nowhere to put one.
+could not ever work: the shadow ROM was inside the CPU module, the module's connection to
+the motherboard is a 6809E 40-pin socket, and every one of those 40 pins is defined.
+There was no wire for this bit and nowhere to put one.
 
-**It belongs in the CPU module**, which sees every `$FFBx` write on the bus and can latch
-its own copy at no cost. Not fixed here — it is a `machine.md` §7.2 correction, not a GAL
-one — but it is why the control register above allocates only `TASK`.
+**It belonged in the CPU module**, which sees every `$FFBx` write on the bus and can latch
+its own copy at no cost — a `machine.md` §7.2 correction rather than a GAL one.
+
+⭐ **And on 2026-09-08 the bit came back to the motherboard, under a different name and
+for the opposite reason.** `machine.md` §7.2 retired the shadow ROM for a 1 MB ROM on
+this board, and its `BOOT` latch at **`$FFB1`** gates motherboard logic and nothing else —
+so it *can* be a motherboard latch, and has to be. The finding stands: **a control bit
+belongs wherever the thing it controls is**, and this one moved because the thing moved.
+
+The control register now allocates two bits: `TASK` at `$FFB0`, `BOOT` at `$FFB1`,
+aliased 8× each on `A0`'s parity.
 
 ### 4. `$FFA0`–`$FFAF` cannot hold both the block registers and the vector RAM
 

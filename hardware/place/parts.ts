@@ -93,21 +93,32 @@ export const CARDS: Record<string, CardSpec> = {
     ],
   },
   audio: {
-    title: "Audio", length: 180, ics: 29, source: "audio/docs/audio.md 10",
-    note: "4-channel 8-bit PCM, Paula-exact",
-    rear: [{ w: 47, h: 24, label: "analogue out + filters", kind: "analog" }],
+    title: "Audio", length: 180, ics: 31, source: "audio/docs/audio.md 10",
+    note: "4-channel 8-bit PCM, Paula-exact, panned",
+    /* audio.md 7.1: the output is line level on a 3.5 mm stereo jack at the
+     * rear edge, in parallel with the backplane's AUDIO_L/R pair. Nothing
+     * consumed that pair - there is no chassis and no rear panel - and this
+     * is what makes the card testable with no backplane at all. */
+    rear: [{ w: 47, h: 24, label: "analogue out + filters", kind: "analog" },
+           { w: 14, h: 13, label: "3.5 mm", kind: "conn" }],
     parts: [
       pkg(33, 33, "ATF1508AS", "pld", 1, "1508"),
       pkg(20.3, 12.7, "28.375 MHz osc", "clk", 1, "OSC"),
-      dip(32, 0.6, "AS6C1008 sample RAM", "mem"),
-      dip(24, 0.3, "CY7C128A state file", "mem", 3),
+      /* 5: 512 KB in one package, the part the motherboard stopped using when
+       * ram.md 6.2 went to SIMM sockets. 5.3: the state file is two x16 parts
+       * where it was three x8 - TSOP-44 II, the same body the video card's
+       * framebuffer takes, and 32 bits wide where word 0 needs 24. */
+      dip(32, 0.6, "AS6C4008 sample RAM", "mem"),
+      pkg(18.4, 11.8, "IS61C6416 state file", "mem", 2, "6416"),
       dip(16, 0.3, "74HC590 counter", "bus", 2),
       dip(20, 0.3, "74HC688 compare", "bus", 2),
       dip(16, 0.3, "74HC283 adder", "bus", 4),
       dip(20, 0.3, "74HC574 pipeline", "bus", 3),
       dip(20, 0.3, "74HC574 conv port", "bus", 2),
-      dip(20, 0.3, "AD7528 dual MDAC", "analog", 4),
-      dip(14, 0.3, "TL074", "analog", 2),
+      /* 11.1: twelve halves - one sample and TWO volume converters per
+       * channel - and the fourth TL07x that a per-die I/V needs. */
+      dip(20, 0.3, "AD7528 dual MDAC", "analog", 6),
+      dip(14, 0.3, "TL074", "analog", 3),
       dip(8, 0.3, "TL072", "analog"),
       dip(14, 0.3, "74HC4066", "analog"),
       dip(20, 0.3, "74HC574 pw", "bus"),

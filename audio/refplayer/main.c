@@ -51,7 +51,7 @@ static void usage(void)
       "  --ntsc            use the 3.579545 MHz colour clock (audio.md §4.1)\n"
       "  --led             start with the LED filter on (audio.md §7)\n"
       "  --bypass          bypass all filtering -- WRONG for modules, see §7\n"
-      "  --ram KB          populated sample RAM (default 128, max 512)\n"
+      "  --ram KB          populated sample RAM (default 512, max 512)\n"
       "  --info            print the parsed module and exit\n");
 }
 
@@ -60,7 +60,7 @@ int main(int argc, char **argv)
     const char *path = NULL, *wavpath = NULL, *tracepath = NULL, *rowpath = NULL, *vupath = NULL;
     int rate = 48000, ntsc = 0, led = 0, bypass = 0, info_only = 0;
     double seconds = 0.0;
-    unsigned long ramkb = 128;
+    unsigned long ramkb = 512;   /* audio.md 5: one AS6C4008, all of it */
 
     card_t card;
     mod_song song;

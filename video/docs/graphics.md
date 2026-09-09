@@ -744,7 +744,7 @@ commodity SRAM and the buffer that substitution costs — §15). This is the cou
 | Qty | Part | Role |
 |---|---|---|
 | 1 | 2K×8 SRAM, **15 ns** | the block map, addressed by `{TASK, A15..A13}` in translate mode, outputting physical A13..A19 |
-| 1 | `74HC574` | task select, MMU enable, and the §6.3.3 shadow-ROM disable — three bits, at addresses this machine picks (see below), not the GIME's `$FF90`/`$FF91` |
+| 1 | `74HC574` | `TASK` at `$FFB0` — one live bit of eight. **MMU enable and the shadow-ROM disable are both gone**: `hardware/gal/README.md` findings 1 and 3 showed the first cannot exist and the second could not be wired, and §7.2's `BOOT` at `$FFB1` replaced what the second was for |
 | 1 | `GAL22V10` | write decode, the `/IOPAGE` term, and the control sequencing of the two parts below |
 | 1 | `74HC245` | **isolation** between the SRAM's common I/O and `D0–D7`, break-before-make |
 | 1 | `74HC157` | **quad 2:1 mux** on the SRAM address: `{TASK, A15..A13}` in translate mode, `A3..A0` during a map write |
@@ -923,14 +923,21 @@ undriven bus. That is not a video problem, but it is a video *constraint*, becau
 the obvious repair (map a ROM into physical space) collides with §6.3's "`A19` = 0
 RAM, `A19` = 1 VRAM" map, which reserves zero bytes for one.
 
-**The machine's answer is CPU-module shadow ROM** (`docs/machine.md` §5 item 0):
-`$FFF0`–`$FFFF` is served from 16 bytes of internal vector RAM in the STM32, always
-on and writable through the MMU window; `$E000`–`$FEFF` is served from internal flash
-at reset and switched off by a bit in the MMU window once the OS is up; and
+**The machine's answer is a 1 MB boot ROM on the motherboard** (`docs/machine.md`
+§7.2, decided 2026-09-08): a `BOOT` latch set by `/RESET` puts the ROM's first 8 KB
+behind every logical block until software clears it, and logical `$FFC0`–`$FFFF` reads
+the ROM **unconditionally**, so `$FFFE` is a reset vector rather than an undriven bus.
 `$FF00`–`$FFBF` continues to decode normally to cards and the MMU throughout, so this
-card's registers work during boot. **Nothing on the video card changes** — the
-physical map keeps both halves, no carve-out is needed, and `/IOPAGE` keeps the card
-quiet during all of it. What it does cost is §16 item 8; see there.
+card's registers work during boot.
+
+**Nothing on the video card changes** — `ram.md` §5.2's 32 MB map put the ROM at
+physical 2.0–3.0 MB, which is above the bottom 2 MB this card decodes, and `/IOPAGE`
+keeps the card quiet during all of it. ⭐ **And the collision this section names is
+gone rather than worked around**: the "map a ROM into physical space" repair collided
+with a 1 MB map that reserved zero bytes for one, and the map is 32 MB now.
+
+⭐ **§16 item 8 is restored by it** — a real HD63C09E in the socket fetches `$FFFE` from
+the ROM like any 6809 ever did.
 
 ---
 
@@ -2866,14 +2873,15 @@ unnecessary.
 ---
 
 **Off-card, on the motherboard**, and this is where the parts that used to be on this
-list went (the motherboard's own full census — DRAM control, buffers, SIMM sockets —
-is `hardware/ram.md` §6.5, at **14 ICs**):
+list went (the motherboard's own full census — DRAM control, buffers, SIMM sockets, boot
+ROM — is `hardware/ram.md` §6.5, at **17 ICs**):
 
 | Qty | Part | Role |
 |---|---|---|
 | 1 | 25.175 MHz oscillator | **system master** (§5.1) — feeds the E/Q divider *and* the backplane |
 | 1 | GAL22V10 | ÷12 / ÷8 E and Q generation, with the **divisor-dependent Q tap** (§5.1) and the whole-E-period `/WAIT` (§3.3) |
-| 5 | §6.3.1's MMU | SRAM, `'574`, GAL, `'245` isolation, `'157` address mux |
+| 5 | §6.3.1's MMU | SRAM, `'574`, GAL, `'245` isolation, `'157` address mux — **plus a second map SRAM**, `ram.md` §3.1 |
+| 3 | the boot ROM | 2 × `SST39SF040` and a `'541`, §6.3.3 — **which is what makes §16 item 8's real-6309 drop-in valid again** |
 
 **Power:**
 
@@ -2992,28 +3000,34 @@ any other 6809 homebrew.
 6. **Raster interrupts cost one pin** (§12.2), and are more flexible than the
    hardware they replace.
 7. **`TFM` exists** (§10.2).
-8. **A real HD63C09E is *not* currently a valid part for the socket** — a property
-   the clock-slaved design (§5.3) was originally argued on, so it is worth being
-   precise about what broke and what would restore it.
+8. **⭐ RESTORED 2026-09-08 — a real HD63C09E is a valid part for the socket again**,
+   which is the property the clock-slaved design (§5.3) was originally argued on.
 
-   `docs/machine.md` resolves the machine's boot problem (§6.3.3) by having the
-   **CPU module serve the vector page and an 8 KB shadow ROM from its own STM32
-   flash, without a bus cycle** (§7.2 there). A real HD63C09E dropped into that
-   socket fetches `$FFFE`–`$FFFF` from the backplane, where nothing answers: the
-   silicon A/B reference does not boot. It boots again **only if the recorded
-   alternative is taken** — an 8 KB EPROM plus decode on the motherboard, with an
-   explicit vector/ROM carve-out from the I/O page (2 ICs, no CPU divergence). That
-   is a live option, recorded here so it stays priced.
+   For two days it was not. `docs/machine.md` resolved the machine's boot problem
+   (§6.3.3) by having the CPU module serve the vector page and an 8 KB shadow ROM from
+   its own STM32 flash without a bus cycle, and a real HD63C09E dropped into that socket
+   fetched `$FFFE`–`$FFFF` from a backplane where nothing answered. This item recorded
+   the alternative that would restore it — *"an 8 KB EPROM plus decode on the
+   motherboard, with an explicit vector/ROM carve-out from the I/O page"* — and said it
+   was live and priced.
 
-   A second, smaller qualification, unrelated to boot: at **÷8** the 317.8 ns bus
-   cycle is below the HD63C09E's **333 ns `t_cyc` minimum**, so the A/B reference
-   cannot be captured in fast-E mode with a rated part even with a ROM present
-   (§11). At the specified ÷12 rate, 476.7 ns, it is comfortable.
+   **It was taken, at 1 MB rather than 8 KB and three packages rather than two**
+   (`machine.md` §7.2): a `BOOT` latch, an unconditional `$FFC0`–`$FFFF` decode, and a
+   `'541` driving physical `A19`–`A13` while either is asserted. The carve-out this
+   item said it needed turned out not to be needed either — `ram.md` §5.2's 32 MB map
+   had space at 2.0–3.0 MB — and **NitrOS-9's divergence ledger got shorter rather
+   than longer**, because ROM vectors pointing at a RAM jump table is what a CoCo has.
 
-   What survives untouched is everything the property is *used* for at ÷12 with a
-   motherboard ROM: clock-slaving (§5.3), the Q-lead specification (§5.1) and the
-   `/WAIT` discipline (§3.3) are all written so that real silicon works. The
-   obstacle is one decode, not the timing.
+   ⚠ **One qualification survives, and it is now the only one.** At **÷8** the 317.8 ns
+   bus cycle is below the HD63C09E's **333 ns `t_cyc` minimum**, so the A/B reference
+   cannot be captured in fast-E mode with a rated part even with the ROM present (§11).
+   At the specified ÷12 rate, 476.7 ns, it is comfortable — and ÷12 is the only rate the
+   machine is specified at (`machine.md` §1.1), so this bounds the *experiment* and not
+   the machine.
+
+   Everything the property is *used* for is untouched: clock-slaving (§5.3), the Q-lead
+   specification (§5.1) and the `/WAIT` discipline (§3.3) are all written so that real
+   silicon works. **The obstacle was one decode, and the decode exists now.**
 
 ---
 
@@ -3023,7 +3037,7 @@ Brief, because it is not the video question — but the backplane spec has to be
 frozen before the video card is laid out, and the sound card is the other consumer.
 
 > **The sound card has its own document: [`audio.md`](../../audio/docs/audio.md)** — a
-> 4-channel PCM card modelled on the Amiga's Paula, **29 ICs**, whose acceptance test
+> 4-channel PCM card modelled on the Amiga's Paula, **31 ICs**, whose acceptance test
 > is playing existing OCS tracker modules unmodified, with the loader and
 > replayer that do that in [`modplayer.md`](../../audio/docs/modplayer.md). **It supersedes this
 > section's original Ensoniq 5503 DOC assumption**; the bullets below are what

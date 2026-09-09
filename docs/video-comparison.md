@@ -202,7 +202,7 @@ microcontroller that knows the beam position.
 | What the system needs alongside it | raster compare **inside `arm6309`** (two GPIO pins — HSYNC *and* VSYNC, or the line number has no origin); MMU **on the motherboard**, **5 ICs**; the master oscillator and the E/Q divider GAL, also on the motherboard — **7 parts** in all | very little — it absorbed the SAM and the VDG | **PLA for banking, 2× CIA for timers and interrupts** |
 | Programmable logic | **2 × `ATF1508AS` + 1 × `GAL22V10`** (`graphics.md` §10.1.6) | none — mask ROM | none |
 | Power | **~0.5–0.85 A, 0.65 A nominal** ⚠ estimate, design to 1 A (`graphics.md` §14.2) | one chip | one chip, famously hot |
-| Area | ~150 cm² on a 160 cm² Eurocard | a socket | a socket |
+| Area | **99.1 cm² of courtyard on a 100 × 180 mm card** — measured by `hardware/place/`, not estimated | a socket | a socket |
 | Buildable from parts available today | **yes** | no | no |
 
 That last row is the card's real justification. The other two columns describe chips nobody
@@ -232,21 +232,22 @@ can buy.
 | Availability in 2026 | **arm6309 card** — the only one you can still build |
 
 **Summary.** The card wins every axis that memory bandwidth and colour depth can buy,
-because it is spending 40 packages, ~1.5 A and three to seven years of hindsight to do
-it. It loses
-on exactly the things integration buys: TV output, one chip instead of a Eurocard — and it
-has no answer at all to the VIC-II's sprites, which remain the single best-spent transistor
-budget of the three.
+because it is spending **27 packages, ~0.65 A** and three to seven years of hindsight to
+do it. It loses on exactly the things integration buys: TV output, one chip instead of a
+board — and it has no answer at all to the VIC-II's sprites, which remain the single
+best-spent transistor budget of the three.
 
 **The text row is the one that moved.** It was the GIME's clearest structural win, and
 `graphics.md` §6.4 closes it for **+1 IC and 1–2 GALs**: the tile address is bit
 concatenation rather than arithmetic, and the colour path costs nothing because the palette
-LUT is 32K×8 ×2 with 256 entries used — the attribute table lives in the dead 127/128 of
-its address space. Two qualifications, both real:
+LUT is one `IS61C6416` 64K×16 with 256 entries used — the attribute table lives in the
+dead 255/256 of its address space (`graphics.md` §14.2). Two qualifications, both real:
 
-- **It is a proposal, not the specified card.** §6.4 is one section old and its gating item
-  — whether the scan-address and sequencer GAL pairs have the spare *pins* — is open
-  (`graphics.md` §19 item 15). Until that fit closes, Rev A's row above is the true one.
+- **It is built in the address path and a placeholder in the fetch path.** The CPLDs are
+  fitted and `check:tile` evaluates the fitted address mux against the model over every
+  cell, pixel and code; `check:cadence` runs the fetch sequence over a whole line
+  (`graphics.md` §19 item 15(c)). Rev A's row above is still what a builder gets until
+  both are on a bench.
 - **The GIME still wins the thing it was built for.** Its character generator is in
   silicon at zero marginal cost; this one costs packages, GAL capacity, and a mode that
   cannot mix with per-pixel graphics except at a scanline boundary via the list engine.

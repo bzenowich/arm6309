@@ -49,14 +49,19 @@ find-and-replace the earlier text implied.
 This machine has no PTM. The audio card's general-purpose timer (`audio.md` §8.2) is the
 only programmable timer in the machine, it interrupts on `/FIRQ`, and it is not readable
 as a 6840. ASSIST09's timer-dependent commands need either stubbing out or rewriting
-against that timer — and note `$E000` is inside the shadow-ROM window, so the equate
-collides with the code itself.
+against that timer — and note `$E000` is where `BOOT` mode puts the boot ROM
+(`machine.md` §7.2), so the equate collides with the code itself.
 
-**Also worth knowing before bring-up:** `machine.md` §7.2's shadow ROM is served by the
-CPU module, so a monitor image lives in STM32 flash rather than on an EPROM. That makes
-iterating on it a firmware reflash, which is faster than a programmer — and it means the
-monitor is only available on *this* machine, not on the CoCo 3 drop-in, where the
-mechanism is off.
+**Also worth knowing before bring-up:** `machine.md` §7.2's boot ROM is **two
+`SST39SF040` on the motherboard**, so a monitor image is a file you burn with a
+programmer — and there is a megabyte of it, of which the boot monitor uses the first
+8 KB and a read-only NitrOS-9 ROM disk uses the rest.
+
+⚠ **And there is a convention this monitor has to keep**, because the vectors are in ROM
+and cannot be retargeted: `$FFC0`–`$FFFF` is served from ROM page 0 unconditionally, so
+**the ROM's vector table must point at a fixed RAM jump table** and software installs its
+handlers there — exactly as a CoCo does. Publishing those addresses is part of writing
+the monitor, and nothing else in the repository names them yet.
 
 ## Licensing
 

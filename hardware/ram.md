@@ -1,69 +1,76 @@
-# RAM Expansion
+# The Memory System
 
-## 512 KB to 16 MB, and the Three Ceilings That Are Not the Same Height
+## 32 MB of Map, 16 MB of DRAM, 1 MB of ROM, and the Three Ceilings That Are Not the Same Height
 
-**Question this answers:** the machine has 512 KB of system RAM and a 2 MB
-physical map. What would it take to reach **16 MB**, and what is the cheapest
-path that does not throw away the 2 MB that already works?
+**Question this answers:** what is on the motherboard between the CPU socket and the
+slots, and why. That is the MMU's address path, four SIMM sockets of DRAM, and the boot
+ROM — **the whole of the machine's memory**, because since 2026-09-08 there is no
+memory on a card except the video ring, the audio card's samples and the card buffers.
 
 > Superseded material is archived in [history.md](history.md); this document describes
 > only the present design.
 
 **Status: ⭐ decided 2026-09-08 for the memory system; brainstorm for the rest.**
-§5 and §6 are decisions — the physical map is re-carved and the memory is four
-30-pin SIMM sockets. §3's map widening comes with them because it has to (§5.1).
-Everything else is still options. Every option is priced against
-the parts that exist on [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx)
-today, and the recommendation at §10 is a staging order rather than a design.
+§5, §6 and §6.7 are decisions — the physical map is re-carved, the memory is four
+30-pin SIMM sockets, and the boot ROM is on the board. §3's map widening comes with
+them because it has to (§5.1). §§2.1, 4 and 9 are still options. Every option is priced
+against the parts on
+[`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx), which
+⚠ **still draws the nine-IC board this document superseded** — the board file is behind
+the decisions and `hardware/README.md` open item 3 is where that is tracked.
 
-> **The short answer.** The address path to 16 MB costs **one SRAM, one GAL
-> output and three backplane pins** — it is nearly free, because the MMU was
-> built with 128× more map storage than it uses. The *memory* costs a DRAM
-> controller and a SIMM bank, which is where the real work is. And the
-> **operating system tops out around 2 MB**, which is why §10 says build the
-> address path, populate 2 MB, and treat the rest as unmanaged store.
+> **The short answer.** The address path to 32 MB costs **one SRAM and one GAL
+> output** — it is nearly free, because the MMU was built with 128× more map
+> storage than it uses, and it needs **no backplane pins at all** because
+> `/IOPAGE` already does the work (§5.3). The *memory* costs a DRAM controller and
+> a SIMM bank, which is where the real work is. And the **operating system tops out
+> around 2 MB**, which is why §10 says build the address path, populate 2 MB, and
+> treat the rest as unmanaged store.
 
 ---
 
-## 0. Three ceilings, and they are at 2 MB, 16 MB and 32 packages
+## 0. Three ceilings, and only the third one is still binding
 
 Conflating these is how "how much RAM can it take?" gets a wrong answer.
 
-| Ceiling | Where it is now | Where it could be | What moves it |
+| Ceiling | Where it was | **Where it is** | What moved it |
 |---|---|---|---|
-| **Physical address** | **2 MB** — 8-bit map entries, `A20..A13` | **16 MB** at 11 bits, 32 MB at 12 | §3 — one SRAM and a GAL output |
-| **Parts** | 512 KB in one DIP-32 | **16 MB needs 32 of them**, or four SIMM sockets | §6 — DRAM, and the refresh owner the machine has never had |
-| **⚠ Operating system** | **512 KB native, ~2 MB patched** | unknown above that | §9 — NitrOS-9's memory manager, and nobody has done it |
+| **Physical address** | 2 MB — 8-bit map entries, `A20..A13` | ⭐ **32 MB** — 16-bit entries, `A24..A13` | §3 — one SRAM and a GAL output |
+| **Parts** | 512 KB in one DIP-32 | ⭐ **4–16 MB in four SIMM sockets** | §6 — DRAM, and the refresh owner the machine finally has |
+| **⚠ Operating system** | **512 KB native, ~2 MB patched** | **unchanged, and it is now the binding one** | §9 — NitrOS-9's memory manager, and nobody has done it |
 
-**The three are independent and the smallest one is the OS.** Build the first,
-buy the second, and be honest that the third is what decides how much of it
-NitrOS-9 will ever hand to a process.
+**The three are independent and the smallest one is the OS.** The first two are
+decided; be honest that the third is what decides how much of it NitrOS-9 will ever
+hand to a process.
 
 ---
 
-## 1. Where the machine is today
+## 1. Where the machine is
 
-From [`gal/README.md`](gal/README.md) and `docs/machine.md` §6.3.1, §7.1:
+From [`gal/README.md`](gal/README.md), `docs/machine.md` §6.3.1, §7.1 and §7.2, and
+§§3, 5, 6 and 6.7 below:
 
 | | |
 |---|---|
 | Logical space | 64 KB, **eight 8 KB blocks** |
-| Map entry | **8 bits = physical `A20..A13`** — 256 blocks, **2 MB** |
-| Map store | one **`CY7C128A`, 2K×8**, of which **16 bytes are used** |
-| Index | `{TASK, block}` — `TASK` is **one bit**, so two task contexts |
-| Registers | `$FFA0`–`$FFAF` sixteen entries; `$FFB0`–`$FFBF` control, **one bit, aliased 16×** |
-| System RAM | **one `AS6C4008`, 512 KB**, at `A20 = 0, A19 = 0` |
-| Physical map | `00` RAM · `01` VRAM · `1x` card buffers (`machine.md` §5 item 7) |
+| Map entry | **16 bits**, of which **12 are physical `A24..A13`** — 4096 blocks, **32 MB** (§3.1) |
+| Map store | **two `CY7C128A`, 2K×8**, read in parallel — **16 of 2048 words used** (§3.2) |
+| Index | `{TASK, block}` — ⚠ `TASK` is **one bit** on the board as drawn; §3.2 widens it to 8 for zero parts and that is step 0 of §10 |
+| Registers | `$FFA0`–`$FFAF` sixteen entries; `$FFB0` `TASK`, `$FFB1` `BOOT` (`machine.md` §3, §7.2) |
+| **System RAM** | **four 30-pin SIMM sockets, 4–16 MB of DRAM**, at physical **4–20 MB** (§6) |
+| **Boot ROM** | **1 MB**, read-only, at physical **2.0–3.0 MB** (§6.7) |
+| **SRAM on the motherboard** | **none but the map's own two** (§6.2) |
+| Physical map | §5.2 — VRAM, card buffers, ROM and four SIMM windows in a 32 MB space |
 
-**This is the GIME's architecture with the third-party 2 MB upgrade already
-applied.** A stock GIME uses 6 of its 8 entry bits — 64 blocks, 512 KB — and
-the CoCo 3 community's 2 MB boards spend the two spare bits. This machine took
-bit 7 for `A20` on 2026-09-08 and is at exactly that ceiling: **8 bits, 2 MB,
-nothing left in the byte.**
+**This started as the GIME's architecture with the third-party 2 MB upgrade already
+applied**, and it is not that any more. A stock GIME uses 6 of its 8 entry bits — 64
+blocks, 512 KB — and the CoCo 3 community's 2 MB boards spend the two spare bits. This
+machine spent the eighth on `A20` on 2026-09-08 and then **stopped being 8-bit
+entries at all**, because §5.1 showed the SIMM sockets could not be addressed
+otherwise.
 
-⚠ **So the next megabyte is not free the way the last one was.** `A20` cost one
-backplane pin and no parts because the map SRAM was already byte-wide and the
-eighth bit was already stored. **There is no ninth bit.**
+⚠ **The one thing the widening did not buy is an operating system that can use it** —
+§9, and it is the ceiling §0 says is now the binding one.
 
 ---
 
@@ -75,7 +82,7 @@ Eleven bits do not fit in a byte, and that single fact drives everything below.
 | Target | Entry bits | Blocks | Entry size |
 |---|---|---|---|
 | 512 KB | 6 | 64 | 1 byte |
-| **2 MB — today** | **8** | 256 | **1 byte** |
+| 2 MB — what this machine had until 2026-09-08 | 8 | 256 | 1 byte |
 | 4 MB | 9 | 512 | 2 bytes |
 | 8 MB | 10 | 1024 | 2 bytes |
 | 16 MB | 11 | 2048 | 2 bytes |
@@ -122,7 +129,7 @@ high byte drives `A23..A21` and five flags.
 | `A21`–`A24` to the backplane | **0** — §5.3 keeps them on the motherboard and pulls `/IOPAGE` instead |
 | Isolation `'245` | **0** — both SRAMs sit on the same `D0`–`D7`; the address picks which is written |
 | Address mux `'157` | **0** — §3.2 |
-| **Address path alone** | **9 ICs → 10** — §8 has the whole memory system at 14 |
+| **Address path alone** | **9 ICs → 10** — §8 has the whole motherboard at 17 |
 
 **Both bytes must be read in the same access**, which is why this is two
 byte-wide parts and not one wider one: translation needs `A23..A13`
@@ -183,7 +190,7 @@ Two layouts, and they differ in what they give up.
 |---|---|
 | `$FFA0`–`$FFA7` | blocks 0–7, **low byte** — `A20..A13` |
 | `$FFA8`–`$FFAF` | blocks 0–7, **high byte** — `A23..A21` + flags |
-| `$FFB0` | **`TASK`, 8 bits** (today one bit, aliased 16×) |
+| `$FFB0` | **`TASK`, 8 bits** — one bit on the board as drawn, aliased 8× on even addresses; `$FFB1` is `BOOT` (`machine.md` §3, §7.2) |
 
 **It fits the windows that exist, exactly, with no new I/O space** — and the
 `$FFB0`–`$FFBF` alias that has been carrying one bit since the map was
@@ -238,16 +245,23 @@ by `A24..A19`:
 
 | `A24..A19` | Range | Contents | Status |
 |---|---|---|---|
-| `000000` | 0.0–0.5 M | **reserved** — the natural home for §6.5's boot scratch | |
+| `000000` | 0.0–0.5 M | **reserved** | nothing answers here |
 | `000001` | 0.5–1.0 M | **VRAM** — the video ring | **unchanged** |
 | `00001x` | 1.0–2.0 M | **card buffers — 16 regions of 64 KB** | **unchanged** |
-| `0001xx` | 2.0–4.0 M | reserved | |
+| `00010x` | **2.0–3.0 M** | ⭐ **the boot ROM — 1 MB, read-only** | §6.7 |
+| `00011x` | 3.0–4.0 M | reserved | |
 | `001xxx`–`100xxx` | **4–20 M** | **four SIMM windows of 4 MB — all of system RAM** | §6 |
 | `101xxx`–`111xxx` | 20–32 M | reserved | |
 
 **Nothing that exists changes address.** VRAM keeps `A20:A19 = 01` and the card regions
 keep `A20 = 1`, so **the video card is untouched and no card document is
-re-specified.**
+re-specified.** The ROM went into the 2.0–4.0 MB block that was already reserved and
+that nothing had asked for, which is why it cost no re-carving either.
+
+⚠ **The bottom 0.5 MB is empty and stays empty.** It was reserved as "the natural home
+for a boot scratch" while §6.4 was open; §6.7 closed that without needing any, so the
+quadrant has no claimant. It is the obvious place for the next thing that needs a fixed
+physical address, and there is no such thing today.
 
 ⭐ **And system RAM is not in the bottom 4 MB at all** — it is 4–20 MB, entirely on the
 SIMMs. **Nothing cares**, because this is a block-mapped machine: physical addresses are
@@ -316,10 +330,10 @@ left**: 2 MB of SRAM against 4–16 MB of DRAM in four sockets, for four package
 | | |
 |---|---|
 | Reserved footprints | **removed** — `place/svg.ts` |
-| Motherboard | **18 → 14 ICs**, and the board shrinks with them |
+| Motherboard | **18 → 14 ICs**, and the board shrinks with them (§6.7 puts three back) |
 | The `74HC139` the footprints needed | never built; U9 does the space decode |
 
-⚠ **What it costs is the boot path** — §6.5.
+**What it cost was the boot path, for one day** — §6.4, closed by §6.7.
 
 ### 6.3 What the bank costs
 
@@ -335,32 +349,55 @@ left**: 2 MB of SRAM against 4–16 MB of DRAM in four sockets, for four package
 address, so the refresh row counter a 1980s design would have carried — a `74HC4040` and
 its mux path — is **not on this list**. One request every ~15.6 µs, arbitrated by U10.
 
-### 6.4 ⚠ The boot path, which is what the SRAM was quietly insuring
+### 6.4 ⭐ The boot path — stackless, and shorter than it sounds
 
-**With no SRAM, the machine has no memory at all until the DRAM controller is up.** The
-CPU module serves its shadow ROM and vector page without a bus cycle (`machine.md` §7.2),
-so it *executes* — but **the first `JSR` needs a stack**, and there is nowhere to put one.
+**With no SRAM, the machine has no writable memory at all until the DRAM controller is
+up.** It *executes* from the moment `/RESET` releases — `machine.md` §7.2's `BOOT` mode
+puts the boot ROM's first 8 KB behind every logical block — but **the first `JSR` needs
+a stack**, and there is nowhere to put one.
 
-Two answers, and the second is nearly free:
+**The answer is that the sequence that fixes it contains no `JSR`.** In full:
 
-| | |
-|---|---|
-| **Stackless DRAM init** | boot code brings up refresh and the map using registers only, no subroutine calls, until the first SIMM answers. The 6309 has the registers for it; it is careful assembly and a real constraint on the boot ROM |
-| ⭐ **The CPU module serves a scratch RAM** | it already serves an 8 KB shadow ROM and a 16-byte vector RAM from its own flash and SRAM. **An `STM32G431CB` has 32 KB of SRAM**; serving 2 KB of it as a logical window costs **zero ICs** and a firmware change, and it parallels §7.2 exactly |
+```
+        ; BOOT = 1 out of reset.  Every logical block reads ROM page 0.
+        ; No RAM, no stack, no subroutine calls in this block.
+        lda   #$xx                ; physical page holding the ROM's own page 0
+        sta   $FFA0 + n           ; ... one store per block, sixteen of them
+        ...
+        clr   $FFB1               ; BOOT = 0.  The map takes over.
+        lds   #stacktop           ; the first SIMM answers; ordinary code from here
+```
 
-**The second is recommended and not specified.** It also gives the machine somewhere to
-run from if a SIMM is absent or dead, which the four-SRAM version got for free and this
-one does not.
+Sixteen stores, one `CLR` and an `LDS`. **Refresh needs nothing at all**, because
+U10's refresh timer free-runs off `CLK25` from reset — `machine.md` §5 item 10's rule
+requires that of it independently, so it is not a favour asked of the DRAM controller
+but a property it has to have anyway.
+
+⚠ **The one real constraint is that the block the code is executing from must survive
+the `CLR`.** Point one map entry at physical 2.0 MB — the same ROM page 0 the code is
+already running out of — and clearing `BOOT` does not move the instruction stream.
+That is a rule about the boot code, not about the hardware, and it belongs in the ROM's
+source next to the sequence above.
+
+> **What was proposed instead, and is withdrawn.** Until §6.7 the recommendation was
+> that the CPU module serve 2 KB of its own SRAM as a logical window — zero ICs, and it
+> paralleled the shadow ROM exactly. **It is not needed, and it was the last thing
+> keeping boot inside the CPU module.** Archived in [history.md](history.md).
 
 ### 6.5 The motherboard, assembled
 
 | | ICs |
 |---|---|
-| the board as drawn today (`mainboard.circuit.tsx`) | 9 |
+| the board as drawn in `mainboard.circuit.tsx` | 9 |
 | − the DIP system RAM, removed (§6.2) | −1 |
 | + second map SRAM, 16-bit entries (§3.1) | +1 |
 | + U9 space decode, U10 SIMM timing, 3 × `'157` | +5 |
-| **total** | **14 ICs + 4 SIMM sockets** |
+| + **the boot ROM: 2 × `SST39SF040` and the `'541`** (§6.7) | **+3** |
+| **total** | **17 ICs + 4 SIMM sockets** |
+
+⚠ **`mainboard.circuit.tsx` still draws the nine.** The board file is a schematic of the
+state before §3.1, §6.2 and §6.7, and closing that gap is `hardware/README.md` open
+item 3 — it is a drawing job, not a design one.
 
 ### 6.6 ⭐ Refresh against stretched cycles — settled
 
@@ -387,6 +424,38 @@ and would have lost 50 bytes of a frame per maximal span.
 and `net.md` §3.4's dispatch arithmetic have never carried. **Small, and nobody has
 subtracted it from anything.**
 
+### 6.7 ⭐ The boot ROM — 1 MB on the motherboard, decided
+
+`machine.md` §7.2 is the owning section and carries the reasoning; this is the part of
+it that is a motherboard parts list.
+
+| Qty | Part | Role |
+|---|---|---|
+| **2** | **`SST39SF040`** — 512K×8, 5 V, 70 ns, PDIP-32 | 1 MB at physical **2.0–3.0 MB**. Physical `A19` selects between them — one literal on U9 |
+| **1** | **`74HCT541`** | drives physical `A19`–`A13` to zero while `BOOT` or `VECSEL` is asserted, so the ROM's page 0 is reachable with the map switched off |
+
+**What it needs from the logic on this board**, and none of it is a new part:
+
+| Signal | Where | Cost |
+|---|---|---|
+| `BOOT` — set by `/RESET`, cleared by a write to `$FFB1` | a registered macrocell on **U9** | 1 macrocell |
+| `VECSEL` — logical `$FFC0`–`$FFFF` | **U9**, from the logical lines that never leave this board (`machine.md` §2) | 1 term |
+| ROM `/CE` | **U9** — `BOOT · /($FF00–$FFBF)` **+** `VECSEL` **+** the physical 2.0–3.0 MB compare | 3 terms |
+| `'541` `/OE` and the map `'245`'s enable | **U9**, and they are complements of one another | 1 term |
+| ⚠ SIMM selects and the `/IOPAGE` pull, **gated off by `BOOT` and `VECSEL`** | **U9** — `A24`–`A20` float in both forced modes, so no decode above `A19` may be trusted during one | 1 literal each |
+| ROM `/OE` | `R/W`, exactly as §"`/OE` is qualified by `R/W`" argues for the SIMMs | — |
+
+⚠ **U9 was "comfortably inside a `GAL22V10`" and is no longer obviously so.** It now
+carries four SIMM window selects, the `/IOPAGE` pull of §5.3, two ROM chip selects,
+`BOOT`, `VECSEL` and the `'541`/`'245` enable pair — **ten outputs on a part that has
+ten**, before counting inputs. §11 item 6 is where that gets fitted, and the fallback
+is that `BOOT`/`VECSEL` and the enables move to U10, which carries a state machine and
+is going to be an `ATF16V8`-or-larger anyway.
+
+**Why `BOOT` closes §6.4 rather than adding to it** is that the ROM is the *only* thing
+the machine needs before there is RAM, and it needs no configuration to serve it: reset
+asserts `BOOT`, `BOOT` maps the ROM everywhere, and everything after that is stores.
+
 ## 7. The backplane — zero new pins (§5.3)
 
 **The motherboard keeps every address bit above `A20` to itself** and pulls
@@ -397,30 +466,33 @@ see. **Zero new pins.**
 [`lib/slot.ts`](lib/slot.ts) spent its last position on physical `A20` — and
 `vctrl` sits at 64 of 64 I/O, with no room for an address extension.
 
-> **What is still true** is that the connector's own justification expired when
-> the card format changed: a 240 mm edge holds 98 positions at 0.1″ where the
-> Eurocard held 39 ([`README.md`](README.md)). The DMA request/grant pair
-> `net.md` §13.1 wanted and a future rail are still waiting on that decision.
-> **RAM is no longer one of the claimants**, which makes the decision smaller
-> rather than larger.
+> **What is still true** is that the connector's own justification expired when the
+> card format changed: a 240 mm edge holds 98 positions at 0.1″ where the 100 mm
+> Eurocard the 72-pin count was derived from held 39 ([`README.md`](README.md),
+> `machine.md` §5 item 5). The DMA request/grant pair `net.md` §13.1 wanted and a
+> future rail are the two claimants left. **Neither RAM nor the boot ROM is one of
+> them** — §5.3 and §6.7 both stay on the motherboard — which makes the decision
+> smaller rather than larger, and it is not being reopened.
 
 ## 8. What it costs, assembled
 
 | | ICs | Notes |
 |---|---|---|
-| Second map SRAM | +1 | `CY7C128A`, §3.1 — **and it is what lets the footprints be populated at all** (§5.1) |
+| Second map SRAM | +1 | `CY7C128A`, §3.1 — **and it is what lets the SIMMs be addressed at all** (§5.1) |
 | U3 high-byte write strobe | 0 | pin 23 is free |
 | `TASK` widened to 8 bits | 0 | seven unused bits of an existing `'574`, §3.2 |
 | The DIP system RAM, removed | −1 | **no DIP SRAM at all — §6.2** |
 | U9 space decode | +1 | §6.3 |
 | U10 SIMM timing + 3 × `'157` | +4 | §6.3 |
-| **Motherboard** | **9 → 14** | plus four SIMM sockets |
-| Backplane | **0 pins** | §5.3 |
+| **Boot ROM: 2 × `SST39SF040` + `'541`** | **+3** | §6.7 |
+| **Motherboard** | **9 → 17** | plus four SIMM sockets |
+| Backplane | **0 pins** | §5.3, §6.7 |
 | Cards | **0 changes** | one jumper position on storage and net, §5.2 |
 
-**Up to 16 MB of DRAM for five packages and no card re-specification.** The map widening
-is the load-bearing part and it is one of the five. ⚠ **And the machine now has no SRAM
-at all**, which is §6.4's boot problem and the one thing this design gives up.
+**Up to 16 MB of DRAM for five packages, a bootable machine for three more, and no card
+re-specification.** The map widening is the load-bearing part and it is one of the
+five. ⚠ **The machine has no SRAM outside the map**, which was §6.4's boot problem until
+§6.7 made boot a sequence of stores.
 
 ## 9. ⚠ The ceiling that is not hardware
 
@@ -440,8 +512,9 @@ OS manages:
 
 - **A RAM disk**, which is the traditional answer and needs no memory manager
   at all — a driver, a bank register (§2.1!) and a window.
-- **`audio.md`'s sample memory**, which is card-local today and 128 KB
-  (`audio.md` §16 item 0 asks whether it should move into the physical map).
+- **`audio.md`'s sample memory**, which is card-local and **512 KB since 2026-09-08**
+  (`audio.md` §5). `audio.md` §5.2 decided it stays card-local: memory-mapping it costs
+  three `'157` on a card that had collapsed the mux away.
 - **`net.md`'s ring and `sdcard.md`'s block buffer**, which already live in the
   physical map and would like to be bigger.
 - **Video**, whose ring is 512 KB and whose §6.2 modes want 307 KB for one
@@ -465,16 +538,18 @@ and tried to make the OS use all of it.
 | **0** | **Widen `TASK` to 8 bits** (§3.2) | **0 ICs** | 256 resident contexts; a process switch becomes one write. Independent of everything below and the only step that helps software that exists today |
 | **1** | **Second map SRAM, 16-bit entries** (§3.1, §4) | +1 IC | the 32 MB address path — ⚠ **and the precondition for step 2**, which §5.1 is about |
 | **2** | **U9 and the SIMM bank** — 4 sockets, U10, 3 × `'157` (§6.3) | +5 ICs | **4–16 MB of DRAM: all of the machine's memory** |
+| **3** | **The boot ROM** — 2 flash + a `'541` (§6.7) | +3 ICs | ⭐ **a machine that boots standalone**, and the `$FFC0`–`$FFFF` vectors. Independent of steps 1 and 2 in hardware, and **required before either can be tested**, because nothing else puts an instruction in front of the CPU |
 | **4** | A bank-register window (§2.1) | +2 ICs | the space above the OS ceiling as an unmanaged store, without a memory-manager port |
 
 ⚠ **Step 1 before step 2 is not a preference.** The SIMM windows are at 4–20 MB and an
 8-bit map entry reaches 2 MB; **no SIMM is addressable until the entries are 16 bits
 wide.**
 
-⚠ **And there is no step that yields a working machine without DRAM any more**, which is
-what dropping the four SRAMs cost (§6.2, §6.4). The machine executes from the CPU
-module's shadow ROM and has nowhere to put a stack until a SIMM answers. **§6.4's
-scratch-RAM-in-the-module is the cheap insurance and it is not specified.**
+⚠ **And step 3 is not optional either, though it is independent.** With no SRAM there is
+no step that yields a working machine without DRAM (§6.2), and with no ROM there is no
+step that yields one that can execute at all. **Build step 3 first if you want a bench
+to test steps 1 and 2 on** — a machine with a boot ROM and no SIMMs runs the monitor out
+of ROM registers-only, which is exactly what §6.4's sequence is.
 
 ## 11. Open items
 
@@ -487,32 +562,45 @@ scratch-RAM-in-the-module is the cheap insurance and it is not specified.**
    construction.
 3. **⚠ Layout A or B** (§4) — a NitrOS-9 cost question, not a hardware one, and
    the only genuinely open part of §3.
-4. ⚠ **NEW — the boot path has no RAM** (§6.4). Either the boot ROM initialises DRAM
-   without a stack, or the CPU module serves 2 KB of its own SRAM as a window — zero
-   ICs, and it parallels `machine.md` §7.2 exactly. **Not specified, and it is the thing
-   the four SRAMs were quietly insuring.**
+4. **CLOSED 2026-09-08 — the boot path is stackless and it is eighteen instructions**
+   (§6.4). `machine.md` §7.2's motherboard ROM serves page 0 behind every logical block
+   out of reset, refresh free-runs, and the map is written with stores. The
+   scratch-RAM-in-the-CPU-module proposal is withdrawn.
 5. **Does U3 fit the second write strobe?** Pin 23 is free and `gal/README.md`
    says the part fits *"with one pin spare"*. One output costs a macrocell
    **and** a pin. **Fit it before believing §8's "+1 IC".**
-6. **Fit U9 and U10.** U9 is smaller than it was — the four SRAM chip selects went with
-   the SRAM — so it is the four SIMM windows and the `/IOPAGE` pull, comfortably inside a
-   `GAL22V10`. U10 carries the RAS/CAS state machine, refresh arbitration
-   and `/WAIT`, and has not been counted at all.
+6. **⚠ Fit U9 and U10, and U9 is no longer comfortable.** The four SRAM chip selects
+   went with the SRAM, but §6.7 put the boot ROM's two selects, `BOOT`, `VECSEL` and the
+   `'541`/`'245` enable pair back — **ten outputs on a `GAL22V10`'s ten**, before
+   counting inputs. U10 carries the RAS/CAS state machine, refresh arbitration and
+   `/WAIT`, and has not been counted at all. **Fit both before believing §8's totals**;
+   the fallback is that the boot terms move to U10.
 7. **Source the SIMMs.** 4 MB 30-pin modules were made and are not
    current-production; this is `net.md` §13.6's lesson again — **availability is
    the first question about a part.** 1 MB modules are commoner and give 4 MB.
 8. **Period audit.** 30-pin SIMMs are 1987 and in period. **16 MB in 1989 was a
    workstation** and a 2 MB CoCo 3 was exotic, so the *capacity* is a stretch
-   even though every part is not. `docs/machine.md` §15 if this is built.
+   even though every part is not. ⚠ **The boot ROM is the weaker claim**: an 8 Mbit
+   ROM is 1991-era mask/EPROM territory and the `SST39SF040` §6.7 actually specifies is
+   a **1995** flash part. It is in the same posture as the two CPLD cards — buildable
+   and honestly late — and `graphics.md` §15's audit is the model. `docs/machine.md`
+   §15 if this is built.
+
 9. **Nobody has measured a process switch**, so §3.2's "eight bus cycles to one"
    is arithmetic. Same unmeasured NitrOS-9 dispatch cost as `ps2.md` §14 item 3.
+10. **⚠ NEW — nothing burns the ROM yet.** §6.7 specifies the part and the decode; the
+    *contents* — boot monitor, the `$FFC0`–`$FFFF` vector table, the ROM-disk image and
+    the tool that assembles the three into a `.bin` — are `software/` work that does not
+    exist. [`../docs/drivewire.md`](../docs/drivewire.md) §6.1 is one of its callers,
+    and `machine.md` §7.2 is what it has to satisfy.
 
 ## 12. Cross-references
 
 | | |
 |---|---|
 | [`gal/README.md`](gal/README.md) | the MMU's register map, the entry format, and the "16 of 2048" line §3.2 turns into a capability |
-| [`../docs/machine.md`](../docs/machine.md) | §5 item 1 the 2 MB map, §5 item 5 the connector, §5 item 7 the card regions, §5 item 8 `/WAIT`, §5 item 10 stretched cycles, §7.1 system RAM and the DRAM rejection |
-| [`place/`](place/) | the placement study — `svg.ts` draws the motherboard at 14 ICs and four SIMM sockets, with no SRAM |
+| [`../docs/machine.md`](../docs/machine.md) | §5 item 1 the second megabyte, §5 item 5 the connector, §5 item 7 the card regions, §5 item 8 `/WAIT`, §5 item 10 stretched cycles, §7.1 system RAM and **§7.2 the boot ROM, which §6.7 is the parts list for** |
+| [`place/`](place/) | the placement study — `svg.ts` draws the motherboard at **17 ICs**, four SIMM sockets and the boot ROM, with no SRAM outside the map |
 | [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx) | the `'574` with seven unused bits, and U3's free pin 23 |
-| [`../audio/docs/audio.md`](../audio/docs/audio.md) §16 item 0 | the other card asking to put its memory in the physical map |
+| [`../audio/docs/audio.md`](../audio/docs/audio.md) §5.2 | the other card that asked to put its memory in the physical map, and the arithmetic that said no |
+| [`../docs/drivewire.md`](../docs/drivewire.md) | what the boot ROM's spare megabyte is *not* for, and how a new one gets onto the machine |

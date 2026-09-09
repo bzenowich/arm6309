@@ -417,7 +417,7 @@ address bit reads `V`; both halves of the old code fail it.
   console at 1 write per cell, which is fewer than the dropped Variant B's 2.
 - **⚠ "Neither CPLD has JTAG" (§10.1.6.3, §19 item 25) is no longer true.**
   `vctrl` exported `V0..V2` to `vaddr` for a field that should never have crossed;
-  removing them returned three pins on each part. The fits are now **`vaddr` 61 of
+  removing them returned three pins on each part. The fits went to **`vaddr` 61 of
   64 and `vctrl` 59 of 64 with `TMS`/`TDI`/`TDO`/`TCK` reserved**, both reporting
   "Design fits successfully" — so both parts are programmed **in circuit**. The
   superseded figures were `vaddr` 64 of 64 and `vctrl` 62 of 64, "two pins spare
@@ -425,6 +425,12 @@ address bit reads `V`; both halves of the old code fail it.
   that would buy `vctrl`'s back. §14.2 would still free six output pins; it is no
   longer what in-circuit programming waits on. `vctrl`'s declared device moved
   `f1508plcc84` → `f1508ispplcc84` with it.
+
+  ⚠ **The 59 stood for hours.** §6.4.9's fetch cadence and §8.1's window signals spent
+  the three pins again the same day and `vctrl` is at **64 of 64 I/O and 121 of 128
+  cells** — still fitting, JTAG still reserved, and with nothing spare. `vaddr` is
+  unchanged at 61 of 64. The present figures are in `graphics.md` §10.1.6.3 and
+  `cpld/vctrl.fit`; the chain 62 → 59 → 64 is in `hardware/history.md`.
 
 **§6.4.5 / §10.1.5 / §19 item 15 said the tile fetch was closed by the CPLD build.**
 §19 item 15 read *"closed by the CPLD build … what remains is bench verification with

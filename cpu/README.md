@@ -193,30 +193,35 @@ STM32_Programmer_CLI -c port=SWD -ob displ            # verify, do not skip
 **Alternative:** a pulldown on `PB8`. It works, but it forms a divider against the host's
 4.7 K address pull-up — strong enough to hold `PB8` low at reset means ~1 K, which then
 loads `A8` differently from the other fifteen address lines for the life of the board.
-Two option bits cost nothing at runtime and nothing on the BOM. Also set at this point:
-the `PF1` machine strap that gates the shadow boot ROM (see below).
+Two option bits cost nothing at runtime and nothing on the BOM. (There is nothing else to
+set: the `PF1` machine strap that used to gate the shadow boot ROM was retired on
+2026-09-08 — see below — and the pin is spare.)
 
 ---
 
-## Serving the boot ROM (homebrew machine only)
+## Serving the boot ROM — RETIRED 2026-09-08
 
-Specified in [`docs/plan.md`](docs/plan.md) §4.5, **not implemented** — Phase 1 is a timing
-spike and has no shadow ROM.
+This module served the homebrew machine's boot ROM from its own flash, because
+[`docs/machine.md`](../docs/machine.md) had nowhere else to put one: the 1 MB physical map
+had no carve-out for a ROM, and the reset vector at `$FFFE` lands inside the I/O page,
+which overrides MMU translation by design.
 
-The homebrew machine of [`docs/machine.md`](../docs/machine.md) has no boot ROM anywhere in
-its physical map, and its reset vector at `$FFFE` lands inside the I/O page, which
-overrides MMU translation by design. The machine-wide resolution puts the ROM **here**:
-this module serves logical `$E000`–`$FEFF` and `$FFC0`–`$FFEF` from **~8 KB of its own
-128 KB flash** with no bus cycle, keeps `$FF00`–`$FFBF` decoding normally so the boot code
-can reach the MMU and the cards, and serves `$FFF0`–`$FFFF` from a 16-byte internal vector
-RAM that is writable through the MMU window. A bit in the MMU window retires the shadow
-ROM once the OS is up, freeing that logical space for RAM; vector service stays on.
+**`hardware/ram.md` §5.2 re-carved the map to 32 MB and `machine.md` §7.2 put a 1 MB ROM
+on the motherboard at physical 2.0–3.0 MB.** `plan.md` §4.5 is retired with the mechanism;
+the archived text is in [`docs/history.md`](docs/history.md).
 
-**For the CoCo 3 and the Dragon 64 the whole mechanism is off** — those machines answer
-`$E000`–`$FFFF` from their own ROM, and a drop-in that served something else would not be
-a drop-in. Mode comes from a strap on `PF1`, the pinout's last spare pin, read once at
-reset. Consequence worth stating plainly: with this mechanism in the CPU, a real HD63C09E
-is not a drop-in *for the homebrew machine* — see plan §4.5.
+⭐ **Four things came back with it**, and they are the reason this is worth a heading
+rather than a deletion:
+
+| | |
+|---|---|
+| **One microcode step** | the per-address "does this read come from flash?" range test is gone from every formed address |
+| **`PF1`** | §3.2's last spare pin was the machine strap that turned the mechanism off for the CoCo 3 and the Dragon 64. **The pinout has a spare pin again** |
+| **Byte-identical firmware** | the drop-in SKU and the homebrew SKU now differ in no firmware behaviour at all — a stronger form of the "one image, three machines" property the strap existed to protect |
+| **The drop-in property** | `graphics.md` §16 item 8's *"drop a real HD63C09E into the homebrew machine"* holds again: the boot ROM is on the bus, so a part with no flash boots from it |
+
+**Nothing in this module is involved in boot any more**, which is the shortest true
+statement of what changed.
 
 ---
 
@@ -441,8 +446,9 @@ and it lives in [`../software/`](../software/).
       which is what would justify relaxing the pass gate from 14 back towards 18
 - [ ] First silicon measurement; record actuals against predictions in `cpu/docs/plan.md` §5
 
-Beyond Phase 1, and specified rather than built: the **shadow boot ROM and vector page**
-of `plan.md` §4.5 — see "Serving the boot ROM" above. It is Phase 6b, and it is what makes
-the homebrew machine boot at all.
+Beyond Phase 1, and specified rather than built: the core itself. **The shadow boot ROM
+and vector page of `plan.md` §4.5 are not on this list any more** — the machine's ROM
+moved to the motherboard on 2026-09-08 and Phase 6b was deleted with it. See "Serving the
+boot ROM" above.
 
 Predictions are recorded deliberately. A wrong one is informative.

@@ -584,8 +584,10 @@ static void test_loader_capacity(void)
           "capacity: 180 KB of samples is rejected at 128 KB populated");
     check(strstr(err, "128 KB") != NULL, "capacity: and the message names the populated size");
 
-    /* The same module fits once the other SRAMs are populated (§4.7 option 3),
-     * so the check is a bound and not a blanket refusal. */
+    /* The same module fits at the card's actual size, so the check is a bound and
+     * not a blanket refusal. 512 KB in one AS6C4008 is what audio.md 5 specifies
+     * since 2026-09-08; 128 KB is kept above as the smaller-bound case, because
+     * modplayer.md 4.7's rule is about POPULATED RAM and must work at any size. */
     card_reset(&c, sram, 512u * 1024u);
     check_eq(mod_load(&s, &c, path, err, sizeof err), 0,
              "capacity: and accepted at 512 KB populated");

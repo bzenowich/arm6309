@@ -291,7 +291,7 @@ loop — two bytes per instruction.
 > The only defence is that one document says who flips, which is why item 27 had to be
 > decided rather than left to whoever wrote the converter.
 
-`W` is 16 bits, so a >64 KB sample is two `TFM`s and **a full 128 KB card image is
+`W` is 16 bits, so a >64 KB sample is two `TFM`s and **a full 128 KB module image is
 three**: `65,535 + 65,535 + 2 = 131,072`. ([`audio.md`](audio.md) §13.2 gives the same
 count; they agree.) In the streaming loader of §4.1 the block size is the disk
 buffer, so `TFM` is issued per sector and `W` never approaches its limit — the
@@ -391,26 +391,32 @@ player did, and it is the difference between playing 98 % of a corpus and 90 %.
 
 ### 4.7 When the module does not fit
 
-[`audio.md`](audio.md) §5 populates 128 KB with footprints for 512 KB. If
-`Σ sample bytes` exceeds card RAM, the honest options in order:
+⭐ **Since 2026-09-08 it almost always does.** [`audio.md`](audio.md) §5 replaced one
+128 KB `AS6C1008` and three empty footprints with **one `AS6C4008`: all 512 KB, in one
+package, populated.** The coverage table there says 512 KB is *"everything, including the
+8-channel and OctaMED material"*, so this section's case is now the exception rather than
+the thing a builder has to plan around.
 
-1. **Reject with a clear message.** The default. "Needs 214 KB, card has 128 KB."
+If `Σ sample bytes` exceeds card RAM, the honest options in order:
+
+1. **Reject with a clear message.** The default. "Needs 640 KB, card has 512 KB."
 2. **Truncate the longest samples.** Musically destructive; do not do it silently.
-3. **Populate the other three SRAMs.** The real fix, +3 ICs, and the reason the
-   footprints are on the board.
+3. ~~**Populate the other three SRAMs.**~~ **Gone** — there are no other SRAMs and no
+   footprints. A module that does not fit 512 KB does not fit this card.
 
-There is no fourth option: sample data cannot live in system RAM, because the card
-has no bus-master path to it ([`audio.md`](audio.md) §5), and it cannot live in
-VRAM ([`graphics.md`](../../video/docs/graphics.md) §17).
+There is no fourth option: sample data cannot live in system RAM, because the card has
+no bus-master path to it and the backplane has no DMA pins ([`audio.md`](audio.md) §5.1),
+and it cannot live in VRAM ([`graphics.md`](../../video/docs/graphics.md) §17).
 
-**The rejection rule is normative, and the bound is `populated` RAM, not the
-footprint.** The comparison is against the SRAM actually fitted — 128 KB with one
-part, 512 KB with four (`audio.md` §5) — and *not* against the 512 KB the board has
-footprints for. Getting that wrong is not a cosmetic error: a module that "loads
-successfully" into RAM that is not there leaves the card fetching **unwritten SRAM at
-28 kHz**, which is §4.6's nightmare case arriving through the one path in the loader
-that exists to prevent it, and it does so silently because the error message can
-still be printing the right number while the comparison uses the wrong one.
+**The rejection rule is still normative, and the bound is still `populated` RAM.**
+⚠ **What changed is that populated and fitted are now the same number** — the board has
+one memory socket's worth of sample RAM and it is either there or the card does not work
+at all. **Do not hardcode 512 KB anyway**: read it from one constant, because getting
+this wrong is not a cosmetic error. A module that "loads successfully" into RAM that is
+not there leaves the card fetching **unwritten SRAM at 28 kHz**, which is §4.6's
+nightmare case arriving through the one path in the loader that exists to prevent it,
+and it does so silently because the error message can still be printing the right number
+while the comparison uses the wrong one.
 
 **And it must be tested.** §9's corpus row for card-RAM limits is a listening test;
 this is an arithmetic rule with an off-by-one-variable failure mode, and it needs a
@@ -914,7 +920,7 @@ each one fails loudly if a specific thing is wrong.
 | **`9xx` sample offset** | uses offset for vocal or breakbeat slicing |
 | **The filter (§5.6)** | uses `E0x`. Fails as no audible timbre change — **and pair it with a synthetic `E0x` probe A/B'd against libopenmpt's `a500`**, because "audible change" passes at both 2 poles and 5 |
 | **Loader robustness (§4.6)** | is truncated, and one that is a 15-sample Soundtracker file |
-| **Card RAM limits (§4.7)** | exceeds 128 KB of samples. Must reject cleanly, not corrupt — **and back it with a unit test**, §4.7: this is the one row that is an arithmetic rule rather than a listening test |
+| **Card RAM limits (§4.7)** | exceeds the card's sample RAM. Must reject cleanly, not corrupt — **and back it with a unit test**, §4.7: this is the one row that is an arithmetic rule rather than a listening test. ⚠ **The limit is 512 KB since `audio.md` §5** (2026-09-08), not 128; check what §4.7 and the test actually encode |
 | **Torn register writes ([`audio.md`](audio.md) §9.4)** | rewrites `PER` on every tick under vibrato, and retriggers short one-shots. Fails as intermittent clicks and, roughly once a minute, a burst of the wrong sample |
 | **Tuning ([`audio.md`](audio.md) §4.1)** | is a single sustained note. Not a module at all — the finetune and crystal errors are 12–16 cents and only a 1-cent instrument can see them (§8) |
 

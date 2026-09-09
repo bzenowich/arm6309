@@ -38,6 +38,13 @@ discrete logic and the deliverable is the document.
 breadboard **including the analog drive stage** — **comes before laying out anything**,
 because it contains the design's real unknowns.
 
+⭐ **The drive stage is specified and drawn** (§9.1, §9.2, and
+`hardware/cards/video.circuit.tsx` since 2026-09-08): a 1 kΩ/2 kΩ ladder, three NPN
+emitter followers returned to a shared `V_be` diode, a 75 Ω series source into the
+monitor's 75 Ω, and blanking by `74AHCT273` `/MR` for zero packages. **No ICs** — three
+transistors, a diode and fifteen resistors — which is what closed `design-review.md`
+§Vid-M4. It is still what step 1 has to measure.
+
 ⚠ **Both CPLDs are full in the dimension that matters — logic cells.** `vaddr` is
 **109 of 128** and `vctrl` **121 of 128**; anything added to either displaces
 something else. Pins are binding too, now: `vaddr` is 61 of 64 and `vctrl`

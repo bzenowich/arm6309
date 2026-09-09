@@ -62,11 +62,15 @@ export const MB = { W: 272, H: 224, pad: 15, slotL: 91.4, slotW: 10.16, pitch: 2
 
 /** x, y, w, h, label, kind, reserved. Overlap-checked by place.check.ts.
  *
- * hardware/ram.md §6.5: 14 ICs and four 30-pin SIMM sockets. There is no SRAM
- * on this board — §6.2 dropped all four AS6C4008 once the sockets existed, and
- * the '139 the reserved footprints would have needed was never built. What that
- * costs is the boot path (§6.4): the machine executes from the CPU module's
- * shadow ROM and has nowhere to put a stack until a SIMM answers. */
+ * hardware/ram.md §6.5: 17 ICs and four 30-pin SIMM sockets. There is no SRAM
+ * on this board except the map's own two — §6.2 dropped all four AS6C4008 once
+ * the sockets existed, and the '139 the reserved footprints would have needed
+ * was never built.
+ *
+ * The boot path that cost (§6.4) is closed by §6.7's 1 MB ROM: two SST39SF040
+ * at physical 2.0-3.0 MB, and a '541 that drives physical A19-A13 to zero while
+ * BOOT or VECSEL is asserted, so the ROM's page 0 answers with the map switched
+ * off. Boot is sixteen stores, a CLR and an LDS - no stack needed. */
 export const MB_PARTS: [number, number, number, number, string, Kind, boolean][] = [
   /* -- the MMU, two map SRAMs for 16-bit entries (ram.md §3.1) ------------ */
   [12, 140, 50.8, 15.24, "J0 6309 socket", "pld", false],
@@ -85,6 +89,10 @@ export const MB_PARTS: [number, number, number, number, string, Kind, boolean][]
   [139, 160, 20.3, 7.62, "U11 157", "bus", false],
   [139, 170, 20.3, 7.62, "U12 157", "bus", false],
   [163, 160, 20.3, 7.62, "U13 157", "bus", false],
+  /* -- the boot ROM: 1 MB and its address driver (ram.md §6.7) ------------ */
+  [105, 182, 41.9, 15.24, "U14 SST39SF040", "mem", false],
+  [105, 200, 41.9, 15.24, "U15 SST39SF040", "mem", false],
+  [12, 194, 25.4, 7.62, "U16 541 boot addr", "bus", false],
   [190, 160, 32.0, 12.0, "power in", "conn", false],
   [150, 182, 89.0, 8.0, "30-pin SIMM 0", "mem", false],
   [150, 194, 89.0, 8.0, "30-pin SIMM 1", "mem", false],
@@ -112,7 +120,8 @@ export const mbSvg = (envelopes: { len: number; label: string }[]): string => {
       `y="${pad + y + slotW / 2 + 1.3}">J${i + 1}</text>`)
   })
   o.push(`<text class="dim" style="font-size:3.0px" x="${pad + 12}" y="${pad + 137}">` +
-    `no SRAM &#8212; all memory is DRAM on four 30-pin SIMMs (ram.md 6.2)</text>`)
+    `no SRAM &#8212; all memory is DRAM on four 30-pin SIMMs (ram.md 6.2), ` +
+    `plus a 1 MB boot ROM at physical 2.0&#8211;3.0 M (ram.md 6.7)</text>`)
   for (const [x, y, w, h, lab, kind, rsv] of MB_PARTS) {
     o.push(`<rect class="${rsv ? "resv" : "pk"}" x="${pad + x}" y="${pad + y}" ` +
       `width="${w}" height="${h}" rx="0.7" style="fill:${FILL[kind]}"/>`)

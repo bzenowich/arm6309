@@ -11,11 +11,16 @@ at that, and at the five cards that plug into it.
 > Superseded material is archived in [history.md](history.md); this document describes
 > only the present design.
 
-**Status: schematic-level, and nothing is placed or routed.** Three things gate layout.
-Every package pinout is read off a datasheet — open item 1, and it was not a formality:
-see history.md's finding 4. [`gal/`](gal/) holds the motherboard GALs' equations, fitted
-as `.jed` files checked at the fuse level — fitting them found four defects in the board
-below (history.md). The video output stage (`design-review.md` §Vid-M4) has not moved.
+**Status: schematic-level, and nothing is placed or routed.** Every package pinout is
+read off a datasheet — open item 1, and it was not a formality: see history.md's
+finding 4. [`gal/`](gal/) holds the motherboard GALs' equations, fitted as `.jed` files
+checked at the fuse level — fitting them found four defects in the board below
+(history.md).
+
+⚠ **The motherboard file is behind the documents.** [`ram.md`](ram.md) §3.1, §6.2 and
+§6.7 make the board **17 ICs and four SIMM sockets** — two map SRAMs, no DIP system RAM,
+U9/U10 and three `'157`, and a 1 MB boot ROM with its `'541`. `mainboard.circuit.tsx`
+still draws the nine-IC state. **Open item 3.**
 
 > **The MMU register map is signed off (2026-09-06) and the board implements the
 > equations.** `machine.md` §5 item 3 is closed with it. `npm run check:netlist` asserts
@@ -27,10 +32,12 @@ motherboard and a card cannot disagree about what A17 is.
 
 ---
 
-## The two decisions this took
+## The three decisions this took
 
 `docs/machine.md` §5 item 5 — *"Backplane or single board?"* — left the connector, the
-slot count and the CPU module's siting open, and a pinout cannot be written without them.
+slot count and the CPU module's siting open, and a pinout cannot be written without
+them. **All three were decided here on 2026-09-06**, and `machine.md` §5 item 5 is a
+closed record of them since 2026-09-08.
 
 | | Decision | Why |
 |---|---|---|
@@ -95,8 +102,17 @@ Four properties are load-bearing, and each is checked rather than asserted:
   of row B from the clock group, each beside an `AGND` — `graphics.md` §17's "two pins and
   two grounds". Paula's channels are hard-panned and summing them to mono makes a module
   *wrong*, not quieter, so the pair is not negotiable either.
-- **5 × +5 V.** The video card is the worst case at ~1.1–1.7 A, design to 2 A
-  (`graphics.md` §14). At a conservative ~1 A per gold finger that is 5 A against 2 A.
+
+  > ⚠ **And since 2026-09-08 nothing consumes it.** `audio.md` §7.1 puts a **3.5 mm
+  > stereo jack on the audio card's own rear edge** and drives the backplane pair in
+  > parallel; there is still no chassis, no rear panel and no document that says where
+  > B32–B35 terminate. The four positions are kept — they cost nothing now that the
+  > connector is decided — and they are the **first candidates to reclaim** if it is ever
+  > re-specified, ahead of the ground allocation.
+- **5 × +5 V.** The video card is the worst case at **~0.5–0.85 A, 0.65 A nominal,
+  design to 1 A** (`graphics.md` §14.2 — the figure fell when the ten GALs became two
+  CPLDs and the seven SRAMs became four). At a conservative ~1 A per gold finger that is
+  5 A against a whole machine's 1.8–2.9 A (`machine.md` §8).
 - **Logical A13–A15 appear nowhere.** They are the map SRAM's address inputs and stay on
   the motherboard (`machine.md` §2). `lib/netlist.check.ts` proves they reach no slot.
 
@@ -125,7 +141,7 @@ The backplane carries **5 V only** — the storage card makes its own 3.3 V behi
 | [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
 | [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
 | [`cards/`](cards/) | audio, video, **io** (PS/2 + serial, merged 2026-09-08), storage, net — bus interface each | |
-| [`ram.md`](ram.md) | **the memory system — decided 2026-09-08**: 16-bit map entries, a 32 MB physical map, four 30-pin SIMM sockets of DRAM and no SRAM at all. The address path costs one SRAM because the MMU was built with 128× the map storage it uses; the rest of the document is a staged brainstorm | |
+| [`ram.md`](ram.md) | **the memory system — decided 2026-09-08**: 16-bit map entries, a 32 MB physical map, four 30-pin SIMM sockets of DRAM, **a 1 MB boot ROM** and no SRAM outside the map. The address path costs one SRAM because the MMU was built with 128× the map storage it uses; §§2.1, 4 and 9 are still options | |
 | [`place/`](place/) | **the placement study** — every board drawn 1 : 1 from its parts list, and the check that found the video card did not fit a Eurocard | + [`place/place.check.ts`](place/place.check.ts) |
 | [`gal/`](gal/) | **the programmable logic** — U3 and U6's equations in CUPL and Verilog, and [`gal/jedec/`](gal/jedec/), which assembles them into the fuse maps a programmer burns | + [`gal/mmu.check.ts`](gal/mmu.check.ts), [`gal/mmu_tb.sv`](gal/mmu_tb.sv), [`gal/jedec.check.ts`](gal/jedec.check.ts) |
 | [`vendor/mc6809/`](vendor/mc6809/) | **third-party** — Greg Miller's cycle-accurate MC6809E core, BSD, byte-identical to upstream | |
@@ -157,13 +173,19 @@ Drawing a board is a different check on a specification than reading it. Two of 
 pass's findings are applied — their record is in [history.md](history.md) — and one is a
 live DRC caveat.
 
-### 1. `machine.md` §7.1's system RAM is one part, not four (applied 2026-09-06; see history.md)
+### 1. `machine.md` §7.1's system RAM is one part, not four — and then none (2026-09-06, superseded 2026-09-08; see history.md)
 
-**One `AS6C4008` is the whole 512 KB requirement, and with one part there is nothing to
-decode**: `/CE` is the `A19 = 0 · /IOPAGE` term. [`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx)
-fits **U8 alone**, and `lib/netlist.check.ts` asserts both halves: one package, A0–A18,
-and no sight of A19. ([`ram.md`](ram.md) §6.2 has since removed the DIP SRAM from the
-decided design entirely; the board file still draws today's 9-IC state.)
+**What the layout found** was that one `AS6C4008` is the whole 512 KB requirement and
+that with one part there is nothing to decode: `/CE` is the `A19 = 0 · /IOPAGE` term.
+[`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx) fits **U8 alone**,
+and `lib/netlist.check.ts` asserts both halves — one package, A0–A18, and no sight of
+A19.
+
+⚠ **Two days later there is no DIP SRAM on the board at all.** [`ram.md`](ram.md) §6.2
+dropped it for four 30-pin SIMM sockets, and the part went to the audio card
+(`audio.md` §5). **The finding stands as a finding** — drawing the board is what showed
+the four-part decode was imaginary — and it no longer describes the design. The board
+file still draws the 9-IC state; open item 3.
 
 ### 2. `/IOSEL` is the `$FF00`–`$FF7F` window strobe, not geographic (applied 2026-09-06; see history.md)
 
@@ -209,13 +231,21 @@ memory, is in history.md.
 
 2. **The slot socket footprint is a DIP body.** Pad grid and pin numbering are right, the
    outline is not. It needs a measured footprint once a receptacle is sourced.
-3. **Nothing is placed.** Every board's components sit at the origin, so the PCB DRC
-   reports overlaps that mean nothing yet — **299 plated-hole clearance errors on the
-   motherboard alone**. It becomes a real number the moment placement starts and not
-   before. Placement waits on open item 2 and on the GAL fitting `graphics.md` §18 step 0
-   requires — the motherboard's two parts are fitted ([`gal/jedec/`](gal/jedec/)), and so
-   are the video card's two CPLDs and its `rfa` GAL ([`gal/cpld/`](gal/cpld/),
-   `gal/rfa.jed`).
+3. **⚠ Nothing is placed, and `mainboard.circuit.tsx` is behind the design.** Two
+   separate gaps:
+
+   - **The board file draws 9 ICs; the design is 17** ([`ram.md`](ram.md) §6.5). Missing:
+     the second map SRAM (§3.1), U9 and U10 and three `'157` and the four SIMM sockets
+     (§6.3), and the 1 MB boot ROM with its `'541` (§6.7). Present and wrong: U8, the
+     DIP system RAM, which §6.2 deleted. **This is a drawing job, not a design one** —
+     every part and every decode is specified.
+   - **Every board's components sit at the origin**, so the PCB DRC reports overlaps that
+     mean nothing yet — **299 plated-hole clearance errors on the motherboard alone**. It
+     becomes a real number the moment placement starts and not before. Placement waits on
+     open item 2 and on the GAL fitting `graphics.md` §18 step 0 requires — the
+     motherboard's two *existing* parts are fitted ([`gal/jedec/`](gal/jedec/)), U9 and
+     U10 are not ([`ram.md`](ram.md) §11 item 6), and the video card's two CPLDs and its
+     `rfa` GAL are ([`gal/cpld/`](gal/cpld/), `gal/rfa.jed`).
 4. **Closed 2026-09-06** — the system RAM's control lines are driven: `RAM_CE`, `RAM_OE`
    and `RAM_WE` come from **U6** ([`gal/clkdec.pld`](gal/clkdec.pld)), with `/OE`
    qualified by `R/W` rather than tied low — which removes ~90 ns of SRAM-versus-CPU
@@ -227,8 +257,15 @@ memory, is in history.md.
    mechanical and belongs with placement.
 7. **CLOSED 2026-09-08** — `machine.md` §5 item 1 is decided: the window is
    `$FF00`–`$FF7F`, 64 bytes of it free (`npm run check` prints the figure), and the
-   physical map is 2 MB — options A and D. The widening was one literal *removed* from
-   [`gal/clkdec.pld`](gal/clkdec.pld), taken while the backplane is still a table.
+   physical map gained its second megabyte — options A and D. The widening was one
+   literal *removed* from [`gal/clkdec.pld`](gal/clkdec.pld), taken while the backplane
+   is still a table. ([`ram.md`](ram.md) §5.2 has since re-carved the map to 32 MB; the
+   `$FF` window is unchanged.)
+
+8. **⚠ NEW — U9 may not fit a `GAL22V10`.** [`ram.md`](ram.md) §6.7 put the boot ROM's
+   two chip selects, `BOOT`, `VECSEL` and the `'541`/`'245` enable pair onto a part that
+   already carries four SIMM window selects and the `/IOPAGE` pull — **ten outputs on a
+   part with ten**. `ram.md` §11 item 6.
 
 ---
 

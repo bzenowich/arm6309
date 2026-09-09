@@ -8,6 +8,110 @@ kept verbatim or lightly trimmed, because the archive is the record.
 
 ---
 
+## `ram.md` — the header, §0 and §1: "512 KB to 16 MB" (rewritten 2026-09-08)
+
+The document was titled **"RAM Expansion — 512 KB to 16 MB, and the Three Ceilings That
+Are Not the Same Height"** and opened:
+
+> **Question this answers:** the machine has 512 KB of system RAM and a 2 MB physical
+> map. What would it take to reach **16 MB**, and what is the cheapest path that does not
+> throw away the 2 MB that already works?
+>
+> **The short answer.** The address path to 16 MB costs **one SRAM, one GAL output and
+> three backplane pins** — it is nearly free, because the MMU was built with 128× more
+> map storage than it uses.
+
+§0's ceilings table had a **"Where it is now"** column reading *2 MB — 8-bit map entries*
+and *512 KB in one DIP-32*, and §1 — headed **"Where the machine is today"** — listed an
+8-bit map entry, one `CY7C128A`, `TASK` at one bit, and *"System RAM: **one `AS6C4008`,
+512 KB**, at `A20 = 0, A19 = 0`"*, closing:
+
+> **This is the GIME's architecture with the third-party 2 MB upgrade already applied.**
+> ... This machine took bit 7 for `A20` on 2026-09-08 and is at exactly that ceiling:
+> **8 bits, 2 MB, nothing left in the byte.**
+>
+> ⚠ **So the next megabyte is not free the way the last one was.** `A20` cost one
+> backplane pin and no parts because the map SRAM was already byte-wide and the eighth
+> bit was already stored. **There is no ninth bit.**
+
+**Every line of that was true when written and none of it survived the same day.** §§5
+and 6 of the same document decided the 32 MB map and the SIMM sockets, and §6.2 deleted
+the DIP SRAM — so the "today" the header, §0 and §1 described was two sections earlier in
+the file that superseded it. The **three backplane pins** in the short answer were struck
+by §5.3 before the ink dried (`/IOPAGE` does the work instead, for zero pins), and this
+archive's own entry below records that.
+
+**Replaced by "The Memory System — 32 MB of Map, 16 MB of DRAM, 1 MB of ROM"**, with §1
+retitled "Where the machine is" and describing the decided design.
+
+---
+
+## `ram.md` §6.4 — the boot path, and the scratch RAM that is not needed
+
+§6.4 was headed **"⚠ The boot path, which is what the SRAM was quietly insuring"** and
+offered two answers:
+
+> | | |
+> |---|---|
+> | **Stackless DRAM init** | boot code brings up refresh and the map using registers only, no subroutine calls, until the first SIMM answers. The 6309 has the registers for it; it is careful assembly and a real constraint on the boot ROM |
+> | ⭐ **The CPU module serves a scratch RAM** | it already serves an 8 KB shadow ROM and a 16-byte vector RAM from its own flash and SRAM. **An `STM32G431CB` has 32 KB of SRAM**; serving 2 KB of it as a logical window costs **zero ICs** and a firmware change, and it parallels §7.2 exactly |
+>
+> **The second is recommended and not specified.** It also gives the machine somewhere to
+> run from if a SIMM is absent or dead, which the four-SRAM version got for free and this
+> one does not.
+
+§8 closed on *"the machine now has no SRAM at all, which is §6.4's boot problem and the
+one thing this design gives up"*, §10 warned *"there is no step that yields a working
+machine without DRAM any more"*, and §11 item 4 carried it open.
+
+**The first answer is the one taken, and it turned out not to be careful assembly.**
+`machine.md` §7.2's boot sequence is sixteen stores to `$FFA0`–`$FFAF`, a `CLR` of
+`$FFB1` and an `LDS` — no `JSR`, so no stack — and **refresh needs no initialisation at
+all**, because U10's refresh timer free-runs off `CLK25` from reset (which
+`machine.md` §5 item 10's rule requires of it independently).
+
+**The scratch-RAM proposal is withdrawn**, and the reason is worth keeping: it was the
+last thing that would have kept boot inside the CPU module, and `cpu/docs/plan.md` §4.5 —
+the mechanism it paralleled — was retired the same day.
+
+---
+
+## `ram.md` §5.2 — the bottom quadrant was "the natural home for a boot scratch"
+
+The 0.0–0.5 MB row of §5.2's map read **"reserved — the natural home for §6.5's boot
+scratch"**, and `machine.md` §2's copy of the table said **"reserved — no RAM here;
+§7.1's boot-scratch question lands here"**. There is no boot scratch (see above), so the
+quadrant has no claimant at all; both tables now say so, and the boot ROM went into the
+2.0–4.0 MB block that was already reserved.
+
+---
+
+## `README.md` finding 1 / open item 3 — the motherboard's system RAM
+
+Finding 1 read **"`machine.md` §7.1's system RAM is one part, not four"** and described
+the board as fitting **U8 alone**, an `AS6C4008` whose `/CE` is the `A19 = 0 · /IOPAGE`
+term, with a parenthetical noting that `ram.md` §6.2 had since removed the DIP SRAM. That
+parenthetical was doing too much work: the finding read as present design and the design
+had no DIP SRAM in it.
+
+**The finding is kept as a finding** — drawing the board is what showed the four-part
+decode was imaginary — and rewritten to say plainly that the part is gone, that it went
+to the audio card (`audio.md` §5), and that the board file has not caught up. Open item 3
+now names both gaps: the board file draws 9 ICs where the design is 17, and nothing is
+placed.
+
+**The status paragraph also said "Three things gate layout"** and listed the video output
+stage among them; `graphics.md` §9.1–§9.3 specified it and
+`hardware/cards/video.circuit.tsx` draws it, so that clause is gone.
+
+**And the slot's power bullet quoted the video card at "~1.1–1.7 A, design to 2 A"**,
+which `graphics.md` §14.2 had already taken to **~0.5–0.85 A, 0.65 A nominal** when the
+ten GALs became two CPLDs and the seven SRAMs became four. `lib/slot.check.ts` carried
+the same stale figure in a comment and in `WORST_CARD_A`; both are corrected, and the
+check still passes with 5 A of finger against it.
+
+---
+
 ## README.md §The two decisions — card format: Eurocard → 250 × 100 → per-card lengths
 
 The card-format cell carried its own chain: ⚠ *"**Was a 100 × 160 mm Eurocard.**

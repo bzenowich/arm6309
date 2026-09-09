@@ -62,7 +62,7 @@ so the two documents agree.
 | **Address cost** | **Four bytes at `$FF58`–`$FF5B`, plus one 64 KB physical region at `A20 = 1`** of which 2 KB is used. | §6.1 |
 | **IC count** | **14**, plus a 3.3 V regulator and the socket. | §8 |
 
-**Net: 14 ICs**, against video's 30, audio's 29, net's 12, PS/2's 11 and serial's 3.
+**Net: 14 ICs**, against video's 27, audio's 31, net's 12, PS/2's 11 and serial's 3.
 
 > ⚠ **Half of this card is the buffer's plumbing, and each of those packages buys exactly
 > one thing.** A `6116` for the buffer, a `74HC4040` for the block address, a `74HCT245`
@@ -1132,11 +1132,20 @@ buildable one goes in the BOM. If §10's exception is refused, this is what gets
 NitrOS-9's DriveWire serves virtual disks over a serial link, and `serial.md`'s card
 exists. Zero ICs.
 
-**Rejected as the primary path, kept as a bootstrap.** A CoCo runs DriveWire at 230,400
-baud through its bit-banger; `serial.md` §3.1's 6551 tops out at **19,200 baud = 1,920 B/s = 1.9 KiB/s**, and
-§5 there shows the interrupt load is what bounds it, not the baud generator. That is 360×
-slower than this card. But it needs no hardware at all, which makes it the right way to get
-a filesystem onto the machine before this card exists — §12 step 0.
+**Rejected as the primary path, kept as the development link.** A CoCo runs DriveWire at
+230,400 baud through its bit-banger; `serial.md` §3.1's 6551 tops out at **19,200
+baud = 1,920 B/s = 1.9 KiB/s**, and §5 there shows the interrupt load is what bounds it,
+not the baud generator. That is 360× slower than this card, and **62× slower even with
+§4.5's `16C550` at 115,200**, which is the tier
+[`drivewire.md`](../../docs/drivewire.md) §3 plans against.
+
+⚠ **It is no longer "the right way to get a filesystem onto the machine before this card
+exists", because it is no longer the only way.** `machine.md` §7.2's 1 MB motherboard ROM
+(2026-09-08) holds the NitrOS-9 distribution as a read-only ROM disk, so the machine boots
+standalone. What DriveWire is uniquely good at — a **writable** volume whose media is a
+file on the developer's desk, and the machine's only source of a **wall-clock time**
+(there is no RTC anywhere in this design) — is in
+[`drivewire.md`](../../docs/drivewire.md), which is the owning document.
 
 ### 11.4 SCSI — in period, and genuinely good
 
@@ -1209,7 +1218,7 @@ them — about ten bytes of driver.
 
 | # | Step | Exit criterion |
 |---|---|---|
-| 0 | **Get a filesystem onto the machine over DriveWire** (§11.3), before any of this exists | NitrOS-9 boots and mounts a virtual disk |
+| 0 | **Have a NitrOS-9 to develop the driver under** — boot it from `machine.md` §7.2's ROM disk, and bring up [`drivewire.md`](../../docs/drivewire.md) for a *writable* volume. Neither needs this card | NitrOS-9 boots, and a `.dsk` on the host mounts as `/x0` |
 | 1 | **⚠ Settle `TFM`'s interrupt/resume behaviour from silicon** — `plan.md` §7 already wants this | a capture from a real HD63C09E answering **three** questions: **(a)** is the *source* re-read on resume, and at what point — the recorded behaviour §4 rests on; **(b)** **can the *destination* be written twice** — gates §9.2's masking, and `modplayer.md` §4.4's upload with it; **(c)** do dummy bus cycles drive `$FFFF` — gates §3.4, and is a requirement on the core whatever silicon says. **Then §11.6's choice, which is the owner's.** |
 | 2 | **Full §9.0 initialisation on the bus exerciser** (`graphics.md` §16.1), init clock only, no 6309 core | `CMD0` → `CMD8` check-pattern echo → `ACMD41` → `CMD58` with `CCS` = 1; the card's `CID` reads back correctly; **an SDSC card is refused cleanly rather than mis-addressed** (§9.0.1) |
 | 3 | **Fit the GALs**; switch to the fast clock | burst measured at ≤636 ns; §8's macrocell arithmetic confirmed, or the card becomes 15 ICs (§8.1); **§6.6's `DI` hold margin scoped at the card's own pin**, and the inverted-`SCK` decision taken |
@@ -1318,7 +1327,8 @@ will experience**; every other number in this document is a component of it.
 | [`net/docs/net.md`](../../net/docs/net.md) | §3.2 cites §4's hazard statement and §4.2's idempotence argument; §5.1 holds `$FF5C`–`$FF5F` |
 | [`graphics.md`](../../video/docs/graphics.md) | §16.1 the bus exerciser; §16 the "drop a real HD63C09E in" property §11.6 weighs; §17 the disk-controller reservation this card claims half of |
 | [`ps2.md`](../../io/ps2/docs/ps2.md) | §4.1 the `'595` storage-register pattern; §4.2 the `HC`-versus-`HCT` lesson §7 repeats |
-| [`serial.md`](../../io/serial/docs/serial.md) | §3.1 the 6551 that bounds §11.3's DriveWire bootstrap; §4.4 the bit-banging argument §11.5 distinguishes itself from |
+| [`serial.md`](../../io/serial/docs/serial.md) | §3.1 the 6551 that bounds §11.3's DriveWire link and §4.5 the `16C550` that unbounds it; §4.4 the bit-banging argument §11.5 distinguishes itself from |
+| [`drivewire.md`](../../docs/drivewire.md) | the owning document for §11.3 — throughput, the client, the wall clock, and why the boot ROM changed its job |
 | HD63B09EP Technical Reference Guide; *A Memo on the Secret Features of 6309* | §4.1's `TFM` behaviour. ⚠ Neither is in `reference/` |
 | [`audio.md`](../../audio/docs/audio.md) | §9.3 the read-triggers-prefetch pattern §3.1 shares; §13.2 `ADATA`/`SDATA`'s auto-increment, which makes §9.2's doubled-write caveat apply there too |
 | SD Simplified Specification (Physical Layer, SPI mode) | §9.0's init dialog, §9.1's tokens, §9.2's write sequence, §9.3's R1/error tokens and timeout ceilings. ⚠ **Not in `reference/` — §13 item 2, and §9 is entirely recalled until it is** |

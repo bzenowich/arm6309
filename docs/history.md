@@ -12,6 +12,125 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## §0 / §3 / §7.2 — boot: the CPU module's shadow ROM → a 1 MB ROM on the motherboard (2026-09-08)
+
+§0's boot row read **"the CPU module serves an ~8 KB shadow ROM and the vector page
+from its own flash — §7.2. No ROM chip on the motherboard"**, and the two-targets table
+below it said this machine boots from *"the CPU module's shadow ROM"*.
+
+§7.2 was headed **"Boot — the CPU module serves the vectors and a shadow ROM"** and read,
+in full:
+
+> **The decision.** The CPU module already synthesises every bus cycle in firmware, so it
+> can answer a fetch without running one:
+>
+> | | |
+> |---|---|
+> | **Shadow ROM** | at reset, logical `$E000`–`$FFFF` is served from ~8 KB of the STM32's 128 KB flash **without a bus cycle** — except `$FF00`–`$FFBF`, which continues to decode normally to cards and the MMU, so I/O works during boot |
+> | **Vector page** | `$FFF0`–`$FFFF` is served from a 16-byte **vector RAM inside the CPU module**, writable through the **`$FF90`–`$FF9F`** window (§3 — `$FFA0`–`$FFAF` is sixteen block registers and has no room), so the OS can retarget the vectors. Initialised from flash at reset to point into the shadow ROM. **Vector service is always on** — it is the one thing that must never depend on a configuration bit |
+> | **Disable** | a bit **latched inside the module** turns off the `$E000`–`$FEFF` shadow once the OS is up, returning that logical space to RAM. NitrOS-9 Level 2 wants it. It cannot be a motherboard latch — every one of the socket's 40 pins is defined, so there is no wire to carry the bit (§3) |
+> | **CoCo 3 drop-in** | the whole mechanism is **off**. That machine has its own ROM, and a drop-in that shadowed it would be a drop-in that broke it |
+>
+> **Cost:** zero ICs, ~8 KB of a 128 KB flash, and one more line in the divergence ledger
+> (§5 item 6). **What it buys:** bring-up needs no ROM chip, no programmer, and no
+> carve-out drawn into a physical map that has no room for one.
+>
+> > **The alternative, recorded because it is genuinely close.** An 8 KB EPROM plus a decode
+> > on the motherboard — 2 ICs, no CPU divergence, and a `HD63C09E` could then be dropped
+> > into the socket and the machine would still boot. It needs an explicit ROM/vector
+> > carve-out cut out of the I/O page, and it puts the boot firmware on a part you have to
+> > program. It was not taken because the CPU-side answer costs nothing and this machine's
+> > CPU is firmware anyway — but if the "drop a real 6309 in" property is ever wanted back,
+> > **this is the switch that returns it.**
+> >
+> > ⚠ **And that property is what this decision spends.** `graphics.md` §16 item 8 offers
+> > "drop a real HD63C09E in" as a standing sanity check on the rest of the machine. Under
+> > the shadow-ROM answer it no longer holds: a real 6309 in the socket fetches `$FFFE` from
+> > a bus with nothing on it. Marked there too.
+
+**Replaced 2026-09-08 by a 1 MB ROM on the motherboard** — 2 × `SST39SF040` and a
+`74HCT541`, at physical 2.0–3.0 MB, with a `BOOT` latch at `$FFB1` and an unconditional
+`$FFC0`–`$FFFF` decode. **The alternative the old §7.2 recorded is the one that was
+taken**, at three packages rather than two and a megabyte rather than eight kilobytes.
+
+**Three things changed under it, and none of them is that the reasoning was wrong.**
+
+1. **The physical map got room.** The old text's *"nor is there anywhere to put a ROM
+   chip: the physical map has no carve-out for one"* was literally true of the 1 MB map
+   it was written against. `ram.md` §5.2's 32 MB re-carve (2026-09-08) left 2.0–4.0 MB
+   reserved with no claimant.
+2. **A megabyte does something eight kilobytes cannot.** The old design's job was to get
+   the first instruction executed. The new one holds the whole NitrOS-9 Level 2
+   distribution as a read-only ROM disk (~645 KB of `.dsk` images in ~1016 KB), so the
+   machine boots to a shell with no SD card, no serial cable and no host — which is what
+   dissolves `sdcard.md` §12 step 0's circularity rather than working around it.
+3. **The vector RAM's benefit turned out to be a divergence.** A writable vector page
+   *"so the OS can retarget the vectors"* is not what a CoCo has; a CoCo has ROM vectors
+   pointing at a fixed RAM jump table, and NitrOS-9 is written against that. Putting the
+   vectors in ROM removed a ledger entry instead of shrinking one.
+
+**What the old design got right and the new one inherits verbatim** is the `$FF00`–`$FFBF`
+exception: I/O and the MMU decode normally while the ROM is serving everything else, so
+boot code can write the map. `BOOT` mode carries the same rule with the same boundary.
+
+**`$FF90`–`$FF9F` is free again.** It was the vector RAM's write window and it was never
+decoded on the motherboard; §3's note that "nothing in this machine decodes
+`$FF80`–`$FF9F`" is now unqualified.
+
+---
+
+## §5 item 5 — "Backplane or single board? Still open." (closed 2026-09-06, recorded 2026-09-08)
+
+The item read:
+
+> **Backplane or single board? Still open.** Every card document assumes slots and a
+> `/IOSEL`, but nothing states how many slots, what the connector is, or whether the
+> CPU module is a card or the motherboard.
+>
+> > **And it has a lot to carry.** The motherboard's parts list is not just the MMU and
+> > the divider: §7.1's SIMM sockets and DRAM controller, §2.1's reset supervisor and
+> > pull-ups, and the master oscillator all live there. The connector question has also
+> > acquired an answer it must satisfy — §8's supply is amps-scale, so **how many power
+> > and ground pins per slot** is part of this decision, not a detail after it.
+
+**It had been answered for two days and this document had not noticed.**
+[`hardware/README.md`](../hardware/README.md) decided all three parts on 2026-09-06 — a
+72-pin 0.1″ card edge, a per-card 100 mm × 120/180/240 mm format, and the CPU module in
+a 40-pin DIP socket on the motherboard — and `hardware/lib/slot.ts` has carried the
+pinout as data since, with `slot.check.ts` re-deriving the claims §2 makes about it.
+The power question the item's last sentence raised was answered with the connector:
+5 × +5 V and 18 grounds.
+
+**This is the second time a machine-level open item outlived its answer** (the first was
+§5 item 1, closed by the same directory), and the cause is the same: the owning document
+moved and the index did not. The item is now a closed record with the decisions in it.
+
+---
+
+## §6 / §8 — the video output stage, and "a single Eurocard" (2026-09-08)
+
+**§6's cross-card table carried "Specify the video output stage — the R-2R ladders
+cannot drive 75 Ω from `'574` outputs, and blanking has no mechanism", citing
+`design-review.md` §Vid-M4.** Both halves had been specified: `graphics.md` §9.1 answers
+the drive stage with a 1 kΩ/2 kΩ ladder, three NPN emitter followers on a shared `V_be`
+reference and a 75 Ω series source, arithmetic included; §9.2 answers blanking by
+specifying the post-LUT latches as `74AHCT273` and driving `/MR` from the existing
+`BLANK` term, for zero packages; and §9.3 deletes the `BORDER` register because VGA has
+no overscan to paint one into. The row is a closed record now, and the stage is drawn in
+`hardware/cards/video.circuit.tsx`.
+
+**§8's power section ended on "⚠ Whether 29 ICs of audio fit a single Eurocard has to be
+measured."** The machine's card format stopped being a Eurocard on 2026-09-08 (§5
+item 5 above); the measurement is still owed, and it is owed against a 100 × 180 mm card
+and an analogue section that has since grown to twelve converter halves and thirteen
+amplifier channels (`audio.md` §11.1).
+
+**§8 also asked "how many power and ground pins per slot connector — which §5 item 5
+must answer as part of choosing the connector."** Answered with the connector: 5 × +5 V,
+18 grounds, and a ground on both sides of every clock and sync line.
+
+---
+
 # Part I — `machine.md`
 
 ## §intro — from pure collation to a document that decides (2026-09-04)

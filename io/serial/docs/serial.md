@@ -921,11 +921,15 @@ central one shipped inside a CoCo.
    fallback holds `E` for the whole machine, replayer included, and should not be planned
    on. **Owner's decision; this card cannot make it alone.**
 
-10. **One port, and a second is affordable.** **The window has 64 free bytes**, so two
-   `16C550`s are sixteen addresses out of sixty-four, and one package each. §2 does not
-   need one; **a modem on one port and a DriveWire link on the other is a real use**,
-   and it is not an address problem. If a second is ever wanted it is item 4's problem
-   first, not a circuit problem.
+10. **One port, and a second is affordable — but DriveWire no longer needs it.** **The
+   window has 64 free bytes**, so two `16C550`s are sixteen addresses out of sixty-four,
+   and one package each. The use that motivated it was *"a modem on one port and a
+   DriveWire link on the other"* — and [`drivewire.md`](../../../docs/drivewire.md) §5
+   points out that DriveWire multiplexes **up to 15 virtual serial channels over the one
+   link**, so the modem and the disk share a physical port. ⚠ **The item is not closed**,
+   because two independent physical ports is still a thing somebody may want; it is
+   demoted from "a real use" to "no use has been named". Item 4's problem first, not a
+   circuit problem.
 
 11. **The `/IRQ`-masked window on the PS/2 card costs this card data** (§5.1 point 4,
    `ps2.md` §7.1). 0.8–1.3 ms with `/IRQ` off against a 521 µs byte time at 19,200 baud is
@@ -949,6 +953,7 @@ central one shipped inside a CoCo.
 | [`docs/design-review.md`](../../../docs/design-review.md) | §6, 2026-09-04 — the review whose findings (IO-S1…S7) shaped this design; what each one changed is archived in [history.md](history.md) |
 | [`audio.md`](../../../audio/docs/audio.md) | §8.1 why `/FIRQ` outranks `/IRQ`, which is what kills §4.4 |
 | [`graphics.md`](../../../video/docs/graphics.md) | §16.1 the bus exerciser; §17 the backplane and the widen-the-window warning |
+| [`drivewire.md`](../../../docs/drivewire.md) | **the strongest single argument for §4.5's tier** — §3 there prices DriveWire at 1.8 KiB/s and 37 % of the CPU on the 6551 against 11.0 KiB/s and 16 % on a `16C550`; §2.1 is the PS/2 collision from this card's item 11, one part further along |
 | **CoCopedia, *Deluxe RS-232 Program Pak*; Tandy *Deluxe RS-232 Operation Manual*** | §3.2's precedent — a 6551 on a 6809 bus, shipped |
 | Wikipedia, *MOS Technology 6551* and *WDC 65C51*; Jeff Tranter, *The 6551 ACIA*; 6502.org forum | §3.1 and §3.3 |
 | `~/code/colormin/docs/backplane.md` §5 | the discrete alternative §4.1 rejects |

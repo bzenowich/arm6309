@@ -164,7 +164,7 @@ corrupt it.
 --ntsc          3.579545 MHz colour clock (audio.md §4.1)
 --led           start with the LED filter on
 --bypass        bypass all filtering -- WRONG for modules, see audio.md §7
---ram KB        populated sample RAM, 1..512 (default 128)
+--ram KB        populated sample RAM, 1..512 (default 512 -- audio.md §5)
 --info          parse and print, do not play
 ```
 

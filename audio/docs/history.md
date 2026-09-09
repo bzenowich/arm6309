@@ -9,6 +9,138 @@ to say, and why each claim changed. Section numbers refer to `audio.md`. "Aud-*"
 
 ---
 
+## §5 / §5.3 / §10 / §11.1 / §16 items 0 and 19 — the memory consolidated and panning was built (2026-09-08)
+
+Three changes landed together and the count went **29 → 31**. They are one entry
+because each one's arithmetic uses the others'.
+
+### §5 — the sample RAM was 128 KB with three empty footprints
+
+The section read **"1 × AS6C1008-55 (128 KB), footprint for 4 (512 KB)"**, with the
+coverage table calling 128 KB *"the large majority of the ProTracker corpus"* and the
+recommendation *"populate one chip; leave three footprints. That is +0 cost now and
++3 ICs later, and it is the same 'leave the expansion on the board' call the video card
+makes for its interleave."* §10's "where it will grow" carried **"+3 for 512 KB of
+sample RAM"** as a standing line.
+
+**Replaced by one `AS6C4008`, 512K×8, in the same 600-mil DIP-32** — all of the memory,
+today, in one package, and the three footprints deleted from the board. The part became
+available to this card on the same day for a reason worth recording: `ram.md` §6.2
+dropped the motherboard's DIP system RAM for SIMM sockets, and the `AS6C4008` datasheet,
+footprint and `hardware/lib/parts.ts` entry were left with nothing citing them. **The
+machine's parts list did not grow; a line item moved from one board to another.**
+
+The video card's §14.2 had made the same move hours earlier and the argument is the
+same one: *two of the four SRAM packages were width and expansion, not capacity.*
+
+### §5.1 — "system RAM is cheap in bandwidth but needs a mechanism the machine does not have"
+
+The system-RAM row of §5's options table read: *"Cheap in **bandwidth**, but needs a
+bus-master and an arbitration mechanism the machine does not have. Not worth inventing
+for 5 %."* That was true and it read as a cost judgement that could be revisited.
+
+**It cannot be revisited, and §5.1 now says why in three structural terms** rather than
+one economic one: the backplane's last position went to physical `A20` on 2026-09-08 and
+`net.md` §13.1's DMA request/grant pair lost that competition, so **there are no pins**;
+`machine.md` §5 item 7's fixed-phase scheme is host-facing and keyed to `CLK25` and `E`,
+which §5 item 10's rule forbids a card's internal scheduling from using; and this card's
+scheduling free-runs on a 28.37516 MHz can with no integral relationship to `CLK25` at
+all. The 5.4 % figure survives as arithmetic and stops being the reason.
+
+### §16 item 0 — "should the sample RAM move into the machine's physical map?"
+
+Opened 2026-09-08 when `machine.md` §5 item 7 created the sixteen 64 KB card regions and
+storage and net both claimed one. The item listed what mapping would buy — a 238 ms
+chunked upload becoming 188 ms unchunked, the `TFM` doubled-write exposure gone, and the
+ability to stream a module larger than the sample RAM — and priced the cost as *"the
+same address and data plumbing the other two cards paid — `sdcard.md` §8 priced it at
+five 74-series packages"*, with the note that **128 KB is two regions of the sixteen**.
+It closed: *"Not decided here. The 50 ms is minor; closing the machine's last
+doubled-write exposure is not, and it is the argument that should decide this."*
+
+**Decided 2026-09-08: no, and the price is three packages rather than five.** §5.2 has
+it. The blocker is §9.5's single-source sample-RAM address — the sentence that made the
+card cheap — and a memory-mapped window needs a second source, which is a 19-bit 2:1 mux
+(**3 × `74HC157`**) or nineteen more pins on a CPLD at 50 of 64. The decisive difference
+from storage and net is that **their port was in the way of every sector and every
+frame, and this card's is used once per module load.** The two-regions note survives:
+512 KB is now eight regions of the sixteen, which makes the mapped option worse rather
+than better.
+
+⚠ **The consequence recorded with the decision is that this card is the last one in the
+machine whose bulk transfer targets a side-effecting port**, and that what retires the
+exposure is `sdcard.md` §11.6's `TFM` firmware choice, not anything on this board.
+
+### §3.3 / §5.3 / §10 — the state file was three `CY7C128A`
+
+§3.3 read: *"...and why the state file is **three** `2K×8` packages rather than four."*
+§10's "where it could shrink" offered **"−2 if the state file goes to 16 bits, at the
+price of two accesses per slot, a 17.5 ns SRAM that did not exist in 1989, and an
+address latch for `PTR` that would cost the packages back."*
+
+**Replaced by two `IS61C6416AL-12TLI`, 64K×16, TSOP-44** — a 32-bit file in two
+packages, at 12 ns rather than 15. The shrink line's premise was that width had to be
+bought with *time*; it did not, because `graphics.md` §14.2.1 had just put a stocked 5 V
+×16 part on the machine's parts list for the palette LUT. The old row is replaced by a
+new one — **−1 more if `PEND[7:0]` moves into the CPLD and the file becomes a single
+part** — which is §16 item 28 and is not costed.
+
+⚠ **The cost is the card's first surface mount**, and the part being replaced is the
+least available thing on the board: `CY7C128A` is long out of production and its DIP-24
+grade is secondary-market. §17's period audit gained a row saying so, and gained a
+harder one for the `AS6C4008` — a 4 Mbit SRAM is 1992–93, two years past the 1 Mbit part
+that was already *"the newest silicon on the card"*.
+
+### §11.1 / §6.2 / §7 / §10 — panning was an option and is built
+
+§11.1 was headed **"Panning — fixed is free, programmable is +3 ICs"** and opened
+*"Fixed panning is free. Which summing node a channel's volume half drives is which
+package it sits in."* §6.2's converter table specified **4 × `AD7528`, eight halves**
+and closed *"Hard panning is free... And programmable panning is now +3 rather than
++10 — §11.1."* §7 listed **ten amplifier channels, nine used**, and §10's "where it will
+grow" carried **"+3 for programmable per-channel panning"** as a standing line. §9.3's
+state-file offset 10 said `PAN` was *"ignored unless `ACTRL.5` — and unpopulated unless
+that superset is built"*.
+
+**Built 2026-09-08.** Six `AD7528` and twelve halves: one sample and **two** volume
+converters per channel, driving both sides' summing nodes. Four `TL07x` packages,
+**thirteen amplifier channels of fourteen** — each volume die gets its own I/V and the
+two per side are voltage-summed through a matched 0.1 % pair, because a node collecting
+four ladders across two dice loses §6.2's ±1 % on-die match. `+3 ICs`, exactly as
+§11.1 had priced it.
+
+**What did not change is the acceptance test**, and that is the point of the mode bit:
+`ACTRL` b5 = 0 is the reset state and makes the sequencer derive the right-hand code
+from `VOL` and the channel index, so ch0,3 land on L and ch1,2 on R and a Paula-exact
+replayer never writes `PAN`.
+
+### §7 / §10 / §16 item 19 — the output had no connector, and the card had no jack
+
+§7 ended: *"**Line output**, not a speaker amp: ~2 V p-p, DC-blocked, 100 Ω series...
+Whatever drives the machine's speakers is a separate concern and should not be on a card
+carrying four digital SRAMs."* It never said **where the output went.**
+`graphics.md` §17 had put `AUDIO_L`, `AUDIO_R` and two `AGND` returns on the backplane
+and `hardware/lib/slot.ts` carried them at B32–B35 — and **nothing in the machine
+consumed them**: no chassis, no rear panel, no terminating document.
+
+**§7.1 adds a 3.5 mm stereo PCB jack on the card's rear edge**, in parallel with the
+backplane pair, which is kept unchanged. Zero ICs; it is the same two nodes wired to two
+more places, and it makes the card testable on a bench with no backplane. ⚠ It also puts
+a line-level signal on the connector people associate with headphones, which is §16
+item 29 and is priced at +1 IC if the level is judged wrong.
+
+### §10 / §16 item 19 — "a single-Eurocard fit"
+
+§10's area paragraph and §16 item 19 both asserted a **single-Eurocard** fit *"asserted
+and never measured"*, against *"eight converter halves and ten amplifier channels"*.
+**The machine stopped using Eurocards on 2026-09-08** (`machine.md` §5 item 5): the card
+format is 100 mm × 120/180/240 mm per card, and `hardware/place/` puts this card on
+**18 cm** by courtyard area. The measurement item survives with the format corrected and
+the analogue section restated at **twelve converter halves and thirteen amplifier
+channels**, plus a rear-edge jack to place.
+
+---
+
 ## §0 / §10 — the package-count chain: 35 → 57 → 54 → 45 → 36 → 29
 
 The card's headline count was re-tallied five times, and the whole chain is worth

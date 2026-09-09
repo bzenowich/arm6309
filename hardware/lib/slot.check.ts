@@ -44,9 +44,14 @@ check(
 )
 const refs = SLOT_PINS.map((p) => p.ref)
 check(new Set(refs).size === refs.length, "no duplicate pin reference")
+/* The card is 100 mm high (README.md "The three decisions this took"), so the
+ * edge the fingers sit on is 100 mm whatever the card's LENGTH is - the per-card
+ * 120/180/240 mm format changed the length and not this. The 72-pin count was
+ * DERIVED from this number back when the format was a Eurocard, and that premise
+ * expired; the number itself did not. */
 check(
   36 * 2.54 <= 100,
-  "the fingers fit a 100 mm Eurocard edge",
+  "the fingers fit the 100 mm card edge",
   `${(36 * 2.54).toFixed(1)} mm of 100 mm`,
 )
 
@@ -57,10 +62,10 @@ const duplicated = [...counts].filter(([s, n]) => n > 1 && !["GND", "AGND", "+5V
 check(duplicated.length === 0, "no signal is doubled up", duplicated.map(([s]) => s).join(", "))
 
 /* -- power, against docs/machine.md 8 ------------------------------------ */
-/* The video card is the worst case: ~1.1-1.7 A, design to 2 A (graphics.md 14).
+/* The video card is the worst case: ~0.5-0.85 A, design to 1 A (graphics.md 14.2).
  * A 0.1" gold finger on 1 oz copper is good for ~1 A conservatively. */
 const FINGER_A = 1.0
-const WORST_CARD_A = 2.0
+const WORST_CARD_A = 1.0
 const p5 = counts.get("+5V") ?? 0
 check(
   p5 * FINGER_A >= WORST_CARD_A * 2,

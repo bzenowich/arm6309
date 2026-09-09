@@ -96,7 +96,7 @@ Four things, and the last one is the whole shape of the card.
 | | applenet | here | why |
 |---|---|---|---|
 | **Bus** | Apple IIe 50-pin, Φ0, `/DEVSEL`, 16 offsets at `$C0nX` | arm6309 72-pin, `E`/`Q`, `/IOSEL`, **4 offsets** at `$FF5C` **plus a 64 KB physical region** | `machine.md` §2, §3, §5 item 7 |
-| **Driver ROM** | 256 bytes at `$Cn00`, plus `/IOSEL` decode | **none** | the CPU module serves an 8 KB shadow ROM from its own flash (`machine.md` §7.2); this machine has no expansion-ROM window and needs none |
+| **Driver ROM** | 256 bytes at `$Cn00`, plus `/IOSEL` decode | **none** | this machine has no expansion-ROM window and needs none — its boot ROM is 1 MB on the motherboard (`machine.md` §7.2) and a driver lives in it or on disk like any other |
 | **Arbitration clock** | none — `arch-v3.md` notes "the only clock available is a bus strobe that stops when the slot is idle" | **`CLK25`, 25.175 MHz, free-running, on the backplane** | `machine.md` §2. It is what makes §4.3's fixed-phase schedule possible at all |
 | **⚠ Buffers** | ping-pong behind a host port, "recommended but not required for first silicon" | **a sixteen-frame ring the host addresses as memory** | §3.3 — and `arch-v3.md`'s ping-pong does not work as written, §3.3.1 |
 

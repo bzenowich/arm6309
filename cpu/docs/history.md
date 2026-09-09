@@ -7,6 +7,119 @@ is current.
 
 ---
 
+## §4.5 / §3.2 / Phase 6b / §10 items 7–8 — the shadow ROM and vector page, retired 2026-09-08
+
+**The whole mechanism moved off this module** when `docs/machine.md` §7.2 put a 1 MB ROM
+on the motherboard. The alternative `plan.md` §4.5 had itself recorded — *"an 8 KB EPROM
+plus decode on the motherboard — 2 ICs, no CPU divergence"* — is the one the machine
+took, at three packages and a megabyte, because `hardware/ram.md` §5.2's 32 MB re-carve
+gave the physical map somewhere to put it.
+
+### What §4.5 specified
+
+> **Machine-wide decision D1.** Without this mechanism the homebrew machine cannot boot:
+> no ROM chip exists anywhere in its physical map, and the reset vector at `$FFFE` lands
+> inside the I/O page — which overrides MMU translation by design — so nothing decodes
+> there. The resolution puts the boot ROM **in this module**, served from STM32 flash with
+> no bus cycle at all, because that is the one place in the machine that already has
+> non-volatile storage and an address decoder.
+>
+> #### 4.5.1 What the module serves
+>
+> | Logical range | Served from | When |
+> |---|---|---|
+> | `$E000`–`$FEFF` | STM32 flash, **shadow ROM** | from reset until the OS clears the disable bit |
+> | `$FF00`–`$FFBF` | **nothing — decodes normally** | always: cards and the MMU answer here |
+> | `$FFC0`–`$FFEF` | STM32 flash, shadow ROM | same as `$E000`–`$FEFF` |
+> | `$FFF0`–`$FFFF` | 16-byte internal **vector RAM** | **always**, disable bit or not |
+>
+> Three rules, and the second is the one that is easy to get wrong:
+>
+> 1. **A shadowed read never becomes a bus cycle.** The emulator resolves the address
+>    internally and supplies the byte from flash. Externally the cycle still happens — E,
+>    Q and the address are the host's, and cycle accuracy is unaffected — but the module
+>    ignores `D0..D7` and drives `BUS_OE`/`R/W` as it would for any read.
+> 2. **`$FF00`–`$FFBF` is carved out and must keep decoding normally.** The boot code has
+>    to talk to the MMU, the video card and storage while it is running. A shadow that
+>    covered the whole of `$FF00`–`$FFFF` would work exactly until the first register
+>    access.
+> 3. **Vector service is unconditional.** `$FFF0`–`$FFFF` comes from the vector RAM
+>    whether the shadow ROM is enabled or not, which is what lets the OS retarget the
+>    vectors after it has switched the shadow off. The RAM is initialised from flash at
+>    reset to point into the shadow ROM, so the reset vector is valid on the first fetch.
+>
+> #### 4.5.2 Control, and turning the whole thing off
+>
+> - **Disable bit** — one bit in the MMU control window. Setting it retires
+>   `$E000`–`$FEFF` and `$FFC0`–`$FFEF`, freeing that logical space for RAM once NitrOS-9
+>   is up. It is a one-way switch per reset by design: nothing re-enables the shadow
+>   except a reset, so a wild store cannot bring the ROM back over live RAM.
+> - **Vector RAM is writable through the MMU window**, 16 bytes, so the OS installs its
+>   own vectors and the shadow ROM's are only the bootstrap set.
+> - **Machine-mode gating.** On the **CoCo 3 and the Dragon 64 the entire mechanism is
+>   off**. Mode is read once at reset from the **`PF1` strap** (pulled up = drop-in, tied
+>   low on the homebrew motherboard), which keeps one firmware image serving all three
+>   machines.
+>
+> > ⚠ **Consequence for the drop-in claim.** `video/docs/graphics.md` §16.8's "you can
+> > drop a real HD63C09E into the homebrew machine" property **does not hold** with the
+> > shadow ROM in the CPU: a real 6309 has no flash and the machine has no boot ROM
+> > without it.
+>
+> #### 4.5.3 Cost
+>
+> | Item | Cost |
+> |---|---|
+> | Shadow ROM image | **~8 KB of the 128 KB** internal flash (6.3 %) |
+> | Vector RAM | 16 bytes of SRAM, plus 16 bytes of flash for the reset image |
+> | Per-cycle cost | one range test on the address the microcode is about to drive |
+> | Pins | one, `PF1`, the last spare |
+>
+> The per-cycle cost is the term to watch — it lands in the microcode step measured in
+> §3.3(d), not in the `t_AD` path, because the decision "does this read come from flash?"
+> is made when the address is *formed*, one step before it is driven.
+
+### What went with it
+
+- **`PF1`** was *"§4.5 machine-mode strap — the last pin"* in §3.2's pin table, and the
+  budget stood at **39 of 39, none spare** on both target columns. It is **38 of 39** now
+  and the pin is unconnected.
+- **Phase 6b** — *"Shadow boot ROM and vector page (3–5 days, homebrew target only)"* —
+  is deleted, not renumbered.
+- **§10 item 7**, *"`PF1` strap, or a build-time flag and two images?"*, is closed by not
+  existing: the retirement gives both halves of what the question was trading between,
+  because the image is identical on all three machines with no strap and no flag.
+- **§10 item 8**, *"§4.5 or the EPROM alternative?"*, is decided in favour of the EPROM
+  alternative.
+- **§10's risk table** carried *"§4.5 shadow ROM competes for microcode budget — Low"*.
+  There is no range test to budget for.
+- **`README.md`'s "Serving the boot ROM (homebrew machine only)" section** described the
+  same mechanism and ended: *"with this mechanism in the CPU, a real HD63C09E is not a
+  drop-in for the homebrew machine"*. It is one again.
+
+### Why it was right and then wasn't
+
+**The reasoning was never wrong; one of its premises expired.** §4.5 opens on *"no ROM
+chip exists anywhere in its physical map"*, and that was a true statement about a 1 MB
+map in which `graphics.md` §6.3 had already spent every byte — 512 KB of system RAM at
+`A19 = 0` and 512 KB of VRAM at `A19 = 1`. `machine.md` §5 item 1 option D doubled the
+map on 2026-09-08 and `ram.md` §5.2 re-carved it to 32 MB hours later; **the sentence
+stopped being true the same day it was still being cited.**
+
+The second thing that changed is what the ROM is *for*. §4.5's job was to get the first
+instruction executed, and 8 KB is enough for that. A megabyte holds the NitrOS-9
+distribution as a read-only ROM disk, which makes the machine bootable with no SD card,
+no serial cable and no host — a different capability, not a bigger version of the same
+one.
+
+The third is that **the vector RAM's headline benefit turned out to be a divergence.** A
+writable vector page *"so the OS can retarget the vectors"* is not what a CoCo has; a
+CoCo has ROM vectors pointing at a fixed RAM jump table, and NitrOS-9 is written against
+that. Putting the vectors in ROM removed a divergence-ledger entry instead of shrinking
+one.
+
+---
+
 ## Header — revision trail (2026-08-19 → 2026-09-04)
 
 The plan's date line recorded its own revisions:
