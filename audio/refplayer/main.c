@@ -44,6 +44,7 @@ static void usage(void)
       "usage: refplayer [options] file.mod\n"
       "  --wav FILE        write stereo PCM (default: none)\n"
       "  --trace FILE      write the register-write trace ('-' for stdout)\n"
+      "  --sram FILE       dump loaded sample RAM as $readmemh, for the RTL bench\n"
       "  --rowtrace FILE   write order/pattern/row/tick/speed/bpm per tick\n"
       "  --vu FILE         write per-channel output RMS every 10 ms\n"
       "  --rate HZ         output sample rate (default 48000)\n"
@@ -58,6 +59,7 @@ static void usage(void)
 int main(int argc, char **argv)
 {
     const char *path = NULL, *wavpath = NULL, *tracepath = NULL, *rowpath = NULL, *vupath = NULL;
+    const char *srampath = NULL;
     int rate = 48000, ntsc = 0, led = 0, bypass = 0, info_only = 0;
     double seconds = 0.0;
     unsigned long ramkb = 512;   /* audio.md 5: one AS6C4008, all of it */
@@ -79,6 +81,7 @@ int main(int argc, char **argv)
         const char *a = argv[i];
         if      (!strcmp(a, "--wav")     && i + 1 < argc) { wavpath = argv[++i]; }
         else if (!strcmp(a, "--trace")   && i + 1 < argc) { tracepath = argv[++i]; }
+        else if (!strcmp(a, "--sram")    && i + 1 < argc) { srampath = argv[++i]; }
         else if (!strcmp(a, "--rowtrace")&& i + 1 < argc) { rowpath = argv[++i]; }
         else if (!strcmp(a, "--vu")      && i + 1 < argc) { vupath = argv[++i]; }
         else if (!strcmp(a, "--rate")    && i + 1 < argc) { rate = atoi(argv[++i]); }
@@ -115,6 +118,25 @@ int main(int argc, char **argv)
            (unsigned long)song.sample_bytes, ramkb,
            song.truncated ? "  (file was truncated; clamped, §4.6)" : "");
     printf("%-14s %ld Hz (%s)\n", "colour clock:", cc, ntsc ? "NTSC" : "PAL");
+    /* --sram: the sample RAM as the loader left it.
+     *
+     * ⚠ WHY THIS EXISTS AND WHAT IT IS NOT. hardware/gal/verilog/modplay_tb.sv
+     * plays a module on the REAL CARD - audio.v and aseq.v, generated from the
+     * term lists the fitter compiles - and a card with no samples in it plays
+     * nothing. The bytes are uploaded into the RTL through SPTR/SDATA, the same
+     * host port the 6309 will use, so the upload itself is hardware under test.
+     * What this dump is, is the OUTPUT OF §4's LOADER: the relocation, the
+     * offset-binary flip and the null loop word. It is not a model of the card
+     * and nothing about card.c's playback reaches the RTL bench through it. */
+    if (srampath) {
+        FILE *f = fopen(srampath, "w");
+        uint32_t n = MOD_SAMPLE_BASE + song.sample_bytes;
+        if (!f) { fprintf(stderr, "refplayer: cannot write %s\n", srampath); goto out_song; }
+        for (uint32_t i = 0; i < n; i++) { fprintf(f, "%02X\n", sram[i]); }
+        fclose(f);
+        printf("%-14s %lu bytes -> %s\n", "sram dump:", (unsigned long)n, srampath);
+    }
+
     if (info_only) { rc = 0; goto out_song; }
 
     if (render_open(&render, wavpath, rate, cc) != 0) {

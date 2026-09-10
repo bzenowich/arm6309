@@ -99,6 +99,8 @@ module vctrl (
     output wire HPOL,
     output wire TILEMODE,
     output wire WSTBV,
+    output wire WPQ,
+    output wire WSTART,
     output wire HS0,
     output wire HS1,
     output wire WADV0,
@@ -180,6 +182,7 @@ module vctrl (
   reg  r_CELL;
   reg  r_IRQEN;
   reg  r_DISPEN;
+  reg  r_WPQ;
   reg  r_HS0;
   reg  r_HS1;
   reg  r_WADV0;
@@ -226,6 +229,7 @@ module vctrl (
   assign CELL = r_CELL;
   assign IRQEN = r_IRQEN;
   assign DISPEN = r_DISPEN;
+  assign WPQ = r_WPQ;
   assign HS0 = r_HS0;
   assign HS1 = r_HS1;
   assign WADV0 = r_WADV0;
@@ -340,38 +344,42 @@ module vctrl (
          | (SPANEND & WADV1 & ~LRUN);
   // buried - SRCSEL[n] is this same pin - 5.2.1, not a second macrocell
   assign ACPU0 =
-         (VRAMSEL & ~IOPAGE & ~A0 & ~A1);
+         (VRAMSEL & ~IOPAGE & WAITRW & ~A0 & ~A1);
   // EXTERNAL
   assign GSPN0 =
          (SPNREQG & ~SPNA0 & ~SPNA1 & ~VRAMSEL)
          | (SPNREQG & ~SPNA0 & ~SPNA1 & IOPAGE)
+         | (SPNREQG & ~SPNA0 & ~SPNA1 & ~WAITRW)
          | (SPNREQG & ~SPNA0 & ~SPNA1 & A0)
          | (SPNREQG & ~SPNA0 & ~SPNA1 & A1);
   // buried
   assign ACPU1 =
-         (VRAMSEL & ~IOPAGE & A0 & ~A1);
+         (VRAMSEL & ~IOPAGE & WAITRW & A0 & ~A1);
   // EXTERNAL
   assign GSPN1 =
          (SPNREQG & SPNA0 & ~SPNA1 & ~VRAMSEL)
          | (SPNREQG & SPNA0 & ~SPNA1 & IOPAGE)
+         | (SPNREQG & SPNA0 & ~SPNA1 & ~WAITRW)
          | (SPNREQG & SPNA0 & ~SPNA1 & ~A0)
          | (SPNREQG & SPNA0 & ~SPNA1 & A1);
   // buried
   assign ACPU2 =
-         (VRAMSEL & ~IOPAGE & ~A0 & A1);
+         (VRAMSEL & ~IOPAGE & WAITRW & ~A0 & A1);
   // EXTERNAL
   assign GSPN2 =
          (SPNREQG & ~SPNA0 & SPNA1 & ~VRAMSEL)
          | (SPNREQG & ~SPNA0 & SPNA1 & IOPAGE)
+         | (SPNREQG & ~SPNA0 & SPNA1 & ~WAITRW)
          | (SPNREQG & ~SPNA0 & SPNA1 & A0)
          | (SPNREQG & ~SPNA0 & SPNA1 & ~A1);
   // buried
   assign ACPU3 =
-         (VRAMSEL & ~IOPAGE & A0 & A1);
+         (VRAMSEL & ~IOPAGE & WAITRW & A0 & A1);
   // EXTERNAL
   assign GSPN3 =
          (SPNREQG & SPNA0 & SPNA1 & ~VRAMSEL)
          | (SPNREQG & SPNA0 & SPNA1 & IOPAGE)
+         | (SPNREQG & SPNA0 & SPNA1 & ~WAITRW)
          | (SPNREQG & SPNA0 & SPNA1 & ~A0)
          | (SPNREQG & SPNA0 & SPNA1 & ~A1);
   // buried
@@ -381,7 +389,8 @@ module vctrl (
          | (SPNREQG & ~SPNA1 & A1)
          | (SPNREQG & SPNA1 & ~A1)
          | (SPNREQG & ~VRAMSEL)
-         | (SPNREQG & IOPAGE);
+         | (SPNREQG & IOPAGE)
+         | (SPNREQG & ~WAITRW);
   // EXTERNAL - open-drain by the OE idiom - SPANBUSY . VRAMSEL . /IOPAGE . E . /RW
   assign WAIT =
          1'b0;
@@ -398,6 +407,9 @@ module vctrl (
   // buried
   assign WSTBV =
          (VRAMSEL & ~RW & E);
+  // buried
+  assign WSTART =
+         (WPQ & ~E);
   // EXTERNAL - the serialiser's top bit, except that span-solid is always WFG
   assign MASKBIT =
          (WM1 & ~WM0)
@@ -565,6 +577,7 @@ module vctrl (
       r_CELL <= 1'b0;
       r_IRQEN <= 1'b0;
       r_DISPEN <= 1'b0;
+      r_WPQ <= 1'b0;
       r_HS0 <= 1'b0;
       r_HS1 <= 1'b0;
       r_WADV0 <= 1'b0;
@@ -769,20 +782,20 @@ module vctrl (
          (PH1 & ~PH0)
          | (~PH1 & PH0);
       r_SPANBUSY <=
-         (WSTBV)
+         (WSTART)
          | (SPANBUSY & ~SPANEND);
       r_MC0 <=
-         (~WSTBV & RETIRE & ~MC0)
-         | (~WSTBV & ~RETIRE & MC0);
+         (~WSTART & RETIRE & ~MC0)
+         | (~WSTART & ~RETIRE & MC0);
       r_MC1 <=
-         (~WSTBV & RETIRE & MC1 & ~MC0)
-         | (~WSTBV & RETIRE & ~MC1 & MC0)
-         | (~WSTBV & ~RETIRE & MC1);
+         (~WSTART & RETIRE & MC1 & ~MC0)
+         | (~WSTART & RETIRE & ~MC1 & MC0)
+         | (~WSTART & ~RETIRE & MC1);
       r_MC2 <=
-         (~WSTBV & RETIRE & MC2 & ~MC0)
-         | (~WSTBV & RETIRE & MC2 & ~MC1)
-         | (~WSTBV & RETIRE & ~MC2 & MC0 & MC1)
-         | (~WSTBV & ~RETIRE & MC2);
+         (~WSTART & RETIRE & MC2 & ~MC0)
+         | (~WSTART & RETIRE & MC2 & ~MC1)
+         | (~WSTART & RETIRE & ~MC2 & MC0 & MC1)
+         | (~WSTART & ~RETIRE & MC2);
       r_VMODE0 <=
          (WCTRL & D0)
          | (VMODE0 & ~WCTRL);
@@ -804,6 +817,8 @@ module vctrl (
       r_DISPEN <=
          (WCTRL & D7)
          | (DISPEN & ~WCTRL);
+      r_WPQ <=
+         (VRAMSEL & ~RW & E);
       r_HS0 <=
          (LDHS & D0)
          | (HS0 & ~LDHS);

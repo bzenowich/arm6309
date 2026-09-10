@@ -65,9 +65,52 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 | **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs seven testbenches. **225 claims, ~3 min** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
 | `npm run check:sim` | the two *hand-written* Verilog models, `gal/mmu.v` and `gal/clkdec.v`, with their own testbenches. Older and separate from `check:video` |
 | `npm run check:netlist` | the motherboard's connectivity, against `dist/mainboard/mainboard/circuit.json` — **a build artefact**, so run `npm run build` first if a `.circuit.tsx` changed |
-| `npm run gen:pld` | writes `gal/{vaddr,vctrl,audio}.pld` from the term lists |
+| `npm run gen:pld` | writes `gal/{vaddr,vctrl,vsup,audio,aseq}.pld` from the term lists |
+| ⭐ **`npm run check:machine`** | **the whole machine**: a 6809E core, the motherboard and the video card, running `software/boot/boot.asm` out of the boot ROM, and a screenshot taken off `RGB`/`BLANK`/`HSYNC`/`VSYNC`. **22 claims, ~40 s** |
+| `npm run rom` | assembles `software/boot/boot.asm` with A09 → `boot.bin`, `boot.hex`, `boot.lst` |
+| ⭐ **`npm run check:modplay`** | **a module plays on `audio_card.v`** and its converter codes are rendered to a WAV and A/B'd against libopenmpt, with `refplayer` as the control. Needs `libopenmpt.so.0`, numpy, and probes from `audio/tools/modcompare/mkprobe.py` |
 | `npm run build` | renders every `.circuit.tsx` to `dist/` with `tsci` |
 | `npm run build:all` | all of the above in order — `gen:pld`, `build`, `check`, `check:netlist`, `check:sim`, `check:video` |
+
+### The CPLD fitter and CUPL — how to get them, and how to know they worked
+
+⚠ **A fresh clone has no `~/.wine_atf`, and `npm run check` still passes without
+it.** The Atmel toolchain is not a dependency of the model checks — it is the
+thing that answers *does the design still fit the part*, which no model check
+can — so its absence is silent. **Set it up before changing any `.jedec.ts`,
+`video.cpld.ts`, `aseq.cpld.ts` or `audio.cpld.ts`.** The installer is tracked
+at the repository root; nothing else is needed but `wine`, `7z` and `unzip`:
+
+```sh
+sh hardware/gal/prjbureau/extract-wincupl.sh awincupl.exe.zip    # ~1 min, from the repo root
+# -> "fitters and CUPL in ~/.wine_atf/drive_c/Wincupl"
+#    "Atmel ATF1508AS Fitter Version 1.8.7.8"
+```
+
+Then, **from `hardware/`**, and after `npm run gen:pld`:
+
+| | |
+|---|---|
+| `sh gal/prjbureau/fit1508.sh gal/vctrl.pld` | place and route one CPLD → `gal/cpld/vctrl.{jed,fit}`. Also `vaddr`, `vsup`, `audio`, `aseq` |
+| `sh gal/prjbureau/cupl-reference.sh gal/arb.pld` | recompile one **GAL**'s reference JEDEC → `gal/jedec/reference/arb.cupl.jed` |
+
+⛔ **`Error Code = 1` on the fitter's first line is normal noise and is not the
+answer.** The answer is the sentence **"Design fits successfully"**, which
+appears only in stdout and never in the `.fit` — `fit1508.sh` requires it and
+refuses `INTERNAL ERROR`, and the two traps at the bottom of this file are why.
+Read the utilisation out of the new `.fit` and compare it against the old one
+(`Total Logic cells used`, `Total I/O pins used`, `Total cascade used`); a
+change in cascades is a timing change even when the cell count is flat.
+
+⚠ **Changing a GAL design breaks `check:cupl` until its `.pld` AND its reference
+are regenerated**, and the failure names a fuse, not a file:
+`FAIL CUPL arb.jed: matches our fuse map ... (GCPU0 at inputs 0000000011: ours 0, CUPL 1)`.
+The `.pld` for a GAL is written by `toGalPld()` (`gal/jedec/galpld.ts`), so the
+sequence is: edit the `.jedec.ts` → rewrite the `.pld` → `cupl-reference.sh` →
+`npm run check`.
+
+⚠ **One fit at a time, always** — the Wine prefix is one shared working
+directory, and two concurrent fits write the same `cpld/<name>.fit`.
 
 ### The Verilator tests
 
@@ -87,6 +130,7 @@ change to the video card, the mainboard, or `emit.ts` itself:
 | `audio.jedec.ts`, `aseq.*`, `audio_card.v`, `audio_tb.sv` | `npm run check:sim:audio` (~25 s) |
 | the mainboard, `u9`/`u10` | `npm run check:sim:board` |
 | the video card, or `verilog/emit.ts` | `npm run check:video` (everything) |
+| anything the CPU touches — the map, the boot path, `boot.asm`, `machine.v` | ⭐ **`npm run check:machine`** |
 | the audio card's *behaviour* | ⭐ **`npm run check:oracle`** as well — this card against an independent Paula (`gal/verilog/oracle/`). It is what found `audio.md` §16 items 36 and 39, and `audio_tb` could not |
 
 Or one at a time, from `hardware/gal/verilog/`:
@@ -106,6 +150,8 @@ first. After editing a `.jedec.ts`, run `bun run gal/verilog/gen.ts` or a
 | `vspan_tb` | " | all four `WMODE`s, the retire rate, `/WAIT`'s read/write rule, `WADV` chaining, the display list, the VBL interrupt |
 | `audio_tb` | both audio CPLDs + the state file, the sample RAM, the adder and the converters | the slot walk, the ÷5 CIA clock, Paula's set/clear, open-drain `/FIRQ`, §9.4.5's merge, the six micro-op sequences — **and how many samples a buffer yields**, which is the claim two audible defects survived 43 green ones by not having (`audio.md` §16 item 36) |
 | `mainboard_tb` | U3, U6, U9, U10 + the map SRAMs, `'157`, `'574`, boot `'244`, flash and SIMMs | the boot sequence, the 32 MB map, the four SIMM windows, `/IOPAGE`, and that exactly one thing drives physical `A20`–`A13` |
+| ⭐ `machine_tb` | **`mc6809e` + the whole motherboard + the whole video card** | that the machine executes its own boot ROM: leaves boot mode with a map it wrote, finds its SIMM, loads 256 palette entries, paints 640 × 200 with the span writer, chains 200 spans with `WADV`, and produces a frame whose every pixel is the index the software drew — **and it is what found `graphics.md` §19 items 36, 37 and 38, which twelve testbenches and 543 model claims could not** |
+| ⭐ `modplay_tb` | **the whole audio card** | that a real module plays: samples uploaded through `SPTR`/`SDATA`, the register stream delivered on the card's own §8.2 tick interrupt, and the four `AD7528` pairs' codes recorded for `audio/tools/dacwav` |
 
 **What is generated and what is written.** `verilog/emit.ts` turns a `Merged`
 or a `Design` into Verilog from **the same `Cell` term lists `jedec/cupl.ts`
@@ -114,6 +160,24 @@ compiles for the fitter** — so `vaddr.v`, `vctrl.v`, `rfa.v`, `vlen.v`,
 change the `.jedec.ts` and re-run. The card and board wrappers
 (`video_card.v`, `mainboard.v`) and every `*_tb.sv` are hand-written.
 `verilog/README.md` has the rest.
+
+⭐ **AND THE ONE THING NONE OF THEM DID UNTIL 2026-09-10 IS EXECUTE AN
+INSTRUCTION.** `mainboard_tb` walks `machine.md` §7.2's boot sequence as twenty
+literal bus cycles and `vspan_tb` writes the video card's registers from a
+task, so both check that each part does what its author thought when driven the
+way its author expected. `machine_tb` hands the bus to a CPU core somebody else
+wrote and lets the boot ROM drive, and **three defects fell out of the first run
+that had survived everything else** (`graphics.md` §19 items 36–38). Each was a
+seam: the arbiter refused the span writer the chip the CPU's own stalled write
+was holding; `SPANBUSY` was set by a level over `E`-high, which `/WAIT` makes
+unbounded; and §7.4's own "poll `VSTAT`" rule took the register file away from
+the span whose colour that file *is*.
+
+⚠ **The reason none of the older benches could see any of them is the same
+reason**, and it is worth stating as a rule: **a testbench that drives `E` from
+its own free-running counter has a CPU that cannot be waited.** `/WAIT` is the
+only signal on this backplane that changes what the CPU does rather than what it
+reads, and a harness that ignores it is testing a machine that does not exist.
 
 ⚠ **It models the logic and not the timing.** Propagation delay, the switch
 matrix, product-term cascading and placement are `fit1508.exe`'s business and

@@ -63,6 +63,41 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > register port — and the eighth is a third `ATF1508AS`, which **reduced** the count by
 > absorbing all three of the card's `GAL22V10`s (`graphics.md` §10.1.7, §14.1).
 >
+> ⛔ **AND THEN IT RAN ITS OWN SOFTWARE, on 2026-09-10, and three more things broke.**
+> Everything above was checked by testbenches that drive the bus by hand. On
+> 2026-09-10 a cycle-accurate **6809E core** went in the socket, the motherboard and
+> the video card went in with it, and the machine executed
+> [`software/boot/boot.asm`](software/boot/boot.asm) out of its own ROM
+> (`hardware/gal/verilog/machine_tb.sv`). **It did not reach its second span.**
+>
+> Three defects, all of them seams between parts that are individually correct, and
+> **all three invisible to every check that existed for the same reason: a testbench
+> that drives `E` from a free-running counter has a CPU that cannot be waited.**
+> `/WAIT` is the one backplane signal that changes what the CPU *does* rather than
+> what it reads.
+>
+> | | |
+> |---|---|
+> | ⛔ **the machine deadlocked on its first span** | the arbiter refused the span writer the framebuffer chip the CPU's own stalled write was selecting — and that write was stalled *by* the span. One literal (`R/W`) on the CPU's grant: a posted VRAM write needs no access of its own |
+> | ⛔ **the span re-armed itself for ever** | `SPANBUSY` was set by a **level** over `E`-high, and `/WAIT` makes `E`-high unbounded. One registered macrocell makes it an `E`-**fall** edge, which is what §3.1.1's `'574`s always did |
+> | ⛔ **polling `VSTAT` put a three-pixel hole in every span** | §7.4's colour path *is* the register file's address, and any CPU access to the card took it from the running span. The CPU's claim is qualified on `!SPANBUSY` now, and it **gives product terms back** |
+>
+> ⭐ **All three are repaired, `vctrl` and `vsup` re-fit, and the machine draws a
+> 640 × 200 picture whose every pixel is the index the software wrote** — 225
+> Verilator claims and 543 model claims, none failing. `graphics.md` §19 items 36–38,
+> and `video/docs/history.md` has the derivations. **One video item is open**: the
+> picture sits five dots right of the active window, so the last five columns of every
+> row are never displayed (§19 item 35).
+>
+> ⛔ **The audio card played a module the same day and it plays 12 dB too quietly.**
+> `modplay_tb.sv` uploads a module's samples through the card's host port, delivers
+> the register stream on the card's **own** tempo-timer interrupt, and records what the
+> four `AD7528` pairs are given; it agrees with libopenmpt to **−0.01 cents** and
+> **0.9977** spectral correlation, against **0.9989** for the C reference model as a
+> control. `audio.md` §6.1's ×4 for Paula-mode `VOL` **is not built** — `DACVOL` = 64
+> where 255 is specified — which is 12.04 dB and two bits of volume resolution
+> (`audio.md` §16 item 40, **open**).
+
 > ⭐ **The display list has a descriptor format since 2026-09-09** — `MOVE`, `WAIT`,
 > `$FF` to end (`graphics.md` §10.3.2) — and it reaches **`HSCROLL`, `HSCROLLH` and the
 > whole palette port**, so per-scanline gradients and split palettes are hardware and

@@ -29,21 +29,43 @@ const chipIs = (sig: string, n: number) =>
 const arbCells: Cell[] = []
 for (let n = 0; n < 4; n++) {
   /* The CPU wants VRAM this cycle and this is its chip. VREQ is formed here
-   * rather than taken in: VRAMSEL and /IOPAGE are both already on the card. */
+   * rather than taken in: VRAMSEL and /IOPAGE are both already on the card.
+   *
+   * ⛔ AND ONLY A READ WANTS ONE - the RW literal, added 2026-09-10 after the
+   * whole machine deadlocked on its first span.
+   *
+   * A CPU VRAM WRITE NEEDS NO ACCESS OF ITS OWN. It is POSTED (3.1.1): the
+   * byte goes into a '574 and the SPAN WRITER retires it at WPTR, which is
+   * what makes direct mode "one posted write, one byte" rather than a bus
+   * cycle into VRAM. Claiming a chip for it was harmless-looking and it is
+   * what closed the loop below:
+   *
+   *   the write starts a span         -> SPANBUSY
+   *   SPANBUSY + a CPU VRAM write     -> /WAIT, and U6 holds E HIGH
+   *   E held high                     -> VRAMSEL stays asserted all cycle
+   *   VRAMSEL asserted on this chip   -> GSPN is 0, the span never retires
+   *   the span never retires          -> SPANBUSY never clears -> /WAIT never
+   *                                      releases -> THE MACHINE STOPS.
+   *
+   * Every part is doing what its own specification says. The loop is between
+   * three of them, and machine_tb is what closed it: vspan_tb drives E from a
+   * free-running counter, so its CPU cannot be waited and its VRAMSEL always
+   * goes away on time. graphics.md 5.2.1, 19 item 36. */
   arbCells.push({
     pin: 0, name: `GCPU${n}`, assertedLow: false, s0: 1, registered: false,
-    terms: [`VRAMSEL & !IOPAGE & ${chipIs("CPUA", n)}`],
+    terms: [`VRAMSEL & !IOPAGE & RW & ${chipIs("CPUA", n)}`],
     why: n === 0 ? "SRCSEL[n] is this same pin - 5.2.1, not a second macrocell" : undefined,
   })
   /* The span writer gets the chip if it wants it and the CPU has not taken
-   * it. Expanding !GRANT_CPU[n] gives four ways for the CPU not to have it:
-   * it is not selecting VRAM, it is in the I/O page, or either of its two
-   * address bits differs from this chip. */
+   * it. Expanding !GRANT_CPU[n] gives FIVE ways for the CPU not to have it:
+   * it is not selecting VRAM, it is in the I/O page, IT IS WRITING, or either
+   * of its two address bits differs from this chip. */
   arbCells.push({
     pin: 0, name: `GSPN${n}`, assertedLow: false, s0: 1, registered: false,
     terms: [
       `SPNREQ & ${chipIs("SPNA", n)} & !VRAMSEL`,
       `SPNREQ & ${chipIs("SPNA", n)} & IOPAGE`,
+      `SPNREQ & ${chipIs("SPNA", n)} & !RW`,
       `SPNREQ & ${chipIs("SPNA", n)} & ${n & 1 ? "!" : ""}CPUA0`,
       `SPNREQ & ${chipIs("SPNA", n)} & ${n & 2 ? "!" : ""}CPUA1`,
     ],
@@ -82,6 +104,8 @@ arbCells.push({
     /* or the CPU is not after VRAM this cycle at all */
     "SPNREQ & !VRAMSEL",
     "SPNREQ & IOPAGE",
+    /* or it is WRITING, which needs no access of its own - see GCPU above */
+    "SPNREQ & !RW",
   ],
 })
 

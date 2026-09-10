@@ -3332,6 +3332,58 @@ specification that has not been tested.
     would not release — **which presented as an interrupt defect and was a testbench
     that does not obey the register map it is testing.**
 
+40. **⛔ NEW 2026-09-10 — §6.1's ×4 is not built, so every channel plays 12 dB
+    down and `VOL` has two bits fewer than it is specified to have.**
+
+    §6.1: *"The default (`ACTRL` b3 = 0) is `VOL` 0–64 **with the card doing the ×4**,
+    so the register stays Paula-identical and the acceptance test does not move,"* and
+    *"with `ACTRL` b3 set it is eight, and **the sequencer stops shifting**."* There is
+    no shift in the sequencer, set or clear: `aseq.micro.ts`'s W5 moves the state
+    file's `VOL` byte to the converter port register unchanged, and §10.2.6's lane
+    routing has no second path.
+
+    **Measured, on the real design.** `modplay_tb` plays a module on `audio_card.v`
+    and records what the four `AD7528` pairs are given. A channel at Paula's full
+    volume presents **`DACVOL` = 64** where §6.1 requires 255; rendered through the
+    same analogue chain, the card peaks at **12.1 % of full scale where the reference
+    model peaks at 48.2 %** — a factor of 4.00, which is 12.04 dB.
+
+    ⚠ **It is a level defect and not a pitch or timing one**, so nothing that has ever
+    been run could have caught it: `audio_tb` asserts which byte reaches the converter
+    and not what the converter does with it, the differential oracle compares the
+    *sample* stream and deliberately not audio (`oracle/README.md`), and `abcompare.py`
+    normalises level in the first two lines of its comparison, on purpose. The card
+    scores **0.9977 median spectral correlation against libopenmpt where the reference
+    model scores 0.9989** — it plays the right notes at the right pitch, quietly.
+
+    ⚠ **And two bits of volume resolution go with it.** `VOL` = 1 presents code 1 out
+    of 255 instead of 4 out of 255, so the bottom of a volume slide quantises four
+    times more coarsely than §6.1's 65 levels promise.
+
+    ⭐ **BOTH HALVES ARE MEASURED SEPARATELY, and the experiment is worth recording
+    because it is what separates them.** `mkprobe.py`'s `02_setvol` probe — one
+    channel, `Cxx` and nothing else — is the one probe on the ladder where the card
+    diverges from the control at all:
+
+    | | median spectral corr. vs libopenmpt | peak |
+    |---|---|---|
+    | the card as built | **0.7774** | 12.1 % |
+    | the same converter log with ×4 applied afterwards | **0.9873** | **48.2 %** |
+    | `refplayer` (the control) | 0.9985 | 48.2 % |
+
+    Multiplying the recorded `DACVOL` codes by four and re-rendering recovers the
+    level **exactly** — 48.2 % against the control's 48.2 % — and most of the score.
+    **What it does not recover is the resolution**: the codes are still multiples of
+    four, and 0.9873 against 0.9985 is what those two bits are worth on a probe that
+    does nothing but change volume.
+
+    **What the fix costs is microcode, not packages.** §6.1's own note on the ÷5 CIA
+    divider is the method — *"4N is two doublings, so there is no shifter here"* — so
+    W5 gains two adder passes, gated on `CTRL3`. It is design work in the sequence
+    §10.3's control store already holds, and it is item 38's decision that says where
+    it lands. **Not taken today**, and it is the only one of 2026-09-10's four findings
+    that is not repaired.
+
 ---
 
 ## 17. Period audit

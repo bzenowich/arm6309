@@ -164,8 +164,37 @@ const comb = (name: string, terms: string[]): Cell =>
  *
  * The second strobe is one macrocell on a part that already has all three
  * literals - VRAMSEL is formed here (regfile.ts) and R/W and E are pins. */
+/* ⛔ AND SPANBUSY HAS TO BE SET BY AN EDGE, not by this level - 2026-09-10,
+ * and it is the other half of the deadlock access.jedec.ts describes.
+ *
+ * `VRAMSEL & /RW & E` is a LEVEL over E-high, and that is RIGHT for three of
+ * its four consumers: 3.1.1's data '574 wants the value present at E-fall, the
+ * mask serialiser wants the same byte, and vsup's SPANLEN load is already
+ * qualified `& !SPANBUSY`. All three are idempotent over a level.
+ *
+ * ⚠ SEQCTL'S SPANBUSY IS NOT. It is set on `WSTB # SPANBUSY & !SPANEND`, so
+ * the level re-sets it on every dot it is high - and /WAIT makes E-high
+ * UNBOUNDED. U6 holds E high for the whole of a stretched cycle
+ * (gal/clkdec.pld), so a span re-arms itself on every dot of its own wait:
+ * SPANEND fires, SPANBUSY clears for one dot, the level sets it again, and the
+ * span writer runs on for ever. machine_tb watched WPTR walk past the end of a
+ * 128-byte span and keep going, 128 bytes at a time, for the rest of the run.
+ *
+ * ⭐ AND THE EDGE HAS TO BE E-FALL, WHICH IS WHAT 3.1.1 ALWAYS SAID: "all four
+ * '574 clock on the same inverted E". An E-RISE pulse was tried first and it is
+ * wrong twice over - the CPU has not driven its data yet, and it starts the
+ * span inside the CPU's own bus cycle, so the first byte retires against an
+ * empty latch. vspan_tb caught that as every span retiring one byte short.
+ *
+ * WPQ is the level delayed one dot; WSTART is one dot wide at E-fall. Two
+ * cells, one of them registered, and every other consumer keeps the level. */
 const vramWriteStrobe: Cell[] = [
   comb("WSTBV", ["VRAMSEL & !RW & E"]),
+  {
+    pin: 0, name: "WPQ", assertedLow: false, s0: 1, registered: true,
+    terms: ["VRAMSEL & !RW & E"],
+  },
+  comb("WSTART", ["WPQ & !E"]),
 ]
 
 const ctrlFanout: Cell[] = [
@@ -255,7 +284,12 @@ export const arbGal = arbGalDesign
  * is how the sync trio and the scan pair already work. */
 /* seqctl's "a posted write has been latched" is WSTBV and not rfa's register
  * strobe - design-review2.md V-2, and the comment on vramWriteStrobe. */
-const SPAN_STB: Record<string, string> = { WSTB: "WSTBV" }
+/* ⭐ AND SPANBUSY'S SET IS WSTART, THE E-FALL EDGE - 2026-09-10. seqctl uses
+ * WSTB for two things: setting SPANBUSY, and holding the mask counter at zero.
+ * Both want the edge - the counter has to be zeroed at the instant the span
+ * starts and there is no RETIRE before it - and only the edge survives a
+ * stretched cycle. See vramWriteStrobe above. */
+const SPAN_STB: Record<string, string> = { WSTB: "WSTART" }
 
 export const vctrlCpld: Merged = merge(
   [rename(hgenDesign, SLOT_CE), rename(vgenDesign, SLOT_CE), vdecDesign,

@@ -139,24 +139,38 @@ def main():
     ap.add_argument("--seconds", type=float, default=None)
     ap.add_argument("--player", default="build-host/refplayer")
     ap.add_argument("--amiga", default="a500")
+    # ⭐ --wav: score a WAV that already exists, instead of running the player.
+    # Added 2026-09-10 so that the SAME metric and the SAME reference can be
+    # pointed at hardware/gal/verilog/modplay_tb.sv's render of the real card.
+    # Without it this file could only ever measure the C model, which is the
+    # thing the oracle README warns about: "two independent implementations of
+    # one paragraph, and the A/B only ever tested one of them."
+    ap.add_argument("--wav", default=None,
+                    help="score this WAV instead of running --player")
+    ap.add_argument("--label", default=None, help="what to call it in the output")
     args = ap.parse_args()
 
     tmp = tempfile.mkdtemp()
     ours_path = os.path.join(tmp, "ours.wav")
 
     ref, ref_dur = omptrender.render(args.mod, RATE, args.seconds, args.amiga)
-    cmd = [args.player, "--wav", ours_path]
-    if args.seconds:
-        cmd += ["--seconds", str(args.seconds)]
-    cmd.append(args.mod)
-    out = subprocess.run(cmd, capture_output=True, text=True)
-    if out.returncode != 0:
-        print(out.stdout, out.stderr); sys.exit(1)
+    if args.wav:
+        ours_path = args.wav
+        label = args.label or os.path.basename(args.wav)
+    else:
+        label = args.label or "refplayer"
+        cmd = [args.player, "--wav", ours_path]
+        if args.seconds:
+            cmd += ["--seconds", str(args.seconds)]
+        cmd.append(args.mod)
+        out = subprocess.run(cmd, capture_output=True, text=True)
+        if out.returncode != 0:
+            print(out.stdout, out.stderr); sys.exit(1)
     ours = read_wav(ours_path)
 
     print(f"module        {os.path.basename(args.mod)}")
     print(f"libopenmpt    {len(ref)/RATE:8.2f} s   (reported duration {ref_dur:.2f} s)")
-    print(f"refplayer     {len(ours)/RATE:8.2f} s")
+    print(f"{label:<13} {len(ours)/RATE:8.2f} s")
     d = abs(len(ref) - len(ours)) / RATE
     print(f"length delta  {d:8.3f} s   {'OK' if d < 0.25 else '*** MISMATCH ***'}")
     print()
@@ -206,7 +220,9 @@ def main():
         print(f"  worst frames         {' '.join(worst)}")
         print()
 
-    os.remove(ours_path); os.rmdir(tmp)
+    if not args.wav:
+        os.remove(ours_path)
+    os.rmdir(tmp)
 
 
 if __name__ == "__main__":

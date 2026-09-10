@@ -29,6 +29,38 @@ const NOT_REGSEL = ["!IOSEL", "!A6", "!A5"]
 /** `!REGSEL & <x>`, expanded - three terms, one per literal of !REGSEL. */
 const gated = (x: string) => NOT_REGSEL.map((n) => `${n} & ${x}`)
 
+/* ⛔ AND THE CPU DOES NOT GET THE FILE WHILE A SPAN IS RUNNING - 2026-09-10.
+ *
+ * The CPU's claim used to be REGSEL alone, so ANY access to $FF60-$FF7F took
+ * RA away from the span writer for the whole bus cycle. 7.4's colour path is
+ * the file's address - "RD IS WFG or WBG without a mux" - so for the twelve
+ * dots of that cycle the span retired whatever byte the CPU's own address
+ * named. Three retires, because a retire is one per four dots.
+ *
+ * ⚠ AND THE ACCESS THE MACHINE ACTUALLY MAKES IS THE ONE 7.4 TELLS IT TO
+ * MAKE. §7.4's rule is "poll VSTAT at $FF73, which never waits", and §13 puts
+ * VSTAT on §12.1's '244 rather than in the file - so the poll needs no file
+ * access at all, and took one anyway. machine_tb drew 640x200 with the card's
+ * own span writer and every span came out with a three-pixel hole in it,
+ * one per poll. graphics.md 7.4, 19 item 38.
+ *
+ * ⭐ IT COSTS NOTHING AND GIVES TERMS BACK. The CPU's term gains a literal;
+ * the span's three gated terms collapse to one, because "the CPU is not
+ * taking it" is now implied by SPANBUSY itself. RA1 goes from four product
+ * terms to two.
+ *
+ * ⚠ WHAT IT COSTS SOFTWARE, stated because it is a real rule: while SPANBUSY,
+ * a read of $FF60-$FF7F returns the span's colour byte rather than the
+ * register asked for, and a WRITE lands in WFG or WBG. VSTAT is exempt in both
+ * directions - it is the '244 - so the polling loop 7.4 specifies is exactly
+ * the access that still works. Extending /WAIT to hold register writes during
+ * a span was costed and not taken: it is one product term on the arbiter's
+ * output enable plus a REGSEL pin vctrl does not have, to buy a case the
+ * polling rule already covers. */
+const CPUSEL = `${REGSEL} & !SPANBUSY`
+/** The CPU is not taking the file: `!REGSEL` (three terms) or a span is. */
+const notCpu = (x: string) => [...gated(x), `SPANBUSY & ${x}`]
+
 /* ⭐ REWRITTEN 2026-09-09, and it is 7.4's mechanism rather than a walk
  * towards it.
  *
@@ -55,7 +87,7 @@ const gated = (x: string) => NOT_REGSEL.map((n) => `${n} & ${x}`)
  * continuously while no span is running, so the counter's load at the posted
  * write needs no walk, no phase and no state. FP0, FP1 and the two macrocells
  * they would have cost on vctrl are all deleted. */
-const SPAN = gated("SPANBUSY")
+const SPAN = ["SPANBUSY"]
 /* ⭐ AND A THIRD STATE, 2026-09-09: 7.2's column reload. vaddr walks RP1:RP0
  * through 01 and 10 at span end (video.parts.ts) and this part points the file
  * at WPTR's own low and middle bytes for those two dots, so wcol reloads
@@ -80,18 +112,18 @@ const cells: Cell[] = [
    * nothing; here it is one literal. */
   { pin: 0, name: "RA0", assertedLow: false, s0: 1, registered: false,
     why: "7.4: the mask bit IS the register file's address bit 0, inverted",
-    terms: [`${REGSEL} & A0`, ...gated("SPANBUSY & !MASKBIT"), ...IDLE,
+    terms: [`${CPUSEL} & A0`, "SPANBUSY & !MASKBIT", ...IDLE,
       ...RELOAD_B] },
   { pin: 0, name: "RA1", assertedLow: false, s0: 1, registered: false,
-    terms: [`${REGSEL} & A1`, ...SPAN] },
+    terms: [`${CPUSEL} & A1`, ...SPAN] },
   /* Bit 2 is 1 in $05, $06 and $07 alike and 0 in $08/$09. */
   { pin: 0, name: "RA2", assertedLow: false, s0: 1, registered: false,
-    terms: [`${REGSEL} & A2`, ...gated("!RP0 & !RP1")] },
+    terms: [`${CPUSEL} & A2`, ...notCpu("!RP0 & !RP1")] },
   /* Bit 3 is the reload's own, and nothing else's. */
   { pin: 0, name: "RA3", assertedLow: false, s0: 1, registered: false,
-    terms: [`${REGSEL} & A3`, ...RELOAD_A, ...RELOAD_B] },
+    terms: [`${CPUSEL} & A3`, ...RELOAD_A, ...RELOAD_B] },
   { pin: 0, name: "RA4", assertedLow: false, s0: 1, registered: false,
-    terms: [`${REGSEL} & A4`] },
+    terms: [`${CPUSEL} & A4`] },
 
   /* ⭐ TWO STROBES THIS PART CAN FORM AND vctrl CANNOT, 2026-09-09. CTRL's
    * write strobe and VSTAT's were inputs to vctrl that nothing produced - so

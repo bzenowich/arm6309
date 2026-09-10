@@ -93,6 +93,11 @@ module video_card (
   wire MAPA0, MAPA1;
 
   wire WCTRL, VSTATWR, BCTRLGO, HS0, HS1, WADV0, WADV1, TC, MASKBIT, WSTBV;
+  // WPQ / WSTART: the posted-write level delayed a dot, and the one-dot E-FALL
+  // edge made from it. Added 2026-09-10 - SPANBUSY is set by WSTART, because a
+  // level over E-high re-arms the span for ever once /WAIT stretches the cycle.
+  // graphics.md 7.4, 19 item 37; video.cpld.ts has the derivation.
+  wire WPQ, WSTART;
   wire SPNREQ, SPNTICK, LGRANT, CELLTICK, WINC;
   wire SR0,SR1,SR2,SR3,SR4,SR5,SR6,SR7;
   wire LDADV;
@@ -141,7 +146,7 @@ module video_card (
     .MAPA0(MAPA0), .MAPA1(MAPA1), .RW(RW),
     .A19(PA[19]), .A20(PA[20]),
     .HS0(HS0), .HS1(HS1), .WADV0(WADV0), .WADV1(WADV1),
-    .MASKBIT(MASKBIT), .WSTBV(WSTBV), .SPNREQ(SPNREQ), .SPNTICK(SPNTICK),
+    .MASKBIT(MASKBIT), .WSTBV(WSTBV), .WPQ(WPQ), .WSTART(WSTART), .SPNREQ(SPNREQ), .SPNTICK(SPNTICK),
     .LGRANT(LGRANT), .CELLTICK(CELLTICK),
     .SR0(SR0),.SR1(SR1),.SR2(SR2),.SR3(SR3),
     .SR4(SR4),.SR5(SR5),.SR6(SR6),.SR7(SR7),

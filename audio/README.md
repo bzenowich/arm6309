@@ -52,6 +52,35 @@ ctest --test-dir build-host --output-on-failure
 
 ## Status
 
+⭐ **A MODULE PLAYS ON THE CARD ITSELF, since 2026-09-10.**
+[`hardware/gal/verilog/modplay_tb.sv`](../hardware/gal/verilog/modplay_tb.sv) uploads a
+module's samples into `audio_card.v` through `SPTR`/`SDATA` — real 6809 bus cycles on
+the host port, `ASTAT` b6 honoured on every one — then delivers §5's register stream
+tick by tick, **waiting for the card's own §8.2 timer interrupt** between ticks, and
+records what the four `AD7528` pairs are given. `audio/tools/dacwav` renders that
+through `render.c`'s analogue chain.
+
+⛔ **`refplayer/card.c` is not in that pipeline at any point**, and the run script says
+so at the top. What `refplayer` supplies is software: §4's loader decides where the
+samples land, §5's tick engine decides which register gets which byte on which tick,
+and the second of those is the trace a 6309 port is contracted to reproduce byte for
+byte. The **reference** is libopenmpt and the **control** is `refplayer` scored against
+the same reference — a card that scores like the control plays what the software asked
+for, and one that scores worse is hardware.
+
+**First result, on `mkprobe.py`'s note probe:** the card scores **0.9977** median
+spectral correlation against libopenmpt where the control scores **0.9989**, at
+**−0.01 cents**. It plays the right notes at the right pitch.
+
+⛔ **And it plays them 12 dB too quietly** — §6.1's ×4 is specified and is not built
+([`docs/audio.md`](docs/audio.md) §16 item 40). The card presents `DACVOL` = 64 where
+§6.1 requires 255. Nothing that existed could have caught it: `audio_tb` asserts which
+byte reaches the converter and not what the converter does with it, the differential
+oracle compares the *sample* stream and deliberately not audio, and `abcompare.py`
+normalises level on purpose. **It took rendering the card's own converter pins to a
+file and looking at the peak.**
+
+
 ⭐ **Both CPLDs are fitted and the card is simulated end to end.** `audio_tb` writes a
 channel's `LC`/`LEN`/`PER` through the host port, enables it with `DMACON`, and watches a
 sample byte come out of card RAM through `PEND`, a converter port register and into an

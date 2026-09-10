@@ -5,18 +5,27 @@ export interface ArbIn {
   /** the PIN level: low during $FF00-$FFFF */
   nIopage: 0 | 1
   cpuChip: number
+  /** the CPU's R/W. A WRITE claims no chip - see below. */
+  rw: boolean
   spnreq: boolean
   spnChip: number
 }
 
 export interface ArbOut { gcpu: boolean[]; gspn: boolean[] }
 
-/** graphics.md 5.2.1, verbatim:
- *    GRANT_CPU[n]  = VREQ . (CPUCHIP == n)
+/** graphics.md 5.2.1:
+ *    GRANT_CPU[n]  = VREQ . R/W . (CPUCHIP == n)
  *    GRANT_SPAN[n] = SPNREQ . (SPNCHIP == n) . /GRANT_CPU[n]
- *  and SRCSEL[n] is GRANT_CPU[n], which is why it is not in this interface. */
+ *  and SRCSEL[n] is GRANT_CPU[n], which is why it is not in this interface.
+ *
+ * ⛔ THE R/W LITERAL IS NEW ON 2026-09-10 and it is not a refinement - without
+ * it the machine deadlocks on its first span. A CPU VRAM WRITE IS POSTED
+ * (3.1.1) and needs no access of its own; claiming one makes the CPU's own
+ * stalled write block the span writer that has to finish before /WAIT can
+ * release it. access.jedec.ts has the loop written out, graphics.md 19 item 36
+ * is the finding, and machine_tb is what could see it. */
 export const arbitrate = (io: ArbIn): ArbOut => {
-  const vreq = io.vramsel && io.nIopage === 1
+  const vreq = io.vramsel && io.nIopage === 1 && io.rw
   const gcpu = [0, 1, 2, 3].map((n) => vreq && io.cpuChip === n)
   return {
     gcpu,

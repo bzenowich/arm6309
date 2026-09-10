@@ -14,6 +14,10 @@ module mainboard #(
     input  wire        CLK25,
     input  wire        n_reset,
     input  wire        fast_e,
+    // ⭐ /WAIT, asserted high, from the backplane. U6 holds the divider on it
+    // (machine.md 5 item 8) and until 2026-09-10 this model tied it to zero,
+    // because no testbench had a card in it to pull the line. machine.v does.
+    input  wire        wait_i,
 
     // the CPU, as a 6809E on the motherboard's socket
     input  wire [15:0] la,
@@ -39,7 +43,12 @@ module mainboard #(
     output wire        pa_hi_pulled,
     output wire        dramsel,
     output wire [3:0]  ras,
-    output wire        romsel
+    output wire        romsel,
+    // ⚠ WHETHER THE MOTHERBOARD IS DRIVING D0-D7 AT ALL. `din` always carries
+    // a byte - d_last, when nothing answers - and a machine with cards on the
+    // bus has to know the difference, or two drivers become one OR and the
+    // trap design-review2.md 10 records is back.
+    output wire        din_valid
 );
 
   // ---- U6: the divider, /IOSEL and boot mode ------------------------------
@@ -47,7 +56,7 @@ module mainboard #(
   wire n_bootoe, n_iopage_u3;
   clkdec u6 (.clk25(CLK25), .n_reset(n_reset), .fast_e(fast_e),
              .n_iopage(n_iopage_u3), .la7(la[7]), .la6(la[6]), .la5(la[5]),
-             .la4(la[4]), .la0(la[0]), .wait_i(1'b0), .rw(rw),
+             .la4(la[4]), .la0(la[0]), .wait_i(wait_i), .rw(rw),
              .cnt(cnt), .e(e), .q(q), .run(run),
              .n_iosel(n_iosel), .n_bootoe(n_bootoe));
 
@@ -226,10 +235,17 @@ module mainboard #(
   always @(posedge CLK25) if (driven || !rw) d_last <= rw ? answer : dout;
 
   assign din = driven ? answer : d_last;
+  assign din_valid = driven;
 
   // verilator lint_off UNUSEDSIGNAL
   task automatic load_rom(input int addr, input logic [7:0] v);
     rom[addr] = v;
+  endtask
+  // A whole image, from what software/tools/mkrom.sh writes. Byte 0 of the
+  // file is ROM $00000, which machine.md 7.2 makes logical $E000 in boot mode
+  // and logical $E000 again after RUN, because block 7 points back at it.
+  task automatic load_rom_file(input string path);
+    $readmemh(path, rom);
   endtask
   function automatic logic [7:0] map_lo_at(input int i); return map_lo[i]; endfunction
   function automatic logic [7:0] map_hi_at(input int i); return map_hi[i]; endfunction

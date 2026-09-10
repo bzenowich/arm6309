@@ -120,32 +120,29 @@ PINNODE = PS3 ;
 
 /* --- equations ---------------------------------------------------- */
 WSTB = IOSEL & A6 & A5 & !RW & E ;
-RA0 = IOSEL & A6 & A5 & A0
-      # !IOSEL & SPANBUSY & !MASKBIT
-      # !A6 & SPANBUSY & !MASKBIT
-      # !A5 & SPANBUSY & !MASKBIT
+RA0 = IOSEL & A6 & A5 & !SPANBUSY & A0
+      # SPANBUSY & !MASKBIT
       # !IOSEL & !SPANBUSY & !RP0 & !RP1
       # !A6 & !SPANBUSY & !RP0 & !RP1
       # !A5 & !SPANBUSY & !RP0 & !RP1
       # !IOSEL & RP1
       # !A6 & RP1
       # !A5 & RP1 ;
-RA1 = IOSEL & A6 & A5 & A1
-      # !IOSEL & SPANBUSY
-      # !A6 & SPANBUSY
-      # !A5 & SPANBUSY ;
-RA2 = IOSEL & A6 & A5 & A2
+RA1 = IOSEL & A6 & A5 & !SPANBUSY & A1
+      # SPANBUSY ;
+RA2 = IOSEL & A6 & A5 & !SPANBUSY & A2
       # !IOSEL & !RP0 & !RP1
       # !A6 & !RP0 & !RP1
-      # !A5 & !RP0 & !RP1 ;
-RA3 = IOSEL & A6 & A5 & A3
+      # !A5 & !RP0 & !RP1
+      # SPANBUSY & !RP0 & !RP1 ;
+RA3 = IOSEL & A6 & A5 & !SPANBUSY & A3
       # !IOSEL & RP0
       # !A6 & RP0
       # !A5 & RP0
       # !IOSEL & RP1
       # !A6 & RP1
       # !A5 & RP1 ;
-RA4 = IOSEL & A6 & A5 & A4 ;
+RA4 = IOSEL & A6 & A5 & !SPANBUSY & A4 ;
 WCTRL = IOSEL & A6 & A5 & !RW & E & !A4 & !A3 & !A2 & !A1 & !A0 ;
 VSTATWR = IOSEL & A6 & A5 & !RW & E & A4 & !A3 & !A2 & A1 & A0 ;
 LDLEN = WSTBV & !SPANBUSY ;

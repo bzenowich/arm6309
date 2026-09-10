@@ -9,6 +9,88 @@ to `graphics.md` unless marked otherwise. "Vid-*" identifiers are findings of th
 
 ---
 
+## §5.2.1, §7.4, §13 — the three defects the first running machine found (2026-09-10)
+
+On 2026-09-10 the video card was put in a slot behind a **cycle-accurate 6809E core
+running the boot ROM's own instructions** for the first time
+(`hardware/gal/verilog/machine_tb.sv`, `software/boot/boot.asm`). Twelve testbenches
+and 543 model claims had passed against this card for two days. The machine did not
+reach its second span.
+
+**All three defects are seams between parts that are individually correct**, and all
+three were invisible to every check that existed, for one reason each:
+
+| | Why nothing saw it |
+|---|---|
+| **item 36** — the arbiter refused the span writer the chip the CPU's own stalled write was selecting, so the span could not finish, so `/WAIT` never released | `vspan_tb` drives `E` from a free-running counter. **Its CPU cannot be waited**, so `VRAMSEL` always went away on time and the loop could not close |
+| **item 37** — `SPANBUSY` was set by a level over `E`-high, which `/WAIT` makes unbounded | The same. A six-dot `E`-high is bounded and the level is harmless; only a *stretched* cycle exposes it, and nothing could stretch one |
+| **item 38** — any CPU access to `$FF60`–`$FF7F` took the register file away from the running span, and §7.4's colour path **is** the file's address | `regfile.check.ts` **asserted the defect**: it swept `SPANBUSY` and required the CPU to win in both states, "span running or not" |
+
+### §5.2.1's grant rule — what it used to be
+
+```
+  GRANT_CPU[n]  = VREQ . (CPUCHIP == n)
+  GRANT_SPAN[n] = SPNREQ . (SPNCHIP == n) . /GRANT_CPU[n]
+```
+
+**`VREQ` is now qualified on `R/W`.** A CPU VRAM *write* is posted (§3.1.1) — the byte
+goes into a `'574` and the span writer retires it at `WPTR` — so it never needs a
+framebuffer access of its own. Claiming one closed this loop:
+
+```
+  the write starts a span         -> SPANBUSY
+  SPANBUSY + a CPU VRAM write     -> /WAIT, and U6 holds E HIGH
+  E held high                     -> VRAMSEL stays asserted all cycle
+  VRAMSEL asserted on this chip   -> GSPN is 0, the span never retires
+  the span never retires          -> SPANBUSY never clears -> /WAIT never
+                                     releases -> the machine stops
+```
+
+Cost: one literal on four cells, one product term on `GSPN` and on `SPNGRANT`.
+`access.check.ts` sweeps `R/W` now — it was **held at 0**, which is CLAUDE.md's third
+trap, and holding it is precisely why the check could not see this.
+
+### §7.4's `WSTB` — the edge that was a level
+
+`WSTBV = VRAMSEL & /RW & E` is correct for three of its four consumers and wrong for
+`seqctl`'s `SPANBUSY`, which is set on `WSTB # SPANBUSY & !SPANEND`. Under `/WAIT` the
+level re-set it on every dot of the span's own wait: `SPANEND` fired, `SPANBUSY`
+cleared for one dot, the level set it again, and `WPTR` walked on for ever.
+
+⚠ **An `E`-rise pulse was tried first and it is wrong twice over** — the CPU has not
+driven its data yet, and it starts the span inside the CPU's own bus cycle, so the
+first byte retires against an empty latch. `vspan_tb` reported every span retiring one
+byte short. **The edge is `E`-fall**, which is what §3.1.1 always said: *"all four
+`'574` clock on the same inverted E"*. `WPQ` (registered) and `WSTART` are the two
+cells, and every other consumer keeps the level.
+
+### §13's register file — who owns the address during a span
+
+The CPU's claim is qualified on `!SPANBUSY`. The picture the machine drew had a
+**three-pixel hole in every span** — three, because a retire is one per four dots and a
+bus cycle is twelve — at the point in each span where the CPU's `VSTAT` poll landed.
+
+⭐ **It gives product terms back.** The span's three gated terms collapse to one,
+because "the CPU is not taking it" is implied by `SPANBUSY` itself: `RA1` goes from
+four product terms to two, `RA0` from ten to eight.
+
+### What the repairs cost the parts
+
+| | before | after |
+|---|---|---|
+| `vctrl` logic cells | 98 of 128 | **100 of 128** |
+| `vctrl` flip-flops | 45 | **46** |
+| `vctrl` I/O | 64 of 64 | **61 of 64** |
+| `vsup` I/O | 58 of 64 | **54 of 64** |
+| `vctrl` cascades | 1 | **11** |
+
+⚠ **The I/O drops are the fitter's placement and not headroom the design asked for**,
+and the cascade count is a timing change even where the cell count is flat. Both parts
+re-fit with *"Design fits successfully"*; `gal/cpld/vctrl.fit` and `vsup.fit` are the
+authority.
+
+---
+
 ## §9, §19 item 9 — the `74HC593` `PIDX` counter (closed 2026-09-09)
 
 §9 carried minimal256.md §6.1's sourcing flag verbatim, and §19 item 9 carried it as an

@@ -356,7 +356,7 @@ rather than ranges.
 The obvious problem with a map above 2 MB is that **cards decode only
 `A0`–`A20`**, so an access at 2.5 MB looks to a card exactly like one at
 0.5 MB. Giving every card `A21`–`A24` is four backplane pins the slot does not
-have — and `vctrl` sits at **64 of 64 I/O** (`gal/cpld/vctrl.fit`), with no
+have — and `vctrl` sits at **61 of 64 I/O** (`gal/cpld/vctrl.fit`), with no
 room for four more inputs.
 
 **It does not have to.** `machine.md` §2 already requires every physical decode
@@ -780,7 +780,7 @@ see. **Zero new pins.**
 
 **Which is fortunate**, because the slot has none to give —
 [`lib/slot.ts`](lib/slot.ts) spent its last position on physical `A20` — and
-`vctrl` sits at 64 of 64 I/O, with no room for an address extension.
+`vctrl` sits at 61 of 64 I/O, with no room for an address extension.
 
 > **What is still true** is that the connector's own justification expired when the
 > card format changed: a 240 mm edge holds 98 positions at 0.1″ where the 100 mm

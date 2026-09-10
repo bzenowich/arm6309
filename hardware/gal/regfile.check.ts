@@ -16,6 +16,7 @@ import { join } from "node:path"
 import { assemble, fuseChecksum, toJedec, toReport } from "./jedec/assemble"
 import { Gal22v10, parseJedec } from "./jedec/simulate"
 import { rfaDesign } from "./regfile.jedec"
+import { REGS } from "./regfile"
 
 let failures = 0
 const check = (ok: boolean, claim: string, detail = "") => {
@@ -136,29 +137,52 @@ const cpu = (reg: number, rw: 0 | 1, e: 0 | 1 = 1) => run({
     "and the walk returns the file to SPANLEN when it ends")
 }
 
-/* -- 4. the CPU wins the address while it is accessing the window --------- */
+/* -- 4. who wins the address, and the answer changed on 2026-09-10 --------- */
 {
-  /* Both can be true at once - a CPU register access during an idle fetch
-   * phase - and the CPU's A[4:0] has to win, or the access reads the wrong
-   * register. The equations are OR-of-products with !REGSEL on every
-   * read-back term, so this is a real claim about that gating. */
+  /* ⛔ THIS CHECK USED TO ASSERT THE DEFECT. It swept SPANBUSY and required
+   * the CPU's A[4:0] to win in BOTH states - "span running or not" - which is
+   * what the equations did and what put a three-pixel hole in every span the
+   * machine drew: 7.4's colour path IS the file's address, so a CPU access
+   * during a span retires the byte at the CPU's address instead of WFG/WBG.
+   * graphics.md 19 item 38, and machine_tb is what saw it.
+   *
+   * The rule now: the CPU wins while the span writer is IDLE, and the span
+   * writer keeps the file while it is running. */
   let bad: string | null = null
   for (let reg = 0; reg < 32 && !bad; reg++) {
-    for (const busy of [0, 1] as const) {
-      for (const mask of [0, 1] as const) {
-        const r = run({
-          IOSEL: 1, A6: 1, A5: 1, RW: 1, E: 1, SPANBUSY: busy, MASKBIT: mask,
-          A0: (reg & 1) as 0 | 1, A1: ((reg >> 1) & 1) as 0 | 1, A2: ((reg >> 2) & 1) as 0 | 1,
-          A3: ((reg >> 3) & 1) as 0 | 1, A4: ((reg >> 4) & 1) as 0 | 1,
-        })
-        if (r.ra !== reg) {
-          bad = `+$${reg.toString(16)} with SPANBUSY=${busy} MASKBIT=${mask} -> RA=${r.ra}`
-        }
+    for (const mask of [0, 1] as const) {
+      const r = run({
+        IOSEL: 1, A6: 1, A5: 1, RW: 1, E: 1, SPANBUSY: 0, MASKBIT: mask,
+        A0: (reg & 1) as 0 | 1, A1: ((reg >> 1) & 1) as 0 | 1, A2: ((reg >> 2) & 1) as 0 | 1,
+        A3: ((reg >> 3) & 1) as 0 | 1, A4: ((reg >> 4) & 1) as 0 | 1,
+      })
+      if (r.ra !== reg) {
+        bad = `+$${reg.toString(16)} idle, MASKBIT=${mask} -> RA=${r.ra}`
       }
     }
   }
   check(bad === null,
-    "a CPU access beats the span writer's own address, span running or not", bad ?? "")
+    "a CPU access reaches its own register while the span writer is idle", bad ?? "")
+
+  /* item 38: and it does NOT while one is running. Every one of the 32
+   * addresses, both mask bits - the span's colour has to survive all of them. */
+  bad = null
+  for (let reg = 0; reg < 32 && !bad; reg++) {
+    for (const mask of [0, 1] as const) {
+      const r = run({
+        IOSEL: 1, A6: 1, A5: 1, RW: 1, E: 1, SPANBUSY: 1, MASKBIT: mask,
+        A0: (reg & 1) as 0 | 1, A1: ((reg >> 1) & 1) as 0 | 1, A2: ((reg >> 2) & 1) as 0 | 1,
+        A3: ((reg >> 3) & 1) as 0 | 1, A4: ((reg >> 4) & 1) as 0 | 1,
+      })
+      const want = mask ? REGS.WFG : REGS.WBG
+      if (r.ra !== want) {
+        bad = `+$${reg.toString(16)} during a span, MASKBIT=${mask} -> RA=${r.ra}, want ${want}`
+      }
+    }
+  }
+  check(bad === null,
+    "item 38: and a CPU access during a span does NOT - the file stays on WFG/WBG, " +
+    "whatever address the CPU is presenting", bad ?? "")
 }
 
 /* ⭐ Twelve dedicated inputs (1-11, 13) and nothing on a macrocell pin: FP0 and

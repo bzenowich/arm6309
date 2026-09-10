@@ -21,7 +21,7 @@
     "render:boards": "bun run place/render.ts",
     "check:sim": "cd gal && verilator --binary --timing -Wall -Wno-DECLFILENAME --top-module mmu_tb mmu.v mmu_tb.sv -o mmu_tb && ./obj_dir/mmu_tb && verilator --binary --timing -Wall -Wno-DECLFILENAME --top-module clkdec_tb clkdec.v clkdec_tb.sv -o clkdec_tb && ./obj_dir/clkdec_tb",
     "build": "for f in mainboard/mainboard.circuit.tsx cards/*.circuit.tsx; do echo \"-- $f\"; tsci build \"$f\" || exit 1; done",
-    "build:all": "npm run gen:pld && npm run build && npm run check && npm run check:netlist && npm run check:sim && npm run check:video",
+    "build:all": "npm run gen:pld && npm run build && npm run check && npm run check:netlist && npm run check:sim && npm run check:video && npm run check:machine",
     "dev": "tsci dev",
     "census": "bun run gal/census.ts",
     "census:audio": "bun run gal/audio.census.ts",
@@ -36,7 +36,10 @@
     "gen:pld": "bun run gal/cpld.gen.ts",
     "check:pxsel": "bun run gal/pxsel.check.ts",
     "check:docs": "bun run lib/docs.check.ts",
-    "check:decode": "bun run lib/decode.check.ts"
+    "check:decode": "bun run lib/decode.check.ts",
+    "rom": "sh ../software/tools/mkrom.sh",
+    "check:machine": "sh gal/verilog/run-machine.sh",
+    "check:modplay": "sh gal/verilog/run-modplay.sh /tmp/arm6309-mod/00_notes.mod 2"
   },
   "type": "commonjs",
   "dependencies": {

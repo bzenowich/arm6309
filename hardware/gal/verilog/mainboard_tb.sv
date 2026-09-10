@@ -15,10 +15,13 @@ module mainboard_tb;
   always #1 CLK25 <= ~CLK25;
 
   logic n_reset = 0, fast_e = 0, rw = 1;
+  // No card in this testbench, so nothing pulls /WAIT. machine_tb has one.
+  logic wait_i = 0;
   logic [15:0] la = 16'hFFFE;
   logic [7:0]  dout = 0;
   wire  [7:0]  din;
   wire e, q, run, n_iosel, n_iopage_bp, pa_valid, pa_conflict, dramsel, romsel;
+  wire din_valid;
   // The top four physical bits, which never leave the board and which nothing
   // drove at all until 2026-09-09 - machine.md 5 item 14.
   wire pa_hi_valid, pa_hi_conflict, pa_hi_pulled;

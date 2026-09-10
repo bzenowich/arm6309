@@ -37,10 +37,8 @@ module rfa (
          (IOSEL & A6 & A5 & ~RW & E);
   // EXTERNAL - 7.4: the mask bit IS the register file's address bit 0, inverted
   assign RA0 =
-         (IOSEL & A6 & A5 & A0)
-         | (~IOSEL & SPANBUSY & ~MASKBIT)
-         | (~A6 & SPANBUSY & ~MASKBIT)
-         | (~A5 & SPANBUSY & ~MASKBIT)
+         (IOSEL & A6 & A5 & ~SPANBUSY & A0)
+         | (SPANBUSY & ~MASKBIT)
          | (~IOSEL & ~SPANBUSY & ~RP0 & ~RP1)
          | (~A6 & ~SPANBUSY & ~RP0 & ~RP1)
          | (~A5 & ~SPANBUSY & ~RP0 & ~RP1)
@@ -49,19 +47,18 @@ module rfa (
          | (~A5 & RP1);
   // EXTERNAL
   assign RA1 =
-         (IOSEL & A6 & A5 & A1)
-         | (~IOSEL & SPANBUSY)
-         | (~A6 & SPANBUSY)
-         | (~A5 & SPANBUSY);
+         (IOSEL & A6 & A5 & ~SPANBUSY & A1)
+         | (SPANBUSY);
   // EXTERNAL
   assign RA2 =
-         (IOSEL & A6 & A5 & A2)
+         (IOSEL & A6 & A5 & ~SPANBUSY & A2)
          | (~IOSEL & ~RP0 & ~RP1)
          | (~A6 & ~RP0 & ~RP1)
-         | (~A5 & ~RP0 & ~RP1);
+         | (~A5 & ~RP0 & ~RP1)
+         | (SPANBUSY & ~RP0 & ~RP1);
   // EXTERNAL
   assign RA3 =
-         (IOSEL & A6 & A5 & A3)
+         (IOSEL & A6 & A5 & ~SPANBUSY & A3)
          | (~IOSEL & RP0)
          | (~A6 & RP0)
          | (~A5 & RP0)
@@ -70,7 +67,7 @@ module rfa (
          | (~A5 & RP1);
   // EXTERNAL
   assign RA4 =
-         (IOSEL & A6 & A5 & A4);
+         (IOSEL & A6 & A5 & ~SPANBUSY & A4);
   // EXTERNAL
   assign WCTRL =
          (IOSEL & A6 & A5 & ~RW & E & ~A4 & ~A3 & ~A2 & ~A1 & ~A0);

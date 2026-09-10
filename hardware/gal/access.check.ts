@@ -36,18 +36,24 @@ const wrow = build(wrowDesign, "wrow")
   const GC = [0, 1, 2, 3].map((n) => arb.assembly.usage.find((u) => u.name === `GCPU${n}`)!.pin)
   const GS = [0, 1, 2, 3].map((n) => arb.assembly.usage.find((u) => u.name === `GSPN${n}`)!.pin)
   let bad: string | null = null
-  let sameChipYield = 0, cpuAbsent = 0
-  for (let bits = 0; bits < 128 && !bad; bits++) {
+  let sameChipYield = 0, cpuAbsent = 0, writeYield = 0
+  /* ⛔ R/W IS SWEPT NOW AND IT WAS HELD AT 0. That is CLAUDE.md's third trap -
+   * "a check that holds an input constant cannot see a defect in it" - and the
+   * defect it could not see was the machine's first span deadlocking, because
+   * the grant rule read the same for a posted write as for a read. 256
+   * combinations, not 128. graphics.md 19 item 36. */
+  for (let bits = 0; bits < 256 && !bad; bits++) {
     const vramsel = !!(bits & 1), nIopage = ((bits >> 1) & 1) as 0 | 1
     const cpuChip = (bits >> 2) & 3, spnreq = !!((bits >> 4) & 1), spnChip = (bits >> 5) & 3
+    const rw = !!((bits >> 7) & 1)
     const pins = arb.gal.evaluate({
       1: vramsel ? 1 : 0, 2: nIopage, 3: (cpuChip & 1) as 0 | 1, 4: ((cpuChip >> 1) & 1) as 0 | 1,
       5: spnreq ? 1 : 0, 6: (spnChip & 1) as 0 | 1, 7: ((spnChip >> 1) & 1) as 0 | 1,
       8: spnreq ? 1 : 0, // SPANBUSY, for /WAIT
       9: 1,              // E, for /WAIT's E qualification (machine.md 5 item 8)
-      10: 0,             // R/W low - a write, so /WAIT may assert
+      10: rw ? 1 : 0,
     })
-    const want = arbitrate({ vramsel, nIopage, cpuChip, spnreq, spnChip })
+    const want = arbitrate({ vramsel, nIopage, cpuChip, rw, spnreq, spnChip })
     for (let n = 0; n < 4; n++) {
       if (pins[GC[n]] !== (want.gcpu[n] ? 1 : 0) || pins[GS[n]] !== (want.gspn[n] ? 1 : 0)) {
         bad = `chip ${n}: fuses give CPU=${pins[GC[n]]} SPAN=${pins[GS[n]]}, ` +
@@ -58,14 +64,22 @@ const wrow = build(wrowDesign, "wrow")
        * to prevent, and it is worth asserting separately from the model. */
       if (pins[GC[n]] === 1 && pins[GS[n]] === 1) bad = `chip ${n} granted to both`
     }
-    const vreq = vramsel && nIopage === 1
+    const vreq = vramsel && nIopage === 1 && rw
     if (vreq && spnreq && cpuChip === spnChip && pins[GS[spnChip]] === 0) sameChipYield++
     if (!vreq && spnreq && pins[GS[spnChip]] === 1) cpuAbsent++
+    if (vramsel && nIopage === 1 && !rw && spnreq && cpuChip === spnChip
+        && pins[GS[spnChip]] === 1) writeYield++
   }
-  check(bad === null, "the arbiter matches 5.2.1 over all 128 input combinations", bad ?? "")
+  check(bad === null, "the arbiter matches 5.2.1 over all 256 input combinations", bad ?? "")
   /* Item 20's three cases, named. */
   check(sameChipYield > 0, "item 20 (a): CPU and span on the same chip - the span writer yields")
   check(cpuAbsent > 0, "item 20 (b): CPU absent entirely - the span writer takes the chip anyway")
+  /* ⛔ THE CASE THAT DEADLOCKED THE MACHINE, now a claim: the CPU's own posted
+   * VRAM write must NOT take the chip, or it blocks the span it just started
+   * and /WAIT never releases. graphics.md 19 item 36. */
+  check(writeYield > 0,
+    "item 36: a CPU VRAM WRITE on the same chip - the span writer takes it anyway, " +
+    "because a posted write needs no access of its own")
   check(arb.assembly.usage.length === 10,
     "item 20 (c): 8 grants - SRCSEL[n] IS GRANT_CPU[n], not a second macrocell - " +
     "plus the two the spare capacity was spent on: SPNGRANT and /WAIT",
@@ -81,16 +95,16 @@ const wrow = build(wrowDesign, "wrow")
    * writer is refused when the CPU wants THE SAME chip, so it is a comparison
    * and not a decode. Six terms, and the exhaustive check below is what says
    * the two are the same function. */
-  check(G.used === 6, "SPNGRANT is 6 product terms, not the 16 it was written as",
+  check(G.used === 7, "SPNGRANT is 7 product terms, not the 16 it was written as",
     `${G.used}/${G.available}`)
   let orBad: string | null = null
-  for (let bits = 0; bits < 128; bits++) {
+  for (let bits = 0; bits < 256; bits++) {
     const vramsel = !!(bits & 1), nIopage = ((bits >> 1) & 1) as 0 | 1
     const cpuChip = (bits >> 2) & 3, spnreq = !!((bits >> 4) & 1), spnChip = (bits >> 5) & 3
     const pins = arb.gal.evaluate({
       1: vramsel ? 1 : 0, 2: nIopage, 3: (cpuChip & 1) as 0 | 1, 4: ((cpuChip >> 1) & 1) as 0 | 1,
       5: spnreq ? 1 : 0, 6: (spnChip & 1) as 0 | 1, 7: ((spnChip >> 1) & 1) as 0 | 1, 8: 1,
-      9: 1, 10: 0,
+      9: 1, 10: ((bits >> 7) & 1) as 0 | 1,
     })
     const anyGrant = GS.some((p) => pins[p] === 1) ? 1 : 0
     if (pins[G.pin] !== anyGrant) orBad = `SPNGRANT ${pins[G.pin]} vs any grant ${anyGrant}`
