@@ -172,25 +172,32 @@ export const HCT244: PartDef = {
 /** SST39SF040 512K x 8 flash, 70 ns, PDIP-32. Two of them are the 1 MB boot
  * ROM at physical 2.0-3.0 M; physical A19 picks between them (gal/u9.pld).
  *
- * ⚠ UNVERIFIED, AND THIS IS THE FIRST PART ON THE BOARD THAT IS SINCE
- * 2026-09-06. There is no SST39SF040 datasheet in reference/datasheets/, so the
- * numbering below is the JEDEC 32-pin byte-wide flash pinout written from
- * familiarity - which is EXACTLY the failure mode hardware/history.md's
- * finding 4 records for the map SRAM, on a part whose pinout is equally
- * "obvious".
+ * ⭐ CONFIRMED 2026-09-10 against the datasheet, and the numbering below was
+ * right on all 32 pins. It had been the only unverified pinout on the board
+ * since 2026-09-06, written from the JEDEC 32-pin byte-wide flash convention -
+ * the same way the map SRAM was written before hardware/history.md's finding 4
+ * caught three rotated pins in it.
  *
- * TWO THINGS TO CHECK, and they are the two that differ from the AS6C4008
- * sitting above it in this file:
- *   1. pin 1 is A18 on both, but pin 3 is A15 on 4 Mbit FLASH and A14 on the
- *      4 Mbit SRAM - the address block is NOT the same permutation
- *   2. pin 31 is /WE on flash and A15 on the SRAM
+ * THE TWO THINGS THE UNVERIFIED NOTE SAID TO CHECK, both now read off Figure 4
+ * (32-pin PDIP, top view), and both were already correct:
+ *   1. pin 3 is A15 on this part and A14 on the AS6C4008 above it - the
+ *      address block is NOT the same permutation, and it was not written as
+ *      though it were
+ *   2. pin 31 is /WE here and A15 on the SRAM
  * Getting either wrong swaps address lines and the ROM reads as noise.
  *
- * UNVERIFIED_PARTS below is derived from this field, so it reappears in
- * `npm run check` until a datasheet is fetched. hardware/README.md open item 1.
+ * ⚠ PIN 1 IS A18 ONLY ON THE 4 Mbit PART. It is NC on the SST39SF010A and
+ * SST39SF020A, which share this datasheet and this footprint - so a 1 or
+ * 2 Mbit substitute silently loses the top address line rather than failing
+ * to fit. The 512K x 8 device is the one machine.md 7.2 specifies.
+ *
+ * The 600-mil body is the datasheet's own ("A 600 mil, 32-pin PDIP is also
+ * available"), which is the dimension finding 4 got wrong on the map SRAM.
+ * Grades are 45/55/70 ns; 70 is the one ram.md budgets.
  */
 export const FLASH_512K: PartDef = {
-  provenance: "unverified",
+  provenance: "confirmed",
+  source: "reference/datasheets/SST39SF040.pdf fig 4 (DS25022A, 32-pin PDIP)",
   footprint: "dip32_w0.6in",
   pins: {
     1: "A18", 2: "A16", 3: "A15", 4: "A12", 5: "A7", 6: "A6", 7: "A5", 8: "A4",
@@ -237,18 +244,38 @@ export const SIMM30: PartDef = {
  * forgets. This package exists because that interval cannot come from anything
  * already on the board.
  *
- * ⚠ UNVERIFIED. There is no 74HC4040 datasheet in reference/datasheets/ and the
- * numbering below is the standard 4040 pinout written from familiarity - the
- * failure mode hardware/history.md finding 4 records. The Q outputs are NOT in
- * pin order on this part, which is exactly what gets written from memory
- * wrongly: check Q0-Q11 individually, and check that MR is ACTIVE HIGH - it is
- * on a 4040, unlike almost everything else on this board. */
+ * ⛔ CONFIRMED 2026-09-10, AND THREE PINS WERE ROTATED - THE SAME SHAPE, ON
+ * THE SAME BOARD, AS hardware/history.md FINDING 4. The note that stood here
+ * said "the Q outputs are NOT in pin order on this part, which is exactly what
+ * gets written from memory wrongly: check Q0-Q11 individually". They were
+ * written from memory, and pins 12, 13 and 15 were a 3-cycle rotation of the
+ * truth:
+ *
+ *     pin 12   was Q10   is Q8    <- the tap the design actually uses
+ *     pin 13   was Q8    is Q7
+ *     pin 15   was Q7    is Q10
+ *
+ * ⚠ WHAT IT WOULD HAVE COST, and why nothing caught it: mainboard.circuit.tsx
+ * connects `Q8: "net.REFCLK"` BY NAME, so the netlist is right and
+ * check:netlist is happy. The error is in the pin NUMBER behind the name, so
+ * it appears for the first time at layout - the REFCLK trace would have gone
+ * to physical pin 13, which is Q7, and ram.md 6.3.1's 10.16 us refresh
+ * interval would have been 5.08 us. DRAM retention still holds (2.6 ms against
+ * 8), so it would not have failed; it would have quietly spent twice the
+ * refresh bandwidth forever. Finding 4's sentence again: a name-level netlist
+ * check cannot see a number-level footprint error.
+ *
+ * Q1' on the datasheet is the first stage and is Q0 here - the names below are
+ * this board's 0-based ones, per the file header. MR IS ACTIVE HIGH, which the
+ * old note also said and which the datasheet confirms ("a high voltage level
+ * on the MR line resets all counters to their zero state"). */
 export const HC4040: PartDef = {
-  provenance: "unverified",
+  provenance: "confirmed",
+  source: "reference/datasheets/CD74HC4040.pdf p.1 (CD74HC4040E, 16 Ld PDIP)",
   footprint: "dip16_w0.3in",
   pins: {
     1: "Q11", 2: "Q5", 3: "Q4", 4: "Q6", 5: "Q3", 6: "Q2", 7: "Q1", 8: "GND",
-    9: "Q0", 10: "CLK", 11: "MR", 12: "Q10", 13: "Q8", 14: "Q9", 15: "Q7",
+    9: "Q0", 10: "CLK", 11: "MR", 12: "Q8", 13: "Q7", 14: "Q9", 15: "Q10",
     16: "VCC",
   },
 }
@@ -258,8 +285,14 @@ export const PARTS: Record<string, PartDef> = {
   SIMM30, HC4040,
 }
 
-/** Derived, so it cannot go stale the way the hand-written list did. Empty
- * since 2026-09-06; a part added without a datasheet reappears here. */
+/** Derived, so it cannot go stale the way the hand-written list did.
+ *
+ * ⛔ IT SAID "Empty since 2026-09-06" UNTIL 2026-09-10 AND IT WAS NEVER EMPTY -
+ * FLASH_512K, SIMM30 and HC4040 were all in it, and nothing imported this
+ * export, so no check ever read the list and the prose beside it drifted for
+ * four days. Same shape as CLAUDE.md's "a design output can be absent, and
+ * prose does not notice": a derived value nobody asserts on is not a check.
+ * lib/netlist.check.ts now pins the contents against KNOWN_UNVERIFIED. */
 export const UNVERIFIED_PARTS: Record<string, PartDef> = Object.fromEntries(
   Object.entries(PARTS).filter(([, p]) => p.provenance !== "confirmed"),
 )

@@ -9,6 +9,41 @@ to say, and why each claim changed. Section numbers refer to `audio.md`. "Aud-*"
 
 ---
 
+## §16 item 37 open items 1 and 2 — the two datasheets arrived (2026-09-10)
+
+Item 37 was written on 2026-09-10 with two of its numbers unread. Both were fetched the
+same day from Octopart's datasheet CDN, and one of them changed the answer.
+
+**Open item 2 said:**
+
+> ⚠ **No `IS61C6416` datasheet is in the repository**, so the 6 ns of write setup above
+> is an assumption. Same posture as item 15's missing converter datasheet.
+
+**Closed, and the assumption was right.** `t_SD` is 6 ns — for the `-12` grade, which is
+the grade §5.3 and §14.1 specify. The change is that the grade is now load-bearing on the
+adder budget rather than only on §3.2's stage-A read.
+
+**Open item 1 said, of the fix for the over-temperature shortfall:**
+
+> The lever is a faster family for those four packages: `74F283` is period (1979) and
+> roughly 4× quicker, ⚠ **and it is not free** — it cannot drive `74HC` inputs (`V_OH`
+> 2.7 V against `V_IH` 3.15 V), so everything `SD` feeds becomes `74HCT`, and fast
+> bipolar edges beside the analogue section are exactly item 9's risk. **Get its
+> datasheet before costing it**, which is the lesson this item is.
+
+**The datasheet was got, and it refused the part** — which is the lesson working. The
+level prediction was correct (`V_OH` 2.7 V min), but two numbers nobody had guessed
+decided it first: `I_CC` **55 mA per package**, and ⛔ **no plastic DIP in the packaging
+addendum at all** — commercial orderable is `SN74F283D`, SOIC. A through-hole board
+cannot use it, so `net.md` §13.6's availability question settles it before the electrical
+argument is reached.
+
+`74ACT283` replaced it in the item as the candidate to cost: **16 ns worst case over
+−40…85 °C** against the `'HC283`'s 39 ns at 25 °C, and `V_OH` **4.4 V**, so it keeps the
+card `74HC` throughout and raises no item 9 risk. ⚠ Its availability is the open half.
+
+---
+
 ## §7.1 / §10 / §16 item 29 — the jack got a driver (2026-09-09)
 
 §7.1 put a **line-level** signal on a 3.5 mm connector and flagged the consequence

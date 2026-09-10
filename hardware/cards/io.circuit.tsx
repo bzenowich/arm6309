@@ -201,12 +201,20 @@ export default () => (
       *     defect and 3.4's fast-E rating both go: this part is clocked by
       *     its own crystal and never sees backplane E at all
       *
-      * ⚠ THE PINOUT IS UNVERIFIED. There is no TL16C550C datasheet in
-      * reference/datasheets/ and the numbering below is written from
-      * familiarity - the failure mode hardware/history.md finding 4 records.
-      * Check the PDIP-40 package specifically: TI's current catalogue lists
-      * FN (PLCC-44) and PT (TQFP-48), and whether the DIP is still made is
-      * the first question about the part (net.md 13.6).
+      * ⭐ THE PINOUT IS VERIFIED SINCE 2026-09-10 against Table 4-1 of
+      * reference/datasheets/TL16C550C.pdf (SLLS177I), column NO.N - and it
+      * WAS WRONG, in exactly the way hardware/history.md finding 4 records
+      * for the map SRAM. See the RD1/RD2 note below.
+      *
+      * ⛔ THE PDIP-40 IS NOT ORDERABLE. The N package is drawn in the
+      * datasheet (Figure 4-1) but carries "Not Recommended for New Designs",
+      * and the packaging addendum has no ACTIVE N row at all: commercial
+      * orderable is FN (PLCC-44), PT (LQFP-48) and PFB (TQFP-48). By
+      * net.md 13.6's ordering - does a part exist, is it available, does it
+      * fit - this footprint fails question two, and serial.md 9.2 carries the
+      * decision. The DIP is drawn here because it is what the card was
+      * specified as; moving to the PLCC-44 socket is a live open item and not
+      * a redraw this file should make on its own.
       *
       * ⚠ INTR IS ACTIVE HIGH AND TOTEM-POLE. The 6551's /IRQ was open-drain
       * and wire-ORed onto the backplane directly; THIS PART CANNOT. It goes
@@ -225,7 +233,7 @@ export default () => (
         pin6: "D5", pin7: "D6", pin8: "D7", pin9: "RCLK", pin10: "SIN",
         pin11: "SOUT", pin12: "CS0", pin13: "CS1", pin14: "nCS2",
         pin15: "nBAUDOUT", pin16: "XIN", pin17: "XOUT", pin18: "nWR",
-        pin19: "WR", pin20: "GND", pin21: "RD", pin22: "nRD", pin23: "nDDIS",
+        pin19: "WR", pin20: "GND", pin21: "nRD", pin22: "RD", pin23: "nDDIS",
         pin24: "nTXRDY", pin25: "ADS", pin26: "A2", pin27: "A1", pin28: "A0",
         pin29: "nRXRDY", pin30: "INTR", pin31: "nOUT2", pin32: "nRTS",
         pin33: "nDTR", pin34: "nOUT1", pin35: "MR", pin36: "nCTS",
@@ -241,6 +249,18 @@ export default () => (
         /* Intel-style strobes, synthesised from E and R/W on U14 - one
          * product term each (serial.md 9.1). The active-high halves are
          * tied off. */
+        /* ⛔ RD1 AND RD2 WERE SWAPPED HERE UNTIL 2026-09-10, AND THE ERROR
+         * WAS SELF-CONCEALING because the WRITE pair beside it is right.
+         * Table 4-1: RD1 (pin 21) is active LOW, RD2 (pin 22) active HIGH,
+         * and the datasheet says to tie the unused one to its INACTIVE level
+         * - "RD2 tied low or RD1 tied high". This file had pin 21 labelled
+         * "RD" and pin 22 "nRD", so it tied pin 21 - the active-low input -
+         * to GND, which ASSERTS READ PERMANENTLY, and drove pin 22 with the
+         * active-low SER_RD, which asserts a read exactly when there is not
+         * one. The UART would have driven D0-D7 through every write it was
+         * selected for, and popped the RX FIFO doing it.
+         * Nothing could have caught it: check:netlist reads the MOTHERBOARD
+         * circuit.json, and no card has a netlist check. */
         nRD: "net.SER_RD", nWR: "net.SER_WR", RD: "net.GND", WR: "net.GND",
         CS0: "net.V5", CS1: "net.V5", nCS2: "net.SER_CS",
         ADS: "net.GND",

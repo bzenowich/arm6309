@@ -7,6 +7,8 @@
 const path = process.argv[2] ?? "dist/mainboard/mainboard/circuit.json"
 const cj: any[] = JSON.parse(await Bun.file(path).text())
 
+import { UNVERIFIED_PARTS } from "./parts"
+
 const el = (t: string) => cj.filter((e) => e.type === t)
 const byId = new Map(cj.map((e) => [e.source_component_id ?? e.source_port_id ?? e.source_net_id, e]))
 
@@ -451,6 +453,26 @@ check(pinsOn("U5", "LA3").length === 1,
   "machine.md 3's {TASK, block} write index")
 check(pinsOn("U6", "R_W").length === 1,
   "U6 takes R/W, which is what makes the $FFB1 strobe a write and not a read")
+
+/* -- lib/parts.ts: every pinout is read off a datasheet -------------------
+ *
+ * hardware/README.md open item 1 and history.md finding 4. UNVERIFIED_PARTS is
+ * derived from each PartDef's provenance, but until 2026-09-10 nothing
+ * imported it, so the list was free to grow while its own comment claimed it
+ * was empty. Pinning it here is what makes "confirmed" mean something: adding
+ * a part without a datasheet fails, and so does confirming one without
+ * striking it off this list. */
+const KNOWN_UNVERIFIED = [
+  /* A 30-pin SIMM pinout is a JEDEC standard rather than a part datasheet, so
+   * this one closes against a module datasheet or the JEDEC sheet, not against
+   * a vendor PDF. It also still wants the measured footprint of open item 2. */
+  "SIMM30",
+].sort()
+const stillUnverified = Object.keys(UNVERIFIED_PARTS).sort()
+check(
+  stillUnverified.join(",") === KNOWN_UNVERIFIED.join(","),
+  `lib/parts.ts pinouts: ${stillUnverified.length} unverified, and they are the ${KNOWN_UNVERIFIED.length} expected`,
+  `have [${stillUnverified.join(" ")}] expected [${KNOWN_UNVERIFIED.join(" ")}]`)
 
 console.log(failures === 0 ? "\nmainboard netlist OK" : `\n${failures} failure(s)`)
 process.exit(failures === 0 ? 0 : 1)

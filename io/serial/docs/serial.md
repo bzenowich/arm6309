@@ -854,12 +854,14 @@ be acted on from them:
 
 ⭐ **The sourcing note this section used to carry is deleted rather than updated.** It
 said row 1 was "the only part on this card that cannot be substituted with a jellybean"
-and had **two** attributes to match. It has one — buy a `TL16C550C` — and
-⚠ **the remaining question is the package.** TI's current catalogue lists `FN` (PLCC-44)
-and `PT` (TQFP-48); whether the **PDIP-40** is still made is the first question about the
-part (`net.md` §13.6). `hardware/lib/parts.ts` has no entry for it and
-`hardware/cards/io.circuit.tsx` marks the pinout **unverified** until a datasheet is in
-`reference/datasheets/`.
+and had **two** attributes to match. It has one — buy a `TL16C550C`.
+
+⛔ **And the package is answered, in the negative (2026-09-10).** The datasheet is in
+`reference/datasheets/`, the pinout is verified, and the **PDIP-40 is not orderable**:
+the `N` package is "Not Recommended for New Designs" and has no ACTIVE row in the
+packaging addendum. Orderable is `FN` (PLCC-44), `PT` (LQFP-48) and `PFB` (TQFP-48).
+§12 row 1a carries the decision; §12.1 has the rest of what the datasheet settled,
+including a wiring defect it found in `hardware/cards/io.circuit.tsx`.
 
 For scale: PS/2 is 11 (`ps2.md` §9), audio's count is in `audio.md` §10 and the video
 card's in `graphics.md` §14; serial is **3**. The card is small because the problem was
@@ -957,7 +959,8 @@ central one shipped inside a CoCo.
 | # | Step | Exit criterion |
 |---|---|---|
 | 0 | **CLOSED 2026-09-09 — tier 1 is taken** (§9.1). The `16C550` replaces the 6551 one for one; the "+1 IC" was a counting error. The window moved with it: `$FF30`–`$FF3F` for the card, `$FF38`–`$FF3F` for this half, ⚠ and the decode is `A0`–`A6` | done |
-| 1 | **Get a `TL16C550C` datasheet** into `reference/datasheets/` and correct §7.2, §7.3 and the pinout against it. ⚠ **The pinout is unverified and it is the only unverified part on this card** — `hardware/cards/io.circuit.tsx` carries it from familiarity. Three things to look up specifically: **(a) is the PDIP-40 still made?** TI's catalogue lists PLCC-44 and TQFP-48, and availability is the first question about a part (`net.md` §13.6). **(b)** the `FCR` trigger-level encoding, since §5.4's arithmetic assumes 14. **(c)** the `IIR` character-timeout condition, which is what stops a partial FIFO sitting unread | §13 items 1 and 5 closed; the pinout `confirmed` in `hardware/lib/parts.ts`; the three lookups recorded with the datasheet cited |
+| 1 | ⭐ **CLOSED 2026-09-10 — the datasheet is in `reference/datasheets/TL16C550C.pdf`** (SLLS177I), and it found a defect. See the three answers below the table; the pinout in `hardware/cards/io.circuit.tsx` is corrected and marked verified against Table 4-1 | done, and **one new open item**: the package (row 1a) |
+| **1a** | ⛔ **NEW 2026-09-10 — THE PDIP-40 IS NOT ORDERABLE, so decide the package.** The `N` package is drawn in the datasheet and marked **"Not Recommended for New Designs"**, and the packaging addendum lists **no ACTIVE `N` row at all** — commercial orderable is `FN` (PLCC-44), `PT` (LQFP-48), `PFB` (TQFP-48). `net.md` §13.6 asks *does a part exist, is it available, does it fit*, in that order, and the DIP fails question two. **The card is drawn as a DIP-40 and cannot be built as one from new stock.** Either take the PLCC-44 in a socket — which is what the video and audio cards already do for their `ATF1508AS`, so the machine has the practice — or accept NOS/used DIPs and say so | a package chosen, `io.circuit.tsx` redrawn if it changes, and the IC count and board length re-checked against `place/parts.ts` |
 | 2 | **Measure NitrOS-9's interrupt dispatch cost** — shared with `ps2.md` §13 step 8 | §5's ceiling becomes a number; the FIFO question is settled for both cards |
 | 3 | **Breadboard the UART on the bus exerciser** (`graphics.md` §16.1) — no 6309 core needed | `SCR` reads back what was written (the standard is-it-there probe); the divisor latches work and `LCR` bit 7 swaps them in and out; `IIR` reports "no interrupt" without side effects — §7.3's claim, on silicon |
 | 4 | **Loopback at 9600**, `TxD` to `RxD` | a byte written appears in the receive register with no framing or parity error |
@@ -967,6 +970,56 @@ central one shipped inside a CoCo.
 
 **Step 2 gates step 6**, and it is the same measurement the PS/2 card is waiting on.
 **Step 7 is shared with `ps2.md` §13 step 9** and cannot be run on either card alone.
+
+### 12.1 ⭐ What the datasheet answered, and the defect it found (2026-09-10)
+
+Step 1 named three lookups. All three are answered from
+[`TL16C550C.pdf`](../../../reference/datasheets/TL16C550C.pdf), and a fourth thing turned
+up that nobody had asked for.
+
+**(a) Is the PDIP-40 still made?** No — row 1a above. The pinout itself is confirmed:
+Table 4-1's `NO.N` column is the classic 16550 DIP-40, `D0`–`D7` on 1–8, `VSS` on 20,
+`VCC` on 40.
+
+**(b) The `FCR` receiver-trigger encoding** is Table 7-4, and §5.4's assumption of 14 is
+right:
+
+| `FCR7` | `FCR6` | trigger (bytes) |
+|---|---|---|
+| 0 | 0 | 1 |
+| 0 | 1 | 4 |
+| 1 | 0 | 8 |
+| **1** | **1** | **14** |
+
+So the card's initialisation writes **`FCR = $C1`** — trigger 14, FIFOs enabled. ⚠ `FCR0`
+must be set in the same write or the other bits are not programmed at all.
+
+**(c) The `IIR` character timeout** is `IIR = $0C`, priority 2, and its condition is
+precise: **at least one character in the RX FIFO, and neither a new character received
+nor a host read of the FIFO for four continuous character times**, timed off `RCLK` so
+the delay scales with the baud rate. It is cleared by reading one character from the
+FIFO. That is what stops a partial FIFO — a final 3 bytes of a 17-byte transfer, say —
+sitting unread behind a trigger level of 14.
+
+⛔ **(d) The thing nobody asked, and it was a real defect: `RD1` and `RD2` were
+swapped in the board file.** Table 4-1: **`RD1` (pin 21) is active LOW, `RD2` (pin 22)
+active HIGH**, and the sheet says to tie the unused one to its *inactive* level — "`RD2`
+tied low or `RD1` tied high". `io.circuit.tsx` had pin 21 labelled `RD` and pin 22
+`nRD`, so it **tied pin 21 to GND — asserting read permanently** — and drove pin 22 with
+the active-low `SER_RD`, asserting a read exactly when there was not one. The UART would
+have driven `D0`–`D7` through every write it was selected for, and popped the RX FIFO
+doing it.
+
+⚠ **What makes this the interesting one is that the write pair beside it is correct.**
+`WR1`/`WR2` have the identical structure and identical wording in the datasheet, and
+this file gets them right — `nWR` ← `SER_WR`, `WR` ← GND. A reader checking the block
+sees a correct idiom and a matching one, which is exactly `hardware/history.md` finding
+4's shape: **the pin nobody would check twice.**
+
+⚠ **And nothing could have caught it.** `npm run check:netlist` reads the *motherboard's*
+`circuit.json`; **no card has a netlist check at all**, so every card's pinout rests on
+the board file being read by a person. That is a gap this card should not close alone —
+see `hardware/README.md`.
 
 > ⭐ **If §5.4's Tier 1 is taken, this order changes at the front and not much else.**
 > Step 1 sources a `TL16C550C` instead of hunting an `R6551A`, and **loses three of its

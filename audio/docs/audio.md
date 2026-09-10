@@ -3113,18 +3113,69 @@ specification that has not been tested.
     costs one. Four packages for 1.6× the time, and a floor at `PER` ≥ 32, outside the
     spec. **Item 34 was priced when the ALU was assumed free.**
 
+    ⭐ **THE 6 ns IS NOT AN ASSUMPTION ANY MORE (2026-09-10).**
+    [`IS61C6416.pdf`](../../reference/datasheets/IS61C6416.pdf) is in the repository and
+    `t_SD` — data setup to write end — is **6 ns**, exactly the figure the paragraph
+    above guessed. ⚠ **It is 6 ns for the `-12` grade and for no other**: `-15` is 9,
+    `-35` is 20, `-45` is 25. §5.3 and §14.1 specify `IS61C6416AL-12TLI` throughout, so
+    the number is right for the specified part — but the **speed grade is now part of
+    the timing specification**, the same way `serial.md` §3.4's used to be, and a
+    substitution to a slower grade moves this budget.
+
+    ⚠ **And the sheet carries two constraints this document has never budgeted:**
+    `t_PWE` (`/WE` pulse width) **9 ns** and `t_AW` (address setup to write end)
+    **9 ns**. Both are comfortably inside a 35.24 ns slot, so neither changes a
+    conclusion; they are recorded because nothing had looked.
+
     **Still open, in order:**
 
     1. ⚠ **Over temperature nothing closes** — 240 ns against 229. The card is a
        commercial-temperature design as it stands, and that should be a stated
        specification rather than an accident. The lever is a faster family for those
-       four packages: `74F283` is period (1979) and roughly 4× quicker, ⚠ **and it is
-       not free** — it cannot drive `74HC` inputs (`V_OH` 2.7 V against `V_IH` 3.15 V),
-       so everything `SD` feeds becomes `74HCT`, and fast bipolar edges beside the
-       analogue section are exactly item 9's risk. **Get its datasheet before costing
-       it**, which is the lesson this item is.
-    2. ⚠ **No `IS61C6416` datasheet is in the repository**, so the 6 ns of write setup
-       above is an assumption. Same posture as item 15's missing converter datasheet.
+       four packages, and **this item said to get the datasheet before costing one.
+       That was done on 2026-09-10, and it killed the candidate it proposed:**
+
+       ⛔ **`74F283` is refused, on three numbers and not on the one this item
+       predicted.** [`SN74F283.pdf`](../../reference/datasheets/SN74F283.pdf):
+       - the level objection was **right** — `V_OH` is **2.7 V min** at 4.75 V, against
+         a `74HC` `V_IH` of 3.15 V, so everything `SD` feeds would become `74HCT`
+       - `I_CC` is **55 mA per package**. Four of them is **220 mA**, on a card whose
+         whole §14 budget is smaller than that
+       - ⛔ **and it is not available in a DIP.** The packaging addendum's only ACTIVE
+         commercial row is `SN74F283D` — **SOIC**. The plastic DIP is gone, and this
+         board is through-hole. That is `net.md` §13.6's first question, and the part
+         fails it before any of the electrical argument matters
+
+       ⭐ **`74ACT283` clears all three, and it is the candidate that should be
+       costed.** [`CD74ACT283.pdf`](../../reference/datasheets/CD74ACT283.pdf), 5 V,
+       **worst case over −40…85 °C** — not a 25 °C column:
+
+       | | `CD74ACT283` | `CD74HC283` (25 °C / −40…85 °C) |
+       |---|---|---|
+       | `A`/`B` → `C_OUT` | **16 ns** | 39 / 49 |
+       | `C_IN` → `C_OUT` | **16 ns** | 39 / 49 |
+       | `C_IN` → `S_n` | **16 ns** | 46 / 58 |
+       | `A`/`B` → `S_n` | **16.5 ns** | 42 / 53 |
+       | `V_OH` | **4.4 V** | 4.4 V |
+
+       A 16-bit ripple is `A`/`B`→`C_OUT` + `C_IN`→`C_OUT` × 2 + `C_IN`→`S3` =
+       **64 ns over temperature**, against the `'HC283`'s 163 at 25 °C and 205 over it.
+       With the `74HC244`'s 23 and the state file's 6 that is **93 ns into the 229 ns
+       §10.2 gives it** — and 93 into §10.3's 211. ⭐ **The card closes over its full
+       temperature range with 2.4× margin, and it stays a `74HC` card**: `V_OH` 4.4 V
+       is a CMOS level, so nothing downstream becomes `74HCT` and item 9's
+       fast-bipolar-edges risk does not arise. It is also a CMOS part, so `I_CC` is
+       microamps static rather than the `'F283`'s 55 mA.
+
+       ⚠ **What is still not checked is availability**, which by `net.md` §13.6 is the
+       question that comes first and is the one that just killed the `'F283`. `AC`/`ACT`
+       283 is a sparse line at both distributors. **Do not move the BOM until a
+       through-hole `74ACT283` is confirmed orderable**; if it is not, the fallback is
+       the stated-commercial-temperature specification this item opens with, which is
+       honest and costs nothing.
+
+    2. **Closed 2026-09-10** — the `IS61C6416` datasheet is in the repository and
+       `t_SD` = 6 ns is verified for the `-12` grade. See the block above.
     3. `PROGRAM` re-timed to the across-the-walk rule, and `audio_tb` re-run. ⚠ The
        testbench cannot verify the timing — what it verifies is that the microprogram
        still plays a buffer once the steps have moved.

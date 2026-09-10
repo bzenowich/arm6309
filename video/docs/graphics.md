@@ -3416,6 +3416,49 @@ unnecessary.
 > trades two 15 ns cache-grade parts for one. **Half the saving is the family, not the
 > consolidation.**
 
+#### 14.2.6 ⚠ NEW 2026-09-10 — two things the datasheets say that §14.2 was written without
+
+Both consolidated parts' datasheets are in `reference/datasheets/` since 2026-09-10
+([`AS6C8016.pdf`](../../reference/datasheets/AS6C8016.pdf),
+[`IS61C6416.pdf`](../../reference/datasheets/IS61C6416.pdf)). §14.2's headline numbers all
+hold — 55 ns, 12 ns, TSOP-44 II, `/LB`/`/UB`, 2.7–5.5 V. Two things it did not have:
+
+**1. ⚠ Both parts drive TTL levels, not CMOS ones, and that is why the dot path must
+stay `74AHCT`.**
+
+| | `AS6C8016` | `IS61C6416AL` |
+|---|---|---|
+| `V_OH` min | **2.4 V** @ `I_OH` = −1 mA | **2.4 V** @ `I_OH` = −4 mA |
+| `V_IH` min | 2.2 V | 2.2 V |
+
+A `74AHC` input wants **3.85 V at `V_CC` = 5.5 V**
+([`SN74AHC574.pdf`](../../reference/datasheets/SN74AHC574.pdf), recommended operating
+conditions), and a `74HC` one wants 0.7 × `V_CC`. **2.4 V reaches neither, and is not
+close.** A `74AHCT` input takes the TTL threshold of 2.0 V, which 2.4 V clears with the
+ordinary TTL margin — ⚠ **that last figure is the family's standard one and there is no
+`74AHCT` datasheet in `reference/datasheets/` yet**; the `AHC` half of the comparison is
+cited, the `AHCT` half is not. **The card is already right**: §14.1 puts `74AHCT` on every part that touches
+a memory output — the fetch latches, the `'153` mux, `PIDX`, the post-LUT `'273`. ⛔ **But
+no section says why**, and §17's family table calls `74AHCT` "the newest 74-series family
+on the card" as though the choice were about date. It is not: **it is the only 74-series
+family on the card that can read these two SRAMs at all.** A substitution to `74AHC` —
+same speed, same pinout, one letter — silently breaks the dot path. Recorded here so the
+next person to price a family swap finds the constraint before the scope does.
+
+**2. ⚠ §14.2.5's power table is built on typicals, and the maxima are ~75 mA higher.**
+
+| | table says | datasheet typ | datasheet **max** |
+|---|---|---|---|
+| `AS6C8016` × 2 | ~60 mA | 30 mA ea | **60 mA ea → 120 mA** |
+| `IS61C6416AL-12` × 1 | ~35 mA | 35 mA (`I_CC2`) | **50 mA (`I_CC2`, com.)** |
+| | **~95 mA** | | **~170 mA** |
+
+This does not change a decision — §14's "call it 0.65 A nominal and **specify for 1 A**"
+already carries the headroom, and the 205–405 mA the consolidation saves is a comparison
+of like with like. It is recorded because the table reads as though it were worst-case
+and it is not. ⚠ The `AS6C8016`'s **6 µA standby is the `LL` version's typ** against a
+50 µA max, and `AS6C8016-55ZIN` is not the `LL` suffix.
+
 ---
 
 **Off-card, on the motherboard**, and this is where the parts that used to be on this

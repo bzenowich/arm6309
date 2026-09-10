@@ -8,6 +8,60 @@ kept verbatim or lightly trimmed, because the archive is the record.
 
 ---
 
+## `lib/parts.ts` `HC4040` and `FLASH_512K` — the last two unverified pinouts, and finding 4 repeating (2026-09-10)
+
+The two pinouts `lib/parts.ts` still carried "from familiarity" were read off datasheets
+fetched from Octopart's CDN. **One was right and one was finding 4 all over again.**
+
+### `FLASH_512K` — right on all 32 pins
+
+The note said the numbering was "the JEDEC 32-pin byte-wide flash pinout written from
+familiarity — which is EXACTLY the failure mode finding 4 records", and named two pins to
+check. Both were already correct: pin 3 is `A15` (not `A14`, which is what the `AS6C4008`
+above it in the file has there) and pin 31 is `/WE`. The 600-mil body is right too.
+`SST39SF040.pdf` Figure 4. **The suspicion was well-placed and the work was sound.**
+
+### `HC4040` — three pins rotated, on the same board, in the same way
+
+The note said: *"The Q outputs are NOT in pin order on this part, which is exactly what
+gets written from memory wrongly: check Q0–Q11 individually."* They were, and it was:
+
+| pin | file said | `CD74HC4040.pdf` says |
+|---|---|---|
+| 12 | `Q10` | **`Q8`** |
+| 13 | `Q8` | **`Q7`** |
+| 15 | `Q7` | **`Q10`** |
+
+A 3-cycle rotation of three outputs — **finding 4's map SRAM was three pins rotated too.**
+
+⚠ **What makes it worth an entry rather than a diff is that nothing could have caught
+it.** `mainboard.circuit.tsx` wires the refresh timebase as `Q8: "net.REFCLK"` — **by
+name** — so the netlist is correct and `check:netlist` passes. The error lives in the pin
+*number* behind the name and surfaces for the first time at layout. Finding 4's own
+sentence, unchanged: *a name-level netlist check cannot see a number-level footprint
+error.*
+
+**And it would not have failed loudly.** `REFCLK` would have come off physical pin 13 —
+`Q7`, not `Q8` — halving `ram.md` §6.3.1's interval from 10.16 µs to 5.08 µs. 512 rows in
+2.6 ms against the DRAM's 8 ms, so refresh still holds; the machine would have worked, and
+spent twice the refresh bandwidth for ever. `MR` active high was confirmed as stated.
+
+### What changed so this cannot recur silently
+
+`UNVERIFIED_PARTS` had been derived from `provenance` since 2026-09-06 and **nothing
+imported it** — no check read it, and the comment beside it claimed it was empty while it
+held three parts. `lib/netlist.check.ts` now pins its contents against a declared
+`KNOWN_UNVERIFIED`, so adding a part without a datasheet fails the check and so does
+confirming one without striking it off. **`SIMM30` is the one left**, and it closes
+against a JEDEC standard rather than a vendor sheet.
+
+⛔ **The gap this leaves is the cards.** `check:netlist` reads the motherboard's
+`circuit.json` and nothing else, so **no card's pinout is checked by anything at all** —
+which is how the I/O card's `TL16C550C` came to have `RD1` and `RD2` swapped
+(`io/serial/docs/serial.md` §12.1, found the same day).
+
+---
+
 ## `ram.md` §3.1 — "Isolation `'245`: 0 — both SRAMs sit on the same `D0`–`D7`" (2026-09-09)
 
 §3.1's cost table for the second map SRAM carried this row:

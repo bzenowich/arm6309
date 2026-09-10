@@ -241,13 +241,29 @@ memory, is in history.md.
 
 ## Open items
 
-1. **Closed 2026-09-06** — every motherboard pinout is read off a datasheet: see finding
-   4 for what that caught, and
-   [`reference/datasheets/README.md`](../reference/datasheets/README.md) for the files and
-   what cites each. **One part on the wanted list has no datasheet and will not get one:**
-   the I/O card's `R6551A`/`G65SC51` is out of production at both distributors, so
-   `serial.md` §3.4's speed-grade argument rests on recalled figures. The `W65C51N`
-   sheet is there for the DIP-28 pinout and for nothing else.
+1. **Closed 2026-09-06 for the motherboard, and the last two pinouts closed 2026-09-10.**
+   Every motherboard pinout is read off a datasheet: see finding 4 for what that caught,
+   and [`reference/datasheets/README.md`](../reference/datasheets/README.md) for the files
+   and what cites each. `lib/parts.ts`'s `FLASH_512K` was the board's last unverified
+   pinout and is now confirmed against `SST39SF040.pdf` — **and it was right on all 32
+   pins**, including the two its own note flagged.
+
+   ⭐ **`UNVERIFIED_PARTS` is load-bearing since 2026-09-10.** It had been derived from
+   `provenance` since 2026-09-06 and **nothing imported it**, so no check read it and its
+   comment claimed it was empty while it held three parts. `lib/netlist.check.ts` now pins
+   its contents against a declared `KNOWN_UNVERIFIED`, so adding a part without a
+   datasheet fails and so does confirming one without striking it off. **Two remain:**
+   `SIMM30` (a JEDEC standard rather than a vendor sheet, and still wants open item 2's
+   measured footprint) and `HC4040`.
+
+   ⛔ **The gap that replaces this one is the CARDS.** `check:netlist` reads
+   `dist/mainboard/mainboard/circuit.json` and nothing else, so **no card's pinout is
+   checked by anything.** On 2026-09-10 the I/O card's `TL16C550C` was found with `RD1`
+   and `RD2` swapped — read asserted permanently, the UART driving `D0`–`D7` through
+   every write — by reading the datasheet, which is the only mechanism there is
+   (`serial.md` §12.1). **The `R6551A`/`G65SC51` note that stood here is retired**:
+   `serial.md` §9.2 deleted the requirement on 2026-09-09 when the card took the
+   `TL16C550C`, which is current production and needs no speed grade.
 
 2. **The slot socket footprint is a DIP body.** Pad grid and pin numbering are right, the
    outline is not. It needs a measured footprint once a receptacle is sourced.
