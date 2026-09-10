@@ -115,6 +115,37 @@ module audio_tb;
   int wtc[8];
   bit bad;
   bit pwseen, pwlast, pwafter;
+
+  // ⭐ THE PRECONDITION THE PIPELINE RESTS ON, watched continuously rather
+  // than sampled. 9.3's decodes (HW, HL, HRO, HSTAGE) are clocked every slot
+  // so they TRACK AIDX; anything that freezes a decision at the strobe is only
+  // sound if AIDX cannot move while a sequence runs. That is what 9.4.4's
+  // handshake now guarantees - PWBUSY holds to LAST, and covers index writes.
+  wire [5:0] aidxv = {card.u2.AIDX5, card.u2.AIDX4, card.u2.AIDX3,
+                      card.u2.AIDX2, card.u2.AIDX1, card.u2.AIDX0};
+  logic [5:0] aidxsnap = 6'd0;
+  bit aidxbad = 1'b0;
+  int aidxseq = 0;
+  // ⚠ SCOPED TO THE HOST'S OWN SEQUENCE, and the first version of this monitor
+  // was not - it snapshotted at START, and a W1 chaining into W2 enters
+  // through ENDNOW without ever asserting START, so it compared a channel
+  // sequence against a stale index and reported a defect the card does not
+  // have. AIDX is ALLOWED to move while channel work runs; what must not
+  // happen is it moving under W3, because that is what the frozen decodes
+  // would be reading.
+  always @(posedge SLOTCLK) begin
+    if (!card.u2.BUSY) aidxsnap <= aidxv;
+    else if ({card.u2.WT2, card.u2.WT1, card.u2.WT0} === 3'd4) begin
+      if (card.u2.RUN && card.u2.LAST) aidxseq <= aidxseq + 1;
+      else if (aidxv !== aidxsnap) begin
+        if (!aidxbad)
+          $display("      [dbg] AIDX moved under W3: %0d -> %0d T=%0d HSTB=%b AIDXLD=%b",
+                   aidxsnap, aidxv, {card.u2.T3,card.u2.T2,card.u2.T1,card.u2.T0},
+                   card.u2.HSTB, card.u2.AIDXLD);
+        aidxbad <= 1'b1;
+      end
+    end
+  end
   logic [18:0] ptr0;
   logic [16:0] cnt0;
   logic [15:0] next0;
@@ -417,6 +448,10 @@ module audio_tb;
     ok(sfl(4) == 16'd30,
        $sformatf("⭐ and the host's write of PER = 30 reached the state file (holds %0d) - a MOD player rewrites a channel's period every row, and it lands WHILE FOUR CHANNELS PLAY",
                  sfl(4)));
+
+    ok(!aidxbad,
+       $sformatf("⭐ AIDX never moves under a running HOST sequence, across %0d of them - the precondition every frozen decode rests on, and what 9.4.4's handshake buys",
+                 aidxseq));
 
     $display("");
     $display("9.4.4 - the handshake: PWBUSY spans the WHOLE sequence");

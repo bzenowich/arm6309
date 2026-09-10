@@ -1741,14 +1741,15 @@ is one slot, and **even steps read, odd steps write**: a state-file read holds i
 for as long as the address holds (§9.5), so a read-modify-write is two slots and never
 three.
 
-⚠ **THE CONTROL DECODE IS THE PART THAT IS FULL.** Every output above re-derives its
-own meaning from `(WT, T)` plus the host qualifiers — `SFWE0` asks six signals to say
-"this access writes lane 0", and five more macrocells each ask `HCOMMIT & !HRW`. That is
-what fills an `ATF1508AS`'s switch matrix: **six of U2's eight logic blocks stand at 36
-of 40 signals**, and it is the reason the 8-bit datapath does not fit (§16 item 34).
-Concentrating the decode — asking once, registering the answer — is the redesign this
-section needs, and §16 item 34 records the two shapes of it that have been tried and why
-`AIDX`'s auto-increment defeats both.
+⚠ **THE STEP DECODE IS THE PART THAT IS FULL, and it is not the host qualifiers.**
+**Six of U2's eight logic blocks stand at 35 of 40 signals**, which is why the 8-bit
+datapath does not fit (§16 item 34). The obvious cure — ask a host access's meaning once
+and register the answer, so `SFWE0` reads one signal where it reads six — was built on
+§9.4.4's repaired handshake, simulates clean, and **makes fan-in worse**: 35 → 38,
+because a registered decision is a new *distinct signal* every reader's block must route,
+where the literals it replaced were merely substituted. What actually fills the matrix is
+`RUN`, `WT0`–`WT2`, `T0`–`T3` and the working state, read by **every** output above.
+Narrowing that means changing the microprogram's shape, not the decode in front of it.
 
 | | steps | what |
 |---|---|---|
@@ -2503,42 +2504,49 @@ specification that has not been tested.
     write (`!ISAIDX`) so the index cannot store itself into the location it names.
     `audio_tb` reads `PER`'s two bytes back and gets what it wrote.
 
-34. **⛔ THE 8-BIT DATAPATH IS BLOCKED BY FAN-IN, AND THE PIPELINE THAT WOULD RELIEVE
-    IT IS BLOCKED BY A RACE.** Two attempts, both reverted, both measured.
+34. **⛔ THE 8-BIT DATAPATH IS BLOCKED BY FAN-IN, AND THE PIPELINE DOES NOT RELIEVE IT
+    — IT COSTS THREE.** Both were built, both ran, both were reverted, and the second
+    result is the one worth keeping because it is counter-intuitive.
 
     **The datapath itself works.** Narrowing the adder is worth **−4 packages**
     (`74HC283` 4 → 2, the sum's three-state 2 → 1, the `$FF` constant 2 → 1). A `BYTE`
-    toggle holds the step counter while the two halves go through, so it needs **no
-    fifth `T` bit** — two registers and two pins. `audio_tb` ran the whole card on it:
-    **38 claims, 0 failed**, a channel event at **ten work slots** instead of seven, and
-    the margin at ProTracker's top note **14.2× → 7.7×**. Ample.
+    toggle holds the step counter through the two halves, so it needs **no fifth `T`
+    bit**. `audio_tb` ran the whole card on it: 38 claims 0 failed, a channel event at
+    ten work slots instead of seven, margin at ProTracker's top note 14.2× → **7.7×**.
+    Ample. ⛔ **The fitter refused it: `Grouping fail`, all eight LABs at `FanIn [40]`.**
 
-    ⛔ **The fitter refused it: `Grouping fail`, all eight LABs at `FanIn [40]`.** ⭐ The
-    baseline explains why, and it is the number to keep: **six of U2's eight blocks
-    already stand at 36 of 40** (E at 28, H at 11), against U1's comfortable 25–28. Four
-    signals of headroom, and a narrower datapath needs *more* control signals.
+    ⭐ **The pipeline is now SOUND and still does not help.** Registering a host access's
+    meaning once — so `SFWE0` reads one signal where it read six, and five macrocells
+    stop each asking `HCOMMIT & !HRW` — was unsound until §9.4.4's handshake fix,
+    because a frozen decision is a lie if `AIDX` can move under the sequence reading it.
+    It cannot now, and `audio_tb` asserts it directly across 137 host sequences. Built on
+    that footing the pipeline simulates clean, **43 claims 0 failed** — and fits *worse*:
 
-    **The pipeline is the right answer and it is not a small one.** The idea is to ask a
-    host access's meaning ONCE and register the answer, so a consumer reads one signal
-    where it reads six — today `SFWE0` asks `!HRW & !HRO & !ISAIDX & !ISSDATA & !HL1 &
-    !HL0`, and five more macrocells each ask `HCOMMIT & !HRW`. ⚠ **What defeats it is
-    `AIDX`.** The existing decodes (`HW`, `HL`, `HRO`, `HSTAGE`) are *continuously
-    clocked*, so they track the index as it auto-increments; a decision latched at
-    `HSTB` freezes a possibly-stale `AIDX`, because the host's next access can arrive
-    while the previous `W3` is still running — `ASTAT` b6 clears when the sequence
-    **starts**, not when it ends. And a decision clocked off `HRW` instead is **two
-    registers deep** where everything around it is one, so it arrives a slot late. Both
-    shapes were built and both failed in simulation, in different ways.
+    | | before | with the pipeline |
+    |---|---|---|
+    | LAB fan-in | 35,35,35,35,35,35,34,17 | **38,38,38,31,32,32,38,31** |
+    | foldback nodes | 61 | **94** |
+    | product terms | 441 | **495** |
 
-    **What it needs is a third shape**: decisions clocked continuously from `AIDX` *and*
-    from `HRW`, with the sequence gated so it cannot start until they have settled —
-    which is a change to the host handshake of §9.4.4, not to the decode. **That is the
-    next attempt, and it should be made on its own rather than underneath a datapath
-    change.**
+    ⭐ **Why, and this is the transferable part.** Registering a decision trades a few
+    *substituted literals* for a new *distinct signal*, and **a switch matrix counts
+    signals, not literals**. Nine decisions went in; perhaps two of the qualifiers they
+    replaced actually left, because `HRW`, `HL0` and `HL1` are still read elsewhere. The
+    net is +7 things to route.
+
+    ⛔ **And it means the decode was never the fan-in problem.** The 36-of-40 baseline is
+    dominated by the *step* signals — `RUN`, `WT0`–`WT2`, `T0`–`T3` — plus the working
+    state (`WC`, `DUE`, `RST`, `DMAEN`, `SDQ`, `AIDX`), which **every** control output
+    reads and which no amount of host-qualifier concentration touches. Relieving it means
+    narrowing *that*, and the step encoding is already minimal at seven bits for 42
+    steps.
+
+    **So the datapath is not attempted, and 35 ICs stands.** What would have to change
+    first is the shape of the microprogram itself, not the decode in front of it.
 
     ⚠ **Do not plan any of this as a move to U1.** U1 is **pin-bound at 62 of 64**; its
     40 spare cells are unreachable because anything moved there needs signals crossing
-    and there are two pins to cross on. Three partitions were costed and all three are
+    and there are two pins to cross on. Three partitions were costed and all are
     pin-fatal:
 
     | move to U1 | U2 pins | U1 pins | |
@@ -2547,14 +2555,14 @@ specification that has not been tested.
     | the same, with U1 driving `SFA` directly | −6, +6 | +12 | U1 to 74 |
     | the converter control (`WROTE`, `CVC`, `CVOEA`) | −1 | +7 | U1 to 69 |
 
-    ⭐ **The transferable lesson, and it is the third limit this family has.** After
-    macrocells and pins, an `ATF1508AS` runs out of **LAB fan-in**, and a combinational
-    intermediate in CUPL is *substituted* rather than given a macrocell — so its terms
-    multiply into everything that reads it, and every reader's block pays. U1's
-    comparator is the worked example: as one 32-term macrocell it was unplaceable and
-    the fitter simply never returned; split per byte into `NEQL`/`NEQH` it placed in two
-    minutes **and the part got smaller**. ⚠ **A fit past ~3 minutes is a fan-in
-    suspicion, not a slow fit** — the symptom is often silence, not `Grouping fail`.
+    ⭐ **The third limit, stated once.** After macrocells and pins, an `ATF1508AS` runs
+    out of **LAB fan-in**. A combinational intermediate in CUPL is *substituted* rather
+    than given a macrocell, so its terms multiply into every reader — but the cure is not
+    automatically to register it, because that adds a signal every reader's block must
+    route. U1's comparator is the case where splitting won (`NEQL`/`NEQH`: unplaceable
+    as one 32-term macrocell, two minutes and a *smaller* part as two); this is the case
+    where concentrating lost. ⚠ **A fit past ~3 minutes is a fan-in suspicion, not a slow
+    fit** — the symptom is often silence rather than `Grouping fail`.
 
 35. **⚠ NEW 2026-09-09 — the 17th and 19th bits do not distinguish an increment from a
     decrement, and it is a latent hole in the design as it stands.** `SDH0`–`SDH2` carry

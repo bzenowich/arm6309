@@ -1126,3 +1126,44 @@ back to back with no pause each keep the value the host wrote; and the worst-cas
 
 ⚠ **The fan-in relief is one signal on the hot blocks and is not a result to build on** —
 it is reported because it was asked for, not because it changes what §16 item 34 says.
+
+
+---
+
+## 2026-09-09 (eighth pass) — the pipeline, now sound and still not worth having
+
+**Nothing in the present design changed.** The card is 35 ICs on 18 cm; `aseq` is the
+handshake fit committed as `8b764c1`.
+
+⭐ **The precondition it needed is now true, and is asserted rather than assumed.**
+Shape 2 of the pipeline — a host access's meaning decided once at the strobe and held in
+registers — was reverted on 2026-09-09 because `AIDX` could move under a running `W3`.
+§9.4.4's `HACK`-at-`LAST` repair closed exactly that, and `audio_tb` now carries the
+claim: **`AIDX` never moves under a running host sequence, across 137 of them.**
+
+⚠ **The first version of that claim was wrong and reported a defect the card does not
+have.** It snapshotted at `START` — but a `W1` chaining into `W2` enters through
+`ENDNOW` and never asserts `START`, so it compared a *channel* sequence against a stale
+index. The trace said it plainly: `WT=1`, `HSTB=0`, `AIDXLD=0`, `AINC=0` — nothing had
+moved. Scoped to `W3`, it passes. *A monitor is a claim and needs the same scepticism as
+the design.*
+
+⛔ **Built on that footing, the pipeline simulates clean and fits worse.**
+
+| | before | with the pipeline |
+|---|---|---|
+| `aseq` LAB fan-in | 35,35,35,35,35,35,34,17 | **38,38,38,31,32,32,38,31** |
+| foldback nodes | 61 | **94** |
+| product terms | 441 | **495** |
+| `audio_tb` | 43 claims, 0 failed | 43 claims, 0 failed |
+
+⭐ **Why it fails is the useful part.** Registering a decision trades a few *substituted
+literals* for a new *distinct signal* — and a switch matrix counts signals, not literals.
+Nine decisions went in and perhaps two qualifiers actually left, because `HRW`, `HL0` and
+`HL1` are read elsewhere too. ⛔ **It also shows the decode was never the problem**: the
+36-of-40 baseline is dominated by `RUN`, `WT0`–`WT2`, `T0`–`T3` and the working state,
+which every control output reads and which no host-qualifier concentration touches.
+
+**So the 8-bit datapath was not attempted, and §16 item 35's latent `ACOUT` hole is left
+recorded rather than half-fixed.** The reverted branch keeps both, and §16 item 34 now
+carries the measurement instead of the estimate.
