@@ -1381,3 +1381,66 @@ engine, the period table, the tempo mapping, the `LC`/`LEN` shadow idiom. That i
 and it is build step 0's exit criterion. **What it says about the hardware is nothing**,
 and the only thing that does is a testbench that runs the design — which is why item 36's
 oracle found in one afternoon what six days of green A/B did not.
+
+
+---
+
+## 2026-09-10 (fourth pass) — the oracle rebuilt, run, and it found a third defect
+
+**Nothing in the present design changed except one open item's status.** The card is
+35 ICs, `aseq` fits, and §16 items 35 and 36 stay closed.
+
+### §16 item 36 — "the card half of the harness is entirely ours"
+
+⛔ **It did not exist.** Only `fetch-paula.sh` had been committed; `run-oracle.sh` and
+both testbenches were named in a comment and produced by nothing. Same defect class as
+item 0b, in the tooling this time. [`gal/verilog/oracle/`](../../hardware/gal/verilog/oracle/)
+is the rebuilt harness — two testbenches and a runner that builds them as **separate
+binaries** so nothing links against `Paula.v`, whose licence is still unsettled.
+
+⭐ **Re-run against the repaired design, it agrees.** Card and Paula play the same bytes
+in the same cyclic order — `02 03 04 05` repeating for a two-word loop. D-1 and D-2 are
+confirmed fixed by an implementation that shares nothing with ours but the hardware
+reference manual.
+
+### ⚠ Four harness bugs, every one of which looked like a finding first
+
+An oracle is a claim and needs the same scepticism as the design. Paula does not fetch
+its own samples — it raises a request and *Agnus* owns the pointer — so an Agnus is part
+of the oracle, and getting it wrong produces confident nonsense:
+
+| Symptom | Cause |
+|---|---|
+| `AUDxLEN`/`AUDxPER` read back 0, `DMACON` fine | RGA left asserted for the data colour clock wrote every register twice, the second time with zero. ⚠ **DMACON survived because "clear no bits" is a no-op** — the bug hid itself in three registers out of four |
+| `fetches=0` — looks like a chip that never asks | Paula's control outputs are four-bit **rotating** shift registers; they only read as "bit *i* is channel *i*" while `cck` is high |
+| `fetches=1`, then silence | Paula **holds** the request until answered; an Agnus that waits for a rising edge answers once |
+| the sample walking off the end of the buffer | the restart flag is `dmasen \| lenfin`, not `dmasen` — and `lenfin` is `lenctr == 1`, which is the same "one less" convention item 36's repair arrived at independently |
+
+### §16 item 39 — the third defect, and the first repair that would not fit
+
+The steady state is exact and the **first pass is not**: `03 04 05 06` out of a four-byte
+sample, because W6 primes and W2 does not, so both loading `CNT` = 2 × `LEN` − 1 leaves
+the enable path one short. And the primed byte is never strobed into the converter, so
+the first sample of every note is skipped.
+
+⛔ **The repair was written, measured correct, and refused.** Two more microcode steps in
+W6; `fit1508.exe` answered `INTERNAL ERROR`. **§16 item 32 stopped being a forecast**:
+the card carries a known first-pass defect because the part has no room for the fix, and
+that is the strongest evidence §10.3 has.
+
+### ⛔ And a new fitter trap, which is why the refusal was nearly missed
+
+`fit1508.exe` answered `INTERNAL ERROR` **and wrote a `.jed` and a `.fit` anyway.**
+`fit1508.sh`'s only test was "does a JEDEC exist", so it printed `wrote …`, exited 0, and
+copied out a report claiming a plausible 128/128 cells and a *better* LAB fan-in than the
+design that really did fit. ⚠ **"Design fits successfully" is in the fitter's stdout and
+not in the `.fit`**, so nothing downstream can recover it. The script now requires that
+sentence and refuses `INTERNAL ERROR`; CLAUDE.md's first trap has the sibling recorded
+beside it.
+
+### And one hand-maintained table that disagreed with the table beside it
+
+`aseq.jedec.ts` carried a `LEN` map of sequence lengths next to `PROGRAM`, and adding
+steps to W2 and W6 left `LAST` firing mid-sequence — a channel that fell silent with **no
+failing claim anywhere**, because the microprogram simply stopped part-way. It is derived
+from `PROGRAM` now.

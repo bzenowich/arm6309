@@ -53,9 +53,31 @@ cp "$SHARED/$name.tt2" "$FITTERS/"
 # It costs four I/O, so it is a fit result and not a preference: ask for it and
 # read whether the design still fits.
 JTAG=${JTAG:-off}
-( cd "$FITTERS" && wine fit1508.exe "$name.tt2" -device "$DEV" -preassign ignore \
-    -strategy JTAG="$JTAG" ) | grep -viE '^warning' | tail -6
+# ⛔ THE SUCCESS TEST IS THE FITTER'S OWN SENTENCE, NOT THE PRESENCE OF A
+# JEDEC, and that distinction cost an afternoon on 2026-09-10. `fit1508.exe`
+# answered `INTERNAL ERROR - Please contact your Hot-Line` for a design that
+# does not fit AND WROTE A .jed AND A .fit ANYWAY - so the file test below
+# passed, this script printed "wrote ...", and the .fit it copied out reported
+# a plausible 128/128 cells and a BETTER LAB fan-in than the design that really
+# did fit. A failed fit that leaves no output is CLAUDE.md's first trap; this
+# is its nastier sibling, a failed fit that leaves a CONVINCING one.
+#
+# "Design fits successfully" appears only in the fitter's stdout - it is not in
+# the .fit report, so nothing downstream can recover it. It has to be caught
+# here.
+fitlog=$(cd "$FITTERS" && wine fit1508.exe "$name.tt2" -device "$DEV" \
+    -preassign ignore -strategy JTAG="$JTAG" 2>&1)
+echo "$fitlog" | grep -viE '^warning' | tail -6
 
+case "$fitlog" in
+  *"INTERNAL ERROR"*)
+    echo "fitter reported INTERNAL ERROR - the design does not fit; see $FITTERS/$name.fit" >&2
+    exit 1 ;;
+esac
+echo "$fitlog" | grep -q "Design fits successfully" || {
+  echo "fitter never said 'Design fits successfully'; see $FITTERS/$name.fit" >&2
+  exit 1
+}
 [ -f "$FITTERS/$name.jed" ] || { echo "fitter produced no JEDEC; see $FITTERS/$name.fit" >&2; exit 1; }
 mkdir -p "$OUT"
 cp "$FITTERS/$name.jed" "$FITTERS/$name.fit" "$OUT/"

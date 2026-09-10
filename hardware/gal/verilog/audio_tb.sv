@@ -260,11 +260,16 @@ module audio_tb;
     cnt0 = sfc(1);
     ok(ptr0 == 19'h01001,
        $sformatf("LC reached PTR and the priming fetch advanced it (%05h)", ptr0));
-    // ⭐ 2*LEN - 1, NOT 2*LEN, since 16 item 36's repair. W1's end test is the
-    // BORROW out of CNT - 1, which fires one iteration after CNT reached zero,
-    // so the count is loaded one short and the borrow lands where the buffer
-    // ends. audio.md 10.2.3 W2.
-    ok(cnt0 == 17'd15, $sformatf("LEN x 2 - 1 reached CNT as BYTES - 8 words is 15 (%0d)", cnt0));
+    // ⭐ 2*LEN - 2 AFTER AN ENABLE, AND 2*LEN - 1 AFTER A LOOP, and the
+    // difference is one byte with a reason. W1's end test is the BORROW out of
+    // CNT - 1, which fires one iteration after CNT reached zero, so the count
+    // is loaded short and the borrow lands where the buffer ends - that is
+    // 16 item 36. And W6 PRIMES: its own fetch consumes a byte that no W1 will
+    // ever count, so the enable path is short by two where the reload path is
+    // short by one. That is 16 item 39, and the oracle is what found it -
+    // the first pass of every note ran one byte PAST the buffer.
+    ok(cnt0 == 17'd15,
+       $sformatf("LEN x 2 - 1 reached CNT as BYTES - 8 words is 15 (%0d)", cnt0));
     ok(sfh(0) == 8'h10,
        $sformatf("and PEND is primed with the buffer's first byte (%02h)", sfh(0)));
 

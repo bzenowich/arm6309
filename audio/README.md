@@ -72,9 +72,19 @@ claim item 36 says was missing, and the reason both defects survived 43 green cl
 ends a buffer correctly; the hardware did not. Two implementations of one paragraph, and
 the A/B only ever tested one of them.
 
-⚠ **The repair spent the last of the part**: five of `aseq`'s eight logic blocks now
-stand at **39 of 40 LAB fan-in**, against six at 35 before. The next repair of this kind
-will not fit.
+⭐ **Re-run against the repaired design, the oracle agrees** — card and an independent
+Paula play the same bytes in the same cyclic order. The harness is in the tree now
+([`../hardware/gal/verilog/oracle/`](../hardware/gal/verilog/oracle/), `npm run
+check:oracle`); ⛔ it had been described as "entirely ours" and did not exist.
+
+⛔ **And the same run found a third defect: the FIRST pass of every note reads one byte
+past the buffer**, because W6 primes and W2 does not (§16 item 39). **The repair is
+written, measured correct, and `fit1508.exe` refuses it.** The card carries the defect
+because the part has no room for the fix.
+
+⚠ **The last repair spent the last of the part**: five of `aseq`'s eight logic blocks
+stand at **39 of 40 LAB fan-in**, against six at 35 before. §16 item 32 stopped being a
+forecast the moment the next repair was tried.
 
 ⚠ **So the sequencer has a third arrangement, designed on 2026-09-10 and not decided.**
 §10.3 moves the `(WT, T)` decode out of macrocells into four `27C512` with the step

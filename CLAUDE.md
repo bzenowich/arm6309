@@ -77,11 +77,26 @@ is the answer** — a testbench prints a failed claim and then calls `$finish`,
 which exits 0, so the count is what decides the status. Read the `FAIL` lines;
 each names the claim and the observed value.
 
-One testbench at a time, from `hardware/gal/verilog/`:
+⚠ **RUN ONLY THE TESTBENCHES THE CHANGE CAN REACH.** The full suite is ~3
+minutes and most of it is whole frames of video that an audio-card edit cannot
+touch. There are scoped scripts for exactly this, and `check:video` is for a
+change to the video card, the mainboard, or `emit.ts` itself:
+
+| changed | run |
+|---|---|
+| `audio.jedec.ts`, `aseq.*`, `audio_card.v`, `audio_tb.sv` | `npm run check:sim:audio` (~25 s) |
+| the mainboard, `u9`/`u10` | `npm run check:sim:board` |
+| the video card, or `verilog/emit.ts` | `npm run check:video` (everything) |
+| the audio card's *behaviour* | ⭐ **`npm run check:oracle`** as well — this card against an independent Paula (`gal/verilog/oracle/`). It is what found `audio.md` §16 items 36 and 39, and `audio_tb` could not |
+
+Or one at a time, from `hardware/gal/verilog/`:
 
 ```sh
 TBS=vtile sh run.sh          # one; TBS="vsync vaddr" for several
 ```
+⚠ `run.sh` does **not** regenerate the Verilog — `npm run check:video` does that
+first. After editing a `.jedec.ts`, run `bun run gal/verilog/gen.ts` or a
+`check:sim:*` script, or you will test the previous design and believe it.
 
 | Testbench | Parts instantiated | What it asserts |
 |---|---|---|
@@ -113,6 +128,14 @@ where two of `design-review2.md`'s findings came from.
   across the run, or grep the fitter's output for `INTERNAL ERROR` /
   `does not fit`. `gal/prjbureau/fit1508.sh` records the same trap for CUPL's
   `.tt2`.
+  ⛔ **And its nastier sibling, found 2026-09-10: a failed fit that leaves a
+  CONVINCING one.** `fit1508.exe` answered `INTERNAL ERROR` for a design that
+  does not fit and **wrote a `.jed` and a `.fit` anyway** — so the wrapper's
+  "does a JEDEC exist" test passed, it printed `wrote …`, and the report it
+  copied out claimed a plausible 128/128 cells and a *better* LAB fan-in than
+  the design that really did fit. ⚠ **"Design fits successfully" appears only in
+  the fitter's stdout, never in the `.fit`**, so nothing downstream can recover
+  it. `fit1508.sh` now requires that sentence and refuses `INTERNAL ERROR`.
 - **Every `.pld` must be 7-bit ASCII.** Atmel's CUPL is an MS-DOS program and
   its lexer aborts on the `⚠`/`⭐`/`⛔` this repository's prose is made of —
   `illegal character: ASCII code 226`. `jedec.check.ts` asserts it.

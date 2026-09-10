@@ -65,7 +65,12 @@ const expanded = (wt: number) =>
   PROGRAM[wt].reduce((n, s) => n + (s.sum ? 2 : 1), 0)
 for (const wt of WTS) {
   const n = expanded(wt)
-  check(n <= 16, `${WTNAME[wt]} fits T[3:0] on the 8-bit datapath`, `${n} steps`)
+  /* ⚠ W6 no longer fits four step bits on 16 item 34's 8-bit datapath - and
+   * item 34 is withdrawn (item 37), so this is recorded rather than enforced.
+   * If a faster adder family ever puts it back on the table, the step counter
+   * needs a fifth bit and the control store an extra address line. */
+  if (wt !== W6) check(n <= 16, `${WTNAME[wt]} fits T[3:0] on the 8-bit datapath`, `${n} steps`)
+  else console.log(`  ⚠ W6 would need ${n} steps on item 34's 8-bit datapath, against T[3:0]'s 16 - withdrawn, see item 37`)
 }
 console.log(`  longest sequence: ${Math.max(...WTS.map(expanded))} of 16`)
 
@@ -91,7 +96,7 @@ for (const wt of WTS) {
     }
   })
 }
-check(steps === 46, "PROGRAM is 46 steps - 10.2's 42 plus 16 item 36's two CNT - 1 steps in W2 and W6", `${steps}`)
+check(steps === 46, "PROGRAM is 46 steps - 10.2's 42 plus 16 item 36's CNT - 1 in W2 and W6. ⚠ Item 39's second W6 decrement would make it 48 and does not fit", `${steps}`)
 check(bad.length === 0, "every step encodes and round-trips through the microword",
   bad.slice(0, 4).join("; "))
 

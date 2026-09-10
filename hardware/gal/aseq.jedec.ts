@@ -27,9 +27,14 @@ import {
  * one with WT2 set: "not a host access" is then one literal instead of four,
  * and it appears in most of the equations below. */
 export const WTC: Record<number, number> = { [W1]: 0, [W2]: 1, [W6]: 2, [W4]: 3, [W3]: 4, [W5]: 5 }
-const LEN: Record<number, number> = {
-  [W1]: 7, [W2]: 6, [W6]: 11, [W4]: 10, [W3]: 6, [W5]: 6,
-}
+/* ⛔ DERIVED, NOT DECLARED. This was a hand-maintained table of sequence
+ * lengths beside a table of sequences, and on 2026-09-10 they disagreed twice
+ * in one afternoon: adding steps to W2 and W6 for 16 item 36 left LAST firing
+ * mid-sequence, and the symptom was a channel that fell silent with no failing
+ * claim anywhere - the microprogram simply stopped part-way and the engine
+ * never released. One table. */
+const LEN: Record<number, number> = Object.fromEntries(
+  [W1, W2, W3, W4, W5, W6].map((wt) => [wt, PROGRAM[wt].length]))
 
 const bits = (name: string, v: number, n: number) =>
   [...Array(n).keys()].map((i) => `${(v >> i) & 1 ? "" : "!"}${name}${i}`)
@@ -595,8 +600,8 @@ const conv: Cell[] = [
    * is written on events rather than on colour clocks. */
   ...[0, 1, 2, 3].map((n) => ({
     pin: 0, name: `WROTE${n}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: [`RUN & !WT2 & !WT1 & !WT0 & ${bits("T", 4, 4).join(" & ")} & ${
-      bits("WC", n, 2).join(" & ")}`,
+    terms: [...onSteps(NOHOST((s) => s.pend === true))
+      .map((t) => `${t} & ${bits("WC", n, 2).join(" & ")}`),
       `WROTE${n} & !${n < 2 ? "S2" : "QCHAN"} `.trim(),
       `WROTE${n} & !S1`, `WROTE${n} & !S0`],
   })),

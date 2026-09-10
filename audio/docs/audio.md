@@ -2841,7 +2841,13 @@ specification that has not been tested.
     software rule, stated in §4.3 and §9.3**, with a zero-detect gate (+1 IC) as the
     fallback if a bench ever needs it.
 
-32. **⚠ U2 is full and U1 is not, and on 2026-09-10 it got tighter**: items 35 and 36's
+32. **⛔ AND ON 2026-09-10 IT STOPPED BEING A FORECAST: THE NEXT REPAIR DID NOT FIT.**
+    §16 item 39's two microcode steps were written, simulated correct, and refused by
+    `fit1508.exe` with `INTERNAL ERROR`. The card ships with a known first-pass defect
+    because the part has no room for the fix. **That is the strongest evidence §10.3 has
+    and it was obtained by trying.**
+
+    **⚠ U2 is full and U1 is not, and on 2026-09-10 it got tighter**: items 35 and 36's
     repair took five of eight logic blocks to **39 of 40 LAB fan-in**, against six at 35
     before. It fitted, and it spent every literal `CW0`–`CW2` and `CL2` freed. **The next
     repair of this kind will not fit.** ⭐ **§10.3 is the answer to it.** 44 of U2's
@@ -3031,8 +3037,28 @@ specification that has not been tested.
     anywhere, its floor comes from Agnus's DMA rate. This card does not clamp either and
     §10.2.4 says so, so §4.2 contradicts §10.2.4 as well as Paula.
 
-    ⚠ **The oracle is not in the tree.** `Paula.v` is GPL v3 and vendoring it is
-    undecided; the card half of the harness is entirely ours.
+    ⭐ **RE-RUN AGAINST THE REPAIRED DESIGN, 2026-09-10, AND IT AGREES.** The card
+    and an independent Paula play **the same bytes in the same cyclic order** —
+    `02 03 04 05` repeating, for a two-word loop, in both. That is the repair confirmed
+    by an implementation that shares nothing with ours but the hardware reference
+    manual.
+
+    ```
+      card   steady state : 03 04 05 02 03 04 05 02 03 04 05 02
+      Paula  steady state : 05 02 03 04 05 02 03 04 05 02 03 04
+      ok    the card and an independent Paula play the same bytes in the same cyclic order
+    ```
+
+    ⚠ **The harness is in the tree now and `Paula.v` still is not** —
+    [`gal/verilog/oracle/`](../../hardware/gal/verilog/oracle/), `sh run-oracle.sh`.
+    Its header claims GPL v3 and its repository claims CC BY-NC 4.0, which are
+    incompatible with each other and with a project that might one day be sold, so it is
+    fetched on demand and **the two halves are built as separate binaries that never
+    link**. ⛔ The card half was described as *"entirely ours"* on 2026-09-10 and **did
+    not exist**: only `fetch-paula.sh` had been committed. Same defect class as item 0b,
+    in the tooling this time.
+
+    ⚠ **And the oracle found a third defect the same afternoon — item 39.**
 
     ⛔ **And the deeper lesson is about `modcompare`, which is green and always was.**
     [`../tools/modcompare/`](../tools/modcompare/) A/Bs [`../refplayer/`](../refplayer/)
@@ -3169,6 +3195,44 @@ specification that has not been tested.
     the only route anyone has costed to items 35 and 36, which are two audible defects
     in the design as it stands. **That is the trade, and it should be taken deliberately
     or not at all.**
+
+39. **⛔ NEW 2026-09-10 — THE FIRST PASS OF EVERY NOTE READS ONE BYTE PAST THE
+    BUFFER, AND THE REPAIR IS WRITTEN AND DOES NOT FIT.** Found by re-running §16 item
+    36's oracle against the repaired design: the steady state is exact, and the *first*
+    loop after a `DMACON` enable is not.
+
+    ```
+      first pass, card  : 03 04 05 06        ← 06 is outside a four-byte sample
+      steady state      : 02 03 04 05  02 03 04 05  …
+    ```
+
+    ⛔ **Two causes, and they are separate.**
+
+    **(a) W6 primes and W2 does not.** Both load `CNT` with 2 × `LEN` − 1, but W6's own
+    priming fetch consumes a byte that no W1 will ever count — so the enable path is one
+    short and runs one byte long. The repair is a second `read CNT, CNT − 1` pair in W6:
+    **written, measured correct (`PTR` never leaves the buffer, steady state unchanged),
+    and refused by `fit1508.exe`.** Two microcode steps is what the part no longer has.
+
+    **(b) The primed byte is never strobed into the converter.** §6.2's strobe is gated
+    on *"this channel's `PEND` changed in the frame just gone"*, which reads W1 step 4
+    and nothing else — so W6's priming write raises no flag and **the first sample of
+    every note is skipped**. ⚠ Marking W6's step as well makes the strobe fire only when
+    that step lands in a slot from which `WROTE` survives to the next walk: **right
+    sometimes and wrong otherwise, which is worse than consistently wrong.** Measured,
+    recorded, not half-fixed.
+
+    ⭐ **The cheaper shape, for whoever takes this next: end W6 with a chain into W1**,
+    the way W1 already chains into W2. W6 then does `LC → PTR`, `CNT` = 2 × `LEN` − 1 and
+    `NEXT` = the free-running count, and *W1* does the first fetch and the first
+    decrement — so the accounting is uniform, the priming byte goes through W1's own
+    `PEND` write and gets its strobe for free, and W6 comes out at about **eight steps
+    against eleven.** ⚠ It costs a second chain condition in `WT0`–`WT2` and `BUSY`,
+    which is logic on a part at 39 of 40 fan-in, so it is a proposal and not a plan.
+
+    ⚠ **Why it matters more than it looks.** A defect confined to the first pass is a
+    defect on every **note**, and a note's first pass is its attack. ProTracker
+    retriggers constantly.
 
 ---
 

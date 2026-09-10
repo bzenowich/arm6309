@@ -1081,22 +1081,22 @@ module aseq (
          (PFCK)
          | (PFVALID & ~AIDXLD & ~AINC);
       r_WROTE0 <=
-         (RUN & ~WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3 & ~WC0 & ~WC1)
+         (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & ~WC0 & ~WC1)
          | (WROTE0 & ~S2)
          | (WROTE0 & ~S1)
          | (WROTE0 & ~S0);
       r_WROTE1 <=
-         (RUN & ~WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3 & WC0 & ~WC1)
+         (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & WC0 & ~WC1)
          | (WROTE1 & ~S2)
          | (WROTE1 & ~S1)
          | (WROTE1 & ~S0);
       r_WROTE2 <=
-         (RUN & ~WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3 & ~WC0 & WC1)
+         (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & ~WC0 & WC1)
          | (WROTE2 & ~QCHAN)
          | (WROTE2 & ~S1)
          | (WROTE2 & ~S0);
       r_WROTE3 <=
-         (RUN & ~WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3 & WC0 & WC1)
+         (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & WC0 & WC1)
          | (WROTE3 & ~QCHAN)
          | (WROTE3 & ~S1)
          | (WROTE3 & ~S0);

@@ -81,6 +81,10 @@ export interface Step {
   cvstr?: "vol"
   /** the second half of a frame's converter pair - port registers 3 and 2 */
   cvb?: boolean
+  /** this step writes PEND, so 6.2's converter strobe fires for the channel.
+   *  ⚠ It is a FIELD and not a step number because there are two such steps -
+   *  W1's and W6's priming write - and the second one was missing. */
+  pend?: boolean
   /** the sequence may end here, if the named condition holds */
   done?: "always" | "noinc" | "nocommit" | "notend"
 }
@@ -118,7 +122,7 @@ export const PROGRAM: Record<number, Step[]> = {
     /* 1 */ { w: 2, wr: [0, 1, 2], b: "zero", cin: true, sum: true, drv: true },
     /* 2 */ { w: 4, blat: true },
     /* 3 */ { w: 0, alat: true },
-    /* 4 */ { w: 0, wr: [0, 1, 2], b: "blat", sum: true, sbo: true },
+    /* 4 */ { w: 0, wr: [0, 1, 2], b: "blat", sum: true, sbo: true, pend: true },
     /* 5 */ { w: 1, alat: true, cap: true },
     /* 6 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true, done: "notend" },
   ],
@@ -193,13 +197,30 @@ export const PROGRAM: Record<number, Step[]> = {
     /* 1 */ { w: 2, wr: [0, 1, 2], b: "zero", sum: true, drv: true },
     /* 2 */ { w: 5, alat: true, blat: true },
     /* 3 */ { w: 1, wr: [0, 1, 2], b: "blat", sum: true, drv: true },
+    /* ⛔ ONE DECREMENT HERE AND ONE IN W2, AND THAT IS 16 ITEM 39: IT SHOULD
+     * BE TWO. W6 PRIMES and W2 does not, so W6's own fetch below consumes a
+     * byte that no W1 will ever count, and the first pass of every note runs
+     * one byte PAST the buffer - the oracle measured it playing 03 04 05 06
+     * out of a four-byte sample, while every later loop was exact. The repair
+     * is a second `read CNT, CNT - 1` pair right here; it was written, it was
+     * measured correct, and `fit1508.exe` REFUSED IT. The part is full.
+     * A defect in the first pass only is a defect on every NOTE. */
     /* 4 */ { w: 1, alat: true, cap: true },
     /* 5 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true },
     /* 6 */ { w: 2, alat: true, cap: true, srd: true },
     /* 7 */ { w: 2, wr: [0, 1, 2], b: "zero", cin: true, sum: true, drv: true },
     /* 8 */ { w: 4, blat: true },
     /* 9 */ { count: true, alat: true },
-    /* 10 */ { w: 0, wr: [0, 1, 2], b: "blat", sum: true, sbo: true, done: "always" },
+    /* ⚠ NOT MARKED `pend`, DELIBERATELY, AND 16 ITEM 39 IS WHY. This step
+     * writes PEND too, and 6.2's converter strobe is gated on "this channel's
+     * PEND changed in the frame just gone" - which reads W1 step 4 and nothing
+     * else, so the primed byte is never strobed and the first sample of every
+     * note is skipped. Marking it here makes the strobe fire only when the
+     * step happens to land in a slot from which WROTE survives to the next
+     * walk - it is right sometimes and wrong otherwise, which is worse than
+     * consistently wrong. Measured, recorded, and not half-fixed. */
+    /* 10 */ { w: 0, wr: [0, 1, 2], b: "blat", sum: true, sbo: true,
+               done: "always" },
   ],
 }
 
