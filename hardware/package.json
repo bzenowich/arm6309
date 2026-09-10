@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Board layouts for the arm6309 machine",
   "scripts": {
-    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run lib/decode.check.ts && bun run place/place.check.ts && bun run gal/mmu.check.ts && bun run gal/jedec.check.ts && bun run gal/sync.check.ts && bun run gal/scan.check.ts && bun run gal/access.check.ts && bun run gal/regfile.check.ts && bun run gal/seqph.check.ts && bun run gal/seqctl.check.ts && bun run gal/tile.check.ts && bun run gal/cadence.check.ts && bun run gal/jedec/cupl.check.ts && bun run gal/vlen.check.ts && bun run gal/pxsel.check.ts && bun run gal/audio.check.ts && bun run lib/docs.check.ts",
+    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run lib/decode.check.ts && bun run place/place.check.ts && bun run gal/mmu.check.ts && bun run gal/jedec.check.ts && bun run gal/sync.check.ts && bun run gal/scan.check.ts && bun run gal/access.check.ts && bun run gal/regfile.check.ts && bun run gal/seqph.check.ts && bun run gal/seqctl.check.ts && bun run gal/tile.check.ts && bun run gal/cadence.check.ts && bun run gal/jedec/cupl.check.ts && bun run gal/vlen.check.ts && bun run gal/pxsel.check.ts && bun run gal/audio.check.ts && bun run gal/arom.check.ts && bun run lib/docs.check.ts",
     "check:jedec": "bun run gal/jedec.check.ts",
     "check:cupl": "bun run gal/jedec/cupl.check.ts",
     "check:sync": "bun run gal/sync.check.ts",
@@ -15,6 +15,7 @@
     "check:tile": "bun run gal/tile.check.ts",
     "check:cadence": "bun run gal/cadence.check.ts",
     "check:audio": "bun run gal/audio.check.ts",
+    "check:arom": "bun run gal/arom.check.ts",
     "check:netlist": "bun run lib/netlist.check.ts",
     "check:place": "bun run place/place.check.ts",
     "render:boards": "bun run place/render.ts",

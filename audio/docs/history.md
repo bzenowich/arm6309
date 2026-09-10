@@ -1167,3 +1167,73 @@ which every control output reads and which no host-qualifier concentration touch
 **So the 8-bit datapath was not attempted, and §16 item 35's latent `ACOUT` hole is left
 recorded rather than half-fixed.** The reverted branch keeps both, and §16 item 34 now
 carries the measurement instead of the estimate.
+
+
+---
+
+## 2026-09-10 — the Paula overview arrived, and the sequencer got a third arrangement
+
+**Nothing in the present design changed.** The card is 35 ICs on 18 cm, two `ATF1508AS`,
+U2 at 128 of 128. What changed is that §10.3 now exists beside §10.2, and §0 says so.
+
+### §18 — Paula was a bibliography entry and is now a file
+
+[`paula.md`](paula.md) is a functional overview of the MOS 8364, added verbatim with a
+provenance header. ⚠ **It is a secondary source and is labelled one**: the *Hardware
+Reference Manual* outranks it, and §16 item 36's differential oracle outranks them both.
+That precedence is not decoration — the oracle has already overturned one thing this
+document said about Paula (§4.2's *"`PER` = 0 or 1: clamp in the sequencer, as Paula
+effectively does"*; Paula does not clamp anywhere, its floor comes from Agnus's DMA
+rate). ⚠ **And the one thing deliberately not taken from it is the DMA architecture**:
+Paula does not arbitrate the bus, this card has no Agnus and no bus mastering, and its
+sample RAM is card-local (§2, §5), so "samples must live in chip RAM" has no analogue
+here.
+
+### §10.2.6 — "there is nothing left on U2", and what that was blocking
+
+The fitted sequencer is a microcoded engine whose control store is built out of
+**macrocells**: 36 control outputs, each a sum-of-products decode of
+(`RUN`, `WT[2:0]`, `T[3:0]`) qualified by the host state. It stands at 128 of 128 cells,
+61 foldback nodes and six of eight blocks at 35 of 40 LAB fan-in, and five open items
+were stuck behind that one fact — §16 items 7, 32, 34, 35 and 36, **two of which are
+live audible defects**.
+
+§10.3 moves the decode into four `27C512` and every qualifier into an address line.
+⭐ **The reason it works is §16 item 34's own measurement, read the other way round**:
+if a switch matrix counts *signals* rather than *literals*, the cure for fan-in is not to
+register a qualifier — that adds a signal, which is why item 34's pipeline made it worse,
+35 → 38 — but to make the qualifier **stop being a signal**, which is what addressing a
+memory with it does.
+
+| | present | §10.3 |
+|---|---|---|
+| ICs | 35 | **36** (+4 `27C512`, +1 `74HC163`, −4 datapath) |
+| U2's 149 term-list cells | all on the part | 44 absorbed, 18 rewritten, 87 unchanged |
+| step rate | 10.64 M/s | 7.09 M/s |
+| margin at `PER` = 113 | 12.1× | **5.7×** |
+| throughput floor | `PER` ≥ 10 | **`PER` ≥ 20** |
+
+⚠ **It is measured and not fitted**, and §16 item 38 is the gate. `npm run check:arom`
+computes the microword, the address map, the image and the budget from the same
+`PROGRAM` table the fitted design's term lists come from — 48 claims — and prints the
+macrocell and pin figures as **estimates**, with the word on them, because only
+`fit1508.exe` settles those.
+
+### §0 / §10.2.3 — two claims that did not survive designing it
+
+⛔ **"No tight path at all."** §0's sentence is *"the fastest thing on the card is a
+state-file read at 30 ns inside a 35.24 ns slot"*, and **the `'283` chain is not in it
+and never was in any other sentence either.** §10.2.3's read-modify-write is two
+consecutive slots, so a 16-bit ripple carry through four `74HC283` has roughly 50 ns —
+against a single `74HC244` buffer at 23 ns max at 4.5 V, the only 74HC propagation figure
+in the repository. ⚠ **Nothing on the card can see it**: the Verilog models logic and not
+timing, and the `'283`s are inside neither CPLD, so `cpld/*.fit` does not see them
+either. §16 item 37 is now that finding, and it belongs to the **present** design.
+
+⛔ **"Even `T` is a state-file read, odd `T` is a write."** `aseq.micro.ts`'s header
+states it as *the one invariant that makes it cheap*, and `PROGRAM` does not obey it:
+W1 steps 2 and 3 are both reads, W3 step 0 is an even write and step 5 an odd read, and
+every step of W5 alternates the wrong way. It was found by trying to *use* it — the
+16-bit two-package microword §10.3.4 prices and rejects depends on it being true — and
+the lesson is narrow: **an invariant a document states and a table does not hold is not
+an invariant, and the way to find out is to build something that needs it.**

@@ -74,6 +74,14 @@ mastering, no `/WAIT`, and **no tight path at all**: the fastest thing on the ca
 state-file read at 30 ns inside a 35.24 ns slot, on a part already specified at that
 grade.
 
+⚠ **And the sequencer has a THIRD arrangement, designed on 2026-09-10 and not yet
+decided.** §10.2's U2 is exactly full, and §16 items 7, 32, 34, 35 and 36 are all stuck
+behind that one fact — including **two live, audible defects**. §10.3 moves the
+`(WT, T)` decode out of macrocells and into four `27C512`: **+1 IC net, 36**, every one
+of those items reachable, and **the margin at ProTracker's top note falls from 12× to
+5.7×**. It is measured (`npm run check:arom`, 48 claims) and **not fitted**, so §0's
+headline stays 35 ICs until §16 item 38's gate is passed.
+
 **E-rate compatibility.** The card is **unaffected by the machine's E rate**. Every
 audio-timing figure in this document is referred to the card's own 28.37516 MHz
 crystal, not to E; the register port is asynchronous to E by construction (§9.4);
@@ -1459,6 +1467,10 @@ state-file byte lane), a `74HC138` for §10.2.6's lever, and a `74HC00` to gate 
 enables with the slot clock's second half. ⚠ **The analogue side is still an enumeration
 and not a layout** — §16 item 19.
 
+⚠ **This table is the present design.** §10.3 prices a different one at **36** — four
+`27C512` and a `74HC163` in, four datapath packages out — and §16 item 38 is the
+decision.
+
 ### 10.1 Two CPLDs, and why the counter and comparator stay outside
 
 **Case A decided 2026-09-07**, from `npm run census:audio`: the counter and the
@@ -1825,6 +1837,11 @@ cells at 128 of 128 — both packages carry the same 128 macrocells — so the l
 buys pin headroom this design does not need and costs the socket. **The PLCC-84 with JTAG
 off is the answer, and the next thing added to this card has to displace something.**
 
+⭐ **Or stop putting the decode in macrocells at all — §10.3.** The 36 outputs above are
+a decode of `(WT, T)`, which is what an addressed memory does for nothing; moving them
+into four `27C512` takes 44 cells off this part and stops 18 more from reading the step
+signals, at +1 IC net and a 2× cut in slot margin. §16 item 38.
+
 ⭐ **One lever was pulled, and it is named because a pin count that comes down without a
 reason is a feature that has been quietly dropped.** Four converter port-register clocks
 and three `AD7528` chip selects are mutually exclusive — a step that loads a register
@@ -1846,6 +1863,277 @@ produced its **trailing** edge, which is after `E` has fallen and the address ma
 be gone — so **which register was touched was never captured anywhere**. U2 latches the
 offset and R/W on the leading synchronised edge instead, which is the only place on the
 card that can act on it.
+
+### 10.3 The control store — the sequencer's third arrangement
+
+⚠ **DESIGNED AND MEASURED 2026-09-10; NOT THE PRESENT DESIGN.** §10.1 and §10.2
+describe what is fitted and simulated. This section describes the arrangement that
+replaces §10.2's decode with an addressed memory, and it is here rather than in
+[history.md](history.md) because it is the answer to §16 items 32, 34, 35 and 36,
+which the present design cannot answer at all. **The gate it has to pass is in
+§16 item 38**: a fit, a Verilog model and `audio_tb` playing a buffer through it.
+Until then §0's headline is 35 ICs and two CPLDs, and this is a costed proposal.
+
+⭐ **What is already measured** — `npm run check:arom`, **48 claims, 0 failed**, all of it
+computed from [`gal/aseq.micro.ts`](../../hardware/gal/aseq.micro.ts)'s `PROGRAM`, the
+same table §10.2's term lists come from: the microword's width, the address map, the
+image, the step budget, and which of U2's 149 cells become table content. What is
+**estimated** and says so: what the fitter would then do with what is left.
+
+#### 10.3.1 Why — three limits, and three items stuck behind one of them
+
+**U2 is already a microcoded engine.** A work type and a step counter live in registers
+and every one of its 36 control outputs is a sum-of-products decode of
+(`RUN`, `WT[2:0]`, `T[3:0]`) qualified by the host state — `aseq.jedec.ts`'s `ctl()`
+is literally that function. **That is what an addressed memory does for nothing**, and
+doing it in an `ATF1508AS` spends all three of the family's limits at once: 128 of 128
+logic cells, 61 foldback nodes, and six of eight logic blocks at **35 of 40 LAB fan-in**.
+
+⛔ **Three open items are stuck behind that one fact, and none of them is cosmetic.**
+
+| Item | What it wants | Why it cannot have it |
+|---|---|---|
+| 34 | the 8-bit datapath, worth **−4 packages** | `Grouping fail`, all eight LABs at `FanIn [40]`. Built, ran (38 claims, 0 failed), reverted |
+| 35 | four high-lane modes — `inc`, `dec`, `pass`, `carry` | there is one bit of `ACIN` to tell them apart, and four of the nine driving steps have `ACIN` = 0. **The 17-bit `CNT` does not exist in the fitted design** |
+| 36 | the two live, audible defects the Paula oracle found | both trace to item 35, on a part with no cell and no fan-in left to repair them with |
+
+⭐ **And §16 item 34 already established WHY the obvious cure fails, which is the result
+this section is built on.** Registering a decision trades a few *substituted literals*
+for a new *distinct signal*, and **a switch matrix counts signals, not literals** — so
+the pipeline made fan-in worse, 35 → 38. Addressing a memory with a qualifier is the
+one move that makes the qualifier **stop being a signal at all**. It is not a bigger
+part; it is a different accounting.
+
+#### 10.3.2 The shape
+
+```
+   U1  ATF1508AS  ──── host port, decode, interrupts, /FIRQ, slot counter, ÷5,
+   (unchanged, +CIANEXT)   the free-running counter and the comparator
+                           ⭐ + 8.2's CIANEXT, 16 cells of its 40 spare and NOT ONE PIN
+
+   U2  ATF1508AS  ──── SEQUENCING STATE ONLY: WT, WC, AIDX, the due / restart /
+   (shrunk)            host flags, the arbiter, SD[18:16]'s arithmetic, 9.2's
+                       two status bits.  ⛔ All 36 decoded outputs leave.
+        │  WT[2:0]  AIDX[3:0]  HKIND[2:0]
+        ▼
+   U3  4 × 27C512 ──── THE CONTROL STORE.  16 address bits, 28-bit microword,
+                       21 bits straight to the datapath and 7 back through U2
+        ▲
+        │  T[3:0]                    ACOUT (from the '283 chain)   BYTE
+   U4  74HC163    ──── the step counter, which was four macrocells
+```
+
+⭐ **The trade in one line: everything §10.2 qualifies a control output *with* becomes an
+address line, and stops being a signal.**
+
+#### 10.3.3 The address — 16 bits, and what each line deletes
+
+| Line | Bits | What it takes off U2 |
+|---|---|---|
+| `T` | 4 | the step counter — a `74HC163`, and with it `LAST`, the step comparator. ⚠ Four bits is the longest sequence at **14 of 16**; W4 on the 8-bit datapath is the one that sizes it |
+| `WT` | 3 | nothing — `WT` stays three registers on U2 and is driven out as pins |
+| `AIDX` | 4 | ⭐ **twelve cells**: `HRO`, `HSTAGE`, `HCOMMIT`, `CL2`, `HW0`–`HW2`, `HL0`–`HL1`, `CW0`–`CW2`. §9.3's byte map, §9.4.3's commit mask and §9.3's read-only offsets all become table content |
+| `HKIND` | 3 | the six-way "which port, which direction" qualification every W3 step carries. ⚠ It is U2's and not the backplane's, because §9.4.4's finding is that *which register was touched* has to be captured on the synchronised **leading** edge |
+| `ACOUT` | 1 | ⭐ the branch. `done: notend` becomes a **stored decision**: carry set retires the work item, carry clear chains straight into W2's reload — the same address, the other half of the image |
+| `BYTE` | 1 | §16 item 34's half-select. ⭐ It is *also* `ALAT`'s and `BLAT`'s output enables directly, so the 8-bit datapath's half select costs no microword bit |
+
+**65,536 words, which is one `27C512` per lane exactly.** 4,608 addresses are programmed
+and hold **70 distinct words**; the rest hold the idle word, which reads nothing, writes
+nothing, drives nothing and ends the sequence — ⭐ **so a runaway step counter lands on
+it and stops**, which is a property the present design's decode does not have.
+
+#### 10.3.4 The microword — 28 bits, horizontal, in four packages
+
+**One bit per control line, no encoding, no decoders.** That was costed against the two
+alternatives rather than assumed, and both lose:
+
+| | width | packages | glue | verdict |
+|---|---|---|---|---|
+| **horizontal — taken** | **28** | **4** | **none** | |
+| encoded (2-bit fields for the mutually exclusive output enables) | 25 | 3 | a `'139` for the two bus-source fields and a `'138` for the ALU op, both also qualified by the engine phase | **5 packages, so it loses** |
+| overlaid by phase (the read word and the write word share the bus) | 16 | 2 | the same decoders, **plus** ~8 inserted no-op steps | see below |
+
+⛔ **The overlay's premise is not true of the microprogram.** §10.2.3's invariant —
+"even `T` is a read, odd `T` is a write" — reads well and `PROGRAM` does not obey it:
+W1 steps 2 and 3 are both reads, W3 step 0 is an even write, and every step of W5
+alternates the wrong way. Restoring it costs about eight inserted steps, **W5 doubling
+from 6 to 12** — and W5 is the sequence that suppresses the walk's converter load while
+it runs. *An invariant a document states and a table does not hold is not an invariant.*
+
+⭐ **And the horizontal word is the only one for which the engine phase costs no gates.**
+The control store's own `/OE` **is** the engine phase: in walk slots every microword bit
+floats to its inert level on the pull-downs `SD` already has (§10.2.2), so nothing on the
+card has to AND anything with "is this a work slot". An encoded word's decoders would
+each need that qualification explicitly.
+
+| Field | Bits | Goes to |
+|---|---|---|
+| `SFA5`, `SFA[2:0]` | 4 | the state file. ⚠ `SFA[4:3]` is **not** here and cannot be — it is `WC` in a channel sequence, `AIDX[5:4]` in a host one and the **slot number** during the walk, so U2 drives those two pins |
+| `SFOE` | 1 | ORed with the walk's read by one gate of the `'00` that already gates the write enables |
+| `SFWE0`–`SFWE2` | 3 | ⭐ §9.4.3's commit mask, as table content: `LC` three lanes, `LEN` and `PER` two, a read-only offset none |
+| `ALATCK`, `BLATCK`, `BLATOE`, `ONESOE`, `CNTOE`, `ACIN`, `SUMOE` | 7 | the ALU and its two operand latches |
+| `SROE`, `SRWE`, `SBOE` | 3 | the sample RAM, and the byte on its way to `PEND` |
+| `PWOE`, `PFCK`, `PFLANE` | 3 | §9.3's two host latches |
+| `CVOP` | 2 | **U2** — because the *walk* loads the same four converter port registers in slots 0–3 and one of them has to win |
+| `HLOP` | 3 | **U2** — ⛔ §16 item 35, and the reason this section exists |
+| `SEQ` | 2 | **U2** — `next` / `end` / `chain` / `end and fire`. ⭐ The entire next-state logic |
+| | **28** | 21 straight to the datapath, 7 through U2, **4 spare** |
+
+⭐ **The four spare bits are where §16 item 7's 8-channel mode and §11.3's attach chain
+go** — which is the first time since 2026-09-09 that this card has had anywhere to put
+them (§16 item 32).
+
+#### 10.3.5 ⛔ The adder does not settle in a slot, and it never did — §16 item 37
+
+**This is not a consequence of the control store. It is a hole in the present design that
+designing the control store found**, and it is what makes §16 item 34's 8-bit datapath
+mandatory here rather than merely economical.
+
+§0 says the card has "**no tight path at all** — the fastest thing on the card is a
+state-file read at 30 ns inside a 35.24 ns slot". **The `'283` chain is not in that
+sentence and has never been budgeted anywhere in this document.** §10.2.3's read-modify-write
+is two *consecutive* slots: `ALAT` is clocked mid-way through the read slot (`gated()`
+in `aseq.jedec.ts` explains why) and the byte-lane write enable falls in the second half
+of the next one, so from the `ALAT` edge to the data setup before `/WE` rises is
+**roughly 50 ns** — and in that window the sum has to ripple through **four** `74HC283`
+*and* the `74HC244` that three-states it onto `SD`. A single `74HC244` buffer is
+**13 ns typical, 23 ns max at 4.5 V**
+([`sn74hc244.pdf`](../../reference/datasheets/sn74hc244.pdf), the only 74HC propagation
+figure in this repository); four cascaded 4-bit adders plus that buffer are several of
+those.
+
+⚠ **`audio_tb` cannot see it and neither can the fitter.** CLAUDE.md says it plainly —
+the Verilog models the logic and not the timing, and `cpld/*.fit` is where propagation
+lives, and the `'283` chain is on neither. It is the same class as `design-review2.md`
+§10's "a check that holds an input constant cannot see a defect in it".
+
+**Under the control store the same path gets ~65 ns**, because a micro-step is two slot
+times, and **two** cascaded `'283` plus the `'244` make it. So:
+
+| | present | control store |
+|---|---|---|
+| ALU width | 16 bits, 4 × `'283` | **8 bits, 2 × `'283`** (§16 item 34) |
+| window from `ALATCK` to the write's data setup | **~50 ns** ⛔ | **~65 ns** |
+| packages | 4 + 2 (`SUM` three-state) + 2 (`$FFFF`) | 2 + 1 + 1 — **−4** |
+
+⚠ **A datasheet for the `74HC283` is not in this repository**, so the figures above are
+an order-of-magnitude argument from the `'244`'s and not a timing budget. §16 item 37 is
+the item that closes it, and it is the same posture §16 item 15 took about the missing
+converter datasheet: get the part's own numbers before quoting a margin.
+
+#### 10.3.6 The timing, and where the fourth work slot comes from
+
+| | present | control store |
+|---|---|---|
+| walk | slots 0–3, four channel reads | unchanged |
+| timer compare | **slot 4, reading `$21` from the state file** | ⭐ **U1**, `CIANEXT` in 16 of its 40 spare cells, compared against the counter U1 already holds — **and not one pin**, because U1 already has `SD[15:0]` |
+| the engine | slots 5–7, one slot per step | **slots 4–7, two slots per step** |
+| step rate | 10.64 M/s | **7.09 M/s** |
+
+⚠ **The `CIANEXT` move is the part of this arrangement most likely to fail, and it
+should be fitted first.** "Sixteen registers in U1's 40 spare cells" is the easy half;
+the hard half is that they have to be **compared against the free-running counter**, and
+U1 already has one 16-bit comparator whose placement was the subject of §10.1.1's
+`NEQL`/`NEQH` story — **32 signals into one logic block, against the 40 an `ATF1508AS`
+LAB takes, and the fitter was killed trying**. Giving it a second operand source is a
+16-bit mux in front of exactly that block. If it does not place, the fallback is to leave
+the timer compare in slot 4 where it is and the engine keeps three work slots: **5.32 M
+steps/s, and every margin in §10.3.7 falls by a further quarter** — `PER` = 113 to 4.2×,
+`PER` = 30 to **1.13×**, and the throughput floor to `PER` ≥ 27, which is inside §4.3's
+30 with almost nothing to spare. That is the sensitivity to test first, and it is part of
+§16 item 38's gate.
+
+**A micro-step is two slot times because an addressed memory cannot answer inside
+35.24 ns.** A 45 ns part is valid 45 ns into the step, which leaves the second slot for
+the state-file access; a pipeline register on the store's output would remove the latency
+altogether and cost **four more `74HC574`** — a 28-bit word — which is more than the
+word itself costs. ⚠ **The margin at the top of the step is
+thin and is a bench question, not an arithmetic one** — see §16 item 37.
+
+#### 10.3.7 What it costs, and what it buys
+
+**⭐ One package net, and the whole of the margin argument is the price.**
+
+| | Δ | |
+|---|---|---|
+| `27C512` control store | **+4** | four lanes of 64K × 8 |
+| `74HC163` step counter | **+1** | `T[3:0]`, which was four macrocells |
+| `74HC283` 16-bit → 8-bit | **−2** | §16 item 34, unblocked |
+| `74HC244` sum three-state, `74HC244` `$FFFF` | **−2** | item 34 |
+| | **+1** | **36 ICs against §10's 35** |
+
+⚠ **And the margin falls, on every row.** One formula for all three columns, so they are
+comparable; the absolute figures differ from §10.2.5's because that row prices the host
+differently.
+
+| | present | control store, 16-bit ⚠ | **control store, 8-bit** | 8-bit, ⚠ 3-slot fallback |
+|---|---|---|---|---|
+| step rate | 10.64 M/s | 7.09 M/s | **7.09 M/s** | 5.32 M/s |
+| `PER` = 428 (C-2) | 45.9× | 30.6× | **21.4×** | 16.1× |
+| `PER` = 113 (ProTracker's top note) | 12.1× | 8.1× | **5.7×** | 4.2× |
+| `PER` = 30 (§4.3's floor) | 3.2× | 2.1× | **1.5×** | **1.13×** |
+| `PER` = 113 + a 6309 saturating the port | 3.2× | 2.2× | **1.5×** | **1.10×** |
+| throughput floor | `PER` ≥ 10 | `PER` ≥ 14 | **`PER` ≥ 20** | `PER` ≥ 27 |
+
+⚠ **The fourth column is §10.3.6's fallback**, taken only if `CIANEXT` will not place in
+U1. At `PER` = 30 it is 1.13× — which is a design that works and has no margin, and is
+the reason the `CIANEXT` fit is item 38's *first* step and not its last.
+
+⚠ **The 16-bit column is priced and not available** — §10.3.5 is why. And the 8-bit
+column's `PER` ≥ 20 sits below §4.3's conservative 30 by 1.5× rather than the present
+3×, which is the honest cost: **this card gets its headroom back in logic and pays for it
+in slots.**
+
+**What it buys, item by item:**
+
+| §16 item | Present | With a control store |
+|---|---|---|
+| 34 — the 8-bit datapath | refused by fan-in | **taken; it is what pays for the store** |
+| 35 — four high-lane modes | one bit of `ACIN` for four behaviours | **`HLOP`, three bits of a stored word.** `check:arom` asserts the mode of all nine driving steps |
+| 36 — D-1 and D-2 | not repairable in place | repairable; ⚠ **the repair is not written and the claims that would catch it are not either** |
+| 7 — eight channels | "the next thing added has to displace something" | four spare microword bits; ⚠ **the slot walk still refuses it** |
+| 32 — U2 full, U1 pin-bound | both parts full | 44 cells become table content, 18 more stop reading `(WT, T)` |
+| 11.3 — the attach chain | unfitted | one microword bit |
+
+#### 10.3.8 What leaves U2 — measured, and what is only estimated
+
+`check:arom` partitions all 149 cells of the fitted term list into three classes and
+asserts that **no cell outside the first two reads `RUN`, `WT` or `T`** — so the
+partition accounts for every reader of the step signals §16 item 34 measured as the
+fan-in driver.
+
+| | | |
+|---|---|---|
+| **absorbed** | **44** | become table content, or the `'163` |
+| **rewritten** | **18** | keep their macrocell and read *one microword bit* instead of a `(WT, T)` decode |
+| unchanged | 87 | |
+
+⭐ **And a second claim makes the absorption honest rather than hopeful:** every absorbed
+cell is asserted to read **only** an address line, another absorbed cell, or the slot
+phase. A cell reading anything else would depend on state the address does not carry and
+could not be table content at all.
+
+⚠ **ESTIMATE, NOT A FIT.** Only `fit1508.exe` reports macrocells, and there is no `.fit`
+for this arrangement. What is measured is *which cells go* and *what the ones that stay
+read*; what is estimated is what the fitter would then do with them. The pin budget is
+the same kind of estimate — U2 comes out at roughly **58 of 64** (25 backplane and board
+inputs, 7 microword inputs, 26 outputs) — and §16 item 38 is where it stops being one.
+
+#### 10.3.9 Build order
+
+1. `npm run check:arom` — done, 48 claims. **The microword, the address and the budget.**
+2. **A `74HC283` datasheet, and the `'283` chain timed** — §16 item 37. This decides
+   whether the present card has a defect as well as whether this one closes.
+3. `aseq.jedec.ts` rewritten to the residue, and **fitted**. The gate: cells, pins and
+   LAB fan-in from `fit1508.exe`, not from §10.3.8.
+4. The 8-bit expansion of `PROGRAM`, with **item 35's `HLOP` applied**.
+5. `verilog/audio_card.v` gets the store as a `$readmemh` of the image, and `audio_tb`
+   runs. ⚠ **With the claims §16 item 36 says are missing** — *count the samples a
+   buffer yields* — or the next defect of that class is equally invisible.
+6. The decision, in §16 item 38.
+
+---
+
 
 ---
 
@@ -2280,6 +2568,10 @@ specification that has not been tested.
    not move this: four `WR` lines and four latch clocks is eight control signals,
    exactly what the digital sum needed (§6.2). Same posture as
    [`graphics.md`](../../video/docs/graphics.md) §19 item 15.
+
+   ⚠ **§10.3 gives it four spare microword bits and does NOT give it slots.** The
+   control store removes the reason "there is nothing left on U2"; the 8-slot walk is
+   the other half of this item and is untouched by it.
 8. **Retired — the digital-sum glitch bench.** There is no adder in the card's audio
    path (§6.2). Each converter is driven from a hold latch that has been static for
    105.7 ns when `WR` rises, so there is no digital transient to measure; the
@@ -2489,7 +2781,11 @@ specification that has not been tested.
     software rule, stated in §4.3 and §9.3**, with a zero-detect gate (+1 IC) as the
     fallback if a bench ever needs it.
 
-32. **⚠ U2 is full and U1 is not.** U2 is the sequencer and it has no spare cells;
+32. **⚠ U2 is full and U1 is not** — ⭐ **and §10.3 is the answer to it.** 44 of U2's
+    cells become table content, 18 more stop reading `(WT, T)`, and U1 gets §8.2's
+    `CIANEXT` in 16 of its 40 spare cells for no pins at all. §16 item 38 is the gate.
+
+    ⚠ **The original text of this item stands until that is fitted:** U2 is the sequencer and it has no spare cells;
     U1 has room and 18 spare pins, which is why the counter, the comparator and the
     read-back latch all went there. §16 item 7's 8-channel mode and §11.3's attach chain
     still have to **displace** something on U2 or move to U1.
@@ -2564,6 +2860,13 @@ specification that has not been tested.
     where concentrating lost. ⚠ **A fit past ~3 minutes is a fan-in suspicion, not a slow
     fit** — the symptom is often silence rather than `Grouping fail`.
 
+    ⭐ **AND THE RESULT ABOVE IS WHAT §10.3 IS BUILT ON.** If a switch matrix counts
+    signals rather than literals, then the cure is not to register a qualifier — that
+    adds a signal — but to make it **stop being a signal**, which is what addressing a
+    memory with it does. §10.3 takes this datapath as a consequence rather than as a
+    goal: it is what pays for the control store's four packages, and §16 item 37 makes
+    it mandatory rather than merely economical.
+
 35. **⚠ NEW 2026-09-09 — the 17th and 19th bits do not distinguish an increment from a
     decrement, and it is a latent hole in the design as it stands.** `SDH0`–`SDH2` carry
     `PTR[18:16]` and `CNT[16]`, and they apply the adder's `ACOUT` one way for every
@@ -2612,6 +2915,13 @@ specification that has not been tested.
     or a microcode step. **Neither is free, and this is why item 36 is not a one-literal
     repair.**
 
+    ⭐ **In §10.3 it is three bits of a stored word and costs nothing.** `HLOP` names the
+    mode the step is arithmetically in — `cap` / `pass` / `inc` / `dec` / `carry` — and
+    `npm run check:arom` asserts the mode of all nine driving steps by name, including
+    the two this item says are wrong: W1 step 6 is a **decrement** and W2 step 3 is a
+    **carry**. ⚠ The zero-detect problem this item ends on does not go away — it becomes
+    a microword bit that has somewhere to live, not a repair that is already written.
+
 36. **⛔ NEW 2026-09-10 — two live defects on the shipped card, found by a Paula.v
     differential oracle, and they share item 35's root cause.** A separate implementation
     of Paula was driven alongside this card in simulation and their observable output
@@ -2658,6 +2968,83 @@ specification that has not been tested.
     ⚠ **The oracle is not in the tree.** `Paula.v` is GPL v3 and vendoring it is
     undecided; the card half of the harness is entirely ours.
 
+    ⚠ **§10.3 makes both repairable and repairs neither.** The control store gives item
+    35's four modes somewhere to live, which is the precondition; the fix itself is
+    unwritten, and so are the claims that would catch it. **This item does not close
+    until something counts the samples a buffer yields.**
+37. **⛔ NEW 2026-09-10 — THE `'283` CHAIN HAS NEVER BEEN GIVEN A PROPAGATION BUDGET,
+    AND ONE SLOT IS NOT ENOUGH FOR SIXTEEN BITS OF IT.** §0 says the card has "no tight
+    path at all — the fastest thing on the card is a state-file read at 30 ns inside a
+    35.24 ns slot". **The adder is not in that sentence, and it is not in any other one
+    either.**
+
+    §10.2.3's read-modify-write is two *consecutive* slots: `ALAT` is clocked in the
+    middle of the read slot (that gating is deliberate — `aseq.jedec.ts`'s `gated()`
+    explains why) and the byte-lane write enable falls in the second half of the next
+    slot, so **a 16-bit ripple carry through four `74HC283` packages has roughly 50 ns
+    to settle.** The only 74HC propagation figure in this repository is the `'244`'s —
+    **13 ns typical, 23 ns max at 4.5 V**
+    ([`sn74hc244.pdf`](../../reference/datasheets/sn74hc244.pdf)) — and a carry rippling
+    through four packages plus a final sum is several of those.
+
+    ⚠ **Nothing on this card can see it.** CLAUDE.md states the rule the video card paid
+    for: the Verilog models the logic and **not the timing**, and propagation is
+    `fit1508.exe`'s business, recorded in `cpld/*.fit` — and the `'283` chain is in
+    neither, because it is not inside either CPLD. `audio_tb` will pass at any adder
+    delay whatsoever. Same class as `design-review2.md` §10's "a check that holds an
+    input constant cannot see a defect in it": **a model that cannot represent the
+    failure cannot report it.**
+
+    **What to do, in order.** (a) Get a `74HC283` datasheet into
+    `reference/datasheets/` — the figures above are an order-of-magnitude argument from
+    a different part and are not a budget. (b) Time the chain, **including the `'244`
+    that three-states the sum onto `SD`**: `A/B → C_out` of the first package,
+    `C_in → C_out` twice, `C_in → Σ` of the last, then the buffer. (c) If it does not
+    make 50 ns, the present card has a defect and the choices are §16 item 34's 8-bit
+    datapath (2 packages, ~half the delay — and **−4 ICs**), a `74HC182` lookahead
+    (+1 IC), a faster family for those four packages alone (⚠ `74F`/`74AC` switching
+    beside the analogue section, which is item 9's risk), or §10.3's two-slot micro-step.
+
+    ⭐ **§10.3 needs no fix for it**, which is the one piece of good news: a micro-step
+    there is two slot times, the same path gets ~61 ns, and the 8-bit datapath makes it
+    with margin. **This item is inherited by that design, not created by it.**
+
+38. **⚠ NEW 2026-09-10 — the decision on §10.3's control store, and what has to happen
+    before it can be made.** §10.3 designs the sequencer's third arrangement: the
+    `(WT, T)` decode moves out of U2's macrocells into four `27C512`, with the step
+    counter as a `74HC163` and every host qualifier as an address line. **48 claims,
+    0 failed** (`npm run check:arom`), and the arithmetic says **+1 IC net — 36 — and
+    every one of §16 items 7, 32, 34, 35 and 36 becomes reachable.**
+
+    ⛔ **What is measured and what is not, because this is exactly the gap item 0b was
+    about.** Measured, from the same `PROGRAM` the fitted design is built from: the
+    28-bit microword, the 16-bit address, the image (70 distinct words in 65,536),
+    the step budget, and the partition of all 149 term-list cells into 44 absorbed,
+    18 rewritten and 87 unchanged — with the claim that **no cell outside the first two
+    classes reads `RUN`, `WT` or `T`**. Estimated, and labelled so everywhere: **U2's
+    macrocell count and its ~58 of 64 pins.**
+
+    **The gate, and none of it is optional:**
+
+    1. item 37 — a `74HC283` datasheet and the chain timed.
+    2. `aseq.jedec.ts` rewritten to §10.3.8's residue and **fitted**. Cells, pins and
+       LAB fan-in from `fit1508.exe`, not from a census. ⚠ And CLAUDE.md's first trap
+       applies: **a failed fit leaves the previous `.fit` in place**, so compare the
+       hash.
+    3. `PROGRAM` expanded to the 8-bit datapath with item 35's `HLOP` applied.
+    4. `audio_card.v` reading the image, and `audio_tb` playing a buffer through it —
+       ⚠ **with the claims item 36 says are missing**: *count the samples a buffer
+       yields.* A test written from the same understanding as the design can only
+       confirm the design does what its author thought, and that is how D-1 and D-2
+       survived 43 claims.
+    5. `check:place` at 36 packages — item 19 already refuses 18 cm at 35.
+
+    ⚠ **And the honest reason to hesitate is the margin, not the packages.** §10.3.7's
+    table: `PER` = 113 falls from 12.1× to 5.7×, and the throughput floor from `PER` ≥ 10
+    to `PER` ≥ 20 against §4.3's conservative 30. The present design has more slots and
+    no room; this one has room and fewer slots. **That is the trade, and it should be
+    taken deliberately or not at all.**
+
 ---
 
 ## 17. Period audit
@@ -2703,6 +3090,12 @@ the sound card too. That is a decision to make deliberately, not to inherit.
 - `~/code/colormin/docs/backplane.md` — slot model, open-drain interrupt lines,
   the mono `AUDIO` node that [`graphics.md`](../../video/docs/graphics.md) §17 already argues should
   be stereo.
+- [`paula.md`](paula.md) — **the functional overview of the MOS 8364 this card
+  reproduces**, added 2026-09-10, kept verbatim with a provenance header. It is a
+  secondary source: where it and the *Hardware Reference Manual* disagree the manual
+  wins, and where it and §16 item 36's differential oracle disagree the oracle wins —
+  which has already happened once, to §4.2's "`PER` = 0 or 1: clamp, as Paula
+  effectively does".
 - **Amiga hardware behaviour** — Paula's register set, `DMACON`/`INTREQ`
   semantics, the audio DMA slot allocation, and the CIA-B tempo path. **Every
   behavioural claim in §1, §4.2 and §4.3 is from the documented model and must be

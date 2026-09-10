@@ -27,6 +27,7 @@ root.
 | | |
 |---|---|
 | [`docs/audio.md`](docs/audio.md) | the card — datapath, register map, DAC, filters, IC budget |
+| [`docs/paula.md`](docs/paula.md) | **the MOS 8364 this card reproduces** — a functional overview, kept verbatim, ⚠ a *secondary* source (see its header for the trust precedence) |
 | [`docs/modplayer.md`](docs/modplayer.md) | the software — what the loader relocates and what the replayer computes |
 | [`refplayer/`](refplayer/) | **host reference model** of both, in C. Builds and is tested. |
 | [`test/`](test/) | unit tests for the reference model, run by `ctest` |
@@ -56,6 +57,25 @@ channel's `LC`/`LEN`/`PER` through the host port, enables it with `DMACON`, and 
 sample byte come out of card RAM through `PEND`, a converter port register and into an
 `AD7528` — then rewrites `LC`/`LEN` while the first pass is still playing and sees the
 buffer loop to the new address and the end-of-buffer interrupt reach `/FIRQ`. 38 claims, 0 failed.
+
+⛔ **And it has two live, audible defects, found on 2026-09-10 by running a separate
+Paula implementation alongside it and diffing the output.** Every loop plays one sample
+past its end, and `LEN` = 0 gives one byte instead of Paula's 65,536 words
+([`docs/audio.md`](docs/audio.md) §16 item 36). Both trace to one root cause — the
+17-bit `CNT` the design advertises **does not exist in the fitted part** (item 35) — and
+neither is repairable on a CPLD at 128 of 128 cells and 35 of 40 fan-in. ⚠ **`audio_tb`
+cannot see either**, because nothing anywhere counts how many samples a buffer yields.
+
+⚠ **So the sequencer has a third arrangement, designed on 2026-09-10 and not decided.**
+§10.3 moves the `(WT, T)` decode out of macrocells into four `27C512` with the step
+counter as a `74HC163`: **36 ICs**, and items 7, 32, 34, 35 and 36 all become reachable.
+It costs slot margin — 12× to 5.7× at ProTracker's top note — and it is **measured
+(`npm run check:arom`, 48 claims) and not fitted**. §16 item 38 is the gate.
+
+⛔ **One more thing designing it found, and it belongs to the card as built: the 16-bit
+`74HC283` chain has never been given a propagation budget, and one 35 ns slot is not
+enough for it** (§16 item 37). Nothing on the card can see that — the Verilog models
+logic and not timing, and the adder is inside neither CPLD.
 
 | | | |
 |---|---|---|
