@@ -409,9 +409,9 @@ module aseq (
   // buried - 9.4.4: one slot wide, on the leading edge of a synchronised access
   assign HSTB =
          (HSY1 & ~HSY2);
-  // buried
+  // buried - 9.2: the host's access is retired when its sequence ENDS
   assign HACK =
-         (START & ~RSTANY & ~TDUE & ~DUEANY & HDUE);
+         (RUN & WT2 & ~WT1 & ~WT0 & LAST);
   // buried
   assign ISADATA =
          (~HA3 & ~HA2 & ~HA1 & HA0);
@@ -1065,7 +1065,7 @@ module aseq (
          (SDHCAP & SDH2)
          | (SDQ2 & ~SDHCAP);
       r_PWBUSY <=
-         (HSTB & ~RW & ~AIDXLD)
+         (HSTB & ~RW)
          | (PWBUSY & ~HACK);
       r_PFVALID <=
          (PFCK)

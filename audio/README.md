@@ -60,7 +60,7 @@ buffer loop to the new address and the end-of-buffer interrupt reach `/FIRQ`. 38
 | | | |
 |---|---|---|
 | **U1** the host register block, plus §4.2's counter and comparator and §9.3's read-back latch | `audio` | 88 of 128 cells, 62 of 64 I/O |
-| **U2** the sequencer (§10.2) | `aseq` | ⚠ **128 of 128 cells**, 60 of 64 I/O |
+| **U2** the sequencer (§10.2) | `aseq` | ⚠ **128 of 128 cells**, 61 of 64 I/O |
 
 ⚠ **U2 is exactly full and U1 is not**, which is why every reduction this pass moved work
 *to* U1 — sixteen state-file data pins there bought seven packages, because the counter,

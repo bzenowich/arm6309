@@ -106,7 +106,7 @@ matrix, product-term cascading and placement are `fit1508.exe`'s business and
 phase *at all* is logic, not delay, and this model does see that — which is
 where two of `design-review2.md`'s findings came from.
 
-### Seven traps this repository has already paid for
+### Eight traps this repository has already paid for
 
 - **A failed CPLD fit leaves the previous `.fit` in place.** A stale
   utilisation report reads exactly like a passing one. Compare the file's hash
@@ -139,6 +139,16 @@ where two of `design-review2.md`'s findings came from.
   the job itself writes** (`echo "DONE=$?" >> log`), or wait on a PID; and
   before concluding anything from a process count, check `ppid` — two
   `fit1508.exe` with different parents are two *fits*, not one wrapper pair.
+- ⛔ **`grep '^FAIL'` cannot match a failure, because `bun` colours stderr.**
+  `console.error` emits `ESC[0m ESC[31m FAIL …`, so the line begins with an
+  escape, not an `F`. The pattern matches nothing and **reports nothing, which
+  reads exactly like passing** — it was used to verify this repository all
+  through 2026-09-09 and was vacuous every time. ⚠ The `&&` chain in
+  `npm run check` is what hid it: a failure stops the chain, so the `ok` count
+  collapses and the drop is visible — **except for the LAST script in the
+  chain**, where the count barely moves. `check:docs` is last. Strip first
+  (`sed 's/\x1b\[[0-9;]*m//g'`), or trust the **exit code**, which is never
+  coloured.
 - ⛔ **Killing `wine` mid-fit poisons the prefix, and the symptom names the
   wrong culprit.** Afterwards *every* design fails with "CUPL produced no
   `.tt2`" and **no error anywhere in the `.lst`** — it reads like a broken

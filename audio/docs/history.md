@@ -1082,3 +1082,47 @@ on its own rather than underneath a datapath change.
 ⚠ **And a correction that cost a pass**: U1's `88 of 128` cells reads like headroom and
 is not — U1 is **pin-bound at 62 of 64**, so those 40 cells are unreachable. Anything
 moved there needs signals crossing on two pins. It is `vctrl`'s lesson on a second card.
+
+
+---
+
+## 2026-09-09 (seventh pass) — `PWBUSY`, the second defect in the same flag
+
+### §9.2 / §9.4.4 — `HACK` fired at `START`
+
+**Was:** `HACK = START & !RSTANY & !TDUE & !DUEANY & HDUE`, so the work request *and*
+`PWBUSY` cleared when the sequence **began**.
+
+**Why it moved:** `BUSY` covers `START`→`LAST`, so the sequencer could never restart —
+but `PWBUSY` is what the **host** reads, and `ASTAT` b6 said "free" while `W3` was still
+running. A host polling b6 exactly as §9.2 asks could write into that window; `HSTB` set
+`HDUE` again and loaded a new `AIDX`, and §9.3's continuously-clocked decodes (`HW`,
+`HL`, `HRO`, `HSTAGE`) followed it **underneath the running sequence**. The observed
+symptom was a channel holding `PER` = 113 after the host had written 30 — silent, and
+dependent on how fast the host was.
+
+⚠ **It survived the earlier repair to the same flag, on the same day.** That one fixed
+how `PWBUSY` **sets** — adding `!AIDXLD`, so an index load could not wedge it — and did
+not touch how it **clears**. Two defects in one four-term equation, and the first fix
+read as complete. The lesson is narrow and worth keeping: *a flag has two edges, and
+fixing one of them is not evidence about the other.*
+
+**Now:** `HACK = RUN & WT2 & !WT1 & !WT0 & LAST` — the last step of the host's own
+sequence. `HDUE` staying asserted throughout cannot restart anything because `START`
+requires `!BUSY`. And `!AIDXLD` leaves `PWBUSY`: it existed because an index load queued
+no work and could never be acknowledged, but every access queues a work item since §9.3's
+prefetch was wired, so covering the index write closes the same hole for it.
+
+**Measured, not asserted.** `audio_tb` gained three claims it did not have: that b6 is
+still high **at** the sequence's last step and low after it; that four channels rewritten
+back to back with no pause each keep the value the host wrote; and the worst-case wait.
+
+| | before | after |
+|---|---|---|
+| host's worst wait for b6 | 43 slots, 1.5 µs | **63 slots, 2.2 µs** |
+| work-slot mix, 4 channels at `PER` = 30 | — | **195 W1, 0 W3** — channel work unaffected |
+| `aseq` LAB fan-in | 36,36,36,36,28,36,36,11 | **35,35,35,35,35,35,34,17** |
+| `aseq` cells / I/O / Pts | 128/128, 60/64, 449 | 128/128, **61/64**, **441** |
+
+⚠ **The fan-in relief is one signal on the hot blocks and is not a result to build on** —
+it is reported because it was asked for, not because it changes what §16 item 34 says.

@@ -1092,7 +1092,7 @@ never issue it.
 | Bit | Definition | Behaviour on this machine |
 |---|---|---|
 | `ACTRL` b4 | **8-channel mode** (§11.2) | **b4, unambiguously** — decision D7. `card.h` follows the document, not the other way round: §9.2 is the deliverable. |
-| `ASTAT` b6 | **posted-write busy** — 1 while the depth-1 sample-RAM posted write of §5 has not yet retired in slot 5. A further `SDATA` write while b6 = 1 is lost and sets `AINTREQ` b5 (§8.1). The path is depth 1, so "busy" is the honest word. | It can only ever read 1 to a host faster than 3.55 M/s: a 6309 store takes ~5 E cycles = 2.38 µs, and the retire takes 281.9 ns, so on this machine b6 reads 0 every time it is polled. It exists for the MCU card and for bring-up. |
+| `ASTAT` b6 | **host access busy** — 1 from the strobe of **any** host write, index writes included, until the sequencer's work item for it has **finished**. A further write while b6 = 1 is lost and sets `AINTREQ` b5 (§8.1). | ⚠ **It is a real handshake now, not observability.** Measured worst wait: **63 slots, 2.2 µs** — comparable to a 6309 store at ~5 E cycles (2.38 µs), so a polling host will occasionally see it set. §9.4.4 has why it must span the whole sequence. |
 | `ASTAT` b7 | **prefetch valid** — 1 when the `ADATA`/`SDATA` prefetch latch (§9.3) holds the byte for the *current* index. Cleared by a write to `AIDX`/`SPTR` and by the post-increment; set when slot 5 retires the prefetch. | The same arithmetic as b6 from the other side: the prefetch completes within one colour clock (281.9 ns) and the soonest a 6309 can look is 2.38 µs later, so **b7 reads 1 every time this machine polls it** and §9.3's "reads never stall" holds. It is not a handshake the 6309 has to honour; it is the observability that makes that claim checkable on a logic analyser, and it is a real handshake for any host fast enough to need one. |
 
 ### 9.3 The state file — index/data, and why that is not a cost
@@ -1289,6 +1289,45 @@ three synchronisers — write strobe, read strobe, and `E` itself for edge detec
 are six registered cells in the CPLD (§10.1.1; on the six-GAL allocation they were a
 `74HC174`).
 
+
+##### The acknowledgement is the END of the sequence, not its start
+
+⛔ **`HACK` fired at `START` until 2026-09-09, and that is a correctness defect rather
+than a nicety.** `BUSY` covers `START`→`LAST`, so the *sequencer* could never restart —
+but `PWBUSY` is what the **host** reads, and it had already gone low while `W3` was still
+running. `ASTAT` b6 said "free" mid-sequence.
+
+**What that let through.** A host polling b6 exactly as §9.2 asks could still write into
+the window. `HSTB` set `HDUE` again and loaded a new `AIDX`, and §9.3's decodes — `HW`,
+`HL`, `HRO`, `HSTAGE`, all *continuously* clocked so that they track the index as it
+auto-increments — followed it **underneath the running sequence**. The symptom is a
+channel keeping its old period after the host has written a new one, and it is silent:
+nothing is reported, the byte simply lands on the wrong lane or the wrong word.
+
+⚠ **It survived the repair that made the same flag SET correctly** (that one added
+`!AIDXLD`, so an index load could not wedge it). Two defects in one flag, one after the
+other, and the first fix looked complete. [history.md](history.md) has both.
+
+⭐ **The rule now: `HACK` is the last step of the host's own sequence.**
+
+```
+  HACK   = RUN & WT2 & !WT1 & !WT0 & LAST      ; W3's final step
+  HDUE   = HSTB # HDUE & !HACK
+  PWBUSY = HSTB & !RW # PWBUSY & !HACK
+```
+
+`HDUE` staying asserted for the whole sequence cannot restart anything, because `START`
+requires `!BUSY`. And **`!AIDXLD` goes from `PWBUSY`**: it was there because an index
+load queued no work and so could never be acknowledged, but since §9.3's "writing `AIDX`
+prefetches that entry" every access queues a work item and every one is acknowledged — so
+covering the index write closes the same hole for it.
+
+**What it costs, measured.** The host's worst wait for b6 goes **43 slots → 63** (1.5 µs
+→ 2.2 µs), which is inside one 6309 store. Channel work is unaffected: at four channels
+and `PER` = 30 the work-slot mix over 200 colour clocks is **195 W1 and no W3 at all**,
+and the host's write still lands — `HDUE` is last in `START`'s priority list and holding
+it longer does not reorder anything ahead of it.
+
 #### 9.4.5 Reads of registers the slot logic is writing
 
 Two registers change underneath the host: `AINTREQ` (slot logic sets request bits) and
@@ -1445,11 +1484,11 @@ pins and spends cells. There is no one-part arrangement of this card.
 | | holds | fitted |
 |---|---|---|
 | **U1** `ATF1508AS` PLCC-84, socketed | the host register block — §9.1's decode, `ADMACON`, `AINTENA`, `AINTREQ` and its pending register, `/FIRQ`, `ACTRL`, the `AINTREQ` read synchroniser, the slot walk, the ÷5 tempo reference — **plus §4.2's free-running counter and comparator and §9.3's read-back latch**, which is seven packages for sixteen pins | **88 of 128 cells, 62 of 64 I/O** — §10.1.1 |
-| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **128 of 128 cells, 60 of 64 I/O** — §10.2.6 |
+| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **128 of 128 cells, 61 of 64 I/O** — §10.2.6 |
 
 ⚠ **U2 IS EXACTLY FULL AND U1 IS NOT**, which is the whole shape of this card's logic
 and the reason every reduction moved work *towards* U1. "Design fits successfully" on
-both: U2 at **128 of 128 cells**, 60 of 64 I/O, 65 foldback nodes, 21 cascades and 449
+both: U2 at **128 of 128 cells**, 61 of 64 I/O, 61 foldback nodes, 21 cascades and 441
 product terms; U1 at **88 of 128 cells**, 62 of 64 I/O, 22 foldback, no cascades and 274
 product terms. A **TQFP-100 was tried and does not help**: it takes the
 pins from 62 of 64 to 62 of 80 and leaves the cells at 128 of 128, because both packages
@@ -1772,7 +1811,7 @@ work slots per colour clock instead of three. Both are archived.
 
 #### 10.2.6 The pin budget, and the one lever that was pulled
 
-U2 is **37 outputs and 26 inputs**, and the fitter reports **60 of 64 I/O and 128 of
+U2 is **36 outputs and 27 inputs**, and the fitter reports **61 of 64 I/O and 128 of
 128 logic cells** — "Design fits successfully" on the first pass, with 76 foldback nodes,
 18 cascades and 469 product terms. `npm run check:audio` prints the interface and asserts
 it is **closed in both directions**: every signal U1 reads is produced by U2, the

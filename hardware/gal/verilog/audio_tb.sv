@@ -65,7 +65,18 @@ module audio_tb;
   task automatic wr(input int off, input logic [7:0] v); wrraw(7'h40 | off[3:0], v); endtask
 
   // 9.3's index/data window.
-  task automatic aidx(input int v); wr('h0, v[7:0]); endtask
+  // ⚠ EVERY host write honours ASTAT b6 now, index writes included: since
+  // 2026-09-09 an AIDX write raises PWBUSY like any other, so that a host
+  // cannot move the index under a running sequence.
+  task automatic pwwait();
+    int w;
+    w = 0;
+    while (card.u2.PWBUSY === 1'b1 && w < 4096) begin @(posedge SLOTCLK); w++; end
+    if (w >= 4096) ok(1'b0, "PWBUSY cleared within 4096 slots - the host is not wedged");
+    if (w > pw_wait_max) pw_wait_max = w;
+  endtask
+
+  task automatic aidx(input int v); pwwait(); wr('h0, v[7:0]); endtask
   /* ⛔ ADATA IS FLOW-CONTROLLED AND THIS TASK DID NOT HONOUR IT.
    *
    * There is ONE posted-write latch. `PWBUSY` (ASTAT b6, 9.2) is high from the
@@ -83,19 +94,7 @@ module audio_tb;
    * The bound is CLAUDE.md's fifth trap: an unbounded wait here would hang the
    * testbench rather than fail it if PWBUSY ever stuck high. */
   int pw_wait_max = 0;
-  task automatic adata(input logic [7:0] v);
-    int w;
-    w = 0;
-    while (card.u2.PWBUSY === 1'b1 && w < 4096) begin @(posedge SLOTCLK); w++; end
-    if (w >= 4096) begin
-      $display("      [dbg] PWBUSY stuck: RUN=%b BUSY=%b HDUE=%b WORKSLOT=%b CTRL7=%b DMAEN0=%b",
-               card.u2.RUN, card.u2.BUSY, card.u2.HDUE, card.u2.WORKSLOT,
-               card.u1.CTRL7, card.u2.DMAEN0);
-      ok(1'b0, "PWBUSY cleared within 4096 slots - the host is not wedged");
-    end
-    if (w > pw_wait_max) pw_wait_max = w;
-    wr('h1, v);
-  endtask
+  task automatic adata(input logic [7:0] v); pwwait(); wr('h1, v); endtask
   // ⚠ TWICE, and the second time is not belt-and-braces. 9.3 says writing
   // AIDX prefetches that entry and NOTHING DOES: the prefetch runs at the end
   // of an ADATA access, so the first read after an index write returns the
@@ -115,6 +114,7 @@ module audio_tb;
   int seen[8];
   int wtc[8];
   bit bad;
+  bit pwseen, pwlast, pwafter;
   logic [18:0] ptr0;
   logic [16:0] cnt0;
   logic [15:0] next0;
@@ -417,6 +417,64 @@ module audio_tb;
     ok(sfl(4) == 16'd30,
        $sformatf("⭐ and the host's write of PER = 30 reached the state file (holds %0d) - a MOD player rewrites a channel's period every row, and it lands WHILE FOUR CHANNELS PLAY",
                  sfl(4)));
+
+    $display("");
+    $display("9.4.4 - the handshake: PWBUSY spans the WHOLE sequence");
+    $display("");
+    // 2 - asserted rather than inferred. Watch one host write from its strobe
+    // to its sequence's last step, and check the flag on both sides of it.
+    fork
+      begin wr('h5, 8'h80); end
+      begin
+        pwseen = 0; pwlast = 1; pwafter = 1;
+        for (i = 0; i < 4096; i++) begin
+          @(posedge SLOTCLK); #0;
+          if (card.u2.PWBUSY) pwseen = 1;
+          // the last step of the host's own sequence
+          if (card.u2.RUN && {card.u2.WT2,card.u2.WT1,card.u2.WT0} === 3'd4
+              && card.u2.LAST) begin
+            pwlast = card.u2.PWBUSY;          // still busy AT the last step
+            @(posedge SLOTCLK); @(posedge SLOTCLK); #0;
+            pwafter = card.u2.PWBUSY;         // free just after it
+            i = 9999;
+          end
+        end
+      end
+    join
+    ok(pwseen === 1'b1, "a host write raises ASTAT b6");
+    ok(pwlast === 1'b1,
+       "⭐ and it is STILL high at the last step of the sequence - the window in which the host could move AIDX under a running W3 is closed");
+    ok(pwafter === 1'b0, "and low once the sequence has retired the byte");
+
+    $display("");
+    $display("9.4.3 - back to back, with no pause at all");
+    $display("");
+    // 1 - the claim the card did not have, and the one the ch2 dump would have
+    // caught: write every channel, then immediately write every channel again
+    // with different values, honouring only b6.
+    for (i = 0; i < 4; i++) begin
+      aidx(i * 16);
+      adata(8'h00); adata(8'h10 + i[7:0]); adata(8'h00);   // LC  = $010i00
+      adata(8'h00); adata(8'h08);                          // LEN = 8
+      adata(8'h00); adata(8'h64);                          // PER = 100
+      adata(8'h20);                                        // VOL = 32
+    end
+    for (i = 0; i < 4; i++) begin
+      aidx(i * 16 + 5);
+      adata(8'h00); adata(8'h71 + i[7:0]);                 // PER = $0071+i
+      adata(8'h40);                                        // VOL = 64
+    end
+    bad = 0;
+    for (i = 0; i < 4; i++) begin
+      if (sfl(i * 8 + 4) !== (16'h0071 + i[15:0])) bad = 1;   // PER
+      if (sfh(i * 8 + 6) !== 8'h40)                bad = 1;   // VOL
+      if (sfp(i * 8 + 3) !== {3'b0, 8'h10 + i[7:0], 8'h00}) bad = 1;  // LC
+      if (sfl(i * 8 + 5) !== 16'd8)                bad = 1;   // LEN
+    end
+    ok(!bad,
+       $sformatf("⭐ every one of four channels keeps the value the host wrote, rewritten back to back with no pause - PER %04h/%04h/%04h/%04h",
+                 sfl(4), sfl(12), sfl(20), sfl(28)));
+
 
     $display("");
     if (fails == 0) $display("audio_tb OK");

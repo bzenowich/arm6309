@@ -218,8 +218,24 @@ const host: Cell[] = [
    * write and has nothing to retire. */
   { pin: 0, name: "HDUE", assertedLow: false, s0: 1, registered: true,
     terms: ["HSTB", "HDUE & !HACK"] },
+  /* ⛔ IT FIRED AT `START` UNTIL 2026-09-09, WHICH IS WHERE THE SEQUENCE BEGINS.
+   * `BUSY` covers START->LAST so the SEQUENCER could not restart - but `PWBUSY`
+   * is what the HOST reads, and it had already gone low while W3 was still
+   * running. `ASTAT` b6 said "free" mid-sequence, so a host polling it exactly
+   * as 9.2 asks could still write into the window: `HSTB` set `HDUE` again and
+   * loaded a new `AIDX`, and the continuously-clocked decodes (`HW`, `HL`,
+   * `HRO`, `HSTAGE`) followed it UNDERNEATH the running sequence. A channel
+   * kept its old period after the host had written a new one.
+   *
+   * ⚠ It survived the 2026-09-09 repair that made the flag SET correctly. Two
+   * defects in one flag, and the first fix looked complete.
+   *
+   * The acknowledgement is the last step of the host's own sequence. `HDUE`
+   * staying asserted throughout cannot restart anything, because `START`
+   * requires `!BUSY`. */
   { pin: 0, name: "HACK", assertedLow: false, s0: 1, registered: false,
-    terms: ["START & !RSTANY & !TDUE & !DUEANY & HDUE"] },
+    why: "9.2: the host's access is retired when its sequence ENDS",
+    terms: ["RUN & WT2 & !WT1 & !WT0 & LAST"] },
 
   /* Which of 9.2's registers. */
   { pin: 0, name: "ISADATA", assertedLow: false, s0: 1, registered: false,
@@ -487,8 +503,14 @@ const port: Cell[] = [
    * report. audio_tb caught it as PWBUSY = 1 with HDUE = 0.
    *
    * One literal, and it is the same qualification HDUE has always had. */
+  /* ⭐ AND `!AIDXLD` GOES, WHICH CLOSES THE SAME HOLE FOR INDEX WRITES. It was
+   * there because an index load queued no work and so could never be
+   * acknowledged - it would have wedged the flag. Every host access queues a
+   * work item now (9.3's "writing AIDX prefetches that entry"), so every one
+   * is acknowledged, and covering the index write means a host that honours
+   * b6 cannot move `AIDX` under a running sequence either. */
   { pin: 0, name: "PWBUSY", assertedLow: false, s0: 1, registered: true,
-    terms: ["HSTB & !RW & !AIDXLD", "PWBUSY & !HACK"] },
+    terms: ["HSTB & !RW", "PWBUSY & !HACK"] },
   { pin: 0, name: "PFVALID", assertedLow: false, s0: 1, registered: true,
     terms: ["PFCK", "PFVALID & !AIDXLD & !AINC"] },
 ]

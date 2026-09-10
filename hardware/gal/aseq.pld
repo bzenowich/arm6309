@@ -276,7 +276,7 @@ HRW.d = HSTB & RW
         # HRW & !HSTB ;
 HDUE.d = HSTB
          # HDUE & !HACK ;
-HACK = START & !RSTANY & !TDUE & !DUEANY & HDUE ;
+HACK = RUN & WT2 & !WT1 & !WT0 & LAST ;
 ISADATA = !HA3 & !HA2 & !HA1 & HA0 ;
 ISAIDX = !HA3 & !HA2 & !HA1 & !HA0 ;
 ISSDATA = HA3 & !HA2 & !HA1 & HA0 ;
@@ -622,7 +622,7 @@ PWOE = RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !ISAIDX & !ISSDA
 PFCK = RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & HRW ;
 PFLANE = HL0 ;
-PWBUSY.d = HSTB & !RW & !AIDXLD
+PWBUSY.d = HSTB & !RW
            # PWBUSY & !HACK ;
 PFVALID.d = PFCK
             # PFVALID & !AIDXLD & !AINC ;
