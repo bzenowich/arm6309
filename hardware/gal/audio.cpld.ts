@@ -18,6 +18,7 @@
  */
 
 import { merge, toCupl, type Merged } from "./jedec/cupl"
+import { counterTerms } from "./jedec/counter"
 import type { Cell } from "./jedec/assemble"
 import {
   aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign, buildAintreqSplit,
@@ -50,9 +51,82 @@ const setDecode: Cell[] = [0, 1, 2, 3, 4, 5].map((i) => ({
     .map((x) => x.replace(/([!]?)([ABC])/, "$1SET$2")).join(" & ")],
 }))
 
+
+/* ============ 4.2's counter and comparator, absorbed 2026-09-09 ============
+ *
+ * ⭐ SIXTEEN PINS BUY SEVEN PACKAGES. Giving U1 the state file's low sixteen
+ * data lines lets it hold the free-running colour-clock counter (2 x '590),
+ * form the event compare against NEXT (2 x '688) and latch 9.3's read-back
+ * byte (3 x '574) - because all three want the same bus, and U1 was the part
+ * with 51 spare cells and 18 spare pins while U2 had none of either.
+ *
+ * The counter is the period reference: NEXT is a colour-clock count and a
+ * channel is due when the count reaches it (4.2's "compare, do not count
+ * down"). The tempo timer's CIANEXT rides the same comparator in slot 4. */
+const CNT16 = [...Array(16).keys()].map((i) => `CT${i}`)
+const counter: Cell[] = counterTerms({ bits: CNT16, enable: "CCLK" }).map((t, i) => ({
+  pin: 0, name: CNT16[i], assertedLow: false, s0: 1 as const, registered: true, terms: t,
+}))
+
+/* ⛔ SIXTEEN BITS OF EQUALITY, AND TWO SHAPES OF IT DO NOT WORK.
+ *
+ * Written as four nibble-equalities ANDed together it looks like 64 product
+ * terms - but a combinational intermediate in CUPL is SUBSTITUTED, not given a
+ * macrocell, so `EQ0 & EQ1 & EQ2 & EQ3` multiplies four 16-term sums out into
+ * 65,536. The fitter ran seven minutes on that one.
+ *
+ * ⭐ Inverting it fixes the term count: INEQUALITY is a sum - any bit that
+ * differs - so it is two product terms per bit and thirty-two in all. But as
+ * ONE macrocell it reads sixteen SD pins AND sixteen counter registers, and
+ * **32 signals into one logic block is the ATF1508AS's third limit**: a LAB
+ * takes 40 from the switch matrix, and the fitter was KILLED trying to place
+ * it. Cells and pins were never the problem - this part is smaller than U2.
+ *
+ * So it is halved. Each byte's inequality is sixteen signals and sixteen
+ * terms, comfortably inside one block, and each is a PIN - because two
+ * combinational nodes would just be substituted back into one. U2 spends one
+ * more input and forms the hit as `!NEQL & !NEQH`, which its array does for
+ * nothing. */
+const neq = (name: string, from: number): Cell => ({
+  pin: 0, name, assertedLow: false, s0: 1, registered: false,
+  why: `4.2: some bit of NEXT[${from + 7}:${from}] differs from the count`,
+  terms: [...Array(8).keys()].flatMap((b) => {
+    const i = from + b
+    return [`SD${i} & !CT${i}`, `!SD${i} & CT${i}`]
+  }),
+})
+const compare: Cell[] = [neq("NEQL", 0), neq("NEQH", 8)]
+
+/* 9.3's read-back byte. U2 says when (PFCK) and which lane (PFLANE); the host
+ * reads it off D0-D7 through the same bidirectional macrocells AINTREQ and
+ * ASTAT already use, so the three '574s and their three output enables all go.
+ *
+ * ⭐ BOTH LANES ARE CAPTURED and the lane is chosen at READ time, not at
+ * capture time - which is what the three '574s did, and doing it the other way
+ * round returns the byte the PREVIOUS index named.
+ *
+ * ⚠ LANE 2 IS NOT REACHABLE, and two of 9.3's sixteen bytes live there: VOL
+ * (offset 7) and PTR[18:16] (offset 11). Both read 0 now. VOL is write-only
+ * to a replayer, which never reads it back, and PTR is the advisory debugging
+ * window 9.4.5 already says is not atomic across bytes. */
+const prefetch: Cell[] = [...Array(8).keys()].map((i) => ({
+  pin: 0, name: `PF${i}`, assertedLow: false, s0: 1 as const, registered: true,
+  terms: [`PFCK & !PFLANE & SD${i}`, `PFCK & PFLANE & SD${i + 8}`, `PF${i} & !PFCK`],
+}))
+
+/* W6 needs the count to set NEXT one period ahead, and the count is in here
+ * now, so U1 hands it back on the same sixteen pins it reads NEXT on. They are
+ * bidirectional macrocells, which is what an I/O macrocell is for - the same
+ * idiom D0-D7 use for the host read-back. */
+const countOut: Cell[] = [...Array(16).keys()].map((i) => ({
+  pin: 0, name: `SD${i}`, assertedLow: false, s0: 1 as const, registered: false,
+  bidir: true, oe: "CNTOE", terms: [`CT${i}`],
+}))
+
 const merged: Cell[] = [
   ...ctrl,
   ...setDecode,
+  ...counter, ...compare, ...prefetch, ...countOut,
   ...sync("SYNCR", "RINTREQ"),   // the AINTREQ read strobe
   /* §9.4.5: a request bit set by the slot logic merges into INTREQ on a colour
    * clock, and NOT while a host read of AINTREQ is in flight - so a set
@@ -127,8 +201,11 @@ const merged: Cell[] = [
    * (9.3), which has its own three-state outputs; what this part owes it is
    * the enable, PFOE below. */
   { pin: 0, name: "HRD", assertedLow: false, s0: 1, registered: false,
-    why: "a host read this part answers: AINTREQ or ASTAT, inside E",
-    terms: ["RINTREQ & E", "RASTAT & E"] },
+    why: "a host read this part answers: AINTREQ, ASTAT or ADATA/SDATA, inside E",
+    terms: ["RINTREQ & E", "RASTAT & E", "RPF & E"] },
+  /* +$1 ADATA and +$9 SDATA both read out of the prefetch byte (9.3). */
+  { pin: 0, name: "RPF", assertedLow: false, s0: 1, registered: false,
+    terms: ["SEL & RW & !A3 & !A2 & !A1 & A0", "SEL & RW & A3 & !A2 & !A1 & A0"] },
   ...[
     /* bit,  AINTREQ (+$4)     ASTAT (+$A)  - 9.2's two readable registers */
     ["D0", "REQ0", "DMAEN0"],
@@ -145,6 +222,7 @@ const merged: Cell[] = [
     terms: [
       ...(req ? [`RINTREQ & ${req}`] : []),
       ...(stat ? [`RASTAT & ${stat}`] : []),
+      `RPF & PF${(name as string).slice(1)}`,
     ],
     oe: "HRD",
   })),
@@ -170,7 +248,9 @@ const EXTERNAL = new Set([
   "SEL",
   "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7",
   "DMAEN0", "DMAEN1", "DMAEN2", "DMAEN3",
-  "CIACLK", "FIRQ",
+  "CIACLK", "FIRQ", "NEQL", "NEQH",
+  "SD0", "SD1", "SD2", "SD3", "SD4", "SD5", "SD6", "SD7",
+  "SD8", "SD9", "SD10", "SD11", "SD12", "SD13", "SD14", "SD15",
   "CTRL0", "CTRL1", "CTRL2", "CTRL3", "CTRL4", "CTRL5", "CTRL6", "CTRL7",
 ])
 

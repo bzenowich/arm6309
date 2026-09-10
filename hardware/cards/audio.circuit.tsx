@@ -15,7 +15,7 @@
 import { Card } from "../lib/Card"
 
 export default () => (
-  <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} length={240} icBudget={45}>
+  <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} length={180} icBudget={35}>
     {/* Y1 - not the backplane's 25.175 MHz. machine.md 1's one-master rule has
       * exactly one exception and this is it. */}
     <crystal

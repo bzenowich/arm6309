@@ -26,7 +26,8 @@ PIN = S2 ;
 PIN = S1 ;
 PIN = S0 ;
 PIN = ACOUT ;
-PIN = HIT ;
+PIN = NEQL ;
+PIN = NEQH ;
 PIN = DMAEN0 ;
 PIN = CTRL7 ;
 PIN = DMAEN1 ;
@@ -46,7 +47,6 @@ PIN = D2 ;
 PIN = D3 ;
 PIN = D4 ;
 PIN = D5 ;
-PIN = CTRL5 ;
 PIN = SLOTCLK ;
 
 /* --- outputs ------------------------------------------------------ */
@@ -76,9 +76,7 @@ PIN = SDH2 ;
 PIN = PWCK ;
 PIN = PWOE ;
 PIN = PFCK ;
-PIN = PFOE0 ;
-PIN = PFOE1 ;
-PIN = PFOE2 ;
+PIN = PFLANE ;
 PIN = PWBUSY ;
 PIN = PFVALID ;
 PIN = CVOEA ;
@@ -148,14 +146,13 @@ PINNODE = WROTE1 ;
 PINNODE = WROTE2 ;
 PINNODE = WROTE3 ;
 PINNODE = VDIRTY ;
-PINNODE = PDIRTY ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * QCHAN, QTMR, RUN, WORKSLOT, LAST, RSTANY, DUEANY, START, ENDNOW
  * RPICK0, RPICK1, RPICK2, RPICK3, DPICK0, DPICK1, DPICK2, DPICK3
  * CLR0, CLR1, CLR2, CLR3, TACK, TARM, RCLR0, RCLR1, RCLR2, RCLR3, HSTB
- * HACK, ISADATA, ISSDATA, ISSPTR, ISTIMER, AIDXLD, AINC, GBL, SDHCAP
- * SDHOE, CVBUSY, CVB, CVCSS, CVCSV, CVCSP, CVLD0, CVLD1, CVLD2, CVLD3
+ * HACK, ISADATA, ISAIDX, ISSDATA, ISSPTR, ISTIMER, AIDXLD, AINC, GBL
+ * SDHCAP, SDHOE, CVBUSY, CVB, CVCSS, CVCSV, CVLD0, CVLD1, CVLD2, CVLD3
  * VACK, FIRE0, FIRE1, FIRE2, FIRE3, FIRE4, FIRE5, NOFIRE
  */
 
@@ -183,8 +180,8 @@ LAST = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
        # RUN & !WT0 & !WT1 & WT2 & T0 & !T1 & T2 & !T3
        # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & T3
-       # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3 ;
+       # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & T2 & !T3
+       # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3 ;
 RSTANY = RST0
          # RST1
          # RST2
@@ -197,8 +194,7 @@ START = WORKSLOT & !BUSY & RSTANY
         # WORKSLOT & !BUSY & TDUE
         # WORKSLOT & !BUSY & DUEANY
         # WORKSLOT & !BUSY & HDUE
-        # WORKSLOT & !BUSY & VDIRTY
-        # WORKSLOT & !BUSY & PDIRTY ;
+        # WORKSLOT & !BUSY & VDIRTY ;
 BUSY.d = START
          # BUSY & !LAST
          # ENDNOW ;
@@ -231,19 +227,19 @@ DPICK0 = START & !RSTANY & !TDUE & DUE0 ;
 DPICK1 = START & !RSTANY & !TDUE & !DUE0 & DUE1 ;
 DPICK2 = START & !RSTANY & !TDUE & !DUE0 & !DUE1 & DUE2 ;
 DPICK3 = START & !RSTANY & !TDUE & !DUE0 & !DUE1 & !DUE2 & DUE3 ;
-DUE0.d = QCHAN & !S1 & !S0 & HIT & DMAEN0 & CTRL7
+DUE0.d = QCHAN & !S1 & !S0 & !NEQL & !NEQH & DMAEN0 & CTRL7
          # DUE0 & !CLR0 ;
-DUE1.d = QCHAN & !S1 & S0 & HIT & DMAEN1 & CTRL7
+DUE1.d = QCHAN & !S1 & S0 & !NEQL & !NEQH & DMAEN1 & CTRL7
          # DUE1 & !CLR1 ;
-DUE2.d = QCHAN & S1 & !S0 & HIT & DMAEN2 & CTRL7
+DUE2.d = QCHAN & S1 & !S0 & !NEQL & !NEQH & DMAEN2 & CTRL7
          # DUE2 & !CLR2 ;
-DUE3.d = QCHAN & S1 & S0 & HIT & DMAEN3 & CTRL7
+DUE3.d = QCHAN & S1 & S0 & !NEQL & !NEQH & DMAEN3 & CTRL7
          # DUE3 & !CLR3 ;
 CLR0 = DPICK0 ;
 CLR1 = DPICK1 ;
 CLR2 = DPICK2 ;
 CLR3 = DPICK3 ;
-TDUE.d = QTMR & HIT & CTRL6
+TDUE.d = QTMR & !NEQL & !NEQH & CTRL6
          # TARM
          # TDUE & !TACK ;
 TACK = START & !RSTANY & TDUE ;
@@ -278,10 +274,11 @@ HA3.d = HSTB & A3
         # HA3 & !HSTB ;
 HRW.d = HSTB & RW
         # HRW & !HSTB ;
-HDUE.d = HSTB & !AIDXLD
+HDUE.d = HSTB
          # HDUE & !HACK ;
 HACK = START & !RSTANY & !TDUE & !DUEANY & HDUE ;
 ISADATA = !HA3 & !HA2 & !HA1 & HA0 ;
+ISAIDX = !HA3 & !HA2 & !HA1 & !HA0 ;
 ISSDATA = HA3 & !HA2 & !HA1 & HA0 ;
 ISSPTR = !HA3 & HA2 & HA1 & !HA0
          # !HA3 & HA2 & HA1 & HA0
@@ -410,9 +407,9 @@ SFOE = QCHAN
        # RUN & WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3
        # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
        # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & !T2 & !T3
+       # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & !T2 & T3
+       # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3
@@ -424,26 +421,18 @@ SFA4 = QCHAN & S1
        # RUN & !GBL & !WT2 & WC1
        # RUN & !GBL & WT2 & !WT0 & AIDX5
        # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & T3
-       # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & !T2 & T3 ;
+       # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & T2 & !T3 ;
 SFA3 = QCHAN & S0
        # RUN & !GBL & !WT2 & WC0
        # RUN & !GBL & WT2 & !WT0 & AIDX4
        # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & T3 ;
+       # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & !T3 ;
 SFA0 = QTMR
        # RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
        # RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & T3
-       # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & !T2 & T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
@@ -453,11 +442,7 @@ SFA0 = QTMR
        # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & !T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HSTAGE & HW0
        # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & T2 & !T3 & HW0
-       # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & CW0
-       # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & T2 & !T3 & CTRL5
-       # RUN & WT0 & !WT1 & WT2 & T0 & T1 & T2 & !T3 & CTRL5
-       # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & T3 & CTRL5
-       # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & !T2 & T3 & CTRL5 ;
+       # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & CW0 ;
 SFA1 = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
@@ -466,10 +451,6 @@ SFA1 = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & T3
-       # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & !T2 & T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3
@@ -485,10 +466,6 @@ SFA2 = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & T3
-       # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & !T2 & T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3
        # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
@@ -514,8 +491,8 @@ SFWE0 = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
-        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
-        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISSDATA & !HL0 & !HL1
+        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
+        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISAIDX & !ISSDATA & !HL0 & !HL1
         # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HCOMMIT & !HRW
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
 SFWE1 = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
@@ -530,8 +507,8 @@ SFWE1 = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
-        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
-        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISSDATA & HL0 & !HL1
+        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
+        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISAIDX & !ISSDATA & HL0 & !HL1
         # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HCOMMIT & !HRW
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
 SFWE2 = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
@@ -542,8 +519,8 @@ SFWE2 = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
-        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
-        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISSDATA & !HL0 & HL1
+        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
+        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISAIDX & !ISSDATA & !HL0 & HL1
         # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HCOMMIT & !HRW & CL2
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
 ALATCK = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3 & !SLOTCLK
@@ -557,27 +534,27 @@ ALATCK = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3 & !SLOTCLK
          # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3 & !SLOTCLK
          # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
          # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3 & !SLOTCLK
-         # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3 & !SLOTCLK
+         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3 & !SLOTCLK
          # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & !T2 & !T3 & HCOMMIT & !HRW & !SLOTCLK
          # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & !SLOTCLK ;
-BLATCK = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3
-         # RUN & WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3
-         # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
-         # RUN & WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3
-         # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3
-         # RUN & WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3
-         # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3 ;
+BLATCK = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
+         # RUN & WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
+         # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3 & !SLOTCLK
+         # RUN & WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
+         # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3 & !SLOTCLK
+         # RUN & WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3 & !SLOTCLK
+         # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
+         # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3 & !SLOTCLK ;
 BLATOE = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3
          # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
          # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
          # RUN & WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
          # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
          # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & T3
-         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3 ;
+         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
+         # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3 ;
 ONESOE = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3 ;
-CNTOE = QCHAN & !SLOTCLK
-        # QTMR & !SLOTCLK
-        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3 & !SLOTCLK ;
+CNTOE = RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3 ;
 ACIN = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
@@ -593,7 +570,7 @@ SUMOE = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
-        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
+        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
         # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HCOMMIT & !HRW
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
 SROE = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
@@ -601,7 +578,7 @@ SROE = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & HRW ;
 SRWE = RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & !HRW ;
 SBOE = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3
-       # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3 ;
+       # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3 ;
 SDHCAP = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
          # RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
          # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
@@ -640,25 +617,19 @@ SDH2 = SDQ2 & !ACIN
        # !SDQ2 & SDQ1 & SDQ0 & ACIN & ACOUT ;
 SDH2.oe = SDHOE ;
 PWCK = HSTB & !RW & !SLOTCLK ;
-PWOE = RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !ISSDATA
+PWOE = RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !ISAIDX & !ISSDATA
        # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & !HRW ;
-PFCK = RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & T2 & !T3 & !SLOTCLK
-       # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & HRW & !SLOTCLK ;
-PFOE0 = SEL & RW & E & !A3 & !A2 & !A1 & A0 & !HL0 & !HL1
-        # SEL & RW & E & A3 & !A2 & !A1 & A0 ;
-PFOE1 = SEL & RW & E & !A3 & !A2 & !A1 & A0 & HL0 & !HL1 ;
-PFOE2 = SEL & RW & E & !A3 & !A2 & !A1 & A0 & !HL0 & HL1 ;
-PWBUSY.d = HSTB & !RW
+PFCK = RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & T2 & !T3
+       # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & HRW ;
+PFLANE = HL0 ;
+PWBUSY.d = HSTB & !RW & !AIDXLD
            # PWBUSY & !HACK ;
 PFVALID.d = PFCK
             # PFVALID & !AIDXLD & !AINC ;
 CVBUSY = RUN & WT2 & !WT1 & WT0 ;
 CVB = RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & !T3
       # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & T2 & !T3
-      # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & T2 & !T3
-      # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & T3
-      # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & !T2 & T3
-      # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & T3 ;
+      # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & T2 & !T3 ;
 CVOEA = !QCHAN & !CVBUSY
         # CVBUSY & !CVB ;
 WROTE0.d = RUN & !WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & !WC0 & !WC1
@@ -683,36 +654,25 @@ CVCSS = !QCHAN & !CVBUSY & WROTE0
         # QCHAN & !CVBUSY & WROTE3 ;
 CVCSV = RUN & WT0 & !WT1 & WT2 & !T0 & T1 & !T2 & !T3
         # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & T2 & !T3 ;
-CVCSP = RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & !T2 & T3
-        # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & T3 ;
 CVLD0 = QCHAN & !CVBUSY & !S0 & !S1
-        # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & !T2 & !T3
-        # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & T2 & !T3 ;
+        # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & !T2 & !T3 ;
 CVLD1 = QCHAN & !CVBUSY & S0 & !S1
-        # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & !T3
-        # RUN & WT0 & !WT1 & WT2 & T0 & T1 & T2 & !T3 ;
+        # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & !T3 ;
 CVLD2 = QCHAN & !CVBUSY & !S0 & S1
-        # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & T2 & !T3
-        # RUN & WT0 & !WT1 & WT2 & !T0 & T1 & !T2 & T3 ;
+        # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & T2 & !T3 ;
 CVLD3 = QCHAN & !CVBUSY & S0 & S1
-        # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & !T3
-        # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & !T2 & T3 ;
+        # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & !T3 ;
 CVC0 = CVLD0
        # CVLD2
-       # CVCSS
-       # CVCSP ;
+       # CVCSS ;
 CVC1 = CVLD1
        # CVLD2
-       # CVCSV
-       # CVCSP ;
+       # CVCSV ;
 CVC2 = CVLD3
        # CVCSS
-       # CVCSV
-       # CVCSP ;
-VDIRTY.d = RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISSDATA & !AIDX3 & AIDX2 & AIDX1 & AIDX0
+       # CVCSV ;
+VDIRTY.d = RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISAIDX & !ISSDATA & !AIDX3 & AIDX2 & AIDX1 & AIDX0
            # VDIRTY & !VACK ;
-PDIRTY.d = RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISSDATA & AIDX3 & !AIDX2 & AIDX1 & !AIDX0
-           # PDIRTY & !VACK ;
 VACK = START & !RSTANY & !TDUE & !DUEANY & !HDUE ;
 FIRE0 = ENDNOW & !WC0 & !WC1 ;
 FIRE1 = ENDNOW & WC0 & !WC1 ;
@@ -739,4 +699,4 @@ SETC = FIRE4
 [HSY2,HA0,HA1,HA2,HA3,HRW,HDUE,AIDX0,AIDX1,AIDX2,AIDX3,AIDX4].ck = SLOTCLK ;
 [AIDX5,HW0,HW1,HW2,HL0,HL1,HRO,HSTAGE,HCOMMIT,CW0,CW1,CW2].ck = SLOTCLK ;
 [CL2,SDQ0,SDQ1,SDQ2,PWBUSY,PFVALID,WROTE0,WROTE1,WROTE2].ck = SLOTCLK ;
-[WROTE3,VDIRTY,PDIRTY].ck = SLOTCLK ;
+[WROTE3,VDIRTY].ck = SLOTCLK ;

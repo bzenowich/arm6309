@@ -106,7 +106,7 @@ matrix, product-term cascading and placement are `fit1508.exe`'s business and
 phase *at all* is logic, not delay, and this model does see that — which is
 where two of `design-review2.md`'s findings came from.
 
-### Five traps this repository has already paid for
+### Seven traps this repository has already paid for
 
 - **A failed CPLD fit leaves the previous `.fit` in place.** A stale
   utilisation report reads exactly like a passing one. Compare the file's hash
@@ -129,6 +129,23 @@ where two of `design-review2.md`'s findings came from.
   other parts and connected to the wrong one. `lib/netlist.check.ts` asserts
   **reachability**: every data pin on every memory or register part reaches
   `D0`–`D7`, across a buffer or directly.
+- ⛔ **A `pgrep`/`pkill -f` pattern matches the waiting command's own line.**
+  `until ! pgrep -f "fit1508"; do sleep 60; done` never exits: the shell running
+  it *contains* the string `fit1508`, so it waits on itself — thirteen minutes,
+  once. The same shape read six `tsci build` processes that were five monitoring
+  commands and one build, and turned a healthy build into a reported failure.
+  ⚠ And `pkill -f` on a generic pattern reaches into **other sessions** — one
+  broad kill took out unrelated agents' wait loops. **Poll a completion marker
+  the job itself writes** (`echo "DONE=$?" >> log`), or wait on a PID; and
+  before concluding anything from a process count, check `ppid` — two
+  `fit1508.exe` with different parents are two *fits*, not one wrapper pair.
+- ⛔ **Killing `wine` mid-fit poisons the prefix, and the symptom names the
+  wrong culprit.** Afterwards *every* design fails with "CUPL produced no
+  `.tt2`" and **no error anywhere in the `.lst`** — it reads like a broken
+  design, not a broken toolchain. `WINEPREFIX=~/.wine_atf wineserver -k` and
+  retry. ⚠ The prefix is also **one shared resource**: concurrent fits write the
+  same `cpld/<name>.fit`, so two of them do not race to a winner, they grind
+  indefinitely and produce nothing. One fit at a time, always.
 - **A hang is worse than a failure.** `vsync_tb` waited on
   `SLOTTICK == 0 && PH == 0`; `SLOTTICK` later moved phase, the conjunction
   became unsatisfiable, and the `forever` spun for half an hour. **`run.sh`'s

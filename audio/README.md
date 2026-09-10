@@ -2,7 +2,7 @@
 
 A **Paula**, not a Paula-alike: 4 channels of 8-bit signed PCM, built from pre-1990
 parts, whose acceptance test is playing existing Amiga OCS tracker modules **correctly**.
-**45 ICs on a 24 cm card** — **two** `ATF1508AS`, both fitted
+⭐ **35 ICs on an 18 cm card** — **two** `ATF1508AS`, both fitted
 ([`docs/audio.md`](docs/audio.md) §10.1, §10.2) — **512 KB of card-local
 sample SRAM in one package**, no bus mastering, and **no digital multiply and no digital
 sum anywhere**:
@@ -11,9 +11,10 @@ outputs, and they are different signals: a **headphone-driven 3.5 mm stereo jack
 card's rear edge, and a **line-level** pair on the backplane (§7.1).
 
 > The IC count's path from the first tally of 35 through 57, 54, 45, 36, 29, 31 and 32
-> to **45** on 2026-09-09 — when the sequencer was enumerated, and then built, and
-> turned out to be a second CPLD and twelve datapath and glue packages nobody had
-> counted — is archived, itemised, in [docs/history.md](docs/history.md).
+> up to **45** on 2026-09-09 when the sequencer was built, and back down to **35** the
+> same day — programmable panning given up for classic MOD's fixed LRRL, and the
+> counter, the comparator and the read-back latch absorbed into U1, where sixteen pins
+> bought seven packages — is archived, itemised, in [docs/history.md](docs/history.md).
 
 **Unaffected by the machine's E rate.** Everything on the card is referred to its own
 28.37516 MHz crystal, and §9.3's prefetch means there is no `/WAIT` path to close, so the
@@ -54,17 +55,17 @@ ctest --test-dir build-host --output-on-failure
 channel's `LC`/`LEN`/`PER` through the host port, enables it with `DMACON`, and watches a
 sample byte come out of card RAM through `PEND`, a converter port register and into an
 `AD7528` — then rewrites `LC`/`LEN` while the first pass is still playing and sees the
-buffer loop to the new address and the end-of-buffer interrupt reach `/FIRQ`. 33 claims,
-0 failed.
+buffer loop to the new address and the end-of-buffer interrupt reach `/FIRQ`. 38 claims, 0 failed.
 
 | | | |
 |---|---|---|
-| **U1** the host register block, `audio` | 77 of 128 cells, 46 of 64 I/O | room |
-| **U2** the sequencer, `aseq` (§10.2) | ⚠ **128 of 128 cells**, 62 of 64 I/O | **full** |
+| **U1** the host register block, plus §4.2's counter and comparator and §9.3's read-back latch | `audio` | 88 of 128 cells, 62 of 64 I/O |
+| **U2** the sequencer (§10.2) | `aseq` | ⚠ **128 of 128 cells**, 60 of 64 I/O |
 
-⚠ **U2 is exactly full**, and a TQFP-100 does not help — both packages carry the same 128
-macrocells. **What is not closed is the analogue half**: the converter glitch, the
-cascaded settling and the layout at 45 packages on a 24 cm card (§16 items 9, 10, 19).
+⚠ **U2 is exactly full and U1 is not**, which is why every reduction this pass moved work
+*to* U1 — sixteen state-file data pins there bought seven packages, because the counter,
+the comparator and the read-back latch all want the same bus. **What is not closed is the analogue half**: the converter glitch, the cascaded
+settling and the layout at 35 packages on an 18 cm card (§16 items 9, 10, 19).
 
 **The model is validated structurally, and the tuning claim is not yet
 measurable.** 15/15 single-effect probes and the whole 1112-row path through

@@ -208,6 +208,12 @@ console.log("\nThe port census - every input has a producer, or a reason\n")
     SETA: "8.1's six sources, as a 3-bit code - 10.2.6's lever",
     SETB: "8.1 sources, bit 1", SETC: "8.1 sources, bit 2",
     PWBUSY: "9.2 ASTAT b6", PFVALID: "9.2 ASTAT b7",
+    /* U1 absorbed the counter, the comparator and 9.3's read-back latch on
+     * 2026-09-09 - seven packages for sixteen state-file data pins - so the
+     * sequencer now tells it when to capture a byte, which lane, and when to
+     * hand the free-running count back for W6. */
+    PFCK: "9.3: capture the read-back byte", PFLANE: "9.3: which byte lane",
+    CNTOE: "10.2.3 W6: hand the count back on the state file's bus",
   }
   const produced = new Set(audioCpld.cells.map((c) => c.name))
   const consumed = new Set<string>()

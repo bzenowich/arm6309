@@ -37,7 +37,7 @@
 
 /** B-bus source. The bus is pulled down, so "none" is a hard zero and `A + 1`
  *  costs no package at all. */
-export type BSrc = "zero" | "blat" | "ones" | "count"
+export type BSrc = "zero" | "blat" | "ones"
 
 export interface Step {
   /** word within the channel, 0-7 */
@@ -70,21 +70,17 @@ export interface Step {
   pf?: boolean
   /** raise an 8.1 interrupt source at the end of this step */
   set?: number
+  /** U1 drives the free-running count onto the state file's data bus, so the
+   *  adder can reach it without a seventeenth wire (10.2.2) */
+  count?: boolean
   /** override the channel: W5 walks all four rather than working on WC */
   ch?: number
   /** clock that channel's converter port register out of a work slot */
   cvld?: boolean
   /** which converter package pair to strobe */
-  cvstr?: "vol" | "pan"
+  cvstr?: "vol"
   /** the second half of a frame's converter pair - port registers 3 and 2 */
   cvb?: boolean
-  /** read PAN (w7) instead of VOL (w6) when ACTRL b5 is set; when it is clear
-   *  the step drives nothing and the pull-downs write a zero, which is Paula's
-   *  hard pan */
-  panword?: boolean
-  /** this step's read is suppressed when ACTRL b5 is clear, so the port
-   *  register takes the pulled-down zero */
-  zeroif?: "nopan" 
   /** the sequence may end here, if the named condition holds */
   done?: "always" | "noinc" | "nocommit" | "notend"
 }
@@ -166,40 +162,33 @@ export const PROGRAM: Record<number, Step[]> = {
     /* 3 */ { w: 1, wr: [0, 1, 2], b: "blat", sum: true, drv: true },
     /* 4 */ { w: 2, alat: true, cap: true, srd: true },
     /* 5 */ { w: 2, wr: [0, 1, 2], b: "zero", cin: true, sum: true, drv: true },
-    /* 6 */ { w: 4, alat: true },
-    /* 7 */ { w: 0, wr: [0, 1, 2], b: "count", sum: true, sbo: true, done: "always" },
+    /* 6 */ { w: 4, blat: true },
+    /* 7 */ { count: true, alat: true },
+    /* 8 */ { w: 0, wr: [0, 1, 2], b: "blat", sum: true, sbo: true, done: "always" },
   ],
 }
 
-/* -- W5: 6.1's volume and 11.1's pan, which are the other eight converter
- * halves. A port register loaded from the walk holds PEND and nothing else, so
- * the volume codes need their own reads - and they must be loaded and strobed
- * inside ONE frame's work slots, because the walk reloads the registers in
- * slots 0-3. Twelve steps, at the ~200 volume writes a second a replayer
- * makes, and 10.2.5 prices it at nothing.
+/* -- W5: 6.1's volume, and the other four converter halves. A port register
+ * loaded from the walk holds PEND and nothing else, so the volume codes need
+ * their own reads - and they must be loaded and strobed inside ONE frame's
+ * work slots, because the walk reloads the registers in slots 0-3. Six steps,
+ * at the ~200 volume writes a second a replayer makes.
+ *
+ * ⭐ IT WAS TWELVE UNTIL PROGRAMMABLE PANNING WAS GIVEN UP. 11.1's second
+ * volume code per channel needed a second pass over all four registers and a
+ * second chip select; classic MOD's fixed LRRL - channels 0 and 3 left, 1 and
+ * 2 right - is which summing node an output is WIRED to, and no logic at all.
  *
  * ⚠ IT SUPPRESSES THE WALK'S PORT-REGISTER LOAD WHILE IT RUNS, so a sample
- * transition can be late by up to four colour clocks - 1.13 us - about 200
- * times a second. That is a real departure from 3.2's "jitter-free" and it is
- * 0.9 % of one sample period on 2 % of transitions. Stated rather than hidden.
- *
- * ACTRL b5 = 0 is Paula's hard pan and it is exact: the step that would read
- * PAN instead drives nothing, and SD's pull-downs write a zero into the port
- * register. There is no constant generator on this card and it does not need
- * one. */
+ * transition can be late by up to two colour clocks - 564 ns - about 200 times
+ * a second. Stated rather than hidden. */
 PROGRAM[W5] = [
-  /*  0 */ { ch: 0, w: 6, cvld: true },
-  /*  1 */ { ch: 1, w: 6, cvld: true, zeroif: "nopan" },
-  /*  2 */ { cvstr: "vol" },
-  /*  3 */ { ch: 3, w: 6, cvld: true, cvb: true },
-  /*  4 */ { ch: 2, w: 6, cvld: true, cvb: true, zeroif: "nopan" },
-  /*  5 */ { cvstr: "vol", cvb: true },
-  /*  6 */ { ch: 0, w: 7, cvld: true, panword: true, zeroif: "nopan" },
-  /*  7 */ { ch: 1, w: 7, cvld: true, panword: true },
-  /*  8 */ { cvstr: "pan" },
-  /*  9 */ { ch: 3, w: 7, cvld: true, cvb: true, panword: true, zeroif: "nopan" },
-  /* 10 */ { ch: 2, w: 7, cvld: true, cvb: true, panword: true },
-  /* 11 */ { cvstr: "pan", cvb: true, done: "always" },
+  /* 0 */ { ch: 0, w: 6, cvld: true },
+  /* 1 */ { ch: 1, w: 6, cvld: true },
+  /* 2 */ { cvstr: "vol" },
+  /* 3 */ { ch: 3, w: 6, cvld: true, cvb: true },
+  /* 4 */ { ch: 2, w: 6, cvld: true, cvb: true },
+  /* 5 */ { cvstr: "vol", cvb: true, done: "always" },
 ]
 
 /** 9.3's sixteen host bytes, as (word, lane). AIDX[3:0] indexes this and
@@ -214,7 +203,7 @@ export const HOSTMAP: { w: number; lane: number; ro?: boolean }[] = [
   { w: 6, lane: 2 },                                         // VOL
   { w: 6, lane: 0 },                                         // DAT
   { w: 6, lane: 1 },                                         // ATT
-  { w: 7, lane: 2 },                                         // PAN
+  { w: 7, lane: 2 },                                         // reserved (was PAN)
   { w: 2, lane: 2, ro: true }, { w: 2, lane: 1, ro: true },
   { w: 2, lane: 0, ro: true },                               // PTR, read-only
   { w: 1, lane: 1, ro: true }, { w: 1, lane: 0, ro: true },  // CNT, read-only

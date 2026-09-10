@@ -32,7 +32,7 @@ const EXTERNAL = new Set([
   /* 6.2's converters */
   "CVOEA", "CVC0", "CVC1", "CVC2",
   /* 9.3's host latches */
-  "PFOE0", "PFOE1", "PFOE2", "PFCK", "PWCK", "PWOE",
+  "PFLANE", "PFCK", "PWCK", "PWOE",
   /* 8.1's six sources, as a 3-bit code - 10.2.6's lever, decoded on U1 */
   "SETA", "SETB", "SETC",
   /* 9.2's two status bits */

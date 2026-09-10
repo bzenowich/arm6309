@@ -46,23 +46,24 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 
 | Question | Answer | § |
 |---|---|---|
-| **Discrete card, real Paula, a period sound chip, or an MCU?** | **Discrete card.** **45 ICs** (§10) — **two** `ATF1508AS` for the logic, **both fitted**, on one **100 × 240 mm** card — it outgrew 180 mm on 2026-09-09 — with a physically separate analogue section. | §12, §10.1, §10.2 |
+| **Discrete card, real Paula, a period sound chip, or an MCU?** | **Discrete card.** ⭐ **35 ICs** (§10) — **two** `ATF1508AS` for the logic, both fitted, back on one **100 × 180 mm** card. It reached 45 and 24 cm before programmable panning was given up and U1 absorbed the counter, the comparator and the read-back latch. | §12, §10.1, §10.2 |
 | **Where does the sample data live?** | **Card-local SRAM, 512 KB in one `AS6C4008`.** The card never touches the bus for audio, and it cannot — there is no DMA pair on the backplane. | §5, §5.1 |
 | **How are the four channels implemented?** | **One time-multiplexed datapath**, 8 slots per colour clock, state in a 32-bit-wide SRAM file. | §3 |
 | **How is per-channel pitch generated?** | **Compare-against-a-free-running-counter**, not four down-counters. Kills 12+ ICs. | §4.2 |
 | **What is the period reference clock?** | **3.546895 MHz — the Amiga PAL colour clock**, from a 28.37516 MHz crystal ÷8. Non-negotiable. | §4.1 |
 | **How is volume applied?** | **By the other half of the converter.** The sample DAC's output is the *reference* of a second multiplying DAC whose code is the volume, so the product is formed in the analogue domain and is not quantised at all. No table, no multiplier, no boot upload. | §6.1 |
-| **How are channels summed?** | **In the analogue domain, the way Paula does it** — one DAC per channel, its own I/V amplifier, and a two-resistor passive sum per side that *is* the fixed 4.4 kHz pole. No adder, no accumulator, no output sample rate, no resampling, no jitter. | §6.2 |
-| **What DAC?** | **6 × AD7528** — dual 8-bit parallel multiplying DAC, on one die, with on-chip latches: **twelve halves**, one sample and **two** volume converters per channel. Not a serial audio DAC — §6.3. **Samples are stored offset binary**, converted once by the loader — §6.1. | §6.3 |
+| **How are channels summed?** | **In the analogue domain, the way Paula does it** — one DAC per channel, its own I/V amplifier, and a two-resistor passive sum per side that *is* the fixed 4.4 kHz pole. **Fixed LRRL**: channels 0 and 3 to the left node, 1 and 2 to the right, which is wiring. No adder, no accumulator, no output sample rate, no resampling, no jitter. | §6.2 |
+| **What DAC?** | **4 × AD7528** — dual 8-bit parallel multiplying DAC, on one die, with on-chip latches: **eight halves**, one sample and one volume converter per channel. Not a serial audio DAC — §6.3. **Samples are stored offset binary**, converted once by the loader — §6.1. | §6.3 |
 | **Do we need the Amiga filter?** | **Yes, and not for nostalgia.** It is the reconstruction filter for channels running below ~16 kHz. Both filters, switchable. | §7 |
 | **Where does mod tempo come from?** | **An on-card 16-bit timer clocked at colourclock/5 = 709.379 kHz — the Amiga's CIA clock exactly**, so `Fxx` BPM values are CIA-B-identical. Costs one slot, zero ICs. | §8.2 |
 | **Which interrupt line?** | **`/FIRQ`.** Video's VBL owns `/IRQ`. A 6809 `FIRQ` is what a replayer tick should be. | §8.1 |
 | **What does mod playback cost the 6309?** | **~2.7 % of a 2.098 MHz CPU** for the replayer, with a 19× worst-case margin; **~738 ms once** to upload 128 KB of samples — a ~500 ms `EORD` pass converting them to offset binary (§6.1, §16 item 27) plus a 238 ms chunked `TFM X+,Y` (§13.2). The `TFM` alone is 187 ms. | §13, [`modplayer.md`](modplayer.md) §7 |
 | ⭐ **Where does the sound come out?** | **Two places, and they are different signals.** A **headphone-driven** 3.5 mm stereo jack on the card's rear edge (an `NJM4556AD`, 70 mA), and a **line-level** pair on the backplane. | §7.1 |
-| **What does this card do that Paula cannot?** | **Programmable per-channel panning, built** (§11.1); no minimum period; 8 channels at half period resolution; a programmable volume curve (host software — §6.1). | §11 |
+| **What does this card do that Paula cannot?** | No minimum period; 8 channels at half period resolution; a programmable volume curve (host software — §6.1). ⚠ **Programmable panning was given up on 2026-09-09** — it cost six packages against the two it was pitched at, and classic MOD is hard-panned anyway (§11.1). | §11 |
 
-**Net: 45 ICs.** The logic is **two** `ATF1508AS` — **U1**, the host register block,
-and **U2**, the sequencer (§10.2) — and **the card is simulated end to end**:
+⭐ **Net: 35 ICs, on a 180 mm card.** The logic is **two** `ATF1508AS` — **U1**, the
+host register block, and **U2**, the sequencer (§10.2) — and **the card is simulated end
+to end**:
 `audio_tb` writes a channel's `LC`/`LEN`/`PER` through the host port, enables it with
 `DMACON`, and watches a sample byte come out of card RAM, through `PEND`, through a
 converter port register and into an `AD7528`, with the buffer reloading from a shadow
@@ -629,10 +630,9 @@ each pair has a volume package **per side**:
   AD7528 #6   DAC A = ch1 PAN      DAC B = ch2 PAN        --> OUT A + OUT B --> I/V --> R
 ```
 
-**Six packages, twelve halves: four sample and eight volume.** Each side collects four
-volume ladders across **two** dice, so the ±1 % on-die match no longer covers a whole
-summing node — §11.1 gives each die its own I/V amplifier and voltage-sums the two per
-side through a matched 0.1 % pair, which is the +1 amplifier package it charges.
+**Four packages, eight halves: four sample and four volume.** Each side's two volume
+ladders sit on **one** die, so the ±1 % on-die `VREF` match covers the whole summing
+node and the extra amplifier pair programmable panning charged goes with it.
 
 Within a die, both parts' `RFB` is tied to that amplifier's output. Paralleling the two
 on-die feedback resistors halves the transimpedance, which is exactly the headroom split
@@ -1375,8 +1375,6 @@ a 16-bit adder chain; the top three bits are a carry-in increment in the sequenc
 |---|---|---|
 | **1** | **AS6C4008-55 (512K×8)** | **sample RAM — all 512 KB in one DIP-32, §5** |
 | **2** | **IS61C6416AL-12 (64K×16, 12 ns, TSOP-44)** | channel state file, **32 bits wide** — `{NEXT[15:0], PEND[7:0]}` in one read (§3.3, §5.3) |
-| 2 | 74HC590 | free-running 16-bit colour-clock counter (§4.2) |
-| 2 | 74HC688 | 16-bit event comparator (§4.2) |
 | 4 | 74HC283 | shared 16-bit adder — `NEXT`+`PER`, `PTR`+1, `CNT`−1 (slots 6–7) |
 | **2** | **74HC574** | **`ALAT` — the adder's A operand, off the state-file read bus (§10.2.2)** |
 | **2** | **74HC574** | **`BLAT` — the adder's B operand: `PER`, or `LEN` for the doubling (§10.2.2)** |
@@ -1384,12 +1382,12 @@ a 16-bit adder chain; the top three bits are a carry-in increment in the sequenc
 | **2** | **74HC244** | **`SUM` → the state file's data bus; the `'283` outputs are totem-pole (§10.2.2)** |
 | **1** | **74HC574** | **`SBLAT` — the sample byte, held from its fetch slot to its `PEND` write (§10.2.3)** |
 | **2** | **74HC574** | **converter port register, one per side — 8 bits, loaded twice per frame (§6.2). ⚠ §10.2.2 asks whether it is one per channel** |
-| **6** | **AD7528** | **dual 8-bit parallel multiplying DAC, on-chip latches — twelve halves: one sample and **two** volume converters per channel (§6.1, §6.3, §11.1)** |
-| **3** | **TL074** | **sample I/V ×4, volume I/V ×4, voltage summers ×2, LED Sallen-Key ×2 (§7)** |
+| **4** | **AD7528** | **dual 8-bit parallel multiplying DAC, on-chip latches — eight halves: one sample and one volume converter per channel (§6.1, §6.3)** |
+| **2** | **TL074** | **sample I/V ×4, volume I/V ×2, LED Sallen-Key ×2 (§7)** |
 | **1** | **TL072** | **`−Vref` inverter (§6.3); one channel spare** |
 | 1 | 74HC4066 | filter select / bypass (§7) |
 | 1 | 74HC574 | posted-write data latch (host → sample RAM) |
-| **1** | **74HC574** | **`ADATA`/`SDATA` read-prefetch latch (§9.3)** |
+
 | **1** | **`ATF1508AS-…JC84`, PLCC-84, socketed — U1** | the host register block: §9.1's seven-bit decode, `ADMACON`, `AINTENA`, `AINTREQ` and its pending register, `/FIRQ`, `ACTRL`, the synchronisers, §9.3's read-back path, the slot counter and the ÷5 prescale. **Fitted at 89 of 128 cells and 57 of 64 I/O** (§10.1.1) |
 | **1** | **`ATF1508AS` — U2** | ⚠ **the sequencer — specified in §10.2, not fitted.** ~69 I/O and ~74 cells; the package is §10.2.6's open decision |
 | 1 | 28.37516 MHz osc | PAL Amiga master (§4.1) |
@@ -1397,7 +1395,7 @@ a 16-bit adder chain; the top three bits are a carry-in increment in the sequenc
 | — | 3.5 mm stereo jack | **headphone output on the card's rear edge — §7.1.** The backplane pair is the line output and is a different signal |
 | — | R-2R / passives | filter networks, offset-injection resistors (§6.3), output stage |
 | **1** | **NJM4556AD** | **headphone driver for the 3.5 mm jack — dual, 70 mA output, DIP-8 (§7.1)** |
-| **39** | | **(40 with the NTSC can)** |
+| **35** | | **(36 with the NTSC can)** |
 
 ⚠ **45, and thirteen of them arrived on 2026-09-09.** The table carried 32 while the
 sequencer was a paragraph. Seven came from enumerating the datapath §3.2, §4.2 and §9.5
@@ -1434,12 +1432,14 @@ pins and spends cells. There is no one-part arrangement of this card.
 
 | | holds | fitted |
 |---|---|---|
-| **U1** `ATF1508AS` PLCC-84, socketed | the host register block: §9.1's decode, `ADMACON`, `AINTENA`, `AINTREQ` and its pending register, `/FIRQ`, `ACTRL`, the `AINTREQ` read synchroniser, the slot walk, the ÷5 tempo reference and §9.3's read-back path | **77 of 128 cells, 46 of 64 I/O** — §10.1.1 |
-| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **128 of 128 cells, 62 of 64 I/O** — §10.2.6 |
+| **U1** `ATF1508AS` PLCC-84, socketed | the host register block — §9.1's decode, `ADMACON`, `AINTENA`, `AINTREQ` and its pending register, `/FIRQ`, `ACTRL`, the `AINTREQ` read synchroniser, the slot walk, the ÷5 tempo reference — **plus §4.2's free-running counter and comparator and §9.3's read-back latch**, which is seven packages for sixteen pins | **88 of 128 cells, 62 of 64 I/O** — §10.1.1 |
+| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **128 of 128 cells, 60 of 64 I/O** — §10.2.6 |
 
-⛔ **U2 IS EXACTLY FULL, and that is the headline of the fit.** "Design fits
-successfully" on the first pass, with **128 of 128 logic cells**, 76 foldback nodes, 18
-cascades and 469 product terms. A **TQFP-100 was tried and does not help**: it takes the
+⚠ **U2 IS EXACTLY FULL AND U1 IS NOT**, which is the whole shape of this card's logic
+and the reason every reduction moved work *towards* U1. "Design fits successfully" on
+both: U2 at **128 of 128 cells**, 60 of 64 I/O, 65 foldback nodes, 21 cascades and 449
+product terms; U1 at **88 of 128 cells**, 62 of 64 I/O, 22 foldback, no cascades and 274
+product terms. A **TQFP-100 was tried and does not help**: it takes the
 pins from 62 of 64 to 62 of 80 and leaves the cells at 128 of 128, because both packages
 carry the same 128 macrocells. So the PLCC-84 is the right package — it keeps the socket
 and the TQFP-100 would buy eighteen pins the design does not need — and **there is
@@ -1449,8 +1449,8 @@ nothing left on U2 for anything else**, §16 item 7's 8-channel mode included.
 60. Both parts are programmed out of circuit, so this is the arrangement the card already
 had (§10.1.1), not a concession.
 
-**What does not move, and never could:** the three SRAMs, the six `AD7528` multiplying
-DACs, the four op-amps, the `4066`, the oscillator and every passive. This is an
+**What does not move, and never could:** the three SRAMs, the four `AD7528` multiplying
+DACs, the three op-amps, the `4066`, the oscillator and every passive. This is an
 analogue card with a digital corner, and the CPLDs are the corner.
 
 #### 10.1.2 What the part does not contain (superseded 2026-09-09; see history.md)
@@ -1468,21 +1468,39 @@ successfully".** One command regenerates it —
 
 | | |
 |---|---|
-| logic cells | **77 of 128** |
-| flip-flops | 38 of 128 |
-| I/O pins | **46 of 64** — 21 in, 27 out, and `D0`–`D7` are eight of both |
+| logic cells | **88 of 128** — with the counter, the comparator and §9.3's read-back latch aboard |
+| I/O pins | **62 of 64**, JTAG off — 20 in, 45 out, and `SD0`–`SD15` and `D0`–`D7` are bidirectional |
+| product terms | 274, 22 foldback nodes, no cascades |
 | dedicated inputs | 2 of 4 — `SLOTCLK` and `RESET` |
-| product terms | 287 |
 | `SLOTCLK` | pin 83, a **global clock** — the fitter chose it |
 | `RESET` | pin 1, the **global clear** |
 | fitter passes | 1 failed placement; 2 succeeded with cascade logic |
 
-⭐ **U1 got smaller when U2 arrived**, from 89 cells and 57 pins to 77 and 46, and the
-direction is worth reading: the host handshake moved to U2 (§10.2.6), the four slot-phase
-decodes stopped being pins because U2 takes the three counter bits and decodes them
-itself, `SET0`–`SET5` became a 3-bit code in, and the prefetch enable became three
-enables out of U2. **U1 has 51 cells and 18 pins free and U2 has none**, which is where
-any future rebalancing has to start.
+⭐ **U1 got smaller when U2 arrived and then spent all of it.** It fell to 77 cells and
+46 pins when the host handshake moved to U2, and the 2026-09-09 reduction spent every one
+of those: sixteen state-file data pins bought **seven packages** — the `'590` counter, the
+`'688` comparator and §9.3's three prefetch `'574`s — because all three want the same bus.
+**Both parts are now full**, which is the honest state and the constraint on anything
+added next.
+
+⛔ **Sixteen bits of equality is where that twice went wrong, and the second time is the
+one worth keeping.** Written as four nibble-equalities ANDed together it looks like 64
+product terms — but a combinational intermediate in CUPL is *substituted* rather than
+given a macrocell, so it multiplies four 16-term sums into **65,536**, and the fitter ran
+seven minutes on it. Inverting it fixes the term count: **inequality is a sum**, two
+terms per bit, thirty-two in all.
+
+⛔ **And as one macrocell that still does not place.** Thirty-two terms reading sixteen
+`SD` pins *and* sixteen counter registers is **32 signals into one logic block**, against
+the 40 an `ATF1508AS` LAB takes from the switch matrix — the family's third limit, after
+cells and pins, and the fitter was **killed** trying. Cells were never the constraint:
+this part is smaller than U2 and the `.pld` is shorter.
+
+⭐ **Halved, it places in two minutes and gets *smaller*.** `NEQL` and `NEQH` are sixteen
+signals and sixteen terms each, and each is a **pin** — two combinational nodes would only
+be substituted back into one. U2 forms the hit as `!NEQL & !NEQH`, which its array does
+for nothing. The part went from unplaceable to **88 of 128 cells**, because the 32-term
+version had been forcing foldback across the whole design.
 
 **The source is generated, not written twice.** `hardware/gal/jedec/cupl.ts` emits the
 `.pld` from the same `Cell` term lists that `check:audio` exercises on six GAL22V10s,
@@ -1543,7 +1561,7 @@ itemised, in [history.md](history.md).
   be exactly right and to be seven of them. §10.2.
 
 **Power.** Three SRAMs, **two** `ATF1508AS`, ~22 HC packages, **thirteen op-amp channels and
-six `AD7528`** at 2 mA each, plus §7.1's headphone driver — ~10 mA quiescent and up to
+four `AD7528`** at 2 mA each, plus §7.1's headphone driver — ~10 mA quiescent and up to
 ~60 mA into a low-impedance load on both channels: estimate **340–500 mA**, and the CPLD is the term least
 worth trusting — a 128-macrocell part with ~100 registers toggling at 28 MHz is not
 obviously cheaper than the six GALs it replaces, whatever the package count says. §16
@@ -1555,18 +1573,17 @@ and digital grounds must meet at exactly one point, and the `AD7528` reference m
 share a rail with the SRAMs. That is the only layout constraint on this card that the
 video card does not also have, and it is the one that decides whether it sounds clean.
 
-**Area.** 45 packages — one DIP-32 SRAM, **two TSOP-44 SRAMs**, **two PLCC-84** (U1
+**Area.** 35 packages — one DIP-32 SRAM, **two TSOP-44 SRAMs**, **two PLCC-84** (U1
 socketed; U2's package is §10.2's open decision), **six DIP-20 converters**, four op-amp packages, a DIP-8 headphone driver and the rest
 DIP-14/16/20 logic.
-⚠ **The analogue section is now twelve converter halves and thirteen amplifier
-channels**, half again what the original one-board assertion was made about — and that
-assertion was about a **Eurocard**, which the machine stopped using on 2026-09-08
-(`machine.md` §5 item 5). ⚠ **`hardware/place/` no longer fits the card on 18 cm.**
-`npm run check:place` places the 45 packages and reports that **24 cm is the shortest
-length that works** — 18 cm leaves five of them with nowhere to go. That is a courtyard-area check and not a layout, and
-it is the first time this card's package count has bought it a bigger board. The question
-is no longer "does it need a second card"; it is whether a 24 cm card with the analogue
-section physically separate is a thing this machine's chassis wants.
+**The analogue section is eight converter halves and eight amplifier channels** since
+programmable panning was given up (§11.1) — and the original one-board assertion was
+about a **Eurocard**, which the machine stopped using on 2026-09-08 (`machine.md` §5
+item 5). ⭐ **`npm run check:place` places the 35 packages on 18 cm and reports it as the
+shortest length that works** — the card reached 24 cm at 45 packages and came back. That
+is a courtyard-area check and not a layout. The question is no longer "does it need a
+second card"; it is whether the analogue section can be kept physically separate on the
+same 18 cm board.
 **Measure the layout — §16 item 19.**
 
 ---
@@ -1632,8 +1649,7 @@ datapath much bigger than §10 ever counted:
 
 | Qty | Part | Role | in §10 before? |
 |---|---|---|---|
-| 2 | `74HC590` | the free-running 16-bit colour-clock counter (§4.2) | yes |
-| 2 | `74HC688` | `NEXT` vs the count — `HIT` (§4.2) | yes |
+| — | ~~`74HC590` ×2, `74HC688` ×2~~ | ⭐ **inside U1 since 2026-09-09** — the counter is 16 registers and the compare a foldback tree, and both wanted the same sixteen state-file data lines U1 now has | **−4** |
 | 4 | `74HC283` | the 16-bit adder | yes |
 | 2 | `74HC574` | **`ALAT`** — the A operand, latched off the read bus | 3 "pipeline latches" |
 | 2 | `74HC574` | **`BLAT`** — the B operand | ⛔ **no** |
@@ -1641,7 +1657,8 @@ datapath much bigger than §10 ever counted:
 | 2 | `74HC244` | **`SUM` → `SD[15:0]`** — the `'283` outputs would fight the file on every read | ⛔ **no** |
 | 1 | `74HC574` | **`SBLAT`** — the sample byte, held from its fetch slot to its `PEND` write | 3 "pipeline latches" |
 | **4** | `74HC574` | converter port register, **one per channel** (§6.2) | 2 |
-| **3** | `74HC574` | `ADATA`/`SDATA` prefetch, **one per state-file byte lane** (§9.3) | 1 |
+| — | ~~`74HC244` ×2, `74HC574` ×2~~ | ⚠ **the 8-bit datapath is NOT taken** — §16 item 34 | — |
+| — | ~~`74HC574` ×3~~ | ⭐ **inside U1 since 2026-09-09** — the read-back byte is eight registers on the part that already drives `D0`–`D7` for `AINTREQ` and `ASTAT` | **−3** |
 | **1** | `74HC138` | the converter control code — §10.2.6's lever | ⛔ **no** |
 | **1** | `74HC00` | the byte-lane write enables, gated with the slot clock's second half | ⛔ **no** |
 | 1 | `74HC574` | posted-write data latch, host → sample RAM | yes |
@@ -1734,7 +1751,7 @@ work slots per colour clock instead of three. Both are archived.
 
 #### 10.2.6 The pin budget, and the one lever that was pulled
 
-U2 is **38 outputs and 25 inputs**, and the fitter reports **62 of 64 I/O and 128 of
+U2 is **37 outputs and 26 inputs**, and the fitter reports **60 of 64 I/O and 128 of
 128 logic cells** — "Design fits successfully" on the first pass, with 76 foldback nodes,
 18 cascades and 469 product terms. `npm run check:audio` prints the interface and asserts
 it is **closed in both directions**: every signal U1 reads is produced by U2, the
@@ -1777,58 +1794,20 @@ Presented as opt-in, because **the default configuration must be Paula-exact** o
 the acceptance test in §1 is meaningless. Each of these is a register bit that
 software has to ask for.
 
-### 11.1 ⭐ Panning — programmable, built, and +3 ICs
+### 11.1 Panning (given up 2026-09-09; see history.md)
 
-> **Decided 2026-09-08 — this is part of the card, not an option.** It was written up
-> here as an opt-in extra and is left in this section because §11's framing is right:
-> **Paula cannot do it**, and the acceptance test of §1 does not exercise it. What
-> changed is that it is now in §6.2's converter table, §9.3's register map and §10's
-> budget.
+⛔ **Programmable per-channel panning was pitched at "+2 ICs" and cost six**, and it is
+not in the card. §6.3's twelve halves are eight; the second volume converter per channel,
+the extra `AD7528` pair, the extra `TL074` and W5's second pass over all four port
+registers all went with it.
 
-**The mechanism is one more volume converter per channel.** Give each channel a second
-volume half fed from the same sample voltage, driving the opposite side's summing node:
+⭐ **What replaces it is what every MOD already assumes: fixed LRRL.** Channels 0 and 3
+sum at the left node, 1 and 2 at the right — Paula's hard pan, bit-exact, and **it is
+which node an output is wired to rather than any logic at all.** `ACTRL` b5 is withdrawn
+and `PAN` (§9.3 offset 10) reads and writes as reserved.
 
-| | halves | packages |
-|---|---|---|
-| sample converters — one per channel | 4 | 2 |
-| volume converters, **left** — one per channel | 4 | 2 |
-| **volume converters, right** — one per channel | **4** | **2** |
-| **total** | **12** | **6 × `AD7528`** |
-
-**The replayer writes two codes per channel and computes the pan law itself**, which is
-where a pan law belongs: `VOL` (§9.3) is the left code and `PAN` (§9.3 offset 10) the
-right. Both are the same 0–64 Paula scale, both go through §6.1's ×4, and `ACTRL` b3's
-raw-volume mode applies to both.
-
-**⭐ The default is Paula, exactly, and it is a mode bit rather than a convention.**
-`ACTRL` b5 = 0 — the reset state — makes the sequencer derive the right-hand code from
-`VOL` and the channel index alone:
-
-| `ACTRL` b5 | ch0, ch3 | ch1, ch2 | what the host writes |
-|---|---|---|---|
-| **0 — reset** | `VOL_L = VOL`, `VOL_R = 0` | `VOL_L = 0`, `VOL_R = VOL` | **`VOL` only.** Paula's hard pan, bit-exact |
-| 1 | `VOL_L = VOL`, `VOL_R = PAN` | `VOL_L = VOL`, `VOL_R = PAN` | both, per channel |
-
-**So a Paula-exact replayer never writes `PAN` and cannot tell the other four halves
-exist**, and §1's acceptance test is untouched. The term is `ch != 1,2` on one
-multiplexer input — sequencer logic, no packages, and the same shape as §11.3's
-`attach_target_valid`.
-
-**What it costs, itemised:**
-
-| | |
-|---|---|
-| **+2 `AD7528`** | packages #5 and #6 of §6.2 |
-| **+1 `TL074`** | ⚠ each side's node now collects four volume ladders across **two dice**, so §6.2's ±1 % on-die match no longer covers the whole node. Give each die its own I/V amplifier and voltage-sum the two per side through a matched 0.1 % pair: **13 amplifier channels of 14**, against 9 of 10 (§7) |
-| Port registers | **0** — volume codes are written at host rate, not event rate (§6.2). Each side's `'574` now drives three packages instead of two, which is a fan-out of 3 on an HC output |
-| Write windows | **0** — a volume write borrows a sample window and displaces one sample write by one colour clock about once every 70,000 frames (§6.2). Two codes per channel doubles that to once in 35,000 |
-| CPLD | **0 packages.** The `PAN` field, the b5 multiplexer and the extra `CS` decode are terms on **U2**, the sequencer (§10.2) — which is where every one of them lives and where the pin budget is tight, so "0 packages" is a claim §16 item 00 step b settles and not one this table can |
-| State file | **0** — `PAN` is 7 bits in words 1–3 beside `VOL`, which §5.3 just made 32 bits wide |
-| **Total** | **+3 ICs**, where the four-converter analogue sum would have charged 10 |
-
-⚠ **What is not free is the analogue layout.** Twelve converter halves and thirteen
-amplifier channels is half again what §10's area paragraph was written about, and
-`machine.md` §8 flags the same thing. **Measure it — §16 item 19.**
+**The acceptance test is untouched**: §1 requirement 5 *is* hard-panned stereo, and this
+is the arrangement it names.
 
 ### 11.2 Eight channels — a slot-allocation question, not a hardware one
 
@@ -2177,7 +2156,7 @@ specification that has not been tested.
 
     ⚠ **What is NOT closed, and it is the analogue half.** §16 items 9, 10, 19, 23 and
     25 are unchanged: the converter glitch, the cascaded settling, the layout at 45
-    packages on 24 cm, the channel-to-channel gain match and the split rails. **The
+    packages on 18 cm, the channel-to-channel gain match and the split rails. **The
     digital side of §1's acceptance test can now be evaluated from the design; the
     analogue side still cannot be evaluated from anything but a bench.** And §16 item 7's
     8-channel mode remains unfitted — the microprogram has room for two more work types
@@ -2313,13 +2292,13 @@ specification that has not been tested.
     the corner (Aud-M4 was exactly that — history.md §7). Until the probe exists,
     "both Amiga filters, switchable" is an unverified claim about the half of §7 the
     acceptance test can hear.
-19. **⚠ Confirm the card fits its envelope at 45 packages — and it is 24 cm now**
+19. **⚠ Confirm the card fits its envelope at 35 packages, back on 18 cm**
     (§10, §7.1). The one-board fit has been asserted and never measured, and the card's
     shape is digital-light and analogue-heavy — **twelve converter halves and thirteen
     amplifier channels** since §11.1's panning, against the eight and ten this item was
     first written about. (The original assertion was about a **Eurocard**;
     `machine.md` §5 item 5's card format replaced it.) ⚠ **`npm run check:place` refuses
-    18 cm at 45 packages and reports 24 cm as the shortest that works** — the first
+    18 cm at 35 packages and reports it as the shortest that works** — the
     consequence of §10.2's enumeration that is not a pin or a package but a board.
     Measure it, with the analogue section physically separate and a rear-edge jack to
     place as well. This is the last thing standing between the card and a layout, and it
@@ -2433,7 +2412,8 @@ specification that has not been tested.
     cost nothing because they are the sequencer's, and the sequencer is not on U1. What
     moved the numbers was item 0b's three repairs.
 
-31. **PART-CLOSED 2026-09-09 — the converter port registers are one per channel.**
+31. **CLOSED 2026-09-09 — the converter port registers are one per channel**, and
+    programmable panning is gone, so the second question this item carried went with it.
     §6.2's two, one per side, collide with the walk order: channel 0's byte reaches the
     read bus in slot 0 and channel 3's in slot 3, and one register cannot hold both
     across two four-slot windows. It is **four `74HC574`**, three-stated onto the port
@@ -2448,14 +2428,32 @@ specification that has not been tested.
     software rule, stated in §4.3 and §9.3**, with a zero-detect gate (+1 IC) as the
     fallback if a bench ever needs it.
 
-32. **⚠ NEW 2026-09-09 — U2 is at 128 of 128 logic cells.** It fits, on the first
-    fitter pass, and there is nothing left. Item 7's 8-channel mode, §11.3's attach chain
-    and anything else the sequencer might grow have to **displace** something or move to
-    U1, which has 51 cells and 18 pins free (§10.1.1). A TQFP-100 does not help: both
-    packages carry the same 128 macrocells. **The rebalancing to look at first** is
-    §9.3's `AIDX` and its sixteen-entry offset decode — eighteen registers on U2 that
-    would sit naturally on U1, which already has `D0`–`D7` and the `AIDX` write strobe.
-    It costs pins in the other direction and U2 has two; cost it properly before doing it.
+32. **⚠ U2 is full and U1 is not.** U2 is the sequencer and it has no spare cells;
+    U1 has room and 18 spare pins, which is why the counter, the comparator and the
+    read-back latch all went there. §16 item 7's 8-channel mode and §11.3's attach chain
+    still have to **displace** something on U2 or move to U1.
+
+33. **⭐ CLOSED 2026-09-09 — writing `AIDX` now prefetches, as §9.3 always said.**
+    ⛔ **It never did.** The prefetch ran at the *end* of an `ADATA` access, so the first
+    read after an index write returned the byte the **previous** index named. It was
+    invisible while the read-back was three `'574`s capturing all three lanes and
+    choosing one at read time — the two offsets a test happened to compare lived in the
+    same word — and it became a hard failure the moment U1 captured a single lane.
+    Every host access queues a work item now, with W3's write step gated off for an index
+    write (`!ISAIDX`) so the index cannot store itself into the location it names.
+    `audio_tb` reads `PER`'s two bytes back and gets what it wrote.
+
+34. **⚠ NEW 2026-09-09 — the 8-bit datapath, costed and NOT taken.** Narrowing the adder
+    to a byte halves the `'283` chain, the `$FF` constant and the sum three-state: **−4
+    packages**, and the measured margin can afford it — a channel event would go from
+    seven work slots to ten, and four channels at ProTracker's top note use **37 of 600**
+    slots today (§10.2.5). **What stops it is `ALAT` and `BLAT`.** Each must still hold
+    sixteen bits and present eight, so each is still two `'574`s with their output
+    enables acting as the byte multiplexer — the "halved" latches are not halved, and the
+    saving is 4 rather than the 6 it looks like. It also wants two more U2 pins for the
+    byte select on a part with three, and a fifth `T` bit on a part at 128 of 128 cells.
+    **Take it only with a U2 rebalance in the same pass** — §9.3's `AIDX` and its
+    sixteen-entry offset decode are eighteen registers that would sit naturally on U1.
 
 ---
 
@@ -2465,7 +2463,7 @@ specification that has not been tested.
 |---|---|---|
 | Paula (MOS 8364) as the model | **1985** | the design premise |
 | 28.37516 MHz crystal | 1985 (Amiga PAL master) | period-exact, and still purchasable |
-| `AD7528` **dual** 8-bit multiplying DAC | **1985** | period, and the datasheet is in the repo — the sample/volume cascade of §6.1 is its own headline application. **Six of them, twelve halves** since §11.1 |
+| `AD7528` **dual** 8-bit multiplying DAC | **1985** | period, and the datasheet is in the repo — the sample/volume cascade of §6.1 is its own headline application. **Four of them, eight halves** |
 | `TL072` / `NE5532` | 1978 / 1979 | period |
 | `74HC` logic | 1982 | period |
 | `74HC688` 8-bit comparator | 1984 | period |

@@ -17,6 +17,9 @@ module audio (
     input  wire SETC,
     input  wire SETB,
     input  wire SETA,
+    input  wire PFCK,
+    input  wire PFLANE,
+    input  wire CNTOE,
     input  wire IOSEL,
     input  wire A6,
     input  wire A5,
@@ -79,12 +82,55 @@ module audio (
     output wire SET3,
     output wire SET4,
     output wire SET5,
+    output wire CT0,
+    output wire CT1,
+    output wire CT2,
+    output wire CT3,
+    output wire CT4,
+    output wire CT5,
+    output wire CT6,
+    output wire CT7,
+    output wire CT8,
+    output wire CT9,
+    output wire CT10,
+    output wire CT11,
+    output wire CT12,
+    output wire CT13,
+    output wire CT14,
+    output wire CT15,
+    output wire NEQL,
+    output wire NEQH,
+    output wire PF0,
+    output wire PF1,
+    output wire PF2,
+    output wire PF3,
+    output wire PF4,
+    output wire PF5,
+    output wire PF6,
+    output wire PF7,
+    inout  wire SD0,
+    inout  wire SD1,
+    inout  wire SD2,
+    inout  wire SD3,
+    inout  wire SD4,
+    inout  wire SD5,
+    inout  wire SD6,
+    inout  wire SD7,
+    inout  wire SD8,
+    inout  wire SD9,
+    inout  wire SD10,
+    inout  wire SD11,
+    inout  wire SD12,
+    inout  wire SD13,
+    inout  wire SD14,
+    inout  wire SD15,
     output wire SYNCR1,
     output wire SYNCR2,
     output wire MERGE,
     output wire FIRQANY,
     output wire SEL,
     output wire HRD,
+    output wire RPF,
     inout  wire D0,
     inout  wire D1,
     inout  wire D2,
@@ -94,6 +140,22 @@ module audio (
     inout  wire D6,
     inout  wire D7,
     output wire FIRQ_OE,
+    output wire SD0_OE,
+    output wire SD1_OE,
+    output wire SD2_OE,
+    output wire SD3_OE,
+    output wire SD4_OE,
+    output wire SD5_OE,
+    output wire SD6_OE,
+    output wire SD7_OE,
+    output wire SD8_OE,
+    output wire SD9_OE,
+    output wire SD10_OE,
+    output wire SD11_OE,
+    output wire SD12_OE,
+    output wire SD13_OE,
+    output wire SD14_OE,
+    output wire SD15_OE,
     output wire D0_OE,
     output wire D1_OE,
     output wire D2_OE,
@@ -140,6 +202,30 @@ module audio (
   reg  r_CTRL5;
   reg  r_CTRL6;
   reg  r_CTRL7;
+  reg  r_CT0;
+  reg  r_CT1;
+  reg  r_CT2;
+  reg  r_CT3;
+  reg  r_CT4;
+  reg  r_CT5;
+  reg  r_CT6;
+  reg  r_CT7;
+  reg  r_CT8;
+  reg  r_CT9;
+  reg  r_CT10;
+  reg  r_CT11;
+  reg  r_CT12;
+  reg  r_CT13;
+  reg  r_CT14;
+  reg  r_CT15;
+  reg  r_PF0;
+  reg  r_PF1;
+  reg  r_PF2;
+  reg  r_PF3;
+  reg  r_PF4;
+  reg  r_PF5;
+  reg  r_PF6;
+  reg  r_PF7;
   reg  r_SYNCR1;
   reg  r_SYNCR2;
 
@@ -179,6 +265,30 @@ module audio (
   assign CTRL5 = r_CTRL5;
   assign CTRL6 = r_CTRL6;
   assign CTRL7 = r_CTRL7;
+  assign CT0 = r_CT0;
+  assign CT1 = r_CT1;
+  assign CT2 = r_CT2;
+  assign CT3 = r_CT3;
+  assign CT4 = r_CT4;
+  assign CT5 = r_CT5;
+  assign CT6 = r_CT6;
+  assign CT7 = r_CT7;
+  assign CT8 = r_CT8;
+  assign CT9 = r_CT9;
+  assign CT10 = r_CT10;
+  assign CT11 = r_CT11;
+  assign CT12 = r_CT12;
+  assign CT13 = r_CT13;
+  assign CT14 = r_CT14;
+  assign CT15 = r_CT15;
+  assign PF0 = r_PF0;
+  assign PF1 = r_PF1;
+  assign PF2 = r_PF2;
+  assign PF3 = r_PF3;
+  assign PF4 = r_PF4;
+  assign PF5 = r_PF5;
+  assign PF6 = r_PF6;
+  assign PF7 = r_PF7;
   assign SYNCR1 = r_SYNCR1;
   assign SYNCR2 = r_SYNCR2;
 
@@ -242,6 +352,90 @@ module audio (
   // buried
   assign SET5 =
          (SETC & ~SETB & SETA);
+  // EXTERNAL - 4.2: some bit of NEXT[7:0] differs from the count
+  assign NEQL =
+         (SD0 & ~CT0)
+         | (~SD0 & CT0)
+         | (SD1 & ~CT1)
+         | (~SD1 & CT1)
+         | (SD2 & ~CT2)
+         | (~SD2 & CT2)
+         | (SD3 & ~CT3)
+         | (~SD3 & CT3)
+         | (SD4 & ~CT4)
+         | (~SD4 & CT4)
+         | (SD5 & ~CT5)
+         | (~SD5 & CT5)
+         | (SD6 & ~CT6)
+         | (~SD6 & CT6)
+         | (SD7 & ~CT7)
+         | (~SD7 & CT7);
+  // EXTERNAL - 4.2: some bit of NEXT[15:8] differs from the count
+  assign NEQH =
+         (SD8 & ~CT8)
+         | (~SD8 & CT8)
+         | (SD9 & ~CT9)
+         | (~SD9 & CT9)
+         | (SD10 & ~CT10)
+         | (~SD10 & CT10)
+         | (SD11 & ~CT11)
+         | (~SD11 & CT11)
+         | (SD12 & ~CT12)
+         | (~SD12 & CT12)
+         | (SD13 & ~CT13)
+         | (~SD13 & CT13)
+         | (SD14 & ~CT14)
+         | (~SD14 & CT14)
+         | (SD15 & ~CT15)
+         | (~SD15 & CT15);
+  // EXTERNAL, bidirectional
+  assign SD0 = ((CNTOE)) ?
+         (CT0) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD1 = ((CNTOE)) ?
+         (CT1) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD2 = ((CNTOE)) ?
+         (CT2) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD3 = ((CNTOE)) ?
+         (CT3) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD4 = ((CNTOE)) ?
+         (CT4) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD5 = ((CNTOE)) ?
+         (CT5) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD6 = ((CNTOE)) ?
+         (CT6) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD7 = ((CNTOE)) ?
+         (CT7) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD8 = ((CNTOE)) ?
+         (CT8) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD9 = ((CNTOE)) ?
+         (CT9) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD10 = ((CNTOE)) ?
+         (CT10) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD11 = ((CNTOE)) ?
+         (CT11) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD12 = ((CNTOE)) ?
+         (CT12) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD13 = ((CNTOE)) ?
+         (CT13) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD14 = ((CNTOE)) ?
+         (CT14) : 1'bz;
+  // EXTERNAL, bidirectional
+  assign SD15 = ((CNTOE)) ?
+         (CT15) : 1'bz;
   // buried - 9.4.5: every colour clock EXCEPT while a host read is in flight
   assign MERGE =
          (CCLK & ~SYNCR2 & ~SYNCR1);
@@ -256,44 +450,121 @@ module audio (
   // EXTERNAL - 9.1: $FF40-$FF4F out of the 128-byte geographic window - SEVEN bits
   assign SEL =
          (IOSEL & A6 & ~A5 & ~A4);
-  // buried - a host read this part answers: AINTREQ or ASTAT, inside E
+  // buried - a host read this part answers: AINTREQ, ASTAT or ADATA/SDATA, inside E
   assign HRD =
          (RINTREQ & E)
-         | (RASTAT & E);
+         | (RASTAT & E)
+         | (RPF & E);
+  // buried
+  assign RPF =
+         (SEL & RW & ~A3 & ~A2 & ~A1 & A0)
+         | (SEL & RW & A3 & ~A2 & ~A1 & A0);
   // EXTERNAL, bidirectional
   assign D0 = ((HRD)) ?
          (RINTREQ & REQ0)
-         | (RASTAT & DMAEN0) : 1'bz;
+         | (RASTAT & DMAEN0)
+         | (RPF & PF0) : 1'bz;
   // EXTERNAL, bidirectional
   assign D1 = ((HRD)) ?
          (RINTREQ & REQ1)
-         | (RASTAT & DMAEN1) : 1'bz;
+         | (RASTAT & DMAEN1)
+         | (RPF & PF1) : 1'bz;
   // EXTERNAL, bidirectional
   assign D2 = ((HRD)) ?
          (RINTREQ & REQ2)
-         | (RASTAT & DMAEN2) : 1'bz;
+         | (RASTAT & DMAEN2)
+         | (RPF & PF2) : 1'bz;
   // EXTERNAL, bidirectional
   assign D3 = ((HRD)) ?
          (RINTREQ & REQ3)
-         | (RASTAT & DMAEN3) : 1'bz;
+         | (RASTAT & DMAEN3)
+         | (RPF & PF3) : 1'bz;
   // EXTERNAL, bidirectional
   assign D4 = ((HRD)) ?
          (RINTREQ & REQ4)
-         | (RASTAT & CTRL6) : 1'bz;
+         | (RASTAT & CTRL6)
+         | (RPF & PF4) : 1'bz;
   // EXTERNAL, bidirectional
   assign D5 = ((HRD)) ?
-         (RINTREQ & REQ5) : 1'bz;
+         (RINTREQ & REQ5)
+         | (RPF & PF5) : 1'bz;
   // EXTERNAL, bidirectional
   assign D6 = ((HRD)) ?
-         (RASTAT & PWBUSY) : 1'bz;
+         (RASTAT & PWBUSY)
+         | (RPF & PF6) : 1'bz;
   // EXTERNAL, bidirectional
   assign D7 = ((HRD)) ?
-         (RASTAT & PFVALID) : 1'bz;
+         (RASTAT & PFVALID)
+         | (RPF & PF7) : 1'bz;
 
   // FIRQ is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FIRQ_OE =
          (FIRQANY);
+  // SD0 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD0_OE =
+         (CNTOE);
+  // SD1 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD1_OE =
+         (CNTOE);
+  // SD2 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD2_OE =
+         (CNTOE);
+  // SD3 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD3_OE =
+         (CNTOE);
+  // SD4 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD4_OE =
+         (CNTOE);
+  // SD5 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD5_OE =
+         (CNTOE);
+  // SD6 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD6_OE =
+         (CNTOE);
+  // SD7 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD7_OE =
+         (CNTOE);
+  // SD8 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD8_OE =
+         (CNTOE);
+  // SD9 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD9_OE =
+         (CNTOE);
+  // SD10 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD10_OE =
+         (CNTOE);
+  // SD11 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD11_OE =
+         (CNTOE);
+  // SD12 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD12_OE =
+         (CNTOE);
+  // SD13 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD13_OE =
+         (CNTOE);
+  // SD14 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD14_OE =
+         (CNTOE);
+  // SD15 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SD15_OE =
+         (CNTOE);
   // D0 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign D0_OE =
@@ -366,6 +637,30 @@ module audio (
       r_CTRL5 <= 1'b0;
       r_CTRL6 <= 1'b0;
       r_CTRL7 <= 1'b0;
+      r_CT0 <= 1'b0;
+      r_CT1 <= 1'b0;
+      r_CT2 <= 1'b0;
+      r_CT3 <= 1'b0;
+      r_CT4 <= 1'b0;
+      r_CT5 <= 1'b0;
+      r_CT6 <= 1'b0;
+      r_CT7 <= 1'b0;
+      r_CT8 <= 1'b0;
+      r_CT9 <= 1'b0;
+      r_CT10 <= 1'b0;
+      r_CT11 <= 1'b0;
+      r_CT12 <= 1'b0;
+      r_CT13 <= 1'b0;
+      r_CT14 <= 1'b0;
+      r_CT15 <= 1'b0;
+      r_PF0 <= 1'b0;
+      r_PF1 <= 1'b0;
+      r_PF2 <= 1'b0;
+      r_PF3 <= 1'b0;
+      r_PF4 <= 1'b0;
+      r_PF5 <= 1'b0;
+      r_PF6 <= 1'b0;
+      r_PF7 <= 1'b0;
       r_SYNCR1 <= 1'b0;
       r_SYNCR2 <= 1'b0;
     end else begin
@@ -516,6 +811,206 @@ module audio (
       r_CTRL7 <=
          (WCTRL & D7)
          | (CTRL7 & ~WCTRL);
+      r_CT0 <=
+         (CCLK & ~CT0)
+         | (~CCLK & CT0);
+      r_CT1 <=
+         (CCLK & CT1 & ~CT0)
+         | (CCLK & ~CT1 & CT0)
+         | (~CCLK & CT1);
+      r_CT2 <=
+         (CCLK & CT2 & ~CT0)
+         | (CCLK & CT2 & ~CT1)
+         | (CCLK & ~CT2 & CT0 & CT1)
+         | (~CCLK & CT2);
+      r_CT3 <=
+         (CCLK & CT3 & ~CT0)
+         | (CCLK & CT3 & ~CT1)
+         | (CCLK & CT3 & ~CT2)
+         | (CCLK & ~CT3 & CT0 & CT1 & CT2)
+         | (~CCLK & CT3);
+      r_CT4 <=
+         (CCLK & CT4 & ~CT0)
+         | (CCLK & CT4 & ~CT1)
+         | (CCLK & CT4 & ~CT2)
+         | (CCLK & CT4 & ~CT3)
+         | (CCLK & ~CT4 & CT0 & CT1 & CT2 & CT3)
+         | (~CCLK & CT4);
+      r_CT5 <=
+         (CCLK & CT5 & ~CT0)
+         | (CCLK & CT5 & ~CT1)
+         | (CCLK & CT5 & ~CT2)
+         | (CCLK & CT5 & ~CT3)
+         | (CCLK & CT5 & ~CT4)
+         | (CCLK & ~CT5 & CT0 & CT1 & CT2 & CT3 & CT4)
+         | (~CCLK & CT5);
+      r_CT6 <=
+         (CCLK & CT6 & ~CT0)
+         | (CCLK & CT6 & ~CT1)
+         | (CCLK & CT6 & ~CT2)
+         | (CCLK & CT6 & ~CT3)
+         | (CCLK & CT6 & ~CT4)
+         | (CCLK & CT6 & ~CT5)
+         | (CCLK & ~CT6 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5)
+         | (~CCLK & CT6);
+      r_CT7 <=
+         (CCLK & CT7 & ~CT0)
+         | (CCLK & CT7 & ~CT1)
+         | (CCLK & CT7 & ~CT2)
+         | (CCLK & CT7 & ~CT3)
+         | (CCLK & CT7 & ~CT4)
+         | (CCLK & CT7 & ~CT5)
+         | (CCLK & CT7 & ~CT6)
+         | (CCLK & ~CT7 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6)
+         | (~CCLK & CT7);
+      r_CT8 <=
+         (CCLK & CT8 & ~CT0)
+         | (CCLK & CT8 & ~CT1)
+         | (CCLK & CT8 & ~CT2)
+         | (CCLK & CT8 & ~CT3)
+         | (CCLK & CT8 & ~CT4)
+         | (CCLK & CT8 & ~CT5)
+         | (CCLK & CT8 & ~CT6)
+         | (CCLK & CT8 & ~CT7)
+         | (CCLK & ~CT8 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7)
+         | (~CCLK & CT8);
+      r_CT9 <=
+         (CCLK & CT9 & ~CT0)
+         | (CCLK & CT9 & ~CT1)
+         | (CCLK & CT9 & ~CT2)
+         | (CCLK & CT9 & ~CT3)
+         | (CCLK & CT9 & ~CT4)
+         | (CCLK & CT9 & ~CT5)
+         | (CCLK & CT9 & ~CT6)
+         | (CCLK & CT9 & ~CT7)
+         | (CCLK & CT9 & ~CT8)
+         | (CCLK & ~CT9 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8)
+         | (~CCLK & CT9);
+      r_CT10 <=
+         (CCLK & CT10 & ~CT0)
+         | (CCLK & CT10 & ~CT1)
+         | (CCLK & CT10 & ~CT2)
+         | (CCLK & CT10 & ~CT3)
+         | (CCLK & CT10 & ~CT4)
+         | (CCLK & CT10 & ~CT5)
+         | (CCLK & CT10 & ~CT6)
+         | (CCLK & CT10 & ~CT7)
+         | (CCLK & CT10 & ~CT8)
+         | (CCLK & CT10 & ~CT9)
+         | (CCLK & ~CT10 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9)
+         | (~CCLK & CT10);
+      r_CT11 <=
+         (CCLK & CT11 & ~CT0)
+         | (CCLK & CT11 & ~CT1)
+         | (CCLK & CT11 & ~CT2)
+         | (CCLK & CT11 & ~CT3)
+         | (CCLK & CT11 & ~CT4)
+         | (CCLK & CT11 & ~CT5)
+         | (CCLK & CT11 & ~CT6)
+         | (CCLK & CT11 & ~CT7)
+         | (CCLK & CT11 & ~CT8)
+         | (CCLK & CT11 & ~CT9)
+         | (CCLK & CT11 & ~CT10)
+         | (CCLK & ~CT11 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10)
+         | (~CCLK & CT11);
+      r_CT12 <=
+         (CCLK & CT12 & ~CT0)
+         | (CCLK & CT12 & ~CT1)
+         | (CCLK & CT12 & ~CT2)
+         | (CCLK & CT12 & ~CT3)
+         | (CCLK & CT12 & ~CT4)
+         | (CCLK & CT12 & ~CT5)
+         | (CCLK & CT12 & ~CT6)
+         | (CCLK & CT12 & ~CT7)
+         | (CCLK & CT12 & ~CT8)
+         | (CCLK & CT12 & ~CT9)
+         | (CCLK & CT12 & ~CT10)
+         | (CCLK & CT12 & ~CT11)
+         | (CCLK & ~CT12 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10 & CT11)
+         | (~CCLK & CT12);
+      r_CT13 <=
+         (CCLK & CT13 & ~CT0)
+         | (CCLK & CT13 & ~CT1)
+         | (CCLK & CT13 & ~CT2)
+         | (CCLK & CT13 & ~CT3)
+         | (CCLK & CT13 & ~CT4)
+         | (CCLK & CT13 & ~CT5)
+         | (CCLK & CT13 & ~CT6)
+         | (CCLK & CT13 & ~CT7)
+         | (CCLK & CT13 & ~CT8)
+         | (CCLK & CT13 & ~CT9)
+         | (CCLK & CT13 & ~CT10)
+         | (CCLK & CT13 & ~CT11)
+         | (CCLK & CT13 & ~CT12)
+         | (CCLK & ~CT13 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10 & CT11 & CT12)
+         | (~CCLK & CT13);
+      r_CT14 <=
+         (CCLK & CT14 & ~CT0)
+         | (CCLK & CT14 & ~CT1)
+         | (CCLK & CT14 & ~CT2)
+         | (CCLK & CT14 & ~CT3)
+         | (CCLK & CT14 & ~CT4)
+         | (CCLK & CT14 & ~CT5)
+         | (CCLK & CT14 & ~CT6)
+         | (CCLK & CT14 & ~CT7)
+         | (CCLK & CT14 & ~CT8)
+         | (CCLK & CT14 & ~CT9)
+         | (CCLK & CT14 & ~CT10)
+         | (CCLK & CT14 & ~CT11)
+         | (CCLK & CT14 & ~CT12)
+         | (CCLK & CT14 & ~CT13)
+         | (CCLK & ~CT14 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10 & CT11 & CT12 & CT13)
+         | (~CCLK & CT14);
+      r_CT15 <=
+         (CCLK & CT15 & ~CT0)
+         | (CCLK & CT15 & ~CT1)
+         | (CCLK & CT15 & ~CT2)
+         | (CCLK & CT15 & ~CT3)
+         | (CCLK & CT15 & ~CT4)
+         | (CCLK & CT15 & ~CT5)
+         | (CCLK & CT15 & ~CT6)
+         | (CCLK & CT15 & ~CT7)
+         | (CCLK & CT15 & ~CT8)
+         | (CCLK & CT15 & ~CT9)
+         | (CCLK & CT15 & ~CT10)
+         | (CCLK & CT15 & ~CT11)
+         | (CCLK & CT15 & ~CT12)
+         | (CCLK & CT15 & ~CT13)
+         | (CCLK & CT15 & ~CT14)
+         | (CCLK & ~CT15 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10 & CT11 & CT12 & CT13 & CT14)
+         | (~CCLK & CT15);
+      r_PF0 <=
+         (PFCK & ~PFLANE & SD0)
+         | (PFCK & PFLANE & SD8)
+         | (PF0 & ~PFCK);
+      r_PF1 <=
+         (PFCK & ~PFLANE & SD1)
+         | (PFCK & PFLANE & SD9)
+         | (PF1 & ~PFCK);
+      r_PF2 <=
+         (PFCK & ~PFLANE & SD2)
+         | (PFCK & PFLANE & SD10)
+         | (PF2 & ~PFCK);
+      r_PF3 <=
+         (PFCK & ~PFLANE & SD3)
+         | (PFCK & PFLANE & SD11)
+         | (PF3 & ~PFCK);
+      r_PF4 <=
+         (PFCK & ~PFLANE & SD4)
+         | (PFCK & PFLANE & SD12)
+         | (PF4 & ~PFCK);
+      r_PF5 <=
+         (PFCK & ~PFLANE & SD5)
+         | (PFCK & PFLANE & SD13)
+         | (PF5 & ~PFCK);
+      r_PF6 <=
+         (PFCK & ~PFLANE & SD6)
+         | (PFCK & PFLANE & SD14)
+         | (PF6 & ~PFCK);
+      r_PF7 <=
+         (PFCK & ~PFLANE & SD7)
+         | (PFCK & PFLANE & SD15)
+         | (PF7 & ~PFCK);
       r_SYNCR1 <=
          (RINTREQ);
       r_SYNCR2 <=

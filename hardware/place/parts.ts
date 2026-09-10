@@ -112,7 +112,7 @@ export const CARDS: Record<string, CardSpec> = {
     ],
   },
   audio: {
-    title: "Audio", length: 240, ics: 45, source: "audio/docs/audio.md 10",
+    title: "Audio", length: 180, ics: 35, source: "audio/docs/audio.md 10",
     note: "4-channel 8-bit PCM, Paula-exact, panned",
     /* audio.md 7.1: the output is line level on a 3.5 mm stereo jack at the
      * rear edge, in parallel with the backplane's AUDIO_L/R pair. Nothing
@@ -134,8 +134,6 @@ export const CARDS: Record<string, CardSpec> = {
        * framebuffer takes, and 32 bits wide where word 0 needs 24. */
       dip(32, 0.6, "AS6C4008 sample RAM", "mem"),
       pkg(18.4, 11.8, "IS61C6416 state file", "mem", 2, "6416"),
-      dip(16, 0.3, "74HC590 counter", "bus", 2),
-      dip(20, 0.3, "74HC688 compare", "bus", 2),
       dip(16, 0.3, "74HC283 adder", "bus", 4),
       /* 10.2.2: the datapath, enumerated on 2026-09-09. The three "pipeline
        * latches" this list carried were never the adder's operand registers,
@@ -160,10 +158,12 @@ export const CARDS: Record<string, CardSpec> = {
       /* The state file's byte-lane write enables, gated with the slot clock's
        * second half - an inverter and three gates, exactly. */
       dip(14, 0.3, "74HC00 /WE gate", "bus", 1),
-      /* 11.1: twelve halves - one sample and TWO volume converters per
-       * channel - and the fourth TL07x that a per-die I/V needs. */
-      dip(20, 0.3, "AD7528 dual MDAC", "analog", 6),
-      dip(14, 0.3, "TL074", "analog", 3),
+      /* 6.3: eight halves - one sample and one volume converter per channel.
+       * Programmable panning was given up on 2026-09-09; classic MOD's fixed
+       * LRRL is which summing node an output is wired to, and the second
+       * volume half per channel went with it, and a TL074 with that. */
+      dip(20, 0.3, "AD7528 dual MDAC", "analog", 4),
+      dip(14, 0.3, "TL074", "analog", 2),
       dip(8, 0.3, "TL072", "analog"),
       dip(14, 0.3, "74HC4066", "analog"),
       /* 7.1: the jack is a headphone output and the backplane pair is a line
@@ -172,10 +172,6 @@ export const CARDS: Record<string, CardSpec> = {
        * not beside the CPLD. */
       dip(8, 0.3, "NJM4556A hp drv", "analog"),
       dip(20, 0.3, "74HC574 pw", "bus"),
-      /* 9.3's read-back path is one '574 per state-file byte lane, and which
-       * lane a host byte lives on is a function of AIDX. Three lanes, three
-       * latches; lane 3 is unpopulated, which is what stops it being four. */
-      dip(20, 0.3, "74HC574 prefetch", "bus", 3),
     ],
   },
   net: {

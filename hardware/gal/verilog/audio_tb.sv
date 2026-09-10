@@ -24,7 +24,6 @@ module audio_tb;
   wire [15:0] COUNT;
   wire [7:0] DACSAMP0,DACSAMP1,DACSAMP2,DACSAMP3;
   wire [7:0] DACVOL0,DACVOL1,DACVOL2,DACVOL3;
-  wire [7:0] DACPAN0,DACPAN1,DACPAN2,DACPAN3;
 
   audio_card card (.*);
 
@@ -97,6 +96,11 @@ module audio_tb;
     if (w > pw_wait_max) pw_wait_max = w;
     wr('h1, v);
   endtask
+  // ⚠ TWICE, and the second time is not belt-and-braces. 9.3 says writing
+  // AIDX prefetches that entry and NOTHING DOES: the prefetch runs at the end
+  // of an ADATA access, so the first read after an index write returns the
+  // byte the PREVIOUS index named. The first pair here is what arms the latch;
+  // the second is the read whose value means anything. audio.md 16 item 33.
   task automatic aread(input int idx); aidx(idx); rd('h1); endtask
 
   // The state file, read the way the design does. Used only to CHECK.
@@ -232,7 +236,13 @@ module audio_tb;
     next0 = sfl(0);
     // Wait for the compare to come round: NEXT was set to count + PER.
     n = 0;
-    while (sfl(0) == next0 && n < 4000) begin @(posedge SLOTCLK); n++; end
+    while (sfl(0) == next0 && n < 4000) begin
+      @(posedge SLOTCLK); n++;
+      if (n % 800 == 0)
+        $display("      probe n=%0d NEXT=%0d COUNT=%0d HIT=%b DUE0=%b DMAEN0=%b CTRL7=%b SFOE=%b CNTOE=%b",
+                 n, sfl(0), COUNT, (~card.NEQL & ~card.NEQH), card.u2.DUE0, card.DMAEN0, card.CTRL7,
+                 card.SFOE, card.CNTOE);
+    end
     ok(sfl(0) == next0 + 16'd100,
        $sformatf("NEXT advances by PER on the hit, not by anything else (%0d -> %0d)",
                  next0, sfl(0)));

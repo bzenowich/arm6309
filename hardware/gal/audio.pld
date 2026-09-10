@@ -32,6 +32,9 @@ PIN = E ;
 PIN = SETC ;
 PIN = SETB ;
 PIN = SETA ;
+PIN = PFCK ;
+PIN = PFLANE ;
+PIN = CNTOE ;
 PIN = IOSEL ;
 PIN = A6 ;
 PIN = A5 ;
@@ -58,6 +61,24 @@ PIN = CTRL4 ;
 PIN = CTRL5 ;
 PIN = CTRL6 ;
 PIN = CTRL7 ;
+PIN = NEQL ;
+PIN = NEQH ;
+PIN = SD0 ;
+PIN = SD1 ;
+PIN = SD2 ;
+PIN = SD3 ;
+PIN = SD4 ;
+PIN = SD5 ;
+PIN = SD6 ;
+PIN = SD7 ;
+PIN = SD8 ;
+PIN = SD9 ;
+PIN = SD10 ;
+PIN = SD11 ;
+PIN = SD12 ;
+PIN = SD13 ;
+PIN = SD14 ;
+PIN = SD15 ;
 PIN = SEL ;
 PIN = D0 ;
 PIN = D1 ;
@@ -90,13 +111,37 @@ PINNODE = REQ2 ;
 PINNODE = REQ3 ;
 PINNODE = REQ4 ;
 PINNODE = REQ5 ;
+PINNODE = CT0 ;
+PINNODE = CT1 ;
+PINNODE = CT2 ;
+PINNODE = CT3 ;
+PINNODE = CT4 ;
+PINNODE = CT5 ;
+PINNODE = CT6 ;
+PINNODE = CT7 ;
+PINNODE = CT8 ;
+PINNODE = CT9 ;
+PINNODE = CT10 ;
+PINNODE = CT11 ;
+PINNODE = CT12 ;
+PINNODE = CT13 ;
+PINNODE = CT14 ;
+PINNODE = CT15 ;
+PINNODE = PF0 ;
+PINNODE = PF1 ;
+PINNODE = PF2 ;
+PINNODE = PF3 ;
+PINNODE = PF4 ;
+PINNODE = PF5 ;
+PINNODE = PF6 ;
+PINNODE = PF7 ;
 PINNODE = SYNCR1 ;
 PINNODE = SYNCR2 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * CHANSLOT, TMRSLOT, HOSTSLOT, DEFSLOT, WAIDX, WDMACON, WINTENA
  * WINTREQ, WCTRL, RINTREQ, RASTAT, SET0, SET1, SET2, SET3, SET4, SET5
- * MERGE, FIRQANY, HRD
+ * MERGE, FIRQANY, HRD, RPF
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -232,6 +277,246 @@ SET2 = !SETC & SETB & !SETA ;
 SET3 = !SETC & SETB & SETA ;
 SET4 = SETC & !SETB & !SETA ;
 SET5 = SETC & !SETB & SETA ;
+CT0.d = CCLK & !CT0
+        # !CCLK & CT0 ;
+CT1.d = CCLK & CT1 & !CT0
+        # CCLK & !CT1 & CT0
+        # !CCLK & CT1 ;
+CT2.d = CCLK & CT2 & !CT0
+        # CCLK & CT2 & !CT1
+        # CCLK & !CT2 & CT0 & CT1
+        # !CCLK & CT2 ;
+CT3.d = CCLK & CT3 & !CT0
+        # CCLK & CT3 & !CT1
+        # CCLK & CT3 & !CT2
+        # CCLK & !CT3 & CT0 & CT1 & CT2
+        # !CCLK & CT3 ;
+CT4.d = CCLK & CT4 & !CT0
+        # CCLK & CT4 & !CT1
+        # CCLK & CT4 & !CT2
+        # CCLK & CT4 & !CT3
+        # CCLK & !CT4 & CT0 & CT1 & CT2 & CT3
+        # !CCLK & CT4 ;
+CT5.d = CCLK & CT5 & !CT0
+        # CCLK & CT5 & !CT1
+        # CCLK & CT5 & !CT2
+        # CCLK & CT5 & !CT3
+        # CCLK & CT5 & !CT4
+        # CCLK & !CT5 & CT0 & CT1 & CT2 & CT3 & CT4
+        # !CCLK & CT5 ;
+CT6.d = CCLK & CT6 & !CT0
+        # CCLK & CT6 & !CT1
+        # CCLK & CT6 & !CT2
+        # CCLK & CT6 & !CT3
+        # CCLK & CT6 & !CT4
+        # CCLK & CT6 & !CT5
+        # CCLK & !CT6 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5
+        # !CCLK & CT6 ;
+CT7.d = CCLK & CT7 & !CT0
+        # CCLK & CT7 & !CT1
+        # CCLK & CT7 & !CT2
+        # CCLK & CT7 & !CT3
+        # CCLK & CT7 & !CT4
+        # CCLK & CT7 & !CT5
+        # CCLK & CT7 & !CT6
+        # CCLK & !CT7 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6
+        # !CCLK & CT7 ;
+CT8.d = CCLK & CT8 & !CT0
+        # CCLK & CT8 & !CT1
+        # CCLK & CT8 & !CT2
+        # CCLK & CT8 & !CT3
+        # CCLK & CT8 & !CT4
+        # CCLK & CT8 & !CT5
+        # CCLK & CT8 & !CT6
+        # CCLK & CT8 & !CT7
+        # CCLK & !CT8 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7
+        # !CCLK & CT8 ;
+CT9.d = CCLK & CT9 & !CT0
+        # CCLK & CT9 & !CT1
+        # CCLK & CT9 & !CT2
+        # CCLK & CT9 & !CT3
+        # CCLK & CT9 & !CT4
+        # CCLK & CT9 & !CT5
+        # CCLK & CT9 & !CT6
+        # CCLK & CT9 & !CT7
+        # CCLK & CT9 & !CT8
+        # CCLK & !CT9 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8
+        # !CCLK & CT9 ;
+CT10.d = CCLK & CT10 & !CT0
+         # CCLK & CT10 & !CT1
+         # CCLK & CT10 & !CT2
+         # CCLK & CT10 & !CT3
+         # CCLK & CT10 & !CT4
+         # CCLK & CT10 & !CT5
+         # CCLK & CT10 & !CT6
+         # CCLK & CT10 & !CT7
+         # CCLK & CT10 & !CT8
+         # CCLK & CT10 & !CT9
+         # CCLK & !CT10 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9
+         # !CCLK & CT10 ;
+CT11.d = CCLK & CT11 & !CT0
+         # CCLK & CT11 & !CT1
+         # CCLK & CT11 & !CT2
+         # CCLK & CT11 & !CT3
+         # CCLK & CT11 & !CT4
+         # CCLK & CT11 & !CT5
+         # CCLK & CT11 & !CT6
+         # CCLK & CT11 & !CT7
+         # CCLK & CT11 & !CT8
+         # CCLK & CT11 & !CT9
+         # CCLK & CT11 & !CT10
+         # CCLK & !CT11 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10
+         # !CCLK & CT11 ;
+CT12.d = CCLK & CT12 & !CT0
+         # CCLK & CT12 & !CT1
+         # CCLK & CT12 & !CT2
+         # CCLK & CT12 & !CT3
+         # CCLK & CT12 & !CT4
+         # CCLK & CT12 & !CT5
+         # CCLK & CT12 & !CT6
+         # CCLK & CT12 & !CT7
+         # CCLK & CT12 & !CT8
+         # CCLK & CT12 & !CT9
+         # CCLK & CT12 & !CT10
+         # CCLK & CT12 & !CT11
+         # CCLK & !CT12 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10 & CT11
+         # !CCLK & CT12 ;
+CT13.d = CCLK & CT13 & !CT0
+         # CCLK & CT13 & !CT1
+         # CCLK & CT13 & !CT2
+         # CCLK & CT13 & !CT3
+         # CCLK & CT13 & !CT4
+         # CCLK & CT13 & !CT5
+         # CCLK & CT13 & !CT6
+         # CCLK & CT13 & !CT7
+         # CCLK & CT13 & !CT8
+         # CCLK & CT13 & !CT9
+         # CCLK & CT13 & !CT10
+         # CCLK & CT13 & !CT11
+         # CCLK & CT13 & !CT12
+         # CCLK & !CT13 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10 & CT11 & CT12
+         # !CCLK & CT13 ;
+CT14.d = CCLK & CT14 & !CT0
+         # CCLK & CT14 & !CT1
+         # CCLK & CT14 & !CT2
+         # CCLK & CT14 & !CT3
+         # CCLK & CT14 & !CT4
+         # CCLK & CT14 & !CT5
+         # CCLK & CT14 & !CT6
+         # CCLK & CT14 & !CT7
+         # CCLK & CT14 & !CT8
+         # CCLK & CT14 & !CT9
+         # CCLK & CT14 & !CT10
+         # CCLK & CT14 & !CT11
+         # CCLK & CT14 & !CT12
+         # CCLK & CT14 & !CT13
+         # CCLK & !CT14 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10 & CT11 & CT12 & CT13
+         # !CCLK & CT14 ;
+CT15.d = CCLK & CT15 & !CT0
+         # CCLK & CT15 & !CT1
+         # CCLK & CT15 & !CT2
+         # CCLK & CT15 & !CT3
+         # CCLK & CT15 & !CT4
+         # CCLK & CT15 & !CT5
+         # CCLK & CT15 & !CT6
+         # CCLK & CT15 & !CT7
+         # CCLK & CT15 & !CT8
+         # CCLK & CT15 & !CT9
+         # CCLK & CT15 & !CT10
+         # CCLK & CT15 & !CT11
+         # CCLK & CT15 & !CT12
+         # CCLK & CT15 & !CT13
+         # CCLK & CT15 & !CT14
+         # CCLK & !CT15 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10 & CT11 & CT12 & CT13 & CT14
+         # !CCLK & CT15 ;
+NEQL = SD0 & !CT0
+       # !SD0 & CT0
+       # SD1 & !CT1
+       # !SD1 & CT1
+       # SD2 & !CT2
+       # !SD2 & CT2
+       # SD3 & !CT3
+       # !SD3 & CT3
+       # SD4 & !CT4
+       # !SD4 & CT4
+       # SD5 & !CT5
+       # !SD5 & CT5
+       # SD6 & !CT6
+       # !SD6 & CT6
+       # SD7 & !CT7
+       # !SD7 & CT7 ;
+NEQH = SD8 & !CT8
+       # !SD8 & CT8
+       # SD9 & !CT9
+       # !SD9 & CT9
+       # SD10 & !CT10
+       # !SD10 & CT10
+       # SD11 & !CT11
+       # !SD11 & CT11
+       # SD12 & !CT12
+       # !SD12 & CT12
+       # SD13 & !CT13
+       # !SD13 & CT13
+       # SD14 & !CT14
+       # !SD14 & CT14
+       # SD15 & !CT15
+       # !SD15 & CT15 ;
+PF0.d = PFCK & !PFLANE & SD0
+        # PFCK & PFLANE & SD8
+        # PF0 & !PFCK ;
+PF1.d = PFCK & !PFLANE & SD1
+        # PFCK & PFLANE & SD9
+        # PF1 & !PFCK ;
+PF2.d = PFCK & !PFLANE & SD2
+        # PFCK & PFLANE & SD10
+        # PF2 & !PFCK ;
+PF3.d = PFCK & !PFLANE & SD3
+        # PFCK & PFLANE & SD11
+        # PF3 & !PFCK ;
+PF4.d = PFCK & !PFLANE & SD4
+        # PFCK & PFLANE & SD12
+        # PF4 & !PFCK ;
+PF5.d = PFCK & !PFLANE & SD5
+        # PFCK & PFLANE & SD13
+        # PF5 & !PFCK ;
+PF6.d = PFCK & !PFLANE & SD6
+        # PFCK & PFLANE & SD14
+        # PF6 & !PFCK ;
+PF7.d = PFCK & !PFLANE & SD7
+        # PFCK & PFLANE & SD15
+        # PF7 & !PFCK ;
+SD0 = CT0 ;
+SD0.oe = CNTOE ;
+SD1 = CT1 ;
+SD1.oe = CNTOE ;
+SD2 = CT2 ;
+SD2.oe = CNTOE ;
+SD3 = CT3 ;
+SD3.oe = CNTOE ;
+SD4 = CT4 ;
+SD4.oe = CNTOE ;
+SD5 = CT5 ;
+SD5.oe = CNTOE ;
+SD6 = CT6 ;
+SD6.oe = CNTOE ;
+SD7 = CT7 ;
+SD7.oe = CNTOE ;
+SD8 = CT8 ;
+SD8.oe = CNTOE ;
+SD9 = CT9 ;
+SD9.oe = CNTOE ;
+SD10 = CT10 ;
+SD10.oe = CNTOE ;
+SD11 = CT11 ;
+SD11.oe = CNTOE ;
+SD12 = CT12 ;
+SD12.oe = CNTOE ;
+SD13 = CT13 ;
+SD13.oe = CNTOE ;
+SD14 = CT14 ;
+SD14.oe = CNTOE ;
+SD15 = CT15 ;
+SD15.oe = CNTOE ;
 SYNCR1.d = RINTREQ ;
 SYNCR2.d = SYNCR1 ;
 MERGE = CCLK & !SYNCR2 & !SYNCR1 ;
@@ -243,27 +528,38 @@ FIRQANY = REQ0 & ENA0
           # REQ5 & ENA5 ;
 SEL = IOSEL & A6 & !A5 & !A4 ;
 HRD = RINTREQ & E
-      # RASTAT & E ;
+      # RASTAT & E
+      # RPF & E ;
+RPF = SEL & RW & !A3 & !A2 & !A1 & A0
+      # SEL & RW & A3 & !A2 & !A1 & A0 ;
 D0 = RINTREQ & REQ0
-     # RASTAT & DMAEN0 ;
+     # RASTAT & DMAEN0
+     # RPF & PF0 ;
 D0.oe = HRD ;
 D1 = RINTREQ & REQ1
-     # RASTAT & DMAEN1 ;
+     # RASTAT & DMAEN1
+     # RPF & PF1 ;
 D1.oe = HRD ;
 D2 = RINTREQ & REQ2
-     # RASTAT & DMAEN2 ;
+     # RASTAT & DMAEN2
+     # RPF & PF2 ;
 D2.oe = HRD ;
 D3 = RINTREQ & REQ3
-     # RASTAT & DMAEN3 ;
+     # RASTAT & DMAEN3
+     # RPF & PF3 ;
 D3.oe = HRD ;
 D4 = RINTREQ & REQ4
-     # RASTAT & CTRL6 ;
+     # RASTAT & CTRL6
+     # RPF & PF4 ;
 D4.oe = HRD ;
-D5 = RINTREQ & REQ5 ;
+D5 = RINTREQ & REQ5
+     # RPF & PF5 ;
 D5.oe = HRD ;
-D6 = RASTAT & PWBUSY ;
+D6 = RASTAT & PWBUSY
+     # RPF & PF6 ;
 D6.oe = HRD ;
-D7 = RASTAT & PFVALID ;
+D7 = RASTAT & PFVALID
+     # RPF & PF7 ;
 D7.oe = HRD ;
 
 /* One clock for every register: the card is one slot-walked datapath
@@ -271,10 +567,14 @@ D7.oe = HRD ;
 [S0,S1,S2,DMAEN0,DMAEN1,DMAEN2,DMAEN3,P0,P1,P2,ENA0,ENA1].ck = SLOTCLK ;
 [ENA2,ENA3,ENA4,ENA5,PEND0,PEND1,PEND2,PEND3,PEND4,PEND5].ck = SLOTCLK ;
 [REQ0,REQ1,REQ2,REQ3,REQ4,REQ5,CTRL0,CTRL1,CTRL2,CTRL3,CTRL4].ck = SLOTCLK ;
-[CTRL5,CTRL6,CTRL7,SYNCR1,SYNCR2].ck = SLOTCLK ;
+[CTRL5,CTRL6,CTRL7,CT0,CT1,CT2,CT3,CT4,CT5,CT6,CT7,CT8,CT9].ck = SLOTCLK ;
+[CT10,CT11,CT12,CT13,CT14,CT15,PF0,PF1,PF2,PF3,PF4,PF5,PF6].ck = SLOTCLK ;
+[PF7,SYNCR1,SYNCR2].ck = SLOTCLK ;
 
 /* One asynchronous reset for every register, as on the GALs. */
 [S0,S1,S2,DMAEN0,DMAEN1,DMAEN2,DMAEN3,P0,P1,P2,ENA0,ENA1].ar = RESET ;
 [ENA2,ENA3,ENA4,ENA5,PEND0,PEND1,PEND2,PEND3,PEND4,PEND5].ar = RESET ;
 [REQ0,REQ1,REQ2,REQ3,REQ4,REQ5,CTRL0,CTRL1,CTRL2,CTRL3,CTRL4].ar = RESET ;
-[CTRL5,CTRL6,CTRL7,SYNCR1,SYNCR2].ar = RESET ;
+[CTRL5,CTRL6,CTRL7,CT0,CT1,CT2,CT3,CT4,CT5,CT6,CT7,CT8,CT9].ar = RESET ;
+[CT10,CT11,CT12,CT13,CT14,CT15,PF0,PF1,PF2,PF3,PF4,PF5,PF6].ar = RESET ;
+[PF7,SYNCR1,SYNCR2].ar = RESET ;

@@ -26,7 +26,7 @@ import { PROGRAM, HOSTMAP, COMMIT, STAGED, W1, W2, W3, W4, W5, W6, type Step } f
  * and it appears in most of the equations below. */
 export const WTC: Record<number, number> = { [W1]: 0, [W2]: 1, [W6]: 2, [W4]: 3, [W3]: 4, [W5]: 5 }
 const LEN: Record<number, number> = {
-  [W1]: 7, [W2]: 4, [W6]: 8, [W4]: 10, [W3]: 6, [W5]: 12,
+  [W1]: 7, [W2]: 4, [W6]: 9, [W4]: 10, [W3]: 6, [W5]: 6,
 }
 
 const bits = (name: string, v: number, n: number) =>
@@ -105,7 +105,7 @@ const engine: Cell[] = [
   { pin: 0, name: "START", assertedLow: false, s0: 1, registered: false,
     terms: ["WORKSLOT & !BUSY & RSTANY", "WORKSLOT & !BUSY & TDUE",
       "WORKSLOT & !BUSY & DUEANY", "WORKSLOT & !BUSY & HDUE",
-      "WORKSLOT & !BUSY & VDIRTY", "WORKSLOT & !BUSY & PDIRTY"] },
+      "WORKSLOT & !BUSY & VDIRTY"] },
 
   { pin: 0, name: "BUSY", assertedLow: false, s0: 1, registered: true,
     terms: ["START", "BUSY & !LAST", "ENDNOW"] },
@@ -158,7 +158,7 @@ const CHSEL = (n: number) => `QCHAN & ${n & 2 ? "" : "!"}S1 & ${n & 1 ? "" : "!"
 const sources: Cell[] = [
   ...[0, 1, 2, 3].map((n) => ({
     pin: 0, name: `DUE${n}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: [`${CHSEL(n)} & HIT & DMAEN${n} & CTRL7`, `DUE${n} & !CLR${n}`],
+    terms: [`${CHSEL(n)} & !NEQL & !NEQH & DMAEN${n} & CTRL7`, `DUE${n} & !CLR${n}`],
   })),
   ...[0, 1, 2, 3].map((n) => ({
     pin: 0, name: `CLR${n}`, assertedLow: false, s0: 1 as const, registered: false,
@@ -167,7 +167,7 @@ const sources: Cell[] = [
   /* The tempo timer's compare shares the comparator and lands in slot 4,
    * where the walk has $21 - CIANEXT - on the bus. 8.2. */
   { pin: 0, name: "TDUE", assertedLow: false, s0: 1, registered: true,
-    terms: ["QTMR & HIT & CTRL6", "TARM", "TDUE & !TACK"] },
+    terms: ["QTMR & !NEQL & !NEQH & CTRL6", "TARM", "TDUE & !TACK"] },
   { pin: 0, name: "TACK", assertedLow: false, s0: 1, registered: false,
     terms: ["START & !RSTANY & TDUE"] },
   /* Arming: CTRL6's 0-to-1 edge, so CIANEXT is set from the counter the first
@@ -211,14 +211,26 @@ const host: Cell[] = [
   })),
   { pin: 0, name: "HRW", assertedLow: false, s0: 1, registered: true,
     terms: ["HSTB & RW", "HRW & !HSTB"] },
+  /* ⭐ EVERY host access asks for a work item, index writes included - 9.3
+   * says writing AIDX prefetches that entry and until 2026-09-09 nothing did,
+   * so the first read after an index write returned the byte the PREVIOUS
+   * index named. PWBUSY keeps its own `!AIDXLD`: an index load is not a posted
+   * write and has nothing to retire. */
   { pin: 0, name: "HDUE", assertedLow: false, s0: 1, registered: true,
-    terms: ["HSTB & !AIDXLD", "HDUE & !HACK"] },
+    terms: ["HSTB", "HDUE & !HACK"] },
   { pin: 0, name: "HACK", assertedLow: false, s0: 1, registered: false,
     terms: ["START & !RSTANY & !TDUE & !DUEANY & HDUE"] },
 
   /* Which of 9.2's registers. */
   { pin: 0, name: "ISADATA", assertedLow: false, s0: 1, registered: false,
     terms: ["!HA3 & !HA2 & !HA1 & HA0"] },
+  /* ⛔ A WRITE TO AIDX MUST NOT BEHAVE LIKE A WRITE TO ADATA. It queues a work
+   * item now, so that 9.3's "writing it PREFETCHES that entry" is finally
+   * true - and by the time that item runs AIDX holds the NEW index, so W3
+   * step 0 left ungated would store the index value into the state file at the
+   * location the index names. Only the prefetch may run. */
+  { pin: 0, name: "ISAIDX", assertedLow: false, s0: 1, registered: false,
+    terms: ["!HA3 & !HA2 & !HA1 & !HA0"] },
   { pin: 0, name: "ISSDATA", assertedLow: false, s0: 1, registered: false,
     terms: ["HA3 & !HA2 & !HA1 & HA0"] },
   { pin: 0, name: "ISSPTR", assertedLow: false, s0: 1, registered: false,
@@ -342,11 +354,6 @@ const addr: Cell[] = [
       ...(((5 >> b) & 1) === 1 ? [w3(0, "HSTAGE"), w3(1)] : []),
       ...(((2 >> b) & 1) === 1 ? [w3(3), w3(4)] : []),
       w3(0, `!HSTAGE & HW${b}`), w3(5, `HW${b}`), w3(2, `CW${b}`),
-      /* 11.1: PAN is w7 and VOL is w6, and they differ in bit 0 alone, so
-       * ACTRL b5 is one literal on one address bit and not a multiplexer. */
-      ...(b === 0
-        ? onSteps(NOHOST((s) => s.panword === true)).map((t) => `${t} & CTRL5`)
-        : []),
     ],
   })),
 ]
@@ -366,7 +373,7 @@ const lanes: Cell[] = [0, 1, 2].map((l) => ({
     ...on((s) => s.wr?.includes(l)),
     /* W3 step 0: the host's byte, at the lane 9.3 puts it on - and never at a
      * read-only offset, which is what makes PTR and CNT read-only. */
-    w3(0, `!HRW & !HRO & !ISSDATA & ${bits("HL", l, 2).join(" & ")}`),
+    w3(0, `!HRW & !HRO & !ISAIDX & !ISSDATA & ${bits("HL", l, 2).join(" & ")}`),
     /* W3 step 2: 9.4.3's commit. Lane 2 only for LC, which is the 19-bit one. */
     ...(l < 2 ? [w3(2, "HCOMMIT & !HRW")] : [w3(2, "HCOMMIT & !HRW & CL2")]),
     /* W3 step 4: SPTR's post-increment. */
@@ -379,7 +386,7 @@ const alu: Cell[] = [
   { pin: 0, name: "ALATCK", assertedLow: false, s0: 1, registered: false,
     terms: gated([...on((s) => s.alat), w3(1, "HCOMMIT & !HRW"), w3(3, "ISSDATA")]) },
   { pin: 0, name: "BLATCK", assertedLow: false, s0: 1, registered: false,
-    terms: on((s) => s.blat) },
+    terms: gated(on((s) => s.blat)) },
   { pin: 0, name: "BLATOE", assertedLow: false, s0: 1, registered: false,
     terms: on((s) => s.b === "blat") },
   { pin: 0, name: "ONESOE", assertedLow: false, s0: 1, registered: false,
@@ -388,8 +395,12 @@ const alu: Cell[] = [
   /* The free-running counter drives the shared B bus during the walk, because
    * that is what the '688 compares NEXT against; the microprogram borrows it
    * once, for W6's NEXT = count + PER. */
+  /* ⚠ U1 hands the free-running count back on the state file's own bus, for
+   * W6's "NEXT is one period from now". The walk does not need it any more:
+   * 4.2's comparator moved into U1 WITH the counter on 2026-09-09, so nothing
+   * outside this card is comparing and the bus is free. */
   { pin: 0, name: "CNTOE", assertedLow: false, s0: 1, registered: false,
-    terms: gated(["QCHAN", "QTMR", ...on((s) => s.b === "count")]) },
+    terms: on((s) => s.count === true) },
   { pin: 0, name: "ACIN", assertedLow: false, s0: 1, registered: false,
     terms: [...on((s) => s.cin), w3(4, "ISSDATA")] },
   { pin: 0, name: "SUMOE", assertedLow: false, s0: 1, registered: false,
@@ -442,17 +453,25 @@ const port: Cell[] = [
     why: "the posted-write latch takes the host's byte on the synchronised edge",
     terms: gated(["HSTB & !RW"]) },
   { pin: 0, name: "PWOE", assertedLow: false, s0: 1, registered: false,
-    terms: [...on((s) => s.pw), w3(0, "!HRW & !ISSDATA"), w3(3, "ISSDATA & !HRW")] },
+    terms: [...on((s) => s.pw), w3(0, "!HRW & !ISAIDX & !ISSDATA"), w3(3, "ISSDATA & !HRW")] },
+  /* ⚠ NOT SLOT-GATED, and the reason is the whole of why gating exists. Every
+   * other latch clock here drives a '574 outside, which needs its rising edge
+   * in the middle of the slot - after the address has settled. This one drives
+   * a REGISTER INSIDE U1 (9.3's read-back moved there on 2026-09-09), and a
+   * register samples on the slot edge, by which time `!SLOTCLK` has gone: the
+   * gate that makes an external latch correct makes an internal one never
+   * capture at all. It read back zero for every byte on the card. */
   { pin: 0, name: "PFCK", assertedLow: false, s0: 1, registered: false,
-    terms: gated([w3(5), w3(3, "ISSDATA & HRW")]) },
-  /* Three prefetch latches, one per lane, three-stated onto the host bus.
-   * 9.3 deletes the '245 because a '574's outputs are three-state; what it did
-   * not say is how many, and the answer is one per lane the map uses. */
-  ...[0, 1, 2].map((l) => ({
-    pin: 0, name: `PFOE${l}`, assertedLow: false, s0: 1 as const, registered: false,
-    terms: [`SEL & RW & E & !A3 & !A2 & !A1 & A0 & ${bits("HL", l, 2).join(" & ")}`,
-      ...(l === 0 ? ["SEL & RW & E & A3 & !A2 & !A1 & A0"] : [])] },
-  )),
+    terms: [w3(5), w3(3, "ISSDATA & HRW")] },
+  /* ⭐ THE PREFETCH LATCHES WENT TO U1 on 2026-09-09, with the counter and the
+   * comparator - three '574s and their three output enables for two pins.
+   * What is left here is when to capture (PFCK) and which of the state file's
+   * two reachable lanes (PFLANE). U1 drives the host bus off the same
+   * bidirectional macrocells AINTREQ and ASTAT already use. */
+  { pin: 0, name: "PFLANE", assertedLow: false, s0: 1, registered: false,
+    why: "9.3: which byte lane the host's index names",
+    terms: ["HL0"] },
+  /* W6 reads the free-running count out of U1, a byte at a time. */
   /* 9.2's two status bits, which had no producer at all before U2. */
   /* ⛔ `!AIDXLD`, AND WITHOUT IT THE FIRST INDEX WRITE WEDGED THE CARD.
    *
@@ -519,8 +538,6 @@ const conv: Cell[] = [
       "QCHAN & !CVBUSY & WROTE2", "QCHAN & !CVBUSY & WROTE3"] },
   { pin: 0, name: "CVCSV", assertedLow: false, s0: 1, registered: false,
     terms: onSteps(NOHOST((s) => s.cvstr === "vol")) },
-  { pin: 0, name: "CVCSP", assertedLow: false, s0: 1, registered: false,
-    terms: onSteps(NOHOST((s) => s.cvstr === "pan")) },
   /* The port registers' load: the walk in slots 0-3, W5 out of a work slot.
    * W5 has to suppress the walk's load while it runs, or the walk would put
    * PEND back into a register W5 has just filled with a volume code. */
@@ -547,20 +564,17 @@ const conv: Cell[] = [
       ...onSteps(NOHOST((s) => s.cvld === true && s.ch === n))],
   })),
   { pin: 0, name: "CVC0", assertedLow: false, s0: 1, registered: false,
-    terms: ["CVLD0", "CVLD2", "CVCSS", "CVCSP"] },
+    terms: ["CVLD0", "CVLD2", "CVCSS"] },
   { pin: 0, name: "CVC1", assertedLow: false, s0: 1, registered: false,
-    terms: ["CVLD1", "CVLD2", "CVCSV", "CVCSP"] },
+    terms: ["CVLD1", "CVLD2", "CVCSV"] },
   { pin: 0, name: "CVC2", assertedLow: false, s0: 1, registered: false,
-    terms: ["CVLD3", "CVCSS", "CVCSV", "CVCSP"] },
+    terms: ["CVLD3", "CVCSS", "CVCSV"] },
   /* A host write that lands on VOL (offset 7) or PAN (offset 10) asks for a
    * W5. Both are cleared by the one sequence, because W5 writes all eight
    * halves and there is no point running it twice. */
   { pin: 0, name: "VDIRTY", assertedLow: false, s0: 1, registered: true,
-    terms: [w3(0, "!HRW & !HRO & !ISSDATA & !AIDX3 & AIDX2 & AIDX1 & AIDX0"),
+    terms: [w3(0, "!HRW & !HRO & !ISAIDX & !ISSDATA & !AIDX3 & AIDX2 & AIDX1 & AIDX0"),
       "VDIRTY & !VACK"] },
-  { pin: 0, name: "PDIRTY", assertedLow: false, s0: 1, registered: true,
-    terms: [w3(0, "!HRW & !HRO & !ISSDATA & AIDX3 & !AIDX2 & AIDX1 & !AIDX0"),
-      "PDIRTY & !VACK"] },
   { pin: 0, name: "VACK", assertedLow: false, s0: 1, registered: false,
     terms: ["START & !RSTANY & !TDUE & !DUEANY & !HDUE"] },
 ]

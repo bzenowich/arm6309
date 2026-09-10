@@ -109,13 +109,11 @@ export const ROLE: Record<string, string> = {
   "video:74HC244 fanout": "Clock and load fan-out, and carries `HSYNC`/`VSYNC` out to the backplane at TTL level for §12.2's raster-compare timer in the CPU module.",
 
   /* ---------------- audio ---------------- */
-  "audio:ATF1508AS": "U1 is the register block, host interface and slot decode; U2 (`aseq`) is the microcoded sequencer — a work-type selects one of six micro-op sequences and every control output is a decode of (type, step). U2 is exactly full at 128 of 128 macrocells. audio.md §10.2.",
+  "audio:ATF1508AS": "U1 is the register block, host interface, slot decode, the free-running colour-clock counter, the event comparator and 9.3's read-back latch - sixteen state-file data pins bought it seven packages, because all three of those blocks want the same bus; U2 (`aseq`) is the microcoded sequencer — a work-type selects one of six micro-op sequences and every control output is a decode of (type, step). U2 is exactly full at 128 of 128 macrocells. audio.md §10.2.",
   "audio:28.375 MHz osc": "The PAL colour clock, and the card's whole time base: ÷8 gives the 3.546895 MHz period reference and ÷5 the 709,379 Hz CIA-B tempo clock. Eight slots per colour clock.",
   "audio:AS6C4008 sample RAM": "512 KB of sample memory — the card holds its own samples rather than fetching them across the backplane.",
   "audio:IS61C6416 state file": "The channel state file: pointer, length, period, volume and the running counters for every channel, read and written by the sequencer twice per slot.",
-  "audio:74HC590 counter": "Walks the state file's address during a micro-op sequence — counter and 3-state output register in one package.",
-  "audio:74HC688 compare": "The event comparator: fires when a channel's `NEXT` count reaches the running period reference, which is what makes a sample due.",
-  "audio:74HC283 adder": "The 16-bit adder the sequencer shares across every channel — `NEXT += PER`, `PTR + 1` and `CNT − 1` are all this one datapath.",
+  "audio:74HC283 adder": "The 16-bit adder the sequencer shares across every channel — `NEXT += PER`, `PTR + 1` and `CNT − 1` are all this one datapath. The compare it works against is inside U1.",
   "audio:74HC574 ALAT": "The adder's A operand latch.",
   "audio:74HC574 BLAT": "The adder's B operand latch.",
   "audio:74HC244 B=$FFFF": "Drives a constant `$FFFF` onto the adder's B input, so a decrement is an addition — `A − 1` is `A + $FFFF` and the card needs no subtractor.",
@@ -124,13 +122,12 @@ export const ROLE: Record<string, string> = {
   "audio:74HC574 conv port": "One per channel: presents that channel's byte at its DAC. Four are needed because §6.2's two converter windows collide with the slot walk order — channel 0's byte is on the bus in slot 0, channel 3's in slot 3.",
   "audio:74HC138 conv ctl": "Decodes one 3-bit control code into four converter port clocks and three DAC chip selects. They are mutually exclusive, so eight outputs cover idle plus all seven — which is what bought U2 six pins it did not have.",
   "audio:74HC00 /WE gate": "Gates the state file's byte-lane write enables with the second half of the slot clock, so a write lands after the address has settled.",
-  "audio:AD7528 dual MDAC": "The output converters. The reference input is what carries volume and pan, so level and position are a multiplication rather than a second stage.",
-  "audio:TL074": "The output filter and summing stages.",
+  "audio:AD7528 dual MDAC": "The output converters, eight halves in four packages: one sample and one volume converter per channel. The volume code drives the second converter's REFERENCE input, so level is a multiplication in the analogue domain rather than a digital multiply. Channels 0 and 3 sum to the left node and 1 and 2 to the right - classic MOD's fixed LRRL, which is wiring.",
+  "audio:TL074": "The I/V converters and the two summing stages - one per side. Eight amplifier channels in two packages: four turn the sample converters' currents into voltages and two sum each side's pair after the volume stage.",
   "audio:TL072": "Output buffering.",
   "audio:74HC4066": "Switches the reconstruction filter in and out — `ACTRL` b0/b1, so software can choose a filtered or raw output.",
   "audio:NJM4556A hp drv": "Drives the headphone jack directly, at ~70 mA per channel, so no separate amplifier is needed.",
   "audio:74HC574 pw": "The host's posted-write latch: captures the CPU's byte so the bus cycle can complete before the sequencer retires it.",
-  "audio:74HC574 prefetch": "Read-back prefetch — one per state-file byte lane, so the host can read a value the sequencer is otherwise using every slot. §9.3.",
 
   /* ---------------- net ---------------- */
   "net:ATF1508AS U1/U2": "The card's logic: the 10BASE-T framer, Manchester encode/decode, the ring buffers' addressing and the host interface. net.md §9.",

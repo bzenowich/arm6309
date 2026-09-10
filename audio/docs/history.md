@@ -901,3 +901,83 @@ both when the board is drawn."*
 **Decided: one per channel.** The walk order is §3.1's jitter argument and is not
 available to trade. Their clocks and the three chip selects are one 3-bit code through a
 `74HC138`, which is also §10.2.6's pin lever, so the two decisions paid for each other.
+
+
+---
+
+## 2026-09-09 (fourth pass) — 45 to 35: panning given up, and U1 absorbing seven packages
+
+The user's question was *"I'm surprised it ballooned to 45 ICs… I see a lot of '574 and
+'244 chips"*, and it was a fair one. The answer was three decisions, two of which were
+reversible.
+
+### §11.1 — programmable panning, built and then given up
+
+**Was:** *"⭐ Panning — programmable, built, and +3 ICs … **The mechanism is one more
+volume converter per channel.** Give each channel a second volume half fed from the same
+sample voltage, driving the opposite side's summing node"*, with a cost table ending
+*"**Total** | **+3 ICs**, where the four-converter analogue sum would have charged 10"*.
+
+**Why it moved:** the user gave it up — *"that was originally pitched as 'just 2 chips'"* —
+and the honest count was **six**: two `AD7528`, one `TL074`, and W5's second pass over all
+four converter port registers. What replaces it is what every MOD already assumes, and
+what §1 requirement 5 already required: **fixed LRRL**, channels 0 and 3 to the left
+summing node and 1 and 2 to the right. That is which node an output is *wired* to.
+`ACTRL` b5 is withdrawn and `PAN` (§9.3 offset 10) is reserved.
+
+### §4.2 / §9.3 / §10 — the counter, the comparator and the read-back latches
+
+**Was:** *"**2 × `74HC590` + 2 × `74HC688` = 4 ICs for all four channels**"* outside the
+logic, and §9.3's read-back as *"three `'574`s, one per state-file byte lane"*.
+
+**Why it moved:** ⭐ **sixteen pins bought seven packages.** Giving U1 the state file's
+low sixteen data lines lets it hold the counter (16 registers), form the compare against
+`NEXT` (a foldback tree) and latch the read-back byte — because **all three want the same
+bus**, and U1 was the part with 51 spare cells and 18 spare pins while U2 had neither.
+U1 hands the count back on the same sixteen pins for W6's "`NEXT` is one period from now",
+which is what an I/O macrocell is for.
+
+⚠ **Two of §9.3's sixteen bytes are no longer readable**: `VOL` (offset 7) and
+`PTR[18:16]` (offset 11) live in lane 2, which U1 does not see. A replayer never reads
+`VOL` back, and `PTR` is the advisory debugging window §9.4.5 already says is not atomic
+across bytes.
+
+### §10 / §0 — 45 ICs on a 240 mm card
+
+**Why it moved:** **35, and back on 180 mm.** The card grew to 45 and 24 cm when the
+sequencer was built; giving up panning and absorbing the counter, comparator and
+read-back took it back under the 18 cm courtyard. `npm run check:place` is the authority
+for both numbers.
+
+### §10.2.5 — the margin, and which floor it is quoted against
+
+**Not superseded — corrected in kind.** Every margin figure before this pass was quoted
+at §4.3's `PER ≥ 16`, which is a *hardware* floor: a rate no note uses and the converters
+could not reproduce. ProTracker's range is **113 to 856**. Measured at `PER` = 113, four
+channels: **37 of 600 work slots**. That is the number a datapath change has to spend,
+and it is why §16 item 34 records the 8-bit datapath as affordable-but-not-taken rather
+than as impossible.
+
+### §4.2's comparator — the shape that fits, and two that do not
+
+**Not superseded — recorded, because the two failures are the useful part.** Sixteen
+bits of equality went through three shapes in one afternoon:
+
+1. **Four nibble-equalities ANDed together.** Looks like 64 product terms. A
+   combinational intermediate in CUPL is *substituted* rather than given a macrocell, so
+   `EQ0 & EQ1 & EQ2 & EQ3` multiplies four 16-term sums into **65,536**. The fitter ran
+   seven minutes before it was killed.
+2. **One `NEQ` macrocell, inequality as a sum** — two terms per bit, 32 in all. The term
+   count is right and it still does not place: 32 terms reading sixteen `SD` pins *and*
+   sixteen counter registers is **32 signals into one logic block**, against the 40 an
+   `ATF1508AS` LAB takes from the switch matrix. ⛔ **Cells and pins were never the
+   constraint** — U1's `.pld` is shorter than U2's, which fits in two minutes.
+3. ⭐ **`NEQL` and `NEQH`, one per byte, each a pin.** Sixteen signals and sixteen terms
+   apiece; U2 forms the hit as `!NEQL & !NEQH`. It places in two minutes **and the part
+   gets smaller** — 88 of 128 cells, where the single-macrocell version had been forcing
+   foldback across the whole design.
+
+**The lesson for this repository is the third limit.** After macrocells and pins, an
+`ATF1508AS` runs out of **LAB fan-in**, and its symptom is not a diagnostic — it is a
+`Grouping fail`, or a killed process, on a design that is comfortably inside both of the
+numbers anyone quotes.
