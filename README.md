@@ -96,6 +96,25 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > macrocells, zero pins**. `VSTAT`'s `HBLANK`/`VBLANK` are deliberately *not* delayed,
 > because what those have to agree with is the sync.
 >
+> ⛔ **AND THE CENSUS THAT FOUND THOSE IS A CHECK NOW — `npm run check:reach`.**
+> `design-review2.md` closed the direction *"a fitted part reads what nothing
+> produces"*; this is the other one, and it was open in twenty-five places. A
+> signal that is **produced and read by nothing** is, for a register bit, a
+> feature the host can write and the card cannot perform — and nothing else in
+> this repository could see it, because every other check asks whether a part
+> computes its own equations correctly and a bit nobody reads has no equation to
+> get wrong.
+>
+> | | |
+> |---|---|
+> | ⛔ **5 promised and not built** | audio: §6.1's volume ×4, §11.2's 8-channel mode, `DAT`'s CPU-fed samples, `ATT`'s attach modulation. Video: §11's readable VRAM, promised at `+$15` and **absent from the decode entirely** |
+> | ⚠ **5 withdrawn and still in the map** | audio `ACTRL` b2 (NTSC — there is *one* crystal), b5 and `PAN` (panning, withdrawn); video `CHAR` and `FONTBASE` (§6.4.3's Variant B, dropped — and `FONTBASE`'s load strobe is still built) |
+> | ⚠ **8 macrocells of dead logic** | four slot decodes and a host strobe on U1, two duplicate decodes on U2, and §8.2's ÷5 clock on a pin nothing takes. **None is a broken feature** — the features work, which is how they are known to be redundant |
+> | ⚠ **12 whose consumer is a board part the model lacks** | §5.2.1's eight grants among them. `check:netlist` is what should close that and `graphics.md` §19 item 34 is why it cannot yet |
+>
+> ⚠ **The list is checked in both directions**: an entry that stops being unread
+> fails too, so a feature that gets built has to be taken off it.
+
 > ⛔ **The audio card played a module the same day, and the volume converter was
 > being fed the SAMPLE byte.** After the first volume change of a module, on every
 > channel, while the state file held the right value throughout — so `audio_tb`'s

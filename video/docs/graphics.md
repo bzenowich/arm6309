@@ -3977,6 +3977,28 @@ left is measurement. They are grouped by what would settle them.
     `SPANBUSY` was costed at one product term on the arbiter's output enable **plus a
     `REGSEL` pin `vctrl` has not got**, and is not taken.
 
+40. **⛔ NEW 2026-09-10 — §11's readable VRAM is promised at `+$15` and absent
+    from the decode, and two register-map entries describe features that were
+    dropped.** `npm run check:reach` is the instrument, and it is part of
+    `npm run check`.
+
+    | | |
+    |---|---|
+    | ⛔ **`+$15` `VDATA`** | §13: *"read or write VRAM byte at `WPTR`, post-increment"* — which **is** §11's readable VRAM, the section whose whole argument is that without it *"a windowing OS must keep a 128 KB shadow of the screen in system RAM"*. `regfile.ts` is the register decode of record and **has no entry for it**, so there is no signal to dangle: the feature is absent rather than unread, and only the map knows it was promised. `machine.v`'s `vram_read_attempt` is the same hole seen from the machine, and `machine_tb` asserts the software never takes it |
+    | ⚠ `CTRL` b2 `CHAR` | §6.4.3's Variant B was dropped 2026-09-08 and `video.cpld.ts` correctly builds **no cell** for the bit — the macrocell went to the mask serialiser. **The silicon is right and §13's prose is stale**: it still reads "with `CELL`: 0 tile (8×8 colour), 1 character (1bpp glyph)". A doc fix |
+    | ⚠ `+$18` `FONTBASE` | the same dropped Variant B, and this one **is** still built: `vaddr` carries the `LDFB` load strobe for a register §13 already calls reserved. Cells on a part at 124 of 128 |
+
+    ⭐ **And `vaddr` is the part that cannot spare them.** §19 item 33's rewrite is
+    already blocked on cells there; `LDFB` and its register are the cheapest thing
+    on the part that is known to be unwanted.
+
+    ⚠ **Eight signals on this card are `board` in the census rather than live**, and
+    that is item 34 rather than a defect: §5.2.1's four `GCPU` and four `GSPN`
+    grants go to the framebuffer SRAMs' `/WE` and the four `'153` source selects,
+    and `video_card.v` models the write with `WEN` and `WPTR` instead. **Nothing
+    can close that but the netlist**, and `cards/video.circuit.tsx` does not carry
+    those nets yet.
+
 ### 19.6 Closed
 
 | Items | Closed | Where the argument is |

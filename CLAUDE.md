@@ -68,9 +68,50 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 | `npm run gen:pld` | writes `gal/{vaddr,vctrl,vsup,audio,aseq}.pld` from the term lists |
 | ⭐ **`npm run check:machine`** | **the whole machine**: a 6809E core, the motherboard and the video card, running `software/boot/boot.asm` out of the boot ROM, and a screenshot taken off `RGB`/`BLANK`/`HSYNC`/`VSYNC`. **22 claims, ~40 s** |
 | `npm run rom` | assembles `software/boot/boot.asm` with A09 → `boot.bin`, `boot.hex`, `boot.lst` |
+| ⭐ **`npm run check:reach`** | **every signal the machine produces must reach something.** `design-review2.md` closed the direction "a fitted part reads what nothing produces"; this is the other one — a signal that is *produced* and that nothing reads, which for a register bit means **a feature the host can write and the card cannot perform**. Part of `npm run check` |
 | ⭐ **`npm run check:modplay`** | **a module plays on `audio_card.v`** and its converter codes are rendered to a WAV and A/B'd against libopenmpt, with `refplayer` as the control. Needs `libopenmpt.so.0`, numpy, and probes from `audio/tools/modcompare/mkprobe.py` |
 | `npm run build` | renders every `.circuit.tsx` to `dist/` with `tsci` |
 | `npm run build:all` | all of the above in order — `gen:pld`, `build`, `check`, `check:netlist`, `check:sim`, `check:video` |
+
+### `check:reach` — the census, and why it is not optional
+
+⛔ **`ACTRL` b3 was latched, read back through `ASTAT`, and taken by no cell on
+either CPLD for two days.** So `audio.md` §6.1's *"the card doing the ×4"* was
+never built and the card sat 12.04 dB below every output level §7.1 specifies.
+**Nothing caught it**, because every other check in this repository asks whether
+a part computes its own equations correctly — and a bit nobody reads has no
+equation to get wrong.
+
+`gal/reach.check.ts` asks the other question. For each card it takes the term
+lists and the hand-written board file and finds every signal that is produced
+and read by nothing, then requires each one to be on a `RESERVED` list with a
+reason:
+
+| | |
+|---|---|
+| `open` | ⛔ **specified, allocated a bit, and not built.** These are the findings |
+| `stale` | a bit for a feature that was **withdrawn**; the card correctly does nothing |
+| `dead` | logic that costs a macrocell and buys nothing — the job moved and the cell stayed |
+| `board` | its consumer is a discrete part the board model does not have. ⚠ **Not a free pass**: `check:netlist` is what should close it, and `graphics.md` §19 item 34 says that board is partial |
+
+⚠ **The list is checked in both directions.** An entry that is *no longer*
+unread fails too, so a feature that gets built has to be taken off it — which is
+what stops `RESERVED` becoming a place to put things.
+
+⚠ **Four bugs in this check's own first four runs are worth knowing, because
+each of them made it report the opposite of the truth:**
+
+- **a cell reading itself is not a consumer.** Every registered bit holds with
+  `X & !STROBE`, so a naive scan finds all of them "read" — it reported every
+  `ACTRL` bit as live.
+- **a port map is not a use.** `.MAPCE_LO(mapce_lo)` says the pin was wired to a
+  net; whether anything reads that net is the question. Follow the alias.
+- **`wire x = expr;` is a continuous assignment wearing a declaration's
+  clothes.** Stripping declarations took the uses with them and reported the
+  whole of U3 as dangling.
+- **`HOSTMAP` is not evidence.** Being host-writable is exactly what `DAT`,
+  `ATT` and `PAN` already are; reading the host map as a consumer is the check
+  answering its own question.
 
 ### The CPLD fitter and CUPL — how to get them, and how to know they worked
 

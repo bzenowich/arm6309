@@ -3490,6 +3490,54 @@ specification that has not been tested.
     not move this metric, because `abcompare.py` normalises level in the first two
     lines of its comparison.
 
+42. **⛔ NEW 2026-09-10 — the card's own census: three features promised and not
+    built, three withdrawn features still in the register map, and eight
+    macrocells of dead logic.** `npm run check:reach` is the instrument and it is
+    part of `npm run check`; §16 item 40 is how it came to be written.
+
+    **Promised and not built** — a register bit or field the host can write and
+    the card cannot perform:
+
+    | | | |
+    |---|---|---|
+    | `ACTRL` b3 | §6.1's volume ×4 | item 40 — 12.04 dB, and the only one costed |
+    | `ACTRL` b4 | §11.2's 8-channel mode | the slot allocation is designed; no cell reads the bit |
+    | state file `+$8` `DAT` | §1 requirement 8's CPU-fed sample | storable, and no microcode step plays it |
+    | state file `+$9` `ATT` | Paula's `ADKCON` bits, per channel (§11.3 *"Build it"*) | storable, and nothing modulates |
+
+    ⚠ **`ATT` is not an extra register.** `paula.md` puts attach in one global
+    `ADKCON` at `$DFF09E`; §9.3 puts the same two bits in a per-channel byte. Same
+    feature, redistributed — and §11.3's "channel 3 modulates nothing" is Paula's
+    rule too.
+
+    **Withdrawn and still in the map** — the card is right and the map is stale:
+
+    | | |
+    |---|---|
+    | `ACTRL` b2 | NTSC clock. §4.1 takes **one** crystal and rejects NTSC at +16 cents, so there is no second crystal and no divider select: the bit can never do anything. ⚠ **And `refplayer`'s `card.c` implements it** — a model above its hardware, which is the trap CLAUDE.md records for `mainboard.v` |
+    | `ACTRL` b5 | pan enable. §11.1's programmable panning was withdrawn 2026-09-09 — it is most of 45 ICs → 35 |
+    | state file `+$A` `PAN` | the same withdrawal. `HOSTMAP` already says "reserved (was PAN)"; §9.3's table still describes it as "the right-hand volume code, 0–64" |
+
+    **Dead logic** — eight macrocells that cost a cell and buy nothing, because
+    the job moved and the cell stayed. ⚠ **None of these is a broken feature**,
+    and the way that is known is that the features work: `modplay_tb` uploads
+    samples through `SPTR`/`SDATA` and takes every tick from `TIMER`, so
+    `ISSPTR` and `ISTIMER` are second decodes of a path that is already
+    decoded elsewhere.
+
+    | | |
+    |---|---|
+    | `CHANSLOT`, `TMRSLOT`, `HOSTSLOT`, `DEFSLOT` | U1's four slot decodes. §9.2's own note says *"U2 takes the three counter bits and decodes the five phases itself — three pins instead of five"*, and U1 still computes all four |
+    | `WAIDX` | U1's "a host write to `AIDX`". U2 decodes it itself as `ISAIDX` |
+    | `ISSPTR`, `ISTIMER` | U2's `SPTR` and `TIMER` decodes, duplicated by `HW0`/`HW1`/`HW2` off `HA` directly |
+    | `CIACLK` | ⚠ **§8.2's ÷5 tempo clock, on a PIN.** The timer is counted by the microcode against the shared adder, so nothing on the card takes it. `CCLK` is a pin because §4.1 says a scope wants it; this one has no such sentence and needs a decision |
+
+    ⭐ **Eight cells matters here specifically**, because U2 is at **128 of 128
+    logic cells** and both remaining features — `ATT` and 8-channel mode — are
+    sequencer work. Four of the eight are on U1, which has forty spare; four are
+    not. §16 item 38's control-store decision is the same question from the other
+    end.
+
 ---
 
 ## 17. Period audit
