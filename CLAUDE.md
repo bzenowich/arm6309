@@ -162,6 +162,33 @@ where two of `design-review2.md`'s findings came from.
   the job itself writes** (`echo "DONE=$?" >> log`), or wait on a PID; and
   before concluding anything from a process count, check `ppid` — two
   `fit1508.exe` with different parents are two *fits*, not one wrapper pair.
+
+  ⛔ **AND THE MARKER IS NOT WRITTEN WHEN THE JOB DIES, SO BOUND THE WAIT.**
+  Polling a marker fixes the self-match and creates an immortal loop in its
+  place: if the job is killed, segfaults, or exits down a path that never
+  reaches the `echo`, the marker never appears and `until grep -q …; do sleep
+  N; done` waits for ever. On 2026-09-10 **eight of them were found spinning,
+  17 to 38 hours old**, reparented to `ppid 2`, each waiting on a file that had
+  stopped growing the day before — one on a fit whose log says only
+  `Error Code = 1`. They blocked the session from exiting and cost nothing
+  visible while doing it, which is why nobody noticed. **Every unbounded wait
+  gets an iteration bound and fails loudly on exhaustion**, exactly as the
+  testbenches do (see "A hang is worse than a failure" below — the same lesson,
+  learned twice, in the shell as well as in Verilog):
+
+  ```sh
+  n=0
+  until grep -q "DONE=" log; do
+    n=$((n+1)); [ $n -gt 120 ] && { echo "FAIL: no DONE= after 10 min"; break; }
+    sleep 5
+  done
+  ```
+
+  ⚠ **And a background task is owned by the SESSION, not by the shell that
+  spawned it.** Those eight carried a different shell snapshot in their
+  `cmdline` and were nonetheless this session's tracked tasks. A snapshot id
+  says which shell started a process; it says nothing about who owns it. Check
+  the harness's own task list, not `/proc`.
 - ⛔ **`grep '^FAIL'` cannot match a failure, because `bun` colours stderr.**
   `console.error` emits `ESC[0m ESC[31m FAIL …`, so the line begins with an
   escape, not an `F`. The pattern matches nothing and **reports nothing, which
