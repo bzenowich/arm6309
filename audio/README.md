@@ -59,8 +59,9 @@ sample byte come out of card RAM through `PEND`, a converter port register and i
 buffer loop to the new address and the end-of-buffer interrupt reach `/FIRQ`. 38 claims, 0 failed.
 
 ⛔ **And it has two live, audible defects, found on 2026-09-10 by running a separate
-Paula implementation alongside it and diffing the output.** Every loop plays one sample
-past its end, and `LEN` = 0 gives one byte instead of Paula's 65,536 words
+Paula implementation alongside it and diffing the output** — in the *design*; nothing
+has been built. Every loop plays one sample past its end, and `LEN` = 0 gives one byte
+instead of Paula's 65,536 words
 ([`docs/audio.md`](docs/audio.md) §16 item 36). Both trace to one root cause — the
 17-bit `CNT` the design advertises **does not exist in the fitted part** (item 35) — and
 neither is repairable on a CPLD at 128 of 128 cells and 35 of 40 fan-in. ⚠ **`audio_tb`
@@ -68,14 +69,18 @@ cannot see either**, because nothing anywhere counts how many samples a buffer y
 
 ⚠ **So the sequencer has a third arrangement, designed on 2026-09-10 and not decided.**
 §10.3 moves the `(WT, T)` decode out of macrocells into four `27C512` with the step
-counter as a `74HC163`: **36 ICs**, and items 7, 32, 34, 35 and 36 all become reachable.
-It costs slot margin — 12× to 5.7× at ProTracker's top note — and it is **measured
-(`npm run check:arom`, 48 claims) and not fitted**. §16 item 38 is the gate.
+counter as a `74HC163`: **40 ICs**, and items 7, 32, 35 and 36 all become reachable. It
+costs 25 % of the throughput — 7.1× to 5.7× at ProTracker's top note — and it is
+**measured (`npm run check:arom`, 59 claims) and not fitted**. §16 item 38 is the gate.
 
-⛔ **One more thing designing it found, and it belongs to the card as built: the 16-bit
-`74HC283` chain has never been given a propagation budget, and one 35 ns slot is not
-enough for it** (§16 item 37). Nothing on the card can see that — the Verilog models
-logic and not timing, and the adder is inside neither CPLD.
+⛔ **One more thing designing it found, and it belongs to the design as it stands, not
+to §10.3: the 16-bit `74HC283` chain was never given a propagation budget, and the
+datasheet says it is 192 ns into a 53 ns window** (§16 item 37). Nothing on the card can
+see that — the Verilog models logic and not timing, and the adder is inside neither
+CPLD. ⭐ **The repair is free and it is a re-timing**: the walk never adds, so putting a
+read and its write on either side of it gives the sum 229 ns. ⛔ What it costs is §16
+item 34's 8-bit datapath, which is now withdrawn — and that is why §10.3 is five
+packages rather than one.
 
 | | | |
 |---|---|---|

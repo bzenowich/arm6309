@@ -1215,7 +1215,7 @@ memory with it does.
 
 ⚠ **It is measured and not fitted**, and §16 item 38 is the gate. `npm run check:arom`
 computes the microword, the address map, the image and the budget from the same
-`PROGRAM` table the fitted design's term lists come from — 48 claims — and prints the
+`PROGRAM` table the fitted design's term lists come from — 59 claims — and prints the
 macrocell and pin figures as **estimates**, with the word on them, because only
 `fit1508.exe` settles those.
 
@@ -1237,3 +1237,58 @@ every step of W5 alternates the wrong way. It was found by trying to *use* it �
 16-bit two-package microword §10.3.4 prices and rejects depends on it being true — and
 the lesson is narrow: **an invariant a document states and a table does not hold is not
 an invariant, and the way to find out is to build something that needs it.**
+
+
+---
+
+## 2026-09-10 (second pass) — the `'283` datasheet, and what it decided and did not
+
+**Same day, and it revised the section written that morning.** §10.3's first version
+argued from the `74HC244`'s 23 ns that four cascaded 4-bit adders would be "several of
+those". [`cd74hc283.pdf`](../../reference/datasheets/cd74hc283.pdf) is now in the
+repository and says a single package's carry is **39 ns**, not ~15.
+
+⛔ **The estimate was wrong by 3× and it was wrong in the optimistic direction**, which
+is the direction that matters: it made a hole look smaller than it is. §16 item 37 now
+carries the datasheet's own figures.
+
+| | first version, 2026-09-10 morning | the datasheet |
+|---|---|---|
+| a 16-bit ripple | "roughly 50 ns available, several `'244`s needed" | **163 ns of carry, 192 ns to the state file** |
+| an 8-bit ripple | ~108 ns, "and two cascaded make 61 ns" | **114 ns — it does not** |
+| what closes it | the 8-bit datapath and a 2-slot micro-step | ⭐ **a re-timing that costs neither** |
+
+### What it decided
+
+⛔ **§16 item 34, the 8-bit datapath, is withdrawn.** It was priced on package count with
+the ALU assumed free. It is not free: an 8-bit sum still needs the across-the-walk window,
+so it buys no time and costs **two** colour clocks per 16-bit update where a 16-bit adder
+costs one — four packages for 1.6× the time, and a throughput floor at `PER` ≥ 32 against
+§4.3's 30. ⚠ **The consequence lands on §10.3: it costs five packages now, not one**,
+because item 34 was paying for four of them. **40 ICs, not 36.**
+
+### What it did NOT decide, which was the surprise
+
+⭐ **It does not choose between §10.2's arrangement and §10.3's.** Once a 16-bit sum is
+192 ns, both have exactly one window long enough and it is the *same* window — the walk,
+which never adds and whose four slots are therefore free settling time. One
+read-modify-write per colour clock in both; W1 = 4 colour clocks in §10.2 and 5 in
+§10.3, a **25 %** difference rather than the 2× the first version's slot arithmetic
+implied. **The case for the control store is now entirely that U2 is at 128 of 128 cells,
+which is where it started.**
+
+### And one claim became true
+
+⭐ **§10.3.4 rejected the 16-bit two-package microword because "even `T` reads, odd `T`
+writes" is asserted by `aseq.micro.ts` and not obeyed by `PROGRAM`.** The across-the-walk
+rule *forces* that parity — a read must land on the last engine step of a colour clock
+and its write on the first of the next — so the invariant becomes true by construction.
+The narrow microword is not taken, but it is **no longer refused for the reason it was**,
+and §16 item 38's gate says to re-price it while the microprogram is open.
+
+### "The shipped card"
+
+⚠ §16 item 36 said *"two live defects on the shipped card"*. **Nothing has been built**;
+the machine is in design. Corrected — they are defects in a fitted, simulated design in
+its first week, which is where they are cheapest, and the reason to record them at this
+volume is that neither the fitter nor `audio_tb` found them.

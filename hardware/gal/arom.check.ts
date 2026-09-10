@@ -17,6 +17,8 @@
 
 import {
   ADDRESS, ADDRESSED, ABSORBED, CVOP, FIELDS, HKIND, HLOP, IMAGE_WORDS, PACKAGES,
+  ALU_PRESENT, ALU_STORE16, ALU_STORE8, HC244, HC283, SLOT, SRAM_TDW, WINDOWS,
+  aluFloor, aluMargin, aluPath, chainDelay, closes,
   PRESENT, REWRITTEN, SEQ, STORE8, STORE8_3, STORE16, addrOf, addressBits, addressOf, buildImage,
   encode, eventsPerSecond, highLaneMode, literalsOf, margin, microwordBits,
   pack, periodFloor, residue, stepsPerSecond, toLanes, unpack, writeOf,
@@ -264,15 +266,73 @@ check(margin(STORE8, 113) < margin(PRESENT, 113),
   "⚠ and it IS a loss against the present design, which is stated rather than hidden",
   `${margin(STORE8, 113).toFixed(2)}x against ${margin(PRESENT, 113).toFixed(2)}x`)
 
+/* -- 9b. the adder, from the datasheet ------------------------------------ */
+rule("9b. 16 item 37 - the adder, now that the datasheet is in the repository")
+
+console.log("  CD74HC283, 4.5 V, 50 pF, 25 C max - reference/datasheets/cd74hc283.pdf")
+for (const [n, what] of [[1, "4-bit"], [2, "8-bit"], [4, "16-bit"]] as [number, string][]) {
+  console.log(`    ${what.padEnd(7)} chain ${fmt(chainDelay(n))} ns` +
+    `  + '244 ${HC244.c25} + SRAM setup ${SRAM_TDW} = ${fmt(aluPath(n))} ns` +
+    `   (over temp ${fmt(aluPath(n, true))})`)
+}
+console.log(`\n  one slot = ${SLOT.toFixed(2)} ns. Windows:`)
+for (const [k, v] of Object.entries(WINDOWS)) console.log(`    ${k.padEnd(20)} ${v.toFixed(0)} ns`)
+
+check(chainDelay(4) === 163, "a 16-bit ripple is 163 ns of carry alone", `${chainDelay(4)}`)
+check(aluPath(4) > WINDOWS.presentAdjacent,
+  "⛔ 10.2's back-to-back read/write slot pair CANNOT carry a 16-bit sum",
+  `${aluPath(4)} ns needed, ${WINDOWS.presentAdjacent.toFixed(0)} available`)
+check(aluPath(2) > WINDOWS.storeAdjacent,
+  "⛔ and neither can 10.3's adjacent micro-steps, even 8 bits wide",
+  `${aluPath(2)} ns needed, ${WINDOWS.storeAdjacent.toFixed(0)} available`)
+check(closes(ALU_PRESENT) && closes(ALU_STORE16),
+  "⭐ BUT BOTH ARCHITECTURES CLOSE ACROSS THE WALK, and by the same trick - " +
+  "the walk never adds, so its four slots are free settling time",
+  `${WINDOWS.presentAcrossWalk.toFixed(0)} and ${WINDOWS.storeAcrossWalk.toFixed(0)} ns ` +
+  `against ${aluPath(4)}`)
+check(!closes(ALU_PRESENT, true) && !closes(ALU_STORE16, true),
+  "⚠ and NEITHER closes over -40 to 85 C - this is a commercial-temperature " +
+  "design until a faster family is costed",
+  `${aluPath(4, true)} ns needed`)
+
+/* -- 9c. and what that does to 16 item 34 --------------------------------- */
+rule("9c. The budget when the ADDER is the binding resource")
+
+for (const b of [ALU_PRESENT, ALU_STORE16, ALU_STORE8]) {
+  console.log(`\n  ${b.name}`)
+  console.log(`    ${b.adder} x '283, ${aluPath(b.adder)} ns into a ${b.window.toFixed(0)} ns window` +
+    ` -> ${b.cclkPerRmw} colour clock(s) per 16-bit update, W1 = ${b.w1cclk}`)
+  for (const [name, per] of [["PER = 428", 428], ["PER = 113", 113], ["PER = 30", 30]] as [string, number][]) {
+    console.log(`    ${name.padEnd(12)} ${aluMargin(b, per).toFixed(2)}x`)
+  }
+  console.log(`    ${"floor".padEnd(12)} PER >= ${aluFloor(b)}`)
+}
+
+check(aluMargin(ALU_PRESENT, 113) > 4 && aluMargin(ALU_STORE16, 113) > 4,
+  "both arrangements keep a 4x margin at ProTracker's top note",
+  `${aluMargin(ALU_PRESENT, 113).toFixed(2)}x and ${aluMargin(ALU_STORE16, 113).toFixed(2)}x`)
+check(aluFloor(ALU_PRESENT) < 30 && aluFloor(ALU_STORE16) < 30,
+  "and both keep a throughput floor inside 4.3's conservative 30",
+  `PER >= ${aluFloor(ALU_PRESENT)} and ${aluFloor(ALU_STORE16)}`)
+check(aluMargin(ALU_STORE16, 113) / aluMargin(ALU_PRESENT, 113) > 0.7,
+  "⭐ THE ADDER COSTS THE TWO ARCHITECTURES ALMOST THE SAME, so it does not " +
+  "decide between them - the control store is 25 % slower here and not 2x",
+  `${(aluMargin(ALU_STORE16, 113) / aluMargin(ALU_PRESENT, 113)).toFixed(2)}`)
+check(ALU_STORE8.w1cclk > ALU_STORE16.w1cclk,
+  "⛔ AND 16 ITEM 34'S 8-BIT DATAPATH IS NOW OFF: with the ALU delay dominating " +
+  "it needs two colour clocks per 16-bit update where a 16-bit adder needs one",
+  `W1 = ${ALU_STORE8.w1cclk} colour clocks against ${ALU_STORE16.w1cclk}`)
+check(aluFloor(ALU_STORE8) > 30,
+  "⛔ and it puts the throughput floor OUTSIDE 4.3's 30",
+  `PER >= ${aluFloor(ALU_STORE8)}`)
+
 /* -- 10. the package count ------------------------------------------------ */
 rule("10. The package count")
 
 const DELTA: [string, number, string][] = [
   ["27C512 control store", +PACKAGES, "the microword, four lanes of 64K x 8"],
   ["74HC163 step counter", +1, "T[3:0], which was four macrocells"],
-  ["74HC283 16-bit -> 8-bit", -2, "16 item 34, unblocked"],
-  ["74HC244 sum three-state", -1, "item 34"],
-  ["74HC244 $FFFF constant", -1, "item 34"],
+  ["74HC283 16-bit -> 8-bit", 0, "⛔ 16 item 34 is OFF - see 9c, it costs 1.6x the time"],
 ]
 let delta = 0
 for (const [name, n, why] of DELTA) {
@@ -280,7 +340,10 @@ for (const [name, n, why] of DELTA) {
   console.log(`  ${n > 0 ? "+" : ""}${n}  ${name.padEnd(26)} ${why}`)
 }
 console.log(`  ${delta > 0 ? "+" : ""}${delta}  net, against audio.md 10's 35`)
-check(delta === 1, "the control store costs one package net", `${delta}`)
+check(delta === 5,
+  "⚠ the control store costs FIVE packages net, not one - item 34 was paying " +
+  "for four of them and item 37 has taken it away",
+  `${delta}`)
 
 /* ------------------------------------------------------------------------ */
 const total = failures === 0

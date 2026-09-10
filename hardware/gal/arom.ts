@@ -20,7 +20,17 @@
  *
  * Moving the decode into a memory relieves all three at once, because the
  * (WT, T) decode stops being logic and becomes an address, and every
- * qualifier stops being a term and becomes an address line. This file is the
+ * qualifier stops being a term and becomes an address line.
+ *
+ * ⚠ REVISED 2026-09-10, SAME DAY, BY A DATASHEET. cd74hc283.pdf says a single
+ * package's carry is 39 ns, not the ~15 this file first guessed from the
+ * '244's. Section 5b is that arithmetic. Two things follow and neither is
+ * what it looks like: the adder does NOT decide between 10.2's arrangement
+ * and 10.3's, because both have exactly one window long enough and it is the
+ * same window; and item 34's 8-bit datapath is OFF, because with the ALU
+ * delay dominating it costs 1.6x the time to save four packages. So the
+ * control store is +5 packages and not +1, and the case for it is now
+ * entirely about U2 being full. This file is the
  * arithmetic of that: the microword, the address map, the image and the step
  * budget - generated from THE SAME aseq.micro.ts PROGRAM the present design's
  * term lists come from, so the two are one microprogram and can be diffed
@@ -61,7 +71,7 @@ export const ADDRESS = [
   { name: "ACOUT", bits: 1,
     why: "the adder's carry out. ⭐ Makes `done: notend` a stored decision rather than a branch, and gives item 35's four high-lane modes somewhere to come from" },
   { name: "BYTE", bits: 1,
-    why: "16 item 34's half-select. ⭐ It is also the two operand latches' output enables, directly - ALAT and BLAT are '574 pairs on a shared 8-bit bus, so the half select IS an enable and needs no microword bit of its own" },
+    why: "⚠ 16 item 34's half-select, and item 34 is OFF since the '283 datasheet arrived (section 5b) - so this line is TIED LOW and the image is written to both halves. It is kept because it costs one address pin and nothing else, and because a faster adder family would put item 34 back on the table" },
 ] as const
 
 export const addressBits = ADDRESS.reduce((n, f) => n + f.bits, 0)
@@ -360,6 +370,68 @@ export const toLanes = (img: Uint32Array): Uint8Array[] =>
  * this design, not created by it.
  * ======================================================================== */
 
+/* ======================================================================== *
+ * 5b. THE ADDER, TIMED - 16 item 37, from the datasheet
+ *
+ * ⛔ THE ESTIMATE THIS FILE SHIPPED WITH ON 2026-09-10 WAS WRONG BY 3x, AND IT
+ * WAS WRONG IN THE OPTIMISTIC DIRECTION. It reasoned from the '244's 23 ns and
+ * guessed a 4-bit adder was "several of those". `cd74hc283.pdf` is now in
+ * reference/datasheets and says a single package's carry is 39 ns, not ~15.
+ *
+ * ⭐ AND THE CONSEQUENCE IS THE OPPOSITE OF WHAT IT LOOKS LIKE. It does not
+ * decide between 10.2's arrangement and 10.3's, because once a 16-bit add is
+ * 186 ns BOTH have exactly one place to put it - across the walk, one
+ * read-modify-write per colour clock - and that costs both the same. What it
+ * does decide is 16 item 34: with the ALU delay dominating, an 8-bit datapath
+ * needs TWO colour clocks per 16-bit update where a 16-bit one needs one, so
+ * it costs 1.75x the time to save four packages. That trade is off.
+ * ======================================================================== */
+
+/** CD74HC283, V_CC = 4.5 V, C_L = 50 pF, from reference/datasheets/cd74hc283.pdf
+ *  5.5. ⚠ The card's real load is a '244 input and a short trace, nearer 15 pF,
+ *  where the datasheet gives only a 5 V TYPICAL column - so there is margin
+ *  here that is not quantified, and it is not spent. */
+export const HC283 = {
+  c25: { cinS0: 32, cinS1: 36, cinS2: 39, cinCout: 39, cinS3: 46, abCout: 39, abSn: 42 },
+  c85: { cinS0: 40, cinS1: 45, cinS2: 49, cinCout: 49, cinS3: 58, abCout: 49, abSn: 53 },
+}
+/** SN74HC244 A -> Y, same conditions - reference/datasheets/sn74hc244.pdf. */
+export const HC244 = { c25: 23, c85: 29 }
+/** ⚠ ASSUMPTION, not a datasheet: the state file's data setup before /WE
+ *  rises. No IS61C6416 datasheet is in the repository - 16 item 37. */
+export const SRAM_TDW = 6
+
+/** Worst-case ripple through an n-package chain: A/B of the least significant
+ *  package to S3 of the most significant. */
+export const chainDelay = (packages: number, t = HC283.c25) =>
+  packages === 1 ? t.abSn
+    : t.abCout + (packages - 2) * t.cinCout + t.cinS3
+
+/** What the state file actually sees: the chain, plus the '244 that
+ *  three-states the sum onto SD, plus the SRAM's own setup. */
+export const aluPath = (packages: number, hot = false) =>
+  chainDelay(packages, hot ? HC283.c85 : HC283.c25) + (hot ? HC244.c85 : HC244.c25) + SRAM_TDW
+
+/** One slot time - 3.1's 28.37516 MHz. */
+export const SLOT = 1000 / 28.37516
+
+/** The windows an architecture can offer between the ALAT clock and the write.
+ *  ⚠ Every latch clock is gated to the middle of its slot (aseq.jedec.ts's
+ *  `gated()` says why), so a read slot contributes only its second half. */
+export const WINDOWS = {
+  /** 10.2: read slot then write slot, back to back. */
+  presentAdjacent: 1.5 * SLOT,
+  /** 10.2: read in slot 7, write in slot 5 of the next colour clock - the walk
+   *  in between costs the engine nothing, because the walk never adds. */
+  presentAcrossWalk: 6.5 * SLOT,
+  /** 10.3: read micro-step then write micro-step inside one engine window. */
+  storeAdjacent: 2 * SLOT,
+  /** ⭐ 10.3: read on the SECOND engine micro-step, write on the FIRST of the
+   *  next colour clock. Same trick, and it is why the control store costs
+   *  nothing extra for the adder. */
+  storeAcrossWalk: 6 * SLOT,
+}
+
 /** 4.1's PAL colour clock. */
 export const CCLK = 3546895
 
@@ -405,6 +477,66 @@ export const margin = (b: Budget, per: number, hostStores = 0) =>
 /** The floor: four channels at one W1 per PER colour clocks. */
 export const periodFloor = (b: Budget) =>
   Math.ceil((4 * b.w1 * b.slotsPerStep) / b.engineSlots)
+
+/* -- and what the budget becomes once the ADDER is the binding resource --- *
+ *
+ * ⛔ The tables above price WORK SLOTS, and with a 39 ns carry per package
+ * that is no longer what runs out. A 16-bit sum is 192 ns from the ALAT edge
+ * to the state file's setup, and the only window either architecture has that
+ * long is the one that STRADDLES THE WALK - so at most one read-modify-write
+ * retires per colour clock, in both, and colour clocks are the budget.
+ *
+ * ⭐ THE DISCIPLINE THIS IMPOSES IS THE INVARIANT 10.3.4 FOUND TO BE FALSE.
+ * "Even T reads, odd T writes" was stated by aseq.micro.ts and not obeyed by
+ * PROGRAM; under this rule the microprogram has no choice - a read must land
+ * on the LAST engine step of a colour clock and its write on the FIRST of the
+ * next - so the parity becomes true by construction rather than by assertion.
+ */
+export interface AluBudget {
+  name: string
+  /** packages in the chain */
+  adder: number
+  /** the window this architecture can offer, ns */
+  window: number
+  /** engine steps per colour clock, and how many of them can be reads */
+  stepsPerCclk: number
+  /** colour clocks per 16-bit read-modify-write */
+  cclkPerRmw: number
+  /** colour clocks for one channel event - 10.2.3's W1 */
+  w1cclk: number
+}
+
+/** W1 is three read-modify-writes (PTR + 1, NEXT + PER, CNT - 1) plus one
+ *  auxiliary read (PER into BLAT) and the first RMW's own read colour clock.
+ *  The present arrangement has three engine slots per colour clock and can
+ *  retire a write and two reads in one; the control store has two engine
+ *  micro-steps and can retire a write and one read. */
+const w1 = (cclkPerRmw: number, spareReads: number) =>
+  3 * cclkPerRmw + 1 + (spareReads >= 2 ? 0 : 1)
+
+export const ALU_PRESENT: AluBudget = {
+  name: "10.2, 16-bit adder, RMW across the walk",
+  adder: 4, window: WINDOWS.presentAcrossWalk, stepsPerCclk: 3,
+  cclkPerRmw: 1, w1cclk: w1(1, 2),
+}
+export const ALU_STORE16: AluBudget = {
+  name: "10.3, 16-bit adder, RMW across the walk",
+  adder: 4, window: WINDOWS.storeAcrossWalk, stepsPerCclk: 2,
+  cclkPerRmw: 1, w1cclk: w1(1, 1),
+}
+export const ALU_STORE8: AluBudget = {
+  name: "10.3, 16 item 34's 8-bit adder",
+  adder: 2, window: WINDOWS.storeAcrossWalk, stepsPerCclk: 2,
+  cclkPerRmw: 2, w1cclk: w1(2, 1),
+}
+
+/** Does the sum reach the state file in time, at 25 C and over temperature? */
+export const closes = (b: AluBudget, hot = false) => b.window >= aluPath(b.adder, hot)
+
+export const aluMargin = (b: AluBudget, per: number) =>
+  CCLK / (eventsPerSecond(per) * b.w1cclk)
+
+export const aluFloor = (b: AluBudget) => 4 * b.w1cclk
 
 /* ======================================================================== *
  * 6. WHAT LEAVES U2

@@ -35,7 +35,8 @@ TI `SN74HC…` sheets are the family documents, and pin numbering is what they a
 | `sn74hc574.pdf` | TI SN74HC574 octal D flip-flop | `cpu/docs/plan.md` §3.6 (the read-data latch — the design calls for the LVC part; this is the family datasheet), and `parts.ts` `HC574` |
 | `sn74hc245.pdf` | TI SN74HC245 octal bus transceiver | `parts.ts` `HC245` — break-before-make isolation between the map SRAM and D0–D7 |
 | `sn74hc157.pdf` | TI SN74HC157 quad 2:1 multiplexer | `parts.ts` `HC157` — the mux on the map SRAM address |
-| `sn74hc244.pdf` | TI SN74HC244 octal buffer / line driver | `graphics.md`, `ps2.md` |
+| `sn74hc244.pdf` | TI SN74HC244 octal buffer / line driver | `graphics.md`, `ps2.md`, and `audio.md` §10.3.5 / §16 item 37 — its 23 ns is the delay the audio card's sum crosses on its way to the state file |
+| `cd74hc283.pdf` | TI CD54HC283 / CD74HC283 / CD74HCT283, 4-bit binary full adder with fast carry, SCHS176E | **`audio/docs/audio.md` §10.3.5 and §16 item 37 — the number that re-timed the audio card's datapath.** §5.5: `A`/`B` → `C_OUT` **39 ns**, `C_IN` → `C_OUT` **39 ns**, `C_IN` → `S3` **46 ns** at 4.5 V / 50 pF / 25 °C max, so a 16-bit ripple is 163 ns of carry alone. It withdrew §16 item 34's 8-bit datapath and it is why one read-modify-write per colour clock is the audio card's arithmetic rate |
 | `sn74hc273.pdf` | TI SN74HC273 octal D flip-flop with clear | `graphics.md`, `ps2.md`, `audio.md` |
 | `sn74hc595.pdf` | TI SN74HC595 8-bit shift register with output latch | `ps2.md` §3 — the receive shift register |
 | `74hc_hct595.pdf` | Nexperia 74HC595 **and 74HCT595**, one document | `sdcard.md` §7 — the SD card's receive register is the **HCT** part deliberately, and the reason is an input threshold: 3.3 V `MISO` clears an HCT input's 2.0 V `V_IH`, so the return path needs no level shifter. That number is here and not in the TI HC sheet above |
