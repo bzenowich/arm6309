@@ -87,12 +87,27 @@ about the **state file**, and the state file was right. **Nothing had ever compa
 the converter's own pins against the file's contents.** `modplay_tb` does now, on all
 four channels, every 4096 colour clocks.
 
-⛔ **What remains is that the card plays 12 dB too quietly** — §6.1's ×4 is specified
-and is not built (§16 item 40, **open**). `DACVOL` = 64 where §6.1 requires 255. It is
-a level defect and nothing else: re-rendering with ×4 applied moves the probe by two
-ten-thousandths, because `abcompare.py` normalises level on purpose. Where the ×4
-belongs — two `74HC157`, one resistor and no raw mode, or the replayer — is a
-specification decision, costed in §16 item 40.
+⛔ **What remains is that the card is 12.04 dB below every output level this project
+specifies** — §6.1's ×4 is not built and `ACTRL` b3 reaches nothing, so the card
+implements raw mode only and the mode every MOD replayer uses is the broken one
+(§16 item 40, **open**).
+
+⚠ **It is a level defect, and level is what this card sells.** An earlier revision
+sized it with `abcompare.py` — which normalises level on purpose, against a render
+that is an ideal multiply with no ladder and no noise floor — and concluded it was
+worth "two ten-thousandths". The right instruments are §7.1's own arithmetic and the
+`AD7528` datasheet:
+
+| | as designed | as built |
+|---|---|---|
+| backplane line out | 2 V p-p, −3.0 dBV | 0.5 V p-p, **−15.1 dBV** — 5 dB *below* consumer line level |
+| 3.5 mm jack into 32 Ω | 15.6 mW | **0.98 mW** — under the bottom of §7.1's own "1–5 mW comfortable" |
+| into 300 Ω, §7.1's stated limit | 1.67 mW | **0.104 mW** — inaudible |
+| muted-channel feedthrough vs the music | −70 dB | **−58 dB** (−53 over temperature) |
+| ±½ LSB relative accuracy at `VOL` = 1 | ±12.5 % | **±50 %**, at a single LSB of the ladder |
+
+Where the ×4 belongs — two `74HC157`, one resistor and no raw mode, or the replayer —
+is a specification decision, costed in §16 item 40.
 
 
 ⭐ **Both CPLDs are fitted and the card is simulated end to end.** `audio_tb` writes a

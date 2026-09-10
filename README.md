@@ -112,10 +112,15 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > the register stream on the card's **own** tempo-timer interrupt, and records what the
 > four `AD7528` pairs are given; it agrees with libopenmpt to **−0.01 cents** and
 > **0.9977** spectral correlation, against **0.9989** for the C reference model as a
-> control. `audio.md` §6.1's ×4 for Paula-mode `VOL` **is not built** — `DACVOL` = 64
-> where 255 is specified, which is 12.04 dB (`audio.md` §16 item 40, **open**). It is
-> a level defect and nothing else, and where the ×4 belongs — two `74HC157`, one
-> resistor and no raw mode, or the replayer — is a specification decision.
+> control. `audio.md` §6.1's ×4 for Paula-mode `VOL` **is not built** and `ACTRL` b3
+> reaches nothing, so the card implements raw mode only and the mode every MOD
+> replayer uses is the broken one. ⛔ **It is 12.04 dB below every output level
+> `audio.md` §7.1 specifies**: 0.98 mW into 32 Ω headphones where §7.1 calls 1–5 mW
+> comfortable and claims 15.6 mW of headroom, **0.104 mW into the 300 Ω it says it
+> drives**, a "line" output 5 dB *below* consumer line level, and a muted channel
+> bleeding at −58 dB instead of −70. Where the ×4 belongs — two `74HC157`, one
+> resistor and no raw mode, or the replayer — is a specification decision
+> (`audio.md` §16 item 40, **open**).
 
 > ⭐ **The display list has a descriptor format since 2026-09-09** — `MOVE`, `WAIT`,
 > `$FF` to end (`graphics.md` §10.3.2) — and it reaches **`HSCROLL`, `HSCROLLH` and the

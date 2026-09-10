@@ -3332,51 +3332,87 @@ specification that has not been tested.
     would not release — **which presented as an interrupt defect and was a testbench
     that does not obey the register map it is testing.**
 
-40. **⛔ NEW 2026-09-10 — §6.1's ×4 is not built, so every channel plays 12 dB
-    down and `VOL` has two bits fewer than it is specified to have.**
+40. **⛔ OPEN — §6.1's ×4 is not built, and `ACTRL` b3 is a bit with no consumer.
+    The card is 12.04 dB below every output level this document specifies.**
 
-    §6.1: *"The default (`ACTRL` b3 = 0) is `VOL` 0–64 **with the card doing the ×4**,
-    so the register stays Paula-identical and the acceptance test does not move,"* and
-    *"with `ACTRL` b3 set it is eight, and **the sequencer stops shifting**."* There is
-    no shift in the sequencer, set or clear: `aseq.micro.ts`'s W5 moves the state
-    file's `VOL` byte to the converter port register unchanged, and §10.2.6's lane
-    routing has no second path.
+    §6.1: *"The default (`ACTRL` b3 = 0) is `VOL` 0–64 **with the card doing the ×4**"*,
+    and §6.1's own cascade diagram carries `VOLCODE = VOL x 4`. There is no shift in
+    the sequencer, set or clear: `aseq.micro.ts`'s W5 moves the state file's `VOL` byte
+    to the converter port register unchanged.
 
-    **Measured, on the real design.** `modplay_tb` plays a module on `audio_card.v`
-    and records what the four `AD7528` pairs are given. A channel at Paula's full
-    volume presents **`DACVOL` = 64** where §6.1 requires 255; rendered through the
-    same analogue chain, the card peaks at **12.1 % of full scale where the reference
-    model peaks at 48.2 %** — a factor of 4.00, which is 12.04 dB.
+    ⛔ **AND `CTRL3` REACHES NOTHING.** It is latched, it reads back, and no other cell
+    on either CPLD takes it — `aseq.v` has no `CTRL3` port. So the card implements
+    **raw mode only**, `ACTRL` b3 selects nothing, and the mode every MOD replayer uses
+    is the broken one. It is `design-review2.md`'s "described in prose and present in no
+    design file", in a register bit.
 
-    ⚠ **It is a level defect and not a pitch or timing one**, so nothing that has ever
-    been run could have caught it: `audio_tb` asserts which byte reaches the converter
-    and not what the converter does with it, the differential oracle compares the
-    *sample* stream and deliberately not audio (`oracle/README.md`), and `abcompare.py`
-    normalises level in the first two lines of its comparison, on purpose. The card
-    scores **0.9977 median spectral correlation against libopenmpt where the reference
-    model scores 0.9989** — it plays the right notes at the right pitch, quietly.
+    **Measured on the real design**: a channel at Paula's full volume presents
+    `DACVOL` = 64 where §6.1 requires 255.
 
-    ⚠ **It is a LEVEL defect and nothing else — it costs no resolution.** `VOL` is
-    0–64 either way, so the card presents 65 distinct levels whether the ×4 happens or
-    not; what changes is that they sit in the bottom quarter of the converter's range
-    instead of spanning it. The **absolute** step is 1/255 of full scale in both cases.
-    (An earlier revision of this item claimed two bits of volume resolution went with
-    it. That was wrong, and it is corrected here rather than quietly deleted: the
-    residual it was invented to explain is item 41, which is a different defect.)
+    ### It is a level defect, and level is what this card sells
 
-    ⭐ **MEASURED ON THE LADDER.** `mkprobe.py`'s `02_setvol` probe — one channel,
-    `Cxx` and nothing else:
+    ⚠ **An earlier revision of this item sized it at "two ten-thousandths of median
+    spectral correlation" and that was the wrong instrument twice over.**
+    `abcompare.py` normalises level in the first two lines of its comparison — on
+    purpose — and `dacwav` renders an *ideal* multiply with no ladder, no noise floor
+    and no feedthrough. Neither can see a gain error. **The right instruments are §7.1's
+    output arithmetic and the `AD7528` datasheet**, and they say this:
 
-    | | median spectral corr. vs libopenmpt | peak |
+    | | §7.1 as designed | as built | |
+    |---|---|---|---|
+    | one channel alone | **half of full scale** (§6.2) | **⅛** | −12.04 dB |
+    | two channels at full | **all of it** | **¼** | |
+    | backplane line out | **2 V p-p**, −3.0 dBV | **0.5 V p-p**, −15.1 dBV | **5 dB *below* consumer line level** instead of 7 dB above |
+    | 3.5 mm jack into 32 Ω | **15.6 mW** | **0.98 mW** | §7.1 calls 1–5 mW *"a comfortable listening level"* and 15.6 mW *"headroom, not a compromise"*. The card lands **under** the bottom of its own range |
+    | into 300 Ω — §7.1's stated upper limit | **1.67 mW** | **0.104 mW** | a decent pair of headphones is **inaudible** |
+    | SNR at the jack | design | **−12 dB** | everything after the volume DAC — I/V amp, §7's poles, the `NJM4556AD` — has a fixed noise floor, and 12 dB less signal goes into it |
+
+    ### And the ladder is used in its bottom quarter, where its own specs are worst
+
+    The volume law's *shape* is unchanged — 65 steps either way, and the ratios between
+    them are identical, so nothing about the **relative** volume law is wrong. What
+    changes is **where those codes sit**: 1…64 instead of 4…255. Every `AD7528` error
+    term is specified in LSBs of full scale, so all of them are **4× larger relative to
+    the output**. At the L/C/U grade's ±½ LSB relative accuracy (§6.3):
+
+    | `VOL` | designed code | attenuation | ±½ LSB is | as-built code | attenuation | ±½ LSB is |
+    |---|---|---|---|---|---|---|
+    | 64 | 255 | −0.0 dB | ±0.2 % | 64 | **−12.0 dB** | ±0.8 % |
+    | 16 | 64 | −12.0 dB | ±0.8 % | 16 | **−24.1 dB** | ±3.1 % |
+    | 4 | 16 | −24.1 dB | ±3.1 % | 4 | **−36.1 dB** | ±12.5 % |
+    | 1 | 4 | **−36.1 dB** | ±12.5 % | 1 | **−48.2 dB** | **±50 %** |
+
+    ⚠ **§6.1's own headline claim is in that table and it is false as built**: *"`VOL` = 1
+    attenuates the full 8-bit sample by **36 dB**"* — it is 48 dB, at a single LSB of the
+    ladder, which is the worst-specified code any ladder DAC has. §16 item 23's
+    channel-to-channel gain match is 4× harder at every setting.
+
+    ⛔ **AND §6.3'S DISMISSAL OF FEEDTHROUGH STOPS HOLDING.** `VREF`-to-`OUT`
+    feedthrough is −70 dB (−65 over temperature) **of the sample**, independent of the
+    volume code — so it is fixed while the music is 12 dB smaller:
+
+    > §6.3: *"Feedthrough at `VOLCODE` = 0 means a muted channel leaks its sample at
+    > −65 dB, where Paula leaks nothing; that is below the analogue noise floor the card
+    > is trying to hit anyway."*
+
+    Relative to the music the card actually makes, that leak is **−58 dB, and −53 dB
+    over temperature**. On four-channel MOD material, where channels drop out on every
+    other row, that is bleed a listener can hear — and it is the one place the cascade
+    was already conceded to be worse than Paula.
+
+    ### Where the ×4 could go, and what each costs
+
+    | | cost | what it gives up |
     |---|---|---|
-    | the card as built | **0.7774** | 12.1 % |
-    | the same converter log with ×4 applied afterwards | 0.9873 | **48.2 %** |
-    | `refplayer` (the control) | 0.9985 | 48.2 % |
+    | **2 × `74HC157`** on the converter port registers' inputs, selected by a "this load is a volume" signal from U2 | **+2 ICs, 35 → 37** | nothing — it is §6.1 as written, both modes intact |
+    | **A ×4 in the analogue gain** — one feedback resistor on §6.2's I/V stage | **0 ICs, one resistor** | **raw mode**, which would then be 12 dB hot and clip above code 64. `ACTRL` b3 becomes reserved rather than merely unbuilt. Also a bench question: the volume DAC's output is the *reference* of nothing, but §6.2's summing node moves 12 dB and §16 item 25's rails move with it |
+    | **The replayer writes `VOL` × 4** — a 65-byte table and one indexed load, ~20 cycles in a ~1,200-cycle tick | **0 ICs** | `VOL` stops being Paula-identical, which is §6.1's *only* reason for the ×4; `ACTRL` b3 becomes a dead bit; and the rule lives in prose, where its failure mode is silent — 12 dB down and plausible, which is exactly how this survived |
 
-    Multiplying the recorded `DACVOL` codes by four and re-rendering recovers the
-    level **exactly** — 48.2 % against the control's 48.2 %. ⚠ **The score it does not
-    recover is item 41's**, and the two findings were tangled together until the
-    converter's codes were compared against the state file's byte for byte.
+    ⚠ **What none of them changes is the resolution**, because there is none to lose:
+    `VOL` is 0–64 in all three and the card presents 65 levels either way. The
+    difference is entirely level, and everything level touches.
+
+    **Not taken today** — it is a specification decision, not a repair.
 
 41. **⭐ CLOSED 2026-09-10 — after the first volume change, the VOLUME converter
     was fed the SAMPLE byte, while the state file held the right value throughout.**
