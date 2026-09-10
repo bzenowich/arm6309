@@ -74,12 +74,31 @@ bus cycle is twelve — at the point in each span where the CPU's `VSTAT` poll l
 because "the CPU is not taking it" is implied by `SPANBUSY` itself: `RA1` goes from
 four product terms to two, `RA0` from ten to eight.
 
+### §19 item 35 — `BLANK` and the five dots nobody had charged for
+
+Found by the same run, and only after the first three were repaired: with a picture on
+the connector at last, every colour boundary in it was five dots right of where the
+framebuffer said. §6.1's dot path is `'153` mux → pixel-index `'574` → 15 ns LUT →
+post-LUT `'273`, and `BLANK` came straight off hgen's H counter with no matching delay.
+
+⚠ **`sync.timing.ts` counts SLOTS, four dots each** (`H.backEnd` = 35,
+`H.activeEnd` = 195), so every horizontal boundary is a multiple of four and moving
+the constants can buy four dots and never five. The delay is the fix.
+
+⭐ **And it costs no pin.** `BLANK`'s only consumer is the post-LUT `'273` pair's
+asynchronous `/MR`, so `vctrl` exports the delayed copy and `BLANK` itself becomes
+buried — five registered macrocells, zero pins.
+
+`vsync_tb` used to assert `BLANK == HBLANK # VBLANK`, which is exactly the defect
+written as a claim. It asserts the delay and its **depth** now, and that four and six
+both fail.
+
 ### What the repairs cost the parts
 
 | | before | after |
 |---|---|---|
-| `vctrl` logic cells | 98 of 128 | **100 of 128** |
-| `vctrl` flip-flops | 45 | **46** |
+| `vctrl` logic cells | 98 of 128 | **104 of 128** |
+| `vctrl` flip-flops | 45 | **51** |
 | `vctrl` I/O | 64 of 64 | **61 of 64** |
 | `vsup` I/O | 58 of 64 | **54 of 64** |
 | `vctrl` cascades | 1 | **11** |

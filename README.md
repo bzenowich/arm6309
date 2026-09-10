@@ -83,11 +83,18 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > | ⛔ **polling `VSTAT` put a three-pixel hole in every span** | §7.4's colour path *is* the register file's address, and any CPU access to the card took it from the running span. The CPU's claim is qualified on `!SPANBUSY` now, and it **gives product terms back** |
 >
 > ⭐ **All three are repaired, `vctrl` and `vsup` re-fit, and the machine draws a
-> 640 × 200 picture whose every pixel is the index the software wrote** — 225
-> Verilator claims and 543 model claims, none failing. `graphics.md` §19 items 36–38,
-> and `video/docs/history.md` has the derivations. **One video item is open**: the
-> picture sits five dots right of the active window, so the last five columns of every
-> row are never displayed (§19 item 35).
+> 640 × 200 picture whose every pixel is the index the software wrote** — 226
+> Verilator claims, 543 model claims and 22 machine claims, **none failing**.
+> `graphics.md` §19 items 36–38, and `video/docs/history.md` has the derivations.
+>
+> ⭐ **A fourth followed from the picture itself and is repaired too** (§19 item 35):
+> it sat **five dots right of the active window**, so the last five columns of every
+> row were never displayed and the first five repeated byte 0. §6.1's dot path is five
+> dots deep and `BLANK` came off the H counter with no matching delay — and the H
+> counter counts four-dot **slots**, so no change to its constants could ever buy
+> five. `vctrl` exports the delayed copy and `BLANK` becomes buried: **five registered
+> macrocells, zero pins**. `VSTAT`'s `HBLANK`/`VBLANK` are deliberately *not* delayed,
+> because what those have to agree with is the sync.
 >
 > ⛔ **The audio card played a module the same day and it plays 12 dB too quietly.**
 > `modplay_tb.sv` uploads a module's samples through the card's host port, delivers

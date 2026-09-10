@@ -3356,26 +3356,76 @@ specification that has not been tested.
     scores **0.9977 median spectral correlation against libopenmpt where the reference
     model scores 0.9989** — it plays the right notes at the right pitch, quietly.
 
-    ⚠ **And two bits of volume resolution go with it.** `VOL` = 1 presents code 1 out
-    of 255 instead of 4 out of 255, so the bottom of a volume slide quantises four
-    times more coarsely than §6.1's 65 levels promise.
+    ⚠ **It is a LEVEL defect and nothing else — it costs no resolution.** `VOL` is
+    0–64 either way, so the card presents 65 distinct levels whether the ×4 happens or
+    not; what changes is that they sit in the bottom quarter of the converter's range
+    instead of spanning it. The **absolute** step is 1/255 of full scale in both cases.
+    (An earlier revision of this item claimed two bits of volume resolution went with
+    it. That was wrong, and it is corrected here rather than quietly deleted: the
+    residual it was invented to explain is item 41, which is a different defect.)
 
-    ⭐ **BOTH HALVES ARE MEASURED SEPARATELY, and the experiment is worth recording
-    because it is what separates them.** `mkprobe.py`'s `02_setvol` probe — one
-    channel, `Cxx` and nothing else — is the one probe on the ladder where the card
-    diverges from the control at all:
+    ⭐ **MEASURED ON THE LADDER.** `mkprobe.py`'s `02_setvol` probe — one channel,
+    `Cxx` and nothing else:
 
     | | median spectral corr. vs libopenmpt | peak |
     |---|---|---|
     | the card as built | **0.7774** | 12.1 % |
-    | the same converter log with ×4 applied afterwards | **0.9873** | **48.2 %** |
+    | the same converter log with ×4 applied afterwards | 0.9873 | **48.2 %** |
     | `refplayer` (the control) | 0.9985 | 48.2 % |
 
     Multiplying the recorded `DACVOL` codes by four and re-rendering recovers the
-    level **exactly** — 48.2 % against the control's 48.2 % — and most of the score.
-    **What it does not recover is the resolution**: the codes are still multiples of
-    four, and 0.9873 against 0.9985 is what those two bits are worth on a probe that
-    does nothing but change volume.
+    level **exactly** — 48.2 % against the control's 48.2 %. ⚠ **The score it does not
+    recover is item 41's**, and the two findings were tangled together until the
+    converter's codes were compared against the state file's byte for byte.
+
+41. **⛔ NEW 2026-09-10 — after the first volume change, the VOLUME converter is fed
+    the SAMPLE byte, while the state file holds the right value throughout.**
+
+    §9.4.5: a host write to offset 7 asks for a W5, and `aseq.micro.ts`'s W5 walks the
+    four channels reading word 6 lane 2 — `VOL` — into the four converter port
+    registers. The state file is correct at every instant. What reaches the converter
+    is not.
+
+    ```
+      cc         tick    DACVOL0   the file's VOL
+      994        0.01      64            64        <- the first W5 is right
+      393228     5.54     208            63
+      786444    11.09      44            62
+      1179660   16.63     132            61
+    ```
+
+    ⭐ **AND THE WRONG BYTES ARE NOT RANDOM — every one of them is a sample code.**
+    Over a two-second run of `02_setvol` the volume converter took seventeen distinct
+    values and **all seventeen are in the set the SAMPLE converter took**, while none
+    of them is a value that was ever written to `VOL`:
+
+    ```
+      DACSAMP0 took   0 4 8 12 ... 248 252          (the probe's 64-byte saw)
+      DACVOL0  took   0 20 36 44 60 64 76 92 108 132 152 168 184 200 208 224 240
+      of those, in the sample set:  ALL SEVENTEEN
+      of those, ever written to VOL:  none but 0 and 64
+    ```
+
+    §10.2.4's own note says W5 *"suppresses the walk's port-register load while it
+    runs, so a sample transition can be late by up to two colour clocks"*. **That
+    suppression is what is not happening**: the walk's sample load lands inside W5's
+    pass and the byte goes into the volume half.
+
+    ⚠ **It is not audible as a wrong note and that is why it survived.** The sample
+    byte is a plausible volume — it moves slowly compared to the note, so what it
+    sounds like is a slow tremolo at the sample's own rate, and every metric this
+    project owns is either level-normalised, pitch-based, or compares the SAMPLE
+    stream and deliberately not audio (`oracle/README.md`). It shows up as 0.7774
+    against a control's 0.9985 on the one probe that does nothing but change volume,
+    and as nothing at all on a probe that sets volume once.
+
+    ⚠ **`audio_tb` cannot see it either**, for a reason worth writing down: it asserts
+    `sfh(6) == $40` — *"VOL is one byte and goes straight through"* — which is a claim
+    about the **state file**, and the state file is right. Nothing has ever compared
+    the converter's pins against the file's contents. `modplay_tb`'s `+voldbg` does.
+
+    **Open. It has to be understood before item 40 is repaired**, because where the ×4
+    belongs is a smaller question than whether the volume load lands at all.
 
     **What the fix costs is microcode, not packages.** §6.1's own note on the ÷5 CIA
     divider is the method — *"4N is two doublings, so there is no shifter here"* — so

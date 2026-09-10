@@ -237,19 +237,51 @@ module vsync_tb;
                  h_level_in_pulse));
 
     $display("");
-    $display("BLANK reaches the post-LUT '273 (9.2) whenever either axis blanks");
+    $display("BLANK reaches the post-LUT '273 (9.2) FIVE DOTS behind the counters");
     $display("");
+    /* ⭐ THIS USED TO ASSERT `BLANK == HBLANK # VBLANK`, and that equality is
+     * exactly the defect graphics.md 19 item 35 records: the picture is five
+     * dots behind the scan counter (6.1's dot path) and blanking that agrees
+     * with the COUNTER disagrees with the PICTURE. What leaves the card is the
+     * delayed copy - video.cpld.ts's BD0..BD4 - and this is the stronger
+     * claim, because it pins the depth as well as the shape.
+     *
+     * ⚠ HBLANK and VBLANK themselves are NOT delayed and must not be: VSTAT's
+     * bits are what software schedules against (13.1, 12.1) and what they have
+     * to agree with is the sync. */
     set_ctrl(8'h00); to_frame_start();
     begin
       bit bad = 0;
       int n = 0;
+      bit [4:0] hist = 5'h1F;          // the last five dots of HBLANK # VBLANK
       forever begin
         @(posedge DOTCLK); #0;
-        if (BLANK != (HBLANK | VBLANK)) bad = 1;
+        if (n >= 5 && BLANK != hist[4]) bad = 1;
+        hist = {hist[3:0], (HBLANK | VBLANK)};
         n++;
         if (n == 800 * 449) break;
       end
-      ok(!bad, "BLANK = HBLANK # VBLANK over a whole frame");
+      ok(!bad, "BLANK is HBLANK # VBLANK delayed by exactly 5 dots, over a whole frame");
+    end
+
+    /* And the depth is not five by accident: four or six must both fail, or
+     * the claim above would pass for a card with no delay in it at all. */
+    begin
+      int wrong4 = 0, wrong6 = 0, n = 0;
+      bit [5:0] hist = 6'h3F;
+      forever begin
+        @(posedge DOTCLK); #0;
+        if (n >= 6) begin
+          if (BLANK != hist[3]) wrong4++;
+          if (BLANK != hist[5]) wrong6++;
+        end
+        hist = {hist[4:0], (HBLANK | VBLANK)};
+        n++;
+        if (n == 800 * 449) break;
+      end
+      ok(wrong4 > 0 && wrong6 > 0,
+         $sformatf("and it is five and not four or six (4 -> %0d wrong, 6 -> %0d wrong)",
+                   wrong4, wrong6));
     end
 
     $display("");

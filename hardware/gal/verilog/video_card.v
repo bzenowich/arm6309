@@ -78,6 +78,11 @@ module video_card (
 
   // ---- the three parts -----------------------------------------------------
   wire H0,H1,H2,H3,H4,H5,H6,H7, HBLANK_w;
+  /* ⭐ THE BLANKING THE '273 PAIR SEES IS THE DELAYED ONE - 2026-09-10,
+   * graphics.md 19 item 35. BLANK_raw is hgen's own, five dots ahead of the
+   * picture; BLANKD is what leaves the part and what /MR is wired to. The
+   * five stages are on vctrl (video.cpld.ts) and BLANK_raw reaches no pin. */
+  wire BLANK_raw, BD0, BD1, BD2, BD3, BD4;
   wire V0,V1,V2,V3,V4,V5,V6,V7,V8,V9, VTC, VBLANK_w, VSDLY, VBLPEND;
   wire IRQ;
   wire PH0, PH1, SPAREWIN_w;
@@ -153,7 +158,8 @@ module video_card (
     .H0(H0),.H1(H1),.H2(H2),.H3(H3),.H4(H4),.H5(H5),.H6(H6),.H7(H7),
     .HSYNC(HSYNC), .HBLANK(HBLANK_w),
     .V0(V0),.V1(V1),.V2(V2),.V3(V3),.V4(V4),.V5(V5),.V6(V6),.V7(V7),.V8(V8),.V9(V9),
-    .VTC(VTC), .VSYNC(VSYNC), .VBLANK(VBLANK_w), .BLANK(BLANK),
+    .VTC(VTC), .VSYNC(VSYNC), .VBLANK(VBLANK_w), .BLANK(BLANK_raw),
+    .BD0(BD0), .BD1(BD1), .BD2(BD2), .BD3(BD3), .BD4(BD4), .BLANKD(BLANK),
     .VSDLY(VSDLY), .VBLPEND(VBLPEND), .IRQ(IRQ), .IRQ_OE(IRQ_OE),
     .PH0(PH0), .PH1(PH1), .SLOTTICK(SLOTTICK), .SPAREWIN(SPAREWIN_w),
     .FCLK0(FCLK0),.FCLK1(FCLK1),.FCLK2(FCLK2),.FCLK3(FCLK3),
@@ -465,7 +471,7 @@ module video_card (
   reg [15:0] lut [0:255];
   always @(posedge DOTCLK) if (PWE) lut[lut_a] <= {pdath, pdatl};
 
-  // The two post-LUT 74AHCT273. 9.2: /MR is BLANK, and it is asynchronous, so
+  // The two post-LUT 74AHCT273. 9.2: /MR is BLANKD - the DELAYED blanking, so
   // the porches are 0.000 V and the monitor's back-porch clamp has something
   // true to clamp to. Rejected alternatives are in 9.2; this is the reason the
   // part is a '273 and not a '574.

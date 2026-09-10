@@ -101,6 +101,12 @@ module vctrl (
     output wire WSTBV,
     output wire WPQ,
     output wire WSTART,
+    output wire BD0,
+    output wire BD1,
+    output wire BD2,
+    output wire BD3,
+    output wire BD4,
+    output wire BLANKD,
     output wire HS0,
     output wire HS1,
     output wire WADV0,
@@ -183,6 +189,11 @@ module vctrl (
   reg  r_IRQEN;
   reg  r_DISPEN;
   reg  r_WPQ;
+  reg  r_BD0;
+  reg  r_BD1;
+  reg  r_BD2;
+  reg  r_BD3;
+  reg  r_BD4;
   reg  r_HS0;
   reg  r_HS1;
   reg  r_WADV0;
@@ -230,6 +241,11 @@ module vctrl (
   assign IRQEN = r_IRQEN;
   assign DISPEN = r_DISPEN;
   assign WPQ = r_WPQ;
+  assign BD0 = r_BD0;
+  assign BD1 = r_BD1;
+  assign BD2 = r_BD2;
+  assign BD3 = r_BD3;
+  assign BD4 = r_BD4;
   assign HS0 = r_HS0;
   assign HS1 = r_HS1;
   assign WADV0 = r_WADV0;
@@ -287,7 +303,7 @@ module vctrl (
          | (M0 & V9 & V1 & V0)
          | (M0 & V9 & V2)
          | (M0 & V9 & V3);
-  // EXTERNAL
+  // buried
   assign BLANK =
          (VBLANK)
          | (HBLANK);
@@ -410,6 +426,9 @@ module vctrl (
   // buried
   assign WSTART =
          (WPQ & ~E);
+  // EXTERNAL
+  assign BLANKD =
+         (BD4);
   // EXTERNAL - the serialiser's top bit, except that span-solid is always WFG
   assign MASKBIT =
          (WM1 & ~WM0)
@@ -578,6 +597,11 @@ module vctrl (
       r_IRQEN <= 1'b0;
       r_DISPEN <= 1'b0;
       r_WPQ <= 1'b0;
+      r_BD0 <= 1'b0;
+      r_BD1 <= 1'b0;
+      r_BD2 <= 1'b0;
+      r_BD3 <= 1'b0;
+      r_BD4 <= 1'b0;
       r_HS0 <= 1'b0;
       r_HS1 <= 1'b0;
       r_WADV0 <= 1'b0;
@@ -819,6 +843,16 @@ module vctrl (
          | (DISPEN & ~WCTRL);
       r_WPQ <=
          (VRAMSEL & ~RW & E);
+      r_BD0 <=
+         (BLANK);
+      r_BD1 <=
+         (BD0);
+      r_BD2 <=
+         (BD1);
+      r_BD3 <=
+         (BD2);
+      r_BD4 <=
+         (BD3);
       r_HS0 <=
          (LDHS & D0)
          | (HS0 & ~LDHS);

@@ -188,6 +188,51 @@ const comb = (name: string, terms: string[]): Cell =>
  *
  * WPQ is the level delayed one dot; WSTART is one dot wide at E-fall. Two
  * cells, one of them registered, and every other consumer keeps the level. */
+/* ⛔ 6.1'S DOT PATH IS FIVE DOTS DEEP AND BLANK WAS NEVER CHARGED FOR IT -
+ * 2026-09-10, graphics.md 19 item 35.
+ *
+ * The picture is a pipeline behind the scan counter:
+ *
+ *     fetch latches -> '153 mux            3 dots   the cadence
+ *     -> pixel-index '574                  1 dot
+ *     -> 15 ns LUT -> post-LUT '273        1 dot
+ *                                          -------
+ *                                          5 dots
+ *
+ * BLANK comes straight off hgen's H counter with no matching delay, so the
+ * active window opened five dots before the first framebuffer byte arrived at
+ * the connector: byte 0 was emitted on active dot 5, and bytes 635-639 were
+ * emitted after BLANK had re-asserted. FIVE COLUMNS OF EVERY ROW WERE NEVER
+ * DISPLAYED, and the first five repeated byte 0.
+ *
+ * ⚠ NOTHING COULD SEE IT. vsync_tb measures the active window against THIS
+ * PART'S OWN H COUNTER, so it compares the card's idea of where it is against
+ * itself. The offset exists only between the PICTURE and the SYNC, which needs
+ * a frame with known content in it - machine_tb drew one.
+ *
+ * ⚠ AND THE H COUNTER CANNOT EXPRESS IT. sync.timing.ts counts SLOTS, four
+ * dots each (H.backEnd = 35, H.activeEnd = 195), so every horizontal boundary
+ * is a multiple of four and five is not. Moving the constants can buy four
+ * dots and never five.
+ *
+ * ⭐ SO THE DELAY IS THE FIX AND IT COSTS NO PIN. BLANK's only consumer is the
+ * post-LUT '273 pair's asynchronous /MR (9.2's blank-to-black), so the part
+ * exports the DELAYED copy and BLANK itself becomes buried: five registered
+ * macrocells, zero pins, on a part with 28 cells spare.
+ *
+ * ⚠ VSTAT's HBLANK AND VBLANK ARE DELIBERATELY NOT DELAYED. Those two bits are
+ * what software schedules against (13.1's palette rule, 12.1's VBL handler),
+ * and what they have to agree with is the SYNC, not the pixel pipeline. The
+ * two answers are different by five dots and both are right. */
+const BLANK_DELAY = 5
+const blankDelay: Cell[] = [
+  ...Array.from({ length: BLANK_DELAY }, (_, i) => ({
+    pin: 0, name: `BD${i}`, assertedLow: false, s0: 1 as const, registered: true,
+    terms: [i === 0 ? "BLANK" : `BD${i - 1}`],
+  })),
+  comb("BLANKD", [`BD${BLANK_DELAY - 1}`]),
+]
+
 const vramWriteStrobe: Cell[] = [
   comb("WSTBV", ["VRAMSEL & !RW & E"]),
   {
@@ -294,7 +339,7 @@ const SPAN_STB: Record<string, string> = { WSTB: "WSTART" }
 export const vctrlCpld: Merged = merge(
   [rename(hgenDesign, SLOT_CE), rename(vgenDesign, SLOT_CE), vdecDesign,
    seqphDesign, rename(seqctlDesign, SPAN_STB), arbGalDesign],
-  [...ctrl, ...ctrlFanout, ...vramWriteStrobe,
+  [...ctrl, ...ctrlFanout, ...vramWriteStrobe, ...blankDelay,
    ...loadable2("HS", "LDHS"), ...loadable2("WADV", "LDADV"),
    ...maskSerialiser, ...tileCadence, ...decodeCells],
   {
@@ -312,7 +357,9 @@ export const vctrlCpld: Merged = merge(
      * fitter reserves TMS/TDI/TDO/TCK and reports "Design fits successfully". */
     device: "f1508ispplcc84", clock: "DOTCLK",
     external: new Set([
-      "HSYNC", "VSYNC", "BLANK",
+      /* ⭐ BLANKD, not BLANK - the picture is five dots behind the scan counter
+       * and this is the copy that agrees with it. See blankDelay above. */
+      "HSYNC", "VSYNC", "BLANKD",
       "VBLANK", "HBLANK", "SPANBUSY",                    // VSTAT, driven onto D0-7
       "IRQ",
       "FCLK0", "FCLK1", "FCLK2", "FCLK3",

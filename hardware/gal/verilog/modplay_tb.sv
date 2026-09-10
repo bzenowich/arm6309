@@ -122,7 +122,19 @@ module modplay_tb;
   bit      first_row = 1;
   int      dac_rows = 0;
 
+  /* ⭐ +voldbg: what the state file holds against what the converter got.
+   * The card's own VOL byte for channel n is SF[n*8+6][23:16] (aseq.micro.ts:
+   * SFA = {0, ch[1:0], w[2:0]}), so this is the two ends of 6.1's volume path
+   * printed side by side. Added while chasing 16 item 40. */
+  int voldbg = 0;
+  initial void'($value$plusargs("voldbg=%d", voldbg));
+
   task automatic dac_emit();
+    if (voldbg > 0 && dac_rows < voldbg)
+      $display("      vol cc=%0d  DACVOL=%3d %3d %3d %3d   file=%3d %3d %3d %3d",
+               cc, DACVOL0, DACVOL1, DACVOL2, DACVOL3,
+               card.SF[6][23:16], card.SF[14][23:16],
+               card.SF[22][23:16], card.SF[30][23:16]);
     if (dacfd != 0)
       $fwrite(dacfd, "%0d %0d %0d %0d %0d %0d %0d %0d %0d\n", cc,
               DACSAMP0, DACSAMP1, DACSAMP2, DACSAMP3,

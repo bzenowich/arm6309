@@ -2246,7 +2246,7 @@ pins are fitted; `check:tile` asserts what they compute, including both axes of 
 (§6.4.6 limit 2); and `check:cadence` runs the second fetch cadence over a whole line
 (§6.4.9). ⚠ The package decision is unchanged but its **headroom is gone**: the
 cadence filled `vctrl`'s I/O and took it to 122 of its 128 cells as the fit then
-stood; it is 61 of 64 I/O and 100 of 128 cells today (§14 has the live figure).
+stood; it is 61 of 64 I/O and 104 of 128 cells today (§14 has the live figure).
 
 **What §7 keeps.** The span writer is not deleted — it is the text engine, the fill
 and clear engine, and §6.4.6's limit 1 means bitmap regions need it regardless.
@@ -2416,7 +2416,7 @@ combinations by `gal/jedec/cupl.check.ts`. `hardware/gal/video.cpld.ts` and
 to signal through the freed pins.
 
 **The spare-access arbiter is inside `vctrl`.** With `rfa`'s fourteen pins and
-Variant B's four freed, `vctrl` holds the arbiter at **61 of 64 I/O and 100 of 128
+Variant B's four freed, `vctrl` holds the arbiter at **61 of 64 I/O and 104 of 128
 cells** (121 when this paragraph was written; §14.1's encoding and §8.2's rank
 select are what moved it). A CPLD at two-thirds capacity sitting beside a
 `GAL22V10` doing ten macrocells of work would be a package nobody is buying
@@ -3173,7 +3173,7 @@ arithmetic line by line. (The GAL-build table this section used to carry — 41 
 | **2** | **74HC573** | ⭐ **`PDATL`/`PDATH`, §13's `+$11`/`+$12`** — the LUT entry is 16 bits and the card's bus is 8, so the pair has to be assembled somewhere. Transparent latches, because a `'574` clocked on a register write's *rising* edge samples before a 6809E has driven the data (§3.1) | **new** |
 | **1** | **74HC244** | ⭐ **§10.3.3's descriptor-byte buffer** — the display list's fetched byte, from the pixel bus onto the card's internal data bus for the dot a granted engine slot lasts. It is what makes a list `MOVE` reach a register at all | **new** |
 | 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vaddr`** — scan address, `WPTR`/span pointer, tile address sources. **63 of 64 I/O, 113 of 128 cells** (`hardware/gal/cpld/vaddr.fit`) | |
-| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, span-mask handling. **61 of 64 I/O, 100 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) | |
+| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, span-mask handling, §19 item 35's blanking delay. **61 of 64 I/O, 104 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) | |
 | **1** | `ATF1508AS-15JC84`, PLCC-84 | ⭐ **`vsup`** — §10.1.7, **new 2026-09-09**. The register-file address, §7.4's `SPANLEN` counter, §8.2's rank select, §9's palette write path and §10.3's descriptor decode. It **replaces three `GAL22V10`s** (`rfa`, `vlen`, `pxsel`), so a third PLCC-84 is −2 packages before it does anything else. **54 of 64 I/O, 84 of 128 cells** (`hardware/gal/cpld/vsup.fit`) | |
 | 1 | 74HC574 | posted-write **data** latch | = |
 | **3** | **74HC574** | **posted-write address + control latches — 19 address + VRAMSEL + R/W + `WMODE[1:0]` = 23 bits (§3.1.1)** | **+3** |
@@ -3932,29 +3932,42 @@ left is measurement. They are grouped by what would settle them.
     that said `rfa` would free five pins freed fourteen, and estimates on this card have
     been wrong in both directions."*
 
-35. **⚠ OPEN — the picture sits five dots to the right of the active window, and the
-    last five columns of every row are never displayed.** Raised 2026-09-10, by
-    `machine_tb`: the whole machine drew a 640 × 200 test pattern with the card's own
-    span writer, and the capture — taken from `RGB`, `BLANK`, `HSYNC` and `VSYNC`
-    alone — has every colour boundary and the eight-pixel stripe **five dots later
-    than the framebuffer says**. Framebuffer byte 0 is emitted on active dot 5; bytes
-    635–639 are emitted after `BLANK` has re-asserted.
+35. **⭐ CLOSED 2026-09-10 — the picture sat five dots right of the active window and
+    the last five columns of every row were never displayed.** Found by `machine_tb`:
+    the whole machine drew a 640 × 200 test pattern with the card's own span writer,
+    and the capture — taken from `RGB`, `BLANK`, `HSYNC` and `VSYNC` alone — had every
+    colour boundary and the eight-pixel stripe **five dots later than the framebuffer
+    said**. Framebuffer byte 0 was emitted on active dot 5; bytes 635–639 after
+    `BLANK` had re-asserted, and the first five dots repeated byte 0.
 
-    **It is a delay that was never charged.** §6.1's dot path is three registers deep
-    behind the scan counter — `'153` mux → pixel-index `'574` → 15 ns LUT → post-LUT
-    `'273` — and `BLANK` comes straight off the H counter in `vctrl` with no matching
-    delay. Five dots is what the design actually has; nothing in this document said
-    what it should be, which is why nothing caught it.
+    **It was a pipeline delay that had never been charged.** §6.1's dot path is
+    `'153` mux → pixel-index `'574` → 15 ns LUT → post-LUT `'273`: three dots of
+    cadence and two of registers. `BLANK` came straight off the H counter with no
+    matching delay.
 
-    ⚠ **`vsync_tb` cannot see this and never could.** It measures the active window
-    against `vctrl`'s own H counter, so it compares the card's idea of where it is
-    against itself. The offset only exists between the *picture* and the *sync*, and
-    that needs a frame with known content in it.
+    ⚠ **`vsync_tb` could not see it and never could.** It measures the active window
+    against `vctrl`'s **own H counter**, so it compares the card's idea of where it is
+    against itself. The offset exists only between the *picture* and the *sync*, and
+    seeing it needs a frame with known content in it.
 
-    **What it costs a monitor is nothing** — a uniform five-dot shift is inside the
-    centring any VGA display does — and **what it costs the machine is five columns**,
-    which is a real loss on a 640-pixel line. The fix is arithmetic on `vctrl`'s
-    blanking comparison, not a package; costing it is the work this item tracks.
+    ⚠ **And the H counter cannot express the fix.** `sync.timing.ts` counts **slots**,
+    four dots each, so every horizontal boundary is a multiple of four — moving the
+    constants can buy four dots and never five.
+
+    ⭐ **So the delay is the fix, and it costs no pin.** `BLANK`'s only consumer is the
+    post-LUT `'273` pair's asynchronous `/MR` (§9.2's blank-to-black), so `vctrl`
+    exports the **delayed** copy and `BLANK` itself becomes buried: five registered
+    macrocells, zero pins, 100 → 104 of 128 cells. `video.cpld.ts`'s `BD0`–`BD4`.
+
+    ⚠ **`VSTAT`'s `HBLANK` and `VBLANK` are deliberately NOT delayed.** Those two bits
+    are what software schedules against (§13.1's palette rule, §12.1's VBL handler),
+    and what they have to agree with is the **sync**, not the pixel pipeline. The two
+    answers differ by five dots and both are right.
+
+    `vsync_tb` asserts the depth as well as the shape now — that `BLANK` is
+    `HBLANK # VBLANK` delayed by exactly five dots over a whole frame, **and that four
+    and six both fail** — and `machine_tb` reports the offset it measures rather than
+    assuming it, which is the claim that would catch the next one.
 
 39. **⚠ OPEN — a CPU register READ during a span returns the span's colour byte, and a
     WRITE lands in `WFG` or `WBG`.** The other half of item 38's repair, stated as the
@@ -3986,6 +3999,7 @@ left is measurement. They are grouped by what would settle them.
 | **32** the display list's descriptor format | **2026-09-09** | **§10.3.2** |
 | **9** `74HC593` availability | **2026-09-09** | **§9** — the part is discontinued; `PIDX` is 2 × `'163` + 1 × `'244` |
 | **28** byte-granular horizontal scroll | **2026-09-09** | **§8.2** — two ranks and an output-enable select, +4 packages |
+| ⭐ **35** the picture was five dots right of the active window | **2026-09-10** | **§19 item 35 above** — five registered macrocells on `vctrl`, zero pins, and `vsync_tb` pins the depth |
 | ⛔ **36** the arbiter deadlocked the machine on its first span | **2026-09-10** | **§5.2.1** — a posted CPU VRAM write claimed a framebuffer chip it does not need, and then blocked the span it had just started, while `/WAIT` held `E` waiting for that span. One literal (`R/W`) on `GCPU`, one product term on `GSPN` |
 | ⛔ **37** the posted-write strobe re-armed the span for ever | **2026-09-10** | **§7.4** — `SPANBUSY` was set by a LEVEL over `E`-high, and `/WAIT` makes `E`-high unbounded. `WPQ`/`WSTART` make it a one-dot **E-fall** edge, which is what §3.1.1's `'574`s always did. One registered macrocell |
 | ⛔ **38** polling `VSTAT` put a three-pixel hole in every span | **2026-09-10** | **§7.4** — §7.4's colour path *is* the register file's address, and any CPU access to `$FF60`–`$FF7F` took it from the running span for the whole bus cycle. The CPU's claim is now qualified on `!SPANBUSY`, which **gives product terms back** |
