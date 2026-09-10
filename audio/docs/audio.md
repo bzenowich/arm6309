@@ -648,8 +648,20 @@ temperature: **`tWR` 100 ns, `tDS` 90 ns, `tCS` 100 ns, `tAS` 100 ns, `tDH` 0 ns
 The state file presents a channel's byte for one 35.24 ns slot, so the port needs a
 register in front of it.
 
-**One 8-bit `'574` per side**, driving both of that side's packages, with the frame
-split into two fixed windows:
+⚠ **TWO 8-bit `'574` per side — four, not two.** This section said one per side until
+2026-09-09 and the parts list has said four since the datapath was built; the prose is
+what was wrong. **One register per side cannot both hold and capture.** The walk puts
+channel *N*'s byte on the bus in slot *N*, so all four bytes arrive in slots 0–3 while
+the write windows are 0–3 and 4–7: the left side must **hold** `ch0` through slot 3 for
+its own write, in the very slot `ch3`'s byte **arrives** for the next window. A pair per
+side ping-pongs; a single register drops one of the two.
+
+⚠ Reassigning which channels share a side does not help — any pairing puts both bytes
+inside the same window. And dropping programmable panning (2026-09-09) does not either:
+it changed which converter halves exist, not the walk order or the window structure.
+
+Each side's pair drives both of that side's packages, with the frame split into two
+fixed windows:
 
 | Slots | Left `'574` | Right `'574` |
 |---|---|---|
@@ -673,7 +685,7 @@ Volume writes are host-driven and rare (≤50 Hz per channel). One borrows a win
 asserting `CS` on the volume package instead of the sample package, which displaces
 one sample write by one colour clock about once every 70,000 frames.
 
-**Two packages of latch, not eight**, because the bus is 8 bits wide rather than 12
+**Four packages of latch, not eight**, because the bus is 8 bits wide rather than 12
 and each side's two channels can share a register that is loaded twice per frame.
 
 Packages, itemised so §10 has something to add up:

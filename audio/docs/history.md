@@ -981,3 +981,25 @@ bits of equality went through three shapes in one afternoon:
 `ATF1508AS` runs out of **LAB fan-in**, and its symptom is not a diagnostic — it is a
 `Grouping fail`, or a killed process, on a design that is comfortably inside both of the
 numbers anyone quotes.
+
+## §6.2 — "one `'574` per side", corrected 2026-09-09
+
+The section costed the converter feed at **two** packages:
+
+> **One 8-bit `'574` per side**, driving both of that side's packages …
+> **Two packages of latch, not eight**, because the bus is 8 bits wide rather than 12
+
+`place/parts.ts` has carried **four** since the datapath was built, and the parts list
+was right. ⚠ **One register per side cannot both hold and capture**: the walk puts
+channel *N*'s byte on the bus in slot *N*, so all four arrive in slots 0–3 while the
+write windows are 0–3 and 4–7 — the left side must hold `ch0` through slot 3 for its
+own write in the very slot `ch3`'s byte arrives for the next window.
+
+⭐ **Found by the user asking whether dropping panning freed them.** It does not: panning
+changed which converter halves exist, not the walk order or the window structure. The
+question surfaced the stale prose rather than a saving.
+
+⛔ **And it is the class `lib/docs.check.ts` cannot catch.** That check holds utilisation
+figures and IC totals against `gal/cpld/*.fit` and `place/parts.ts`; "two packages of
+latch" is prose, tied to no part name and no total. Numbers are checkable; sentences are
+not, and this is what that limitation looks like in practice.
