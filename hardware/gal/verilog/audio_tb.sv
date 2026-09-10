@@ -511,6 +511,58 @@ module audio_tb;
                  sfl(4), sfl(12), sfl(20), sfl(28)));
 
 
+    // ================= 16 item 36: SAMPLES PER BUFFER =====================
+    //
+    // ⛔ THE CLAIM THIS FILE DID NOT HAVE, AND THE REASON IT COULD NOT SEE
+    // TWO LIVE DEFECTS. Everything above asserts the reload VALUE - sfc(1)
+    // after W2 - and nothing counts how many samples a buffer actually
+    // yields. A test written from the same understanding as the design can
+    // only confirm the design does what its author thought.
+    //
+    // A Paula.v differential oracle (gal/verilog/oracle/) counted it and
+    // found 2*LEN+1 where Paula plays exactly 2*LEN, on every iteration.
+    // For a two-word loop - ordinary in a MOD instrument - that is one
+    // sample in five coming from outside the loop.
+    //
+    // Count W1 completions between W2 reloads: W1 retires one sample, W2 is
+    // the buffer-end shadow reload, so the count between two W2s IS the
+    // buffer length in samples.
+    $display("");
+    $display("16 item 36 - samples retired per buffer (D-1, D-2)");
+    $display("");
+    // ⚠ THE PER-BUFFER COUNT IS NOT HERE, DELIBERATELY. Counting W1
+    // completions between W2 reloads looks like the natural claim and it is
+    // NOT TRUSTWORTHY: measured over 20,000 slots it gives 104 W1 against 14
+    // W2 - about 7.4 samples for a 2-byte buffer - where the oracle's byte
+    // trace at the converter shows 3 (02 03 04, repeating). Both cannot be
+    // right, and W1/W2 is an indirect proxy: not every W1 need retire a
+    // sample, and W2 need not be the only path out of a buffer.
+    //
+    // The claim that belongs here counts SAMPLE BYTES AT THE CONVERTER PORT,
+    // the way the oracle did, and writing it needs the converter-feed timing
+    // (6.2's two windows, one frame behind the compare). Left undone rather
+    // than committed wrong: a claim that measures the wrong thing is worse
+    // than no claim, because it will be believed. 16 item 36 D-1.
+
+    // ⚠ AND NEITHER IS THE LEN = 0 CLAIM. It was written here, and it
+    // reported 87 reloads with CNT = 65535 (a correct FAIL for D-2) until the
+    // block above it was removed - after which it reported 0 reloads with
+    // CNT = 101 and PASSED. Same design, same claim, opposite verdict: the
+    // channel was still holding state from an earlier section, the LEN = 0
+    // write never landed, and the claim went green while testing nothing.
+    //
+    // ⛔ A VACUOUSLY PASSING CLAIM IS THE WORST OUTCOME - worse than the
+    // failing one and worse than no claim, because it reports green. That is
+    // design-review2.md 10's own lesson arriving from a new direction: an
+    // input a check cannot actually drive is an input it cannot see a defect
+    // in, and here the check could not drive the channel it was testing.
+    //
+    // What both missing claims need first is ISOLATION: a task that resets a
+    // channel to a known state and verifies the write landed (sfl/sfc read
+    // back) BEFORE measuring anything. Every section above inherits state
+    // from the one before it, which is survivable when the claim is about a
+    // register value and fatal when it is about a rate. 16 item 36 D-1, D-2.
+
     $display("");
     if (fails == 0) $display("audio_tb OK");
     else $display("audio_tb: %0d FAILURES", fails);
