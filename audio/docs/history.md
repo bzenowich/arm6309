@@ -1039,3 +1039,46 @@ the other; §16 item 34 has the table.
 
 **Reverted whole.** The card is 35 ICs on 18 cm, both CPLDs fitted, 483 checks and 38
 simulation claims green — the state committed as `31665a4`.
+
+
+---
+
+## 2026-09-09 (sixth pass) — the microcode pipeline, attempted twice and reverted
+
+**Nothing in the present design changed.** The card is 35 ICs on 18 cm, both CPLDs
+fitted, `check` 483 and `audio_tb` 38 — the state committed as `32878bd`.
+
+⭐ **What this pass produced is a measurement, and it is the useful part.** LAB fan-in,
+which had never been read off a `.fit` before:
+
+| | fan-in per logic block, of 40 |
+|---|---|
+| **U2 `aseq`** | A–D, F, G at **36**; E 28; H 11 |
+| **U1 `audio`** | 25–28 across all eight |
+
+Six of U2's eight blocks stand four signals from the wall. That is the whole explanation
+for the 8-bit datapath's `Grouping fail`, and it is why the answer is not "shave a cell".
+
+**The pipeline, and why both shapes failed.** The idea: ask a host access's meaning once
+and register the answer, so a consumer reads one signal where it reads six. Two shapes
+were built and simulated:
+
+1. **Decisions clocked continuously, derived from `HRW`.** `HRW` is itself latched at
+   `HSTB`, so the decisions are **two registers deep** where everything around them is
+   one. The sequence can start in the very next work slot; the decision arrives stale.
+   Simulation showed the card running one event ahead of itself.
+2. **Decisions latched at `HSTB` from the raw signals**, one deep like `HA` and `HRW`.
+   That fixes the depth and breaks something else: the existing decodes (`HW`, `HL`,
+   `HRO`, `HSTAGE`) are *continuously* clocked, so they track `AIDX` as it
+   auto-increments — a decision frozen at `HSTB` does not. The host's next access can
+   arrive while the previous `W3` is still running, because `ASTAT` b6 clears when the
+   sequence **starts**, not when it ends. Channel state landed in the wrong lanes.
+
+⇒ **The third shape is the one to build**: decisions clocked continuously from `AIDX`
+*and* `HRW`, with the work item gated so it cannot start until they have settled. That
+is a change to §9.4.4's host handshake rather than to the decode, and it should be made
+on its own rather than underneath a datapath change.
+
+⚠ **And a correction that cost a pass**: U1's `88 of 128` cells reads like headroom and
+is not — U1 is **pin-bound at 62 of 64**, so those 40 cells are unreachable. Anything
+moved there needs signals crossing on two pins. It is `vctrl`'s lesson on a second card.

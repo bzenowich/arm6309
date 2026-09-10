@@ -1702,6 +1702,15 @@ is one slot, and **even steps read, odd steps write**: a state-file read holds i
 for as long as the address holds (§9.5), so a read-modify-write is two slots and never
 three.
 
+⚠ **THE CONTROL DECODE IS THE PART THAT IS FULL.** Every output above re-derives its
+own meaning from `(WT, T)` plus the host qualifiers — `SFWE0` asks six signals to say
+"this access writes lane 0", and five more macrocells each ask `HCOMMIT & !HRW`. That is
+what fills an `ATF1508AS`'s switch matrix: **six of U2's eight logic blocks stand at 36
+of 40 signals**, and it is the reason the 8-bit datapath does not fit (§16 item 34).
+Concentrating the decode — asking once, registering the answer — is the redesign this
+section needs, and §16 item 34 records the two shapes of it that have been tried and why
+`AIDX`'s auto-increment defeats both.
+
 | | steps | what |
 |---|---|---|
 | **W1** | **7** | a channel's compare hit: fetch the next sample byte at `PTR` and advance it, `NEXT += PER`, write the byte into `PEND`, `CNT − 1`. The carry out of the last step **is** the buffer end |
@@ -2455,47 +2464,69 @@ specification that has not been tested.
     write (`!ISAIDX`) so the index cannot store itself into the location it names.
     `audio_tb` reads `PER`'s two bytes back and gets what it wrote.
 
-34. **⛔ ATTEMPTED 2026-09-09 AND REFUSED BY THE FITTER — the 8-bit datapath, and
-    what stops it is FAN-IN.** Narrowing the adder is worth **−4 packages**: `74HC283`
-    4 → 2, the sum's three-state 2 → 1, and the `$FF` constant 2 → 1. It was built,
-    simulated and rejected, and the arithmetic is not what rejected it.
+34. **⛔ THE 8-BIT DATAPATH IS BLOCKED BY FAN-IN, AND THE PIPELINE THAT WOULD RELIEVE
+    IT IS BLOCKED BY A RACE.** Two attempts, both reverted, both measured.
 
-    ⭐ **The design works.** A `BYTE` toggle holds the step counter while the two halves
-    of a 16-bit operation go through, so it costs **no fifth `T` bit** — two registers
-    (`BYTE` and the inter-byte carry `CY`) and two pins for the byte select, which is
-    all U2 had room for. `ALAT` and `BLAT` stay two `'574`s each: they hold sixteen bits
-    and *present* eight, their output enables doing the multiplexing. `audio_tb` ran the
-    whole card on it — **38 claims, 0 failed**, a channel event at **ten work slots**
-    instead of seven, and the margin at ProTracker's top note **14.2× → 7.7×**, which is
-    ample.
+    **The datapath itself works.** Narrowing the adder is worth **−4 packages**
+    (`74HC283` 4 → 2, the sum's three-state 2 → 1, the `$FF` constant 2 → 1). A `BYTE`
+    toggle holds the step counter while the two halves go through, so it needs **no
+    fifth `T` bit** — two registers and two pins. `audio_tb` ran the whole card on it:
+    **38 claims, 0 failed**, a channel event at **ten work slots** instead of seven, and
+    the margin at ProTracker's top note **14.2× → 7.7×**. Ample.
 
-    ⛔ **`Grouping fail`, with all eight LABs pinned at `FanIn assignment [40]`.** Not
-    macrocells and not pins — the `ATF1508AS`'s third limit, and this time it is the
-    whole device rather than one block. A narrower datapath needs *more control
-    signals*, and every one of them fans into the same decodes.
+    ⛔ **The fitter refused it: `Grouping fail`, all eight LABs at `FanIn [40]`.** ⭐ The
+    baseline explains why, and it is the number to keep: **six of U2's eight blocks
+    already stand at 36 of 40** (E at 28, H at 11), against U1's comfortable 25–28. Four
+    signals of headroom, and a narrower datapath needs *more* control signals.
 
-    ⚠ **And the rebalance has nowhere to go.** U1 is at **62 of 64 pins** — it is
-    pin-bound, not cell-bound, so the 40 cells it has spare are unreachable: anything
-    moved there needs signals crossing, and there are two pins to cross on. Three
-    partitions were costed and all are pin-fatal:
+    **The pipeline is the right answer and it is not a small one.** The idea is to ask a
+    host access's meaning ONCE and register the answer, so a consumer reads one signal
+    where it reads six — today `SFWE0` asks `!HRW & !HRO & !ISAIDX & !ISSDATA & !HL1 &
+    !HL0`, and five more macrocells each ask `HCOMMIT & !HRW`. ⚠ **What defeats it is
+    `AIDX`.** The existing decodes (`HW`, `HL`, `HRO`, `HSTAGE`) are *continuously
+    clocked*, so they track the index as it auto-increments; a decision latched at
+    `HSTB` freezes a possibly-stale `AIDX`, because the host's next access can arrive
+    while the previous `W3` is still running — `ASTAT` b6 clears when the sequence
+    **starts**, not when it ends. And a decision clocked off `HRW` instead is **two
+    registers deep** where everything around it is one, so it arrives a slot late. Both
+    shapes were built and both failed in simulation, in different ways.
+
+    **What it needs is a third shape**: decisions clocked continuously from `AIDX` *and*
+    from `HRW`, with the sequence gated so it cannot start until they have settled —
+    which is a change to the host handshake of §9.4.4, not to the decode. **That is the
+    next attempt, and it should be made on its own rather than underneath a datapath
+    change.**
+
+    ⚠ **Do not plan any of this as a move to U1.** U1 is **pin-bound at 62 of 64**; its
+    40 spare cells are unreachable because anything moved there needs signals crossing
+    and there are two pins to cross on. Three partitions were costed and all three are
+    pin-fatal:
 
     | move to U1 | U2 pins | U1 pins | |
     |---|---|---|---|
     | `AIDX` + the 16-entry offset decode (18 registers) | −6 in, +14 in | +14 | both over 64 |
-    | the same, with U1 driving `SFA` directly | −6 in, +6 | +12 | U1 to 74 |
+    | the same, with U1 driving `SFA` directly | −6, +6 | +12 | U1 to 74 |
     | the converter control (`WROTE`, `CVC`, `CVOEA`) | −1 | +7 | U1 to 69 |
 
-    **So it is 35 ICs, not 31**, and the −4 is available only behind one of: a bigger
-    package for U2 (a `TQFP-100` buys pins, not fan-in — it would not help), a third
-    CPLD (+1 IC, which spends the −4 to save 4), or a microcode pipeline that registers
-    the control word a slot ahead so each output reads one signal instead of eight.
-    **The last is the real answer and it is a redesign of §10.2.3, not an optimisation.**
+    ⭐ **The transferable lesson, and it is the third limit this family has.** After
+    macrocells and pins, an `ATF1508AS` runs out of **LAB fan-in**, and a combinational
+    intermediate in CUPL is *substituted* rather than given a macrocell — so its terms
+    multiply into everything that reads it, and every reader's block pays. U1's
+    comparator is the worked example: as one 32-term macrocell it was unplaceable and
+    the fitter simply never returned; split per byte into `NEQL`/`NEQH` it placed in two
+    minutes **and the part got smaller**. ⚠ **A fit past ~3 minutes is a fan-in
+    suspicion, not a slow fit** — the symptom is often silence, not `Grouping fail`.
 
-    ⭐ **The transferable lesson is the one U1's comparator already taught**: a
-    combinational intermediate in CUPL is *substituted*, so its terms multiply into
-    everything that reads it. `WIDE` was promoted to a pin for exactly that reason and
-    it was not enough. **After cells and pins, this family runs out of fan-in, and a
-    saturated part shows it as `Grouping fail` with no other diagnostic.**
+35. **⚠ NEW 2026-09-09 — the 17th and 19th bits do not distinguish an increment from a
+    decrement, and it is a latent hole in the design as it stands.** `SDH0`–`SDH2` carry
+    `PTR[18:16]` and `CNT[16]`, and they apply the adder's `ACOUT` one way for every
+    operation. **`ACOUT` means "carry" on an increment and "no borrow" on a decrement.**
+    The 16-bit datapath never exercises it — `CNT` reaching bit 16 needs a buffer over
+    65,536 bytes — but the fault is real and it was measured: on the 8-bit build, a
+    16-byte buffer came back as **65,551 bytes**. The fix is one bit of mode per step
+    (`"inc"`, `"dec"`, `"pass"`, `"carry"`) and it is written down in the reverted
+    branch; it is **not** in the tree, because half-fixing a path nothing currently
+    reaches is worse than recording it. **Fix it with whatever next touches §10.2.3.**
 
 ---
 
