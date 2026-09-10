@@ -1003,3 +1003,39 @@ question surfaced the stale prose rather than a saving.
 figures and IC totals against `gal/cpld/*.fit` and `place/parts.ts`; "two packages of
 latch" is prose, tied to no part name and no total. Numbers are checkable; sentences are
 not, and this is what that limitation looks like in practice.
+
+
+---
+
+## 2026-09-09 (fifth pass) — the 8-bit datapath, built and refused
+
+**Nothing in the present design changed.** This entry exists because the attempt is
+worth more than its absence, and because §16 item 34 now records a *measured* refusal
+where it used to record an estimate.
+
+**What was tried.** Narrowing the adder to a byte: `74HC283` 4 → 2, the sum's
+three-state 2 → 1, the constant 2 → 1 — **−4 packages, 35 → 31**. The sequencing was
+cheaper than the earlier estimate feared: a `BYTE` toggle holds the step counter while
+the two halves of a 16-bit operation go through, so it needed **no fifth `T` bit**, only
+two registers and two pins. `ALAT` and `BLAT` stayed two `'574`s each — they hold sixteen
+bits and *present* eight, which is why they never halved.
+
+**It worked.** `audio_tb` ran the whole card on it: **38 claims, 0 failed**, a channel
+event at ten work slots instead of seven, the margin at ProTracker's top note 14.2× →
+**7.7×**. Two real defects surfaced and were fixed on the way — the 17th and 19th bits
+need to know an increment from a decrement, because `ACOUT` means "carry" on one and
+"no borrow" on the other, and reading it one way for both made a 16-byte buffer 65,551
+bytes long.
+
+⛔ **The fitter refused it: `Grouping fail`, all eight LABs at `FanIn assignment [40]`.**
+Not macrocells, not pins — fan-in, and the whole device rather than one block. A narrower
+datapath needs *more control signals* and every one fans into the same decodes.
+
+⚠ **And the rebalance had nowhere to go**, which is the part worth keeping. U1 is at
+**62 of 64 pins**: it is pin-bound, not cell-bound, so its 40 spare cells are
+unreachable — anything moved there needs signals crossing and there are two pins to
+cross on. Three partitions were costed and all three are pin-fatal in one direction or
+the other; §16 item 34 has the table.
+
+**Reverted whole.** The card is 35 ICs on 18 cm, both CPLDs fitted, 483 checks and 38
+simulation claims green — the state committed as `31665a4`.

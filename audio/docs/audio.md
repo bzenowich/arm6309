@@ -2455,17 +2455,47 @@ specification that has not been tested.
     write (`!ISAIDX`) so the index cannot store itself into the location it names.
     `audio_tb` reads `PER`'s two bytes back and gets what it wrote.
 
-34. **⚠ NEW 2026-09-09 — the 8-bit datapath, costed and NOT taken.** Narrowing the adder
-    to a byte halves the `'283` chain, the `$FF` constant and the sum three-state: **−4
-    packages**, and the measured margin can afford it — a channel event would go from
-    seven work slots to ten, and four channels at ProTracker's top note use **37 of 600**
-    slots today (§10.2.5). **What stops it is `ALAT` and `BLAT`.** Each must still hold
-    sixteen bits and present eight, so each is still two `'574`s with their output
-    enables acting as the byte multiplexer — the "halved" latches are not halved, and the
-    saving is 4 rather than the 6 it looks like. It also wants two more U2 pins for the
-    byte select on a part with three, and a fifth `T` bit on a part at 128 of 128 cells.
-    **Take it only with a U2 rebalance in the same pass** — §9.3's `AIDX` and its
-    sixteen-entry offset decode are eighteen registers that would sit naturally on U1.
+34. **⛔ ATTEMPTED 2026-09-09 AND REFUSED BY THE FITTER — the 8-bit datapath, and
+    what stops it is FAN-IN.** Narrowing the adder is worth **−4 packages**: `74HC283`
+    4 → 2, the sum's three-state 2 → 1, and the `$FF` constant 2 → 1. It was built,
+    simulated and rejected, and the arithmetic is not what rejected it.
+
+    ⭐ **The design works.** A `BYTE` toggle holds the step counter while the two halves
+    of a 16-bit operation go through, so it costs **no fifth `T` bit** — two registers
+    (`BYTE` and the inter-byte carry `CY`) and two pins for the byte select, which is
+    all U2 had room for. `ALAT` and `BLAT` stay two `'574`s each: they hold sixteen bits
+    and *present* eight, their output enables doing the multiplexing. `audio_tb` ran the
+    whole card on it — **38 claims, 0 failed**, a channel event at **ten work slots**
+    instead of seven, and the margin at ProTracker's top note **14.2× → 7.7×**, which is
+    ample.
+
+    ⛔ **`Grouping fail`, with all eight LABs pinned at `FanIn assignment [40]`.** Not
+    macrocells and not pins — the `ATF1508AS`'s third limit, and this time it is the
+    whole device rather than one block. A narrower datapath needs *more control
+    signals*, and every one of them fans into the same decodes.
+
+    ⚠ **And the rebalance has nowhere to go.** U1 is at **62 of 64 pins** — it is
+    pin-bound, not cell-bound, so the 40 cells it has spare are unreachable: anything
+    moved there needs signals crossing, and there are two pins to cross on. Three
+    partitions were costed and all are pin-fatal:
+
+    | move to U1 | U2 pins | U1 pins | |
+    |---|---|---|---|
+    | `AIDX` + the 16-entry offset decode (18 registers) | −6 in, +14 in | +14 | both over 64 |
+    | the same, with U1 driving `SFA` directly | −6 in, +6 | +12 | U1 to 74 |
+    | the converter control (`WROTE`, `CVC`, `CVOEA`) | −1 | +7 | U1 to 69 |
+
+    **So it is 35 ICs, not 31**, and the −4 is available only behind one of: a bigger
+    package for U2 (a `TQFP-100` buys pins, not fan-in — it would not help), a third
+    CPLD (+1 IC, which spends the −4 to save 4), or a microcode pipeline that registers
+    the control word a slot ahead so each output reads one signal instead of eight.
+    **The last is the real answer and it is a redesign of §10.2.3, not an optimisation.**
+
+    ⭐ **The transferable lesson is the one U1's comparator already taught**: a
+    combinational intermediate in CUPL is *substituted*, so its terms multiply into
+    everything that reads it. `WIDE` was promoted to a pin for exactly that reason and
+    it was not enough. **After cells and pins, this family runs out of fan-in, and a
+    saturated part shows it as `Grouping fail` with no other diagnostic.**
 
 ---
 
