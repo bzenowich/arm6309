@@ -647,6 +647,33 @@ const conv: Cell[] = [
   ...[0, 1, 2, 3].map((n) => ({
     pin: 0, name: `CVLD${n}`, assertedLow: false, s0: 1 as const, registered: false,
     terms: [`QCHAN & !CVBUSY & ${bits("S", n, 2).join(" & ")}`,
+      /* ⭐ 16 ITEM 39(b): THE PORT REGISTER ALSO LOADS AT THE `PEND` WRITE
+       * ITSELF, and that is the whole repair.
+       *
+       * The walk's load above is one frame behind the write - it copies `PEND`
+       * off the read bus in the channel's own walk slot - while `WROTE`, which
+       * arms the strobe, is set one slot AFTER the write. So the strobe window
+       * opened on a port register that had not been reloaded yet: measured, a
+       * `PEND` write in slot 5 armed `WROTE0` in slot 6 and `CVCSS` fired in
+       * slots 6 and 7 with the register still holding the PREVIOUS sample.
+       * The new byte arrived at slot 0 of the next frame, by which time
+       * `WROTE0` had cleared, and it was never strobed at all - so the first
+       * sample of every note went to `PEND` and not to the converter.
+       *
+       * ⭐ The byte is already ON THE BUS at that step: `sbo` drives the sample
+       * latch onto `SD[23:16]` so the state file can take it. Latching it into
+       * the port register at the same instant costs ONE TERM on four
+       * combinational cells - no macrocell, no pin, no package - and it makes
+       * the walk's load a refresh with the same value rather than the only
+       * path. §6.2's "one frame behind the compare" becomes "at the write",
+       * which is strictly less latency and strictly more of §3.2's claim that
+       * the converter changes on the colour clock the sample changed on.
+       *
+       * ⚠ It cannot collide with the walk: the walk loads in slots 0-3 and a
+       * work slot is 5-7, and 10.2.6's `74HC138` codes make a load and a
+       * strobe mutually exclusive by construction. */
+      ...onSteps(NOHOST((st) => st.pend === true))
+        .map((t) => `${t} & ${bits("WC", n, 2).join(" & ")}`),
       ...onSteps(NOHOST((s) => s.cvld === true && s.ch === n))],
   })),
   { pin: 0, name: "CVC0", assertedLow: false, s0: 1, registered: false,

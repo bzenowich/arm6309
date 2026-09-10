@@ -1507,12 +1507,12 @@ pins and spends cells. There is no one-part arrangement of this card.
 | | holds | fitted |
 |---|---|---|
 | **U1** `ATF1508AS` PLCC-84, socketed | the host register block — §9.1's decode, `ADMACON`, `AINTENA`, `AINTREQ` and its pending register, `/FIRQ`, `ACTRL`, the `AINTREQ` read synchroniser, the slot walk, the ÷5 tempo reference — **plus §4.2's free-running counter and comparator and §9.3's read-back latch**, which is seven packages for sixteen pins | **88 of 128 cells, 62 of 64 I/O** — §10.1.1 |
-| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **127 of 128 cells, 61 of 64 I/O** — §10.2.6 |
+| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **128 of 128 cells, 60 of 64 I/O** — §10.2.6 |
 
 ⚠ **U2 IS EXACTLY FULL AND U1 IS NOT**, which is the whole shape of this card's logic
 and the reason every reduction moved work *towards* U1. "Design fits successfully" on
-both: U2 at **127 of 128 cells**, 61 of 64 I/O, **69 foldback nodes, no cascades and 461
-product terms**, six of eight blocks at **37 of 40 LAB fan-in**; U1 at **88 of 128 cells**, 62 of 64 I/O, 22 foldback, no cascades and 274
+both: U2 at **128 of 128 cells**, 60 of 64 I/O, **72 foldback nodes, no cascades and 473
+product terms**, six of eight blocks at **36 of 40 LAB fan-in**; U1 at **88 of 128 cells**, 62 of 64 I/O, 22 foldback, no cascades and 274
 product terms. A **TQFP-100 was tried and does not help**: it takes the
 pins from 62 of 64 to 62 of 80 and leaves the cells at 128 of 128, because both packages
 carry the same 128 macrocells. So the PLCC-84 is the right package — it keeps the socket
@@ -1846,19 +1846,21 @@ work slots per colour clock instead of three. Both are archived.
 
 #### 10.2.6 The pin budget, and the one lever that was pulled
 
-U2 is **36 outputs and 26 inputs**, and the fitter reports **61 of 64 I/O and 128 of
-128 logic cells** — "Design fits successfully", with **71 foldback nodes, 1 cascade and
-487 product terms**, and **five of eight logic blocks at 39 of 40 LAB fan-in**
-(§16 item 35 refit, 2026-09-10). `npm run check:audio` prints the interface and asserts
+U2 is **36 outputs and 26 inputs**, and the fitter reports **60 of 64 I/O and 128 of
+128 logic cells** — "Design fits successfully", with **72 foldback nodes, no cascades and
+473 product terms**, and **six of eight logic blocks at 36 of 40 LAB fan-in**
+(§16 items 35, 36 and 39 all repaired into it, 2026-09-10). `npm run check:audio` prints the interface and asserts
 it is **closed in both directions**: every signal U1 reads is produced by U2, the
 backplane or the board, and every signal U2 reads is a U1 output or the `'688` and the
 `'283` chain answering it. Seventeen nets cross from U1 to U2 and five come back.
 
-⚠ **There is ONE CELL LEFT, and it arrived by deleting work rather than by finding
-room.** §16 item 39's W6-into-W1 chain took the sequencer from 128 of 128 to **127**,
-product terms from 487 to 461 and peak LAB fan-in from 39 to 37 — because W6 stopped
-duplicating a fetch W1 already does. That is not headroom to spend; it is what one
-removed duplicate is worth, and the part is still 99 % full. A **TQFP-100 was fitted as well** and takes the pins to 62 of 80 while leaving the
+⛔ **There is nothing left, and the one cell there briefly was is spent.** §16 item
+39(a)'s W6-into-W1 chain took the sequencer from 128 of 128 to **127** — because W6
+stopped duplicating a fetch W1 already does — and item 39(b) then spent it, on the term
+that loads the converter port register at the `PEND` write. ⭐ **The pair together cost
+nothing and bought two audible repairs**: 487 product terms to 473, peak LAB fan-in 39
+to **36**, and a pin back. ⚠ But the part is 128 of 128 again, and the next thing added
+still has to displace something. A **TQFP-100 was fitted as well** and takes the pins to 62 of 80 while leaving the
 cells where they are — both packages carry the same 128 macrocells — so the larger package
 buys pin headroom this design does not need and costs the socket. **The PLCC-84 with JTAG
 off is the answer, and the next thing added to this card has to displace something.**
@@ -1912,8 +1914,8 @@ image, the step budget, and which of U2's 149 cells become table content. What i
 and every one of its 36 control outputs is a sum-of-products decode of
 (`RUN`, `WT[2:0]`, `T[3:0]`) qualified by the host state — `aseq.jedec.ts`'s `ctl()`
 is literally that function. **That is what an addressed memory does for nothing**, and
-doing it in an `ATF1508AS` spends all three of the family's limits at once: **127 of 128
-logic cells**, 69 foldback nodes, and **six of eight logic blocks at 37 of 40 LAB
+doing it in an `ATF1508AS` spends all three of the family's limits at once: **128 of 128
+logic cells**, 72 foldback nodes, and **six of eight logic blocks at 36 of 40 LAB
 fan-in** after §16 items 35, 36 and 39 were repaired into it on 2026-09-10.
 
 ⛔ **Three open items are stuck behind that one fact, and none of them is cosmetic.**
@@ -2139,7 +2141,7 @@ That one step is the whole difference.
 | throughput floor | `PER` ≥ 16 | **`PER` ≥ 20** | `PER` ≥ 32 ⛔ |
 
 ⭐ **The adder costs the two architectures almost the same, which is the useful result:
-it does not decide between them.** What decides is that U2 is at 127 of 128 cells.
+it does not decide between them.** What decides is that U2 is at 128 of 128 cells.
 
 **What the control store buys, item by item:**
 
@@ -3173,7 +3175,7 @@ specification that has not been tested.
 
     ⚠ **What that does to this item is narrow the case rather than close it.** The two
     audible defects were the strongest argument for §10.3 and they are gone. What remains
-    is §16 item 32 — U2 at 127 of 128 cells with **six of eight blocks at 37 of 40
+    is §16 item 32 — U2 at 128 of 128 cells with **six of eight blocks at 36 of 40
     fan-in** — so §16 item 7's eight channels and §11.3's attach
     chain still have nowhere to go, and **the next repair of this kind will not fit.**
     §10.3 is now a question about headroom for future work, not about a card that
@@ -3206,8 +3208,8 @@ specification that has not been tested.
     in the design as it stands. **That is the trade, and it should be taken deliberately
     or not at all.**
 
-39. **⭐ HALF CLOSED 2026-09-10 — the first pass no longer reads outside the buffer,
-    and it cost the part nothing; the first sample is still not strobed.** Found by
+39. **⭐ CLOSED 2026-09-10 — the first pass of a note is now the buffer, exactly, and
+    the two halves of the repair paid for each other.** Found by
     re-running §16 item 36's oracle against the repaired design: the steady state was
     exact and the *first* loop after a `DMACON` enable was not — `03 04 05 06` out of a
     four-byte sample.
@@ -3235,18 +3237,40 @@ specification that has not been tested.
     a new step cannot leave it pointing at the wrong one), one literal on `WT1`'s hold
     term and one term on `BUSY` — the same shape `ENDNOW` already had for W1 → W2.
 
-    **(b) ⚠ STILL OPEN: the first `PEND` write of a note is not strobed into the
-    converter.** §6.2's strobe is gated on `WROTE`, which is set by the `PEND` write and
-    held only until the next slot 7 — so it reaches the `AD7528` when the writing step
-    happens to land in a slot from which it survives to the following walk, and not
-    otherwise. In steady state it always does; the first event after an enable does not,
-    and the note's first sample is skipped. **The oracle measures it**: the card emits
-    three samples on its first pass and four on every one after, while fetching four
-    throughout.
+    **(b) ⭐ CLOSED — the port register loads at the `PEND` write itself.** §6.2's
+    strobe is armed by `WROTE`, which is set one slot *after* the `PEND` write, while the
+    port register only copied `PEND` off the read bus in the channel's own walk slot —
+    **one frame later.** So the strobe window opened on a register that had not been
+    reloaded yet. Measured, before the repair:
 
-    ⚠ **Do not fix it by widening `WROTE`'s hold without measuring.** The flag exists to
-    cut converter write traffic 28× beside the analogue section (§3.2, §16 item 9), and
-    it is one term on four registered cells on a part at 127 of 128.
+    ```
+      PENDWRITE slot=5  PEND<=02
+        CVCSS   slot=6  WROTE0=1  port=00      ← strobes the PREVIOUS sample
+        CVCSS   slot=7  WROTE0=1  port=00
+        CVLD0   slot=0  port<=02  WROTE0=0     ← the new byte arrives, unarmed
+    ```
+
+    The byte is **already on the bus** at that step — `sbo` drives the sample latch onto
+    `SD[23:16]` so the state file can take it — so latching it into the port register at
+    the same instant is **one term on four combinational cells**: no macrocell, no pin,
+    no package. The walk's load becomes a refresh with the same value rather than the
+    only path, and §6.2's *"one frame behind the compare"* becomes *"at the write"*,
+    which is strictly less latency and strictly more of §3.2's claim that the converter
+    changes on the colour clock the sample changed on.
+
+    ⭐ **The card's first pass is now the buffer, exactly**, and `npm run check:oracle`
+    asserts it:
+
+    ```
+      first pass, card  : 02 03 04 05        ok  the FIRST pass is the buffer, exactly
+    ```
+
+    ⚠ **The claim is on the FIRST pass and not the steady state**, deliberately: the
+    steady state was never wrong, so asserting it would have caught neither half of this
+    item.
+
+    ⚠ **And it spent the cell 39(a) freed.** 127 of 128 back to 128 — though the pair
+    together cost nothing net and lowered peak LAB fan-in from 39 to 36.
 
     ⚠ **And a testbench bug fell out of the same change, which is worth more than it
     looks.** §8.1 bit 5 is `HSTB & !RW & PWBUSY` — it fires on **any** host write that

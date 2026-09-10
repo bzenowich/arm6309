@@ -763,18 +763,22 @@ module aseq (
   // buried
   assign CVLD0 =
          (QCHAN & ~CVBUSY & ~S0 & ~S1)
+         | (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & ~WC0 & ~WC1)
          | (RUN & WT0 & ~WT1 & WT2 & ~T0 & ~T1 & ~T2 & ~T3);
   // buried
   assign CVLD1 =
          (QCHAN & ~CVBUSY & S0 & ~S1)
+         | (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & WC0 & ~WC1)
          | (RUN & WT0 & ~WT1 & WT2 & T0 & ~T1 & ~T2 & ~T3);
   // buried
   assign CVLD2 =
          (QCHAN & ~CVBUSY & ~S0 & S1)
+         | (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & ~WC0 & WC1)
          | (RUN & WT0 & ~WT1 & WT2 & ~T0 & ~T1 & T2 & ~T3);
   // buried
   assign CVLD3 =
          (QCHAN & ~CVBUSY & S0 & S1)
+         | (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & WC0 & WC1)
          | (RUN & WT0 & ~WT1 & WT2 & T0 & T1 & ~T2 & ~T3);
   // EXTERNAL
   assign CVC0 =

@@ -83,11 +83,13 @@ obvious repair — a second decrement in W6 — was written, measured correct, a
 by the fitter**. The one that worked *deleted* the duplicate instead: **W6 chains into
 W1**, which already fetches and counts, so the accounting is uniform from the first pass.
 
-⭐ **It is the only change that made the part smaller** — 128 of 128 cells to **127**,
-487 product terms to **461**, peak LAB fan-in 39 to **37**, and W6 from eleven steps to
-eight. ⚠ **One spare cell is not headroom**: the cheap moves left are *deletions*, and
-§16 item 7's eight channels are an addition. What is still open is the strobe — the first
-sample of a note reaches `PEND` and not the converter (item 39(b)).
+⭐ **It is the only change that made the part smaller** — W6 from eleven steps to eight,
+487 product terms to 461, peak LAB fan-in 39 to 37 — and the cell it freed then paid for
+**item 39(b)**: the port register now loads at the `PEND` write itself, so the first
+sample of a note reaches the converter instead of stopping at `PEND`. ⭐ **The card's
+first pass is now the buffer exactly — `02 03 04 05` — and `check:oracle` asserts it**,
+because the steady state was never wrong and asserting *that* would have caught neither
+half of the defect.
 
 ⚠ **So the sequencer has a third arrangement, designed on 2026-09-10 and not decided.**
 §10.3 moves the `(WT, T)` decode out of macrocells into four `27C512` with the step
@@ -107,7 +109,7 @@ packages rather than one.
 | | | |
 |---|---|---|
 | **U1** the host register block, plus §4.2's counter and comparator and §9.3's read-back latch | `audio` | 88 of 128 cells, 62 of 64 I/O |
-| **U2** the sequencer (§10.2) | `aseq` | ⚠ **127 of 128 cells**, 61 of 64 I/O |
+| **U2** the sequencer (§10.2) | `aseq` | ⚠ **128 of 128 cells**, 60 of 64 I/O |
 
 ⚠ **U2 is exactly full and U1 is not**, which is why every reduction this pass moved work
 *to* U1 — sixteen state-file data pins there bought seven packages, because the counter,

@@ -74,14 +74,18 @@ module card_oracle_tb;
 
   logic [7:0] last;
   int unsigned emitted = 0;
+  int fails = 0;
   logic started = 0;
   int i;
+
+  logic [7:0] firstpass [0:3];
 
   // A monitor, not a driver.
   always @(posedge SLOTCLK) begin
     if (started && DACSAMP0 !== last) begin
       last <= DACSAMP0;
       emitted <= emitted + 1;
+      if (emitted < 4) firstpass[emitted] <= DACSAMP0;
       $display("SAMPLE %0d %02h   (PTR=%05h CNT=%0d)", emitted + 1, DACSAMP0,
                {card.SF[2][18:16], card.SF[2][15:0]},
                {card.SF[1][16], card.SF[1][15:0]});
@@ -118,7 +122,22 @@ module card_oracle_tb;
 
     for (i = 0; i < 400000 && emitted <= 24; i++) @(posedge SLOTCLK);
 
+    // ⭐ 16 ITEM 39, AS A CLAIM. The FIRST pass of a note used to differ from
+    // every later one in two ways at once - it read one byte past the buffer,
+    // and its first sample went to PEND and never to the converter - so a card
+    // that looped perfectly still mis-played every attack. Both are gone, and
+    // the way to keep them gone is to assert the first pass rather than the
+    // steady state, because the steady state was never wrong.
     $display("");
+    if (firstpass[0] === 8'h02 && firstpass[1] === 8'h03
+        && firstpass[2] === 8'h04 && firstpass[3] === 8'h05)
+      $display("ok    ⭐ the FIRST pass is the buffer, exactly: %02h %02h %02h %02h",
+               firstpass[0], firstpass[1], firstpass[2], firstpass[3]);
+    else begin
+      $display("FAIL  the first pass is %02h %02h %02h %02h, not 02 03 04 05",
+               firstpass[0], firstpass[1], firstpass[2], firstpass[3]);
+      fails = 1;
+    end
     $display("CARD samples=%0d", emitted);
     $finish;
   end

@@ -1502,3 +1502,55 @@ previous has not retired, not only on `ADATA`. `audio_tb` honoured b6 in `adata`
 and nowhere else, and got away with it because the engine was quick enough. A longer
 enable sequence made the next write overrun, `AINTREQ` b5 latched, `/FIRQ` would not
 release — **and it presented as an interrupt defect.** Every write waits on b6 now.
+
+
+---
+
+## 2026-09-10 (sixth pass) — 39(b), and the cheapest term of the day
+
+**The card is still 35 ICs.** §16 item 39 is closed: the first pass of a note is now the
+buffer exactly, `02 03 04 05`, and `check:oracle` asserts it.
+
+### §6.2 — the converter port register loads at the `PEND` write, not one frame later
+
+**Was:** the port register copied `PEND` off the state-file read bus in the channel's own
+walk slot — slot 0 for channel 0 — and the `AD7528` was strobed later in the frame,
+gated by `WROTE`.
+
+⛔ **`WROTE` is set one slot after the `PEND` write, and the load is a frame after it.**
+So the strobe window opened on a register that had not been reloaded yet. Measured:
+
+```
+  PENDWRITE slot=5  PEND<=02
+    CVCSS   slot=6  WROTE0=1  port=00      ← strobes the PREVIOUS sample
+    CVCSS   slot=7  WROTE0=1  port=00
+    CVLD0   slot=0  port<=02  WROTE0=0     ← the new byte arrives, unarmed
+```
+
+In steady state the previous sample is always one the converter has already had, so the
+stream is right and only lags; after an enable there is no previous sample and the first
+one is simply skipped.
+
+⭐ **Now:** the sample byte is *already on `SD[23:16]`* at that step — `sbo` puts it there
+so the state file can take it — so the port register latches it at the same instant. **One
+term on four combinational cells.** The walk's load becomes a refresh with the same value.
+
+### What it cost and what it bought
+
+| `aseq` | priming W6 | after 39(a) | **after 39(b)** |
+|---|---|---|---|
+| logic cells | 128 / 128 | 127 / 128 | **128 / 128** |
+| I/O | 61 / 64 | 61 / 64 | **60 / 64** |
+| product terms | 487 | 461 | **473** |
+| peak LAB fan-in | 39 of 40 | 37 of 40 | **36 of 40** |
+
+⭐ **The pair paid for each other**: 39(a) freed a cell by deleting a duplicate and 39(b)
+spent it, and between them peak fan-in fell from 39 to 36 and a pin came back. ⚠ **The
+part is 128 of 128 again** — §16 item 32 stands.
+
+### ⭐ And the claim is on the first pass, deliberately
+
+`card_oracle_tb` asserts that the first four samples of a note are the buffer's four
+bytes. **The steady state was never wrong** — it was right through both halves of item 39
+and through D-1 and D-2 before them — so a claim about it would have caught none of them.
+*Assert the transient; the steady state is where defects hide from you.*

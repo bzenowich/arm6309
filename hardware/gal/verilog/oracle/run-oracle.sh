@@ -68,5 +68,18 @@ esac
 
 echo "      first pass, card  : $(grep '^SAMPLE' card.out  | head -6 | awk '{print $3}' | tr '\n' ' ')"
 echo "      first pass, Paula : $(grep '^SAMPLE' paula.out | head -6 | awk '{print $3}' | tr '\n' ' ')"
-echo "      ⚠ the first pass is NOT compared - 16 items 36 and 39 say why."
+
+# ⭐ THE CARD'S FIRST PASS IS ITS OWN CLAIM, made inside card_oracle_tb. It is
+# not compared against Paula's, because Paula discards the first word fetched
+# after DMACON and this card does not - an Agnus cycle this harness cannot
+# settle (16 item 36). What IS asserted is that the card's first pass is the
+# buffer and nothing but the buffer, which is what 16 item 39 was about: the
+# steady state was never wrong, so asserting it would not have caught either
+# half of that defect.
+if grep -q '^ok    ⭐ the FIRST pass' card.out; then
+  grep '^ok    ⭐ the FIRST pass' card.out
+else
+  grep '^FAIL' card.out || echo "FAIL  card_oracle_tb made no first-pass claim"
+  rc=1
+fi
 exit $rc
