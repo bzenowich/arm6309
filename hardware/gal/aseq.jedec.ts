@@ -115,12 +115,21 @@ const engine: Cell[] = [
       "WORKSLOT & !BUSY & VDIRTY"] },
 
   { pin: 0, name: "BUSY", assertedLow: false, s0: 1, registered: true,
-    terms: ["START", "BUSY & !LAST", "ENDNOW"] },
+    terms: ["START", "BUSY & !LAST", "ENDNOW", "CHAIN1"] },
 
-  /* The work type latched at START, and W1's chain into W2 at ENDNOW. */
+  /* The work type latched at START, and the two chains that hand the engine
+   * from one sequence to another without releasing it. */
   { pin: 0, name: "ENDNOW", assertedLow: false, s0: 1, registered: false,
     why: "W1 ended on a buffer end, so W2 follows without releasing the engine",
     terms: [`RUN & !WT2 & !WT1 & !WT0 & ${bits("T", 6, 4).join(" & ")} & !ACOUT`] },
+  /* ⭐ 16 ITEM 39: W6's LAST STEP HANDS OVER TO W1. W6 no longer primes PEND
+   * itself - it sets PTR, CNT and NEXT and lets W1 do the first fetch, which
+   * is what makes the byte accounting uniform and gets the first sample its
+   * 6.2 strobe. Derived from the table's own length, so adding a step to W6
+   * cannot leave this pointing at the wrong one. */
+  { pin: 0, name: "CHAIN1", assertedLow: false, s0: 1, registered: false,
+    why: "W6 finished its reload, so W1 follows without releasing the engine",
+    terms: onSteps([[W6, LEN[W6] - 1]]) },
   { pin: 0, name: "WT0", assertedLow: false, s0: 1, registered: true,
     /* W1 = 000, W2 = 001, W6 = 010, W4 = 011, W3 = 100, W5 = 101. ⚠ The host
      * sequence is the ONLY one with WT0 clear and WT2 set, and getting that
@@ -129,8 +138,12 @@ const engine: Cell[] = [
      * wrote ever landed and every claim below the decode failed at once. */
     terms: ["ENDNOW", "START & !RSTANY & TDUE",
       "START & !RSTANY & !TDUE & !DUEANY & !HDUE", "WT0 & !START & !ENDNOW"] },
+  /* ⚠ `!CHAIN1` IS WHAT MAKES THE HAND-OVER A HAND-OVER. W6 is 010 and W1 is
+   * 000, so the only bit that has to move is this one - and it moves by having
+   * its hold term stop holding, exactly as ENDNOW moves WT0 the other way. */
   { pin: 0, name: "WT1", assertedLow: false, s0: 1, registered: true,
-    terms: ["START & RSTANY", "START & !RSTANY & TDUE", "WT1 & !START & !ENDNOW"] },
+    terms: ["START & RSTANY", "START & !RSTANY & TDUE",
+      "WT1 & !START & !ENDNOW & !CHAIN1"] },
   { pin: 0, name: "WT2", assertedLow: false, s0: 1, registered: true,
     terms: ["START & !RSTANY & !TDUE & !DUEANY & HDUE",
       "START & !RSTANY & !TDUE & !DUEANY & !HDUE", "WT2 & !START & !ENDNOW"] },

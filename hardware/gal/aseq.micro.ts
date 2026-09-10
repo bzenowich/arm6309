@@ -186,41 +186,38 @@ export const PROGRAM: Record<number, Step[]> = {
     /* 8 */ { g: 1, alat: true },
     /* 9 */ { g: 1, wr: [0, 1], b: "blat", sum: true, set: 4, done: "always" },
   ],
-  /* -- W6: 1 requirement 6's restart. The 0-to-1 edge of DMACON's enable bit
-   * reloads the pointer and the count from the shadow, primes PEND, and sets
-   * NEXT one period ahead - so the first sample lands one period after the
-   * enable, exactly as Paula's does. It JUMPS THE QUEUE (16 item 13), and its
-   * first four steps are W2's, so the latch the replayer depends on completes
-   * in two colour clocks against the 1.13 us that item asks for. */
+  /* -- W6: 1 requirement 6's restart, and it CHAINS INTO W1 ----------------
+   * The 0-to-1 edge of DMACON's enable bit reloads the pointer and the count
+   * from the shadow and sets NEXT, and then hands the engine to W1 without
+   * releasing it - the same trick W1 already uses to reach W2.
+   *
+   * ⭐ THAT IS 16 ITEM 39's REPAIR, AND IT MAKES W6 SHORTER RATHER THAN
+   * LONGER. W6 used to prime PEND itself, which cost it a sample fetch, a
+   * pointer increment and a PEND write - and left two defects behind, because
+   * its own fetch consumed a byte no W1 would ever count (so the first pass of
+   * every note ran one byte past the buffer) and its PEND write raised none of
+   * 6.2's WROTE flags (so the first sample of every note was never strobed
+   * into the converter). Handing the fetch to W1 fixes both by DELETING the
+   * duplicate rather than by correcting it: W1 already decrements CNT for
+   * every byte it fetches, and W1 step 4 is the write 6.2's strobe watches.
+   *
+   * ⚠ NEXT IS SET TO THE BARE COUNT, not count + PER, because the chained W1
+   * adds PER itself at step 4. Setting count + PER here would put the first
+   * sample two periods out.
+   *
+   * ⚠ AND THE LAST STEP WRITES LANES 0 AND 1 ONLY. Lane 2 of word 0 is PEND,
+   * and the chained W1 is about to write it; writing all three here would put
+   * the top byte of the free-running counter into the converter's path for one
+   * frame. */
   [W6]: [
     /* 0 */ { w: 3, alat: true, cap: true },
     /* 1 */ { w: 2, wr: [0, 1, 2], b: "zero", sum: true, drv: true },
     /* 2 */ { w: 5, alat: true, blat: true },
     /* 3 */ { w: 1, wr: [0, 1, 2], b: "blat", sum: true, drv: true },
-    /* ⛔ ONE DECREMENT HERE AND ONE IN W2, AND THAT IS 16 ITEM 39: IT SHOULD
-     * BE TWO. W6 PRIMES and W2 does not, so W6's own fetch below consumes a
-     * byte that no W1 will ever count, and the first pass of every note runs
-     * one byte PAST the buffer - the oracle measured it playing 03 04 05 06
-     * out of a four-byte sample, while every later loop was exact. The repair
-     * is a second `read CNT, CNT - 1` pair right here; it was written, it was
-     * measured correct, and `fit1508.exe` REFUSED IT. The part is full.
-     * A defect in the first pass only is a defect on every NOTE. */
     /* 4 */ { w: 1, alat: true, cap: true },
     /* 5 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true },
-    /* 6 */ { w: 2, alat: true, cap: true, srd: true },
-    /* 7 */ { w: 2, wr: [0, 1, 2], b: "zero", cin: true, sum: true, drv: true },
-    /* 8 */ { w: 4, blat: true },
-    /* 9 */ { count: true, alat: true },
-    /* ⚠ NOT MARKED `pend`, DELIBERATELY, AND 16 ITEM 39 IS WHY. This step
-     * writes PEND too, and 6.2's converter strobe is gated on "this channel's
-     * PEND changed in the frame just gone" - which reads W1 step 4 and nothing
-     * else, so the primed byte is never strobed and the first sample of every
-     * note is skipped. Marking it here makes the strobe fire only when the
-     * step happens to land in a slot from which WROTE survives to the next
-     * walk - it is right sometimes and wrong otherwise, which is worse than
-     * consistently wrong. Measured, recorded, and not half-fixed. */
-    /* 10 */ { w: 0, wr: [0, 1, 2], b: "blat", sum: true, sbo: true,
-               done: "always" },
+    /* 6 */ { count: true, alat: true },
+    /* 7 */ { w: 0, wr: [0, 1], b: "zero", sum: true, done: "always" },
   ],
 }
 

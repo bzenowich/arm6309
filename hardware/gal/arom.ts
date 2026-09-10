@@ -563,8 +563,9 @@ export const ABSORBED = new Set([
   /* W5's half of the converter ops. The walk's half stays - it is the slot
    * phase, which the microprogram never sees */
   "CVB", "CVCSV",
-  /* the step comparator: SEQ is a field now */
-  "LAST",
+  /* the step comparator, and the two chains between sequences: SEQ is a field
+   * now and it carries `chain` */
+  "LAST", "CHAIN1",
   /* ⭐ and the step counter itself, which becomes a 74HC163 outside */
   "T0", "T1", "T2", "T3",
   /* 8.1's timer source, which is SEQ = endfire */

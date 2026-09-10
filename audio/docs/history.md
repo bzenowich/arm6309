@@ -1444,3 +1444,61 @@ beside it.
 steps to W2 and W6 left `LAST` firing mid-sequence — a channel that fell silent with **no
 failing claim anywhere**, because the microprogram simply stopped part-way. It is derived
 from `PROGRAM` now.
+
+
+---
+
+## 2026-09-10 (fifth pass) — W6 chains into W1, and the part gets smaller
+
+**The card is still 35 ICs.** What changed is that §16 item 39(a) is closed and `aseq`
+came **down** — the only change all day that did.
+
+### §10.2.3 W6 — eleven steps of priming became eight steps of handover
+
+**Was:** W6 reloaded `PTR`/`CNT`, then did its own sample fetch, its own pointer
+increment and its own `PEND` write, and set `NEXT` = count + `PER`.
+
+⛔ **Two defects lived in that duplication.** W6's fetch consumed a byte no W1 would ever
+count, so the first pass of every note ran one byte past the buffer; and its `PEND` write
+raised none of §6.2's `WROTE` flags, so the first sample was never strobed.
+
+**The obvious repair — a second `CNT − 1` pair in W6 — was written, measured correct, and
+refused by `fit1508.exe`.**
+
+⭐ **Now:** W6 sets `PTR`, `CNT` and `NEXT` = the bare count and **chains into W1**, the
+way W1 already chains into W2. W1 does the first fetch, counts it like any other, adds
+`PER` itself, and its `PEND` write is the one §6.2 already watches.
+
+| `aseq` | priming W6 | chained W6 |
+|---|---|---|
+| steps in W6 | 11 | **8** |
+| logic cells | 128 / 128 | **127 / 128** |
+| product terms | 487 | **461** |
+| foldback | 71 | **69** |
+| cascades | 1 | **0** |
+| peak LAB fan-in | 39 of 40 | **37 of 40** |
+
+⭐ **Deleting the duplicate was cheaper than correcting it, and that is the transferable
+part.** Every other repair this day *added* — a mode, a step, a term — and each cost the
+part more than the last. This one removed work that was already being done elsewhere and
+paid for itself twice over. ⚠ **One spare cell is not headroom**: what it shows is that
+the cheap moves left on this part are deletions, and §16 item 7 and §11.3 are additions.
+
+The chain is one combinational cell (`CHAIN1`, derived from W6's own length), one literal
+on `WT1`'s hold term and one term on `BUSY`.
+
+### ⚠ What is NOT closed
+
+The first `PEND` write of a note still is not strobed into the converter — §6.2's `WROTE`
+flag is held only until the next slot 7, so it reaches the `AD7528` when the writing step
+lands in a slot from which it survives to the following walk, and not otherwise. In
+steady state it always does. **The oracle measures the residue**: three samples on the
+first pass, four on every one after, four fetched throughout.
+
+### §9.2 — a testbench that did not obey the register map it was testing
+
+§8.1 bit 5 is `HSTB & !RW & PWBUSY`: it fires on **any** host write arriving while the
+previous has not retired, not only on `ADATA`. `audio_tb` honoured b6 in `adata`/`aidx`
+and nowhere else, and got away with it because the engine was quick enough. A longer
+enable sequence made the next write overrun, `AINTREQ` b5 latched, `/FIRQ` would not
+release — **and it presented as an interrupt defect.** Every write waits on b6 now.

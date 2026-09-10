@@ -77,14 +77,17 @@ Paula play the same bytes in the same cyclic order. The harness is in the tree n
 ([`../hardware/gal/verilog/oracle/`](../hardware/gal/verilog/oracle/), `npm run
 check:oracle`); ⛔ it had been described as "entirely ours" and did not exist.
 
-⛔ **And the same run found a third defect: the FIRST pass of every note reads one byte
-past the buffer**, because W6 primes and W2 does not (§16 item 39). **The repair is
-written, measured correct, and `fit1508.exe` refuses it.** The card carries the defect
-because the part has no room for the fix.
+⭐ **And the same run found a third defect, now half closed: the FIRST pass of every note
+read one byte past the buffer**, because W6 primed and W2 did not (§16 item 39). The
+obvious repair — a second decrement in W6 — was written, measured correct, and **refused
+by the fitter**. The one that worked *deleted* the duplicate instead: **W6 chains into
+W1**, which already fetches and counts, so the accounting is uniform from the first pass.
 
-⚠ **The last repair spent the last of the part**: five of `aseq`'s eight logic blocks
-stand at **39 of 40 LAB fan-in**, against six at 35 before. §16 item 32 stopped being a
-forecast the moment the next repair was tried.
+⭐ **It is the only change that made the part smaller** — 128 of 128 cells to **127**,
+487 product terms to **461**, peak LAB fan-in 39 to **37**, and W6 from eleven steps to
+eight. ⚠ **One spare cell is not headroom**: the cheap moves left are *deletions*, and
+§16 item 7's eight channels are an addition. What is still open is the strobe — the first
+sample of a note reaches `PEND` and not the converter (item 39(b)).
 
 ⚠ **So the sequencer has a third arrangement, designed on 2026-09-10 and not decided.**
 §10.3 moves the `(WT, T)` decode out of macrocells into four `27C512` with the step
@@ -104,7 +107,7 @@ packages rather than one.
 | | | |
 |---|---|---|
 | **U1** the host register block, plus §4.2's counter and comparator and §9.3's read-back latch | `audio` | 88 of 128 cells, 62 of 64 I/O |
-| **U2** the sequencer (§10.2) | `aseq` | ⚠ **128 of 128 cells**, 61 of 64 I/O |
+| **U2** the sequencer (§10.2) | `aseq` | ⚠ **127 of 128 cells**, 61 of 64 I/O |
 
 ⚠ **U2 is exactly full and U1 is not**, which is why every reduction this pass moved work
 *to* U1 — sixteen state-file data pins there bought seven packages, because the counter,

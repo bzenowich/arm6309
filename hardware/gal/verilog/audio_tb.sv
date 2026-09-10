@@ -52,7 +52,17 @@ module audio_tb;
     repeat (24) @(negedge SLOTCLK);
   endtask
 
+  // ⛔ EVERY WRITE WAITS ON ASTAT b6, AND ONLY TWO OF THEM USED TO. 8.1 bit 5
+  // is `HSTB & !RW & PWBUSY` - it fires on ANY host write that arrives while
+  // the previous one has not retired, not only on ADATA - so 9.2's rule covers
+  // the direct window too. The testbench honoured it in `adata`/`aidx` and
+  // nowhere else, and got away with it because the engine happened to be quick
+  // enough. 16 item 39's W6-into-W1 chain made the enable sequence longer, the
+  // very next write overran, REQ5 latched, and /FIRQ would not release - which
+  // presented as an interrupt defect and was a testbench that does not obey
+  // the register map it is testing.
   task automatic wrraw(input int addr, input logic [7:0] v);
+    pwwait();
     @(negedge SLOTCLK); IOSEL = 1; A = addr[6:0]; RW = 0; hostD = v; hostDrv = 1;
     repeat (3) @(negedge SLOTCLK);
     E = 1;
@@ -268,8 +278,12 @@ module audio_tb;
     // ever count, so the enable path is short by two where the reload path is
     // short by one. That is 16 item 39, and the oracle is what found it -
     // the first pass of every note ran one byte PAST the buffer.
-    ok(cnt0 == 17'd15,
-       $sformatf("LEN x 2 - 1 reached CNT as BYTES - 8 words is 15 (%0d)", cnt0));
+    // ⭐ 2*LEN - 1 loaded, and 14 read back, because W6 now CHAINS INTO W1 and
+    // that W1 has already fetched a byte and counted it. That the two numbers
+    // differ by exactly one is the point of 16 item 39's repair: there is no
+    // longer a priming fetch that nobody counts.
+    ok(cnt0 == 17'd14,
+       $sformatf("LEN x 2 - 1 loaded, less the chained W1's own byte - 8 words is 14 (%0d)", cnt0));
     ok(sfh(0) == 8'h10,
        $sformatf("and PEND is primed with the buffer's first byte (%02h)", sfh(0)));
 
@@ -295,7 +309,7 @@ module audio_tb;
     while (card.u2.BUSY && n < 200) begin @(posedge SLOTCLK); n++; end
     repeat (20) @(posedge SLOTCLK);
     ok(sfp(2) == 19'h01002, $sformatf("PTR advanced by one byte (%05h)", sfp(2)));
-    ok(sfc(1) == 17'd14, $sformatf("CNT counted one byte down (%0d)", sfc(1)));
+    ok(sfc(1) == 17'd13, $sformatf("CNT counted one byte down (%0d)", sfc(1)));
     ok(sfh(0) == 8'h11,
        $sformatf("and PEND holds the NEXT sample, fetched in advance (%02h)", sfh(0)));
 
@@ -567,8 +581,8 @@ module audio_tb;
                  sfp(3), sfl(5), sfl(4)));
     wr('h2, 8'h81);                                   // enable
     repeat (80) @(posedge SLOTCLK);
-    ok(sfc(1) == 17'd3,
-       $sformatf("and CNT loaded as 2*LEN - 1 = 3 bytes (%0d)", sfc(1)));
+    ok(sfc(1) == 17'd2,
+       $sformatf("and CNT is 2*LEN - 1 = 3 less the chained W1's byte (%0d)", sfc(1)));
 
     // Count W1s between buffer ends. ⚠ Bounded, per CLAUDE.md's fifth trap:
     // a hang here would present as "budget more time" and not as a failure.
@@ -618,8 +632,8 @@ module audio_tb;
                  sfl(5), sfp(3)));
     wr('h2, 8'h81);
     repeat (80) @(posedge SLOTCLK);
-    ok(sfc(1) == 17'd131071,
-       $sformatf("⭐ D-2: LEN = 0 loads CNT = $1FFFF - Paula's 65,536 words, and it needs the 17th bit to exist (%0d)",
+    ok(sfc(1) == 17'd131070,
+       $sformatf("⭐ D-2: LEN = 0 wraps CNT into the 17th bit - $1FFFF loaded, $1FFFE after the chained W1 (%0d)",
                  sfc(1)));
     passes = 0;
     for (i = 0; i < 20000; i++) begin

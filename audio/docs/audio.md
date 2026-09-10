@@ -1507,12 +1507,12 @@ pins and spends cells. There is no one-part arrangement of this card.
 | | holds | fitted |
 |---|---|---|
 | **U1** `ATF1508AS` PLCC-84, socketed | the host register block — §9.1's decode, `ADMACON`, `AINTENA`, `AINTREQ` and its pending register, `/FIRQ`, `ACTRL`, the `AINTREQ` read synchroniser, the slot walk, the ÷5 tempo reference — **plus §4.2's free-running counter and comparator and §9.3's read-back latch**, which is seven packages for sixteen pins | **88 of 128 cells, 62 of 64 I/O** — §10.1.1 |
-| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **128 of 128 cells, 61 of 64 I/O** — §10.2.6 |
+| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **127 of 128 cells, 61 of 64 I/O** — §10.2.6 |
 
 ⚠ **U2 IS EXACTLY FULL AND U1 IS NOT**, which is the whole shape of this card's logic
 and the reason every reduction moved work *towards* U1. "Design fits successfully" on
-both: U2 at **128 of 128 cells**, 61 of 64 I/O, **71 foldback nodes, 1 cascade and 487
-product terms**, five of eight blocks at **39 of 40 LAB fan-in**; U1 at **88 of 128 cells**, 62 of 64 I/O, 22 foldback, no cascades and 274
+both: U2 at **127 of 128 cells**, 61 of 64 I/O, **69 foldback nodes, no cascades and 461
+product terms**, six of eight blocks at **37 of 40 LAB fan-in**; U1 at **88 of 128 cells**, 62 of 64 I/O, 22 foldback, no cascades and 274
 product terms. A **TQFP-100 was tried and does not help**: it takes the
 pins from 62 of 64 to 62 of 80 and leaves the cells at 128 of 128, because both packages
 carry the same 128 macrocells. So the PLCC-84 is the right package — it keeps the socket
@@ -1781,7 +1781,7 @@ Narrowing that means changing the microprogram's shape, not the decode in front 
 | **W3** | 6 | a host access: the byte to its lane or to §9.4.3's shadow, the commit, `SDATA`'s sample-RAM access and `SPTR` increment, and a re-prefetch at the post-incremented `AIDX` |
 | **W4** | 10 | the tempo timer: `CIANEXT += 5 × TIMER`, once per period |
 | **W5** | 6 | §6.1's volume — the other four converter halves |
-| **W6** | **11** | §1 requirement 6's `DMACON` restart. **It jumps the queue** |
+| **W6** | **8** | §1 requirement 6's `DMACON` restart: `LC → PTR`, `CNT` = 2 × `LEN` − 1, `NEXT` = the free-running count. ⭐ **It jumps the queue, and it CHAINS INTO W1** rather than priming `PEND` itself — §16 item 39 |
 
 ⛔ **`CNT` IS LOADED AS 2 × `LEN` − 1, AND THAT IS §16 ITEM 36's D-1.** W1's end test
 is the **borrow** out of `CNT − 1`, which fires one iteration *after* `CNT` reached
@@ -1814,7 +1814,7 @@ transitions. Stated rather than hidden.
 | Quirk | This card |
 |---|---|
 | `LC`/`LEN` copied at buffer end, not at note start | W2, triggered by W1 step 6's borrow — **and the buffer yields exactly 2 × `LEN` samples**, which `audio_tb` counts (§16 item 36) |
-| First fetch one period after `DMACON` enable | W6 primes `PEND` and sets `NEXT` = count + `PER` |
+| First fetch one period after `DMACON` enable | W6 sets `NEXT` = the count and **chains into W1**, which does the fetch and adds `PER` — so the first sample is one period out and is counted like every other (§16 item 39) |
 | `LEN` = 0 means 65,536 words | falls out of the 17-bit `CNT` — ⚠ **and the 17th bit had to be built**, §16 items 35 and 36. `CNT` = 0 − 1 = `$1FFFF`, measured |
 | `LEN` = 1 is one word, two bytes | `CNT` = 2 |
 | `DMACON` cleared mid-buffer | W1 is not entered; `PTR`/`CNT` freeze; §6.1 forces `VOLCODE` = 0, so the held sample is silent |
@@ -1854,9 +1854,12 @@ it is **closed in both directions**: every signal U1 reads is produced by U2, th
 backplane or the board, and every signal U2 reads is a U1 output or the `'688` and the
 `'283` chain answering it. Seventeen nets cross from U1 to U2 and five come back.
 
-⛔ **There is nothing left.** 128 of 128 is not a comfortable fit and it is not presented
-as one. A **TQFP-100 was fitted as well** and takes the pins to 62 of 80 while leaving the
-cells at 128 of 128 — both packages carry the same 128 macrocells — so the larger package
+⚠ **There is ONE CELL LEFT, and it arrived by deleting work rather than by finding
+room.** §16 item 39's W6-into-W1 chain took the sequencer from 128 of 128 to **127**,
+product terms from 487 to 461 and peak LAB fan-in from 39 to 37 — because W6 stopped
+duplicating a fetch W1 already does. That is not headroom to spend; it is what one
+removed duplicate is worth, and the part is still 99 % full. A **TQFP-100 was fitted as well** and takes the pins to 62 of 80 while leaving the
+cells where they are — both packages carry the same 128 macrocells — so the larger package
 buys pin headroom this design does not need and costs the socket. **The PLCC-84 with JTAG
 off is the answer, and the next thing added to this card has to displace something.**
 
@@ -1909,9 +1912,9 @@ image, the step budget, and which of U2's 149 cells become table content. What i
 and every one of its 36 control outputs is a sum-of-products decode of
 (`RUN`, `WT[2:0]`, `T[3:0]`) qualified by the host state — `aseq.jedec.ts`'s `ctl()`
 is literally that function. **That is what an addressed memory does for nothing**, and
-doing it in an `ATF1508AS` spends all three of the family's limits at once: 128 of 128
-logic cells, 71 foldback nodes, and **five of eight logic blocks at 39 of 40 LAB
-fan-in** since §16 items 35 and 36 were repaired into it on 2026-09-10.
+doing it in an `ATF1508AS` spends all three of the family's limits at once: **127 of 128
+logic cells**, 69 foldback nodes, and **six of eight logic blocks at 37 of 40 LAB
+fan-in** after §16 items 35, 36 and 39 were repaired into it on 2026-09-10.
 
 ⛔ **Three open items are stuck behind that one fact, and none of them is cosmetic.**
 
@@ -2136,7 +2139,7 @@ That one step is the whole difference.
 | throughput floor | `PER` ≥ 16 | **`PER` ≥ 20** | `PER` ≥ 32 ⛔ |
 
 ⭐ **The adder costs the two architectures almost the same, which is the useful result:
-it does not decide between them.** What decides is that U2 is at 128 of 128 cells.
+it does not decide between them.** What decides is that U2 is at 127 of 128 cells.
 
 **What the control store buys, item by item:**
 
@@ -2841,11 +2844,17 @@ specification that has not been tested.
     software rule, stated in §4.3 and §9.3**, with a zero-detect gate (+1 IC) as the
     fallback if a bench ever needs it.
 
-32. **⛔ AND ON 2026-09-10 IT STOPPED BEING A FORECAST: THE NEXT REPAIR DID NOT FIT.**
-    §16 item 39's two microcode steps were written, simulated correct, and refused by
-    `fit1508.exe` with `INTERNAL ERROR`. The card ships with a known first-pass defect
-    because the part has no room for the fix. **That is the strongest evidence §10.3 has
-    and it was obtained by trying.**
+32. **⛔ ON 2026-09-10 IT STOPPED BEING A FORECAST — AND THEN GOT ONE CELL BACK.**
+    §16 item 39's first repair, two more microcode steps in W6, was written, simulated
+    correct and refused by `fit1508.exe` with `INTERNAL ERROR`. ⭐ **The second repair
+    fitted and made the part smaller**: handing W6's priming fetch to W1 deleted a
+    duplicate rather than correcting it — 128 of 128 cells to **127**, 487 product terms
+    to **461**, peak fan-in 39 to **37**.
+
+    ⚠ **One cell is not headroom and should not be spent as if it were.** What it shows
+    is that the cheap moves left on this part are *deletions*, not additions: the first
+    thing that adds work still will not fit, and §16 item 7's eight channels and §11.3's
+    attach chain are additions.
 
     **⚠ U2 is full and U1 is not, and on 2026-09-10 it got tighter**: items 35 and 36's
     repair took five of eight logic blocks to **39 of 40 LAB fan-in**, against six at 35
@@ -2973,7 +2982,7 @@ specification that has not been tested.
     survived where two steps happened to fall in the same colour clock and vanished where
     they did not: `carry` landed, `dec` did not, and `CNT[16]` took a silent zero. Adding
     the hold term made it correct and made `fit1508.exe` answer **`INTERNAL ERROR`** on a
-    part at 128 of 128. ⚠ CLAUDE.md's first trap fired exactly as written: the previous
+    part at 128 of 128 as it then stood. ⚠ CLAUDE.md's first trap fired as written: the previous
     `.fit` stayed in place and read like a passing one. **Compare the hash.**
 
     ⭐ **What paid for it, and it was free: `CW0`–`CW2` and `CL2` are gone.** For every
@@ -2983,9 +2992,10 @@ specification that has not been tested.
     already computed. And `CL2` is `HCOMMIT & HW1`. **Four registered macrocells, deleted,
     with no package behind them.**
 
-    ⚠ **And it consumed the part.** The refit is 128 of 128 cells, 61 of 64 I/O, 71
-    foldback, 487 product terms, and **five of eight blocks at 39 of 40 fan-in** against
-    the six at 35 it had before. §16 item 32 stands and is now tighter.
+    ⚠ **And it consumed the part**, at the time: 128 of 128 cells, 71 foldback, 487
+    product terms and five of eight blocks at 39 of 40 fan-in, against six at 35 before.
+    ⭐ §16 item 39 later gave one cell back by deleting a duplicate, and the current
+    figures are §10.2.6's.
 
 36. **⭐ CLOSED 2026-09-10 — both defects are repaired, and `audio_tb` now counts the
     thing that would have caught them.** They were found by driving a separate Paula
@@ -3163,8 +3173,8 @@ specification that has not been tested.
 
     ⚠ **What that does to this item is narrow the case rather than close it.** The two
     audible defects were the strongest argument for §10.3 and they are gone. What remains
-    is §16 item 32 — U2 at 128 of 128 cells with **five of eight blocks now at 39 of 40
-    fan-in** against six at 35 before — so §16 item 7's eight channels and §11.3's attach
+    is §16 item 32 — U2 at 127 of 128 cells with **six of eight blocks at 37 of 40
+    fan-in** — so §16 item 7's eight channels and §11.3's attach
     chain still have nowhere to go, and **the next repair of this kind will not fit.**
     §10.3 is now a question about headroom for future work, not about a card that
     mis-plays loops. ⚠ **Do not read "it fitted" as "there is room": the refit spent
@@ -3196,43 +3206,56 @@ specification that has not been tested.
     in the design as it stands. **That is the trade, and it should be taken deliberately
     or not at all.**
 
-39. **⛔ NEW 2026-09-10 — THE FIRST PASS OF EVERY NOTE READS ONE BYTE PAST THE
-    BUFFER, AND THE REPAIR IS WRITTEN AND DOES NOT FIT.** Found by re-running §16 item
-    36's oracle against the repaired design: the steady state is exact, and the *first*
-    loop after a `DMACON` enable is not.
+39. **⭐ HALF CLOSED 2026-09-10 — the first pass no longer reads outside the buffer,
+    and it cost the part nothing; the first sample is still not strobed.** Found by
+    re-running §16 item 36's oracle against the repaired design: the steady state was
+    exact and the *first* loop after a `DMACON` enable was not — `03 04 05 06` out of a
+    four-byte sample.
 
-    ```
-      first pass, card  : 03 04 05 06        ← 06 is outside a four-byte sample
-      steady state      : 02 03 04 05  02 03 04 05  …
-    ```
+    **(a) ⭐ CLOSED. W6 chains into W1 instead of priming.** W6 primed `PEND` itself,
+    which cost it a sample fetch, a pointer increment and a `PEND` write — and its own
+    fetch consumed a byte no W1 would ever count, so the enable path ran one byte long.
+    Adding a second decrement to W6 fixed it and **did not fit**. Handing the fetch to W1
+    fixes it by **deleting the duplicate rather than correcting it**: W1 already
+    decrements `CNT` for every byte it fetches. `PTR` now cycles `LC` → `LC` + 2 × `LEN`
+    on the first pass exactly as on every other, measured by the oracle.
 
-    ⛔ **Two causes, and they are separate.**
+    ⭐ **And it is the only change all day that made the part SMALLER:**
 
-    **(a) W6 primes and W2 does not.** Both load `CNT` with 2 × `LEN` − 1, but W6's own
-    priming fetch consumes a byte that no W1 will ever count — so the enable path is one
-    short and runs one byte long. The repair is a second `read CNT, CNT − 1` pair in W6:
-    **written, measured correct (`PTR` never leaves the buffer, steady state unchanged),
-    and refused by `fit1508.exe`.** Two microcode steps is what the part no longer has.
+    | `aseq` | priming W6 | **chained W6** |
+    |---|---|---|
+    | steps in W6 | 11 | **8** |
+    | logic cells | 128 / 128 | **127 / 128** |
+    | product terms | 487 | **461** |
+    | foldback | 71 | **69** |
+    | cascades | 1 | **0** |
+    | peak LAB fan-in | 39 of 40 | **37 of 40** |
 
-    **(b) The primed byte is never strobed into the converter.** §6.2's strobe is gated
-    on *"this channel's `PEND` changed in the frame just gone"*, which reads W1 step 4
-    and nothing else — so W6's priming write raises no flag and **the first sample of
-    every note is skipped**. ⚠ Marking W6's step as well makes the strobe fire only when
-    that step lands in a slot from which `WROTE` survives to the next walk: **right
-    sometimes and wrong otherwise, which is worse than consistently wrong.** Measured,
-    recorded, not half-fixed.
+    The chain itself is one combinational cell (`CHAIN1`, derived from W6's own length so
+    a new step cannot leave it pointing at the wrong one), one literal on `WT1`'s hold
+    term and one term on `BUSY` — the same shape `ENDNOW` already had for W1 → W2.
 
-    ⭐ **The cheaper shape, for whoever takes this next: end W6 with a chain into W1**,
-    the way W1 already chains into W2. W6 then does `LC → PTR`, `CNT` = 2 × `LEN` − 1 and
-    `NEXT` = the free-running count, and *W1* does the first fetch and the first
-    decrement — so the accounting is uniform, the priming byte goes through W1's own
-    `PEND` write and gets its strobe for free, and W6 comes out at about **eight steps
-    against eleven.** ⚠ It costs a second chain condition in `WT0`–`WT2` and `BUSY`,
-    which is logic on a part at 39 of 40 fan-in, so it is a proposal and not a plan.
+    **(b) ⚠ STILL OPEN: the first `PEND` write of a note is not strobed into the
+    converter.** §6.2's strobe is gated on `WROTE`, which is set by the `PEND` write and
+    held only until the next slot 7 — so it reaches the `AD7528` when the writing step
+    happens to land in a slot from which it survives to the following walk, and not
+    otherwise. In steady state it always does; the first event after an enable does not,
+    and the note's first sample is skipped. **The oracle measures it**: the card emits
+    three samples on its first pass and four on every one after, while fetching four
+    throughout.
 
-    ⚠ **Why it matters more than it looks.** A defect confined to the first pass is a
-    defect on every **note**, and a note's first pass is its attack. ProTracker
-    retriggers constantly.
+    ⚠ **Do not fix it by widening `WROTE`'s hold without measuring.** The flag exists to
+    cut converter write traffic 28× beside the analogue section (§3.2, §16 item 9), and
+    it is one term on four registered cells on a part at 127 of 128.
+
+    ⚠ **And a testbench bug fell out of the same change, which is worth more than it
+    looks.** §8.1 bit 5 is `HSTB & !RW & PWBUSY` — it fires on **any** host write that
+    arrives while the previous has not retired, not only on `ADATA` — so §9.2's
+    poll-b6 rule covers the direct window too. `audio_tb` honoured it in `adata`/`aidx`
+    and nowhere else and got away with it because the engine was quick enough. The
+    longer enable sequence made the next write overrun, `AINTREQ` b5 latched and `/FIRQ`
+    would not release — **which presented as an interrupt defect and was a testbench
+    that does not obey the register map it is testing.**
 
 ---
 
