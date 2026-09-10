@@ -2573,7 +2573,90 @@ specification that has not been tested.
     16-byte buffer came back as **65,551 bytes**. The fix is one bit of mode per step
     (`"inc"`, `"dec"`, `"pass"`, `"carry"`) and it is written down in the reverted
     branch; it is **not** in the tree, because half-fixing a path nothing currently
-    reaches is worse than recording it. **Fix it with whatever next touches §10.2.3.**
+    reaches is worse than recording it.
+
+    ⛔ **AND IT IS NOT LATENT — TRACED 2026-09-10, AND IT HAS A THIRD SYMPTOM.** The
+    Paula.v differential oracle found two live defects (§16 item 36) and tracing them
+    lands here. `Step.drv` is documented as *"drive SD[18:16] from U2, **incremented
+    when `cin` carried**"*, and the equation is exactly that:
+
+    ```
+    SDH0 = SDQ0 & !ACIN  #  SDQ0 & !ACOUT  #  !SDQ0 & ACIN & ACOUT     — SDQ0 XOR (ACIN & ACOUT)
+    ```
+
+    **Nine steps drive the high lane and they need FOUR different behaviours**, which
+    `ACIN` cannot tell apart because four of them have `ACIN` = 0:
+
+    | step | operation | needs |
+    |---|---|---|
+    | `W1` s1, `W6` s5 | `PTR` + 1 | **inc** — bit 16 takes the 16-bit carry |
+    | `W1` s6 | `CNT` − 1 | ⛔ **dec** — bit 16 must take the **borrow**, and never does |
+    | `W2` s1, `W6` s1, `W3` s2 | copy / host pass | **pass** |
+    | `W2` s3, `W6` s3 | `CNT` = `LEN` + `LEN` | ⛔ **carry** — bit 16 *is* the carry out |
+    | `W3` s4 | host + 1 | inc |
+
+    ⭐ **The third symptom, not previously reported: `CNT[16]` is never SET either.**
+    `LEN` + `LEN` is the doubling §10.2.4 calls "no shifter", and its carry out is by
+    construction `CNT[16]` — but with `ACIN` = 0 the equation passes `SDQ0` through, so
+    the carry is dropped. **Any sample longer than 32,767 words gets a truncated byte
+    count.** So bit 16 is neither set by the load nor decremented by the walk: the 17-bit
+    `CNT` that §10.2.3's ⭐ and §10.2.4's "no term" both rest on **does not exist in the
+    fitted design at all.**
+
+    ⚠ **And the end test cannot simply be widened.** `ENDNOW` fires on `!ACOUT` — the
+    16-bit borrow — which is *one byte late* by construction (item 36 D-1). Firing on
+    "the 17-bit result is zero" needs a **zero detect across the 16-bit sum**, and that is
+    sixteen signals into one logic block on a part already at **35 of 40 fan-in**. The
+    cheaper shape is to change the convention so the borrow lands right — load `CNT` with
+    2·`LEN` − 1 rather than 2·`LEN` — which costs a third operand the adder does not have,
+    or a microcode step. **Neither is free, and this is why item 36 is not a one-literal
+    repair.**
+
+36. **⛔ NEW 2026-09-10 — two live defects on the shipped card, found by a Paula.v
+    differential oracle, and they share item 35's root cause.** A separate implementation
+    of Paula was driven alongside this card in simulation and their observable output
+    compared. Both findings are ours; both are audible.
+
+    **D-1 — every loop plays one sample past the end.** A 2·`LEN`-byte buffer yields
+    2·`LEN` + 1 samples, on every iteration, and `PTR` reaches `LC` + 2·`LEN` + 1 before
+    `W2` fires. Paula plays exactly 2·`LEN`. Measured, where buffer byte *b* holds *b*+2:
+
+    ```
+    LEN=1  buffer 02 03        card plays 02 03 04                    repeating
+    LEN=2  buffer 02..05       card plays 02 03 04 05 06              repeating
+    LEN=4  buffer 02..09       card plays 02 03 04 05 06 07 08 09 0a  repeating
+    ```
+
+    ⚠ For a **two-word loop — ordinary in a MOD instrument — that is one sample in five
+    coming from outside the loop.**
+
+    **D-2 — `LEN` = 0 gives ONE BYTE, not 65,536 words.** `CNT` = 0 at the enable and the
+    first `W1` ends the buffer. Measured at `PER` = 64: 63 reloads in 4,000 colour clocks,
+    `PTR` never past `LC` + 1. §3.3 advertises `LEN` = 0 as Paula's 65,536 words "for
+    free"; item 35 explains why the free thing was never built.
+
+    **Where the card is exactly right, so the scope is bounded:** `PER` → colour clocks
+    per sample matches Paula at 428, 113, 64 and 16, single-valued and jitter-free. With
+    four channels at `PER` = 113 the card retires 177 samples per channel per 20,000
+    colour clocks against 176 expected, 2 gaps of 177 off by 1–3 clocks, **zero dropped**.
+    §4.2's "behaviourally identical to Paula" holds for pitch.
+
+    ⚠ **`audio_tb` cannot see either defect and that is the lesson.** It asserts the
+    reload *value* (`sfc(1) == 17'd4`) and **nothing anywhere counts how many samples a
+    buffer yields**. A test written from the same understanding as the design can only
+    confirm the design does what its author thought. The fix must land with claims that
+    **count samples per buffer**, or the next such defect is equally invisible.
+
+    ⚠ **Two more oracle results, neither a hardware defect.** Paula discards the first
+    word fetched after `DMACON` and our card does not — but that fetch is the cycle
+    carrying `dmasen`, an *Agnus* concern the oracle cannot settle; check the hardware
+    reference manual before changing anything. And §4.2's *"`PER` = 0 or 1: clamp in the
+    sequencer, as Paula effectively does"* is a **misreading**: Paula does not clamp
+    anywhere, its floor comes from Agnus's DMA rate. Our hardware does not clamp either
+    and §10.2.4 says so, so §4.2 contradicts §10.2.4 as well as Paula.
+
+    ⚠ **The oracle is not in the tree.** `Paula.v` is GPL v3 and vendoring it is
+    undecided; the card half of the harness is entirely ours.
 
 ---
 
