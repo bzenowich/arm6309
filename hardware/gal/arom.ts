@@ -46,7 +46,10 @@
  * precedence is not suspended for a design one likes.
  */
 
-import { PROGRAM, HOSTMAP, COMMIT, STAGED, W1, W2, W3, W4, W5, W6, type Step } from "./aseq.micro"
+import {
+  PROGRAM, HOSTMAP, COMMIT, STAGED, W1, W2, W3, W4, W5, W6,
+  highLaneMode as highLaneModeName, type Step,
+} from "./aseq.micro"
 import { aseqCells, WTC } from "./aseq.jedec"
 
 /* ======================================================================== *
@@ -183,19 +186,11 @@ export interface HostCtx {
 
 export type Word = Record<string, number>
 
-/** ⭐ The high-lane mode item 35 needs, derived from what the step is
- *  ARITHMETICALLY doing rather than from the carry in - which is the whole
- *  correction. `dec` is CNT - 1, where bit 16 must take the borrow and in the
- *  fitted design never does; `carry` is CNT = LEN + LEN, where bit 16 IS the
- *  carry out and in the fitted design is dropped. */
-export const highLaneMode = (s: Step): number => {
-  if (s.cap) return HLOP.cap
-  if (!s.drv) return HLOP.off
-  if (s.b === "ones") return HLOP.dec
-  if (s.b === "blat") return HLOP.carry
-  if (s.b === "zero" && s.cin) return HLOP.inc
-  return HLOP.pass
-}
+/** ⭐ The high-lane mode, as a microword code. ⚠ The MODE ITSELF comes from
+ *  aseq.micro.ts - it is the sequencer's now, not this file's, because
+ *  16 item 35 was repaired in the term lists on 2026-09-10 and there must not
+ *  be two definitions of which step decrements. */
+export const highLaneMode = (s: Step): number => HLOP[highLaneModeName(s)]
 
 /** The state-file word and the global flag, given the host context. */
 export const addressOf = (s: Step, host?: HostCtx): { global: boolean; word: number } => {
@@ -557,9 +552,11 @@ export const ABSORBED = new Set([
   "SROE", "SRWE", "SBOE",
   /* the host's latches */
   "PWOE", "PFCK", "PFLANE",
-  /* ⭐ 9.3's byte map, entire - this is AIDX being an address line */
-  "HRO", "HSTAGE", "HCOMMIT", "CL2", "HW0", "HW1", "HW2", "HL0", "HL1",
-  "CW0", "CW1", "CW2",
+  /* ⭐ 9.3's byte map, entire - this is AIDX being an address line. ⚠ CW0-2
+   * and CL2 are NOT here any more: they were deleted from the sequencer
+   * outright on 2026-09-10, because the commit word is the host word. */
+  "HRO", "HSTAGE", "HCOMMIT", "HW0", "HW1", "HW2", "HL0", "HL1",
+
   /* the high lane's control. ⚠ SDH0-2 themselves STAY: they are the inc/dec
    * arithmetic item 35 is about, and arithmetic is not decode */
   "SDHCAP", "SDHOE",

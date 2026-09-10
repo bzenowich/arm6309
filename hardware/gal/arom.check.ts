@@ -91,7 +91,7 @@ for (const wt of WTS) {
     }
   })
 }
-check(steps === 42, "PROGRAM is 42 steps, unchanged from the fitted design", `${steps}`)
+check(steps === 46, "PROGRAM is 46 steps - 10.2's 42 plus 16 item 36's two CNT - 1 steps in W2 and W6", `${steps}`)
 check(bad.length === 0, "every step encodes and round-trips through the microword",
   bad.slice(0, 4).join("; "))
 
@@ -102,7 +102,9 @@ rule("4. 16 item 35 - the high lane's four modes")
  * wrong, and the two it happens to get right. */
 const mode = (wt: number, t: number) => highLaneMode(PROGRAM[wt][t])
 check(mode(W1, 1) === HLOP.inc, "W1 step 1 - PTR + 1 - is an INCREMENT")
-check(mode(W6, 5) === HLOP.inc, "W6 step 5 - PTR + 1 - is an INCREMENT")
+check(mode(W6, 7) === HLOP.inc, "W6 step 7 - PTR + 1 - is an INCREMENT")
+check(mode(W2, 5) === HLOP.dec && mode(W6, 5) === HLOP.dec,
+  "⭐ and W2/W6 step 5 - 16 item 36's CNT = 2*LEN - 1 - is a DECREMENT")
 check(mode(W1, 6) === HLOP.dec,
   "⛔ W1 step 6 - CNT - 1 - is a DECREMENT, and bit 16 takes the borrow")
 check(mode(W2, 3) === HLOP.carry,
@@ -115,7 +117,7 @@ check(mode(W3, 4) === HLOP.inc, "W3 step 4 - SPTR + 1 - is an INCREMENT")
 
 const drivers = WTS.flatMap((wt) => PROGRAM[wt].map((s, t) => ({ wt, t, s })))
   .filter((x) => x.s.drv)
-check(drivers.length === 9, "nine steps drive the high lane, as item 35 counts them",
+check(drivers.length === 11, "eleven steps drive the high lane - item 35's nine plus item 36's two",
   `${drivers.length}`)
 const modes = new Set(drivers.map((x) => highLaneMode(x.s)))
 check(modes.size === 4, "and they need four distinct modes", `${modes.size}`)

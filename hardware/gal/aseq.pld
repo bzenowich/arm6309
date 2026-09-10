@@ -134,10 +134,6 @@ PINNODE = HL1 ;
 PINNODE = HRO ;
 PINNODE = HSTAGE ;
 PINNODE = HCOMMIT ;
-PINNODE = CW0 ;
-PINNODE = CW1 ;
-PINNODE = CW2 ;
-PINNODE = CL2 ;
 PINNODE = SDQ0 ;
 PINNODE = SDQ1 ;
 PINNODE = SDQ2 ;
@@ -177,11 +173,11 @@ T3.d = RUN & !LAST & T3 & !T0
        # RUN & !LAST & !T3 & T0 & T1 & T2
        # !RUN & T3 ;
 LAST = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3
-       # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
+       # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
        # RUN & !WT0 & !WT1 & WT2 & T0 & !T1 & T2 & !T3
        # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & T3
        # RUN & WT0 & !WT1 & WT2 & T0 & !T1 & T2 & !T3
-       # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3 ;
+       # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & T3 ;
 RSTANY = RST0
          # RST1
          # RST2
@@ -371,12 +367,6 @@ HSTAGE.d = !AIDX0 & !AIDX1 & !AIDX2 & !AIDX3
 HCOMMIT.d = !AIDX0 & AIDX1 & !AIDX2 & !AIDX3
             # !AIDX0 & !AIDX1 & AIDX2 & !AIDX3
             # !AIDX0 & AIDX1 & AIDX2 & !AIDX3 ;
-CW0.d = !AIDX0 & AIDX1 & !AIDX2 & !AIDX3
-        # !AIDX0 & !AIDX1 & AIDX2 & !AIDX3 ;
-CW1.d = !AIDX0 & AIDX1 & !AIDX2 & !AIDX3 ;
-CW2.d = !AIDX0 & !AIDX1 & AIDX2 & !AIDX3
-        # !AIDX0 & AIDX1 & AIDX2 & !AIDX3 ;
-CL2.d = !AIDX0 & AIDX1 & !AIDX2 & !AIDX3 ;
 GBL = QTMR
       # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
       # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
@@ -401,6 +391,7 @@ SFOE = QCHAN
        # RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3
+       # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3
        # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3
@@ -414,6 +405,7 @@ SFOE = QCHAN
        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3
+       # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
        # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & !T2 & !T3 & HCOMMIT & !HRW
        # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA
        # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & T2 & !T3 ;
@@ -433,16 +425,20 @@ SFA0 = QTMR
        # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
+       # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3
+       # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
+       # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3
+       # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
        # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
        # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & T3
        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & HSTAGE
        # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & !T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HSTAGE & HW0
        # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & T2 & !T3 & HW0
-       # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & CW0 ;
+       # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HW0 ;
 SFA1 = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
@@ -453,13 +449,13 @@ SFA1 = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
-       # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3
-       # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
+       # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3
+       # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HSTAGE & HW1
        # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & T2 & !T3 & HW1
-       # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & CW1 ;
+       # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HW1 ;
 SFA2 = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & !T2 & !T3
@@ -467,7 +463,7 @@ SFA2 = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & T0 & T1 & !T2 & !T3
        # RUN & WT0 & !WT1 & WT2 & !T0 & !T1 & T2 & !T3
        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3
-       # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3
+       # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
        # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
        # RUN & WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
@@ -478,12 +474,13 @@ SFA2 = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & !T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HSTAGE & HW2
        # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & T2 & !T3 & HW2
-       # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & CW2 ;
+       # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HW2 ;
 SFWE0 = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3
         # RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3
         # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
+        # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
         # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
@@ -491,7 +488,8 @@ SFWE0 = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
-        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
+        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
+        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & T3
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISAIDX & !ISSDATA & !HL0 & !HL1
         # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HCOMMIT & !HRW
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
@@ -500,6 +498,7 @@ SFWE1 = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3
         # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
+        # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
         # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
@@ -507,7 +506,8 @@ SFWE1 = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
-        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
+        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
+        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & T3
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISAIDX & !ISSDATA & HL0 & !HL1
         # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HCOMMIT & !HRW
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
@@ -516,25 +516,29 @@ SFWE2 = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3
         # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
+        # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
-        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
+        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
+        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & T3
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !HRO & !ISAIDX & !ISSDATA & !HL0 & HL1
-        # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HCOMMIT & !HRW & CL2
+        # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HCOMMIT & !HRW & HW1
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
 ALATCK = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3 & !SLOTCLK
          # RUN & !WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3 & !SLOTCLK
          # RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3 & !SLOTCLK
          # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3 & !SLOTCLK
          # RUN & WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
+         # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3 & !SLOTCLK
          # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3 & !SLOTCLK
          # RUN & WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
          # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3 & !SLOTCLK
          # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3 & !SLOTCLK
          # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
          # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3 & !SLOTCLK
-         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3 & !SLOTCLK
+         # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3 & !SLOTCLK
+         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & T3 & !SLOTCLK
          # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & !T2 & !T3 & HCOMMIT & !HRW & !SLOTCLK
          # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & !SLOTCLK ;
 BLATCK = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
@@ -544,7 +548,7 @@ BLATCK = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
          # RUN & WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3 & !SLOTCLK
          # RUN & WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3 & !SLOTCLK
          # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & !T3 & !SLOTCLK
-         # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3 & !SLOTCLK ;
+         # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3 & !SLOTCLK ;
 BLATOE = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3
          # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
          # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
@@ -552,17 +556,20 @@ BLATOE = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3
          # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
          # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & T3
          # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
-         # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3 ;
-ONESOE = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3 ;
-CNTOE = RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3 ;
+         # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & T3 ;
+ONESOE = RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3
+         # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
+         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3 ;
+CNTOE = RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & T3 ;
 ACIN = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
-       # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
+       # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
 SUMOE = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3
         # RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3
         # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
+        # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
         # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
@@ -570,29 +577,34 @@ SUMOE = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
-        # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3
+        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
+        # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & T3
         # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HCOMMIT & !HRW
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
 SROE = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
-       # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3
+       # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3
        # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & HRW ;
 SRWE = RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & !HRW ;
 SBOE = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3
-       # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & T3 ;
+       # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & !T2 & T3 ;
 SDHCAP = RUN & !WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
          # RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
          # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
+         # RUN & WT0 & !WT1 & !WT2 & !T0 & !T1 & T2 & !T3
          # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & !T2 & !T3
          # RUN & !WT0 & WT1 & !WT2 & !T0 & !T1 & T2 & !T3
+         # RUN & !WT0 & WT1 & !WT2 & !T0 & T1 & T2 & !T3
          # RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & !T2 & !T3 & HCOMMIT & !HRW
          # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA ;
 SDHOE = RUN & !WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & !WT1 & !WT2 & !T0 & T1 & T2 & !T3
         # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & WT0 & !WT1 & !WT2 & T0 & T1 & !T2 & !T3
+        # RUN & WT0 & !WT1 & !WT2 & T0 & !T1 & T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & !T2 & !T3
         # RUN & !WT0 & WT1 & !WT2 & T0 & !T1 & T2 & !T3
+        # RUN & !WT0 & WT1 & !WT2 & T0 & T1 & T2 & !T3
         # RUN & WT2 & !WT1 & !WT0 & !T0 & T1 & !T2 & !T3 & HCOMMIT & !HRW
         # RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & T2 & !T3 & ISSDATA ;
 SDQ0.d = SDHCAP & SDH0
@@ -601,20 +613,30 @@ SDQ1.d = SDHCAP & SDH1
          # SDQ1 & !SDHCAP ;
 SDQ2.d = SDHCAP & SDH2
          # SDQ2 & !SDHCAP ;
-SDH0 = SDQ0 & !ACIN
-       # SDQ0 & !ACOUT
-       # !SDQ0 & ACIN & ACOUT ;
+SDH0 = !ACIN & !ONESOE & !BLATOE & SDQ0
+       # ACIN & SDQ0 & !ACOUT
+       # ACIN & !SDQ0 & ACOUT
+       # ONESOE & SDQ0 & ACOUT
+       # ONESOE & !SDQ0 & !ACOUT
+       # BLATOE & ACOUT ;
 SDH0.oe = SDHOE ;
-SDH1 = SDQ1 & !ACIN
-       # SDQ1 & !ACOUT
-       # SDQ1 & !SDQ0
-       # !SDQ1 & SDQ0 & ACIN & ACOUT ;
+SDH1 = !ACIN & !ONESOE & !BLATOE & SDQ1
+       # ACIN & SDQ1 & !ACOUT
+       # ACIN & SDQ1 & !SDQ0
+       # ACIN & !SDQ1 & ACOUT & SDQ0
+       # ONESOE & SDQ1 & ACOUT
+       # ONESOE & SDQ1 & SDQ0
+       # ONESOE & !SDQ1 & !ACOUT & !SDQ0 ;
 SDH1.oe = SDHOE ;
-SDH2 = SDQ2 & !ACIN
-       # SDQ2 & !ACOUT
-       # SDQ2 & !SDQ0
-       # SDQ2 & !SDQ1
-       # !SDQ2 & SDQ1 & SDQ0 & ACIN & ACOUT ;
+SDH2 = !ACIN & !ONESOE & !BLATOE & SDQ2
+       # ACIN & SDQ2 & !ACOUT
+       # ACIN & SDQ2 & !SDQ0
+       # ACIN & SDQ2 & !SDQ1
+       # ACIN & !SDQ2 & ACOUT & SDQ1 & SDQ0
+       # ONESOE & SDQ2 & ACOUT
+       # ONESOE & SDQ2 & SDQ0
+       # ONESOE & SDQ2 & SDQ1
+       # ONESOE & !SDQ2 & !ACOUT & !SDQ1 & !SDQ0 ;
 SDH2.oe = SDHOE ;
 PWCK = HSTB & !RW & !SLOTCLK ;
 PWOE = RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & !ISAIDX & !ISSDATA
@@ -697,6 +719,5 @@ SETC = FIRE4
 [T0,T1,T2,T3,BUSY,WT0,WT1,WT2,WC0,WC1,DUE0,DUE1,DUE2,DUE3].ck = SLOTCLK ;
 [TDUE,TQ,DMAQ0,DMAQ1,DMAQ2,DMAQ3,RST0,RST1,RST2,RST3,HSY1].ck = SLOTCLK ;
 [HSY2,HA0,HA1,HA2,HA3,HRW,HDUE,AIDX0,AIDX1,AIDX2,AIDX3,AIDX4].ck = SLOTCLK ;
-[AIDX5,HW0,HW1,HW2,HL0,HL1,HRO,HSTAGE,HCOMMIT,CW0,CW1,CW2].ck = SLOTCLK ;
-[CL2,SDQ0,SDQ1,SDQ2,PWBUSY,PFVALID,WROTE0,WROTE1,WROTE2].ck = SLOTCLK ;
-[WROTE3,VDIRTY].ck = SLOTCLK ;
+[AIDX5,HW0,HW1,HW2,HL0,HL1,HRO,HSTAGE,HCOMMIT,SDQ0,SDQ1,SDQ2].ck = SLOTCLK ;
+[PWBUSY,PFVALID,WROTE0,WROTE1,WROTE2,WROTE3,VDIRTY].ck = SLOTCLK ;

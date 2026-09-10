@@ -75,8 +75,11 @@ state-file read at 30 ns inside a 35.24 ns slot, on a part already specified at 
 grade.
 
 ⚠ **And the sequencer has a THIRD arrangement, designed on 2026-09-10 and not yet
-decided.** §10.2's U2 is exactly full, and §16 items 7, 32, 34, 35 and 36 are all stuck
-behind that one fact — including **two live, audible defects**. §10.3 moves the
+decided.** §10.2's U2 is exactly full. ⭐ **§16 items 35 and 36's two audible defects
+were repaired inside it that same day at zero packages** — the 17-bit `CNT` exists, a
+buffer yields exactly 2 × `LEN` samples and `audio_tb` counts them — **and the repair
+spent the last of the part**: five of eight logic blocks now stand at 39 of 40 fan-in.
+§16 items 7, 32 and 11.3 remain stuck behind that. §10.3 moves the
 `(WT, T)` decode out of macrocells and into four `27C512`: **+5 ICs, 40**, every one of
 those items reachable, and **the margin at ProTracker's top note 7.1× → 5.7×**. It is
 measured (`npm run check:arom`, 59 claims) and **not fitted**, so §0's headline stays
@@ -1508,8 +1511,8 @@ pins and spends cells. There is no one-part arrangement of this card.
 
 ⚠ **U2 IS EXACTLY FULL AND U1 IS NOT**, which is the whole shape of this card's logic
 and the reason every reduction moved work *towards* U1. "Design fits successfully" on
-both: U2 at **128 of 128 cells**, 61 of 64 I/O, 61 foldback nodes, 21 cascades and 441
-product terms; U1 at **88 of 128 cells**, 62 of 64 I/O, 22 foldback, no cascades and 274
+both: U2 at **128 of 128 cells**, 61 of 64 I/O, **71 foldback nodes, 1 cascade and 487
+product terms**, five of eight blocks at **39 of 40 LAB fan-in**; U1 at **88 of 128 cells**, 62 of 64 I/O, 22 foldback, no cascades and 274
 product terms. A **TQFP-100 was tried and does not help**: it takes the
 pins from 62 of 64 to 62 of 80 and leaves the cells at 128 of 128, because both packages
 carry the same 128 macrocells. So the PLCC-84 is the right package — it keeps the socket
@@ -1774,14 +1777,25 @@ Narrowing that means changing the microprogram's shape, not the decode in front 
 | | steps | what |
 |---|---|---|
 | **W1** | **7** | a channel's compare hit: fetch the next sample byte at `PTR` and advance it, `NEXT += PER`, write the byte into `PEND`, `CNT − 1`. The carry out of the last step **is** the buffer end |
-| **W2** | 4 | §3.3's shadow reload: `LC → PTR` and `LEN + LEN → CNT`, using whatever the host has written since. **W1 chains straight into it** without releasing the engine |
+| **W2** | **6** | §3.3's shadow reload: `LC → PTR` and `2 × LEN − 1 → CNT`, using whatever the host has written since. **W1 chains straight into it** without releasing the engine |
 | **W3** | 6 | a host access: the byte to its lane or to §9.4.3's shadow, the commit, `SDATA`'s sample-RAM access and `SPTR` increment, and a re-prefetch at the post-incremented `AIDX` |
 | **W4** | 10 | the tempo timer: `CIANEXT += 5 × TIMER`, once per period |
-| **W5** | 12 | §6.1's volume and §11.1's pan — the other eight converter halves |
-| **W6** | 8 | §1 requirement 6's `DMACON` restart. **It jumps the queue** |
+| **W5** | 6 | §6.1's volume — the other four converter halves |
+| **W6** | **11** | §1 requirement 6's `DMACON` restart. **It jumps the queue** |
 
-⭐ **`LEN` = 0 is Paula's 65,536 words for free.** W2 writes `CNT` = 0 and W1's next
-decrement takes it to `$1FFFF` = 131,071 bytes. No special case, no term.
+⛔ **`CNT` IS LOADED AS 2 × `LEN` − 1, AND THAT IS §16 ITEM 36's D-1.** W1's end test
+is the **borrow** out of `CNT − 1`, which fires one iteration *after* `CNT` reached
+zero — so a 2 × `LEN`-byte buffer yielded **2 × `LEN` + 1 samples on every loop**, and
+for the two-word loops ordinary in a MOD instrument that is one sample in five coming
+from outside the loop. Ending on "the result is zero" instead needs a sixteen-bit zero
+detect, which is sixteen signals into one logic block on a part at 39 of 40 fan-in.
+**Loading one less costs two microcode steps in a sequence that runs once per buffer
+end, and nothing else** — which is why W2 is six and W6 eleven.
+
+⭐ **`LEN` = 0 is Paula's 65,536 words, and it now is.** `CNT` = 0 − 1 = `$1FFFF` =
+131,072 bytes, which is exactly 65,536 words. ⚠ **It needs the 17th bit to exist**, and
+§16 item 35 is why it did not: `audio_tb` measures `CNT` = 131,071 at the load and
+watches the channel run 20,000 slots without reloading once.
 
 ⭐ **The tempo timer costs nothing per CIA tick**, which is what §8.2 meant by *"a fifth
 entry in the compare structure of §4.2"* and is not what §8.2's implementation note
@@ -1799,9 +1813,9 @@ transitions. Stated rather than hidden.
 
 | Quirk | This card |
 |---|---|
-| `LC`/`LEN` copied at buffer end, not at note start | W2, triggered by W1 step 7's `ACOUT` |
+| `LC`/`LEN` copied at buffer end, not at note start | W2, triggered by W1 step 6's borrow — **and the buffer yields exactly 2 × `LEN` samples**, which `audio_tb` counts (§16 item 36) |
 | First fetch one period after `DMACON` enable | W6 primes `PEND` and sets `NEXT` = count + `PER` |
-| `LEN` = 0 means 65,536 words | falls out of the 17-bit `CNT` — no term |
+| `LEN` = 0 means 65,536 words | falls out of the 17-bit `CNT` — ⚠ **and the 17th bit had to be built**, §16 items 35 and 36. `CNT` = 0 − 1 = `$1FFFF`, measured |
 | `LEN` = 1 is one word, two bytes | `CNT` = 2 |
 | `DMACON` cleared mid-buffer | W1 is not entered; `PTR`/`CNT` freeze; §6.1 forces `VOLCODE` = 0, so the held sample is silent |
 | `PER` written mid-note | already correct — `NEXT` was computed from the old `PER` (§4.2) |
@@ -1832,9 +1846,10 @@ work slots per colour clock instead of three. Both are archived.
 
 #### 10.2.6 The pin budget, and the one lever that was pulled
 
-U2 is **36 outputs and 27 inputs**, and the fitter reports **61 of 64 I/O and 128 of
-128 logic cells** — "Design fits successfully" on the first pass, with 76 foldback nodes,
-18 cascades and 469 product terms. `npm run check:audio` prints the interface and asserts
+U2 is **36 outputs and 26 inputs**, and the fitter reports **61 of 64 I/O and 128 of
+128 logic cells** — "Design fits successfully", with **71 foldback nodes, 1 cascade and
+487 product terms**, and **five of eight logic blocks at 39 of 40 LAB fan-in**
+(§16 item 35 refit, 2026-09-10). `npm run check:audio` prints the interface and asserts
 it is **closed in both directions**: every signal U1 reads is produced by U2, the
 backplane or the board, and every signal U2 reads is a U1 output or the `'688` and the
 `'283` chain answering it. Seventeen nets cross from U1 to U2 and five come back.
@@ -1895,7 +1910,8 @@ and every one of its 36 control outputs is a sum-of-products decode of
 (`RUN`, `WT[2:0]`, `T[3:0]`) qualified by the host state — `aseq.jedec.ts`'s `ctl()`
 is literally that function. **That is what an addressed memory does for nothing**, and
 doing it in an `ATF1508AS` spends all three of the family's limits at once: 128 of 128
-logic cells, 61 foldback nodes, and six of eight logic blocks at **35 of 40 LAB fan-in**.
+logic cells, 71 foldback nodes, and **five of eight logic blocks at 39 of 40 LAB
+fan-in** since §16 items 35 and 36 were repaired into it on 2026-09-10.
 
 ⛔ **Three open items are stuck behind that one fact, and none of them is cosmetic.**
 
@@ -2825,7 +2841,10 @@ specification that has not been tested.
     software rule, stated in §4.3 and §9.3**, with a zero-detect gate (+1 IC) as the
     fallback if a bench ever needs it.
 
-32. **⚠ U2 is full and U1 is not** — ⭐ **and §10.3 is the answer to it.** 44 of U2's
+32. **⚠ U2 is full and U1 is not, and on 2026-09-10 it got tighter**: items 35 and 36's
+    repair took five of eight logic blocks to **39 of 40 LAB fan-in**, against six at 35
+    before. It fitted, and it spent every literal `CW0`–`CW2` and `CL2` freed. **The next
+    repair of this kind will not fit.** ⭐ **§10.3 is the answer to it.** 44 of U2's
     cells become table content, 18 more stop reading `(WT, T)`, and U1 gets §8.2's
     `CIANEXT` in 16 of its 40 spare cells for no pins at all. §16 item 38 is the gate.
 
@@ -2919,115 +2938,113 @@ specification that has not been tested.
     goal: it is what pays for the control store's four packages, and §16 item 37 makes
     it mandatory rather than merely economical.
 
-35. **⚠ NEW 2026-09-09 — the 17th and 19th bits do not distinguish an increment from a
-    decrement, and it is a latent hole in the design as it stands.** `SDH0`–`SDH2` carry
-    `PTR[18:16]` and `CNT[16]`, and they apply the adder's `ACOUT` one way for every
-    operation. **`ACOUT` means "carry" on an increment and "no borrow" on a decrement.**
-    The 16-bit datapath never exercises it — `CNT` reaching bit 16 needs a buffer over
-    65,536 bytes — but the fault is real and it was measured: on the 8-bit build, a
-    16-byte buffer came back as **65,551 bytes**. The fix is one bit of mode per step
-    (`"inc"`, `"dec"`, `"pass"`, `"carry"`) and it is written down in the reverted
-    branch; it is **not** in the tree, because half-fixing a path nothing currently
-    reaches is worse than recording it.
+35. **⭐ CLOSED 2026-09-10 — the 17-bit `CNT` now exists, and the mode needed no
+    storage at all.** `SD[18:16]` is driven by eleven steps needing four behaviours, and
+    the fitted design distinguished them with `ACIN` alone — which cannot, because
+    `ACIN` = 0 covers three of the four. `CNT[16]` was therefore neither set by the load
+    nor decremented by the walk.
 
-    ⛔ **AND IT IS NOT LATENT — TRACED 2026-09-10, AND IT HAS A THIRD SYMPTOM.** The
-    Paula.v differential oracle found two live defects (§16 item 36) and tracing them
-    lands here. `Step.drv` is documented as *"drive SD[18:16] from U2, **incremented
-    when `cin` carried**"*, and the equation is exactly that:
+    ⭐ **THE INFORMATION WAS ALREADY ON THE BOARD.** Three control outputs this design
+    has always produced separate all four cases, on the very step that needs them:
 
-    ```
-    SDH0 = SDQ0 & !ACIN  #  SDQ0 & !ACOUT  #  !SDQ0 & ACIN & ACOUT     — SDQ0 XOR (ACIN & ACOUT)
-    ```
-
-    **Nine steps drive the high lane and they need FOUR different behaviours**, which
-    `ACIN` cannot tell apart because four of them have `ACIN` = 0:
-
-    | step | operation | needs |
+    | | means | steps |
     |---|---|---|
-    | `W1` s1, `W6` s5 | `PTR` + 1 | **inc** — bit 16 takes the 16-bit carry |
-    | `W1` s6 | `CNT` − 1 | ⛔ **dec** — bit 16 must take the **borrow**, and never does |
-    | `W2` s1, `W6` s1, `W3` s2 | copy / host pass | **pass** |
-    | `W2` s3, `W6` s3 | `CNT` = `LEN` + `LEN` | ⛔ **carry** — bit 16 *is* the carry out |
-    | `W3` s4 | host + 1 | inc |
+    | `ACIN` | carry in — an **increment** | `PTR` + 1, `SPTR` + 1 |
+    | `ONESOE` | B = `$FFFF` — a **decrement**, and bit 16 takes the **borrow** | `CNT` − 1 |
+    | `BLATOE` | B = the latch — `CNT` = `LEN` + `LEN`, and bit 16 **is** the carry | the doubling |
+    | none of the three | a **pass** — a copy, or the host's commit | |
 
-    ⭐ **The third symptom, not previously reported: `CNT[16]` is never SET either.**
-    `LEN` + `LEN` is the doubling §10.2.4 calls "no shifter", and its carry out is by
-    construction `CNT[16]` — but with `ACIN` = 0 the equation passes `SDQ0` through, so
-    the carry is dropped. **Any sample longer than 32,767 words gets a truncated byte
-    count.** So bit 16 is neither set by the load nor decremented by the walk: the 17-bit
-    `CNT` that §10.2.3's ⭐ and §10.2.4's "no term" both rest on **does not exist in the
-    fitted design at all.**
+    They are mutually exclusive on every driving step, because no step carries in *and*
+    sums against `$FFFF` or the latch. **Two more literals on three equations, no new
+    macrocell, no new pin, no package.** A subtract here is A + `$FFFF`, so its borrow is
+    `!ACOUT`.
 
-    ⚠ **And the end test cannot simply be widened.** `ENDNOW` fires on `!ACOUT` — the
-    16-bit borrow — which is *one byte late* by construction (item 36 D-1). Firing on
-    "the 17-bit result is zero" needs a **zero detect across the 16-bit sum**, and that is
-    sixteen signals into one logic block on a part already at **35 of 40 fan-in**. The
-    cheaper shape is to change the convention so the borrow lands right — load `CNT` with
-    2·`LEN` − 1 rather than 2·`LEN` — which costs a third operand the adder does not have,
-    or a microcode step. **Neither is free, and this is why item 36 is not a one-literal
-    repair.**
+    ⛔ **THE FIRST REPAIR WAS TWO REGISTERED MODE BITS AND IT DID NOT FIT**, and the
+    reason is worth keeping. A register decoded from (`WT`, `T`) has to be decoded from
+    the **preceding** step — a registered cell's terms are evaluated on the edge that
+    *ends* a step — and it has to **hold across the five walk slots** between one work
+    slot and the next. The first version had neither, and the symptom was that the mode
+    survived where two steps happened to fall in the same colour clock and vanished where
+    they did not: `carry` landed, `dec` did not, and `CNT[16]` took a silent zero. Adding
+    the hold term made it correct and made `fit1508.exe` answer **`INTERNAL ERROR`** on a
+    part at 128 of 128. ⚠ CLAUDE.md's first trap fired exactly as written: the previous
+    `.fit` stayed in place and read like a passing one. **Compare the hash.**
 
-    ⭐ **In §10.3 it is three bits of a stored word and costs nothing.** `HLOP` names the
-    mode the step is arithmetically in — `cap` / `pass` / `inc` / `dec` / `carry` — and
-    `npm run check:arom` asserts the mode of all nine driving steps by name, including
-    the two this item says are wrong: W1 step 6 is a **decrement** and W2 step 3 is a
-    **carry**. ⚠ The zero-detect problem this item ends on does not go away — it becomes
-    a microword bit that has somewhere to live, not a repair that is already written.
+    ⭐ **What paid for it, and it was free: `CW0`–`CW2` and `CL2` are gone.** For every
+    offset that commits, §9.4.3's commit word is the *same* word §9.3's byte map already
+    puts that offset on — `LC` commits into `w3` and its bytes live in `w3`, `LEN` into
+    `w5`, `PER` into `w4` — so `CW` was a second decode of `AIDX` computing what `HW` had
+    already computed. And `CL2` is `HCOMMIT & HW1`. **Four registered macrocells, deleted,
+    with no package behind them.**
 
-36. **⛔ NEW 2026-09-10 — two live defects in the design, found by a Paula.v
-    differential oracle, and they share item 35's root cause.** ⚠ *"Shipped"* is the
-    wrong word and was corrected the same day: **nothing has been built.** These are
-    defects in a fitted, simulated design in its first week, which is exactly where they
-    are cheapest — and the reason to record them at this volume is that neither the
-    fitter nor `audio_tb` found them. A separate implementation
-    of Paula was driven alongside this card in simulation and their observable output
-    compared. Both findings are ours; both are audible.
+    ⚠ **And it consumed the part.** The refit is 128 of 128 cells, 61 of 64 I/O, 71
+    foldback, 487 product terms, and **five of eight blocks at 39 of 40 fan-in** against
+    the six at 35 it had before. §16 item 32 stands and is now tighter.
 
-    **D-1 — every loop plays one sample past the end.** A 2·`LEN`-byte buffer yields
-    2·`LEN` + 1 samples, on every iteration, and `PTR` reaches `LC` + 2·`LEN` + 1 before
-    `W2` fires. Paula plays exactly 2·`LEN`. Measured, where buffer byte *b* holds *b*+2:
+36. **⭐ CLOSED 2026-09-10 — both defects are repaired, and `audio_tb` now counts the
+    thing that would have caught them.** They were found by driving a separate Paula
+    implementation alongside this card in simulation and diffing the output. ⚠ *"Shipped"*
+    was the wrong word in the first version of this item and is corrected: **nothing has
+    been built.** These were defects in a fitted, simulated design in its first week,
+    which is where they are cheapest.
+
+    **D-1 — every loop played one sample past its end.** A 2 × `LEN`-byte buffer yielded
+    2 × `LEN` + 1 samples, on every iteration. For a **two-word loop, ordinary in a MOD
+    instrument, that is one sample in five coming from outside the loop.**
+
+    **D-2 — `LEN` = 0 gave ONE BYTE, not 65,536 words.**
+
+    ⭐ **One repair closes both, and it is two microcode steps.** `CNT` is loaded as
+    **2 × `LEN` − 1** rather than 2 × `LEN`, so the borrow out of `CNT − 1` lands where
+    the buffer ends instead of one iteration later; and `LEN` = 0 becomes 0 − 1 =
+    `$1FFFF` = 131,072 bytes = Paula's 65,536 words. W2 goes from four steps to six and
+    W6 from nine to eleven, in sequences that run once per buffer end and once per note.
+    It requires item 35's 17th bit to exist, which is why the two items closed together.
+
+    ⛔ **AND THE CLAIM THAT WAS MISSING IS THE PART TO KEEP.** This item used to end
+    *"`audio_tb` cannot see either defect and that is the lesson — it asserts the reload
+    VALUE and nothing anywhere counts how many samples a buffer yields."* It does now:
 
     ```
-    LEN=1  buffer 02 03        card plays 02 03 04                    repeating
-    LEN=2  buffer 02..05       card plays 02 03 04 05 06              repeating
-    LEN=4  buffer 02..09       card plays 02 03 04 05 06 07 08 09 0a  repeating
+    samples per pass: 4 4 4 4 4   (LEN = 2 words = 4 bytes)
+    ⭐ D-1: every steady-state loop yields exactly 2*LEN = 4 samples, not 5 (0 bad of 5)
+    ⭐ D-2: LEN = 0 loads CNT = $1FFFF - Paula's 65,536 words (131071)
+       and it does not reload at all in 20,000 slots, where one byte would reload on every sample
     ```
 
-    ⚠ For a **two-word loop — ordinary in a MOD instrument — that is one sample in five
-    coming from outside the loop.**
+    ⚠ **Writing it needed ISOLATION, in both directions, and the first version had
+    neither.** The channel under test has to be set up from scratch with the write
+    *verified to have landed* before anything is measured — every section above inherits
+    the channel state of the one before it, which is survivable for a register value and
+    fatal for a rate — **and every other channel has to be excluded from the count.**
+    Without the second, an unfiltered count of W1 starts counted channels 1–3's events
+    too and reported "4, 7, 5, 6, 5 samples" for the same four-byte buffer. ⛔ The earlier
+    attempt at the `LEN` = 0 claim went **vacuously green** for the same reason: the write
+    never landed and the claim measured a channel that was not running. *A passing claim
+    that tests nothing is worse than a failing one.*
 
-    **D-2 — `LEN` = 0 gives ONE BYTE, not 65,536 words.** `CNT` = 0 at the enable and the
-    first `W1` ends the buffer. Measured at `PER` = 64: 63 reloads in 4,000 colour clocks,
-    `PTR` never past `LC` + 1. §3.3 advertises `LEN` = 0 as Paula's 65,536 words "for
-    free"; item 35 explains why the free thing was never built.
-
-    **Where the card is exactly right, so the scope is bounded:** `PER` → colour clocks
-    per sample matches Paula at 428, 113, 64 and 16, single-valued and jitter-free. With
-    four channels at `PER` = 113 the card retires 177 samples per channel per 20,000
-    colour clocks against 176 expected, 2 gaps of 177 off by 1–3 clocks, **zero dropped**.
-    §4.2's "behaviourally identical to Paula" holds for pitch.
-
-    ⚠ **`audio_tb` cannot see either defect and that is the lesson.** It asserts the
-    reload *value* (`sfc(1) == 17'd4`) and **nothing anywhere counts how many samples a
-    buffer yields**. A test written from the same understanding as the design can only
-    confirm the design does what its author thought. The fix must land with claims that
-    **count samples per buffer**, or the next such defect is equally invisible.
-
-    ⚠ **Two more oracle results, neither a hardware defect.** Paula discards the first
-    word fetched after `DMACON` and our card does not — but that fetch is the cycle
-    carrying `dmasen`, an *Agnus* concern the oracle cannot settle; check the hardware
-    reference manual before changing anything. And §4.2's *"`PER` = 0 or 1: clamp in the
-    sequencer, as Paula effectively does"* is a **misreading**: Paula does not clamp
-    anywhere, its floor comes from Agnus's DMA rate. Our hardware does not clamp either
-    and §10.2.4 says so, so §4.2 contradicts §10.2.4 as well as Paula.
+    ⚠ **Two oracle results are still open, and neither is a hardware defect.** Paula
+    discards the first word fetched after `DMACON` and this card does not — but that fetch
+    is the cycle carrying `dmasen`, an *Agnus* concern the oracle cannot settle; check the
+    hardware reference manual before changing anything. And §4.2's *"`PER` = 0 or 1: clamp
+    in the sequencer, as Paula effectively does"* is a **misreading**: Paula does not clamp
+    anywhere, its floor comes from Agnus's DMA rate. This card does not clamp either and
+    §10.2.4 says so, so §4.2 contradicts §10.2.4 as well as Paula.
 
     ⚠ **The oracle is not in the tree.** `Paula.v` is GPL v3 and vendoring it is
     undecided; the card half of the harness is entirely ours.
 
-    ⚠ **§10.3 makes both repairable and repairs neither.** The control store gives item
-    35's four modes somewhere to live, which is the precondition; the fix itself is
-    unwritten, and so are the claims that would catch it. **This item does not close
-    until something counts the samples a buffer yields.**
+    ⛔ **And the deeper lesson is about `modcompare`, which is green and always was.**
+    [`../tools/modcompare/`](../tools/modcompare/) A/Bs [`../refplayer/`](../refplayer/)
+    — **a C model of this card** — against libopenmpt's Paula emulation, and it has
+    reported near-perfect agreement since 2026-09-04. It could not have caught either
+    defect: `card.c` ends a buffer with `if (--ch->cnt == 0u)`, which is right, and the
+    hardware ended it on a borrow, which was not. **Two independent implementations of the
+    same prose, and the A/B only ever tested one of them.** §16 item 14 asks for an
+    emulator that models the host boundary; what item 36 adds is that **the model and the
+    hardware need something that compares them to each other**, and `audio_tb` against the
+    oracle is now that thing.
+
 37. **⛔ NEW 2026-09-10 — THE `'283` CHAIN WAS NEVER GIVEN A PROPAGATION BUDGET, AND
     THE DATASHEET SAYS IT IS 192 ns INTO A 53 ns WINDOW.** §0 says the card has "no
     tight path at all — the fastest thing on the card is a state-file read at 30 ns
@@ -3111,9 +3128,23 @@ specification that has not been tested.
        survived 43 claims.
     6. `check:place` at **40** packages — item 19 already refuses 18 cm at 35.
 
-    ⭐ **AND THERE IS A ONE-PACKAGE VERSION OF THE SAME IDEA THAT SHOULD BE TRIED
-    FIRST, because 40 ICs is a lot to spend before knowing whether 36 would have
-    done.** The single largest block §10.3 takes off U2 is §9.3's byte map — `HRO`,
+    ⭐ **RESOLVED 2026-09-10 — AND THE ANSWER IS THAT NO PACKAGE WAS NEEDED AT ALL.**
+    The one-package PROM below was costed and then not built, because building the thing
+    it was supposed to enable turned out to be free: §16 items 35 and 36 are **closed, in
+    the fitted part, at zero packages and zero pins**, by reading `ONESOE` and `BLATOE`
+    beside `ACIN` and by deleting `CW0`–`CW2` and `CL2`. "Design fits successfully",
+    `audio_tb` counts the samples, 225 claims across seven testbenches, 0 failed.
+
+    ⚠ **What that does to this item is narrow the case rather than close it.** The two
+    audible defects were the strongest argument for §10.3 and they are gone. What remains
+    is §16 item 32 — U2 at 128 of 128 cells with **five of eight blocks now at 39 of 40
+    fan-in** against six at 35 before — so §16 item 7's eight channels and §11.3's attach
+    chain still have nowhere to go, and **the next repair of this kind will not fit.**
+    §10.3 is now a question about headroom for future work, not about a card that
+    mis-plays loops. ⚠ **Do not read "it fitted" as "there is room": the refit spent
+    every literal it freed.**
+
+    ⚠ **The PROM arithmetic is kept because it is the reason not to reach for one.** The single largest block §10.3 takes off U2 is §9.3's byte map — `HRO`,
     `HSTAGE`, `HCOMMIT`, `CL2`, `HW0`–`HW2`, `HL0`–`HL1`, `CW0`–`CW2`, **twelve cells**
     — and every one of them is a pure function of `AIDX[3:0]`. That is a **16 × 8
     lookup**, which is one small PROM addressed by four pins U2 already drives nowhere.

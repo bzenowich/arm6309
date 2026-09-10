@@ -115,10 +115,6 @@ module aseq (
     output wire HRO,
     output wire HSTAGE,
     output wire HCOMMIT,
-    output wire CW0,
-    output wire CW1,
-    output wire CW2,
-    output wire CL2,
     output wire GBL,
     output wire SFA5,
     output wire SFOE,
@@ -233,10 +229,6 @@ module aseq (
   reg  r_HRO;
   reg  r_HSTAGE;
   reg  r_HCOMMIT;
-  reg  r_CW0;
-  reg  r_CW1;
-  reg  r_CW2;
-  reg  r_CL2;
   reg  r_SDQ0;
   reg  r_SDQ1;
   reg  r_SDQ2;
@@ -294,10 +286,6 @@ module aseq (
   assign HRO = r_HRO;
   assign HSTAGE = r_HSTAGE;
   assign HCOMMIT = r_HCOMMIT;
-  assign CW0 = r_CW0;
-  assign CW1 = r_CW1;
-  assign CW2 = r_CW2;
-  assign CL2 = r_CL2;
   assign SDQ0 = r_SDQ0;
   assign SDQ1 = r_SDQ1;
   assign SDQ2 = r_SDQ2;
@@ -325,11 +313,11 @@ module aseq (
   // buried - the final step of the sequence in progress
   assign LAST =
          (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
-         | (RUN & WT0 & ~WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & ~WT0 & ~WT1 & WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & T3)
          | (RUN & WT0 & ~WT1 & WT2 & T0 & ~T1 & T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3);
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & T3);
   // buried
   assign RSTANY =
          (RST0)
@@ -466,6 +454,7 @@ module aseq (
          | (RUN & ~WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
@@ -479,6 +468,7 @@ module aseq (
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & ~T1 & ~T2 & ~T3 & HCOMMIT & ~HRW)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & T1 & ~T2 & ~T3 & ISSDATA)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & ~T1 & T2 & ~T3);
@@ -504,16 +494,20 @@ module aseq (
          | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & ~T2 & ~T3 & HSTAGE)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & ~T2 & ~T3 & ~HSTAGE & HW0)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & ~T1 & T2 & ~T3 & HW0)
-         | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & CW0);
+         | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & HW0);
   // EXTERNAL
   assign SFA1 =
          (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3)
@@ -526,13 +520,13 @@ module aseq (
          | (RUN & WT0 & ~WT1 & WT2 & ~T0 & ~T1 & T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & T2 & ~T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & T1 & ~T2 & ~T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & ~T2 & ~T3 & ~HSTAGE & HW1)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & ~T1 & T2 & ~T3 & HW1)
-         | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & CW1);
+         | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & HW1);
   // EXTERNAL
   assign SFA2 =
          (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3)
@@ -542,7 +536,7 @@ module aseq (
          | (RUN & WT0 & ~WT1 & WT2 & T0 & T1 & ~T2 & ~T3)
          | (RUN & WT0 & ~WT1 & WT2 & ~T0 & ~T1 & T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
@@ -553,7 +547,7 @@ module aseq (
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & ~T2 & ~T3 & ~HSTAGE & HW2)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & ~T1 & T2 & ~T3 & HW2)
-         | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & CW2);
+         | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & HW2);
   // EXTERNAL
   assign SFWE0 =
          (RUN & ~WT0 & ~WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
@@ -561,6 +555,7 @@ module aseq (
          | (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
@@ -568,7 +563,8 @@ module aseq (
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & ~T2 & ~T3 & ~HRW & ~HRO & ~ISAIDX & ~ISSDATA & ~HL0 & ~HL1)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & HCOMMIT & ~HRW)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3 & ISSDATA);
@@ -579,6 +575,7 @@ module aseq (
          | (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
@@ -586,7 +583,8 @@ module aseq (
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & ~T2 & ~T3 & ~HRW & ~HRO & ~ISAIDX & ~ISSDATA & HL0 & ~HL1)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & HCOMMIT & ~HRW)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3 & ISSDATA);
@@ -597,12 +595,14 @@ module aseq (
          | (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & ~T2 & ~T3 & ~HRW & ~HRO & ~ISAIDX & ~ISSDATA & ~HL0 & HL1)
-         | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & HCOMMIT & ~HRW & CL2)
+         | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & HCOMMIT & ~HRW & HW1)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3 & ISSDATA);
   // EXTERNAL
   assign ALATCK =
@@ -611,13 +611,15 @@ module aseq (
          | (RUN & ~WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3 & ~SLOTCLK)
          | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3 & ~SLOTCLK)
          | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3 & ~SLOTCLK)
+         | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & ~SLOTCLK)
          | (RUN & WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3 & ~SLOTCLK)
          | (RUN & WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3 & ~SLOTCLK)
          | (RUN & WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3 & ~SLOTCLK)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3 & ~SLOTCLK)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3 & ~SLOTCLK)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & ~SLOTCLK)
-         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & T2 & ~T3 & ~SLOTCLK)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3 & ~SLOTCLK)
+         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & T3 & ~SLOTCLK)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & ~T1 & ~T2 & ~T3 & HCOMMIT & ~HRW & ~SLOTCLK)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & T1 & ~T2 & ~T3 & ISSDATA & ~SLOTCLK);
   // EXTERNAL
@@ -629,7 +631,7 @@ module aseq (
          | (RUN & WT0 & WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3 & ~SLOTCLK)
          | (RUN & WT0 & WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3 & ~SLOTCLK)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & ~T3 & ~SLOTCLK)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3 & ~SLOTCLK);
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3 & ~SLOTCLK);
   // EXTERNAL
   assign BLATOE =
          (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
@@ -639,17 +641,19 @@ module aseq (
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3);
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & T3);
   // EXTERNAL - B = $FFFF, so A - 1 is A + $FFFF and the card has no inverter
   assign ONESOE =
-         (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3);
+         (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3);
   // EXTERNAL
   assign CNTOE =
-         (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & T2 & ~T3);
+         (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & T3);
   // EXTERNAL
   assign ACIN =
          (RUN & ~WT0 & ~WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & T2 & ~T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3 & ISSDATA);
   // EXTERNAL
   assign SUMOE =
@@ -658,6 +662,7 @@ module aseq (
          | (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
          | (RUN & WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
@@ -665,13 +670,14 @@ module aseq (
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & HCOMMIT & ~HRW)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3 & ISSDATA);
   // EXTERNAL
   assign SROE =
          (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & T1 & ~T2 & ~T3 & ISSDATA & HRW);
   // EXTERNAL
   assign SRWE =
@@ -679,14 +685,16 @@ module aseq (
   // EXTERNAL - the fetched byte drives the PEND lane while word 0 is written
   assign SBOE =
          (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
-         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & T3);
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & ~T2 & T3);
   // buried
   assign SDHCAP =
          (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & ~T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & ~T1 & ~T2 & ~T3 & HCOMMIT & ~HRW)
          | (RUN & WT2 & ~WT1 & ~WT0 & T0 & T1 & ~T2 & ~T3 & ISSDATA);
   // buried
@@ -695,29 +703,41 @@ module aseq (
          | (RUN & ~WT0 & ~WT1 & ~WT2 & ~T0 & T1 & T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & WT0 & ~WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
+         | (RUN & WT0 & ~WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & ~T2 & ~T3)
          | (RUN & ~WT0 & WT1 & ~WT2 & T0 & ~T1 & T2 & ~T3)
+         | (RUN & ~WT0 & WT1 & ~WT2 & T0 & T1 & T2 & ~T3)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & T1 & ~T2 & ~T3 & HCOMMIT & ~HRW)
          | (RUN & WT2 & ~WT1 & ~WT0 & ~T0 & ~T1 & T2 & ~T3 & ISSDATA);
   // EXTERNAL, bidirectional
   assign SDH0 = ((SDHOE)) ?
-         (SDQ0 & ~ACIN)
-         | (SDQ0 & ~ACOUT)
-         | (~SDQ0 & ACIN & ACOUT) : 1'bz;
+         (~ACIN & ~ONESOE & ~BLATOE & SDQ0)
+         | (ACIN & SDQ0 & ~ACOUT)
+         | (ACIN & ~SDQ0 & ACOUT)
+         | (ONESOE & SDQ0 & ACOUT)
+         | (ONESOE & ~SDQ0 & ~ACOUT)
+         | (BLATOE & ACOUT) : 1'bz;
   // EXTERNAL, bidirectional
   assign SDH1 = ((SDHOE)) ?
-         (SDQ1 & ~ACIN)
-         | (SDQ1 & ~ACOUT)
-         | (SDQ1 & ~SDQ0)
-         | (~SDQ1 & SDQ0 & ACIN & ACOUT) : 1'bz;
+         (~ACIN & ~ONESOE & ~BLATOE & SDQ1)
+         | (ACIN & SDQ1 & ~ACOUT)
+         | (ACIN & SDQ1 & ~SDQ0)
+         | (ACIN & ~SDQ1 & ACOUT & SDQ0)
+         | (ONESOE & SDQ1 & ACOUT)
+         | (ONESOE & SDQ1 & SDQ0)
+         | (ONESOE & ~SDQ1 & ~ACOUT & ~SDQ0) : 1'bz;
   // EXTERNAL, bidirectional
   assign SDH2 = ((SDHOE)) ?
-         (SDQ2 & ~ACIN)
-         | (SDQ2 & ~ACOUT)
-         | (SDQ2 & ~SDQ0)
-         | (SDQ2 & ~SDQ1)
-         | (~SDQ2 & SDQ1 & SDQ0 & ACIN & ACOUT) : 1'bz;
+         (~ACIN & ~ONESOE & ~BLATOE & SDQ2)
+         | (ACIN & SDQ2 & ~ACOUT)
+         | (ACIN & SDQ2 & ~SDQ0)
+         | (ACIN & SDQ2 & ~SDQ1)
+         | (ACIN & ~SDQ2 & ACOUT & SDQ1 & SDQ0)
+         | (ONESOE & SDQ2 & ACOUT)
+         | (ONESOE & SDQ2 & SDQ0)
+         | (ONESOE & SDQ2 & SDQ1)
+         | (ONESOE & ~SDQ2 & ~ACOUT & ~SDQ1 & ~SDQ0) : 1'bz;
   // EXTERNAL - the posted-write latch takes the host's byte on the synchronised edge
   assign PWCK =
          (HSTB & ~RW & ~SLOTCLK);
@@ -1045,16 +1065,6 @@ module aseq (
          (~AIDX0 & AIDX1 & ~AIDX2 & ~AIDX3)
          | (~AIDX0 & ~AIDX1 & AIDX2 & ~AIDX3)
          | (~AIDX0 & AIDX1 & AIDX2 & ~AIDX3);
-      r_CW0 <=
-         (~AIDX0 & AIDX1 & ~AIDX2 & ~AIDX3)
-         | (~AIDX0 & ~AIDX1 & AIDX2 & ~AIDX3);
-      r_CW1 <=
-         (~AIDX0 & AIDX1 & ~AIDX2 & ~AIDX3);
-      r_CW2 <=
-         (~AIDX0 & ~AIDX1 & AIDX2 & ~AIDX3)
-         | (~AIDX0 & AIDX1 & AIDX2 & ~AIDX3);
-      r_CL2 <=
-         (~AIDX0 & AIDX1 & ~AIDX2 & ~AIDX3);
       r_SDQ0 <=
          (SDHCAP & SDH0)
          | (SDQ0 & ~SDHCAP);

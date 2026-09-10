@@ -61,8 +61,8 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 
 | | |
 |---|---|
-| `npm run check` | every GAL design against its own model, and the live ones against Atmel's CUPL. **391 claims, ~36 s** |
-| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs six testbenches. **140 claims, ~2 min 40 s** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
+| `npm run check` | every GAL design against its own model, and the live ones against Atmel's CUPL. **543 claims, ~40 s** |
+| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs seven testbenches. **225 claims, ~3 min** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
 | `npm run check:sim` | the two *hand-written* Verilog models, `gal/mmu.v` and `gal/clkdec.v`, with their own testbenches. Older and separate from `check:video` |
 | `npm run check:netlist` | the motherboard's connectivity, against `dist/mainboard/mainboard/circuit.json` — **a build artefact**, so run `npm run build` first if a `.circuit.tsx` changed |
 | `npm run gen:pld` | writes `gal/{vaddr,vctrl,audio}.pld` from the term lists |
@@ -72,7 +72,7 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 ### The Verilator tests
 
 `npm run check:video` is the one that runs the *design* rather than its
-equations. It ends with a line like `140 claims, 0 failed`, and **its exit code
+equations. It ends with a line like `225 claims, 0 failed`, and **its exit code
 is the answer** — a testbench prints a failed claim and then calls `$finish`,
 which exits 0, so the count is what decides the status. Read the `FAIL` lines;
 each names the claim and the observed value.
@@ -89,7 +89,7 @@ TBS=vtile sh run.sh          # one; TBS="vsync vaddr" for several
 | `vaddr_tb` | " | the bitmap scan address over whole lines, both scroll axes, both ring wraps, line doubling, who owns the internal address bus |
 | `vtile_tb` | " | the cell fetch cadence, both address concatenations, cell-mode scroll in both axes, the 32-row ring |
 | `vspan_tb` | " | all four `WMODE`s, the retire rate, `/WAIT`'s read/write rule, `WADV` chaining, the display list, the VBL interrupt |
-| `audio_tb` | the audio CPLD | the slot walk, the ÷5 CIA clock, Paula's set/clear, open-drain `/FIRQ`, §9.4.5's merge |
+| `audio_tb` | both audio CPLDs + the state file, the sample RAM, the adder and the converters | the slot walk, the ÷5 CIA clock, Paula's set/clear, open-drain `/FIRQ`, §9.4.5's merge, the six micro-op sequences — **and how many samples a buffer yields**, which is the claim two audible defects survived 43 green ones by not having (`audio.md` §16 item 36) |
 | `mainboard_tb` | U3, U6, U9, U10 + the map SRAMs, `'157`, `'574`, boot `'244`, flash and SIMMs | the boot sequence, the 32 MB map, the four SIMM windows, `/IOPAGE`, and that exactly one thing drives physical `A20`–`A13` |
 
 **What is generated and what is written.** `verilog/emit.ts` turns a `Merged`

@@ -58,14 +58,23 @@ sample byte come out of card RAM through `PEND`, a converter port register and i
 `AD7528` — then rewrites `LC`/`LEN` while the first pass is still playing and sees the
 buffer loop to the new address and the end-of-buffer interrupt reach `/FIRQ`. 38 claims, 0 failed.
 
-⛔ **And it has two live, audible defects, found on 2026-09-10 by running a separate
-Paula implementation alongside it and diffing the output** — in the *design*; nothing
-has been built. Every loop plays one sample past its end, and `LEN` = 0 gives one byte
-instead of Paula's 65,536 words
-([`docs/audio.md`](docs/audio.md) §16 item 36). Both trace to one root cause — the
-17-bit `CNT` the design advertises **does not exist in the fitted part** (item 35) — and
-neither is repairable on a CPLD at 128 of 128 cells and 35 of 40 fan-in. ⚠ **`audio_tb`
-cannot see either**, because nothing anywhere counts how many samples a buffer yields.
+⭐ **Two audible defects were found on 2026-09-10 by running a separate Paula
+implementation alongside it and diffing the output — and repaired the same day for no
+package, no pin and no macrocell.** Every loop played one sample past its end, and
+`LEN` = 0 gave one byte instead of Paula's 65,536 words
+([`docs/audio.md`](docs/audio.md) §16 items 35 and 36). `CNT` is loaded as 2 × `LEN` − 1
+now, the 17th bit exists, and `audio_tb` **counts the samples a buffer yields** — the
+claim item 36 says was missing, and the reason both defects survived 43 green claims.
+**225 claims across seven testbenches, 0 failed.**
+
+⛔ **And `modcompare` was green throughout and could not have caught either.** It A/Bs
+[`refplayer/`](refplayer/) — a **C model** of this card — against libopenmpt. `card.c`
+ends a buffer correctly; the hardware did not. Two implementations of one paragraph, and
+the A/B only ever tested one of them.
+
+⚠ **The repair spent the last of the part**: five of `aseq`'s eight logic blocks now
+stand at **39 of 40 LAB fan-in**, against six at 35 before. The next repair of this kind
+will not fit.
 
 ⚠ **So the sequencer has a third arrangement, designed on 2026-09-10 and not decided.**
 §10.3 moves the `(WT, T)` decode out of macrocells into four `27C512` with the step

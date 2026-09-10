@@ -111,6 +111,9 @@ module audio_tb;
   function automatic [16:0] sfc(input int w); return {card.SF[w][16], card.SF[w][15:0]}; endfunction
 
   int i, n, cclks, cias;
+  int n1, passes, bad_pass;
+  int pass_len[0:6];
+  bit w1seen;
   int seen[8];
   int wtc[8];
   bit bad;
@@ -257,7 +260,11 @@ module audio_tb;
     cnt0 = sfc(1);
     ok(ptr0 == 19'h01001,
        $sformatf("LC reached PTR and the priming fetch advanced it (%05h)", ptr0));
-    ok(cnt0 == 17'd16, $sformatf("LEN x 2 reached CNT as BYTES - 8 words is 16 (%0d)", cnt0));
+    // ⭐ 2*LEN - 1, NOT 2*LEN, since 16 item 36's repair. W1's end test is the
+    // BORROW out of CNT - 1, which fires one iteration after CNT reached zero,
+    // so the count is loaded one short and the borrow lands where the buffer
+    // ends. audio.md 10.2.3 W2.
+    ok(cnt0 == 17'd15, $sformatf("LEN x 2 - 1 reached CNT as BYTES - 8 words is 15 (%0d)", cnt0));
     ok(sfh(0) == 8'h10,
        $sformatf("and PEND is primed with the buffer's first byte (%02h)", sfh(0)));
 
@@ -283,7 +290,7 @@ module audio_tb;
     while (card.u2.BUSY && n < 200) begin @(posedge SLOTCLK); n++; end
     repeat (20) @(posedge SLOTCLK);
     ok(sfp(2) == 19'h01002, $sformatf("PTR advanced by one byte (%05h)", sfp(2)));
-    ok(sfc(1) == 17'd15, $sformatf("CNT counted one byte down (%0d)", sfc(1)));
+    ok(sfc(1) == 17'd14, $sformatf("CNT counted one byte down (%0d)", sfc(1)));
     ok(sfh(0) == 8'h11,
        $sformatf("and PEND holds the NEXT sample, fetched in advance (%02h)", sfh(0)));
 
@@ -328,7 +335,7 @@ module audio_tb;
     n = 0;
     while (card.u2.BUSY && n < 200) begin @(posedge SLOTCLK); n++; end
     repeat (20) @(posedge SLOTCLK);
-    ok(sfc(1) == 17'd4, $sformatf("and the new LEN with it, doubled to bytes (%0d)", sfc(1)));
+    ok(sfc(1) == 17'd3, $sformatf("and the new LEN with it, doubled to bytes less one (%0d)", sfc(1)));
 
     $display("");
     $display("1 requirement 7 - the end-of-buffer interrupt, end to end");
@@ -530,38 +537,95 @@ module audio_tb;
     $display("");
     $display("16 item 36 - samples retired per buffer (D-1, D-2)");
     $display("");
-    // ⚠ THE PER-BUFFER COUNT IS NOT HERE, DELIBERATELY. Counting W1
-    // completions between W2 reloads looks like the natural claim and it is
-    // NOT TRUSTWORTHY: measured over 20,000 slots it gives 104 W1 against 14
-    // W2 - about 7.4 samples for a 2-byte buffer - where the oracle's byte
-    // trace at the converter shows 3 (02 03 04, repeating). Both cannot be
-    // right, and W1/W2 is an indirect proxy: not every W1 need retire a
-    // sample, and W2 need not be the only path out of a buffer.
-    //
-    // The claim that belongs here counts SAMPLE BYTES AT THE CONVERTER PORT,
-    // the way the oracle did, and writing it needs the converter-feed timing
-    // (6.2's two windows, one frame behind the compare). Left undone rather
-    // than committed wrong: a claim that measures the wrong thing is worse
-    // than no claim, because it will be believed. 16 item 36 D-1.
 
-    // ⚠ AND NEITHER IS THE LEN = 0 CLAIM. It was written here, and it
-    // reported 87 reloads with CNT = 65535 (a correct FAIL for D-2) until the
-    // block above it was removed - after which it reported 0 reloads with
-    // CNT = 101 and PASSED. Same design, same claim, opposite verdict: the
-    // channel was still holding state from an earlier section, the LEN = 0
-    // write never landed, and the claim went green while testing nothing.
+    // ⛔ THE CLAIM THAT DID NOT EXIST, AND WHY IT NOW CAN. 16 item 36 says it
+    // plainly: audio_tb asserted the reload VALUE and nothing anywhere counted
+    // how many samples a buffer yields, so a test written from the same
+    // understanding as the design confirmed the design did what its author
+    // thought. What the earlier attempt lacked was ISOLATION - every section
+    // above inherits the channel state of the one before it, which is
+    // survivable when the claim is about a register and fatal when it is about
+    // a rate, and the LEN = 0 version of this claim went GREEN while testing a
+    // channel whose write had never landed.
     //
-    // ⛔ A VACUOUSLY PASSING CLAIM IS THE WORST OUTCOME - worse than the
-    // failing one and worse than no claim, because it reports green. That is
-    // design-review2.md 10's own lesson arriving from a new direction: an
-    // input a check cannot actually drive is an input it cannot see a defect
-    // in, and here the check could not drive the channel it was testing.
-    //
-    // What both missing claims need first is ISOLATION: a task that resets a
-    // channel to a known state and verifies the write landed (sfl/sfc read
-    // back) BEFORE measuring anything. Every section above inherits state
-    // from the one before it, which is survivable when the claim is about a
-    // register value and fatal when it is about a rate. 16 item 36 D-1, D-2.
+    // So: disable, rewrite, and PROVE the buffer landed before measuring it.
+    // A sample is one W1 - each writes PEND exactly once (step 4) - plus W6's
+    // priming fetch, and a buffer ends when W1 chains into W2.
+    wr('h2, 8'h0F);                                   // DMACON: clear ALL FOUR
+    repeat (80) @(posedge SLOTCLK);
+    aidx(0);
+    adata(8'h00); adata(8'h20); adata(8'h00);         // LC  = $02000
+    adata(8'h00); adata(8'h02);                       // LEN = 2 words = 4 bytes
+    adata(8'h00); adata(8'h10);                       // PER = 16
+    ok(sfp(3) == 19'h02000 && sfl(5) == 16'd2 && sfl(4) == 16'd16,
+       $sformatf("ISOLATION: the buffer under test landed before it was measured (LC %05h LEN %0d PER %0d)",
+                 sfp(3), sfl(5), sfl(4)));
+    wr('h2, 8'h81);                                   // enable
+    repeat (80) @(posedge SLOTCLK);
+    ok(sfc(1) == 17'd3,
+       $sformatf("and CNT loaded as 2*LEN - 1 = 3 bytes (%0d)", sfc(1)));
+
+    // Count W1s between buffer ends. ⚠ Bounded, per CLAUDE.md's fifth trap:
+    // a hang here would present as "budget more time" and not as a failure.
+    n1 = 0; passes = 0; bad_pass = 0; w1seen = 0;
+    for (i = 0; i < 200000 && passes < 5; i++) begin
+      @(posedge SLOTCLK); #0;
+      // ⚠ FILTERED BY WORKING CHANNEL, and the first version was not: the
+      // sections above leave channels 1-3 enabled, so an unfiltered count of
+      // W1 starts counted THEIR events too and reported 4, 7, 5, 6, 5 samples
+      // for the same four-byte buffer. A rate claim needs isolation in both
+      // directions - the channel under test set up from scratch, and every
+      // other channel excluded from the count.
+      if (card.u2.RUN && {card.u2.WT2,card.u2.WT1,card.u2.WT0} === 3'd0
+          && {card.u2.WC1,card.u2.WC0} === 2'd0
+          && {card.u2.T3,card.u2.T2,card.u2.T1,card.u2.T0} === 4'd0) begin
+        if (!w1seen) begin n1++; w1seen = 1; end
+      end else w1seen = 0;
+      if (card.u2.ENDNOW) begin
+        passes++;
+        pass_len[passes > 5 ? 5 : passes] = n1;
+        if (passes > 1 && n1 != 4) bad_pass++;
+        n1 = 0;
+        @(posedge SLOTCLK);                            // step past ENDNOW's slot
+      end
+    end
+    $display("      samples per pass: %0d %0d %0d %0d %0d   (LEN = 2 words = 4 bytes)",
+             pass_len[1], pass_len[2], pass_len[3], pass_len[4], pass_len[5]);
+    ok(passes >= 4,
+       $sformatf("the buffer looped at least four times inside the bound (%0d)", passes));
+    ok(bad_pass == 0,
+       $sformatf("⭐ D-1: every steady-state loop yields exactly 2*LEN = 4 samples, not 5 (%0d bad of %0d)",
+                 bad_pass, passes));
+
+    // ---- D-2: LEN = 0 is Paula's 65,536 words, not one byte --------------
+    // ⚠ SAME ISOLATION, and it is the claim that went vacuously green last
+    // time. The proof that it is testing something is the reload count: at
+    // PER = 16 a 131,072-byte buffer cannot reload even once inside the bound,
+    // and the ONE-BYTE defect reloads on every sample.
+    wr('h2, 8'h0F);
+    repeat (80) @(posedge SLOTCLK);
+    aidx(0);
+    adata(8'h00); adata(8'h20); adata(8'h00);         // LC = $02000
+    adata(8'h00); adata(8'h00);                       // LEN = 0
+    adata(8'h00); adata(8'h10);                       // PER = 16
+    ok(sfl(5) == 16'd0 && sfp(3) == 19'h02000,
+       $sformatf("ISOLATION: LEN = 0 landed before it was measured (LEN %0d LC %05h)",
+                 sfl(5), sfp(3)));
+    wr('h2, 8'h81);
+    repeat (80) @(posedge SLOTCLK);
+    ok(sfc(1) == 17'd131071,
+       $sformatf("⭐ D-2: LEN = 0 loads CNT = $1FFFF - Paula's 65,536 words, and it needs the 17th bit to exist (%0d)",
+                 sfc(1)));
+    passes = 0;
+    for (i = 0; i < 20000; i++) begin
+      @(posedge SLOTCLK); #0;
+      if (card.u2.ENDNOW) passes++;
+    end
+    ok(passes == 0,
+       $sformatf("and it does not reload at all in 20,000 slots, where one byte would reload on every sample (%0d)",
+                 passes));
+    ok(sfp(2) > 19'h02010,
+       $sformatf("PTR walked well past the first byte (%05h)", sfp(2)));
 
     $display("");
     if (fails == 0) $display("audio_tb OK");

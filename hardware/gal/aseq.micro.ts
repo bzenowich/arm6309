@@ -85,6 +85,25 @@ export interface Step {
   done?: "always" | "noinc" | "nocommit" | "notend"
 }
 
+/** ⛔ 16 ITEM 35: WHAT SD[18:16] MUST DO ON A STEP THAT DRIVES IT.
+ *
+ * Nine steps drive the high lane and they need FOUR behaviours, and the fitted
+ * design distinguished them with `cin` and `ACOUT` - which cannot, because
+ * four of them have `cin` = 0. `CNT - 1` never took the borrow and
+ * `LEN + LEN` never delivered the carry, so the 17-bit CNT 3.3 advertises did
+ * not exist. This function is that distinction, derived from what the step is
+ * ARITHMETICALLY doing rather than from a carry in, and it is the ONE origin:
+ * aseq.jedec.ts builds HM0/HM1 from it and arom.ts encodes it into HLOP. */
+export type HighLaneMode = "off" | "cap" | "pass" | "inc" | "dec" | "carry"
+export const highLaneMode = (s: Step): HighLaneMode => {
+  if (s.cap) return "cap"
+  if (!s.drv) return "off"
+  if (s.b === "ones") return "dec"        // CNT - 1: bit 16 takes the BORROW
+  if (s.b === "blat") return "carry"      // CNT = LEN + LEN: bit 16 IS the carry
+  if (s.b === "zero" && s.cin) return "inc"
+  return "pass"
+}
+
 /** W1 a channel event, W2 a buffer reload, W3 a host access, W4 the tempo
  *  timer's reload, W6 DMACON's restart. There is no W5 here: 6.2's converter
  *  windows are a function of the slot phase and never of the microprogram. */
@@ -105,14 +124,28 @@ export const PROGRAM: Record<number, Step[]> = {
   ],
   /* -- W2: 3.3's shadow reload. The single highest-value line on the card:
    * LC and LEN are copied AT BUFFER END, so ProTracker's one-shot then loop
-   * idiom works. LEN+LEN is the byte count and the carry is CNT[16], so there
-   * is no shifter - and LEN = 0 becomes 131,071 bytes on the next decrement,
-   * which is Paula's 65,536 words for no terms at all. */
+   * idiom works. LEN+LEN is the byte count and its carry out IS CNT[16], so
+   * there is no shifter.
+   *
+   * ⭐ CNT IS LOADED AS 2*LEN - 1, NOT 2*LEN, AND THAT IS 16 ITEM 36'S D-1.
+   * W1's end test is the BORROW out of CNT - 1, which fires when CNT was
+   * already zero - one iteration late - so a 2*LEN-byte buffer yielded
+   * 2*LEN + 1 samples on every loop. Firing on "the result is zero" instead
+   * would need a sixteen-bit zero detect, which is sixteen signals into one
+   * logic block on a part at 35 of 40 fan-in (item 35). Loading one less
+   * costs TWO MICROCODE STEPS in a sequence that runs once per buffer end,
+   * and nothing else at all.
+   *
+   * ⭐ AND IT FIXES D-2 IN THE SAME MOVE. LEN = 0 gives CNT = 0 - 1 = $1FFFF,
+   * which is 131,072 bytes = Paula's 65,536 words, where before it gave one.
+   * The 17th bit has to exist for that, which is item 35's HLOP. */
   [W2]: [
     /* 0 */ { w: 3, alat: true, cap: true },
     /* 1 */ { w: 2, wr: [0, 1, 2], b: "zero", sum: true, drv: true },
     /* 2 */ { w: 5, alat: true, blat: true },
-    /* 3 */ { w: 1, wr: [0, 1, 2], b: "blat", sum: true, drv: true, done: "always" },
+    /* 3 */ { w: 1, wr: [0, 1, 2], b: "blat", sum: true, drv: true },
+    /* 4 */ { w: 1, alat: true, cap: true },
+    /* 5 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true, done: "always" },
   ],
   /* -- W3: a host access, retired out of the work slots (9.3, 9.4.3).
    * ⚠ EVERY W3 RUNS ALL SIX STEPS and each step's controls are gated by which
@@ -160,11 +193,13 @@ export const PROGRAM: Record<number, Step[]> = {
     /* 1 */ { w: 2, wr: [0, 1, 2], b: "zero", sum: true, drv: true },
     /* 2 */ { w: 5, alat: true, blat: true },
     /* 3 */ { w: 1, wr: [0, 1, 2], b: "blat", sum: true, drv: true },
-    /* 4 */ { w: 2, alat: true, cap: true, srd: true },
-    /* 5 */ { w: 2, wr: [0, 1, 2], b: "zero", cin: true, sum: true, drv: true },
-    /* 6 */ { w: 4, blat: true },
-    /* 7 */ { count: true, alat: true },
-    /* 8 */ { w: 0, wr: [0, 1, 2], b: "blat", sum: true, sbo: true, done: "always" },
+    /* 4 */ { w: 1, alat: true, cap: true },
+    /* 5 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true },
+    /* 6 */ { w: 2, alat: true, cap: true, srd: true },
+    /* 7 */ { w: 2, wr: [0, 1, 2], b: "zero", cin: true, sum: true, drv: true },
+    /* 8 */ { w: 4, blat: true },
+    /* 9 */ { count: true, alat: true },
+    /* 10 */ { w: 0, wr: [0, 1, 2], b: "blat", sum: true, sbo: true, done: "always" },
   ],
 }
 

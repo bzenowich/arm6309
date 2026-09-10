@@ -1292,3 +1292,92 @@ and §16 item 38's gate says to re-price it while the microprogram is open.
 the machine is in design. Corrected — they are defects in a fitted, simulated design in
 its first week, which is where they are cheapest, and the reason to record them at this
 volume is that neither the fitter nor `audio_tb` found them.
+
+
+---
+
+## 2026-09-10 (third pass) — items 35 and 36 closed in the fitted part, for nothing
+
+**The card is still 35 ICs and two `ATF1508AS`.** What changed is that the two audible
+defects §16 item 36 recorded that morning are repaired, measured, and fitted — and that
+the repair cost **no package, no pin and no macrocell**.
+
+### §10.2.4 / §16 item 35 — "the 17-bit `CNT` does not exist"
+
+**Was:** `SD[18:16]` driven by `SDQ` XOR (`ACIN` & `ACOUT`), so four behaviours were
+told apart by one bit that is zero in three of them.
+
+⭐ **Now: `ACIN`, `ONESOE` and `BLATOE`** — three control outputs the design has always
+produced, mutually exclusive on every driving step, read directly by the three lane
+equations. **Two extra literals on three equations.** The information was never missing;
+the equation was only reading a third of it.
+
+⛔ **The first repair was two registered mode bits and it did not fit**, and both of its
+failures are worth keeping:
+
+- a registered decode of (`WT`, `T`) must be decoded from the **preceding** step, because
+  a register's terms are evaluated on the edge that *ends* a step;
+- and it must **hold across the five walk slots** between one work slot and the next.
+  Without the hold it survived where two steps fell in the same colour clock and vanished
+  where they did not — `carry` landed, `dec` did not, `CNT[16]` took a silent zero — which
+  is a defect that *looks intermittent and is not*.
+- With the hold it was correct and `fit1508.exe` answered **`INTERNAL ERROR`**. ⚠ CLAUDE.md's
+  first trap fired verbatim: the previous `.fit` stayed in place and read like a passing
+  one. The hash is what caught it.
+
+⭐ **`CW0`–`CW2` and `CL2` paid for it, and they were free to delete.** For every offset
+that commits, §9.4.3's commit word is the same word §9.3's byte map already puts that
+offset on, so `CW` was a second decode of `AIDX` computing what `HW` had computed. `CL2`
+is `HCOMMIT & HW1`. Four registered macrocells, gone.
+
+| `aseq` | before | after |
+|---|---|---|
+| logic cells | 128/128 | 128/128 |
+| I/O | 61/64 | 61/64 |
+| flip-flops | 60 | **56** |
+| foldback | 61 | **71** |
+| product terms | 441 | **487** |
+| cascades | 21 | **1** |
+| LAB fan-in | 35,35,35,35,35,35,34,17 | ⚠ **39,39,39,33,39,34,39,27** |
+
+⚠ **It fitted and it spent everything it freed.** §16 item 32 is tighter, not looser.
+
+### §10.2.3 / §16 item 36 — D-1 and D-2
+
+`CNT` is loaded as **2 × `LEN` − 1**, so the borrow out of `CNT − 1` lands where the
+buffer ends rather than one iteration later, and `LEN` = 0 becomes `$1FFFF` = 131,072
+bytes = Paula's 65,536 words. **Two microcode steps**: W2 four → six, W6 nine → eleven,
+in sequences that run once per buffer end and once per note.
+
+### The claim that was missing, and why writing it was the hard part
+
+Item 36 ended *"nothing anywhere counts how many samples a buffer yields"*. `audio_tb`
+counts them now — `4 4 4 4 4` for a two-word loop — and getting there needed **isolation
+in both directions**, neither of which the earlier attempt had:
+
+- the channel under test set up from scratch, with the write **verified to have landed**
+  before anything is measured;
+- and **every other channel excluded from the count**. Without that, an unfiltered count
+  of W1 starts counted channels 1–3's events too and reported *"4, 7, 5, 6, 5 samples"*
+  for the same four-byte buffer — a number that looks like a defect and is an instrument
+  fault.
+
+⛔ And the earlier `LEN` = 0 attempt had gone **vacuously green**: the write never landed
+and the claim measured a channel that was not running. *A passing claim that tests
+nothing is worse than a failing one, because it reports green.*
+
+### ⛔ What this says about `modcompare`, which is green and always was
+
+`audio/tools/modcompare/` A/Bs `audio/refplayer/` — **a C model of this card** — against
+libopenmpt's Paula emulation, and has reported near-perfect agreement since 2026-09-04.
+**It could not have caught either defect.** `card.c` ends a buffer with
+`if (--ch->cnt == 0u)`, which is right; the hardware ended it on a borrow, which was not.
+Two independent implementations of the same prose, and the A/B only ever tested one of
+them. The card was not in the loop, and on 2026-09-04 it could not have been — there was
+no Verilator model and the logic was five GALs.
+
+**What modcompare validates is the replayer and the register-level model**: the effect
+engine, the period table, the tempo mapping, the `LC`/`LEN` shadow idiom. That is real
+and it is build step 0's exit criterion. **What it says about the hardware is nothing**,
+and the only thing that does is a testbench that runs the design — which is why item 36's
+oracle found in one afternoon what six days of green A/B did not.

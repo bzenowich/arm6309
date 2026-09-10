@@ -17,7 +17,9 @@
 import { counterTerms } from "./jedec/counter"
 import { reduceTerms } from "./jedec/minimise"
 import type { Cell } from "./jedec/assemble"
-import { PROGRAM, HOSTMAP, COMMIT, STAGED, W1, W2, W3, W4, W5, W6, type Step } from "./aseq.micro"
+import {
+  PROGRAM, HOSTMAP, COMMIT, STAGED, W1, W2, W3, W4, W5, W6, type Step,
+} from "./aseq.micro"
 
 /* -- how a (work type, step) becomes literals ---------------------------- *
  *
@@ -26,7 +28,7 @@ import { PROGRAM, HOSTMAP, COMMIT, STAGED, W1, W2, W3, W4, W5, W6, type Step } f
  * and it appears in most of the equations below. */
 export const WTC: Record<number, number> = { [W1]: 0, [W2]: 1, [W6]: 2, [W4]: 3, [W3]: 4, [W5]: 5 }
 const LEN: Record<number, number> = {
-  [W1]: 7, [W2]: 4, [W6]: 9, [W4]: 10, [W3]: 6, [W5]: 6,
+  [W1]: 7, [W2]: 6, [W6]: 11, [W4]: 10, [W3]: 6, [W5]: 6,
 }
 
 const bits = (name: string, v: number, n: number) =>
@@ -301,15 +303,17 @@ const hostmap: Cell[] = [
     why: "9.4.3: this byte is a field's last, so the shadow lands in one write",
     terms: reduceTerms(Object.keys(COMMIT).map((k) => bits("AIDX", Number(k), 4)))
       .map((t) => t.join(" & ")) },
-  ...[0, 1, 2].map((b) => ({
-    pin: 0, name: `CW${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: reduceTerms(Object.entries(COMMIT).flatMap(([k, v]) =>
-      ((v.w >> b) & 1) === 1 ? [bits("AIDX", Number(k), 4)] : [])).map((t) => t.join(" & ")),
-  })),
-  { pin: 0, name: "CL2", assertedLow: false, s0: 1, registered: true,
-    why: "only LC's commit reaches lane 2 - it is the 19-bit one",
-    terms: reduceTerms(Object.entries(COMMIT).flatMap(([k, v]) =>
-      v.lanes.includes(2) ? [bits("AIDX", Number(k), 4)] : [])).map((t) => t.join(" & ")) },
+  /* ⭐ CW0-2 AND CL2 ARE GONE, AND THEY COST NOTHING TO DELETE. For every
+   * offset that commits, 9.4.3's commit word is the SAME word 9.3's byte map
+   * already puts that offset on - LC commits into w3 and its bytes live in
+   * w3, LEN into w5, PER into w4 - so `CW` was a second decode of AIDX
+   * computing what `HW` had already computed. And CL2, "only LC's commit
+   * reaches lane 2", is `HCOMMIT & HW1`: of the three committing offsets, only
+   * LC's has bit 1 of its word set (3 = 011 against 5 = 101 and 4 = 100).
+   *
+   * Four registered macrocells, deleted, with no package and no pin behind
+   * them - which is what paid for HM0/HM1 below. `checkCommitWord` in
+   * audio.check.ts asserts the identity rather than trusting this paragraph. */
 ]
 
 /* ======================= the control outputs ============================ *
@@ -369,7 +373,7 @@ const addr: Cell[] = [
       /* W3: the shadow at $25, SPTR at $22, or the host's own byte */
       ...(((5 >> b) & 1) === 1 ? [w3(0, "HSTAGE"), w3(1)] : []),
       ...(((2 >> b) & 1) === 1 ? [w3(3), w3(4)] : []),
-      w3(0, `!HSTAGE & HW${b}`), w3(5, `HW${b}`), w3(2, `CW${b}`),
+      w3(0, `!HSTAGE & HW${b}`), w3(5, `HW${b}`), w3(2, `HW${b}`),
     ],
   })),
 ]
@@ -391,7 +395,7 @@ const lanes: Cell[] = [0, 1, 2].map((l) => ({
      * read-only offset, which is what makes PTR and CNT read-only. */
     w3(0, `!HRW & !HRO & !ISAIDX & !ISSDATA & ${bits("HL", l, 2).join(" & ")}`),
     /* W3 step 2: 9.4.3's commit. Lane 2 only for LC, which is the 19-bit one. */
-    ...(l < 2 ? [w3(2, "HCOMMIT & !HRW")] : [w3(2, "HCOMMIT & !HRW & CL2")]),
+    ...(l < 2 ? [w3(2, "HCOMMIT & !HRW")] : [w3(2, "HCOMMIT & !HRW & HW1")]),
     /* W3 step 4: SPTR's post-increment. */
     w3(4, "ISSDATA"),
   ],
@@ -446,21 +450,63 @@ const high: Cell[] = [
     terms: [...on((s) => s.cap), w3(1, "HCOMMIT & !HRW"), w3(3, "ISSDATA")] },
   { pin: 0, name: "SDHOE", assertedLow: false, s0: 1, registered: false,
     terms: [...on((s) => s.drv), w3(2, "HCOMMIT & !HRW"), w3(4, "ISSDATA")] },
-  /* The captured value, and the three-bit increment on top of ACOUT. */
+  /* The captured value. */
   ...[0, 1, 2].map((i) => ({
     pin: 0, name: `SDQ${i}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [`SDHCAP & SDH${i}`, `SDQ${i} & !SDHCAP`],
   })),
+
+  /* ⛔ 16 ITEM 35, REPAIRED - AND THE MODE NEEDED NO STORAGE AT ALL.
+   *
+   * The first repair gave the lane two registered mode bits decoded from
+   * (WT, T). It was correct and it DID NOT FIT: a registered bit has to hold
+   * across the five walk slots between one work slot and the next, that hold
+   * term is a sixth product on two more macrocells, and `fit1508.exe` answered
+   * `INTERNAL ERROR` on a part already at 128 of 128 with two logic blocks at
+   * 40 of 40 fan-in.
+   *
+   * ⭐ THE MODE IS ALREADY ON THE BOARD. Three control outputs this design has
+   * always had distinguish all four cases, on the very step that needs them,
+   * with no register and no hold:
+   *
+   *     ACIN    the carry in   -> the step is an INCREMENT   (PTR + 1, SPTR + 1)
+   *     ONESOE  B = $FFFF      -> the step is a DECREMENT    (CNT - 1)
+   *     BLATOE  B = the latch  -> the step is CNT = LEN + LEN, so bit 16 IS the carry
+   *     none of the three      -> a PASS (a copy, or the host's commit)
+   *
+   * They are mutually exclusive on every one of the eleven steps that drive
+   * the lane, because no step ever carries in AND sums against $FFFF or the
+   * latch. ⚠ What the fitted design got wrong was never that the information
+   * was missing - it was that it read ONLY `ACIN`, and `ACIN` = 0 covers three
+   * of the four cases. Two more literals, and nothing else.
+   *
+   * A subtract here is A + $FFFF, so its borrow is !ACOUT and not ACOUT. */
   { pin: 0, name: "SDH0", assertedLow: false, s0: 1, registered: false, bidir: true,
     oe: "SDHOE",
-    terms: ["SDQ0 & !ACIN", "SDQ0 & !ACOUT", "!SDQ0 & ACIN & ACOUT"] },
+    terms: [
+      "!ACIN & !ONESOE & !BLATOE & SDQ0",                       // pass
+      "ACIN & SDQ0 & !ACOUT", "ACIN & !SDQ0 & ACOUT",           // + carry in
+      "ONESOE & SDQ0 & ACOUT", "ONESOE & !SDQ0 & !ACOUT",       // - borrow
+      "BLATOE & ACOUT",                                          // bit 16 IS the carry
+    ] },
   { pin: 0, name: "SDH1", assertedLow: false, s0: 1, registered: false, bidir: true,
     oe: "SDHOE",
-    terms: ["SDQ1 & !ACIN", "SDQ1 & !ACOUT", "SDQ1 & !SDQ0", "!SDQ1 & SDQ0 & ACIN & ACOUT"] },
+    terms: [
+      "!ACIN & !ONESOE & !BLATOE & SDQ1",
+      "ACIN & SDQ1 & !ACOUT", "ACIN & SDQ1 & !SDQ0",
+      "ACIN & !SDQ1 & ACOUT & SDQ0",
+      "ONESOE & SDQ1 & ACOUT", "ONESOE & SDQ1 & SDQ0",
+      "ONESOE & !SDQ1 & !ACOUT & !SDQ0",
+    ] },
   { pin: 0, name: "SDH2", assertedLow: false, s0: 1, registered: false, bidir: true,
     oe: "SDHOE",
-    terms: ["SDQ2 & !ACIN", "SDQ2 & !ACOUT", "SDQ2 & !SDQ0", "SDQ2 & !SDQ1",
-      "!SDQ2 & SDQ1 & SDQ0 & ACIN & ACOUT"] },
+    terms: [
+      "!ACIN & !ONESOE & !BLATOE & SDQ2",
+      "ACIN & SDQ2 & !ACOUT", "ACIN & SDQ2 & !SDQ0", "ACIN & SDQ2 & !SDQ1",
+      "ACIN & !SDQ2 & ACOUT & SDQ1 & SDQ0",
+      "ONESOE & SDQ2 & ACOUT", "ONESOE & SDQ2 & SDQ0", "ONESOE & SDQ2 & SDQ1",
+      "ONESOE & !SDQ2 & !ACOUT & !SDQ1 & !SDQ0",
+    ] },
 ]
 
 /* -- the host's two latches ---------------------------------------------- */
