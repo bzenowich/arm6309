@@ -72,13 +72,27 @@ for, and one that scores worse is hardware.
 spectral correlation against libopenmpt where the control scores **0.9989**, at
 **−0.01 cents**. It plays the right notes at the right pitch.
 
-⛔ **And it plays them 12 dB too quietly** — §6.1's ×4 is specified and is not built
-([`docs/audio.md`](docs/audio.md) §16 item 40). The card presents `DACVOL` = 64 where
-§6.1 requires 255. Nothing that existed could have caught it: `audio_tb` asserts which
-byte reaches the converter and not what the converter does with it, the differential
-oracle compares the *sample* stream and deliberately not audio, and `abcompare.py`
-normalises level on purpose. **It took rendering the card's own converter pins to a
-file and looking at the peak.**
+⛔ **And it found that the volume converter was being fed the SAMPLE byte** — after
+the first volume change of a module, on every channel, while the state file held the
+right value throughout ([`docs/audio.md`](docs/audio.md) §16 item 41). ⭐ **Repaired
+the same day, by a deletion**: §16 item 39(b) already loads the port register at the
+`PEND` write, so the walk's per-frame refresh was redundant — and it was landing in
+the middle of W5, between a volume load and the strobe that captures it. Foldbacks on
+U2 go **72 → 65** and the part still fits. The `02_setvol` probe goes from **0.7774
+to 0.9901**.
+
+⚠ **`audio_tb` could not see it, and the reason is worth carrying.** It asserts
+`sfh(6) == $40` — *"VOL is one byte and goes straight through"* — which is a claim
+about the **state file**, and the state file was right. **Nothing had ever compared
+the converter's own pins against the file's contents.** `modplay_tb` does now, on all
+four channels, every 4096 colour clocks.
+
+⛔ **What remains is that the card plays 12 dB too quietly** — §6.1's ×4 is specified
+and is not built (§16 item 40, **open**). `DACVOL` = 64 where §6.1 requires 255. It is
+a level defect and nothing else: re-rendering with ×4 applied moves the probe by two
+ten-thousandths, because `abcompare.py` normalises level on purpose. Where the ×4
+belongs — two `74HC157`, one resistor and no raw mode, or the replayer — is a
+specification decision, costed in §16 item 40.
 
 
 ⭐ **Both CPLDs are fitted and the card is simulated end to end.** `audio_tb` writes a

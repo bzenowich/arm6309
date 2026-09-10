@@ -96,14 +96,26 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > macrocells, zero pins**. `VSTAT`'s `HBLANK`/`VBLANK` are deliberately *not* delayed,
 > because what those have to agree with is the sync.
 >
-> ⛔ **The audio card played a module the same day and it plays 12 dB too quietly.**
+> ⛔ **The audio card played a module the same day, and the volume converter was
+> being fed the SAMPLE byte.** After the first volume change of a module, on every
+> channel, while the state file held the right value throughout — so `audio_tb`'s
+> *"VOL is one byte and goes straight through"* was true and useless: it is a claim
+> about the state file, and **nothing had ever compared the converter's own pins
+> against the file's contents.** ⭐ **Repaired by a DELETION**: the walk's per-frame
+> refresh of the port registers had been redundant since `audio.md` §16 item 39(b)
+> made the `PEND` write do the loading, and it was landing in the middle of a volume
+> pass. U2's foldbacks go **72 → 65** and it still fits — two repairs that *added*
+> logic were tried first and neither did (§16 item 41).
+>
+> ⛔ **And it still plays 12 dB too quietly.**
 > `modplay_tb.sv` uploads a module's samples through the card's host port, delivers
 > the register stream on the card's **own** tempo-timer interrupt, and records what the
 > four `AD7528` pairs are given; it agrees with libopenmpt to **−0.01 cents** and
 > **0.9977** spectral correlation, against **0.9989** for the C reference model as a
 > control. `audio.md` §6.1's ×4 for Paula-mode `VOL` **is not built** — `DACVOL` = 64
-> where 255 is specified — which is 12.04 dB and two bits of volume resolution
-> (`audio.md` §16 item 40, **open**).
+> where 255 is specified, which is 12.04 dB (`audio.md` §16 item 40, **open**). It is
+> a level defect and nothing else, and where the ×4 belongs — two `74HC157`, one
+> resistor and no raw mode, or the replayer — is a specification decision.
 
 > ⭐ **The display list has a descriptor format since 2026-09-09** — `MOVE`, `WAIT`,
 > `$FF` to end (`graphics.md` §10.3.2) — and it reaches **`HSCROLL`, `HSCROLLH` and the

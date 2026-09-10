@@ -74,18 +74,26 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 
 ### The CPLD fitter and CUPL — how to get them, and how to know they worked
 
-⚠ **A fresh clone has no `~/.wine_atf`, and `npm run check` still passes without
-it.** The Atmel toolchain is not a dependency of the model checks — it is the
-thing that answers *does the design still fit the part*, which no model check
-can — so its absence is silent. **Set it up before changing any `.jedec.ts`,
-`video.cpld.ts`, `aseq.cpld.ts` or `audio.cpld.ts`.** The installer is tracked
-at the repository root; nothing else is needed but `wine`, `7z` and `unzip`:
+⚠ **A fresh clone has no fitter, and `npm run check` still passes without one.**
+The Atmel toolchain is not a dependency of the model checks — it is the thing
+that answers *does the design still fit the part*, which no model check can — so
+its absence is **silent**. **Set it up before changing any `.jedec.ts`,
+`video.cpld.ts`, `aseq.cpld.ts` or `audio.cpld.ts`.** The installer is tracked at
+the repository root; nothing else is needed but `wine`, `7z` and `unzip`:
 
 ```sh
 sh hardware/gal/prjbureau/extract-wincupl.sh awincupl.exe.zip    # ~1 min, from the repo root
-# -> "fitters and CUPL in ~/.wine_atf/drive_c/Wincupl"
+# -> "fitters and CUPL in <repo>/.wine_atf/drive_c/Wincupl"
 #    "Atmel ATF1508AS Fitter Version 1.8.7.8"
 ```
+
+⭐ **The Wine prefix lives at `<repo>/.wine_atf`, not in `$HOME`.** This project is
+developed inside a sandbox whose `$HOME` does not survive the session, so a prefix
+under `~/.wine_atf` is extracted, used once and gone — and, per the paragraph
+above, gone silently. It is **1.3 GB and `.gitignore`d**: a Wine prefix with
+Microchip's WinCUPL inside it, which this project has no right to redistribute.
+`$ATF_HOME` overrides the location and `$WINEPREFIX` / `$SHARED` / `$FITTERS`
+override that, so a prefix you already have elsewhere keeps working.
 
 Then, **from `hardware/`**, and after `npm run gen:pld`:
 

@@ -1,4 +1,4 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Thu Sep 10 15:51:22 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Thu Sep 10 17:17:37 2026
 
 
 fit1508 vsup.tt2 -device P1508C84 -preassign ignore -JTAG off

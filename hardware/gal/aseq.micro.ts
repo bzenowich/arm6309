@@ -232,9 +232,20 @@ export const PROGRAM: Record<number, Step[]> = {
  * second chip select; classic MOD's fixed LRRL - channels 0 and 3 left, 1 and
  * 2 right - is which summing node an output is WIRED to, and no logic at all.
  *
- * ⚠ IT SUPPRESSES THE WALK'S PORT-REGISTER LOAD WHILE IT RUNS, so a sample
- * transition can be late by up to two colour clocks - 564 ns - about 200 times
- * a second. Stated rather than hidden. */
+ * ⛔ IT USED TO SAY "IT SUPPRESSES THE WALK'S PORT-REGISTER LOAD WHILE IT RUNS,
+ * so a sample transition can be late by up to two colour clocks". It did not
+ * suppress anything - the term that was meant to (`CVBUSY`) is true only in a
+ * work slot, and the walk loads in slots 0-3 - and W5 is six steps against a
+ * frame's three work slots, so it spans two frames and the walk ran inside it,
+ * between a load and the strobe that captures it. The VOLUME converter was
+ * given a SAMPLE byte. audio.md 16 item 41.
+ *
+ * ⭐ THE WALK NO LONGER LOADS THE PORT REGISTERS AT ALL, so there is nothing
+ * left to suppress and nothing to be late: 16 item 39(b) loads the register at
+ * the `PEND` write itself, which is strictly less latency, and aseq.jedec.ts's
+ * CVLD says why the walk's copy was a redundant refresh. 6.2's strobe fires on
+ * `WROTE`, set by that same write, so a converter is only ever strobed after
+ * the register has been filled by it. */
 PROGRAM[W5] = [
   /* 0 */ { ch: 0, w: 6, cvld: true },
   /* 1 */ { ch: 1, w: 6, cvld: true },

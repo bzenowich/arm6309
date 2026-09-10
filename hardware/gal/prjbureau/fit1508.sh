@@ -26,12 +26,28 @@
 
 PLD=${1:?usage: fit1508.sh path/to/name.pld [P1508C84]}
 DEV=${2:-P1508C84}
-SHARED=${SHARED:-$HOME/.wine_atf/drive_c/Wincupl/Shared}
-FITTERS=${FITTERS:-$HOME/.wine_atf/drive_c/Wincupl/Fitters}
+# ⭐ THE WINE PREFIX LIVES IN THE REPOSITORY, NOT IN $HOME - 2026-09-10.
+#
+# This project is developed inside a bwrap sandbox whose $HOME does not survive
+# the session, so a prefix under ~/.wine_atf is extracted, used once, and gone -
+# and its absence is SILENT, because `npm run check` passes without a fitter and
+# only the fit knows whether a design still fits the part. Keeping it beside the
+# sources makes it as durable as they are.
+#
+# ⚠ IT IS 1.3 GB AND GITIGNORED. It is a Wine prefix with Microchip's WinCUPL
+# inside it; nothing here may be redistributed, and extract-wincupl.sh rebuilds
+# it from awincupl.exe.zip in about a minute.
+#
+# $ATF_HOME overrides it; $WINEPREFIX, $SHARED and $FITTERS still override that,
+# so an existing prefix elsewhere keeps working.
+ATF_HOME=${ATF_HOME:-$(cd "$(dirname "$0")/../../.." && pwd)/.wine_atf}
+
+SHARED=${SHARED:-$ATF_HOME/drive_c/Wincupl/Shared}
+FITTERS=${FITTERS:-$ATF_HOME/drive_c/Wincupl/Fitters}
 OUT=$(cd "$(dirname "$0")/../cpld" && pwd)
 
 [ -f "$SHARED/cupl.exe" ] || { echo "run extract-wincupl.sh first" >&2; exit 1; }
-export WINEPREFIX=${WINEPREFIX:-$HOME/.wine_atf}
+export WINEPREFIX=${WINEPREFIX:-$ATF_HOME}
 export WINEDEBUG=-all
 export LIBCUPL="$SHARED/atmel.dl"
 export PATH="$FITTERS:$PATH"

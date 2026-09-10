@@ -30,7 +30,7 @@
  */
 
 import { CARDS } from "../place/parts"
-import { readdirSync, readFileSync, statSync } from "node:fs"
+import { lstatSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 
 let failures = 0
@@ -80,11 +80,23 @@ const PAST_TENSE =
   /\b(was|were|used to|went to|had been|before|until|when this|earlier|previously|no longer|briefly|once |old |former|then \*\*|paragraph was written|is not built|not taken|would have|refused|it reported)\b/i
 
 const mdFiles: string[] = []
+/* ⚠ DOT-DIRECTORIES ARE SKIPPED, and `.wine_atf` is why - 2026-09-10.
+ *
+ * The ATF15xx toolchain's Wine prefix moved into the repository that day so it
+ * would survive a sandboxed session (CLAUDE.md), and a Wine prefix contains
+ * `dosdevices/z:` - a symlink to `/`. Following it walks the whole filesystem
+ * and dies on the first transient entry under `/dev/fd`, which is what this
+ * check did the first time it ran afterwards. Skipping every dot-directory
+ * covers it and `.git` besides, and `lstat` means a symlink is never followed
+ * even if one turns up outside a dot-directory. */
 const walk = (dir: string) => {
   for (const e of readdirSync(dir)) {
-    if (e === "node_modules" || e === ".git" || e === "dist" || e === "obj_dir") continue
+    if (e.startsWith(".")) continue
+    if (e === "node_modules" || e === "dist" || e === "obj_dir") continue
     const p = join(dir, e)
-    if (statSync(p).isDirectory()) walk(p)
+    const st = lstatSync(p)
+    if (st.isSymbolicLink()) continue
+    if (st.isDirectory()) walk(p)
     else if (e.endsWith(".md")) mdFiles.push(p)
   }
 }

@@ -3378,13 +3378,13 @@ specification that has not been tested.
     recover is item 41's**, and the two findings were tangled together until the
     converter's codes were compared against the state file's byte for byte.
 
-41. **⛔ NEW 2026-09-10 — after the first volume change, the VOLUME converter is fed
-    the SAMPLE byte, while the state file holds the right value throughout.**
+41. **⭐ CLOSED 2026-09-10 — after the first volume change, the VOLUME converter
+    was fed the SAMPLE byte, while the state file held the right value throughout.**
 
-    §9.4.5: a host write to offset 7 asks for a W5, and `aseq.micro.ts`'s W5 walks the
-    four channels reading word 6 lane 2 — `VOL` — into the four converter port
-    registers. The state file is correct at every instant. What reaches the converter
-    is not.
+    §9.4.5: a host write to offset 7 asks for a W5, and `aseq.micro.ts`'s W5 walks
+    the four channels reading word 6 lane 2 — `VOL` — into the four converter port
+    registers. The state file was correct at every instant. What reached the
+    converter was not.
 
     ```
       cc         tick    DACVOL0   the file's VOL
@@ -3394,45 +3394,65 @@ specification that has not been tested.
       1179660   16.63     132            61
     ```
 
-    ⭐ **AND THE WRONG BYTES ARE NOT RANDOM — every one of them is a sample code.**
-    Over a two-second run of `02_setvol` the volume converter took seventeen distinct
-    values and **all seventeen are in the set the SAMPLE converter took**, while none
-    of them is a value that was ever written to `VOL`:
+    ⭐ **AND THE WRONG BYTES WERE NOT RANDOM — every one of them was a sample
+    code.** Over a two-second run of `02_setvol` the volume converter took
+    seventeen distinct values, **all seventeen** in the set the sample converter
+    took, and none but 0 and 64 was ever written to `VOL`.
+
+    **The mechanism, measured slot by slot.** W5 is six steps and a frame has three
+    work slots, so a volume pass spans two frames — and the walk reloads every port
+    register with `PEND` in slots 0–3, between a load and the strobe that captures
+    it:
 
     ```
-      DACSAMP0 took   0 4 8 12 ... 248 252          (the probe's 64-byte saw)
-      DACVOL0  took   0 20 36 44 60 64 76 92 108 132 152 168 184 200 208 224 240
-      of those, in the sample set:  ALL SEVENTEEN
-      of those, ever written to VOL:  none but 0 and 64
+      cc=393227 S=111 code=1 SD=3f   W5 step 0: CVR0 <= VOL ($3F), in slot 7
+      cc=393227 S=000 code=1 SD=d0   THE WALK:  CVR0 <= PEND ($D0)
+      cc=393228 S=101 code=2         W5 step 1, next frame
+      cc=393228 S=110 code=6         W5 step 2: strobe -> the volume DAC is given
+                                     $D0, a sample byte
     ```
 
-    §10.2.4's own note says W5 *"suppresses the walk's port-register load while it
-    runs, so a sample transition can be late by up to two colour clocks"*. **That
-    suppression is what is not happening**: the walk's sample load lands inside W5's
-    pass and the byte goes into the volume half.
+    ⛔ **§10.2.4 SAYS W5 SUPPRESSES THAT AND THE TERM THAT DID IT WAS VACUOUS.**
+    `CVBUSY` is `RUN & <W5>` and `RUN` is `WORKSLOT & BUSY`, so it is true only in
+    a **work slot** — and the walk runs in slots 0–3. The literal suppressed the
+    walk exactly in the slots the walk does not run in.
 
-    ⚠ **It is not audible as a wrong note and that is why it survived.** The sample
-    byte is a plausible volume — it moves slowly compared to the note, so what it
-    sounds like is a slow tremolo at the sample's own rate, and every metric this
-    project owns is either level-normalised, pitch-based, or compares the SAMPLE
-    stream and deliberately not audio (`oracle/README.md`). It shows up as 0.7774
-    against a control's 0.9985 on the one probe that does nothing but change volume,
-    and as nothing at all on a probe that sets volume once.
+    ⭐ **THE REPAIR IS A DELETION.** §16 item 39(b) already loads the port register
+    **at the `PEND` write itself**, and that item's own text says what that makes
+    the walk's load: *"it makes the walk's load a REFRESH WITH THE SAME VALUE
+    rather than the only path."* A refresh of a register nothing else may touch is
+    not worth a product term; a refresh that lands in the middle of W5 is a defect.
+    The walk's load is gone, and **nothing is left unprimed**: §6.2's strobe fires
+    on `WROTE`, which is set by the same write that now does the loading.
 
-    ⚠ **`audio_tb` cannot see it either**, for a reason worth writing down: it asserts
-    `sfh(6) == $40` — *"VOL is one byte and goes straight through"* — which is a claim
-    about the **state file**, and the state file is right. Nothing has ever compared
-    the converter's pins against the file's contents. `modplay_tb`'s `+voldbg` does.
+    ⚠ **TWO OTHER REPAIRS WERE TRIED FIRST AND NEITHER FITS**, which is worth
+    recording because U2 has no headroom at all — 128 of 128 logic cells:
 
-    **Open. It has to be understood before item 40 is repaired**, because where the ×4
-    belongs is a smaller question than whether the volume load lands at all.
+    | | |
+    |---|---|
+    | `CVBUSY = BUSY & <W5>` — make the suppression real | **"Design does not fit."** One product term against two, and foldbacks go 72 → 85: it stops CUPL sharing `WORKSLOT & !BUSY` across `START`'s five terms |
+    | `START`'s `VDIRTY` term qualified on **slot 7**, so W5 begins where its (load, load, strobe) triples fall inside one frame | **"Design does not fit"**, both ways of writing it, and again with the dead `!CVBUSY` literal deleted to pay for it |
 
-    **What the fix costs is microcode, not packages.** §6.1's own note on the ÷5 CIA
-    divider is the method — *"4N is two doublings, so there is no shifter here"* — so
-    W5 gains two adder passes, gated on `CTRL3`. It is design work in the sequence
-    §10.3's control store already holds, and it is item 38's decision that says where
-    it lands. **Not taken today**, and it is the only one of 2026-09-10's four findings
-    that is not repaired.
+    ⭐ **The deletion gives resource back instead of spending it: foldbacks 72 → 65,
+    logic cells unchanged at 128 of 128, "Design fits successfully".**
+
+    ⚠ **`audio_tb` could not see any of it**, and the reason is the useful part: it
+    asserts `sfh(6) == $40` — *"VOL is one byte and goes straight through"* — which
+    is a claim about the **state file**, and the state file was right. **Nothing had
+    ever compared the converter's own pins against the file's contents.**
+    `modplay_tb` does now, every 4096 colour clocks, on all four channels, and only
+    where the file's byte has been stable since the previous sample: **6,319
+    settled comparisons, 0 wrong**, against **1,472 wrong** on the design as it was.
+
+    **What it was worth:** `mkprobe.py`'s `02_setvol` probe goes from **0.7774 to
+    0.9901** median spectral correlation against libopenmpt, with `refplayer` as
+    the control at 0.9985.
+
+    ⚠ **And it is what separated item 40 from this.** Re-rendering the *repaired*
+    card's converter log with ×4 applied scores **0.9903** — two ten-thousandths
+    better than without it. §16 item 40 is a level defect and nothing else; it does
+    not move this metric, because `abcompare.py` normalises level in the first two
+    lines of its comparison.
 
 ---
 

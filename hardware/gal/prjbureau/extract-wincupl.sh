@@ -20,9 +20,20 @@
 # Usage: extract-wincupl.sh /path/to/awincupl.exe.zip [destination]
 
 ZIP=${1:?usage: extract-wincupl.sh awincupl.exe.zip [dest]}
-DEST=${2:-$HOME/.wine_atf/drive_c/Wincupl}
+
+# ⭐ THE PREFIX LIVES IN THE REPOSITORY, NOT IN $HOME - 2026-09-10. This project
+# is developed inside a bwrap sandbox whose $HOME does not survive the session,
+# so a prefix under ~/.wine_atf is extracted, used once, and gone - and its
+# absence is SILENT, because `npm run check` passes without a fitter and only
+# the fit knows whether a design still fits the part.
+#
+# ⚠ 1.3 GB, and .gitignored. It is a Wine prefix with Microchip's WinCUPL in it;
+# nothing here may be redistributed, and this script rebuilds it from
+# awincupl.exe.zip in about a minute. $ATF_HOME and $WINEPREFIX override.
+ATF_HOME=${ATF_HOME:-$(cd "$(dirname "$0")/../../.." && pwd)/.wine_atf}
+DEST=${2:-$ATF_HOME/drive_c/Wincupl}
 WORK=$(mktemp -d)
-export WINEPREFIX=${WINEPREFIX:-$HOME/.wine_atf}
+export WINEPREFIX=${WINEPREFIX:-$ATF_HOME}
 export WINEDEBUG=-all
 
 unzip -o -q "$ZIP" -d "$WORK"

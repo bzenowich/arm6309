@@ -163,6 +163,73 @@ module modplay_tb;
     end
   end
 
+  /* ---- +cvdbg=N: the bus at the instant a port register is clocked ------
+   * 16 item 41. The state file holds the right VOL and the converter gets a
+   * sample byte, so the question is what SD[23:16] carries at the load - which
+   * is one $display and not an argument. */
+  int cvdbg = 0, cvdbg_n = 0;
+  initial void'($value$plusargs("cvdbg=%d", cvdbg));
+  // +cvwin=N: every slot in the 3 colour clocks starting at N, CVC code or not.
+  int cvwin = -1;
+  initial void'($value$plusargs("cvwin=%d", cvwin));
+  always @(negedge SLOTCLK)
+    if (cvwin >= 0 && cc >= cvwin && cc < cvwin + 3)
+      $display("      SLOT cc=%0d S=%b%b%b code=%0d SD=%02h SFOE=%b SFA=%02h CVR0=%02h dv0=%02h CVOEA=%b CVBUSY=%b QCHAN=%b WT=%b%b%b",
+               cc, card.S2, card.S1, card.S0,
+               {card.CVC2, card.CVC1, card.CVC0}, card.SD[23:16],
+               card.SFOE, card.SFA, card.CVR0, DACVOL0, card.CVOEA,
+               card.u2.CVBUSY, card.u2.QCHAN,
+               card.u2.WT2, card.u2.WT1, card.u2.WT0);
+
+  always @(negedge SLOTCLK)
+    if (cvdbg > 0 && cvdbg_n < cvdbg
+        && {card.CVC2, card.CVC1, card.CVC0} != 3'd0) begin
+      cvdbg_n++;
+      $display("      cv cc=%0d code=%0d SD=%02h SFOE=%b SBOE=%b SFA=%02h file6=%02h CVR0=%02h dv0=%02h CVOEA=%b CVBUSY=%b QCHAN=%b WT=%b%b%b",
+               cc, {card.CVC2, card.CVC1, card.CVC0}, card.SD[23:16],
+               card.SFOE, card.SBOE, card.SFA,
+               card.SF[6][23:16], card.CVR0, DACVOL0, card.CVOEA,
+               card.u2.CVBUSY, card.u2.QCHAN,
+               card.u2.WT2, card.u2.WT1, card.u2.WT0);
+    end
+
+  /* ---- 6.1's volume path, end to end ----------------------------------- *
+   *
+   * ⛔ THE CLAIM THAT WAS MISSING, and it is why 16 item 41 survived. audio_tb
+   * asserts `sfh(6) == $40` - "VOL is one byte and goes straight through" -
+   * which is a claim about the STATE FILE, and the state file was right the
+   * whole time. Nothing had ever compared the converter's own pins against the
+   * file's contents, so a volume path that delivered a SAMPLE byte to the
+   * volume DAC read as forty-three green claims.
+   *
+   * Sampled every 4096 colour clocks, and only where the file's byte has not
+   * changed since the previous sample - W5's latency is three colour clocks
+   * and a replayer writes VOL about 200 times a second, so a settled
+   * comparison is the honest one and a live one would just measure the
+   * handshake. */
+  int vol_checks = 0, vol_bad = 0;
+  int vol_bad_ch = -1;
+  logic [7:0] prev_file [0:3];
+  longint     next_vol_check = 4096;
+  always @(posedge SLOTCLK) if (counting && cc >= next_vol_check) begin
+    logic [7:0] f [0:3];
+    next_vol_check = cc + 4096;
+    f[0] = card.SF[6][23:16];  f[1] = card.SF[14][23:16];
+    f[2] = card.SF[22][23:16]; f[3] = card.SF[30][23:16];
+    for (int n = 0; n < 4; n++) begin
+      logic [7:0] got;
+      got = (n == 0) ? DACVOL0 : (n == 1) ? DACVOL1 : (n == 2) ? DACVOL2 : DACVOL3;
+      if (f[n] === prev_file[n]) begin
+        vol_checks++;
+        if (got !== f[n]) begin
+          vol_bad++;
+          if (vol_bad_ch < 0) vol_bad_ch = n;
+        end
+      end
+      prev_file[n] = f[n];
+    end
+  end
+
   /* ---- the trace ------------------------------------------------------- */
   // audio/refplayer's format: "%06lu %-7s %02X" - tick, register name, byte.
   function automatic int reg_of(input string name);
@@ -284,6 +351,13 @@ module modplay_tb;
     ok(firq_timeouts == 0,
        $sformatf("the card's own §8.2 timer produced every tick (%0d never came)",
                  firq_timeouts));
+
+    ok(vol_bad == 0,
+       $sformatf("16 item 41: every settled VOL byte reaches its own converter (%0d of %0d samples wrong%s)",
+                 vol_bad, vol_checks,
+                 vol_bad_ch < 0 ? "" : $sformatf(", first on channel %0d", vol_bad_ch)));
+    ok(vol_checks > 100,
+       $sformatf("and the volume path was sampled enough times to mean it (%0d)", vol_checks));
 
     // Run on to the requested length, so the tail of the last note is rendered.
     while (cc < run_cc) @(posedge SLOTCLK);

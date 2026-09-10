@@ -646,7 +646,43 @@ const conv: Cell[] = [
    * turns out not to be one. */
   ...[0, 1, 2, 3].map((n) => ({
     pin: 0, name: `CVLD${n}`, assertedLow: false, s0: 1 as const, registered: false,
-    terms: [`QCHAN & !CVBUSY & ${bits("S", n, 2).join(" & ")}`,
+    /* ⛔ THE WALK'S LOAD IS GONE - 2026-09-10, audio.md 16 item 41, and it was
+     * the thing that put a SAMPLE byte into the VOLUME converter.
+     *
+     * It was `QCHAN & !CVBUSY & <S == n>`: reload this channel's port register
+     * with `PEND` in its own walk slot, every frame. Two things make it both
+     * harmful and unnecessary.
+     *
+     * ⚠ HARMFUL, because W5 is six steps and a frame has three work slots, so
+     * a volume pass spans two frames and the walk runs inside it - between a
+     * load and the strobe that captures it. `!CVBUSY` did not stop that:
+     * `CVBUSY` is `RUN & <W5>` and `RUN` is `WORKSLOT & BUSY`, so it is true
+     * only in a work slot, and the walk runs in slots 0-3. The literal
+     * suppressed the walk exactly in the slots the walk does not run in.
+     * Measured:
+     *
+     *   cc=393227 S=111 code=1 SD=3f   W5 step 0: CVR0 <= VOL ($3F)
+     *   cc=393227 S=000 code=1 SD=d0   the WALK:  CVR0 <= PEND ($D0)
+     *   cc=393228 S=110 code=6         W5 step 2: strobe -> the VOLUME DAC
+     *                                  is given $D0, a sample byte
+     *
+     * ⭐ UNNECESSARY, because item 39(b) below already loads the register AT
+     * THE `PEND` WRITE, and that item's own text says what that makes this
+     * one: "it makes the walk's load a REFRESH WITH THE SAME VALUE rather than
+     * the only path". A refresh of a register nothing else may touch is not
+     * worth a term; a refresh that lands in the middle of W5 is a defect.
+     *
+     * ⚠ AND NOTHING IS LEFT UNPRIMED. 6.2's strobe fires on `WROTE`, which is
+     * set by the same write that now does the loading, so a converter is only
+     * ever strobed after the register has been filled by that write - which is
+     * strictly what item 39(b) built.
+     *
+     * ⭐ IT ALSO GIVES CELLS BACK, and U2 needs them: the part is at 128 of 128
+     * logic cells, and the alternative repair - qualifying `START` so a W5
+     * begins only on slot 7, which aligns each (load, load, strobe) triple
+     * inside one frame - costs two literals and does not fit. "Design does not
+     * fit", measured, twice, two ways of writing it. */
+    terms: [
       /* ⭐ 16 ITEM 39(b): THE PORT REGISTER ALSO LOADS AT THE `PEND` WRITE
        * ITSELF, and that is the whole repair.
        *
