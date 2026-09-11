@@ -78,13 +78,35 @@ the first ~49 `WAIT`s in the blanking. ⛔ And until 2026-09-10 it was worse tha
 `WAIT` cleared on a **level**, so a run of them collapsed to one per fetch slot and this
 program's raster bar finished inside three lines of blanking — `graphics.md` §19 item 42.
 
+## Cell mode — 2,000 cells out of 256 bytes
+
+The last scene puts a tilemap in VRAM with the span writer, points `TILEBASE` (`+$17`)
+and the map base (`+$19`) at it, sets `CTRL` b5, and lets the card paint.
+
+⭐ **The tile set is the bytes 0..255 in order, and that is not laziness.** §6.4.1's
+tile address is a *concatenation* — `TILEBASE | code<<6 | row<<3 | col` — so tile *n*'s
+pixel (*r*, *c*) sits at `n*64 + r*8 + c`, which for four tiles is the offset itself.
+Writing `i` at offset `i` makes every pixel's index equal to `(n<<6)|(r<<3)|c`, and §9's
+palette is the identity map, so **every pixel that reaches the connector names the three
+fields that addressed it**. `machine_tb` states the whole expression independently and
+checks all 256,000 of them.
+
+The map is `code = (cellRow + cellCol) & 3`, so the tile changes across *and* down and a
+row/column swap in the concatenation cannot look right. ⚠ **VMODE 00, because the cell
+row is five bits** — §6.4.1: cell mode addresses 32 rows, which covers 640×200's 25 and
+640×240's 30 and does not reach 640×400's 50 or 640×480's 60.
+
+⛔ **And it is what found `graphics.md` §19 item 43.** `runlist` must wait for the
+engine to stop before anything else loads `WPTR` — §10.3.1's own rule — and the bit
+that says so, `LRUN`, had **no path to the data bus**: `+$0F` `BSTAT` is a register-file
+address and `LRUN` is a live macrocell, so a read returned a zero that meant nothing.
+The tilemap went into a pointer the engine was still walking. `LRUN` is `VSTAT` b4 now.
+
 ## What it does not do yet
 
 - **No `ram.md` §6.4.1 sizing walk.** It proves the first SIMM answers with a
   two-pattern read-back through a driven bus, which is that section's *method* on one
   socket; the four-socket walk that discovers how much memory the machine has is still
   to write.
-- **No cell mode.** §6.4's `TILEBASE`/map base at `+$17`/`+$19` and `CHAR` have never
-  been written by software; the tile fetch is exercised only by `vtile_tb`.
 - **No console, no monitor, no DriveWire loader.** `machine.md` §7.2 says what page 0
   is eventually for. `software/6809/README.md` has what retargeting ASSIST09 costs.

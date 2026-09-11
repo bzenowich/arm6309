@@ -49,8 +49,10 @@ PDATL   EQU     VBASE+$11       GGGBBBBB
 PDATH   EQU     VBASE+$12       RRRRRGGG -- the write commits the entry
 VSTAT   EQU     VBASE+$13       b7 SPANBUSY, b6 VBLANK, b5 HBLANK, b0 IRQ
 WADV    EQU     VBASE+$14       00 continue, 01 next row same column
+TILEBAS EQU     VBASE+$17       6.4.1's TB4..TB0 -- the tile set's A18..A14
+MAPBAS  EQU     VBASE+$19       6.4.1's MB6..MB0 -- the map's A18..A12
 BCTRL   EQU     VBASE+$0E       b0 GO -- starts the display list from WPTR
-BSTAT   EQU     VBASE+$0F       b0 LRUN -- 1 while the engine owns WPTR
+BSTAT   EQU     VBASE+$0F       reserved - LRUN reads back as VSTAT b4
 
 * CTRL bit patterns
 CT_OFF  EQU     $00             display off, WMODE 00 direct, VMODE 00
@@ -80,6 +82,7 @@ P_M01   EQU     $11             ... 01, 640x240 doubled
 P_M11   EQU     $12             ... 11, 640x480 progressive
 P_LSTA  EQU     $20             display list A running - a palette raster bar
 P_LSTB  EQU     $21             ... and B - one HSCROLL MOVE per line
+P_TILE  EQU     $30             6.4's cell mode - a tilemap, drawn by the CPU
 P_BADR  EQU     $E1             the SIMM did not answer
 
 *------------------------------------------------------------- geometry ------
@@ -492,6 +495,92 @@ lb1     lda     #$03            MOVE HSCROLL, (pair & 63) * 4
         sta     HSCROLL
         sta     HSCRLH
 
+*==============================================================================
+* 8. Cell mode.  graphics.md 6.4, and until now only vtile_tb had reached it -
+*    which drives the fetch and reads back the ADDRESS the card asks for.  This
+*    puts a tilemap in VRAM with the span writer, points the two base registers
+*    at it, sets CTRL b5, and lets the card paint 2,000 cells out of 256 bytes
+*    of tile data.  What comes out of the connector is the claim.
+*
+* ⭐ THE TILE SET IS THE BYTES 0..255 IN ORDER, and that is not laziness.
+*    6.4.1's address is a CONCATENATION - TILEBASE | code<<6 | row<<3 | col -
+*    so the byte holding tile n's pixel (r, c) sits at n*64 + r*8 + c, which
+*    for four tiles is exactly the offset itself.  Writing i at offset i makes
+*    every pixel's INDEX equal to (n<<6)|(r<<3)|c, and 9's palette is the
+*    identity map, so every pixel that reaches the connector names the three
+*    fields that addressed it.  A row field off by one, a column field on the
+*    wrong address bit, a map byte fetched for the neighbouring cell - each
+*    moves a different part of that number, and machine_tb states the whole
+*    expression independently.
+*
+* ⚠ VMODE 00, BECAUSE THE CELL ROW IS FIVE BITS.  6.4.1: cell mode addresses
+*    32 rows, which covers 640x200's 25 and 640x240's 30 and does not reach
+*    640x400's 50 or 640x480's 60.  vtile_tb runs VMODE 10 because it is
+*    checking addresses and not a picture; a picture has to stay inside the
+*    field.
+*==============================================================================
+TILEB   EQU     8               tile set at 8 * 16,384  = VRAM 131,072
+MAPB    EQU     40              map      at 40 * 4,096  = VRAM 163,840
+TBPAGE  EQU     $02             ... which is $20000, so WPTR[18:16] = 2
+TBLOW   EQU     $0000
+MBPAGE  EQU     $02             ... and $28000
+MBLOW   EQU     $8000
+CELLS   EQU     80              cells across, 640 / 8
+CROWS   EQU     25              cell rows, 200 / 8
+MSTRIDE EQU     128             6.4.1's map row stride - a power of two, so the
+*                               map fetch is a concatenation and not a multiply
+
+        lda     #TBPAGE
+        sta     wpage
+        ldd     #TBLOW
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        clra                    256 bytes: four tiles, every pixel distinct
+tset    lbsr    putb
+        inca
+        bne     tset
+
+* The map: code = (cellRow + cellCol) & 3, so the tile changes both across and
+* down and a row/column swap in 6.4.1's concatenation cannot look right.
+        lda     #MBPAGE
+        sta     wpage
+        clr     yrow
+mrow    lda     yrow
+        ldb     #MSTRIDE
+        mul                     D = cellRow * 128, and no carry: 24*128 < 64 K
+        addd    #MBLOW
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        clr     ccol
+mcol    lda     yrow
+        adda    ccol
+        anda    #3
+        lbsr    putb
+        inc     ccol
+        lda     ccol
+        cmpa    #CELLS
+        bne     mcol
+        inc     yrow
+        lda     yrow
+        cmpa    #CROWS
+        bne     mrow
+        clr     wpage
+
+        lda     #TILEB
+        sta     TILEBAS
+        lda     #MAPB
+        sta     MAPBAS
+        clra                    cell mode scrolls through the same two
+        sta     VSCROLL         registers as bitmap mode - 6.4.1's note about
+        sta     VSCRLH          vadr - so start them at the top left
+        sta     HSCROLL
+        sta     HSCRLH
+        lda     #CT_ON+$20      display ON, CELL, VMODE 00
+        sta     VCTRL
+        lda     #P_TILE
+        sta     SIMPORT
+        lbsr    settle
+
 halt    bra     halt
 
 *==============================================================================
@@ -546,6 +635,17 @@ rl2     lda     VSTAT
         sta     BCTRL
         dec     lframe
         bne     rl1
+* ⛔ AND WAIT FOR THE LAST ONE TO STOP.  10.3.1: while LRUN is set the engine
+* OWNS WPTR - it is walking it - so the next thing that loads WPTR is writing a
+* register another master is using, and every byte it retires lands wherever
+* the engine has got to.  Without this poll the tilemap below was written into
+* a moving target: its 256 bytes came out interleaved with the descriptors the
+* engine was still fetching, at addresses that skipped.  machine_tb saw
+* LRUN = 1 through the whole of it.  The wait is bounded by the list's own
+* terminator, which is what ENDOP is for.
+rl3     lda     VSTAT           b4 LRUN - and 13 says why it is HERE and not
+        bita    #$10            at +$0F, which is a register file location and
+        bne     rl3             cannot carry a macrocell's live state
         puls    a,b,pc
 
 *==============================================================================

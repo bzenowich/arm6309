@@ -1492,3 +1492,36 @@ first ~49 `WAIT`s in the blanking. The wording is now "the next **scanline**", w
 what the hardware does and what an Amiga copper does; `software/boot/boot.asm`'s
 `runlist` loads `WPTR` at blank's start (the tear-free instant) and issues `GO` at
 blank's *end*, so `WAIT` number *n* means line *n*.
+
+
+## 2026-09-10 — §13 `+$0F`: `BSTAT` was a register the hardware could not answer
+
+### §13's `+$0F` row, and §10.3.1's table — as written 2026-09-09
+
+| `+$0F` | `BSTAT` | b0 `LRUN` | list engine status — 1 while the engine owns `WPTR`; the bit a driver polls (§10.3.1) |
+
+§10.3.1's observability table read `| +$0F BSTAT b0 LRUN | 1 while the engine owns
+it, 0 when the list ends |`, and §10.3 §2583 read "`BCTRL` and `BSTAT` sit at
+`+$0E`–`$0F`".
+
+**None of it could happen.** §12.1 had already made the argument, for a different
+register, and nobody carried it across: `VSTAT` is "the one register that is **not** a
+register-file location — `SPANBUSY`, `VBLANK` and `HBLANK` are the instantaneous state
+of the sequencer and sync GALs, so the `'245` that reads the register file back has
+nothing to read", and it was given a `74HC244` of its own for exactly that. `LRUN` is
+the same kind of bit — a live macrocell on `vsup` — and it was given nothing. A CPU
+read of `+$0F` returns the register file's byte at `+$0F`, which no one ever writes.
+
+⚠ **And the rule that depended on it was §10.3.1's own.** "Do not write card registers
+while `LRUN` is set" is the rule that keeps the span writer and the engine off each
+other's pointer; the bit that says whether `LRUN` is set was unreadable, so the rule
+was unenforceable from software. `software/boot/boot.asm` polled `BSTAT` b0, read a
+zero that meant nothing, and loaded `WPTR` while the engine was still walking it —
+`machine_tb` watched 256 bytes of tilemap land at addresses that skipped, with
+`LRUN = 1` throughout, and the picture that came out was the tile set fetched through
+a map the CPU had written into a moving target.
+
+`LRUN` is now `VSTAT` **b4**. §12.1's `'244` carried four of its eight channels and
+`LRUN` was already a pin on `vctrl` (`seqctl.jedec.ts` says so, for the arbiter's
+sake), so the repair is **one net, no package and no macrocell**; `+$0F` keeps its row
+in §13 and its name in the sources, and says where the bit went.

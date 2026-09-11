@@ -2580,7 +2580,8 @@ reason is stronger here:
 - Its `MOVE` opcode is one SRAM write into the register file, and the palette it
   writes to already exists.
 
-`BCTRL` and `BSTAT` sit at `+$0E`–`$0F`; there is no `LIST` register (§10.3.1).
+`BCTRL` sits at `+$0E` and `+$0F` is reserved — `LRUN` reads back as `VSTAT` b4
+(§19 item 43); there is no `LIST` register (§10.3.1).
 The board-to-board blitter header stays reserved (blitter.md §9, hooks 2 and 6).
 
 #### 10.3.1 The `WPTR` reload rule — what the shared pointer costs software
@@ -2594,7 +2595,7 @@ pointer are the same nineteen registers.**
 | `+$08`–`$0A` `WPTR` | the span writer's pointer — **and the list engine's.** A list is started by pointing this at the descriptor list |
 | `+$0B`–`$0D` | reserved — there is **no `LIST` register**. A second address for the same nineteen registers would be a fiction, and one that invites exactly the mistake this section exists to prevent |
 | `+$0E` `BCTRL` b0 `GO` | starts the walk. From here the engine owns `WPTR` |
-| `+$0F` `BSTAT` b0 `LRUN` | **1 while the engine owns it**, 0 when the list ends |
+| ⭐ `+$13` `VSTAT` b4 `LRUN` | **1 while the engine owns it**, 0 when the list ends. ⚠ **`VSTAT` b4, not `BSTAT` b0** — §19 item 43 |
 
 **The rule, in one sentence: anything that starts a list must reload `WPTR` before its
 next drawing operation.** Three writes to `+$08`–`$0A`, ~7.1 µs.
@@ -2977,7 +2978,7 @@ Two ways:
 
 | Option | Cost | Verdict |
 |---|---|---|
-| **`74HC244`** driven by the GAL macrocells, `/OE` = `VSTAT read` | **+1 IC** | **Specified.** Keeps the GAL outputs as plain totem-pole macrocells and puts the bus turnaround in a part designed for it. |
+| **`74HC244`** driven by the GAL macrocells, `/OE` = `VSTAT read` | **+1 IC** | **Specified.** Keeps the GAL outputs as plain totem-pole macrocells and puts the bus turnaround in a part designed for it. ⭐ **It carries five bits of eight since 2026-09-10** — b4 is the list engine's `LRUN`, which had the same problem and no buffer of its own (§19 item 43). The spare channels are the reason that cost nothing. |
 | Product-term output enables on the sync/sequencer macrocells themselves | 0 ICs | Rejected — see the note below, and those macrocells are the scarcest resource on the card (§19 item 8). |
 
 *Second, the open-drain idiom costs a product term.* **A GAL22V10's outputs are
@@ -3065,11 +3066,11 @@ tables are shared between both projects.
 | `+$08`–`$0A` | `WPTR` | | write/read pointer, 19 bits, auto-increment | — |
 | `+$0B`–`$0D` | — | | reserved — there is **no `LIST` register**: the engine shares `WPTR`, so a list is started by loading `+$08`–`$0A` (§10.3.1) | — |
 | `+$0E` | `BCTRL` | b0 `GO` | list engine control — writing b0 starts the walk from `WPTR` (§10.3.1). ⭐ While `LRUN`, `WADV` is withheld (§19 item 24) | **new** |
-| `+$0F` | `BSTAT` | b0 `LRUN` | list engine status — 1 while the engine owns `WPTR`; the bit a driver polls (§10.3.1) | **new** |
+| `+$0F` | `BSTAT` | — | **reserved (emptied 2026-09-10; see history.md).** `LRUN` reads back as `VSTAT` b4 — §19 item 43 | **new** |
 | `+$10` | `PIDX` | b7..0 | palette index, auto-increments after `PDATH` | — |
 | `+$11` | `PDATL` | b7..0 | palette entry `GGGBBBBB` | — |
 | `+$12` | `PDATH` | b7..0 | palette entry `RRRRRGGG`; write commits | — |
-| `+$13` | `VSTAT` | b7 `SPANBUSY`, b6 `VBLANK`, b5 `HBLANK`, b0 IRQ pending | **read** through the `'244` of §12.1, not the register file; write clears IRQ | extended |
+| `+$13` | `VSTAT` | b7 `SPANBUSY`, b6 `VBLANK`, b5 `HBLANK`, ⭐ **b4 `LRUN`**, b0 IRQ pending | **read** through the `'244` of §12.1, not the register file; write clears IRQ. ⭐ **b4 is the list engine's `LRUN`** — §10.3.1's "the bit a driver polls" — and it is here rather than at `+$0F` for exactly §12.1's reason: it is a live macrocell, so the register file cannot carry it (§19 item 43) | extended |
 | `+$14` | `WADV` | b1..0 | pointer advance: 00 continue, **01 next row same column** (§7.2), 10 vertical (advance by stride) | **new** |
 | `+$15` | `VDATA` | b7..0 | **read or write** VRAM byte at `WPTR`, post-increment | **new** (§11) |
 | `+$16` | — | | reserved — there is **no `BORDER` register** (§9.3): VGA timing has no overscan, the porches must be black for the back-porch clamp, and the `'153` pixel mux has no spare input for a border index | — |
@@ -4047,6 +4048,7 @@ left is measurement. They are grouped by what would settle them.
 | ⭐ **35** the picture was five dots right of the active window | **2026-09-10** | **§19 item 35 above** — five registered macrocells on `vctrl`, zero pins, and `vsync_tb` pins the depth |
 | ⛔ **36** the arbiter deadlocked the machine on its first span | **2026-09-10** | **§5.2.1** — a posted CPU VRAM write claimed a framebuffer chip it does not need, and then blocked the span it had just started, while `/WAIT` held `E` waiting for that span. One literal (`R/W`) on `GCPU`, one product term on `GSPN` |
 | ⛔ **37** the posted-write strobe re-armed the span for ever | **2026-09-10** | **§7.4** — `SPANBUSY` was set by a LEVEL over `E`-high, and `/WAIT` makes `E`-high unbounded. `WPQ`/`WSTART` make it a one-dot **E-fall** edge, which is what §3.1.1's `'574`s always did. One registered macrocell |
+| ⛔ **43** `BSTAT` had no path to the data bus | **2026-09-10** | **§13, §12.1** — §10.3.1 calls `LRUN` "the bit a driver polls" and §13 put it at `+$0F`, but §12.1's own argument for `VSTAT`'s `'244` applies to it word for word: `LRUN` is a live macrocell on `vsup`, not a register-file location, so §3.2's `'245` reads back whatever the CPU last wrote at `+$0F` — **zero**. A driver obeying §10.3.1's "do not write card registers while `LRUN` is set" could not find out whether it was set. `machine_tb` found it as a tilemap uploaded into a pointer the engine was still walking. `LRUN` is now `VSTAT` **b4**: the `'244` that exists carried four bits of eight and `LRUN` was already a pin, so **one net, no package, no macrocell** |
 | ⛔ **42** `WAIT` waited a fetch slot, not a line | **2026-09-10** | **§10.3.2** — `LWAIT`'s hold term was `!HLOAD`, and `HLOAD` is a **33-slot level**, so every `WAIT` reached inside the sync-and-back-porch window cleared on the dot it was set. `machine_tb` measured 27 descriptors consumed in one window; a 180-`WAIT` raster bar finished inside three lines of blanking. `vsup`'s `LREL` — armed while `!HLOAD`, disarmed by the first `LADV` after it rises — releases the engine once per line. One registered macrocell, one extra product term on `LWAIT` |
 | ⛔ **38** polling `VSTAT` put a three-pixel hole in every span | **2026-09-10** | **§7.4** — §7.4's colour path *is* the register file's address, and any CPU access to `$FF60`–`$FF7F` took it from the running span for the whole bus cycle. The CPU's claim is now qualified on `!SPANBUSY`, which **gives product terms back** |
 

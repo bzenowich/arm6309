@@ -189,9 +189,20 @@ module machine #(
    * excludes it by construction below. */
   wire vid_drives   = vid_regsel & cpu_rnw;
 
-  // 2. VSTAT's '244 - §12.1, §13. b7 SPANBUSY, b6 VBLANK, b5 HBLANK, b0 IRQ.
+  // 2. VSTAT's '244 - §12.1, §13. b7 SPANBUSY, b6 VBLANK, b5 HBLANK,
+  //    b4 LRUN, b0 IRQ.
   wire vstat_sel = vid_regsel & (pa[4:0] == 5'h13);
-  wire [7:0] vstat = {SPANBUSY, VBLANK, HBLANK, 4'b0000, vid_irq_oe};
+  /* ⛔ b4 IS LRUN, BECAUSE BSTAT HAD NO PATH TO THE DATA BUS - §19 item 43.
+   * §13 puts LRUN at +$0F and §10.3.1 calls it "the bit a driver polls", but
+   * §12.1's argument for VSTAT's own '244 applies to it word for word: LRUN is
+   * a live macrocell on vsup, not a register-file location, so §3.2's '245 has
+   * nothing to read back at +$0F and a read returns whatever the CPU last
+   * wrote there. boot.asm polled it, got zero, and loaded WPTR while the list
+   * engine was still walking it; machine_tb saw LRUN = 1 through the whole of
+   * the tilemap upload, its 256 bytes landing at addresses that skipped. The
+   * '244 that exists carries four bits of eight and LRUN is already a pin, so
+   * this is one net and no package. */
+  wire [7:0] vstat = {SPANBUSY, VBLANK, HBLANK, vid_lrun, 3'b000, vid_irq_oe};
 
   wire [7:0] vid_d = vstat_sel ? vstat : vid_rd;
 

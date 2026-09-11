@@ -547,6 +547,59 @@ module machine_tb;
          $sformatf("⭐ PER-SCANLINE HSCROLL: the stripe stands in %0d distinct columns in ONE frame - 8.2's byte-granular scroll, moved by a descriptor per line", distinct));
     end
 
+    /* ---- cell mode ------------------------------------------------------
+     *
+     * ⭐ vtile_tb DRIVES THE FETCH AND READS BACK THE ADDRESS. This reads the
+     * PICTURE, out of a tilemap 6809 code put in VRAM through the span writer,
+     * and states graphics.md 6.4.1's concatenation as one expression:
+     *
+     *     index(x, y) = code(x/8, y/8) << 6 | (y & 7) << 3 | (x & 7)
+     *     code(cx, cy) = (cx + cy) & 3               boot.asm's map
+     *
+     * The tile set is the bytes 0..255, so a pixel's index IS the three fields
+     * that addressed it; §9's palette is the identity map, so the value
+     * survives to the connector. Every field is checked at every pixel. */
+    wait_progress(8'h30, 900000, "⭐ cell mode is on - graphics.md 6.4's tilemap, built by the CPU");
+    capture_frame(1400000);
+    if (shot_lines > 0) write_ppm("screenshot-cellmode.ppm");
+    ok(shot_lines == 400,
+       $sformatf("VMODE 00 doubles, so cell mode still fills the frame (%0d lines)", shot_lines));
+    begin
+      int bad, first_bad_x, first_bad_y, codes[int];
+      logic [7:0] want, got;
+      bad = 0; first_bad_x = -1; first_bad_y = -1;
+      for (int L = 0; L < shot_lines; L++) begin
+        int y;
+        y = L / 2;                       // VMODE 00 is 200 rows doubled to 400
+        for (int x = 0; x < 640; x++) begin
+          want = (((x / 8) + (y / 8)) & 3) << 6 | ((y & 7) << 3) | (x & 7);
+          got  = shot[L][x][15:8];       // the identity palette: RRRRRGGG = i
+          if (got !== want) begin
+            bad++;
+            if (first_bad_x < 0) begin first_bad_x = x; first_bad_y = y; end
+          end
+          if (L == 0 || L == 398) codes[want >> 6] = 1;
+        end
+      end
+      /* ⚠ ON FAILURE, SAY WHICH HALF. A wrong picture here is either a wrong
+       * tilemap in VRAM or a wrong fetch of a right one, and the two look
+       * identical at the connector - printing both is what separated §19
+       * item 43 from a fetch bug in ten minutes rather than an afternoon. */
+      if (bad > 0) begin
+        string r1, r2;
+        $display("      first wrong pixel at x=%0d y=%0d", first_bad_x, first_bad_y);
+        r1 = ""; r2 = "";
+        for (int i = 0; i < 16; i++) r1 = {r1, $sformatf("%02h ", m.card.peek(131072 + i))};
+        for (int i = 0; i < 16; i++) r2 = {r2, $sformatf("%02h ", m.card.peek(163840 + i))};
+        $display("      tiles at 131072: %s   (want 00 01 02 03 ...)", r1);
+        $display("      map   at 163840: %s   (want 00 01 02 03 00 ...)", r2);
+      end
+      ok(bad == 0,
+         $sformatf("⭐ EVERY PIXEL IS TILEBASE|code<<6|row<<3|col, for the code the map holds (%0d wrong of 256000)", bad));
+      ok(codes.size() == 4,
+         $sformatf("and all four tile codes are on the screen, so the map fetch really varies (%0d)", codes.size()));
+    end
+
     // ---- and the things that must not have happened -------------------
     $display("");
     $display("7. What must not have happened");
