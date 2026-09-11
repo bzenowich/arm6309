@@ -101,6 +101,7 @@ PINNODE = SL6 ;
 PINNODE = SL7 ;
 PINNODE = LGO ;
 PINNODE = LPH ;
+PINNODE = LREL ;
 PINNODE = LWAIT ;
 PINNODE = LD0 ;
 PINNODE = LD1 ;
@@ -245,8 +246,11 @@ LFETCH = LADV & !LPH ;
 LMOVE = LADV & LPH ;
 LPH.d = LFETCH & !D7
         # LPH & !LMOVE & !LGO ;
+LREL.d = !HLOAD
+         # LREL & !LADV ;
 LWAIT.d = LFETCH & D7 & !LSTOP
-          # LWAIT & !HLOAD & LRUN & !LSTOP ;
+          # LWAIT & !HLOAD & LRUN & !LSTOP
+          # LWAIT & !LREL & LRUN & !LSTOP ;
 LD0.d = LFETCH & D0
         # LD0 & !LFETCH & !LGO ;
 LD1.d = LFETCH & D1
@@ -290,10 +294,10 @@ PWE = PS2 ;
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
 [NSL0,NSL1,NSL2,NSL3,NSL4,NSL5,NSL6,NSL7,HS0,HS1,SL0,SL1,SL2].ck = DOTCLK ;
-[SL3,SL4,SL5,SL6,SL7,LGO,LRUN,LPH,LWAIT,LD0,LD1,LD2,LD3,LD4].ck = DOTCLK ;
-[LD7,PS0,PS1,PS2,PS3].ck = DOTCLK ;
+[SL3,SL4,SL5,SL6,SL7,LGO,LRUN,LPH,LREL,LWAIT,LD0,LD1,LD2,LD3].ck = DOTCLK ;
+[LD4,LD7,PS0,PS1,PS2,PS3].ck = DOTCLK ;
 
 /* One asynchronous reset for every register, as on the GALs. */
 [NSL0,NSL1,NSL2,NSL3,NSL4,NSL5,NSL6,NSL7,HS0,HS1,SL0,SL1,SL2].ar = RESET ;
-[SL3,SL4,SL5,SL6,SL7,LGO,LRUN,LPH,LWAIT,LD0,LD1,LD2,LD3,LD4].ar = RESET ;
-[LD7,PS0,PS1,PS2,PS3].ar = RESET ;
+[SL3,SL4,SL5,SL6,SL7,LGO,LRUN,LPH,LREL,LWAIT,LD0,LD1,LD2,LD3].ar = RESET ;
+[LD4,LD7,PS0,PS1,PS2,PS3].ar = RESET ;

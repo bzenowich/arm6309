@@ -2676,7 +2676,7 @@ why, and it is fan-in rather than macrocells.
 | b7 | b6 b5 | b4..b0 | | |
 |---|---|---|---|---|
 | `0` | — | `rrrrr` | **`MOVE`** | the **next** byte is written to register `+$rr` |
-| `1` | — | `≠ 11111` | **`WAIT`** | resume at the start of the next displayed line |
+| `1` | — | `≠ 11111` | **`WAIT`** | resume at the start of the next **scanline** |
 | `1` | — | `11111` | **`END`** | clears `LRUN`; canonically `$FF` |
 
 b6 and b5 are reserved and **ignored** — `LD5` and `LD6` are not built, because
@@ -2722,6 +2722,24 @@ everything else here.
   fine pair lived only on `vctrl`, which the engine could not reach; `vsup` holds a
   second copy written by the same descriptor in the same dot, so a listed scroll is as
   smooth as a CPU one. `vpal_tb` checks both halves land from one `MOVE`.
+⚠ **`WAIT` counts scanlines, not displayed lines, and one `WAIT` really is one
+line.** `LWAIT` is released by `HLOAD`, a purely horizontal decode of the sync pulse
+and back porch with no vertical term, so a blanked line consumes a `WAIT` exactly as a
+displayed one does. A list started at the top of vertical blank — §10.3.1's own advice,
+and where a VBL handler naturally sits — therefore spends its first ~49 `WAIT`s in the
+blanking and lands its first effect ~49 lines higher than the descriptor count reads.
+**Issue `GO` at blank's *end*** (load `WPTR` at its start, where the instant is
+tear-free) and `WAIT` number *n* is line *n*; `software/boot/boot.asm`'s `runlist` is
+that shape.
+
+⛔ **AND UNTIL 2026-09-10 IT WAS NOT ONE LINE, IT WAS ONE FETCH SLOT** — §19 item 42.
+`HLOAD` is a **level** thirty-three slots wide and `LWAIT`'s hold term was `!HLOAD`, so
+a `WAIT` reached anywhere inside that window cleared on the dot it was set. `machine_tb`
+measured **twenty-seven descriptors consumed in a single `HLOAD` window**: `boot.asm`'s
+180-`WAIT` raster bar ran start to finish in three scanlines and never reached the
+display. `vsup`'s `LREL` register is the repair — armed while `HLOAD` is low, disarmed
+by the first `LADV` after it rises, so the window releases the engine exactly once.
+
 - **`WAIT` has no count, and the arithmetic says that is right.** A count is a six-bit
   down-counter on `LD` — a borrow chain, five or six extra terms on the top bit, on the
   part that has already refused a shadow. Waiting *n* lines is *n* `WAIT` bytes instead:
@@ -4029,6 +4047,7 @@ left is measurement. They are grouped by what would settle them.
 | ⭐ **35** the picture was five dots right of the active window | **2026-09-10** | **§19 item 35 above** — five registered macrocells on `vctrl`, zero pins, and `vsync_tb` pins the depth |
 | ⛔ **36** the arbiter deadlocked the machine on its first span | **2026-09-10** | **§5.2.1** — a posted CPU VRAM write claimed a framebuffer chip it does not need, and then blocked the span it had just started, while `/WAIT` held `E` waiting for that span. One literal (`R/W`) on `GCPU`, one product term on `GSPN` |
 | ⛔ **37** the posted-write strobe re-armed the span for ever | **2026-09-10** | **§7.4** — `SPANBUSY` was set by a LEVEL over `E`-high, and `/WAIT` makes `E`-high unbounded. `WPQ`/`WSTART` make it a one-dot **E-fall** edge, which is what §3.1.1's `'574`s always did. One registered macrocell |
+| ⛔ **42** `WAIT` waited a fetch slot, not a line | **2026-09-10** | **§10.3.2** — `LWAIT`'s hold term was `!HLOAD`, and `HLOAD` is a **33-slot level**, so every `WAIT` reached inside the sync-and-back-porch window cleared on the dot it was set. `machine_tb` measured 27 descriptors consumed in one window; a 180-`WAIT` raster bar finished inside three lines of blanking. `vsup`'s `LREL` — armed while `!HLOAD`, disarmed by the first `LADV` after it rises — releases the engine once per line. One registered macrocell, one extra product term on `LWAIT` |
 | ⛔ **38** polling `VSTAT` put a three-pixel hole in every span | **2026-09-10** | **§7.4** — §7.4's colour path *is* the register file's address, and any CPU access to `$FF60`–`$FF7F` took it from the running span for the whole bus cycle. The CPU's claim is now qualified on `!SPANBUSY`, which **gives product terms back** |
 
 ---

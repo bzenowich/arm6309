@@ -161,11 +161,35 @@ export const listDecode: Cell[] = [
    * descriptor state, so every list starts from opcode phase with no
    * terminator in the latch. */
   reg("LPH", ["LFETCH & !D7", "LPH & !LMOVE & !LGO"]),
-  /* Stalled between lines. HLOAD is the start of a displayed line, which is
-   * what loads the scan column counter from HSCROLL - the very register a
-   * list writes. !LSTOP is what stops a $FF from leaving this set after LRUN
-   * falls. */
-  reg("LWAIT", ["LFETCH & D7 & !LSTOP", "LWAIT & !HLOAD & LRUN & !LSTOP"]),
+  /* ⛔ HLOAD IS A LEVEL, AND UNTIL 2026-09-10 LWAIT WAS CLEARED BY IT. HLOAD
+   * runs from count 0 to the slot before MFETCH opens - thirty-three fetch
+   * slots of sync and back porch - and the engine is granted a dot in each of
+   * them, so every WAIT reached inside that window cleared on the dot it was
+   * set and the next descriptor came straight after it. A run of WAITs, which
+   * is the ONLY way 10.3.2 offers to wait n lines, therefore collapsed to one
+   * WAIT per SLOT. machine_tb measured twenty-seven descriptors consumed in a
+   * single HLOAD window; boot.asm's 180-WAIT raster bar ran start to finish in
+   * three scanlines of vertical blank and never reached the display.
+   *
+   * LREL is the repair and it is one register: armed whenever HLOAD is low -
+   * that is, through the whole displayed part of a line - and disarmed by the
+   * first LADV after HLOAD rises. So the window releases the engine exactly
+   * once, and the WAIT fetched on the way out holds until the next line.
+   * ⚠ Disarming on LADV rather than on a dot counter is what makes it robust:
+   * LGRANT is one dot per slot and can be withheld by a span, so the release
+   * has to be held until the engine actually takes it, not for a fixed time. */
+  reg("LREL", ["!HLOAD", "LREL & !LADV"],
+    "one release per line, held until the engine takes it"),
+  /* Stalled between lines. HLOAD is the start of a line, which is what loads
+   * the scan column counter from HSCROLL - the very register a list writes.
+   * !LSTOP is what stops a $FF from leaving this set after LRUN falls.
+   * ⚠ EVERY line, blanked ones included: HLOAD is a horizontal decode with no
+   * vertical term, so 10.3.2's WAIT counts scanlines and not displayed lines,
+   * and a list started at the top of vertical blank spends its first WAITs
+   * there. graphics.md 10.3.2 says so; boot.asm starts at blank's end. */
+  reg("LWAIT", ["LFETCH & D7 & !LSTOP",
+                "LWAIT & !HLOAD & LRUN & !LSTOP",
+                "LWAIT & !LREL & LRUN & !LSTOP"]),
   /* The opcode byte. b6 and b5 are reserved, so they are not latched, and the
    * GO write clears what is left of the previous list - see LPH. */
   ...[0, 1, 2, 3, 4, 7].map((b) =>

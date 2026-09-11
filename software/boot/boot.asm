@@ -49,6 +49,8 @@ PDATL   EQU     VBASE+$11       GGGBBBBB
 PDATH   EQU     VBASE+$12       RRRRRGGG -- the write commits the entry
 VSTAT   EQU     VBASE+$13       b7 SPANBUSY, b6 VBLANK, b5 HBLANK, b0 IRQ
 WADV    EQU     VBASE+$14       00 continue, 01 next row same column
+BCTRL   EQU     VBASE+$0E       b0 GO -- starts the display list from WPTR
+BSTAT   EQU     VBASE+$0F       b0 LRUN -- 1 while the engine owns WPTR
 
 * CTRL bit patterns
 CT_OFF  EQU     $00             display off, WMODE 00 direct, VMODE 00
@@ -76,6 +78,8 @@ P_DONE  EQU     $FF             VMODE 00 shown -- sample the picture now
 P_M10   EQU     $10             ... and VMODE 10, 640x400 progressive
 P_M01   EQU     $11             ... 01, 640x240 doubled
 P_M11   EQU     $12             ... 11, 640x480 progressive
+P_LSTA  EQU     $20             display list A running - a palette raster bar
+P_LSTB  EQU     $21             ... and B - one HSCROLL MOVE per line
 P_BADR  EQU     $E1             the SIMM did not answer
 
 *------------------------------------------------------------- geometry ------
@@ -346,30 +350,242 @@ wbusy4  lda     VSTAT
         sta     VCTRL
         lda     #P_DONE
         sta     SIMPORT
-        bsr     settle
+        lbsr    settle
 
         lda     #CT_ON+2        VMODE 10 - 640x400 progressive, same 70 Hz family
         sta     VCTRL
         lda     #P_M10
         sta     SIMPORT
-        bsr     settle
+        lbsr    settle
 
         lda     #CT_ON+1        VMODE 01 - 640x240, doubled to 480, 60 Hz
         sta     VCTRL
         lda     #P_M01
         sta     SIMPORT
-        bsr     settle
+        lbsr    settle
 
         lda     #CT_ON+3        VMODE 11 - 640x480 progressive, 60 Hz
         sta     VCTRL
         lda     #P_M11
         sta     SIMPORT
-        bsr     settle
+        lbsr    settle
 
-        lda     #CT_ON          back to 00 for anything after this
+        lda     #CT_ON          back to 00 for the list scenes
         sta     VCTRL
 
+*==============================================================================
+* 7. The display list.  graphics.md 10.3, and it has never been started by
+*    software: vspan_tb pokes descriptors straight into the framebuffer array
+*    and writes BCTRL from a task.
+*
+*    Two lists, because §10.3 sells two different effects and they fail
+*    differently:
+*
+*      A  ninety WAITs and then a palette repaint - a RASTER BAR.  The stripe
+*         at x = 256 is index $FF on every row, so changing that one entry part
+*         way down the screen makes the stripe change colour at a line, and
+*         machine_tb looks for exactly that.
+*      B  one MOVE to HSCROLL per line, stepping - PER-SCANLINE SCROLL.  The
+*         stripe moves left a little further on each line, so the frame carries
+*         as many distinct stripe positions as the list had entries.
+*
+*    ⚠ A DESCRIPTOR IS WRITTEN THROUGH THE SPAN WRITER.  A CPU VRAM write is
+*    posted and retires at WPTR (§3.1.1, §7.4) - the address on the bus selects
+*    VRAM and nothing else - so building a list means pointing WPTR at it and
+*    letting the auto-increment walk.  That is also why every byte polls VSTAT
+*    b7 first: §7.4's rule, and the only alternative is 40.7 us of /WAIT.
+*==============================================================================
+* ⛔ A SPAN-WRITTEN BYTE STREAM CANNOT LEAVE ITS 1024-BYTE ROW.  WPTR is not
+* one counter: WA9..WA0 is a column that WRAPS at 1024 and WA18..WA10 is a row
+* that only WROWADV clocks, so with WADV = 00 the 1025th byte lands back on the
+* first.  The first version of this code put two lists 256 bytes apart and made
+* list B 1261 bytes long; it wrapped at byte 1024 and rewrote itself over list
+* A, and what the engine then walked was picture data executed as descriptors.
+* Hence: ONE ROW PER LIST, and no list longer than 1024 bytes.
+LISTPG  EQU     50              ring page 50 = VRAM 409,600, well past the image
+LPAGE   EQU     $06             ... which is $64000, so WPTR[18:16] = 6
+LISTA   EQU     $4000           list A  - VRAM 409,600, ring row 400
+LISTB   EQU     $4400           list B  - VRAM 410,624, ring row 401
+WAITOP  EQU     $80             graphics.md 10.3.2: WAIT
+ENDOP   EQU     $FF             ... and the terminator
+BARIDX  EQU     $FF             the stripe's palette index
+
+* ⚠ The map matters only for the CPU's half of the transaction.  In WMODE 00
+* the address a store carries selects the VRAM window and nothing else - WPTR
+* is what says where the byte lands - so X below stays at the window's base and
+* the descriptors go wherever setwptr last pointed.
+        lda     #$40+LISTPG     block 1 -> the descriptor page
+        sta     MAPLO+1
+        clra
+        sta     MAPHI+1
+        lda     #LPAGE
+        sta     wpage
+
+* ---- list A: a RASTER BAR - white, then magenta, then white again -------
+* ⭐ BOTH EFFECTS ARE PERSISTENT, so a list that changes the palette once shows
+* a bar only in the frame it runs in and a solid colour ever after. A bar that
+* can be photographed has to change and change back, and the list has to be
+* restarted every frame - which is what a driver does anyway, out of 12.1's VBL
+* handler.
+        ldd     #LISTA
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        ldb     #90
+la1     lda     #WAITOP
+        lbsr    putb
+        decb
+        bne     la1
+        ldy     #barmag         entry $FF := $F81F
+        lbsr    putpal
+        ldb     #90
+la2     lda     #WAITOP
+        lbsr    putb
+        decb
+        bne     la2
+        ldy     #barwht         ... and back to $FFFF
+        lbsr    putpal
+        lda     #ENDOP
+        lbsr    putb
+
+* ---- list B: one MOVE HSCROLL per line, for a whole frame ---------------
+* ⚠ The operand's bits 7..2 are HSCROLL[9..2] (vspan_tb measures it), so an
+* operand of 4n scrolls by 4n pixels - byte-granular, which is what 8.2 bought.
+* The step wraps every 64 lines so the stripe sweeps the screen repeatedly and
+* the frame carries many distinct positions rather than one.
+        ldd     #LISTB
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        clr     lstep
+        clr     lstep+1
+lb1     lda     #$03            MOVE HSCROLL, (pair & 63) * 4
+        lbsr    putb
+        lda     lstep+1
+        anda    #63
+        lsla
+        lsla
+        lbsr    putb
+        lda     #WAITOP         ... and hold it for two lines, so 400 lines of
+        lbsr    putb
+        lda     #WAITOP         descriptor cost 800 bytes and stay inside the
+        lbsr    putb            row that the paragraph above is about
+        ldd     lstep
+        addd    #1
+        std     lstep
+        cmpd    #200            200 pairs = the whole visible frame
+        bne     lb1
+        lda     #ENDOP
+        lbsr    putb
+
+* ---- run list A, restarted every vertical blank -------------------------
+        lda     #P_LSTA
+        sta     SIMPORT
+        ldd     #LISTA
+        lbsr    runlist
+
+* ---- and list B ---------------------------------------------------------
+        lda     #P_LSTB
+        sta     SIMPORT
+        ldd     #LISTB
+        lbsr    runlist
+
+        clra                    leave the scroll where a reader expects it
+        sta     HSCROLL
+        sta     HSCRLH
+
 halt    bra     halt
+
+*==============================================================================
+* putpal - append "MOVE PIDX,$FF / MOVE PDATL,lo / MOVE PDATH,hi" to the list.
+* Y points at a three-byte table: PIDX operand, PDATL, PDATH.  13's second write
+* port on +$10..+$12 is what makes a palette reachable from a descriptor at all,
+* and PDATH is the write that commits.
+*==============================================================================
+putpal  pshs    a
+        lda     #$10
+        lbsr    putb
+        lda     ,y+
+        lbsr    putb
+        lda     #$11
+        lbsr    putb
+        lda     ,y+
+        lbsr    putb
+        lda     #$12
+        lbsr    putb
+        lda     ,y+
+        lbsr    putb
+        puls    a,pc
+
+barmag  FCB     BARIDX,$1F,$F8  entry $FF := $F81F, magenta
+barwht  FCB     BARIDX,$FF,$FF  ... and back to white
+
+*==============================================================================
+* runlist - start the list at D at every vertical blank, for eight frames.
+*
+* ⭐ THIS IS THE DRIVER SHAPE, not a testbench convenience. 10.3.1: the engine
+* shares WPTR, so a list is started by loading WPTR and writing BCTRL - and it
+* clobbers WPTR on the way through, so every frame has to load it again. 12.1's
+* VBL handler is where that belongs.
+*==============================================================================
+runlist pshs    a,b
+        std     lstart
+        lda     #8
+        sta     lframe
+rl1     ldb     #1
+        lbsr    vblonly         the tear-free instant: load WPTR here
+        ldd     lstart
+        lbsr    setwptr
+* ⚠ ... BUT GO AT BLANK'S END, NOT AT ITS START.  10.3.2's WAIT resumes at the
+* next SCANLINE and HLOAD has no vertical term, so blanked lines count: a list
+* GO'd at the top of vertical blank spends its first ~49 WAITs there and the
+* effect lands 49 lines higher than the descriptor count says.  Waiting out the
+* blank costs one poll and makes WAIT number n mean line n.
+rl2     lda     VSTAT
+        bita    #$40
+        bne     rl2
+        lda     #$01            BCTRL.GO
+        sta     BCTRL
+        dec     lframe
+        bne     rl1
+        puls    a,b,pc
+
+*==============================================================================
+* setwptr - D = the 16-bit VRAM offset; WPTR := D (the top three bits are zero
+* for everything this ROM addresses).  §13's +$08..+$0A, little-endian.
+*==============================================================================
+setwptr stb     WPTR0
+        sta     WPTR1
+        pshs    a
+        lda     wpage
+        sta     WPTR2
+        puls    a,pc
+
+*==============================================================================
+* putb - retire A into VRAM at WPTR, one byte, WMODE 00.
+*
+* X names the same byte in logical space and post-increments with WPTR: the
+* address is what selects VRAM and WPTR is what says where the byte lands, and
+* keeping them in step is what makes this readable rather than merely working.
+*==============================================================================
+putb    pshs    b
+pb1     ldb     VSTAT           §7.4: poll b7, SPANBUSY
+        bmi     pb1
+        sta     ,x+
+        puls    b,pc
+
+*==============================================================================
+* vblonly - wait B vertical blanks and return immediately after the edge, so a
+* caller gets the whole of the next frame rather than the tail of this one.
+*==============================================================================
+vblonly pshs    a
+vo1     lda     VSTAT
+        bita    #$40
+        bne     vo1
+vo2     lda     VSTAT
+        bita    #$40
+        beq     vo2
+        decb
+        bne     vo1
+        puls    a,pc
 
 *==============================================================================
 * settle - give the capture a whole frame to find, by waiting four vertical
@@ -431,6 +647,10 @@ rombyte FCB     $C3             a known ROM byte, for the read-back test
 yrow    EQU     RAMWIN+$10      current row, 0..199
 ccol    EQU     RAMWIN+$11      current span within the row, 0..4
 taddr   EQU     RAMWIN+$12      the logical address the trigger writes (2 bytes)
+lstep   EQU     RAMWIN+$14      list B's line counter while it is built (2 bytes)
+lframe  EQU     RAMWIN+$16      runlist's frame counter
+wpage   EQU     RAMWIN+$17      WPTR[18:16] for the next setwptr -- see 13
+lstart  EQU     RAMWIN+$18      runlist's list address, reloaded every frame
 
 *==============================================================================
 * The vector page.  machine.md 7.2: $FFC0-$FFFF is served by the ROM

@@ -129,6 +129,7 @@ module video_card (
   // 10.3's engine, all of it on vsup - graphics.md 10.3.3.
   wire LD0,LD1,LD2,LD3,LD4,LD7, LSTOP, LADV, LFETCH, LMOVE, LGO;
   wire LPH, LWAIT, LWHSL, LWHSH, LBYTE, LWPI, LWPDL, LWPDH;
+  wire LREL;                          // 10.3.2's one release per line
   wire LDBOE, RFOE, PLOAD, PDHW, PINC, PILD, PS0,PS1,PS2,PS3;
   wire LDPDL, LDPDH, PDOE, PIXOE, PWE;
   wire WSPL, WPIDX, WPDL, WPDH;
@@ -267,6 +268,7 @@ module video_card (
     // 10.3's descriptor decode, whole - and 10.3.1's deferred GO
     .BCTRLGO(BCTRLGO), .LGO(LGO), .LRUN(LRUN), .LSTOP(LSTOP),
     .LADV(LADV), .LFETCH(LFETCH), .LMOVE(LMOVE), .LPH(LPH), .LWAIT(LWAIT),
+    .LREL(LREL),
     .LD0(LD0),.LD1(LD1),.LD2(LD2),.LD3(LD3),.LD4(LD4),.LD7(LD7),
     .LBYTE(LBYTE), .LDBOE(LDBOE), .RFOE(RFOE),
     .LWHSL(LWHSL), .LWHSH(LWHSH),

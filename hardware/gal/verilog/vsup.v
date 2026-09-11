@@ -81,6 +81,7 @@ module vsup (
     output wire LFETCH,
     output wire LMOVE,
     output wire LPH,
+    output wire LREL,
     output wire LWAIT,
     output wire LD0,
     output wire LD1,
@@ -132,6 +133,7 @@ module vsup (
   reg  r_LGO;
   reg  r_LRUN;
   reg  r_LPH;
+  reg  r_LREL;
   reg  r_LWAIT;
   reg  r_LD0;
   reg  r_LD1;
@@ -165,6 +167,7 @@ module vsup (
   assign LGO = r_LGO;
   assign LRUN = r_LRUN;
   assign LPH = r_LPH;
+  assign LREL = r_LREL;
   assign LWAIT = r_LWAIT;
   assign LD0 = r_LD0;
   assign LD1 = r_LD1;
@@ -358,6 +361,7 @@ module vsup (
       r_LGO <= 1'b0;
       r_LRUN <= 1'b0;
       r_LPH <= 1'b0;
+      r_LREL <= 1'b0;
       r_LWAIT <= 1'b0;
       r_LD0 <= 1'b0;
       r_LD1 <= 1'b0;
@@ -471,9 +475,13 @@ module vsup (
       r_LPH <=
          (LFETCH & ~D7)
          | (LPH & ~LMOVE & ~LGO);
+      r_LREL <=
+         (~HLOAD)
+         | (LREL & ~LADV);
       r_LWAIT <=
          (LFETCH & D7 & ~LSTOP)
-         | (LWAIT & ~HLOAD & LRUN & ~LSTOP);
+         | (LWAIT & ~HLOAD & LRUN & ~LSTOP)
+         | (LWAIT & ~LREL & LRUN & ~LSTOP);
       r_LD0 <=
          (LFETCH & D0)
          | (LD0 & ~LFETCH & ~LGO);

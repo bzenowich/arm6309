@@ -72,6 +72,8 @@ module machine_tb;
   // drivers cannot see a bus fight, so machine.v does not OR them and this
   // watches what it reports instead.
   bit saw_bus_conflict = 0, saw_pa_conflict = 0, saw_vram_read = 0;
+  bit saw_lrun = 0;
+  always @(posedge CLK25) if (m.vid_lrun) saw_lrun = 1;
   always @(posedge CLK25) begin
     if (bus_conflict)      saw_bus_conflict = 1;
     if (pa_conflict)       saw_pa_conflict  = 1;
@@ -94,6 +96,8 @@ module machine_tb;
 
   int e_cycles = 0;
   always @(negedge e) e_cycles++;
+
+
 
   // ---- +hb=N: a heartbeat every N dots ------------------------------------
   // What it is for: E can be HELD, and a testbench that only prints on E's own
@@ -483,6 +487,65 @@ module machine_tb;
     capture_frame(1400000);
     if (shot_lines > 0) write_ppm("screenshot-vmode11.ppm");
     check_picture("VMODE 11 - 640x480 progressive", 480, 0);
+
+    /* ---- the display list, started by software ---------------------------
+     *
+     * ⭐ IT HAD NEVER BEEN STARTED BY SOFTWARE. vspan_tb pokes descriptors
+     * straight into the framebuffer array and writes BCTRL from a task; these
+     * two lists were BUILT through the span writer, byte by byte at WPTR, and
+     * started out of a VBL poll - which is 10.3.1's own rule and 12.1's own
+     * handler. */
+    wait_progress(8'h20, 900000, "a display list is running - graphics.md 10.3's raster bar");
+    capture_frame(1400000);
+    if (shot_lines > 0) write_ppm("screenshot-rasterbar.ppm");
+    ok(saw_lrun, "BSTAT b0 LRUN went high - the engine took WPTR and walked");
+    $display("      list A: HSCROLL[9:2]=%02h  pal[$FF]=%04h  WPTR=%0d  VRAM[8192..8195]=%02h %02h %02h %02h",
+             m.vid_hscr, m.card.peek_pal(255), WPTR,
+             m.card.peek(8192), m.card.peek(8193), m.card.peek(8194), m.card.peek(8195));
+    /* The stripe is index $FF on every row, so the list repainting that one
+     * entry part way down IS a bar. Count the lines of each colour on the
+     * stripe's own column. */
+    begin
+      int white, magenta, other, flips;
+      logic [15:0] prev;
+      white = 0; magenta = 0; other = 0; flips = 0; prev = 16'hxxxx;
+      for (int L = 0; L < shot_lines; L++) begin
+        logic [15:0] c;
+        c = shot[L][256 + shift + 2];
+        if (c === 16'hFFFF) white++;
+        else if (c === 16'hF81F) magenta++;
+        else other++;
+        if (L > 0 && c !== prev) flips++;
+        prev = c;
+      end
+      ok(other == 0,
+         $sformatf("the stripe is one of the list's two colours on every line (%0d neither)", other));
+      ok(white > 20 && magenta > 20,
+         $sformatf("⭐ A RASTER BAR: %0d lines white, %0d magenta - one palette entry, changed and changed back mid-frame", white, magenta));
+      ok(flips == 2,
+         $sformatf("and exactly two transitions down the frame, which is the bar's two edges (got %0d)", flips));
+    end
+
+    /* ---- per-scanline HSCROLL ------------------------------------------- */
+    wait_progress(8'h21, 900000, "the second list is running - per-scanline HSCROLL");
+    capture_frame(1400000);
+    if (shot_lines > 0) write_ppm("screenshot-hscroll.ppm");
+    begin
+      int positions[int];
+      int distinct, found;
+      distinct = 0;
+      for (int L = 0; L < shot_lines; L++) begin
+        found = -1;
+        for (int x = 0; x < 640 && found < 0; x++)
+          if (shot[L][x] === 16'hFFFF || shot[L][x] === 16'hF81F) found = x;
+        if (found >= 0 && !positions.exists(found)) begin
+          positions[found] = 1;
+          distinct++;
+        end
+      end
+      ok(distinct >= 16,
+         $sformatf("⭐ PER-SCANLINE HSCROLL: the stripe stands in %0d distinct columns in ONE frame - 8.2's byte-granular scroll, moved by a descriptor per line", distinct));
+    end
 
     // ---- and the things that must not have happened -------------------
     $display("");

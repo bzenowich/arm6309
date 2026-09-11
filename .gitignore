@@ -50,3 +50,4 @@ reference/**/*.zip
 # redistribute, and reference/README.md's rule for vendor blobs applies.
 awincupl.exe.zip
 *wincupl*.zip
+hardware/gal/verilog/*.ppm

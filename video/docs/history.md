@@ -1452,3 +1452,43 @@ comparison table's **"per-region mode mixing — the list engine switches it per
 scanline"** and **"per cell colour ... or per scanline region from the display list"**
 were the same claim in two more places and are corrected with it.
 
+
+## 2026-09-10 — §10.3.2: `WAIT` waited a fetch slot, and said "displayed line"
+
+### §10.3.2's `WAIT` row — as written 2026-09-09
+
+| b7 | b6 b5 | b4..b0 | | |
+|---|---|---|---|---|
+| `1` | — | `≠ 11111` | **`WAIT`** | resume at the start of the next displayed line |
+
+Two things were wrong with that line, and `machine_tb` — the first testbench to run a
+list from **6809 code** rather than from a task — found both on 2026-09-10.
+
+**It was not a line, it was a fetch slot** (§19 item 42). `vsup`'s `LWAIT` held on
+`LWAIT & !HLOAD & LRUN & !LSTOP`, and `HLOAD` is not an edge: `video.parts.ts` decodes
+it as `rangeTerms({ bits: HB, lo: 0, hi: H.backEnd - 3 })`, **thirty-three fetch slots**
+of sync pulse and back porch, and `LGRANT` gives the engine a dot in each of them. So a
+`WAIT` reached anywhere inside that window cleared on the dot it was set, and the next
+descriptor followed immediately. Since §10.3.2 offers a run of `WAIT` bytes as the
+*only* way to wait *n* lines, waiting was broken in exactly the case it exists for.
+`machine_tb` measured **27 descriptors consumed inside one `HLOAD` window**;
+`boot.asm`'s raster bar — 90 `WAIT`s, a palette `MOVE`, 90 more, another `MOVE` — ran
+start to finish across **three scanlines of vertical blank**, at V=441 to V=444, and the
+captured frame was a uniform white with no bar in it.
+
+The repair is `vsup`'s `LREL`, one registered macrocell: set by `!HLOAD` — so it is
+armed throughout the displayed part of every line — and held by `LREL & !LADV`, so the
+first advance after `HLOAD` rises disarms it for the rest of the window. `LWAIT` gains
+`LWAIT & !LREL & LRUN & !LSTOP`, and the window therefore releases the engine exactly
+once. Disarming on `LADV` rather than after a fixed number of dots is what makes it
+survive a span: `LGRANT` is one dot per slot and a span in flight withholds it, so the
+release has to stand until the engine actually takes it. `vsup` went 84→85 logic cells
+and 32→33 flip-flops of 128; `fit1508.exe` says `Design fits successfully`.
+
+**And "displayed" was never true.** `HLOAD` is a purely horizontal decode with no
+vertical term, so a blanked line consumes a `WAIT` exactly as a displayed one does — the
+spec's own §10.3.1 advice to start a list from the VBL handler therefore spent the
+first ~49 `WAIT`s in the blanking. The wording is now "the next **scanline**", which is
+what the hardware does and what an Amiga copper does; `software/boot/boot.asm`'s
+`runlist` loads `WPTR` at blank's start (the tear-free instant) and issues `GO` at
+blank's *end*, so `WAIT` number *n* means line *n*.

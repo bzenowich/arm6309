@@ -55,11 +55,36 @@ how many fit, and a scan-address error moves the stripe.
 rather than relying on `/WAIT`. Both work since 2026-09-10; before that day neither
 did, and `machine_tb` is what found out.
 
+## The display list, and the two things it taught
+
+`boot.asm` builds two lists **through the span writer** — byte by byte at `WPTR`, the
+way a driver would — and starts each one out of a `VSTAT` poll, eight frames running:
+
+| list A | 90 `WAIT`s, `MOVE PIDX/PDATL/PDATH` to make entry `$FF` magenta, 90 more, back to white | a **raster bar**: the stripe at x=256 is index `$FF`, so repainting that one entry part way down the frame is a bar with exactly two edges |
+| list B | `MOVE HSCROLL,(n&63)*4` and two `WAIT`s, 200 times | **per-scanline scroll**: `machine_tb` counts the stripe standing in 64 distinct columns in ONE frame |
+
+⛔ **A span-written byte stream cannot leave its 1024-byte row.** `WPTR` is not one
+counter: `WA9`–`WA0` is a column that **wraps** at 1024 and `WA18`–`WA10` is a row that
+only `WROWADV` clocks, so with `WADV = 00` the 1025th byte lands back on the first. The
+first version of this code put the two lists 256 bytes apart and made list B 1261 bytes
+long; it wrapped at byte 1024 and **rewrote itself over list A**, and what the engine
+then walked was picture data executed as descriptors. Hence one row per list, and the
+lists live at VRAM 409,600 and 410,624 — ring rows 400 and 401, past the image.
+
+⚠ **`WAIT` counts scanlines, blanked ones included** (`graphics.md` §10.3.2). `runlist`
+loads `WPTR` at vertical blank's *start* — the tear-free instant — and issues `GO` at
+its *end*, so `WAIT` number *n* means line *n*. Starting at blank's start instead spends
+the first ~49 `WAIT`s in the blanking. ⛔ And until 2026-09-10 it was worse than that:
+`WAIT` cleared on a **level**, so a run of them collapsed to one per fetch slot and this
+program's raster bar finished inside three lines of blanking — `graphics.md` §19 item 42.
+
 ## What it does not do yet
 
 - **No `ram.md` §6.4.1 sizing walk.** It proves the first SIMM answers with a
   two-pattern read-back through a driven bus, which is that section's *method* on one
   socket; the four-socket walk that discovers how much memory the machine has is still
   to write.
+- **No cell mode.** §6.4's `TILEBASE`/map base at `+$17`/`+$19` and `CHAR` have never
+  been written by software; the tile fetch is exercised only by `vtile_tb`.
 - **No console, no monitor, no DriveWire loader.** `machine.md` §7.2 says what page 0
   is eventually for. `software/6809/README.md` has what retargeting ASSIST09 costs.
