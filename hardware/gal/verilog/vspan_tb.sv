@@ -98,6 +98,8 @@ module vspan_tb;
 
   int i, n, got;
   int m, waited;
+  int wait_lines;          // HLOADs across a WAIT - 10.3's "next line", counted
+  logic prev_hload;
   logic [7:0] hscr_before_wait;
   logic [7:0] b;
   logic [7:0] mask8 = 8'hB4;
@@ -253,19 +255,31 @@ module vspan_tb;
     wreg('h03, 8'h00); wreg('h04, 8'h00);   // HSCROLL = 0 before the list runs
     set_wptr(8192);
     wreg('h0e, 8'h01);          // BCTRL.GO
+    /* ⚠ AND THE WAIT HAS TO BE ONE LINE, which nothing counted until
+     * 2026-09-10. graphics.md 10.3 sells the list engine as per-scanline -
+     * gradients, split palettes, raster bars - and the whole of that rests on
+     * WAIT resuming at the NEXT HLOAD rather than some later one. "LWAIT was
+     * asserted" is a claim about the stall and says nothing about its length,
+     * so the lines are counted here: HLOAD pulses from the instant LWAIT rises
+     * to the instant it falls, and the answer has to be one. */
     n = 0; m = 0; waited = 0; hscr_before_wait = 8'hxx;
+    wait_lines = 0; prev_hload = 1'b0;
     for (i = 0; i < 40000; i++) begin
       @(posedge DOTCLK); #0;
       if (card.LMOVE) n++;
       if (LWAIT_o) begin
         waited = 1;
         if (m == 0) begin hscr_before_wait = HSCR; m = 1; end
+        if (card.HLOAD && !prev_hload) wait_lines++;
       end
+      prev_hload = card.HLOAD;
       if (i > 40 && !LRUN) break;
     end
     ok(LRUN == 1'b0, "BSTAT b0 LRUN falls when the engine meets the $FF terminator");
     ok(n == 3, $sformatf("three MOVEs, one operand cycle each - the opcode bytes and the WAIT are not writes (got %0d)", n));
     ok(waited == 1, "⭐ the WAIT opcode stalled the engine - LWAIT was asserted");
+    ok(wait_lines == 1,
+       $sformatf("⭐ and it resumed on the NEXT line - %0d HLOAD across the stall, and 10.3's per-scanline gradients are that number being one", wait_lines));
     ok(hscr_before_wait == 8'h95,
        $sformatf("and by then both MOVEs had landed: HSCROLL[9:2] = $95 (got $%02h)", hscr_before_wait));
     ok(HSCR == 8'hBF,
