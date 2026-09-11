@@ -98,8 +98,6 @@ module aseq (
     output wire ISADATA,
     output wire ISAIDX,
     output wire ISSDATA,
-    output wire ISSPTR,
-    output wire ISTIMER,
     output wire AIDXLD,
     output wire AINC,
     output wire AIDX0,
@@ -413,15 +411,6 @@ module aseq (
   // buried
   assign ISSDATA =
          (HA3 & ~HA2 & ~HA1 & HA0);
-  // buried
-  assign ISSPTR =
-         (~HA3 & HA2 & HA1 & ~HA0)
-         | (~HA3 & HA2 & HA1 & HA0)
-         | (HA3 & ~HA2 & ~HA1 & ~HA0);
-  // buried
-  assign ISTIMER =
-         (HA3 & ~HA2 & HA1 & HA0)
-         | (HA3 & HA2 & ~HA1 & ~HA0);
   // buried
   assign AIDXLD =
          (HSTB & ~A3 & ~A2 & ~A1 & ~A0 & ~RW);

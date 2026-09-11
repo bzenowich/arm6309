@@ -175,7 +175,7 @@ PINNODE = MC6 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * RLDA, RLDB, LDVSL, LDVSH, LDHS, LDHSH, LDADV, LDA, LDB, LDC, LDTB
- * LDFB, LDMB, WINC
+ * LDMB, WINC
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -597,7 +597,6 @@ LDA = WSTB & !RA4 & RA3 & !RA2 & !RA1 & !RA0 ;
 LDB = WSTB & !RA4 & RA3 & !RA2 & !RA1 & RA0 ;
 LDC = WSTB & !RA4 & RA3 & !RA2 & RA1 & !RA0 ;
 LDTB = WSTB & RA4 & !RA3 & RA2 & RA1 & RA0 ;
-LDFB = WSTB & RA4 & RA3 & !RA2 & !RA1 & !RA0 ;
 LDMB = WSTB & RA4 & RA3 & !RA2 & !RA1 & RA0 ;
 WINC = RETIRE
        # LADV ;

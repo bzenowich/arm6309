@@ -157,24 +157,21 @@ const RESERVED: Record<string, { why: Why; note: string }> = {
   CTRL0: { why: "board", note: "§7's LED filter, into the 74HC4066 (place/parts.ts)" },
   CTRL1: { why: "board", note: "§7's filter bypass, the same 74HC4066" },
   CTRL2: { why: "stale", note: "⛔ NTSC clock. §4.1 takes ONE crystal, 28.37516 MHz, and rejects NTSC at +16 cents - the card has no second crystal and no divider select, so the bit can never do anything. ⚠ refplayer's card.c IMPLEMENTS it, which is a model above its hardware" },
-  CTRL3: { why: "open",  note: "⛔ §6.1's volume ×4. VOLCODE should be min(4·VOL,255) and is VOL - 12.04 dB below every level §7.1 specifies. §16 item 40" },
+  CTRL3: { why: "stale", note: "⛔ raw volume, RETIRED 2026-09-10. paula.md's AUDxVOL is 0-64, and the words 255, 8-bit volume and attenuator appear NOWHERE in it, so 256-level volume was invented. ⚠ §6.1's ×4 is still not built - §16 item 40 - but it is a DATAPATH gap with no bit behind it now, and no signal-level census can see it" },
   CTRL4: { why: "stale", note: "⛔ 8-channel mode, DROPPED 2026-09-10. paula.md: Paula has four channels, numbered 0-3, so §11.2 failed §11's own question. Nothing was ever built - SFA's channel field is two bits" },
   CTRL5: { why: "stale", note: "⛔ pan enable. §11.1's programmable panning was WITHDRAWN 2026-09-09 - most of 45 ICs → 35" },
 
-  /* ================= produced, and nothing anywhere consumes ============ *
-   * ⚠ NOT missing features. Each of these costs a macrocell (and CIACLK a
-   * pin) and buys nothing, because the job moved and the cell stayed. The
-   * FEATURES all work - modplay_tb uploads samples through SPTR and takes
-   * every tick from TIMER - which is exactly how these are known to be
-   * redundant decodes rather than dead ends. */
-  CHANSLOT: { why: "dead", note: "U1's slot decode. audio.cpld.ts: \"U2 takes the three counter bits and decodes the five phases itself\" - and U1 still computes all four" },
-  TMRSLOT:  { why: "dead", note: "the same, slot 4" },
-  HOSTSLOT: { why: "dead", note: "the same, slot 5" },
-  DEFSLOT:  { why: "dead", note: "the same, slots 6-7" },
-  WAIDX:    { why: "dead", note: "U1's \"a host write to AIDX\". U2 decodes it itself as ISAIDX" },
-  ISSPTR:   { why: "dead", note: "U2's SPTR decode. The writes work - the upload lands - so the path is HW0/HW1/HW2 off HA directly and this is a second decode of the same thing" },
-  ISTIMER:  { why: "dead", note: "U2's TIMER decode, the same. §8.2's tempo timer runs; modplay_tb takes every tick from it" },
-  CIACLK:   { why: "dead", note: "⚠ §8.2's ÷5 tempo clock, ON A PIN. The timer is counted by the microcode against the shared adder, not by this, so nothing on the card takes it. CCLK is a pin because §4.1 says a scope wants it; this one has no such sentence and needs a decision" },
+  /* ⭐ EIGHT `dead` ENTRIES WERE HERE AND ARE DELETED - 2026-09-10, audio.md
+   * 16 item 42. U1's four slot decodes, its WAIDX, its CIACLK pin, and U2's
+   * ISSPTR and ISTIMER: logic that cost a macrocell and bought nothing, because
+   * the job moved and the cell stayed. ⚠ NONE was a broken feature, and the way
+   * that was known is that the features work - modplay_tb uploads a module's
+   * samples through SPTR and takes every tick from TIMER - so they were second
+   * decodes of paths decoded elsewhere. The list is checked in both directions,
+   * so deleting them is what forced this comment to replace them.
+   *
+   * ⭐ SIX ON U1 AND TWO ON U2, and the split is the point: U2 is at 128 of 128
+   * logic cells and is where 11.3's attach chain has to go. */
 
   /* ================= open-drain outputs: the pin, not the enable ======== *
    * §3.3's idiom - the pin drives low or floats, and the condition rides on
@@ -203,7 +200,9 @@ const RESERVED: Record<string, { why: Why; note: string }> = {
    * dropped - so there is no signal to dangle. The design is right and §13's
    * prose is what is stale: it still describes b2 as "with CELL: 0 tile, 1
    * character". A doc fix, not a silicon one. */
-  LDFB: { why: "stale", note: "⛔ FONTBASE's load strobe, for that same dropped Variant B. §13 calls +$18 reserved and the strobe is still built" },
+  /* ⭐ LDFB WAS HERE AND IS DELETED - 2026-09-10. FONTBASE's load strobe, for
+   * §6.4.3's dropped Variant B: one cell on vaddr, which is the video part that
+   * cannot spare them. regfile.ts has the derivation. */
 }
 
 /* ---- the analysis ------------------------------------------------------- */
@@ -280,6 +279,25 @@ check(stale.length === 0,
     decoded ? "it is decoded now - take this claim out and give it a real one" : "")
 }
 
+/* ---- which part each one is on, computed ---------------------------------- *
+ * ⚠ BECAUSE PROSE GETS THIS WRONG. This card has two CPLDs and the video card
+ * has three, and a sentence like "four of the eight are on U1" is exactly the
+ * kind of claim that drifts from the designs and is never checked again. It is
+ * derived here instead. */
+const WHERE = new Map<string, string[]>()
+for (const card of CARDS) {
+  for (const p of card.parts) {
+    for (const c of p.cells) {
+      if (!WHERE.has(c.name)) WHERE.set(c.name, [])
+      WHERE.get(c.name)!.push(`${card.name}/${p.name}`)
+    }
+  }
+}
+const homeless = Object.keys(RESERVED).filter((n) => !WHERE.has(n))
+check(homeless.length === 0,
+  "every RESERVED entry names a cell that exists on a part this check knows about",
+  homeless.length ? homeless.join(", ") : "")
+
 /* ---- the headline, so a reader does not have to count ------------------- */
 const byWhy = (w: Why) => Object.entries(RESERVED).filter(([, v]) => v.why === w)
 console.log("")
@@ -288,11 +306,18 @@ const EXTRA: Record<string, number> = { open: 2, stale: 1 }   // DAT, ATT; and P
 for (const w of ["open", "stale", "dead", "board"] as Why[]) {
   const n = byWhy(w).length + (EXTRA[w] ?? 0)
   console.log(`        ${w.padEnd(6)} ${n}${w === "open" ? "   <- register bits the host can write and the card cannot perform" : ""}`)
+  for (const [name] of byWhy(w)) {
+    console.log(`          ${name.padEnd(9)} ${(WHERE.get(name) ?? ["?"]).join(", ")}`)
+  }
 }
 console.log("")
-console.log("      open counts audio.md §9.3's DAT and ATT, which are state-file")
-console.log("      FIELDS and have no signal; stale counts PAN, withdrawn with")
-console.log("      CTRL5. graphics.md §13's VDATA is a seventh, absent from the")
-console.log("      decode entirely and asserted separately above.")
+console.log("      open is audio.md §9.3's DAT and ATT - state-file FIELDS with no")
+console.log("      signal of their own; stale counts PAN alongside them.")
+console.log("")
+console.log("      ⚠ TWO MORE MISSING FEATURES HAVE NO SIGNAL AT ALL, and no census")
+console.log("      of this shape can see them: graphics.md §13's +$15 VDATA, absent")
+console.log("      from the decode and asserted separately above, and audio.md")
+console.log("      §6.1's volume ×4, a datapath that was never built (§16 item 40).")
+console.log("      FOUR missing features, not two.")
 
 process.exit(failures === 0 ? 0 : 1)

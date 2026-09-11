@@ -31,11 +31,15 @@ const aseqCells: Cell[] = [
   { pin: 0, name: "CCLK", assertedLow: false, s0: 1, registered: false, terms: ["S2 & S1 & S0"] },
   /* Slots 0-3 run unconditionally every colour clock, which is what makes the
    * design jitter-free: a channel's sample transition lands on its true Paula
-   * boundary, never on whenever the sequencer got round to it. */
-  { pin: 0, name: "CHANSLOT", assertedLow: false, s0: 1, registered: false, terms: ["!S2"] },
-  { pin: 0, name: "TMRSLOT", assertedLow: false, s0: 1, registered: false, terms: ["S2 & !S1 & !S0"] },
-  { pin: 0, name: "HOSTSLOT", assertedLow: false, s0: 1, registered: false, terms: ["S2 & !S1 & S0"] },
-  { pin: 0, name: "DEFSLOT", assertedLow: false, s0: 1, registered: false, terms: ["S2 & S1"] },
+   * boundary, never on whenever the sequencer got round to it.
+   *
+   * ⛔ THE FOUR SLOT DECODES WERE HERE AND NOTHING READ THEM - deleted
+   * 2026-09-10, audio.md 16 item 42. CHANSLOT, TMRSLOT, HOSTSLOT and DEFSLOT
+   * decoded S2:S0 into the five phases; the deferred-work queue moved to U2 on
+   * 2026-09-09 and audio.cpld.ts records what went with it - "U2 takes the
+   * three counter bits and decodes the five phases ITSELF, three pins instead
+   * of five". The pins went and the cells stayed, on a card where U2 is at 128
+   * of 128 and U1 at 62 of 64 I/O. check:reach is what noticed. */
   /* ⚠ The deferred-work queue moved to U2 on 2026-09-09 - it is the work
    * scheduler of 10.2.3 and it needs the microprogram beside it. */
 ]
@@ -55,7 +59,9 @@ export const aseqDesign: Design = {
 const reg = (n: number) =>
   `SEL & ${n & 8 ? "" : "!"}A3 & ${n & 4 ? "" : "!"}A2 & ${n & 2 ? "" : "!"}A1 & ${n & 1 ? "" : "!"}A0`
 const adecCells: Cell[] = [
-  { pin: 0, name: "WAIDX", assertedLow: false, s0: 1, registered: false, terms: [`${reg(0x0)} & !RW`] },
+  /* ⛔ WAIDX WENT THE SAME WAY - deleted 2026-09-10. "A host write to AIDX",
+   * decoded here and read by nothing; U2 decodes it itself as ISAIDX, and that
+   * is the copy 9.3's prefetch rule is built on. */
   { pin: 0, name: "WDMACON", assertedLow: false, s0: 1, registered: false, terms: [`${reg(0x2)} & !RW`] },
   { pin: 0, name: "WINTENA", assertedLow: false, s0: 1, registered: false, terms: [`${reg(0x3)} & !RW`] },
   { pin: 0, name: "WINTREQ", assertedLow: false, s0: 1, registered: false, terms: [`${reg(0x4)} & !RW`] },
@@ -99,7 +105,18 @@ const admatCells: Cell[] = [
   ...PRE.map((name, i) => ({
     pin: 0, name, assertedLow: false, s0: 1 as const, registered: true, terms: preCount[i],
   })),
-  { pin: 0, name: "CIACLK", assertedLow: false, s0: 1, registered: false, terms: ["CCLK & P2"] },
+  /* ⛔ CIACLK WAS HERE, ON A PIN, AND NOTHING TOOK IT - deleted 2026-09-10.
+   *
+   * 8.2's tempo clock is colour clock / 5, and the timer is COUNTED BY THE
+   * MICROCODE against the shared adder - "a ÷5 prescale driving a 16-bit count
+   * that the shared adder increments every five". So this output was the
+   * prescale's edge presented to a card that does its counting elsewhere.
+   *
+   * ⭐ AND THE PIN IS THE ONE 6.1's ×4 NEEDS. U1 was at 62 of 64 I/O with the
+   * VOL4 select of 16 item 40 still to place; deleting an output nothing takes
+   * is where that pin comes from. CCLK stays - 4.1 says a scope wants the
+   * colour clock, and that sentence is why it is a pin at all; there was never
+   * an equivalent one for this. */
 ]
 const admatPins = place(admatCells, [14, 15, 16, 17, 18, 19, 20, 21, 22, 23])
 export const admatDesign: Design = {

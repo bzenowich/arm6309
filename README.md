@@ -107,13 +107,19 @@ count, and a measurement in place of an estimate wherever one can be taken.
 >
 > | | |
 > |---|---|
-> | ⛔ **5 promised and not built** | audio: §6.1's volume ×4, §11.2's 8-channel mode, `DAT`'s CPU-fed samples, `ATT`'s attach modulation. Video: §11's readable VRAM, promised at `+$15` and **absent from the decode entirely** |
-> | ⚠ **5 withdrawn and still in the map** | audio `ACTRL` b2 (NTSC — there is *one* crystal), b5 and `PAN` (panning, withdrawn); video `CHAR` and `FONTBASE` (§6.4.3's Variant B, dropped — and `FONTBASE`'s load strobe is still built) |
-> | ⚠ **8 macrocells of dead logic** | four slot decodes and a host strobe on U1, two duplicate decodes on U2, and §8.2's ÷5 clock on a pin nothing takes. **None is a broken feature** — the features work, which is how they are known to be redundant |
+> | ⛔ **4 promised and not built** | audio: §6.1's volume ×4, `DAT`'s CPU-fed samples, `ATT`'s attach modulation. Video: §11's readable VRAM, promised at `+$15` and **absent from the decode entirely**. ⚠ Two of the four have no register bit behind them, so no census of this shape can see them |
+> | ⭐ **6 invented features retired** | audio `ACTRL` b2 (NTSC — §4.1 takes **one** crystal), b3 (raw 256-level volume — `paula.md`'s `AUDxVOL` is 0–64 and the word "255" appears nowhere in it), b4 (8 channels — Paula has four), b5 and `PAN` (panning); video `CHAR` and `FONTBASE` (§6.4.3's Variant B). **Every one failed the same test, and §11's own title is the test:** *what does this card do that Paula cannot* |
+> | ⭐ **8 macrocells of dead logic deleted** | six on U1, two on U2. **None was a broken feature** — the features work, which is how they were known to be redundant — and **two checks were their only consumers**, which is why they survived. A check is not a consumer |
 > | ⚠ **12 whose consumer is a board part the model lacks** | §5.2.1's eight grants among them. `check:netlist` is what should close that and `graphics.md` §19 item 34 is why it cannot yet |
 >
 > ⚠ **The list is checked in both directions**: an entry that stops being unread
-> fails too, so a feature that gets built has to be taken off it.
+> fails too, so a feature that gets built has to be taken off it — which is what
+> forced the deletions above to be recorded rather than merely made.
+>
+> **What the retirements bought, measured:** U1 **62 → 61 I/O**, and that pin is
+> the one §6.1's ×4 select needs; `vaddr` **63 → 59 I/O**, on the video part §19
+> item 33 is blocked on. ⚠ **U2 gained nothing measurable** — two cells deleted
+> and the fitter still reports 128 of 128, because it packs the array.
 
 > ⛔ **The audio card played a module the same day, and the volume converter was
 > being fed the SAMPLE byte.** After the first volume change of a module, on every

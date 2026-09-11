@@ -198,11 +198,18 @@ module audio_tb;
     $display("");
     $display("The CIA-B tempo reference - audio.md 8.2: colourclock / 5, exactly");
     $display("");
+    /* ⚠ MEASURED ON THE DIVIDER, NOT ON A PIN - changed 2026-09-10, audio.md
+     * §16 item 42. `CIACLK` used to be an output of U1 and this was its only
+     * consumer anywhere: the timer is counted by U2's microcode against the
+     * shared adder, so nothing on the card ever took the pin, and a check is
+     * not a consumer. The pin went; §8.2's claim is about the ÷5 DIVIDER and
+     * the divider is still here, so the claim is made on `CCLK & P2` - which
+     * is exactly what the deleted cell computed. */
     cclks = 0; cias = 0;
     for (i = 0; i < 8 * 5 * 200; i++) begin
       @(posedge SLOTCLK); #0;
       if (card.CCLK) cclks++;
-      if (card.CIACLK) cias++;
+      if (card.CCLK && card.u1.P2) cias++;
     end
     ok(cclks == 1000 && cias == 200,
        $sformatf("%0d colour clocks produce %0d CIA ticks - the ratio is exactly 5", cclks, cias));

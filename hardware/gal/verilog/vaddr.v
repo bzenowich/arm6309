@@ -147,7 +147,6 @@ module vaddr (
     output wire LDB,
     output wire LDC,
     output wire LDTB,
-    output wire LDFB,
     output wire LDMB,
     output wire WINC,
     output wire FBA2,
@@ -390,9 +389,6 @@ module vaddr (
   // buried
   assign LDTB =
          (WSTB & RA4 & ~RA3 & RA2 & RA1 & RA0);
-  // buried
-  assign LDFB =
-         (WSTB & RA4 & RA3 & ~RA2 & ~RA1 & ~RA0);
   // buried
   assign LDMB =
          (WSTB & RA4 & RA3 & ~RA2 & ~RA1 & RA0);

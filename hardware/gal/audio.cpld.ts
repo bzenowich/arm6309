@@ -248,7 +248,10 @@ const EXTERNAL = new Set([
   "SEL",
   "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7",
   "DMAEN0", "DMAEN1", "DMAEN2", "DMAEN3",
-  "CIACLK", "FIRQ", "NEQL", "NEQH",
+  /* ⛔ CIACLK left this list on 2026-09-10 with the cell - audio.md 16 item 42.
+   * It was a pin carrying 8.2's ÷5 prescale to a card that counts the timer in
+   * microcode, and the pin is where 6.1's ×4 select goes. */
+  "FIRQ", "NEQL", "NEQH",
   "SD0", "SD1", "SD2", "SD3", "SD4", "SD5", "SD6", "SD7",
   "SD8", "SD9", "SD10", "SD11", "SD12", "SD13", "SD14", "SD15",
   "CTRL0", "CTRL1", "CTRL2", "CTRL3", "CTRL4", "CTRL5", "CTRL6", "CTRL7",

@@ -161,13 +161,21 @@ static void test_volume_law(void)
     set_chan(&c, 0, 127, 63);
     check(card_chan_out(&c, 0) < 127 * 255, "volume: 64 is louder than 63 (the 7th bit exists)");
 
-    /* ACTRL b3 is where a non-Paula volume curve lives now: the host writes the
-     * attenuator code itself, and the card stops shifting. */
-    card_write(&c, A_ACTRL, ACTRL_ENABLE | ACTRL_RAWVOL);
-    set_chan(&c, 0, 127, 255);
-    check_eq(card_chan_out(&c, 0), 127 * 255, "raw volume: the code passes through");
+    /* ⛔ THIS USED TO ASSERT RAW MODE, and raw mode is retired - audio.md §16
+     * item 42, 2026-09-10. `ACTRL` b3 was "VOL is an 8-bit attenuator code" and
+     * §11's own question is what this card does that Paula cannot: Paula's
+     * AUDxVOL is 0-64 and nothing else, and the bit reached no cell on either
+     * CPLD, so the card never had the mode the model was implementing.
+     *
+     * What replaces it is the claim that the ×4 is UNCONDITIONAL - writing b3
+     * changes nothing at all, which is the regression this retirement needs. */
+    card_write(&c, A_ACTRL, ACTRL_ENABLE | ACTRL_RSVD3);
     set_chan(&c, 0, 127, 64);
-    check_eq(card_chan_out(&c, 0), 127 * 64, "raw volume: no shift applied");
+    check_eq(card_chan_out(&c, 0), 127 * 255,
+             "ACTRL b3 is reserved: VOL 64 is still code 255 with the bit set");
+    set_chan(&c, 0, 127, 16);
+    check_eq(card_chan_out(&c, 0), 127 * 64,
+             "and VOL 16 is still code 64 - the shift does not depend on b3");
 }
 
 static void test_period_is_the_colour_clock(void)

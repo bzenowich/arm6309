@@ -95,7 +95,8 @@ static void set_tempo(mod_player *p)
     /* audio/docs/audio.md §8.2: the timer counts at colourclock/5 — the Amiga's CIA
      * rate — and 1773447 is the numerator, not the clock. Confusing the two
      * detunes every tempo by exactly 2.5x. */
-    long k = (card_colour_clock(p->card) == CARD_CC_NTSC) ? 1789773L : 1773447L;
+    /* One crystal: §4.1, and §16 item 42. 1773447 = colourclock / 2. */
+    long k = 1773447L;
     uint16_t n = (uint16_t)(k / (long)(p->bpm ? p->bpm : 125u));
     w(p, A_TIMER1, (uint8_t)(n >> 8));
     w(p, A_TIMER0, (uint8_t)(n & 0xFFu));
@@ -577,7 +578,7 @@ void mod_start(mod_player *p, mod_song *s, card_t *c)
      * shadow, so the card and the shadow can never disagree and every later
      * E0x is computed from what the card actually holds. ACTRL goes down
      * BEFORE the tempo: the reload set_tempo computes depends on which colour
-     * clock ACTRL_NTSC selected, and DMA is already off, so enabling here is
+     * clock, and DMA is already off, so enabling here is
      * still silent. */
     p->actrl = (uint8_t)(p->actrl | ACTRL_ENABLE | ACTRL_TIMER);
     w(p, A_ACTRL, p->actrl);

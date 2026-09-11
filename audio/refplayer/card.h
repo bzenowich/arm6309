@@ -28,7 +28,11 @@
 /* ---------------------------------------------------------------- clocks -- */
 
 #define CARD_CC_PAL      3546895L   /* colour clock, 28.37516 MHz / 8        */
-#define CARD_CC_NTSC     3579545L   /* colour clock, 28.63636 MHz / 8        */
+/* ⛔ CARD_CC_NTSC IS GONE - 2026-09-10, audio.md §16 item 42. audio.md §4.1
+ * takes ONE crystal, 28.37516 MHz, and rejects the NTSC master at +16 cents;
+ * the card has no second crystal and no divider select, so ACTRL b2 could
+ * never do anything and this model implemented a mode its hardware cannot
+ * enter. That is the trap CLAUDE.md records for mainboard.v, in a constant. */
 #define CARD_CIA_DIV     5          /* tempo timer prescale (audio.md §8.2)  */
 
 /* ------------------------------------------------- direct I/O window §9.2 -- */
@@ -72,7 +76,11 @@ enum {
  *      go away. That is what this model implements.
  *
  * VOL stays 0..64 and the card shifts it left two to make an 8-bit attenuator
- * code (saturating at 255, so the top step is 0.4 % narrow). ACTRL_RAWVOL makes
+ * code (saturating at 255, so the top step is 0.4 % narrow). ⛔ ACTRL b3's raw
+ * mode was RETIRED 2026-09-10 - Paula's AUDxVOL is 0-64 and nothing else, and
+ * §11's own question is what this card does that Paula cannot. The shift is
+ * unconditional now. The paragraph below is kept for the arithmetic; where it
+ * says ACTRL_RAWVOL makes
  * VOL the 8-bit code directly, which is where a non-Paula volume curve now
  * lives: in the host's software, not in the card's SRAM.
  *
@@ -83,8 +91,8 @@ enum {
 enum {
     ACTRL_LED     = 0x01,  /* + 2-pole LED filter (audio.md §7)   */
     ACTRL_BYPASS  = 0x02,  /* bypass all filtering                */
-    ACTRL_NTSC    = 0x04,  /* NTSC colour clock                   */
-    ACTRL_RAWVOL  = 0x08,  /* VOL is a raw 8-bit attenuator code  */
+    ACTRL_RSVD2   = 0x04,  /* was NTSC clock; §4.1 has one crystal */
+    ACTRL_RSVD3   = 0x08,  /* was raw volume; Paula's VOL is 0-64  */
     ACTRL_RSVD4   = 0x10,  /* audio.md §11.2 dropped 2026-09-10   */
     ACTRL_PAN     = 0x20,  /* audio.md §11.1 — not modelled       */
     ACTRL_TIMER   = 0x40,  /* tempo timer runs; 0 stops it        */
@@ -125,7 +133,7 @@ typedef struct {
     uint32_t lc;        /* shadow location, byte address, 19 bits          */
     uint32_t len;       /* shadow length, in words                         */
     uint16_t per;
-    uint8_t  vol;       /* 0..64, or an 8-bit code under ACTRL_RAWVOL      */
+    uint8_t  vol;       /* 0..64, Paula-exact. §6.1's ×4 is the card's    */
     uint8_t  att;
     uint8_t  pan;
 

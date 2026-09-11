@@ -49,7 +49,6 @@ static void usage(void)
       "  --vu FILE         write per-channel output RMS every 10 ms\n"
       "  --rate HZ         output sample rate (default 48000)\n"
       "  --seconds N       stop after N seconds (default: one pass of the song)\n"
-      "  --ntsc            use the 3.579545 MHz colour clock (audio.md §4.1)\n"
       "  --led             start with the LED filter on (audio.md §7)\n"
       "  --bypass          bypass all filtering -- WRONG for modules, see §7\n"
       "  --ram KB          populated sample RAM (default 512, max 512)\n"
@@ -60,7 +59,7 @@ int main(int argc, char **argv)
 {
     const char *path = NULL, *wavpath = NULL, *tracepath = NULL, *rowpath = NULL, *vupath = NULL;
     const char *srampath = NULL;
-    int rate = 48000, ntsc = 0, led = 0, bypass = 0, info_only = 0;
+    int rate = 48000, led = 0, bypass = 0, info_only = 0;
     double seconds = 0.0;
     unsigned long ramkb = 512;   /* audio.md 5: one AS6C4008, all of it */
 
@@ -87,7 +86,6 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--rate")    && i + 1 < argc) { rate = atoi(argv[++i]); }
         else if (!strcmp(a, "--seconds") && i + 1 < argc) { seconds = atof(argv[++i]); }
         else if (!strcmp(a, "--ram")     && i + 1 < argc) { ramkb = strtoul(argv[++i], NULL, 10); }
-        else if (!strcmp(a, "--ntsc"))   { ntsc = 1; }
         else if (!strcmp(a, "--led"))    { led = 1; }
         else if (!strcmp(a, "--bypass")) { bypass = 1; }
         else if (!strcmp(a, "--info"))   { info_only = 1; }
@@ -104,7 +102,6 @@ int main(int argc, char **argv)
     if (!sram) { fprintf(stderr, "refplayer: out of memory\n"); return 1; }
 
     card_reset(&card, sram, (uint32_t)(ramkb * 1024u));
-    if (ntsc) { card_write(&card, A_ACTRL, ACTRL_NTSC); }
     cc = card_colour_clock(&card);
 
     if (mod_load(&song, &card, path, err, sizeof err) != 0) {
@@ -117,7 +114,7 @@ int main(int argc, char **argv)
     printf("%-14s %lu bytes of %lu KB card RAM%s\n", "samples:",
            (unsigned long)song.sample_bytes, ramkb,
            song.truncated ? "  (file was truncated; clamped, §4.6)" : "");
-    printf("%-14s %ld Hz (%s)\n", "colour clock:", cc, ntsc ? "NTSC" : "PAL");
+    printf("%-14s %ld Hz (PAL - audio.md §4.1 has one crystal)\n", "colour clock:", cc);
     /* --sram: the sample RAM as the loader left it.
      *
      * ⚠ WHY THIS EXISTS AND WHAT IT IS NOT. hardware/gal/verilog/modplay_tb.sv
@@ -179,8 +176,7 @@ int main(int argc, char **argv)
         if (!vu) { fprintf(stderr, "refplayer: cannot write %s\n", vupath); goto out_render; }
     }
 
-    player.actrl = (uint8_t)((ntsc ? ACTRL_NTSC : 0)
-                           | (led ? ACTRL_LED : 0)
+    player.actrl = (uint8_t)((led ? ACTRL_LED : 0)
                            | (bypass ? ACTRL_BYPASS : 0));
     mod_start(&player, &song, &card);
 

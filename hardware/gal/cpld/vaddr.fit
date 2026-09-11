@@ -1,7 +1,7 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Wed Sep 09 16:17:54 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Thu Sep 10 20:23:24 2026
 
 
-fit1508 vaddr.tt2 -device P1508C84 -preassign ignore -JTAG on
+fit1508 vaddr.tt2 -device P1508C84 -preassign ignore -JTAG off
 
 
 ****** Initial fitting strategy and property ******
@@ -38,7 +38,7 @@ fit1508 vaddr.tt2 -device P1508C84 -preassign ignore -JTAG on
  Power down pin 1 = OFF
  Power down pin 2 = OFF
  power_reset = OFF
- JTAG = ON
+ JTAG = OFF
  TDI pullup = OFF
  TMS pullup = OFF
  MC_power = OFF
@@ -48,9 +48,6 @@ fit1508 vaddr.tt2 -device P1508C84 -preassign ignore -JTAG on
  ITD2 = ON
  Fast_inlatch = off
  *******************************
-Info: vaddr uses 95% of the pins available in device PLCC84
-  If you wish to have more pins available for future logic changes
-  Atmel  recommends using a larger device
 ---------------------------------------------------------
  Fitter_Pass 1, Preassign = IGNORE, LOGIC_DOUBLING : OFF 
  ... 
@@ -79,106 +76,106 @@ Attempt to place floating signals ...
 WA2 is placed at feedback node 601 (MC 1)
 WA5 is placed at feedback node 602 (MC 2)
 XXL_577 is placed at foldback expander node 302 (MC 2)
-RA2 is placed at pin 12 (MC 3)
+RA3 is placed at pin 12 (MC 3)
 TB1 is placed at feedback node 603 (MC 3)
 XXL_568 is placed at foldback expander node 303 (MC 3)
 WA7 is placed at feedback node 604 (MC 4)
 XXL_506 is placed at foldback expander node 304 (MC 4)
-RA3 is placed at pin 11 (MC 5)
+RA4 is placed at pin 11 (MC 5)
 MB1 is placed at feedback node 605 (MC 5)
 XXL_498 is placed at foldback expander node 305 (MC 5)
-RA4 is placed at pin 10 (MC 6)
+WSTB is placed at pin 10 (MC 6)
 XXL_493 is placed at feedback node 606 (MC 6)
 XXL_497 is placed at foldback expander node 306 (MC 6)
 WA3 is placed at feedback node 607 (MC 7)
 XXL_495 is placed at foldback expander node 307 (MC 7)
-WSTB is placed at pin 9 (MC 8)
+D0 is placed at pin 9 (MC 8)
 XXL_547 is placed at feedback node 608 (MC 8)
 XXL_489 is placed at foldback expander node 308 (MC 8)
 WA6 is placed at feedback node 609 (MC 9)
 XXL_485 is placed at foldback expander node 309 (MC 9)
 WA8 is placed at feedback node 610 (MC 10)
 XXL_479 is placed at foldback expander node 310 (MC 10)
-D0 is placed at pin 8 (MC 11)
+D4 is placed at pin 8 (MC 11)
 HS9 is placed at feedback node 611 (MC 11)
 XXL_477 is placed at foldback expander node 311 (MC 11)
-D4 is placed at pin 6 (MC 13)
+SRC0 is placed at pin 6 (MC 13)
 WA9 is placed at feedback node 613 (MC 13)
 WA0 is placed at pin 5 (MC 14)
 XXL_475 is placed at foldback expander node 314 (MC 14)
 WA4 is placed at feedback node 615 (MC 15)
 WA1 is placed at pin 4 (MC 16)
 XXL_474 is placed at foldback expander node 316 (MC 16)
-SRC0 is placed at pin 22 (MC 17)
+SRC1 is placed at pin 22 (MC 17)
 VS2 is placed at feedback node 617 (MC 17)
 WA11 is placed at feedback node 618 (MC 18)
-SRC1 is placed at pin 21 (MC 19)
+ROWADV is placed at pin 21 (MC 19)
 TB2 is placed at feedback node 619 (MC 19)
 WA12 is placed at feedback node 620 (MC 20)
-D1 is placed at pin 20 (MC 21)
+D6 is placed at pin 20 (MC 21)
 MB2 is placed at feedback node 621 (MC 21)
 XXL_578 is placed at foldback expander node 321 (MC 21)
 WA15 is placed at feedback node 622 (MC 22)
 XXL_573 is placed at foldback expander node 322 (MC 22)
 WA13 is placed at feedback node 623 (MC 23)
 XXL_528 is placed at foldback expander node 323 (MC 23)
-D6 is placed at pin 18 (MC 24)
+D3 is placed at pin 18 (MC 24)
 HS4 is placed at feedback node 624 (MC 24)
 XXL_489 is placed at foldback expander node 324 (MC 24)
-D3 is placed at pin 17 (MC 25)
+D7 is placed at pin 17 (MC 25)
 HS5 is placed at feedback node 625 (MC 25)
 XXL_485 is placed at foldback expander node 325 (MC 25)
 WA16 is placed at feedback node 626 (MC 26)
 XXL_483 is placed at foldback expander node 326 (MC 26)
-D7 is placed at pin 16 (MC 27)
+D5 is placed at pin 16 (MC 27)
 HS2 is placed at feedback node 627 (MC 27)
 XXL_482 is placed at foldback expander node 327 (MC 27)
 WA14 is placed at feedback node 628 (MC 28)
-D5 is placed at pin 15 (MC 29)
+PB7 is placed at pin 15 (MC 29)
 WA10 is placed at feedback node 629 (MC 29)
 XXL_476 is placed at foldback expander node 329 (MC 29)
 WA17 is placed at feedback node 630 (MC 30)
 XXL_475 is placed at foldback expander node 331 (MC 31)
-TDI is placed at pin 14 (MC 32)
+MCADV is placed at pin 14 (MC 32)
 WA18 is placed at feedback node 632 (MC 32)
 SA12 is placed at feedback node 633 (MC 33)
 SA15 is placed at feedback node 634 (MC 34)
-HLOAD is placed at pin 31 (MC 35)
+CELLTICK is placed at pin 31 (MC 35)
 VS1 is placed at feedback node 635 (MC 35)
 SA13 is placed at feedback node 636 (MC 36)
-MCADV is placed at pin 30 (MC 37)
+D2 is placed at pin 30 (MC 37)
 MB0 is placed at feedback node 637 (MC 37)
-CELLTICK is placed at pin 29 (MC 38)
+LWHSH is placed at pin 29 (MC 38)
 SA10 is placed at feedback node 638 (MC 38)
 SA16 is placed at feedback node 639 (MC 39)
-D2 is placed at pin 28 (MC 40)
+PB1 is placed at pin 28 (MC 40)
 SA11 is placed at feedback node 640 (MC 40)
 SA14 is placed at feedback node 641 (MC 41)
-SA17 is placed at feedback node 642 (MC 42)
-RA0 is placed at pin 27 (MC 43)
-XXL_579 is placed at foldback expander node 343 (MC 43)
-VS8 is placed at feedback node 644 (MC 44)
-XXL_574 is placed at foldback expander node 344 (MC 44)
-FBA11 is placed at pin 25 (MC 45)
-XXL_529 is placed at foldback expander node 345 (MC 45)
-FBA10 is placed at pin 24 (MC 46)
+XXL_579 is placed at foldback expander node 342 (MC 42)
+WROWADV is placed at pin 27 (MC 43)
+VS8 is placed at feedback node 643 (MC 43)
+XXL_574 is placed at foldback expander node 343 (MC 43)
+XXL_529 is placed at foldback expander node 344 (MC 44)
+LWHSL is placed at pin 25 (MC 45)
+SA18 is placed at feedback node 645 (MC 45)
+FBA11 is placed at pin 24 (MC 46)
 XXL_485 is placed at foldback expander node 346 (MC 46)
-XXL_483 is placed at foldback expander node 347 (MC 47)
-TMS is placed at pin 23 (MC 48)
-SA18 is placed at feedback node 648 (MC 48)
-LWHSH is placed at pin 41 (MC 49)
+SA17 is placed at feedback node 647 (MC 47)
+FBA10 is placed at pin 23 (MC 48)
+XXL_483 is placed at foldback expander node 348 (MC 48)
+PB2 is placed at pin 41 (MC 49)
 MC2 is placed at feedback node 649 (MC 49)
 SA7 is placed at feedback node 650 (MC 50)
-PB1 is placed at pin 40 (MC 51)
+PB5 is placed at pin 40 (MC 51)
 MC5 is placed at feedback node 651 (MC 51)
 MC3 is placed at feedback node 652 (MC 52)
-WROWADV is placed at pin 39 (MC 53)
+PB4 is placed at pin 39 (MC 53)
 SA2 is placed at feedback node 653 (MC 53)
 MC6 is placed at feedback node 654 (MC 54)
 SA5 is placed at feedback node 655 (MC 55)
-LWHSL is placed at pin 37 (MC 56)
+HLOAD is placed at pin 37 (MC 56)
 SA3 is placed at feedback node 656 (MC 56)
-PB2 is placed at pin 36 (MC 57)
+PB6 is placed at pin 36 (MC 57)
 SA4 is placed at feedback node 657 (MC 57)
 XXL_580 is placed at foldback expander node 357 (MC 57)
 SA8 is placed at feedback node 658 (MC 58)
@@ -192,68 +189,64 @@ SA6 is placed at feedback node 662 (MC 62)
 SA9 is placed at feedback node 663 (MC 63)
 FBA4 is placed at pin 33 (MC 64)
 XXL_530 is placed at foldback expander node 364 (MC 64)
-PB5 is placed at pin 44 (MC 65)
+PB3 is placed at pin 44 (MC 65)
 VS0 is placed at feedback node 665 (MC 65)
 TB0 is placed at feedback node 666 (MC 66)
-PB4 is placed at pin 45 (MC 67)
+PB0 is placed at pin 45 (MC 67)
 VS5 is placed at feedback node 667 (MC 67)
 MB3 is placed at feedback node 668 (MC 68)
-PB7 is placed at pin 46 (MC 69)
+MAPLD is placed at pin 46 (MC 69)
 VS6 is placed at feedback node 669 (MC 69)
 MB5 is placed at feedback node 670 (MC 70)
 VS7 is placed at feedback node 671 (MC 71)
-PB6 is placed at pin 48 (MC 72)
+LADV is placed at pin 48 (MC 72)
 MB6 is placed at feedback node 672 (MC 72)
-PB3 is placed at pin 49 (MC 73)
+RETIRE is placed at pin 49 (MC 73)
 TB3 is placed at feedback node 673 (MC 73)
 HS8 is placed at feedback node 674 (MC 74)
-PB0 is placed at pin 50 (MC 75)
+VBLANK is placed at pin 50 (MC 75)
 VS3 is placed at feedback node 675 (MC 75)
 HS3 is placed at feedback node 676 (MC 76)
 XXL_495 is placed at foldback expander node 376 (MC 76)
-MAPLD is placed at pin 51 (MC 77)
+D1 is placed at pin 51 (MC 77)
 MB4 is placed at feedback node 677 (MC 77)
 XXL_489 is placed at foldback expander node 377 (MC 77)
 HS6 is placed at feedback node 678 (MC 78)
 XXL_485 is placed at foldback expander node 378 (MC 78)
 HS7 is placed at feedback node 679 (MC 79)
 XXL_483 is placed at foldback expander node 379 (MC 79)
-LADV is placed at pin 52 (MC 80)
+FETCH is placed at pin 52 (MC 80)
 TB4 is placed at feedback node 680 (MC 80)
 XXL_482 is placed at foldback expander node 380 (MC 80)
-RA1 is placed at pin 54 (MC 83)
-FBA14 is placed at pin 55 (MC 85)
-FBA8 is placed at pin 56 (MC 86)
-FBA13 is placed at pin 57 (MC 88)
-FBA6 is placed at pin 58 (MC 91)
-FBA5 is placed at pin 60 (MC 93)
-FBA9 is placed at pin 61 (MC 94)
-MAPQ0 is placed at feedback node 695 (MC 95)
-TCK is placed at pin 62 (MC 96)
-VS4 is placed at feedback node 696 (MC 96)
+RA0 is placed at pin 54 (MC 83)
+RA1 is placed at pin 55 (MC 85)
+FBA14 is placed at pin 56 (MC 86)
+FBA8 is placed at pin 57 (MC 88)
+FBA13 is placed at pin 58 (MC 91)
+MAPQ0 is placed at feedback node 692 (MC 92)
+FBA6 is placed at pin 60 (MC 93)
+FBA5 is placed at pin 61 (MC 94)
+VS4 is placed at feedback node 695 (MC 95)
+FBA9 is placed at pin 62 (MC 96)
 XXL_483 is placed at foldback expander node 396 (MC 96)
-MAPA1 is placed at pin 63 (MC 97)
-FBA2 is placed at pin 64 (MC 99)
-FBA18 is placed at pin 65 (MC 101)
-FBA15 is placed at pin 67 (MC 104)
-FBA16 is placed at pin 68 (MC 105)
-FBA17 is placed at pin 69 (MC 107)
-FBA12 is placed at pin 70 (MC 109)
-MAP7 is placed at feedback node 711 (MC 111)
-TDO is placed at pin 71 (MC 112)
-MAPQ6 is placed at feedback node 712 (MC 112)
+RA2 is placed at pin 63 (MC 97)
+MAPA1 is placed at pin 64 (MC 99)
+FBA2 is placed at pin 65 (MC 101)
+FBA18 is placed at pin 67 (MC 104)
+FBA15 is placed at pin 68 (MC 105)
+FBA16 is placed at pin 69 (MC 107)
+FBA17 is placed at pin 70 (MC 109)
+MAP7 is placed at feedback node 710 (MC 110)
+MAPQ6 is placed at feedback node 711 (MC 111)
+FBA12 is placed at pin 71 (MC 112)
 XXL_581 is placed at foldback expander node 412 (MC 112)
 MAPQ2 is placed at feedback node 713 (MC 113)
 MAP5 is placed at feedback node 714 (MC 114)
-RETIRE is placed at pin 73 (MC 115)
 MAPQ3 is placed at feedback node 715 (MC 115)
 MAP2 is placed at feedback node 716 (MC 116)
-VBLANK is placed at pin 74 (MC 117)
 MAPQ5 is placed at feedback node 717 (MC 117)
-ROWADV is placed at pin 75 (MC 118)
 MAPQ7 is placed at feedback node 718 (MC 118)
 MAP6 is placed at feedback node 719 (MC 119)
-FETCH is placed at pin 76 (MC 120)
 MAPQ4 is placed at feedback node 720 (MC 120)
 MAP4 is placed at feedback node 721 (MC 121)
 MAP3 is placed at feedback node 722 (MC 122)
@@ -268,46 +261,45 @@ MAPA0 is placed at pin 81 (MC 128)
                                                                                     
                                                                                     
                                                                                     
-                                             D               R                      
-                                          R  O   M         F O                      
-                          W               E  T   A         E W                      
-                     R R  S   G   W W V   S  C G P R R V   T A                      
-                     A A  T D N D A A C   E  L N A P P C   C D                      
-                     3 4  B 0 D 4 0 1 C   T  K D 0 0 1 C   H V                      
+                                             D                                      
+                                          R  O   M                                  
+                       W        S         E  T   A                                  
+                     R S      G R W W V   S  C G P R R V                            
+                     A T  D D N C A A C   E  L N A P P C                            
+                     4 B  0 4 D 0 0 1 C   T  K D 0 0 1 C                            
                     -------------------------------------------                     
                    / 11   9   7   5   3   1  83  81  79  77  75 \                  
                   /    10   8   6   4   2  84  82  80  78  76    \                 
-             RA2 | 12                    (*)                   74 | VBLANK          
-             VCC | 13                                          73 | RETIRE          
-             TDI | 14                                          72 | GND             
-              D5 | 15                                          71 | TDO             
-              D7 | 16                                          70 | FBA12           
-              D3 | 17                                          69 | FBA17           
-              D6 | 18                                          68 | FBA16           
-             GND | 19                                          67 | FBA15           
-              D1 | 20                                          66 | VCC             
-            SRC1 | 21                                          65 | FBA18           
-            SRC0 | 22                 ATF1508                  64 | FBA2            
-             TMS | 23               84-Lead PLCC               63 | MAPA1           
-           FBA10 | 24                                          62 | TCK             
-           FBA11 | 25                                          61 | FBA9            
-             VCC | 26                                          60 | FBA5            
-             RA0 | 27                                          59 | GND             
-              D2 | 28                                          58 | FBA6            
-        CELLTICK | 29                                          57 | FBA13           
-           MCADV | 30                                          56 | FBA8            
-           HLOAD | 31                                          55 | FBA14           
-             GND | 32                                          54 | RA1             
+             RA3 | 12                    (*)                   74 |                 
+             VCC | 13                                          73 |                 
+           MCADV | 14                                          72 | GND             
+             PB7 | 15                                          71 | FBA12           
+              D5 | 16                                          70 | FBA17           
+              D7 | 17                                          69 | FBA16           
+              D3 | 18                                          68 | FBA15           
+             GND | 19                                          67 | FBA18           
+              D6 | 20                                          66 | VCC             
+          ROWADV | 21                                          65 | FBA2            
+            SRC1 | 22                 ATF1508                  64 | MAPA1           
+           FBA10 | 23               84-Lead PLCC               63 | RA2             
+           FBA11 | 24                                          62 | FBA9            
+           LWHSL | 25                                          61 | FBA5            
+             VCC | 26                                          60 | FBA6            
+         WROWADV | 27                                          59 | GND             
+             PB1 | 28                                          58 | FBA13           
+           LWHSH | 29                                          57 | FBA8            
+              D2 | 30                                          56 | FBA14           
+        CELLTICK | 31                                          55 | RA1             
+             GND | 32                                          54 | RA0             
                   \     34  36  38  40  42  44  46  48  50  52   /                 
                    \  33  35  37  39  41  43  45  47  49  51  53/                  
               	    --------------------------------------------                     
-                      F F F P L V W P L G V P P P G P P P M L V                     
-                      B B B B W C R B W N C B B B N B B B A A C                     
-                      A A A 2 H C O 1 H D C 5 4 7 D 6 3 0 P D C                     
-                      4 7 3   S   W   S                   L V                       
-                              L   A   H                   D                         
-                                  D                                                 
-                                  V                                                 
+                      F F F P H V P P P G V P P M G L R V D F V                     
+                      B B B B L C B B B N C B B A N A E B 1 E C                     
+                      A A A 6 O C 4 5 2 D C 3 0 P D D T L   T C                     
+                      4 7 3   A                 L   V I A   C                       
+                              D                 D     R N   H                       
+                                                      E K                           
 
 
 
@@ -315,245 +307,243 @@ VCC = Supply Voltage pin which must be connected to (5.0V or 3.0V)
 
 GND = GND pin which must be connected to ground
 
-TMS,TDI,TDO,TDI = JTAG pins which must reserved for the JTAG interface
-
 NC = Unused I/O pins which must be unconnected on the board
 
 Universal-Interconnect-Multiplexer assignments
 ------------------------------------------------
 FanIn assignment for block A [35]
 {
-D7,D6,D4,D5,D1,D0,D2,D3,
+D2,D5,D0,D4,D3,D6,D1,D7,
 HS9,
-LWHSH,LADV,
+LADV,LWHSH,
 MB1,
 PB1,
-RA0,RA1,RP1,RA2,RA4,RP0,RA3,RETIRE,
+RP1,RA3,RA4,RETIRE,RA0,RA2,RP0,RA1,
 TB1,
-WA4,WA0,WA1,WA6,WA3,WSTB,WA2,WA5,WA9,WA7,WA8,
+WA4,WA0,WA1,WA6,WA3,WA2,WSTB,WA7,WA5,WA9,WA8,
 XXL_493,XXL_547,
 }
 Multiplexer assignment for block A
-RA0			(MC18	P)   : MUX 0		Ref (C43p)
-RA1			(MC19	P)   : MUX 1		Ref (F83p)
-D7			(MC29	P)   : MUX 2		Ref (B27p)
-D6			(MC27	P)   : MUX 3		Ref (B24p)
+D2			(MC27	P)   : MUX 1		Ref (C37p)
+D5			(MC26	P)   : MUX 2		Ref (B27p)
+D0			(MC21	P)   : MUX 3		Ref (A8p)
 RP1			(MC16	P)   : MUX 4		Ref (H125p)
 WA4			(MC14	FB)  : MUX 5		Ref (A15fb)
-D4			(MC25	P)   : MUX 6		Ref (A13p)
-RA2			(MC20	P)   : MUX 7		Ref (A3p)
+D4			(MC22	P)   : MUX 6		Ref (A11p)
+RA3			(MC18	P)   : MUX 7		Ref (A3p)
 WA0			(MC13	P)   : MUX 8		Ref (A14p)
-RA4			(MC22	P)   : MUX 9		Ref (A6p)
+D3			(MC24	P)   : MUX 9		Ref (B24p)
 WA1			(MC15	P)   : MUX 10		Ref (A16p)
-WA6			(MC9	FB)  : MUX 11		Ref (A9fb)
+D6			(MC23	P)   : MUX 11		Ref (B21p)
 XXL_493			(MC6	FB)  : MUX 12		Ref (A6fb)
-PB1			(MC33	P)   : MUX 13		Ref (D51p)
-D5			(MC30	P)   : MUX 14		Ref (B29p)
-LWHSH			(MC32	P)   : MUX 15		Ref (D49p)
-RP0			(MC17	P)   : MUX 16		Ref (H126p)
-D1			(MC26	P)   : MUX 17		Ref (B21p)
-XXL_547			(MC8	FB)  : MUX 18		Ref (A8fb)
-RA3			(MC21	P)   : MUX 19		Ref (A5p)
-WA3			(MC7	FB)  : MUX 20		Ref (A7fb)
-WSTB			(MC23	P)   : MUX 21		Ref (A8p)
-LADV			(MC34	P)   : MUX 22		Ref (E80p)
-RETIRE			(MC35	P)   : MUX 23		Ref (H115p)
-D0			(MC24	P)   : MUX 24		Ref (A11p)
-HS9			(MC11	FB)  : MUX 25		Ref (A11fb)
+RA4			(MC19	P)   : MUX 13		Ref (A5p)
+RETIRE			(MC31	P)   : MUX 14		Ref (E73p)
+WA6			(MC9	FB)  : MUX 15		Ref (A9fb)
+XXL_547			(MC8	FB)  : MUX 16		Ref (A8fb)
+D1			(MC32	P)   : MUX 18		Ref (E77p)
+LADV			(MC30	P)   : MUX 19		Ref (E72p)
+RA0			(MC33	P)   : MUX 21		Ref (F83p)
+WA3			(MC7	FB)  : MUX 22		Ref (A7fb)
+HS9			(MC11	FB)  : MUX 23		Ref (A11fb)
+RA2			(MC35	P)   : MUX 25		Ref (G97p)
 WA2			(MC1	FB)  : MUX 26		Ref (A1fb)
-MB1			(MC5	FB)  : MUX 28		Ref (A5fb)
-D2			(MC31	P)   : MUX 29		Ref (C40p)
-D3			(MC28	P)   : MUX 30		Ref (B25p)
+WSTB			(MC20	P)   : MUX 27		Ref (A6p)
+RP0			(MC17	P)   : MUX 28		Ref (H126p)
+PB1			(MC29	P)   : MUX 29		Ref (C40p)
+D7			(MC25	P)   : MUX 30		Ref (B25p)
+RA1			(MC34	P)   : MUX 31		Ref (F85p)
+WA7			(MC4	FB)  : MUX 32		Ref (A4fb)
 WA5			(MC2	FB)  : MUX 34		Ref (A2fb)
+LWHSH			(MC28	P)   : MUX 35		Ref (C38p)
 TB1			(MC3	FB)  : MUX 36		Ref (A3fb)
 WA9			(MC12	FB)  : MUX 37		Ref (A13fb)
-WA7			(MC4	FB)  : MUX 38		Ref (A4fb)
+MB1			(MC5	FB)  : MUX 38		Ref (A5fb)
 WA8			(MC10	FB)  : MUX 39		Ref (A10fb)
 
 FanIn assignment for block B [34]
 {
-D6,D4,D0,D5,D7,D2,D3,D1,
-HS2,HS4,HS5,
+D5,D0,D4,D3,D6,D1,D2,D7,
+HS4,HS5,HS2,
 LWHSL,
 MB2,
-PB2,PB4,PB5,
-RA0,RA1,RA4,RA3,RA2,
+PB5,PB4,PB2,
+RA4,RA3,RA0,RA1,RA2,
 TB2,
 VS2,
-WA12,WSTB,WA15,WA16,WA11,WA17,WA10,WROWADV,WA14,WA13,WA18,
+WA17,WA15,WROWADV,WA10,WA12,WSTB,WA11,WA16,WA14,WA13,WA18,
 }
 Multiplexer assignment for block B
-RA0			(MC16	P)   : MUX 0		Ref (C43p)
-RA1			(MC17	P)   : MUX 1		Ref (F83p)
-D6			(MC25	P)   : MUX 3		Ref (B24p)
-WA12			(MC4	FB)  : MUX 4		Ref (B20fb)
-HS2			(MC11	FB)  : MUX 5		Ref (B27fb)
-D4			(MC23	P)   : MUX 6		Ref (A13p)
-WSTB			(MC21	P)   : MUX 7		Ref (A8p)
+D5			(MC24	P)   : MUX 0		Ref (B27p)
+RA4			(MC17	P)   : MUX 1		Ref (A5p)
+D0			(MC19	P)   : MUX 3		Ref (A8p)
+WA17			(MC14	FB)  : MUX 5		Ref (B30fb)
+D4			(MC20	P)   : MUX 6		Ref (A11p)
+RA3			(MC16	P)   : MUX 7		Ref (A3p)
 WA15			(MC6	FB)  : MUX 8		Ref (B22fb)
-RA4			(MC20	P)   : MUX 9		Ref (A6p)
-D0			(MC22	P)   : MUX 10		Ref (A11p)
-WA16			(MC10	FB)  : MUX 11		Ref (B26fb)
+D3			(MC22	P)   : MUX 9		Ref (B24p)
+WROWADV			(MC26	P)   : MUX 10		Ref (C43p)
+D6			(MC21	P)   : MUX 11		Ref (B21p)
 HS4			(MC8	FB)  : MUX 12		Ref (B24fb)
-RA3			(MC19	P)   : MUX 13		Ref (A5p)
-WA11			(MC2	FB)  : MUX 14		Ref (B18fb)
-LWHSL			(MC31	P)   : MUX 15		Ref (D56p)
-D5			(MC28	P)   : MUX 16		Ref (B29p)
-RA2			(MC18	P)   : MUX 17		Ref (A3p)
-WA17			(MC14	FB)  : MUX 19		Ref (B30fb)
-D7			(MC27	P)   : MUX 20		Ref (B27p)
-D2			(MC29	P)   : MUX 21		Ref (C40p)
+PB5			(MC29	P)   : MUX 13		Ref (D51p)
+LWHSL			(MC27	P)   : MUX 14		Ref (C45p)
+WA10			(MC13	FB)  : MUX 15		Ref (B29fb)
+D1			(MC31	P)   : MUX 16		Ref (E77p)
+PB4			(MC30	P)   : MUX 17		Ref (D53p)
+D2			(MC25	P)   : MUX 19		Ref (C37p)
+WA12			(MC4	FB)  : MUX 20		Ref (B20fb)
+RA0			(MC32	P)   : MUX 21		Ref (F83p)
 TB2			(MC3	FB)  : MUX 22		Ref (B19fb)
-WA10			(MC13	FB)  : MUX 23		Ref (B29fb)
-WROWADV			(MC30	P)   : MUX 25		Ref (D53p)
+RA1			(MC33	P)   : MUX 23		Ref (F85p)
+RA2			(MC34	P)   : MUX 25		Ref (G97p)
 VS2			(MC1	FB)  : MUX 26		Ref (B17fb)
-WA14			(MC12	FB)  : MUX 27		Ref (B28fb)
-PB2			(MC32	P)   : MUX 28		Ref (D57p)
-PB4			(MC34	P)   : MUX 29		Ref (E67p)
-D3			(MC26	P)   : MUX 30		Ref (B25p)
+WSTB			(MC18	P)   : MUX 27		Ref (A6p)
+WA11			(MC2	FB)  : MUX 28		Ref (B18fb)
+WA16			(MC10	FB)  : MUX 29		Ref (B26fb)
+D7			(MC23	P)   : MUX 30		Ref (B25p)
+WA14			(MC12	FB)  : MUX 31		Ref (B28fb)
 WA13			(MC7	FB)  : MUX 32		Ref (B23fb)
-D1			(MC24	P)   : MUX 33		Ref (B21p)
+PB2			(MC28	P)   : MUX 33		Ref (D49p)
 HS5			(MC9	FB)  : MUX 35		Ref (B25fb)
 MB2			(MC5	FB)  : MUX 36		Ref (B21fb)
 WA18			(MC15	FB)  : MUX 37		Ref (B32fb)
-PB5			(MC33	P)   : MUX 39		Ref (E65p)
+HS2			(MC11	FB)  : MUX 39		Ref (B27fb)
 
 FanIn assignment for block C [35]
 {
 D0,D1,
-MAPQ5,MAPQ4,MB0,
-RA0,RA1,RA2,RA4,RA3,ROWADV,
-SA10,SA13,SRC1,SRC0,SA14,SA11,SA15,SA17,SA18,SA16,SA12,
-VBLANK,VS8,VS5,VS1,VS3,VS7,VS6,VS2,VS0,VS4,
+MAPQ5,MB0,MAPQ4,
+RA4,RA3,RA2,RA0,RA1,ROWADV,
+SRC0,SA18,SA15,SRC1,SA12,SA13,SA11,SA10,SA14,SA17,SA16,
+VS1,VS6,VS5,VS3,VS2,VBLANK,VS8,VS0,VS4,VS7,
 WA11,WSTB,WA10,
 }
 Multiplexer assignment for block C
-RA0			(MC24	P)   : MUX 0		Ref (C43p)
-RA1			(MC25	P)   : MUX 1		Ref (F83p)
-SA10			(MC9	FB)  : MUX 2		Ref (C38fb)
-VBLANK			(MC34	P)   : MUX 3		Ref (H117p)
+SRC0			(MC28	P)   : MUX 0		Ref (A13p)
+RA4			(MC25	P)   : MUX 1		Ref (A5p)
+VS1			(MC6	FB)  : MUX 2		Ref (C35fb)
+D0			(MC27	P)   : MUX 3		Ref (A8p)
 MAPQ5			(MC22	FB)  : MUX 4		Ref (H117fb)
-VS8			(MC14	FB)  : MUX 5		Ref (C44fb)
+SA18			(MC14	FB)  : MUX 5		Ref (C45fb)
 WA11			(MC2	FB)  : MUX 6		Ref (B18fb)
-RA2			(MC26	P)   : MUX 7		Ref (A3p)
-SA13			(MC7	FB)  : MUX 8		Ref (C36fb)
-RA4			(MC28	P)   : MUX 9		Ref (A6p)
-D0			(MC30	P)   : MUX 10		Ref (A11p)
-SRC1			(MC32	P)   : MUX 11		Ref (B19p)
+RA3			(MC24	P)   : MUX 7		Ref (A3p)
+VS6			(MC18	FB)  : MUX 8		Ref (E69fb)
+RA2			(MC35	P)   : MUX 9		Ref (G97p)
+SA15			(MC5	FB)  : MUX 10		Ref (C34fb)
 VS5			(MC17	FB)  : MUX 12		Ref (E67fb)
-SRC0			(MC31	P)   : MUX 13		Ref (B17p)
-SA14			(MC12	FB)  : MUX 15		Ref (C41fb)
-VS1			(MC6	FB)  : MUX 16		Ref (C35fb)
+SRC1			(MC29	P)   : MUX 13		Ref (B17p)
+SA12			(MC4	FB)  : MUX 14		Ref (C33fb)
+WSTB			(MC26	P)   : MUX 15		Ref (A6p)
+D1			(MC32	P)   : MUX 16		Ref (E77p)
 VS3			(MC20	FB)  : MUX 17		Ref (E75fb)
-VS7			(MC19	FB)  : MUX 18		Ref (E71fb)
-RA3			(MC27	P)   : MUX 19		Ref (A5p)
+SA13			(MC7	FB)  : MUX 18		Ref (C36fb)
 SA11			(MC11	FB)  : MUX 20		Ref (C40fb)
-WSTB			(MC29	P)   : MUX 21		Ref (A8p)
-SA15			(MC5	FB)  : MUX 22		Ref (C34fb)
-SA17			(MC13	FB)  : MUX 23		Ref (C42fb)
-VS6			(MC18	FB)  : MUX 24		Ref (E69fb)
-ROWADV			(MC35	P)   : MUX 25		Ref (H118p)
+RA0			(MC33	P)   : MUX 21		Ref (F83p)
+MB0			(MC8	FB)  : MUX 22		Ref (C37fb)
+RA1			(MC34	P)   : MUX 23		Ref (F85p)
+SA10			(MC9	FB)  : MUX 24		Ref (C38fb)
+SA14			(MC12	FB)  : MUX 25		Ref (C41fb)
 VS2			(MC1	FB)  : MUX 26		Ref (B17fb)
-SA18			(MC15	FB)  : MUX 27		Ref (C48fb)
-VS0			(MC16	FB)  : MUX 28		Ref (E65fb)
-MAPQ4			(MC23	FB)  : MUX 32		Ref (H120fb)
-D1			(MC33	P)   : MUX 33		Ref (B21p)
+ROWADV			(MC30	P)   : MUX 27		Ref (B19p)
+MAPQ4			(MC23	FB)  : MUX 30		Ref (H120fb)
+VBLANK			(MC31	P)   : MUX 32		Ref (E75p)
+SA17			(MC15	FB)  : MUX 33		Ref (C47fb)
 SA16			(MC10	FB)  : MUX 34		Ref (C39fb)
-WA10			(MC3	FB)  : MUX 35		Ref (B29fb)
-MB0			(MC8	FB)  : MUX 36		Ref (C37fb)
-SA12			(MC4	FB)  : MUX 38		Ref (C33fb)
-VS4			(MC21	FB)  : MUX 39		Ref (F96fb)
+VS8			(MC13	FB)  : MUX 35		Ref (C43fb)
+VS0			(MC16	FB)  : MUX 36		Ref (E65fb)
+VS4			(MC21	FB)  : MUX 37		Ref (F95fb)
+VS7			(MC19	FB)  : MUX 38		Ref (E71fb)
+WA10			(MC3	FB)  : MUX 39		Ref (B29fb)
 
 FanIn assignment for block D [35]
 {
 FETCH,
-HS9,HS4,HLOAD,HS7,HS6,HS5,HS2,HS3,HS8,
-MAPA0,MC3,MAPA1,MC6,MCADV,MC2,MC4,MC5,MAPQ1,
-SA6,SA13,SA9,SA11,SA2,SA10,SRC1,SA8,SRC0,SA7,SA3,SA4,SA5,
+HS9,HS4,HS2,HLOAD,HS7,HS3,HS6,HS5,HS8,
+MAPA0,MAPA1,MC3,MC4,MC2,MC6,MCADV,MAPQ1,MC5,
+SRC0,SA7,SRC1,SA3,SA11,SA6,SA4,SA13,SA2,SA8,SA5,SA9,SA10,
 WA4,WA3,WA7,
 }
 Multiplexer assignment for block D
 MAPA0			(MC30	P)   : MUX 0		Ref (H128p)
-FETCH			(MC35	P)   : MUX 1		Ref (H120p)
+MAPA1			(MC28	P)   : MUX 1		Ref (G99p)
 MC3			(MC14	FB)  : MUX 2		Ref (D52fb)
 HS9			(MC3	FB)  : MUX 3		Ref (A11fb)
 HS4			(MC5	FB)  : MUX 4		Ref (B24fb)
-WA4			(MC4	FB)  : MUX 5		Ref (A15fb)
-MAPA1			(MC28	P)   : MUX 7		Ref (G97p)
+HS2			(MC7	FB)  : MUX 5		Ref (B27fb)
+SRC0			(MC31	P)   : MUX 6		Ref (A13p)
+WA4			(MC4	FB)  : MUX 7		Ref (A15fb)
 WA3			(MC2	FB)  : MUX 8		Ref (A7fb)
-HLOAD			(MC33	P)   : MUX 9		Ref (C35p)
-HS7			(MC27	FB)  : MUX 11		Ref (E79fb)
-MC6			(MC16	FB)  : MUX 12		Ref (D54fb)
-SA6			(MC22	FB)  : MUX 13		Ref (D62fb)
+MC4			(MC21	FB)  : MUX 9		Ref (D60fb)
+SA7			(MC12	FB)  : MUX 10		Ref (D50fb)
+MC2			(MC11	FB)  : MUX 12		Ref (D49fb)
+SRC1			(MC32	P)   : MUX 13		Ref (B17p)
 WA7			(MC1	FB)  : MUX 14		Ref (A4fb)
-HS6			(MC26	FB)  : MUX 15		Ref (E78fb)
-HS5			(MC6	FB)  : MUX 17		Ref (B25fb)
-SA13			(MC8	FB)  : MUX 18		Ref (C36fb)
-SA9			(MC23	FB)  : MUX 19		Ref (D63fb)
+HLOAD			(MC34	P)   : MUX 15		Ref (D56p)
+MC6			(MC16	FB)  : MUX 16		Ref (D54fb)
+HS7			(MC27	FB)  : MUX 17		Ref (E79fb)
+SA3			(MC18	FB)  : MUX 18		Ref (D56fb)
 SA11			(MC10	FB)  : MUX 20		Ref (C40fb)
-MCADV			(MC34	P)   : MUX 21		Ref (C37p)
-MC2			(MC11	FB)  : MUX 22		Ref (D49fb)
-HS2			(MC7	FB)  : MUX 23		Ref (B27fb)
-SA2			(MC15	FB)  : MUX 24		Ref (D53fb)
-MC4			(MC21	FB)  : MUX 25		Ref (D60fb)
-SA10			(MC9	FB)  : MUX 26		Ref (C38fb)
-SRC1			(MC32	P)   : MUX 27		Ref (B19p)
+SA6			(MC22	FB)  : MUX 21		Ref (D62fb)
+FETCH			(MC35	P)   : MUX 22		Ref (E80p)
+SA4			(MC19	FB)  : MUX 23		Ref (D57fb)
+MCADV			(MC33	P)   : MUX 24		Ref (B32p)
+HS3			(MC25	FB)  : MUX 25		Ref (E76fb)
+SA13			(MC8	FB)  : MUX 26		Ref (C36fb)
+MAPQ1			(MC29	FB)  : MUX 27		Ref (H123fb)
+SA2			(MC15	FB)  : MUX 28		Ref (D53fb)
 SA8			(MC20	FB)  : MUX 29		Ref (D58fb)
-MC5			(MC13	FB)  : MUX 30		Ref (D51fb)
-SRC0			(MC31	P)   : MUX 31		Ref (B17p)
-SA7			(MC12	FB)  : MUX 32		Ref (D50fb)
-MAPQ1			(MC29	FB)  : MUX 33		Ref (H123fb)
-HS3			(MC25	FB)  : MUX 35		Ref (E76fb)
-SA3			(MC18	FB)  : MUX 36		Ref (D56fb)
-SA4			(MC19	FB)  : MUX 37		Ref (D57fb)
-SA5			(MC17	FB)  : MUX 38		Ref (D55fb)
+HS6			(MC26	FB)  : MUX 31		Ref (E78fb)
+SA5			(MC17	FB)  : MUX 32		Ref (D55fb)
+MC5			(MC13	FB)  : MUX 34		Ref (D51fb)
+SA9			(MC23	FB)  : MUX 35		Ref (D63fb)
+HS5			(MC6	FB)  : MUX 37		Ref (B25fb)
+SA10			(MC9	FB)  : MUX 38		Ref (C38fb)
 HS8			(MC24	FB)  : MUX 39		Ref (E74fb)
 
 FanIn assignment for block E [34]
 {
-D7,D6,D4,D0,D5,D3,
-HS7,HS3,HS6,HS8,
+D5,D0,D4,D3,D6,D7,
+HS7,HS6,HS3,HS8,
 LWHSL,LWHSH,
-MB4,MB6,MB3,MB5,
-PB6,PB7,PB3,PB0,
-RA0,RA1,RA4,RA3,RA2,
+MB4,MB5,MB6,MB3,
+PB6,PB0,PB3,PB7,
+RA4,RA1,RA3,RA0,RA2,
 TB0,TB4,TB3,
-VS0,VS5,VS3,VS7,VS6,
+VS5,VS3,VS7,VS6,VS0,
 WSTB,
 }
 Multiplexer assignment for block E
-RA0			(MC17	P)   : MUX 0		Ref (C43p)
-RA1			(MC18	P)   : MUX 1		Ref (F83p)
-D7			(MC27	P)   : MUX 2		Ref (B27p)
-D6			(MC25	P)   : MUX 3		Ref (B24p)
-TB0			(MC2	FB)  : MUX 4		Ref (E66fb)
-HS7			(MC15	FB)  : MUX 5		Ref (E79fb)
-D4			(MC24	P)   : MUX 6		Ref (A13p)
-PB6			(MC32	P)   : MUX 7		Ref (E72p)
-VS0			(MC1	FB)  : MUX 8		Ref (E65fb)
-RA4			(MC21	P)   : MUX 9		Ref (A6p)
-D0			(MC23	P)   : MUX 10		Ref (A11p)
-PB7			(MC31	P)   : MUX 11		Ref (E69p)
+D5			(MC25	P)   : MUX 0		Ref (B27p)
+RA4			(MC18	P)   : MUX 1		Ref (A5p)
+D0			(MC20	P)   : MUX 3		Ref (A8p)
+PB6			(MC29	P)   : MUX 4		Ref (D57p)
+RA1			(MC33	P)   : MUX 5		Ref (F85p)
+D4			(MC21	P)   : MUX 6		Ref (A11p)
+RA3			(MC17	P)   : MUX 7		Ref (A3p)
+TB0			(MC2	FB)  : MUX 8		Ref (E66fb)
+D3			(MC23	P)   : MUX 9		Ref (B24p)
+HS7			(MC15	FB)  : MUX 11		Ref (E79fb)
 VS5			(MC3	FB)  : MUX 12		Ref (E67fb)
-RA3			(MC20	P)   : MUX 13		Ref (A5p)
-D5			(MC28	P)   : MUX 14		Ref (B29p)
-LWHSL			(MC30	P)   : MUX 15		Ref (D56p)
-VS3			(MC11	FB)  : MUX 17		Ref (E75fb)
+VS3			(MC11	FB)  : MUX 13		Ref (E75fb)
+LWHSL			(MC28	P)   : MUX 14		Ref (C45p)
+HS6			(MC14	FB)  : MUX 15		Ref (E78fb)
+LWHSH			(MC27	P)   : MUX 17		Ref (C38p)
 VS7			(MC7	FB)  : MUX 18		Ref (E71fb)
 MB4			(MC13	FB)  : MUX 19		Ref (E77fb)
-PB3			(MC33	P)   : MUX 20		Ref (E73p)
-WSTB			(MC22	P)   : MUX 21		Ref (A8p)
+MB5			(MC6	FB)  : MUX 20		Ref (E70fb)
+RA0			(MC32	P)   : MUX 21		Ref (F83p)
 MB6			(MC8	FB)  : MUX 22		Ref (E72fb)
-LWHSH			(MC29	P)   : MUX 23		Ref (D49p)
-MB3			(MC4	FB)  : MUX 24		Ref (E68fb)
-HS3			(MC12	FB)  : MUX 25		Ref (E76fb)
+TB4			(MC16	FB)  : MUX 23		Ref (E80fb)
+RA2			(MC34	P)   : MUX 25		Ref (G97p)
 VS6			(MC5	FB)  : MUX 26		Ref (E69fb)
-TB4			(MC16	FB)  : MUX 27		Ref (E80fb)
-PB0			(MC34	P)   : MUX 28		Ref (E75p)
-D3			(MC26	P)   : MUX 30		Ref (B25p)
-RA2			(MC19	P)   : MUX 31		Ref (A3p)
-HS6			(MC14	FB)  : MUX 35		Ref (E78fb)
-MB5			(MC6	FB)  : MUX 36		Ref (E70fb)
+WSTB			(MC19	P)   : MUX 27		Ref (A6p)
+VS0			(MC1	FB)  : MUX 28		Ref (E65fb)
+PB0			(MC31	P)   : MUX 29		Ref (E67p)
+PB3			(MC30	P)   : MUX 31		Ref (E65p)
+PB7			(MC26	P)   : MUX 32		Ref (B29p)
+D6			(MC22	P)   : MUX 33		Ref (B21p)
+D7			(MC24	P)   : MUX 34		Ref (B25p)
+HS3			(MC12	FB)  : MUX 35		Ref (E76fb)
+MB3			(MC4	FB)  : MUX 36		Ref (E68fb)
 TB3			(MC9	FB)  : MUX 37		Ref (E73fb)
 HS8			(MC10	FB)  : MUX 39		Ref (E74fb)
 
@@ -561,137 +551,137 @@ FanIn assignment for block F [35]
 {
 CELLTICK,
 D4,
-MB1,MAPQ2,MB2,MC6,MAPQ7,MAPQ0,MC5,MAPQ3,MAP0,
-RA0,RA1,RA4,RA3,RA2,
-SA9,SA14,SA8,SA6,SA12,SRC1,SA15,SRC0,SA5,SA13,
+MB1,MAPQ2,MB2,MAPQ0,MC6,MAPQ7,MC5,MAP0,MAPQ3,
+RA4,RA3,RA2,RA1,RA0,
+SRC0,SA9,SA8,SA12,SA14,SA15,SRC1,SA5,SA13,SA6,
 TB0,
 VS4,
-WSTB,WA8,WA6,WA13,WA5,WA9,WA14,
+WA6,WA13,WSTB,WA5,WA14,WA8,WA9,
 }
 Multiplexer assignment for block F
-RA0			(MC26	P)   : MUX 0		Ref (C43p)
-RA1			(MC27	P)   : MUX 1		Ref (F83p)
+SRC0			(MC30	P)   : MUX 0		Ref (A13p)
+RA4			(MC27	P)   : MUX 1		Ref (A5p)
 MB1			(MC2	FB)  : MUX 2		Ref (A5fb)
-WSTB			(MC31	P)   : MUX 3		Ref (A8p)
 SA9			(MC18	FB)  : MUX 5		Ref (D63fb)
-D4			(MC32	P)   : MUX 6		Ref (A13p)
-WA8			(MC4	FB)  : MUX 7		Ref (A10fb)
-RA4			(MC30	P)   : MUX 9		Ref (A6p)
+D4			(MC29	P)   : MUX 6		Ref (A11p)
+RA3			(MC26	P)   : MUX 7		Ref (A3p)
+RA2			(MC35	P)   : MUX 9		Ref (G97p)
 MAPQ2			(MC22	FB)  : MUX 10		Ref (H113fb)
 WA6			(MC3	FB)  : MUX 11		Ref (A9fb)
 MB2			(MC6	FB)  : MUX 12		Ref (B21fb)
-RA3			(MC29	P)   : MUX 13		Ref (A5p)
+RA1			(MC34	P)   : MUX 13		Ref (F85p)
 WA13			(MC7	FB)  : MUX 14		Ref (B23fb)
-SA14			(MC12	FB)  : MUX 15		Ref (C41fb)
+WSTB			(MC28	P)   : MUX 15		Ref (A6p)
 WA5			(MC1	FB)  : MUX 16		Ref (A2fb)
-CELLTICK		(MC35	P)   : MUX 17		Ref (C38p)
+MAPQ0			(MC20	FB)  : MUX 17		Ref (F92fb)
 SA8			(MC16	FB)  : MUX 19		Ref (D58fb)
 MC6			(MC14	FB)  : MUX 20		Ref (D54fb)
-SA6			(MC17	FB)  : MUX 21		Ref (D62fb)
+RA0			(MC33	P)   : MUX 21		Ref (F83p)
 MAPQ7			(MC24	FB)  : MUX 22		Ref (H118fb)
-MAPQ0			(MC20	FB)  : MUX 23		Ref (F95fb)
+CELLTICK		(MC32	P)   : MUX 23		Ref (C35p)
 SA12			(MC9	FB)  : MUX 24		Ref (C33fb)
-VS4			(MC21	FB)  : MUX 25		Ref (F96fb)
-SRC1			(MC34	P)   : MUX 27		Ref (B19p)
+SA14			(MC12	FB)  : MUX 25		Ref (C41fb)
+WA14			(MC8	FB)  : MUX 27		Ref (B28fb)
 SA15			(MC10	FB)  : MUX 28		Ref (C34fb)
-RA2			(MC28	P)   : MUX 29		Ref (A3p)
+WA8			(MC4	FB)  : MUX 29		Ref (A10fb)
 MC5			(MC13	FB)  : MUX 30		Ref (D51fb)
-SRC0			(MC33	P)   : MUX 31		Ref (B17p)
+SRC1			(MC31	P)   : MUX 31		Ref (B17p)
 SA5			(MC15	FB)  : MUX 32		Ref (D55fb)
 WA9			(MC5	FB)  : MUX 33		Ref (A13fb)
 TB0			(MC19	FB)  : MUX 34		Ref (E66fb)
+MAP0			(MC25	FB)  : MUX 35		Ref (H127fb)
 SA13			(MC11	FB)  : MUX 36		Ref (C36fb)
-WA14			(MC8	FB)  : MUX 37		Ref (B28fb)
+VS4			(MC21	FB)  : MUX 37		Ref (F95fb)
 MAPQ3			(MC23	FB)  : MUX 38		Ref (H115fb)
-MAP0			(MC25	FB)  : MUX 39		Ref (H127fb)
+SA6			(MC17	FB)  : MUX 39		Ref (D62fb)
 
 FanIn assignment for block G [35]
 {
 CELLTICK,
 HS4,HLOAD,
-MAPA0,MAP7,MB5,MCADV,MAP6,MAPA1,MAPLD,MC2,MB3,MB4,MB0,MB6,MAPQ6,
+MAPA0,MAPA1,MAPQ6,MCADV,MB5,MAP7,MC2,MAPLD,MB3,MB4,MB6,MB0,MAP6,
 PB7,
-SRC1,SA15,SRC0,SA16,SA17,SA12,SA2,SA18,
-TB3,TB1,TB2,TB4,
-WA12,WA2,WA18,WA17,WA15,WA16,
+SRC0,SA15,SRC1,SA12,SA18,SA2,SA17,SA16,
+TB3,TB2,TB1,TB4,
+WA2,WA16,WA12,WA18,WA15,WA17,
 }
 Multiplexer assignment for block G
 MAPA0			(MC28	P)   : MUX 0		Ref (H128p)
-MAP7			(MC25	FB)  : MUX 1		Ref (G111fb)
-MB5			(MC19	FB)  : MUX 2		Ref (E70fb)
-MCADV			(MC32	P)   : MUX 3		Ref (C37p)
+MAPA1			(MC24	P)   : MUX 1		Ref (G99p)
+WA2			(MC1	FB)  : MUX 2		Ref (A1fb)
+WA16			(MC7	FB)  : MUX 3		Ref (B26fb)
 WA12			(MC4	FB)  : MUX 4		Ref (B20fb)
 TB3			(MC21	FB)  : MUX 5		Ref (E73fb)
-MAP6			(MC27	FB)  : MUX 6		Ref (H119fb)
-MAPA1			(MC24	P)   : MUX 7		Ref (G97p)
-WA2			(MC1	FB)  : MUX 8		Ref (A1fb)
-SRC1			(MC30	P)   : MUX 9		Ref (B19p)
+SRC0			(MC29	P)   : MUX 6		Ref (A13p)
+MAPQ6			(MC26	FB)  : MUX 7		Ref (G111fb)
+MCADV			(MC32	P)   : MUX 8		Ref (B32p)
 SA15			(MC11	FB)  : MUX 10		Ref (C34fb)
 WA18			(MC9	FB)  : MUX 11		Ref (B32fb)
 HS4			(MC6	FB)  : MUX 12		Ref (B24fb)
-SRC0			(MC29	P)   : MUX 13		Ref (B17p)
-SA16			(MC13	FB)  : MUX 14		Ref (C39fb)
-SA17			(MC14	FB)  : MUX 15		Ref (C42fb)
-MAPLD			(MC35	P)   : MUX 16		Ref (E77p)
-CELLTICK		(MC33	P)   : MUX 17		Ref (C38p)
+SRC1			(MC30	P)   : MUX 13		Ref (B17p)
+SA12			(MC10	FB)  : MUX 14		Ref (C33fb)
+HLOAD			(MC34	P)   : MUX 15		Ref (D56p)
+TB2			(MC3	FB)  : MUX 16		Ref (B19fb)
+SA18			(MC14	FB)  : MUX 17		Ref (C45fb)
 TB1			(MC2	FB)  : MUX 18		Ref (A3fb)
-WA17			(MC8	FB)  : MUX 19		Ref (B30fb)
-TB2			(MC3	FB)  : MUX 20		Ref (B19fb)
+MB5			(MC19	FB)  : MUX 20		Ref (E70fb)
+MAP7			(MC25	FB)  : MUX 21		Ref (G110fb)
 MC2			(MC16	FB)  : MUX 22		Ref (D49fb)
-PB7			(MC34	P)   : MUX 23		Ref (E69p)
+MAPLD			(MC35	P)   : MUX 23		Ref (E69p)
 MB3			(MC18	FB)  : MUX 24		Ref (E68fb)
 MB4			(MC22	FB)  : MUX 25		Ref (E77fb)
 WA15			(MC5	FB)  : MUX 26		Ref (B22fb)
-TB4			(MC23	FB)  : MUX 27		Ref (E80fb)
-WA16			(MC7	FB)  : MUX 29		Ref (B26fb)
-MB0			(MC12	FB)  : MUX 30		Ref (C37fb)
-SA12			(MC10	FB)  : MUX 32		Ref (C33fb)
-SA2			(MC17	FB)  : MUX 34		Ref (D53fb)
-HLOAD			(MC31	P)   : MUX 35		Ref (C35p)
-MB6			(MC20	FB)  : MUX 36		Ref (E72fb)
-MAPQ6			(MC26	FB)  : MUX 37		Ref (G112fb)
-SA18			(MC15	FB)  : MUX 39		Ref (C48fb)
+WA17			(MC8	FB)  : MUX 27		Ref (B30fb)
+SA2			(MC17	FB)  : MUX 28		Ref (D53fb)
+SA17			(MC15	FB)  : MUX 29		Ref (C47fb)
+MB6			(MC20	FB)  : MUX 30		Ref (E72fb)
+TB4			(MC23	FB)  : MUX 31		Ref (E80fb)
+SA16			(MC13	FB)  : MUX 32		Ref (C39fb)
+PB7			(MC31	P)   : MUX 34		Ref (B29p)
+CELLTICK		(MC33	P)   : MUX 35		Ref (C35p)
+MB0			(MC12	FB)  : MUX 36		Ref (C37fb)
+MAP6			(MC27	FB)  : MUX 38		Ref (H119fb)
 
 FanIn assignment for block H [30]
 {
 CELLTICK,
 HLOAD,HS3,
-MAPA0,MAP7,MAPQ2,MAP1,MAP4,MAPQ3,MAP0,MAP2,MAPQ4,MAPLD,MCADV,MAP5,MAP3,MAPQ7,MAP6,MAPQ1,MAPQ5,
-PB2,PB5,PB0,PB1,PB4,PB6,PB3,
+MAPA0,MAP3,MAPQ2,MCADV,MAPQ3,MAPLD,MAPQ4,MAP7,MAPQ5,MAP4,MAP5,MAPQ7,MAP6,MAPQ1,MAP0,MAP2,MAP1,
+PB4,PB2,PB6,PB3,PB5,PB1,PB0,
 RP1,RP0,
 WROWADV,
 }
 Multiplexer assignment for block H
 MAPA0			(MC18	P)   : MUX 0		Ref (H128p)
-MAP7			(MC2	FB)  : MUX 1		Ref (G111fb)
+MAP3			(MC12	FB)  : MUX 1		Ref (H122fb)
 MAPQ2			(MC3	FB)  : MUX 2		Ref (H113fb)
-MAP1			(MC14	FB)  : MUX 3		Ref (H124fb)
+PB4			(MC25	P)   : MUX 3		Ref (D53p)
 RP1			(MC15	P)   : MUX 4		Ref (H125p)
-MAP4			(MC11	FB)  : MUX 5		Ref (H121fb)
-PB2			(MC24	P)   : MUX 6		Ref (D57p)
-PB5			(MC25	P)   : MUX 7		Ref (E65p)
-MAPQ3			(MC5	FB)  : MUX 8		Ref (H115fb)
-HLOAD			(MC19	P)   : MUX 9		Ref (C35p)
-PB0			(MC29	P)   : MUX 10		Ref (E75p)
-MAP0			(MC17	FB)  : MUX 11		Ref (H127fb)
-MAP2			(MC6	FB)  : MUX 12		Ref (H116fb)
-PB1			(MC22	P)   : MUX 13		Ref (D51p)
+PB2			(MC23	P)   : MUX 5		Ref (D49p)
+PB6			(MC27	P)   : MUX 6		Ref (D57p)
+PB3			(MC28	P)   : MUX 7		Ref (E65p)
+MCADV			(MC19	P)   : MUX 8		Ref (B32p)
+CELLTICK		(MC20	P)   : MUX 9		Ref (C35p)
+MAPQ3			(MC5	FB)  : MUX 10		Ref (H115fb)
+MAPLD			(MC30	P)   : MUX 11		Ref (E69p)
+PB5			(MC24	P)   : MUX 13		Ref (D51p)
 MAPQ4			(MC10	FB)  : MUX 14		Ref (H120fb)
-PB4			(MC26	P)   : MUX 15		Ref (E67p)
-CELLTICK		(MC21	P)   : MUX 17		Ref (C38p)
-MAPLD			(MC30	P)   : MUX 18		Ref (E77p)
-PB6			(MC27	P)   : MUX 19		Ref (E72p)
-MCADV			(MC20	P)   : MUX 21		Ref (C37p)
+HLOAD			(MC26	P)   : MUX 15		Ref (D56p)
+RP0			(MC16	P)   : MUX 16		Ref (H126p)
+MAP7			(MC2	FB)  : MUX 17		Ref (G110fb)
+MAPQ5			(MC7	FB)  : MUX 18		Ref (H117fb)
+MAP4			(MC11	FB)  : MUX 19		Ref (H121fb)
 MAP5			(MC4	FB)  : MUX 22		Ref (H114fb)
-MAP3			(MC12	FB)  : MUX 23		Ref (H122fb)
 MAPQ7			(MC8	FB)  : MUX 24		Ref (H118fb)
 HS3			(MC1	FB)  : MUX 25		Ref (E76fb)
 MAP6			(MC9	FB)  : MUX 26		Ref (H119fb)
 MAPQ1			(MC13	FB)  : MUX 27		Ref (H123fb)
-RP0			(MC16	P)   : MUX 28		Ref (H126p)
-WROWADV			(MC23	P)   : MUX 31		Ref (D53p)
-PB3			(MC28	P)   : MUX 34		Ref (E73p)
-MAPQ5			(MC7	FB)  : MUX 36		Ref (H117fb)
+WROWADV			(MC22	P)   : MUX 28		Ref (C43p)
+PB1			(MC21	P)   : MUX 29		Ref (C40p)
+PB0			(MC29	P)   : MUX 33		Ref (E67p)
+MAP0			(MC17	FB)  : MUX 35		Ref (H127fb)
+MAP2			(MC6	FB)  : MUX 36		Ref (H116fb)
+MAP1			(MC14	FB)  : MUX 39		Ref (H124fb)
 
 Creating JEDEC file vaddr.jed ...
 
@@ -1577,64 +1567,60 @@ PLCC84 Pin/Node Placement:
 Pin 1  = RESET;
 Pin 4  = WA1; /* MC 16 */
 Pin 5  = WA0; /* MC 14 */
-Pin 6  = D4; /* MC 13 */
-Pin 8  = D0; /* MC 11 */
-Pin 9  = WSTB; /* MC 8 */
-Pin 10 = RA4; /* MC  6 */
-Pin 11 = RA3; /* MC  5 */
-Pin 12 = RA2; /* MC  3 */
-Pin 14 = TDI; /* MC 32 */ 
-Pin 15 = D5; /* MC 29 */ 
-Pin 16 = D7; /* MC 27 */ 
-Pin 17 = D3; /* MC 25 */ 
-Pin 18 = D6; /* MC 24 */ 
-Pin 20 = D1; /* MC 21 */ 
-Pin 21 = SRC1; /* MC 19 */ 
-Pin 22 = SRC0; /* MC 17 */ 
-Pin 23 = TMS; /* MC 48 */ 
-Pin 24 = FBA10; /* MC 46 */ 
-Pin 25 = FBA11; /* MC 45 */ 
-Pin 27 = RA0; /* MC 43 */ 
-Pin 28 = D2; /* MC 40 */ 
-Pin 29 = CELLTICK; /* MC 38 */ 
-Pin 30 = MCADV; /* MC 37 */ 
-Pin 31 = HLOAD; /* MC 35 */ 
+Pin 6  = SRC0; /* MC 13 */
+Pin 8  = D4; /* MC 11 */
+Pin 9  = D0; /* MC 8 */
+Pin 10 = WSTB; /* MC  6 */
+Pin 11 = RA4; /* MC  5 */
+Pin 12 = RA3; /* MC  3 */
+Pin 14 = MCADV; /* MC 32 */ 
+Pin 15 = PB7; /* MC 29 */ 
+Pin 16 = D5; /* MC 27 */ 
+Pin 17 = D7; /* MC 25 */ 
+Pin 18 = D3; /* MC 24 */ 
+Pin 20 = D6; /* MC 21 */ 
+Pin 21 = ROWADV; /* MC 19 */ 
+Pin 22 = SRC1; /* MC 17 */ 
+Pin 23 = FBA10; /* MC 48 */ 
+Pin 24 = FBA11; /* MC 46 */ 
+Pin 25 = LWHSL; /* MC 45 */ 
+Pin 27 = WROWADV; /* MC 43 */ 
+Pin 28 = PB1; /* MC 40 */ 
+Pin 29 = LWHSH; /* MC 38 */ 
+Pin 30 = D2; /* MC 37 */ 
+Pin 31 = CELLTICK; /* MC 35 */ 
 Pin 33 = FBA4; /* MC 64 */ 
 Pin 34 = FBA7; /* MC 61 */ 
 Pin 35 = FBA3; /* MC 59 */ 
-Pin 36 = PB2; /* MC 57 */ 
-Pin 37 = LWHSL; /* MC 56 */ 
-Pin 39 = WROWADV; /* MC 53 */ 
-Pin 40 = PB1; /* MC 51 */ 
-Pin 41 = LWHSH; /* MC 49 */ 
-Pin 44 = PB5; /* MC 65 */ 
-Pin 45 = PB4; /* MC 67 */ 
-Pin 46 = PB7; /* MC 69 */ 
-Pin 48 = PB6; /* MC 72 */ 
-Pin 49 = PB3; /* MC 73 */ 
-Pin 50 = PB0; /* MC 75 */ 
-Pin 51 = MAPLD; /* MC 77 */ 
-Pin 52 = LADV; /* MC 80 */ 
-Pin 54 = RA1; /* MC 83 */ 
-Pin 55 = FBA14; /* MC 85 */ 
-Pin 56 = FBA8; /* MC 86 */ 
-Pin 57 = FBA13; /* MC 88 */ 
-Pin 58 = FBA6; /* MC 91 */ 
-Pin 60 = FBA5; /* MC 93 */ 
-Pin 61 = FBA9; /* MC 94 */ 
-Pin 62 = TCK; /* MC 96 */ 
-Pin 63 = MAPA1; /* MC 97 */ 
-Pin 64 = FBA2; /* MC 99 */ 
-Pin 65 = FBA18; /* MC 101 */ 
-Pin 67 = FBA15; /* MC 104 */ 
-Pin 68 = FBA16; /* MC 105 */ 
-Pin 69 = FBA17; /* MC 107 */ 
-Pin 70 = FBA12; /* MC 109 */ 
-Pin 71 = TDO; /* MC 112 */ 
-Pin 73 = RETIRE; /* MC 115 */ 
-Pin 74 = VBLANK; /* MC 117 */ 
-Pin 75 = ROWADV; /* MC 118 */ 
-Pin 76 = FETCH; /* MC 120 */ 
+Pin 36 = PB6; /* MC 57 */ 
+Pin 37 = HLOAD; /* MC 56 */ 
+Pin 39 = PB4; /* MC 53 */ 
+Pin 40 = PB5; /* MC 51 */ 
+Pin 41 = PB2; /* MC 49 */ 
+Pin 44 = PB3; /* MC 65 */ 
+Pin 45 = PB0; /* MC 67 */ 
+Pin 46 = MAPLD; /* MC 69 */ 
+Pin 48 = LADV; /* MC 72 */ 
+Pin 49 = RETIRE; /* MC 73 */ 
+Pin 50 = VBLANK; /* MC 75 */ 
+Pin 51 = D1; /* MC 77 */ 
+Pin 52 = FETCH; /* MC 80 */ 
+Pin 54 = RA0; /* MC 83 */ 
+Pin 55 = RA1; /* MC 85 */ 
+Pin 56 = FBA14; /* MC 86 */ 
+Pin 57 = FBA8; /* MC 88 */ 
+Pin 58 = FBA13; /* MC 91 */ 
+Pin 60 = FBA6; /* MC 93 */ 
+Pin 61 = FBA5; /* MC 94 */ 
+Pin 62 = FBA9; /* MC 96 */ 
+Pin 63 = RA2; /* MC 97 */ 
+Pin 64 = MAPA1; /* MC 99 */ 
+Pin 65 = FBA2; /* MC 101 */ 
+Pin 67 = FBA18; /* MC 104 */ 
+Pin 68 = FBA15; /* MC 105 */ 
+Pin 69 = FBA16; /* MC 107 */ 
+Pin 70 = FBA17; /* MC 109 */ 
+Pin 71 = FBA12; /* MC 112 */ 
 Pin 79 = RP1; /* MC 125 */ 
 Pin 80 = RP0; /* MC 126 */ 
 Pin 81 = MAPA0; /* MC 128 */ 
@@ -1660,11 +1646,11 @@ PINNODE 326 = XXL_483; /* MC 26 Foldback */
 PINNODE 327 = XXL_482; /* MC 27 Foldback */
 PINNODE 329 = XXL_476; /* MC 29 Foldback */
 PINNODE 331 = XXL_475; /* MC 31 Foldback */
-PINNODE 343 = XXL_579; /* MC 43 Foldback */
-PINNODE 344 = XXL_574; /* MC 44 Foldback */
-PINNODE 345 = XXL_529; /* MC 45 Foldback */
+PINNODE 342 = XXL_579; /* MC 42 Foldback */
+PINNODE 343 = XXL_574; /* MC 43 Foldback */
+PINNODE 344 = XXL_529; /* MC 44 Foldback */
 PINNODE 346 = XXL_485; /* MC 46 Foldback */
-PINNODE 347 = XXL_483; /* MC 47 Foldback */
+PINNODE 348 = XXL_483; /* MC 48 Foldback */
 PINNODE 357 = XXL_580; /* MC 57 Foldback */
 PINNODE 358 = XXL_576; /* MC 58 Foldback */
 PINNODE 359 = XXL_575; /* MC 59 Foldback */
@@ -1714,9 +1700,9 @@ PINNODE 638 = SA10; /* MC 38 Feedback */
 PINNODE 639 = SA16; /* MC 39 Feedback */
 PINNODE 640 = SA11; /* MC 40 Feedback */
 PINNODE 641 = SA14; /* MC 41 Feedback */
-PINNODE 642 = SA17; /* MC 42 Feedback */
-PINNODE 644 = VS8; /* MC 44 Feedback */
-PINNODE 648 = SA18; /* MC 48 Feedback */
+PINNODE 643 = VS8; /* MC 43 Feedback */
+PINNODE 645 = SA18; /* MC 45 Feedback */
+PINNODE 647 = SA17; /* MC 47 Feedback */
 PINNODE 649 = MC2; /* MC 49 Feedback */
 PINNODE 650 = SA7; /* MC 50 Feedback */
 PINNODE 651 = MC5; /* MC 51 Feedback */
@@ -1746,10 +1732,10 @@ PINNODE 677 = MB4; /* MC 77 Feedback */
 PINNODE 678 = HS6; /* MC 78 Feedback */
 PINNODE 679 = HS7; /* MC 79 Feedback */
 PINNODE 680 = TB4; /* MC 80 Feedback */
-PINNODE 695 = MAPQ0; /* MC 95 Feedback */
-PINNODE 696 = VS4; /* MC 96 Feedback */
-PINNODE 711 = MAP7; /* MC 111 Feedback */
-PINNODE 712 = MAPQ6; /* MC 112 Feedback */
+PINNODE 692 = MAPQ0; /* MC 92 Feedback */
+PINNODE 695 = VS4; /* MC 95 Feedback */
+PINNODE 710 = MAP7; /* MC 110 Feedback */
+PINNODE 711 = MAPQ6; /* MC 111 Feedback */
 PINNODE 713 = MAPQ2; /* MC 113 Feedback */
 PINNODE 714 = MAP5; /* MC 114 Feedback */
 PINNODE 715 = MAPQ3; /* MC 115 Feedback */
@@ -1784,61 +1770,61 @@ For input only = INPUT.
 MCell Pin# Oe   PinDrive  DCERP  FBDrive  DCERP  Foldback  CascadeOut     TotPT output_slew
 MC1   0         --               WA2      Dg-g-  --        --             3     slow
 MC2   0         --               WA5      Dg-g-  XXL_577   --             4     slow
-MC3   12   --   RA2       INPUT  TB1      Dg-g-  XXL_568   --             3     slow
+MC3   12   --   RA3       INPUT  TB1      Dg-g-  XXL_568   --             3     slow
 MC4   0         --               WA7      Dg-g-  XXL_506   --             4     slow
-MC5   11   --   RA3       INPUT  MB1      Dg-g-  XXL_498   --             3     slow
-MC6   10   --   RA4       INPUT  XXL_493  C----  XXL_497   --             3     slow
+MC5   11   --   RA4       INPUT  MB1      Dg-g-  XXL_498   --             3     slow
+MC6   10   --   WSTB      INPUT  XXL_493  C----  XXL_497   --             3     slow
 MC7   0         --               WA3      Dg-g-  XXL_495   --             5     slow
-MC8   9    --   WSTB      INPUT  XXL_547  C----  XXL_489   --             3     slow
+MC8   9    --   D0        INPUT  XXL_547  C----  XXL_489   --             3     slow
 MC9   0         --               WA6      Dg-g-  XXL_485   --             5     slow
 MC10  0         --               WA8      Dg-g-  XXL_479   --             5     slow
-MC11  8    --   D0        INPUT  HS9      Dg-g-  XXL_477   --             4     slow
+MC11  8    --   D4        INPUT  HS9      Dg-g-  XXL_477   --             4     slow
 MC12  0         --               --              NA        -> WA9         5     slow
-MC13  6    --   D4        INPUT  WA9      Dg-g-  NA        --             5     slow
+MC13  6    --   SRC0      INPUT  WA9      Dg-g-  NA        --             5     slow
 MC14  5    on   WA0       Dg-g-  --              XXL_475   --             4     slow
 MC15  0         --               WA4      Dg-g-  NA        --             5     slow
 MC16  4    on   WA1       Dg-g-  --              XXL_474   --             4     slow
-MC17  22   --   SRC0      INPUT  VS2      Dg-g-  --        --             2     slow
+MC17  22   --   SRC1      INPUT  VS2      Dg-g-  --        --             2     slow
 MC18  0         --               WA11     Dg-g-  --        --             3     slow
-MC19  21   --   SRC1      INPUT  TB2      Dg-g-  --        --             2     slow
+MC19  21   --   ROWADV    INPUT  TB2      Dg-g-  --        --             2     slow
 MC20  0         --               WA12     Dg-g-  --        --             3     slow
-MC21  20   --   D1        INPUT  MB2      Dg-g-  XXL_578   --             3     slow
+MC21  20   --   D6        INPUT  MB2      Dg-g-  XXL_578   --             3     slow
 MC22  0         --               WA15     Dg-g-  XXL_573   --             4     slow
 MC23  0         --               WA13     Dg-g-  XXL_528   --             5     slow
-MC24  18   --   D6        INPUT  HS4      Dg-g-  XXL_489   --             4     slow
-MC25  17   --   D3        INPUT  HS5      Dg-g-  XXL_485   --             4     slow
+MC24  18   --   D3        INPUT  HS4      Dg-g-  XXL_489   --             4     slow
+MC25  17   --   D7        INPUT  HS5      Dg-g-  XXL_485   --             4     slow
 MC26  0         --               WA16     Dg-g-  XXL_483   --             5     slow
-MC27  16   --   D7        INPUT  HS2      Dg-g-  XXL_482   --             4     slow
+MC27  16   --   D5        INPUT  HS2      Dg-g-  XXL_482   --             4     slow
 MC28  0         --               WA14     Dg-g-  NA        --             5     slow
-MC29  15   --   D5        INPUT  WA10     Dg-g-  XXL_476   --             4     slow
+MC29  15   --   PB7       INPUT  WA10     Dg-g-  XXL_476   --             4     slow
 MC30  0         --               WA17     Dg-g-  NA        --             5     slow
 MC31  0         --               --              XXL_475   -> WA18        5     slow
-MC32  14   --   TDI       INPUT  WA18     Dg-g-  NA        --             5     slow
+MC32  14   --   MCADV     INPUT  WA18     Dg-g-  NA        --             5     slow
 MC33  0         --               SA12     Dg-g-  --        --             3     slow
 MC34  0         --               SA15     Dg-g-  --        --             3     slow
-MC35  31   --   HLOAD     INPUT  VS1      Dg-g-  --        --             2     slow
+MC35  31   --   CELLTICK  INPUT  VS1      Dg-g-  --        --             2     slow
 MC36  0         --               SA13     Dg-g-  --        --             4     slow
-MC37  30   --   MCADV     INPUT  MB0      Dg-g-  --        --             2     slow
-MC38  29   --   CELLTICK  INPUT  SA10     Dg-g-  --        --             3     slow
+MC37  30   --   D2        INPUT  MB0      Dg-g-  --        --             2     slow
+MC38  29   --   LWHSH     INPUT  SA10     Dg-g-  --        --             3     slow
 MC39  0         --               SA16     Dg-g-  --        --             4     slow
-MC40  28   --   D2        INPUT  SA11     Dg-g-  --        --             3     slow
+MC40  28   --   PB1       INPUT  SA11     Dg-g-  --        --             3     slow
 MC41  0         --               SA14     Dg-g-  NA        --             5     slow
-MC42  0         --               SA17     Dg-g-  NA        --             5     slow
-MC43  27   --   RA0       INPUT  --              XXL_579   -> VS8         5     slow
-MC44  0         --               VS8      Dg-g-  XXL_574   --             4     slow
-MC45  25   on   FBA11     C----  --              XXL_529   --             5     slow
-MC46  24   on   FBA10     C----  --              XXL_485   --             5     slow
-MC47  0         --               --              XXL_483   -> SA18        5     slow
-MC48  23   --   TMS       INPUT  SA18     Dg-g-  NA        --             5     slow
-MC49  41   --   LWHSH     INPUT  MC2      Dg-g-  --        --             3     slow
+MC42  0         --               --              XXL_579   -> VS8         5     slow
+MC43  27   --   WROWADV   INPUT  VS8      Dg-g-  XXL_574   --             4     slow
+MC44  0         --               --              XXL_529   -> SA18        5     slow
+MC45  25   --   LWHSL     INPUT  SA18     Dg-g-  NA        --             5     slow
+MC46  24   on   FBA11     C----  --              XXL_485   --             5     slow
+MC47  0         --               SA17     Dg-g-  NA        --             5     slow
+MC48  23   on   FBA10     C----  --              XXL_483   --             5     slow
+MC49  41   --   PB2       INPUT  MC2      Dg-g-  --        --             3     slow
 MC50  0         --               SA7      Dg-g-  --        --             3     slow
-MC51  40   --   PB1       INPUT  MC5      Dg-g-  --        --             3     slow
+MC51  40   --   PB5       INPUT  MC5      Dg-g-  --        --             3     slow
 MC52  0         --               MC3      Dg-g-  --        --             4     slow
-MC53  39   --   WROWADV   INPUT  SA2      Dg-g-  --        --             3     slow
+MC53  39   --   PB4       INPUT  SA2      Dg-g-  --        --             3     slow
 MC54  0         --               MC6      Dg-g-  --        --             4     slow
 MC55  0         --               SA5      Dg-g-  --        --             4     slow
-MC56  37   --   LWHSL     INPUT  SA3      Dg-g-  --        --             3     slow
-MC57  36   --   PB2       INPUT  SA4      Dg-g-  XXL_580   --             4     slow
+MC56  37   --   HLOAD     INPUT  SA3      Dg-g-  --        --             3     slow
+MC57  36   --   PB6       INPUT  SA4      Dg-g-  XXL_580   --             4     slow
 MC58  0         --               SA8      Dg-g-  XXL_576   --             5     slow
 MC59  35   on   FBA3      C----  --              XXL_575   --             5     slow
 MC60  0         --               MC4      Dg-g-  NA        --             5     slow
@@ -1846,62 +1832,62 @@ MC61  34   on   FBA7      C----  --              XXL_531   --             5     
 MC62  0         --               SA6      Dg-g-  NA        --             5     slow
 MC63  0         --               SA9      Dg-g-  NA        --             5     slow
 MC64  33   on   FBA4      C----  --              XXL_530   --             5     slow
-MC65  44   --   PB5       INPUT  VS0      Dg-g-  --        --             2     slow
+MC65  44   --   PB3       INPUT  VS0      Dg-g-  --        --             2     slow
 MC66  0         --               TB0      Dg-g-  --        --             2     slow
-MC67  45   --   PB4       INPUT  VS5      Dg-g-  --        --             2     slow
+MC67  45   --   PB0       INPUT  VS5      Dg-g-  --        --             2     slow
 MC68  0         --               MB3      Dg-g-  --        --             2     slow
-MC69  46   --   PB7       INPUT  VS6      Dg-g-  --        --             2     slow
+MC69  46   --   MAPLD     INPUT  VS6      Dg-g-  --        --             2     slow
 MC70  0         --               MB5      Dg-g-  --        --             2     slow
 MC71  0         --               VS7      Dg-g-  --        --             2     slow
-MC72  48   --   PB6       INPUT  MB6      Dg-g-  --        --             2     slow
-MC73  49   --   PB3       INPUT  TB3      Dg-g-  --        --             2     slow
+MC72  48   --   LADV      INPUT  MB6      Dg-g-  --        --             2     slow
+MC73  49   --   RETIRE    INPUT  TB3      Dg-g-  --        --             2     slow
 MC74  0         --               HS8      Dg-g-  --        --             3     slow
-MC75  50   --   PB0       INPUT  VS3      Dg-g-  --        --             2     slow
+MC75  50   --   VBLANK    INPUT  VS3      Dg-g-  --        --             2     slow
 MC76  0         --               HS3      Dg-g-  XXL_495   --             4     slow
-MC77  51   --   MAPLD     INPUT  MB4      Dg-g-  XXL_489   --             3     slow
+MC77  51   --   D1        INPUT  MB4      Dg-g-  XXL_489   --             3     slow
 MC78  0         --               HS6      Dg-g-  XXL_485   --             4     slow
 MC79  0         --               HS7      Dg-g-  XXL_483   --             4     slow
-MC80  52   --   LADV      INPUT  TB4      Dg-g-  XXL_482   --             3     slow
+MC80  52   --   FETCH     INPUT  TB4      Dg-g-  XXL_482   --             3     slow
 MC81  0         --               --              --        --             0     slow
 MC82  0         --               --              --        --             0     slow
-MC83  54   --   RA1       INPUT  --              --        --             0     slow
+MC83  54   --   RA0       INPUT  --              --        --             0     slow
 MC84  0         --               --              --        --             0     slow
-MC85  55   on   FBA14     C----  --              --        --             4     slow
-MC86  56   on   FBA8      C----  --              --        --             4     slow
+MC85  55   --   RA1       INPUT  --              --        --             0     slow
+MC86  56   on   FBA14     C----  --              --        --             4     slow
 MC87  0         --               --              --        --             0     slow
-MC88  57   on   FBA13     C----  --              --        --             4     slow
+MC88  57   on   FBA8      C----  --              --        --             4     slow
 MC89  0         --               --              --        --             0     slow
 MC90  0         --               --              --        --             0     slow
-MC91  58   on   FBA6      C----  --              --        --             4     slow
-MC92  0         --               --              --        --             0     slow
-MC93  60   on   FBA5      C----  --              --        --             4     slow
-MC94  61   on   FBA9      C----  --              --        --             4     slow
-MC95  0         --               MAPQ0    Dg-g-  --        --             2     slow
-MC96  62   --   TCK       INPUT  VS4      Dg-g-  XXL_483   --             3     slow
-MC97  63   on   MAPA1     Dg-g-  --              --        --             3     slow
+MC91  58   on   FBA13     C----  --              --        --             4     slow
+MC92  0         --               MAPQ0    Dg-g-  --        --             2     slow
+MC93  60   on   FBA6      C----  --              --        --             4     slow
+MC94  61   on   FBA5      C----  --              --        --             4     slow
+MC95  0         --               VS4      Dg-g-  --        --             2     slow
+MC96  62   on   FBA9      C----  --              XXL_483   --             5     slow
+MC97  63   --   RA2       INPUT  --              --        --             0     slow
 MC98  0         --               --              --        --             0     slow
-MC99  64   on   FBA2      C----  --              --        --             3     slow
+MC99  64   on   MAPA1     Dg-g-  --              --        --             3     slow
 MC100 0         --               --              --        --             0     slow
-MC101 65   on   FBA18     C----  --              --        --             4     slow
+MC101 65   on   FBA2      C----  --              --        --             3     slow
 MC102 0         --               --              --        --             0     slow
 MC103 0         --               --              --        --             0     slow
-MC104 67   on   FBA15     C----  --              --        --             4     slow
-MC105 68   on   FBA16     C----  --              --        --             4     slow
+MC104 67   on   FBA18     C----  --              --        --             4     slow
+MC105 68   on   FBA15     C----  --              --        --             4     slow
 MC106 0         --               --              --        --             0     slow
-MC107 69   on   FBA17     C----  --              --        --             4     slow
+MC107 69   on   FBA16     C----  --              --        --             4     slow
 MC108 0         --               --              --        --             0     slow
-MC109 70   on   FBA12     C----  --              --        --             4     slow
-MC110 0         --               --              --        --             0     slow
-MC111 0         --               MAP7     Dg-g-  --        --             2     slow
-MC112 71   --   TDO       INPUT  MAPQ6    Dg-g-  XXL_581   --             3     slow
+MC109 70   on   FBA17     C----  --              --        --             4     slow
+MC110 0         --               MAP7     Dg-g-  --        --             2     slow
+MC111 0         --               MAPQ6    Dg-g-  --        --             2     slow
+MC112 71   on   FBA12     C----  --              XXL_581   --             5     slow
 MC113 0         --               MAPQ2    Dg-g-  --        --             2     slow
 MC114 0         --               MAP5     Dg-g-  --        --             2     slow
-MC115 73   --   RETIRE    INPUT  MAPQ3    Dg-g-  --        --             2     slow
+MC115 73        --               MAPQ3    Dg-g-  --        --             2     slow
 MC116 0         --               MAP2     Dg-g-  --        --             2     slow
-MC117 74   --   VBLANK    INPUT  MAPQ5    Dg-g-  --        --             2     slow
-MC118 75   --   ROWADV    INPUT  MAPQ7    Dg-g-  --        --             2     slow
+MC117 74        --               MAPQ5    Dg-g-  --        --             2     slow
+MC118 75        --               MAPQ7    Dg-g-  --        --             2     slow
 MC119 0         --               MAP6     Dg-g-  --        --             2     slow
-MC120 76   --   FETCH     INPUT  MAPQ4    Dg-g-  --        --             2     slow
+MC120 76        --               MAPQ4    Dg-g-  --        --             2     slow
 MC121 0         --               MAP4     Dg-g-  --        --             2     slow
 MC122 0         --               MAP3     Dg-g-  --        --             2     slow
 MC123 77        --               MAPQ1    Dg-g-  --        --             2     slow
@@ -1923,16 +1909,16 @@ D: LC49	- LC64		16/16(100%)	8/16(50%)	5/16(31%)	66/80(82%)	(35)	0
 E: LC65	- LC80		16/16(100%)	8/16(50%)	5/16(31%)	41/80(51%)	(34)	0
 F: LC81	- LC96		8/16(50%)	8/16(50%)	1/16(6%)	29/80(36%)	(35)	0
 G: LC97	- LC112		9/16(56%)	8/16(50%)	1/16(6%)	31/80(38%)	(35)	0
-H: LC113- LC128		16/16(100%)	7/16(43%)	0/16(0%)	31/80(38%)	(30)	0
+H: LC113- LC128		16/16(100%)	3/16(18%)	0/16(0%)	31/80(38%)	(30)	0
 
 Total dedicated input used:	2/4 	(50%)
-Total I/O pins used		63/64 	(98%)
+Total I/O pins used		59/64 	(92%)
 Total Logic cells used 		113/128 	(88%)
 Total Flip-Flop used 		90/128 	(70%)
 Total Foldback logic used 	38/128 	(29%)
 Total Nodes+FB/MCells 		147/128 	(114%)
 Total cascade used 		4
-Total input pins 		42
+Total input pins 		38
 Total output pins 		23
 Total Pts 			389
 Creating pla file vaddr.tt3 with 0 inputs 0 outputs, 0 pins 0 nodes and 0 pterms...

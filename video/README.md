@@ -55,7 +55,7 @@ transistors, a diode and fifteen resistors — which is what closed `design-revi
 
 ⚠ **Every part on this card is bound by PINS, and none of them by macrocells.**
 `vctrl` is 61 of 64 I/O.
-`vaddr` is 63 of 64 I/O.
+`vaddr` is 59 of 64 I/O.
 `vsup` is 54 of 64 I/O.
 Their cell counts are 104, 113 and 84 of 128. Those totals **include JTAG's four**,
 because the `ATF1508AS` shares `TMS`/`TDI`/`TDO`/`TCK` with ordinary I/O, and all three

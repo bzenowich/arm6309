@@ -3055,7 +3055,7 @@ tables are shared between both projects.
 | `+$14` | `WADV` | b1..0 | pointer advance: 00 continue, **01 next row same column** (§7.2), 10 vertical (advance by stride) | **new** |
 | `+$15` | `VDATA` | b7..0 | **read or write** VRAM byte at `WPTR`, post-increment | **new** (§11) |
 | `+$16` | — | | reserved — there is **no `BORDER` register** (§9.3): VGA timing has no overscan, the porches must be black for the back-porch clamp, and the `'153` pixel mux has no spare input for a border index | — |
-| `+$17`–`$1F` | — | | reserved (`TILEBASE`/`FONTBASE` and map base at `+$17`–`$19`, §6.4; `WPTR` column shadow, §7.2, is written implicitly) | |
+| `+$17`–`$1F` | — | | reserved. `TILEBASE` at `+$17` and the map base at `+$19` (§6.4); `WPTR`'s column shadow (§7.2) is written implicitly. ⚠ **`+$18` decodes nowhere at all since 2026-09-10** — `FONTBASE`'s eight registers went with §6.4.3's Variant B on 2026-09-08 and its load strobe `LDFB` followed on 2026-09-10, which gave `vaddr` **four I/O pins back** (§19 item 40) | |
 
 ⭐ **Five of these have a second write port** — `+$03` `HSCROLL`, `+$04` `HSCROLLH`,
 `+$10` `PIDX`, `+$11` `PDATL` and `+$12` `PDATH` are the registers §10.3.2's display
@@ -3073,8 +3073,10 @@ which is what let §14.1 delete the `vlen` package.
 stock mode to select. `VMODE` is two bits; `CHAR` holds the third. Sync polarity is
 **not** a register bit — it follows `VMODE0`, since §12's 70 Hz codes are exactly
 the positive-H ones (§10.1.6.1). The window is **32 bytes**, so
-`TILEBASE`/`FONTBASE`/map base sit at `+$17`–`+$19`; ⚠ **`FONTBASE` at `+$18` is
-reserved rather than used** — §6.4.3's Variant B is not built.
+`TILEBASE` and the map base sit at `+$17` and `+$19`; ⚠ **`FONTBASE` at `+$18` is
+reserved rather than used** — §6.4.3's Variant B is not built, and since
+2026-09-10 nothing decodes the address either: its `LDFB` load strobe went, and
+that gave `vaddr` four I/O pins back (§19 item 40).
 
 `VMODE` chooses among native modes only. Reset forces `CTRL = 0`: display
 disabled, direct writes, no IRQ — so the machine comes up quiet and software
@@ -3172,7 +3174,7 @@ arithmetic line by line. (The GAL-build table this section used to carry — 41 
 | **1** | **74AHCT244** | ⭐ **the index onto the LUT's address bus** — §13.1's turnaround, `/OE` from `vsup` | **new** |
 | **2** | **74HC573** | ⭐ **`PDATL`/`PDATH`, §13's `+$11`/`+$12`** — the LUT entry is 16 bits and the card's bus is 8, so the pair has to be assembled somewhere. Transparent latches, because a `'574` clocked on a register write's *rising* edge samples before a 6809E has driven the data (§3.1) | **new** |
 | **1** | **74HC244** | ⭐ **§10.3.3's descriptor-byte buffer** — the display list's fetched byte, from the pixel bus onto the card's internal data bus for the dot a granted engine slot lasts. It is what makes a list `MOVE` reach a register at all | **new** |
-| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vaddr`** — scan address, `WPTR`/span pointer, tile address sources. **63 of 64 I/O, 113 of 128 cells** (`hardware/gal/cpld/vaddr.fit`) | |
+| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vaddr`** — scan address, `WPTR`/span pointer, tile address sources. **59 of 64 I/O, 113 of 128 cells** (`hardware/gal/cpld/vaddr.fit`) | |
 | 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, span-mask handling, §19 item 35's blanking delay. **61 of 64 I/O, 104 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) | |
 | **1** | `ATF1508AS-15JC84`, PLCC-84 | ⭐ **`vsup`** — §10.1.7, **new 2026-09-09**. The register-file address, §7.4's `SPANLEN` counter, §8.2's rank select, §9's palette write path and §10.3's descriptor decode. It **replaces three `GAL22V10`s** (`rfa`, `vlen`, `pxsel`), so a third PLCC-84 is −2 packages before it does anything else. **54 of 64 I/O, 84 of 128 cells** (`hardware/gal/cpld/vsup.fit`) | |
 | 1 | 74HC574 | posted-write **data** latch | = |
@@ -3986,11 +3988,14 @@ left is measurement. They are grouped by what would settle them.
     |---|---|
     | ⛔ **`+$15` `VDATA`** | §13: *"read or write VRAM byte at `WPTR`, post-increment"* — which **is** §11's readable VRAM, the section whose whole argument is that without it *"a windowing OS must keep a 128 KB shadow of the screen in system RAM"*. `regfile.ts` is the register decode of record and **has no entry for it**, so there is no signal to dangle: the feature is absent rather than unread, and only the map knows it was promised. `machine.v`'s `vram_read_attempt` is the same hole seen from the machine, and `machine_tb` asserts the software never takes it |
     | ⚠ `CTRL` b2 `CHAR` | §6.4.3's Variant B was dropped 2026-09-08 and `video.cpld.ts` correctly builds **no cell** for the bit — the macrocell went to the mask serialiser. **The silicon is right and §13's prose is stale**: it still reads "with `CELL`: 0 tile (8×8 colour), 1 character (1bpp glyph)". A doc fix |
-    | ⚠ `+$18` `FONTBASE` | the same dropped Variant B, and this one **is** still built: `vaddr` carries the `LDFB` load strobe for a register §13 already calls reserved. Cells on a part at 124 of 128 |
+    | ⭐ `+$18` `FONTBASE` | **CLOSED 2026-09-10.** The same dropped Variant B, and this one *was* still built: `vaddr` carried the `LDFB` load strobe for a register §13 already calls reserved. Deleted |
 
-    ⭐ **And `vaddr` is the part that cannot spare them.** §19 item 33's rewrite is
-    already blocked on cells there; `LDFB` and its register are the cheapest thing
-    on the part that is known to be unwanted.
+    ⭐ **And `vaddr` is the part that could not spare it.** §19 item 33's rewrite is
+    blocked on resource there, and deleting one strobe gave back **four I/O pins —
+    63 of 64 to 59 of 64** (`gal/cpld/vaddr.fit`), which is more than the cell it
+    cost: the fitter re-placed the whole part around it. Cells are unchanged at 113
+    of 128, so this is pin relief and not cell relief, and §19 item 33's refusal
+    was for **cells**.
 
     ⚠ **Eight signals on this card are `board` in the census rather than live**, and
     that is item 34 rather than a defect: §5.2.1's four `GCPU` and four `GSPN`

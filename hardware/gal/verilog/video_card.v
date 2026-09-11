@@ -137,7 +137,9 @@ module video_card (
   // that would carry one of them, and this wire is the one they agree on.
   wire VS_LDHS;
   wire SL0,SL1,SL2,SL3,SL4,SL5,SL6,SL7;
-  wire LDA,LDB,LDC,LDTB,LDFB,LDMB;
+  // ⭐ LDFB is gone - graphics.md 19 item 40, 2026-09-10. FONTBASE's load
+  // strobe, for §6.4.3's dropped Variant B; it gave vaddr four I/O pins back.
+  wire LDA,LDB,LDC,LDTB,LDMB;
   wire RP0, RP1, RLDA, RLDB;
   wire [7:0] PB;
 
@@ -218,7 +220,7 @@ module video_card (
     .WA10(WA10),.WA11(WA11),.WA12(WA12),.WA13(WA13),.WA14(WA14),
     .WA15(WA15),.WA16(WA16),.WA17(WA17),.WA18(WA18),
     .LDVSL(LDVSL),.LDVSH(LDVSH),.LDHS(LDHS),.LDHSH(LDHSH),
-    .LDA(LDA),.LDB(LDB),.LDC(LDC),.LDTB(LDTB),.LDFB(LDFB),.LDMB(LDMB),
+    .LDA(LDA),.LDB(LDB),.LDC(LDC),.LDTB(LDTB),.LDMB(LDMB),
     .FBA2(FBA2),.FBA3(FBA3),.FBA4(FBA4),.FBA5(FBA5),.FBA6(FBA6),
     .FBA7(FBA7),.FBA8(FBA8),.FBA9(FBA9),.FBA10(FBA10),.FBA11(FBA11),
     .FBA12(FBA12),.FBA13(FBA13),.FBA14(FBA14),.FBA15(FBA15),

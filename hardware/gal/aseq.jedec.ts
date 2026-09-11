@@ -269,10 +269,17 @@ const host: Cell[] = [
     terms: ["!HA3 & !HA2 & !HA1 & !HA0"] },
   { pin: 0, name: "ISSDATA", assertedLow: false, s0: 1, registered: false,
     terms: ["HA3 & !HA2 & !HA1 & HA0"] },
-  { pin: 0, name: "ISSPTR", assertedLow: false, s0: 1, registered: false,
-    terms: ["!HA3 & HA2 & HA1 & !HA0", "!HA3 & HA2 & HA1 & HA0", "HA3 & !HA2 & !HA1 & !HA0"] },
-  { pin: 0, name: "ISTIMER", assertedLow: false, s0: 1, registered: false,
-    terms: ["HA3 & !HA2 & HA1 & HA0", "HA3 & HA2 & !HA1 & !HA0"] },
+  /* ⛔ ISSPTR AND ISTIMER WERE HERE AND NOTHING READ THEM - deleted 2026-09-10,
+   * audio.md 16 item 42. They decoded the SPTR ($6-$8) and TIMER ($B-$C) groups
+   * out of HA, and the writes to both of those groups WORK - modplay_tb uploads
+   * a module's samples through SPTR and takes every one of its hundred ticks
+   * from TIMER - so they were a second decode of a path HW0/HW1/HW2 already
+   * decode off HA directly, not a dead end.
+   *
+   * ⭐ TWO CELLS BACK ON A PART AT 128 OF 128, which is the only reason this is
+   * worth doing rather than merely tidy: U2 is the part 11.3's attach chain has
+   * to fit on, and a one-literal change to CVBUSY could not be placed on it
+   * this afternoon. check:reach is what found them. */
 
   /* 9.3's index. ⛔ IT CANNOT LIVE IN THE STATE FILE, which is what 9.5 said
    * it did - "at a fixed address the sequencer knows, which is what breaks the

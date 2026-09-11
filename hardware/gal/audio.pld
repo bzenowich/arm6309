@@ -51,7 +51,6 @@ PIN = DMAEN0 ;
 PIN = DMAEN1 ;
 PIN = DMAEN2 ;
 PIN = DMAEN3 ;
-PIN = CIACLK ;
 PIN = !FIRQ ;
 PIN = CTRL0 ;
 PIN = CTRL1 ;
@@ -139,9 +138,8 @@ PINNODE = SYNCR1 ;
 PINNODE = SYNCR2 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * CHANSLOT, TMRSLOT, HOSTSLOT, DEFSLOT, WAIDX, WDMACON, WINTENA
- * WINTREQ, WCTRL, RINTREQ, RASTAT, SET0, SET1, SET2, SET3, SET4, SET5
- * MERGE, FIRQANY, HRD, RPF
+ * WDMACON, WINTENA, WINTREQ, WCTRL, RINTREQ, RASTAT, SET0, SET1, SET2
+ * SET3, SET4, SET5, MERGE, FIRQANY, HRD, RPF
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -152,11 +150,6 @@ S2.d = S2 & !S0
        # S2 & !S1
        # !S2 & S0 & S1 ;
 CCLK = S2 & S1 & S0 ;
-CHANSLOT = !S2 ;
-TMRSLOT = S2 & !S1 & !S0 ;
-HOSTSLOT = S2 & !S1 & S0 ;
-DEFSLOT = S2 & S1 ;
-WAIDX = SEL & !A3 & !A2 & !A1 & !A0 & !RW ;
 WDMACON = SEL & !A3 & !A2 & A1 & !A0 & !RW ;
 WINTENA = SEL & !A3 & !A2 & A1 & A0 & !RW ;
 WINTREQ = SEL & !A3 & A2 & !A1 & !A0 & !RW ;
@@ -186,7 +179,6 @@ P1.d = CCLK & !P2 & P1 & !P0
        # !CCLK & P1 ;
 P2.d = CCLK & !P2 & P0 & P1
        # !CCLK & P2 ;
-CIACLK = CCLK & P2 ;
 ENA0.d = WINTENA & D7 & D0
          # ENA0 & !WINTENA
          # ENA0 & D7

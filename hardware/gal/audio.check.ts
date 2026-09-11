@@ -56,26 +56,38 @@ const pinOf = (p: { assembly: { usage: { name: string; pin: number }[] } }, n: s
     const p = aseq.gal.evaluate({ 2: 1, 3: 0 })
     const slot = SL.reduce((n, pin, b) => n | (p[pin] << b), 0)
     if (slot !== model) { bad = `step ${i}: slot ${slot}, model ${model}`; break }
-    const want = {
-      CHANSLOT: isChannel(slot) ? 1 : 0, TMRSLOT: isTimer(slot) ? 1 : 0,
-      HOSTSLOT: isHost(slot) ? 1 : 0, DEFSLOT: isDeferred(slot) ? 1 : 0,
-      CCLK: isFrameEnd(slot) ? 1 : 0,
-    }
-    for (const [n, v] of Object.entries(want)) {
-      if (p[pinOf(aseq, n)] !== v) bad = `${n} = ${p[pinOf(aseq, n)]}, expected ${v} in slot ${slot}`
+    /* ⛔ THE FOUR PHASE DECODES WERE CHECKED HERE AND ARE DELETED - 2026-09-10,
+     * audio.md 16 item 42. CHANSLOT, TMRSLOT, HOSTSLOT and DEFSLOT were cells
+     * on this part that NOTHING IN THE DESIGN READ: U2 takes S2:S0 and decodes
+     * the five phases itself (audio.cpld.ts), and this check was their only
+     * consumer. A check is not a consumer, and four macrocells kept alive by one
+     * is what `check:reach` exists to find.
+     *
+     * ⭐ WHAT SURVIVES IS THE CLAIM, because the claim was never about the
+     * decodes: §3.1 is a statement about the COUNTER, and the counter is still
+     * here and still walked against the model above. CCLK stays because §4.1
+     * gives it a reason to - a scope wants the colour clock. */
+    if (p[pinOf(aseq, "CCLK")] !== (isFrameEnd(slot) ? 1 : 0)) {
+      bad = `CCLK = ${p[pinOf(aseq, "CCLK")]}, expected ${isFrameEnd(slot) ? 1 : 0} in slot ${slot}`
     }
     aseq.gal.clock({ 2: 1, 3: 0 }); model = nextSlot(model)
   }
   check(bad === null,
-    `aseq: the slot walk is ${SLOTS_PER_FRAME} slots and every phase decode agrees ` +
-    "with §3.1 over five frames", bad ?? "")
-  check(!bad, "aseq: slots 0-3 are the channels, 4 the timer, 5 host service, 6-7 deferred")
+    `aseq: the slot counter walks ${SLOTS_PER_FRAME} slots and CCLK marks the frame end, ` +
+    "over five frames - §3.1", bad ?? "")
+  check(!bad,
+    "aseq: and §3.1's phases - 0-3 channels, 4 timer, 5 host, 6-7 deferred - are U2's " +
+    "decode of that counter, not four cells here (audio.cpld.ts)")
 }
 
 /* -- the host decode, §9.2's sixteen bytes -------------------------------- */
 {
   const STROBE: Record<string, [number, boolean]> = {
-    WAIDX: [0x0, false], WDMACON: [0x2, false], WINTENA: [0x3, false],
+    /* ⛔ WAIDX WAS HERE AND IS DELETED - 2026-09-10, audio.md 16 item 42. U1
+     * decoded "a host write to AIDX" and nothing in the design read it; U2
+     * decodes it itself as ISAIDX, and that is the copy 9.3's prefetch rule is
+     * built on. This check was its only consumer, and a check is not one. */
+    WDMACON: [0x2, false], WINTENA: [0x3, false],
     WINTREQ: [0x4, false], WCTRL: [0x5, false], RINTREQ: [0x4, true], RASTAT: [0xa, true],
   }
   let bad: string | null = null

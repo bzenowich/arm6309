@@ -30,11 +30,6 @@ module audio (
     output wire S1,
     output wire S2,
     output wire CCLK,
-    output wire CHANSLOT,
-    output wire TMRSLOT,
-    output wire HOSTSLOT,
-    output wire DEFSLOT,
-    output wire WAIDX,
     output wire WDMACON,
     output wire WINTENA,
     output wire WINTREQ,
@@ -48,7 +43,6 @@ module audio (
     output wire P0,
     output wire P1,
     output wire P2,
-    output wire CIACLK,
     output wire ENA0,
     output wire ENA1,
     output wire ENA2,
@@ -296,21 +290,6 @@ module audio (
   assign CCLK =
          (S2 & S1 & S0);
   // buried
-  assign CHANSLOT =
-         (~S2);
-  // buried
-  assign TMRSLOT =
-         (S2 & ~S1 & ~S0);
-  // buried
-  assign HOSTSLOT =
-         (S2 & ~S1 & S0);
-  // buried
-  assign DEFSLOT =
-         (S2 & S1);
-  // buried
-  assign WAIDX =
-         (SEL & ~A3 & ~A2 & ~A1 & ~A0 & ~RW);
-  // buried
   assign WDMACON =
          (SEL & ~A3 & ~A2 & A1 & ~A0 & ~RW);
   // buried
@@ -328,9 +307,6 @@ module audio (
   // buried
   assign RASTAT =
          (SEL & A3 & ~A2 & A1 & ~A0 & RW);
-  // EXTERNAL
-  assign CIACLK =
-         (CCLK & P2);
   // EXTERNAL
   assign FIRQ =
          1'b0;

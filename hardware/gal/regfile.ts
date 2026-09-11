@@ -104,7 +104,17 @@ export const writeStrobes: Cell[] = [
    * nothing else. */
   strobe("LDA", REGS.WPTRA, "WPTR's three bytes - item 23 offered a '138 for these"),
   strobe("LDB", REGS.WPTRB), strobe("LDC", REGS.WPTRC),
-  strobe("LDTB", REGS.TILEBASE), strobe("LDFB", REGS.FONTBASE),
+  strobe("LDTB", REGS.TILEBASE),
+  /* ⛔ LDFB IS DELETED - 2026-09-10, graphics.md 19 item 40.
+   *
+   * FONTBASE's eight registers went with 6.4.3's Variant B on 2026-09-08
+   * (video.parts.ts) and the strobe that loaded them did not, so vaddr carried
+   * a decode of an address 13 already calls reserved, for a feature the card
+   * does not have. check:reach found it: produced, and read by nothing.
+   *
+   * ⭐ ONE CELL, ON THE PART THAT CANNOT SPARE THEM. vaddr is at 113 of 128 and
+   * 63 of 64 I/O, and 19 item 33's rewrite is already blocked on cells there -
+   * "VSCROLL in the display list is refused by the fitter for want of nine". */
   strobe("LDMB", REGS.MAPBASE),
   /* ⚠ LLOAD IS DELETED - 2026-09-08, and it was carrying a defect.
    *

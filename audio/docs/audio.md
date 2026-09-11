@@ -572,7 +572,7 @@ DAC against a fixed reference; its I/V output becomes the **reference** of a sec
 
   Vs ------------>| DAC |--> I ~= Vs * VOLCODE/256            (the multiply, in analogue)
                      ^
-                  VOLCODE = VOL x 4
+                  VOLCODE = min(VOL x 4, 255)     always; §16 item 42
 ```
 
 That is not a trick; it is the AD7528's own headline application — *"Digitally
@@ -593,15 +593,21 @@ speed grade and a 65,536-byte boot upload. Here `VOL` = 1 attenuates the full 8-
 sample by 36 dB instead of reducing it to a 12-bit value of ±2 — a better result,
 reached by deleting the digital product rather than by widening it.
 
-**The programmable volume curve is host software.** **`ACTRL` b3 = raw volume**: with
-it set, `VOL` is an 8-bit attenuator code the host writes directly. A replayer that
-wants a dB-linear law, a soft-clip or a per-machine calibration keeps a 65-byte table
-and writes the mapped byte — one indexed load per volume change, in the tick that was
-writing `VOL` anyway. The default (`ACTRL` b3 = 0) is `VOL` 0–64 with the card doing
-the ×4, so the register stays Paula-identical and the acceptance test does not move.
+**`VOL` IS 0–64 AND THE ×4 IS UNCONDITIONAL.** ⛔ **`ACTRL` b3's raw-volume mode was
+retired 2026-09-10** — §16 item 42. It offered the host an 8-bit attenuator code so a
+replayer could implement a dB-linear law or a per-machine calibration, and it failed
+§11's own question: **Paula's `AUDxVOL` is 0–64 and nothing else.** The bit reached no
+cell on either CPLD, so the card never had the mode; `refplayer`'s `card.c` did, which
+is a model above its hardware.
 
-**`VOL` is seven bits in the state file** (0–64 is 65 levels). With `ACTRL` b3 set it
-is eight, and the sequencer stops shifting.
+**A non-Paula volume curve is still host software and costs no bit**: map into 0–64
+with a 65-byte table, one indexed load per volume change, in the tick that was writing
+`VOL` anyway. What is given up is the bottom two bits of that curve's resolution, and
+what is bought is a register that is Paula-identical in every mode because there is
+only one.
+
+**`VOL` is seven bits in the state file** (0–64 is 65 levels) and always was: the
+eighth existed only for the retired mode.
 
 **Sample coding moves to the loader, and costs nothing there.** An 8-bit multiplying
 DAC takes **unsigned** data, so a two's-complement sample byte would put full-scale
@@ -1071,7 +1077,7 @@ anyway. [history.md](history.md) has what this section said before 2026-09-09.
 | `+$2` | `ADMACON` | W | b3..0 channel DMA enable. **b7 = set/clear**, Paula's `DMACON` convention |
 | `+$3` | `AINTENA` | W | b5..0 interrupt enables (§8.1). Same b7 set/clear convention |
 | `+$4` | `AINTREQ` | R/W | read: pending flags. write: **b7 = 0 clears** the bits set in b5..0; **b7 = 1 sets** them, Paula's `INTREQ` convention |
-| `+$5` | `ACTRL` | W | b0 LED filter, b1 filter bypass, b2 NTSC clock, **b3 raw volume** — `VOL` is an 8-bit attenuator code instead of Paula's 0–64 (§6.1), ⚠ **b4 reserved** (§11.2's 8-channel mode, dropped 2026-09-10), ⚠ **b5 reserved** (§11.1's pan enable, withdrawn 2026-09-09 — Paula's hard pan is the wiring and the only mode), **b6 tempo-timer enable** (§8.2), b7 master enable |
+| `+$5` | `ACTRL` | W | b0 LED filter, b1 filter bypass, ⚠ **b2 reserved** (NTSC clock, retired 2026-09-10 — §4.1 takes one crystal), ⚠ **b3 reserved** (raw volume, retired 2026-09-10 — Paula's `VOL` is 0–64 and §6.1's ×4 is unconditional), ⚠ **b4 reserved** (§11.2's 8-channel mode, dropped 2026-09-10), ⚠ **b5 reserved** (§11.1's pan enable, withdrawn 2026-09-09 — Paula's hard pan is the wiring and the only mode), **b6 tempo-timer enable** (§8.2), b7 master enable. ⛔ **Four of eight bits are reserved and every one of them was a feature Paula does not have** — §11 is where that reckoning is |
 | `+$6`–`$8` | `SPTR` | W | sample-RAM pointer, 19 bits, auto-increment |
 | `+$9` | `SDATA` | R/W | sample-RAM byte at `SPTR`, **post-increment** — a **side-effecting port**, see the `TFM` note below |
 | `+$A` | `ASTAT` | R | b3..0 channel DMA active, b4 timer running, b5 reserved (reads 0), **b6 posted-write busy**, **b7 prefetch valid** — b6/b7 defined below |
@@ -1125,7 +1131,7 @@ Per channel, `AIDX` = `channel × 16 + offset`:
 | 7 | `VOL` | 1 | `AUDxVOL` | 0–64 |
 | 8 | `DAT` | 1 | `AUDxDAT` | direct sample write, CPU-fed mode (§1 req. 8) — **offset binary**, like everything else the converter sees (§6.1) |
 | 9 | `ATT` | 1 | `ADKCON` bits | b0 attach-period, b1 attach-volume (§11.3). **Channel 3's bits are ignored** — there is no channel 4 and no wrap to channel 0 |
-| 10 | `PAN` | 1 | — | **the right-hand volume code, 0–64** (§11.1). Ignored unless `ACTRL` b5; **the converter halves it drives are built** |
+| 10 | — | 1 | — | ⚠ **reserved.** Was `PAN`, the right-hand volume code; §11.1's programmable panning was withdrawn 2026-09-09 and the converter halves it drove went with it. Writable, read-back, and read by no microcode step — `check:reach` asserts that |
 | 11–15 | `PTR`/`CNT` | 5 | — | **read-only**, current pointer and remaining count |
 
 > **The `LC` / `LEN` asymmetry is deliberate and must be frozen early.** `LEN` stays
@@ -2266,7 +2272,10 @@ open item, and there is nothing left to promise.
   about a rarely-exercised corner is exactly how a divergence survives to a GAL. The
   sequencer term is `attach_target_valid = (ch != 3)`.
 - **Extended period range** (§4.3) — already free.
-- **Programmable volume curve** (§6.1) — already free.
+- ⛔ **Programmable volume curve** (§6.1) — **dropped 2026-09-10** with `ACTRL` b3.
+  It was the third extension of the same kind as §11.1's panning and §11.2's eight
+  channels, and it went for the same reason: Paula's `VOL` is 0–64, a curve maps into
+  0–64 in host software for no bit at all, and the mode bit reached no cell.
 
 ### 11.4 What is *not* worth building
 
@@ -3495,53 +3504,62 @@ specification that has not been tested.
     not move this metric, because `abcompare.py` normalises level in the first two
     lines of its comparison.
 
-42. **⛔ NEW 2026-09-10 — the card's own census: three features promised and not
-    built, three withdrawn features still in the register map, and eight
-    macrocells of dead logic.** `npm run check:reach` is the instrument and it is
-    part of `npm run check`; §16 item 40 is how it came to be written.
+42. **⭐ CLOSED 2026-09-10 — the card's own census, and what retiring it bought.**
+    `npm run check:reach` is the instrument and it is part of `npm run check`;
+    §16 item 40 is how it came to be written.
 
-    **Promised and not built** — a register bit or field the host can write and
-    the card cannot perform:
+    ### Retired: four of `ACTRL`'s eight bits, and every one was invented
 
-    | | | |
+    | | |
+    |---|---|
+    | b2 | **NTSC clock.** §4.1 takes **one** crystal and rejects the NTSC master at +16 cents, so there was no second crystal and no divider select: the bit could never do anything. ⚠ **And `refplayer`'s `card.c` implemented it** — a model above its hardware, which is the trap CLAUDE.md records for `mainboard.v`. `CARD_CC_NTSC` and `--ntsc` are gone |
+    | b3 | **raw volume.** `paula.md`: *"`AUDxVOL`: 0–64 linear amplitude"*, and the words **255**, *8-bit volume* and *attenuator* appear **nowhere in that document** — 256-level volume was invented. §6.1's ×4 is unconditional now and a non-Paula curve maps into 0–64 in host software for no bit at all |
+    | b4 | **8-channel mode.** Paula has four (§11.2, dropped) |
+    | b5 | **pan enable.** §11.1's panning, withdrawn 2026-09-09 |
+
+    Plus state-file `+$A` `PAN`, withdrawn with b5.
+
+    ⚠ **All four failed the same test**, and §11's own title is the test: *what
+    does this card do that Paula cannot*. The card's premise (§1) is bit-exact
+    playback of existing Amiga OCS modules, and a feature Paula does not have
+    cannot appear in one.
+
+    ### Deleted: eight macrocells of dead logic, six on U1 and two on U2
+
+    ⚠ **None of these was a broken feature**, and the way that is known is that
+    the features work: `modplay_tb` uploads a module's samples through
+    `SPTR`/`SDATA` and takes every one of its hundred ticks from `TIMER`, so
+    `ISSPTR` and `ISTIMER` were second decodes of a path `HW0`/`HW1`/`HW2`
+    already decode off `HA`.
+
+    | | on | |
     |---|---|---|
-    | `ACTRL` b3 | §6.1's volume ×4 | item 40 — 12.04 dB, and the only one costed |
-    | state file `+$8` `DAT` | §1 requirement 8's CPU-fed sample | storable, and no microcode step plays it |
-    | state file `+$9` `ATT` | Paula's `ADKCON` bits, per channel (§11.3 *"Build it"*) | storable, and nothing modulates |
+    | `CHANSLOT`, `TMRSLOT`, `HOSTSLOT`, `DEFSLOT` | **U1** | the four slot decodes. §9.2's own note says *"U2 takes the three counter bits and decodes the five phases itself — three pins instead of five"*. The pins went in 2026-09-09 and the cells stayed |
+    | `WAIDX` | **U1** | "a host write to `AIDX`". U2 decodes it itself as `ISAIDX` |
+    | `CIACLK` | **U1** | ⚠ §8.2's ÷5 tempo clock, **on a pin**. The timer is counted by the microcode against the shared adder, so nothing took it. `CCLK` stays — §4.1 says a scope wants the colour clock, and there was never an equivalent sentence for this one |
+    | `ISSPTR`, `ISTIMER` | **U2** | the `SPTR` and `TIMER` group decodes, duplicated |
 
-    ⚠ **`ATT` is not an extra register.** `paula.md` puts attach in one global
-    `ADKCON` at `$DFF09E`; §9.3 puts the same two bits in a per-channel byte. Same
-    feature, redistributed — and §11.3's "channel 3 modulates nothing" is Paula's
-    rule too.
+    ⚠ **Two checks were their only consumers**, which is the reason they survived:
+    `audio.check.ts` asserted the four phase decodes and `WAIDX`'s offset. **A
+    check is not a consumer** — §3.1's claim is about the *counter*, which is
+    still there and still walked, and the phases are U2's decode of it.
 
-    **Withdrawn and still in the map** — the card is right and the map is stale:
+    ### What it bought, measured rather than asserted
 
-    | | |
-    |---|---|
-    | `ACTRL` b2 | NTSC clock. §4.1 takes **one** crystal and rejects NTSC at +16 cents, so there is no second crystal and no divider select: the bit can never do anything. ⚠ **And `refplayer`'s `card.c` implements it** — a model above its hardware, which is the trap CLAUDE.md records for `mainboard.v` |
-    | `ACTRL` b4 | ⛔ **8-channel mode, dropped 2026-09-10.** Paula has four channels (`paula.md`), so it failed §11's own question — *what does this card do that Paula cannot* — the moment it was asked. Nothing was ever built: `SFA`'s channel field is two bits |
-    | `ACTRL` b5 | pan enable. §11.1's programmable panning was withdrawn 2026-09-09 — it is most of 45 ICs → 35 |
-    | state file `+$A` `PAN` | the same withdrawal. `HOSTMAP` already says "reserved (was PAN)"; §9.3's table still describes it as "the right-hand volume code, 0–64" |
+    | | before | after | |
+    |---|---|---|---|
+    | U1 logic cells | 88 of 128 | **87** | |
+    | **U1 I/O** | 62 of 64 | **61** | ⭐ **and that pin is the one §6.1's ×4 select needs.** U1 had two spare with `VOL4` still to place |
+    | U2 | 128 of 128 | **128 of 128** | ⚠ **no measurable relief.** Two cells were deleted and the fitter still reports the array full — it packs to 128. The part that needs room for §11.3's attach chain did not gain any that `gal/cpld/aseq.fit` can show |
 
-    **Dead logic** — eight macrocells that cost a cell and buy nothing, because
-    the job moved and the cell stayed. ⚠ **None of these is a broken feature**,
-    and the way that is known is that the features work: `modplay_tb` uploads
-    samples through `SPTR`/`SDATA` and takes every tick from `TIMER`, so
-    `ISSPTR` and `ISTIMER` are second decodes of a path that is already
-    decoded elsewhere.
+    ### What is left: four missing features, and two of them have no bit
 
     | | |
     |---|---|
-    | `CHANSLOT`, `TMRSLOT`, `HOSTSLOT`, `DEFSLOT` | U1's four slot decodes. §9.2's own note says *"U2 takes the three counter bits and decodes the five phases itself — three pins instead of five"*, and U1 still computes all four |
-    | `WAIDX` | U1's "a host write to `AIDX`". U2 decodes it itself as `ISAIDX` |
-    | `ISSPTR`, `ISTIMER` | U2's `SPTR` and `TIMER` decodes, duplicated by `HW0`/`HW1`/`HW2` off `HA` directly |
-    | `CIACLK` | ⚠ **§8.2's ÷5 tempo clock, on a PIN.** The timer is counted by the microcode against the shared adder, so nothing on the card takes it. `CCLK` is a pin because §4.1 says a scope wants it; this one has no such sentence and needs a decision |
-
-    ⭐ **Eight cells matters here specifically**, because U2 is at **128 of 128
-    logic cells** and both remaining features — `ATT` and 8-channel mode — are
-    sequencer work. Four of the eight are on U1, which has forty spare; four are
-    not. §16 item 38's control-store decision is the same question from the other
-    end.
+    | §6.1's volume ×4 | §16 item 40. ⚠ **A datapath gap with no register bit behind it now**, so `check:reach` cannot see it and only that item tracks it |
+    | `+$8` `DAT` | §1 requirement 8's CPU-fed sample. Storable; no microcode step plays it |
+    | `+$9` `ATT` | Paula's `ADKCON` bits, per channel (§11.3 *"Build it"*). Storable; nothing modulates |
+    | `graphics.md` §13's `+$15` `VDATA` | §11's readable VRAM — the video card's, and absent from its decode entirely |
 
 ---
 

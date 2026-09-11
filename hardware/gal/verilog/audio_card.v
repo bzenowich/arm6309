@@ -31,7 +31,11 @@ module audio_card (
 
   // ---------------------------------------------------------------- U1 ---
   wire S0, S1, S2, CCLK, SEL, NEQL, NEQH;
-  wire DMAEN0,DMAEN1,DMAEN2,DMAEN3, CIACLK, FIRQ;
+  // ⭐ CIACLK is gone - audio.md 16 item 42, 2026-09-10. It was 8.2's ÷5 tempo
+  // clock on a pin, and the timer is counted by U2's microcode against the
+  // shared adder, so nothing on this board ever took it. The pin it frees is
+  // where 6.1's ×4 select goes.
+  wire DMAEN0,DMAEN1,DMAEN2,DMAEN3, FIRQ;
   wire CTRL0,CTRL1,CTRL2,CTRL3,CTRL4,CTRL5,CTRL6,CTRL7;
   wire SETA,SETB,SETC, PWBUSY, PFVALID;
   // U1 buried

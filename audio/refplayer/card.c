@@ -304,12 +304,12 @@ int card_firq(const card_t *c)
 }
 
 /* VOL -> the 8-bit code written to the volume converter (§6.1). Paula's 0..64
- * shifts left two and saturates; ACTRL_RAWVOL passes the byte through, so a
+ * shifts left two and saturates, unconditionally since 2026-09-10 - §16 item
+ * 42 retired ACTRL b3, so there is no raw mode and a
  * non-linear volume curve lives in host software instead of card silicon. */
-static unsigned vol_code(const card_t *c, unsigned vol)
+static unsigned vol_code(unsigned vol)
 {
     unsigned code;
-    if (c->ctrl & ACTRL_RAWVOL) { return vol & 0xFFu; }
     if (vol > 64u) { vol = 64u; }
     code = vol << 2;
     return code > 255u ? 255u : code;
@@ -320,7 +320,7 @@ int card_chan_out(const card_t *c, unsigned n)
     /* The sample converter is unsigned-coded and its half-scale pedestal is
      * cancelled at its own I/V node, BEFORE the volume stage (§6.3) — which is
      * why VOL = 0 is exact silence here, with no DC step to leave behind. */
-    return ((int)c->ch[n].samp - 128) * (int)vol_code(c, c->ch[n].vol);
+    return ((int)c->ch[n].samp - 128) * (int)vol_code(c->ch[n].vol);
 }
 
 void card_dac(const card_t *c, int *l, int *r)
@@ -346,5 +346,10 @@ void card_dac(const card_t *c, int *l, int *r)
 
 long card_colour_clock(const card_t *c)
 {
-    return (c->ctrl & ACTRL_NTSC) ? CARD_CC_NTSC : CARD_CC_PAL;
+    /* One crystal - audio.md §4.1, and §16 item 42 retired ACTRL b2. The
+     * parameter stays: the signature is card.h's public API and every caller
+     * passes the card it is asking about, which is the honest shape even now
+     * that the answer does not depend on it. */
+    (void)c;
+    return CARD_CC_PAL;
 }
