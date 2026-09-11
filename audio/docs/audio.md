@@ -59,7 +59,7 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
 | **Which interrupt line?** | **`/FIRQ`.** Video's VBL owns `/IRQ`. A 6809 `FIRQ` is what a replayer tick should be. | §8.1 |
 | **What does mod playback cost the 6309?** | **~2.7 % of a 2.098 MHz CPU** for the replayer, with a 19× worst-case margin; **~738 ms once** to upload 128 KB of samples — a ~500 ms `EORD` pass converting them to offset binary (§6.1, §16 item 27) plus a 238 ms chunked `TFM X+,Y` (§13.2). The `TFM` alone is 187 ms. | §13, [`modplayer.md`](modplayer.md) §7 |
 | ⭐ **Where does the sound come out?** | **Two places, and they are different signals.** A **headphone-driven** 3.5 mm stereo jack on the card's rear edge (an `NJM4556AD`, 70 mA), and a **line-level** pair on the backplane. | §7.1 |
-| **What does this card do that Paula cannot?** | No minimum period; 8 channels at half period resolution; a programmable volume curve (host software — §6.1). ⚠ **Programmable panning was given up on 2026-09-09** — it cost six packages against the two it was pitched at, and classic MOD is hard-panned anyway (§11.1). | §11 |
+| **What does this card do that Paula cannot?** | ⛔ **Almost nothing, deliberately.** No minimum period (§4.3) and that is all. ⚠ **Programmable panning was given up 2026-09-09** — six packages against the two it was pitched at, and classic MOD is hard-panned anyway (§11.1) — and ⚠ **eight channels dropped 2026-09-10**: Paula has four, and a card whose acceptance test is bit-exact MOD playback does not need a fifth (§11.2). | §11 |
 
 ⭐ **Net: 35 ICs, on a 180 mm card.** The logic is **two** `ATF1508AS` — **U1**, the
 host register block, and **U2**, the sequencer (§10.2) — and **the card is simulated end
@@ -457,7 +457,7 @@ This card inherits the line item, so the machine's parts list does not grow — 
 |---|---|
 | 64 KB | most early/chiptune modules |
 | 128 KB | the large majority of the ProTracker corpus |
-| **512 KB** | **everything, including the 8-channel and OctaMED material of §11.2** |
+| **512 KB** | **everything, including the OctaMED material that used to justify §11.2's eight channels** |
 
 The host writes samples through an auto-incrementing `SPTR`/`SDATA` pair (§9), retired
 in slot 5 — a posted write, exactly the discipline of
@@ -1071,7 +1071,7 @@ anyway. [history.md](history.md) has what this section said before 2026-09-09.
 | `+$2` | `ADMACON` | W | b3..0 channel DMA enable. **b7 = set/clear**, Paula's `DMACON` convention |
 | `+$3` | `AINTENA` | W | b5..0 interrupt enables (§8.1). Same b7 set/clear convention |
 | `+$4` | `AINTREQ` | R/W | read: pending flags. write: **b7 = 0 clears** the bits set in b5..0; **b7 = 1 sets** them, Paula's `INTREQ` convention |
-| `+$5` | `ACTRL` | W | b0 LED filter, b1 filter bypass, b2 NTSC clock, **b3 raw volume** — `VOL` is an 8-bit attenuator code instead of Paula's 0–64 (§6.1), **b4 8-channel mode** (§11.2), **b5 pan enable** (§11.1 — 0 is Paula's hard pan and is the reset state), **b6 tempo-timer enable** (§8.2), b7 master enable |
+| `+$5` | `ACTRL` | W | b0 LED filter, b1 filter bypass, b2 NTSC clock, **b3 raw volume** — `VOL` is an 8-bit attenuator code instead of Paula's 0–64 (§6.1), ⚠ **b4 reserved** (§11.2's 8-channel mode, dropped 2026-09-10), ⚠ **b5 reserved** (§11.1's pan enable, withdrawn 2026-09-09 — Paula's hard pan is the wiring and the only mode), **b6 tempo-timer enable** (§8.2), b7 master enable |
 | `+$6`–`$8` | `SPTR` | W | sample-RAM pointer, 19 bits, auto-increment |
 | `+$9` | `SDATA` | R/W | sample-RAM byte at `SPTR`, **post-increment** — a **side-effecting port**, see the `TFM` note below |
 | `+$A` | `ASTAT` | R | b3..0 channel DMA active, b4 timer running, b5 reserved (reads 0), **b6 posted-write busy**, **b7 prefetch valid** — b6/b7 defined below |
@@ -1109,7 +1109,7 @@ never issue it.
 
 | Bit | Definition | Behaviour on this machine |
 |---|---|---|
-| `ACTRL` b4 | **8-channel mode** (§11.2) | **b4, unambiguously** — decision D7. `card.h` follows the document, not the other way round: §9.2 is the deliverable. |
+| `ACTRL` b4 | ⛔ **reserved.** §11.2's 8-channel mode was dropped 2026-09-10 — Paula has four channels. The bit reads back and selects nothing, `check:reach` asserts that no cell takes it, and `card.h` follows. |
 | `ASTAT` b6 | **host access busy** — 1 from the strobe of **any** host write, index writes included, until the sequencer's work item for it has **finished**. A further write while b6 = 1 is lost and sets `AINTREQ` b5 (§8.1). | ⚠ **It is a real handshake now, not observability.** Measured worst wait: **63 slots, 2.2 µs** — comparable to a 6309 store at ~5 E cycles (2.38 µs), so a polling host will occasionally see it set. §9.4.4 has why it must span the whole sequence. |
 | `ASTAT` b7 | **prefetch valid** — 1 when the `ADATA`/`SDATA` prefetch latch (§9.3) holds the byte for the *current* index. Cleared by a write to `AIDX`/`SPTR` and by the post-increment; set when slot 5 retires the prefetch. | The same arithmetic as b6 from the other side: the prefetch completes within one colour clock (281.9 ns) and the soonest a 6309 can look is 2.38 µs later, so **b7 reads 1 every time this machine polls it** and §9.3's "reads never stall" holds. It is not a handshake the 6309 has to honour; it is the observability that makes that claim checkable on a logic analyser, and it is a real handshake for any host fast enough to need one. |
 
@@ -1517,7 +1517,7 @@ product terms. A **TQFP-100 was tried and does not help**: it takes the
 pins from 62 of 64 to 62 of 80 and leaves the cells at 128 of 128, because both packages
 carry the same 128 macrocells. So the PLCC-84 is the right package — it keeps the socket
 and the TQFP-100 would buy eighteen pins the design does not need — and **there is
-nothing left on U2 for anything else**, §16 item 7's 8-channel mode included.
+nothing left on U2 for anything else** — which §11.2's departure does not change, because that mode was never built.
 
 ⚠ **JTAG is off on U2**, which is the four pins that made it fit: 62 of 64 against 62 of
 60. Both parts are programmed out of circuit, so this is the arrangement the card already
@@ -2008,9 +2008,9 @@ each need that qualification explicitly.
 | `SEQ` | 2 | **U2** — `next` / `end` / `chain` / `end and fire`. ⭐ The entire next-state logic |
 | | **28** | 21 straight to the datapath, 7 through U2, **4 spare** |
 
-⭐ **The four spare bits are where §16 item 7's 8-channel mode and §11.3's attach chain
-go** — which is the first time since 2026-09-09 that this card has had anywhere to put
-them (§16 item 32).
+⭐ **The four spare bits are where §11.3's attach chain goes** — which is the first
+time since 2026-09-09 that this card has had anywhere to put it (§16 item 32), and
+since 2026-09-10 it is the only claimant, §11.2's eight channels having been dropped.
 
 #### 10.3.5 ⛔ The adder, timed — and it does not decide between the two designs
 
@@ -2208,6 +2208,18 @@ Presented as opt-in, because **the default configuration must be Paula-exact** o
 the acceptance test in §1 is meaningless. Each of these is a register bit that
 software has to ask for.
 
+> ⛔ **AND BOTH OF THEM ARE GONE.** §11.1's panning was given up 2026-09-09 and
+> §11.2's eight channels dropped 2026-09-10, each for the same reason from a
+> different direction: **this card plays MOD files, and a feature Paula does not
+> have cannot appear in a bit-exact playback of a Paula module.** What is left
+> under this heading is §11.3, which is Paula's own extras — so the section is
+> now a record of two extensions that were costed and refused rather than a list
+> of things the card does.
+>
+> ⚠ **§11.3's "programmable volume curve" is the third of the same kind**, and
+> it is `ACTRL` b3's raw-volume mode. Paula's `AUDxVOL` is 0–64 and nothing
+> else. §16 item 40 costs what retiring it would buy.
+
 ### 11.1 Panning (given up 2026-09-09; see history.md)
 
 ⛔ **Programmable per-channel panning was pitched at "+2 ICs" and cost six**, and it is
@@ -2223,30 +2235,23 @@ and `PAN` (§9.3 offset 10) reads and writes as reserved.
 **The acceptance test is untouched**: §1 requirement 5 *is* hard-panned stereo, and this
 is the arrangement it names.
 
-### 11.2 Eight channels — a slot-allocation question, not a hardware one
+### 11.2 Eight channels (dropped 2026-09-10; see history.md)
 
-The state file has room; the slot walk does not. Eight channels at full period
-resolution needs 8 slots for channels alone plus timer and host — 12 slots per
-colour clock at **42.6 MHz**, which is not a 1989 SRAM.
+⛔ **Paula has four channels and this card plays MOD files.** `paula.md`: *"Paula
+supports **four** simultaneous, independent 8-bit signed PCM channels, numbered
+0–3."* Eight was this project's own invention, and the test it failed is the one
+this section's title asks: **is it a native Paula feature?** It is not, and the
+card's premise (§1) is bit-exact playback of existing Amiga OCS modules, not a
+superset.
 
-The asymmetric answer fits inside the existing 8-slot frame:
+**`ACTRL` b4 is reserved.** It was never built — `check:reach` is what found the
+bit had no consumer — and the state file never addressed eight channels either:
+`SFA`'s channel field is two bits (`aseq.jedec.ts`), so nothing on the card was
+ever sized for it. **Dropping it costs nothing and returns the §3.1 slot margin
+to 56×**, because slots 6–7 stay with deferred pointer work.
 
-```
-  colour clock even : slots 0-3 = ch 0-3,  slots 6-7 = ch 4,5
-  colour clock odd  : slots 0-3 = ch 0-3,  slots 6-7 = ch 6,7
-```
-
-**Channels 0–3 keep full Paula period resolution; channels 4–7 tick on a
-2-colour-clock grid** (half the pitch resolution — ~0.9 % worst case at the top
-note, ~15 cents). That is the right asymmetry: 4-channel modules — the acceptance
-test — are exact, and 8-channel OctaMED/FastTracker material, which is rarer and
-was never Paula-exact anyway (the Amiga plays it by software-mixing pairs into
-Paula's four channels, at *worse* fidelity than this), gets a mode bit and the
-deferred slots.
-
-**Cost: sequencer terms only, +0 ICs.** But it takes slots 6–7 away from deferred
-pointer work, so the §3.1 margin drops from 56× to ~2×. **Fit and verify before
-promising it (§16 item 7).**
+⚠ **§16 item 7 goes with it** — "fit and verify before promising it" was the
+open item, and there is nothing left to promise.
 
 ### 11.3 Paula's own extras, for free
 
@@ -3501,7 +3506,6 @@ specification that has not been tested.
     | | | |
     |---|---|---|
     | `ACTRL` b3 | §6.1's volume ×4 | item 40 — 12.04 dB, and the only one costed |
-    | `ACTRL` b4 | §11.2's 8-channel mode | the slot allocation is designed; no cell reads the bit |
     | state file `+$8` `DAT` | §1 requirement 8's CPU-fed sample | storable, and no microcode step plays it |
     | state file `+$9` `ATT` | Paula's `ADKCON` bits, per channel (§11.3 *"Build it"*) | storable, and nothing modulates |
 
@@ -3515,6 +3519,7 @@ specification that has not been tested.
     | | |
     |---|---|
     | `ACTRL` b2 | NTSC clock. §4.1 takes **one** crystal and rejects NTSC at +16 cents, so there is no second crystal and no divider select: the bit can never do anything. ⚠ **And `refplayer`'s `card.c` implements it** — a model above its hardware, which is the trap CLAUDE.md records for `mainboard.v` |
+    | `ACTRL` b4 | ⛔ **8-channel mode, dropped 2026-09-10.** Paula has four channels (`paula.md`), so it failed §11's own question — *what does this card do that Paula cannot* — the moment it was asked. Nothing was ever built: `SFA`'s channel field is two bits |
     | `ACTRL` b5 | pan enable. §11.1's programmable panning was withdrawn 2026-09-09 — it is most of 45 ICs → 35 |
     | state file `+$A` `PAN` | the same withdrawal. `HOSTMAP` already says "reserved (was PAN)"; §9.3's table still describes it as "the right-hand volume code, 0–64" |
 

@@ -158,7 +158,7 @@ const RESERVED: Record<string, { why: Why; note: string }> = {
   CTRL1: { why: "board", note: "§7's filter bypass, the same 74HC4066" },
   CTRL2: { why: "stale", note: "⛔ NTSC clock. §4.1 takes ONE crystal, 28.37516 MHz, and rejects NTSC at +16 cents - the card has no second crystal and no divider select, so the bit can never do anything. ⚠ refplayer's card.c IMPLEMENTS it, which is a model above its hardware" },
   CTRL3: { why: "open",  note: "⛔ §6.1's volume ×4. VOLCODE should be min(4·VOL,255) and is VOL - 12.04 dB below every level §7.1 specifies. §16 item 40" },
-  CTRL4: { why: "open",  note: "⛔ §11.2's 8-channel mode. The slot allocation is designed; no cell reads the bit" },
+  CTRL4: { why: "stale", note: "⛔ 8-channel mode, DROPPED 2026-09-10. paula.md: Paula has four channels, numbered 0-3, so §11.2 failed §11's own question. Nothing was ever built - SFA's channel field is two bits" },
   CTRL5: { why: "stale", note: "⛔ pan enable. §11.1's programmable panning was WITHDRAWN 2026-09-09 - most of 45 ICs → 35" },
 
   /* ================= produced, and nothing anywhere consumes ============ *
@@ -284,7 +284,7 @@ check(stale.length === 0,
 const byWhy = (w: Why) => Object.entries(RESERVED).filter(([, v]) => v.why === w)
 console.log("")
 console.log(`      ${dangling.length} signals produced and read by nothing:`)
-const EXTRA: Record<string, number> = { open: 2, stale: 1 }   // the state file's fields
+const EXTRA: Record<string, number> = { open: 2, stale: 1 }   // DAT, ATT; and PAN
 for (const w of ["open", "stale", "dead", "board"] as Why[]) {
   const n = byWhy(w).length + (EXTRA[w] ?? 0)
   console.log(`        ${w.padEnd(6)} ${n}${w === "open" ? "   <- register bits the host can write and the card cannot perform" : ""}`)

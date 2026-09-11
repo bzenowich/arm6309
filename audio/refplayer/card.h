@@ -85,7 +85,7 @@ enum {
     ACTRL_BYPASS  = 0x02,  /* bypass all filtering                */
     ACTRL_NTSC    = 0x04,  /* NTSC colour clock                   */
     ACTRL_RAWVOL  = 0x08,  /* VOL is a raw 8-bit attenuator code  */
-    ACTRL_8CHAN   = 0x10,  /* audio.md §11.2 — not modelled       */
+    ACTRL_RSVD4   = 0x10,  /* audio.md §11.2 dropped 2026-09-10   */
     ACTRL_PAN     = 0x20,  /* audio.md §11.1 — not modelled       */
     ACTRL_TIMER   = 0x40,  /* tempo timer runs; 0 stops it        */
     ACTRL_ENABLE  = 0x80   /* master enable; 0 at reset           */
