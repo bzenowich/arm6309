@@ -9,6 +9,814 @@ to say, and why each claim changed. Section numbers refer to `audio.md`. "Aud-*"
 
 ---
 
+## §8.2 / §9.4.3 / §10 / §16 item 44 — the tempo timer moves to U1, and the direct window stores only where §9.2 says (2026-09-11)
+
+§16 item 44 was opened and closed on 2026-09-11. Two defects shared one symptom, a tempo
+fixed at 54.1 Hz:
+
+- **W3 step 0 stored every host byte at `AIDX`.** It excluded only `AIDX` and `SDATA`
+  writes, so writes to `ADMACON`, `AINTENA`, `AINTREQ`, `ACTRL`, `SPTR` and `TIMER`
+  landed in channel state. `HCOMMIT` decoded `AIDX` alone, so such a write could also
+  commit the shadow into a channel's `LC`, `LEN` or `PER`. Nothing routed `SPTR` to
+  `$22` or `TIMER` to `$20`.
+- **W4 could not express the tempo even when routed.** It kept the timer as a
+  colour-clock deadline compared against the sixteen-bit counter, so no period could
+  exceed 65,536 colour clocks. 125 BPM is 70,935, so routing `TIMER` correctly would
+  have played the default tempo at about 131 Hz.
+
+The repair has three parts:
+
+- **U1 got a CIA count**: 18 cells, reloaded from `$20` in slot 4.
+- **U2 lost W4**: its ten steps and five cells (`TDUE`, `TACK`, `TQ`, `TARM`,
+  `FIRE4`) and the `CTRL6` pin.
+- **U2's host decode gained `HGBL` and `HWE`**, with `ISAIDX` deleted. `SPTR` and
+  `TIMER` stage through `$25` and commit on their low byte.
+
+Fits: U1 went from 90 to 107 of 128 cells, 63 to 62 of 64 I/O, and 0 to 2 cascades. U2
+went from 127 to 124 cells, fan-in 38 to 36, and 465 to 433 product terms. The
+superseded text follows, verbatim.
+
+**§8.2 — implementation — said:**
+
+> ⭐ **Implementation: it is a fifth entry in the compare structure of §4.2, serviced in
+> slot 4, and it shares the counter after all.** A CIA period of `N` ticks is exactly
+> `5N` colour clocks, so the timer's next-fire time can be kept **in colour clocks** —
+> `CIANEXT`, state word `$21` — and compared against the same free-running counter the
+> four channels use. The only arithmetic is `CIANEXT += 5 × TIMER`, once per period at
+> ~50 Hz: **500 work slots a second, and zero additional packages.** `5N = 4N + N` is two
+> doublings and an add, and a doubling is `ALAT` and `BLAT` loaded from the same read, so
+> there is no shifter (§10.2.3 W4).
+>
+> ⚠ **The obvious implementation costs 13 % of the work-slot budget and this one costs
+> nothing**, which is worth stating because the obvious one is what this section used to
+> specify: a ÷5 prescale driving a 16-bit count that the shared adder increments every five
+> colour clocks is 709,379 increments/s × 2 slots = **1.4 M of 10.64 M**. The ÷5 prescale
+> itself is still on U1 and still exact — it is `CIACLK`, on a pin, because §8.2's claim is
+> that this card's tempo reference **is** the Amiga's and a bench should be able to see it.
+
+**§8.2 — the enable bit — said:**
+
+> started and never stopped: once `TIMER` holds a non-zero reload the compare in slot 4
+> fires forever,
+
+> b6 = 0 holds the
+> timer's count in reset and inhibits the slot-4 compare; b6 = 1 loads `TIMER` and
+> runs. Writing `TIMER` while b6 = 0 is the ordinary way to arm it, and the
+> double-buffered commit of §9.4 means the two-byte write is atomic either way.
+
+**§8.2 — one count short — said:**
+
+> reloads on the *following* cycle, so the period is **latch + 1** counts; this card's
+> compare structure (§4.2) gives period = **latch** exactly.
+
+> entitled to know which of the two arithmetics the card implements. Adding the +1 is a
+> single term in the sequencer GAL if exactness is preferred to the simpler compare;
+> **decide it with the GAL fit, §16 item 20**,
+
+**§9.4.3 — the table and the shadow — said:**
+
+> | `TIMER` | 2 | `+$B`,`+$C` | `+$C` |
+>
+> Nothing else needs it: `VOL` and the three reserved bytes are one byte each and are
+> therefore atomic already, and `SPTR` is a pointer into a linear write stream
+> where a torn value can only mis-place the *next* byte, not a live playing pointer —
+> they commit on their own low byte anyway because they are counters (§9.5) and the
+> load is one operation.
+
+> **Cost: nothing — the staging is a shadow word in the state file** (§9.5 makes the same
+> move for the host counters). Each channel's arriving bytes land in a shadow word at
+> `AIDX | $40`; the committing byte triggers one deferred-slot copy of shadow → live. The
+> widest field is `LC` at 3 bytes, so a 32-bit shadow word covers every field in the table
+> with room to spare, and the copy is the same read-hold-write the deferred slots already
+> do for the `LC`/`LEN` reload of §3.3.
+
+**§10 — state and where it lives — said:**
+
+> | Tempo ÷5 prescale + timer enable | 4 | **U1**, built. ⚠ The timer's *compare and reload* are U2's (§8.2, §10.2.3 W4) |
+
+**§10 — the host-visible counters (correction: SPTR is $22) — said:**
+
+>     deferred slot A : read state word $21          -> SPTR on the read bus
+
+>                       write it back to word $21
+
+**§10.1 — parts list — said:**
+
+> §9.3's read-back path, the slot counter and the ÷5 prescale. **Fitted at 90 of 128 cells and 63 of 64 I/O** (§10.1.1) |
+
+> | **the sequencer (§10.2). Fitted at 127 of 128 cells and 63 of 64 I/O** (§10.2.6) |
+
+**§10.1 — the two parts — said:**
+
+> the slot walk, the ÷5 tempo reference — **plus §4.2's free-running counter and comparator and §9.3's read-back latch**, which is seven packages for sixteen pins | **90 of 128 cells, 63 of 64 I/O** — §10.1.1 |
+> | **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **127 of 128 cells, 63 of 64 I/O** — §10.2.6 |
+
+> both: U2 at **127 of 128 cells**, 63 of 64 I/O, **74 foldback nodes, two cascades and 465
+> product terms**, six of eight blocks at **38 of 40 LAB fan-in**; U1 at **90 of 128 cells**,
+> 63 of 64 I/O, 24 foldback, no cascades and 280 product terms.
+
+**§10.1.1 — U1's fit — said:**
+
+> | logic cells | **90 of 128** — with the counter, the comparator and §9.3's read-back latch aboard, and §6.2's `S3` and `OEB` |
+> | I/O pins | **63 of 64**, JTAG off — 20 in, 46 out, and `SD0`–`SD15` and `D0`–`D7` are bidirectional |
+> | product terms | 280, 24 foldback nodes, no cascades |
+
+**§10.2.1 — the state file's words — said:**
+
+> | `$21` | | `CIANEXT` — the colour-clock count the timer fires on |
+
+> | `$24` | | the ×5 scratch |
+
+**§10.2.3 — the microprogram — said:**
+
+> | **W3** | 6 | a host access: the byte to its lane or to §9.4.3's shadow, the commit, `SDATA`'s sample-RAM access and `SPTR` increment, and a re-prefetch at the post-incremented `AIDX` |
+> | **W4** | 10 | the tempo timer: `CIANEXT += 5 × TIMER`, once per period |
+
+> ⭐ **The tempo timer costs nothing per CIA tick**, which is what §8.2 meant by *"a fifth
+> entry in the compare structure of §4.2"* and is not what §8.2's implementation note
+> described. `CIANEXT` is a **colour-clock** count compared against the same free-running
+> counter the channels use, in slot 4; the only arithmetic is W4's ×5, once per timer
+> period at ~50 Hz. The ÷5 prescale that note specified would have cost **1.4 M work slots
+> a second — 13 % of the budget** — to do the same thing.
+
+**§10.2.6 — U2's fit — said:**
+
+> U2 is **38 outputs and 27 inputs**, and the fitter reports **63 of 64 I/O and 127 of
+> 128 logic cells** — "Design fits successfully", with **74 foldback nodes, two cascades and
+> 465 product terms**, and **six of eight logic blocks at 38 of 40 LAB fan-in**
+> (§16 item 43's converter writes, 2026-09-11). ⚠ **The two cascades are on `SFOE` and
+> `SFA4`**, the state file's output enable and address. The previous fit had none, and
+> reached `SFOE` through two buried nodes instead. That is a timing change on the card's one
+> tight path (§3.2), and nothing here times it.
+
+> `'283` chain answering it. Seventeen nets cross from U1 to U2 and five come back.
+
+> to **36**, and a pin back. ⚠ But the part is 128 of 128 again, and the next thing added
+> still has to displace something.
+
+**§10.3.2 — the shape — said:**
+
+>    (unchanged, +CIANEXT)   the free-running counter and the comparator
+>                            ⭐ + 8.2's CIANEXT, 16 cells of its 40 spare and NOT ONE PIN
+
+**§10.3.3 — the address — said:**
+
+> ⚠ Four bits is the longest sequence at **14 of 16**; W4 on the 8-bit datapath is the one that sizes it |
+
+> | `AIDX` | 4 | ⭐ **twelve cells**: `HRO`, `HSTAGE`,
+
+**§10.3.6 — the timing — said:**
+
+> | timer compare | **slot 4, reading `$21` from the state file** | ⭐ **U1**, `CIANEXT` in 16 of its 40 spare cells, compared against the counter U1 already holds — **and not one pin**, because U1 already has `SD[15:0]` |
+
+> ⚠ **The `CIANEXT` move is the part of this arrangement most likely to fail, and it
+> should be fitted first.** "Sixteen registers in U1's 40 spare cells" is the easy half;
+> the hard half is that they have to be **compared against the free-running counter**, and
+> U1 already has one 16-bit comparator whose placement was the subject of §10.1.1's
+> `NEQL`/`NEQH` story — **32 signals into one logic block, against the 40 an `ATF1508AS`
+> LAB takes, and the fitter was killed trying**. Giving it a second operand source is a
+> 16-bit mux in front of exactly that block. If it does not place, the fallback is to leave
+> the timer compare in slot 4 where it is and the engine keeps three work slots:
+
+**§10.3.7 — what it costs — said:**
+
+> it does not decide between them.** What decides is that U2 is at 127 of 128 cells.
+
+> | 32 — U2 full, U1 pin-bound | both parts full | 44 cells become table content, 18 more stop reading `(WT, T)` |
+
+**§10.3.8 — what leaves U2 — said:**
+
+> `check:arom` partitions all 149 cells of the fitted term list into three classes and
+
+> | **absorbed** | **44** | become table content, or the `'163` |
+> | **rewritten** | **18** | keep their macrocell and read *one microword bit* instead of a `(WT, T)` decode |
+> | unchanged | 87 | |
+
+**§10.3.9 — build order — said:**
+
+> 3. **`CIANEXT` into U1, and fitted** — §10.3.6 says why this is the first step and not
+>    the last.
+
+**§10.2.6 — the control-store pointer — said:**
+
+> into four `27C512` takes 44 cells off this part and stops 18 more from reading the step
+> signals,
+
+**§16 item 32 — said:**
+
+>     repair of this kind will not fit.** ⭐ **§10.3 is the answer to it.** 44 of U2's
+>     cells become table content, 18 more stop reading `(WT, T)`, and U1 gets §8.2's
+>     `CIANEXT` in 16 of its 40 spare cells for no pins at all. §16 item 38 is the gate.
+
+**§16 item 38 — said:**
+
+>     the step budget, and the partition of all 149 term-list cells into 44 absorbed,
+>     18 rewritten and 87 unchanged
+
+>     2. `CIANEXT` into U1, **fitted** — §10.3.6 says why this is first.
+
+**§10.3.3 — the image — said:**
+
+> **65,536 words, which is one `27C512` per lane exactly.** 4,608 addresses are programmed
+> and hold **70 distinct words**;
+
+**§16 item 38 — said:**
+
+> the image (70 distinct words in 65,536),
+
+**`hardware/gal/aseq.micro.ts` — W4, the ten steps that were deleted:**
+
+```ts
+  /* -- W4: the tempo timer, and it is 8.2's "fifth entry in the compare
+   * structure" taken literally. CIANEXT is a colour-clock count compared
+   * against the same free-running counter the channels use, so the timer costs
+   * NOTHING per CIA tick - only this ten-step multiply once per period, at
+   * 50 Hz. 5N = 4N + N, and 4N is two doublings, so there is no shifter here
+   * either: both operands come off the file and A + A is a doubling. */
+  [W4]: [
+    /* 0 */ { g: 0, alat: true, blat: true },
+    /* 1 */ { g: 4, wr: [0, 1], b: "blat", sum: true },
+    /* 2 */ { g: 4, alat: true, blat: true },
+    /* 3 */ { g: 4, wr: [0, 1], b: "blat", sum: true },
+    /* 4 */ { g: 0, blat: true },
+    /* 5 */ { g: 4, wr: [0, 1], b: "blat", sum: true },
+    /* 6 */ { g: 4, blat: true },
+    /* 7 */ { g: 4, wr: [] },
+    /* 8 */ { g: 1, alat: true },
+    /* 9 */ { g: 1, wr: [0, 1], b: "blat", sum: true, set: 4, done: "always" },
+  ],
+```
+
+⚠ **Never measured, and deleted rather than repaired:** read literally, step 4 reloads `B`
+with `N` while `A` still holds `2N` from step 2, so step 5 writes `3N`, not `5N`. No claim
+ever measured a period, so whether the multiply was right is unknown.
+
+**§16 item 44 — the open item said:**
+
+> 44. **⛔ OPEN 2026-09-11 — writes to the direct window's other registers land in the
+>     state file at `AIDX`, and `SPTR` and `TIMER` never reach their own words. The
+>     tempo timer runs at 54.1 Hz whatever `TIMER` holds.**
+>
+>     Found by `modplay_tb`'s §16 item 40 claim, *"every volume code is one the table
+>     produces"*: on a four-channel module, channel 3's volume converter held `$0F`, a
+>     value the replayer never writes to `VOL`. Traced to the write that put it in the file:
+>
+>     ```
+>       cc=1573065  SFWE2 at word 30 (ch3 VOL) = $0F   W3 step 0, HA = 2 (ADMACON), AIDX = 55
+>     ```
+>
+>     **Every host access queues a W3** (§9.3's prefetch rule), and W3 step 0 stores the
+>     posted byte at the `(word, lane)` that `AIDX` names. It excludes only `AIDX` writes and
+>     `SDATA`, so the byte written to `ADMACON`, `AINTENA`, `AINTREQ`, `ACTRL`, `SPTR` or
+>     `TIMER` lands in whatever channel field `AIDX` points at. A staged `AIDX` offset, 0–6,
+>     sends it to the shadow at `$25` instead. `HW`/`HL` decode `AIDX`, never `HA`, so
+>     **nothing routes `SPTR` to `$22` or `TIMER` to `$20`**:
+>
+>     | measured | |
+>     |---|---|
+>     | `SPTR` writes (`+$6`–`+$8`) | go to `$25`, the staging shadow. `SDATA` uploads work because `SPTR` is 0 from reset, and a `SPTR` of anything but 0 would not |
+>     | `TIMER` at `$20` after the replayer writes `$376B` | **`$0000`** |
+>     | tick period | **65,536 colour clocks, 54.1 Hz**, where 125 BPM is 70,937 (50.0 Hz). Every module plays **8.2 % fast**, and `Fxx` changes nothing |
+>
+>     ⚠ **Why nothing saw it.** `modplay_tb` asserts that every tick *came*, not how far
+>     apart. `abcompare.py` aligns lengths and the probe it runs is one sustained note. And
+>     §16 item 42 read *"takes every one of its hundred ticks from `TIMER`"* as proof that the
+>     `TIMER` path worked. The deleted `ISSPTR`/`ISTIMER` decodes were read by nothing
+>     because the routing that should have read them was never built.
+>
+>     **Repair not started.** It is a U2 change on a part at 127 of 128: W3 step 0 must
+>     write only for `ADATA`, and `SPTR`/`TIMER` need their own word addressing. The claims
+>     must come with it: `TIMER` lands in `$20`, `SPTR` in `$22`, the tick period is
+>     5 × `TIMER` colour clocks, and a direct-register write leaves every channel field
+>     unchanged.
+
+---
+
+## §6.2 / §10.1 / §10.2 / §16 item 43 — the converter writes, redesigned (2026-09-11)
+
+§16 item 43 was opened on 2026-09-11 and closed the same day. The half-frame write windows
+had strobes of one or two slots, and a DAC select that moved on the same edge as the
+strobe. Their shared sample strobe also wrote the partner channel's port register into
+its converter: 1,114 of 67,781 sample captures took a volume code on a four-channel
+module. They were replaced by frame-parity windows (`S3`/`OEB` on U1), per-side
+registered strobes (`CSSL`/`CSSR`/`CSV` on U2), and a W5 that waits instead of strobing.
+No package was added. The superseded text follows, verbatim.
+
+**§6.2 — the write window said:**
+
+> #### The write window, which is the only thing the digital side still owes
+>
+> The AD7528's input latches are transparent while `CS` and `WR` are low and capture on
+> the rising edge, so the port must be stable across it. At `VDD` = 5 V over
+> temperature: **`tWR` 100 ns, `tDS` 90 ns, `tCS` 100 ns, `tAS` 100 ns, `tDH` 0 ns**.
+> The state file presents a channel's byte for one 35.24 ns slot, so the port needs a
+> register in front of it.
+>
+> ⚠ **TWO 8-bit `'574` per side — four, not two.** This section said one per side until
+> 2026-09-09 and the parts list has said four since the datapath was built; the prose is
+> what was wrong. **One register per side cannot both hold and capture.** The walk puts
+> channel *N*'s byte on the bus in slot *N*, so all four bytes arrive in slots 0–3 while
+> the write windows are 0–3 and 4–7: the left side must **hold** `ch0` through slot 3 for
+> its own write, in the very slot `ch3`'s byte **arrives** for the next window. A pair per
+> side ping-pongs; a single register drops one of the two.
+>
+> ⚠ Reassigning which channels share a side does not help — any pairing puts both bytes
+> inside the same window. And dropping programmable panning (2026-09-09) does not either:
+> it changed which converter halves exist, not the walk order or the window structure.
+>
+> Each side's pair drives both of that side's packages, with the frame split into two
+> fixed windows:
+>
+> | Slots | Left `'574` | Right `'574` |
+> |---|---|---|
+> | 0–3 | `ch0`'s byte; `CS` on #1, `DAC A/B` = A, `WR` low, captures at the end of slot 3 | `ch1`, `CS` on #3, select A |
+> | 4–7 | `ch3`'s byte; `CS` on #1, `DAC A/B` = B, `WR` low, captures at the end of slot 7 | `ch2`, `CS` on #3, select B |
+>
+> Each window is **4 slots — 141 ns**, against 100 ns of `tWR`/`tCS`/`tAS` and 90 ns of
+> `tDS`: **40 % margin on every one of them**, and `tDH` = 0 is satisfied by the register
+> simply not moving. ⛔ **As built, the windows are not four slots.** Every volume strobe is
+> one slot (35 ns), and 51 of 513 sample strobes are one or two slots. §16 item 43. **A window is used only when that channel's compare hit** — at most
+> once per channel per colour clock, which is exactly the two windows a side has.
+>
+> **The windows run one frame behind the compare**, because a channel's byte comes off
+> the state file in its own walk slot and the window it belongs to may already have
+> started. So: hit in frame *N* (§3.2), converter written in frame *N+1*. The latency is
+> **10 or 11 slots — 353 or 388 ns — fixed per channel** by which window that channel
+> owns. A constant per-channel offset of one slot is not jitter; it is 0.1 % of the
+> shortest sample period ProTracker can ask for, identical on every note, and nothing in
+> §1's nine requirements can see it.
+>
+> Volume writes are host-driven and rare (≤50 Hz per channel). One borrows a window,
+> asserting `CS` on the volume package instead of the sample package, which displaces
+> one sample write by one colour clock about once every 70,000 frames. ⛔ W5 does not
+> borrow a window: it strobes for a single work slot (§16 item 43).
+>
+> **Four packages of latch, not eight**, because the bus is 8 bits wide rather than 12
+> and each side's two channels can share a register that is loaded twice per frame.
+>
+> Packages, itemised so §10 has something to add up:
+>
+> | Qty | Part | Role |
+> |---|---|---|
+> | **6** | **`AD7528`** | **12 converter halves**: one sample and **two** volume converters per channel (§6.3, §11.1) |
+> | 2 | `74HC574` | one 8-bit port register per side — each now driving three packages instead of two |
+> | 0 | — | volume LUT, adders, accumulators, output registers: **none** |
+> | — | 4 × 0.1 % resistor + passives | the pedestal cancellation of §6.3 |
+>
+> **Hard panning is what the card does by default**, and it is a mode bit rather than a
+> wire: `ACTRL` b5 = 0 makes the sequencer drive the right-hand code from `VOL` by the
+> channel's Paula side, so ch0,3 land on L and ch1,2 on R and a Paula-exact replayer never
+> knows the other four halves are there. **Programmable panning is §11.1**, and it is
+> built.
+
+**§3.2 — "the sample path is jitter-free" said:**
+
+> - **The sample path is jitter-free.** The event-instant work is a flag and a fixed
+>   write window, so the converter's input changes on the exact colour clock the sample
+>   changed on — the property §6.2's latency argument rests on.
+
+**§10 — the parts table's two CPLD rows said:**
+
+> the slot counter and the ÷5 prescale. **Fitted at 89 of 128 cells and 57 of 64 I/O** (§10.1.1) |
+> | **1** | **`ATF1508AS` — U2** | ⚠ **the sequencer — specified in §10.2, not fitted.** ~69 I/O and ~74 cells; the package is §10.2.6's open decision |
+
+**§10.1 — the two-part table said:**
+
+> which is seven packages for sixteen pins | **88 of 128 cells, 62 of 64 I/O** — §10.1.1 |
+> | **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **128 of 128 cells, 60 of 64 I/O** — §10.2.6 |
+
+**§10.1 — the utilisation paragraph said:**
+
+> both: U2 at **128 of 128 cells**, 60 of 64 I/O, **72 foldback nodes, no cascades and 473
+> product terms**, six of eight blocks at **36 of 40 LAB fan-in**; U1 at **88 of 128 cells**, 62 of 64 I/O, 22 foldback, no cascades and 274
+> product terms.
+
+**§10.1.1 — U1's fit table said:**
+
+> | logic cells | **88 of 128** — with the counter, the comparator and §9.3's read-back latch aboard |
+> | I/O pins | **62 of 64**, JTAG off — 20 in, 45 out, and `SD0`–`SD15` and `D0`–`D7` are bidirectional |
+> | product terms | 274, 22 foldback nodes, no cascades |
+> | dedicated inputs | 2 of 4 — `SLOTCLK` and `RESET` |
+
+**§10.2.3 — the W5 row said:**
+
+> | **W5** | 6 | §6.1's volume — the other four converter halves |
+
+**§10.2.3 — the W5 note said:**
+
+> ⚠ **W5 suppresses the walk's converter-port load while it runs**, so a sample transition
+> can be late by up to four colour clocks — 1.13 µs — about 200 times a second. That is a
+> real departure from §3.2's "jitter-free": 0.9 % of one sample period, on 2 % of
+> transitions. Stated rather than hidden.
+
+**§10.2.6 — the fit paragraph said:**
+
+> U2 is **36 outputs and 26 inputs**, and the fitter reports **60 of 64 I/O and 128 of
+> 128 logic cells** — "Design fits successfully", with **72 foldback nodes, no cascades and
+> 473 product terms**, and **six of eight logic blocks at 36 of 40 LAB fan-in**
+> (§16 items 35, 36 and 39 all repaired into it, 2026-09-10).
+
+**§10.2.6 — the 74HC138 lever said:**
+
+> never strobes a package — so they are **one 3-bit code and a `74HC138`**, whose eight
+> outputs are exactly idle, four clocks and three selects with nothing left over.
+> **−6 pins, +1 IC.** Two more turned out not to be levers at all: the `AD7528`'s `/WR` is
+> tied low (its latch is transparent while `CS` and `WR` are both low and captures on the
+> rising edge of either, so `/CS` alone is the strobe), and `CVOEB` and the DAC A/B select
+> are both `CVOEA`'s complement, which is an inverter rather than two pins.
+
+**§16 item 43 — as it was opened, 2026-09-11 said:**
+
+> 43. **⛔ OPEN 2026-09-11 — the `AD7528` write strobe is shorter than the part's minimum,
+>     on every volume write and on one sample write in ten, and nothing on the card can see
+>     it.**
+>
+>     `/WR` is tied low (§10.2.6), so `/CS` alone is the strobe and its low time **is** the
+>     write pulse. [`AD7528.pdf`](../../reference/datasheets/AD7528.pdf), `VDD` = +5 V:
+>
+>     | | 25 °C | −40…85 °C |
+>     |---|---|---|
+>     | `tWR`, write pulse width, min | **90 ns** | **100 ns** |
+>     | `tDS`, data setup before the rising edge, min | 80 ns | 90 ns |
+>     | `tCS`, chip select to write setup, min | 90 ns | 100 ns |
+>
+>     §6.2 sizes the strobe at a four-slot window, 141 ns. **Measured** in `audio_tb` on
+>     2026-09-11, with a scratch monitor bound into `audio_card` that counts how many
+>     consecutive slots each `74HC138` chip-select code is held (`audio_tb` itself: 51
+>     claims, 0 failed):
+>
+>     | `/CS` | slots | width | count |
+>     |---|---|---|---|
+>     | sample packages (code 5) | 4 | 141 ns | 462 |
+>     | | 2 | 70 ns | 38 |
+>     | | 1 | **35 ns** | 13 |
+>     | volume packages (code 6) | 1 | **35 ns** | **50 of 50** |
+>
+>     **Why, from the term lists (`aseq.jedec.ts`):**
+>
+>     - **Volume.** `CVCSV` is decoded from W5's two `cvstr: "vol"` steps, and a step is
+>       one work slot. **Every volume write is a 35 ns pulse, 39 % of `tWR`.** §6.2's
+>       *"one borrows a window"* is not what W5 does.
+>     - **Sample.** `CVCSS` is `WROTEn` qualified by the half-frame and by `!CVBUSY`, and
+>       `WROTEn` is set one slot after the `PEND` write. Channels 2 and 3 strobe in the
+>       next frame's slots 0–3, always four slots. Channels 0 and 1 strobe in what is left
+>       of the *current* slots 4–7: a `PEND` write in slot 7 gets the next frame's four
+>       slots, in slot 5 it gets two, and in slot 6 one. A W5 running in those work slots
+>       cuts it further through `!CVBUSY`.
+>     - ⚠ **Data setup is short as well, derived and not measured.** `CVOEA` is
+>       `!QCHAN & !CVBUSY` outside W5, so registers 3 and 2 drive both ports through
+>       slots 0–3 and registers 0 and 1 through slot 4 onwards. It is `CVBUSY & !CVB`
+>       inside W5, so the port can swap at the start of the very slot that strobes, and a
+>       W5 port register can be loaded one slot before its strobe. In those cases the data
+>       is valid for 35–70 ns before the edge, against `tDS` 80 ns.
+>     - ⚠ **Decoder hazard, unmeasured.** `CVC0`–`CVC2` are three independent
+>       combinational CPLD outputs into a `74HC138`. A code change that flips more than
+>       one bit can pass through a strobe code for a few nanoseconds. Each `AD7528` latch
+>       is transparent while `/CS` is low, so a glitch can write whatever is on the port.
+>
+>     **What it does.** A pulse below the guaranteed minimum is not guaranteed to write.
+>     A typical part at room temperature may well capture 35 ns, which is how this passes a
+>     bench and then fails with a different part, or warm. A lost volume write leaves the
+>     channel at its previous level; a lost sample write repeats the previous sample.
+>
+>     **Why nothing saw it.** `audio_card.v` models each converter as a register that
+>     samples the code on one `posedge SLOTCLK`, so a strobe of any width captures. That is
+>     §16 item 37's class: **a model that cannot represent the failure cannot report it.**
+>     `modplay_tb`'s settled comparisons of converter pins against the state file pass for
+>     the same reason.
+>
+>     **The repair is not chosen.** Directions, none costed:
+>
+>     - Hold every strobe for a full window, which is what §6.2 specifies. That changes U2,
+>       which is at 128 of 128 cells (§16 item 32). The strobe logic is exactly where item
+>       41's one-literal repairs did not fit.
+>     - Stretch the strobe on the board: flip-flops set by the `'138` code and cleared at
+>       the window boundary. That is roughly +1–2 ICs, and it also removes the decoder
+>       hazard if the flip-flops are what drive `/CS`.
+>     - Generate the windows on U1, which has the slot counter, 41 spare cells and 3 spare
+>       pins.
+>
+>     ⚠ **Whatever repairs it must land with the claims that would have caught it**: every
+>     `/CS` held for at least three slots (106 ns ≥ `tWR` 100 ns), with the port stable
+>     for at least three slots before the rising edge. The scratch monitor above is the
+>     width half of that. ⚠ **Any logic placed in front of the volume packages' data
+>     inputs spends from the same `tDS`**, which is one reason §16 item 40 put the ×4 in
+>     software.
+
+---
+
+## §6.1 / §9.3 offset 7 / §16 item 40 — the volume ×4 moved to the replayer (2026-09-11)
+
+`VOL` became the volume converter's code, 0–255, taken verbatim, and the replayer writes
+`min(4 × volume, 255)`. **No hardware changed**: W5 already copied all eight bits. What
+changed was the specification's claim that the card did the ×4, which it never had, and
+`refplayer`'s `card.c`, which did.
+
+**§6.1 said:**
+
+> ```
+>                   VOLCODE = min(VOL x 4, 255)     always; §16 item 42
+> ```
+>
+> | Volume | **8 bits** | `VOLCODE` = `VOL` × 4, saturated at 255 — one shift in the sequencer |
+>
+> **`VOL` IS 0–64 AND THE ×4 IS UNCONDITIONAL.** ⛔ **`ACTRL` b3's raw-volume mode was
+> retired 2026-09-10** — §16 item 42. It offered the host an 8-bit attenuator code so a
+> replayer could implement a dB-linear law or a per-machine calibration, and it failed
+> §11's own question: **Paula's `AUDxVOL` is 0–64 and nothing else.** The bit reached no
+> cell on either CPLD, so the card never had the mode; `refplayer`'s `card.c` did, which
+> is a model above its hardware.
+>
+> **A non-Paula volume curve is still host software and costs no bit**: map into 0–64
+> with a 65-byte table, one indexed load per volume change, in the tick that was writing
+> `VOL` anyway. What is given up is the bottom two bits of that curve's resolution, and
+> what is bought is a register that is Paula-identical in every mode because there is
+> only one.
+>
+> **`VOL` is seven bits in the state file** (0–64 is 65 levels) and always was: the
+> eighth existed only for the retired mode.
+
+⚠ "One shift in the sequencer" did not exist, and the state file always held eight
+bits.
+
+**§6.1 also said** *"A disabled channel forces `VOLCODE` = 0, one term in the
+sequencer."*, and **§10.2.4** *"`DMACON` cleared mid-buffer | W1 is not entered;
+`PTR`/`CNT` freeze; §6.1 forces `VOLCODE` = 0, so the held sample is silent"*.
+⛔ **No such term exists.** No converter cell in `aseq.jedec.ts` reads `DMAEN`. It
+would not be Paula's behaviour either: Paula holds the last sample when DMA stops, which
+is why ProTracker writes volume 0 (`refplayer/card.c`).
+
+**§3.3 said** `| VOL | 7 | host | 0–64 — seven bits, per §6.1's correction. The left code since §11.1 |`,
+and *"the fields above are 103 bits"* (after `ATT`'s flags went the same day).
+
+**§9.3, offset 7, said** `| 7 | VOL | 1 | AUDxVOL | 0–64 |`.
+
+**§9.2's `ACTRL` b3 note said** *"(raw volume, retired 2026-09-10 — Paula's `VOL` is
+0–64 and §6.1's ×4 is unconditional)"*.
+
+**§1 requirement 4's cost said** *"free — it is the second half of the converter
+(§6.1)"*.
+
+**§11's lead-in said** *"⚠ **§11.3's 'programmable volume curve' is the third of the
+same kind**, and it is `ACTRL` b3's raw-volume mode. Paula's `AUDxVOL` is 0–64 and
+nothing else. §16 item 40 costs what retiring it would buy."* **§11.3** said it *"went
+for the same reason: Paula's `VOL` is 0–64, a curve maps into 0–64 in host software for
+no bit at all, and the mode bit reached no cell."*
+
+**`refplayer`** masked `VOL` to seven bits (`s[ST_VOL] & 0x7F`) and multiplied in the
+card model: `vol_code(vol)` clamped to 64, shifted left two and saturated at 255. The
+replayer wrote the 0–64 volume verbatim. `test_refplayer`'s volume-law claims asserted
+that card-side ×4, including *"ACTRL b3 is reserved: VOL 64 is still code 255 with the
+bit set"*.
+
+**§16 item 40, in full, as it stood:**
+
+40. **⛔ OPEN — §6.1's ×4 is not built, and `ACTRL` b3 is a bit with no consumer.
+The card is 12.04 dB below every output level this document specifies.**
+
+§6.1: *"The default (`ACTRL` b3 = 0) is `VOL` 0–64 **with the card doing the ×4**"*,
+and §6.1's own cascade diagram carries `VOLCODE = VOL x 4`. There is no shift in
+the sequencer, set or clear: `aseq.micro.ts`'s W5 moves the state file's `VOL` byte
+to the converter port register unchanged.
+
+⛔ **AND `CTRL3` REACHES NOTHING.** It is latched, it reads back, and no other cell
+on either CPLD takes it — `aseq.v` has no `CTRL3` port. So the card implements
+**raw mode only**, `ACTRL` b3 selects nothing, and the mode every MOD replayer uses
+is the broken one. It is `design-review2.md`'s "described in prose and present in no
+design file", in a register bit.
+
+**Measured on the real design**: a channel at Paula's full volume presents
+`DACVOL` = 64 where §6.1 requires 255.
+
+### It is a level defect, and level is what this card sells
+
+⚠ **An earlier revision of this item sized it at "two ten-thousandths of median
+spectral correlation" and that was the wrong instrument twice over.**
+`abcompare.py` normalises level in the first two lines of its comparison — on
+purpose — and `dacwav` renders an *ideal* multiply with no ladder, no noise floor
+and no feedthrough. Neither can see a gain error. **The right instruments are §7.1's
+output arithmetic and the `AD7528` datasheet**, and they say this:
+
+| | §7.1 as designed | as built | |
+|---|---|---|---|
+| one channel alone | **half of full scale** (§6.2) | **⅛** | −12.04 dB |
+| two channels at full | **all of it** | **¼** | |
+| backplane line out | **2 V p-p**, −3.0 dBV | **0.5 V p-p**, −15.1 dBV | **5 dB *below* consumer line level** instead of 7 dB above |
+| 3.5 mm jack into 32 Ω | **15.6 mW** | **0.98 mW** | §7.1 calls 1–5 mW *"a comfortable listening level"* and 15.6 mW *"headroom, not a compromise"*. The card lands **under** the bottom of its own range |
+| into 300 Ω — §7.1's stated upper limit | **1.67 mW** | **0.104 mW** | a decent pair of headphones is **inaudible** |
+| SNR at the jack | design | **−12 dB** | everything after the volume DAC — I/V amp, §7's poles, the `NJM4556AD` — has a fixed noise floor, and 12 dB less signal goes into it |
+
+### And the ladder is used in its bottom quarter, where its own specs are worst
+
+The volume law's *shape* is unchanged — 65 steps either way, and the ratios between
+them are identical, so nothing about the **relative** volume law is wrong. What
+changes is **where those codes sit**: 1…64 instead of 4…255. Every `AD7528` error
+term is specified in LSBs of full scale, so all of them are **4× larger relative to
+the output**. At the L/C/U grade's ±½ LSB relative accuracy (§6.3):
+
+| `VOL` | designed code | attenuation | ±½ LSB is | as-built code | attenuation | ±½ LSB is |
+|---|---|---|---|---|---|---|
+| 64 | 255 | −0.0 dB | ±0.2 % | 64 | **−12.0 dB** | ±0.8 % |
+| 16 | 64 | −12.0 dB | ±0.8 % | 16 | **−24.1 dB** | ±3.1 % |
+| 4 | 16 | −24.1 dB | ±3.1 % | 4 | **−36.1 dB** | ±12.5 % |
+| 1 | 4 | **−36.1 dB** | ±12.5 % | 1 | **−48.2 dB** | **±50 %** |
+
+⚠ **§6.1's own headline claim is in that table and it is false as built**: *"`VOL` = 1
+attenuates the full 8-bit sample by **36 dB**"* — it is 48 dB, at a single LSB of the
+ladder, which is the worst-specified code any ladder DAC has. §16 item 23's
+channel-to-channel gain match is 4× harder at every setting.
+
+⛔ **AND §6.3'S DISMISSAL OF FEEDTHROUGH STOPS HOLDING.** `VREF`-to-`OUT`
+feedthrough is −70 dB (−65 over temperature) **of the sample**, independent of the
+volume code — so it is fixed while the music is 12 dB smaller:
+
+> §6.3: *"Feedthrough at `VOLCODE` = 0 means a muted channel leaks its sample at
+> −65 dB, where Paula leaks nothing; that is below the analogue noise floor the card
+> is trying to hit anyway."*
+
+Relative to the music the card actually makes, that leak is **−58 dB, and −53 dB
+over temperature**. On four-channel MOD material, where channels drop out on every
+other row, that is bleed a listener can hear — and it is the one place the cascade
+was already conceded to be worse than Paula.
+
+### Where the ×4 could go, and what each costs
+
+| | cost | what it gives up |
+|---|---|---|
+| **2 × `74HC157`** on the converter port registers' inputs, selected by a "this load is a volume" signal from U2 | **+2 ICs, 35 → 37** | nothing — it is §6.1 as written, both modes intact |
+| **A ×4 in the analogue gain** — one feedback resistor on §6.2's I/V stage | **0 ICs, one resistor** | **raw mode**, which would then be 12 dB hot and clip above code 64. `ACTRL` b3 becomes reserved rather than merely unbuilt. Also a bench question: the volume DAC's output is the *reference* of nothing, but §6.2's summing node moves 12 dB and §16 item 25's rails move with it |
+| **The replayer writes `VOL` × 4** — a 65-byte table and one indexed load, ~20 cycles in a ~1,200-cycle tick | **0 ICs** | `VOL` stops being Paula-identical, which is §6.1's *only* reason for the ×4; `ACTRL` b3 becomes a dead bit; and the rule lives in prose, where its failure mode is silent — 12 dB down and plausible, which is exactly how this survived |
+
+⚠ **What none of them changes is the resolution**, because there is none to lose:
+`VOL` is 0–64 in all three and the card presents 65 levels either way. The
+difference is entirely level, and everything level touches.
+
+**Not taken today** — it is a specification decision, not a repair.
+
+---
+
+## §11.3 / §9.3 offset 9 — attach modulation (`ATT`) retired (2026-09-11)
+
+The same test as `DAT` below, with the same evidence. **The whole ProTracker 2.3F source
+has no write to `ADKCON` (`$DFF09E`)**: not the tracker (`PT2.3F.s`), not its CIA
+replayer, not its VBlank replayer. djh0ffman's 2.3a replay has none either. No MOD
+effect can ask for attach, so no module can need it. The card's scope is 4-channel
+ProTracker playback, and it was never built: `check:reach` listed `ATT` as `open`.
+
+Building it would also have cost more than §11.3 claimed. The `ATT` byte was on lane 1,
+and U2 has no pins there (it sees only `SD[18:16]`). Paula's attach consumes whole
+16-bit words: a period attach loads all of `AUDxPER`. So a byte-wide card needed a
+two-byte fetch sequence of its own, on a part at 128 of 128 cells.
+
+**§11.3's first bullet said:**
+
+> - **Attach modulation** (`ADKCON`'s period/volume attach: channel *n* modulates
+>   *n+1*). Rarely used, but some modules and several demos need it, and it is a
+>   couple of sequencer terms plus the `ATT` byte already reserved in §9.3. **Build it.**
+>   **Channel 3 modulates nothing.** On Paula the attach chain is 0→1, 1→2, 2→3 and
+>   stops: `AUD3DAT` has no consumer, so setting channel 3's attach bits does nothing at
+>   all. **This card does the same, explicitly: no wrap to channel 0.** It is stated here
+>   because a wrap is the natural thing to write when the channel index is three bits of
+>   a slot counter and `+1` costs nothing — and because a card and a model that disagree
+>   about a rarely-exercised corner is exactly how a divergence survives to a GAL. The
+>   sequencer term is `attach_target_valid = (ch != 3)`.
+
+⚠ *"Some modules … need it"* was wrong for MOD files. A module cannot request attach.
+Only demo code that writes Paula directly can.
+
+**§9.3, offset 9, said:**
+
+> | 9 | `ATT` | 1 | `ADKCON` bits | b0 attach-period, b1 attach-volume (§11.3). **Channel 3's bits are ignored** — there is no channel 4 and no wrap to channel 0 |
+
+**§3.3's field table said** `| flags | 4 | both | DMA enable, attach-period, attach-volume, IRQ pending |`,
+and the paragraph below it *"the fields above are 105 bits"*.
+
+**§9.4.3 said** *"`VOL`, `ATT` and the two reserved bytes are one byte each"* (after the
+`DAT` retirement the same day).
+
+**§10.2.1, word 6, said** `| w6 | VOL | lane 1 ATT, lane 0 reserved (§9.3 offset 8) |`.
+
+**§10.2.4's quirks table said:**
+
+> | Attach (§11.3), ch *n* → ch *n*+1 | W1 step 5 writes the fetched byte to `ch+1,4` or `ch+1,5` instead of `PEND`. **Channel 3 modulates nothing**: the term is `ch != 3` |
+
+⚠ No such term was ever in `aseq.jedec.ts`.
+
+**§0 said** *"§16 items 7, 32 and 11.3 remain stuck behind that. §10.3 moves the
+`(WT, T)` decode out of macrocells and into four `27C512`: **+5 ICs, 40**, every one of
+those items reachable"*.
+
+**§10.3.4 said:**
+
+> ⭐ **The four spare bits are where §11.3's attach chain goes** — which is the first
+> time since 2026-09-09 that this card has had anywhere to put it (§16 item 32), and
+> since 2026-09-10 it is the only claimant, §11.2's eight channels having been dropped.
+
+**§10.3.7's "what the control store buys" table carried:**
+
+> | 7 — eight channels | "the next thing added has to displace something" | four spare microword bits; ⚠ **the slot walk still refuses it** |
+> | 11.3 — the attach chain | unfitted | one microword bit |
+
+⚠ "One microword bit" undercounted it. Attach is a branch on per-channel state, so it
+needs an address input or U2 cells, and the 16-bit address was already one `27C512` per
+lane exactly.
+
+**§16 item 32 said** *"the first thing that adds work still will not fit, and §16 item
+7's eight channels and §11.3's attach chain are additions"* and *"§16 item 7's 8-channel
+mode and §11.3's attach chain still have to **displace** something on U2 or move to U1."*
+
+**§16 item 38 said** *"so §16 item 7's eight channels and §11.3's attach chain still have
+nowhere to go, and **the next repair of this kind will not fit.**"*
+
+**§16 item 42** said of U2 *"The part that needs room for §11.3's attach chain did not
+gain any that `gal/cpld/aseq.fit` can show"*. Its "what is left" table carried
+`| +$9 ATT | Paula's ADKCON bits, per channel (§11.3 "Build it"). Storable; nothing modulates |`
+under the heading "three missing features, and two of them have no bit".
+
+**The root `README.md` said** *"⛔ **3 promised and not built** | audio: §6.1's volume ×4,
+`ATT`'s attach modulation … ⚠ Two of the four have no register bit behind them"*.
+
+**`refplayer`** implemented it as *"a byte-oriented adaptation of a word-oriented
+behaviour, and no test module exercises it"* (`refplayer/README.md`). `card.c`'s
+`chan_tick` loaded the fetched byte, un-offset, into channel *n*+1's low `PER` byte or
+its `VOL`, and wrapped channel 3 to channel 0 with `(n + 1u) & 3u`. That contradicted
+§11.3's own "no wrap", and it was a model above its hardware.
+
+**`arom.check.ts`** labelled its spare-bits claim *"16 items 7 and 11.3 need somewhere to
+go"*.
+
+**Now:** offset 9 is reserved and `check:reach` lists `ATT` as `stale`. `card.c` has no
+attach, and §10.3's control store has no feature waiting on its headroom. **Nothing
+changes on either CPLD.**
+
+---
+
+## §1 requirement 8 / §9.3 offset 8 — CPU-fed `DAT` retired (2026-09-11)
+
+The card's scope was narrowed to **4-channel ProTracker playback**, and requirement 8
+failed that test. It is a real Paula feature, unlike the six retired on 2026-09-10, but
+no ProTracker replayer uses it. The evidence, from the primary sources:
+
+- **ProTracker 2.3F's replayers** (`replayer/PT2.3F_replay_cia.s` and
+  `PT2.3F_replay_vblank.s`, 8bitbubsy/pt23f) touch Paula at `AUDxLC` (`(A5)`,
+  `$A0(A5)`…), `AUDxLEN` (`4(A5)`), `AUDxPER` (`6(A5)`), `AUDxVOL` (`8(A5)`,
+  `$DFF0A8`…) and `DMACON` (`$DFF096`). **No `AUDxDAT` offset `$A`, and no `ADKCON`
+  `$DFF09E`.** The `A(A5)`/`B(A5)` hits in the CIA replayer are `ciacra`/`ciacrb`.
+- **djh0ffman's ProTracker 2.3a replay** (`protracker.asm`): the same register set.
+- **The whole ProTracker 2.3F source** (`PT2.3F.s`) has exactly one `AUDxDAT` reference,
+  `LEA $DFF0BA,A6` in the sampler: with DMA off, each byte read from the parallel-port
+  digitiser is echoed to the output so the user can hear the input. That is input
+  monitoring, not playback, and §11.4 keeps a sampler off this card.
+- It was not an OctaMED playback feature either. OctaMED's 5–8 channel mode mixes in
+  software into a buffer that is played by DMA, with the tempo set by the mix-buffer
+  size (libxmp issue #232). ⚠ That is from secondary sources, not OctaMED's own code.
+
+The feature had never been built on the card, and `check:reach` listed it as `open`.
+Only `refplayer`'s `card.c` performed it, which made the model more capable than its
+hardware.
+
+**§1's table, row 8, said:**
+
+> | 8 | **Direct `AUDxDAT` writes** (CPU-fed, no DMA) | The one-shot idiom in several players, and the only way to do software mixing. | one state-file byte |
+
+and the table's lead-in said *"Nine things have to be right … all nine are
+load-bearing."* ⚠ **Neither of that row's claims holds for ProTracker.** No ProTracker
+replayer uses a one-shot `AUDxDAT` idiom; it gets one-shot behaviour from requirement
+3's shadow reload. And Amiga software mixing is done into DMA buffers.
+
+**§9.3, offset 8, said:**
+
+> | 8 | `DAT` | 1 | `AUDxDAT` | direct sample write, CPU-fed mode (§1 req. 8) — **offset binary**, like everything else the converter sees (§6.1) |
+
+**§9.4.3 said:** *"Nothing else needs it: `VOL`, `DAT`, `ATT` and `PAN` are one byte
+each and are therefore atomic already"*.
+
+**§10.2.1, word 6, said:** `| w6 | VOL | lane 1 ATT, lane 0 DAT |`
+
+**§12.1 said:**
+
+> - **CPU-fed mode is out of reach.** Feeding `AUDxDAT` in software is 4 × 28.6 kHz ×
+>   2 bytes = **229 KB/s**, roughly 8× what a 2.098 MHz 6309 can sustain.
+
+**§16 item 27 said** the one-gate inverter on the fetch path *"lost on packages and on
+the register-map exception it would carve for `DAT` (§9.3 offset 8)"*. Only the packages
+argument is left.
+
+**§16 item 42's "what is left" table was headed "four missing features, and two of them
+have no bit"**, and carried:
+
+> | `+$8` `DAT` | §1 requirement 8's CPU-fed sample. Storable; no microcode step plays it |
+
+**The root `README.md` said** *"⛔ **4 promised and not built** | audio: §6.1's volume ×4,
+`DAT`'s CPU-fed samples, `ATT`'s attach modulation."*
+
+**Now:** offset 8 is reserved, like offset 10. It is writable and reads back, and no
+microcode step reads it. `check:reach` moves `DAT` from `open` to `stale`, and `card.c`
+stores the byte and plays nothing. **Nothing changes on either CPLD**, because nothing
+was ever built.
+
+---
+
 ## §16 item 37 open items 1 and 2 — the two datasheets arrived (2026-09-10)
 
 Item 37 was written on 2026-09-10 with two of its numbers unread. Both were fetched the

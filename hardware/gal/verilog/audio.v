@@ -29,6 +29,8 @@ module audio (
     output wire S0,
     output wire S1,
     output wire S2,
+    output wire S3,
+    output wire OEB,
     output wire CCLK,
     output wire WDMACON,
     output wire WINTENA,
@@ -94,6 +96,24 @@ module audio (
     output wire CT15,
     output wire NEQL,
     output wire NEQH,
+    output wire TC0,
+    output wire TC1,
+    output wire TC2,
+    output wire TC3,
+    output wire TC4,
+    output wire TC5,
+    output wire TC6,
+    output wire TC7,
+    output wire TC8,
+    output wire TC9,
+    output wire TC10,
+    output wire TC11,
+    output wire TC12,
+    output wire TC13,
+    output wire TC14,
+    output wire TC15,
+    output wire TLOAD,
+    output wire TFIRE,
     output wire PF0,
     output wire PF1,
     output wire PF2,
@@ -163,6 +183,8 @@ module audio (
   reg  r_S0;
   reg  r_S1;
   reg  r_S2;
+  reg  r_S3;
+  reg  r_OEB;
   reg  r_DMAEN0;
   reg  r_DMAEN1;
   reg  r_DMAEN2;
@@ -212,6 +234,24 @@ module audio (
   reg  r_CT13;
   reg  r_CT14;
   reg  r_CT15;
+  reg  r_TC0;
+  reg  r_TC1;
+  reg  r_TC2;
+  reg  r_TC3;
+  reg  r_TC4;
+  reg  r_TC5;
+  reg  r_TC6;
+  reg  r_TC7;
+  reg  r_TC8;
+  reg  r_TC9;
+  reg  r_TC10;
+  reg  r_TC11;
+  reg  r_TC12;
+  reg  r_TC13;
+  reg  r_TC14;
+  reg  r_TC15;
+  reg  r_TLOAD;
+  reg  r_TFIRE;
   reg  r_PF0;
   reg  r_PF1;
   reg  r_PF2;
@@ -226,6 +266,8 @@ module audio (
   assign S0 = r_S0;
   assign S1 = r_S1;
   assign S2 = r_S2;
+  assign S3 = r_S3;
+  assign OEB = r_OEB;
   assign DMAEN0 = r_DMAEN0;
   assign DMAEN1 = r_DMAEN1;
   assign DMAEN2 = r_DMAEN2;
@@ -275,6 +317,24 @@ module audio (
   assign CT13 = r_CT13;
   assign CT14 = r_CT14;
   assign CT15 = r_CT15;
+  assign TC0 = r_TC0;
+  assign TC1 = r_TC1;
+  assign TC2 = r_TC2;
+  assign TC3 = r_TC3;
+  assign TC4 = r_TC4;
+  assign TC5 = r_TC5;
+  assign TC6 = r_TC6;
+  assign TC7 = r_TC7;
+  assign TC8 = r_TC8;
+  assign TC9 = r_TC9;
+  assign TC10 = r_TC10;
+  assign TC11 = r_TC11;
+  assign TC12 = r_TC12;
+  assign TC13 = r_TC13;
+  assign TC14 = r_TC14;
+  assign TC15 = r_TC15;
+  assign TLOAD = r_TLOAD;
+  assign TFIRE = r_TFIRE;
   assign PF0 = r_PF0;
   assign PF1 = r_PF1;
   assign PF2 = r_PF2;
@@ -324,7 +384,8 @@ module audio (
          (~SETC & SETB & SETA);
   // buried
   assign SET4 =
-         (SETC & ~SETB & ~SETA);
+         (SETC & ~SETB & ~SETA)
+         | (TFIRE);
   // buried
   assign SET5 =
          (SETC & ~SETB & SETA);
@@ -580,6 +641,8 @@ module audio (
       r_S0 <= 1'b0;
       r_S1 <= 1'b0;
       r_S2 <= 1'b0;
+      r_S3 <= 1'b0;
+      r_OEB <= 1'b0;
       r_DMAEN0 <= 1'b0;
       r_DMAEN1 <= 1'b0;
       r_DMAEN2 <= 1'b0;
@@ -629,6 +692,24 @@ module audio (
       r_CT13 <= 1'b0;
       r_CT14 <= 1'b0;
       r_CT15 <= 1'b0;
+      r_TC0 <= 1'b0;
+      r_TC1 <= 1'b0;
+      r_TC2 <= 1'b0;
+      r_TC3 <= 1'b0;
+      r_TC4 <= 1'b0;
+      r_TC5 <= 1'b0;
+      r_TC6 <= 1'b0;
+      r_TC7 <= 1'b0;
+      r_TC8 <= 1'b0;
+      r_TC9 <= 1'b0;
+      r_TC10 <= 1'b0;
+      r_TC11 <= 1'b0;
+      r_TC12 <= 1'b0;
+      r_TC13 <= 1'b0;
+      r_TC14 <= 1'b0;
+      r_TC15 <= 1'b0;
+      r_TLOAD <= 1'b0;
+      r_TFIRE <= 1'b0;
       r_PF0 <= 1'b0;
       r_PF1 <= 1'b0;
       r_PF2 <= 1'b0;
@@ -649,6 +730,16 @@ module audio (
          (S2 & ~S0)
          | (S2 & ~S1)
          | (~S2 & S0 & S1);
+      r_S3 <=
+         (S3 & ~S0)
+         | (S3 & ~S1)
+         | (S3 & ~S2)
+         | (~S3 & S0 & S1 & S2);
+      r_OEB <=
+         (S3 & ~S0)
+         | (S3 & ~S1)
+         | (S3 & ~S2)
+         | (~S3 & S0 & S1 & S2);
       r_DMAEN0 <=
          (WDMACON & D7 & D0)
          | (DMAEN0 & ~WDMACON)
@@ -955,6 +1046,227 @@ module audio (
          | (CCLK & CT15 & ~CT14)
          | (CCLK & ~CT15 & CT0 & CT1 & CT2 & CT3 & CT4 & CT5 & CT6 & CT7 & CT8 & CT9 & CT10 & CT11 & CT12 & CT13 & CT14)
          | (~CCLK & CT15);
+      r_TC0 <=
+         (TLOAD & ~SD0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC0)
+         | (~TLOAD & ~CCLK & TC0)
+         | (~TLOAD & ~P2 & TC0)
+         | (~TLOAD & ~CTRL6 & TC0);
+      r_TC1 <=
+         (TLOAD & ~SD1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC1 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC1 & TC0)
+         | (~TLOAD & ~CCLK & TC1)
+         | (~TLOAD & ~P2 & TC1)
+         | (~TLOAD & ~CTRL6 & TC1);
+      r_TC2 <=
+         (TLOAD & ~SD2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC2 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC2 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC2 & TC0 & TC1)
+         | (~TLOAD & ~CCLK & TC2)
+         | (~TLOAD & ~P2 & TC2)
+         | (~TLOAD & ~CTRL6 & TC2);
+      r_TC3 <=
+         (TLOAD & ~SD3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC3 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC3 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC3 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC3 & TC0 & TC1 & TC2)
+         | (~TLOAD & ~CCLK & TC3)
+         | (~TLOAD & ~P2 & TC3)
+         | (~TLOAD & ~CTRL6 & TC3);
+      r_TC4 <=
+         (TLOAD & ~SD4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC4 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC4 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC4 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC4 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC4 & TC0 & TC1 & TC2 & TC3)
+         | (~TLOAD & ~CCLK & TC4)
+         | (~TLOAD & ~P2 & TC4)
+         | (~TLOAD & ~CTRL6 & TC4);
+      r_TC5 <=
+         (TLOAD & ~SD5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC5 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC5 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC5 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC5 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC5 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC5 & TC0 & TC1 & TC2 & TC3 & TC4)
+         | (~TLOAD & ~CCLK & TC5)
+         | (~TLOAD & ~P2 & TC5)
+         | (~TLOAD & ~CTRL6 & TC5);
+      r_TC6 <=
+         (TLOAD & ~SD6)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC6 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC6 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC6 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC6 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC6 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC6 & ~TC5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC6 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5)
+         | (~TLOAD & ~CCLK & TC6)
+         | (~TLOAD & ~P2 & TC6)
+         | (~TLOAD & ~CTRL6 & TC6);
+      r_TC7 <=
+         (TLOAD & ~SD7)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC7 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC7 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC7 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC7 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC7 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC7 & ~TC5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC7 & ~TC6)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC7 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6)
+         | (~TLOAD & ~CCLK & TC7)
+         | (~TLOAD & ~P2 & TC7)
+         | (~TLOAD & ~CTRL6 & TC7);
+      r_TC8 <=
+         (TLOAD & ~SD8)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC8 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC8 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC8 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC8 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC8 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC8 & ~TC5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC8 & ~TC6)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC8 & ~TC7)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC8 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7)
+         | (~TLOAD & ~CCLK & TC8)
+         | (~TLOAD & ~P2 & TC8)
+         | (~TLOAD & ~CTRL6 & TC8);
+      r_TC9 <=
+         (TLOAD & ~SD9)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC9 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC9 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC9 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC9 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC9 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC9 & ~TC5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC9 & ~TC6)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC9 & ~TC7)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC9 & ~TC8)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC9 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8)
+         | (~TLOAD & ~CCLK & TC9)
+         | (~TLOAD & ~P2 & TC9)
+         | (~TLOAD & ~CTRL6 & TC9);
+      r_TC10 <=
+         (TLOAD & ~SD10)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC10 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC10 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC10 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC10 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC10 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC10 & ~TC5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC10 & ~TC6)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC10 & ~TC7)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC10 & ~TC8)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC10 & ~TC9)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC10 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9)
+         | (~TLOAD & ~CCLK & TC10)
+         | (~TLOAD & ~P2 & TC10)
+         | (~TLOAD & ~CTRL6 & TC10);
+      r_TC11 <=
+         (TLOAD & ~SD11)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC6)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC7)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC8)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC9)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC11 & ~TC10)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC11 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10)
+         | (~TLOAD & ~CCLK & TC11)
+         | (~TLOAD & ~P2 & TC11)
+         | (~TLOAD & ~CTRL6 & TC11);
+      r_TC12 <=
+         (TLOAD & ~SD12)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC6)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC7)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC8)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC9)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC10)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC12 & ~TC11)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC12 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11)
+         | (~TLOAD & ~CCLK & TC12)
+         | (~TLOAD & ~P2 & TC12)
+         | (~TLOAD & ~CTRL6 & TC12);
+      r_TC13 <=
+         (TLOAD & ~SD13)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC6)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC7)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC8)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC9)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC10)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC11)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC13 & ~TC12)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC13 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11 & TC12)
+         | (~TLOAD & ~CCLK & TC13)
+         | (~TLOAD & ~P2 & TC13)
+         | (~TLOAD & ~CTRL6 & TC13);
+      r_TC14 <=
+         (TLOAD & ~SD14)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC6)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC7)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC8)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC9)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC10)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC11)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC12)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC14 & ~TC13)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC14 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11 & TC12 & TC13)
+         | (~TLOAD & ~CCLK & TC14)
+         | (~TLOAD & ~P2 & TC14)
+         | (~TLOAD & ~CTRL6 & TC14);
+      r_TC15 <=
+         (TLOAD & ~SD15)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC0)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC1)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC2)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC3)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC4)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC5)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC6)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC7)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC8)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC9)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC10)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC11)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC12)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC13)
+         | (~TLOAD & CCLK & P2 & CTRL6 & TC15 & ~TC14)
+         | (~TLOAD & CCLK & P2 & CTRL6 & ~TC15 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11 & TC12 & TC13 & TC14)
+         | (~TLOAD & ~CCLK & TC15)
+         | (~TLOAD & ~P2 & TC15)
+         | (~TLOAD & ~CTRL6 & TC15);
+      r_TLOAD <=
+         (~S2 & S1 & S0 & ~CTRL6)
+         | (~S2 & S1 & S0 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11 & TC12 & TC13 & TC14 & TC15);
+      r_TFIRE <=
+         (~S2 & S1 & S0 & CTRL6 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11 & TC12 & TC13 & TC14 & TC15);
       r_PF0 <=
          (PFCK & ~PFLANE & SD0)
          | (PFCK & PFLANE & SD8)

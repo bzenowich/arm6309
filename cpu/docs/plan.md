@@ -746,9 +746,9 @@ as everything else below.
 
 **Machine-wide decision D5 applies here verbatim: divide-by-12 (2.0979 MHz) is the
 default and the only rate the machine is specified at.** fast-E (3.1469 MHz) is
-**experimental and not guaranteed**, and three independent subsystems break there — video
-VRAM read-back does not close (`video/docs/graphics.md` §11), a 2 MHz 6551 is 57 % over
-rating (`io/docs/serial.md` §3.3), and the `t_cyc` violation above. The CPU module's
+**experimental and not guaranteed**, and two independent subsystems break there — a 2 MHz
+6551 is 57 % over rating (`io/docs/serial.md` §3.3), and the `t_cyc` violation above. (The
+video card's VRAM read-back no longer does: it is prefetched, `video/docs/graphics.md` §11.) The CPU module's
 position: fast-E is a probe, it needs the §3.6 latch, it has ~6 cycles of `TFM` margin,
 and it has no silicon reference. **Per naming decision D6 this rate is "fast-E mode";
 it is never called "stretch mode", and "/WAIT" is reserved for a wait state or E-hold.**

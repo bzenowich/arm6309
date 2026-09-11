@@ -20,12 +20,22 @@ const setClearTerms = (strobe: string, bit: number, q: string) => [
 ]
 
 /* ===================== GAL 1 - aseq: the slot walk (§3.1) ================ */
-const SLOT = ["S0", "S1", "S2"]
+/* ⭐ FOUR BITS, and the fourth is the frame parity. S0-S2 walk the eight slots
+ * of a colour clock (3.1); S3 toggles once per colour clock, and it is the one
+ * signal allowed to move an AD7528's DAC A/B select or a converter port
+ * register's /OE - audio.md 6.2, 16 item 43. */
+const SLOT = ["S0", "S1", "S2", "S3"]
 const slotCount = counterTerms({ bits: SLOT })
 const aseqCells: Cell[] = [
   ...SLOT.map((name, i) => ({
     pin: 0, name, assertedLow: false, s0: 1 as const, registered: true, terms: slotCount[i],
   })),
+  /* S3's complement, as its own register so both edges leave on the same
+   * clock: the /OE of port registers 3 and 2 (S3 itself is the /OE of 0 and 1).
+   * Active low, so it comes out of reset with registers 3 and 2 OFF the port -
+   * S3 resets to 0, which is 0 and 1 driving - and the two can never fight. */
+  { pin: 0, name: "OEB", assertedLow: true, s0: 0, registered: true, terms: slotCount[3],
+    why: "6.2: port registers 3 and 2 drive the converters, in DAC B frames" },
   /* The colour clock is the frame boundary and the period reference for the
    * whole card (§4.1). */
   { pin: 0, name: "CCLK", assertedLow: false, s0: 1, registered: false, terms: ["S2 & S1 & S0"] },
@@ -112,9 +122,8 @@ const admatCells: Cell[] = [
    * that the shared adder increments every five". So this output was the
    * prescale's edge presented to a card that does its counting elsewhere.
    *
-   * ⭐ AND THE PIN IS THE ONE 6.1's ×4 NEEDS. U1 was at 62 of 64 I/O with the
-   * VOL4 select of 16 item 40 still to place; deleting an output nothing takes
-   * is where that pin comes from. CCLK stays - 4.1 says a scope wants the
+   * The pin it freed was earmarked for 16 item 40's VOL4 select, which is not
+   * needed: the replayer writes the converter's code instead. CCLK stays - 4.1 says a scope wants the
    * colour clock, and that sentence is why it is a pin at all; there was never
    * an equivalent one for this. */
 ]

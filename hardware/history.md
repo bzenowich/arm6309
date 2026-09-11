@@ -8,6 +8,44 @@ kept verbatim or lightly trimmed, because the archive is the record.
 
 ---
 
+## `ram.md` §3.1, §6.3.1 and `lib/parts.ts` — the motherboard's HC parts become HCT; U6's `/WAIT` sense (2026-09-11)
+
+A three-board review found two motherboard defects that no check could see.
+
+**Families.** Seven parts read the CPU module's address or write data directly: U2
+(`TASK`), U4 and U18 (map isolation), U5 (map index mux) and U11–U13 (SIMM row/column
+mux). All seven were `74HC`. The module's `74LVC` buffers drive 3.3 V (`cpu/docs/plan.md`
+§2.6), and a `74HC` input at 5 V needs 0.7 × V<sub>CC</sub> = 3.5 V to see a one. All seven
+are `74HCT` now; the pinouts are the same. `ram.md` said:
+
+> `TASK` is a `74HC574` with **one bit used and seven wired to nothing**
+
+> | 3 | **`74HC157`** | RAS/CAS address mux, 11 bits …
+
+`graphics.md` §6.3.1's MMU table named `74HC574`, `74HC245` and `74HC157`.
+
+**U6 pin 10.** `clkdec.jedec.ts` declared `WAIT` active-high, and `clkdec.pld` said
+`PIN 10 = WAIT ;`. Its comment said the pin was "inverted by the 3.3k pull-up + this
+declaration". A pull-up inverts nothing. The idle bus therefore held every divider cell,
+and E never toggled. `clkdec.v` takes the asserted sense, and every GAL check held pin 10
+at 0, so nothing saw it. The pin is now `PIN 10 = !WAIT ;`, `jedec/cupl.check.ts` drives
+pin 10 low as well as high, and `gal/pins.check.ts` holds every backplane pin to its sense.
+
+## `ram.md` §5.3 and `gal/README.md` — `vctrl`'s pin count after `VDATA` (2026-09-11)
+
+`graphics.md` §19 item 47 gave `vctrl` one input pin, `VDSEL`, for `+$15` `VDATA`, taking it
+from 55 to 56 of 64 I/O. The superseded text follows, verbatim.
+
+**ram.md §5.3 — vctrl's pins — said:**
+
+> have. `vctrl` has the pins, at **55 of 64 I/O** (`gal/cpld/vctrl.fit`), but four more
+
+**hardware/gal/README.md — vctrl's pins — said:**
+
+> > 55 of 64 I/O now, but 127 of 128 cells on the fitter's second pass (§19 item 46).
+
+---
+
 ## `lib/parts.ts` `HC4040` and `FLASH_512K` — the last two unverified pinouts, and finding 4 repeating (2026-09-10)
 
 The two pinouts `lib/parts.ts` still carried "from familiarity" were read off datasheets

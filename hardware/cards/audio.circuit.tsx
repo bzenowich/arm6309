@@ -1,48 +1,52 @@
-/* Audio card - 4-channel 8-bit PCM, Paula-exact, with programmable per-channel
- * panning. 39 ICs, audio/docs/audio.md 10 - and that number moved from 32 on
- * 2026-09-09, when the sequencer was enumerated (10.2) and turned out to be a
- * SECOND ATF1508AS plus six datapath packages the chip budget had never
- * counted. It is an enumeration and not a fit; 16 item 00 is what closes it.
+/* Audio card - 4-channel 8-bit PCM for ProTracker playback, Paula's fixed
+ * LRRL panning. 35 ICs, audio/docs/audio.md 10: U1 (audio) and U2 (aseq) are
+ * both ATF1508AS PLCC-84 and both fitted (gal/cpld/audio.fit, aseq.fit).
  *
- * Bus interface only. The card's own document is the specification and its
- * 15 step 0 is "freeze the register map", which is ahead of any board.
+ * NOT a board yet. What is drawn is U1's clock, reset and power pins, the
+ * card's clock source, and the analogue output stage from the summing nodes
+ * outward. The host bus pins, U2, the state file, the sample RAM, the adder,
+ * the converters and their port registers are not drawn; audio.md 10.1 keeps
+ * the datapath pinout open, and gal/pins.check.ts holds the pin senses that
+ * are settled until they are.
  *
  * The one thing this card does not take from the backplane is its clock: its
- * period reference is a second crystal, 28.37516 MHz, the Amiga PAL master, and
+ * period reference is its own 28.37516 MHz, the Amiga PAL master, and
  * audio.md 4.1 calls that non-negotiable because every module in the corpus was
  * tuned by ear against exactly that number.
+ *
+ * ⛔ REMOVED 2026-09-11: a 74HC574 drawn as "U2" on D0-D7 with its /OE, CP and
+ * inputs unconnected. The prefetch latch it stood for is eight registers inside
+ * U1 (audio.md 9.3), and U2 is the sequencer.
  */
 import { Card } from "../lib/Card"
 
 export default () => (
   <Card name="arm6309-audio" ioBase={0xff40} ioSize={16} length={180} icBudget={35}>
-    {/* Y1 - not the backplane's 25.175 MHz. machine.md 1's one-master rule has
-      * exactly one exception and this is it. */}
-    <crystal
-      name="Y1"
-      frequency="28.37516MHz"
-      loadCapacitance="18pF"
-      footprint="hc49"
-      connections={{ pin1: "net.PAL_XTAL", pin2: "net.GND" }}
+    {/* OSC1 - not the backplane's 25.175 MHz. machine.md 1's one-master rule
+      * has exactly one exception and this is it.
+      *
+      * ⛔ AN OSCILLATOR CAN, since 2026-09-11 - audio.md 10's "1 x 28.37516 MHz
+      * osc" and place/parts.ts. It was drawn as a bare crystal with one leg
+      * grounded, into a CPLD's global clock input, which has no amplifier to
+      * make it oscillate. Same half-can pinout as the motherboard's OSC1. */}
+    <chip
+      name="OSC1"
+      footprint="dip8_w0.3in"
+      pinLabels={{ pin1: "EN", pin4: "GND", pin5: "OUT", pin8: "VCC" }}
+      connections={{ EN: "net.V5", GND: "net.GND", VCC: "net.V5", OUT: "net.PAL_OSC" }}
+      noConnect={["pin2", "pin3", "pin6", "pin7"]}
     />
 
-    {/* U1 - ALL of the card's logic, audio.md 10.1. This was five GAL22V10s
-      * when the card was drawn and it is TWO ATF1508AS now (10.1, 10.2 - and
-      * only U1 is drawn here), for a reason that
-      * is not package-count: 9.5's interrupt block does not fit a GAL22V10
-      * whole (13 equations, 10 macrocells) or split (17 inputs, 14 pins), so
-      * the GAL allocation was six and rising. The part also absorbs the '273,
-      * the three '174 synchronisers and the '07, the last because an
-      * ATF1508AS output has a programmable open-collector option and 8.1 needs
-      * the wire-OR a GAL's totem-pole pin cannot do.
+    {/* U1 - the host interface, the interrupt block, the timer and the free-
+      * running counter (audio.md 10.1). hardware/gal/cpld/audio.fit is the
+      * fitted device: 107 of 128 cells, 62 of 64 I/O. Pin numbers are the ones
+      * the fitter chose and they are NOT settled - fit1508.sh runs with
+      * -preassign ignore, so every refit may move them. Only what the fitter
+      * cannot move is drawn: the global clock, the global clear, and power.
       *
-      * hardware/gal/cpld/audio.jed is the fitted device: 89 of 128 logic
-      * cells, 57 of 64 I/O, refitted 2026-09-09 with 9.1's decode and 9.3's
-      * read-back path, neither of which had ever been built. Pin numbers below are the ones the
-      * fitter chose and they are NOT settled - audio.md 10.1 keeps the
-      * datapath pinout open, and fit1508.sh is run with -preassign ignore, so
-      * every refit may move them. Only the two the fitter cannot move are
-      * relied on here: the global clock and the global clear.
+      * ⛔ PIN 84 IS NOT VCC. It was drawn tied to +5 V, and on an ATF1508AS
+      * pin 84 is INPUT/OE1 - the fit puts CNTOE there. The part's eight VCC and
+      * eight GND pins are below, all of them (2026-09-11).
       *
       * Socketed. It is programmed out of circuit, so JTAG is not routed. */}
     <chip
@@ -50,44 +54,27 @@ export default () => (
       footprint="plcc84"
       pinLabels={{
         pin83: "SLOTCLK", pin1: "nRESET",
-        pin84: "VCC", pin42: "GND",
+        pin3: "VCC1", pin13: "VCC2", pin26: "VCC3", pin38: "VCC4",
+        pin43: "VCC5", pin53: "VCC6", pin66: "VCC7", pin78: "VCC8",
+        pin7: "GND1", pin19: "GND2", pin32: "GND3", pin42: "GND4",
+        pin47: "GND5", pin59: "GND6", pin72: "GND7", pin82: "GND8",
       }}
       connections={{
-        VCC: "net.V5", GND: "net.GND",
-        /* 4.1: the card's own 28.37516 MHz reference, divided on-part. Not
-         * the backplane's 25.175 MHz - machine.md 1's one-master rule has
-         * exactly one exception and this is it. */
-        SLOTCLK: "net.PAL_XTAL",
+        VCC1: "net.V5", VCC2: "net.V5", VCC3: "net.V5", VCC4: "net.V5",
+        VCC5: "net.V5", VCC6: "net.V5", VCC7: "net.V5", VCC8: "net.V5",
+        GND1: "net.GND", GND2: "net.GND", GND3: "net.GND", GND4: "net.GND",
+        GND5: "net.GND", GND6: "net.GND", GND7: "net.GND", GND8: "net.GND",
+        /* 4.1: the card's own 28.37516 MHz reference, divided on-part. */
+        SLOTCLK: "net.PAL_OSC",
         nRESET: "net.nRESET",
-      }}
-    />
-
-    {/* U2 - the prefetch latch, and the whole read-back path. audio.md 9.3:
-      * a '574 is a flip-flop with three-state outputs, so it drives the host
-      * bus itself and the '245 that used to buffer it is deleted. */}
-    <chip
-      name="U2"
-      footprint="dip20_w0.3in"
-      pinLabels={{
-        pin1: "nOE", pin11: "CP", pin10: "GND", pin20: "VCC",
-        pin2: "D1", pin3: "D2", pin4: "D3", pin5: "D4",
-        pin6: "D5", pin7: "D6", pin8: "D7", pin9: "D8",
-        pin19: "Q1", pin18: "Q2", pin17: "Q3", pin16: "Q4",
-        pin15: "Q5", pin14: "Q6", pin13: "Q7", pin12: "Q8",
-      }}
-      connections={{
-        VCC: "net.V5", GND: "net.GND",
-        Q1: "net.D0", Q2: "net.D1", Q3: "net.D2", Q4: "net.D3",
-        Q5: "net.D4", Q6: "net.D5", Q7: "net.D6", Q8: "net.D7",
       }}
     />
 
     {/* ------------------------------------------------- the output, 7.1 --- */}
     {/* Two channels, and they must stay two. audio.md 1 requirement 5: Paula's
       * channels are 0 and 3 left, 1 and 2 right, and summing them to mono does
-      * not make a module quieter, it makes it WRONG. Since 11.1's panning the
-      * assignment is a mode bit rather than a wire (ACTRL b5), and the default
-      * is still Paula's hard pan exactly.
+      * not make a module quieter, it makes it WRONG. The assignment is wiring -
+      * Paula's hard pan exactly, and not a mode bit (ACTRL b5 is reserved).
       *
       * The DC block is good manners rather than load-bearing: 6.3 cancels the
       * sample converters' pedestal UPSTREAM of the volume stage, so the card's
@@ -122,7 +109,7 @@ export default () => (
       *   where a comfortable listening level is 1-5 mW - so there is headroom
       *   rather than a compromise.
       *   10 ohm in series is short-circuit protection and damping, not a
-      *   divider: into 32 ohm it costs 2.6 dB and into a 10 kohm line input
+      *   divider: into 32 ohm it costs 2.4 dB (20 log 32/42) and into a 10 kohm line input
       *   nothing at all.
       *   470 uF into 32 ohm is 10.6 Hz, three decades below anything a module
       *   contains. The line path's 10 uF into 100 kohm is 0.16 Hz; a headphone

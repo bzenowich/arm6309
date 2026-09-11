@@ -12,6 +12,71 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## §0, §2, §8 and the root README — the video card is 33 ICs, and the totals follow the parts list (2026-09-11)
+
+`graphics.md` §19 item 44 deleted the video card's three unclocked address latches (36 → 33).
+Two things went with that. §0's and §8's machine totals were recomputed from
+`hardware/place/parts.ts`: they had still carried video at 27–28 and audio at 39, from
+before the audio card came back to 35. And the backplane row's reason for carrying physical
+`A0`–`A18` stopped naming the video card, which decodes only `A19`/`A20` for VRAM. The
+superseded text follows, verbatim.
+
+**README.md — the video row — said:**
+
+> span writer, a display list that writes the palette per scanline. **36 ICs** on a 24 cm board — 3 `ATF1508AS` and no GALs, all three fitted with JTAG. | **Specified; simulated 2026-09-09 and repaired — 36 ICs, two open items** |
+
+**machine.md §0 — the video row — said:**
+
+> a hardware palette path** — **36 ICs on a 240 mm board**,
+
+**machine.md §2 — the backplane's address lines — said:**
+
+> | `A0–A18`, `A19`, `A20` | **physical**, not logical A0–A15 — the video card needs the translated address.
+
+**machine.md §0 — total silicon — said:**
+
+> | **Total silicon** | **126 ICs** — **107 on cards**, **19** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8. ⚠ **The motherboard went 18 → 19 on 2026-09-09**: the high map byte had no data path to `D0`–`D7` at all, and two common-I/O SRAMs cannot share one isolation `'245` — `ram.md` §3.1 and §11 item 11. ⚠ **Audio went 32 → 39 the same day**, and its second CPLD is scoped and not fitted. ⚠ **Video is in flight** as its third CPLD lands; `graphics.md` §14.1 is the number of record |
+
+**machine.md §8 — the power table — said:**
+
+> | 5 V | **video card** | **27** — 2 CPLDs, 1 GAL, 4 SRAMs |
+
+> | 5 V | **audio card** | **39** on a 24 cm board — `audio.md` §10.1 |
+
+**machine.md §8 — the sum — said:**
+
+> **The machine is plausibly **1.8–3.0 A** at 5 V across **126 ICs**, plus a 3.3 V
+> rail.** The sum, from each card's own document:
+>
+> | video | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
+> |---|---|---|---|---|---|---|---|---|
+> | **28** | **39** | 11 | 3 | **14** | **12** | **107** | **19** | **126** |
+>
+> ⚠ **Two of those moved on 2026-09-09 and one is still moving.** Audio went 32 → 39 when
+> `audio.md` §10's budget was found six packages short of the datapath the same document
+> specifies; the motherboard went 18 → 19 for `ram.md` §3.1's second isolation `'245`; and
+> **video's is in flight** as its third `ATF1508AS` lands — `graphics.md` §14.1 is the
+> number of record and this table follows it.
+
+---
+
+## §1.1 / §5 item 10 — VRAM read-back stopped breaking ÷8 (2026-09-11)
+
+`graphics.md` §11's read path was built prefetched at `WPTR`, with no fetch inside the CPU's own cycle, so the video card left §1.1's list of things that break at ÷8. The same change made VRAM reads wait on a span in flight.
+
+The text it replaced:
+
+> > **Decided 2026-09-04 — [`design-review.md`](design-review.md).** Three independent
+> > things break at ÷8, in three different subsystems:
+>
+> > | **video** | VRAM read-back does not close | `graphics.md` §11 |
+>
+>     intervals and 51 net framer byte-times. `/WAIT` is also qualified on `R/W`, so
+>     **reads never wait at all** (`graphics.md` §7.4).
+>
+
+---
+
 ## §5 items 13 and 14, and §3 — the day M-1 was declared fixed twice (2026-09-09)
 
 ### ⛔ The trap: a model that is more capable than the hardware cannot fail

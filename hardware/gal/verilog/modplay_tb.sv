@@ -60,6 +60,8 @@ module modplay_tb;
     else begin fails++; $display("FAIL  %s", claim); end
   endtask
 
+  `include "conv_claims.svh"
+
   /* ---- the host port, as a 6809E cycle -------------------------------- *
    * audio.md §9.4: the port is asynchronous to the card and the address is
    * the whole seven bits the geographic window leaves it. Same shape as
@@ -174,22 +176,22 @@ module modplay_tb;
   initial void'($value$plusargs("cvwin=%d", cvwin));
   always @(negedge SLOTCLK)
     if (cvwin >= 0 && cc >= cvwin && cc < cvwin + 3)
-      $display("      SLOT cc=%0d S=%b%b%b code=%0d SD=%02h SFOE=%b SFA=%02h CVR0=%02h dv0=%02h CVOEA=%b CVBUSY=%b QCHAN=%b WT=%b%b%b",
+      $display("      SLOT cc=%0d S=%b%b%b code=%0d SD=%02h SFOE=%b SFA=%02h CVR0=%02h dv0=%02h S3=%b CSV=%b QCHAN=%b WT=%b%b%b",
                cc, card.S2, card.S1, card.S0,
                {card.CVC2, card.CVC1, card.CVC0}, card.SD[23:16],
-               card.SFOE, card.SFA, card.CVR0, DACVOL0, card.CVOEA,
-               card.u2.CVBUSY, card.u2.QCHAN,
+               card.SFOE, card.SFA, card.CVR0, DACVOL0, card.S3,
+               card.CSV, card.u2.QCHAN,
                card.u2.WT2, card.u2.WT1, card.u2.WT0);
 
   always @(negedge SLOTCLK)
     if (cvdbg > 0 && cvdbg_n < cvdbg
         && {card.CVC2, card.CVC1, card.CVC0} != 3'd0) begin
       cvdbg_n++;
-      $display("      cv cc=%0d code=%0d SD=%02h SFOE=%b SBOE=%b SFA=%02h file6=%02h CVR0=%02h dv0=%02h CVOEA=%b CVBUSY=%b QCHAN=%b WT=%b%b%b",
+      $display("      cv cc=%0d code=%0d SD=%02h SFOE=%b SBOE=%b SFA=%02h file6=%02h CVR0=%02h dv0=%02h S3=%b CSV=%b QCHAN=%b WT=%b%b%b",
                cc, {card.CVC2, card.CVC1, card.CVC0}, card.SD[23:16],
                card.SFOE, card.SBOE, card.SFA,
-               card.SF[6][23:16], card.CVR0, DACVOL0, card.CVOEA,
-               card.u2.CVBUSY, card.u2.QCHAN,
+               card.SF[6][23:16], card.CVR0, DACVOL0, card.S3,
+               card.CSV, card.u2.QCHAN,
                card.u2.WT2, card.u2.WT1, card.u2.WT0);
     end
 
@@ -211,6 +213,25 @@ module modplay_tb;
   int vol_bad_ch = -1;
   logic [7:0] prev_file [0:3];
   longint     next_vol_check = 4096;
+
+  /* ⛔ AND THE LEVEL, WHICH THE CLAIM ABOVE CANNOT SEE: 16 item 40. It asks
+   * whether the converter got the FILE's byte, and a file holding Paula's
+   * 0..64 passes it while every channel plays 12 dB quiet. The replayer turns
+   * 0..64 into 4v saturated at 255 (audio.md 6.1), so over a whole module the
+   * volume converters must reach 255, and every code they take must be one
+   * that table can produce - a multiple of four, or 255. */
+  int vol_max = 0, vol_offtable = 0;
+  always @(posedge SLOTCLK) if (counting) begin
+    for (int n = 0; n < 4; n++) begin
+      logic [7:0] v;
+      v = (n == 0) ? DACVOL0 : (n == 1) ? DACVOL1 : (n == 2) ? DACVOL2 : DACVOL3;
+      if (!$isunknown(v)) begin
+        if (v > vol_max) vol_max = v;
+        if (v != 8'hFF && v[1:0] != 2'b00) vol_offtable++;
+      end
+    end
+  end
+
   always @(posedge SLOTCLK) if (counting && cc >= next_vol_check) begin
     logic [7:0] f [0:3];
     next_vol_check = cc + 4096;
@@ -252,6 +273,27 @@ module modplay_tb;
   endfunction
 
   int      trfd, srfd;
+  // ⭐ 8.2 AND 16 item 44: THE TEMPO IS MEASURED, NOT ASSUMED. Every claim here
+  // used to ask whether a tick CAME, and the card delivered all of them at
+  // 54.1 Hz - the ceiling of a colour-clock compare - whatever TIMER held. Each
+  // fire's period is checked against the TIMER value U1 reloaded from at the
+  // fire before it, which is the word slot 4 put on the bus in that same slot.
+  longint     tf_last = -1;
+  logic [15:0] tf_load = 16'd0;
+  int         tf_count = 0, tf_bad = 0;
+  longint     tf_min = 0, tf_max = 0;
+  logic [15:0] timer_written = 16'd0, timer_hi = 16'd0;
+  always @(posedge SLOTCLK) if (counting && card.TFIRE === 1'b1) begin
+    if (tf_last >= 0) begin
+      if (cc - tf_last != 5 * longint'(tf_load)) tf_bad <= tf_bad + 1;
+      if (tf_count == 0 || cc - tf_last < tf_min) tf_min <= cc - tf_last;
+      if (tf_count == 0 || cc - tf_last > tf_max) tf_max <= cc - tf_last;
+      tf_count <= tf_count + 1;
+    end
+    tf_last <= cc;
+    tf_load <= card.SF[32][15:0];
+  end
+
   string   sram_path, trace_path, dac_path;
   int      run_cc;
   int      tick_now, tick_line, n, v, got;
@@ -336,6 +378,8 @@ module modplay_tb;
         ticks_played++;
       end
       n = reg_of(rname);
+      if (n == 11) timer_hi = {byte_v, 8'h00};
+      if (n == 12) timer_written = timer_hi | {8'h00, byte_v};
       if (n < 0) unknown_regs++;
       else begin
         wr(n, byte_v);
@@ -352,12 +396,26 @@ module modplay_tb;
        $sformatf("the card's own §8.2 timer produced every tick (%0d never came)",
                  firq_timeouts));
 
+    ok(timer_written != 0 && card.SF[32][15:0] == timer_written,
+       $sformatf("⭐ 16 item 44: the replayer's TIMER is at $20 (%04h, written %04h)",
+                 card.SF[32][15:0], timer_written));
+    ok(tf_count >= 10 && tf_bad == 0,
+       $sformatf("⭐ and every tick period is 5 x TIMER colour clocks - %0d periods, %0d wrong, %0d to %0d cc (125 BPM is 70,935)",
+                 tf_count, tf_bad, tf_min, tf_max));
+
     ok(vol_bad == 0,
        $sformatf("16 item 41: every settled VOL byte reaches its own converter (%0d of %0d samples wrong%s)",
                  vol_bad, vol_checks,
                  vol_bad_ch < 0 ? "" : $sformatf(", first on channel %0d", vol_bad_ch)));
     ok(vol_checks > 100,
        $sformatf("and the volume path was sampled enough times to mean it (%0d)", vol_checks));
+    conv_report();
+    ok(vol_max == 255,
+       $sformatf("16 item 40: a volume converter reaches full scale, code 255 (highest seen %0d)",
+                 vol_max));
+    ok(vol_offtable == 0,
+       $sformatf("and every volume code is one 6.1's 4v table produces (%0d slot-samples were not)",
+                 vol_offtable));
 
     // Run on to the requested length, so the tail of the last note is rendered.
     while (cc < run_cc) @(posedge SLOTCLK);

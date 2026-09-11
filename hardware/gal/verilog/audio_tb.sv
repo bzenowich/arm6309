@@ -28,10 +28,15 @@ module audio_tb;
   audio_card card (.*);
 
   int fails = 0;
+  logic [3:0] floor_clear;
+  int floor_rises;
+  logic floor_busy_q;
   task automatic ok(input bit good, input string claim);
     if (good) $display("ok    %s", claim);
     else begin fails++; $display("FAIL  %s", claim); end
   endtask
+
+  `include "conv_claims.svh"
 
   logic [7:0] rdval;
 
@@ -104,6 +109,33 @@ module audio_tb;
    * The bound is CLAUDE.md's fifth trap: an unbounded wait here would hang the
    * testbench rather than fail it if PWBUSY ever stuck high. */
   int pw_wait_max = 0;
+
+  // 16 item 44: the tempo timer's fires, measured in colour clocks. TFIRE is
+  // one slot wide and CCLK one slot in eight, so a count of CCLKs between two
+  // fires IS the period - both are locked to the same slot counter.
+  int tf_ivl [0:7];
+  int tf_n;
+  int cc_since_en = 0;
+  always @(posedge SLOTCLK) begin
+    if (card.CTRL6 !== 1'b1) cc_since_en <= 0;
+    else if (card.CCLK) cc_since_en <= cc_since_en + 1;
+  end
+  int tf_first;
+  // ⚠ Bounded, and the bound is a claim at the call site (CLAUDE.md's hang
+  // trap). k counts fires; the first interval runs from the call, not a fire.
+  task automatic tfire_intervals(input int want, input int bound_slots);
+    int cc, s;
+    cc = 0; tf_n = 0; tf_first = -1;
+    for (s = 0; s < bound_slots && tf_n < want; s++) begin
+      @(posedge SLOTCLK); #0;
+      if (card.CCLK) cc++;
+      if (card.TFIRE === 1'b1) begin
+        if (tf_first < 0) tf_first = cc_since_en;
+        tf_ivl[tf_n] = cc; tf_n++; cc = 0;
+      end
+    end
+  endtask
+  logic [23:0] snap [0:31];
   task automatic adata(input logic [7:0] v); pwwait(); wr('h1, v); endtask
   // ⚠ TWICE, and the second time is not belt-and-braces. 9.3 says writing
   // AIDX prefetches that entry and NOTHING DOES: the prefetch runs at the end
@@ -387,13 +419,26 @@ module audio_tb;
       adata(8'h40);
     end
     wr('h2, 8'h8F);
-    repeat (4000) @(posedge SLOTCLK);
-    n = 0;
-    for (i = 0; i < 4; i++) if (card.u2.DUE0 === 1'b0) n++;
-    ok(card.u2.DUE0 === 1'b0 && card.u2.DUE1 === 1'b0,
-       "no channel is left permanently due - the engine keeps up at the floor");
-    ok(card.u2.BUSY === 1'b0 || card.u2.BUSY === 1'b1,
-       "and the engine is still sequencing rather than wedged");
+    // ⛔ OVER A WINDOW, since 2026-09-11. This read one instant: DUE0 and DUE1
+    // at slot 4000 (the loop above it counted DUE0 four times), and then
+    // `BUSY === 0 || BUSY === 1`, which no two-state signal can fail. Now each
+    // of the four DUE bits must be seen clear, and BUSY must keep rising - at
+    // PER = 16 the four channels ask for ~125 events in 4000 slots.
+    repeat (400) @(posedge SLOTCLK);
+    floor_clear = 4'b0000; floor_rises = 0; floor_busy_q = card.u2.BUSY;
+    repeat (4000) begin
+      @(posedge SLOTCLK);
+      if (card.u2.DUE0 === 1'b0) floor_clear[0] = 1'b1;
+      if (card.u2.DUE1 === 1'b0) floor_clear[1] = 1'b1;
+      if (card.u2.DUE2 === 1'b0) floor_clear[2] = 1'b1;
+      if (card.u2.DUE3 === 1'b0) floor_clear[3] = 1'b1;
+      if (card.u2.BUSY === 1'b1 && floor_busy_q !== 1'b1) floor_rises++;
+      floor_busy_q = card.u2.BUSY;
+    end
+    ok(floor_clear === 4'b1111,
+       $sformatf("no channel is left permanently due - each of the four DUE bits clears within 4000 slots (seen %b)", floor_clear));
+    ok(floor_rises >= 10,
+       $sformatf("and the engine is still sequencing rather than wedged - BUSY rose %0d times in 4000 slots", floor_rises));
 
     $display("");
     $display("10.2.5 - the margin at PROTRACKER's floor, which is the one that matters");
@@ -452,8 +497,8 @@ module audio_tb;
     ok(n > 0 && n < cclks,
        $sformatf("the engine uses %0d of them at PER = 30 - a margin of %0d.%0d x",
                  n, cclks / n, (cclks * 10 / n) % 10));
-    $display("      by work type: W1 %0d  W2 %0d  W6 %0d  W4 %0d  W3 %0d  W5 %0d",
-             wtc[0], wtc[1], wtc[2], wtc[3], wtc[4], wtc[5]);
+    $display("      by work type: W1 %0d  W2 %0d  W6 %0d  W3 %0d  W5 %0d   (3, W4, retired)",
+             wtc[0], wtc[1], wtc[2], wtc[4], wtc[5]);
     // How often does channel 0 actually tick? 4.1 says once per PER colour
     // clocks and the pitch IS that rate, so this is 1 requirement 2 measured.
     n = 0; cclks = 0; bad = 0;
@@ -652,6 +697,120 @@ module audio_tb;
                  passes));
     ok(sfp(2) > 19'h02010,
        $sformatf("PTR walked well past the first byte (%05h)", sfp(2)));
+
+    // ---- 9.2, 9.4.3: the direct window stores only where 9.2 says ------------
+    $display("");
+    $display("16 item 44 - a direct-window write lands in its own word, and nowhere else");
+    $display("");
+    // ⛔ WHY THIS SECTION EXISTS. W3 step 0 stored every posted byte at the
+    // (word, lane) AIDX named unless the port was AIDX or SDATA, so ADMACON,
+    // AINTENA, AINTREQ, ACTRL, SPTR and TIMER all wrote into channel state, and
+    // an AIDX on a commit offset copied the shadow into LC, LEN or PER as
+    // well. Nothing here ever wrote a direct port with AIDX anywhere but 0.
+    //
+    // Every channel is disabled, so nothing but the host may move a channel
+    // word: the whole 32-word block is snapshotted and compared.
+    wr('h2, 8'h0F);
+    repeat (400) @(posedge SLOTCLK);
+    for (i = 0; i < 32; i++) snap[i] = card.SF[i];
+    n = 0;
+    // AIDX 2 is LC's COMMITTING byte (the staged path) and 7 is VOL (the
+    // straight-through path). Both, because the two paths failed differently.
+    for (int pass = 0; pass < 2; pass++) begin
+      aidx(pass == 0 ? 2 : 55);
+      wr('h2, 8'h0F);                                   // ADMACON: clear, again
+      wr('h3, 8'h3F);                                   // AINTENA: clear all
+      wr('h4, 8'h3F);                                   // AINTREQ: clear all
+      wr('h5, 8'h80);                                   // ACTRL: master enable only
+      wr('h6, 8'h05); wr('h7, 8'hA5); wr('h8, 8'h5A);   // SPTR  = $5A55A
+      wr('hB, 8'h00); wr('hC, 8'h40);                   // TIMER = $0040
+      repeat (80) @(posedge SLOTCLK);
+    end
+    for (i = 0; i < 32; i++) if (card.SF[i] !== snap[i]) n++;
+    ok(n == 0,
+       $sformatf("⭐ ADMACON, AINTENA, AINTREQ, ACTRL, SPTR and TIMER written with AIDX on a committing byte and on VOL leave every channel word unchanged (%0d of 32 moved)", n));
+    ok(sfp(34) == 19'h5A55A,
+       $sformatf("⭐ SPTR's three bytes commit to $22, all nineteen bits (%05h)", sfp(34)));
+    ok(sfl(32) == 16'h0040,
+       $sformatf("⭐ TIMER's two bytes commit to $20 (%04h)", sfl(32)));
+
+    // The prefetch must survive them: HW names $22 or $20 after these ports,
+    // and W3 step 5 must not re-prefetch there.
+    aidx(1 * 16 + 6);                 // channel 1's PER low byte, lane 0, readable
+    rd('h1);                          // arms 9.3's latch at that index
+    aidx(1 * 16 + 6);
+    wr('hB, 8'h00); wr('hC, 8'h40);
+    rd('h1);
+    ok(rdval == card.SF[1 * 8 + 4][7:0] && rdval != card.SF[1 * 8 + 0][7:0],
+       $sformatf("and ADATA still returns the byte AIDX names after a TIMER write, not the word HW named for TIMER (%02h, file %02h)",
+                 rdval, card.SF[1 * 8 + 4][7:0]));
+
+    // SDATA writes where SPTR now points, and post-increments it.
+    wr('h6, 8'h03); wr('h7, 8'h21); wr('h8, 8'h40);   // SPTR = $32140
+    wr('h9, 8'h77);
+    repeat (40) @(posedge SLOTCLK);
+    ok(card.SRAM['h32140] == 8'h77 && sfp(34) == 19'h32141,
+       $sformatf("and SDATA stores at the pointer SPTR set, then advances it (RAM %02h, SPTR %05h)",
+                 card.SRAM['h32140], sfp(34)));
+
+    $display("");
+    $display("8.2 and 16 item 44 - the tempo timer is N CIA ticks, at any N");
+    $display("");
+    wr('h4, 8'h10);                                   // clear AINTREQ b4
+    n = 0;
+    for (i = 0; i < 8 * 2000; i++) begin @(posedge SLOTCLK); #0; if (card.TFIRE === 1'b1) n++; end
+    ok(n == 0, $sformatf("ACTRL b6 = 0: no timer fire in 2,000 colour clocks (%0d)", n));
+
+    wr('h5, 8'hC0);                                   // ACTRL: timer on
+    tfire_intervals(5, 8 * 5 * 64 * 7);
+    ok(tf_n == 5, $sformatf("five fires inside the bound at TIMER = 64 (%0d)", tf_n));
+    ok(tf_first >= 5 * 64 - 5 && tf_first <= 5 * 64 + 1,
+       $sformatf("the first fires one period after b6 is set, to within a CIA tick (%0d cc, period 320)", tf_first));
+    bad = 0;
+    for (i = 1; i < tf_n; i++) if (tf_ivl[i] != 5 * 64) bad = 1;
+    ok(!bad && tf_n == 5,
+       $sformatf("⭐ and every period after it is exactly 5 x TIMER colour clocks (%0d %0d %0d %0d, want 320)",
+                 tf_ivl[1], tf_ivl[2], tf_ivl[3], tf_ivl[4]));
+    ok(card.REQ4 == 1'b1, "and the fire raises AINTREQ b4 through U1's own SET4");
+
+    // A running CIA takes a new latch at its next underflow, not at the write.
+    tfire_intervals(1, 8 * 5 * 64 * 2);
+    wr('hB, 8'h01); wr('hC, 8'h00);                   // TIMER = 256
+    tfire_intervals(3, 8 * 5 * 256 * 4);
+    ok(tf_n == 3 && tf_ivl[1] == 5 * 256 && tf_ivl[2] == 5 * 256,
+       $sformatf("a TIMER written while running takes effect at the next reload (%0d fires; %0d %0d, want 1280)",
+                 tf_n, tf_ivl[1], tf_ivl[2]));
+
+    // ⭐ THE RANGE. 125 BPM is N = 14,187 and 70,935 colour clocks, past the
+    // 65,536 a colour-clock deadline could hold. A whole period is 570 k slots
+    // and modplay_tb measures every one of a module's; here the claim is that
+    // the count is CIA ticks and sixteen bits wide - loaded with ~N, advanced
+    // one per fifth colour clock, and not fired.
+    wr('h5, 8'h80);
+    wr('hB, 8'h37); wr('hC, 8'h6B);                   // TIMER = 14187, 125 BPM
+    wr('h5, 8'hC0);
+    n = 0; cclks = 0;
+    for (i = 0; i < 8 * 3000; i++) begin
+      @(posedge SLOTCLK); #0;
+      if (card.TFIRE === 1'b1) n++;
+    end
+    ok(n == 0 && cc_since_en > 2900
+       && (16'hFFFF - {card.TC15, card.TC14, card.TC13, card.TC12, card.TC11, card.TC10,
+                       card.TC9, card.TC8, card.TC7, card.TC6, card.TC5, card.TC4,
+                       card.TC3, card.TC2, card.TC1, card.TC0}) >= 14187 - (cc_since_en / 5) - 1
+       && (16'hFFFF - {card.TC15, card.TC14, card.TC13, card.TC12, card.TC11, card.TC10,
+                       card.TC9, card.TC8, card.TC7, card.TC6, card.TC5, card.TC4,
+                       card.TC3, card.TC2, card.TC1, card.TC0}) <= 14187 - (cc_since_en / 5) + 1,
+       $sformatf("⭐ 125 BPM: TIMER = 14,187 counts down in CIA ticks with no fire - %0d colour clocks in, %0d ticks remain of a 70,935-colour-clock period the retired compare could not hold",
+                 cc_since_en, 16'hFFFF - {card.TC15, card.TC14, card.TC13, card.TC12, card.TC11, card.TC10,
+                       card.TC9, card.TC8, card.TC7, card.TC6, card.TC5, card.TC4,
+                       card.TC3, card.TC2, card.TC1, card.TC0}));
+    wr('h5, 8'h80);
+
+    $display("");
+    $display("6.2 and 16 item 43 - every converter write of the run, against the AD7528");
+    $display("");
+    conv_report();
 
     $display("");
     if (fails == 0) $display("audio_tb OK");

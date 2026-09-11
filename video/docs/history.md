@@ -9,6 +9,578 @@ to `graphics.md` unless marked otherwise. "Vid-*" identifiers are findings of th
 
 ---
 
+## §8.2, §9.2, §10.1.6.3, §13, §14 — four pin senses corrected, and `CTRL` b7 built (2026-09-11)
+
+A three-board review found the video card's CPLDs declaring four pins with the wrong sense.
+The fitter programs what a `.pld` declares, but the generated Verilog is in asserted sense, so
+no testbench could see the difference:
+
+- **`/IOSEL`** on `vsup` and **`/IOPAGE`** on `vctrl` were active-high inputs. As fitted,
+  the register file decoded every cycle *outside* its window, and VRAM answered only
+  *during* I/O cycles.
+- **`BLANKD`** was active-high into the `'273`s' active-low `/MR`. As fitted, the picture
+  would have been black and the porches coloured.
+- **`OEA0`–`OEA2` / `OEB0`–`OEB2`** were active-high into `'574` `/OE`, under a
+  `pxsel.jedec.ts` comment saying "the board inverts". §8.2 says the board has no
+  inverter. As fitted, every rank was swapped.
+- **`WSTB`**, the register file's `/WE`, was active-high on `vsup`, and `vaddr` read the
+  same net as active-high.
+
+All four are declared active-low now. `hardware/gal/pins.check.ts` holds each pin to its
+backplane signal, to the part at its other end, and to its discrete consumer.
+
+**`CTRL` b7, the display enable, was a buried cell whose only reader was `video_card.v`**,
+which forced `PIXEL` to index 0: the mechanism §9.2 rejects. On silicon the bit did
+nothing. It is now a second term on `BLANKD`. That costs `vctrl` its last macrocell (a
+variant fit without the term places at 127).
+
+**§14 also named three parts in a family that cannot read their inputs**, against §14.2.6's
+own rule that a memory output (V<sub>OH</sub> 2.4 V) needs a TTL-threshold input. The three
+are the descriptor `'244` and the `vread` `'574`, which read the pixel bus, and the
+read-back `'245`, which reads the register file and, on its B side, the CPU module's
+3.3 V write data. §14 said:
+
+> | **1** | **74HC244** | ⭐ **§10.3.3's descriptor-byte buffer** …
+> | 1 | 74HC245 | register read-back | = |
+> | **1** | **74HC574** | **VRAM read latch (§11)** …
+
+and §14.2.6 said "**The card is already right**: §14.1 puts `74AHCT` on every part that
+touches a memory output".
+
+**§10.1.6.3 and §14 said `vctrl` was:**
+
+> **56 of 64 I/O, 127 of 128 cells** (`hardware/gal/cpld/vctrl.fit`)
+
+---
+
+## §10.1.6.2, §10.1.6.3, §10.1.7, §14 — JTAG was never reserved on the fitted parts; `vsup`'s figures (2026-09-11)
+
+These sections said both (later all three) CPLDs were fitted with `TMS`/`TDI`/`TDO`/`TCK`
+reserved and programmed in circuit. The current fits all run `-JTAG off`, which is
+`fit1508.sh`'s default, and place logic on pins 14, 23, 62 and 71. `video/README.md`
+already said so, and the root `README.md` said "all three fitted with JTAG". `vsup`'s
+figures were also the first fit's (84 cells, 58 I/O); the current fit is 91 and 61, which
+leaves no room for JTAG's four pins. Found by the three-board review. The superseded
+passages, verbatim, separated by `=====`:
+
+> > ⭐ **`vaddr` has JTAG** — 62 of 64 with `TMS`/`TDI`/`TDO`/`TCK` reserved, so the
+> > display list did not cost in-circuit programming after all. §6.4.1's corrected
+> > cell address is what paid for it (§10.1.6.3), not a rebalance against `vctrl`.
+>
+> =====
+>
+> ⭐ **Both CPLDs have JTAG.** `TMS`/`TDI`/`TDO`/`TCK` are **four of the 64 I/O, not
+> extra pins** — the `ATF1508AS` shares them with ordinary I/O (PLCC-84 pins 14, 23, 62
+> and 71), which is exactly why JTAG has a cost at all. So the totals are logic pins
+> *plus* those four:
+>
+> | | logic I/O | JTAG | total | dedicated inputs | cells |
+> |---|---|---|---|---|---|
+> | `vaddr` | 58 | +4 | **62 of 64** | 2 of 4 | **124 of 128** |
+> | `vctrl` | **60** | +4 | **64 of 64** | 3 of 4 | **104 of 128** |
+>
+> Both report "Design fits successfully" with the four reserved
+> (`JTAG=on hardware/gal/prjbureau/fit1508.sh`), and no logic signal is placed on them.
+> **They are programmed in circuit**, unlike the audio card's `ATF1508AS`. ⚠ `vctrl` is
+> *exactly* full: 60 + 4 = 64, nothing spare.
+>
+>
+>
+> =====
+>
+> **Both fit a PLCC-84 with JTAG reserved**, and that is with everything §19 item 26
+> listed as missing now built: the mask serialiser, `HSCROLL[1:0]`, `WADV`, `SPNREQ`,
+> `LGRANT`, the posted-write strobe, the map pipeline and §7.2's reload walk. ⚠ `vaddr`
+> is the tight one now — six cells and three pins — and §14.2's two ×16 framebuffer parts
+> are still the relief that exists on paper (§19 item 25).
+>
+> =====
+>
+> part, against the four JTAG needs and the two `vctrl` had. §14.2's two ×16
+> framebuffer parts would free six more by making the arbiter 2 grants instead of 8
+> (§19 item 25); that is no longer what in-circuit programming waits on.
+>
+> =====
+>
+> | **84 of 128 logic cells**, 32 flip-flops, 81 of 128 nodes+FB | 44 spare macrocells |
+> | **58 of 64 I/O**, 2 of 4 dedicated inputs | 6 spare I/O, JTAG reserved |
+>
+> =====
+>
+> ⚠ **That shape is the lesson, and §14 states it generally**: forty-four spare macrocells
+> beside six spare pins is not a balanced part
+>
+> > **84 of 128 cells and 58 of 64 I/O**. Forty-four spare macrocells and six spare
+> > I/O is not a balanced part
+
+---
+
+## §3.1, §6.3, §10.1.6.3, §11, §13, §14 — `+$15` `VDATA` built, the VRAM port in the I/O page (2026-09-11)
+
+§19 item 47. `VDATA` had been retired that morning as a second address for the VRAM
+window's port. It was built the same afternoon, because a second address in the I/O page
+lets software reach VRAM with no MMU block mapped. Doing so added a decode on `vsup`, a port
+select on `vctrl`, and an exclusion in the register-file write strobe. `vsup` went from 90 to
+91 cells and 60 to 61 I/O; `vctrl` from 55 to 56 I/O. The superseded text follows,
+verbatim.
+
+**§3.1 — the WPTR box — said:**
+
+> > byte, latched on E's fall, and nothing on the card captures its address (§3.1.1).
+
+**§6.3 — what the MMU does for VRAM — said:**
+
+>    post-incrementing (§3.1.1, §11). One mapped block is enough, and eight are no better.
+
+**§10.1.6.3 — the arbiter inside vctrl — said:**
+
+> Variant B's four freed, `vctrl` holds the arbiter at **55 of 64 I/O and 127 of 128
+> cells**. The pins fell with §11's deletion of the CPU grant; the cells rose with the
+> fitter's second pass, §19 item 46.
+
+**§11 — what it costs — said:**
+
+> `RDOE` and `VINC`, with `LGRANT` now formed locally. That puts it at 90 of 128 and 60 of
+> 64. On `vctrl` it is one input pin and two product terms, and vctrl gave back seven pins in
+> the same change (§5.2.1, §14).
+
+**§11 — VDATA — said:**
+
+> ⚠ **`+$15` `VDATA` is not built, and §13 reserves it.** A read or write "at `WPTR`,
+> post-increment" is exactly what the VRAM window already does, so `VDATA` would be a
+> second address for the same byte. What it would add is reaching VRAM from the I/O page
+> without mapping it into logical space, and writes do not have that either.
+
+**§13 — the register map — said:**
+
+> | `+$15` | — | | reserved. **VRAM is read and written through the VRAM window, at `WPTR`, post-increment** (§11) — which is what `VDATA` was, at a second address. Retired 2026-09-11 | was `VDATA` |
+
+**§14 — the vctrl and vsup rows — said:**
+
+> span-mask handling, §19 item 35's blanking delay. **55 of 64 I/O, 127 of 128 cells**
+
+> Since 2026-09-11 also §11's read prefetch. **60 of 64 I/O, 90 of 128 cells**
+
+**§19 item 43's table — vctrl's pins — said:**
+
+> ⚠ Since 2026-09-11 vctrl's limit is not pins (55 of 64) but the fitter's cell count (§19 item 46) |
+
+**video/README.md — the fit figures — said:**
+
+> `vctrl` is 55 of 64 I/O.
+> `vaddr` is 59 of 64 I/O.
+> `vsup` is 60 of 64 I/O.
+> Their cell counts are 127, 113 and 90 of 128,
+
+---
+
+## §3.1, §3.1.1, §6.3, §14, §17, §19 item 44 — the address latches come off, and `WPTR` is the only address (2026-09-11)
+
+§19 item 44 closed on 2026-09-11. The decision was to keep `WPTR` addressing and not build
+flat addressing. §14 had listed three `74HC574`s for the posted write's physical address
+since before any design existed, and no design ever clocked them. They were deleted, taking
+the card from 36 to 33 ICs; `npm run check:place` still puts 33 packages on 24 cm and not
+on 18. §6.3 had gone on describing the flat design ("decodes physical A0–A18", "the MMU is
+the random-access path") after §3.1.1 and §11 had both said the address selects the window
+and nothing else, so it was rewritten to match. The superseded text follows, verbatim.
+
+**§0 — the net count — said:**
+
+> **Net: the card is 36 ICs (32 if the tri-state pixel bus closes at 39.7 ns and the
+> `'153` mux is not needed), against colormin's 39 (35)**
+
+**§3.1 — the WPTR box — said:**
+
+> > (§11) returns the byte there, and both post-increment. A CPU write contributes a data
+> > byte, latched on E's fall. ⚠ §14 still lists three address-capture `'574`s that no
+> > design clocks — §3.1.1, §19 item 44.
+
+**§3.1.1 — the heading and the address latches — said:**
+
+> ### 3.1.1 The posted-write path needs its address, not just its data
+
+> ⚠ **§14 carries three more `'574`s for the address: 19 bits plus `VRAMSEL`, `R/W` and
+> `WMODE[1:0]`.** They were costed for a flat write that retires at its own physical
+> address, which §6.3 describes and no design builds. That is §19 item 44: either the
+> flat write is built and they get a producer, or they come off the list and the card
+> is three packages smaller.
+
+**§6.3 — what the MMU does for VRAM — said:**
+
+> card VRAM select = A19 . /IOPAGE(high) . E . (no other card asserting)
+
+> 2. **The video card now decodes physical A0–A18 plus a chip select**, not a 16 KB
+>    window. Any of the eight MMU blocks can be pointed at VRAM, so up to 64 KB of
+>    framebuffer is directly addressable at once — strictly better than a 16 KB
+>    window with a bank register, and it is what makes §11's readable VRAM useful.
+> 3. **That chip select must be qualified against `/IOPAGE`.** ⚠ "Physical A0–A18
+>    plus a chip select", full stop, is an unsafe card. See §6.3.2.
+>
+> `WPTR` stays. The auto-incrementing 19-bit pointer is the streaming path and the
+> span writer's address source; the MMU is the random-access path. Two paths on
+> purpose, exactly as colormin argues — just with the MMU doing the job `BANK` used
+> to do badly.
+
+**§10.1 — the GAL wall — said:**
+
+> describes: **3 × `ATF1508AS` PLCC-84 + 4 SRAM + 29 packages of 74-series = 36 ICs**
+
+**§14 — the chip budget — said:**
+
+> **The card is 36 ICs: 3 CPLDs, no GALs, 4 SRAMs and 29 packages of 74-series** —
+> against colormin's 39 (35), and it is a **24 cm** board rather than 18 (`npm run
+> check:place`; 36 packages do not place on 18 cm).
+
+> | **3** | **74HC574** | **posted-write address + control latches — 19 address + VRAMSEL + R/W + `WMODE[1:0]` = 23 bits (§3.1.1)**. ⚠ **No design clocks them**: every CPU VRAM write retires at `WPTR` — §19 item 44 | **+3** |
+>
+
+> | **36** | | **32 if the tri-state pixel bus closes and the four `'153` come out** | **colormin: 39 (35)** |
+
+> span-mask serialiser went into the CPLDs (§10.1.6); the `VSTAT` `'244` and the
+> posted-write address `'574`s did not, because pins, not macrocells, are what the
+> CPLDs are short of (§10.1.6.3).
+
+**§14.1 — the count, derived — said:**
+
+> **36, reconciled 2026-09-09 (evening)** — from the GAL build's 41 (archived in
+> [history.md](history.md)). The morning's figure was 28; the three rows marked ⭐ are
+> features §8, §9 and §10.3 had *specified and not built*, and none of them is a
+> change of mind:
+
+> | ⭐ **+ 1 × `74HC244`** | **+1** | **§10.3.3** — the descriptor byte onto the card's internal data bus, which is what gives a list `MOVE` a target |
+> | **= the build** | **36** | **32 if the tri-state pixel bus closes and the four `'153` come out** |
+
+**§14.1 — the VSTAT '244 note — said:**
+
+> > `D0`–`D7` from `vctrl` needs eight it does not have (§10.1.6.3), and `vsup` has six
+> > spare. The same argument keeps the three posted-write address `'574`s: 23 bits of
+> > latch is 23 pins, and `vaddr` has two.
+
+**§14.1 — area — said:**
+
+> — and there are now no GALs at all. ⚠ **The card is 24 cm, not 18**: 36 packages do
+> not place on an 18 cm board,
+
+> ⚠ **If the tri-state pixel bus closes (§19 item 2) the four `'153` go too**, and the
+> card is **32 ICs**.
+
+**§14.2 — area — said:**
+
+> descriptor buffer put it back — 36 packages do not place on 18 cm, and
+
+**§14.2 — the SRAM consolidation table — said:**
+
+> §14's 36 packages do not place on 18, and
+
+**§19 item 44 — the open item — said:**
+
+> 44. **⚠ OPEN 2026-09-11 — three packages on §14's list are clocked by no design.**
+>     §3.1.1's posted-write address latches — 19 bits plus `VRAMSEL`, `R/W` and `WMODE` in
+>     three `74HC574` — were costed for a flat write that retires at its own physical
+>     address. No part has `PA[18:2]`, and every CPU VRAM write retires at `WPTR`, which
+>     `boot.asm` relies on (*"the address on the bus selects VRAM and nothing else"*). §11's
+>     read path is built the same way. **Either build the flat addressing** — 17 pins into
+>     the address mux and a CPU source on `SRC`, on `vaddr`, the part with none to spare —
+>     **or delete the three packages, and the card is three smaller.** The second is what the
+>     software already assumes. ⚠ Deciding changes §0's and §14's headline count, so it is
+>     not taken here.
+
+**§17 — the backplane's address lines — said:**
+
+> - **Carry physical A0–A18 plus A19**, not just logical A0–A15 — the video card
+>   needs them (§6.3), and so will any future memory card.
+
+**video/README.md — the count — said:**
+
+> VGA connector at the standard 25.175 MHz dot clock. **The card is 36 ICs** on a 24 cm
+> board — 32 if the tri-state pixel bus closes
+
+**features.md — the vlen note — said:**
+
+> §10.1.7's `vsup` and **the card is 36 ICs**, on a 24 cm board.
+
+---
+
+## `video/README.md` — the fast-E line (2026-09-11)
+
+Superseded by `graphics.md` §11's prefetched read path.
+
+The text it replaced:
+
+> guaranteed**: flat VRAM read-back does not close there (§11), and it is one of three
+> independent things in the machine that break at that rate.
+>
+
+---
+
+## §3.1.1, §5.2.1, §6.4.9, §7.4, §11, §13, §14, §19 items 40 and 44–46 — readable VRAM, built at `WPTR` (2026-09-11)
+
+§11's readable VRAM was built on 2026-09-11. It was not built the way §11 described. That
+text called for a flat read at the CPU's own physical address, fetched inside the CPU's
+cycle, with a phase-by-phase budget that closed at ÷12 and failed at ÷8. No part on the
+card has `PA[18:2]`, and every CPU VRAM write already retires at `WPTR`. So the read is the
+write run backwards: prefetched at `WPTR` into §14's `vread` `'574`, driven for a read of
+the VRAM window, then post-incrementing. §5.2.1's per-chip CPU grant, which reserved a chip
+for the flat read, went with it: it would have deadlocked a read waiting on its prefetch.
+`GMAP` and `MAPHOLD` went too. `VDATA` at `+$15` became a second address for the same byte
+and is reserved. The superseded text follows, verbatim.
+
+**§11 — how read-back was going to work: flat reads by physical address, the phase budget, `VDATA` said:**
+
+> **What it costs:** one `'574` read latch (shared with the blit datapath later) and
+> decode terms.
+>
+> > ⚠ **The budget must be derived by phase, not as a sum** — a total-versus-total
+> > comparison cannot distinguish a path that closes from one that does not. Derived
+> > by phase below, the read closes at ÷12 with 46.9 ns to spare **only under
+> > §5.2.2's spare-first sub-slot ordering**; under the video-first ordering that
+> > §2.2's "video → CPU" priority reads as, it misses by 25.1 ns. The phase table
+> > also charges the **15 ns the map SRAM adds** to physical A13–A19 (§6.3.1): the
+> > address on the backplane is the translation of what the CPU emitted, not the
+> > thing itself.
+>
+> **The budget, by phase.** Everything on this card is phase-locked to the dot clock
+> (§5.2), so the slot alignment is not a worst case to be bounded — it is a **constant
+> to be computed**. Take `t = 0` at the start of the bus cycle; E falls at 476.7 ns; the
+> fetch-slot boundaries inside the cycle are at 0, 158.9, 317.8 and 476.7 ns (÷12 is
+> integral in slots, §5.1).
+>
+> | Phase | Duration | Ends at | Source |
+> |---|---|---|---|
+> | CPU address valid (`t_AD`, self-specified) | 160.0 ns | **160.0** | §5.3 |
+> | Map SRAM → physical A13–A19 | 15.0 ns | **175.0** | §6.3.1 |
+> | Card decode, incl. the `/IOPAGE` qualification | 15.0 ns | **190.0** | §6.3.2 |
+> | Align to the next fetch-slot boundary | 127.8 ns | **317.8** | slot grid |
+> | **Granted access — spare-first, front half of the slot** | 72.0 ns | **389.8** | §2.1, §5.2.2 |
+> | Read latch clock-to-Q + `'245` drive onto `D0–D7` | 20.0 ns | **409.8** | §14 |
+> | **Deadline: `t_DSR` = 20 ns before E-fall at 476.7 ns** | | **456.7** | HD6309E p.3 |
+> | | | **margin +46.9 ns** ✓ | |
+>
+> And the same table with the display fetch taking the front half instead:
+>
+> | Phase | Ends at |
+> |---|---|
+> | …decode complete, aligned | 317.8 |
+> | **display fetch** | 389.8 |
+> | **granted CPU access — back half of the slot** | 461.8 |
+> | latch + drive | **481.8** |
+> | Deadline | 456.7 |
+> | | **margin −25.1 ns** ✗ |
+>
+> **So the read budget is an ordering decision, not a timing coincidence**, and
+> §5.2.2 makes the decision: spare access first, display fetch second. The fetch latch
+> wants the same ordering for its own reasons, so this costs nothing but a sentence —
+> which is precisely why the sentence has to exist.
+>
+> **At ÷8 it does not close, and not by a little.** The cycle is 317.8 ns, the deadline
+> is 297.8 ns, and the slot boundaries inside the cycle are at 0 and 158.9 ns only. The
+> decode completes at the same absolute 190.0 ns, which is **past** the 158.9 ns
+> boundary, so the next available slot is 317.8 ns — the start of the *following* bus
+> cycle:
+>
+> ```
+> required for the 158.9 ns slot :  t_AD + 15 (map) + 15 (decode) <= 158.9
+>                                =>  t_AD <= 128.9 ns  =  21.9 core cycles @ 170 MHz
+> available                      :  plan.md 4.1's worst microcode step is 25 cycles
+>                                =>  no
+> ```
+>
+> > ⚠ **Compatibility line, per `docs/machine.md` §5: this card is specified at ÷12
+> > (E = 2.0979 MHz) and only at ÷12.** The ÷8 rate — **fast-E mode**, 3.1469 MHz — is
+> > **experimental and not guaranteed**, and flat VRAM read-back is one of the three
+> > independent things in the machine that break at it (the others are the 6551, which
+> > is 57 % over rating, and the real HD63C09E's 333 ns `t_cyc` minimum against a
+> > 317.8 ns cycle, which means the drop-in silicon A/B reference cannot even be
+> > captured there). Everything else on this card — writes, span writing, display
+> > fetch, palette, registers — closes at both divisors; it is read-back alone that
+> > does not.
+>
+> Two answers to fast-E read-back, both already in the design and both **optional**,
+> because the rate they serve is not a specified rate:
+>
+> 1. **`/WAIT`** (§3.3) — the motherboard's divider holds E low for one further whole
+>    E period on VRAM reads in fast-E mode. Transparent to the emulator, transparent to
+>    a real 6309E, and the extra period restores the ÷12 arithmetic exactly. Note that
+>    this makes the *effective* fast-E VRAM read no faster than ÷12, which is most of
+>    the argument for not chasing ÷8 at all.
+> 2. Or read through a `VDATA` port at `WPTR` with prefetch (the read for address
+>    *n* is issued when `WPTR` is set, so the CPU's read returns an already-latched
+>    byte). Streaming reads then run at full rate with no stall at either clock.
+>
+> Provide both: flat readable VRAM for random access at ÷12, `VDATA` for streaming.
+
+**§3.1 — the capture-register box said:**
+
+> > **It is four capture registers, not colormin's one.** In colormin, VRAM is
+> > write-only through `WPTR` — the address always comes from the card's own counter,
+> > so a CPU write contributes nothing but a data byte. §6.3 makes this card's VRAM
+> > **flat-mapped**: a direct CPU write arrives carrying an arbitrary **19-bit
+> > physical address** that exists nowhere else on the card, and it has to be captured
+> > on the same edge as the data. One edge, four `'574`s. See §3.1.1.
+
+**§3.1.1 — "everything the retire needs is latched at E-fall" said:**
+
+> So everything the retire needs is latched at E-fall:
+>
+> ```
+>   physical A18..A0        19 bits   <- must be captured
+>   VRAM select (qualified by /IOPAGE, §6.3)   1 bit
+>   R/W                                        1 bit
+>   WMODE[1:0] at capture time (§13)           2 bits
+>   ------------------------------------------------
+>                                             23 bits  ->  3 x '574
+>   D7..D0                                     8 bits  ->  1 x '574  (the one §14 had)
+> ```
+>
+> **Four `74HC574`, not one** — three of them new, and §14 carries them. All four clock
+> on the same inverted E; the "one edge" half of the original claim survives intact, and
+> it is the only half that does.
+
+**§5.2.1 — the live compare and the per-chip CPU grant said:**
+
+> So the span writer may use a chip only after a **live compare** of the CPU's low
+> address bits against its own. That is a small combinational arbiter, and it has to be
+> budgeted:
+>
+> ```
+>   VREQ     = VRAMSEL . /IOPAGE          (§6.3 — the CPU wants VRAM this cycle)
+>   CPUCHIP  = phys A[1:0]
+>   SPNCHIP  = WPTR[1:0]                  (span writer / list engine pointer)
+>
+>   for chip n in 0..3:
+>       GRANT_CPU[n]  = VREQ . (CPUCHIP == n)
+>       GRANT_SPAN[n] = SPNREQ . (SPNCHIP == n) . /GRANT_CPU[n]
+>       SRCSEL[n]     = GRANT_CPU[n]      (mux the chip's address/data source)
+> ```
+>
+> Eight product terms of the form *(2-bit compare)·(request)* plus four inversions.
+> `SRCSEL[n]` **is** `GRANT_CPU[n]` — the same signal, not a second macrocell — so the
+> arbiter is **eight macrocells**, with six inputs. It lives inside `vctrl`
+> (§10.1.6.3); its standalone `GAL22V10` design is kept in
+> [`hardware/gal/access.jedec.ts`](../../hardware/gal/access.jedec.ts), because a
+> GAL22V10 fuse map is the form `access.check.ts` and the CUPL cross-check can
+> execute — the standalone design is the verification vehicle, not a leftover.
+>
+> > ⚠ **§14.2's two-chip framebuffer makes this 2 grants instead of 8**, which is a
+> > §5.2 rewrite rather than a rebalance, and it is not done — §19 item 25. The
+> > equations here are the fitted four-chip form.
+>
+> The arbitration *priority rule* is unchanged; what changes is the honest admission
+> that the CPU tier is static in **time** and dynamic in **space**, and only the first
+> half of that was ever a wire.
+
+**§6.4.9 — the CPU's per-chip collision with the map fetch, and MAPHOLD's wait said:**
+
+> - **The CPU collides per chip**, because its address path is its own. `GMAP[n]` is the
+>   map's chip and the CPU's grant is withdrawn for that chip only.
+>
+> ##### And so the CPU has to be able to wait
+>
+> A refused CPU access is a lost one. The map's collision therefore joins §7.4's span
+> backstop on `/WAIT`, and **it is a different kind of wait**: §7.4's is up to 40.7 µs
+> and only writes take it; this one is **a single 158.9 ns slot and it must apply to
+> reads too**, because a read whose chip is pointed elsewhere returns the wrong byte.
+>
+> `arbDesign` is not edited for this either. Its `/WAIT` output enable already reads two
+> signals, and both are renamed at merge to ones the cadence forms:
+>
+> ```
+>   oe      = WAITSRC & VRAMSEL & /IOPAGE & E & /WAITRW
+>   WAITSRC = SPANBUSY # MAPHOLD
+>   WAITRW  = RW & /MAPHOLD
+> ```
+>
+> so a map hold waits on reads and writes alike while §7.4's backstop keeps its `!RW`
+> exactly as before. `check:cadence` asserts all four cases.
+
+**§7.4 — "reads never wait" said:**
+
+> `/WAIT`'s output enable carries `& !RW`, so the stall applies to writes alone.
+> §3.1.1 says what the backstop actually protects: **the depth-1 posted-write latch**,
+> which a second CPU *write* during a span would overwrite.
+>
+> **A read does not touch that latch**, and §5.2.1's arbiter already gives the CPU its
+> chip ahead of the span writer, so a read has no conflict to wait for either — an
+> unqualified `/WAIT` would stall it for up to 40.7 µs for nothing. The
+> qualification is one literal on an output-enable term that already exists.
+>
+> | | |
+> |---|---|
+> | Writes | still wait — **that is the throttle** that stops the CPU outrunning the span writer, and it is deliberate |
+> | **Reads** | **never wait** |
+>
+> ⭐ **What it buys is on the other side of the card.** `features.md` §8 and §9's sprite
+> save-behind, mouse cursor and read-modify-write pixels are **all VRAM reads**, and they
+> stop being exposed to the bound entirely.
+>
+> **A read during a span sees a partially retired span.** That is the caller's own span
+> and `VSTAT` b7 says whether it has finished — a software rule, not a hazard.
+> `gal/access.check.ts` asserts the float on a read.
+
+**§13 — the `VDATA` row said:**
+
+> | `+$15` | `VDATA` | b7..0 | **read or write** VRAM byte at `WPTR`, post-increment | **new** (§11) |
+
+**§14 — the vctrl row said:**
+
+> **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, span-mask handling, §19 item 35's blanking delay. **61 of 64 I/O, 104 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) | |
+
+**§14 — the vsup row said:**
+
+> so a third PLCC-84 is −2 packages before it does anything else. **54 of 64 I/O, 84 of 128 cells** (`hardware/gal/cpld/vsup.fit`) | |
+
+**§14 — the address-latch row said:**
+
+> | **3** | **74HC574** | **posted-write address + control latches — 19 address + VRAMSEL + R/W + `WMODE[1:0]` = 23 bits (§3.1.1)** | **+3** |
+
+**§14 — the read-back rows said:**
+
+> | 1 | 74HC245 | register + VRAM read-back | = |
+> | **1** | **74HC574** | **VRAM read latch (§11)** | **+1** |
+
+**§10.1.6.3 — vctrl's figures said:**
+
+> Variant B's four freed, `vctrl` holds the arbiter at **61 of 64 I/O and 104 of 128
+> cells** (121 when this paragraph was written; §14.1's encoding and §8.2's rank
+> select are what moved it).
+
+**§5.1 fast-E box — the read-back reason said:**
+
+> > flat VRAM read-back does not close (§11); a 2 MHz R6551A is 57 % over rating
+
+**§18 — build order row 5 said:**
+
+> | 5 | **VRAM read-back** (§11) at ÷12 — the specified rate. Fast-E mode (÷8) is experimental and read-back does **not** close there without `/WAIT` | read-modify-write pixel round-trips clean at ÷12; the `/WAIT` path demonstrated at ÷8 or fast-E abandoned |
+
+**§19 item 40 — as opened, 2026-09-10 said:**
+
+> 40. **⛔ NEW 2026-09-10 — §11's readable VRAM is promised at `+$15` and absent
+>     from the decode, and two register-map entries describe features that were
+>     dropped.** `npm run check:reach` is the instrument, and it is part of
+>     `npm run check`.
+>
+>     | | |
+>     |---|---|
+>     | ⛔ **`+$15` `VDATA`** | §13: *"read or write VRAM byte at `WPTR`, post-increment"* — which **is** §11's readable VRAM, the section whose whole argument is that without it *"a windowing OS must keep a 128 KB shadow of the screen in system RAM"*. `regfile.ts` is the register decode of record and **has no entry for it**, so there is no signal to dangle: the feature is absent rather than unread, and only the map knows it was promised. `machine.v`'s `vram_read_attempt` is the same hole seen from the machine, and `machine_tb` asserts the software never takes it |
+>     | ⚠ `CTRL` b2 `CHAR` | §6.4.3's Variant B was dropped 2026-09-08 and `video.cpld.ts` correctly builds **no cell** for the bit — the macrocell went to the mask serialiser. **The silicon is right and §13's prose is stale**: it still reads "with `CELL`: 0 tile (8×8 colour), 1 character (1bpp glyph)". A doc fix |
+>     | ⭐ `+$18` `FONTBASE` | **CLOSED 2026-09-10.** The same dropped Variant B, and this one *was* still built: `vaddr` carried the `LDFB` load strobe for a register §13 already calls reserved. Deleted |
+>
+>     ⭐ **And `vaddr` is the part that could not spare it.** §19 item 33's rewrite is
+>     blocked on resource there, and deleting one strobe gave back **four I/O pins —
+>     63 of 64 to 59 of 64** (`gal/cpld/vaddr.fit`), which is more than the cell it
+>     cost: the fitter re-placed the whole part around it. Cells are unchanged at 113
+>     of 128, so this is pin relief and not cell relief, and §19 item 33's refusal
+>     was for **cells**.
+>
+>     ⚠ **Eight signals on this card are `board` in the census rather than live**, and
+>     that is item 34 rather than a defect: §5.2.1's four `GCPU` and four `GSPN`
+>     grants go to the framebuffer SRAMs' `/WE` and the four `'153` source selects,
+>     and `video_card.v` models the write with `WEN` and `WPTR` instead. **Nothing
+>     can close that but the netlist**, and `cards/video.circuit.tsx` does not carry
+>     those nets yet.
+
+---
+
 ## §5.2.1, §7.4, §13 — the three defects the first running machine found (2026-09-10)
 
 On 2026-09-10 the video card was put in a slot behind a **cycle-accurate 6809E core

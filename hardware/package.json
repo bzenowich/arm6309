@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Board layouts for the arm6309 machine",
   "scripts": {
-    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run lib/decode.check.ts && bun run place/place.check.ts && bun run gal/mmu.check.ts && bun run gal/jedec.check.ts && bun run gal/sync.check.ts && bun run gal/scan.check.ts && bun run gal/access.check.ts && bun run gal/regfile.check.ts && bun run gal/seqph.check.ts && bun run gal/seqctl.check.ts && bun run gal/tile.check.ts && bun run gal/cadence.check.ts && bun run gal/jedec/cupl.check.ts && bun run gal/vlen.check.ts && bun run gal/pxsel.check.ts && bun run gal/audio.check.ts && bun run gal/arom.check.ts && bun run gal/reach.check.ts && bun run lib/docs.check.ts",
+    "check": "bun run lib/slot.check.ts && bun run lib/cards.check.ts && bun run lib/decode.check.ts && bun run place/place.check.ts && bun run gal/mmu.check.ts && bun run gal/jedec.check.ts && bun run gal/sync.check.ts && bun run gal/scan.check.ts && bun run gal/access.check.ts && bun run gal/regfile.check.ts && bun run gal/seqph.check.ts && bun run gal/seqctl.check.ts && bun run gal/tile.check.ts && bun run gal/cadence.check.ts && bun run gal/jedec/cupl.check.ts && bun run gal/vlen.check.ts && bun run gal/pxsel.check.ts && bun run gal/audio.check.ts && bun run gal/arom.check.ts && bun run gal/pins.check.ts && bun run gal/reach.check.ts && bun run lib/docs.check.ts",
     "check:jedec": "bun run gal/jedec.check.ts",
     "check:cupl": "bun run gal/jedec/cupl.check.ts",
     "check:sync": "bun run gal/sync.check.ts",
@@ -31,16 +31,17 @@
     "check:video": "bun run gal/verilog/gen.ts && sh gal/verilog/run.sh",
     "check:sim:audio": "bun run gal/verilog/gen.ts && TBS=audio sh gal/verilog/run.sh",
     "check:sim:board": "bun run gal/verilog/gen.ts && TBS=mainboard sh gal/verilog/run.sh",
-    "check:oracle": "sh gal/verilog/oracle/run-oracle.sh",
+    "check:oracle": "bun run gal/verilog/gen.ts && sh gal/verilog/oracle/run-oracle.sh",
     "check:vlen": "bun run gal/vlen.check.ts",
     "gen:pld": "bun run gal/cpld.gen.ts",
     "check:pxsel": "bun run gal/pxsel.check.ts",
     "check:docs": "bun run lib/docs.check.ts",
     "check:decode": "bun run lib/decode.check.ts",
     "rom": "sh ../software/tools/mkrom.sh",
-    "check:machine": "sh gal/verilog/run-machine.sh",
-    "check:modplay": "sh gal/verilog/run-modplay.sh /tmp/arm6309-mod/00_notes.mod 2",
-    "check:reach": "bun run gal/reach.check.ts"
+    "check:machine": "bun run gal/verilog/gen.ts && sh gal/verilog/run-machine.sh",
+    "check:modplay": "bun run gal/verilog/gen.ts && sh gal/verilog/run-modplay.sh /tmp/arm6309-mod/00_notes.mod 2",
+    "check:reach": "bun run gal/reach.check.ts",
+    "check:pins": "bun run gal/pins.check.ts"
   },
   "type": "commonjs",
   "dependencies": {

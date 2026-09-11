@@ -33,6 +33,7 @@ module vpal_tb;
 
   wire [15:0] RGB; wire [7:0] PIDX;
   wire PWE_o, PDOE_o, PIXOE_o, DBUS_FIGHT;
+  wire [7:0] VREAD; wire RDOE_o;          // graphics.md 11's vread '574
 
   video_card card (.*);
 

@@ -13,7 +13,7 @@
  *           second fetch cadence
  */
 
-import { merge, rename, toCupl, type Merged } from "./jedec/cupl"
+import { merge, rename, toCupl, withActiveLow, type Merged } from "./jedec/cupl"
 import type { Cell } from "./jedec/assemble"
 import { hgenDesign, vgenDesign, vdecDesign } from "./sync.jedec"
 import { hadrDesign, vadrDesign } from "./scan.jedec"
@@ -31,7 +31,6 @@ import { decodeCells, writeStrobes } from "./regfile"
  * is the physical address's low two bits, which the register decode already
  * needs on this part. Two pins for a rename, and the same kind of identity as
  * WRITESEL = SPNGRANT. */
-const CPU_CHIP: Record<string, string> = { CPUA0: "A0", CPUA1: "A1" }
 
 /* ⚠ AND CE IS SLOTTICK. hgen declares its slot enable as an input and says why
  * in the same breath - "the sequencer pair already forms the dot phase for the
@@ -67,7 +66,9 @@ const wptrMap = Object.fromEntries([...Array(19).keys()].map((i) => [`A${i}`, `W
 
 const mux = addressMux()
 
-export const vaddrCpld: Merged = merge(
+/* ⛔ WSTB IS THE REGISTER FILE'S /WE, active low, and this part reads the same
+ * net - so its input is active low too (2026-09-11, pins.check.ts). */
+export const vaddrCpld: Merged = withActiveLow(merge(
   /* ⚠ wcol IS MERGED WITH 7.2's RELOAD and checked without it - access.jedec.ts
    * has the arithmetic. Thirteen inputs is not a GAL22V10, and the reload
    * changes nothing about the counting or the wrap that access.check.ts
@@ -104,7 +105,7 @@ export const vaddrCpld: Merged = merge(
       "RP0", "RP1",
     ]),
   },
-)
+), ["WSTB"])
 
 /* CTRL, §12's `+$00`, was a '273 on the parts list and it is eight macrocells
  * here. It is WRITE-ONLY - §12 gives reads their own register, VSTAT - which
@@ -230,16 +231,33 @@ const blankDelay: Cell[] = [
     pin: 0, name: `BD${i}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [i === 0 ? "BLANK" : `BD${i - 1}`],
   })),
-  comb("BLANKD", [`BD${BLANK_DELAY - 1}`]),
+  /* ⛔ ASSERTED LOW, since 2026-09-11. Its one consumer is an ACTIVE-LOW pin -
+   * the '273s' /MR - and it was emitted as `PIN = BLANKD`, high during
+   * blanking: on the board, a black picture and coloured porches. The model
+   * could not see it, because the Verilog is in asserted sense and
+   * video_card.v cleared the '273s on BLANKD high. pins.check.ts.
+   *
+   * ⭐ AND !DISPEN IS ITS SECOND TERM. CTRL b7 was a buried cell whose only
+   * reader was video_card.v forcing PIXEL to index 0 - which 9.2 rejects in
+   * so many words, because palette entry 0 is programmable - and on silicon it
+   * did nothing. Blank-to-black is the display enable's mechanism as well:
+   * one term, no pin, no cell. */
+  { pin: 0, name: "BLANKD", assertedLow: true, s0: 0, registered: false,
+    terms: [`BD${BLANK_DELAY - 1}`, "!DISPEN"] },
 ]
 
-const vramWriteStrobe: Cell[] = [
-  comb("WSTBV", ["VRAMSEL & !RW & E"]),
+/* ⭐ AND THE PORT HAS TWO ADDRESSES SINCE 2026-09-11 - graphics.md 11, 19 item
+ * 47. VRAMSEL is the window, qualified !IOPAGE so no I/O cycle touches VRAM;
+ * VDSEL is +$15 VDATA in the I/O page, decoded on vsup, which has A0-A4. The
+ * store is the same posted write at either, and VPORT is the /WAIT half. */
+export const vramWriteStrobe: Cell[] = [
+  comb("WSTBV", ["VRAMSEL & !RW & E", "VDSEL & !RW & E"]),
   {
     pin: 0, name: "WPQ", assertedLow: false, s0: 1, registered: true,
-    terms: ["VRAMSEL & !RW & E"],
+    terms: ["VRAMSEL & !RW & E", "VDSEL & !RW & E"],
   },
   comb("WSTART", ["WPQ & !E"]),
+  comb("VPORT", ["VRAMSEL", "VDSEL"]),
 ]
 
 const ctrlFanout: Cell[] = [
@@ -293,9 +311,19 @@ const ctrlFanout: Cell[] = [
  * Renaming an input is how CPUA0/CPUA1 already reach it; renaming an output is
  * the same operation and the fuse map is untouched either way. */
 const ARB_MAP: Record<string, string> = {
-  ...CPU_CHIP,
+  /* ⭐ 2026-09-11: THE CPU TAKES NO CHIP (graphics.md 11). arbDesign's three
+   * CPU inputs - its address bits and its R/W - are all CPUIDLE, a constant 0
+   * on this part, which makes every CPU-read exclusion in SPNGRANT and GSPN
+   * true and every GCPU (ACPU here) false, and takes A0 and A1 off vctrl's
+   * pins. The GAL itself is unchanged and still checked. */
+  CPUA0: "CPUIDLE", CPUA1: "CPUIDLE",
   GCPU0: "ACPU0", GCPU1: "ACPU1", GCPU2: "ACPU2", GCPU3: "ACPU3",
-  SPNREQ: "SPNREQG", SPANBUSY: "WAITSRC", RW: "WAITRW",
+  SPNREQ: "SPNREQG", SPANBUSY: "WAITSRC", RW: "CPUIDLE",
+  /* ⭐ 19 item 47: /WAIT's select is the port at either address. VRAMSEL
+   * already carries !IOPAGE, so the arbiter's own !IOPAGE literal would refuse
+   * VDATA - it is CPUIDLE here too, which leaves every grant as it was, since
+   * the CPU takes no chip either way. */
+  VRAMSEL: "VPORT", IOPAGE: "CPUIDLE",
 }
 
 export const arbGalDesign = rename(arbDesign, ARB_MAP)
@@ -336,7 +364,11 @@ export const arbGal = arbGalDesign
  * stretched cycle. See vramWriteStrobe above. */
 const SPAN_STB: Record<string, string> = { WSTB: "WSTART" }
 
-export const vctrlCpld: Merged = merge(
+/* ⛔ /IOPAGE is an active-low backplane line. merge() found IOPAGE only as a
+ * literal in regfile.ts's VRAMSEL and synthesised an active-HIGH pin, so the
+ * fitted part answered VRAM only DURING I/O cycles (2026-09-11,
+ * pins.check.ts). */
+export const vctrlCpld: Merged = withActiveLow(merge(
   [rename(hgenDesign, SLOT_CE), rename(vgenDesign, SLOT_CE), vdecDesign,
    seqphDesign, rename(seqctlDesign, SPAN_STB), arbGalDesign],
   [...ctrl, ...ctrlFanout, ...vramWriteStrobe, ...blankDelay,
@@ -385,13 +417,15 @@ export const vctrlCpld: Merged = merge(
        * half" and nothing produced them. MCADV steps the map's column counter,
        * which is on vaddr because the address it feeds is. */
       "FETCH", "MCADV",
-      /* The CPU's per-chip grant, with the map's chip withdrawn - 5.2.1's
-       * SRCSEL[n] under its own name now that it is not arbDesign's output. */
-      "GCPU0", "GCPU1", "GCPU2", "GCPU3",
+      /* ⛔ GCPU0-3 LEFT THIS LIST ON 2026-09-11 with their cells: the CPU
+       * reserves no framebuffer chip, because every CPU VRAM access is at WPTR
+       * (graphics.md 11, video.parts.ts). Four pins back. */
       /* §10.3's engine holds the address bus through SPNGRANT, so what vctrl
        * owes it is the grant and nothing else - and since 2026-09-09 it
        * actually produces it (video.parts.ts). */
-      ...(WITH_LIST ? ["LGRANT"] : []),
+      /* the spare-access grant for the list engine AND 11's read prefetch -
+       * vsup forms LGRANT = SGRANT & LRUN from it */
+      "SGRANT",
       /* ⭐ 7.4's mask bit, to rfa's RA0 - which is the colour path - and the
        * cell-boundary tick that hands the map byte over on vaddr. */
       "MASKBIT", "CELLTICK",
@@ -408,6 +442,11 @@ export const vctrlCpld: Merged = merge(
        * regfile.jedec.ts. Two pins and two macrocells deleted rather than
        * built. */
       "VRAMSEL", "HLOAD", "ROWADV",
+      /* ⛔ 3.1.1's posted-write latch strobe, to vsup's span-length load (and
+       * the data '574 on the board). vsup declared an input pin for it and this
+       * part computed it and kept it - no driver on silicon until 2026-09-11,
+       * so span-solid's length never loaded. check:reach's input census. */
+      "WSTBV",
       /* ⚠ V0..V2 LEFT THIS LIST ON 2026-09-08. They were exported as "the cell's
        * row inside the 8x8 - the sync counters' own low bits, so they cost pins
        * and not logic", and they were the wrong counter: sync.timing.ts starts
@@ -425,12 +464,13 @@ export const vctrlCpld: Merged = merge(
        * "WRITESEL is SPNGRANT" - and the mux takes SRC1:SRC0 now. On this part
        * it is still read by seqctl's RETIRE and by LGRANT, so it stays a cell;
        * it just stops being a pin. */
-      /* ACPU0..3 are buried: the cadence gates them into GCPU0..3 above. */
+      /* ACPU0..3 are buried, and constant 0 since WAITRW is: arbDesign's CPU
+       * grant, which nothing reads (video.parts.ts). */
       ...arbGalDesign.cells.map((c) => c.name)
         .filter((n) => !/^ACPU\d$/.test(n) && n !== "SPNGRANT"),
     ]),
   },
-)
+), ["IOPAGE"])
 
 
 export const vaddrSource = () => toCupl(vaddrCpld)

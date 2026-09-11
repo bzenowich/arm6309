@@ -59,10 +59,12 @@ PIN 6  = LA6 ;      /* WAS WIRED AND USED BY NOTHING for a day: the window
 PIN 7  = LA5 ;       /* $FFA0-$FFBF window select, with LA7/LA6.          */
 PIN 8  = RW ;
 PIN 9  = LA4 ;       /* 0 = $FFA0-$FFAF block registers, 1 = $FFB0-$FFBF  */
-PIN 10 = WAIT ;      /* /WAIT from the backplane, ACTIVE HIGH here (the pin
-                      * is open-drain low on the slot and inverted by the
-                      * 3.3k pull-up + this declaration). It HOLDS the whole
-                      * divider - see the counter below. machine.md 5 item 8 */
+PIN 10 = !WAIT ;     /* /WAIT from the backplane: open-drain, pulled high
+                      * by R3, asserted LOW. The ! is what makes WAIT true
+                      * when the pin is low - a pull-up inverts nothing, and
+                      * without it the idle bus held the whole divider
+                      * (fixed 2026-09-11). It HOLDS the whole divider - see
+                      * the counter below. machine.md 5 item 8 */
 PIN 11 = LA0 ;       /* $FFB0 even is TASK, $FFB1 odd is BOOT - machine.md
                       * 3. One literal, and it is what lets boot code set
                       * TASK without leaving boot mode.                    */

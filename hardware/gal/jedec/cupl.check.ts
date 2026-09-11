@@ -108,7 +108,7 @@ const checkClkdec = (label: string, gal: Gal22v10) => {
      * being swept. */
     const base = { 2: (fastE ? 1 : 0) as 0 | 1, 3: 1 as const, 4: 1 as const,
                    5: 0 as const, 6: 0 as const, 7: 0 as const, 8: 1 as const,
-                   9: 0 as const, 10: 0 as const, 11: 0 as const }
+                   9: 0 as const, 10: 1 as const, 11: 0 as const }
     gal.evaluate({ ...base, 3: 0 }); gal.reset()
     let model: Counter = { ...RESET_STATE }, bad: string | null = null
     const edges = fastE ? 64 : 96
@@ -126,6 +126,23 @@ const checkClkdec = (label: string, gal: Gal22v10) => {
     }
     check(bad === null, `${label}: ${fastE ? "/8 " : "/12"} matches clkdec.model.ts for ${edges} edges`,
       bad ?? "")
+
+    /* ⛔ /WAIT AT THE PIN, since 2026-09-11. Every claim above held pin 10 at
+     * one level, and for a day that level was 0 = "not waiting" against a
+     * declaration that read the pulled-up idle bus as a hold - so E never
+     * toggled on the board and nothing here could say so. The sweep above now
+     * runs with pin 10 HIGH, which is the idle bus; this pulls it LOW. */
+    const cntOf = (p: Record<number, number>) =>
+      Object.entries(CNT).reduce((n, [pin, b]) => n | (p[Number(pin)] << b), 0)
+    for (let i = 0; i < 5; i++) gal.clock(base)
+    const before = cntOf(gal.evaluate(base))
+    for (let i = 0; i < 7; i++) gal.clock({ ...base, 10: 0 })
+    const held = cntOf(gal.evaluate({ ...base, 10: 0 }))
+    gal.clock(base)
+    const resumed = cntOf(gal.evaluate(base))
+    check(held === before && resumed !== before,
+      `${label}: ${fastE ? "/8 " : "/12"} pin 10 LOW (/WAIT asserted) holds the divider and releasing it resumes`,
+      `before ${before}, after 7 held edges ${held}, after release ${resumed}`)
   }
 
   /* Boot mode, in Atmel's own fuses. RUN out of reset is the claim that
@@ -135,7 +152,7 @@ const checkClkdec = (label: string, gal: Gal22v10) => {
    * could be wrong about on its own. */
   const idle = { 2: 0 as const, 3: 1 as const, 4: 1 as const, 5: 0 as const,
                  6: 0 as const, 7: 0 as const, 8: 1 as const, 9: 0 as const,
-                 10: 0 as const, 11: 0 as const }
+                 10: 1 as const, 11: 0 as const }
   gal.evaluate({ ...idle, 3: 0 }); gal.reset()
   check(gal.evaluate(idle)[22] === 0,
     `${label}: RUN comes out of reset at 0 - boot mode, before the first fetch`)

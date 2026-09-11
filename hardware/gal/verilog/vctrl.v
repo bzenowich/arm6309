@@ -11,9 +11,6 @@ module vctrl (
     input  wire VSTATWR,
     input  wire TC,
     input  wire LRUN,
-    input  wire IOPAGE,
-    input  wire A0,
-    input  wire A1,
     input  wire SPNA0,
     input  wire SPNA1,
     input  wire E,
@@ -26,13 +23,14 @@ module vctrl (
     input  wire D6,
     input  wire D7,
     input  wire RW,
+    input  wire VDSEL,
     input  wire LDHS,
     input  wire LDADV,
     input  wire D2,
-    input  wire MAPA0,
-    input  wire MAPA1,
+    input  wire RDVALID,
     input  wire A19,
     input  wire A20,
+    input  wire IOPAGE,
     output wire H0,
     output wire H1,
     output wire H2,
@@ -101,6 +99,7 @@ module vctrl (
     output wire WSTBV,
     output wire WPQ,
     output wire WSTART,
+    output wire VPORT,
     output wire BD0,
     output wire BD1,
     output wire BD2,
@@ -138,18 +137,9 @@ module vctrl (
     output wire SPNREQG,
     output wire SPNREQ,
     output wire SPNTICK,
-    output wire LGRANT,
-    output wire GMAP0,
-    output wire GMAP1,
-    output wire GMAP2,
-    output wire GMAP3,
-    output wire GCPU0,
-    output wire GCPU1,
-    output wire GCPU2,
-    output wire GCPU3,
-    output wire MAPHOLD,
+    output wire SGRANT,
     output wire WAITSRC,
-    output wire WAITRW,
+    output wire CPUIDLE,
     output wire VRAMSEL,
     output wire IRQ_OE,
     output wire WAIT_OE
@@ -360,53 +350,53 @@ module vctrl (
          | (SPANEND & WADV1 & ~LRUN);
   // buried - SRCSEL[n] is this same pin - 5.2.1, not a second macrocell
   assign ACPU0 =
-         (VRAMSEL & ~IOPAGE & WAITRW & ~A0 & ~A1);
+         (VPORT & ~CPUIDLE & CPUIDLE & ~CPUIDLE & ~CPUIDLE);
   // EXTERNAL
   assign GSPN0 =
-         (SPNREQG & ~SPNA0 & ~SPNA1 & ~VRAMSEL)
-         | (SPNREQG & ~SPNA0 & ~SPNA1 & IOPAGE)
-         | (SPNREQG & ~SPNA0 & ~SPNA1 & ~WAITRW)
-         | (SPNREQG & ~SPNA0 & ~SPNA1 & A0)
-         | (SPNREQG & ~SPNA0 & ~SPNA1 & A1);
+         (SPNREQG & ~SPNA0 & ~SPNA1 & ~VPORT)
+         | (SPNREQG & ~SPNA0 & ~SPNA1 & CPUIDLE)
+         | (SPNREQG & ~SPNA0 & ~SPNA1 & ~CPUIDLE)
+         | (SPNREQG & ~SPNA0 & ~SPNA1 & CPUIDLE)
+         | (SPNREQG & ~SPNA0 & ~SPNA1 & CPUIDLE);
   // buried
   assign ACPU1 =
-         (VRAMSEL & ~IOPAGE & WAITRW & A0 & ~A1);
+         (VPORT & ~CPUIDLE & CPUIDLE & CPUIDLE & ~CPUIDLE);
   // EXTERNAL
   assign GSPN1 =
-         (SPNREQG & SPNA0 & ~SPNA1 & ~VRAMSEL)
-         | (SPNREQG & SPNA0 & ~SPNA1 & IOPAGE)
-         | (SPNREQG & SPNA0 & ~SPNA1 & ~WAITRW)
-         | (SPNREQG & SPNA0 & ~SPNA1 & ~A0)
-         | (SPNREQG & SPNA0 & ~SPNA1 & A1);
+         (SPNREQG & SPNA0 & ~SPNA1 & ~VPORT)
+         | (SPNREQG & SPNA0 & ~SPNA1 & CPUIDLE)
+         | (SPNREQG & SPNA0 & ~SPNA1 & ~CPUIDLE)
+         | (SPNREQG & SPNA0 & ~SPNA1 & ~CPUIDLE)
+         | (SPNREQG & SPNA0 & ~SPNA1 & CPUIDLE);
   // buried
   assign ACPU2 =
-         (VRAMSEL & ~IOPAGE & WAITRW & ~A0 & A1);
+         (VPORT & ~CPUIDLE & CPUIDLE & ~CPUIDLE & CPUIDLE);
   // EXTERNAL
   assign GSPN2 =
-         (SPNREQG & ~SPNA0 & SPNA1 & ~VRAMSEL)
-         | (SPNREQG & ~SPNA0 & SPNA1 & IOPAGE)
-         | (SPNREQG & ~SPNA0 & SPNA1 & ~WAITRW)
-         | (SPNREQG & ~SPNA0 & SPNA1 & A0)
-         | (SPNREQG & ~SPNA0 & SPNA1 & ~A1);
+         (SPNREQG & ~SPNA0 & SPNA1 & ~VPORT)
+         | (SPNREQG & ~SPNA0 & SPNA1 & CPUIDLE)
+         | (SPNREQG & ~SPNA0 & SPNA1 & ~CPUIDLE)
+         | (SPNREQG & ~SPNA0 & SPNA1 & CPUIDLE)
+         | (SPNREQG & ~SPNA0 & SPNA1 & ~CPUIDLE);
   // buried
   assign ACPU3 =
-         (VRAMSEL & ~IOPAGE & WAITRW & A0 & A1);
+         (VPORT & ~CPUIDLE & CPUIDLE & CPUIDLE & CPUIDLE);
   // EXTERNAL
   assign GSPN3 =
-         (SPNREQG & SPNA0 & SPNA1 & ~VRAMSEL)
-         | (SPNREQG & SPNA0 & SPNA1 & IOPAGE)
-         | (SPNREQG & SPNA0 & SPNA1 & ~WAITRW)
-         | (SPNREQG & SPNA0 & SPNA1 & ~A0)
-         | (SPNREQG & SPNA0 & SPNA1 & ~A1);
+         (SPNREQG & SPNA0 & SPNA1 & ~VPORT)
+         | (SPNREQG & SPNA0 & SPNA1 & CPUIDLE)
+         | (SPNREQG & SPNA0 & SPNA1 & ~CPUIDLE)
+         | (SPNREQG & SPNA0 & SPNA1 & ~CPUIDLE)
+         | (SPNREQG & SPNA0 & SPNA1 & ~CPUIDLE);
   // buried
   assign SPNGRANT =
-         (SPNREQG & ~SPNA0 & A0)
-         | (SPNREQG & SPNA0 & ~A0)
-         | (SPNREQG & ~SPNA1 & A1)
-         | (SPNREQG & SPNA1 & ~A1)
-         | (SPNREQG & ~VRAMSEL)
-         | (SPNREQG & IOPAGE)
-         | (SPNREQG & ~WAITRW);
+         (SPNREQG & ~SPNA0 & CPUIDLE)
+         | (SPNREQG & SPNA0 & ~CPUIDLE)
+         | (SPNREQG & ~SPNA1 & CPUIDLE)
+         | (SPNREQG & SPNA1 & ~CPUIDLE)
+         | (SPNREQG & ~VPORT)
+         | (SPNREQG & CPUIDLE)
+         | (SPNREQG & ~CPUIDLE);
   // EXTERNAL - open-drain by the OE idiom - SPANBUSY . VRAMSEL . /IOPAGE . E . /RW
   assign WAIT =
          1'b0;
@@ -420,15 +410,21 @@ module vctrl (
   // buried
   assign TILEMODE =
          (CELL);
-  // buried
+  // EXTERNAL
   assign WSTBV =
-         (VRAMSEL & ~RW & E);
+         (VRAMSEL & ~RW & E)
+         | (VDSEL & ~RW & E);
   // buried
   assign WSTART =
          (WPQ & ~E);
+  // buried
+  assign VPORT =
+         (VRAMSEL)
+         | (VDSEL);
   // EXTERNAL
   assign BLANKD =
-         (BD4);
+         (BD4)
+         | (~DISPEN);
   // EXTERNAL - the serialiser's top bit, except that span-solid is always WFG
   assign MASKBIT =
          (WM1 & ~WM0)
@@ -503,50 +499,21 @@ module vctrl (
   // buried
   assign SPNREQ =
          (SPANBUSY & SPAREWIN)
-         | (LRUN & SPAREWIN);
+         | (LRUN & SPAREWIN)
+         | (~RDVALID & SPAREWIN);
   // buried
   assign SPNTICK =
          (~PH1 & PH0);
   // EXTERNAL
-  assign LGRANT =
-         (LRUN & ~SPANBUSY & SPNGRANT & SPNTICK);
-  // buried
-  assign GMAP0 =
-         (MAPREQ & ~MAPA0 & ~MAPA1);
-  // buried
-  assign GMAP1 =
-         (MAPREQ & MAPA0 & ~MAPA1);
-  // buried
-  assign GMAP2 =
-         (MAPREQ & ~MAPA0 & MAPA1);
-  // buried
-  assign GMAP3 =
-         (MAPREQ & MAPA0 & MAPA1);
-  // EXTERNAL
-  assign GCPU0 =
-         (ACPU0 & ~GMAP0);
-  // EXTERNAL
-  assign GCPU1 =
-         (ACPU1 & ~GMAP1);
-  // EXTERNAL
-  assign GCPU2 =
-         (ACPU2 & ~GMAP2);
-  // EXTERNAL
-  assign GCPU3 =
-         (ACPU3 & ~GMAP3);
-  // buried
-  assign MAPHOLD =
-         (MAPREQ & ~MAPA0 & ~A0 & ~MAPA1 & ~A1)
-         | (MAPREQ & MAPA0 & A0 & ~MAPA1 & ~A1)
-         | (MAPREQ & ~MAPA0 & ~A0 & MAPA1 & A1)
-         | (MAPREQ & MAPA0 & A0 & MAPA1 & A1);
+  assign SGRANT =
+         (~SPANBUSY & SPNGRANT & SPNTICK);
   // buried
   assign WAITSRC =
          (SPANBUSY)
-         | (MAPHOLD);
-  // buried
-  assign WAITRW =
-         (RW & ~MAPHOLD);
+         | (RW & ~RDVALID);
+  // buried - arbDesign's CPU address and R/W, defeated: the CPU reserves no chip (graphics.md 11)
+  assign CPUIDLE =
+         1'b0;
   // EXTERNAL - 6.3.2 - A19 alone matches every I/O access, because the map SRAM keeps driving it. /A20 since 2026-09-08: the physical map is 32 MB (machine.md 5 item 1 D) and the ring is one 512 KB quadrant of it, not the top half of a 1 MB map
   assign VRAMSEL =
          (A19 & ~A20 & ~IOPAGE);
@@ -558,7 +525,7 @@ module vctrl (
   // WAIT is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign WAIT_OE =
-         (WAITSRC & VRAMSEL & ~IOPAGE & E & ~WAITRW);
+         (WAITSRC & VPORT & ~CPUIDLE & E & ~CPUIDLE);
 
   wire AR_ = (RESET);
   always @(posedge DOTCLK or posedge AR_) begin
@@ -842,7 +809,8 @@ module vctrl (
          (WCTRL & D7)
          | (DISPEN & ~WCTRL);
       r_WPQ <=
-         (VRAMSEL & ~RW & E);
+         (VRAMSEL & ~RW & E)
+         | (VDSEL & ~RW & E);
       r_BD0 <=
          (BLANK);
       r_BD1 <=

@@ -26,9 +26,6 @@ PIN = !RESET ;
 PIN = VSTATWR ;
 PIN = TC ;
 PIN = LRUN ;
-PIN = !IOPAGE ;
-PIN = A0 ;
-PIN = A1 ;
 PIN = SPNA0 ;
 PIN = SPNA1 ;
 PIN = E ;
@@ -41,13 +38,14 @@ PIN = D5 ;
 PIN = D6 ;
 PIN = D7 ;
 PIN = RW ;
+PIN = VDSEL ;
 PIN = LDHS ;
 PIN = LDADV ;
 PIN = D2 ;
-PIN = MAPA0 ;
-PIN = MAPA1 ;
+PIN = RDVALID ;
 PIN = A19 ;
 PIN = A20 ;
+PIN = !IOPAGE ;
 
 /* --- outputs ------------------------------------------------------ */
 PIN = HSYNC ;
@@ -70,7 +68,8 @@ PIN = GSPN1 ;
 PIN = GSPN2 ;
 PIN = GSPN3 ;
 PIN = !WAIT ;
-PIN = BLANKD ;
+PIN = WSTBV ;
+PIN = !BLANKD ;
 PIN = MASKBIT ;
 PIN = FETCH ;
 PIN = HLOAD ;
@@ -80,11 +79,7 @@ PIN = MAPLD ;
 PIN = CELLTICK ;
 PIN = SRC0 ;
 PIN = SRC1 ;
-PIN = LGRANT ;
-PIN = GCPU0 ;
-PIN = GCPU1 ;
-PIN = GCPU2 ;
-PIN = GCPU3 ;
+PIN = SGRANT ;
 PIN = VRAMSEL ;
 
 /* --- buried registers: state that used to cross a package boundary - */
@@ -141,9 +136,9 @@ PINNODE = SR0 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * VTC, BLANK, SLOTTICK, SPAREWIN, SPANEND, ACPU0, ACPU1, ACPU2, ACPU3
- * SPNGRANT, M0, HPOL, TILEMODE, WSTBV, WSTART, TFETCH, MFETCH, HEND
- * MAPREQ, MAPSEL, TILESEL, LINEAR, SPNREQG, SPNREQ, SPNTICK, GMAP0
- * GMAP1, GMAP2, GMAP3, MAPHOLD, WAITSRC, WAITRW
+ * SPNGRANT, M0, HPOL, TILEMODE, WSTART, VPORT, TFETCH, MFETCH, HEND
+ * MAPREQ, MAPSEL, TILESEL, LINEAR, SPNREQG, SPNREQ, SPNTICK, WAITSRC
+ * CPUIDLE
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -388,39 +383,39 @@ WEN = RETIRE & !WM1
       # RETIRE & MASKBIT ;
 WROWADV = SPANEND & WADV0 & !LRUN
           # SPANEND & WADV1 & !LRUN ;
-ACPU0 = VRAMSEL & !IOPAGE & WAITRW & !A0 & !A1 ;
-GSPN0 = SPNREQG & !SPNA0 & !SPNA1 & !VRAMSEL
-        # SPNREQG & !SPNA0 & !SPNA1 & IOPAGE
-        # SPNREQG & !SPNA0 & !SPNA1 & !WAITRW
-        # SPNREQG & !SPNA0 & !SPNA1 & A0
-        # SPNREQG & !SPNA0 & !SPNA1 & A1 ;
-ACPU1 = VRAMSEL & !IOPAGE & WAITRW & A0 & !A1 ;
-GSPN1 = SPNREQG & SPNA0 & !SPNA1 & !VRAMSEL
-        # SPNREQG & SPNA0 & !SPNA1 & IOPAGE
-        # SPNREQG & SPNA0 & !SPNA1 & !WAITRW
-        # SPNREQG & SPNA0 & !SPNA1 & !A0
-        # SPNREQG & SPNA0 & !SPNA1 & A1 ;
-ACPU2 = VRAMSEL & !IOPAGE & WAITRW & !A0 & A1 ;
-GSPN2 = SPNREQG & !SPNA0 & SPNA1 & !VRAMSEL
-        # SPNREQG & !SPNA0 & SPNA1 & IOPAGE
-        # SPNREQG & !SPNA0 & SPNA1 & !WAITRW
-        # SPNREQG & !SPNA0 & SPNA1 & A0
-        # SPNREQG & !SPNA0 & SPNA1 & !A1 ;
-ACPU3 = VRAMSEL & !IOPAGE & WAITRW & A0 & A1 ;
-GSPN3 = SPNREQG & SPNA0 & SPNA1 & !VRAMSEL
-        # SPNREQG & SPNA0 & SPNA1 & IOPAGE
-        # SPNREQG & SPNA0 & SPNA1 & !WAITRW
-        # SPNREQG & SPNA0 & SPNA1 & !A0
-        # SPNREQG & SPNA0 & SPNA1 & !A1 ;
-SPNGRANT = SPNREQG & !SPNA0 & A0
-           # SPNREQG & SPNA0 & !A0
-           # SPNREQG & !SPNA1 & A1
-           # SPNREQG & SPNA1 & !A1
-           # SPNREQG & !VRAMSEL
-           # SPNREQG & IOPAGE
-           # SPNREQG & !WAITRW ;
+ACPU0 = VPORT & !CPUIDLE & CPUIDLE & !CPUIDLE & !CPUIDLE ;
+GSPN0 = SPNREQG & !SPNA0 & !SPNA1 & !VPORT
+        # SPNREQG & !SPNA0 & !SPNA1 & CPUIDLE
+        # SPNREQG & !SPNA0 & !SPNA1 & !CPUIDLE
+        # SPNREQG & !SPNA0 & !SPNA1 & CPUIDLE
+        # SPNREQG & !SPNA0 & !SPNA1 & CPUIDLE ;
+ACPU1 = VPORT & !CPUIDLE & CPUIDLE & CPUIDLE & !CPUIDLE ;
+GSPN1 = SPNREQG & SPNA0 & !SPNA1 & !VPORT
+        # SPNREQG & SPNA0 & !SPNA1 & CPUIDLE
+        # SPNREQG & SPNA0 & !SPNA1 & !CPUIDLE
+        # SPNREQG & SPNA0 & !SPNA1 & !CPUIDLE
+        # SPNREQG & SPNA0 & !SPNA1 & CPUIDLE ;
+ACPU2 = VPORT & !CPUIDLE & CPUIDLE & !CPUIDLE & CPUIDLE ;
+GSPN2 = SPNREQG & !SPNA0 & SPNA1 & !VPORT
+        # SPNREQG & !SPNA0 & SPNA1 & CPUIDLE
+        # SPNREQG & !SPNA0 & SPNA1 & !CPUIDLE
+        # SPNREQG & !SPNA0 & SPNA1 & CPUIDLE
+        # SPNREQG & !SPNA0 & SPNA1 & !CPUIDLE ;
+ACPU3 = VPORT & !CPUIDLE & CPUIDLE & CPUIDLE & CPUIDLE ;
+GSPN3 = SPNREQG & SPNA0 & SPNA1 & !VPORT
+        # SPNREQG & SPNA0 & SPNA1 & CPUIDLE
+        # SPNREQG & SPNA0 & SPNA1 & !CPUIDLE
+        # SPNREQG & SPNA0 & SPNA1 & !CPUIDLE
+        # SPNREQG & SPNA0 & SPNA1 & !CPUIDLE ;
+SPNGRANT = SPNREQG & !SPNA0 & CPUIDLE
+           # SPNREQG & SPNA0 & !CPUIDLE
+           # SPNREQG & !SPNA1 & CPUIDLE
+           # SPNREQG & SPNA1 & !CPUIDLE
+           # SPNREQG & !VPORT
+           # SPNREQG & CPUIDLE
+           # SPNREQG & !CPUIDLE ;
 WAIT = 'b'1 ;
-WAIT.oe = WAITSRC & VRAMSEL & !IOPAGE & E & !WAITRW ;
+WAIT.oe = WAITSRC & VPORT & !CPUIDLE & E & !CPUIDLE ;
 VMODE0.d = WCTRL & D0
            # VMODE0 & !WCTRL ;
 VMODE1.d = WCTRL & D1
@@ -439,15 +434,20 @@ M0 = VMODE0 ;
 HPOL = VMODE0
        # !VMODE0 ;
 TILEMODE = CELL ;
-WSTBV = VRAMSEL & !RW & E ;
-WPQ.d = VRAMSEL & !RW & E ;
+WSTBV = VRAMSEL & !RW & E
+        # VDSEL & !RW & E ;
+WPQ.d = VRAMSEL & !RW & E
+        # VDSEL & !RW & E ;
 WSTART = WPQ & !E ;
+VPORT = VRAMSEL
+        # VDSEL ;
 BD0.d = BLANK ;
 BD1.d = BD0 ;
 BD2.d = BD1 ;
 BD3.d = BD2 ;
 BD4.d = BD3 ;
-BLANKD = BD4 ;
+BLANKD = BD4
+         # !DISPEN ;
 HS0.d = LDHS & D0
         # HS0 & !LDHS ;
 HS1.d = LDHS & D1
@@ -517,24 +517,13 @@ SRC1 = TILESEL
        # MAPSEL ;
 SPNREQG = SPNREQ & !MAPREQ ;
 SPNREQ = SPANBUSY & SPAREWIN
-         # LRUN & SPAREWIN ;
+         # LRUN & SPAREWIN
+         # !RDVALID & SPAREWIN ;
 SPNTICK = !PH1 & PH0 ;
-LGRANT = LRUN & !SPANBUSY & SPNGRANT & SPNTICK ;
-GMAP0 = MAPREQ & !MAPA0 & !MAPA1 ;
-GMAP1 = MAPREQ & MAPA0 & !MAPA1 ;
-GMAP2 = MAPREQ & !MAPA0 & MAPA1 ;
-GMAP3 = MAPREQ & MAPA0 & MAPA1 ;
-GCPU0 = ACPU0 & !GMAP0 ;
-GCPU1 = ACPU1 & !GMAP1 ;
-GCPU2 = ACPU2 & !GMAP2 ;
-GCPU3 = ACPU3 & !GMAP3 ;
-MAPHOLD = MAPREQ & !MAPA0 & !A0 & !MAPA1 & !A1
-          # MAPREQ & MAPA0 & A0 & !MAPA1 & !A1
-          # MAPREQ & !MAPA0 & !A0 & MAPA1 & A1
-          # MAPREQ & MAPA0 & A0 & MAPA1 & A1 ;
+SGRANT = !SPANBUSY & SPNGRANT & SPNTICK ;
 WAITSRC = SPANBUSY
-          # MAPHOLD ;
-WAITRW = RW & !MAPHOLD ;
+          # RW & !RDVALID ;
+CPUIDLE = 'b'0 ;
 VRAMSEL = A19 & !A20 & !IOPAGE ;
 
 /* One clock for every register: the card is one slot-walked datapath

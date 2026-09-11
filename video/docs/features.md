@@ -275,7 +275,7 @@ second time and that one is a pin — §8.4.
 > absorb — it is eight macrocells on `vctrl` — and the counter does not, because §7.4
 > loads it from the **register file's read bus** and that is eight pins neither CPLD
 > has. It was `vlen`, a `GAL22V10`; since 2026-09-09 it is eight macrocells on
-> §10.1.7's `vsup` and **the card is 36 ICs**, on a 24 cm board.
+> §10.1.7's `vsup` and **the card is 33 ICs**, on a 24 cm board.
 > [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.2 and §10.
 
 `WADV` (`+$14`) chains spans: `01` is **"next row, same column"** — at span end the row

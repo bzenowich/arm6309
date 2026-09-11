@@ -1,8 +1,8 @@
 # `video/` — the 256-colour video card
 
 640×200 in **256 colours**, 80×25 text, a scrolling bitmap and a span writer, out of a
-VGA connector at the standard 25.175 MHz dot clock. **The card is 36 ICs** on a 24 cm
-board — 32 if the tri-state pixel bus closes at 39.7 ns and the `'153` mux is not
+VGA connector at the standard 25.175 MHz dot clock. **The card is 33 ICs** on a 24 cm
+board — 29 if the tri-state pixel bus closes at 39.7 ns and the `'153` mux is not
 needed — of which the programmable logic is **3 × `ATF1508AS` in PLCC-84 and no
 GALs**, alongside a three-transistor analog drive stage. **~0.6–0.95 A at 5 V, 0.75 A
 nominal.**
@@ -53,16 +53,16 @@ monitor's 75 Ω, and blanking by `74AHCT273` `/MR` for zero packages. **No ICs**
 transistors, a diode and fifteen resistors — which is what closed `design-review.md`
 §Vid-M4. It is still what step 1 has to measure.
 
-⚠ **Every part on this card is bound by PINS, and none of them by macrocells.**
-`vctrl` is 61 of 64 I/O.
+⚠ **`vaddr` is bound by pins and LAB fan-in; `vctrl`, since 2026-09-11, by cells.**
+`vctrl` is 56 of 64 I/O.
 `vaddr` is 59 of 64 I/O.
-`vsup` is 54 of 64 I/O.
-Their cell counts are 104, 113 and 84 of 128. Those totals **include JTAG's four**,
-because the `ATF1508AS` shares `TMS`/`TDI`/`TDO`/`TCK` with ordinary I/O, and all three
-parts are programmed in circuit.
+`vsup` is 61 of 64 I/O.
+Their cell counts are 127, 113 and 91 of 128, and `vctrl`'s is the fitter's second pass
+(`docs/graphics.md` §19 item 46). ⚠ All three are fitted with **JTAG off**
+(`cpld/*.fit`: the four JTAG pins carry signals), so they are programmed out of circuit.
 
 ⛔ **And `vaddr` is bound by a third thing: LAB fan-in.** An `ATF1508AS` block sees 40
-signals through the switch matrix and `vaddr` sits at **40 of 40 in all eight**. Three
+signals through the switch matrix and `vaddr` peaks at **35 of 40** (`cpld/vaddr.fit`). Three
 separate one-literal changes to the display list were refused there on 2026-09-09 — two
 `Grouping fail / Design does not fit`, one `INTERNAL ERROR` — which is why the engine's
 descriptor half moved to `vsup` rather than growing in place. It is invisible in a cell
@@ -78,8 +78,9 @@ the pins. **Blitter room is a pin question here, not a macrocell question.**
 
 **Specified at ÷12 only.** E = 25.175/12 = 2.0979 MHz is the rate this card is
 specified at. The ÷8 rate — fast-E mode, 3.1469 MHz — is **experimental and not
-guaranteed**: flat VRAM read-back does not close there (§11), and it is one of three
-independent things in the machine that break at that rate.
+guaranteed**, for two reasons elsewhere in the machine (`docs/machine.md` §1.1). VRAM
+read-back is not one of them: it is prefetched at `WPTR` and has no in-cycle deadline
+(§11).
 
 `graphics.md` also carries the machine-level material the other cards depend on: the
 one-oscillator clock tree (§5 — the oscillator is on the **motherboard**, not this

@@ -5,6 +5,10 @@ Name:           vlen
 PartNo:         ARM6309-UV11
 Location:       video card - span-solid length counter
 
+*** SUPERSEDED - DO NOT PROGRAM ***
+    graphics.md 10.1.7 - absorbed into vsup, the third ATF1508AS, 2026-09-09
+    This fit is kept as the derivation behind that decision.
+
 *F0
 *G0
 *QP24
@@ -145,4 +149,4 @@ Location:       video card - span-solid length counter
 *L5828 0100000100110110001100110011000000111001010101100100001000000000
 *C35c5
 *
-5e37
+91b7

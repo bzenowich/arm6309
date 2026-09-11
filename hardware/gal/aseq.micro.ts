@@ -22,11 +22,15 @@
  *   w3  lane2 LC[18:16] lanes1:0 LC[15:0]
  *   w4                  lanes1:0 PER[15:0]
  *   w5                  lanes1:0 LEN[15:0]
- *   w6  lane2 VOL       lane1 ATT   lane0 DAT
+ *   w6  lane2 VOL       lane1 reserved (was ATT)   lane0 reserved (was DAT)
  *   w7  lane2 PAN
  *
- *   $20 TIMER    $21 CIANEXT   $22 SPTR
- *   $23 spare    $24 scratch   $25 host staging shadow (9.4.3)
+ *   $20 TIMER    $21 spare     $22 SPTR
+ *   $23 spare    $24 spare     $25 host staging shadow (9.4.3)
+ *
+ * ⚠ $21 AND $24 WERE THE TEMPO TIMER'S - CIANEXT and W4's multiply scratch.
+ * The timer is U1's counter now (8.2, 16 item 44), and slot 4 reads TIMER at
+ * $20 for it to reload from.
  *
  * ⚠ LANE 3 IS UNUSED, DELIBERATELY. Every host-visible byte and every byte a
  * converter takes lives in lanes 0-2, which is what lets the read-back path be
@@ -68,8 +72,6 @@ export interface Step {
   pw?: boolean
   /** clock the addressed lane's prefetch latch */
   pf?: boolean
-  /** raise an 8.1 interrupt source at the end of this step */
-  set?: number
   /** U1 drives the free-running count onto the state file's data bus, so the
    *  adder can reach it without a seventeenth wire (10.2.2) */
   count?: boolean
@@ -77,10 +79,10 @@ export interface Step {
   ch?: number
   /** clock that channel's converter port register out of a work slot */
   cvld?: boolean
-  /** which converter package pair to strobe */
-  cvstr?: "vol"
-  /** the second half of a frame's converter pair - port registers 3 and 2 */
-  cvb?: boolean
+  /** arm 6.2's volume write for the DAC A pair ("a" - port registers 0 and 1)
+   *  or the DAC B pair ("b" - 3 and 2). The strobe itself is not a step: it is
+   *  the frame-parity window, and the sequence waits for it. */
+  varm?: "a" | "b"
   /** this step writes PEND, so 6.2's converter strobe fires for the channel.
    *  ⚠ It is a FIELD and not a step number because there are two such steps -
    *  W1's and W6's priming write - and the second one was missing. */
@@ -108,10 +110,14 @@ export const highLaneMode = (s: Step): HighLaneMode => {
   return "pass"
 }
 
-/** W1 a channel event, W2 a buffer reload, W3 a host access, W4 the tempo
- *  timer's reload, W6 DMACON's restart. There is no W5 here: 6.2's converter
- *  windows are a function of the slot phase and never of the microprogram. */
-export const W1 = 0, W2 = 1, W3 = 2, W4 = 3, W6 = 4, W5 = 5
+/** W1 a channel event, W2 a buffer reload, W3 a host access, W6 DMACON's
+ *  restart, W5 the volume converters. ⚠ 3 WAS W4, THE TEMPO TIMER, and is not
+ *  reused: it multiplied TIMER by five into a colour-clock deadline that a
+ *  16-bit compare could not hold past 65,536 colour clocks, so 125 BPM - 70,937
+ *  - was out of range. U1 counts the timer itself now (audio.md 8.2, 16 item
+ *  44). */
+export const W1 = 0, W2 = 1, W3 = 2, W6 = 4, W5 = 5
+export const SEQUENCES = [W1, W2, W3, W5, W6]
 
 export const PROGRAM: Record<number, Step[]> = {
   /* -- W1: a channel's compare hit. Seven steps, and 10.2.5 counts them ---
@@ -159,7 +165,14 @@ export const PROGRAM: Record<number, Step[]> = {
    * writes the byte (to the shadow, or straight through for the one-byte
    * fields 9.4.3 calls atomic already), 1-2 are the commit, 3-4 are SDATA's
    * sample-RAM access and SPTR's increment, and 5 re-prefetches at the
-   * post-incremented AIDX. */
+   * post-incremented AIDX.
+   *
+   * ⛔ WHICH BYTE LANDS WHERE IS U2's HOST DECODE, NOT AIDX ALONE - 16 item 44.
+   * Step 0 stored every posted byte at the (word, lane) AIDX named, so
+   * ADMACON, AINTENA, AINTREQ and ACTRL wrote into channel fields and SPTR and
+   * TIMER never reached their own words. Now only ADATA, SPTR and TIMER write
+   * at all; SPTR and TIMER stage through $25 like any multi-byte field and
+   * commit on their low byte to $22 and $20. */
   [W3]: [
     /* 0 */ { host: "stage", wr: [0], pw: true },
     /* 1 */ { g: 5, alat: true, cap: true },
@@ -168,24 +181,8 @@ export const PROGRAM: Record<number, Step[]> = {
     /* 4 */ { host: "sptr", wr: [0, 1, 2], b: "zero", cin: true, sum: true, drv: true },
     /* 5 */ { host: "target", pf: true, done: "always" },
   ],
-  /* -- W4: the tempo timer, and it is 8.2's "fifth entry in the compare
-   * structure" taken literally. CIANEXT is a colour-clock count compared
-   * against the same free-running counter the channels use, so the timer costs
-   * NOTHING per CIA tick - only this ten-step multiply once per period, at
-   * 50 Hz. 5N = 4N + N, and 4N is two doublings, so there is no shifter here
-   * either: both operands come off the file and A + A is a doubling. */
-  [W4]: [
-    /* 0 */ { g: 0, alat: true, blat: true },
-    /* 1 */ { g: 4, wr: [0, 1], b: "blat", sum: true },
-    /* 2 */ { g: 4, alat: true, blat: true },
-    /* 3 */ { g: 4, wr: [0, 1], b: "blat", sum: true },
-    /* 4 */ { g: 0, blat: true },
-    /* 5 */ { g: 4, wr: [0, 1], b: "blat", sum: true },
-    /* 6 */ { g: 4, blat: true },
-    /* 7 */ { g: 4, wr: [] },
-    /* 8 */ { g: 1, alat: true },
-    /* 9 */ { g: 1, wr: [0, 1], b: "blat", sum: true, set: 4, done: "always" },
-  ],
+  /* -- W4 (retired 2026-09-11): the tempo timer's multiply. See the note on
+   * the W constants above; audio.md history.md has the ten steps. */
   /* -- W6: 1 requirement 6's restart, and it CHAINS INTO W1 ----------------
    * The 0-to-1 edge of DMACON's enable bit reloads the pointer and the count
    * from the shadow and sets NEXT, and then hands the engine to W1 without
@@ -221,38 +218,47 @@ export const PROGRAM: Record<number, Step[]> = {
   ],
 }
 
-/* -- W5: 6.1's volume, and the other four converter halves. A port register
- * loaded from the walk holds PEND and nothing else, so the volume codes need
- * their own reads - and they must be loaded and strobed inside ONE frame's
- * work slots, because the walk reloads the registers in slots 0-3. Six steps,
- * at the ~200 volume writes a second a replayer makes.
+/* -- W5: 6.1's volume, the other four converter halves -------------------
  *
- * ⭐ IT WAS TWELVE UNTIL PROGRAMMABLE PANNING WAS GIVEN UP. 11.1's second
- * volume code per channel needed a second pass over all four registers and a
- * second chip select; classic MOD's fixed LRRL - channels 0 and 3 left, 1 and
- * 2 right - is which summing node an output is WIRED to, and no logic at all.
+ * A channel's port register carries its sample byte AND, while this runs, its
+ * volume code, so W5 borrows all four and the one rule is that a borrow never
+ * overlaps a write that needs the register's other contents. The strobes are
+ * not steps: 6.2's windows are the frame parity and the slot phase, so W5
+ * loads, arms the two DAC pairs, and HOLDS THE ENGINE until both have fired.
  *
- * ⛔ IT USED TO SAY "IT SUPPRESSES THE WALK'S PORT-REGISTER LOAD WHILE IT RUNS,
- * so a sample transition can be late by up to two colour clocks". It did not
- * suppress anything - the term that was meant to (`CVBUSY`) is true only in a
- * work slot, and the walk loads in slots 0-3 - and W5 is six steps against a
- * frame's three work slots, so it spans two frames and the walk ran inside it,
- * between a load and the strobe that captures it. The VOLUME converter was
- * given a SAMPLE byte. audio.md 16 item 41.
+ *   0-3  wait. A PEND write loads a port register and arms a SAMPLE window
+ *        that fires within two frames; the sequence that made it ends at
+ *        least two work slots later, and two more already put the first load
+ *        after the latest such window. Four is margin (audio.md 6.2).
+ *   4-7  read each channel's VOL into its port register; arm A after 0 and 1,
+ *        B after 2 and 3. ⚠ ON T = 01xx, AND THAT IS NOT DECORATION: the
+ *        address, the output enable and the four loads each collapse to one
+ *        product term there. Loads on steps 2-5 fitted with FOUR CASCADES, on
+ *        SFOE, SFA0 and SFA3 - the state file's address, the card's one tight
+ *        path (3.2) - and T3.
+ *   8-12 wait for the later window, which may be two frames away. No W1 may
+ *        load a register - with a sample byte - before both volume windows
+ *        fire.
  *
- * ⭐ THE WALK NO LONGER LOADS THE PORT REGISTERS AT ALL, so there is nothing
- * left to suppress and nothing to be late: 16 item 39(b) loads the register at
- * the `PEND` write itself, which is strictly less latency, and aseq.jedec.ts's
- * CVLD says why the walk's copy was a redundant refresh. 6.2's strobe fires on
- * `WROTE`, set by that same write, so a converter is only ever strobed after
- * the register has been filled by it. */
+ * ⛔ WHAT IT REPLACES DID NOT WORK ON FOUR CHANNELS, audio.md 16 item 43. It
+ * strobed a single work slot - 35 ns against the AD7528's 90 ns write pulse -
+ * and it left volume codes in the registers, where the next sample write of the
+ * PARTNER channel strobed them into a SAMPLE converter: 1,114 of 67,781 sample
+ * writes on a four-channel module. */
 PROGRAM[W5] = [
-  /* 0 */ { ch: 0, w: 6, cvld: true },
-  /* 1 */ { ch: 1, w: 6, cvld: true },
-  /* 2 */ { cvstr: "vol" },
-  /* 3 */ { ch: 3, w: 6, cvld: true, cvb: true },
-  /* 4 */ { ch: 2, w: 6, cvld: true, cvb: true },
-  /* 5 */ { cvstr: "vol", cvb: true, done: "always" },
+  /* 0 */ {},
+  /* 1 */ {},
+  /* 2 */ {},
+  /* 3 */ {},
+  /* 4 */ { ch: 0, w: 6, cvld: true },
+  /* 5 */ { ch: 1, w: 6, cvld: true, varm: "a" },
+  /* 6 */ { ch: 2, w: 6, cvld: true },
+  /* 7 */ { ch: 3, w: 6, cvld: true, varm: "b" },
+  /* 8 */ {},
+  /* 9 */ {},
+  /* 10 */ {},
+  /* 11 */ {},
+  /* 12 */ { done: "always" },
 ]
 
 /** 9.3's sixteen host bytes, as (word, lane). AIDX[3:0] indexes this and
@@ -265,8 +271,8 @@ export const HOSTMAP: { w: number; lane: number; ro?: boolean }[] = [
   { w: 5, lane: 1 }, { w: 5, lane: 0 },                      // LEN, commits at 4
   { w: 4, lane: 1 }, { w: 4, lane: 0 },                      // PER, commits at 6
   { w: 6, lane: 2 },                                         // VOL
-  { w: 6, lane: 0 },                                         // DAT
-  { w: 6, lane: 1 },                                         // ATT
+  { w: 6, lane: 0 },                                         // reserved (was DAT)
+  { w: 6, lane: 1 },                                         // reserved (was ATT)
   { w: 7, lane: 2 },                                         // reserved (was PAN)
   { w: 2, lane: 2, ro: true }, { w: 2, lane: 1, ro: true },
   { w: 2, lane: 0, ro: true },                               // PTR, read-only
@@ -279,6 +285,17 @@ export const COMMIT: Record<number, { w: number; lanes: number[] }> = {
   2: { w: 3, lanes: [0, 1, 2] },   // LC, 3 bytes
   4: { w: 5, lanes: [0, 1] },      // LEN
   6: { w: 4, lanes: [0, 1] },      // PER
+}
+
+/** 9.2's direct-window ports that store into the state file, by register
+ *  offset: SPTR (+$6-$8) into $22 and TIMER (+$B-$C) into $20, at the lane
+ *  their byte order puts them on. Both stage through $25 like every multi-byte
+ *  field and commit on their last byte, 9.4.3's rule. ⛔ Until 2026-09-11 no
+ *  table said this and nothing built it: W3 put these bytes wherever AIDX
+ *  pointed (audio.md 16 item 44). */
+export const DIRECT: Record<number, { g: number; lane: number; commit?: boolean }> = {
+  0x6: { g: 2, lane: 2 }, 0x7: { g: 2, lane: 1 }, 0x8: { g: 2, lane: 0, commit: true },
+  0xb: { g: 0, lane: 1 }, 0xc: { g: 0, lane: 0, commit: true },
 }
 
 /** Offsets that are staged rather than written straight through. Everything

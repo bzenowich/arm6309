@@ -100,9 +100,18 @@ const RELOAD_A = gated("RP0")      // $08, WPTR's low byte
 const RELOAD_B = gated("RP1")      // $09, its middle byte
 
 const cells: Cell[] = [
-  { pin: 0, name: "WSTB", assertedLow: false, s0: 1, registered: false,
-    why: "E-qualified: a 6809 write is only valid data in the second half",
-    terms: [`${REGSEL} & !RW & E`] },
+  /* ⛔ AND NOT AT +$15, WHICH IS VDATA - 2026-09-11, graphics.md 11, 19 item 47.
+   * VDATA is the VRAM port at an I/O address, so its store is a POSTED VRAM
+   * write (vctrl's WSTBV) and not a register write. Left in, this strobe would
+   * write the file's byte at RA too - and while a span runs RA is WFG or WBG,
+   * not +$15, and /WAIT holds E high for the whole span: the CPU's byte would
+   * become the colour of every pixel still to retire. Five terms, one per
+   * literal of +$15's address. */
+  /* ⛔ ASSERTED LOW since 2026-09-11: this pin IS the register file's /WE, and
+   * the board has no inverter. It was emitted active-high. pins.check.ts. */
+  { pin: 0, name: "WSTB", assertedLow: true, s0: 0, registered: false,
+    why: "E-qualified: a 6809 write is only valid data in the second half - and not VDATA's",
+    terms: ["!A4", "A3", "!A2", "A1", "!A0"].map((l) => `${REGSEL} & !RW & E & ${l}`) },
   /* $05 is 00101 and $06/$07 are 0011x, so bit 0 is 1 when idle and the mask
    * bit during a span - which is the whole of 7.4's colour selection. */
   /* ⚠ IT IS THE COMPLEMENT OF THE MASK BIT, and 13's placement is why. WFG
@@ -151,8 +160,12 @@ export const rfaDesign: Design = {
   partNo: "ARM6309-UV9",
   location: "video card - register-file address",
   signature: "A6309V9",
+  supersededBy: "graphics.md 10.1.7 - absorbed into vsup, the third ATF1508AS, 2026-09-09",
   inputs: [
-    { name: "IOSEL", pin: 1 }, { name: "A5", pin: 2 }, { name: "A6", pin: 3 },
+    /* ⛔ /IOSEL is an active-low backplane strobe; declared active-high until
+     * 2026-09-11, so the fitted decode selected on every cycle OUTSIDE the
+     * window. pins.check.ts. */
+    { name: "IOSEL", pin: 1, activeLow: true }, { name: "A5", pin: 2 }, { name: "A6", pin: 3 },
     { name: "A0", pin: 4 }, { name: "A1", pin: 5 }, { name: "A2", pin: 6 },
     { name: "A3", pin: 7 }, { name: "A4", pin: 8 },
     { name: "RW", pin: 9 }, { name: "E", pin: 10 },

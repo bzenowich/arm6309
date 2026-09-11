@@ -76,8 +76,30 @@ export const merge = (
       }
     }
   }
-  const ar = designs.map((d) => d.ar).find(Boolean)
+  /* ⛔ `?? meta.ar`, since 2026-09-11. Without it a part built from cells alone
+   * - aseq, whose `merge([], …)` names RESET in its meta - had its reset
+   * overwritten with undefined, so aseq.pld carried no .ar and U2 had no
+   * reset in silicon or in Verilog. Verilator's zero-initialised registers hid
+   * it. */
+  const ar = designs.map((d) => d.ar).find(Boolean) ?? meta.ar
   return { ...meta, inputs: [...inputs.values()], cells, ar }
+}
+
+/** Declare inputs of a merged part active-low. `merge` synthesises an input it
+ *  finds only as a literal in some equation, and a synthesised input is
+ *  active-high - which for a backplane strobe like /IOSEL or /IOPAGE is the
+ *  wrong pin sense, and nothing downstream can see it: the emitted Verilog is
+ *  in asserted sense and every wrapper inverts by hand. pins.check.ts is what
+ *  catches the next one. Throws on a name that is not an input, so a rename
+ *  cannot leave a declaration pointing at nothing. */
+export const withActiveLow = (m: Merged, names: string[]): Merged => {
+  for (const n of names) {
+    if (!m.inputs.some((i) => i.name === n)) throw new Error(`${m.name}: ${n} is not an input`)
+  }
+  return {
+    ...m,
+    inputs: m.inputs.map((i) => (names.includes(i.name) ? { ...i, activeLow: true } : i)),
+  }
 }
 
 const banner = (m: Merged) => [

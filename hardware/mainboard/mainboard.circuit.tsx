@@ -40,7 +40,7 @@
  */
 import { SlotSocket } from "../lib/SlotConnector"
 import {
-  CPU_SOCKET, MAP_SRAM, HC574, HC245, HC157, HCT244, FLASH_512K, SIMM30,
+  CPU_SOCKET, MAP_SRAM, HCT574, HCT245, HCT157, HCT244, FLASH_512K, SIMM30,
   HC4040, gal22v10, labels,
 } from "../lib/parts"
 
@@ -171,8 +171,8 @@ export default () => (
       * 6809 write data has been valid for 247 ns. */}
     <chip
       name="U2"
-      footprint={HC574.footprint}
-      pinLabels={labels(HC574)}
+      footprint={HCT574.footprint}
+      pinLabels={labels(HCT574)}
       connections={{
         VCC: "net.V5", GND: "net.GND", nOE: "net.GND", CP: "net.CTRL_CP",
         ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`D${i + 1}`, d(i)])),
@@ -239,8 +239,8 @@ export default () => (
       * what makes the break-before-make claim direction-aware. */}
     <chip
       name="U4"
-      footprint={HC245.footprint}
-      pinLabels={labels(HC245)}
+      footprint={HCT245.footprint}
+      pinLabels={labels(HCT245)}
       connections={{
         VCC: "net.V5", GND: "net.GND",
         DIR: "net.R_W", nOE: "net.ISO_OE_LO",
@@ -280,8 +280,8 @@ export default () => (
       * DIR is R/W, exactly as on U4: a read is A-to-B and a write B-to-A. */}
     <chip
       name="U18"
-      footprint={HC245.footprint}
-      pinLabels={labels(HC245)}
+      footprint={HCT245.footprint}
+      pinLabels={labels(HCT245)}
       connections={{
         VCC: "net.V5", GND: "net.GND",
         DIR: "net.R_W", nOE: "net.ISO_OE_HI",
@@ -305,8 +305,8 @@ export default () => (
       * CY7C128A-15's 12 ns tAW. */}
     <chip
       name="U5"
-      footprint={HC157.footprint}
-      pinLabels={labels(HC157)}
+      footprint={HCT157.footprint}
+      pinLabels={labels(HCT157)}
       connections={{
         VCC: "net.V5", GND: "net.GND", nE: "net.GND", SEL: "net.MUX_SEL",
         "1A": la(13), "1B": la(0), "1Y": "net.MAPA0",
@@ -624,8 +624,8 @@ export default () => (
       <chip
         key={n}
         name={`U1${1 + n}`}
-        footprint={HC157.footprint}
-        pinLabels={labels(HC157)}
+        footprint={HCT157.footprint}
+        pinLabels={labels(HCT157)}
         connections={{
           VCC: "net.V5", GND: "net.GND", nE: "net.GND", SEL: "net.E",
           ...Object.fromEntries([0, 1, 2, 3].flatMap((i) => {

@@ -44,6 +44,10 @@ export const REGS = {
    * that holds PIDX and drives the LUT's two buses. */
   PIDX: 0x10, PDATL: 0x11, PDATH: 0x12,
   WADV: 0x14,
+  /* ⭐ VDATA IS BUILT, 2026-09-11 - graphics.md 11, 19 item 47. The VRAM port
+   * at an I/O address: vsup decodes it from the raw address (RA is a span's
+   * colour while one runs) and vctrl ORs it into the posted write and /WAIT. */
+  VDATA: 0x15,
   TILEBASE: 0x17, FONTBASE: 0x18, MAPBASE: 0x19,
 } as const
 
@@ -92,11 +96,10 @@ const strobe = (name: string, off: number, why?: string) =>
 export const writeStrobes: Cell[] = [
   strobe("LDVSL", REGS.VSCROLL), strobe("LDVSH", REGS.VSCROLLH),
   strobe("LDHS", REGS.HSCROLL),  strobe("LDHSH", REGS.HSCROLLH),
-  /* ⭐ 13's +$14, and it had no strobe - so WADV0 and WADV1 were inputs to
-   * vctrl that nothing produced and 7.2's chaining could not be selected at
-   * all (design-review2.md V-1). It goes out to vctrl, which holds the two
-   * bits beside the span control that reads them. */
-  strobe("LDADV", REGS.WADV, "13's +$14 - 7.2's next-row-same-column mode"),
+  /* ⛔ LDADV LEFT THIS PART ON 2026-09-11. It was decoded here for vctrl and
+   * never exported - a buried cell, substituted into nothing, while vctrl's pin
+   * for it had no driver on silicon. vsup decodes it and exports it now
+   * (vsup.parts.ts); this part had no other reader of it. */
   /* ⚠ BCTRLGO IS NOT DECODED HERE ANY MORE - 2026-09-09. 13's +$0E b0 is the
    * display list's GO, and the whole descriptor half of the engine moved to
    * vsup when vaddr ran out of LAB fan-in (vsup.parts.ts). LRUN is what the

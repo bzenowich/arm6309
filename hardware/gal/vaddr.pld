@@ -49,14 +49,14 @@ PIN = PB1 ;
 PIN = MAPLD ;
 PIN = CELLTICK ;
 PIN = MCADV ;
-PIN = WSTB ;
+PIN = !WSTB ;
 PIN = RA4 ;
 PIN = RA3 ;
 PIN = RA2 ;
 PIN = RA1 ;
 PIN = RA0 ;
 PIN = RETIRE ;
-PIN = LADV ;
+PIN = VINC ;
 PIN = SRC1 ;
 PIN = SRC0 ;
 
@@ -174,8 +174,7 @@ PINNODE = MC5 ;
 PINNODE = MC6 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * RLDA, RLDB, LDVSL, LDVSH, LDHS, LDHSH, LDADV, LDA, LDB, LDC, LDTB
- * LDMB, WINC
+ * RLDA, RLDB, LDVSL, LDVSH, LDHS, LDHSH, LDA, LDB, LDC, LDTB, LDMB, WINC
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -592,14 +591,13 @@ LDVSL = WSTB & !RA4 & !RA3 & !RA2 & !RA1 & RA0 ;
 LDVSH = WSTB & !RA4 & !RA3 & !RA2 & RA1 & !RA0 ;
 LDHS = WSTB & !RA4 & !RA3 & !RA2 & RA1 & RA0 ;
 LDHSH = WSTB & !RA4 & !RA3 & RA2 & !RA1 & !RA0 ;
-LDADV = WSTB & RA4 & !RA3 & RA2 & !RA1 & !RA0 ;
 LDA = WSTB & !RA4 & RA3 & !RA2 & !RA1 & !RA0 ;
 LDB = WSTB & !RA4 & RA3 & !RA2 & !RA1 & RA0 ;
 LDC = WSTB & !RA4 & RA3 & !RA2 & RA1 & !RA0 ;
 LDTB = WSTB & RA4 & !RA3 & RA2 & RA1 & RA0 ;
 LDMB = WSTB & RA4 & RA3 & !RA2 & !RA1 & RA0 ;
 WINC = RETIRE
-       # LADV ;
+       # VINC ;
 FBA2 = !SRC1 & !SRC0 & SA2
        # !SRC1 & SRC0 & WA2
        # SRC1 & !SRC0 & SA2

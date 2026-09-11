@@ -23,7 +23,8 @@
 import { tileCadence } from "./video.parts"
 import { H, V449, V525, SLOTS_PER_LINE, DOTS_PER_SLOT } from "./sync.timing"
 import { vadrDesign } from "./scan.jedec"
-import { vaddrCpld } from "./video.cpld"
+import { vaddrCpld, vramWriteStrobe } from "./video.cpld"
+import { decodeCells } from "./regfile"
 import { MAP_COLS } from "./tile.model"
 
 let failures = 0
@@ -33,7 +34,12 @@ const check = (ok: boolean, claim: string, detail = "") => {
 }
 
 /* -- a sum-of-products evaluator over a named world ---------------------- */
-const cells = new Map(tileCadence.map((c) => [c.name, c.terms]))
+/* ⚠ plus the port's select - VRAMSEL, and VPORT, which is VRAMSEL or +$15
+ * VDATA (19 item 47) - so section 5's /WAIT is evaluated from the design's
+ * cells and not restated here. The strobes beside VPORT are registered or read
+ * E, and are not taken. */
+const cells = new Map([...tileCadence, ...decodeCells,
+  ...vramWriteStrobe.filter((c) => c.name === "VPORT")].map((c) => [c.name, c.terms]))
 const evalIn = (world: Map<string, number>) => {
   /* Cells read other cells (TILESEL reads MAPSEL, GCPU reads GMAP), so settle
    * by iterating. Every cadence output starts at 0 and is RECOMPUTED on each
@@ -87,8 +93,10 @@ const dotWorld = (slot: number, ph: number, extra: Record<string, number> = {}) 
      * running in this world - the engine's slot accounting is vspan_tb's. */
     ["LRUN", 0],
     ["MAPA0", 0], ["MAPA1", 0],
-    /* arbDesign's raw CPU grants, renamed on merge (video.cpld.ts). */
-    ["ACPU0", 0], ["ACPU1", 0], ["ACPU2", 0], ["ACPU3", 0],
+    /* graphics.md 11's read prefetch: the read latch is full, so nothing asks. */
+    ["RDVALID", 1],
+    /* the CPU's access: none of the VRAM port's two addresses (19 item 47) */
+    ["A19", 0], ["A20", 0], ["IOPAGE", 0], ["VDSEL", 0], ["E", 1],
     ...Object.entries(extra),
   ])
   return evalIn(w)
@@ -240,55 +248,59 @@ for (let slot = 0; slot < SLOTS_PER_LINE; slot++) {
     "(that figure is per-chip load, and it is separately right)")
 }
 
-/* -- 5. the CPU's chip, and when it has to wait -------------------------- */
+/* -- 5. the CPU takes no chip, and when it has to wait --------------------- *
+ *
+ * ⛔ THIS SECTION ASSERTED THE OPPOSITE UNTIL 2026-09-11: "the map withdraws
+ * the CPU's grant on its own chip, and raises MAPHOLD exactly there", and "a
+ * read that does not collide does not wait". Both were about a flat CPU read
+ * that reserved the chip its physical address named - and no part has that
+ * address. Every CPU VRAM access is at WPTR: a write retires there, a read is
+ * prefetched from there (graphics.md 11), so the CPU collides with nothing and
+ * the only reasons to wait are the span in flight and the prefetch. */
 {
-  let bad: string | null = null
-  for (let mapChip = 0; mapChip < 4 && !bad; mapChip++) {
-    for (let cpuChip = 0; cpuChip < 4; cpuChip++) {
-      const extra = {
-        MAPA0: mapChip & 1, MAPA1: (mapChip >> 1) & 1,
-        A0: cpuChip & 1, A1: (cpuChip >> 1) & 1,
-        ACPU0: cpuChip === 0 ? 1 : 0, ACPU1: cpuChip === 1 ? 1 : 0,
-        ACPU2: cpuChip === 2 ? 1 : 0, ACPU3: cpuChip === 3 ? 1 : 0,
-      }
-      /* a dot inside a map slot's spare window */
-      const v = dotWorld(H.backEnd - 2, 0, extra)
-      const granted = [0, 1, 2, 3].filter((n) => v.get(`GCPU${n}`) === 1)
-      const held = v.get("MAPHOLD") === 1
-      if (mapChip === cpuChip) {
-        if (granted.length !== 0 || !held) {
-          bad = `map=${mapChip} cpu=${cpuChip}: granted ${granted} held ${held}`
-        }
-      } else if (granted.length !== 1 || granted[0] !== cpuChip || held) {
-        bad = `map=${mapChip} cpu=${cpuChip}: granted ${granted} held ${held}`
-      }
-      if (bad) break
-    }
-  }
-  check(bad === null,
-    "the map withdraws the CPU's grant on its own chip and only its own chip, " +
-    "and raises MAPHOLD exactly there - 2.2's \"video before CPU\"", bad ?? "")
-
-  /* /WAIT: 7.4's span backstop keeps its !RW; a map hold defeats it. */
   const at = (o: Record<string, number>) => dotWorld(H.backEnd - 2, 0, o)
-  const same = { MAPA0: 0, MAPA1: 0, A0: 0, A1: 0 }
-  const diff = { MAPA0: 1, MAPA1: 0, A0: 0, A1: 0 }
-  const waits = (o: Record<string, number>) => {
-    const v = at(o)
-    return v.get("WAITSRC") === 1 && v.get("WAITRW") === 0
+  /* arbDesign's oe, as merged: WAITSRC & VPORT & !CPUIDLE & E & !CPUIDLE, with
+   * VPORT = VRAMSEL # VDSEL (19 item 47). The access is the VRAM window unless
+   * a caller says otherwise. */
+  const WINDOW = { A19: 1, A20: 0, IOPAGE: 0, VDSEL: 0, E: 1 }
+  const waitsAt = (o: Record<string, number>) => {
+    const v = at({ ...WINDOW, ...o })
+    return v.get("WAITSRC") === 1 && v.get("VPORT") === 1 && v.get("E") === 1
+      && v.get("CPUIDLE") === 0
   }
-  check(waits({ ...same, RW: 1, SPANBUSY: 0 }),
-    "a READ whose chip the map has taken waits - it would otherwise return the " +
-    "wrong byte, which 7.4's write-only rule never had to cover")
-  check(waits({ ...same, RW: 0, SPANBUSY: 0 }), "and so does a write")
-  check(!waits({ ...diff, RW: 1, SPANBUSY: 0 }),
-    "a read that does not collide does not wait - 7.4's sprite save-behind and " +
-    "read-modify-write pixels stay off the backstop")
-  check(waits({ ...diff, RW: 0, SPANBUSY: 1 }),
-    "and 7.4's span backstop is unchanged: SPANBUSY still waits on a write")
-  check(!waits({ ...diff, RW: 1, SPANBUSY: 1 }),
-    "and still does not on a read")
+  const waits = waitsAt
+  check(waits({ RW: 0, SPANBUSY: 1 }), "7.4's span backstop: a write waits while a span is in flight")
+  check(!waits({ RW: 0, SPANBUSY: 0, RDVALID: 0 }),
+    "and a write does not wait for the read prefetch - it has nothing to read")
+  check(waits({ RW: 1, SPANBUSY: 1 }),
+    "⭐ a READ waits on a span in flight too - the span's retires move WPTR, which is where the read is")
+  check(waits({ RW: 1, SPANBUSY: 0, RDVALID: 0 }),
+    "⭐ and on a prefetch that has not filled the read latch yet")
+  check(!waits({ RW: 1, SPANBUSY: 0, RDVALID: 1 }),
+    "a read with the latch full and no span does not wait")
+  /* ⭐ 19 item 47: +$15 VDATA is the same port in the I/O page */
+  const VDATA = { A19: 0, IOPAGE: 1, VDSEL: 1 }
+  check(waits({ ...VDATA, RW: 0, SPANBUSY: 1 }) && waits({ ...VDATA, RW: 1, SPANBUSY: 1 })
+    && waits({ ...VDATA, RW: 1, SPANBUSY: 0, RDVALID: 0 }),
+    "⭐ VDATA at +$15 waits exactly as the window does - on a span for either direction, and on the prefetch for a read - though it is in the I/O page")
+  check(!waits({ A19: 0, IOPAGE: 1, VDSEL: 0, RW: 0, SPANBUSY: 1 })
+    && !waits({ A19: 1, A20: 0, IOPAGE: 1, VDSEL: 0, RW: 1, SPANBUSY: 1 }),
+    "and no other I/O cycle waits - not even one whose translated A19 happens to point at VRAM (6.3.2)")
+  /* the map slot, which used to hold the CPU */
+  const mapDot = line.find((d) => d.v.get("MAPREQ") === 1 && d.ph < 2)!
+  check(!dotWorld(mapDot.slot, mapDot.ph, { RW: 1 }).get("WAITSRC") && !(at({}).get("MAPHOLD")),
+    "and a map slot makes nobody wait - MAPHOLD is gone with the chip it protected")
+  /* the prefetch's request and grant */
+  const spare = line.find((d) => d.v.get("MAPREQ") === 0 && d.ph < 2)!
+  check(dotWorld(spare.slot, spare.ph, { RDVALID: 0 }).get("SPNREQ") === 1,
+    "an empty read latch asks for the spare access, in the spare half")
+  check(dotWorld(mapDot.slot, mapDot.ph, { RDVALID: 0 }).get("SPNREQG") === 0,
+    "and yields it to the map, like every other requester")
+  check(dotWorld(spare.slot, 1, { RDVALID: 0, SPNGRANT: 1 }).get("SGRANT") === 1
+    && dotWorld(spare.slot, 1, { RDVALID: 0, SPNGRANT: 1, SPANBUSY: 1 }).get("SGRANT") === 0,
+    "SGRANT is the granted dot, withheld from everyone but the span writer while a span runs")
 }
+
 
 /* -- 6. a whole FRAME: ROWADV, VLOAD and 6.2's line doubling -------------- *
  *

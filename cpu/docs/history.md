@@ -7,6 +7,19 @@ is current.
 
 ---
 
+## fast-E's reasons — VRAM read-back left the list (2026-09-11)
+
+The video card's read-back was built prefetched at `WPTR` (`graphics.md` §11), so it no longer breaks at ÷8.
+
+The text it replaced:
+
+> **experimental and not guaranteed**, and three independent subsystems break there — video
+> VRAM read-back does not close (`video/docs/graphics.md` §11), a 2 MHz 6551 is 57 % over
+> rating (`io/docs/serial.md` §3.3), and the `t_cyc` violation above.
+>
+
+---
+
 ## §4.5 / §3.2 / Phase 6b / §10 items 7–8 — the shadow ROM and vector page, retired 2026-09-08
 
 **The whole mechanism moved off this module** when `docs/machine.md` §7.2 put a 1 MB ROM

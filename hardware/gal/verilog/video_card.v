@@ -73,7 +73,11 @@ module video_card (
     output wire [15:0] RGB,
     output wire [7:0]  PIDX,          // the index vsup counts and drives
     output wire        PWE_o, PDOE_o, PIXOE_o,
-    output wire        DBUS_FIGHT
+    output wire        DBUS_FIGHT,
+
+    // ---- 11's readable VRAM: the vread '574 and its /OE (logic sense) ------
+    output wire [7:0]  VREAD,
+    output wire        RDOE_o
 );
 
   // ---- the three parts -----------------------------------------------------
@@ -88,12 +92,18 @@ module video_card (
   wire PH0, PH1, SPAREWIN_w;
   wire FCLK0,FCLK1,FCLK2,FCLK3, MUXSEL0, MUXSEL1;
   wire WROWADV_w; wire MCm0,MCm1,MCm2;
-  wire GCPU0,GCPU1,GCPU2,GCPU3, GSPN0,GSPN1,GSPN2,GSPN3, WAIT;
+  wire GSPN0,GSPN1,GSPN2,GSPN3, WAIT;
   wire ACPU0,ACPU1,ACPU2,ACPU3;
   wire VMODE0,VMODE1,WM0,WM1,CELL,IRQEN,DISPEN;
   wire M0,HPOL,TILEMODE;
   wire TFETCH,MFETCH,FETCH,HLOAD,HEND,ROWADV,MCADV;
-  wire SPNREQG, GMAP0,GMAP1,GMAP2,GMAP3, MAPHOLD, WAITSRC, WAITRW, VRAMSEL;
+  wire SPNREQG, WAITSRC, CPUIDLE, VRAMSEL;
+  // 13's +$15 VDATA - vsup's decode of the raw address, and vctrl's port select
+  // (VRAMSEL or VDSEL). graphics.md 11, 19 item 47.
+  wire VDSEL, VPORT;
+  // 11's read prefetch - vsup's flag, its latch clock and /OE, the read's own
+  // post-increment, and the spare-access grant it shares with the list engine.
+  wire RDVALID, RDCK, RDOE, RPQ, RSTART, VINC, SGRANT;
   wire SRC0, SRC1;
   wire MAPA0, MAPA1;
 
@@ -103,7 +113,7 @@ module video_card (
   // level over E-high re-arms the span for ever once /WAIT stretches the cycle.
   // graphics.md 7.4, 19 item 37; video.cpld.ts has the derivation.
   wire WPQ, WSTART;
-  wire SPNREQ, SPNTICK, LGRANT, CELLTICK, WINC;
+  wire SPNREQ, SPNTICK, LGRANT, CELLTICK, WINC;   // LGRANT is vsup's since 2026-09-11
   wire SR0,SR1,SR2,SR3,SR4,SR5,SR6,SR7;
   wire LDADV;
 
@@ -146,16 +156,18 @@ module video_card (
 
   vctrl u_vctrl (
     .DOTCLK(DOTCLK), .RESET(RESET),
-    .VSTATWR(VSTATWR), .LDHS(LDHS), .LDADV(LDADV), .TC(TC), .LRUN(LRUN),
+    // ⚠ vctrl's LDHS is vsup's decode, and LDADV is vsup's too - since
+    // 2026-09-11 they are the copies that leave a package (reach.check.ts).
+    .VSTATWR(VSTATWR), .LDHS(VS_LDHS), .LDADV(LDADV), .TC(TC), .LRUN(LRUN),
     .IOPAGE(IOPAGE),
-    .A0(PA[0]), .A1(PA[1]), .SPNA0(WA0), .SPNA1(WA1), .E(E), .WCTRL(WCTRL),
+    .SPNA0(WA0), .SPNA1(WA1), .E(E), .WCTRL(WCTRL),
     .D0(DIN[0]),.D1(DIN[1]),.D2(DIN[2]),.D3(DIN[3]),
     .D4(DIN[4]),.D5(DIN[5]),.D6(DIN[6]),.D7(DIN[7]),
-    .MAPA0(MAPA0), .MAPA1(MAPA1), .RW(RW),
+    .RW(RW),        // MAPA0/1 left vctrl with MAPHOLD, 2026-09-11 - graphics.md 11
     .A19(PA[19]), .A20(PA[20]),
     .HS0(HS0), .HS1(HS1), .WADV0(WADV0), .WADV1(WADV1),
     .MASKBIT(MASKBIT), .WSTBV(WSTBV), .WPQ(WPQ), .WSTART(WSTART), .SPNREQ(SPNREQ), .SPNTICK(SPNTICK),
-    .LGRANT(LGRANT), .CELLTICK(CELLTICK),
+    .SGRANT(SGRANT), .RDVALID(RDVALID), .CELLTICK(CELLTICK),
     .SR0(SR0),.SR1(SR1),.SR2(SR2),.SR3(SR3),
     .SR4(SR4),.SR5(SR5),.SR6(SR6),.SR7(SR7),
     .H0(H0),.H1(H1),.H2(H2),.H3(H3),.H4(H4),.H5(H5),.H6(H6),.H7(H7),
@@ -170,7 +182,6 @@ module video_card (
     .SPANBUSY(SPANBUSY), .RETIRE(RETIRE),
     .MC0(MCm0),.MC1(MCm1),.MC2(MCm2), .SPANEND(SPANEND), .WEN(WEN),
     .WROWADV(WROWADV_w),
-    .GCPU0(GCPU0),.GCPU1(GCPU1),.GCPU2(GCPU2),.GCPU3(GCPU3),
     .GSPN0(GSPN0),.GSPN1(GSPN1),.GSPN2(GSPN2),.GSPN3(GSPN3),
     .SPNGRANT(SPNGRANT), .WAIT(WAIT), .WAIT_OE(WAIT_OE),
     .ACPU0(ACPU0),.ACPU1(ACPU1),.ACPU2(ACPU2),.ACPU3(ACPU3),
@@ -182,8 +193,8 @@ module video_card (
     .MAPSEL(MAPSEL),.TILESEL(TILESEL),.LINEAR(LINEAR),
     .SRC0(SRC0),.SRC1(SRC1),
     .SPNREQG(SPNREQG),
-    .GMAP0(GMAP0),.GMAP1(GMAP1),.GMAP2(GMAP2),.GMAP3(GMAP3),
-    .MAPHOLD(MAPHOLD),.WAITSRC(WAITSRC),.WAITRW(WAITRW),.VRAMSEL(VRAMSEL)
+    .WAITSRC(WAITSRC),.CPUIDLE(CPUIDLE),.VRAMSEL(VRAMSEL),
+    .VDSEL(VDSEL), .VPORT(VPORT)
   );
 
   vaddr u_vaddr (
@@ -209,7 +220,7 @@ module video_card (
     .MAPQ4(MAPQ4),.MAPQ5(MAPQ5),.MAPQ6(MAPQ6),.MAPQ7(MAPQ7),
     // 10.3's engine: three signals in, no state - its descriptor half is on
     // vsup now (vsup.parts.ts), because this part's LAB fan-in is full.
-    .WINC(WINC), .LADV(LADV), .LWHSL(LWHSL), .LWHSH(LWHSH), .LDADV(LDADV),
+    .WINC(WINC), .VINC(VINC), .LWHSL(LWHSL), .LWHSH(LWHSH),
     .MC0(MCa0),.MC1(MCa1),.MC2(MCa2),.MC3(MCa3),.MC4(MCa4),.MC5(MCa5),.MC6(MCa6),
     .MAPA0(MAPA0),.MAPA1(MAPA1),
     .SA2(SA2),.SA3(SA3),.SA4(SA4),.SA5(SA5),.SA6(SA6),.SA7(SA7),
@@ -248,7 +259,10 @@ module video_card (
     .RP0(RP0), .RP1(RP1), .WSTBV(WSTBV), .RETIRE(RETIRE),
     .D0(DBUS[0]),.D1(DBUS[1]),.D2(DBUS[2]),.D3(DBUS[3]),
     .D4(DBUS[4]),.D5(DBUS[5]),.D6(DBUS[6]),.D7(DBUS[7]),
-    .LGRANT(LGRANT), .HLOAD(HLOAD),
+    .SGRANT(SGRANT), .LGRANT(LGRANT), .HLOAD(HLOAD), .VRAMSEL(VRAMSEL),
+    // 11's readable VRAM
+    .RDVALID(RDVALID), .RDCK(RDCK), .RDOE(RDOE), .RPQ(RPQ), .RSTART(RSTART), .VINC(VINC),
+    .VDSEL(VDSEL),
     // rfa's half
     .WSTB(WSTB_REG), .WCTRL(WCTRL), .VSTATWR(VSTATWR),
     .RA0(RA[0]),.RA1(RA[1]),.RA2(RA[2]),.RA3(RA[3]),.RA4(RA[4]),
@@ -262,7 +276,7 @@ module video_card (
     // offset for vctrl's copy of HSCROLL[1:0], and two decodes of one address
     // are cheaper than the pin that would carry one of them. They are separate
     // nets on the board and the testbench asserts they never disagree.
-    .LDHS(VS_LDHS), .HS0(PX_HS0), .HS1(PX_HS1),
+    .LDHS(VS_LDHS), .LDADV(LDADV), .HS0(PX_HS0), .HS1(PX_HS1),
     .OEA0(OEA0), .OEA1(OEA1), .OEA2(OEA2),
     .OEB0(OEB0), .OEB1(OEB1), .OEB2(OEB2),
     // 10.3's descriptor decode, whole - and 10.3.1's deferred GO
@@ -384,8 +398,11 @@ module video_card (
 
   // The four '153: a 4:1 mux on MUXSEL, which is the dot phase plus HSCROLL[1:0].
   wire [1:0] sel = {MUXSEL1, MUXSEL0};
-  assign PIXEL = DISPEN ? (sel == 2'd0 ? l0 : sel == 2'd1 ? l1 :
-                           sel == 2'd2 ? l2 : l3) : 8'h00;
+  // No DISPEN term here since 2026-09-11. The board has no gate on the mux
+  // output, and graphics.md 9.2 rejects forcing index 0 because entry 0 is
+  // programmable: CTRL b7 acts through BLANKD, on the '273s' /MR, below.
+  assign PIXEL = sel == 2'd0 ? l0 : sel == 2'd1 ? l1 :
+                 sel == 2'd2 ? l2 : l3;
 
   // The board has no wire on which both ranks drive: a '574 output enable is
   // hard, not open-drain, so a moment with both asserted is a fight and a
@@ -475,7 +492,9 @@ module video_card (
   reg [15:0] lut [0:255];
   always @(posedge DOTCLK) if (PWE) lut[lut_a] <= {pdath, pdatl};
 
-  // The two post-LUT 74AHCT273. 9.2: /MR is BLANKD - the DELAYED blanking, so
+  // The two post-LUT 74AHCT273. 9.2: /MR is BLANKD - vctrl drives the pin LOW
+  // to blank (asserted-low, pins.check.ts), and this model is in asserted
+  // sense like every generated part. BLANKD is the DELAYED blanking, so
   // the porches are 0.000 V and the monitor's back-porch clamp has something
   // true to clamp to. Rejected alternatives are in 9.2; this is the reason the
   // part is a '273 and not a '574.
@@ -494,6 +513,18 @@ module video_card (
   // and the LUT's own data drivers stand off exactly while the '573 pair runs.
   wire pal_fight = PIXOE & PDOE;
   // verilator lint_on UNUSEDSIGNAL
+
+  // ---- 11's readable VRAM: the vread 74HC574 ------------------------------
+  // Clocked off the pixel bus at the end of the spare-access dot vsup grants
+  // it (RDCK), at WPTR's chip and address - PB is the same selection the list
+  // engine and the map latch read (see the note above PB: the model has it and
+  // the board's per-chip data path is graphics.md 19 item 34's partial board).
+  // Its /OE is RDOE, which drives D0-D7 for a VRAM read; machine.v puts it on
+  // the bus.
+  reg [7:0] vread;
+  always @(posedge DOTCLK) if (RDCK) vread <= PB;
+  assign VREAD  = vread;
+  assign RDOE_o = RDOE;
 
   // a back door for the testbenches to preload VRAM
   // verilator lint_off UNUSEDSIGNAL

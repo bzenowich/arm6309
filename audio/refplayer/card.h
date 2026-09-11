@@ -55,7 +55,7 @@ enum {
      * load path, deleted with the table itself. See the NOTE below. */
 };
 
-/* NOTE — where the volume went, and why VOL is seven bits.
+/* NOTE — where the volume went, and why VOL is the converter's code.
  *
  * audio/docs/audio.md §6.1 has specified three different volume paths, and this
  * model has implemented two of them. Worth recording, because the register map
@@ -75,14 +75,11 @@ enum {
  *      table -- and the SRAM pair, the boot upload and the $D..$F registers all
  *      go away. That is what this model implements.
  *
- * VOL stays 0..64 and the card shifts it left two to make an 8-bit attenuator
- * code (saturating at 255, so the top step is 0.4 % narrow). ⛔ ACTRL b3's raw
- * mode was RETIRED 2026-09-10 - Paula's AUDxVOL is 0-64 and nothing else, and
- * §11's own question is what this card does that Paula cannot. The shift is
- * unconditional now. The paragraph below is kept for the arithmetic; where it
- * says ACTRL_RAWVOL makes
- * VOL the 8-bit code directly, which is where a non-Paula volume curve now
- * lives: in the host's software, not in the card's SRAM.
+ * VOL is the volume converter's 8-bit code, 0..255, and the card passes it
+ * through unchanged. Paula's 0..64 lives in the replayer, which writes 4v
+ * saturated at 255 (so the top step is 0.4 % narrow) - audio.md §6.1, decided
+ * 2026-09-11. The card never had the ×4 in silicon; putting it in software
+ * costs no package and gives the converter its whole range.
  *
  * Samples are stored in card RAM as OFFSET BINARY -- the converter is
  * unsigned-coded, and the loader converts once (mod_load.c, modplayer.md §4.2).
@@ -112,9 +109,9 @@ enum {
     ST_LC2 = 0,  ST_LC1 = 1,  ST_LC0 = 2,   /* 19-bit byte address  */
     ST_LEN1 = 3, ST_LEN0 = 4,               /* length, in WORDS     */
     ST_PER1 = 5, ST_PER0 = 6,               /* period, colour clocks*/
-    ST_VOL  = 7,                            /* 0..64                */
-    ST_DAT  = 8,                            /* direct sample write  */
-    ST_ATT  = 9,                            /* b0 period, b1 volume */
+    ST_VOL  = 7,                            /* volume DAC code 0-255*/
+    ST_RSV8 = 8,                            /* reserved (was DAT)   */
+    ST_RSV9 = 9,                            /* reserved (was ATT)   */
     ST_PAN  = 10,
     ST_PTR2 = 11, ST_PTR1 = 12, ST_PTR0 = 13, /* read-only          */
     ST_CNT1 = 14, ST_CNT0 = 15                /* read-only, WORDS   */
@@ -133,8 +130,7 @@ typedef struct {
     uint32_t lc;        /* shadow location, byte address, 19 bits          */
     uint32_t len;       /* shadow length, in words                         */
     uint16_t per;
-    uint8_t  vol;       /* 0..64, Paula-exact. §6.1's ×4 is the card's    */
-    uint8_t  att;
+    uint8_t  vol;       /* volume converter code, 0..255 (§6.1)           */
     uint8_t  pan;
 
     uint32_t ptr;       /* live pointer                                    */
@@ -149,10 +145,10 @@ typedef struct {
     card_chan ch[4];
 
     uint16_t ccnt;          /* free-running colour-clock counter, §4.2     */
-    uint8_t  pre5;          /* CIA prescale, §8.2                          */
-    uint16_t ciacnt;
-    uint16_t cianext;
-    uint16_t timer;         /* reload; 0 means 65536                       */
+    uint8_t  pre5;          /* CIA prescale, §8.2 - free-running, as on U1 */
+    uint16_t tc;            /* U1's CIA count: loaded ~timer, fires at $FFFF */
+    uint16_t timer;         /* $20, committed on TIMER0 (§9.4.3)           */
+    uint8_t  timer_hi;      /* TIMER1, staged until TIMER0 arrives         */
 
     uint8_t  ctrl;
     uint8_t  intreq;

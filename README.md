@@ -107,7 +107,7 @@ count, and a measurement in place of an estimate wherever one can be taken.
 >
 > | | |
 > |---|---|
-> | ⛔ **4 promised and not built** | audio: §6.1's volume ×4, `DAT`'s CPU-fed samples, `ATT`'s attach modulation. Video: §11's readable VRAM, promised at `+$15` and **absent from the decode entirely**. ⚠ Two of the four have no register bit behind them, so no census of this shape can see them |
+> | ⭐ **0 promised and not built, as of 2026-09-11** | Video's §11 readable VRAM is built, through the VRAM window at `WPTR`, and `+$15` `VDATA` is reserved. Audio's `DAT` and `ATT` were retired (real Paula features that no ProTracker replayer writes), and its volume ×4 closed in the replayer. ⚠ The census still cannot see a feature with no register bit, which is how the ×4 hid |
 > | ⭐ **6 invented features retired** | audio `ACTRL` b2 (NTSC — §4.1 takes **one** crystal), b3 (raw 256-level volume — `paula.md`'s `AUDxVOL` is 0–64 and the word "255" appears nowhere in it), b4 (8 channels — Paula has four), b5 and `PAN` (panning); video `CHAR` and `FONTBASE` (§6.4.3's Variant B). **Every one failed the same test, and §11's own title is the test:** *what does this card do that Paula cannot* |
 > | ⭐ **8 macrocells of dead logic deleted** | six on U1, two on U2. **None was a broken feature** — the features work, which is how they were known to be redundant — and **two checks were their only consumers**, which is why they survived. A check is not a consumer |
 > | ⚠ **12 whose consumer is a board part the model lacks** | §5.2.1's eight grants among them. `check:netlist` is what should close that and `graphics.md` §19 item 34 is why it cannot yet |
@@ -117,7 +117,7 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > forced the deletions above to be recorded rather than merely made.
 >
 > **What the retirements bought, measured:** U1 **62 → 61 I/O**, and that pin is
-> the one §6.1's ×4 select needs; `vaddr` **63 → 59 I/O**, on the video part §19
+> the one earmarked for §6.1's ×4 select (not needed since 2026-09-11); `vaddr` **63 → 59 I/O**, on the video part §19
 > item 33 is blocked on. ⚠ **U2 gained nothing measurable** — two cells deleted
 > and the fitter still reports 128 of 128, because it packs the array.
 
@@ -143,9 +143,10 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > `audio.md` §7.1 specifies**: 0.98 mW into 32 Ω headphones where §7.1 calls 1–5 mW
 > comfortable and claims 15.6 mW of headroom, **0.104 mW into the 300 Ω it says it
 > drives**, a "line" output 5 dB *below* consumer line level, and a muted channel
-> bleeding at −58 dB instead of −70. Where the ×4 belongs — two `74HC157`, one
-> resistor and no raw mode, or the replayer — is a specification decision
-> (`audio.md` §16 item 40, **open**).
+> bleeding at −58 dB instead of −70. ⭐ **Closed 2026-09-11** (`audio.md` §16 item
+> 40): the card already passed all eight bits of `VOL` to the converter, so the
+> replayer writes `min(4 × volume, 255)` and no hardware changes. `modplay_tb` now
+> asserts a full-volume module reaches converter code 255.
 
 > ⭐ **The display list has a descriptor format since 2026-09-09** — `MOVE`, `WAIT`,
 > `$FF` to end (`graphics.md` §10.3.2) — and it reaches **`HSCROLL`, `HSCROLLH` and the
@@ -164,7 +165,7 @@ count, and a measurement in place of an estimate wherever one can be taken.
 | | What | Status | Start here |
 |---|---|---|---|
 | [`cpu/`](cpu/) | HD6309E on an **STM32G431CBU6**, 40-pin drop-in. One UFQFPN48 SKU for the CoCo 3 and this machine, running **byte-identical firmware on both** — the MMU is on the motherboard and so, since 2026-09-08, is the boot ROM. | **Phase 1 — timing spike written, not yet measured on silicon** | [`cpu/README.md`](cpu/README.md), [`cpu/docs/plan.md`](cpu/docs/plan.md) |
-| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, byte-granular scroll, span writer, a display list that writes the palette per scanline. **36 ICs** on a 24 cm board — 3 `ATF1508AS` and no GALs, all three fitted with JTAG. | **Specified; simulated 2026-09-09 and repaired — 36 ICs, two open items** | [`video/README.md`](video/README.md), [`video/docs/graphics.md`](video/docs/graphics.md), [`video/docs/features.md`](video/docs/features.md) |
+| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, byte-granular scroll, span writer, a display list that writes the palette per scanline. **33 ICs** on a 24 cm board — 3 `ATF1508AS` and no GALs, all three fitted (JTAG off: socketed, programmed out of circuit). | **Specified; simulated 2026-09-09 and repaired — 33 ICs since 2026-09-11, when three address latches no design clocked came off** | [`video/README.md`](video/README.md), [`video/docs/graphics.md`](video/docs/graphics.md), [`video/docs/features.md`](video/docs/features.md) |
 | [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula, **with programmable panning**, 512 KB of samples in one package and a headphone-driven jack. ⭐ **35 ICs on an 18 cm card** — **two** `ATF1508AS`, both fitted. It reached 45 when the sequencer was built and came back the same day: programmable panning given up for classic MOD's fixed LRRL, and the counter, comparator and read-back latch absorbed into U1. Whether the analogue section fits the same card is open. Host reference model **builds and passes**. | ⭐ **Both CPLDs fitted, and the sequencer exactly fills its part; the card is simulated end to end — a sample byte reaches an `AD7528` and a buffer reloads from its shadow.** The analogue half is still unmeasured | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
 | [`io/`](io/) | PS/2 keyboard and mouse — **11 ICs** of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does, and since 2026-09-09 it is a **`TL16C550C` at 115,200 baud with 16-byte FIFOs**. One 14-IC card. | **Both specified** | [`io/README.md`](io/README.md), [`io/ps2/docs/ps2.md`](io/ps2/docs/ps2.md), [`io/serial/docs/serial.md`](io/serial/docs/serial.md) |
 | [`storage/`](storage/) | SD card interface — **14 ICs**, **681 KiB/s sustained**, an SPI burst started by the bus read strobe into a block buffer the host reads as memory. ⚠ The `TFM` hazard is retired, not mitigated. | **Specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |

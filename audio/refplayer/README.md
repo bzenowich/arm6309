@@ -140,8 +140,6 @@ corrupt it.
   in [`../tools/modcompare/`](../tools/modcompare/) now reaches the tick-0 `EC0`
   and `E9x` corners, `9xx` memory, `EDx`×`EEx`, `E0x` and `E6x`×`Dxx`. It is
   still libopenmpt, not hardware.
-- **Attach modulation** (`ADKCON`) is a byte-oriented adaptation of a
-  word-oriented behaviour, and no test module exercises it.
 - **`E3x` glissando** is implemented; **`EFx` invert loop** is not, by decision
   ([`modplayer.md`](../../audio/docs/modplayer.md) §10.8).
 - **The A500 filter component values.** The topology is modelled, not measured —

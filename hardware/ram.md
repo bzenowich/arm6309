@@ -176,7 +176,7 @@ latency inside a 110 ns `t_AD` budget that has 15 ns of SRAM in it already.
 block registers is the whole 2 KB SRAM's useful content — **16 of 2048**."*
 
 **2048 locations is exactly 256 tasks × 8 blocks.** And the register that holds
-`TASK` is a `74HC574` with **one bit used and seven wired to nothing** —
+`TASK` is a `74HCT574` with **one bit used and seven wired to nothing** —
 `mainboard.circuit.tsx` `noConnect={["Q2".."Q8"]}`.
 
 So widening `TASK` from 1 bit to 8 costs **zero parts**:
@@ -356,8 +356,8 @@ rather than ranges.
 The obvious problem with a map above 2 MB is that **cards decode only
 `A0`–`A20`**, so an access at 2.5 MB looks to a card exactly like one at
 0.5 MB. Giving every card `A21`–`A24` is four backplane pins the slot does not
-have — and `vctrl` sits at **61 of 64 I/O** (`gal/cpld/vctrl.fit`), with no
-room for four more inputs.
+have. `vctrl` has the pins, at **56 of 64 I/O** (`gal/cpld/vctrl.fit`), but four more
+inputs cannot be taken on a part at 128 of 128 cells (`graphics.md` §19 item 46).
 
 **It does not have to.** `machine.md` §2 already requires every physical decode
 on every card to qualify against `/IOPAGE`, and `/IOPAGE` is **open-drain**. So
@@ -425,7 +425,7 @@ left**: 2 MB of SRAM against 4–16 MB of DRAM in four sockets, for four package
 | 4 | **30-pin SIMM socket** | ×8 or ×9, **4 MB** each — **4, 8, 12 or 16 MB**. ⚠ **not 1 MB**: §6.3.1's mux mapping does not address a 1M×8 module, and rewiring for one is a build-time choice |
 | 1 | **`GAL22V10` U9** | space decode: the four SIMM windows, and §5.3's open-drain `/IOPAGE` pull |
 | 1 | **`GAL22V10` U10** | SIMM timing — `RAS0`–`RAS3`, `CAS`, `/WE`, the mux select, refresh request and `/WAIT` |
-| 3 | **`74HC157`** | RAS/CAS address mux, 11 bits — **row is physical `A10`–`A0`, column `A21`–`A11`**, and the select is `E` itself rather than a GAL output (§6.3.1) |
+| 3 | **`74HCT157`** | RAS/CAS address mux, 11 bits — **row is physical `A10`–`A0`, column `A21`–`A11`**, and the select is `E` itself rather than a GAL output (§6.3.1) |
 | **1** | **`74HC4040`** | ⚠ **the refresh timebase, and it was on nobody's list** — §6.3.1 |
 | **+6 ICs and 4 sockets** | | **all** of the machine's memory, against 32 packages for 16 MB of SRAM |
 
@@ -780,7 +780,7 @@ see. **Zero new pins.**
 
 **Which is fortunate**, because the slot has none to give —
 [`lib/slot.ts`](lib/slot.ts) spent its last position on physical `A20` — and
-`vctrl` sits at 61 of 64 I/O, with no room for an address extension.
+`vctrl` is at 128 of 128 cells, with no room for an address extension.
 
 > **What is still true** is that the connector's own justification expired when the
 > card format changed: a 240 mm edge holds 98 positions at 0.1″ where the 100 mm

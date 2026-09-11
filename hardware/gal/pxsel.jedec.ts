@@ -58,21 +58,24 @@ const hold = (name: string, bit: number) => ({
 const cells = [
   hold("HS0", 0),
   hold("HS1", 1),
-  /* OEA(c) = c < p, with p = HS1:HS0. Active high here; the board inverts to
-   * the '574's /OE, and OEB(c) is the complement on the same net. */
-  { pin: 0, name: "OEA0", assertedLow: false, s0: 1 as const, registered: false,
+  /* OEA(c) = c < p, with p = HS1:HS0, and OEB(c) is the complement on the
+   * same net. ⛔ ASSERTED LOW since 2026-09-11: each pin is a '574's /OE and
+   * the board has no inverter (graphics.md 8.2). They were emitted active-high
+   * under a comment that said "the board inverts", which swapped every rank -
+   * a four-pixel error at every scroll but zero. pins.check.ts. */
+  { pin: 0, name: "OEA0", assertedLow: true, s0: 0 as const, registered: false,
     terms: ["HS0", "HS1"] },                    /* p != 0            */
-  { pin: 0, name: "OEA1", assertedLow: false, s0: 1 as const, registered: false,
+  { pin: 0, name: "OEA1", assertedLow: true, s0: 0 as const, registered: false,
     terms: ["HS1"] },                           /* p >= 2            */
-  { pin: 0, name: "OEA2", assertedLow: false, s0: 1 as const, registered: false,
+  { pin: 0, name: "OEA2", assertedLow: true, s0: 0 as const, registered: false,
     terms: ["HS1 & HS0"] },                     /* p == 3            */
   /* The complements, so the board needs no inverter: a '574's /OE is active
    * low and both ranks sit on one net, so the pair must never both assert. */
-  { pin: 0, name: "OEB0", assertedLow: false, s0: 1 as const, registered: false,
+  { pin: 0, name: "OEB0", assertedLow: true, s0: 0 as const, registered: false,
     terms: ["!HS1 & !HS0"] },
-  { pin: 0, name: "OEB1", assertedLow: false, s0: 1 as const, registered: false,
+  { pin: 0, name: "OEB1", assertedLow: true, s0: 0 as const, registered: false,
     terms: ["!HS1"] },
-  { pin: 0, name: "OEB2", assertedLow: false, s0: 1 as const, registered: false,
+  { pin: 0, name: "OEB2", assertedLow: true, s0: 0 as const, registered: false,
     terms: ["!HS1", "!HS0"] },
 ]
 
@@ -81,6 +84,7 @@ export const pxselDesign: Design = {
   partNo: "ARM6309-UV11",
   location: "video card - fetch-rank select (graphics.md 8.2)",
   signature: "A6309VP",
+  supersededBy: "graphics.md 10.1.7 - absorbed into vsup, the third ATF1508AS, 2026-09-09",
   clockPin: 1,
   inputs: [
     { name: "RESET", pin: 2, activeLow: true },

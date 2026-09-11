@@ -18,7 +18,7 @@ import { counterTerms } from "./jedec/counter"
 import { reduceTerms } from "./jedec/minimise"
 import type { Cell } from "./jedec/assemble"
 import {
-  PROGRAM, HOSTMAP, COMMIT, STAGED, W1, W2, W3, W4, W5, W6, type Step,
+  PROGRAM, HOSTMAP, COMMIT, STAGED, DIRECT, SEQUENCES, W1, W2, W3, W5, W6, type Step,
 } from "./aseq.micro"
 
 /* -- how a (work type, step) becomes literals ---------------------------- *
@@ -26,7 +26,7 @@ import {
  * WT is re-encoded from 10.2.3's names so that the HOST sequence is the only
  * one with WT2 set: "not a host access" is then one literal instead of four,
  * and it appears in most of the equations below. */
-export const WTC: Record<number, number> = { [W1]: 0, [W2]: 1, [W6]: 2, [W4]: 3, [W3]: 4, [W5]: 5 }
+export const WTC: Record<number, number> = { [W1]: 0, [W2]: 1, [W6]: 2, [W3]: 4, [W5]: 5 }
 /* ⛔ DERIVED, NOT DECLARED. This was a hand-maintained table of sequence
  * lengths beside a table of sequences, and on 2026-09-10 they disagreed twice
  * in one afternoon: adding steps to W2 and W6 for 16 item 36 left LAST firing
@@ -34,7 +34,7 @@ export const WTC: Record<number, number> = { [W1]: 0, [W2]: 1, [W6]: 2, [W4]: 3,
  * claim anywhere - the microprogram simply stopped part-way and the engine
  * never released. One table. */
 const LEN: Record<number, number> = Object.fromEntries(
-  [W1, W2, W3, W4, W5, W6].map((wt) => [wt, PROGRAM[wt].length]))
+  SEQUENCES.map((wt) => [wt, PROGRAM[wt].length]))
 
 const bits = (name: string, v: number, n: number) =>
   [...Array(n).keys()].map((i) => `${(v >> i) & 1 ? "" : "!"}${name}${i}`)
@@ -50,7 +50,7 @@ const onSteps = (pairs: [number, number][]): string[] =>
 /** Every (work type, step) whose Step satisfies `p`. */
 const where = (p: (s: Step) => boolean | undefined): [number, number][] => {
   const out: [number, number][] = []
-  for (const wt of [W1, W2, W3, W4, W5, W6]) {
+  for (const wt of SEQUENCES) {
     PROGRAM[wt].forEach((s, t) => { if (p(s)) out.push([wt, t]) })
   }
   return out
@@ -100,7 +100,7 @@ const engine: Cell[] = [
   })),
   { pin: 0, name: "LAST", assertedLow: false, s0: 1, registered: false,
     why: "the final step of the sequence in progress",
-    terms: onSteps(([W1, W2, W3, W4, W5, W6] as number[]).map((wt) => [wt, LEN[wt] - 1])) },
+    terms: onSteps(SEQUENCES.map((wt) => [wt, LEN[wt] - 1])) },
 
   /* 16 item 13's bounded latch is this priority order: a DMACON restart jumps
    * the queue, so LC/LEN reach PTR/CNT within two colour clocks of the enable
@@ -110,7 +110,7 @@ const engine: Cell[] = [
   { pin: 0, name: "DUEANY", assertedLow: false, s0: 1, registered: false,
     terms: [0, 1, 2, 3].map((i) => `DUE${i}`) },
   { pin: 0, name: "START", assertedLow: false, s0: 1, registered: false,
-    terms: ["WORKSLOT & !BUSY & RSTANY", "WORKSLOT & !BUSY & TDUE",
+    terms: ["WORKSLOT & !BUSY & RSTANY",
       "WORKSLOT & !BUSY & DUEANY", "WORKSLOT & !BUSY & HDUE",
       "WORKSLOT & !BUSY & VDIRTY"] },
 
@@ -131,22 +131,21 @@ const engine: Cell[] = [
     why: "W6 finished its reload, so W1 follows without releasing the engine",
     terms: onSteps([[W6, LEN[W6] - 1]]) },
   { pin: 0, name: "WT0", assertedLow: false, s0: 1, registered: true,
-    /* W1 = 000, W2 = 001, W6 = 010, W4 = 011, W3 = 100, W5 = 101. ⚠ The host
+    /* W1 = 000, W2 = 001, W6 = 010, W3 = 100, W5 = 101; 011 was W4. ⚠ The host
      * sequence is the ONLY one with WT0 clear and WT2 set, and getting that
      * wrong put every host access on W5's microprogram - which reads volume
      * codes out of the state file and strobes converters, so nothing the host
      * wrote ever landed and every claim below the decode failed at once. */
-    terms: ["ENDNOW", "START & !RSTANY & TDUE",
-      "START & !RSTANY & !TDUE & !DUEANY & !HDUE", "WT0 & !START & !ENDNOW"] },
+    terms: ["ENDNOW",
+      "START & !RSTANY & !DUEANY & !HDUE", "WT0 & !START & !ENDNOW"] },
   /* ⚠ `!CHAIN1` IS WHAT MAKES THE HAND-OVER A HAND-OVER. W6 is 010 and W1 is
    * 000, so the only bit that has to move is this one - and it moves by having
    * its hold term stop holding, exactly as ENDNOW moves WT0 the other way. */
   { pin: 0, name: "WT1", assertedLow: false, s0: 1, registered: true,
-    terms: ["START & RSTANY", "START & !RSTANY & TDUE",
+    terms: ["START & RSTANY",
       "WT1 & !START & !ENDNOW & !CHAIN1"] },
   { pin: 0, name: "WT2", assertedLow: false, s0: 1, registered: true,
-    terms: ["START & !RSTANY & !TDUE & !DUEANY & HDUE",
-      "START & !RSTANY & !TDUE & !DUEANY & !HDUE", "WT2 & !START & !ENDNOW"] },
+    terms: ["START & !RSTANY & !DUEANY", "WT2 & !START & !ENDNOW"] },
 
   /* The channel a sequence is working on, lowest-numbered first. */
   { pin: 0, name: "WC0", assertedLow: false, s0: 1, registered: true,
@@ -163,7 +162,7 @@ const engine: Cell[] = [
   })),
   ...[0, 1, 2, 3].map((n) => ({
     pin: 0, name: `DPICK${n}`, assertedLow: false, s0: 1 as const, registered: false,
-    terms: [["START & !RSTANY & !TDUE", ...[0, 1, 2, 3].slice(0, n).map((i) => `!DUE${i}`),
+    terms: [["START & !RSTANY", ...[0, 1, 2, 3].slice(0, n).map((i) => `!DUE${i}`),
       `DUE${n}`].join(" & ")],
   })),
 ]
@@ -184,17 +183,11 @@ const sources: Cell[] = [
     pin: 0, name: `CLR${n}`, assertedLow: false, s0: 1 as const, registered: false,
     terms: [`DPICK${n}`],
   })),
-  /* The tempo timer's compare shares the comparator and lands in slot 4,
-   * where the walk has $21 - CIANEXT - on the bus. 8.2. */
-  { pin: 0, name: "TDUE", assertedLow: false, s0: 1, registered: true,
-    terms: ["QTMR & !NEQL & !NEQH & CTRL6", "TARM", "TDUE & !TACK"] },
-  { pin: 0, name: "TACK", assertedLow: false, s0: 1, registered: false,
-    terms: ["START & !RSTANY & TDUE"] },
-  /* Arming: CTRL6's 0-to-1 edge, so CIANEXT is set from the counter the first
-   * time rather than from whatever the SRAM powered up holding. */
-  { pin: 0, name: "TQ", assertedLow: false, s0: 1, registered: true, terms: ["CTRL6"] },
-  { pin: 0, name: "TARM", assertedLow: false, s0: 1, registered: false,
-    terms: ["CTRL6 & !TQ"] },
+  /* ⛔ TDUE, TACK, TQ AND TARM WERE HERE - the tempo timer's compare in slot 4
+   * and its arming edge, retired 2026-09-11 with W4 (audio.md 16 item 44). A
+   * 16-bit colour-clock deadline cannot hold a period past 65,536 colour
+   * clocks and ProTracker's default tempo is 70,937. U1 counts CIA ticks
+   * itself, reloads from $20 in slot 4, and raises 8.1 bit 4 on its own. */
 
   /* 1 requirement 6: DMACON's enable edge restarts the channel. */
   ...[0, 1, 2, 3].map((n) => ({
@@ -260,26 +253,22 @@ const host: Cell[] = [
   /* Which of 9.2's registers. */
   { pin: 0, name: "ISADATA", assertedLow: false, s0: 1, registered: false,
     terms: ["!HA3 & !HA2 & !HA1 & HA0"] },
-  /* ⛔ A WRITE TO AIDX MUST NOT BEHAVE LIKE A WRITE TO ADATA. It queues a work
-   * item now, so that 9.3's "writing it PREFETCHES that entry" is finally
-   * true - and by the time that item runs AIDX holds the NEW index, so W3
-   * step 0 left ungated would store the index value into the state file at the
-   * location the index names. Only the prefetch may run. */
-  { pin: 0, name: "ISAIDX", assertedLow: false, s0: 1, registered: false,
-    terms: ["!HA3 & !HA2 & !HA1 & !HA0"] },
+  /* ⛔ ISAIDX WAS HERE, and it is how 16 item 44 happened. W3 step 0 stored
+   * the posted byte unless the port was AIDX or SDATA - an exclusion list, on
+   * a window with twelve ports - so every other write landed in the state file
+   * at AIDX. HWE below is the inclusion list that replaced it. */
   { pin: 0, name: "ISSDATA", assertedLow: false, s0: 1, registered: false,
     terms: ["HA3 & !HA2 & !HA1 & HA0"] },
   /* ⛔ ISSPTR AND ISTIMER WERE HERE AND NOTHING READ THEM - deleted 2026-09-10,
-   * audio.md 16 item 42. They decoded the SPTR ($6-$8) and TIMER ($B-$C) groups
-   * out of HA, and the writes to both of those groups WORK - modplay_tb uploads
-   * a module's samples through SPTR and takes every one of its hundred ticks
-   * from TIMER - so they were a second decode of a path HW0/HW1/HW2 already
-   * decode off HA directly, not a dead end.
-   *
-   * ⭐ TWO CELLS BACK ON A PART AT 128 OF 128, which is the only reason this is
-   * worth doing rather than merely tidy: U2 is the part 11.3's attach chain has
-   * to fit on, and a one-literal change to CVBUSY could not be placed on it
-   * this afternoon. check:reach is what found them. */
+   * audio.md 16 item 42, on the reading that the SPTR and TIMER writes worked
+   * without them. THEY DID NOT (16 item 44): HW/HL decoded AIDX only, so SPTR
+   * uploads worked because SPTR was 0 from reset, and TIMER never left $25.
+   * The decodes were read by nothing because the routing that should have
+   * read them was never built. HGBL is that decode now, captured with HA. */
+  { pin: 0, name: "HGBL", assertedLow: false, s0: 1, registered: true,
+    why: "9.2: the access is SPTR or TIMER, a port that stores into a global word",
+    terms: [...reduceTerms(Object.keys(DIRECT).map((o) => bits("A", Number(o), 4)))
+      .map((t) => `HSTB & ${t.join(" & ")}`), "HGBL & !HSTB"] },
 
   /* 9.3's index. ⛔ IT CANNOT LIVE IN THE STATE FILE, which is what 9.5 said
    * it did - "at a fixed address the sequencer knows, which is what breaks the
@@ -302,39 +291,58 @@ const host: Cell[] = [
   })),
 ]
 
-/* The (word, lane) a host byte lands on, decoded from AIDX[3:0]. Registered,
+/* The (word, lane) a host byte lands on, decoded from AIDX[3:0] - or, for the
+ * two direct-window ports that store (SPTR, TIMER), from HA. Registered,
  * because these feed the address and the write enables and a combinational
- * copy would multiply every one of those equations by eight terms. */
+ * copy would multiply every one of those equations by eight terms.
+ *
+ * ⚠ `HGBL` IS A LITERAL IN THEIR NEXT STATE, AND IT CAN BE: it loads on the
+ * same HSTB edge as HA and AIDX, so these still follow the access one slot
+ * later, which is what W3 step 0 has always relied on. */
 const mapBit = (f: (e: typeof HOSTMAP[0]) => boolean) =>
   reduceTerms(HOSTMAP.flatMap((e, off) => f(e) ? [bits("AIDX", off, 4)] : []))
     .map((t) => t.join(" & "))
+const directBit = (f: (e: typeof DIRECT[number]) => boolean) =>
+  reduceTerms(Object.entries(DIRECT).flatMap(([o, e]) => f(e) ? [bits("HA", Number(o), 4)] : []))
+    .map((t) => `HGBL & ${t.join(" & ")}`)
+/** ISADATA's own term: ADATA is the port whose byte AIDX places */
+const ONADATA = bits("HA", 1, 4).join(" & ")
 const hostmap: Cell[] = [
   ...[0, 1, 2].map((b) => ({
     pin: 0, name: `HW${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: mapBit((e) => ((e.w >> b) & 1) === 1),
+    terms: [...mapBit((e) => ((e.w >> b) & 1) === 1).map((t) => `!HGBL & ${t}`),
+      ...directBit((e) => ((e.g >> b) & 1) === 1)],
   })),
   ...[0, 1].map((b) => ({
     pin: 0, name: `HL${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: mapBit((e) => ((e.lane >> b) & 1) === 1),
+    terms: [...mapBit((e) => ((e.lane >> b) & 1) === 1).map((t) => `!HGBL & ${t}`),
+      ...directBit((e) => ((e.lane >> b) & 1) === 1)],
   })),
-  { pin: 0, name: "HRO", assertedLow: false, s0: 1, registered: true,
-    why: "9.3: PTR and CNT are read-only",
-    terms: mapBit((e) => e.ro === true) },
+  /* ⭐ 16 item 44: AN INCLUSION LIST. W3 step 0 stores a byte for ADATA at a
+   * writable offset, SPTR and TIMER - and for nothing else on the window. */
+  { pin: 0, name: "HWE", assertedLow: false, s0: 1, registered: true,
+    why: "9.2/9.3: this port stores its byte - ADATA (PTR and CNT are read-only), SPTR, TIMER",
+    terms: ["HGBL", ...mapBit((e) => e.ro !== true).map((t) => `${ONADATA} & ${t}`)] },
   { pin: 0, name: "HSTAGE", assertedLow: false, s0: 1, registered: true,
     why: "9.4.3: a byte of a multi-byte field goes to the shadow, not to the field",
-    terms: reduceTerms([...STAGED].map((off) => bits("AIDX", off, 4)))
-      .map((t) => t.join(" & ")) },
+    terms: [...reduceTerms([...STAGED].map((off) => bits("AIDX", off, 4)))
+      .map((t) => t.join(" & ")), "HGBL"] },
+  /* ⛔ AND ONLY THOSE PORTS COMMIT. HCOMMIT decoded AIDX alone, so an ACTRL
+   * write with AIDX on a channel's PER low byte copied the shadow into PER. */
   { pin: 0, name: "HCOMMIT", assertedLow: false, s0: 1, registered: true,
     why: "9.4.3: this byte is a field's last, so the shadow lands in one write",
-    terms: reduceTerms(Object.keys(COMMIT).map((k) => bits("AIDX", Number(k), 4)))
-      .map((t) => t.join(" & ")) },
+    terms: [...reduceTerms(Object.keys(COMMIT).map((k) => bits("AIDX", Number(k), 4)))
+      .map((t) => `${ONADATA} & ${t.join(" & ")}`),
+      ...directBit((e) => e.commit === true)] },
   /* ⭐ CW0-2 AND CL2 ARE GONE, AND THEY COST NOTHING TO DELETE. For every
    * offset that commits, 9.4.3's commit word is the SAME word 9.3's byte map
    * already puts that offset on - LC commits into w3 and its bytes live in
    * w3, LEN into w5, PER into w4 - so `CW` was a second decode of AIDX
    * computing what `HW` had already computed. And CL2, "only LC's commit
    * reaches lane 2", is `HCOMMIT & HW1`: of the three committing offsets, only
-   * LC's has bit 1 of its word set (3 = 011 against 5 = 101 and 4 = 100).
+   * LC's has bit 1 of its word set (3 = 011 against 5 = 101 and 4 = 100). ⭐ And
+   * of the two direct commits only SPTR's, the other 19-bit field: $22 = 010
+   * against TIMER's $20 = 000.
    *
    * Four registered macrocells, deleted, with no package and no pin behind
    * them - which is what paid for HM0/HM1 below. `checkCommitWord` in
@@ -349,7 +357,7 @@ const hostmap: Cell[] = [
 
 const NOHOST = (p: (s: Step) => boolean | undefined): [number, number][] => {
   const out: [number, number][] = []
-  for (const wt of [W1, W2, W4, W5, W6]) PROGRAM[wt].forEach((s, t) => { if (p(s)) out.push([wt, t]) })
+  for (const wt of [W1, W2, W5, W6]) PROGRAM[wt].forEach((s, t) => { if (p(s)) out.push([wt, t]) })
   return out
 }
 const on = (p: (s: Step) => boolean | undefined) => onSteps(NOHOST(p))
@@ -360,14 +368,15 @@ const w3 = (t: number, extra?: string) =>
 /* -- the state-file address --------------------------------------------- *
  *
  * Walk slots 0-3 read channel {S1,S0} word 0 - the 24 bits 3.3 packs so that
- * the compare needs ONE access. Slot 4 reads $21, the timer's CIANEXT, against
- * the same comparator. Slots 5-7 are the microprogram's. */
+ * the compare needs ONE access. Slot 4 reads $20, TIMER, which U1's tempo
+ * counter reloads from (8.2). Slots 5-7 are the microprogram's. */
 const GLOBALSTEPS = NOHOST((s) => s.g !== undefined)
 const addr: Cell[] = [
   { pin: 0, name: "GBL", assertedLow: false, s0: 1, registered: false,
     why: "this access is one of the six words at $20",
     terms: ["QTMR", ...onSteps(GLOBALSTEPS), w3(1), w3(3), w3(4),
-      w3(0, "HSTAGE")] },
+      /* ⭐ 16 item 44: SPTR and TIMER commit to $22 and $20 */
+      w3(0, "HSTAGE"), w3(2, "HGBL")] },
   { pin: 0, name: "SFA5", assertedLow: false, s0: 1, registered: false, terms: ["GBL"] },
   /* ⭐ THE STATE FILE'S OUTPUT ENABLE IS A PIN, and it earns its place twice.
    * It keeps the file off the bus on every write, and it is how ACTRL b5 = 0
@@ -390,12 +399,13 @@ const addr: Cell[] = [
   ...[0, 1, 2].map((b) => ({
     pin: 0, name: `SFA${b}`, assertedLow: false, s0: 1 as const, registered: false,
     terms: [
-      /* slot 4 is $21 */
-      ...(b === 0 ? ["QTMR"] : []),
+      /* slot 4 is $20, so it sets no bit here */
       /* the table's own words */
       ...onSteps(NOHOST((s) => s.w !== undefined && ((s.w >> b) & 1) === 1)),
       ...onSteps(NOHOST((s) => s.g !== undefined && ((s.g >> b) & 1) === 1)),
-      /* W3: the shadow at $25, SPTR at $22, or the host's own byte */
+      /* W3: the shadow at $25, SPTR at $22, or the host's own byte - and
+       * at step 2 the commit's target, which HW names for SPTR and TIMER
+       * too: $22 and $20, with GBL */
       ...(((5 >> b) & 1) === 1 ? [w3(0, "HSTAGE"), w3(1)] : []),
       ...(((2 >> b) & 1) === 1 ? [w3(3), w3(4)] : []),
       w3(0, `!HSTAGE & HW${b}`), w3(5, `HW${b}`), w3(2, `HW${b}`),
@@ -416,10 +426,10 @@ const lanes: Cell[] = [0, 1, 2].map((l) => ({
   pin: 0, name: `SFWE${l}`, assertedLow: false, s0: 1 as const, registered: false,
   terms: [
     ...on((s) => s.wr?.includes(l)),
-    /* W3 step 0: the host's byte, at the lane 9.3 puts it on - and never at a
-     * read-only offset, which is what makes PTR and CNT read-only. */
-    w3(0, `!HRW & !HRO & !ISAIDX & !ISSDATA & ${bits("HL", l, 2).join(" & ")}`),
-    /* W3 step 2: 9.4.3's commit. Lane 2 only for LC, which is the 19-bit one. */
+    /* W3 step 0: the host's byte, at the lane 9.3 puts it on - and only for
+     * a port that stores one (HWE: ADATA at a writable offset, SPTR, TIMER). */
+    w3(0, `!HRW & HWE & ${bits("HL", l, 2).join(" & ")}`),
+    /* W3 step 2: 9.4.3's commit. Lane 2 only for LC and SPTR, the 19-bit ones. */
     ...(l < 2 ? [w3(2, "HCOMMIT & !HRW")] : [w3(2, "HCOMMIT & !HRW & HW1")]),
     /* W3 step 4: SPTR's post-increment. */
     w3(4, "ISSDATA"),
@@ -432,9 +442,9 @@ const alu: Cell[] = [
     terms: gated([...on((s) => s.alat), w3(1, "HCOMMIT & !HRW"), w3(3, "ISSDATA")]) },
   { pin: 0, name: "BLATCK", assertedLow: false, s0: 1, registered: false,
     terms: gated(on((s) => s.blat)) },
-  { pin: 0, name: "BLATOE", assertedLow: false, s0: 1, registered: false,
+  { pin: 0, name: "BLATOE", assertedLow: true, s0: 0, registered: false,
     terms: on((s) => s.b === "blat") },
-  { pin: 0, name: "ONESOE", assertedLow: false, s0: 1, registered: false,
+  { pin: 0, name: "ONESOE", assertedLow: true, s0: 0, registered: false,
     why: "B = $FFFF, so A - 1 is A + $FFFF and the card has no inverter",
     terms: on((s) => s.b === "ones") },
   /* The free-running counter drives the shared B bus during the walk, because
@@ -448,17 +458,23 @@ const alu: Cell[] = [
     terms: on((s) => s.count === true) },
   { pin: 0, name: "ACIN", assertedLow: false, s0: 1, registered: false,
     terms: [...on((s) => s.cin), w3(4, "ISSDATA")] },
-  { pin: 0, name: "SUMOE", assertedLow: false, s0: 1, registered: false,
+  { pin: 0, name: "SUMOE", assertedLow: true, s0: 0, registered: false,
     terms: [...on((s) => s.sum), w3(2, "HCOMMIT & !HRW"), w3(4, "ISSDATA")] },
 ]
 
+/* ⛔ BLATOE, ONESOE, SUMOE, SROE, SRWE, SBOE AND PWOE ARE ASSERTED LOW since
+ * 2026-09-11. Each is a '574 or '244 /OE, or the sample RAM's /OE or /WE
+ * (10.2.2), and 10.2.2 counts no inverter - SFOE, CSSL and CSV already had it
+ * right, these seven were emitted active-high. The latch CLOCKS (ALATCK,
+ * BLATCK, PWCK, PFCK) are edges and stay as they are. pins.check.ts. */
+
 /* -- the sample RAM, and the byte that becomes PEND ---------------------- */
 const sample: Cell[] = [
-  { pin: 0, name: "SROE", assertedLow: false, s0: 1, registered: false,
+  { pin: 0, name: "SROE", assertedLow: true, s0: 0, registered: false,
     terms: [...on((s) => s.srd), w3(3, "ISSDATA & HRW")] },
-  { pin: 0, name: "SRWE", assertedLow: false, s0: 1, registered: false,
+  { pin: 0, name: "SRWE", assertedLow: true, s0: 0, registered: false,
     terms: [w3(3, "ISSDATA & !HRW")] },
-  { pin: 0, name: "SBOE", assertedLow: false, s0: 1, registered: false,
+  { pin: 0, name: "SBOE", assertedLow: true, s0: 0, registered: false,
     why: "the fetched byte drives the PEND lane while word 0 is written",
     terms: on((s) => s.sbo) },
 ]
@@ -539,8 +555,8 @@ const port: Cell[] = [
   { pin: 0, name: "PWCK", assertedLow: false, s0: 1, registered: false,
     why: "the posted-write latch takes the host's byte on the synchronised edge",
     terms: gated(["HSTB & !RW"]) },
-  { pin: 0, name: "PWOE", assertedLow: false, s0: 1, registered: false,
-    terms: [...on((s) => s.pw), w3(0, "!HRW & !ISAIDX & !ISSDATA"), w3(3, "ISSDATA & !HRW")] },
+  { pin: 0, name: "PWOE", assertedLow: true, s0: 0, registered: false,
+    terms: [...on((s) => s.pw), w3(0, "!HRW & HWE"), w3(3, "ISSDATA & !HRW")] },
   /* ⚠ NOT SLOT-GATED, and the reason is the whole of why gating exists. Every
    * other latch clock here drives a '574 outside, which needs its rising edge
    * in the middle of the slot - after the address has settled. This one drives
@@ -549,7 +565,9 @@ const port: Cell[] = [
    * gate that makes an external latch correct makes an internal one never
    * capture at all. It read back zero for every byte on the card. */
   { pin: 0, name: "PFCK", assertedLow: false, s0: 1, registered: false,
-    terms: [w3(5), w3(3, "ISSDATA & HRW")] },
+    /* ⚠ `!HGBL`: after SPTR or TIMER, HW names $22 or $20, and the prefetch
+     * must keep the byte AIDX names rather than take a pointer's. */
+    terms: [w3(5, "!HGBL"), w3(3, "ISSDATA & HRW")] },
   /* ⭐ THE PREFETCH LATCHES WENT TO U1 on 2026-09-09, with the counter and the
    * comparator - three '574s and their three output enables for two pins.
    * What is left here is when to capture (PFCK) and which of the state file's
@@ -586,178 +604,127 @@ const port: Cell[] = [
     terms: ["PFCK", "PFVALID & !AIDXLD & !AINC"] },
 ]
 
-/* -- 6.2's converter windows, which are the slot phase and nothing else --- *
+/* -- 6.2's converter writes: frame parity, a registered strobe per side ---- *
  *
- * A channel's PEND is on the read bus in its own walk slot; its port register
- * captures it there, and the AD7528 is written four slots later - 6.2's "one
- * frame behind the compare". The four port registers' clocks and their output
- * enables are a 74HC139 on the board decoding S2..S0, so none of that costs a
- * pin here. What DOES cost pins is the chip select and the write strobe, and
- * the write strobe is gated by whether the channel actually hit - which is
- * 3.2's 28x cut in switching beside the analogue section, and the only reason
- * it survives. */
+ * ⛔ audio.md 16 item 43. The AD7528's latch is TRANSPARENT while /CS is low,
+ * and its DAC A/B select chooses which of the package's two latches that is.
+ * So the select must not move while any /CS is low, the port must be valid
+ * 90 ns before /CS rises, and /CS must be low for 100 ns. The half-frame design
+ * this replaces moved the select, the port and the strobe on the same slot
+ * edge every four slots and held the strobe for one or two - and no slot
+ * arrangement of two writes per package per FRAME has room for a guard.
+ *
+ * ⭐ SO A PACKAGE GETS ONE WRITE PER FRAME, and the frame's parity says which
+ * half. S3 is U1's fourth slot-counter bit: it is the DAC A/B select for all
+ * four packages, the /OE of port registers 0 and 1, and - as OEB, its registered
+ * complement - the /OE of 3 and 2. Nothing else ever moves those three.
+ *
+ *   slot 0   S3 and the port switch
+ *   slot 1   the strobe decision is made here, one slot after the switch
+ *   2-4      /CS low, 106 ns; captures on the 4|5 edge
+ *   5-7      nothing moves the select for three more slots, and the port
+ *            registers may be reloaded, because no strobe is low
+ *
+ * ⚠ AND THE STROBE IS PER SIDE. A write to channel 0 must not also strobe
+ * channel 1's DAC with whatever its register holds, which is the second half
+ * of item 43: port register 1 can hold a VOLUME code (W5 borrows it), and a
+ * shared strobe wrote it into channel 1's SAMPLE converter. Left is channels 0
+ * and 3, right is 1 and 2, as 6.2 wires the summing nodes. Volume writes load
+ * all four registers at once, so both volume packages share one strobe. */
+const at = (n: number) =>
+  `${n & 4 ? "" : "!"}S2 & ${n & 2 ? "" : "!"}S1 & ${n & 1 ? "" : "!"}S0`
+/** DAC A (port registers 0 and 1) writes in frames with S3 low, DAC B (3, 2) high */
+const halfOf = (n: number) => (n === 0 || n === 1 ? "!S3" : "S3")
+const otherHalf = (n: number) => (n === 0 || n === 1 ? "S3" : "!S3")
+/** the strobe window: set on slot 1, held through slots 2 and 3, so low 2-4 */
+const window = (name: string, arms: string[]) =>
+  [...arms.map((a) => `${at(1)} & ${a}`), `${name} & !S2 & S1`]
+
 const conv: Cell[] = [
-  /* Channel n's port register captured PEND in walk slot n; registers 0 and 1
-   * drive their packages' ports in slots 4-7, registers 3 and 2 in slots 0-3,
-   * so a frame's two halves are DAC A and DAC B of the same two packages.
-   * THREE chip selects cover six packages, because a pair's left and right are
-   * always written together out of two different port registers - which is
-   * what deletes 10.2.6's 74HC138 lever before it was pulled. */
-  { pin: 0, name: "CVBUSY", assertedLow: false, s0: 1, registered: false,
-    terms: ["RUN & WT2 & !WT1 & WT0"] },
-  { pin: 0, name: "CVB", assertedLow: false, s0: 1, registered: false,
-    why: "W5's second half: port registers 3 and 2, DAC B",
-    terms: onSteps(NOHOST((s) => s.cvb === true)) },
-  { pin: 0, name: "CVOEA", assertedLow: false, s0: 1, registered: false,
-    terms: ["!QCHAN & !CVBUSY", "CVBUSY & !CVB"] },
-  /* ⚠ CVOEB AND CVAB ARE NOT PINS. CVOEA's complement is exactly "registers 3
-   * and 2 drive", and the AD7528's DAC A/B select is the same bit again, so
-   * the board takes one output and one inverter where the obvious enumeration
-   * charged three pins. */
-  /* "this channel's PEND changed in the frame just gone". W1 step 4 is the
-   * write that changes it. Gating the strobe on it is 3.2's 28x cut in
-   * switching next to the analogue section, and the whole reason the converter
-   * is written on events rather than on colour clocks. */
+  /* "this channel's port register holds a byte its converter has not had".
+   * Set by the write that loads it, cleared on the slot where the strobe for
+   * its half is decided - the strobe cell has taken it by then.
+   * ⚠ Clearing on the strobe instead (`WROTE & !CSSL`) is two product terms
+   * rather than four and was fitted: it took peak LAB fan-in from 38 to 39 and
+   * the part's product terms from 465 to 471. A switch matrix counts signals,
+   * and the strobe is one more (16 item 34). */
   ...[0, 1, 2, 3].map((n) => ({
     pin: 0, name: `WROTE${n}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [...onSteps(NOHOST((s) => s.pend === true))
       .map((t) => `${t} & ${bits("WC", n, 2).join(" & ")}`),
-      `WROTE${n} & !${n < 2 ? "S2" : "QCHAN"} `.trim(),
-      `WROTE${n} & !S1`, `WROTE${n} & !S0`],
+      `WROTE${n} & S2`, `WROTE${n} & S1`, `WROTE${n} & !S0`, `WROTE${n} & ${otherHalf(n)}`],
   })),
-  { pin: 0, name: "CVCSS", assertedLow: false, s0: 1, registered: false,
-    why: "6.2: the two sample packages, in the half-frame after the hit",
-    terms: ["!QCHAN & !CVBUSY & WROTE0", "!QCHAN & !CVBUSY & WROTE1",
-      "QCHAN & !CVBUSY & WROTE2", "QCHAN & !CVBUSY & WROTE3"] },
-  { pin: 0, name: "CVCSV", assertedLow: false, s0: 1, registered: false,
-    terms: onSteps(NOHOST((s) => s.cvstr === "vol")) },
-  /* The port registers' load: the walk in slots 0-3, W5 out of a work slot.
-   * W5 has to suppress the walk's load while it runs, or the walk would put
-   * PEND back into a register W5 has just filled with a volume code. */
-  /* ⭐ 10.2.6'S LEVER, PULLED, AND IT IS THE ONLY ONE. Six converter control
-   * lines - four port-register clocks and three chip selects - are mutually
-   * exclusive: a step that loads a register never strobes a package. So they
-   * are ONE 3-bit code through a 74HC138, whose eight outputs are exactly
-   * idle, four clocks and three selects, with nothing left over.
-   *
-   *   0  idle          5  /CS on the two sample packages   (#1, #3)
-   *   1  clock reg 0   6  /CS on the two volume packages   (#2, #4)
-   *   2  clock reg 1   7  /CS on the two pan packages      (#5, #6)
-   *   3  clock reg 2
-   *   4  clock reg 3
-   *
-   * -6 pins for +0 ICs, because the 74HC139 the port-register clocks were
-   * going to need is the package this replaces. And the AD7528's /WR is tied
-   * low: its latch is transparent while CS and WR are both low and captures on
-   * the rising edge of either, so /CS alone is the strobe - one more pin that
-   * turns out not to be one. */
+  { pin: 0, name: "CSSL", assertedLow: true, s0: 0, registered: true,
+    why: "6.2: /CS of the LEFT sample package - channel 0 in DAC A frames, 3 in DAC B",
+    terms: window("CSSL", ["!S3 & WROTE0", "S3 & WROTE3"]) },
+  { pin: 0, name: "CSSR", assertedLow: true, s0: 0, registered: true,
+    why: "6.2: /CS of the RIGHT sample package - channel 1 in DAC A frames, 2 in DAC B",
+    terms: window("CSSR", ["!S3 & WROTE1", "S3 & WROTE2"]) },
+  /* W5's two arms, taken the same way as WROTE. */
+  { pin: 0, name: "VPA", assertedLow: false, s0: 1, registered: true,
+    terms: [...onSteps(NOHOST((s) => s.varm === "a")),
+      "VPA & S2", "VPA & S1", "VPA & !S0", "VPA & S3"] },
+  { pin: 0, name: "VPB", assertedLow: false, s0: 1, registered: true,
+    terms: [...onSteps(NOHOST((s) => s.varm === "b")),
+      "VPB & S2", "VPB & S1", "VPB & !S0", "VPB & !S3"] },
+  { pin: 0, name: "CSV", assertedLow: true, s0: 0, registered: true,
+    why: "6.2: /CS of BOTH volume packages - W5 loads all four registers",
+    terms: window("CSV", ["!S3 & VPA", "S3 & VPB"]) },
+
+  /* The port registers' load, and the 74HC138 that 10.2.6's lever put on it:
+   * codes 1-4 clock registers 0-3 and nothing else. ⭐ Codes 5-7 were the three
+   * chip selects, and a decoder output is exactly where a multi-bit code change
+   * glitches; the strobes are registered pins now. */
   ...[0, 1, 2, 3].map((n) => ({
     pin: 0, name: `CVLD${n}`, assertedLow: false, s0: 1 as const, registered: false,
-    /* ⛔ THE WALK'S LOAD IS GONE - 2026-09-10, audio.md 16 item 41, and it was
-     * the thing that put a SAMPLE byte into the VOLUME converter.
-     *
-     * It was `QCHAN & !CVBUSY & <S == n>`: reload this channel's port register
-     * with `PEND` in its own walk slot, every frame. Two things make it both
-     * harmful and unnecessary.
-     *
-     * ⚠ HARMFUL, because W5 is six steps and a frame has three work slots, so
-     * a volume pass spans two frames and the walk runs inside it - between a
-     * load and the strobe that captures it. `!CVBUSY` did not stop that:
-     * `CVBUSY` is `RUN & <W5>` and `RUN` is `WORKSLOT & BUSY`, so it is true
-     * only in a work slot, and the walk runs in slots 0-3. The literal
-     * suppressed the walk exactly in the slots the walk does not run in.
-     * Measured:
-     *
-     *   cc=393227 S=111 code=1 SD=3f   W5 step 0: CVR0 <= VOL ($3F)
-     *   cc=393227 S=000 code=1 SD=d0   the WALK:  CVR0 <= PEND ($D0)
-     *   cc=393228 S=110 code=6         W5 step 2: strobe -> the VOLUME DAC
-     *                                  is given $D0, a sample byte
-     *
-     * ⭐ UNNECESSARY, because item 39(b) below already loads the register AT
-     * THE `PEND` WRITE, and that item's own text says what that makes this
-     * one: "it makes the walk's load a REFRESH WITH THE SAME VALUE rather than
-     * the only path". A refresh of a register nothing else may touch is not
-     * worth a term; a refresh that lands in the middle of W5 is a defect.
-     *
-     * ⚠ AND NOTHING IS LEFT UNPRIMED. 6.2's strobe fires on `WROTE`, which is
-     * set by the same write that now does the loading, so a converter is only
-     * ever strobed after the register has been filled by that write - which is
-     * strictly what item 39(b) built.
-     *
-     * ⭐ IT ALSO GIVES CELLS BACK, and U2 needs them: the part is at 128 of 128
-     * logic cells, and the alternative repair - qualifying `START` so a W5
-     * begins only on slot 7, which aligns each (load, load, strobe) triple
-     * inside one frame - costs two literals and does not fit. "Design does not
-     * fit", measured, twice, two ways of writing it. */
+    /* ⭐ 16 ITEM 39(b): A SAMPLE LOADS AT THE `PEND` WRITE, which is the one step
+     * that has the byte on SD[23:16] - `sbo` puts it there for the state file.
+     * The walk does not load at all (16 item 41). W5's steps load the volume. */
     terms: [
-      /* ⭐ 16 ITEM 39(b): THE PORT REGISTER ALSO LOADS AT THE `PEND` WRITE
-       * ITSELF, and that is the whole repair.
-       *
-       * The walk's load above is one frame behind the write - it copies `PEND`
-       * off the read bus in the channel's own walk slot - while `WROTE`, which
-       * arms the strobe, is set one slot AFTER the write. So the strobe window
-       * opened on a port register that had not been reloaded yet: measured, a
-       * `PEND` write in slot 5 armed `WROTE0` in slot 6 and `CVCSS` fired in
-       * slots 6 and 7 with the register still holding the PREVIOUS sample.
-       * The new byte arrived at slot 0 of the next frame, by which time
-       * `WROTE0` had cleared, and it was never strobed at all - so the first
-       * sample of every note went to `PEND` and not to the converter.
-       *
-       * ⭐ The byte is already ON THE BUS at that step: `sbo` drives the sample
-       * latch onto `SD[23:16]` so the state file can take it. Latching it into
-       * the port register at the same instant costs ONE TERM on four
-       * combinational cells - no macrocell, no pin, no package - and it makes
-       * the walk's load a refresh with the same value rather than the only
-       * path. §6.2's "one frame behind the compare" becomes "at the write",
-       * which is strictly less latency and strictly more of §3.2's claim that
-       * the converter changes on the colour clock the sample changed on.
-       *
-       * ⚠ It cannot collide with the walk: the walk loads in slots 0-3 and a
-       * work slot is 5-7, and 10.2.6's `74HC138` codes make a load and a
-       * strobe mutually exclusive by construction. */
       ...onSteps(NOHOST((st) => st.pend === true))
         .map((t) => `${t} & ${bits("WC", n, 2).join(" & ")}`),
       ...onSteps(NOHOST((s) => s.cvld === true && s.ch === n))],
   })),
   { pin: 0, name: "CVC0", assertedLow: false, s0: 1, registered: false,
-    terms: ["CVLD0", "CVLD2", "CVCSS"] },
+    terms: ["CVLD0", "CVLD2"] },
   { pin: 0, name: "CVC1", assertedLow: false, s0: 1, registered: false,
-    terms: ["CVLD1", "CVLD2", "CVCSV"] },
+    terms: ["CVLD1", "CVLD2"] },
   { pin: 0, name: "CVC2", assertedLow: false, s0: 1, registered: false,
-    terms: ["CVLD3", "CVCSS", "CVCSV"] },
-  /* A host write that lands on VOL (offset 7) or PAN (offset 10) asks for a
-   * W5. Both are cleared by the one sequence, because W5 writes all eight
-   * halves and there is no point running it twice. */
+    terms: ["CVLD3"] },
+  /* A host write that lands on VOL (offset 7) asks for a W5, which reloads all
+   * four volume converters. */
   { pin: 0, name: "VDIRTY", assertedLow: false, s0: 1, registered: true,
-    terms: [w3(0, "!HRW & !HRO & !ISAIDX & !ISSDATA & !AIDX3 & AIDX2 & AIDX1 & AIDX0"),
+    terms: [w3(0, "!HRW & ISADATA & !AIDX3 & AIDX2 & AIDX1 & AIDX0"),
       "VDIRTY & !VACK"] },
   { pin: 0, name: "VACK", assertedLow: false, s0: 1, registered: false,
-    terms: ["START & !RSTANY & !TDUE & !DUEANY & !HDUE"] },
+    terms: ["START & !RSTANY & !DUEANY & !HDUE"] },
 ]
 
 /* -- 8.1's six sources, encoded ------------------------------------------ *
  *
  * 10.2.6's third lever: a 3-bit source code rather than six lines, decoded
- * back into SET0-5 on U1. Code 7 is "nothing", which is the idle state. */
+ * back into SET0-5 on U1. Code 7 is "nothing", which is the idle state.
+ * ⚠ It carries one source per slot, and the sources it carries cannot collide
+ * except FIRE5: FIRE0-3 are ENDNOW, a work step, and there is one sequence. */
 const irq: Cell[] = [
   ...[0, 1, 2, 3].map((n) => ({
     pin: 0, name: `FIRE${n}`, assertedLow: false, s0: 1 as const, registered: false,
     why: "this channel's buffer ran out - 1 requirement 7",
     terms: [`ENDNOW & ${bits("WC", n, 2).join(" & ")}`],
   })),
-  { pin: 0, name: "FIRE4", assertedLow: false, s0: 1, registered: false,
-    terms: onSteps(NOHOST((s) => s.set === 4)) },
+  /* ⚠ Code 4, the tempo timer, is never sent: U1 raises it from its own
+   * counter (8.2). FIRE4 left with W4 on 2026-09-11. */
   { pin: 0, name: "FIRE5", assertedLow: false, s0: 1, registered: false,
     why: "8.1 bit 5: a posted write arrived while the previous had not retired",
     terms: ["HSTB & !RW & PWBUSY"] },
   { pin: 0, name: "NOFIRE", assertedLow: false, s0: 1, registered: false,
-    terms: ["!FIRE0 & !FIRE1 & !FIRE2 & !FIRE3 & !FIRE4 & !FIRE5"] },
+    terms: ["!FIRE0 & !FIRE1 & !FIRE2 & !FIRE3 & !FIRE5"] },
   { pin: 0, name: "SETA", assertedLow: false, s0: 1, registered: false,
     terms: ["FIRE1", "FIRE3", "FIRE5", "NOFIRE"] },
   { pin: 0, name: "SETB", assertedLow: false, s0: 1, registered: false,
     terms: ["FIRE2", "FIRE3", "NOFIRE"] },
   { pin: 0, name: "SETC", assertedLow: false, s0: 1, registered: false,
-    terms: ["FIRE4", "FIRE5", "NOFIRE"] },
+    terms: ["FIRE5", "NOFIRE"] },
 ]
 
 /* Slot-phase decodes, from U1's three counter bits. Taking S0-S2 rather than

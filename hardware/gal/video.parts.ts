@@ -532,62 +532,60 @@ export const tileCadence: Cell[] = [
    * covers both, and the span writer outranks the engine because a span in
    * flight cannot be interrupted. */
   { pin: 0, name: "SPNREQ", assertedLow: false, s0: 1, registered: false,
-    terms: ["SPANBUSY & SPAREWIN", "LRUN & SPAREWIN"] },
+    terms: ["SPANBUSY & SPAREWIN", "LRUN & SPAREWIN",
+      /* ⭐ AND 11's READ PREFETCH, 2026-09-11 - the fourth user of the spare
+       * access at WPTR, after the span writer, the list engine and the map.
+       * vsup's RDVALID says the read latch holds the byte WPTR names; while it
+       * does not, this asks for the access that refills it. */
+      "!RDVALID & SPAREWIN"] },
   /* One dot per slot, at the END of the spare window - the access has
    * completed by then. seqctl's RETIRE and the engine's LADV both take it,
    * which is what makes the retire rate 7.4's one byte per 158.9 ns fetch
    * slot rather than one per dot. */
   { pin: 0, name: "SPNTICK", assertedLow: false, s0: 1, registered: false,
     terms: ["!PH1 & PH0"] },
-  /* 10.3's grant. vctrl declared it external and produced no cell, so LADV,
-   * LFETCH and LMOVE - all LRUN & LGRANT - were dead on silicon and the engine
-   * re-executed descriptor byte 0 for ever. The span writer has priority: a
-   * span in flight owns the pointer they share. */
-  { pin: 0, name: "LGRANT", assertedLow: false, s0: 1, registered: false,
-    terms: ["LRUN & !SPANBUSY & SPNGRANT & SPNTICK"] },
-  /* THE CPU collides per CHIP, because its address path is its own. GMAP is the
-   * map's chip and the CPU's grant - which is 5.2.1's SRCSEL[n], the thing that
-   * would otherwise point that chip at the CPU's address - is withdrawn for it.
-   * ACPU is arbDesign's GCPU, renamed on merge (video.cpld.ts). */
-  ...[0, 1, 2, 3].map((n) => ({
-    pin: 0, name: `GMAP${n}`, assertedLow: false, s0: 1 as const, registered: false,
-    terms: [`MAPREQ & ${n & 1 ? "" : "!"}MAPA0 & ${n & 2 ? "" : "!"}MAPA1`],
-  })),
-  ...[0, 1, 2, 3].map((n) => ({
-    pin: 0, name: `GCPU${n}`, assertedLow: false, s0: 1 as const, registered: false,
-    terms: [`ACPU${n} & !GMAP${n}`],
-  })),
-
-  /* ---- and the CPU therefore has to be able to wait --------------------- *
+  /* The grant of a spare access to a requester that is NOT the span writer:
+   * the list engine or 11's read prefetch. vsup tells them apart with LRUN,
+   * which is its own register. The span writer has priority - a span in
+   * flight owns the pointer they all share.
    *
-   * A refused CPU access is a lost one unless /WAIT stretches the cycle, so the
-   * map's chip collision joins the span writer's on the backstop. It is a
-   * DIFFERENT KIND of wait and the difference matters: 7.4's is up to 40.7 us
-   * and only writes take it, this one is a single 158.9 ns slot and it has to
-   * apply to reads as well, because a read whose chip is pointed elsewhere
-   * returns the wrong byte just as surely.
+   * ⭐ IT WAS LGRANT = LRUN & !SPANBUSY & SPNGRANT & SPNTICK until 2026-09-11,
+   * and exporting the grant WITHOUT LRUN is what lets the read prefetch use it
+   * for no pin: vsup forms LGRANT = SGRANT & LRUN itself. (LGRANT was a cell
+   * vctrl declared and did not produce once already - LADV, LFETCH and LMOVE
+   * were dead on silicon and the engine re-executed descriptor byte 0 for ever.) */
+  { pin: 0, name: "SGRANT", assertedLow: false, s0: 1, registered: false,
+    terms: ["!SPANBUSY & SPNGRANT & SPNTICK"] },
+  /* ---- the CPU takes no chip, so nothing collides with it --------------- *
    *
-   * arbDesign is not touched. Its /WAIT already reads two inputs on the output
-   * enable - SPANBUSY and R/W - and both are renamed on merge to signals formed
-   * here, so the pin, the open-drain idiom and access.check.ts's assertions
-   * about them all stand:
+   * ⛔ GMAP0-3, GCPU0-3 AND MAPHOLD ARE DELETED - 2026-09-11, graphics.md 11.
+   * They were 5.2.1's per-chip CPU grant: a flat CPU read reserves the chip its
+   * physical address names, the map fetch withdraws its own chip from that
+   * reservation, and /WAIT covers the collision. None of it could work, because
+   * the CPU's physical address never reaches the framebuffer - no part has
+   * PA[18:2] and no design has 3.1.1's capture '574s - and every CPU VRAM access
+   * is at WPTR: a write retires there, and since 2026-09-11 a read is prefetched
+   * from there. The reservation was also a DEADLOCK waiting for the read path:
+   * SPNGRANT refused the spare access while the CPU read a chip whose number
+   * matched WPTR[1:0], and a read waiting on its prefetch would hold that
+   * refusal for the whole stretched cycle.
    *
-   *   oe = WAITSRC & VRAMSEL & !IOPAGE & E & !WAITRW
+   * arbDesign is not touched - it is the GAL22V10 that access.check.ts and
+   * cupl.check.ts execute. Its R/W and its two CPU address bits are renamed
+   * CPUIDLE on merge, a constant 0 here, which makes every CPU-read exclusion true:
+   * SPNGRANT is SPNREQG, GSPN[n] is SPNREQG on WPTR's chip, and GCPU (ACPU on
+   * this part) is 0 and substituted into nothing.
    *
-   * WAITSRC = SPANBUSY # MAPHOLD and WAITRW = RW & !MAPHOLD, so a map hold
-   * asserts for reads and writes alike while 7.4's span backstop keeps its
-   * !RW exactly as before. */
-  { pin: 0, name: "MAPHOLD", assertedLow: false, s0: 1, registered: false,
-    terms: [
-      "MAPREQ & !MAPA0 & !A0 & !MAPA1 & !A1",
-      "MAPREQ & MAPA0 & A0 & !MAPA1 & !A1",
-      "MAPREQ & !MAPA0 & !A0 & MAPA1 & A1",
-      "MAPREQ & MAPA0 & A0 & MAPA1 & A1",
-    ] },
+   *   oe = WAITSRC & VRAMSEL & !IOPAGE & E & !CPUIDLE
+   *
+   * so /WAIT is WAITSRC in the VRAM window: a write waits on a span in flight
+   * (7.4, the depth-1 posted latch), and a READ waits on a span in flight too -
+   * the span's retires move WPTR under it - or on a prefetch not yet valid. */
   { pin: 0, name: "WAITSRC", assertedLow: false, s0: 1, registered: false,
-    terms: ["SPANBUSY", "MAPHOLD"] },
-  { pin: 0, name: "WAITRW", assertedLow: false, s0: 1, registered: false,
-    terms: ["RW & !MAPHOLD"] },
+    terms: ["SPANBUSY", "RW & !RDVALID"] },
+  { pin: 0, name: "CPUIDLE", assertedLow: false, s0: 1, registered: false,
+    why: "arbDesign's CPU address and R/W, defeated: the CPU reserves no chip (graphics.md 11)",
+    terms: [] },
 
   /* ⚠ VARIANT B WAS DROPPED 2026-09-08 - graphics.md 6.4.3 and 10.1.6.2.
    * CHARSEL, GLYPHLD, GLYPHSH and LUTPAGE lived here, and the eight FONTBASE
@@ -659,8 +657,10 @@ export const listEngine: Cell[] = [
    * One cell, and it is the right shape: the span writer and the engine share
    * the pointer by construction (10.1.6.2) and never drive it in the same
    * slot, so they share its enable too. */
+  /* ⭐ VINC is vsup's: the list engine's LADV OR 11's read post-increment.
+   * One pin, the one LADV used to take. */
   { pin: 0, name: "WINC", assertedLow: false, s0: 1, registered: false,
-    terms: ["RETIRE", "LADV"] },
+    terms: ["RETIRE", "VINC"] },
 
   /* ⚠ AND WINC IS ALL THAT IS LEFT OF THE ENGINE ON THIS PART - 2026-09-09.
    *

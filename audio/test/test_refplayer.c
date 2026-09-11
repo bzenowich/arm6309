@@ -139,13 +139,14 @@ static void test_volume_law(void)
 
     /* audio/docs/audio.md §6.1: the volume is the CODE of a second multiplying
      * converter whose reference is the first one's output, so the product is
-     * (signed sample) x (VOL * 4, saturated at 255) and is not quantised. */
-    set_chan(&c, 0, 127, 64);
+     * (signed sample) x VOL and is not quantised. The card takes VOL verbatim;
+     * Paula's 0..64 -> 4v saturated is the replayer's (test_replayer_volume). */
+    set_chan(&c, 0, 127, 255);
     check_eq(card_chan_out(&c, 0), 127 * 255, "volume: +127 at full volume");
-    set_chan(&c, 0, -128, 64);
+    set_chan(&c, 0, -128, 255);
     check_eq(card_chan_out(&c, 0), -128 * 255, "volume: -128 at full volume");
-    set_chan(&c, 0, 127, 32);
-    check_eq(card_chan_out(&c, 0), 127 * 128, "volume: half volume is half the code");
+    set_chan(&c, 0, 127, 128);
+    check_eq(card_chan_out(&c, 0), 127 * 128, "volume: half the code is half the output");
 
     /* VOL = 0 is EXACT silence: the volume ladder passes no current at all, so
      * there is no pedestal to leave behind and no DC step at DMACON changes. */
@@ -154,28 +155,21 @@ static void test_volume_law(void)
     set_chan(&c, 0, -128, 0);
     check_eq(card_chan_out(&c, 0), 0, "volume: VOL=0 is zero for negative samples too");
 
-    /* Seven bits, because 0..64 is 65 levels -- the correction that writing
-     * this model found. Above 64 clamps rather than wrapping. */
-    set_chan(&c, 0, 127, 65);
-    check_eq(card_chan_out(&c, 0), 127 * 255, "volume: above 64 clamps rather than wrapping");
-    set_chan(&c, 0, 127, 63);
-    check(card_chan_out(&c, 0) < 127 * 255, "volume: 64 is louder than 63 (the 7th bit exists)");
-
-    /* ⛔ THIS USED TO ASSERT RAW MODE, and raw mode is retired - audio.md §16
-     * item 42, 2026-09-10. `ACTRL` b3 was "VOL is an 8-bit attenuator code" and
-     * §11's own question is what this card does that Paula cannot: Paula's
-     * AUDxVOL is 0-64 and nothing else, and the bit reached no cell on either
-     * CPLD, so the card never had the mode the model was implementing.
-     *
-     * What replaces it is the claim that the ×4 is UNCONDITIONAL - writing b3
-     * changes nothing at all, which is the regression this retirement needs. */
-    card_write(&c, A_ACTRL, ACTRL_ENABLE | ACTRL_RSVD3);
-    set_chan(&c, 0, 127, 64);
-    check_eq(card_chan_out(&c, 0), 127 * 255,
-             "ACTRL b3 is reserved: VOL 64 is still code 255 with the bit set");
-    set_chan(&c, 0, 127, 16);
+    /* All eight bits reach the converter, through the host port as well as
+     * directly: the model once masked VOL to seven bits, and a mask here would
+     * clamp full volume to code 127 - 6 dB down, and just as quiet about it. */
+    set_chan(&c, 0, 127, 0);
+    card_write(&c, A_AIDX, ST_VOL);
+    card_write(&c, A_ADATA, 0xFF);
+    check_eq(card_chan_out(&c, 0), 127 * 255, "volume: VOL $FF through the port is code 255");
+    card_write(&c, A_AIDX, ST_VOL);
+    card_write(&c, A_ADATA, 64);
     check_eq(card_chan_out(&c, 0), 127 * 64,
-             "and VOL 16 is still code 64 - the shift does not depend on b3");
+             "volume: the card does NOT multiply - VOL 64 is code 64, 12 dB down");
+
+    /* ACTRL b3 is reserved (audio.md §16 item 42) and selects nothing. */
+    card_write(&c, A_ACTRL, ACTRL_ENABLE | ACTRL_RSVD3);
+    check_eq(card_chan_out(&c, 0), 127 * 64, "ACTRL b3 is reserved: setting it changes nothing");
 }
 
 static void test_period_is_the_colour_clock(void)
@@ -274,18 +268,49 @@ static void test_tempo(void)
     uint16_t n = (uint16_t)(1773447L / 125L);
     unsigned fires = 0;
 
+    long first = -1, last = -1, bad = 0;
+
     card_reset(&c, sram, 128u * 1024u);
-    card_write(&c, A_ACTRL, (uint8_t)(ACTRL_ENABLE | ACTRL_TIMER));
+    /* TIMER before b6: §8.2's order, and the only one with a defined first period */
     card_write(&c, A_TIMER1, (uint8_t)(n >> 8));
     card_write(&c, A_TIMER0, (uint8_t)(n & 0xFFu));
     card_write(&c, A_AINTENA, (uint8_t)(0x80u | AINT_TIMER));
+    card_write(&c, A_ACTRL, (uint8_t)(ACTRL_ENABLE | ACTRL_TIMER));
 
     for (long i = 0; i < CARD_CC_PAL; i++) {         /* one second */
         card_step(&c);
-        if (c.intreq & AINT_TIMER) { fires++; card_write(&c, A_AINTREQ, AINT_TIMER); }
+        if (c.intreq & AINT_TIMER) {
+            fires++;
+            if (first < 0) { first = i; }
+            else if (i - last != 5L * n) { bad++; }
+            last = i;
+            card_write(&c, A_AINTREQ, AINT_TIMER);
+        }
     }
     check_eq(n, 14187, "tempo: BPM 125 reload is 14187");
     check(fires == 50u, "tempo: BPM 125 fires 50 times a second");
+    check(first >= 5L * n - 5L && first <= 5L * n, "tempo: the first fire is one period after b6");
+    check(bad == 0, "tempo: every period is 5 x TIMER = 70,935 colour clocks (16 item 44)");
+
+    /* A TIMER written while running takes effect at the next reload, not at
+     * the write - U1's counter, and a running CIA's latch. */
+    {
+        long w_at = -1, f1 = -1, f2 = -1;
+        card_write(&c, A_AINTREQ, AINT_TIMER);
+        for (long i = 0; i < 3L * 5L * n && f2 < 0; i++) {
+            card_step(&c);
+            if (i == 1000) {
+                w_at = i;
+                card_write(&c, A_TIMER1, 0x10u);
+                card_write(&c, A_TIMER0, 0x00u);     /* 4096 */
+            }
+            if (c.intreq & AINT_TIMER) {
+                card_write(&c, A_AINTREQ, AINT_TIMER);
+                if (w_at >= 0 && f1 < 0) { f1 = i; } else if (f1 >= 0) { f2 = i; }
+            }
+        }
+        check(f2 - f1 == 5L * 4096L, "tempo: a TIMER written while running takes the next reload");
+    }
 
     /* ACTRL b6 is the run bit. Without it an armed timer can never be stopped
      * and there is no clean "stop the music" path. */
@@ -926,6 +951,43 @@ static void test_effect_loop_and_break(void)
     mod_free(&s);
 }
 
+static void test_replayer_volume(void)
+{
+    /* audio/docs/audio.md §6.1: the REPLAYER turns Paula's 0..64 into the
+     * converter's code, 4v saturated at 255. ⛔ Nothing audible goes wrong if
+     * it does not - every channel plays 12 dB quiet, and `abcompare.py`
+     * normalises level - so the bytes the replayer puts on the bus are the
+     * claim, read back out of the card's state file. */
+    static cellspec rows[MOD_ROWS][MOD_CHANNELS];
+    card_t c; mod_song s; mod_player p;
+    static const struct { uint8_t eff, par; long code; const char *what; } cases[4] = {
+        { 0x0, 0x00, 255, "replayer: the sample's default volume 64 is written as code 255" },
+        { 0xC, 0x10,  64, "replayer: C10 (volume 16) is written as code 64" },
+        { 0xC, 0x3F, 252, "replayer: C3F (volume 63) is written as code 252" },
+        { 0xC, 0x00,   0, "replayer: C00 is written as code 0 - silence stays exact" },
+    };
+
+    memset(rows, 0, sizeof rows);
+    for (unsigned n = 0; n < 4u; n++) {
+        rows[0][n].smp = 1; rows[0][n].per = 428;
+        rows[0][n].eff = cases[n].eff; rows[0][n].par = cases[n].par;
+    }
+    run_effect_mod(rows, &c, &s, &p, 3, NULL);
+    for (unsigned n = 0; n < 4u; n++) {
+        check_eq(c.state[n * 16u + ST_VOL], cases[n].code, cases[n].what);
+    }
+    mod_free(&s);
+
+    /* A slide ends on the same table: A0F from 64 stays at the ceiling, and a
+     * slide down lands on 4v at every step, never between. */
+    memset(rows, 0, sizeof rows);
+    rows[0][0].smp = 1; rows[0][0].per = 428; rows[0][0].eff = 0xA; rows[0][0].par = 0x01;
+    run_effect_mod(rows, &c, &s, &p, 5, NULL);
+    check_eq(c.state[ST_VOL], 4L * (64 - 5),
+             "replayer: A01 over five ticks writes volume 59 as code 236");
+    mod_free(&s);
+}
+
 int main(void)
 {
     sram = calloc(CARD_SRAM_BYTES, 1);
@@ -947,6 +1009,7 @@ int main(void)
     test_effect_note_delay_repeat();
     test_effect_offset();
     test_effect_loop_and_break();
+    test_replayer_volume();
 
     free(sram);
     if (failures) { printf("%d failure(s)\n", failures); return 1; }

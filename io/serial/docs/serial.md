@@ -191,9 +191,8 @@ device of unknown provenance.
 > (÷8, 3.1469 MHz) requires a genuine 4 MHz-grade `G65SC51`**; with any 2 MHz part it is
 > out of spec by 57 %, and with a 3 MHz part it is out of spec by 5 % with no headroom
 > left for the ÷12 case's own 5 %. This matches the machine-level position — ÷8 is
-> **experimental and not guaranteed**, and this is one of three independent reasons why
-> (`machine.md` §5; the others are the video card's VRAM read-back and the real
-> HD63C09E's 333 ns `t_cyc` minimum).
+> **experimental and not guaranteed**, and this is one of two independent reasons why
+> (`machine.md` §5; the other is the real HD63C09E's 333 ns `t_cyc` minimum).
 
 **The failure mode is worse than "out of spec".** Fast-E is *software-selectable*, so
 nothing stops a program flipping the machine into it **with the serial driver live and a

@@ -31,10 +31,16 @@ const io = (o: { ldhs?: 0 | 1; lwhsl?: 0 | 1; d?: number; pb?: number }): Record
   7: ((o.pb ?? 0) & 1) as 0 | 1, 8: (((o.pb ?? 0) >> 1) & 1) as 0 | 1,
 })
 const heldP = (pins: Record<number, number>) => pins[pin("HS0")] | (pins[pin("HS1")] << 1)
+/* Each enable in ASSERTED sense - 1 is "this rank drives". The pins are the
+ * '574s' /OE and are declared asserted-low (2026-09-11), so the level is
+ * inverted through the declaration; chip 3's pair is strapped, rank A off and
+ * rank B on. pins.check.ts is what holds the declaration to the part. */
+const asserted = (name: string, pins: Record<number, number>) =>
+  pxselDesign.cells.find((c) => c.name === name)!.assertedLow ? 1 - pins[pin(name)] : pins[pin(name)]
 const oeA = (pins: Record<number, number>) =>
-  [pins[pin("OEA0")], pins[pin("OEA1")], pins[pin("OEA2")], 0]
+  [asserted("OEA0", pins), asserted("OEA1", pins), asserted("OEA2", pins), 0]
 const oeB = (pins: Record<number, number>) =>
-  [pins[pin("OEB0")], pins[pin("OEB1")], pins[pin("OEB2")], 1]
+  [asserted("OEB0", pins), asserted("OEB1", pins), asserted("OEB2", pins), 1]
 
 /* -- the two write ports, and that they cannot diverge -------------------- */
 {

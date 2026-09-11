@@ -37,6 +37,7 @@ module vsync_tb;
   // 9's palette, and 10.3.3's turnaround on the card's internal data bus.
   wire [15:0] RGB; wire [7:0] PIDX;
   wire PWE_o, PDOE_o, PIXOE_o, DBUS_FIGHT;
+  wire [7:0] VREAD; wire RDOE_o;          // graphics.md 11's vread '574
 
   video_card card (.*);
 
@@ -248,8 +249,13 @@ module vsync_tb;
      *
      * ⚠ HBLANK and VBLANK themselves are NOT delayed and must not be: VSTAT's
      * bits are what software schedules against (13.1, 12.1) and what they have
-     * to agree with is the sync. */
-    set_ctrl(8'h00); to_frame_start();
+     * to agree with is the sync.
+     *
+     * ⛔ CTRL b7 IS SET HERE since 2026-09-11: the display enable acts through
+     * BLANKD (graphics.md 9.2, video.cpld.ts), so with b7 clear BLANK is held
+     * for the whole frame - and the depth claim below passed against that
+     * constant, because a constant differs from both four and six. */
+    set_ctrl(8'h80); to_frame_start();
     begin
       bit bad = 0;
       int n = 0;
@@ -282,6 +288,23 @@ module vsync_tb;
       ok(wrong4 > 0 && wrong6 > 0,
          $sformatf("and it is five and not four or six (4 -> %0d wrong, 6 -> %0d wrong)",
                    wrong4, wrong6));
+    end
+
+    /* CTRL b7 = 0 is blank-to-black for the whole frame - the display enable
+     * has no mechanism of its own, and forcing palette index 0 is the one 9.2
+     * rejects. Before 2026-09-11 the bit was a buried cell nothing on the
+     * part read. */
+    set_ctrl(8'h00); to_frame_start();
+    begin
+      int unblanked = 0, n = 0;
+      forever begin
+        @(posedge DOTCLK); #0;
+        if (BLANK !== 1'b1) unblanked++;
+        n++;
+        if (n == 800 * 449) break;
+      end
+      ok(unblanked == 0,
+         $sformatf("CTRL b7 = 0 holds BLANK - the '273s' /MR - for a whole frame (%0d dots not blanked)", unblanked));
     end
 
     $display("");

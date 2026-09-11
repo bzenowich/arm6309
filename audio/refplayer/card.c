@@ -52,8 +52,7 @@ static void state_sync(card_t *c, unsigned n)
     ch->lc  = rd19(&s[ST_LC2]);
     ch->len = rd16(&s[ST_LEN1]);
     ch->per = rd16(&s[ST_PER1]);
-    ch->vol = s[ST_VOL] & 0x7Fu;
-    ch->att = s[ST_ATT] & 0x03u;
+    ch->vol = s[ST_VOL];
     ch->pan = s[ST_PAN];
 }
 
@@ -84,14 +83,11 @@ void card_write(card_t *c, uint8_t reg, uint8_t val)
         unsigned n = i / 16u, off = i % 16u;
         /* PTR/CNT are read-only; a write there is a software bug, not a mode. */
         if (off <= ST_PAN) {
+            /* Offset 8 is reserved: CPU-fed samples were retired 2026-09-11
+             * (audio/docs/audio.md §1 requirement 8), so a write there is
+             * stored and plays nothing — exactly what the card does. */
             c->state[i] = val;
-            if (off == ST_DAT) {
-                /* Direct sample write, audio/docs/audio.md §1 requirement 8.
-                 * OFFSET BINARY, like everything else the converter sees. */
-                c->ch[n].samp = val;
-            } else {
-                state_sync(c, n);
-            }
+            state_sync(c, n);
         }
         c->aidx = (uint8_t)((i + 1u) % CARD_STATE_BYTES);
         break;
@@ -144,6 +140,10 @@ void card_write(card_t *c, uint8_t reg, uint8_t val)
         break;
 
     case A_ACTRL:
+        /* While b6 was 0 U1 reloaded the count every colour clock, and a host
+         * write is several colour clocks long, so the count holds ~TIMER at
+         * the instant b6 is set. This model's writes are instantaneous. */
+        if (!(c->ctrl & ACTRL_TIMER)) { c->tc = (uint16_t)~c->timer; }
         c->ctrl = val;
         break;
 
@@ -160,15 +160,15 @@ void card_write(card_t *c, uint8_t reg, uint8_t val)
         break;                      /* read-only */
 
     case A_TIMER1:
-        c->timer = (uint16_t)((c->timer & 0x00FFu) | ((uint16_t)val << 8));
+        c->timer_hi = val;              /* staged, §9.4.3 */
         break;
     case A_TIMER0:
-        /* The low byte completes the 16-bit write and arms the compare, the way
-         * writing a CIA timer's latch loads and starts it. Without this the
-         * compare value never matches and the tempo interrupt never fires --
-         * which is how this was found. */
-        c->timer = (uint16_t)((c->timer & 0xFF00u) | val);
-        c->cianext = (uint16_t)(c->ciacnt + c->timer);
+        /* The low byte commits both, as U2 does. It does NOT restart the
+         * period: U1's counter takes TIMER at its next reload, which is what
+         * writing a running CIA's latch does - audio.md §8.2, §16 item 44.
+         * ⛔ This model used to restart the period on every TIMER0 write, and
+         * the card it modelled never reached TIMER at all. */
+        c->timer = (uint16_t)(((uint16_t)c->timer_hi << 8) | val);
         break;
 
     default:
@@ -193,7 +193,7 @@ uint8_t card_read(card_t *c, uint8_t reg)
     case A_ASTAT: {
         uint8_t s = 0;
         for (unsigned n = 0; n < 4u; n++) { if (c->ch[n].dmaen) { s |= (uint8_t)(1u << n); } }
-        if (c->timer) { s |= 0x10u; }
+        if (c->ctrl & ACTRL_TIMER) { s |= 0x10u; }     /* b4 is ACTRL b6, §9.2 */
         return s;
     }
     case A_SDATA: {
@@ -230,22 +230,9 @@ static void chan_tick(card_t *c, unsigned n)
         c->oob_reads++;
     }
 
-    if (ch->att) {
-        /* Paula's attach modulation (ADKCON): the modulating channel produces
-         * no audio and its data drives the next channel's period or volume.
-         * Paula is word-oriented here and this card is byte-oriented, so this
-         * is an adaptation, not a transcription. UNVERIFIED — no module in the
-         * test corpus exercises it. See audio/docs/audio.md §11.3. */
-        card_chan *t = &c->ch[(n + 1u) & 3u];
-        /* The modulating data is the sample VALUE, so undo the offset-binary
-         * coding the converter needs (§6.1) before it is used as a number. */
-        uint8_t v = (uint8_t)(byte ^ 0x80u);
-        if (ch->att & 0x01u) { t->per = (uint16_t)((t->per & 0xFF00u) | v); }
-        if (ch->att & 0x02u) { t->vol = (uint8_t)(v & 0x7Fu); }
-        ch->samp = 0x80u;
-    } else {
-        ch->samp = byte;
-    }
+    /* No attach modulation: it was retired 2026-09-11 (audio/docs/audio.md
+     * §11.3) because no ProTracker replayer writes ADKCON. */
+    ch->samp = byte;
 
     ch->ptr = (ch->ptr + 1u) & 0x7FFFFu;
 
@@ -275,8 +262,7 @@ void card_step(card_t *c)
         }
     }
 
-    /* Channels walk in order 0,1,2,3, matching the hardware slot walk — which
-     * matters only for attach modulation, where channel n writes n+1. */
+    /* Channels walk in order 0,1,2,3, matching the hardware slot walk. */
     for (unsigned n = 0; n < 4u; n++) {
         card_chan *ch = &c->ch[n];
         if (ch->dmaen && !ch->start_in && ch->per != 0u && ch->next == c->ccnt) {
@@ -284,18 +270,21 @@ void card_step(card_t *c)
         }
     }
 
-    /* Tempo timer, slot 4. Prescaled by 5 off the colour clock so the counter
-     * runs at the Amiga's CIA rate — audio/docs/audio.md §8.2. ACTRL b6 is the
-     * run bit: clearing it is the only way to stop a timer that has been armed,
-     * so it is what "stop the music" writes. */
-    if ((c->ctrl & ACTRL_TIMER) && ++c->pre5 >= CARD_CIA_DIV) {
-        c->pre5 = 0;
-        c->ciacnt = (uint16_t)(c->ciacnt + 1u);
-        if (c->ciacnt == c->cianext) {
-            c->intreq |= AINT_TIMER;
-            c->cianext = (uint16_t)(c->cianext + (c->timer ? c->timer : 0u));
-        }
+    /* Tempo timer - U1's CIA count, audio.md §8.2. Slot 4 reloads it from
+     * TIMER: after a period, or every colour clock while ACTRL b6 is 0, so
+     * setting b6 starts a whole period. Slot 7 of every fifth colour clock
+     * advances it while b6 runs. It counts up from ~TIMER because all-ones is
+     * one product term on the part; a period is TIMER ticks exactly. */
+    if (!(c->ctrl & ACTRL_TIMER)) {
+        c->tc = (uint16_t)~c->timer;
+    } else if (c->tc == 0xFFFFu) {
+        c->intreq |= AINT_TIMER;
+        c->tc = (uint16_t)~c->timer;
     }
+    if (c->pre5 == CARD_CIA_DIV - 1u && (c->ctrl & ACTRL_TIMER)) {
+        c->tc = (uint16_t)(c->tc + 1u);
+    }
+    c->pre5 = (uint8_t)((c->pre5 + 1u) % CARD_CIA_DIV);
 }
 
 int card_firq(const card_t *c)
@@ -303,24 +292,19 @@ int card_firq(const card_t *c)
     return (c->intreq & c->intena) != 0;
 }
 
-/* VOL -> the 8-bit code written to the volume converter (§6.1). Paula's 0..64
- * shifts left two and saturates, unconditionally since 2026-09-10 - §16 item
- * 42 retired ACTRL b3, so there is no raw mode and a
- * non-linear volume curve lives in host software instead of card silicon. */
-static unsigned vol_code(unsigned vol)
-{
-    unsigned code;
-    if (vol > 64u) { vol = 64u; }
-    code = vol << 2;
-    return code > 255u ? 255u : code;
-}
-
 int card_chan_out(const card_t *c, unsigned n)
 {
     /* The sample converter is unsigned-coded and its half-scale pedestal is
      * cancelled at its own I/V node, BEFORE the volume stage (§6.3) — which is
-     * why VOL = 0 is exact silence here, with no DC step to leave behind. */
-    return ((int)c->ch[n].samp - 128) * (int)vol_code(c->ch[n].vol);
+     * why VOL = 0 is exact silence here, with no DC step to leave behind.
+     *
+     * VOL IS THE VOLUME CONVERTER'S CODE, taken verbatim, because that is what
+     * the card does: W5 copies the state-file byte into the AD7528 unchanged.
+     * Paula's 0..64 -> 4v saturated is the REPLAYER's job (mod_replay.c,
+     * audio.md §6.1). This model used to do that ×4 itself, which the card
+     * never did - a model above its hardware, and a control that played 12 dB
+     * louder than the card it was controlling for. */
+    return ((int)c->ch[n].samp - 128) * (int)c->ch[n].vol;
 }
 
 void card_dac(const card_t *c, int *l, int *r)

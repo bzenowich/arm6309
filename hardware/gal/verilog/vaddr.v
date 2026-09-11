@@ -41,7 +41,7 @@ module vaddr (
     input  wire RA1,
     input  wire RA0,
     input  wire RETIRE,
-    input  wire LADV,
+    input  wire VINC,
     input  wire SRC1,
     input  wire SRC0,
     output wire SA2,
@@ -142,7 +142,6 @@ module vaddr (
     output wire LDVSH,
     output wire LDHS,
     output wire LDHSH,
-    output wire LDADV,
     output wire LDA,
     output wire LDB,
     output wire LDC,
@@ -374,9 +373,6 @@ module vaddr (
   // buried
   assign LDHSH =
          (WSTB & ~RA4 & ~RA3 & RA2 & ~RA1 & ~RA0);
-  // buried - 13's +$14 - 7.2's next-row-same-column mode
-  assign LDADV =
-         (WSTB & RA4 & ~RA3 & RA2 & ~RA1 & ~RA0);
   // buried - WPTR's three bytes - item 23 offered a '138 for these
   assign LDA =
          (WSTB & ~RA4 & RA3 & ~RA2 & ~RA1 & ~RA0);
@@ -395,7 +391,7 @@ module vaddr (
   // buried
   assign WINC =
          (RETIRE)
-         | (LADV);
+         | (VINC);
   // EXTERNAL
   assign FBA2 =
          (~SRC1 & ~SRC0 & SA2)

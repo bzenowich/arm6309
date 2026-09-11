@@ -10,15 +10,14 @@ motherboard.
 
 ## What here is a deliverable, and what is derivation
 
-**Four GALs are live and get burned into silicon:** the motherboard's `U3` (the MMU
-sequencer), `U6` (the divider, `/IOSEL` and boot mode) and **`U9` (the physical space
-decode, added 2026-09-09)**, and the video card's `rfa` (the register-file address
-decode, split off `vctrl` — [`regfile.jedec.ts`](regfile.jedec.ts)). `mmu.jed`,
-`clkdec.jed`, `u9.jed` and `rfa.jed` are the files a programmer takes.
+**Four GALs are live and get burned into silicon, all on the motherboard:** `U3` (the
+MMU sequencer), `U6` (the divider, `/IOSEL` and boot mode), `U9` (the physical space
+decode) and `U10` (the SIMM controller, [`../ram.md`](../ram.md) §6.3). `mmu.jed`,
+`clkdec.jed`, `u9.jed` and `u10.jed` are the files a programmer takes. The video card
+has no GALs: `rfa`, `vlen` and `pxsel` were absorbed into `vsup` (`graphics.md`
+§10.1.7) and their `.jed` files carry the superseded banner.
 
-**Two are still unwritten**: the motherboard's **U10** (the SIMM controller —
-[`../ram.md`](../ram.md) §6.3, and the only logic on that board that is not fitted) and
-**the I/O card's pair** ([`../cards/io.circuit.tsx`](../cards/io.circuit.tsx)), which
+**Still unwritten:** **the I/O card's pair** ([`../cards/io.circuit.tsx`](../cards/io.circuit.tsx)), which
 grew on 2026-09-09 with `serial.md` §4.5's `16C550`: Intel-style `/RD`/`/WR` strobes, an
 **active-high** `MR` where the backplane's reset is not, and an open-drain inversion of
 `INTR`, which is active-high totem-pole and cannot wire-OR the way a 6551's `/IRQ` could.
@@ -36,7 +35,7 @@ the argument.
 
 | | Live | Superseded |
 |---|---|---|
-| designs | `mmu`, `clkdec`, **`u9`**, `rfa` | `hgen` `vgen` `vdec` `hadr` `vadr` `arb` `wcol` `wrow` `seqph` `seqctl` |
+| designs | `mmu`, `clkdec`, `u9`, `u10` | `hgen` `vgen` `vdec` `hadr` `vadr` `arb` `wcol` `wrow` `seqph` `seqctl` `rfa` `vlen` `pxsel` |
 | checked against Atmel's CUPL | **all four** | not required |
 
 **The rule, and it is enforced:** a GAL does not ship without a CUPL reference.
@@ -204,9 +203,9 @@ all, and two common-I/O SRAMs cannot share one `'245` because each drives its ow
 pins for the whole of every translation. `hardware/history.md` has the finding. §6 below
 is the *earlier* excursion in which the same pin was spent by accident.
 
-> ⚠ **TWO PARTS IN THIS MACHINE ARE PIN-FULL AND CANNOT TAKE ANOTHER SIGNAL: U3 and the
-> video card's `vctrl`** (61 of 64 I/O, and its three spare are the fitter's placement
-> rather than headroom the design asked for — see `video/docs/history.md` 2026-09-10).
+> ⚠ **U3 IS PIN-FULL AND CANNOT TAKE ANOTHER SIGNAL.** The video card's `vctrl` was the
+> other one until 2026-09-11, when `graphics.md` §11 deleted the CPU's chip grant. It is
+> 56 of 64 I/O now, but 128 of 128 cells on the fitter's second pass (§19 item 46).
 > That is the constraint to check first when a
 > feature "just needs one more input".
 
@@ -538,7 +537,7 @@ failure mode `/IOSEL` and `machine.md` §7.1 already demonstrated twice.
 | Equations | `bun`, already here | ✓ `npm run check`, 23 claims |
 | A CPU to drive it | [`../vendor/mc6809`](../vendor/mc6809) — Greg Miller's cycle-accurate MC6809E, BSD | ✓ elaborates; **nothing drives it yet** |
 
-Three GALs ship — the motherboard's two and the video card's `rfa` — of the roughly
+Four GALs ship, all of them the motherboard's, out of the roughly
 twenty programmable parts the machine carries across its boards. `npm run check:sim` runs
 the two motherboard testbenches; `npm run check` runs the equation check.
 

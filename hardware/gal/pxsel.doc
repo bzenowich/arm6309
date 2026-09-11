@@ -1,16 +1,17 @@
 pxsel - ARM6309-UV11, video card - fetch-rank select (graphics.md 8.2)
-GAL22V10, 5892 fuses, checksum 8239
+*** SUPERSEDED - DO NOT PROGRAM *** graphics.md 10.1.7 - absorbed into vsup, the third ATF1508AS, 2026-09-09
+GAL22V10, 5892 fuses, checksum 8194
 
   pin  signal      terms  of   path           polarity
   ---  ----------  -----  ---  -------------  ------------------
    14  HS0             3    8  registered     pin follows terms
    15  HS1             3   10  registered     pin follows terms
-   16  OEA0            2   12  combinational  pin follows terms
-   17  OEA1            1   14  combinational  pin follows terms
-   18  OEA2            1   16  combinational  pin follows terms
-   19  OEB0            1   16  combinational  pin follows terms
-   20  OEB1            1   14  combinational  pin follows terms
-   21  OEB2            2   12  combinational  pin follows terms
+   16  OEA0            2   12  combinational  pin is complement
+   17  OEA1            1   14  combinational  pin is complement
+   18  OEA2            1   16  combinational  pin is complement
+   19  OEB0            1   16  combinational  pin is complement
+   20  OEB1            1   14  combinational  pin is complement
+   21  OEB2            2   12  combinational  pin is complement
    22  (spare)         -   10  undriven       usable as an input
    23  (spare)         -    8  undriven       usable as an input
 
@@ -151,5 +152,5 @@ GAL22V10, 5892 fuses, checksum 8239
   L5676 00000000000000000000000000000000000000000000  pin 14 term 6  (never)
   L5720 00000000000000000000000000000000000000000000  pin 14 term 7  (never)
   L5764 00000000000000000000000000000000000000000000  SP  synchronous preset  (never)
-  L5808 11111111111111111010  S0,S1 per macrocell, pin 14 first
+  L5808 11110101010101011010  S0,S1 per macrocell, pin 14 first
   L5828 0100000100110110001100110011000000111001010101100101000000000000  user signature "A6309VP"

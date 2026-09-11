@@ -32,9 +32,13 @@ module rfa (
 
 
 
-  // EXTERNAL - E-qualified: a 6809 write is only valid data in the second half
+  // EXTERNAL - E-qualified: a 6809 write is only valid data in the second half - and not VDATA's
   assign WSTB =
-         (IOSEL & A6 & A5 & ~RW & E);
+         (IOSEL & A6 & A5 & ~RW & E & ~A4)
+         | (IOSEL & A6 & A5 & ~RW & E & A3)
+         | (IOSEL & A6 & A5 & ~RW & E & ~A2)
+         | (IOSEL & A6 & A5 & ~RW & E & A1)
+         | (IOSEL & A6 & A5 & ~RW & E & ~A0);
   // EXTERNAL - 7.4: the mask bit IS the register file's address bit 0, inverted
   assign RA0 =
          (IOSEL & A6 & A5 & ~SPANBUSY & A0)

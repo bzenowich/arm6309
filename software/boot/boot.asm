@@ -48,6 +48,7 @@ PIDX    EQU     VBASE+$10       palette index, auto-increments after PDATH
 PDATL   EQU     VBASE+$11       GGGBBBBB
 PDATH   EQU     VBASE+$12       RRRRRGGG -- the write commits the entry
 VSTAT   EQU     VBASE+$13       b7 SPANBUSY, b6 VBLANK, b5 HBLANK, b0 IRQ
+VDATA   EQU     VBASE+$15       graphics.md 11 - the VRAM port at WPTR, in the I/O page
 WADV    EQU     VBASE+$14       00 continue, 01 next row same column
 TILEBAS EQU     VBASE+$17       6.4.1's TB4..TB0 -- the tile set's A18..A14
 MAPBAS  EQU     VBASE+$19       6.4.1's MB6..MB0 -- the map's A18..A12
@@ -83,6 +84,8 @@ P_M11   EQU     $12             ... 11, 640x480 progressive
 P_LSTA  EQU     $20             display list A running - a palette raster bar
 P_LSTB  EQU     $21             ... and B - one HSCROLL MOVE per line
 P_TILE  EQU     $30             6.4's cell mode - a tilemap, drawn by the CPU
+P_VREAD EQU     $40             graphics.md 11 - VRAM read back, every byte right
+P_BADV  EQU     $E2             ... a byte read back wrong; vidx says which
 P_BADR  EQU     $E1             the SIMM did not answer
 
 *------------------------------------------------------------- geometry ------
@@ -581,7 +584,252 @@ mcol    lda     yrow
         sta     SIMPORT
         lbsr    settle
 
+*==============================================================================
+* 10. graphics.md 11: VRAM reads back.
+*
+* A read is a write run backwards.  The address a load carries selects the VRAM
+* window and nothing else; WPTR says which byte, and it post-increments - so X+
+* walks a read exactly as putb walks a write.  Three passes:
+*   (a) the tile set just drawn, 256 bytes of 0..255, read back while cell mode
+*       is on and the map fetch takes every other spare access;
+*   (b) a store and a load back to back with NO VSTAT poll between them, 32
+*       times - so the load has to wait on /WAIT for the store's span to retire
+*       and for the prefetch of the byte after it;
+*   (c) the whole of (b)'s area read back, so both halves of (b) are checked;
+*   (d) a load issued while a 256-byte span-solid is still retiring.  The
+*       prefetch is normally done long before the CPU's next cycle, so (b)
+*       never waits; this does - for the whole span, ~40 us on /WAIT - and
+*       then gets the byte the span stopped in front of;
+*   (e) and the span's 256 bytes read back.
+* And the same port at its other address, +$15 VDATA (graphics.md 19 item 47),
+* which needs no MMU block at all:
+*   (f) 64 stores through VDATA with no poll, read back through the window;
+*   (g) the same 64 read back through VDATA, the first waiting on the prefetch;
+*   (h) two span-solids started back to back through VDATA and a VDATA load
+*       straight after - the second store waits for the first span with E high,
+*       which is when a register-file write at +$15 would repaint the span;
+*   (i) and the two spans' 512 bytes read back through VDATA.
+* Every setwptr is preceded by idlespn: WPTR may not be loaded under a span.
+*==============================================================================
+SCRPAGE EQU     LPAGE           ring row 402 - beside the lists, off the screen
+SCRLOW  EQU     $4800
+SCRN    EQU     64
+
+* (a) the tile set
+        lbsr    idlespn
+        lda     #TBPAGE
+        sta     wpage
+        ldd     #TBLOW
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        clrb
+vra     lda     ,x+             the byte at WPTR, and WPTR moves on
+        stb     vidx
+        cmpa    vidx
+        lbne    vbad
+        incb
+        bne     vra
+
+* (b) prefill with i ^ $A5 ...
+        lbsr    idlespn
+        lda     #SCRPAGE
+        sta     wpage
+        ldd     #SCRLOW
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        clrb
+vrf     tfr     b,a
+        eora    #$A5
+        lbsr    putb
+        incb
+        cmpb    #SCRN
+        bne     vrf
+* ... then store 2i ^ $3C and load straight back, no poll
+        lbsr    idlespn
+        ldd     #SCRLOW
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        clrb                    B = 2i
+vrb     tfr     b,a
+        eora    #$3C
+        sta     ,x              posted: retires at base+2i, and WPTR goes to 2i+1
+        incb                    B = 2i+1
+        lda     ,x              waits for that retire and the prefetch of 2i+1
+        sta     vgot
+        stb     vidx
+        tfr     b,a
+        eora    #$A5            the prefill's byte at 2i+1
+        cmpa    vgot
+        lbne    vbad
+        incb                    B = 2i+2, which is where WPTR is now
+        cmpb    #SCRN
+        bne     vrb
+
+* (c) and the whole area back: stores at the even bytes, the prefill at the odd
+        lbsr    idlespn
+        ldd     #SCRLOW
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        clrb
+vrc     lda     ,x+
+        sta     vgot
+        stb     vidx
+        tfr     b,a
+        bitb    #1
+        bne     vrc1
+        eora    #$3C
+        bra     vrc2
+vrc1    eora    #$A5
+vrc2    cmpa    vgot
+        lbne    vbad
+        incb
+        cmpb    #SCRN
+        bne     vrc
+
+* (d) the byte after the span, prefilled ...
+SPAT    EQU     $5C             what sits at base+256 before the span
+SFG     EQU     $C7             the span's colour
+        lbsr    idlespn
+        ldd     #SCRLOW+256
+        lbsr    setwptr
+        lda     #SPAT
+        lbsr    putb
+* ... then a 256-byte span-solid and a load straight after the store that starts it
+        lbsr    idlespn
+        ldd     #SCRLOW
+        lbsr    setwptr
+        lda     #SFG
+        sta     WFG
+        lda     #255
+        sta     SPANLEN
+        lda     #CT_ON+$20+CT_SOL display on, CELL, WMODE 10 span-solid
+        sta     VCTRL
+        sta     ,x              starts the span - 256 retires, one per fetch slot
+        lda     ,x              and this waits for all of them, and the prefetch
+        sta     vgot
+        clr     vidx
+        cmpa    #SPAT
+        lbne    vbad
+        lbsr    idlespn
+        lda     #CT_ON+$20      back to direct writes
+        sta     VCTRL
+* (e) the span itself
+        ldd     #SCRLOW
+        lbsr    setwptr
+        clrb
+vre     lda     ,x+
+        sta     vgot
+        stb     vidx
+        cmpa    #SFG
+        lbne    vbad
+        incb
+        bne     vre
+
+* (f) VDATA stores, no poll, and the window reads them back
+VDX     EQU     $96
+        lbsr    idlespn
+        ldd     #SCRLOW
+        lbsr    setwptr
+        clrb
+vrf2    tfr     b,a
+        eora    #VDX
+        sta     VDATA           the same posted write: retires at WPTR, which moves on
+        incb
+        cmpb    #SCRN
+        bne     vrf2
+        lbsr    idlespn
+        ldd     #SCRLOW
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        clrb
+vrf3    lda     ,x+
+        sta     vgot
+        stb     vidx
+        tfr     b,a
+        eora    #VDX
+        cmpa    vgot
+        lbne    vbad
+        incb
+        cmpb    #SCRN
+        bne     vrf3
+
+* (g) and VDATA reads them back too - the first load waits for the prefetch
+        lbsr    idlespn
+        ldd     #SCRLOW
+        lbsr    setwptr
+        clrb
+vrg     lda     VDATA
+        sta     vgot
+        stb     vidx
+        tfr     b,a
+        eora    #VDX
+        cmpa    vgot
+        lbne    vbad
+        incb
+        cmpb    #SCRN
+        bne     vrg
+
+* (h) two span-solids through VDATA, the second store under the first span
+VMARK   EQU     $3A             what the stores carry - never the span's colour
+SFG2    EQU     $E4
+        lbsr    idlespn
+        ldd     #SCRLOW+512
+        lbsr    setwptr
+        lda     #SPAT
+        sta     VDATA           the byte after both spans
+        lbsr    idlespn
+        ldd     #SCRLOW
+        lbsr    setwptr
+        lda     #SFG2
+        sta     WFG
+        lda     #255
+        sta     SPANLEN
+        lda     #CT_ON+$20+CT_SOL display on, CELL, WMODE 10 span-solid
+        sta     VCTRL
+        lda     #VMARK
+        sta     VDATA           span 1: 256 x WFG
+        sta     VDATA           waits for span 1 on /WAIT, then span 2
+        lda     VDATA           waits for span 2 and the prefetch
+        sta     vgot
+        lda     #$FF
+        sta     vidx
+        lda     vgot
+        cmpa    #SPAT
+        lbne    vbad
+        lbsr    idlespn
+        lda     #CT_ON+$20      back to direct writes
+        sta     VCTRL
+* (i) both spans, 512 bytes, through VDATA
+        ldd     #SCRLOW
+        lbsr    setwptr
+        ldy     #512
+vri     lda     VDATA
+        sta     vgot
+        tfr     y,d
+        stb     vidx
+        lda     vgot
+        cmpa    #SFG2
+        lbne    vbad
+        leay    -1,y
+        bne     vri
+
+        clr     wpage
+        lda     #P_VREAD
+        sta     SIMPORT
 halt    bra     halt
+
+vbad    lda     #P_BADV         vidx holds the index, vgot the byte
+        sta     SIMPORT
+        bra     halt
+
+*==============================================================================
+* idlespn - wait for SPANBUSY (VSTAT b7) to clear.  §13 / 7.4: WPTR may not be
+* loaded while a span is retiring through it.
+*==============================================================================
+idlespn pshs    b
+is1     ldb     VSTAT
+        bmi     is1
+        puls    b,pc
 
 *==============================================================================
 * putpal - append "MOVE PIDX,$FF / MOVE PDATL,lo / MOVE PDATH,hi" to the list.
@@ -751,6 +999,8 @@ lstep   EQU     RAMWIN+$14      list B's line counter while it is built (2 bytes
 lframe  EQU     RAMWIN+$16      runlist's frame counter
 wpage   EQU     RAMWIN+$17      WPTR[18:16] for the next setwptr -- see 13
 lstart  EQU     RAMWIN+$18      runlist's list address, reloaded every frame
+vidx    EQU     RAMWIN+$1A      section 10's byte index - which byte, on a failure
+vgot    EQU     RAMWIN+$1B      ... and the byte that was read
 
 *==============================================================================
 * The vector page.  machine.md 7.2: $FFC0-$FFFF is served by the ROM

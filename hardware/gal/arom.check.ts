@@ -23,7 +23,7 @@ import {
   encode, eventsPerSecond, highLaneMode, literalsOf, margin, microwordBits,
   pack, periodFloor, residue, stepsPerSecond, toLanes, unpack, writeOf,
 } from "./arom"
-import { PROGRAM, HOSTMAP, COMMIT, STAGED, W1, W2, W3, W4, W5, W6 } from "./aseq.micro"
+import { PROGRAM, HOSTMAP, COMMIT, STAGED, SEQUENCES, W1, W2, W3, W5, W6 } from "./aseq.micro"
 import { aseqCells, WTC } from "./aseq.jedec"
 
 let failures = 0
@@ -33,8 +33,8 @@ const check = (ok: boolean, claim: string, detail = "") => {
 }
 const rule = (s: string) => { console.log(`\n${s}`); console.log("=".repeat(s.length)) }
 const fmt = (n: number, w = 3) => String(n).padStart(w)
-const WTS = [W1, W2, W3, W4, W5, W6]
-const WTNAME: Record<number, string> = { [W1]: "W1", [W2]: "W2", [W3]: "W3", [W4]: "W4", [W5]: "W5", [W6]: "W6" }
+const WTS = SEQUENCES
+const WTNAME: Record<number, string> = { [W1]: "W1", [W2]: "W2", [W3]: "W3", [W5]: "W5", [W6]: "W6" }
 
 /* -- 1. the microword ----------------------------------------------------- */
 rule("1. The microword")
@@ -46,7 +46,7 @@ check(microwordBits <= PACKAGES * 8, "the microword fits its packages",
   `${microwordBits} bits in ${PACKAGES}`)
 check(PACKAGES === 4, "the control store is four 8-bit packages", `${PACKAGES}`)
 check(PACKAGES * 8 - microwordBits >= 3,
-  "at least three microword bits are spare - 16 items 7 and 11.3 need somewhere to go",
+  "at least three microword bits are spare - headroom, since 11.2 and 11.3 were dropped",
   `${PACKAGES * 8 - microwordBits}`)
 check(FIELDS.filter((f) => f.to === "U2").reduce((n, f) => n + f.bits, 0) === 7,
   "seven microword bits go through U2 and the other 21 straight to the datapath")
@@ -96,7 +96,7 @@ for (const wt of WTS) {
     }
   })
 }
-check(steps === 43, "PROGRAM is 43 steps - 10.2's 42, plus item 36's CNT - 1 in W2 and W6, less the three W6 spent priming before item 39 handed the fetch to W1", `${steps}`)
+check(steps === 40, "PROGRAM is 40 steps - 10.2's 42, plus item 36's CNT - 1 in W2 and W6, less the three W6 spent priming before item 39 handed the fetch to W1, plus item 43's seven: W5 loads and WAITS for the frame-parity strobes instead of strobing a single slot itself, less item 44's ten: W4's multiply, now U1's counter", `${steps}`)
 check(bad.length === 0, "every step encodes and round-trips through the microword",
   bad.slice(0, 4).join("; "))
 
@@ -168,8 +168,8 @@ check(unpack(pack(encode(last, undefined, 1))).SEQ === SEQ.end,
   "carry out set - the buffer did not end - retires the work item")
 check(unpack(pack(encode(last, undefined, 0))).SEQ === SEQ.chain,
   "⭐ carry out clear - the buffer ended - chains straight into W2's reload")
-check(unpack(pack(encode(PROGRAM[W4][9]))).SEQ === SEQ.endfire,
-  "W4's last step ends AND raises 8.1's timer source")
+check(SEQUENCES.every((wt) => PROGRAM[wt].every((st) => encode(st).SEQ !== SEQ.endfire)),
+  "no step raises the timer source - it is U1's counter since 16 item 44")
 check(!ABSORBED.has("ENDNOW") && ABSORBED.has("LAST"),
   "the step comparator goes and the buffer-end flag stays - one is decode, one is state")
 

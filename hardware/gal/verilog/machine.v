@@ -24,11 +24,11 @@
 //      either. It is assembled below from the card's own SPANBUSY, VBLANK,
 //      HBLANK and IRQ.
 //
-// ⛔ AND ONE PATH IS DELIBERATELY ABSENT: graphics.md §11's readable VRAM. The
-// card has no read latch in video_card.v, so a CPU read of a VRAM address gets
-// nothing here and `vram_read_attempt` says so rather than a plausible byte
-// arriving from a path the design does not contain. machine_tb asserts the
-// software never does it.
+//   3. ⭐ THE VREAD '574's DRIVE, since 2026-09-11 - graphics.md §11. The latch
+//      is in video_card.v and vsup forms its /OE (RDOE); this puts it on D0-D7
+//      for a VRAM read and reports it if anything else drives at the same time.
+//      Until then this file said the path was "deliberately absent" and
+//      machine_tb asserted the software never read VRAM.
 
 `default_nettype none
 
@@ -71,7 +71,7 @@ module machine #(
     // ---- the three things that must never happen ------------------------
     output wire        bus_conflict,       // two drivers on D0-D7
     output wire        pa_conflict,        // two drivers on physical A20-A13
-    output wire        vram_read_attempt   // §11's path, which is not modelled
+    output wire        vram_read           // a VRAM read cycle - §11, counted
 );
 
   // ---- the CPU ------------------------------------------------------------
@@ -132,6 +132,8 @@ module machine #(
   wire [7:0] vid_pidx;
   wire [9:2] vid_hscr;
   wire vid_lph, vid_lwait, vid_pwe, vid_pdoe, vid_pixoe, vid_dbus_fight;
+  wire [7:0] vid_vread;
+  wire vid_rdoe;
 
   video_card card (
       .DOTCLK(CLK25), .RESET(~n_reset),
@@ -150,7 +152,8 @@ module machine #(
       .HSCR(vid_hscr), .LPH_o(vid_lph), .LWAIT_o(vid_lwait),
       .RGB(RGB), .PIDX(vid_pidx),
       .PWE_o(vid_pwe), .PDOE_o(vid_pdoe), .PIXOE_o(vid_pixoe),
-      .DBUS_FIGHT(vid_dbus_fight)
+      .DBUS_FIGHT(vid_dbus_fight),
+      .VREAD(vid_vread), .RDOE_o(vid_rdoe)
   );
 
   // ---- the open-drain control lines ---------------------------------------
@@ -187,7 +190,12 @@ module machine #(
    * t_DSR is satisfied long before E falls. So the enable here is the read
    * cycle - there is no other driver in this window, because mb_drives
    * excludes it by construction below. */
-  wire vid_drives   = vid_regsel & cpu_rnw;
+  /* ⭐ EXCEPT AT +$15, VDATA - graphics.md 11, 19 item 47. That read is the
+   * vread '574's (RDOE, below), and the '245 must stand off for it exactly as
+   * it must for VSTAT's '244 at +$13 - two drivers otherwise, which
+   * bus_conflict reports. ⚠ The board's '245 enable is a decode this model
+   * states and no part list or netlist carries yet (graphics.md 19 item 34). */
+  wire vid_drives   = vid_regsel & cpu_rnw & (pa[4:0] != 5'h15);
 
   // 2. VSTAT's '244 - §12.1, §13. b7 SPANBUSY, b6 VBLANK, b5 HBLANK,
   //    b4 LRUN, b0 IRQ.
@@ -212,13 +220,17 @@ module machine #(
   // ⛔ TWO DRIVERS IS THE FAILURE /IOPAGE EXISTS TO PREVENT (machine.md §2), so
   // this reports it rather than ORing it. design-review2.md §10: "a model that
   // ORs its drivers cannot see a bus fight".
-  assign bus_conflict = mb_drives & vid_drives;
+  // 4. §11's vread '574, for a read of the VRAM window. RDOE is vsup's
+  //    VRAMSEL & RW, and like the '245's enable above it is the CYCLE and not
+  //    E-high.
+  wire vram_drives  = vid_rdoe & cpu_rnw;
 
-  assign cpu_d_in = vid_drives ? vid_d : mb_din;
+  assign bus_conflict = (mb_drives & (vid_drives | vram_drives)) | (vid_drives & vram_drives);
 
-  // §11's readable VRAM: a CPU read of a mapped VRAM address. The card would
-  // answer; video_card.v has no path that does, so say so.
-  assign vram_read_attempt = cpu_rnw & e & ~iopage & ~pa[20] & pa[19];
+  assign cpu_d_in = vram_drives ? vid_vread : vid_drives ? vid_d : mb_din;
+
+  // no `& e`: a testbench samples this on E's fall, where e is already 0
+  assign vram_read = cpu_rnw & ~iopage & ~pa[20] & pa[19];
 
   // verilator lint_off UNUSEDSIGNAL
   wire _unused = &{1'b0, cpu_ba, cpu_bs, cpu_busy, pa_valid, pa_hi_valid,

@@ -50,7 +50,7 @@ import { merge, rename, toCupl, type Merged } from "./jedec/cupl"
 import { rfaDesign } from "./regfile.jedec"
 import { vlenDesign } from "./vlen.jedec"
 import { pxselDesign } from "./pxsel.jedec"
-import { listDecode, paletteWrite, spanLength, vsupStrobes } from "./vsup.parts"
+import { listDecode, paletteWrite, spanLength, vramRead, vsupStrobes } from "./vsup.parts"
 
 /* ⚠ vlen's LOAD SOURCE IS NOT THE REGISTER FILE ANY MORE - vsup.parts.ts's
  * spanLength has the argument. RD7..RD0 were eight input pins carrying the
@@ -72,7 +72,7 @@ const PXSEL_MAP: Record<string, string> = { PB0: "D0", PB1: "D1" }
 
 export const vsupCpld: Merged = merge(
   [rfaDesign, rename(vlenDesign, LEN_SRC), rename(pxselDesign, PXSEL_MAP)],
-  [...vsupStrobes, ...spanLength, ...listDecode, ...paletteWrite],
+  [...vsupStrobes, ...spanLength, ...listDecode, ...paletteWrite, ...vramRead],
   {
     name: "vsup", partNo: "ARM6309-UV0C",
     location: "video card - register file, palette and list port",
@@ -101,7 +101,18 @@ export const vsupCpld: Merged = merge(
        * is three signals and no state: LADV is WPTR's increment, LWHSL and
        * LWHSH are 8's scroll holds, both on vaddr. LRUN is BSTAT b0 and goes
        * to vctrl's arbiter as well. */
-      "LRUN", "LADV", "LWHSL", "LWHSH",
+      /* ⚠ LADV STOPPED CROSSING ON 2026-09-11: VINC is WPTR's increment now,
+       * the engine's OR a VRAM read's, on the same pin. */
+      "LRUN", "VINC", "LWHSL", "LWHSH",
+      /* graphics.md 11's readable VRAM: the vread '574's clock and /OE, and the
+       * prefetch flag vctrl asks for the spare access and holds /WAIT on. */
+      "RDCK", "RDOE", "RDVALID",
+      /* ⭐ +$15 VDATA's select, to vctrl's posted-write strobe and /WAIT - 19
+       * item 47. vctrl has no A0-A4 to decode it. */
+      "VDSEL",
+      /* ⛔ 8.2's HSCROLL[1:0] and 7.2's WADV, to vctrl - which had input pins
+       * for both and no part exporting either, until 2026-09-11. vsup.parts.ts. */
+      "LDHS", "LDADV",
     ]),
   },
 )

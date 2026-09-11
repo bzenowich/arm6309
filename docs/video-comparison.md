@@ -76,7 +76,7 @@ quantisation.
 |---|---|---|---|
 | Framebuffer lives in | **dedicated 512 KB SRAM**, separate from system RAM (4–16 MB of SIMM DRAM — `machine.md` §7.1) | main DRAM, shared with the CPU | main DRAM, shared with the CPU |
 | Video address reach | 19 bits / 512 KB, **all scannable** | 19 bits / 512 KB | **14 bits / 16 KB window** |
-| CPU access to the framebuffer | MMU-mapped + `WPTR`/`VDATA` (§6.3, §11) | direct — it is just RAM | direct — it is just RAM |
+| CPU access to the framebuffer | MMU-mapped window, addressed by `WPTR`, post-increment (§6.3, §11) | direct — it is just RAM | direct — it is just RAM |
 | Framebuffer read-back | **yes** — colormin's write-only rule reversed (§11) | yes | yes |
 | Video base granularity | **1 row vertically, 1 pixel horizontally** | 8 bytes (`$FF9D`/`$FF9E`) | 1 KB screen, 2 KB character base |
 | Off-screen working space | **384 spare columns + 312 spare rows** in one 1024×512 torus | whatever RAM you spare | inside the same 16 KB window |

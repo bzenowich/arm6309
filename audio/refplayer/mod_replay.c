@@ -81,12 +81,26 @@ static void set_per(mod_player *p, unsigned n, uint16_t per)
     ch->out_period = per;
 }
 
+/* Paula's volume 0..64 -> the byte the card's VOL register takes, which is the
+ * volume converter's 8-bit code (audio/docs/audio.md §6.1). 4v, saturated at
+ * 255 so 64 is full scale. The replayer's arithmetic and clamps all stay on
+ * 0..64 and this is applied only at the write - the 6309 port does the same
+ * with a 65-byte table and one indexed load (modplayer.md §5.2).
+ *
+ * ⚠ LEAVE IT OUT AND NOTHING BREAKS AUDIBLY: every channel plays 12 dB quiet.
+ * That is how the card went two days without the ×4 (§16 item 40), so
+ * test_refplayer.c asserts the bytes. */
+static uint8_t vol_code(uint8_t vol)
+{
+    return vol >= 64u ? 0xFFu : (uint8_t)(vol << 2);
+}
+
 static void set_vol(mod_player *p, unsigned n, uint8_t vol)
 {
     mod_chan *ch = &p->ch[n];
     if (vol == ch->out_volume) { return; }
     w(p, A_AIDX, (uint8_t)(n * 16u + ST_VOL));
-    w(p, A_ADATA, vol);
+    w(p, A_ADATA, vol_code(vol));
     ch->out_volume = vol;
 }
 
@@ -214,7 +228,7 @@ static void commit_triggers(mod_player *p)
         w(p, A_ADATA, (uint8_t)(ch->trig_len & 0xFFu));
         w(p, A_ADATA, (uint8_t)(ch->period >> 8));
         w(p, A_ADATA, (uint8_t)(ch->period & 0xFFu));
-        w(p, A_ADATA, ch->volume);
+        w(p, A_ADATA, vol_code(ch->volume));
         ch->out_period = ch->period;
         ch->out_volume = ch->volume;
     }
@@ -574,15 +588,16 @@ void mod_start(mod_player *p, mod_song *s, card_t *c)
     w(p, A_AINTREQ, 0x3Fu);                            /* clear all pending */
     w(p, A_AINTENA, (uint8_t)(0x80u | AINT_TIMER));
 
-    /* Whatever the caller asked for -- NTSC, LED, BYPASS -- rides in the same
-     * shadow, so the card and the shadow can never disagree and every later
-     * E0x is computed from what the card actually holds. ACTRL goes down
-     * BEFORE the tempo: the reload set_tempo computes depends on which colour
-     * clock, and DMA is already off, so enabling here is
-     * still silent. */
+    /* TIMER goes down BEFORE ACTRL b6, which is modplayer.md §4's order and
+     * audio.md §8.2's rule: setting b6 loads the counter from whatever TIMER
+     * holds, and before this write that is reset garbage - a period of up to
+     * 65,535 ticks, or 0, which fires every colour clock. Whatever the caller
+     * asked for -- LED, BYPASS -- rides in the same shadow, so the card and
+     * the shadow can never disagree and every later E0x is computed from what
+     * the card actually holds. DMA is already off, so enabling is silent. */
+    set_tempo(p);
     p->actrl = (uint8_t)(p->actrl | ACTRL_ENABLE | ACTRL_TIMER);
     w(p, A_ACTRL, p->actrl);
-    set_tempo(p);
 
     /* Play row 0 now rather than waiting for the timer's first expiry. Arming
      * the timer schedules the NEXT tick, so without this the song begins one

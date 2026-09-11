@@ -1,4 +1,4 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Thu Sep 10 20:23:24 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Fri Sep 11 14:17:06 2026
 
 
 fit1508 vaddr.tt2 -device P1508C84 -preassign ignore -JTAG off
@@ -199,9 +199,9 @@ MAPLD is placed at pin 46 (MC 69)
 VS6 is placed at feedback node 669 (MC 69)
 MB5 is placed at feedback node 670 (MC 70)
 VS7 is placed at feedback node 671 (MC 71)
-LADV is placed at pin 48 (MC 72)
+RETIRE is placed at pin 48 (MC 72)
 MB6 is placed at feedback node 672 (MC 72)
-RETIRE is placed at pin 49 (MC 73)
+VINC is placed at pin 49 (MC 73)
 TB3 is placed at feedback node 673 (MC 73)
 HS8 is placed at feedback node 674 (MC 74)
 VBLANK is placed at pin 50 (MC 75)
@@ -294,12 +294,12 @@ MAPA0 is placed at pin 81 (MC 128)
                   \     34  36  38  40  42  44  46  48  50  52   /                 
                    \  33  35  37  39  41  43  45  47  49  51  53/                  
               	    --------------------------------------------                     
-                      F F F P H V P P P G V P P M G L R V D F V                     
-                      B B B B L C B B B N C B B A N A E B 1 E C                     
-                      A A A 6 O C 4 5 2 D C 3 0 P D D T L   T C                     
-                      4 7 3   A                 L   V I A   C                       
-                              D                 D     R N   H                       
-                                                      E K                           
+                      F F F P H V P P P G V P P M G R V V D F V                     
+                      B B B B L C B B B N C B B A N E I B 1 E C                     
+                      A A A 6 O C 4 5 2 D C 3 0 P D T N L   T C                     
+                      4 7 3   A                 L   I C A   C                       
+                              D                 D   R   N   H                       
+                                                    E   K                           
 
 
 
@@ -315,11 +315,12 @@ FanIn assignment for block A [35]
 {
 D2,D5,D0,D4,D3,D6,D1,D7,
 HS9,
-LADV,LWHSH,
+LWHSH,
 MB1,
 PB1,
 RP1,RA3,RA4,RETIRE,RA0,RA2,RP0,RA1,
 TB1,
+VINC,
 WA4,WA0,WA1,WA6,WA3,WA2,WSTB,WA7,WA5,WA9,WA8,
 XXL_493,XXL_547,
 }
@@ -337,11 +338,11 @@ WA1			(MC15	P)   : MUX 10		Ref (A16p)
 D6			(MC23	P)   : MUX 11		Ref (B21p)
 XXL_493			(MC6	FB)  : MUX 12		Ref (A6fb)
 RA4			(MC19	P)   : MUX 13		Ref (A5p)
-RETIRE			(MC31	P)   : MUX 14		Ref (E73p)
+VINC			(MC31	P)   : MUX 14		Ref (E73p)
 WA6			(MC9	FB)  : MUX 15		Ref (A9fb)
 XXL_547			(MC8	FB)  : MUX 16		Ref (A8fb)
 D1			(MC32	P)   : MUX 18		Ref (E77p)
-LADV			(MC30	P)   : MUX 19		Ref (E72p)
+RETIRE			(MC30	P)   : MUX 19		Ref (E72p)
 RA0			(MC33	P)   : MUX 21		Ref (F83p)
 WA3			(MC7	FB)  : MUX 22		Ref (A7fb)
 HS9			(MC11	FB)  : MUX 23		Ref (A11fb)
@@ -761,7 +762,7 @@ FBA15 = ((SRC0 & !SRC1 & WA15.Q)
 	# (!SRC0 & !SRC1 & SA15.Q)
 	# (SRC0 & MB3.Q & SRC1));
 
-HS2.D = ((D2 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+HS2.D = ((D2 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (LWHSL & PB2)
 	# (HS2.Q & !LWHSL & XXL_482));
 
@@ -775,31 +776,31 @@ FBA18 = ((SRC0 & !SRC1 & WA18.Q)
 	# (!SRC0 & !SRC1 & SA18.Q)
 	# (SRC0 & MB6.Q & SRC1));
 
-HS3.D = ((D3 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+HS3.D = ((D3 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (LWHSL & PB3)
 	# (HS3.Q & !LWHSL & XXL_482));
 
-HS4.D = ((D4 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+HS4.D = ((D4 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (LWHSL & PB4)
 	# (HS4.Q & !LWHSL & XXL_482));
 
-HS5.D = ((D5 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+HS5.D = ((D5 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (LWHSL & PB5)
 	# (HS5.Q & !LWHSL & XXL_482));
 
-HS6.D = ((D6 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+HS6.D = ((D6 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (LWHSL & PB6)
 	# (HS6.Q & !LWHSL & XXL_482));
 
-HS7.D = ((D7 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+HS7.D = ((D7 & RA0 & RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (LWHSL & PB7)
 	# (HS7.Q & !LWHSL & XXL_482));
 
-HS8.D = ((D0 & !RA0 & !RA1 & RA2 & !RA3 & !RA4 & WSTB)
+HS8.D = ((D0 & !RA0 & !RA1 & RA2 & !RA3 & !RA4 & !WSTB)
 	# (LWHSH & PB0)
 	# (HS8.Q & !LWHSH & XXL_495));
 
-HS9.D = ((D1 & !RA0 & !RA1 & RA2 & !RA3 & !RA4 & WSTB)
+HS9.D = ((D1 & !RA0 & !RA1 & RA2 & !RA3 & !RA4 & !WSTB)
 	# (LWHSH & PB1)
 	# (HS9.Q & !LWHSH & XXL_495));
 
@@ -851,25 +852,25 @@ MAPQ6.D = ((!CELLTICK & MAPQ6.Q)
 MAPQ7.D = ((!CELLTICK & MAPQ7.Q)
 	# (CELLTICK & MAP7.Q));
 
-MB0.D = ((D0 & RA0 & !RA1 & !RA2 & RA3 & RA4 & WSTB)
+MB0.D = ((D0 & RA0 & !RA1 & !RA2 & RA3 & RA4 & !WSTB)
 	# (MB0.Q & XXL_485));
 
-MB2.D = ((D2 & RA0 & !RA1 & !RA2 & RA3 & RA4 & WSTB)
+MB2.D = ((D2 & RA0 & !RA1 & !RA2 & RA3 & RA4 & !WSTB)
 	# (MB2.Q & XXL_485));
 
-MB1.D = ((D1 & RA0 & !RA1 & !RA2 & RA3 & RA4 & WSTB)
+MB1.D = ((D1 & RA0 & !RA1 & !RA2 & RA3 & RA4 & !WSTB)
 	# (MB1.Q & XXL_485));
 
-MB3.D = ((D3 & RA0 & !RA1 & !RA2 & RA3 & RA4 & WSTB)
+MB3.D = ((D3 & RA0 & !RA1 & !RA2 & RA3 & RA4 & !WSTB)
 	# (MB3.Q & XXL_485));
 
-MB4.D = ((D4 & RA0 & !RA1 & !RA2 & RA3 & RA4 & WSTB)
+MB4.D = ((D4 & RA0 & !RA1 & !RA2 & RA3 & RA4 & !WSTB)
 	# (MB4.Q & XXL_485));
 
-MB5.D = ((D5 & RA0 & !RA1 & !RA2 & RA3 & RA4 & WSTB)
+MB5.D = ((D5 & RA0 & !RA1 & !RA2 & RA3 & RA4 & !WSTB)
 	# (MB5.Q & XXL_485));
 
-MB6.D = ((D6 & RA0 & !RA1 & !RA2 & RA3 & RA4 & WSTB)
+MB6.D = ((D6 & RA0 & !RA1 & !RA2 & RA3 & RA4 & !WSTB)
 	# (MB6.Q & XXL_485));
 
 MAPA0.D = ((!HLOAD & !MAPA0.Q & MCADV)
@@ -994,56 +995,56 @@ SA18.D = ((!VBLANK & SA18.Q & !SA14.Q)
 	# (!VBLANK & SA18.Q & !SA12.Q)
 	# (!VBLANK & SA18.Q & !SA13.Q));
 
-TB0.D = ((D0 & RA0 & RA1 & RA2 & !RA3 & RA4 & WSTB)
+TB0.D = ((D0 & RA0 & RA1 & RA2 & !RA3 & RA4 & !WSTB)
 	# (TB0.Q & XXL_489));
 
-TB1.D = ((D1 & RA0 & RA1 & RA2 & !RA3 & RA4 & WSTB)
+TB1.D = ((D1 & RA0 & RA1 & RA2 & !RA3 & RA4 & !WSTB)
 	# (TB1.Q & XXL_489));
 
-TB2.D = ((D2 & RA0 & RA1 & RA2 & !RA3 & RA4 & WSTB)
+TB2.D = ((D2 & RA0 & RA1 & RA2 & !RA3 & RA4 & !WSTB)
 	# (TB2.Q & XXL_489));
 
-TB3.D = ((D3 & RA0 & RA1 & RA2 & !RA3 & RA4 & WSTB)
+TB3.D = ((D3 & RA0 & RA1 & RA2 & !RA3 & RA4 & !WSTB)
 	# (TB3.Q & XXL_489));
 
-TB4.D = ((D4 & RA0 & RA1 & RA2 & !RA3 & RA4 & WSTB)
+TB4.D = ((D4 & RA0 & RA1 & RA2 & !RA3 & RA4 & !WSTB)
 	# (TB4.Q & XXL_489));
 
-VS0.D = ((D0 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+VS0.D = ((D0 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (VS0.Q & XXL_483));
 
-VS1.D = ((D1 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+VS1.D = ((D1 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (VS1.Q & XXL_483));
 
-VS2.D = ((D2 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+VS2.D = ((D2 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (VS2.Q & XXL_483));
 
-VS3.D = ((D3 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+VS3.D = ((D3 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (VS3.Q & XXL_483));
 
-VS4.D = ((D4 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+VS4.D = ((D4 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (VS4.Q & XXL_483));
 
-VS5.D = ((D5 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+VS5.D = ((D5 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (VS5.Q & XXL_483));
 
-VS6.D = ((D6 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+VS6.D = ((D6 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (VS6.Q & XXL_483));
 
-VS7.D = ((D7 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & WSTB)
+VS7.D = ((D7 & RA0 & !RA1 & !RA2 & !RA3 & !RA4 & !WSTB)
 	# (VS7.Q & XXL_483));
 
 VS8.D = ((VS8.Q & !RA1)
 	# (VS8.Q & RA2)
 	# (VS8.Q & RA3)
 	# (VS8.Q & RA4)
-	# (VS8.Q & !WSTB)
-	# (!RA0 & RA1 & !RA2 & !RA3 & !RA4 & WSTB & D0)
+	# (VS8.Q & WSTB)
+	# (!RA0 & RA1 & !RA2 & !RA3 & !RA4 & !WSTB & D0)
 	# (VS8.Q & RA0));
 
 WA0.D = ((D0 & XXL_493)
 	# (XXL_474 & XXL_477 & !WA0.Q & XXL_479)
-	# (XXL_474 & XXL_477 & WA0.Q & !LADV & !RETIRE));
+	# (XXL_474 & XXL_477 & WA0.Q & !RETIRE & !VINC));
 
 WA1.D = ((D1 & XXL_493)
 	# (XXL_474 & XXL_477 & WA1.Q & XXL_577)
@@ -1094,39 +1095,39 @@ WA9.D = ((XXL_475 & XXL_497 & WA9.Q & !WA4.Q)
 	# (XXL_475 & XXL_497 & WA9.Q & !WA3.Q));
 
 WA10.D = ((XXL_475 & !WA10.Q & WROWADV)
-	# (D2 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB)
+	# (D2 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & !WSTB)
 	# (XXL_475 & WA10.Q & !WROWADV));
 
-WA11.D = ((D3 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB)
+WA11.D = ((D3 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & !WSTB)
 	# (XXL_475 & WA11.Q & XXL_578)
 	# (XXL_475 & !WA11.Q & WA10.Q & WROWADV));
 
 WA12.D = ((XXL_475 & WA12.Q & XXL_573)
 	# (XXL_475 & !WA12.Q & WA11.Q & WA10.Q & WROWADV)
-	# (D4 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB));
+	# (D4 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & !WSTB));
 
-WA13.D = ((D5 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB)
+WA13.D = ((D5 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & !WSTB)
 	# (XXL_475 & !WA13.Q & WA12.Q & WA11.Q & WA10.Q & WROWADV)
 	# (XXL_475 & WA13.Q & !WA12.Q)
 	# (XXL_475 & WA13.Q & XXL_573));
 
 WA14.D = ((XXL_475 & WA14.Q & XXL_573)
-	# (D6 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB)
+	# (D6 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & !WSTB)
 	# (XXL_475 & !WA14.Q & WA12.Q & WA13.Q & WA11.Q & WA10.Q & WROWADV)
 	# (XXL_475 & WA14.Q & !WA13.Q)
 	# (XXL_475 & WA14.Q & !WA12.Q));
 
 WA15.D = ((XXL_475 & !WA15.Q & WA12.Q & WA13.Q & WA14.Q & WA11.Q & WA10.Q & WROWADV)
 	# (XXL_475 & WA15.Q & XXL_528)
-	# (D7 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB));
+	# (D7 & RA0 & !RA1 & !RA2 & RA3 & !RA4 & !WSTB));
 
-WA16.D = ((D0 & !RA0 & RA1 & !RA2 & RA3 & !RA4 & WSTB)
+WA16.D = ((D0 & !RA0 & RA1 & !RA2 & RA3 & !RA4 & !WSTB)
 	# (XXL_476 & !WA16.Q & WA15.Q & WA12.Q & WA13.Q & WA14.Q & WA11.Q & WA10.Q & WROWADV)
 	# (XXL_476 & WA16.Q & !WA15.Q)
 	# (XXL_476 & WA16.Q & XXL_528));
 
 WA17.D = ((XXL_476 & WA17.Q & XXL_528)
-	# (D1 & !RA0 & RA1 & !RA2 & RA3 & !RA4 & WSTB)
+	# (D1 & !RA0 & RA1 & !RA2 & RA3 & !RA4 & !WSTB)
 	# (XXL_476 & !WA17.Q & WA15.Q & WA16.Q & WA12.Q & WA13.Q & WA14.Q & WA11.Q & WA10.Q & WROWADV)
 	# (XXL_476 & WA17.Q & !WA16.Q)
 	# (XXL_476 & WA17.Q & !WA15.Q));
@@ -1136,33 +1137,33 @@ WA18.D = ((XXL_476 & WA18.Q & !WA14.Q)
 	# (XXL_476 & WA18.Q & !WA16.Q)
 	# (XXL_476 & WA18.Q & !WA17.Q)
 	# (XXL_476 & WA18.Q & XXL_573)
-	# (D2 & !RA0 & RA1 & !RA2 & RA3 & !RA4 & WSTB)
+	# (D2 & !RA0 & RA1 & !RA2 & RA3 & !RA4 & !WSTB)
 	# (XXL_476 & !WA18.Q & WA13.Q & WA14.Q & WA15.Q & WA16.Q & WA17.Q & WA12.Q & WA11.Q & WA10.Q & WROWADV)
 	# (XXL_476 & WA18.Q & !WA12.Q)
 	# (XXL_476 & WA18.Q & !WA13.Q));
 
-!XXL_474 = (!RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB);
+!XXL_474 = (!RA0 & !RA1 & !RA2 & RA3 & !RA4 & !WSTB);
 
-!XXL_475 = (RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB);
+!XXL_475 = (RA0 & !RA1 & !RA2 & RA3 & !RA4 & !WSTB);
 
-!XXL_476 = (!RA0 & RA1 & !RA2 & RA3 & !RA4 & WSTB);
+!XXL_476 = (!RA0 & RA1 & !RA2 & RA3 & !RA4 & !WSTB);
 
 !XXL_477 = (RP0.Q & !RP1.Q);
 
-!XXL_479 = (!LADV & !RETIRE);
+!XXL_479 = (!RETIRE & !VINC);
 
-!XXL_482 = (RA0 & RA1 & !RA2 & !RA3 & !RA4 & WSTB);
+!XXL_482 = (RA0 & RA1 & !RA2 & !RA3 & !RA4 & !WSTB);
 
-!XXL_483 = (RA0 & !RA1 & !RA2 & !RA3 & !RA4 & WSTB);
+!XXL_483 = (RA0 & !RA1 & !RA2 & !RA3 & !RA4 & !WSTB);
 
-!XXL_485 = (RA0 & !RA1 & !RA2 & RA3 & RA4 & WSTB);
+!XXL_485 = (RA0 & !RA1 & !RA2 & RA3 & RA4 & !WSTB);
 
-!XXL_489 = (RA0 & RA1 & RA2 & !RA3 & RA4 & WSTB);
+!XXL_489 = (RA0 & RA1 & RA2 & !RA3 & RA4 & !WSTB);
 
-XXL_493 = ((!RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB)
+XXL_493 = ((!RA0 & !RA1 & !RA2 & RA3 & !RA4 & !WSTB)
 	# (RP0.Q & !RP1.Q));
 
-!XXL_495 = (!RA0 & !RA1 & RA2 & !RA3 & !RA4 & WSTB);
+!XXL_495 = (!RA0 & !RA1 & RA2 & !RA3 & !RA4 & !WSTB);
 
 !XXL_497 = (!RP0.Q & RP1.Q);
 
@@ -1178,7 +1179,7 @@ XXL_493 = ((!RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB)
 
 !XXL_531 = (MC2.Q & MC3.Q & MC4.Q & MAPA1.Q & MAPA0.Q & MCADV);
 
-XXL_547 = ((RA0 & !RA1 & !RA2 & RA3 & !RA4 & WSTB)
+XXL_547 = ((RA0 & !RA1 & !RA2 & RA3 & !RA4 & !WSTB)
 	# (!RP0.Q & RP1.Q));
 
 !XXL_568 = (WA1.Q & WA0.Q & XXL_479);
@@ -1600,8 +1601,8 @@ Pin 41 = PB2; /* MC 49 */
 Pin 44 = PB3; /* MC 65 */ 
 Pin 45 = PB0; /* MC 67 */ 
 Pin 46 = MAPLD; /* MC 69 */ 
-Pin 48 = LADV; /* MC 72 */ 
-Pin 49 = RETIRE; /* MC 73 */ 
+Pin 48 = RETIRE; /* MC 72 */ 
+Pin 49 = VINC; /* MC 73 */ 
 Pin 50 = VBLANK; /* MC 75 */ 
 Pin 51 = D1; /* MC 77 */ 
 Pin 52 = FETCH; /* MC 80 */ 
@@ -1839,8 +1840,8 @@ MC68  0         --               MB3      Dg-g-  --        --             2     
 MC69  46   --   MAPLD     INPUT  VS6      Dg-g-  --        --             2     slow
 MC70  0         --               MB5      Dg-g-  --        --             2     slow
 MC71  0         --               VS7      Dg-g-  --        --             2     slow
-MC72  48   --   LADV      INPUT  MB6      Dg-g-  --        --             2     slow
-MC73  49   --   RETIRE    INPUT  TB3      Dg-g-  --        --             2     slow
+MC72  48   --   RETIRE    INPUT  MB6      Dg-g-  --        --             2     slow
+MC73  49   --   VINC      INPUT  TB3      Dg-g-  --        --             2     slow
 MC74  0         --               HS8      Dg-g-  --        --             3     slow
 MC75  50   --   VBLANK    INPUT  VS3      Dg-g-  --        --             2     slow
 MC76  0         --               HS3      Dg-g-  XXL_495   --             4     slow

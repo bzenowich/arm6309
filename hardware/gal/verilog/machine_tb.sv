@@ -2,10 +2,16 @@
 // CONNECTOR.
 //
 // software/boot/boot.asm, assembled by A09 (software/tools/mkrom.sh), executed
-// by mc6809e.v on mainboard.v with video_card.v in a slot. Every part in the
-// path is the design: U3, U6, U9, U10 and the video card's three ATF1508AS are
-// generated from the same term lists hardware/gal/jedec/cupl.ts compiles for
-// the fitter.
+// by mc6809e.v on mainboard.v with video_card.v in a slot. U9, U10 and the
+// video card's three ATF1508AS are generated from the same term lists
+// hardware/gal/jedec/cupl.ts compiles for the fitter. ⚠ U3 and U6 are NOT: they
+// are the hand-written gal/mmu.v and gal/clkdec.v, checked against their fuse
+// maps by check:sim and jedec/cupl.check.ts rather than generated.
+//
+// ⚠ EVERY GENERATED PART IS IN ASSERTED SENSE, and the wrappers invert the
+// backplane lines by hand, so no claim here can see a pin declared with the
+// wrong polarity - nine of them passed this bench until 2026-09-11.
+// gal/pins.check.ts is what holds pin senses.
 //
 // WHAT IS NEW HERE, and it is the reason this file exists rather than a
 // thirteenth register-level testbench: nothing before it ran an INSTRUCTION.
@@ -43,7 +49,7 @@ module machine_tb;
   wire [18:0] WPTR;
   wire [1:0] VMODE;
   wire SPANBUSY, VBLANK, HBLANK;
-  wire bus_conflict, pa_conflict, vram_read_attempt;
+  wire bus_conflict, pa_conflict, vram_read;
 
   machine #(.SIMMS(4)) m (.*);
 
@@ -71,13 +77,12 @@ module machine_tb;
   // sampled check would miss them. design-review2.md 10: a model that ORs its
   // drivers cannot see a bus fight, so machine.v does not OR them and this
   // watches what it reports instead.
-  bit saw_bus_conflict = 0, saw_pa_conflict = 0, saw_vram_read = 0;
+  bit saw_bus_conflict = 0, saw_pa_conflict = 0;
   bit saw_lrun = 0;
   always @(posedge CLK25) if (m.vid_lrun) saw_lrun = 1;
   always @(posedge CLK25) begin
     if (bus_conflict)      saw_bus_conflict = 1;
     if (pa_conflict)       saw_pa_conflict  = 1;
-    if (vram_read_attempt) saw_vram_read    = 1;
   end
 
   // How much of the run the card spent holding the CPU. graphics.md 7.4's
@@ -85,11 +90,20 @@ module machine_tb;
   // a nonzero count here means the polling rule is not sufficient.
   int wait_dots = 0;
   always @(posedge CLK25) if (wait_asserted) wait_dots++;
+  // ... and how much of it was a VDATA access waiting, which the window's
+  // decode cannot produce: the cycle is in the I/O page.
+  int vdata_wait_dots = 0;
+  always @(posedge CLK25) if (wait_asserted && !n_iosel && pa[7:0] == 8'h75) vdata_wait_dots++;
 
   // Work counters, so a stall says WHAT stalled rather than only that it did.
-  int vram_writes = 0, vstat_reads = 0, reg_writes = 0;
+  int vram_writes = 0, vstat_reads = 0, reg_writes = 0, vram_reads = 0;
+  int vdata_reads = 0, vdata_writes = 0;
   always @(negedge e) begin
+    // +$15 VDATA, the VRAM port in the I/O page - graphics.md 19 item 47
+    if (rw && !n_iosel && pa[7:0] == 8'h75) vdata_reads++;
+    if (!rw && !n_iosel && pa[7:0] == 8'h75) vdata_writes++;
     if (!rw && n_iopage_bp && !pa[20] && pa[19]) vram_writes++;
+    if (vram_read) vram_reads++;
     if (rw && !n_iosel && pa[7:0] == 8'h73) vstat_reads++;
     if (!rw && !n_iosel && pa[7:5] == 3'b011) reg_writes++;
   end
@@ -600,19 +614,38 @@ module machine_tb;
          $sformatf("and all four tile codes are on the screen, so the map fetch really varies (%0d)", codes.size()));
     end
 
+    // ---- graphics.md 11: the software reads VRAM back --------------------
+    /* boot.asm section 10: the tile set in cell mode, then 32 stores each
+     * followed straight away by a load, then the whole area again. The ROM
+     * compares every byte itself and reports $40, or $E2 with the index. */
+    $display("");
+    $display("6b. Readable VRAM - graphics.md 11, from the software's own compare");
+    $display("");
+    wait_progress(8'h40, 900000,
+                  "⭐ VRAM READS BACK: 256 tile bytes, 32 store-then-load pairs with no poll between, the 64 bytes they left, a load issued under a 256-byte span, and the span - and through +$15 VDATA 64 stores, 64 loads, two spans started back to back and 512 bytes of them - every byte the ROM compared was right");
+    if (progress === 8'hE2)
+      $display("      boot.asm section 10 reported $E2 - a byte read back wrong (vidx/vgot are in the SIMM at $C01A)");
+    ok(vram_reads >= 256 + 32 + 64 + 1 + 256,
+       $sformatf("and the CPU really read the window - %0d VRAM read cycles", vram_reads));
+    ok(wait_dots > 0,
+       $sformatf("⭐ and a read WAITED - section 10 (d)'s load under a span held the CPU on /WAIT for %0d dots and still got the right byte", wait_dots));
+    ok(vdata_writes >= 64 + 1 + 2 && vdata_reads >= 64 + 1 + 512,
+       $sformatf("⭐ graphics.md 19 item 47: the CPU used +$15 VDATA - %0d stores and %0d loads in the I/O page, with no MMU block", vdata_writes, vdata_reads));
+    ok(vdata_wait_dots > 0,
+       $sformatf("⭐ and a VDATA access WAITED in the I/O page - section 10 (h)'s store and load under a span held the CPU for %0d dots, and the span still came out one colour", vdata_wait_dots));
+
     // ---- and the things that must not have happened -------------------
     $display("");
     $display("7. What must not have happened");
     $display("");
     ok(!saw_bus_conflict, "no cycle had two drivers on D0-D7 - machine.md 2's whole point");
     ok(!saw_pa_conflict,  "no cycle had two drivers on physical A20-A13");
-    ok(!saw_vram_read,    "the software never read VRAM - 11's path is not in video_card.v");
     ok(progress_writes >= 6,
        $sformatf("every stage reported (%0d writes to the progress port)", progress_writes));
 
     $display("");
-    $display("      %0d E cycles, %0d dots of /WAIT, %0d VRAM writes, %0d VSTAT reads",
-             e_cycles, wait_dots, vram_writes, vstat_reads);
+    $display("      %0d E cycles, %0d dots of /WAIT, %0d VRAM writes, %0d VRAM reads, %0d VSTAT reads",
+             e_cycles, wait_dots, vram_writes, vram_reads, vstat_reads);
     $display("");
     if (fails == 0) $display("machine_tb OK - %0d claims", claims);
     else            $display("machine_tb - %0d of %0d claims FAILED", fails, claims);

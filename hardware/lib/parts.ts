@@ -66,10 +66,19 @@ export const MAP_SRAM: PartDef = {
   },
 }
 
-/** 74HC574 - task select, MMU enable, shadow-ROM disable.
+/* ⛔ HCT, NOT HC, FOR EVERY PART THAT TAKES THE CPU'S ADDRESS OR WRITE DATA -
+ * since 2026-09-11. The CPU module fronts the bus with 74LVC buffers at 3.3 V
+ * (cpu/docs/plan.md 2.6: "3.3 V V_OH must satisfy every downstream V_IH"), and
+ * a 74HC input at V_CC = 5 V needs 0.7 x V_CC = 3.5 V to see a one. HCT's is
+ * 2.0 V. U2, U4, U18, U5 and U11-U13 all read the module directly; U16 was
+ * already HCT. Pinouts are identical across the two families, so - exactly as
+ * HCT244 below does - the numbering is read from the HC datasheet in
+ * reference/datasheets/. */
+
+/** 74HCT574 - TASK, the one bit of $FFB0-$FFBF, clocked from D0 at E-fall.
  * Verified as drawn. The datasheet writes the data pins 1D-8D and the clock
  * CLK; D1-D8 and CP here are the older names for the same pins. */
-export const HC574: PartDef = {
+export const HCT574: PartDef = {
   provenance: "confirmed",
   source: "reference/datasheets/sn74hc574.pdf p.3 (SCLS148H, N package)",
   footprint: "dip20_w0.3in",
@@ -82,9 +91,9 @@ export const HC574: PartDef = {
   },
 }
 
-/** 74HC245 - break-before-make isolation between the map SRAM and D0-D7.
- * Verified as drawn, names included. */
-export const HC245: PartDef = {
+/** 74HCT245 - break-before-make isolation between the map SRAM and D0-D7.
+ * Verified as drawn, names included. Its B side takes the CPU's write data. */
+export const HCT245: PartDef = {
   provenance: "confirmed",
   source: "reference/datasheets/sn74hc245.pdf p.1 (SCLS131D, N package)",
   footprint: "dip20_w0.3in",
@@ -97,14 +106,15 @@ export const HC245: PartDef = {
   },
 }
 
-/** 74HC157 - quad 2:1 mux on the map SRAM address.
+/** 74HCT157 - quad 2:1 mux on the map SRAM address, and (U11-U13) the SIMMs'
+ * row/column multiplex. Both read logical address lines from the CPU module.
  *
  * Verified as drawn. Two names differ from the datasheet, and the first one
  * carries a polarity the motherboard depends on: pin 1 is A/B with the bar over
  * the A, so SEL *low* selects the A inputs - which is why U5 ties SEL to
  * MAP_WE and puts the translate path on 1A-4A. Pin 15 is /G on the datasheet
  * and /E here. */
-export const HC157: PartDef = {
+export const HCT157: PartDef = {
   provenance: "confirmed",
   source: "reference/datasheets/sn74hc157.pdf p.1 (SCLS113D, N package)",
   footprint: "dip16_w0.3in",
@@ -281,7 +291,7 @@ export const HC4040: PartDef = {
 }
 
 export const PARTS: Record<string, PartDef> = {
-  CPU_SOCKET, MAP_SRAM, HC574, HC245, HC157, SRAM_512K, HCT244, FLASH_512K,
+  CPU_SOCKET, MAP_SRAM, HCT574, HCT245, HCT157, SRAM_512K, HCT244, FLASH_512K,
   SIMM30, HC4040,
 }
 

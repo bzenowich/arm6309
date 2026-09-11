@@ -31,6 +31,7 @@ module vspan_tb;
   // 9's palette, and 10.3.3's turnaround on the card's internal data bus.
   wire [15:0] RGB; wire [7:0] PIDX;
   wire PWE_o, PDOE_o, PIXOE_o, DBUS_FIGHT;
+  wire [7:0] VREAD; wire RDOE_o;          // graphics.md 11's vread '574
 
   video_card card (.*);
 
@@ -193,7 +194,7 @@ module vspan_tb;
                  retires, slots));
 
     $display("");
-    $display("/WAIT - 7.4: writes wait, reads never do");
+    $display("/WAIT - 7.4: writes wait, and since 11's reads, so do reads");
     $display("");
     wreg('h05, 8'd255);         // a 256-byte span, the worst case
     set_wptr(2048);
@@ -211,7 +212,11 @@ module vspan_tb;
       begin rvram(3000); end
       begin repeat (12) @(posedge DOTCLK); if (WAIT_OE) saw_wait = 1; end
     join
-    ok(!saw_wait, "a CPU VRAM read does NOT - the !RW qualification of 7.4");
+    /* ⛔ THIS CLAIMED THE OPPOSITE UNTIL 2026-09-11 - "a CPU VRAM read does
+     * NOT wait, the !RW qualification of 7.4". That was for a flat read that
+     * reserved its own chip, which no part could do. A read is at WPTR now
+     * (graphics.md 11), and a span in flight is moving WPTR, so it waits. */
+    ok(saw_wait, "⭐ and a CPU VRAM READ during a span pulls /WAIT too - the span is moving the WPTR the read is at (graphics.md 11)");
     // and nothing in the I/O page waits, which is what makes polling VSTAT free
     saw_wait = 0;
     fork

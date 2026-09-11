@@ -37,10 +37,17 @@ export const clkdecDesign: Design = {
     { name: "LA5", pin: 7 },
     { name: "RW", pin: 8 },
     { name: "LA4", pin: 9 },
-    /* /WAIT from the backplane, active high after the slot's open-drain
-     * inversion. It holds every registered macrocell below - machine.md 5
-     * item 8, and clkdec.pld carries the two rules that go with it. */
-    { name: "WAIT", pin: 10 },
+    /* /WAIT from the backplane: open-drain, pulled HIGH by R3, asserted LOW.
+     * It holds every registered macrocell below - machine.md 5 item 8, and
+     * clkdec.pld carries the two rules that go with it.
+     *
+     * ⛔ ACTIVE LOW since 2026-09-11. It was declared active-high under a
+     * comment saying the pull-up "inverts" it, which a pull-up does not: with
+     * nothing asserting /WAIT the pin sat high, WAIT read true, and every
+     * divider cell held - E never toggled. clkdec.v takes the asserted sense,
+     * so no simulation could see it, and every GAL check held pin 10 at 0.
+     * pins.check.ts. */
+    { name: "WAIT", pin: 10, activeLow: true },
     /* $FFB0 even is TASK, $FFB1 odd is BOOT - machine.md 3. One literal, and
      * it is what lets boot code write TASK without leaving boot mode. */
     { name: "LA0", pin: 11 },

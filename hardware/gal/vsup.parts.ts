@@ -49,6 +49,16 @@ export const vsupStrobes: Cell[] = [
    * the same offset for vctrl's copy; two decodes of one address is cheaper
    * than the pin that would carry one of them. */
   comb("LDHS", [`WSTB & ${isReg(REGS.HSCROLL)}`]),
+  /* ⛔ 13's +$14, AND vctrl'S WADV1:0 HAD NO DRIVER ON SILICON UNTIL 2026-09-11.
+   * vaddr decoded it and kept it: a buried combinational cell, substituted and
+   * pinned nowhere, while vctrl declared an input pin for it (cpld/vctrl.fit
+   * pin 9). The same for LDHS, pin 51, which both vaddr and this part computed
+   * and neither exported. emit.ts makes every cell a Verilog port, so the board
+   * file wired the net and every simulation was green. check:reach now asserts
+   * that an input another part computes is an output of that part.
+   * ⭐ HERE AND NOT ON vaddr, because this part has the pins and vaddr has none
+   * to spare - and vaddr's copy of LDADV had no other reader, so it is gone. */
+  comb("LDADV", [`WSTB & ${isReg(REGS.WADV)}`], "13's +$14 - 7.2's next-row-same-column mode, to vctrl"),
   comb("WSPL", [`WSTB & ${isReg(REGS.SPANLEN)}`],
     "13's +$05 - and it had no strobe, because SPANLEN was only ever read"),
   comb("WPIDX", [`WSTB & ${isReg(REGS.PIDX)}`], "13's +$10"),
@@ -131,8 +141,12 @@ export const listDecode: Cell[] = [
   comb("LSTOP", ["LRUN & LD7 & LD4 & LD3 & LD2 & LD1 & LD0"],
     "END is any b7 byte with b4..b0 set - canonically $FF"),
 
+  /* ⭐ vctrl grants the spare access to "whoever is not the span writer" as
+   * SGRANT since 2026-09-11, so the list engine's share is formed here, where
+   * LRUN is - and 11's read prefetch takes the rest (vramRead, below). */
+  comb("LGRANT", ["LRUN & SGRANT"], "10.3's grant: the spare access, while the engine runs"),
   comb("LADV", ["LRUN & LGRANT & !LWAIT"],
-    "10.3.2's consumption cycle - out to vaddr, which is where WPTR is"),
+    "10.3.2's consumption cycle - WPTR's increment, through VINC"),
   /* Expressed through LADV rather than repeating its three literals: the same
    * function, and it is what let the decode fit beside everything else. */
   comb("LFETCH", ["LADV & !LPH"]),
@@ -322,4 +336,58 @@ export const paletteWrite: Cell[] = [
     why: "the pixel-index '574 drives the LUT's address AND the LUT drives its data",
     terms: ["!PDOE"] },
   lowPin("PWE", ["PS2"], "the LUT's /WE - one dot, inside PDOE at both ends"),
+]
+
+/* ---- graphics.md 11: readable VRAM, at WPTR, prefetched ------------------
+ *
+ * ⭐ A READ IS A WRITE RUN BACKWARDS. Every CPU VRAM write retires at WPTR and
+ * post-increments; the physical address a store carries selects the VRAM
+ * window and nothing else (3.1.1's address capture is in no design). So a CPU
+ * read of the window returns the byte at WPTR and post-increments too, and the
+ * software that walks a write with X+ walks a read the same way.
+ *
+ * The byte comes from 14's `74HC574 vread`, which the parts list has carried
+ * since 11 was written and no design clocked:
+ *
+ *   RDVALID  "the read latch holds the byte WPTR names"
+ *   RDCK     its clock - the spare access vctrl grants to the non-span
+ *            requesters (SGRANT), when the engine is not the one running
+ *   RDOE     its /OE onto D0-D7 - the whole read cycle, not E-high
+ *            (machine.v's 2026-09-10 lesson: a 6809E samples on E's fall)
+ *   RSTART   the read's own post-increment, one dot after E falls - WPQ and
+ *            WSTART's shape on vctrl, for the same reason: only an edge
+ *            survives a cycle /WAIT has stretched
+ *
+ * RDVALID falls on ANYTHING that can move WPTR or change the byte at it: a
+ * register write (WSTB - WPTR's three bytes, and nothing is lost by refilling
+ * after the others), a span retire, a list advance, 7.2's column reload walk,
+ * and the read's own increment. Refilling once too often costs a spare access;
+ * missing one returns a wrong byte, so the list errs one way. While RDVALID is
+ * low, vctrl asks for the access (SPNREQ) and holds a VRAM read on /WAIT.
+ *
+ * ⚠ AND IT NEEDS NO CPU ADDRESS AT ALL, which is why it closes at both E rates:
+ * the byte is fetched before the CPU asks for it, not inside the CPU's cycle,
+ * so 11's phase-by-phase ÷12 budget - and its ÷8 failure - do not apply. */
+const RDCLR = "!WSTB & !RETIRE & !LADV & !RSTART & !RP0 & !RP1"
+/* ⭐ VDATA, +$15 - graphics.md 11, 19 item 47. The same port at an address in
+ * the I/O page, so a task or a handler reaches VRAM without an MMU block. It is
+ * decoded from the RAW address and not from RA: while a span runs RA is WFG or
+ * WBG, and a VDATA access under a span is exactly the one that has to wait.
+ * VRAMSEL cannot carry it - it is qualified !IOPAGE so that no I/O cycle ever
+ * touches VRAM - so every consumer of the port takes VRAMSEL # VDSEL. */
+const VDSEL_TERM = `IOSEL & A6 & A5 & ${[4, 3, 2, 1, 0]
+  .map((b) => `${(REGS.VDATA >> b) & 1 ? "" : "!"}A${b}`).join(" & ")}`
+export const vramRead: Cell[] = [
+  comb("VDSEL", [VDSEL_TERM], "13: +$15 VDATA, the VRAM port in the I/O page - to vctrl's strobe and /WAIT"),
+  reg("RPQ", ["VRAMSEL & RW & E", "VDSEL & RW & E"], "a VRAM read was in E-high on the last dot"),
+  comb("RSTART", ["RPQ & !E"], "11's post-increment: the dot after a VRAM read's E falls"),
+  /* Active low, so the '574's rising edge is the END of the granted dot, when
+   * the framebuffer has answered - the same instant the list engine's latch
+   * takes the same bus. */
+  lowPin("RDCK", ["SGRANT & !LRUN & !RDVALID"],
+    "11: clock the vread '574 off the pixel bus - the spare access, at WPTR"),
+  reg("RDVALID", [`RDCK & ${RDCLR}`, `RDVALID & ${RDCLR}`],
+    "11: the read latch holds the byte at WPTR"),
+  lowPin("RDOE", ["VRAMSEL & RW", "VDSEL & RW"], "11: the vread '574 drives D0-D7 for a VRAM read cycle"),
+  comb("VINC", ["LADV", "RSTART"], "WPTR's increment: the list engine's, or a VRAM read's"),
 ]

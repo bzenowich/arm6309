@@ -452,7 +452,7 @@ are a missing field here.
   period            what gets written to PER this tick
   note_period       the period the note was triggered at, before vibrato/arpeggio
   target_period     tone portamento destination (3xx)
-  volume            0..64, what gets written to VOL
+  volume            0..64, Paula's scale; VOL gets VOLCODE[volume] (§5.2)
   finetune          table row 0..15
   porta_speed       3xx memory
   vib_pos, vib_cmd  4xy: position in the sine table, speed/depth
@@ -483,9 +483,26 @@ One `/FIRQ` per tick. Two paths, and they are genuinely different amounts of wor
           advance_position()            ; §5.8
       else:
           for ch in 0..3: per_tick_effect(ch)   ; §5.5
-      for ch in 0..3: write PER, VOL if changed
+      for ch in 0..3: write PER, VOL if changed   ; VOL <- VOLCODE[volume]
       rti
 ```
+
+**`VOL` is written through a table.** The card's `VOL` register is the volume
+converter's 8-bit code, not Paula's 0–64 ([`audio.md`](audio.md) §6.1). Every effect
+works on `volume` in 0–64 exactly as ProTracker does, clamps included, and the one place
+the replayer writes `VOL` converts it:
+
+```
+  VOLCODE    fcb  0,4,8,...,248,252,255     ; 65 bytes: min(4v, 255)
+             ldb  volume,u
+             leax VOLCODE,pcr
+             lda  b,x                       ; ~4 cycles over a plain load
+             sta  ADATA
+```
+
+⚠ **Leave it out and nothing breaks audibly**: every channel plays 12 dB quiet. That is
+why `test_refplayer` asserts the bytes the replayer writes, and the 6309 port's trace
+has to reproduce them.
 
 Three disciplines that matter:
 
@@ -510,7 +527,7 @@ player either works or plays every looped instrument as an endless attack.
   ADATA <- sample_addr[n]  (3 bytes)     ; LC  = one-shot start
   ADATA <- sample_len[n]   (2 bytes)     ; LEN = full length, in words
   ADATA <- period          (2 bytes)     ; PER
-  ADATA <- volume          (1 byte)      ; VOL
+  ADATA <- VOLCODE[volume] (1 byte)     ; VOL, the converter's code (§5.2)
   ...for each triggering channel...
 
   ADMACON <- $00 | mask                  ; STOP the channels being retriggered
@@ -784,7 +801,7 @@ none of the arithmetic below. Every percentage in this section is quoted against
 | effect dispatch through a jump table | ~15 |
 | effect body (vibrato is the worst at ~60; volume slide ~30) | ~30–60 |
 | write `PER` (`AIDX` + 2 × `ADATA`) | ~24 |
-| write `VOL`, if dirty | ~12 |
+| write `VOL`, if dirty, through `VOLCODE` | ~16 |
 | **per channel** | **~100–130** |
 | × 4 channels | ~440 |
 | `FIRQ` entry/exit, timer ack, tick counter | ~180 |

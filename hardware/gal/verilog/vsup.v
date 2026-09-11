@@ -32,8 +32,9 @@ module vsup (
     input  wire D5,
     input  wire D6,
     input  wire D7,
-    input  wire LGRANT,
+    input  wire SGRANT,
     input  wire HLOAD,
+    input  wire VRAMSEL,
     output wire WSTB,
     output wire RA0,
     output wire RA1,
@@ -61,6 +62,7 @@ module vsup (
     output wire OEB1,
     output wire OEB2,
     output wire LDHS,
+    output wire LDADV,
     output wire WSPL,
     output wire WPIDX,
     output wire WPDL,
@@ -77,6 +79,7 @@ module vsup (
     output wire LGO,
     output wire LRUN,
     output wire LSTOP,
+    output wire LGRANT,
     output wire LADV,
     output wire LFETCH,
     output wire LMOVE,
@@ -109,7 +112,14 @@ module vsup (
     output wire PINC,
     output wire PDOE,
     output wire PIXOE,
-    output wire PWE
+    output wire PWE,
+    output wire VDSEL,
+    output wire RPQ,
+    output wire RSTART,
+    output wire RDCK,
+    output wire RDVALID,
+    output wire RDOE,
+    output wire VINC
 );
 
   reg  r_NSL0;
@@ -145,6 +155,8 @@ module vsup (
   reg  r_PS1;
   reg  r_PS2;
   reg  r_PS3;
+  reg  r_RPQ;
+  reg  r_RDVALID;
 
   assign NSL0 = r_NSL0;
   assign NSL1 = r_NSL1;
@@ -179,10 +191,16 @@ module vsup (
   assign PS1 = r_PS1;
   assign PS2 = r_PS2;
   assign PS3 = r_PS3;
+  assign RPQ = r_RPQ;
+  assign RDVALID = r_RDVALID;
 
-  // EXTERNAL - E-qualified: a 6809 write is only valid data in the second half
+  // EXTERNAL - E-qualified: a 6809 write is only valid data in the second half - and not VDATA's
   assign WSTB =
-         (IOSEL & A6 & A5 & ~RW & E);
+         (IOSEL & A6 & A5 & ~RW & E & ~A4)
+         | (IOSEL & A6 & A5 & ~RW & E & A3)
+         | (IOSEL & A6 & A5 & ~RW & E & ~A2)
+         | (IOSEL & A6 & A5 & ~RW & E & A1)
+         | (IOSEL & A6 & A5 & ~RW & E & ~A0);
   // EXTERNAL - 7.4: the mask bit IS the register file's address bit 0, inverted
   assign RA0 =
          (IOSEL & A6 & A5 & ~SPANBUSY & A0)
@@ -248,9 +266,12 @@ module vsup (
   assign OEB2 =
          (~HS1)
          | (~HS0);
-  // buried
+  // EXTERNAL
   assign LDHS =
          (WSTB & ~RA4 & ~RA3 & ~RA2 & RA1 & RA0);
+  // EXTERNAL - 13's +$14 - 7.2's next-row-same-column mode, to vctrl
+  assign LDADV =
+         (WSTB & RA4 & ~RA3 & RA2 & ~RA1 & ~RA0);
   // buried - 13's +$05 - and it had no strobe, because SPANLEN was only ever read
   assign WSPL =
          (WSTB & ~RA4 & ~RA3 & RA2 & ~RA1 & RA0);
@@ -269,7 +290,10 @@ module vsup (
   // buried - END is any b7 byte with b4..b0 set - canonically $FF
   assign LSTOP =
          (LRUN & LD7 & LD4 & LD3 & LD2 & LD1 & LD0);
-  // EXTERNAL - 10.3.2's consumption cycle - out to vaddr, which is where WPTR is
+  // buried - 10.3's grant: the spare access, while the engine runs
+  assign LGRANT =
+         (LRUN & SGRANT);
+  // buried - 10.3.2's consumption cycle - WPTR's increment, through VINC
   assign LADV =
          (LRUN & LGRANT & ~LWAIT);
   // buried
@@ -335,6 +359,23 @@ module vsup (
   // EXTERNAL - the LUT's /WE - one dot, inside PDOE at both ends
   assign PWE =
          (PS2);
+  // EXTERNAL - 13: +$15 VDATA, the VRAM port in the I/O page - to vctrl's strobe and /WAIT
+  assign VDSEL =
+         (IOSEL & A6 & A5 & A4 & ~A3 & A2 & ~A1 & A0);
+  // buried - 11's post-increment: the dot after a VRAM read's E falls
+  assign RSTART =
+         (RPQ & ~E);
+  // EXTERNAL - 11: clock the vread '574 off the pixel bus - the spare access, at WPTR
+  assign RDCK =
+         (SGRANT & ~LRUN & ~RDVALID);
+  // EXTERNAL - 11: the vread '574 drives D0-D7 for a VRAM read cycle
+  assign RDOE =
+         (VRAMSEL & RW)
+         | (VDSEL & RW);
+  // EXTERNAL - WPTR's increment: the list engine's, or a VRAM read's
+  assign VINC =
+         (LADV)
+         | (RSTART);
 
 
   wire AR_ = (RESET);
@@ -373,6 +414,8 @@ module vsup (
       r_PS1 <= 1'b0;
       r_PS2 <= 1'b0;
       r_PS3 <= 1'b0;
+      r_RPQ <= 1'b0;
+      r_RDVALID <= 1'b0;
     end else begin
       r_NSL0 <=
          (LDLEN & ~SL0)
@@ -508,6 +551,12 @@ module vsup (
          (PS1);
       r_PS3 <=
          (PS2);
+      r_RPQ <=
+         (VRAMSEL & RW & E)
+         | (VDSEL & RW & E);
+      r_RDVALID <=
+         (RDCK & ~WSTB & ~RETIRE & ~LADV & ~RSTART & ~RP0 & ~RP1)
+         | (RDVALID & ~WSTB & ~RETIRE & ~LADV & ~RSTART & ~RP0 & ~RP1);
     end
   end
 

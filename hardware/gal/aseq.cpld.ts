@@ -29,8 +29,9 @@ const EXTERNAL = new Set([
   "SROE", "SBOE",
   /* SD[18:16] - 9.5's nineteenth bit and CNT's seventeenth */
   "SDH0", "SDH1", "SDH2",
-  /* 6.2's converters */
-  "CVOEA", "CVC0", "CVC1", "CVC2",
+  /* 6.2's converters: the port registers' load code, and the three strobes.
+   * The select and the port enables are U1's S3 and OEB (audio.md 6.2). */
+  "CVC0", "CVC1", "CVC2", "CSSL", "CSSR", "CSV",
   /* 9.3's host latches */
   "PFLANE", "PFCK", "PWCK", "PWOE",
   /* 8.1's six sources, as a 3-bit code - 10.2.6's lever, decoded on U1 */

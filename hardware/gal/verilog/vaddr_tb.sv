@@ -33,6 +33,7 @@ module vaddr_tb;
   // 9's palette, and 10.3.3's turnaround on the card's internal data bus.
   wire [15:0] RGB; wire [7:0] PIDX;
   wire PWE_o, PDOE_o, PIXOE_o, DBUS_FIGHT;
+  wire [7:0] VREAD; wire RDOE_o;          // graphics.md 11's vread '574
 
   video_card card (.*);
 

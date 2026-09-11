@@ -1,4 +1,5 @@
 vlen - ARM6309-UV11, video card - span-solid length counter
+*** SUPERSEDED - DO NOT PROGRAM *** graphics.md 10.1.7 - absorbed into vsup, the third ATF1508AS, 2026-09-09
 GAL22V10, 5892 fuses, checksum 35c5
 
   pin  signal      terms  of   path           polarity

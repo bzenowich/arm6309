@@ -22,7 +22,7 @@ Device     f1508ispplcc84 ;
 
 /* --- inputs ------------------------------------------------------- */
 PIN = DOTCLK ;
-PIN = IOSEL ;
+PIN = !IOSEL ;
 PIN = A5 ;
 PIN = A6 ;
 PIN = A0 ;
@@ -47,11 +47,12 @@ PIN = D4 ;
 PIN = D5 ;
 PIN = D6 ;
 PIN = D7 ;
-PIN = LGRANT ;
+PIN = SGRANT ;
 PIN = HLOAD ;
+PIN = VRAMSEL ;
 
 /* --- outputs ------------------------------------------------------ */
-PIN = WSTB ;
+PIN = !WSTB ;
 PIN = RA0 ;
 PIN = RA1 ;
 PIN = RA2 ;
@@ -60,14 +61,15 @@ PIN = RA4 ;
 PIN = WCTRL ;
 PIN = VSTATWR ;
 PIN = TC ;
-PIN = OEA0 ;
-PIN = OEA1 ;
-PIN = OEA2 ;
-PIN = OEB0 ;
-PIN = OEB1 ;
-PIN = OEB2 ;
+PIN = !OEA0 ;
+PIN = !OEA1 ;
+PIN = !OEA2 ;
+PIN = !OEB0 ;
+PIN = !OEB1 ;
+PIN = !OEB2 ;
+PIN = LDHS ;
+PIN = LDADV ;
 PIN = LRUN ;
-PIN = LADV ;
 PIN = !LDBOE ;
 PIN = !RFOE ;
 PIN = LWHSL ;
@@ -79,6 +81,11 @@ PIN = PINC ;
 PIN = !PDOE ;
 PIN = !PIXOE ;
 PIN = !PWE ;
+PIN = VDSEL ;
+PIN = !RDCK ;
+PIN = RDVALID ;
+PIN = !RDOE ;
+PIN = VINC ;
 
 /* --- buried registers: state that used to cross a package boundary - */
 PINNODE = NSL0 ;
@@ -113,14 +120,19 @@ PINNODE = PS0 ;
 PINNODE = PS1 ;
 PINNODE = PS2 ;
 PINNODE = PS3 ;
+PINNODE = RPQ ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * LDLEN, LDHS, WSPL, WPIDX, WPDL, WPDH, BCTRLGO, LSTOP, LFETCH, LMOVE
- * LBYTE, LWPI, LWPDL, LWPDH, PLOAD, PDHW
+ * LDLEN, WSPL, WPIDX, WPDL, WPDH, BCTRLGO, LSTOP, LGRANT, LADV, LFETCH
+ * LMOVE, LBYTE, LWPI, LWPDL, LWPDH, PLOAD, PDHW, RSTART
  */
 
 /* --- equations ---------------------------------------------------- */
-WSTB = IOSEL & A6 & A5 & !RW & E ;
+WSTB = IOSEL & A6 & A5 & !RW & E & !A4
+       # IOSEL & A6 & A5 & !RW & E & A3
+       # IOSEL & A6 & A5 & !RW & E & !A2
+       # IOSEL & A6 & A5 & !RW & E & A1
+       # IOSEL & A6 & A5 & !RW & E & !A0 ;
 RA0 = IOSEL & A6 & A5 & !SPANBUSY & A0
       # SPANBUSY & !MASKBIT
       # !IOSEL & !SPANBUSY & !RP0 & !RP1
@@ -215,6 +227,7 @@ OEB1 = !HS1 ;
 OEB2 = !HS1
        # !HS0 ;
 LDHS = WSTB & !RA4 & !RA3 & !RA2 & RA1 & RA0 ;
+LDADV = WSTB & RA4 & !RA3 & RA2 & !RA1 & !RA0 ;
 WSPL = WSTB & !RA4 & !RA3 & RA2 & !RA1 & RA0 ;
 WPIDX = WSTB & RA4 & !RA3 & !RA2 & !RA1 & !RA0 ;
 WPDL = WSTB & RA4 & !RA3 & !RA2 & !RA1 & RA0 ;
@@ -241,6 +254,7 @@ LGO.d = BCTRLGO
 LRUN.d = LGO & !WSTB
          # LRUN & !LSTOP ;
 LSTOP = LRUN & LD7 & LD4 & LD3 & LD2 & LD1 & LD0 ;
+LGRANT = LRUN & SGRANT ;
 LADV = LRUN & LGRANT & !LWAIT ;
 LFETCH = LADV & !LPH ;
 LMOVE = LADV & LPH ;
@@ -290,14 +304,25 @@ PDOE = PS1
        # PS3 ;
 PIXOE = !PDOE ;
 PWE = PS2 ;
+VDSEL = IOSEL & A6 & A5 & A4 & !A3 & A2 & !A1 & A0 ;
+RPQ.d = VRAMSEL & RW & E
+        # VDSEL & RW & E ;
+RSTART = RPQ & !E ;
+RDCK = SGRANT & !LRUN & !RDVALID ;
+RDVALID.d = RDCK & !WSTB & !RETIRE & !LADV & !RSTART & !RP0 & !RP1
+            # RDVALID & !WSTB & !RETIRE & !LADV & !RSTART & !RP0 & !RP1 ;
+RDOE = VRAMSEL & RW
+       # VDSEL & RW ;
+VINC = LADV
+       # RSTART ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
 [NSL0,NSL1,NSL2,NSL3,NSL4,NSL5,NSL6,NSL7,HS0,HS1,SL0,SL1,SL2].ck = DOTCLK ;
 [SL3,SL4,SL5,SL6,SL7,LGO,LRUN,LPH,LREL,LWAIT,LD0,LD1,LD2,LD3].ck = DOTCLK ;
-[LD4,LD7,PS0,PS1,PS2,PS3].ck = DOTCLK ;
+[LD4,LD7,PS0,PS1,PS2,PS3,RPQ,RDVALID].ck = DOTCLK ;
 
 /* One asynchronous reset for every register, as on the GALs. */
 [NSL0,NSL1,NSL2,NSL3,NSL4,NSL5,NSL6,NSL7,HS0,HS1,SL0,SL1,SL2].ar = RESET ;
 [SL3,SL4,SL5,SL6,SL7,LGO,LRUN,LPH,LREL,LWAIT,LD0,LD1,LD2,LD3].ar = RESET ;
-[LD4,LD7,PS0,PS1,PS2,PS3].ar = RESET ;
+[LD4,LD7,PS0,PS1,PS2,PS3,RPQ,RDVALID].ar = RESET ;

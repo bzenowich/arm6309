@@ -43,6 +43,7 @@ import { u9Design } from "./u9.jedec"
 import { u10Design } from "./u10.jedec"
 import type { Cell } from "./jedec/assemble"
 import { readFileSync } from "node:fs"
+import { PROGRAM, type Step } from "./aseq.micro"
 import { join } from "node:path"
 
 let failures = 0
@@ -54,11 +55,13 @@ const check = (ok: boolean, claim: string, detail = "") => {
 const here = new URL(".", import.meta.url).pathname
 
 /* ---- what a card is: the parts on it, and the board they sit on --------- */
-interface Part { name: string; cells: Cell[]; external: Set<string> }
+interface Part { name: string; cells: Cell[]; external: Set<string>; inputs: string[] }
 interface Card { name: string; parts: Part[]; boards: string[] }
 
-const part = (name: string, d: { cells: Cell[]; external?: Set<string> }): Part =>
-  ({ name, cells: d.cells, external: d.external ?? new Set(d.cells.map((c) => c.name)) })
+const part = (name: string,
+  d: { cells: Cell[]; external?: Set<string>; inputs: { name: string }[] }): Part =>
+  ({ name, cells: d.cells, external: d.external ?? new Set(d.cells.map((c) => c.name)),
+     inputs: d.inputs.map((i) => i.name) })
 
 const CARDS: Card[] = [
   {
@@ -157,7 +160,7 @@ const RESERVED: Record<string, { why: Why; note: string }> = {
   CTRL0: { why: "board", note: "§7's LED filter, into the 74HC4066 (place/parts.ts)" },
   CTRL1: { why: "board", note: "§7's filter bypass, the same 74HC4066" },
   CTRL2: { why: "stale", note: "⛔ NTSC clock. §4.1 takes ONE crystal, 28.37516 MHz, and rejects NTSC at +16 cents - the card has no second crystal and no divider select, so the bit can never do anything. ⚠ refplayer's card.c IMPLEMENTS it, which is a model above its hardware" },
-  CTRL3: { why: "stale", note: "⛔ raw volume, RETIRED 2026-09-10. paula.md's AUDxVOL is 0-64, and the words 255, 8-bit volume and attenuator appear NOWHERE in it, so 256-level volume was invented. ⚠ §6.1's ×4 is still not built - §16 item 40 - but it is a DATAPATH gap with no bit behind it now, and no signal-level census can see it" },
+  CTRL3: { why: "stale", note: "⛔ raw volume, RETIRED 2026-09-10. paula.md's AUDxVOL is 0-64, and the words 255, 8-bit volume and attenuator appear NOWHERE in it, so 256-level volume was invented. No mode is needed: VOL is the volume converter's code and the replayer writes min(4v, 255) - §6.1, §16 item 40" },
   CTRL4: { why: "stale", note: "⛔ 8-channel mode, DROPPED 2026-09-10. paula.md: Paula has four channels, numbered 0-3, so §11.2 failed §11's own question. Nothing was ever built - SFA's channel field is two bits" },
   CTRL5: { why: "stale", note: "⛔ pan enable. §11.1's programmable panning was WITHDRAWN 2026-09-09 - most of 45 ICs → 35" },
 
@@ -171,7 +174,7 @@ const RESERVED: Record<string, { why: Why; note: string }> = {
    * so deleting them is what forced this comment to replace them.
    *
    * ⭐ SIX ON U1 AND TWO ON U2, and the split is the point: U2 is at 128 of 128
-   * logic cells and is where 11.3's attach chain has to go. */
+   * logic cells and any future addition has to fit there. */
 
   /* ================= open-drain outputs: the pin, not the enable ======== *
    * §3.3's idiom - the pin drives low or floats, and the condition rides on
@@ -185,10 +188,14 @@ const RESERVED: Record<string, { why: Why; note: string }> = {
    * instead, so nothing in the model wires them - which is graphics.md §19
    * item 34's partial board, not a design hole. check:netlist is what should
    * close this and cannot yet. */
-  GCPU0: { why: "board", note: "§5.2.1's CPU grant / SRCSEL[0]" },
-  GCPU1: { why: "board", note: "§5.2.1's CPU grant / SRCSEL[1]" },
-  GCPU2: { why: "board", note: "§5.2.1's CPU grant / SRCSEL[2]" },
-  GCPU3: { why: "board", note: "§5.2.1's CPU grant / SRCSEL[3]" },
+  /* ⛔ GCPU0-3 WERE HERE, "board": §5.2.1's CPU grant, for a flat CPU read
+   * that reserved its chip. Deleted 2026-09-11 - every CPU VRAM access is at
+   * WPTR (graphics.md 11). What is left is arbDesign's own four outputs, kept
+   * because that GAL22V10 is what access.check.ts and cupl.check.ts execute. */
+  ACPU0: { why: "dead", note: "arbDesign's CPU grant, renamed on merge and constant 0 since CPUIDLE (graphics.md 11) - substituted, so no macrocell" },
+  ACPU1: { why: "dead", note: "as ACPU0" },
+  ACPU2: { why: "dead", note: "as ACPU0" },
+  ACPU3: { why: "dead", note: "as ACPU0" },
   GSPN0: { why: "board", note: "§5.2.1's span-writer grant, chip 0" },
   GSPN1: { why: "board", note: "§5.2.1's span-writer grant, chip 1" },
   GSPN2: { why: "board", note: "§5.2.1's span-writer grant, chip 2" },
@@ -241,42 +248,51 @@ check(stale.length === 0,
  * above cannot see them. What makes one live is a microcode step that reads
  * its (word, lane); HOSTMAP is only what lets the host WRITE it. */
 {
-  const micro = readFileSync(join(here, "aseq.micro.ts"), "utf8")
-  /* ⚠ CUT AT HOSTMAP. The host map is what lets a field be WRITTEN, and being
-   * writable is precisely what DAT, ATT and PAN already are - reading it as
-   * evidence of a consumer is the check answering its own question. */
-  const prog = micro.slice(micro.indexOf("PROGRAM"), micro.indexOf("HOSTMAP"))
+  /* ⛔ READ FROM THE PROGRAM ITSELF, since 2026-09-11. This was a regex for
+   * `w: 6 … lane: 0` in the source text - and `Step` has no `lane` field, so
+   * no step could ever match and the claim could not fail. A step reads a
+   * lane when it is a read (no `wr`) at that word AND something on the step
+   * takes the lane: the operand latches take SD[15:0], lanes 0 and 1; the
+   * high-bit capture and the converter port register take SD[23:16], lane 2.
+   * HOSTMAP is still not evidence - being writable is what a retired field is. */
+  const lanesTaken = (st: Step): number[] => [
+    ...(st.alat || st.blat ? [0, 1] : []),
+    ...(st.cap || st.cvld || st.sbo ? [2] : []),
+  ]
+  const reads = (w: number, lane: number) =>
+    Object.values(PROGRAM).flat().some((st) => st.w === w && !st.wr && lanesTaken(st).includes(lane))
   /* offset -> the (word, lane) audio.md 9.3 puts it at */
   const FIELD: Record<string, { w: number; lane: number; why: Why; note: string }> = {
-    DAT: { w: 6, lane: 0, why: "open", note: "§1 requirement 8's CPU-fed sample" },
-    ATT: { w: 6, lane: 1, why: "open", note: "Paula's ADKCON bits - §11.3 says Build it" },
+    DAT: { w: 6, lane: 0, why: "stale", note: "§1 requirement 8's CPU-fed sample, RETIRED 2026-09-11 - no ProTracker replayer writes AUDxDAT" },
+    ATT: { w: 6, lane: 1, why: "stale", note: "Paula's ADKCON bits, RETIRED 2026-09-11 - no ProTracker replayer writes ADKCON (§11.3)" },
     PAN: { w: 7, lane: 2, why: "stale", note: "§11.1's panning, withdrawn 2026-09-09" },
   }
-  const live: string[] = []
-  for (const [name, f] of Object.entries(FIELD)) {
-    /* a step that names this word AND this lane, anywhere but HOSTMAP */
-    const re = new RegExp(`w:\\s*${f.w}\\b[^}]*lane:\\s*${f.lane}\\b|lane:\\s*${f.lane}\\b[^}]*w:\\s*${f.w}\\b`)
-    if (re.test(prog)) live.push(name)
-  }
+  const live = Object.entries(FIELD).filter(([, f]) => reads(f.w, f.lane)).map(([n]) => n)
+  /* The control: VOL is word 6 lane 2 and W5 reads it into the converter port
+   * registers. If this rule cannot see VOL, it cannot see anything. */
+  check(reads(6, 2),
+    "and the rule sees a live field when there is one - VOL, word 6 lane 2, read by W5 into the port registers")
   check(live.length === 0,
     "audio.md §9.3: DAT, ATT and PAN are storable and no microcode step reads them - " +
-    "three register-map promises the sequencer does not keep",
+    "three retired fields, and the card must not perform them",
     live.length ? `now read: ${live.join(", ")}` : "")
 }
 
 /* ---- and one the analysis above cannot see ------------------------------ *
- * graphics.md 13 puts VDATA at +$15 - "read or write VRAM byte at WPTR,
- * post-increment", which is §11's readable VRAM. regfile.ts is the register
- * decode of record and has no entry for it, so there is no signal to dangle:
- * the feature is absent rather than unread, and only the MAP knows it was
- * promised. */
+ * graphics.md 13's +$15 VDATA - "read or write VRAM byte at WPTR,
+ * post-increment". It was retired on 2026-09-11 as a second address for the
+ * window's port and BUILT the same day (19 item 47), for tasks and handlers
+ * with no MMU block to spare. The claim is turned round again: the map names
+ * it, so something must decode it, and the decode must leave its part. */
 {
   const regs = readFileSync(join(here, "regfile.ts"), "utf8")
   const decoded = /\bVDATA\s*:/.test(regs)
-  check(!decoded,
-    "graphics.md §13's +$15 VDATA is in the register map and NOT in regfile.ts's " +
-    "decode - §11's readable VRAM is promised and absent",
-    decoded ? "it is decoded now - take this claim out and give it a real one" : "")
+  const vsupSrc = readFileSync(join(here, "vsup.cpld.ts"), "utf8")
+  const exported = /"VDSEL"/.test(vsupSrc)
+  check(decoded && exported,
+    "graphics.md §13's +$15 VDATA is decoded and its select leaves vsup for vctrl's " +
+    "posted write and /WAIT - the map names it, so a part must build it",
+    !decoded ? "VDATA is not in regfile.ts's map" : !exported ? "VDSEL is not exported" : "")
 }
 
 /* ---- which part each one is on, computed ---------------------------------- *
@@ -298,11 +314,44 @@ check(homeless.length === 0,
   "every RESERVED entry names a cell that exists on a part this check knows about",
   homeless.length ? homeless.join(", ") : "")
 
+/* ---- the direction census.ts counted and did not check ------------------- *
+ *
+ * ⛔ A PIN ON ONE PART THAT ANOTHER PART COMPUTES AND KEEPS. design-review2.md
+ * closed "a fitted part reads what nothing produces" by counting every signal
+ * some part PRODUCES - and a cell counts as produced whether or not it leaves
+ * its part. Found 2026-09-11 in cpld/*.fit: vctrl reads LDHS (pin 51) and LDADV
+ * (pin 9), which only vaddr and vsup compute, and buried; vsup reads WSTBV
+ * (pin 31), which only vctrl computes, and buried. Three input pins with no
+ * driver on silicon - HSCROLL[1:0] and WADV unwritable, span-solid's length
+ * never loaded - and every simulation green, because emit.ts makes every cell a
+ * Verilog port and the board file wires the net.
+ *
+ * So: an input of one part that is a cell of another must be in that part's
+ * external set. An input no part produces is the board's or the backplane's,
+ * and check:netlist is what answers for those. */
+{
+  const bad: string[] = []
+  for (const card of CARDS) {
+    for (const p of card.parts) {
+      for (const i of p.inputs) {
+        const producers = card.parts.filter((q) => q !== p && q.cells.some((c) => c.name === i))
+        if (producers.length && !producers.some((q) => q.external.has(i))) {
+          bad.push(`${card.name}: ${p.name} reads ${i}, which ${producers.map((q) => q.name).join(" and ")} compute${producers.length > 1 ? "" : "s"} and nobody exports`)
+        }
+      }
+    }
+  }
+  for (const b of bad) console.log(`      ${b}`)
+  check(bad.length === 0,
+    "every input pin that another part computes is an OUTPUT pin of that part - a cell is not a net until it leaves its package",
+    bad.length ? `${bad.length} undriven` : "")
+}
+
 /* ---- the headline, so a reader does not have to count ------------------- */
 const byWhy = (w: Why) => Object.entries(RESERVED).filter(([, v]) => v.why === w)
 console.log("")
 console.log(`      ${dangling.length} signals produced and read by nothing:`)
-const EXTRA: Record<string, number> = { open: 2, stale: 1 }   // DAT, ATT; and PAN
+const EXTRA: Record<string, number> = { stale: 3 }   // DAT, ATT and PAN
 for (const w of ["open", "stale", "dead", "board"] as Why[]) {
   const n = byWhy(w).length + (EXTRA[w] ?? 0)
   console.log(`        ${w.padEnd(6)} ${n}${w === "open" ? "   <- register bits the host can write and the card cannot perform" : ""}`)
@@ -311,13 +360,12 @@ for (const w of ["open", "stale", "dead", "board"] as Why[]) {
   }
 }
 console.log("")
-console.log("      open is audio.md §9.3's DAT and ATT - state-file FIELDS with no")
-console.log("      signal of their own; stale counts PAN alongside them.")
+console.log("      stale counts audio.md §9.3's DAT, ATT and PAN alongside the bits -")
+console.log("      state-file FIELDS with no signal of their own.")
 console.log("")
-console.log("      ⚠ TWO MORE MISSING FEATURES HAVE NO SIGNAL AT ALL, and no census")
-console.log("      of this shape can see them: graphics.md §13's +$15 VDATA, absent")
-console.log("      from the decode and asserted separately above, and audio.md")
-console.log("      §6.1's volume ×4, a datapath that was never built (§16 item 40).")
-console.log("      FOUR missing features, not two.")
+console.log("      ⭐ NO PROMISED FEATURE IS MISSING, as of 2026-09-11: §11's readable")
+console.log("      VRAM is built at WPTR, through the window and through +$15 VDATA.")
+console.log("      ⚠ What a census of this shape still cannot see is a feature with no")
+console.log("      register behind it at all - which is how §6.1's volume x4 hid.")
 
 process.exit(failures === 0 ? 0 : 1)

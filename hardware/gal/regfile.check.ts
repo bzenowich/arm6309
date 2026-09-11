@@ -37,16 +37,27 @@ const gal = new Gal22v10(parsed.fuses)
 const P = Object.fromEntries(a.usage.map((u) => [u.name, u.pin]))
 const IN = Object.fromEntries(rfaDesign.inputs.map((i) => [i.name, i.pin]))
 
-/** Drive every input by name; anything unnamed is 0. */
+/** Drive every input by name, in ASSERTED sense; anything unnamed is
+ *  deasserted. The pin level comes from the design's own declaration - /IOSEL
+ *  is asserted low and WSTB, the file's /WE, fires low (2026-09-11). Whether
+ *  those declarations are the right ones is pins.check.ts's question; this
+ *  one is whether the fuses do what they declare. */
 const run = (set: Record<string, 0 | 1>) => {
   const pins: Record<number, 0 | 1> = {}
-  for (const i of rfaDesign.inputs) pins[i.pin] = set[i.name] ?? 0
+  for (const i of rfaDesign.inputs) {
+    const v = set[i.name] ?? 0
+    pins[i.pin] = (i.activeLow ? 1 - v : v) as 0 | 1
+  }
   const out = gal.evaluate(pins)
+  const wstbCell = rfaDesign.cells.find((c) => c.name === "WSTB")!
   return {
     ra: [0, 1, 2, 3, 4].reduce((v, n) => v | (out[P[`RA${n}`]] << n), 0),
-    wstb: out[P.WSTB],
+    wstb: wstbCell.assertedLow ? 1 - out[P.WSTB] : out[P.WSTB],
   }
 }
+check(rfaDesign.inputs.find((i) => i.name === "IOSEL")!.activeLow === true &&
+  rfaDesign.cells.find((c) => c.name === "WSTB")!.assertedLow === true,
+  "/IOSEL is an active-low input and WSTB an active-low output, so the claims below run at those pin levels")
 /** A CPU access to register `reg` of the 32-byte window. */
 const cpu = (reg: number, rw: 0 | 1, e: 0 | 1 = 1) => run({
   IOSEL: 1, A6: 1, A5: 1, RW: rw, E: e,
@@ -73,6 +84,13 @@ const cpu = (reg: number, rw: 0 | 1, e: 0 | 1 = 1) => run({
   check(cpu(7, 1, 1).wstb === 0, "WSTB does not fire on a READ - it would clobber the register")
   check(cpu(7, 0, 0).wstb === 0,
     "WSTB does not fire before E - a 6809 write is only valid data in E's second half")
+  /* graphics.md 19 item 47: +$15 is VDATA, a posted VRAM write, and must not
+   * also write the file - under a span RA is WFG or WBG. */
+  let other = 0
+  for (let reg = 0; reg < 32; reg++) if (reg !== 0x15 && cpu(reg, 0, 1).wstb !== 1) other++
+  check(cpu(0x15, 0, 1).wstb === 0 && other === 0,
+    "WSTB does not fire at +$15 VDATA - its store is VRAM's, and the file's RA is a span's colour - and fires at the other 31",
+    `${other} others silent`)
   for (const off of [{ IOSEL: 0 as const }, { A6: 0 as const }, { A5: 0 as const }]) {
     const [name] = Object.keys(off)
     const r = run({ IOSEL: 1, A6: 1, A5: 1, RW: 0, E: 1, A0: 1, A1: 1, A2: 1, ...off })

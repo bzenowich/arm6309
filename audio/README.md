@@ -87,27 +87,26 @@ about the **state file**, and the state file was right. **Nothing had ever compa
 the converter's own pins against the file's contents.** `modplay_tb` does now, on all
 four channels, every 4096 colour clocks.
 
-⛔ **What remains is that the card is 12.04 dB below every output level this project
-specifies** — §6.1's ×4 is not built and `ACTRL` b3 reaches nothing, so the card
-implements raw mode only and the mode every MOD replayer uses is the broken one
-(§16 item 40, **open**).
+⭐ **The card's 12.04 dB level defect is closed (2026-09-11, §16 item 40).** §6.1's ×4
+was never built. The card already passes all eight bits of `VOL` to the volume converter,
+so the replayer writes `min(4 × volume, 255)` and no hardware changes. `VOL` is therefore
+the converter's code, not Paula's 0–64 ([`docs/modplayer.md`](docs/modplayer.md) §5.2).
+The failure mode is silent, 12 dB quiet and plausible, so `test_refplayer` asserts the
+bytes the replayer writes and `modplay_tb` asserts that a full-volume module reaches
+converter code 255.
 
-⚠ **It is a level defect, and level is what this card sells.** An earlier revision
-sized it with `abcompare.py` — which normalises level on purpose, against a render
-that is an ideal multiply with no ladder and no noise floor — and concluded it was
-worth "two ten-thousandths". The right instruments are §7.1's own arithmetic and the
-`AD7528` datasheet:
+⭐ **The converter writes meet the `AD7528`, closed 2026-09-11 (§16 item 43).** The
+strobes had been one or two slots against a 90 ns write pulse, and a sample strobe shared
+by both sides wrote the partner channel's port register, sometimes a volume code, into
+its converter: 1,114 wrong captures on a four-channel module. The fix is frame-parity
+windows with per-side registered strobes, **and no package**. Every write is claimed in
+`audio_tb` and `modplay_tb`: 0 wrong of 58,653 on the same module.
 
-| | as designed | as built |
-|---|---|---|
-| backplane line out | 2 V p-p, −3.0 dBV | 0.5 V p-p, **−15.1 dBV** — 5 dB *below* consumer line level |
-| 3.5 mm jack into 32 Ω | 15.6 mW | **0.98 mW** — under the bottom of §7.1's own "1–5 mW comfortable" |
-| into 300 Ω, §7.1's stated limit | 1.67 mW | **0.104 mW** — inaudible |
-| muted-channel feedthrough vs the music | −70 dB | **−58 dB** (−53 over temperature) |
-| ±½ LSB relative accuracy at `VOL` = 1 | ±12.5 % | **±50 %**, at a single LSB of the ladder |
-
-Where the ×4 belongs — two `74HC157`, one resistor and no raw mode, or the replayer —
-is a specification decision, costed in §16 item 40.
+⭐ **And that module found the next one, closed the same day (§16 item 44):** a write to
+`ADMACON`, `ACTRL`, `SPTR` or `TIMER` landed in the state file at `AIDX`, so the tempo
+timer ran at 54.1 Hz whatever it was set to. The timer's colour-clock compare could not
+have held 125 BPM anyway. The timer is now a CIA count on U1, the direct window stores only
+where §9.2 says, and `modplay_tb` asserts every tick period against `TIMER`.
 
 
 ⭐ **Both CPLDs are fitted and the card is simulated end to end.** `audio_tb` writes a
@@ -166,8 +165,8 @@ packages rather than one.
 
 | | | |
 |---|---|---|
-| **U1** the host register block, plus §4.2's counter and comparator and §9.3's read-back latch | `audio` | 87 of 128 cells, 61 of 64 I/O |
-| **U2** the sequencer (§10.2) | `aseq` | ⚠ **128 of 128 cells**, 60 of 64 I/O |
+| **U1** the host register block, plus §4.2's counter and comparator, §9.3's read-back latch, §6.2's frame parity and §8.2's tempo count | `audio` | 107 of 128 cells, 62 of 64 I/O, two cascades |
+| **U2** the sequencer (§10.2) | `aseq` | ⚠ **124 of 128 cells**, 63 of 64 I/O, two cascades |
 
 ⚠ **U2 is exactly full and U1 is not**, which is why every reduction this pass moved work
 *to* U1 — sixteen state-file data pins there bought seven packages, because the counter,

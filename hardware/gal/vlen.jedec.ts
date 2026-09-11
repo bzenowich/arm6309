@@ -67,6 +67,7 @@ export const vlenDesign: Design = {
   partNo: "ARM6309-UV11",
   location: "video card - span-solid length counter",
   signature: "A6309VB",
+  supersededBy: "graphics.md 10.1.7 - absorbed into vsup, the third ATF1508AS, 2026-09-09",
   clockPin: 1,
   inputs: [
     /* The register file's read bus. While no span is running rfa holds the

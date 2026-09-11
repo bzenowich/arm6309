@@ -17,8 +17,12 @@ trap 'rm -f "$out"' EXIT
 
 for tb in $TBS; do
   case $tb in
-    vsync)     SRC="vctrl.v" ;;
-    audio)     SRC="audio.v" ;;
+    # Every source named, not found. Verilator resolves an undeclared module
+    # by searching the current directory, so "vctrl.v" and "audio.v" alone
+    # compiled - and a stale or renamed file would have been picked up the
+    # same way, silently (2026-09-11).
+    vsync)     SRC="$CARD" ;;
+    audio)     SRC="audio_card.v audio.v aseq.v" ;;
     mainboard) SRC="mainboard.v ../clkdec.v ../mmu.v u9.v u10.v" ;;
     *)         SRC="$CARD" ;;
   esac

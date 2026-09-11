@@ -151,7 +151,7 @@ for (const fastE of [false, true]) {
    * at a value that is NOT a $FFB1 write, so RUN stays where reset put it. */
   const base = { 2: (fastE ? 1 : 0) as 0 | 1, 3: 1 as const, 4: 1 as const,
                  5: 0 as const, 6: 0 as const, 7: 0 as const, 8: 1 as const,
-                 9: 0 as const, 10: 0 as const, 11: 0 as const }
+                 9: 0 as const, 10: 1 as const, 11: 0 as const }
 
   /* Reset is asserted by pulling pin 3 LOW, and it is a level: it holds. */
   u6.gal.evaluate({ ...base, 3: 0 })
@@ -219,7 +219,7 @@ console.log("\n      boot mode - machine.md 7.2\n")
   /* $FFxx is /IOPAGE low (pin 4 = 0). $FFB1 is LA7=1 LA6=0 LA5=1 LA4=1 LA0=1;
    * a write is R/W low; the term is qualified on E, so run the counter until
    * E is high. */
-  const hold = { 2: 0 as const, 3: 1 as const, 10: 0 as const }
+  const hold = { 2: 0 as const, 3: 1 as const, 10: 1 as const }
   const addr = (la7: 0|1, la6: 0|1, la5: 0|1, la4: 0|1, la0: 0|1, rw: 0|1, iopage: 0|1) =>
     ({ ...hold, 4: iopage, 5: la7, 6: la6, 7: la5, 8: rw, 9: la4, 11: la0 })
 

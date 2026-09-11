@@ -35,7 +35,7 @@ PIN = SETA ;
 PIN = PFCK ;
 PIN = PFLANE ;
 PIN = CNTOE ;
-PIN = IOSEL ;
+PIN = !IOSEL ;
 PIN = A6 ;
 PIN = A5 ;
 PIN = A4 ;
@@ -46,6 +46,8 @@ PIN = PFVALID ;
 PIN = S0 ;
 PIN = S1 ;
 PIN = S2 ;
+PIN = S3 ;
+PIN = !OEB ;
 PIN = CCLK ;
 PIN = DMAEN0 ;
 PIN = DMAEN1 ;
@@ -58,7 +60,6 @@ PIN = CTRL2 ;
 PIN = CTRL3 ;
 PIN = CTRL4 ;
 PIN = CTRL5 ;
-PIN = CTRL6 ;
 PIN = CTRL7 ;
 PIN = NEQL ;
 PIN = NEQH ;
@@ -110,6 +111,7 @@ PINNODE = REQ2 ;
 PINNODE = REQ3 ;
 PINNODE = REQ4 ;
 PINNODE = REQ5 ;
+PINNODE = CTRL6 ;
 PINNODE = CT0 ;
 PINNODE = CT1 ;
 PINNODE = CT2 ;
@@ -126,6 +128,24 @@ PINNODE = CT12 ;
 PINNODE = CT13 ;
 PINNODE = CT14 ;
 PINNODE = CT15 ;
+PINNODE = TC0 ;
+PINNODE = TC1 ;
+PINNODE = TC2 ;
+PINNODE = TC3 ;
+PINNODE = TC4 ;
+PINNODE = TC5 ;
+PINNODE = TC6 ;
+PINNODE = TC7 ;
+PINNODE = TC8 ;
+PINNODE = TC9 ;
+PINNODE = TC10 ;
+PINNODE = TC11 ;
+PINNODE = TC12 ;
+PINNODE = TC13 ;
+PINNODE = TC14 ;
+PINNODE = TC15 ;
+PINNODE = TLOAD ;
+PINNODE = TFIRE ;
 PINNODE = PF0 ;
 PINNODE = PF1 ;
 PINNODE = PF2 ;
@@ -149,6 +169,14 @@ S1.d = S1 & !S0
 S2.d = S2 & !S0
        # S2 & !S1
        # !S2 & S0 & S1 ;
+S3.d = S3 & !S0
+       # S3 & !S1
+       # S3 & !S2
+       # !S3 & S0 & S1 & S2 ;
+OEB.d = S3 & !S0
+        # S3 & !S1
+        # S3 & !S2
+        # !S3 & S0 & S1 & S2 ;
 CCLK = S2 & S1 & S0 ;
 WDMACON = SEL & !A3 & !A2 & A1 & !A0 & !RW ;
 WINTENA = SEL & !A3 & !A2 & A1 & A0 & !RW ;
@@ -267,7 +295,8 @@ SET0 = !SETC & !SETB & !SETA ;
 SET1 = !SETC & !SETB & SETA ;
 SET2 = !SETC & SETB & !SETA ;
 SET3 = !SETC & SETB & SETA ;
-SET4 = SETC & !SETB & !SETA ;
+SET4 = SETC & !SETB & !SETA
+       # TFIRE ;
 SET5 = SETC & !SETB & SETA ;
 CT0.d = CCLK & !CT0
         # !CCLK & CT0 ;
@@ -453,6 +482,209 @@ NEQH = SD8 & !CT8
        # !SD14 & CT14
        # SD15 & !CT15
        # !SD15 & CT15 ;
+TC0.d = TLOAD & !SD0
+        # !TLOAD & CCLK & P2 & CTRL6 & !TC0
+        # !TLOAD & !CCLK & TC0
+        # !TLOAD & !P2 & TC0
+        # !TLOAD & !CTRL6 & TC0 ;
+TC1.d = TLOAD & !SD1
+        # !TLOAD & CCLK & P2 & CTRL6 & TC1 & !TC0
+        # !TLOAD & CCLK & P2 & CTRL6 & !TC1 & TC0
+        # !TLOAD & !CCLK & TC1
+        # !TLOAD & !P2 & TC1
+        # !TLOAD & !CTRL6 & TC1 ;
+TC2.d = TLOAD & !SD2
+        # !TLOAD & CCLK & P2 & CTRL6 & TC2 & !TC0
+        # !TLOAD & CCLK & P2 & CTRL6 & TC2 & !TC1
+        # !TLOAD & CCLK & P2 & CTRL6 & !TC2 & TC0 & TC1
+        # !TLOAD & !CCLK & TC2
+        # !TLOAD & !P2 & TC2
+        # !TLOAD & !CTRL6 & TC2 ;
+TC3.d = TLOAD & !SD3
+        # !TLOAD & CCLK & P2 & CTRL6 & TC3 & !TC0
+        # !TLOAD & CCLK & P2 & CTRL6 & TC3 & !TC1
+        # !TLOAD & CCLK & P2 & CTRL6 & TC3 & !TC2
+        # !TLOAD & CCLK & P2 & CTRL6 & !TC3 & TC0 & TC1 & TC2
+        # !TLOAD & !CCLK & TC3
+        # !TLOAD & !P2 & TC3
+        # !TLOAD & !CTRL6 & TC3 ;
+TC4.d = TLOAD & !SD4
+        # !TLOAD & CCLK & P2 & CTRL6 & TC4 & !TC0
+        # !TLOAD & CCLK & P2 & CTRL6 & TC4 & !TC1
+        # !TLOAD & CCLK & P2 & CTRL6 & TC4 & !TC2
+        # !TLOAD & CCLK & P2 & CTRL6 & TC4 & !TC3
+        # !TLOAD & CCLK & P2 & CTRL6 & !TC4 & TC0 & TC1 & TC2 & TC3
+        # !TLOAD & !CCLK & TC4
+        # !TLOAD & !P2 & TC4
+        # !TLOAD & !CTRL6 & TC4 ;
+TC5.d = TLOAD & !SD5
+        # !TLOAD & CCLK & P2 & CTRL6 & TC5 & !TC0
+        # !TLOAD & CCLK & P2 & CTRL6 & TC5 & !TC1
+        # !TLOAD & CCLK & P2 & CTRL6 & TC5 & !TC2
+        # !TLOAD & CCLK & P2 & CTRL6 & TC5 & !TC3
+        # !TLOAD & CCLK & P2 & CTRL6 & TC5 & !TC4
+        # !TLOAD & CCLK & P2 & CTRL6 & !TC5 & TC0 & TC1 & TC2 & TC3 & TC4
+        # !TLOAD & !CCLK & TC5
+        # !TLOAD & !P2 & TC5
+        # !TLOAD & !CTRL6 & TC5 ;
+TC6.d = TLOAD & !SD6
+        # !TLOAD & CCLK & P2 & CTRL6 & TC6 & !TC0
+        # !TLOAD & CCLK & P2 & CTRL6 & TC6 & !TC1
+        # !TLOAD & CCLK & P2 & CTRL6 & TC6 & !TC2
+        # !TLOAD & CCLK & P2 & CTRL6 & TC6 & !TC3
+        # !TLOAD & CCLK & P2 & CTRL6 & TC6 & !TC4
+        # !TLOAD & CCLK & P2 & CTRL6 & TC6 & !TC5
+        # !TLOAD & CCLK & P2 & CTRL6 & !TC6 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5
+        # !TLOAD & !CCLK & TC6
+        # !TLOAD & !P2 & TC6
+        # !TLOAD & !CTRL6 & TC6 ;
+TC7.d = TLOAD & !SD7
+        # !TLOAD & CCLK & P2 & CTRL6 & TC7 & !TC0
+        # !TLOAD & CCLK & P2 & CTRL6 & TC7 & !TC1
+        # !TLOAD & CCLK & P2 & CTRL6 & TC7 & !TC2
+        # !TLOAD & CCLK & P2 & CTRL6 & TC7 & !TC3
+        # !TLOAD & CCLK & P2 & CTRL6 & TC7 & !TC4
+        # !TLOAD & CCLK & P2 & CTRL6 & TC7 & !TC5
+        # !TLOAD & CCLK & P2 & CTRL6 & TC7 & !TC6
+        # !TLOAD & CCLK & P2 & CTRL6 & !TC7 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6
+        # !TLOAD & !CCLK & TC7
+        # !TLOAD & !P2 & TC7
+        # !TLOAD & !CTRL6 & TC7 ;
+TC8.d = TLOAD & !SD8
+        # !TLOAD & CCLK & P2 & CTRL6 & TC8 & !TC0
+        # !TLOAD & CCLK & P2 & CTRL6 & TC8 & !TC1
+        # !TLOAD & CCLK & P2 & CTRL6 & TC8 & !TC2
+        # !TLOAD & CCLK & P2 & CTRL6 & TC8 & !TC3
+        # !TLOAD & CCLK & P2 & CTRL6 & TC8 & !TC4
+        # !TLOAD & CCLK & P2 & CTRL6 & TC8 & !TC5
+        # !TLOAD & CCLK & P2 & CTRL6 & TC8 & !TC6
+        # !TLOAD & CCLK & P2 & CTRL6 & TC8 & !TC7
+        # !TLOAD & CCLK & P2 & CTRL6 & !TC8 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7
+        # !TLOAD & !CCLK & TC8
+        # !TLOAD & !P2 & TC8
+        # !TLOAD & !CTRL6 & TC8 ;
+TC9.d = TLOAD & !SD9
+        # !TLOAD & CCLK & P2 & CTRL6 & TC9 & !TC0
+        # !TLOAD & CCLK & P2 & CTRL6 & TC9 & !TC1
+        # !TLOAD & CCLK & P2 & CTRL6 & TC9 & !TC2
+        # !TLOAD & CCLK & P2 & CTRL6 & TC9 & !TC3
+        # !TLOAD & CCLK & P2 & CTRL6 & TC9 & !TC4
+        # !TLOAD & CCLK & P2 & CTRL6 & TC9 & !TC5
+        # !TLOAD & CCLK & P2 & CTRL6 & TC9 & !TC6
+        # !TLOAD & CCLK & P2 & CTRL6 & TC9 & !TC7
+        # !TLOAD & CCLK & P2 & CTRL6 & TC9 & !TC8
+        # !TLOAD & CCLK & P2 & CTRL6 & !TC9 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8
+        # !TLOAD & !CCLK & TC9
+        # !TLOAD & !P2 & TC9
+        # !TLOAD & !CTRL6 & TC9 ;
+TC10.d = TLOAD & !SD10
+         # !TLOAD & CCLK & P2 & CTRL6 & TC10 & !TC0
+         # !TLOAD & CCLK & P2 & CTRL6 & TC10 & !TC1
+         # !TLOAD & CCLK & P2 & CTRL6 & TC10 & !TC2
+         # !TLOAD & CCLK & P2 & CTRL6 & TC10 & !TC3
+         # !TLOAD & CCLK & P2 & CTRL6 & TC10 & !TC4
+         # !TLOAD & CCLK & P2 & CTRL6 & TC10 & !TC5
+         # !TLOAD & CCLK & P2 & CTRL6 & TC10 & !TC6
+         # !TLOAD & CCLK & P2 & CTRL6 & TC10 & !TC7
+         # !TLOAD & CCLK & P2 & CTRL6 & TC10 & !TC8
+         # !TLOAD & CCLK & P2 & CTRL6 & TC10 & !TC9
+         # !TLOAD & CCLK & P2 & CTRL6 & !TC10 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9
+         # !TLOAD & !CCLK & TC10
+         # !TLOAD & !P2 & TC10
+         # !TLOAD & !CTRL6 & TC10 ;
+TC11.d = TLOAD & !SD11
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC0
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC1
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC2
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC3
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC4
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC5
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC6
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC7
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC8
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC9
+         # !TLOAD & CCLK & P2 & CTRL6 & TC11 & !TC10
+         # !TLOAD & CCLK & P2 & CTRL6 & !TC11 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10
+         # !TLOAD & !CCLK & TC11
+         # !TLOAD & !P2 & TC11
+         # !TLOAD & !CTRL6 & TC11 ;
+TC12.d = TLOAD & !SD12
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC0
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC1
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC2
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC3
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC4
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC5
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC6
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC7
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC8
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC9
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC10
+         # !TLOAD & CCLK & P2 & CTRL6 & TC12 & !TC11
+         # !TLOAD & CCLK & P2 & CTRL6 & !TC12 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11
+         # !TLOAD & !CCLK & TC12
+         # !TLOAD & !P2 & TC12
+         # !TLOAD & !CTRL6 & TC12 ;
+TC13.d = TLOAD & !SD13
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC0
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC1
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC2
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC3
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC4
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC5
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC6
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC7
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC8
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC9
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC10
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC11
+         # !TLOAD & CCLK & P2 & CTRL6 & TC13 & !TC12
+         # !TLOAD & CCLK & P2 & CTRL6 & !TC13 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11 & TC12
+         # !TLOAD & !CCLK & TC13
+         # !TLOAD & !P2 & TC13
+         # !TLOAD & !CTRL6 & TC13 ;
+TC14.d = TLOAD & !SD14
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC0
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC1
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC2
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC3
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC4
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC5
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC6
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC7
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC8
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC9
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC10
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC11
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC12
+         # !TLOAD & CCLK & P2 & CTRL6 & TC14 & !TC13
+         # !TLOAD & CCLK & P2 & CTRL6 & !TC14 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11 & TC12 & TC13
+         # !TLOAD & !CCLK & TC14
+         # !TLOAD & !P2 & TC14
+         # !TLOAD & !CTRL6 & TC14 ;
+TC15.d = TLOAD & !SD15
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC0
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC1
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC2
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC3
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC4
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC5
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC6
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC7
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC8
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC9
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC10
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC11
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC12
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC13
+         # !TLOAD & CCLK & P2 & CTRL6 & TC15 & !TC14
+         # !TLOAD & CCLK & P2 & CTRL6 & !TC15 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11 & TC12 & TC13 & TC14
+         # !TLOAD & !CCLK & TC15
+         # !TLOAD & !P2 & TC15
+         # !TLOAD & !CTRL6 & TC15 ;
+TLOAD.d = !S2 & S1 & S0 & !CTRL6
+          # !S2 & S1 & S0 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11 & TC12 & TC13 & TC14 & TC15 ;
+TFIRE.d = !S2 & S1 & S0 & CTRL6 & TC0 & TC1 & TC2 & TC3 & TC4 & TC5 & TC6 & TC7 & TC8 & TC9 & TC10 & TC11 & TC12 & TC13 & TC14 & TC15 ;
 PF0.d = PFCK & !PFLANE & SD0
         # PFCK & PFLANE & SD8
         # PF0 & !PFCK ;
@@ -556,17 +788,19 @@ D7.oe = HRD ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
-[S0,S1,S2,DMAEN0,DMAEN1,DMAEN2,DMAEN3,P0,P1,P2,ENA0,ENA1].ck = SLOTCLK ;
-[ENA2,ENA3,ENA4,ENA5,PEND0,PEND1,PEND2,PEND3,PEND4,PEND5].ck = SLOTCLK ;
-[REQ0,REQ1,REQ2,REQ3,REQ4,REQ5,CTRL0,CTRL1,CTRL2,CTRL3,CTRL4].ck = SLOTCLK ;
-[CTRL5,CTRL6,CTRL7,CT0,CT1,CT2,CT3,CT4,CT5,CT6,CT7,CT8,CT9].ck = SLOTCLK ;
-[CT10,CT11,CT12,CT13,CT14,CT15,PF0,PF1,PF2,PF3,PF4,PF5,PF6].ck = SLOTCLK ;
-[PF7,SYNCR1,SYNCR2].ck = SLOTCLK ;
+[S0,S1,S2,S3,OEB,DMAEN0,DMAEN1,DMAEN2,DMAEN3,P0,P1,P2,ENA0].ck = SLOTCLK ;
+[ENA1,ENA2,ENA3,ENA4,ENA5,PEND0,PEND1,PEND2,PEND3,PEND4].ck = SLOTCLK ;
+[PEND5,REQ0,REQ1,REQ2,REQ3,REQ4,REQ5,CTRL0,CTRL1,CTRL2,CTRL3].ck = SLOTCLK ;
+[CTRL4,CTRL5,CTRL6,CTRL7,CT0,CT1,CT2,CT3,CT4,CT5,CT6,CT7,CT8].ck = SLOTCLK ;
+[CT9,CT10,CT11,CT12,CT13,CT14,CT15,TC0,TC1,TC2,TC3,TC4,TC5].ck = SLOTCLK ;
+[TC6,TC7,TC8,TC9,TC10,TC11,TC12,TC13,TC14,TC15,TLOAD,TFIRE].ck = SLOTCLK ;
+[PF0,PF1,PF2,PF3,PF4,PF5,PF6,PF7,SYNCR1,SYNCR2].ck = SLOTCLK ;
 
 /* One asynchronous reset for every register, as on the GALs. */
-[S0,S1,S2,DMAEN0,DMAEN1,DMAEN2,DMAEN3,P0,P1,P2,ENA0,ENA1].ar = RESET ;
-[ENA2,ENA3,ENA4,ENA5,PEND0,PEND1,PEND2,PEND3,PEND4,PEND5].ar = RESET ;
-[REQ0,REQ1,REQ2,REQ3,REQ4,REQ5,CTRL0,CTRL1,CTRL2,CTRL3,CTRL4].ar = RESET ;
-[CTRL5,CTRL6,CTRL7,CT0,CT1,CT2,CT3,CT4,CT5,CT6,CT7,CT8,CT9].ar = RESET ;
-[CT10,CT11,CT12,CT13,CT14,CT15,PF0,PF1,PF2,PF3,PF4,PF5,PF6].ar = RESET ;
-[PF7,SYNCR1,SYNCR2].ar = RESET ;
+[S0,S1,S2,S3,OEB,DMAEN0,DMAEN1,DMAEN2,DMAEN3,P0,P1,P2,ENA0].ar = RESET ;
+[ENA1,ENA2,ENA3,ENA4,ENA5,PEND0,PEND1,PEND2,PEND3,PEND4].ar = RESET ;
+[PEND5,REQ0,REQ1,REQ2,REQ3,REQ4,REQ5,CTRL0,CTRL1,CTRL2,CTRL3].ar = RESET ;
+[CTRL4,CTRL5,CTRL6,CTRL7,CT0,CT1,CT2,CT3,CT4,CT5,CT6,CT7,CT8].ar = RESET ;
+[CT9,CT10,CT11,CT12,CT13,CT14,CT15,TC0,TC1,TC2,TC3,TC4,TC5].ar = RESET ;
+[TC6,TC7,TC8,TC9,TC10,TC11,TC12,TC13,TC14,TC15,TLOAD,TFIRE].ar = RESET ;
+[PF0,PF1,PF2,PF3,PF4,PF5,PF6,PF7,SYNCR1,SYNCR2].ar = RESET ;

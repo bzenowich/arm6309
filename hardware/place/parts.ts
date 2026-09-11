@@ -65,7 +65,7 @@ export const FINGER_H = 11
 
 export const CARDS: Record<string, CardSpec> = {
   video: {
-    title: "Video", length: 240, ics: 36, source: "video/docs/graphics.md 14.1",
+    title: "Video", length: 240, ics: 33, source: "video/docs/graphics.md 14.1",
     note: "640x200 x 256 colours, VGA out",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
@@ -102,11 +102,13 @@ export const CARDS: Record<string, CardSpec> = {
       /* 10.3.3: the display list's descriptor byte, from the pixel bus onto
        * the card's internal data bus, for the dot a granted engine slot lasts.
        * It is what makes a list MOVE reach a register at all. */
-      dip(20, 0.3, "74HC244 lbyte", "bus"),
+      dip(20, 0.3, "74HCT244 lbyte", "bus"),
       dip(20, 0.3, "74HC574 pw-data", "bus"),
-      dip(20, 0.3, "74HC574 pw-addr", "bus", 3),
-      dip(20, 0.3, "74HC245 rdbk", "bus"),
-      dip(20, 0.3, "74HC574 vread", "bus"),
+      /* ⚠ NO ADDRESS LATCH - graphics.md 3.1.1, 19 item 44, 2026-09-11. Three
+       * '574s for the posted write's physical address were listed here and no
+       * design clocked them: every CPU VRAM access is at WPTR. */
+      dip(20, 0.3, "74HCT245 rdbk", "bus"),
+      dip(20, 0.3, "74HCT574 vread", "bus"),
       dip(20, 0.3, "74HC244 VSTAT", "bus"),
       dip(20, 0.3, "74HC244 fanout", "bus"),
     ],

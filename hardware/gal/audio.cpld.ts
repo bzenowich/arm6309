@@ -17,8 +17,8 @@
  *            unfittable on a 22V10 in either arrangement.
  */
 
-import { merge, toCupl, type Merged } from "./jedec/cupl"
-import { counterTerms } from "./jedec/counter"
+import { merge, toCupl, withActiveLow, type Merged } from "./jedec/cupl"
+import { counterTerms, loadable } from "./jedec/counter"
 import type { Cell } from "./jedec/assemble"
 import {
   aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign, buildAintreqSplit,
@@ -48,7 +48,9 @@ const sync = (name: string, from: string): Cell[] => [
 const setDecode: Cell[] = [0, 1, 2, 3, 4, 5].map((i) => ({
   pin: 0, name: `SET${i}`, assertedLow: false, s0: 1 as const, registered: false,
   terms: [[2, 1, 0].map((b) => `${(i >> b) & 1 ? "" : "!"}${"CBA"[2 - b]}`)
-    .map((x) => x.replace(/([!]?)([ABC])/, "$1SET$2")).join(" & ")],
+    .map((x) => x.replace(/([!]?)([ABC])/, "$1SET$2")).join(" & "),
+    /* ⭐ bit 4 is the tempo timer, and it is this part's own (8.2) */
+    ...(i === 4 ? ["TFIRE"] : [])],
 }))
 
 
@@ -97,6 +99,57 @@ const neq = (name: string, from: number): Cell => ({
 })
 const compare: Cell[] = [neq("NEQL", 0), neq("NEQH", 8)]
 
+/* ================= 8.2's tempo timer - CIA-B timer A ====================
+ *
+ * ⛔ IT WAS U2's W4 UNTIL 2026-09-11, AND 125 BPM WAS OUT OF ITS RANGE.
+ * audio.md 16 item 44. W4 kept the next tick as a colour-clock deadline,
+ * compared in slot 4 against the sixteen-bit counter above - so no period
+ * could exceed 65,536 colour clocks, 54.1 Hz, and ProTracker's default tempo
+ * is N = 14,187 CIA ticks, 70,937 colour clocks. The routing that should have
+ * put TIMER at $20 did not exist either, which is why the card ran at exactly
+ * that ceiling and nobody saw a 131 Hz tempo instead.
+ *
+ * ⭐ SO THE TIMER COUNTS WHAT A CIA COUNTS. Sixteen bits at colour clock / 5,
+ * the prescale this part already has, and a period of N ticks is sixteen bits
+ * for every N. It counts UP from ~N, because all-ones is one product term; the
+ * reload value comes off the state file, where slot 4 now reads TIMER ($20)
+ * rather than the deadline, so U2 still owns the host's two-byte commit
+ * (9.4.3) and this part owns no copy of TIMER.
+ *
+ *   slot 3   all ones seen -> TLOAD and TFIRE for slot 4
+ *   slot 4   the file drives TIMER; the counter loads ~TIMER on the 4|5 edge,
+ *            and TFIRE raises 8.1 bit 4 through SET4
+ *   7|0      a CIA tick, every fifth colour clock - never the load's edge
+ *
+ * Period = N ticks exactly: the load lands between the Nth tick and the next.
+ * While ACTRL b6 is 0 the counter does not count and reloads every colour
+ * clock, so setting b6 starts a full period (8.2's "b6 = 1 loads TIMER and
+ * runs"), and a TIMER written while running takes effect at the next reload,
+ * which is what writing a running CIA's latch does.
+ *
+ * ⚠ TIMER = 0 IS NOT A PERIOD. ~0 is all ones, so the timer fires on every
+ * colour clock until the next tick carries it to zero, and then waits 65,536
+ * ticks. No BPM gives it; 8.2 says so. */
+const TC = [...Array(16).keys()].map((i) => `TC${i}`)
+const tempo: Cell[] = [
+  /* ⚠ ONE SIXTEEN-BIT COUNTER, and two alternatives were fitted against it on
+   * 2026-09-11: a registered tick (fitter INTERNAL ERROR - it does not fit)
+   * and two bytes with a registered carry (fits, one more cell, the same two
+   * cascades). Every version passes only on the fitter's cascade pass, and
+   * the cascades land on SD15's D input - the colour-clock counter's top
+   * bit, which changes once per colour clock and is not the compare path. */
+  ...loadable(TC, "CCLK & P2 & CTRL6", "TLOAD", TC.map((_, i) => `!SD${i}`))
+    .map((terms, i) => ({
+      pin: 0, name: TC[i], assertedLow: false, s0: 1 as const, registered: true, terms,
+    })),
+  { pin: 0, name: "TLOAD", assertedLow: false, s0: 1, registered: true,
+    why: "8.2: reload from TIMER in slot 4 - after a period, or every colour clock while stopped",
+    terms: ["!S2 & S1 & S0 & !CTRL6", `!S2 & S1 & S0 & ${TC.join(" & ")}`] },
+  { pin: 0, name: "TFIRE", assertedLow: false, s0: 1, registered: true,
+    why: "8.1 bit 4: a period of TIMER CIA ticks has elapsed",
+    terms: [`!S2 & S1 & S0 & CTRL6 & ${TC.join(" & ")}`] },
+]
+
 /* 9.3's read-back byte. U2 says when (PFCK) and which lane (PFLANE); the host
  * reads it off D0-D7 through the same bidirectional macrocells AINTREQ and
  * ASTAT already use, so the three '574s and their three output enables all go.
@@ -126,7 +179,7 @@ const countOut: Cell[] = [...Array(16).keys()].map((i) => ({
 const merged: Cell[] = [
   ...ctrl,
   ...setDecode,
-  ...counter, ...compare, ...prefetch, ...countOut,
+  ...counter, ...compare, ...tempo, ...prefetch, ...countOut,
   ...sync("SYNCR", "RINTREQ"),   // the AINTREQ read strobe
   /* §9.4.5: a request bit set by the slot logic merges into INTREQ on a colour
    * clock, and NOT while a host read of AINTREQ is in flight - so a set
@@ -245,19 +298,28 @@ const EXTERNAL = new Set([
    * three pins instead of five, on the part that has none to spare. CCLK
    * stays a pin because it is 4.1's colour clock and a scope wants it. */
   "S0", "S1", "S2", "CCLK",
+  /* 6.2's frame parity: the DAC A/B select and port registers 0/1's /OE, and
+   * the /OE of 3/2. U2 takes S3 too, for its strobe windows. */
+  "S3", "OEB",
   "SEL",
   "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7",
   "DMAEN0", "DMAEN1", "DMAEN2", "DMAEN3",
   /* ⛔ CIACLK left this list on 2026-09-10 with the cell - audio.md 16 item 42.
    * It was a pin carrying 8.2's ÷5 prescale to a card that counts the timer in
-   * microcode, and the pin is where 6.1's ×4 select goes. */
+   * microcode. The pin was earmarked for a 6.1 ×4 select that is not needed:
+   * the replayer writes the converter's code (audio.md 16 item 40). */
   "FIRQ", "NEQL", "NEQH",
   "SD0", "SD1", "SD2", "SD3", "SD4", "SD5", "SD6", "SD7",
   "SD8", "SD9", "SD10", "SD11", "SD12", "SD13", "SD14", "SD15",
-  "CTRL0", "CTRL1", "CTRL2", "CTRL3", "CTRL4", "CTRL5", "CTRL6", "CTRL7",
+  /* ⚠ CTRL6 left on 2026-09-11: U2 compared the timer, and the timer is here */
+  "CTRL0", "CTRL1", "CTRL2", "CTRL3", "CTRL4", "CTRL5", "CTRL7",
 ])
 
-export const audioCpld: Merged = merge(
+/* ⛔ /IOSEL is an active-low backplane strobe, and merge() - which found it only
+ * as a literal in SEL - synthesised an active-HIGH pin: the fitted card
+ * selected on every cycle outside $FF00-$FF7F with A6.!A5.!A4 and drove D0-D7
+ * into ordinary RAM reads (2026-09-11, pins.check.ts). */
+export const audioCpld: Merged = withActiveLow(merge(
   [aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign, buildAintreqSplit()],
   merged,
   {
@@ -267,6 +329,6 @@ export const audioCpld: Merged = merge(
      * per colour clock, and everything on the card is referred to it. */
     clock: "SLOTCLK",
   },
-)
+), ["IOSEL"])
 
 export const audioCuplSource = () => toCupl(audioCpld)

@@ -31,10 +31,13 @@ module audio_card (
 
   // ---------------------------------------------------------------- U1 ---
   wire S0, S1, S2, CCLK, SEL, NEQL, NEQH;
+  // 6.2's frame parity: DAC A/B select and port registers 0/1's /OE (S3), and
+  // the /OE of 3/2 (OEB, active low - its logic value is "3 and 2 drive").
+  wire S3, OEB;
   // ⭐ CIACLK is gone - audio.md 16 item 42, 2026-09-10. It was 8.2's ÷5 tempo
-  // clock on a pin, and the timer is counted by U2's microcode against the
-  // shared adder, so nothing on this board ever took it. The pin it frees is
-  // where 6.1's ×4 select goes.
+  // clock on a pin, and the timer is counted inside U1 (16 item 44), so
+  // nothing on this board ever took it. 6.1's ×4 needs no
+  // pin: the replayer writes the volume converter's code (16 item 40).
   wire DMAEN0,DMAEN1,DMAEN2,DMAEN3, FIRQ;
   wire CTRL0,CTRL1,CTRL2,CTRL3,CTRL4,CTRL5,CTRL6,CTRL7;
   wire SETA,SETB,SETC, PWBUSY, PFVALID;
@@ -46,6 +49,9 @@ module audio_card (
   wire CT1, CT2, CT3, CT4, CT5, CT6, CT7, CT8, CT9, CT10, CT11, CT12, CT13;
   wire CT14, CT15, EQ0, EQ1, EQ2, EQ3, PF0, PF1, PF2, PF3, PF4, PF5, PF6;
   wire PF7, SYNCR1, SYNCR2, MERGE, FIRQANY, HRD, RPF, SD0_OE;
+  // 8.2's tempo timer, U1's since 16 item 44: the CIA count, its reload and its fire
+  wire TC0, TC1, TC2, TC3, TC4, TC5, TC6, TC7, TC8, TC9, TC10, TC11, TC12;
+  wire TC13, TC14, TC15, TLOAD, TFIRE;
   wire SD1_OE, SD2_OE, SD3_OE, SD4_OE, SD5_OE, SD6_OE, SD7_OE, SD8_OE;
   wire SD9_OE, SD10_OE, SD11_OE, SD12_OE, SD13_OE, SD14_OE, SD15_OE, D0_OE;
   wire D1_OE, D2_OE, D3_OE, D4_OE, D5_OE, D6_OE, D7_OE;
@@ -68,7 +74,10 @@ module audio_card (
   wire       SFOE, SFWE0, SFWE1, SFWE2, SROE, SRWE, PFLANE;
   wire       ALATCK, BLATCK, BLATOE, ONESOE, CNTOE, ACIN, SUMOE, SBOE;
 
-  wire       CVOEA, CVC0, CVC1, CVC2;
+  wire       CVC0, CVC1, CVC2;
+  // 6.2's three strobes, registered on U2 and active low on the pins: the left
+  // sample package, the right one, and both volume packages.
+  wire       CSSL, CSSR, CSV;
   wire       PFOE0, PFOE1, PFOE2, PFCK, PWCK, PWOE;
   wire       ACOUT;
   wire [23:0] SD;
@@ -77,25 +86,25 @@ module audio_card (
   wire QCHAN, QTMR, RUN, WORKSLOT, T0, T1, T2, T3, LAST, RSTANY, DUEANY;
   wire START, BUSY, ENDNOW, WT0, WT1, WT2, WC0, WC1, RPICK0, RPICK1;
   wire RPICK2, RPICK3, DPICK0, DPICK1, DPICK2, DPICK3, DUE0, DUE1, DUE2;
-  wire DUE3, CLR0, CLR1, CLR2, CLR3, TDUE, TACK, TQ, TARM, DMAQ0, DMAQ1;
+  wire DUE3, CLR0, CLR1, CLR2, CLR3, DMAQ0, DMAQ1;
   wire DMAQ2, DMAQ3, RST0, RST1, RST2, RST3, RCLR0, RCLR1, RCLR2, RCLR3;
-  wire HSY1, HSY2, HSTB, HA0, HA1, HA2, HA3, HRW, HDUE, HACK, ISADATA, ISAIDX;
-  wire ISSDATA, ISSPTR, ISTIMER, AIDXLD, AINC, AIDX0, AIDX1, AIDX2, AIDX3;
-  wire AIDX4, AIDX5, HW0, HW1, HW2, HL0, HL1, HRO, HSTAGE, HCOMMIT;
-  wire GBL, SDHCAP, SDHOE, SDQ0, SDQ1, SDQ2, CVBUSY, CVB;
-  wire WROTE0, WROTE1, WROTE2, WROTE3, CVCSS, CVCSV, CVCSP, CVLD0, CVLD1;
+  wire HSY1, HSY2, HSTB, HA0, HA1, HA2, HA3, HRW, HDUE, HACK, ISADATA, HGBL;
+  wire ISSDATA, AIDXLD, AINC, AIDX0, AIDX1, AIDX2, AIDX3;
+  wire AIDX4, AIDX5, HW0, HW1, HW2, HL0, HL1, HWE, HSTAGE, HCOMMIT;
+  wire GBL, SDHCAP, SDHOE, SDQ0, SDQ1, SDQ2;
+  wire WROTE0, WROTE1, WROTE2, WROTE3, VPA, VPB, CVLD0, CVLD1;
   wire CVLD2, CVLD3, VDIRTY, VACK, FIRE0, FIRE1, FIRE2, FIRE3;
-  wire FIRE4, FIRE5, NOFIRE, CHAIN1, SDH0_OE, SDH1_OE, SDH2_OE;
+  wire FIRE5, NOFIRE, CHAIN1, SDH0_OE, SDH1_OE, SDH2_OE;
 
   aseq u2 (
     .SLOTCLK(SLOTCLK), .RESET(RESET),
-    .S0(S0), .S1(S1), .S2(S2),
+    .S0(S0), .S1(S1), .S2(S2), .S3(S3),
     .SEL(SEL), .E(E), .RW(RW),
     .A0(A[0]), .A1(A[1]), .A2(A[2]), .A3(A[3]),
     .D0(HD[0]), .D1(HD[1]), .D2(HD[2]), .D3(HD[3]), .D4(HD[4]), .D5(HD[5]),
     .NEQL(NEQL), .NEQH(NEQH), .ACOUT(ACOUT),
     .DMAEN0(DMAEN0), .DMAEN1(DMAEN1), .DMAEN2(DMAEN2), .DMAEN3(DMAEN3),
-    .CTRL6(CTRL6), .CTRL7(CTRL7),
+    .CTRL7(CTRL7),
     .SFA0(SFA[0]), .SFA1(SFA[1]), .SFA2(SFA[2]),
     .SFA3(SFA[3]), .SFA4(SFA[4]), .SFA5(SFA[5]),
     .SDH0(SD[16]), .SDH1(SD[17]), .SDH2(SD[18]),
@@ -159,24 +168,32 @@ module audio_card (
   // 9.3's read-back is U1's now - it latches the byte off SD and drives the
   // host bus through the macrocells AINTREQ and ASTAT already use.
 
-  // ----------------------------------------------- the six AD7528 --------
-  // Each package's port is driven by one of two port registers, chosen by
-  // CVOEA; its DAC A / DAC B select is the same bit. A rising /CS captures.
-  // Classic MOD's fixed LRRL: channels 0 and 3 are the left summing node and
-  // 1 and 2 the right, which is wiring and not logic. Four packages, eight
-  // halves - one sample and one volume converter per channel.
-  wire [7:0] PORTL = CVOEA ? CVR0 : CVR3;   // packages #1 #3 - ch0 and ch3
-  wire [7:0] PORTR = CVOEA ? CVR1 : CVR2;   // packages #2 #4 - ch1 and ch2
-  wire [2:0] CVCODE = {CVC2, CVC1, CVC0};
+  // ------------------------------------------------ the four AD7528 --------
+  // audio.md 6.2. Each package's port is one of two three-stated port
+  // registers: 0 (channel 0) or 3 (channel 3) on the left, 1 or 2 on the
+  // right. Classic MOD's fixed LRRL is which summing node a package's volume
+  // half is wired to, and not logic.
+  //
+  // S3 is the only thing that moves the DAC A/B select or a register's /OE,
+  // and it moves on a frame boundary: registers 0 and 1 drive with S3 low
+  // (DAC A), 3 and 2 with S3 high (DAC B). An X on the port is two registers
+  // fighting or none driving, and a monitor that captures one says so.
+  wire       drvA = (S3 === 1'b0), drvB = (OEB === 1'b1);
+  wire [7:0] PORTL = (drvA && !drvB) ? CVR0 : (drvB && !drvA) ? CVR3 : 8'hxx;
+  wire [7:0] PORTR = (drvA && !drvB) ? CVR1 : (drvB && !drvA) ? CVR2 : 8'hxx;
+
+  // An AD7528 latch is TRANSPARENT while /CS is low: the selected DAC follows
+  // its port and holds what was there when /CS rises. Modelled slot by slot,
+  // so the last slot of a strobe is the capture - and a strobe that is shorter
+  // than the part needs, or a select that moves under it, shows up in the
+  // claims (conv_claims.svh) rather than being hidden by an ideal latch.
   reg [7:0] ds0, ds1, ds2, ds3, dv0, dv1, dv2, dv3;
   always @(posedge SLOTCLK) begin
-    if (CVCODE == 3'd5) begin                     // the two sample packages
-      if (CVOEA) begin ds0 <= PORTL; ds1 <= PORTR; end
-      else       begin ds3 <= PORTL; ds2 <= PORTR; end
-    end
-    if (CVCODE == 3'd6) begin                     // the two volume packages
-      if (CVOEA) begin dv0 <= PORTL; dv1 <= PORTR; end
-      else       begin dv3 <= PORTL; dv2 <= PORTR; end
+    if (CSSL) begin if (!S3) ds0 <= PORTL; else ds3 <= PORTL; end
+    if (CSSR) begin if (!S3) ds1 <= PORTR; else ds2 <= PORTR; end
+    if (CSV) begin
+      if (!S3) begin dv0 <= PORTL; dv1 <= PORTR; end
+      else     begin dv3 <= PORTL; dv2 <= PORTR; end
     end
   end
   assign {DACSAMP0,DACSAMP1,DACSAMP2,DACSAMP3} = {ds0,ds1,ds2,ds3};

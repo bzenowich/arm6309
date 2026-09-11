@@ -47,7 +47,7 @@
  */
 
 import {
-  PROGRAM, HOSTMAP, COMMIT, STAGED, W1, W2, W3, W4, W5, W6,
+  PROGRAM, HOSTMAP, COMMIT, STAGED, SEQUENCES, W1, W2, W3, W5, W6,
   highLaneMode as highLaneModeName, type Step,
 } from "./aseq.micro"
 import { aseqCells, WTC } from "./aseq.jedec"
@@ -65,12 +65,12 @@ import { aseqCells, WTC } from "./aseq.jedec"
 
 export const ADDRESS = [
   { name: "T", bits: 4,
-    why: "the step counter - a 74HC163 outside, not four macrocells. ⚠ Four bits is EXACTLY the longest sequence (W4 at 14 steps on the 8-bit datapath); a fifth costs no ROM this card can notice but does cost the counter a second package" },
+    why: "the step counter - a 74HC163 outside, not four macrocells. ⚠ Four bits holds the longest sequence that fits (W5 at 13 steps; W4's 14 on the 8-bit datapath went with W4 on 2026-09-11); a fifth costs no ROM this card can notice but does cost the counter a second package" },
   { name: "WT", bits: 3, why: "the work type - three registers on U2, driven out as pins" },
   { name: "AIDX", bits: 4,
-    why: "9.3's host byte index. ⭐ This is what turns HOSTMAP, COMMIT, STAGED and the read-only offsets - HRO, HSTAGE, HCOMMIT, CL2, HW0-2, HL0-1, CW0-2, twelve cells - into table content" },
+    why: "9.3's host byte index. ⭐ This is what turns HOSTMAP, COMMIT, STAGED and the read-only offsets - HWE, HSTAGE, HCOMMIT, CL2, HW0-2, HL0-1, CW0-2, twelve cells - into table content" },
   { name: "HKIND", bits: 3,
-    why: "which host port the access touched and its direction - U2's ISADATA / ISAIDX / ISSDATA / ISSPTR / ISTIMER plus HRW, encoded. ⚠ It is U2's and not the backplane's because 9.4.4's whole finding is that WHICH register was touched has to be captured on the synchronised leading edge" },
+    why: "which host port the access touched and its direction - U2's ISADATA / ISSDATA / HGBL plus HRW, encoded. ⚠ For SPTR and TIMER the byte's lane is the port offset and not AIDX (16 item 44), so the index lines must carry HA for those kinds - a '157 this study has not priced, and the image below still places them like ADATA. ⚠ It is U2's and not the backplane's because 9.4.4's whole finding is that WHICH register was touched has to be captured on the synchronised leading edge" },
   { name: "ACOUT", bits: 1,
     why: "the adder's carry out. ⭐ Makes `done: notend` a stored decision rather than a branch, and gives item 35's four high-lane modes somewhere to come from" },
   { name: "BYTE", bits: 1,
@@ -152,16 +152,16 @@ export const FIELDS: FieldDef[] = [
 
   /* -- what U2 has to merge --------------------------------------------- */
   { name: "CVOP", bits: 2, to: "U2",
-    why: "6.1's volume pass: load this channel's converter port register off the read bus, or strobe the volume packages. It goes through U2 because the WALK loads the same four registers in slots 0-3 and one of them has to win" },
+    why: "6.1's volume pass: load this channel's converter port register off the read bus, and arm the A or B volume window. It goes through U2 because the PEND write loads the same four registers and U2 owns the 74HC138 code" },
   { name: "HLOP", bits: 3, to: "U2",
     why: "⛔ 16 ITEM 35, AND THE REASON THIS FILE EXISTS. SD[18:16] needs { capture, pass, increment, decrement, take the carry } and the fitted design distinguishes them with ACIN, which cannot tell a decrement from a pass because both have ACIN = 0. Nine steps drive the high lane and four of them are wrong. Here it is three bits of a stored word and costs nothing to get right" },
   { name: "SEQ", bits: 2, to: "U2",
-    why: "⭐ the entire next-state logic. `end` retires the work item; `chain` loads W2 without releasing the engine, which is W1's buffer-end path; `endfire` also raises 8.1's source, which U2 picks from WC or the timer. Because ACOUT is an address line, `done: notend` is a stored decision and U2 keeps no step comparator at all - LAST goes" },
+    why: "⭐ the entire next-state logic. `end` retires the work item; `chain` loads W2 without releasing the engine, which is W1's buffer-end path; `endfire` also raised 8.1's timer source, and no step uses it since W4 left for U1 on 2026-09-11 - the code is spare. Because ACOUT is an address line, `done: notend` is a stored decision and U2 keeps no step comparator at all - LAST goes" },
 ]
 
 export const SEQ = { next: 0, end: 1, chain: 2, endfire: 3 } as const
 export const HLOP = { off: 0, cap: 1, pass: 2, inc: 3, dec: 4, carry: 5 } as const
-export const CVOP = { off: 0, load: 1, strobe: 2 } as const
+export const CVOP = { off: 0, load: 1, armA: 2, armB: 3 } as const
 
 export const microwordBits = FIELDS.reduce((n, f) => n + f.bits, 0)
 export const PACKAGES = Math.ceil(microwordBits / 8)
@@ -235,7 +235,7 @@ export const encode = (s: Step, host?: HostCtx, acout = 0): Word => {
   const wr = writeOf(s, host)
   const seq = s.done === undefined ? SEQ.next
     : s.done === "notend" ? (acout ? SEQ.end : SEQ.chain)
-    : s.set !== undefined ? SEQ.endfire : SEQ.end
+    : SEQ.end
   /* W3 step 3 carries both srd and swr; the fitted design resolves it with
    * HRW at run time and here the direction is an address line. */
   const srd = s.srd && !(s.swr && host && !host.read)
@@ -244,7 +244,7 @@ export const encode = (s: Step, host?: HostCtx, acout = 0): Word => {
     SFA5: a.global ? 1 : 0,
     SFA20: a.word & 7,
     /* a step that names a word and does not write it is a read */
-    SFOE: (a.global || s.w !== undefined || s.host) && wr.length === 0 && !s.cvstr ? 1 : 0,
+    SFOE: (a.global || s.w !== undefined || s.host) && wr.length === 0 ? 1 : 0,
     SFWE0: wr.includes(0) ? 1 : 0,
     SFWE1: wr.includes(1) ? 1 : 0,
     SFWE2: wr.includes(2) ? 1 : 0,
@@ -261,7 +261,7 @@ export const encode = (s: Step, host?: HostCtx, acout = 0): Word => {
     PWOE: s.pw ? 1 : 0,
     PFCK: s.pf ? 1 : 0,
     PFLANE: host && HOSTMAP[host.aidx].lane === 1 ? 1 : 0,
-    CVOP: s.cvld ? CVOP.load : s.cvstr ? CVOP.strobe : CVOP.off,
+    CVOP: s.varm === "a" ? CVOP.armA : s.varm === "b" ? CVOP.armB : s.cvld ? CVOP.load : CVOP.off,
     HLOP: highLaneMode(s),
     SEQ: seq,
   }
@@ -314,7 +314,7 @@ export const IMAGE_WORDS = 1 << addressBits
 export const buildImage = (): Uint32Array => {
   const idle = pack(encode({ done: "always" }))
   const img = new Uint32Array(IMAGE_WORDS).fill(idle)
-  for (const wt of [W1, W2, W3, W4, W5, W6]) {
+  for (const wt of SEQUENCES) {
     PROGRAM[wt].forEach((s, t) => {
       for (let aidx = 0; aidx < 16; aidx++) {
         for (let acout = 0; acout < 2; acout++) {
@@ -354,6 +354,12 @@ export const toLanes = (img: Uint32Array): Uint8Array[] =>
  * the state file for the timer compare. U1 already holds the free-running
  * counter and the comparator; a 16-bit register beside them is 16 of its 40
  * spare cells and NOT ONE PIN.
+ *
+ * ⚠ 16 ITEM 44 MOVED THE TIMER INTO U1 ON 2026-09-11 AND SLOT 4 STILL READS.
+ * The timer is U1's CIA counter now, and it reloads from TIMER at $20 in slot
+ * 4, because U1 keeps no copy of TIMER. Freeing slot 4 needs that copy - 16
+ * more cells, 24 with 9.4.3's staging - on a part at 108 of 128. Until it is
+ * built STORE8_3 below is the budget that applies.
  *
  * ⚠ AND THIS IS WHY 16 ITEM 34'S 8-BIT DATAPATH IS NOT OPTIONAL HERE. A
  * micro-step's read and the write that follows it are one micro-step apart,
@@ -555,21 +561,16 @@ export const ABSORBED = new Set([
   /* ⭐ 9.3's byte map, entire - this is AIDX being an address line. ⚠ CW0-2
    * and CL2 are NOT here any more: they were deleted from the sequencer
    * outright on 2026-09-10, because the commit word is the host word. */
-  "HRO", "HSTAGE", "HCOMMIT", "HW0", "HW1", "HW2", "HL0", "HL1",
+  "HWE", "HSTAGE", "HCOMMIT", "HW0", "HW1", "HW2", "HL0", "HL1",
 
   /* the high lane's control. ⚠ SDH0-2 themselves STAY: they are the inc/dec
    * arithmetic item 35 is about, and arithmetic is not decode */
   "SDHCAP", "SDHOE",
-  /* W5's half of the converter ops. The walk's half stays - it is the slot
-   * phase, which the microprogram never sees */
-  "CVB", "CVCSV",
   /* the step comparator, and the two chains between sequences: SEQ is a field
    * now and it carries `chain` */
   "LAST", "CHAIN1",
   /* ⭐ and the step counter itself, which becomes a 74HC163 outside */
   "T0", "T1", "T2", "T3",
-  /* 8.1's timer source, which is SEQ = endfire */
-  "FIRE4",
 ])
 
 /** Cells that STAY on U2 and are rewritten: they keep their job and their
@@ -581,7 +582,7 @@ export const ABSORBED = new Set([
 export const REWRITTEN = new Map<string, string>([
   ["WT0", "SEQ"], ["WT1", "SEQ"], ["WT2", "SEQ"],
   ["ENDNOW", "SEQ"], ["HACK", "SEQ"], ["AINC", "SEQ"], ["VDIRTY", "SEQ"],
-  ["CVBUSY", "CVOP"], ["CVLD0", "CVOP"], ["CVLD1", "CVOP"],
+  ["VPA", "CVOP"], ["VPB", "CVOP"], ["CVLD0", "CVOP"], ["CVLD1", "CVOP"],
   ["CVLD2", "CVOP"], ["CVLD3", "CVOP"],
   ["WROTE0", "CVOP"], ["WROTE1", "CVOP"], ["WROTE2", "CVOP"], ["WROTE3", "CVOP"],
   ["SFA4", "SFA5"], ["SFA3", "SFA5"],
@@ -625,9 +626,12 @@ export const ADDRESSED = new Set([
   "RUN", "WT0", "WT1", "WT2", "T0", "T1", "T2", "T3", "ACOUT",
   "AIDX0", "AIDX1", "AIDX2", "AIDX3", "AIDX4", "AIDX5",
   /* HKIND is these six, encoded */
-  "HRW", "ISADATA", "ISAIDX", "ISSDATA", "ISSPTR", "ISTIMER",
+  "HRW", "ISADATA", "ISSDATA", "HGBL",
+  /* ⚠ 16 item 44: SPTR's and TIMER's lane is the port offset, so a byte-map
+   * decode reads HA for those two - the index lines' job, muxed (see AIDX) */
+  "HA0", "HA1", "HA2", "HA3",
   /* the slot phase, merged on the board or on U2 - never in the table */
-  "S0", "S1", "S2", "QCHAN", "QTMR", "SLOTCLK",
+  "S0", "S1", "S2", "S3", "QCHAN", "QTMR", "SLOTCLK",
   /* the working channel, which drives SFA[4:3] from U2 and not from the ROM */
   "WC0", "WC1",
 ])
