@@ -100,13 +100,19 @@ module machine_tb;
   // edge goes silent exactly when the interesting thing happens. This ticks on
   // the dot clock, which nothing can stop.
   int hb_every = 0, hb = 0;
+  /* ⭐ VBLANK's duty cycle, because it is what boot.asm's `settle` waits on and
+   * a stuck poll is indistinguishable from a slow one without it. 49 blanked
+   * lines of 449 is 10.9%; the first run after machine.v's read fix measured
+   * 11.4%, which is how the signal was cleared of suspicion and the read path
+   * convicted. */
+  int vbl_hi = 0, vbl_lo = 0;
+  always @(posedge CLK25) if (VBLANK) vbl_hi++; else vbl_lo++;
   initial void'($value$plusargs("hb=%d", hb_every));
   always @(posedge CLK25) begin
     hb++;
     if (hb_every > 0 && hb % hb_every == 0)
-      $display("      hb %0d dots: %0d E, %0d /WAIT dots, BUSY=%b VRAMSEL=%b WAITOE=%b WPTR=%0d LA=%04h prog=%02h",
-               hb, e_cycles, wait_dots, SPANBUSY, m.card.VRAMSEL,
-               wait_asserted, WPTR, la, progress);
+      $display("      hb %0d dots: %0d E, %0d /WAIT dots, BUSY=%b VBL=%b vstat=%02h WPTR=%0d LA=%04h prog=%02h",
+               hb, e_cycles, wait_dots, SPANBUSY, VBLANK, m.vstat, WPTR, la, progress);
   end
 
   // ---- +trace=N: the first N bus cycles, as the CPU sees them -------------
@@ -277,6 +283,58 @@ module machine_tb;
     else want_index = 8'((y & 'hF8) | (x / 128));
   endfunction
 
+  /* ---- one scene, asserted ------------------------------------------------ *
+   *
+   * ⭐ THE MODE IS CHECKED AT THE CONNECTOR AND FROM CPU CODE, which is what
+   * makes these four claims different from vsync_tb's. That bench drives CTRL
+   * from a task and counts dots against vctrl's own H and V; this reads a frame
+   * boot.asm asked for, with known content in it, and asks whether the shape is
+   * right.
+   *
+   * ⚠ AND LINE DOUBLING FALLS OUT RATHER THAN BEING ASSUMED. VMODE 00 and 01
+   * double, 10 and 11 do not (graphics.md 6.2), so the picture row a scanline
+   * shows is `L/2` or `L` - and asserting the pattern through that mapping is
+   * what proves the doubling from outside the card.
+   *
+   * ⚠ ROWS THE PATTERN NEVER REACHED MUST BE BLACK. boot.asm painted 200 rows
+   * of a 512-row ring, so 10 and 11 scan rows of VRAM that were never written -
+   * and that is a claim too: it says the scan address kept going rather than
+   * wrapping or repeating. */
+  task automatic check_picture(input string what, input int lines, input bit doubled);
+    int bad, fx, fy, pairs;
+    ok(shot_lines == lines,
+       $sformatf("%s: %0d active scanlines (got %0d)", what, lines, shot_lines));
+    ok(shot_w_min == 640 && shot_w_max == 640,
+       $sformatf("%s: every line is 640 pixels (got %0d..%0d)", what,
+                 shot_w_min, shot_w_max));
+    if (doubled) begin
+      pairs = 0;
+      for (int k = 0; k * 2 + 1 < shot_lines; k++)
+        for (int x = 0; x < 640; x++)
+          if (shot[k*2][x] !== shot[k*2+1][x]) pairs++;
+      ok(pairs == 0,
+         $sformatf("%s: each picture row is scanned twice, identically (%0d differ)",
+                   what, pairs));
+    end
+    bad = 0; fx = -1; fy = -1;
+    for (int L = 0; L < shot_lines && L < MAXH; L++) begin
+      int row;
+      row = doubled ? L / 2 : L;
+      for (int x = shift; x < 640; x++) begin
+        logic [7:0] w;
+        w = (row >= 200) ? 8'h00 : want_index(x - shift, row);
+        if (shot[L][x] !== {w, w}) begin
+          bad++;
+          if (fx < 0) begin fx = x; fy = L; end
+        end
+      end
+    end
+    ok(bad == 0,
+       $sformatf("%s: every pixel is the index boot.asm drew, and rows 200+ are black (%0d wrong%s)",
+                 what, bad,
+                 fx < 0 ? "" : $sformatf(", first at x=%0d line=%0d: got %04h", fx, fy, shot[fy][fx])));
+  endtask
+
   // ---- the run -------------------------------------------------------------
   int bad, first_bad_x, first_bad_y, i, shift;
   logic [15:0] got;
@@ -373,31 +431,21 @@ module machine_tb;
     // every picture row scanned twice - vaddr_tb calls it line doubling and
     // this is what it looks like at the connector. A capture that expected 200
     // would have been measuring its own assumption.
-    ok(shot_lines == 400,
-       $sformatf("the frame has 400 scanlines - VMODE 00 doubles 200 rows (got %0d)", shot_lines));
     ok(shot_w_min == 640 && shot_w_max == 640,
        $sformatf("every line is 640 pixels wide (got %0d..%0d)", shot_w_min, shot_w_max));
 
     if (shot_lines > 0) write_ppm("screenshot.ppm");
 
-    bad = 0;
-    for (int k = 0; k * 2 + 1 < shot_lines; k++)
-      for (int x = 0; x < 640; x++)
-        if (shot[k*2][x] !== shot[k*2+1][x]) bad++;
-    ok(bad == 0, $sformatf("each picture row is scanned twice, identically (%0d differ)", bad));
-
-    /* ---- the picture itself ---------------------------------------------
+    /* ---- where the picture starts, measured once -------------------------
      *
      * ⚠ THE HORIZONTAL OFFSET IS MEASURED, NOT ASSUMED. The pixel path is
      * three registers deep behind the scan counter ('153 mux -> index '574 ->
-     * LUT -> post-LUT '273, graphics.md 6.1) and BLANK comes off the H counter
-     * with no matching delay, so "which dot of the active window carries
-     * framebuffer byte 0" is a question the design answers and the
-     * specification does not. Searching for it and REPORTING it separates two
-     * different claims: whether the address path, the interleave, the ring
-     * stride and the palette are right, and whether the picture sits where the
-     * sync says it does. They are not the same finding and they do not have
-     * the same fix. */
+     * LUT -> post-LUT '273, graphics.md 6.1) and BLANK is delayed to match
+     * (19 item 35), so "which dot of the active window carries framebuffer
+     * byte 0" is a question the design answers. Searching for it and REPORTING
+     * it separates two claims: whether the address path, the interleave, the
+     * ring stride and the palette are right, and whether the picture sits
+     * where the sync says it does. The four modes below reuse the answer. */
     shift = -1;
     for (int sh = 0; sh <= 16 && shift < 0; sh++) begin
       int miss;
@@ -412,29 +460,29 @@ module machine_tb;
     ok(shift == 0,
        $sformatf("the picture starts on the first dot of the active window (offset %0d)",
                  shift));
-
-    bad = 0; first_bad_x = -1; first_bad_y = -1;
     if (shift < 0) shift = 0;
-    for (int k = 0; k * 2 < shot_lines && k < 200; k++)
-      for (int x = shift; x < 640; x++) begin
-        want = want_index(x - shift, k);
-        got  = shot[k*2][x];
-        // Entry i was written as $i i, so the index is recoverable from the
-        // connector - which is what makes a screenshot checkable at all.
-        if (got !== {want, want}) begin
-          bad++;
-          if (first_bad_x < 0) begin first_bad_x = x; first_bad_y = k; end
-        end
-      end
-    ok(bad == 0,
-       $sformatf("every pixel of the drawn image carries the index boot.asm drew, at that offset (%0d wrong%s)",
-                 bad,
-                 first_bad_x < 0 ? "" :
-                 $sformatf(", first at x=%0d row=%0d: got %04h want %04h",
-                           first_bad_x, first_bad_y,
-                           shot[first_bad_y*2][first_bad_x],
-                           {want_index(first_bad_x - shift, first_bad_y),
-                            want_index(first_bad_x - shift, first_bad_y)})));
+
+    /* ---- all four of graphics.md 13's VMODEs, from CPU code --------------
+     *
+     * ⭐ THE OTHER THREE HAD NEVER BEEN REACHED BY SOFTWARE. vsync_tb drives
+     * CTRL from a task and counts dots against vctrl's own counters; boot.asm
+     * writes the register and waits on VSTAT b6, and what is checked is a frame
+     * with known content in it. */
+    check_picture("VMODE 00 - 640x200 doubled", 400, 1);
+
+    wait_progress(8'h10, 600000, "VMODE 10 is selected - 640x400 progressive");
+    capture_frame(1200000);
+    if (shot_lines > 0) write_ppm("screenshot-vmode10.ppm");
+    check_picture("VMODE 10 - 640x400 progressive", 400, 0);
+
+    wait_progress(8'h11, 600000, "VMODE 01 is selected - 640x240 doubled");
+    capture_frame(1400000);
+    check_picture("VMODE 01 - 640x240 doubled", 480, 1);
+
+    wait_progress(8'h12, 600000, "VMODE 11 is selected - 640x480 progressive");
+    capture_frame(1400000);
+    if (shot_lines > 0) write_ppm("screenshot-vmode11.ppm");
+    check_picture("VMODE 11 - 640x480 progressive", 480, 0);
 
     // ---- and the things that must not have happened -------------------
     $display("");

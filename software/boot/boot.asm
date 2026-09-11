@@ -72,7 +72,10 @@ P_RAM   EQU     $02             the SIMM stores and reads back
 P_PAL   EQU     $03             256 palette entries loaded
 P_FILL  EQU     $04             the pattern is painted
 P_STRP  EQU     $05             the stripe is drawn
-P_DONE  EQU     $FF             display enabled -- sample the picture now
+P_DONE  EQU     $FF             VMODE 00 shown -- sample the picture now
+P_M10   EQU     $10             ... and VMODE 10, 640x400 progressive
+P_M01   EQU     $11             ... 01, 640x240 doubled
+P_M11   EQU     $12             ... 11, 640x480 progressive
 P_BADR  EQU     $E1             the SIMM did not answer
 
 *------------------------------------------------------------- geometry ------
@@ -322,19 +325,74 @@ wbusy4  lda     VSTAT
         sta     SIMPORT
 
 *==============================================================================
-* 6. Show it.  VMODE 00 = 640x200 at 70 Hz, positive H sync (graphics.md 6.2.1).
+* 6. Show it, in every mode the card has.  graphics.md 13's VMODE is two bits
+*    and 6.2 calls all four native, and until now only 00 had ever been reached
+*    by software - vsync_tb drives the register from a task.  The pattern stays
+*    where it is: the ring is 1024 x 512 and the modes differ only in how much
+*    of it they scan and whether they double, so one framebuffer answers all
+*    four and the SHAPE of what comes out is the claim.
+*
+*    machine_tb captures a frame per scene.  The handshake is the card's own
+*    VBLANK - poll VSTAT b6 - which is 12.1's tear-free instant and the thing a
+*    real driver waits on anyway.
 *==============================================================================
         clra
         sta     VSCROLL
         sta     VSCRLH
         sta     HSCROLL
         sta     HSCRLH
-        lda     #CT_ON
+
+        lda     #CT_ON          VMODE 00 - 640x200, doubled to 400 lines
         sta     VCTRL
         lda     #P_DONE
         sta     SIMPORT
+        bsr     settle
+
+        lda     #CT_ON+2        VMODE 10 - 640x400 progressive, same 70 Hz family
+        sta     VCTRL
+        lda     #P_M10
+        sta     SIMPORT
+        bsr     settle
+
+        lda     #CT_ON+1        VMODE 01 - 640x240, doubled to 480, 60 Hz
+        sta     VCTRL
+        lda     #P_M01
+        sta     SIMPORT
+        bsr     settle
+
+        lda     #CT_ON+3        VMODE 11 - 640x480 progressive, 60 Hz
+        sta     VCTRL
+        lda     #P_M11
+        sta     SIMPORT
+        bsr     settle
+
+        lda     #CT_ON          back to 00 for anything after this
+        sta     VCTRL
 
 halt    bra     halt
+
+*==============================================================================
+* settle - give the capture a whole frame to find, by waiting four vertical
+* blanks on VSTAT b6.  ⚠ FOUR, not one: machine_tb hunts a VSYNC edge and then
+* takes the frame after it, so a scene has to stand still for longer than the
+* two frames that costs.
+*
+* ⭐ AND IT IS THE HANDSHAKE A DRIVER WOULD USE.  13.1's palette rule and
+* 12.1's VBL handler both say "do it in vertical blank", and this is the poll
+* that finds it - so the wait is the machine exercising a documented path
+* rather than a testbench convenience.
+*==============================================================================
+settle  pshs    a,b
+        ldb     #4
+vblnot  lda     VSTAT           wait until NOT in vertical blank
+        bita    #$40
+        bne     vblnot
+vblin   lda     VSTAT           ... then for the edge into it
+        bita    #$40
+        beq     vblin
+        decb
+        bne     vblnot
+        puls    a,b,pc
 
 *==============================================================================
 * The map table: sixteen entries of (low, high), index {TASK, block}.

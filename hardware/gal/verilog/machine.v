@@ -166,7 +166,28 @@ module machine #(
   // 1. graphics.md §3.2's '245, whose enable is rfa's own decode: the card owns
   //    the bus for a READ of its 32-byte window and at no other time.
   wire vid_regsel   = iosel & pa[6] & pa[5];
-  wire vid_drives   = vid_regsel & cpu_rnw & e;
+  /* ⛔ AND THE ENABLE IS THE CYCLE, NOT E-HIGH. This read `& e` until
+   * 2026-09-10 and the CPU could not read a card register at all.
+   *
+   * A 6809E latches read data ON THE FALLING EDGE of E (graphics.md 3.1), and
+   * in a zero-delay model `e` is already 0 in the delta where the core samples
+   * - so gating the card's data on E-high presents it for the whole cycle and
+   * then removes it at the one instant that matters. Every read of $FF60-$FF7F
+   * returned the motherboard's stale byte instead.
+   *
+   * ⚠ IT HID ITSELF, which is why it lasted a day. boot.asm polls VSTAT b7
+   * before each span (7.4's rule) and the loop exited immediately on a stale
+   * zero, so the picture still came out right - the spans were spaced by the
+   * CPU's own arithmetic instead. It only became visible when software waited
+   * on a bit that is zero MOST of the time rather than one that is zero when
+   * the card is idle: VSTAT b6, VBLANK, which is high for 49 lines of 449.
+   *
+   * ⭐ The hardware is fine and it is the model that was wrong: graphics.md
+   * 3.2's '245 sits on the card's own decode, its output is combinational, and
+   * t_DSR is satisfied long before E falls. So the enable here is the read
+   * cycle - there is no other driver in this window, because mb_drives
+   * excludes it by construction below. */
+  wire vid_drives   = vid_regsel & cpu_rnw;
 
   // 2. VSTAT's '244 - §12.1, §13. b7 SPANBUSY, b6 VBLANK, b5 HBLANK, b0 IRQ.
   wire vstat_sel = vid_regsel & (pa[4:0] == 5'h13);
