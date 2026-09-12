@@ -3949,6 +3949,43 @@ left is measurement. They are grouped by what would settle them.
     (`features.md` §3.1 and §12, `machine.md` §8) even though item 25 is *JTAG* and
     closed. The rewrite has no tracker of its own, so it gets one.
 
+    ⭐ **SCOPED 2026-09-12, against the design files rather than the prose — and it is
+    a different job than §7.4 and §14.2.3 describe.** Three findings, in the order they
+    change the estimate:
+
+    **(a) It returns no pins.** §14.2.2 maps `A0` → `/LB`//`UB` and `A1` → chip select,
+    so a two-chip card still needs **four** write strobes — 2 chips × 2 byte lanes —
+    exactly as many as the four `/WE` today. `GSPN0`–`GSPN3` does not become
+    `GSPN0`–`GSPN1`; it becomes {chip0 `/LB`, chip0 `/UB`, chip1 `/LB`, chip1 `/UB`}:
+    **same four macrocells, same four pins, different meaning.** "2 grants instead of
+    8" is the *arbitration decision* collapsing to one, not the pin count falling.
+
+    **(b) The arbiter is already gone.** `vctrl.v`'s fitted `GSPN0` is five terms that
+    reduce to `SPNREQG & !SPNA0 & !SPNA1` — two of them differ only in `CPUIDLE` and
+    `!CPUIDLE` and OR to the term itself. The 2026-09-11 `CPUIDLE` substitution made
+    every CPU exclusion vacuous, so what is on the part is **a 2-to-4 decode, not an
+    arbiter**. Narrowing it is deleting one input bit, which is cheap and safe.
+
+    **(c) ⛔ The cost is the by-four increment, and it lands on the worst counter on the
+    card.** §7.4 prices the broadcast write as "a wide term on `GSPNn`, a by-four
+    increment on `WPTR`, a by-four countdown on `SPANLEN`". `SPANLEN` is `vlen` on
+    **`vsup`**, which has 37 spare cells — fine. `WPTR`'s column counter is `wcol` on
+    **`vctrl`**, and `wcol` is *"ten bits in ten macrocells with nothing left to emit a
+    carry from"* (`access.check.ts` asserts there is no eleventh), on a part at
+    **128 of 128 cells**. A by-four increment is a **mode-dependent carry** — from bit 0
+    in direct and mask modes, injected at bit 2 in solid — on exactly those ten cells.
+    ⚠ **That counter has already refused two smaller changes**: a third load source gave
+    `INTERNAL ERROR` on the fan-in wall, and ten shadow registers gave `Grouping fail`.
+
+    ⚠ **§7.4's own cost paragraph reasons about the wrong resource.** It says "the pins
+    are not a problem… `vctrl` sits at 64 of 64" — `vctrl` is at **56 of 64 pins and
+    128 of 128 cells**, so pins stopped being the constraint and the section has not
+    been re-read since. **The honest estimate is: cheap in pins, free on `vsup`, and a
+    coin-flip on `vctrl`'s cells** — `vctrl` does have 0/128 foldback and only 29 of 40
+    fan-in, so the expanders may absorb it, and only `fit1508.exe` can say. **Budget a
+    fit that may be refused**, and do items 33 and §7.4's broadcast write in one change:
+    the two-chip rewrite alone returns nothing and is pure churn without it.
+
 34. **⛔ OPEN — `cards/video.circuit.tsx` is a partial board, and that is where the
     next M-1 will hide.** It carries the VGA drive stage, three chips and the card's
     `icBudget`; it does **not** carry a net for the framebuffer, the register file, the
