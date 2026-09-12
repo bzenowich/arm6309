@@ -1385,14 +1385,25 @@ Assuming a tight store loop sustains roughly one write per 5 core-6309 cycles in
 native mode (**verify against real cycle counts** — this is the number the whole
 table scales on, and §19 item 1 is still open):
 
-> ⚠ **What has been measured is not this number, and the difference matters.** Since
-> 2026-09-12 `machine_tb` reports the closest two VRAM writes in a whole boot run:
-> **39 E cycles apart, across 4,548 writes**. That is not the store cost — it is what
-> `boot.asm` *achieves*, and it is dominated by §7.4's rule that every span byte polls
-> `VSTAT` first. It bounds the table from the wrong side (no row here is claimed to be
-> achievable while polling) and it is recorded because it is the only figure in this
-> area that comes from running the machine rather than from arithmetic. **The 5-cycle
-> claim remains unsourced.**
+> ⭐ **THE STORE IS MEASURED SINCE 2026-09-12, AND IT IS SIX CYCLES — on the 6809E.**
+> `boot.asm` §2a runs two straight-line blocks, 32 `STA ,X+` and 64, bracketed by an
+> identical `lda #imm` + `sta SIMPORT` and storing into **SIMM rather than VRAM** (a
+> VRAM store is posted and can meet §7.4's `/WAIT`, which would measure the card).
+> `machine_tb` times them at the progress port and subtracts, so the bracketing, the
+> entry cost and every branch cancel exactly: **391 − 199 = 192 E cycles for 32 stores
+> = 6.00 each**, with no remainder.
+>
+> ⚠ **That is emulation mode, and this table is written for native mode.** The core in
+> the socket is `vendor/mc6809` — cycle-accurate, and a **6809** — so six is the figure
+> the "~5" above claims to beat, and one cycle is exactly the saving a 6309's native
+> mode is expected to give on an indexed store. **Expected is not measured.** §19 item
+> 1 stays open for the 6309 number, which now needs a primary source or a decision
+> recorded in `cpu/` rather than a measurement this repository can take.
+>
+> ⚠ **So the rows below read about 20 % optimistic** on a 6809, or on a 6309 left in
+> emulation mode. `machine_tb` separately reports the closest two VRAM writes in the
+> boot run — 39 E cycles across 4,548 — which is `boot.asm`'s *achieved* rate under
+> §7.4's polling rule, and not the store's cost.
 
 | Task | CPU writes | Time @ 2.098 MHz |
 |---|---|---|
@@ -3879,16 +3890,23 @@ left is measurement. They are grouped by what would settle them.
     |---|---|
     | the vendored core | `vendor/mc6809/mc6809e.v` **is** cycle-accurate — and it is a **6809**. It gives emulation mode, which is the baseline native mode claims to beat, not native mode |
     | the project's own firmware | `cpu/src/` is the **timing spike** (`gpio.c`, `spike_dma.c`, `stub_core.c`); there is no instruction table in it to read a cycle count out of. Native-mode timing is a *choice* this project has not yet made — the same shape as `TFM` in `machine.md` §6 |
-    | count a real loop | ⛔ **A09 is not installed**, so `boot.asm` cannot be rebuilt with a tight store loop in it. `boot.bin`/`boot.lst` are committed artefacts, and `boot.lst` carries addresses and opcodes, **not cycle counts** |
+    | count a real loop | ⭐ **DONE — this is the half that closed.** A09 is installed (`software/tools/fetch-a09.sh`) and `boot.asm` §2a counts one directly |
 
-    ⭐ **What was added instead is the measurement that can be made.** `machine_tb`
-    records the closest two VRAM writes in the boot run — **39 E cycles apart over
-    4,548 writes** — and claims it. It is `boot.asm`'s achieved rate, not `STA ,X+`'s
-    cost, because §7.4's polling rule sits between almost every pair; the claim says so
-    in its own text. **The cheapest way to actually close this item is to install A09
-    and add a twenty-instruction store loop to `boot.asm`**, which measures the 6809
-    number exactly; the 6309 native figure then needs a source this repository does not
-    have, or a decision recorded in `cpu/`.
+    ⭐ **THE 6809 HALF IS CLOSED, BY SUBTRACTION: `STA ,X+` IS SIX E CYCLES.**
+    `boot.asm` §2a runs two straight-line blocks — 32 stores and 64 — bracketed
+    identically and targeting SIMM, so nothing on the card is in the number.
+    `machine_tb` times them at the progress port: **391 − 199 = 192 E cycles for 32
+    stores, exactly 6.00 each and no remainder.** The difference method is what makes it
+    a measurement rather than an estimate: the bracketing instructions, the entry cost
+    and any branch appear in both intervals and cancel.
+
+    ⚠ **What stays open is the 6309 native figure, and it is now a narrower question.**
+    Six is emulation mode, on a cycle-accurate 6809. §7.3's "~5" is one less, which is
+    the saving native mode is expected to give on an indexed store — **consistent, and
+    still unverified.** Closing it needs a primary native-mode source, or a decision
+    recorded in `cpu/` of the kind `machine.md` §6 already calls for on `TFM`, because
+    this machine's 6309 is the project's own firmware and its native-mode timings are a
+    **choice** rather than a discovery.
 9. **`74HC593` availability** (§9). ⭐ **CLOSED 2026-09-09, and the answer is that
    the part is discontinued** — out of production, with no widely available
    pin-compatible replacement. It is out of the BOM. `PIDX` is **two `74AHCT163A`
@@ -3952,15 +3970,33 @@ left is measurement. They are grouped by what would settle them.
 
     | | |
     |---|---|
-    | Six output pins on `vctrl` | the arbiter becomes **2 grants instead of 4**. ⚠ Since 2026-09-11 vctrl's limit is not pins (56 of 64) but the fitter's cell count (§19 item 46) |
+    | ⛔ **Two output pins on `vctrl`, and they buy nothing** | the arbiter becomes **2 grants instead of 4**. ⚠ **Re-checked against `cpld/*.fit` on 2026-09-12 and this row was wrong.** It said *six* pins; four of those were `GCPU0`–`GCPU3`, **already banked on 2026-09-11** when `CPUIDLE` made them constant and buried them. Only `GSPN2`/`GSPN3` are left to return — and `vctrl` is **128/128 cells with 56 of 64 pins**, so pins are not what it is short of (§19 item 46) |
     | 25.1 MB/s solid fill | §14.2's broadcast write: four bytes in one access, against 6.29 MB/s today (`features.md` §3.1) |
     | 205–405 mA | §14.2's power saving, and §19 item 10 is the measurement that confirms it |
     | `/WAIT` bounded at 10.2 µs | instead of 40.7 µs (§7.4, `machine.md` §5 item 10) |
 
-    ⚠ **And it is what `vaddr` needs too, now.** §10.3.2 took that part to **124 of 128
-    cells**; `VSCROLL` in the display list is already refused by the fitter for want of
-    nine, and so is anything else. **Both CPLDs are now blocked on this one rewrite** —
-    `vctrl` on pins since 2026-09-08 and `vaddr` on cells since 2026-09-09.
+    ⛔ **"BOTH CPLDs ARE BLOCKED ON THIS REWRITE" WAS TRUE AND IS NOT — corrected
+    2026-09-12 against the fitter's own reports.** This paragraph said §10.3.2 had taken
+    `vaddr` to **124 of 128 cells**, and that `vctrl` was blocked on pins. Neither
+    survives `cpld/*.fit`:
+
+    | part | cells | I/O | peak LAB fan-in |
+    |---|---|---|---|
+    | `vctrl` | **128/128 — full** | 56/64, **8 spare** | 29 of 40 |
+    | `vaddr` | **113/128, 15 spare** | 59/64 | 35 of 40 |
+    | `vsup` | 91/128, 37 spare | 61/64, 3 spare | 25 of 40 |
+
+    `vaddr` has fifteen cells, not four. `vctrl` has eight spare pins and **no spare
+    cells**, so returning pins to it is not the lever — §19 item 46 is. **The rewrite is
+    worth doing for what it does to the picture, not for what it does to the fits**:
+    §14.2.3's broadcast write (25.1 MB/s solid fill against 6.29) and `/WAIT` bounded at
+    10.2 µs instead of 40.7. ⚠ Those two are the whole remaining case for it.
+
+    ⚠ **And the defect class is this document's oldest one**: a headline number that
+    outlived the design it described. The pin figure was superseded by the 2026-09-11
+    `CPUIDLE` change *recorded three items below it*, and nothing reads an open item's
+    stated rationale — `lib/docs.check.ts` guards present-tense utilisation claims, and
+    these were prose inside §19.
 
     It is a **§5.2 rewrite and not a rebalance**: the slot structure, the arbiter's
     width, the four `FCLK`s and the `'153` mux all change together. Item 25 records the

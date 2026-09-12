@@ -64,6 +64,9 @@ CT_ON   EQU     $80             display ON, WMODE 00, VMODE 00 = 640x200 @ 70 Hz
 *-------------------------------------------------------------- the machine --
 VRAMWIN EQU     $2000           logical block 1 -- 8 KB of VRAM at a time
 RAMWIN  EQU     $C000           logical block 6 -- the first SIMM
+STORET  EQU     RAMWIN+$100     19 item 1's 96-byte store target, clear of the
+*                               variables at +$10..$1B and of the stack, which
+*                               descends from $E000
 STACK   EQU     $E000           grows down through block 6
 
 * machine.md 3: $FF00-$FF2F is free and decodes nowhere.  The last byte of it
@@ -87,6 +90,9 @@ P_TILE  EQU     $30             6.4's cell mode - a tilemap, drawn by the CPU
 P_VREAD EQU     $40             graphics.md 11 - VRAM read back, every byte right
 P_BADV  EQU     $E2             ... a byte read back wrong; vidx says which
 P_BADR  EQU     $E1             the SIMM did not answer
+P_ST0   EQU     $50             19 item 1 - the store-rate blocks: A begins
+P_ST1   EQU     $51             ... A done (32 stores), B begins
+P_ST2   EQU     $52             ... B done (64 stores)
 
 *------------------------------------------------------------- geometry ------
 * VMODE 00 is 640x200.  The ring is 1024 bytes per row (graphics.md 8, and
@@ -151,11 +157,139 @@ mapl    lda     ,u+
         bne     rambad
         lda     #P_RAM
         sta     SIMPORT
-        bra     palette
+        bra     strate
+
 
 rambad  lda     #P_BADR
         sta     SIMPORT
         jmp     halt
+
+*==============================================================================
+* 2a. What a store actually costs -- graphics.md 19 item 1.
+*
+*     Every CPU-cost figure in 7.3 scales on "~5 core-6309 cycles per store,
+*     native mode" and nothing in this repository had ever counted one.  This
+*     counts one, for the 6809E core that is really in the socket.
+*
+*     TWO STRAIGHT-LINE BLOCKS AND A SUBTRACTION.  Block A is 32 `sta ,x+`,
+*     block B is 64, and each is bracketed by an identical `lda #imm` + `sta
+*     SIMPORT`.  The difference between the two intervals is therefore EXACTLY
+*     32 stores: the bracketing instructions, the progress write itself and any
+*     fixed entry cost all appear in both and cancel.  There is no branch
+*     inside either block, so no taken-branch cost is being folded in either.
+*
+*     ⚠ THE TARGET IS SIMM, NOT VRAM.  A VRAM store is posted and can meet
+*     7.4's /WAIT, which would measure the card rather than the CPU -- and the
+*     card's own retire rate is already measured elsewhere.
+*
+*     ⚠ IT IS THE 6809 NUMBER.  vendor/mc6809 is cycle-accurate and it is a
+*     6809, so this is emulation mode -- the baseline 7.3's native-mode claim
+*     says it beats.  19 item 1 stays open for the 6309 figure.
+*==============================================================================
+strate  ldx     #STORET
+        lda     #P_ST0
+        sta     SIMPORT
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        lda     #P_ST1
+        sta     SIMPORT
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        lda     #P_ST2
+        sta     SIMPORT
+        bra     palette
 
 *==============================================================================
 * 3. The palette.  graphics.md 13.1: writes during active display snow, so this

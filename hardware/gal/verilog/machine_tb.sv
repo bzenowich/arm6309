@@ -113,12 +113,23 @@ module machine_tb;
    * back-to-back stores, which section 10's store-then-load pairs do with no
    * poll between them. */
   int e_idx = 0, store_gap_min = 1000000, last_store_e = -1;
+  /* boot.asm section 2a's two straight-line blocks, timed at the progress port.
+   * 32 stores between $50 and $51, 64 between $51 and $52, with identical
+   * bracketing either side - so (B - A) is exactly 32 STA ,X+ and every fixed
+   * cost cancels. Captured in THIS block, not a second always @(negedge e),
+   * because e_idx is incremented here and two blocks on the same edge race. */
+  int st_e0 = -1, st_e1 = -1, st_e2 = -1;
   always @(negedge e) begin
     e_idx++;
     if (!rw && n_iopage_bp && !pa[20] && pa[19]) begin
       if (last_store_e >= 0 && (e_idx - last_store_e) < store_gap_min)
         store_gap_min = e_idx - last_store_e;
       last_store_e = e_idx;
+    end
+    if (!n_iosel && pa[7:0] == 8'h2F && !rw) begin
+      if (cpu_dout == 8'h50) st_e0 = e_idx;
+      if (cpu_dout == 8'h51) st_e1 = e_idx;
+      if (cpu_dout == 8'h52) st_e2 = e_idx;
     end
   end
 
@@ -729,6 +740,26 @@ module machine_tb;
     ok(store_gap_min >= 2 && store_gap_min < 1000000,
        $sformatf("⚠ MEASURED, AND IT IS THE 6809 NUMBER: the closest two VRAM writes in the whole run are %0d E cycles apart. 7.3 scales on ~5 core cycles per store in 6309 NATIVE mode - which this cycle-accurate core is not, and which nothing in this repository can source",
                  store_gap_min));
+
+    /* ⭐ AND THE STORE ITSELF, BY SUBTRACTION - boot.asm section 2a. Two
+     * straight-line blocks, 32 stores and 64, bracketed identically: the
+     * difference is exactly 32 STA ,X+ with every fixed cost cancelled. This
+     * is the number 19 item 1 asks for, for the core that is really here. */
+    begin
+      int a32, b64, d;
+      if (st_e0 >= 0 && st_e1 > st_e0 && st_e2 > st_e1) begin
+        a32 = st_e1 - st_e0;
+        b64 = st_e2 - st_e1;
+        d   = b64 - a32;
+        $display("      section 2a: 32 stores + bracket = %0d E, 64 + the same bracket = %0d E",
+                 a32, b64);
+        ok(d > 0 && (d % 32) == 0 && (d / 32) >= 4 && (d / 32) <= 12,
+           $sformatf("⭐ MEASURED BY SUBTRACTION: STA ,X+ costs %0d E cycles on this 6809E - %0d - %0d = %0d for 32 stores, and 19 item 1 wanted exactly this counted rather than estimated",
+                     d / 32, b64, a32, d));
+      end else
+        ok(1'b0, $sformatf("boot.asm section 2a reported its store-rate blocks (marks %0d/%0d/%0d)",
+                           st_e0, st_e1, st_e2));
+    end
 
     // ---- and the things that must not have happened -------------------
     $display("");

@@ -2125,19 +2125,35 @@ stays open on sample size, not on mechanism.
 
 ## §7.3, §19 item 1 — the store rate, and the three routes that are shut (2026-09-12)
 
-§7.3's "~5 core-6309 cycles per store, native mode" has carried a **verify against real
-cycle counts** since the first draft, and on 2026-09-12 three ways of closing it were
-tried and recorded as shut: the vendored core is cycle-accurate but a **6809**;
-`cpu/src/` is the timing spike and holds no instruction table; and **A09 is not
-installed**, so `boot.asm` cannot be rebuilt with a tight store loop. `boot.lst` is an
-address-and-opcode listing with no cycle column.
+§7.3's "~5 core-6309 cycles per store, native mode" carried a **verify against real
+cycle counts** from the first draft until 2026-09-12, when the 6809 half was measured:
+**`STA ,X+` is six E cycles.**
 
-What was added is the measurement that *was* available — `machine_tb` now reports and
-claims the closest two VRAM writes in the boot run, **39 E cycles apart over 4,548
-writes**. ⚠ It is recorded in §7.3 explicitly as *not* the store cost: §7.4's rule puts
-a `VSTAT` poll between nearly every pair, so it measures what `boot.asm` achieves. The
-figure is kept because it is the only number in §7.3's area produced by running the
-machine.
+⚠ **The first attempt that day recorded the item as unclosable, and that was wrong
+within the hour.** Three routes were surveyed — the vendored core is cycle-accurate but
+a **6809**; `cpu/src/` is the timing spike and holds no instruction table; and A09 was
+"not installed", so `boot.asm` could not be rebuilt — and the third was not a fact about
+the repository at all. `software/tools/fetch-a09.sh` is tracked, fetches A09 and builds
+it in about a second. **"The tool is absent" was a statement about the sandbox that had
+been written down as a property of the design.**
+
+What closed it is `boot.asm` §2a: two straight-line blocks, 32 `STA ,X+` and 64,
+bracketed by an identical `lda #imm` + `sta SIMPORT` and storing into **SIMM, not
+VRAM** — a VRAM store is posted and can meet §7.4's `/WAIT`, which would have measured
+the card. `machine_tb` times them at the progress port and subtracts: **391 − 199 = 192
+E cycles for 32 stores, 6.00 each, no remainder.** The difference method is the point —
+the bracketing, the entry cost and every branch appear in both intervals and cancel, so
+nothing is inferred.
+
+⚠ **One build detail worth keeping**, because it cost a failed assembly: inserting ~200
+bytes of straight-line stores between `bne rambad` and the `rambad` label put the target
+out of an 8-bit relative branch's ±127-byte reach. The block was **relocated** past
+`rambad`'s `jmp halt` rather than widening the branches to `lbne`, so the SIMM-failure
+path — the one that reports a dead socket — keeps its exact encoding.
+
+The earlier figure is superseded but not wrong: `machine_tb` still reports the closest
+two VRAM writes in the boot run, **39 E cycles across 4,548**, and §7.3 keeps it labelled
+as `boot.asm`'s *achieved* rate under §7.4's polling rule rather than as the store's cost.
 
 ---
 
