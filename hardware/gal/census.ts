@@ -80,8 +80,7 @@ const LEAVES: Record<string, string> = {
   SPANBUSY: "VSTAT's '244",
   IRQ: "the backplane, open-drain (12.1)",
   WAIT: "the backplane, open-drain (3.3)",
-  FCLK0: "chip 0's fetch '574 (5.2.2)", FCLK1: "chip 1's fetch '574",
-  FCLK2: "chip 2's fetch '574", FCLK3: "chip 3's fetch '574",
+  FCLK0: "the fetch '574s' clock (5.2.2) - ONE net for all eight since 2026-09-12",
   MUXSEL0: "the '153 pixel mux (6.1)", MUXSEL1: "the '153 pixel mux",
   RETIRE: "the '165's shift and the '161's count enable (7.4)",
 }

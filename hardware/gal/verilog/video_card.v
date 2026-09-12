@@ -90,7 +90,7 @@ module video_card (
   wire V0,V1,V2,V3,V4,V5,V6,V7,V8,V9, VTC, VBLANK_w, VSDLY, VBLPEND;
   wire IRQ;
   wire PH0, PH1, SPAREWIN_w;
-  wire FCLK0,FCLK1,FCLK2,FCLK3, MUXSEL0, MUXSEL1;
+  wire FCLK0, MUXSEL0, MUXSEL1;
   wire WROWADV_w; wire MCm0,MCm1,MCm2;
   wire GSPN0,GSPN1,GSPN2,GSPN3, WAIT;
   wire ACPU0,ACPU1,ACPU2,ACPU3;
@@ -177,7 +177,7 @@ module video_card (
     .BD0(BD0), .BD1(BD1), .BD2(BD2), .BD3(BD3), .BD4(BD4), .BLANKD(BLANK),
     .VSDLY(VSDLY), .VBLPEND(VBLPEND), .IRQ(IRQ), .IRQ_OE(IRQ_OE),
     .PH0(PH0), .PH1(PH1), .SLOTTICK(SLOTTICK), .SPAREWIN(SPAREWIN_w),
-    .FCLK0(FCLK0),.FCLK1(FCLK1),.FCLK2(FCLK2),.FCLK3(FCLK3),
+    .FCLK0(FCLK0),
     .MUXSEL0(MUXSEL0), .MUXSEL1(MUXSEL1),
     .SPANBUSY(SPANBUSY), .RETIRE(RETIRE),
     .MC0(MCm0),.MC1(MCm1),.MC2(MCm2), .SPANEND(SPANEND), .WEN(WEN),
@@ -380,10 +380,13 @@ module video_card (
   // horizontal scroll needs and what one rank provably could not give.
   reg [7:0] a0, a1, a2, a3;             // rank A - this slot's fetch
   reg [7:0] b0, b1, b2, b3;             // rank B - the previous one
+  // ⭐ ONE CLOCK NET since 2026-09-12. vctrl drove four identical FCLKs - the
+  // residue of 19 item 23(a)'s deleted per-chip scheme - and all four were
+  // placed macrocells on a part at 128 of 128. One net clocks all eight '574s.
   always @(posedge FCLK0) begin b0 <= a0; a0 <= f0; end
-  always @(posedge FCLK1) begin b1 <= a1; a1 <= f1; end
-  always @(posedge FCLK2) begin b2 <= a2; a2 <= f2; end
-  always @(posedge FCLK3) begin b3 <= a3; a3 <= f3; end
+  always @(posedge FCLK0) begin b1 <= a1; a1 <= f1; end
+  always @(posedge FCLK0) begin b2 <= a2; a2 <= f2; end
+  always @(posedge FCLK0) begin b3 <= a3; a3 <= f3; end
 
   // ⚠ THE SELECT IS AN OUTPUT ENABLE AND NOT A MUX, which is what makes this
   // four packages instead of twelve: `c < p` is constant for a whole line, so

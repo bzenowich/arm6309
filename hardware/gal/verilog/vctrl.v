@@ -63,9 +63,6 @@ module vctrl (
     output wire SLOTTICK,
     output wire SPAREWIN,
     output wire FCLK0,
-    output wire FCLK1,
-    output wire FCLK2,
-    output wire FCLK3,
     output wire MUXSEL0,
     output wire MUXSEL1,
     output wire SPANBUSY,
@@ -306,17 +303,8 @@ module vctrl (
   // buried - 5.2.2 - spare first, which is +46.9 ns against video-first's -25.1
   assign SPAREWIN =
          (~PH1);
-  // EXTERNAL - one clock for all four chips - 8.2's rank select carries the group choice
+  // EXTERNAL - one clock for all eight fetch '574s - 8.2's rank select carries the group choice
   assign FCLK0 =
-         (~PH1 & ~PH0);
-  // EXTERNAL
-  assign FCLK1 =
-         (~PH1 & ~PH0);
-  // EXTERNAL
-  assign FCLK2 =
-         (~PH1 & ~PH0);
-  // EXTERNAL
-  assign FCLK3 =
          (~PH1 & ~PH0);
   // EXTERNAL
   assign MUXSEL0 =

@@ -394,7 +394,12 @@ export const vctrlCpld: Merged = withActiveLow(merge(
       "HSYNC", "VSYNC", "BLANKD",
       "VBLANK", "HBLANK", "SPANBUSY",                    // VSTAT, driven onto D0-7
       "IRQ",
-      "FCLK0", "FCLK1", "FCLK2", "FCLK3",
+      /* ⭐ ONE FCLK since 2026-09-12. It was four, all carrying `!PH1 & !PH0`
+       * and all placed - the residue of 19 item 23(a)'s per-chip scheme that
+       * item 28 deleted. Three macrocells and three pins back on a part at
+       * 128 of 128. The board fans one net to eight '574s; the skew is 19
+       * item 2's bench question. */
+      "FCLK0",
       "MUXSEL0", "MUXSEL1",
       /* ⚠ RETIRE AND WEN ARE TWO SIGNALS SINCE features.md 8.4's sprite mode.
        * RETIRE advances the pointer, the serialiser and the length counter;

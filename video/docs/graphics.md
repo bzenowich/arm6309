@@ -1101,7 +1101,7 @@ its low outputs during the tile fetch. Both are absorbed by the CPLD partition �
 both — at **zero packages**. §6.4.9 is the sequence and §19 item 15(c) is closed. What
 it did cost is headroom: `vctrl` went to 64 of 64 I/O and 122 of 128 cells that day,
 and `vaddr` to 109 of 128, so both still took JTAG and neither had room for the next
-thing. The current fit is **`vctrl` 98 of 128 and `vaddr` 113 of 128** — the
+thing. The current fit is **`vctrl` 125 of 128 and `vaddr` 113 of 128** — the
 encoding of §14.1 moved the load and §10.3.2's descriptor format spent part of it
 (§10.1.6.3).
 
@@ -2410,7 +2410,7 @@ combinations by `gal/jedec/cupl.check.ts`. `hardware/gal/video.cpld.ts` and
 to signal through the freed pins.
 
 **The spare-access arbiter is inside `vctrl`.** With `rfa`'s fourteen pins and
-Variant B's four freed, `vctrl` holds the arbiter at **56 of 64 I/O and 128 of 128
+Variant B's four freed, `vctrl` holds the arbiter at **53 of 64 I/O and 125 of 128
 cells**. The pins fell with §11's deletion of the CPU grant, and one came back for
 `VDATA`'s select (§19 item 47); the cells rose with the fitter's second pass, §19 item 46. A CPLD at two-thirds capacity sitting beside a
 `GAL22V10` doing ten macrocells of work would be a package nobody is buying

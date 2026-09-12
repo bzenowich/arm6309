@@ -356,8 +356,11 @@ rather than ranges.
 The obvious problem with a map above 2 MB is that **cards decode only
 `A0`–`A20`**, so an access at 2.5 MB looks to a card exactly like one at
 0.5 MB. Giving every card `A21`–`A24` is four backplane pins the slot does not
-have. `vctrl` has the pins, at **56 of 64 I/O** (`gal/cpld/vctrl.fit`), but four more
-inputs cannot be taken on a part at 128 of 128 cells (`graphics.md` §19 item 46).
+have. `vctrl` has the pins, at **53 of 64 I/O** (`gal/cpld/vctrl.fit`), and since
+2026-09-12 it has cells too — **125 of 128**, three back from collapsing §19 item
+23(a)'s four identical `FCLK` outputs into one. ⚠ **That does not reopen this.**
+The reason `A21`–`A24` never reach a slot is that the **backplane** has no pins
+for them, and three macrocells on one card do not change a connector.
 
 **It does not have to.** `machine.md` §2 already requires every physical decode
 on every card to qualify against `/IOPAGE`, and `/IOPAGE` is **open-drain**. So
@@ -780,7 +783,8 @@ see. **Zero new pins.**
 
 **Which is fortunate**, because the slot has none to give —
 [`lib/slot.ts`](lib/slot.ts) spent its last position on physical `A20` — and
-`vctrl` is at 128 of 128 cells, with no room for an address extension.
+`vctrl` is at **125 of 128 cells** since 2026-09-12 — ⚠ but it is the **slot**,
+not the CPLD, that has nothing left to give, so the conclusion is unchanged.
 
 > **What is still true** is that the connector's own justification expired when the
 > card format changed: a 240 mm edge holds 98 positions at 0.1″ where the 100 mm

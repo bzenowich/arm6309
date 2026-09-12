@@ -159,7 +159,8 @@ quadrants above it are decoded by a motherboard GAL (`ram.md` §6.2).
 > **`A21`–`A24` never reach a slot.** A card decodes `A0`–`A20`, so an access at 2.5 MB
 > would look to it exactly like one at 0.5 MB — and giving every card four more address
 > pins is four the backplane has not got, on a video card whose VRAM decode sits on
-> `vctrl`, at 128 of 128 cells.
+> `vctrl`, at **125 of 128 cells** (⚠ 128 until 2026-09-12; the backplane pin count
+> is the binding reason here, not the CPLD's).
 >
 > **`/IOPAGE` solves it for nothing.** It is open-drain and this section already requires
 > every physical decode on every card to qualify against it, so the motherboard simply

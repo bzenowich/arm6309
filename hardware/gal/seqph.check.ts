@@ -50,11 +50,9 @@ const io = (hs: number): Record<number, 0 | 1> =>
        * rank select carrying the group choice, HSCROLL[1:0] leaves this
        * equation entirely - which is what this sweep now asserts, by demanding
        * the same phase for every chip at every scroll value. */
-      for (let n = 0; n < 4; n++) {
-        if (p[pin(`FCLK${n}`)] !== (ph === 0 ? 1 : 0)) {
-          phaseBad = `dot ${dot}: HS=${hs} FCLK${n} ${p[pin(`FCLK${n}`)]} at phase ${ph}, ` +
-            `expected high only at phase 0`
-        }
+      if (p[pin("FCLK0")] !== (ph === 0 ? 1 : 0)) {
+        phaseBad = `dot ${dot}: HS=${hs} FCLK0 ${p[pin("FCLK0")]} at phase ${ph}, ` +
+          `expected high only at phase 0`
       }
       if (p[pin("SLOTTICK")]) ticks[hs].push(dot)
       gal.clock(io(hs))
@@ -138,27 +136,39 @@ const io = (hs: number): Record<number, 0 | 1> =>
    * the check this file could not be. */
   {
     let carries: string | null = null
-    for (let n = 0; n < 4 && !carries; n++) {
+    {
       const edges = [0, 1, 2, 3].map((hs) => {
         gal.reset()
         for (let dot = 0; dot < 8; dot++) {
           const p = gal.evaluate(io(hs))
           const ph = p[pin("PH0")] | (p[pin("PH1")] << 1)
-          if (p[pin(`FCLK${n}`)] === 1) return ph
+          if (p[pin("FCLK0")] === 1) return ph
           gal.clock(io(hs))
         }
         return -1
       })
-      if (new Set(edges).size !== 1) carries = `FCLK${n} edges by HSCROLL[1:0]: ${edges.join(",")}`
+      if (new Set(edges).size !== 1) carries = `FCLK0 edges by HSCROLL[1:0]: ${edges.join(",")}`
     }
     check(carries === null,
       "⭐ FCLK does not depend on HSCROLL[1:0] at all - 8.2's rank select carries " +
-      "the group choice, so the four clocks are one signal and item 23(a)'s nine " +
+      "the group choice, so the clock is one signal and item 23(a)'s nine " +
       "product terms are gone", carries ?? "")
 
-    const fclkPts = a.usage.filter((u) => u.name.startsWith("FCLK"))
-      .reduce((n, u) => n + u.used, 0)
-    check(fclkPts === 4, "and the four macrocells hold one product term each, not nine " +
-      "across them - the saving that paid for pxsel's two", `${fclkPts}`)
+    /* ⭐ AND SINCE 2026-09-12 IT IS ONE MACROCELL AS WELL AS ONE SIGNAL.
+     *
+     * This claim used to demand `fclkPts === 4`, and its own wording gave the
+     * game away: "the four clocks are ONE SIGNAL". They were - four cells with
+     * the identical equation `!PH1 & !PH0`, and the fitter placed all four, at
+     * MC 85, 86, 88 and 101 of a part that is FULL at 128 of 128. The check
+     * asserted that the residue of a DELETED scheme (19 item 23(a), removed by
+     * item 28) was still exactly four cells wide.
+     *
+     * A check that pins the shape of withdrawn logic keeps it alive. */
+    const fclkCells = a.usage.filter((u) => u.name.startsWith("FCLK"))
+    const fclkPts = fclkCells.reduce((n, u) => n + u.used, 0)
+    check(fclkCells.length === 1 && fclkPts === 1,
+      "and it is ONE macrocell holding ONE product term - the four per-chip " +
+      "clocks were item 23(a)'s residue and the board fans one net to all eight '574s",
+      `${fclkCells.length} cells, ${fclkPts} terms`)
   }
 }

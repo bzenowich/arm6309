@@ -53,11 +53,15 @@ monitor's 75 Ω, and blanking by `74AHCT273` `/MR` for zero packages. **No ICs**
 transistors, a diode and fifteen resistors — which is what closed `design-review.md`
 §Vid-M4. It is still what step 1 has to measure.
 
-⚠ **`vaddr` is bound by pins and LAB fan-in; `vctrl`, since 2026-09-11, by cells.**
-`vctrl` is 56 of 64 I/O.
+⚠ **`vaddr` is bound by pins and LAB fan-in. `vctrl` was bound by cells from
+2026-09-11 until 2026-09-12, and is not now** — the four identical `FCLK` outputs
+gave back three cells and three pins.
+`vctrl` is 53 of 64 I/O.
 `vaddr` is 59 of 64 I/O.
 `vsup` is 61 of 64 I/O.
-Their cell counts are 127, 113 and 91 of 128, and `vctrl`'s is the fitter's second pass
+Their cell counts are **125**, 113 and 91 of 128 — ⚠ `vctrl` was 128 of 128 until
+2026-09-12, when §19 item 23(a)'s four identical `FCLK` outputs collapsed into one
+and gave back three cells and three pins — and `vctrl`'s is the fitter's second pass
 (`docs/graphics.md` §19 item 46). ⚠ All three are fitted with **JTAG off**
 (`cpld/*.fit`: the four JTAG pins carry signals), so they are programmed out of circuit.
 
@@ -68,11 +72,20 @@ separate one-literal changes to the display list were refused there on 2026-09-0
 descriptor half moved to `vsup` rather than growing in place. It is invisible in a cell
 count and a pin count; only `hardware/gal/cpld/vaddr.fit` shows it.
 
-**Nothing further can be added to `vctrl`.** §14.2's two ×16 framebuffer parts return six
-output pins by making the arbiter 2 grants instead of 8 — already worth doing, and now
-the thing the card's next feature waits on.
+⭐ **`vctrl` HAS ROOM AGAIN — 3 cells and 11 pins**, and this paragraph used to read
+"nothing further can be added to `vctrl`". It was true on 2026-09-11 and it was true
+for the wrong reason: the part was full of §19 item 23(a)'s residue, four macrocells
+carrying one equation for a scheme item 28 had deleted.
 
-⚠ **`vsup`'s spare room is 44 macrocells and 6 pins**, which is the shape of every
+⚠ **And §14.2's two ×16 parts do NOT "return six output pins".** Four of those six were
+`GCPU0`–`GCPU3`, banked on 2026-09-11 when `CPUIDLE` buried them; and §14.2.2 maps
+`A0` → `/LB`//`UB` with `A1` → chip select, so two chips still need **four** write
+strobes — the same count as today. §19 items 33 and 34 carry the corrected scoping:
+what that rewrite still buys is §14.2.3's broadcast write and a 10.2 µs `/WAIT` bound,
+not headroom.
+
+⚠ **`vsup`'s spare room is 37 macrocells and 3 pins** (`cpld/vsup.fit`: 91 of 128
+cells, 61 of 64 I/O), which is the shape of every
 constraint on this card: a blit datapath (`blitter.md`) fits the cells and does not fit
 the pins. **Blitter room is a pin question here, not a macrocell question.**
 

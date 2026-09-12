@@ -141,11 +141,25 @@ const cells: Cell[] = [
    * the OLD contents. Clocking a dot earlier - inside PH 3 - makes the chip
    * displayed at phase 3 read this slot's fetch instead of last slot's, which
    * vaddr_tb reports as exactly one pixel in four wrong at every scroll value. */
-  ...[0, 1, 2, 3].map((n) => ({
-    pin: 0, name: `FCLK${n}`, assertedLow: false, s0: 1 as const, registered: false,
+  /* ⭐ ONE CLOCK, AND IT WAS FOUR UNTIL 2026-09-12 - the last of 19 item
+   * 23(a)'s per-chip FCLK scheme, which item 28 deleted when 8.2's rank select
+   * became an output enable.
+   *
+   * The four cells carried the IDENTICAL equation - `!PH1 & !PH0`, under a
+   * comment that already said "one clock for all four chips" - and the fitter
+   * placed all four, at MC 85, 86, 88 and 101. So the deleted scheme went on
+   * costing three macrocells and three pins on the part that is FULL at 128 of
+   * 128, for fan-out a single net does. 8.2's own diagram draws one FCLK.
+   *
+   * ⚠ WHAT MOVES TO THE BOARD: one net now clocks eight 74AHCT574 (two ranks
+   * of four, place/parts.ts) at 25.175 MHz. That is ~36 pF of clock load plus
+   * trace and it is a SKEW question, not a logic one - 19 item 2's bench is
+   * where it gets answered, with the dot path it already has to measure. */
+  {
+    pin: 0, name: "FCLK0", assertedLow: false, s0: 1 as const, registered: false,
     terms: ["!PH1 & !PH0"],
-    why: n === 0 ? "one clock for all four chips - 8.2's rank select carries the group choice" : undefined,
-  })),
+    why: "one clock for all eight fetch '574s - 8.2's rank select carries the group choice",
+  },
 
   /* Which of the four latched bytes the '153 mux emits. This is the only
    * thing HSCROLL[1:0] touches. */
