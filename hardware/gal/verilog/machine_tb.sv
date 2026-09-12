@@ -95,6 +95,66 @@ module machine_tb;
   int vdata_wait_dots = 0;
   always @(posedge CLK25) if (wait_asserted && !n_iosel && pa[7:0] == 8'h75) vdata_wait_dots++;
 
+  // ---- graphics.md 19 item 1: what a store actually costs ------------------
+  /* ⚠ WHAT THIS CAN AND CANNOT ANSWER, STATED FIRST BECAUSE THE GAP IS THE
+   * POINT. Item 1 asks for NATIVE-MODE 6309 cycle counts for STA ,X+ / STB ,X+.
+   * The core in this socket is Greg Miller's mc6809e (vendor/mc6809) - it IS
+   * cycle-accurate, and it is a 6809. So what this measures is the
+   * EMULATION-MODE cost on the part the whole design is simulated against,
+   * which is the baseline 7.3's "~5 core cycles per store, native mode" claims
+   * to improve on. It does not settle native mode, and no file in this
+   * repository can: the Hitachi datasheet documents emulation mode only, and
+   * A09 is not installed here, so boot.asm cannot be rebuilt with a tight store
+   * loop to count one directly.
+   *
+   * The MINIMUM is the statistic worth having. Most of boot.asm's VRAM writes
+   * poll VSTAT first (7.4's rule), so a mean would describe that polling loop
+   * rather than the store; the minimum is the closest this core comes to
+   * back-to-back stores, which section 10's store-then-load pairs do with no
+   * poll between them. */
+  int e_idx = 0, store_gap_min = 1000000, last_store_e = -1;
+  always @(negedge e) begin
+    e_idx++;
+    if (!rw && n_iopage_bp && !pa[20] && pa[19]) begin
+      if (last_store_e >= 0 && (e_idx - last_store_e) < store_gap_min)
+        store_gap_min = e_idx - last_store_e;
+      last_store_e = e_idx;
+    end
+  end
+
+  // ---- graphics.md 19 item 6: the CPU's sub-slot phase ---------------------
+  /* ⭐ THE HARNESS ITEM 6 ASKS FOR ALREADY EXISTS, AND WHAT WAS MISSING IS THIS
+   * CLAIM. Item 6 closed its free-running half by arithmetic - a fetch slot is
+   * 4 dots and an E period is 12 or 8 master clocks, and 12 mod 4 = 8 mod 4 = 0,
+   * so E repeats on a slot boundary - then left the /WAIT half open "for want of
+   * a testbench that instantiates clkdec and the video card together, which
+   * nothing does yet". machine.v IS that testbench: mainboard's clkdec (u6) and
+   * video_card sit side by side in it. The harness was never the gap.
+   *
+   * A stretch of N master clocks slides E against the fetch slot by N mod 4, so
+   * if /WAIT released at an arbitrary dot the phase would scatter and 11's
+   * 46.9 ns read margin - computed from a FIXED alignment - would be fiction.
+   * It does not scatter: /WAIT falls with SPANBUSY, which is RETIRE-gated on
+   * SPNTICK and therefore slot-aligned. The prediction is that E-fall lands on
+   * exactly ONE dot phase for the whole run, waited cycles included.
+   *
+   * ⚠ Sampled at E-fall - the edge 3.1 says a 6809E write's data is guaranteed
+   * on, and the edge the progress port above already trusts. */
+  int   ph_at_e[4];
+  int   ph_at_e_waited[4];
+  bit   cyc_waited = 1'b0;
+  logic e_d = 1'b0;
+  initial for (int p = 0; p < 4; p++) begin ph_at_e[p] = 0; ph_at_e_waited[p] = 0; end
+  always @(posedge CLK25) begin
+    e_d <= e;
+    if (wait_asserted) cyc_waited <= 1'b1;
+    if (e_d && !e) begin                       // E-fall
+      ph_at_e[m.vid_ph]++;
+      if (cyc_waited) ph_at_e_waited[m.vid_ph]++;
+      cyc_waited <= 1'b0;
+    end
+  end
+
   // Work counters, so a stall says WHAT stalled rather than only that it did.
   int vram_writes = 0, vstat_reads = 0, reg_writes = 0, vram_reads = 0;
   int vdata_reads = 0, vdata_writes = 0;
@@ -633,6 +693,42 @@ module machine_tb;
        $sformatf("⭐ graphics.md 19 item 47: the CPU used +$15 VDATA - %0d stores and %0d loads in the I/O page, with no MMU block", vdata_writes, vdata_reads));
     ok(vdata_wait_dots > 0,
        $sformatf("⭐ and a VDATA access WAITED in the I/O page - section 10 (h)'s store and load under a span held the CPU for %0d dots, and the span still came out one colour", vdata_wait_dots));
+
+    // ---- graphics.md 19 item 6: the CPU's sub-slot phase ------------------
+    $display("");
+    $display("6c. The CPU's sub-slot phase, across a /WAIT stretch - 19 item 6");
+    $display("");
+    begin
+      int used = 0, the_ph = 0, waited_total = 0, waited_elsewhere = 0;
+      for (int p = 0; p < 4; p++) begin
+        if (ph_at_e[p] > 0) begin used++; the_ph = p; end
+        waited_total += ph_at_e_waited[p];
+      end
+      for (int p = 0; p < 4; p++)
+        if (p != the_ph) waited_elsewhere += ph_at_e_waited[p];
+      $display("      E-fall by dot phase: %0d %0d %0d %0d   (of those, waited: %0d %0d %0d %0d)",
+               ph_at_e[0], ph_at_e[1], ph_at_e[2], ph_at_e[3],
+               ph_at_e_waited[0], ph_at_e_waited[1],
+               ph_at_e_waited[2], ph_at_e_waited[3]);
+      ok(used == 1,
+         $sformatf("⭐ EVERY E-fall IN THE RUN LANDED ON ONE DOT PHASE - PH=%0d, %0d cycles - so 11's read budget is computed from an alignment the machine really holds",
+                   the_ph, ph_at_e[the_ph]));
+      ok(waited_total > 0,
+         $sformatf("and %0d of them were cycles the card had held on /WAIT, so a stretch is really inside this sample", waited_total));
+      ok(waited_elsewhere == 0,
+         $sformatf("⭐ AND THE STRETCH DID NOT SLIDE IT - 19 item 6's open half: /WAIT falls with SPANBUSY, RETIRE-gated on SPNTICK and so slot-aligned, and E comes back on the same sub-slot (%0d waited cycles on any other phase)",
+                   waited_elsewhere));
+    end
+
+    // ---- graphics.md 19 item 1: the store rate, as far as it goes ---------
+    $display("");
+    $display("6d. What a store costs on THIS core - graphics.md 19 item 1");
+    $display("");
+    $display("      %0d VRAM writes; the closest two are %0d E cycles apart",
+             vram_writes, store_gap_min);
+    ok(store_gap_min >= 2 && store_gap_min < 1000000,
+       $sformatf("⚠ MEASURED, AND IT IS THE 6809 NUMBER: the closest two VRAM writes in the whole run are %0d E cycles apart. 7.3 scales on ~5 core cycles per store in 6309 NATIVE mode - which this cycle-accurate core is not, and which nothing in this repository can source",
+                 store_gap_min));
 
     // ---- and the things that must not have happened -------------------
     $display("");

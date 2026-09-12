@@ -232,10 +232,21 @@ module vsync_tb;
        $sformatf("VMODE 01: VSYNC is LOW through its pulse - negative (got %0d)",
                  v_level_in_pulse));
 
+    set_ctrl(8'h02); to_frame_start(); sample_polarity();
+    ok(h_level_in_pulse == 1'b0,
+       $sformatf("VMODE 10: HSYNC is LOW through its pulse - negative (got %0d)",
+                 h_level_in_pulse));
+    ok(v_level_in_pulse == 1'b1,
+       $sformatf("VMODE 10: VSYNC is HIGH through its pulse - positive (got %0d)",
+                 v_level_in_pulse));
+
     set_ctrl(8'h03); to_frame_start(); sample_polarity();
     ok(h_level_in_pulse == 1'b0,
        $sformatf("VMODE 11: HSYNC is LOW through its pulse - negative (got %0d)",
                  h_level_in_pulse));
+    ok(v_level_in_pulse == 1'b0,
+       $sformatf("VMODE 11: VSYNC is LOW through its pulse - negative (got %0d)",
+                 v_level_in_pulse));
 
     $display("");
     $display("BLANK reaches the post-LUT '273 (9.2) FIVE DOTS behind the counters");

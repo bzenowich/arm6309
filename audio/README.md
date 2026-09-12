@@ -166,7 +166,7 @@ packages rather than one.
 | | | |
 |---|---|---|
 | **U1** the host register block, plus §4.2's counter and comparator, §9.3's read-back latch, §6.2's frame parity and §8.2's tempo count | `audio` | 107 of 128 cells, 62 of 64 I/O, two cascades |
-| **U2** the sequencer (§10.2) | `aseq` | ⚠ **124 of 128 cells**, 63 of 64 I/O, two cascades |
+| **U2** the sequencer (§10.2) | `aseq` | ⛔ **128 of 128 cells**, 62 of 64 I/O, one cascade, **six of eight blocks at 38 of 40 fan-in** |
 
 ⚠ **U2 is exactly full and U1 is not**, which is why every reduction this pass moved work
 *to* U1 — sixteen state-file data pins there bought seven packages, because the counter,

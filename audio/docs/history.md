@@ -2397,3 +2397,72 @@ part is 128 of 128 again** — §16 item 32 stands.
 bytes. **The steady state was never wrong** — it was right through both halves of item 39
 and through D-1 and D-2 before them — so a claim about it would have caught none of them.
 *Assert the transient; the steady state is where defects hide from you.*
+
+---
+
+## §0 / §10.2.3 / §10.2.5 / §16 items 32, 37 — the `'283` chain gets the walk, and U2 fills (2026-09-12)
+
+§16 item 37 had been open since 2026-09-10 with its repair designed and unbuilt: the
+16-bit `74HC283` chain is **192 ns into a 53 ns window**, and the fix is to put a read at
+the end of one colour clock's engine window and its write at the start of the next, so
+the sum settles across the walk for **229 ns**. Sub-item 3 — *"`PROGRAM` re-timed to the
+across-the-walk rule, and `audio_tb` re-run"* — is what closed.
+
+### What the numbers used to be
+
+| | before | after |
+|---|---|---|
+| W1 / W2 / W3 / W6 steps | 7 / 6 / 6 / 8 | **8 / 8 / 9 / 11** (W5 unchanged at 13) |
+| `PROGRAM` total | 40 steps | **49** |
+| a channel event | seven work slots | **eight** |
+| throughput floor | `PER` ≥ 10 | **`PER` ≥ 11**, ~14 with the start wait |
+| margin at ProTracker's top note | 12× | **10.7×** |
+| margin at `PER` = 30 | 3.8× | **2.7×** |
+| U2 logic cells | 124 of 128 | ⛔ **128 of 128** |
+| U2 I/O | 63 of 64 | 62 of 64 |
+| U2 cascades / foldback | 2 / 52 | **1** / 47 |
+| U2 peak LAB fan-in | 35 of 40 | ⚠ **38 of 40** |
+
+§0 said *"five of eight logic blocks now stand at 39 of 40 fan-in"* and §10.2.3 said
+*"six of U2's eight logic blocks stand at 35 of 40 signals"*; both are superseded by the
+re-fit above. §16 item 32's *"the next repair of this kind will not fit"* stopped being a
+forecast: the re-timing added **no logic at all** — nine wait steps and four more literals
+on `RUN` — and that consumed the last four cells.
+
+### ⛔ The first attempt was correct by construction and starved the card
+
+The phase was pinned in `START`: a sequence could begin only in slot 7. A structural check
+confirmed all twelve adder writes were across the walk, and it was **wrong**. `DUE` is
+cleared only when a start *picks* it (`DPICK`), so gating the start gates the **channel
+picker**, and `RSTANY` and `HDUE` outrank `DUEANY` — a busy host consumed every slot-7
+opportunity and channel events were never picked at all. `audio_tb` measured **channel 0
+ticking 0 times in 300 colour clocks** while W1 burned 154 slots on other work, and the
+host's longest `PWBUSY` wait reached 217 slots.
+
+⚠ **The lesson is that the structural check could not see it.** Every adder write was
+correctly placed; what failed was liveness, not geometry. Only the testbench caught it —
+the same shape as `design-review2.md` §10's *"a check that holds an input constant cannot
+see a defect in it"*.
+
+The repair pins the phase in **`RUN`** instead: step 0 executes only in slot 7, every step
+after it in the next work slot. `T`'s enable is `RUN` and `stepLits` puts `RUN` in every
+control term, so the engine idles driving nothing while `BUSY` holds. Chained sequences
+re-align for free, because `ENDNOW` and `CHAIN1` clear `T` — which also removed the two
+special cases the `START` version had needed (W2's leading wait, W6's trailing one).
+
+### What it cost in the checks, and one defect it exposed
+
+`ENDNOW` had **`T = 6` hardwired** as W1's buffer-end test; the re-timing made W1 eight
+steps, and a literal 6 would have fired the test on the step that adds `PER` rather than
+the one that decrements `CNT`. It is derived from `LEN[W1]` now. `arom.check.ts` carried
+the same defect eight times over — "W1 step 6 is a DECREMENT", "W3 step 2 is the commit" —
+and all eight failed at once for no reason but renumbering; they are derived from each
+step's *identity* now (`b === "ones"` is a decrement, `host === "commit"` is the commit),
+and the claim text prints the index it found.
+
+`arom.ts`'s `residue()` also reported `RUN` as a **stray** — a cell outside the
+absorb/rewrite partition that reads a step signal — because `RUN` now reads `T0`–`T3`.
+That is correct and benign: `RUN` is itself one of the control store's address lines
+(`ADDRESSED`), so a step signal reading another step signal is the sequencer's own state
+machine and there is nothing to absorb it into. The exemption is named and commented
+rather than silent.

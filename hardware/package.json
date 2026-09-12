@@ -39,7 +39,7 @@
     "check:decode": "bun run lib/decode.check.ts",
     "rom": "sh ../software/tools/mkrom.sh",
     "check:machine": "bun run gal/verilog/gen.ts && sh gal/verilog/run-machine.sh",
-    "check:modplay": "bun run gal/verilog/gen.ts && sh gal/verilog/run-modplay.sh /tmp/arm6309-mod/00_notes.mod 2",
+    "check:modplay": "bun run gal/verilog/gen.ts && sh gal/verilog/run-modplay.sh \"$(sh gal/verilog/probes.sh)/00_notes.mod\" 2",
     "check:reach": "bun run gal/reach.check.ts",
     "check:pins": "bun run gal/pins.check.ts"
   },

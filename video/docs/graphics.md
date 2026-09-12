@@ -1383,7 +1383,16 @@ shadow is strictly cheaper.
 
 Assuming a tight store loop sustains roughly one write per 5 core-6309 cycles in
 native mode (**verify against real cycle counts** — this is the number the whole
-table scales on):
+table scales on, and §19 item 1 is still open):
+
+> ⚠ **What has been measured is not this number, and the difference matters.** Since
+> 2026-09-12 `machine_tb` reports the closest two VRAM writes in a whole boot run:
+> **39 E cycles apart, across 4,548 writes**. That is not the store cost — it is what
+> `boot.asm` *achieves*, and it is dominated by §7.4's rule that every span byte polls
+> `VSTAT` first. It bounds the table from the wrong side (no row here is claimed to be
+> achievable while polling) and it is recorded because it is the only figure in this
+> area that comes from running the machine rather than from arithmetic. **The 5-cycle
+> claim remains unsourced.**
 
 | Task | CPU writes | Time @ 2.098 MHz |
 |---|---|---|
@@ -3790,14 +3799,27 @@ left is measurement. They are grouped by what would settle them.
    ticks and asserts the phase moved, so **the mechanism is a claim now and not a
    worry**.
 
-   **What is still open is the consequence, and it is bounded rather than unknown.**
+   ⭐ **THE CONSEQUENCE IS MEASURED SINCE 2026-09-12, AND IT IS THE PREDICTED ONE.**
    `/WAIT` releases when `SPANBUSY` falls, which is `RETIRE`-gated on `SPNTICK` and
    therefore **slot-aligned** — so E does not land anywhere, it lands on one
-   particular sub-slot every time. Settling this needs a testbench that instantiates
-   `clkdec` and the video card together, which nothing does yet: `mainboard_tb` has
-   the divider and no card, and `vspan_tb` has the card and no divider. **That is
-   simulation, not bench, and it is the highest-value thing on this list that does
-   not need the board.**
+   particular sub-slot every time.
+
+   ⚠ **The testbench this item asked for already existed, and what was missing was the
+   claim.** This paragraph used to say settling it "needs a testbench that instantiates
+   `clkdec` and the video card together, which nothing does yet". `machine.v` has done
+   exactly that since 2026-09-10 — `mainboard`'s `clkdec` (U6) and `video_card` in one
+   module — so the item was asking for a harness it already had. `machine_tb` now
+   samples the card's dot phase at every E-fall: **1,406,540 E-falls, every one on
+   phase 0**, and of the cycles the card had held on `/WAIT`, **none landed on any
+   other phase**. §11's 46.9 ns read budget is computed from an alignment the machine
+   really holds.
+
+   ⚠ **The sample is three waited cycles, and that is the live part.** `boot.asm` polls
+   `VSTAT` precisely so that it need never be waited (§7.4), so the whole boot run
+   stretches the CPU three times. What is claimed is that **those** stretches did not
+   slide the phase — not that none can. Widening it means a testbench that deliberately
+   hammers the span writer until `/WAIT` is common, which is simulation and cheap; the
+   **mechanism** is settled and the **sample** is thin.
 7. **Verify VRAM read timing on the bench** (§11), not just on paper — the
    266 ns estimate has ~30 ns of margin at ÷12 and none at ÷8.
 18. **Bench §9.1's drive stage into a real 75 Ω load** — DNL across all 64 green
@@ -3830,8 +3852,11 @@ left is measurement. They are grouped by what would settle them.
     **carried, retimed.** Item 22 is the same trip.
 22. **Verify the sync-polarity table against the actual monitors** (§6.2.1), CRT, LCD
     and scaler, in *both* `VMODE` families. ⭐ The **logic** was wrong and is fixed
-    (item 27, 2026-09-09): `vsync_tb` asserts −H in all four codes and V switching
-    with the family. Polarity is how the monitor picks the vertical format, so
+    (item 27, 2026-09-09), and ⚠ **since 2026-09-12 the bench asserts what this item
+    says it does**: `vsync_tb` samples both edges in all four codes — −H everywhere
+    and V switching with the family. Until that date it sampled `VMODE 00` and `01`
+    in full, `VMODE 11` **HSYNC only**, and `VMODE 10` **not at all**, so two of the
+    eight polarity facts this item rests on were unclaimed (history.md). Polarity is how the monitor picks the vertical format, so
     getting it right in the fuses and wrong at the connector still produces a
     correctly-timed picture at the wrong size — which is the failure most likely to
     be misdiagnosed as a timing bug. Folds into item 11.
@@ -3846,6 +3871,24 @@ left is measurement. They are grouped by what would settle them.
     unusable text. What is needed is a primary native-mode source for `STA ,X+` /
     `STB ,X+` and then the actual glyph loop counted, **not an estimate and not a
     recalled figure**.
+
+    ⚠ **STILL OPEN 2026-09-12, and now with the blockers named rather than implied.**
+    Three routes were tried and each is shut for a different reason:
+
+    | route | why it does not close the item |
+    |---|---|
+    | the vendored core | `vendor/mc6809/mc6809e.v` **is** cycle-accurate — and it is a **6809**. It gives emulation mode, which is the baseline native mode claims to beat, not native mode |
+    | the project's own firmware | `cpu/src/` is the **timing spike** (`gpio.c`, `spike_dma.c`, `stub_core.c`); there is no instruction table in it to read a cycle count out of. Native-mode timing is a *choice* this project has not yet made — the same shape as `TFM` in `machine.md` §6 |
+    | count a real loop | ⛔ **A09 is not installed**, so `boot.asm` cannot be rebuilt with a tight store loop in it. `boot.bin`/`boot.lst` are committed artefacts, and `boot.lst` carries addresses and opcodes, **not cycle counts** |
+
+    ⭐ **What was added instead is the measurement that can be made.** `machine_tb`
+    records the closest two VRAM writes in the boot run — **39 E cycles apart over
+    4,548 writes** — and claims it. It is `boot.asm`'s achieved rate, not `STA ,X+`'s
+    cost, because §7.4's polling rule sits between almost every pair; the claim says so
+    in its own text. **The cheapest way to actually close this item is to install A09
+    and add a twenty-instruction store loop to `boot.asm`**, which measures the 6809
+    number exactly; the 6309 native figure then needs a source this repository does not
+    have, or a decision recorded in `cpu/`.
 9. **`74HC593` availability** (§9). ⭐ **CLOSED 2026-09-09, and the answer is that
    the part is discontinued** — out of production, with no widely available
    pin-compatible replacement. It is out of the BOM. `PIDX` is **two `74AHCT163A`

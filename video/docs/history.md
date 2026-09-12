@@ -2097,3 +2097,79 @@ a map the CPU had written into a moving target.
 `LRUN` was already a pin on `vctrl` (`seqctl.jedec.ts` says so, for the arbiter's
 sake), so the repair is **one net, no package and no macrocell**; `+$0F` keeps its row
 in §13 and its name in the sources, and says where the bit went.
+
+---
+
+## §19 item 6 — the harness it asked for already existed (2026-09-12)
+
+Until 2026-09-12 item 6's last paragraph read:
+
+> Settling this needs a testbench that instantiates `clkdec` and the video card
+> together, which nothing does yet: `mainboard_tb` has the divider and no card, and
+> `vspan_tb` has the card and no divider. **That is simulation, not bench, and it is
+> the highest-value thing on this list that does not need the board.**
+
+`machine.v` had instantiated both together since **2026-09-10** — `mainboard`'s
+`clkdec` (U6) and `video_card` in one module, which is what `machine_tb` drives. The
+item was two days out of date on its own blocker, and the gap was never the harness:
+it was that nobody had written the claim. The sentence survived because an open item's
+*stated reason* for being open is not something any check reads.
+
+Measured on the run that followed: **1,406,540 E-falls, every one on dot phase 0**, of
+which three were cycles the card had held on `/WAIT`, and **none of those landed on
+another phase** — `/WAIT` falls with `SPANBUSY`, `RETIRE`-gated on `SPNTICK`, so the
+release is slot-aligned and the stretch cannot slide E against the fetch slot. The item
+stays open on sample size, not on mechanism.
+
+---
+
+## §7.3, §19 item 1 — the store rate, and the three routes that are shut (2026-09-12)
+
+§7.3's "~5 core-6309 cycles per store, native mode" has carried a **verify against real
+cycle counts** since the first draft, and on 2026-09-12 three ways of closing it were
+tried and recorded as shut: the vendored core is cycle-accurate but a **6809**;
+`cpu/src/` is the timing spike and holds no instruction table; and **A09 is not
+installed**, so `boot.asm` cannot be rebuilt with a tight store loop. `boot.lst` is an
+address-and-opcode listing with no cycle column.
+
+What was added is the measurement that *was* available — `machine_tb` now reports and
+claims the closest two VRAM writes in the boot run, **39 E cycles apart over 4,548
+writes**. ⚠ It is recorded in §7.3 explicitly as *not* the store cost: §7.4's rule puts
+a `VSTAT` poll between nearly every pair, so it measures what `boot.asm` achieves. The
+figure is kept because it is the only number in §7.3's area produced by running the
+machine.
+
+---
+
+## §19 item 22 — the bench did not assert what the item said it did (2026-09-12)
+
+From 2026-09-09, when item 27 fixed the sync-polarity *logic*, item 22 read:
+
+> ⭐ The **logic** was wrong and is fixed (item 27, 2026-09-09): `vsync_tb` asserts
+> −H in all four codes and V switching with the family.
+
+**It did not.** `vsync_tb` sampled `VMODE 00` and `VMODE 01` in full — H and V — then
+`VMODE 11` **HSYNC only**, and `VMODE 10` **not at all**: the mode ran through
+`run_mode` for geometry and never reached `sample_polarity`. Two of the eight polarity
+facts the item rests on were unclaimed, and the one most exposed was `VMODE 11`'s
+VSYNC, which is the *negative* half of "V switching with the family" in the
+progressive 525-line mode.
+
+The defect class is the one `CLAUDE.md` names: the item cited its own bench as
+evidence, and nothing compares an item's prose against the claims a testbench
+actually makes. It was found by reading `vsync_tb.sv` against §19 item 22 during a
+review, not by any check — `check:video`'s exit code was 0 throughout, because a
+claim that is never made cannot fail.
+
+**Repaired by adding the missing claims**, not by weakening the item: a
+`set_ctrl(8'h02)` polarity pass for `VMODE 10` and a VSYNC claim on the existing
+`VMODE 11` pass. `vsync_tb` goes **39 → 44 claims**, 0 failed, and the values are the
+predicted ones — −H in all four codes, V positive in the 449-line family and negative
+in the 525-line one.
+
+⚠ **One latent thing was left alone deliberately.** `measure_frame` counts
+`hsync_dots` against `HSYNC == (VMODE[0] ? 1'b1 : 1'b0)` — i.e. it believes the
+asserted HSYNC level *changes* with the family, which §6.2.1 says it does not. The
+counter is computed and never claimed, so it is dead measurement rather than a wrong
+claim; it is recorded here because the next person to assert on it would inherit the
+error.

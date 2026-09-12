@@ -353,7 +353,11 @@ module audio_tb;
        $sformatf("and PEND holds the NEXT sample, fetched in advance (%02h)", sfh(0)));
 
     // How many work slots one channel event actually costs - 10.2.5 says
-    // seven, and the margins in that table are quoted against the count.
+    // EIGHT since audio.md 16 item 37's re-timing, and the margins in that
+    // table are quoted against the count. It was seven until 2026-09-12: W1
+    // gained one wait step so that its third adder write lands in slot 5 with
+    // its read in slot 7 of the colour clock before, which is what gives the
+    // '283 chain 229 ns instead of 53 (10.3.5).
     // Count from the sequence's own first step, not from BUSY - BUSY is set on
     // the edge that ends the START slot and the first RUN is already gone.
     n = 0;
@@ -367,7 +371,7 @@ module audio_tb;
       if (card.u2.RUN) n++;
       if (card.u2.RUN && card.u2.LAST) i = 999;
     end
-    ok(n == 7, $sformatf("a channel event is seven work slots, and 10.2.5 is priced on it (%0d)", n));
+    ok(n == 8, $sformatf("a channel event is eight work slots, and 10.2.5 is priced on it (%0d)", n));
 
     $display("");
     $display("6.2 - and the byte reaches the converter, one frame behind");
