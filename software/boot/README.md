@@ -102,7 +102,32 @@ that says so, `LRUN`, had **no path to the data bus**: `+$0F` `BSTAT` is a regis
 address and `LRUN` is a live macrocell, so a read returned a zero that meant nothing.
 The tilemap went into a pointer the engine was still walking. `LRUN` is `VSTAT` b4 now.
 
+## What `machine_tb` checks without asking the ROM
+
+⛔ **A stage that passes because its own `cmpa` passed is self-verified.** Stage 2 and
+section 10 were, and a store that lands at the wrong cell, read back from the same wrong
+cell, passes that compare. So `machine_tb` also checks these stages from outside:
+
+| stage | read independently |
+|---|---|
+| 2 | each store to `$C000` is in `dram[$00C000]` one E cycle later, and each load is a byte the board *drove*, not the bus holding its last value |
+| 2a | the 96 stores at `STORET`: 32 × `$50`, then 64 × `$51` |
+| 10 | all 1,250 bytes the CPU loads from VRAM, window and `VDATA`, against the read sequence restated in the testbench. VRAM itself is peeked at both span starts and at the end |
+
+**And the error paths run.** `npm run check:machine` is four runs of the bench
+(`+scenario=`), and in three of them the right answer is a failure:
+
+| scenario | fault | asserted |
+|---|---|---|
+| `e1` | no SIMM in any socket | `rambad` reports `$E1` after one store and one load, then halts |
+| `alias` | a 1M × 8 module in socket 0 (`ram.md` §11 item 7) | the ROM's stage 2 **passes**, and the independent check finds its bytes at `$006000` |
+| `e2` | tile byte 17 corrupted after it is written | section 10 reports `$E2` with `vidx` = 17, after exactly 18 loads |
+
 ## What it does not do yet
+
+- **No interrupt vector is ever taken.** NMI is not wired, FIRQ and IRQ are masked from
+  reset and nothing unmasks them, and the image contains no `SWI`, so the vector table is
+  checked only as two bytes of ROM. All six vectors point at `halt`.
 
 - **No `ram.md` §6.4.1 sizing walk.** It proves the first SIMM answers with a
   two-pattern read-back through a driven bus, which is that section's *method* on one

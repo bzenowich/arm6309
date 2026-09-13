@@ -182,6 +182,123 @@ module machine_tb;
   int e_cycles = 0;
   always @(negedge e) e_cycles++;
 
+  /* ---- +scenario=: the runs that are not the boot ----------------------- *
+   *
+   *   main    the whole ROM, every claim below          (the default)
+   *   e1      no SIMM in any socket - boot.asm must report $E1
+   *   e2      a tile byte corrupted behind the ROM's back - it must report $E2
+   *   alias   a 1M module in socket 0 - the ROM's own stage 2 PASSES, and the
+   *           independent check must say where its bytes really went
+   *
+   * ⛔ WHY THE LAST THREE EXIST. An error path that never runs is an error path
+   * that does not work, and a claim that cannot fail is not a claim. Each one
+   * is a run in which the right answer is a failure, asserted as such. */
+  string scenario = "main";
+  initial void'($value$plusargs("scenario=%s", scenario));
+
+  /* ---- boot.asm stage 2, read independently of the ROM ------------------ *
+   *
+   * ⛔ STAGE 2 WAS SELF-VERIFIED. The ROM stores $A5 and $5A at logical $C000
+   * and compares them back, and marker $02 said only that its own cmpa passed.
+   * A store that lands at the wrong physical cell and a load that reads the
+   * same wrong cell pass that compare - which is exactly what a 1M module in a
+   * 4M socket does (ram.md 11 item 7), and what +scenario=alias shows.
+   *
+   * So this watches the bus and the array, not the ROM's verdict: every store
+   * to $C000 in stage 2 must be in dram[$00C000] one E cycle later (block 6 is
+   * SIMM 0 + 6 x 8 KB), and every load of $C000 must be a DRIVEN byte - not the
+   * bus holding its last value, ram.md 6.4.1's trap - equal to that cell. */
+  localparam int DRAM_C000 = 32'h00C000;
+  int         st2_stores = 0, st2_store_bad = 0, st2_loads = 0, st2_load_bad = 0;
+  logic [7:0] st2_seq [0:3];
+  logic [7:0] st2_pend_v;
+  bit         st2_pend = 0;
+  always @(negedge e) begin
+    if (st2_pend) begin
+      if (m.mb.peek_dram(DRAM_C000) !== st2_pend_v) st2_store_bad++;
+      st2_pend = 0;
+    end
+    if (progress == 8'h01 && la == 16'hC000) begin
+      if (!rw) begin
+        if (st2_stores < 4) st2_seq[st2_stores] = cpu_dout;
+        st2_stores++;
+        st2_pend = 1; st2_pend_v = cpu_dout;
+      end else begin
+        st2_loads++;
+        if (!m.mb_din_valid || cpu_din !== m.mb.peek_dram(DRAM_C000)) st2_load_bad++;
+      end
+    end
+  end
+
+  /* ---- boot.asm section 10, read independently of the ROM --------------- *
+   *
+   * ⛔ SECTION 10 WAS SELF-VERIFIED TOO, at nine compare sites, each against an
+   * expected-value expression in the ROM. A wrong expression writes $40 and
+   * passes. So every byte the CPU LOADS from VRAM - through the window or
+   * through +$15 VDATA - is recorded in order here, and compared against the
+   * sequence section 10 is specified to read, stated a second time below from
+   * the prose in boot.asm's header rather than from its code. */
+  logic [7:0] vrd_seq [0:4095];
+  int         vrd_n = 0;
+  always @(negedge e)
+    if ((vram_read && n_iopage_bp) || (rw && !n_iosel && pa[7:0] == 8'h75)) begin
+      if (vrd_n < 4096) vrd_seq[vrd_n] = cpu_din;
+      vrd_n++;
+    end
+
+  // (a) tile set 0..255; (b) 32 loads of the prefill at 2i+1; (c) 64 bytes,
+  // stores at the even, prefill at the odd; (d) the byte after the span;
+  // (e) the span; (f) 64 VDATA stores read through the window; (g) the same
+  // through VDATA; (h) the byte after two spans; (i) the two spans.
+  function automatic int vrd_want(input int k);
+    if (k < 256) return k;                                          // (a)
+    k -= 256;
+    if (k < 32)  return ((2 * k + 1) ^ 'hA5) & 'hFF;                // (b)
+    k -= 32;
+    if (k < 64)  return ((k & 1) ? (k ^ 'hA5) : (k ^ 'h3C)) & 'hFF; // (c)
+    k -= 64;
+    if (k < 1)   return 'h5C;                                       // (d)
+    k -= 1;
+    if (k < 256) return 'hC7;                                       // (e)
+    k -= 256;
+    if (k < 64)  return (k ^ 'h96) & 'hFF;                          // (f)
+    k -= 64;
+    if (k < 64)  return (k ^ 'h96) & 'hFF;                          // (g)
+    k -= 64;
+    if (k < 1)   return 'h5C;                                       // (h)
+    k -= 1;
+    if (k < 512) return 'hE4;                                       // (i)
+    return -1;
+  endfunction
+  localparam int VRD_TOTAL = 256 + 32 + 64 + 1 + 256 + 64 + 64 + 1 + 512;
+
+  /* And what VRAM HOLDS, which the loads alone cannot say: a store that went to
+   * the wrong byte and a load that followed it there agree with each other.
+   * Taken at the two instants section 10 writes CTRL = $B0 to start a span -
+   * (d) and (h) - each of which is the last moment the passes before it are
+   * still intact. */
+  localparam int VSCR = 32'h64800;        // SCRPAGE 6, SCRLOW $4800
+  int vsnap_n = 0, vsnap_bad [0:1];
+  always @(negedge e)
+    if (!rw && !n_iosel && pa[7:0] == 8'h60 && cpu_dout == 8'hB0 && vsnap_n < 2) begin
+      int bad;
+      bad = 0;
+      for (int j = 0; j < 257; j++) begin
+        logic [7:0] w;
+        bit known;
+        known = 1;
+        // ⚠ No 8'hxx for "don't care": this simulator is two-state, X is 0.
+        if (vsnap_n == 0) begin    // after (a)-(c) and (d)'s prefill
+          w = (j == 256) ? 8'h5C : (j & 1) ? 8'(j ^ 'hA5) : 8'(j ^ 'h3C);
+          known = (j < 64) || (j == 256);
+        end else                   // after (e)-(g): VDATA stores over the span
+          w = (j == 256) ? 8'h5C : (j < 64) ? 8'(j ^ 'h96) : 8'hC7;
+        if (known && m.card.peek(VSCR + j) !== w) bad++;
+      end
+      vsnap_bad[vsnap_n] = bad;
+      vsnap_n++;
+    end
+
 
 
   // ---- +hb=N: a heartbeat every N dots ------------------------------------
@@ -424,6 +541,57 @@ module machine_tb;
                  fx < 0 ? "" : $sformatf(", first at x=%0d line=%0d: got %04h", fx, fy, shot[fy][fx])));
   endtask
 
+  // ---- the scenarios that must fail, asserted as failures ----------------
+  task automatic run_scenario();
+    if (scenario == "e1") begin
+      $display("");
+      $display("E1. No SIMM in any socket - boot.asm's rambad");
+      $display("");
+      wait_progress(8'h01, 2000, "the machine leaves boot mode with no SIMM fitted");
+      wait_progress(8'hE1, 4000, "⭐ and stage 2 reports $E1 - the SIMM did not answer");
+      ok(st2_stores == 1 && st2_loads == 1,
+         $sformatf("after exactly one store and one load: the first compare is the one that fails (%0d, %0d)",
+                   st2_stores, st2_loads));
+      ok(progress_writes == 2,
+         $sformatf("and nothing is reported after it - rambad halts (%0d progress writes)", progress_writes));
+    end else if (scenario == "alias") begin
+      $display("");
+      $display("ALIAS. A 1M x 8 module in socket 0 - ram.md 11 item 7");
+      $display("");
+      wait_progress(8'h02, 4000, "the ROM's own stage 2 PASSES against an aliasing module");
+      ok(st2_store_bad > 0,
+         $sformatf("⭐ and the independent check does not: the stores are not in dram[$00C000] (%0d of %0d missing)",
+                   st2_store_bad, st2_stores));
+      ok(m.mb.peek_dram(32'h006000) === 8'h5A,
+         $sformatf("⭐ they are at $006000, where a module with no MA10 puts logical $C000 (holds %02h)",
+                   m.mb.peek_dram(32'h006000)));
+    end else if (scenario == "e2") begin
+      $display("");
+      $display("E2. A tile byte corrupted behind the ROM's back - boot.asm's vbad");
+      $display("");
+      wait_progress(8'h02, 4000, "stage 2");
+      wait_progress(8'h03, 40000, "the palette");
+      wait_progress(8'h04, 900000, "the pattern");
+      wait_progress(8'h05, 200000, "the stripe");
+      wait_progress(8'hFF, 4000, "VMODE 00");
+      wait_progress(8'h10, 600000, "VMODE 10");
+      wait_progress(8'h11, 600000, "VMODE 01");
+      wait_progress(8'h12, 600000, "VMODE 11");
+      wait_progress(8'h20, 900000, "list A");
+      wait_progress(8'h21, 900000, "list B");
+      wait_progress(8'h30, 900000, "cell mode - the tile set is written");
+      // settle waits four frames before section 10 reads anything
+      m.card.poke(131072 + 17, 8'hEE);
+      wait_progress(8'hE2, 900000, "⭐ section 10 reports $E2 - a byte read back wrong");
+      ok(m.mb.peek_dram(32'h00C01A) === 8'd17,
+         $sformatf("⭐ and vidx names the corrupted byte - tile 17 (holds %0d)",
+                   m.mb.peek_dram(32'h00C01A)));
+      ok(vrd_n == 18,
+         $sformatf("after exactly 18 loads - the ROM stopped at the first wrong one (%0d)", vrd_n));
+    end else
+      ok(1'b0, $sformatf("+scenario=%s is not a scenario this bench has", scenario));
+  endtask
+
   // ---- the run -------------------------------------------------------------
   int bad, first_bad_x, first_bad_y, i, shift;
   logic [15:0] got;
@@ -465,8 +633,20 @@ module machine_tb;
     // Long enough that every /HALT, /IRQ, /FIRQ and /DMABREQ sample stage has
     // clocked the deasserted level in before the core starts. Three E cycles
     // is the core's own synchroniser depth; this is twenty.
+    // The populations are set before reset, as a socket is filled before power.
+    if (scenario == "e1")    m.mb.set_simms(0);
+    if (scenario == "alias") m.mb.set_small(4'b0001);
+
     repeat (240) @(posedge CLK25);
     n_reset = 1;
+
+    if (scenario != "main") begin
+      run_scenario();
+      $display("");
+      if (fails == 0) $display("machine_tb [%s] OK - %0d claims", scenario, claims);
+      else            $display("machine_tb [%s] - %0d of %0d claims FAILED", scenario, fails, claims);
+      $finish;
+    end
 
     $display("");
     $display("1. Boot - machine.md 7.2, and no JSR until the LDS");
@@ -486,11 +666,24 @@ module machine_tb;
     $display("2. The SIMM - ram.md 6.4.1's read-back through a driven bus");
     $display("");
     wait_progress(8'h02, 4000, "a byte survives a round trip to DRAM and back");
+    ok(st2_stores == 2 && st2_seq[0] === 8'hA5 && st2_seq[1] === 8'h5A && st2_store_bad == 0,
+       $sformatf("⭐ and the stores are in the SIMM, read without the ROM: $A5 then $5A reached dram[$00C000], each within one E cycle (%0d stores, %0d not in the cell)",
+                 st2_stores, st2_store_bad));
+    ok(st2_loads == 2 && st2_load_bad == 0,
+       $sformatf("⭐ and each load was a DRIVEN byte equal to that cell - not the bus holding its last value (%0d loads, %0d wrong or undriven)",
+                 st2_loads, st2_load_bad));
 
     $display("");
     $display("3. The palette - 256 entries through 13's write path");
     $display("");
     wait_progress(8'h03, 40000, "256 palette entries load from one write to PIDX");
+    // Section 2a's 96 stores, which nothing read at all: 32 of $50 then 64 of
+    // $51 at STORET, logical $C100 = dram[$00C100].
+    bad = 0;
+    for (i = 0; i < 96; i++)
+      if (m.mb.peek_dram(32'h00C100 + i) !== (i < 32 ? 8'h50 : 8'h51)) bad++;
+    ok(bad == 0,
+       $sformatf("section 2a's 96 stores are in the SIMM - 32 x $50 then 64 x $51 at $C100 (%0d wrong)", bad));
     if (!timed_out) begin
       bad = 0;
       for (i = 0; i < 256; i++)
@@ -696,6 +889,29 @@ module machine_tb;
                   "⭐ VRAM READS BACK: 256 tile bytes, 32 store-then-load pairs with no poll between, the 64 bytes they left, a load issued under a 256-byte span, and the span - and through +$15 VDATA 64 stores, 64 loads, two spans started back to back and 512 bytes of them - every byte the ROM compared was right");
     if (progress === 8'hE2)
       $display("      boot.asm section 10 reported $E2 - a byte read back wrong (vidx/vgot are in the SIMM at $C01A)");
+    begin
+      int vbad, vfirst;
+      vbad = 0; vfirst = -1;
+      for (int k = 0; k < VRD_TOTAL && k < vrd_n && k < 4096; k++)
+        if (int'(vrd_seq[k]) != vrd_want(k)) begin
+          vbad++;
+          if (vfirst < 0) vfirst = k;
+        end
+      ok(vrd_n == VRD_TOTAL && vbad == 0,
+         $sformatf("⭐ READ WITHOUT THE ROM: the %0d bytes the CPU loaded from VRAM are section 10's sequence, restated here - (a) 256, (b) 32, (c) 64, (d) 1, (e) 256, (f) 64, (g) 64, (h) 1, (i) 512 = %0d (%0d wrong%s)",
+                   vrd_n, VRD_TOTAL, vbad,
+                   vfirst < 0 ? "" : $sformatf(", first at load %0d: got %02h want %02h",
+                                               vfirst, vrd_seq[vfirst], vrd_want(vfirst))));
+      ok(vsnap_n == 2 && vsnap_bad[0] == 0 && vsnap_bad[1] == 0,
+         $sformatf("⭐ and VRAM HELD what was stored, at both span starts - (b)/(c)'s 64 bytes and (d)'s prefill, then (f)'s VDATA stores over (e)'s span (%0d snapshots, %0d and %0d wrong)",
+                   vsnap_n, vsnap_n > 0 ? vsnap_bad[0] : -1, vsnap_n > 1 ? vsnap_bad[1] : -1));
+      vbad = 0;
+      for (int j = 0; j < 256; j++) if (m.card.peek(131072 + j) !== 8'(j)) vbad++;
+      for (int j = 0; j < 512; j++) if (m.card.peek(VSCR + j) !== 8'hE4) vbad++;
+      if (m.card.peek(VSCR + 512) !== 8'h5C) vbad++;
+      ok(vbad == 0,
+         $sformatf("and at the end: the tile set is 0..255, (h)'s two spans are 512 x $E4, and the byte after them is $5C (%0d wrong)", vbad));
+    end
     ok(vram_reads >= 256 + 32 + 64 + 1 + 256,
        $sformatf("and the CPU really read the window - %0d VRAM read cycles", vram_reads));
     ok(wait_dots > 0,

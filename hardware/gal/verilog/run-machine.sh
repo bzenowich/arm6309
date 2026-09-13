@@ -4,6 +4,7 @@
 #
 #   npm run check:machine            (from hardware/)
 #   TRACE=40 npm run check:machine   ... with the first 40 bus cycles printed
+#   SCENARIOS=main npm run check:machine   ... the boot run alone
 #
 # EXIT CODE IS THE ANSWER, for the reason run.sh states: a testbench reports a
 # failed claim and then calls $finish, which exits 0.
@@ -42,17 +43,34 @@ SRC="$SRC ../../vendor/mc6809/mc6809e.v ../../vendor/mc6809/mc6809i.v"
 
 $V --top-module machine_tb $SRC machine_tb.sv -o machine_tb > /dev/null
 
-out=$(mktemp)
-trap 'rm -f "$out"' EXIT
+# The logs are KEPT. A mktemp removed on EXIT deletes the FAIL lines of the run
+# that failed - run-modplay.sh paid for that once already.
+OUT=${OUT:-/tmp/arm6309-machine}
+mkdir -p "$OUT"
 
 ARGS=""
 [ -n "$TRACE" ] && ARGS="+trace=$TRACE"
 [ -n "$AFTER" ] && ARGS="$ARGS +after=$AFTER"
 [ -n "$HB" ] && ARGS="$ARGS +hb=$HB"
-./obj_dir/machine_tb $ARGS | tee "$out"
 
-ok=$(grep -c '^ok' "$out" || true)
-bad=$(grep -c '^FAIL' "$out" || true)
+# ⭐ FOUR RUNS, AND THREE OF THEM MUST FAIL THE ROM. `main` is the boot; `e1`,
+# `alias` and `e2` are machine_tb's +scenario= runs, in which boot.asm's error
+# paths are the right answer and are asserted as such (workplan 2026-09-12 P1
+# item 7). SCENARIOS narrows it: SCENARIOS=main for the boot alone.
+SCENARIOS=${SCENARIOS:-"main e1 alias e2"}
+ok=0; bad=0; missing=0
+for sc in $SCENARIOS; do
+  log="$OUT/$sc.log"
+  ./obj_dir/machine_tb $ARGS +scenario=$sc | tee "$log"
+  ok=$((ok + $(grep -c '^ok' "$log" || true)))
+  bad=$((bad + $(grep -c '^FAIL' "$log" || true)))
+  # A run that crashed or hit the backstop prints no OK summary. It counts.
+  if ! grep -q '^machine_tb .*OK - ' "$log" && ! grep -q '^FAIL' "$log"; then
+    echo "FAIL  machine_tb [$sc] produced no summary line"
+    missing=$((missing + 1))
+  fi
+done
+
 echo
-echo "$ok claims, $bad failed"
-[ "$bad" -eq 0 ]
+echo "$ok claims, $((bad + missing)) failed        (logs in $OUT)"
+[ "$bad" -eq 0 ] && [ "$missing" -eq 0 ]
