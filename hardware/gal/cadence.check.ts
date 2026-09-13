@@ -259,14 +259,20 @@ for (let slot = 0; slot < SLOTS_PER_LINE; slot++) {
  * the only reasons to wait are the span in flight and the prefetch. */
 {
   const at = (o: Record<string, number>) => dotWorld(H.backEnd - 2, 0, o)
-  /* arbDesign's oe, as merged: WAITSRC & VPORT & !CPUIDLE & E & !CPUIDLE, with
+  /* arbDesign's oe, as merged and FOLDED: `WAITSRC & VPORT & E`, with
    * VPORT = VRAMSEL # VDSEL (19 item 47). The access is the VRAM window unless
-   * a caller says otherwise. */
+   * a caller says otherwise.
+   *
+   * ⚠ IT READ `WAITSRC & VPORT & !CPUIDLE & E & !CPUIDLE` UNTIL 2026-09-12, and
+   * this predicate tested `CPUIDLE === 0` alongside the rest. CPUIDLE is
+   * `terms: []` - a constant - so that conjunct was always true and the test
+   * always passed: it asserted nothing. merge() folds constants now
+   * (jedec/cupl.ts), the literal is gone from the equation, and testing for it
+   * here would be asserting a signal the oe no longer reads. */
   const WINDOW = { A19: 1, A20: 0, IOPAGE: 0, VDSEL: 0, E: 1 }
   const waitsAt = (o: Record<string, number>) => {
     const v = at({ ...WINDOW, ...o })
     return v.get("WAITSRC") === 1 && v.get("VPORT") === 1 && v.get("E") === 1
-      && v.get("CPUIDLE") === 0
   }
   const waits = waitsAt
   check(waits({ RW: 0, SPANBUSY: 1 }), "7.4's span backstop: a write waits while a span is in flight")

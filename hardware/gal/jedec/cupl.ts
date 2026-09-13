@@ -13,6 +13,7 @@
  */
 
 import type { Cell, Design } from "./assemble"
+import { literalsOf, reduceTerms } from "./minimise"
 
 export interface Merged {
   name: string
@@ -53,13 +54,87 @@ export const rename = (d: Design, map: Record<string, string>): Design => {
   }
 }
 
+/* ⭐ FOLD THE CONSTANTS A RENAME LEAVES BEHIND - 2026-09-12.
+ *
+ * ⛔ WHY THIS EXISTS. `rename` substitutes one name for another, and when the
+ * replacement is a cell that is constant 0 the result is an equation that is
+ * false by inspection and nobody notices. vctrl.pld carried this, and the
+ * fitter compiled it:
+ *
+ *     ACPU0 = VPORT & !CPUIDLE & CPUIDLE & !CPUIDLE & !CPUIDLE ;
+ *
+ * CPUIDLE is `terms: []` - video.parts.ts, "arbDesign's CPU address and R/W,
+ * defeated: the CPU reserves no chip" (graphics.md 11) - so ARB_MAP maps four
+ * different inputs onto it and every CPU-exclusion term in the arbiter becomes
+ * either impossible or unconditional. Four dead grants, thirteen vacuous GSPN
+ * terms, and SPNGRANT reduced to SPNREQG exactly. All of it went to
+ * fit1508.exe, which minimised it away in silence - so the design was right
+ * and the DESIGN FILES were not, and every reader after the substitution had
+ * to re-derive that CPUIDLE was zero to know what the part did.
+ *
+ * The rule is the whole of Boolean constant folding: a term containing the
+ * constant is impossible and dies; a term containing its negation loses the
+ * literal. reduceTerms then removes what that leaves duplicated or subsumed.
+ *
+ * ⚠ WHAT THIS IS NOT. It is not a minimiser. jedec/minimise.ts declines
+ * Quine-McCluskey on purpose - "the answer is a better decomposition, not a
+ * better minimiser" - and this does not overrule it: `A&B # A&!B` on two real
+ * signals is left exactly as written. Only literals that are CONSTANT BY
+ * CONSTRUCTION are folded, which is bookkeeping on a substitution, not a
+ * judgement about anyone's equations. */
+const foldConstants = (cells: Cell[]): Cell[] => {
+  /* ⚠ A DECLARED CONSTANT IS `terms: []` **AND NO oe**. A cell with an oe and
+   * no terms is an OPEN-DRAIN DRIVER - its value is 1 whenever the enable says
+   * so, and its whole condition lives in the oe: WAIT here, FIRQ on the audio
+   * card (access.jedec.ts, audio.jedec.ts). Treating those as constant 0 would
+   * fold away any equation that read one, which is a silent way to delete
+   * logic. Only `terms: []` with no oe is a constant. */
+  const zero = new Set(cells
+    .filter((c) => c.terms.length === 0 && c.oe === undefined)
+    .map((c) => c.name))
+  if (zero.size === 0) return cells
+  const fold = (conj: string): string | null => {
+    const kept: string[] = []
+    for (const lit of literalsOf(conj)) {
+      const bare = lit.replace(/^!/, "")
+      if (!zero.has(bare)) { kept.push(lit); continue }
+      if (!lit.startsWith("!")) return null      // & 0  -> the term is impossible
+      /* & !0 -> & 1: drop the literal and keep going */
+    }
+    return kept.join(" & ")
+  }
+  return cells.map((c) => {
+    if (zero.has(c.name)) return c               // the declared constants themselves
+    /* ⚠ An open-drain cell falls through to here on purpose: its terms are
+     * empty and its oe is the thing that needs folding. */
+    const folded = c.terms.map(fold).filter((t): t is string => t !== null)
+    const oe = c.oe === undefined ? undefined : fold(c.oe)
+    return {
+      ...c,
+      terms: reduceTerms(folded.map(literalsOf)).map((t) => t.join(" & ")),
+      /* ⚠ An oe that folds to impossible would mean a pin that never drives.
+       * Leave it as written rather than silently deleting the output - that is
+       * a design question, and this pass does not get to answer it. */
+      oe: oe === null ? c.oe : oe,
+    }
+  /* ⚠ DROP WHAT FOLDED TO NOTHING, AND ONLY THAT. A cell whose every term died
+   * is constant 0 and drives nothing - the four ACPU grants. A cell that was
+   * DECLARED constant is kept, because something was renamed onto it and the
+   * scan in `merge` would otherwise synthesise it as an input PIN. `zero` is
+   * the set of the declared ones, taken before any folding. */
+  }).filter((c) => c.terms.length > 0 || c.oe !== undefined || zero.has(c.name))
+}
+
 /** Fold several 22V10 designs into one part. Any signal produced by one and
  *  consumed by another stops being a pin and becomes an internal node - which
  *  is the whole reason for doing it. */
 export const merge = (
   designs: Design[], extra: Cell[], meta: Omit<Merged, "inputs" | "cells" | "external">,
 ): Merged => {
-  const cells = [...designs.flatMap((d) => d.cells), ...extra]
+  /* ⚠ FOLD BEFORE THE INPUT SCAN BELOW, not after. The scan synthesises an
+   * input for every literal it cannot find a producer for, so a fold that ran
+   * later would leave CPUIDLE already turned into a PIN. */
+  const cells = foldConstants([...designs.flatMap((d) => d.cells), ...extra])
   const produced = new Set(cells.map((c) => c.name))
   const inputs = new Map<string, { name: string; activeLow?: boolean }>()
   for (const d of designs) {

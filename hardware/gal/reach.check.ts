@@ -192,10 +192,14 @@ const RESERVED: Record<string, { why: Why; note: string }> = {
    * that reserved its chip. Deleted 2026-09-11 - every CPU VRAM access is at
    * WPTR (graphics.md 11). What is left is arbDesign's own four outputs, kept
    * because that GAL22V10 is what access.check.ts and cupl.check.ts execute. */
-  ACPU0: { why: "dead", note: "arbDesign's CPU grant, renamed on merge and constant 0 since CPUIDLE (graphics.md 11) - substituted, so no macrocell" },
-  ACPU1: { why: "dead", note: "as ACPU0" },
-  ACPU2: { why: "dead", note: "as ACPU0" },
-  ACPU3: { why: "dead", note: "as ACPU0" },
+  /* ⭐ ACPU0-3 LEFT THIS LIST 2026-09-12 WITH THEIR EQUATIONS. They were
+   * arbDesign's CPU grants renamed on merge, and every one read
+   * `VPORT & !CPUIDLE & CPUIDLE & ...` - false by inspection, because ARB_MAP
+   * maps four different inputs onto CPUIDLE, which is `terms: []`. The .pld
+   * carried them to the fitter, which minimised them away in silence. merge()
+   * folds constants now (jedec/cupl.ts), so a term containing a constant-0
+   * literal dies and a cell whose every term dies is dropped. */
+  CPUIDLE: { why: "dead", note: "⛔ graphics.md 11: the CPU reserves no framebuffer chip, so arbDesign's two address bits, its R/W and its /IOPAGE are all renamed onto this constant 0 (video.cpld.ts ARB_MAP). Nothing reads it since the fold - it is kept as a CELL because merge() would otherwise synthesise it as an input PIN, and deleted only when ARB_MAP stops naming it" },
   GSPN0: { why: "board", note: "§5.2.1's span-writer grant, chip 0" },
   GSPN1: { why: "board", note: "§5.2.1's span-writer grant, chip 1" },
   GSPN2: { why: "board", note: "§5.2.1's span-writer grant, chip 2" },

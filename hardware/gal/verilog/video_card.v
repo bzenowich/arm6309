@@ -93,7 +93,9 @@ module video_card (
   wire FCLK0, MUXSEL0, MUXSEL1;
   wire WROWADV_w; wire MCm0,MCm1,MCm2;
   wire GSPN0,GSPN1,GSPN2,GSPN3, WAIT;
-  wire ACPU0,ACPU1,ACPU2,ACPU3;
+  // ⛔ ACPU0-3 are gone (2026-09-12). They were arbDesign's CPU grants renamed
+  // onto CPUIDLE, so every one read `VPORT & !CPUIDLE & CPUIDLE & ...` - false
+  // by inspection. merge() folds constants now and drops what dies.
   wire VMODE0,VMODE1,WM0,WM1,CELL,IRQEN,DISPEN;
   wire M0,HPOL,TILEMODE;
   wire TFETCH,MFETCH,FETCH,HLOAD,HEND,ROWADV,MCADV;
@@ -186,7 +188,6 @@ module video_card (
     .WROWADV(WROWADV_w),
     .GSPN0(GSPN0),.GSPN1(GSPN1),.GSPN2(GSPN2),.GSPN3(GSPN3),
     .SPNGRANT(SPNGRANT), .WAIT(WAIT), .WAIT_OE(WAIT_OE),
-    .ACPU0(ACPU0),.ACPU1(ACPU1),.ACPU2(ACPU2),.ACPU3(ACPU3),
     .VMODE0(VMODE0),.VMODE1(VMODE1),.WM0(WM0),.WM1(WM1),
     .CELL(CELL),.IRQEN(IRQEN),.DISPEN(DISPEN),
     .M0(M0),.HPOL(HPOL),.TILEMODE(TILEMODE),

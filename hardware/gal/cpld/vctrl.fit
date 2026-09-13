@@ -1,4 +1,4 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Sat Sep 12 19:57:43 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Sat Sep 12 20:14:19 2026
 
 
 fit1508 vctrl.tt2 -device P1508C84 -preassign ignore -JTAG off
@@ -721,9 +721,9 @@ RETIRE = ((PH0.Q & !PH1.Q & SPANBUSY.Q & !H0.Q)
 	# (!CELL.Q & PH0.Q & !PH1.Q & SPANBUSY.Q));
 
 SRC1 = ((CELL.Q & H0.Q & H6.Q & !H7.Q)
-	# (CELL.Q & H0.Q & H5.Q)
+	# (CELL.Q & H0.Q & !H6.Q & H7.Q)
 	# (CELL.Q & PH1.Q)
-	# (CELL.Q & H0.Q & !H6.Q & H7.Q));
+	# (CELL.Q & H0.Q & H5.Q));
 
 !SRC0 = ((!CELL.Q & !LRUN & RDVALID & !SPANBUSY.Q)
 	# (!LRUN & RDVALID & !SPANBUSY.Q & !H0.Q)

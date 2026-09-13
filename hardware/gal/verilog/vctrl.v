@@ -73,13 +73,9 @@ module vctrl (
     output wire SPANEND,
     output wire WEN,
     output wire WROWADV,
-    output wire ACPU0,
     output wire GSPN0,
-    output wire ACPU1,
     output wire GSPN1,
-    output wire ACPU2,
     output wire GSPN2,
-    output wire ACPU3,
     output wire GSPN3,
     output wire SPNGRANT,
     output wire WAIT,
@@ -335,55 +331,21 @@ module vctrl (
   assign WROWADV =
          (SPANEND & WADV0 & ~LRUN)
          | (SPANEND & WADV1 & ~LRUN);
-  // buried - SRCSEL[n] is this same pin - 5.2.1, not a second macrocell
-  assign ACPU0 =
-         (VPORT & ~CPUIDLE & CPUIDLE & ~CPUIDLE & ~CPUIDLE);
   // EXTERNAL
   assign GSPN0 =
-         (SPNREQG & ~SPNA0 & ~SPNA1 & ~VPORT)
-         | (SPNREQG & ~SPNA0 & ~SPNA1 & CPUIDLE)
-         | (SPNREQG & ~SPNA0 & ~SPNA1 & ~CPUIDLE)
-         | (SPNREQG & ~SPNA0 & ~SPNA1 & CPUIDLE)
-         | (SPNREQG & ~SPNA0 & ~SPNA1 & CPUIDLE);
-  // buried
-  assign ACPU1 =
-         (VPORT & ~CPUIDLE & CPUIDLE & CPUIDLE & ~CPUIDLE);
+         (SPNREQG & ~SPNA0 & ~SPNA1);
   // EXTERNAL
   assign GSPN1 =
-         (SPNREQG & SPNA0 & ~SPNA1 & ~VPORT)
-         | (SPNREQG & SPNA0 & ~SPNA1 & CPUIDLE)
-         | (SPNREQG & SPNA0 & ~SPNA1 & ~CPUIDLE)
-         | (SPNREQG & SPNA0 & ~SPNA1 & ~CPUIDLE)
-         | (SPNREQG & SPNA0 & ~SPNA1 & CPUIDLE);
-  // buried
-  assign ACPU2 =
-         (VPORT & ~CPUIDLE & CPUIDLE & ~CPUIDLE & CPUIDLE);
+         (SPNREQG & SPNA0 & ~SPNA1);
   // EXTERNAL
   assign GSPN2 =
-         (SPNREQG & ~SPNA0 & SPNA1 & ~VPORT)
-         | (SPNREQG & ~SPNA0 & SPNA1 & CPUIDLE)
-         | (SPNREQG & ~SPNA0 & SPNA1 & ~CPUIDLE)
-         | (SPNREQG & ~SPNA0 & SPNA1 & CPUIDLE)
-         | (SPNREQG & ~SPNA0 & SPNA1 & ~CPUIDLE);
-  // buried
-  assign ACPU3 =
-         (VPORT & ~CPUIDLE & CPUIDLE & CPUIDLE & CPUIDLE);
+         (SPNREQG & ~SPNA0 & SPNA1);
   // EXTERNAL
   assign GSPN3 =
-         (SPNREQG & SPNA0 & SPNA1 & ~VPORT)
-         | (SPNREQG & SPNA0 & SPNA1 & CPUIDLE)
-         | (SPNREQG & SPNA0 & SPNA1 & ~CPUIDLE)
-         | (SPNREQG & SPNA0 & SPNA1 & ~CPUIDLE)
-         | (SPNREQG & SPNA0 & SPNA1 & ~CPUIDLE);
+         (SPNREQG & SPNA0 & SPNA1);
   // buried
   assign SPNGRANT =
-         (SPNREQG & ~SPNA0 & CPUIDLE)
-         | (SPNREQG & SPNA0 & ~CPUIDLE)
-         | (SPNREQG & ~SPNA1 & CPUIDLE)
-         | (SPNREQG & SPNA1 & ~CPUIDLE)
-         | (SPNREQG & ~VPORT)
-         | (SPNREQG & CPUIDLE)
-         | (SPNREQG & ~CPUIDLE);
+         (SPNREQG);
   // EXTERNAL - open-drain by the OE idiom - SPANBUSY . VRAMSEL . /IOPAGE . E . /RW
   assign WAIT =
          1'b0;
@@ -509,7 +471,7 @@ module vctrl (
   // WAIT is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign WAIT_OE =
-         (WAITSRC & VPORT & ~CPUIDLE & E & ~CPUIDLE);
+         (WAITSRC & VPORT & E);
 
   wire AR_ = (RESET);
   always @(posedge DOTCLK or posedge AR_) begin
