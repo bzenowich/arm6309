@@ -159,16 +159,19 @@ to §10.3: the 16-bit `74HC283` chain was never given a propagation budget, and 
 datasheet says it is 192 ns into a 53 ns window** (§16 item 37). Nothing on the card can
 see that — the Verilog models logic and not timing, and the adder is inside neither
 CPLD. ⭐ **The repair is free and it is a re-timing**: the walk never adds, so putting a
-read and its write on either side of it gives the sum 229 ns. ⛔ What it costs is §16
+read and its write on either side of it gives the sum 229 ns. ⛔ **It was built on
+2026-09-12 and reverted the same day, because it stopped the card playing** — §16 item 37
+and `docs/history.md`. ⛔ What it costs is §16
 item 34's 8-bit datapath, which is now withdrawn — and that is why §10.3 is five
 packages rather than one.
 
 | | | |
 |---|---|---|
 | **U1** the host register block, plus §4.2's counter and comparator, §9.3's read-back latch, §6.2's frame parity and §8.2's tempo count | `audio` | 107 of 128 cells, 62 of 64 I/O, two cascades |
-| **U2** the sequencer (§10.2) | `aseq` | ⛔ **128 of 128 cells**, 62 of 64 I/O, one cascade, **six of eight blocks at 38 of 40 fan-in** |
+| **U2** the sequencer (§10.2) | `aseq` | **124 of 128 cells**, 63 of 64 I/O, two cascades, **seven of eight blocks at 36 of 40 fan-in** |
 
-⚠ **U2 is exactly full and U1 is not**, which is why every reduction this pass moved work
+⚠ **U2 is the tight part and U1 is not** — four cells and one pin spare against U1's
+twenty-one — which is why every reduction this pass moved work
 *to* U1 — sixteen state-file data pins there bought seven packages, because the counter,
 the comparator and the read-back latch all want the same bus. **What is not closed is the analogue half**: the converter glitch, the cascaded
 settling and the layout at 35 packages on an 18 cm card (§16 items 9, 10, 19).

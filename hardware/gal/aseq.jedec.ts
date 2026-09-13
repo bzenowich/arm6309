@@ -83,29 +83,8 @@ const ctl = (name: string, p: (s: Step) => boolean | undefined, why?: string): C
  * is 10.6 M work slots/s rather than 7.09 M, and 10.2.5's margins are quoted
  * against it. */
 const engine: Cell[] = [
-  /* ⭐ STEP 0 RUNS IN SLOT 7, AND EVERY STEP AFTER IT RUNS IN ANY WORK SLOT -
-   * audio.md 16 item 37's re-timing, and this is where the phase is pinned.
-   *
-   * The engine used to run in whatever work slot the sequence happened to
-   * start in, so a given adder write landed in slot 5, 6 or 7 depending on
-   * WHEN THE REQUEST ARRIVED: the '283 chain got 229 ns or 53 ns by luck of
-   * arrival, and 10.3.5's window was an accident rather than a property.
-   * Holding step 0 until slot 7 makes the whole sequence's phase [7, 5, 6, 7,
-   * ...], so PROGRAM can put every adder write in slot 5 with the read that
-   * feeds it in slot 7 of the colour clock before - 229 ns across the walk.
-   *
-   * ⚠ It is held HERE and not in START, because START is what clears DUE
-   * (DPICK), and gating that starves the channels - see the note on START.
-   * Waiting costs nothing else: T's enable is RUN, and stepLits puts RUN in
-   * every control term, so the engine drives nothing while it idles with BUSY
-   * set. LAST is false at step 0, so BUSY holds; START's !BUSY blocks a second
-   * start. Chained sequences re-align for free, because ENDNOW and CHAIN1
-   * clear T and step 0 waits for slot 7 again. */
   { pin: 0, name: "RUN", assertedLow: false, s0: 1, registered: false,
-    why: "a work slot with a sequence in it, step 0 only in slot 7",
-    terms: ["WORKSLOT & BUSY & T0", "WORKSLOT & BUSY & T1",
-      "WORKSLOT & BUSY & T2", "WORKSLOT & BUSY & T3",
-      "BUSY & S2 & S1 & S0 & !T0 & !T1 & !T2 & !T3"] },
+    why: "a work slot with a sequence in it", terms: ["WORKSLOT & BUSY"] },
   { pin: 0, name: "WORKSLOT", assertedLow: false, s0: 1, registered: false,
     why: "slots 5, 6 and 7 - 3.1's host service and deferred work, together",
     terms: ["S2 & S1", "S2 & S0"] },
@@ -131,15 +110,6 @@ const engine: Cell[] = [
   { pin: 0, name: "DUEANY", assertedLow: false, s0: 1, registered: false,
     terms: [0, 1, 2, 3].map((i) => `DUE${i}`) },
   { pin: 0, name: "START", assertedLow: false, s0: 1, registered: false,
-    /* ⛔ DO NOT GATE THIS BY SLOT. Pinning START to slot 7 was tried on
-     * 2026-09-12 for item 37's re-timing and it starves the channels: DUE is
-     * cleared only when a start PICKS it (DPICK below), so throttling START to
-     * one slot in three throttles the picker, and RSTANY and HDUE both outrank
-     * DUEANY in that priority chain. A host writing continuously then takes
-     * every opportunity and no channel event is ever picked - audio_tb saw W1
-     * run 154 slots with channel 0 ticking ZERO times in 300 colour clocks,
-     * and PWBUSY waiting 217 slots. The phase is pinned in RUN instead, where
-     * it costs the picker nothing. */
     terms: ["WORKSLOT & !BUSY & RSTANY",
       "WORKSLOT & !BUSY & DUEANY", "WORKSLOT & !BUSY & HDUE",
       "WORKSLOT & !BUSY & VDIRTY"] },
@@ -151,13 +121,7 @@ const engine: Cell[] = [
    * from one sequence to another without releasing it. */
   { pin: 0, name: "ENDNOW", assertedLow: false, s0: 1, registered: false,
     why: "W1 ended on a buffer end, so W2 follows without releasing the engine",
-    /* ⛔ DERIVED, NOT DECLARED - the same lesson LEN above is written for.
-     * This said T == 6 while W1 had seven steps; item 37's re-timing made W1
-     * eight, and a hand-written 6 would have fired the buffer-end test one
-     * step early, on the step that adds PER rather than the one that
-     * decrements CNT. ENDNOW must stay on W1's LAST step, because it switches
-     * WT while T resets on LAST and the two have to coincide. */
-    terms: [`RUN & !WT2 & !WT1 & !WT0 & ${bits("T", LEN[W1] - 1, 4).join(" & ")} & !ACOUT`] },
+    terms: [`RUN & !WT2 & !WT1 & !WT0 & ${bits("T", 6, 4).join(" & ")} & !ACOUT`] },
   /* ⭐ 16 ITEM 39: W6's LAST STEP HANDS OVER TO W1. W6 no longer primes PEND
    * itself - it sets PTR, CNT and NEXT and lets W1 do the first fetch, which
    * is what makes the byte accounting uniform and gets the first sample its
@@ -397,19 +361,9 @@ const NOHOST = (p: (s: Step) => boolean | undefined): [number, number][] => {
   return out
 }
 const on = (p: (s: Step) => boolean | undefined) => onSteps(NOHOST(p))
-/* ⭐ W3's LOGICAL STEP, NOT ITS PHYSICAL ONE - audio.md 16 item 37's re-timing.
- * W3 gained three wait steps so that each adder write lands in slot 5 with the
- * read that feeds it in slot 7 of the colour clock before (10.3.5's
- * across-the-walk window, 229 ns against the 53 ns two adjacent work slots
- * give). Renumbering would have meant editing every w3() call site below, and
- * one missed site is a step decode that is wrong in exactly the way 10.2.3
- * warns about. The map is here; the call sites still name the micro-op they
- * mean. ⚠ Keep it in step with PROGRAM[W3]: entry n is where logical step n
- * now lives. */
-const W3STEP = [0, 3, 4, 6, 7, 8]
 /** `RUN & WT2 & T == t`, the shape every W3 term has. */
 const w3 = (t: number, extra?: string) =>
-  `RUN & WT2 & !WT1 & !WT0 & ${bits("T", W3STEP[t], 4).join(" & ")}${extra ? ` & ${extra}` : ""}`
+  `RUN & WT2 & !WT1 & !WT0 & ${bits("T", t, 4).join(" & ")}${extra ? ` & ${extra}` : ""}`
 
 /* -- the state-file address --------------------------------------------- *
  *

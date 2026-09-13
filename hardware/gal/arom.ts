@@ -611,15 +611,6 @@ export const residue = (): Residue => {
     if (ABSORBED.has(c.name)) { absorbed.push(c.name); continue }
     if (REWRITTEN.has(c.name)) { rewritten.push(c.name); continue }
     unchanged.push(c.name)
-    /* ⚠ THE ENGINE'S OWN STATE IS NOT A STRAY FOR READING ITSELF. RUN, WT and
-     * T are the control store's ADDRESS (see ADDRESSED below), so a cell that
-     * IS one of them reading another is the sequencer's state machine, not a
-     * decode that could become table content - there is nothing to absorb it
-     * INTO. audio.md 16 item 37 made this concrete on 2026-09-12: RUN now
-     * reads T0-T3, because a sequence's step 0 runs only in slot 7 and every
-     * step after it in the next work slot. That is phase logic, and under 10.3
-     * it stays in macrocells exactly as it does now. */
-    if (STEP.test(c.name)) continue
     if (literalsOf(c).some((l) => STEP.test(l))) strays.push(c.name)
   }
   return { absorbed, rewritten, unchanged, strays }

@@ -129,9 +129,8 @@ export const PROGRAM: Record<number, Step[]> = {
     /* 2 */ { w: 4, blat: true },
     /* 3 */ { w: 0, alat: true },
     /* 4 */ { w: 0, wr: [0, 1, 2], b: "blat", sum: true, sbo: true, pend: true },
-    /* 5 */ {},
-    /* 6 */ { w: 1, alat: true, cap: true },
-    /* 7 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true, done: "notend" },
+    /* 5 */ { w: 1, alat: true, cap: true },
+    /* 6 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true, done: "notend" },
   ],
   /* -- W2: 3.3's shadow reload. The single highest-value line on the card:
    * LC and LEN are copied AT BUFFER END, so ProTracker's one-shot then loop
@@ -150,21 +149,13 @@ export const PROGRAM: Record<number, Step[]> = {
    * ⭐ AND IT FIXES D-2 IN THE SAME MOVE. LEN = 0 gives CNT = 0 - 1 = $1FFFF,
    * which is 131,072 bytes = Paula's 65,536 words, where before it gave one.
    * The 17th bit has to exist for that, which is item 35's HLOP. */
-  /* ⚠ THE WAIT STEPS ARE 16 ITEM 37's RE-TIMING, and every sequence has the
-   * same shape: a read on the engine's step 0 / 3 / 6 (slot 7) and the adder
-   * write that consumes it on step 1 / 4 / 7 (slot 5 of the next colour
-   * clock), so the sum settles across the walk for 229 ns rather than the
-   * 53 ns two adjacent work slots give it (10.3.5). W2 is reached by ENDNOW,
-   * which clears T, so it re-aligns on slot 7 by itself. */
   [W2]: [
     /* 0 */ { w: 3, alat: true, cap: true },
     /* 1 */ { w: 2, wr: [0, 1, 2], b: "zero", sum: true, drv: true },
-    /* 2 */ {},
-    /* 3 */ { w: 5, alat: true, blat: true },
-    /* 4 */ { w: 1, wr: [0, 1, 2], b: "blat", sum: true, drv: true },
-    /* 5 */ {},
-    /* 6 */ { w: 1, alat: true, cap: true },
-    /* 7 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true, done: "always" },
+    /* 2 */ { w: 5, alat: true, blat: true },
+    /* 3 */ { w: 1, wr: [0, 1, 2], b: "blat", sum: true, drv: true },
+    /* 4 */ { w: 1, alat: true, cap: true },
+    /* 5 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true, done: "always" },
   ],
   /* -- W3: a host access, retired out of the work slots (9.3, 9.4.3).
    * ⚠ EVERY W3 RUNS ALL SIX STEPS and each step's controls are gated by which
@@ -184,14 +175,11 @@ export const PROGRAM: Record<number, Step[]> = {
    * commit on their low byte to $22 and $20. */
   [W3]: [
     /* 0 */ { host: "stage", wr: [0], pw: true },
-    /* 1 */ {},
-    /* 2 */ {},
-    /* 3 */ { g: 5, alat: true, cap: true },
-    /* 4 */ { host: "commit", wr: [0, 1, 2], b: "zero", sum: true, drv: true },
-    /* 5 */ {},
-    /* 6 */ { host: "sptr", alat: true, cap: true, srd: true, swr: true, pf: true },
-    /* 7 */ { host: "sptr", wr: [0, 1, 2], b: "zero", cin: true, sum: true, drv: true },
-    /* 8 */ { host: "target", pf: true, done: "always" },
+    /* 1 */ { g: 5, alat: true, cap: true },
+    /* 2 */ { host: "commit", wr: [0, 1, 2], b: "zero", sum: true, drv: true },
+    /* 3 */ { host: "sptr", alat: true, cap: true, srd: true, swr: true, pf: true },
+    /* 4 */ { host: "sptr", wr: [0, 1, 2], b: "zero", cin: true, sum: true, drv: true },
+    /* 5 */ { host: "target", pf: true, done: "always" },
   ],
   /* -- W4 (retired 2026-09-11): the tempo timer's multiply. See the note on
    * the W constants above; audio.md history.md has the ten steps. */
@@ -221,15 +209,12 @@ export const PROGRAM: Record<number, Step[]> = {
   [W6]: [
     /* 0 */ { w: 3, alat: true, cap: true },
     /* 1 */ { w: 2, wr: [0, 1, 2], b: "zero", sum: true, drv: true },
-    /* 2 */ {},
-    /* 3 */ { w: 5, alat: true, blat: true },
-    /* 4 */ { w: 1, wr: [0, 1, 2], b: "blat", sum: true, drv: true },
-    /* 5 */ {},
-    /* 6 */ { w: 1, alat: true, cap: true },
-    /* 7 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true },
-    /* 8 */ {},
-    /* 9 */ { count: true, alat: true },
-    /* 10 */ { w: 0, wr: [0, 1], b: "zero", sum: true, done: "always" },
+    /* 2 */ { w: 5, alat: true, blat: true },
+    /* 3 */ { w: 1, wr: [0, 1, 2], b: "blat", sum: true, drv: true },
+    /* 4 */ { w: 1, alat: true, cap: true },
+    /* 5 */ { w: 1, wr: [0, 1, 2], b: "ones", sum: true, drv: true },
+    /* 6 */ { count: true, alat: true },
+    /* 7 */ { w: 0, wr: [0, 1], b: "zero", sum: true, done: "always" },
   ],
 }
 

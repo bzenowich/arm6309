@@ -23,7 +23,7 @@ import {
   encode, eventsPerSecond, highLaneMode, literalsOf, margin, microwordBits,
   pack, periodFloor, residue, stepsPerSecond, toLanes, unpack, writeOf,
 } from "./arom"
-import { PROGRAM, HOSTMAP, COMMIT, STAGED, SEQUENCES, W1, W2, W3, W5, W6, type Step } from "./aseq.micro"
+import { PROGRAM, HOSTMAP, COMMIT, STAGED, SEQUENCES, W1, W2, W3, W5, W6 } from "./aseq.micro"
 import { aseqCells, WTC } from "./aseq.jedec"
 
 let failures = 0
@@ -96,7 +96,7 @@ for (const wt of WTS) {
     }
   })
 }
-check(steps === 49, "PROGRAM is 49 steps - 40, plus item 37's NINE wait steps (W1 one, W2 two, W3 three, W6 three) that put every adder write in slot 5 with its read in slot 7 of the colour clock before - 10.2's 42, plus item 36's CNT - 1 in W2 and W6, less the three W6 spent priming before item 39 handed the fetch to W1, plus item 43's seven: W5 loads and WAITS for the frame-parity strobes instead of strobing a single slot itself, less item 44's ten: W4's multiply, now U1's counter", `${steps}`)
+check(steps === 40, "PROGRAM is 40 steps - 10.2's 42, plus item 36's CNT - 1 in W2 and W6, less the three W6 spent priming before item 39 handed the fetch to W1, plus item 43's seven: W5 loads and WAITS for the frame-parity strobes instead of strobing a single slot itself, less item 44's ten: W4's multiply, now U1's counter", `${steps}`)
 check(bad.length === 0, "every step encodes and round-trips through the microword",
   bad.slice(0, 4).join("; "))
 
@@ -106,41 +106,23 @@ rule("4. 16 item 35 - the high lane's four modes")
 /* The table in item 35, as claims. These are the two the fitted design gets
  * wrong, and the two it happens to get right. */
 const mode = (wt: number, t: number) => highLaneMode(PROGRAM[wt][t])
-
-/* ⛔ DERIVED, NOT DECLARED - and this block is why the rule exists.
- * These claims named their steps by INDEX (W1 step 6, W2 step 5, W3 step 2),
- * and audio.md 16 item 37's re-timing inserted wait steps ahead of every one
- * of them: eight claims failed at once, none of them because the design was
- * wrong. A step's IDENTITY is what the claim means and its index is a
- * consequence - the same lesson aseq.jedec.ts's LEN and ENDNOW record. */
-const stepAt = (wt: number, p: (s: Step) => boolean | undefined): number => {
-  const t = PROGRAM[wt].findIndex((s) => !!p(s))
-  if (t < 0) throw new Error(`arom.check: ${WTNAME[wt]} has no such step`)
-  return t
-}
-const INC = (wt: number) => stepAt(wt, (s) => s.sum && s.b === "zero" && s.cin)
-const PASS = (wt: number) => stepAt(wt, (s) => s.sum && s.b === "zero" && !s.cin)
-const CARRY = (wt: number) => stepAt(wt, (s) => s.sum && s.b === "blat")
-const DEC = (wt: number) => stepAt(wt, (s) => s.sum && s.b === "ones")
-check(mode(W1, INC(W1)) === HLOP.inc, `W1 step ${INC(W1)} - PTR + 1 - is an INCREMENT`)
-check(PROGRAM[W6].length === 11,
-  "⭐ 16 item 39: W6 no longer primes - it chains into W1, which does the first fetch. ELEVEN steps since item 37's re-timing: eight, plus three waits that put each adder write in slot 5 with its read in slot 7",
+check(mode(W1, 1) === HLOP.inc, "W1 step 1 - PTR + 1 - is an INCREMENT")
+check(PROGRAM[W6].length === 8,
+  "⭐ 16 item 39: W6 is eight steps and no longer primes - it chains into W1, which does the first fetch",
   `${PROGRAM[W6].length}`)
 check(PROGRAM[W6].every((s) => !s.srd),
   "and it fetches no sample of its own, which is what made the byte accounting uniform")
-check(mode(W2, DEC(W2)) === HLOP.dec && mode(W6, DEC(W6)) === HLOP.dec,
-  `⭐ and W2 step ${DEC(W2)} / W6 step ${DEC(W6)} - 16 item 36's CNT = 2*LEN - 1 - is a DECREMENT`)
-check(mode(W1, DEC(W1)) === HLOP.dec,
-  `⛔ W1 step ${DEC(W1)} - CNT - 1 - is a DECREMENT, and bit 16 takes the borrow`)
-check(mode(W2, CARRY(W2)) === HLOP.carry,
-  `⛔ W2 step ${CARRY(W2)} - CNT = LEN + LEN - is a CARRY, and bit 16 IS the carry out`)
-check(mode(W6, CARRY(W6)) === HLOP.carry, `W6 step ${CARRY(W6)} - the same doubling - is a CARRY`)
-check(mode(W2, PASS(W2)) === HLOP.pass, `W2 step ${PASS(W2)} - LC -> PTR - is a PASS`)
-check(mode(W6, PASS(W6)) === HLOP.pass, `W6 step ${PASS(W6)} - the same copy - is a PASS`)
-check(mode(W3, stepAt(W3, (s) => s.host === "commit")) === HLOP.pass,
-  `W3 step ${stepAt(W3, (s) => s.host === "commit")} - the host's commit - is a PASS`)
-check(mode(W3, stepAt(W3, (s) => s.host === "sptr" && s.sum)) === HLOP.inc,
-  `W3 step ${stepAt(W3, (s) => s.host === "sptr" && s.sum)} - SPTR + 1 - is an INCREMENT`)
+check(mode(W2, 5) === HLOP.dec && mode(W6, 5) === HLOP.dec,
+  "⭐ and W2/W6 step 5 - 16 item 36's CNT = 2*LEN - 1 - is a DECREMENT")
+check(mode(W1, 6) === HLOP.dec,
+  "⛔ W1 step 6 - CNT - 1 - is a DECREMENT, and bit 16 takes the borrow")
+check(mode(W2, 3) === HLOP.carry,
+  "⛔ W2 step 3 - CNT = LEN + LEN - is a CARRY, and bit 16 IS the carry out")
+check(mode(W6, 3) === HLOP.carry, "W6 step 3 - the same doubling - is a CARRY")
+check(mode(W2, 1) === HLOP.pass, "W2 step 1 - LC -> PTR - is a PASS")
+check(mode(W6, 1) === HLOP.pass, "W6 step 1 - the same copy - is a PASS")
+check(mode(W3, 2) === HLOP.pass, "W3 step 2 - the host's commit - is a PASS")
+check(mode(W3, 4) === HLOP.inc, "W3 step 4 - SPTR + 1 - is an INCREMENT")
 
 const drivers = WTS.flatMap((wt) => PROGRAM[wt].map((s, t) => ({ wt, t, s })))
   .filter((x) => x.s.drv)

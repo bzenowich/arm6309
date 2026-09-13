@@ -2466,3 +2466,62 @@ That is correct and benign: `RUN` is itself one of the control store's address l
 (`ADDRESSED`), so a step signal reading another step signal is the sequencer's own state
 machine and there is nothing to absorb it into. The exemption is named and commented
 rather than silent.
+
+---
+
+## §10.2.3 / §10.2.5 / §16 items 32, 37 — the across-the-walk re-timing is reverted (2026-09-12)
+
+§16 item 37's re-timing was built earlier the same day (the entry above) and is reverted
+here. It gave the `'283` chain **229 ns** instead of 53 by putting each sequence's step 0
+in slot 7 and every step after it in the next work slot. **It stopped the card playing.**
+
+### What it broke, and what found it
+
+`check:modplay` fell from 18 claims, 0 failed to **12 of 18** — on the single-channel
+`00_notes` probe and the four-channel `14_fourchan` probe alike:
+
+| | `00_notes` | `14_fourchan` |
+|---|---|---|
+| without the re-timing | 18 ok, 0 failed, 464,841-byte render | 18 ok, 0 failed, 2,976,216-byte render |
+| with it | 12 ok, **6 failed**, **42-byte** render | 12 ok, **6 failed**, **42-byte** render |
+
+The six: 129 of 130 uploaded bytes were not in the card's sample RAM, `TIMER` at `$20`
+read `0000` after `376b` was written, 22 of the card's own §8.2 ticks never came, all 113
+tick periods were wrong, no volume converter was ever captured, and none reached full
+scale. Converter changes fell from **16,946 to 2**, and the A/B scored
+`spectral corr median 0.0000` on both channels against `refplayer`'s 0.9988.
+
+⛔ **`audio_tb` passed 67 claims, 0 failed throughout.** It loads `card.SRAM` by backdoor
+rather than uploading through `SDATA`, so the one path that broke is the one it does not
+drive. `modplay_tb` is the only bench that does — and `check:modplay` is outside both
+`npm run check` and `npm run build:all`, so no aggregate command ran it.
+
+⚠ **The figure that made it look verified was inherited rather than measured.** `487ddd7`
+wrote *"18 claims, 0 failed"* into §16 item 37 while its own commit message says
+`check:modplay not run`; the re-timing commit then reported the same number.
+
+### What the numbers go back to
+
+| | with the re-timing | reverted |
+|---|---|---|
+| W1 / W2 / W3 / W6 steps | 8 / 8 / 9 / 11 | **7 / 6 / 6 / 8** (W5 13 throughout) |
+| `PROGRAM` total | 49 steps | **40** |
+| a channel event | eight work slots | **seven** |
+| throughput floor | `PER` >= 11, ~14 with the start wait | **`PER` >= 10** |
+| margin at ProTracker's top note | 10.7x (56 of 600) | **13.6x (44 of 600)** |
+| margin at `PER` = 30 | 2.7x (217 of 600) | **3.0x (196 of 600)** |
+| U2 logic cells | 128 of 128 | **124 of 128** |
+| U2 I/O | 62 of 64 | **63 of 64** |
+| U2 cascades / foldback | 1 / 47 | **2 / 52** |
+| U2 peak LAB fan-in | 38 of 40 | **36 of 40**, seven of eight blocks |
+
+⚠ **The reverted margins are measured, not restored from the table in the entry above.**
+That table recorded the pre-re-timing margins as 12x and 3.8x and the peak fan-in as 35;
+`audio_tb` and `cpld/aseq.fit` on the reverted design say 13.6x, 3.0x and 36.
+
+### The item is open again
+
+§16 item 37 sub-item 3 is reopened and the `'283` chain is back to **192 ns into a 53 ns
+window**, which is the defect the re-timing existed to fix. Whatever replaces it has to
+keep `check:modplay` green on both probes, and the host's `SDATA` upload path — which is
+what the nine wait steps disturbed — is the thing to watch.
