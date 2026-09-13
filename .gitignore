@@ -3,6 +3,9 @@ build-*/
 *.o
 *.elf
 *.bin
+# ... except the boot ROM image, which is what the machine executes: a design
+# output, tracked like the fitted .jed files. software/boot/README.md.
+!software/boot/boot.bin
 *.hex
 *.map
 *.lst

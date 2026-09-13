@@ -880,10 +880,10 @@ decisions here, because other documents cite them by item number.
     | **Boots on** | any one module in **any one socket** — the walk is stackless, so it runs before there is a stack, and the stack goes at the top of the lowest populated socket. No socket is mandatory |
     | ⚠ **The trap it is designed around** | `D0`–`D7` has no pull-ups, so an empty socket reads back **the pattern you just wrote**. The walk reads a known ROM byte between the store and the load, and uses two complementary patterns |
     | ⭐ **And it detects the wrong module** | an address-line pass on physical `A10` catches a 1M × 8 module in a socket wired for 4M × 8 — one that answers and silently loses data |
-    | Evidence | `mainboard_tb` runs the walk for 0, 1, 2, 3 and 4 populated sockets and against a modelled 1M × 8, with an empty socket modelled as a bus **holding the last driven byte** |
+    | Evidence | ⭐ **`boot.asm` §1a runs it on the CPU**: `machine_tb` boots on 0, 1, 2, 3 and 4 populated sockets and on four with a 1M × 8 in socket 0, which it rejects. `mainboard_tb` runs the same walk as literal bus cycles. Both model an empty socket as a bus **holding the last driven byte** |
 
-    ⚠ **What is still owed is `software/`**: the memory descriptor the monitor leaves for
-    NitrOS-9, and the tool that builds the ROM at all — `ram.md` §11 item 10.
+    The memory descriptor is defined in `software/boot/README.md`: the socket bitmap and
+    the total in 8 KB blocks, at the base of the lowest populated socket.
 
 14. **⭐ CLOSED 2026-09-09 — four 10 kΩ pull-downs park physical `A24`–`A21`.** Item 12
     parks `A20`–`A13`, which are the eight that reach a slot. The top four come from the

@@ -995,3 +995,15 @@ sixteen map writes of §7.2's boot sequence were a bus fight. And an ordinary I/
 selected neither, so eight backplane lines floated into six cards' inputs. The enable is
 now the literal complement of U9's chip enable, three product terms, and the vector page
 falls out of it with no term of its own. `design-review2.md` §3.4.
+
+## machine.md §5 item 13 — the walk runs in the boot ROM (2026-09-12)
+
+`software/boot/boot.asm` §1a implements the walk and writes the memory descriptor;
+`machine_tb` executes it against every population (workplan 2026-09-12 P2 item 8).
+
+### What item 13 said
+
+    | Evidence | `mainboard_tb` runs the walk for 0, 1, 2, 3 and 4 populated sockets and against a modelled 1M × 8, with an empty socket modelled as a bus **holding the last driven byte** |
+
+    ⚠ **What is still owed is `software/`**: the memory descriptor the monitor leaves for
+    NitrOS-9, and the tool that builds the ROM at all — `ram.md` §11 item 10.

@@ -53,11 +53,12 @@ ARGS=""
 [ -n "$AFTER" ] && ARGS="$ARGS +after=$AFTER"
 [ -n "$HB" ] && ARGS="$ARGS +hb=$HB"
 
-# ⭐ FOUR RUNS, AND THREE OF THEM MUST FAIL THE ROM. `main` is the boot; `e1`,
-# `alias` and `e2` are machine_tb's +scenario= runs, in which boot.asm's error
-# paths are the right answer and are asserted as such (workplan 2026-09-12 P1
-# item 7). SCENARIOS narrows it: SCENARIOS=main for the boot alone.
-SCENARIOS=${SCENARIOS:-"main e1 alias e2"}
+# ⭐ SEVEN RUNS. `main` is the boot on four SIMMs. `s1`-`s3` are the other
+# populations ram.md 6.4.1's walk must report, and `alias` a 1M x 8 module it
+# must reject. In `e1` (no SIMM) and `e2` (a corrupted VRAM byte) boot.asm's
+# error path is the right answer and is asserted as such. SCENARIOS narrows it:
+# SCENARIOS=main for the boot alone.
+SCENARIOS=${SCENARIOS:-"main e1 s1 s2 s3 alias e2"}
 ok=0; bad=0; missing=0
 for sc in $SCENARIOS; do
   log="$OUT/$sc.log"

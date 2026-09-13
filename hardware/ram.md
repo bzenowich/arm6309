@@ -642,16 +642,21 @@ put a stack, and the stack then goes at the top of the **lowest populated** sock
 which means the machine boots on any one module in any one socket, not only on socket 0.
 `machine.md` §7.2's sequence carries it.
 
-⭐ **And the answer has to be handed on.** The monitor leaves a **memory descriptor** —
-a socket-populated bitmap and a total in 8 KB blocks — at a fixed offset in the first
-populated socket, and NitrOS-9's boot reads it there rather than probing again. The
-format is `software/` work and belongs with §11 item 10's "nothing burns the ROM yet";
-what is decided here is that **the hardware will never tell anybody, so something in the
-ROM must.**
+⭐ **And the answer has to be handed on.** The monitor leaves a **memory descriptor**
+at the base of the lowest populated socket, and NitrOS-9's boot reads it there rather
+than probing again. **The hardware will never tell anybody, so the ROM must.** Its
+format is `software/boot/README.md`'s: byte 0 is the bitmap of sockets that passed, and
+bytes 1–2 are the total in 8 KB blocks, big-endian.
 
 #### It is simulated, not asserted
 
-`gal/verilog/mainboard_tb.sv` runs the walk as bus cycles against `mainboard.v`, which
+⭐ **The walk is in the boot ROM** — `software/boot/boot.asm` §1a — and `machine_tb`
+executes it on a 6809E core against **0, 1, 2, 3 and 4** populated sockets and against a
+1M × 8 module in socket 0. In each case it asserts the descriptor, all sixteen map
+entries and where stage 2's bytes land, independently of the ROM's own compares. With
+the 1M × 8 module, the walk rejects socket 0 and the machine boots on socket 1.
+
+`gal/verilog/mainboard_tb.sv` also runs the walk, as literal bus cycles against `mainboard.v`, which
 models an empty socket as **a bus holding the last driven byte** rather than a
 convenient rail — the model has to be pessimistic here or the walk proves nothing. The
 walk is run for **0, 1, 2, 3 and 4** populated sockets and reports each correctly, and

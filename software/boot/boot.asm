@@ -12,8 +12,8 @@
 * here runs against a behavioural model of the machine; there isn't one.
 *
 * WHAT IT DOES, in order:
-*   1. leaves boot mode with a map it wrote itself
-*   2. proves the SIMM answers, because everything after needs a stack
+*   1. leaves boot mode with a map it wrote itself, and sizes the SIMM bank
+*   2. proves the chosen SIMM answers, and that TASK selects half the map
 *   3. loads 256 palette entries
 *   4. paints an 8-bit test pattern with the card's span writer
 *   5. draws a vertical stripe with 7.2's WADV chaining
@@ -68,6 +68,9 @@ STORET  EQU     RAMWIN+$100     19 item 1's 96-byte store target, clear of the
 *                               variables at +$10..$1B and of the stack, which
 *                               descends from $E000
 STACK   EQU     $E000           grows down through block 6
+TASKT   EQU     $A000           block 5: a different SIMM page in each task
+DESCMAP EQU     $0000           the memory descriptor, block 0 (1a)
+DESCBLK EQU     $0001
 
 * machine.md 3: $FF00-$FF2F is free and decodes nowhere.  The last byte of it
 * is this simulation's progress port -- machine_tb watches the bus for it, and
@@ -89,7 +92,9 @@ P_LSTB  EQU     $21             ... and B - one HSCROLL MOVE per line
 P_TILE  EQU     $30             6.4's cell mode - a tilemap, drawn by the CPU
 P_VREAD EQU     $40             graphics.md 11 - VRAM read back, every byte right
 P_BADV  EQU     $E2             ... a byte read back wrong; vidx says which
-P_BADR  EQU     $E1             the SIMM did not answer
+P_BADR  EQU     $E1             no SIMM socket passed the walk, or block 6 failed
+P_TASK  EQU     $07             TASK 1's map is live and distinct from TASK 0's
+P_BADT  EQU     $E3             ... it is not
 P_ST0   EQU     $50             19 item 1 - the store-rate blocks: A begins
 P_ST1   EQU     $51             ... A done (32 stores), B begins
 P_ST2   EQU     $52             ... B done (64 stores)
@@ -133,6 +138,88 @@ mapl    lda     ,u+
         clra
         sta     RUNSTB          RUN := 1, and TASK := 0 again (A0 is not decoded)
 
+*==============================================================================
+* 1a. Size the bank.  ram.md 6.4.1: nothing in this machine knows how much
+*     memory it has -- a 30-pin SIMM has no presence-detect pins -- so the ROM
+*     walks the four sockets.  STILL STACKLESS: no RAM is known to work yet, so
+*     no JSR, and the result lives in registers until a socket is chosen.
+*
+*     Per socket n, block 0 -> physical 4(n+1) MB:
+*       $A5 and $5A, each read back with a ROM read between the store and the
+*       load -- D0-D7 has no pull-ups, so without it an EMPTY socket reads back
+*       the byte the store left on the bus, and passes;
+*       then $11 at +$0000 and $22 at +$0400 -- physical A10, which a 1M x 8
+*       module ignores (ram.md 6.3.1), so an aliasing module reads $22 back.
+*     A socket that fails any of the three is not used.  A faulty module and an
+*     absent one are the same answer, which is the right one for a boot ROM.
+*
+*     U's low byte collects the bitmap: bits are distinct, so OR is ADD, and
+*     LEAU A,U is an add that needs no RAM.
+*==============================================================================
+        ldu     #0
+        ldb     #$02            socket 0: map high byte (n+1)*2, A24..A22 = n+1
+walk    stb     MAPHI           entry 0 = TASK 0, block 0
+        clra
+        sta     MAPLO
+        lda     #$A5
+        sta     $0000
+        lda     rombyte         drive the bus with something else
+        lda     $0000
+        cmpa    #$A5
+        bne     wnext
+        lda     #$5A
+        sta     $0000
+        lda     rombyte
+        lda     $0000
+        cmpa    #$5A
+        bne     wnext
+        lda     #$11            the address pass
+        sta     $0000
+        lda     #$22
+        sta     $0400           physical A10
+        lda     rombyte
+        lda     $0000
+        cmpa    #$11
+        bne     wnext
+        ldx     #sockbit-2      B = 2,4,6,8 -> bit 1,2,4,8
+        lda     b,x
+        leau    a,u
+wnext   addb    #2
+        cmpb    #$0A
+        bne     walk
+
+        tfr     u,d             B = the bitmap
+        tstb
+        lbeq    rambad          no socket answered
+
+* The stack, the variables and every SIMM block go in the LOWEST populated
+* socket, so the machine boots on any one module in any one socket.  Ten map
+* entries name SIMM pages -- blocks 0, 3, 4, 5, 6 of both tasks.
+        ldx     #lowhi
+        lda     b,x             that socket's map high byte
+        ldx     #MAPHI
+        sta     ,x
+        sta     3,x
+        sta     4,x
+        sta     5,x
+        sta     6,x
+        sta     8,x
+        sta     11,x
+        sta     12,x
+        sta     13,x
+        sta     14,x
+
+* The memory descriptor, at the base of that socket: logical $0000 now.
+* ram.md 6.4.1 - the hardware will never tell anybody, so the ROM must.
+*   +0   bitmap of the sockets that passed, b0 = socket 0
+*   +1   total memory in 8 KB blocks, big-endian (512 per 4 MB socket)
+        stb     DESCMAP
+        ldx     #blks256
+        lda     b,x             sockets x 2 = blocks / 256
+        sta     DESCBLK
+        clra
+        sta     DESCBLK+1
+
         lds     #STACK          the first instruction after which a JSR works
         lda     #P_BOOT
         sta     SIMPORT
@@ -157,7 +244,41 @@ mapl    lda     ,u+
         bne     rambad
         lda     #P_RAM
         sta     SIMPORT
+
+*==============================================================================
+* 2b. The other task.  machine.md 3: the map index is {TASK, block}, so half of
+*     the map is TASK 1 -- and until this, TASK was only ever 0 and those eight
+*     entries were written and never used.  maptab points task 1's block 5 at a
+*     different SIMM page from task 0's, so one logical address, $A000, is two
+*     physical bytes; the ROM stores a different value under each task and
+*     reads both back.  Blocks 6 and 7 are the same in both tasks, so the stack
+*     and the instruction stream do not move when TASK does.
+*==============================================================================
+        lda     #$C3
+        sta     TASKT           task 0's block 5
+        lda     #$01
+        sta     TASKR           TASK := 1 -- D0 is the task; RUN is not touched
+        lda     #$3C
+        sta     TASKT           task 1's block 5: another page
+        clra
+        sta     TASKR           TASK := 0
+        lda     TASKT
+        cmpa    #$C3
+        bne     taskbad
+        lda     #$01
+        sta     TASKR
+        lda     TASKT
+        cmpa    #$3C
+        bne     taskbad
+        clra
+        sta     TASKR           and leave it at 0
+        lda     #P_TASK
+        sta     SIMPORT
         bra     strate
+
+taskbad lda     #P_BADT
+        sta     SIMPORT
+        jmp     halt
 
 
 rambad  lda     #P_BADR
@@ -1099,7 +1220,9 @@ vblin   lda     VSTAT           ... then for the edge into it
 *   block 1,2         the video ring, physical 0.5 MB    (A20:A19 = 01)
 *   block 7           the boot ROM's own page 0, 2 MB    (A21 = 1)
 *
-* Task 1's eight entries are the same, so a task switch changes nothing yet.
+* Task 1's eight entries are the same except block 5, which 2b uses to prove
+* the task bit selects half the map.  The SIMM entries' high byte, $02, is
+* socket 0's and 1a rewrites it for the lowest socket that passed.
 * ram.md 5.2 is the physical map they name.
 *==============================================================================
 maptab
@@ -1116,11 +1239,18 @@ maptab
         FCB     $41,$00
         FCB     $03,$02
         FCB     $04,$02
-        FCB     $05,$02
+        FCB     $07,$02         block 5  $A000  SIMM + 7    <- task 1 only
         FCB     $06,$02
         FCB     $00,$01
 
 rombyte FCB     $C3             a known ROM byte, for the read-back test
+
+* 1a's tables, indexed by B.
+sockbit FCB     1,0,2,0,4,0,8   B = 2,4,6,8 (from sockbit-2) -> the socket's bit
+lowhi   FCB     $00,$02,$04,$02,$06,$02,$04,$02 bitmap -> lowest socket's high byte
+        FCB     $08,$02,$04,$02,$06,$02,$04,$02
+blks256 FCB     0,2,2,4,2,4,4,6 bitmap -> sockets x 2, which is blocks / 256
+        FCB     2,4,4,6,4,6,6,8
 
 *==============================================================================
 * Variables.  Block 6, which is the SIMM -- so nothing here is touched before

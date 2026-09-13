@@ -895,3 +895,18 @@ physical 2 MB was reachable. §4.3 is a third layout that costs neither: two win
 of the 32 bytes at `$FF80`–`$FF9F` that decoded nowhere, outside the geographic window,
 with U3 the same size and U9 one pin smaller. §4.1 and §4.2 are kept for what each
 costs, not for what the board does.
+
+## ram.md §6.4.1 — the walk is in the boot ROM, and the descriptor has a format (2026-09-12)
+
+`software/boot/boot.asm` §1a now runs the walk before `LDS`, and `machine_tb` runs it
+against every population (workplan 2026-09-12 P2 item 8). The descriptor format was
+deferred to `software/`; it is defined in `software/boot/README.md`.
+
+### What §6.4.1 said about the descriptor
+
+⭐ **And the answer has to be handed on.** The monitor leaves a **memory descriptor** —
+a socket-populated bitmap and a total in 8 KB blocks — at a fixed offset in the first
+populated socket, and NitrOS-9's boot reads it there rather than probing again. The
+format is `software/` work and belongs with §11 item 10's "nothing burns the ROM yet";
+what is decided here is that **the hardware will never tell anybody, so something in the
+ROM must.**

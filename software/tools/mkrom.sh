@@ -40,7 +40,30 @@ od -An -v -tx1 -w16 "$OUT/boot.bin" | tr -s ' ' '\n' | grep -v '^$' > "$OUT/boot
 lines=$(wc -l < "$OUT/boot.hex")
 [ "$lines" -eq 8192 ] || { echo "FAIL  boot.hex has $lines records, want 8192"; exit 1; }
 
-# The reset vector, read back out of the image the machine will actually run,
-# because "it assembled" and "it will fetch" are different claims.
-vec=$(od -An -v -tx1 -j 8190 -N 2 "$OUT/boot.bin" | tr -d ' ')
-echo "ok    boot.bin 8192 bytes, reset vector at ROM \$1FFE = \$$vec"
+# ⛔ THE VECTORS ARE COMPARED, NOT PRINTED. This used to print the reset vector
+# behind an `ok` prefix without comparing it to anything, so a mis-assembled
+# vector read as a claim. Each of the seven is now checked three ways: the two
+# bytes in boot.bin at ROM $1FF2-$1FFF, the value A09's listing says that FDB
+# assembled to, and the address of the label it names - so "it assembled",
+# "the image holds it" and "it points where the source says" are one claim.
+fail=0
+for v in FFF2:SWI3 FFF4:SWI2 FFF6:FIRQ FFF8:IRQ FFFA:SWI FFFC:NMI FFFE:RESET; do
+  addr=${v%%:*}; name=${v#*:}
+  off=$(( 0x$addr - 0xE000 ))
+  img=$(od -An -v -tx1 -j "$off" -N 2 "$OUT/boot.bin" | tr -d ' \n' | tr 'a-f' 'A-F')
+  # " FFFE E000                    FDB     reset           RESET"
+  line=$(grep -E "^ *$addr [0-9A-F]{4} +FDB " "$OUT/boot.lst" | head -1)
+  lst=$(echo "$line" | awk '{print $2}')
+  label=$(echo "$line" | awk '{print $4}')
+  # " E000 4F              reset   clra" - the label's own definition
+  def=$(grep -E "^ *[0-9A-F]{4} [0-9A-F]* +$label( |$)" "$OUT/boot.lst" | head -1 | awk '{print $1}')
+  if [ -z "$line" ] || [ -z "$def" ] || [ "$img" != "$lst" ] || [ "$img" != "$def" ]; then
+    echo "FAIL  $name vector: image \$$img, listing \$${lst:-?}, label '${label:-?}' at \$${def:-?}"
+    fail=1
+  fi
+done
+# And RESET is the ORG: machine.md 7.2 fetches the first instruction from $E000.
+reset=$(od -An -v -tx1 -j 8190 -N 2 "$OUT/boot.bin" | tr -d ' \n' | tr 'a-f' 'A-F')
+[ "$reset" = "E000" ] || { echo "FAIL  RESET vector is \$$reset, want \$E000"; fail=1; }
+[ "$fail" -eq 0 ] || exit 1
+echo "ok    boot.bin is 8192 bytes, and all seven vectors match the image, the listing and their labels (RESET = \$$reset)"

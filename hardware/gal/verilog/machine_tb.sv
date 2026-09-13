@@ -184,17 +184,48 @@ module machine_tb;
 
   /* ---- +scenario=: the runs that are not the boot ----------------------- *
    *
-   *   main    the whole ROM, every claim below          (the default)
-   *   e1      no SIMM in any socket - boot.asm must report $E1
+   *   main    four SIMMs, the whole ROM, every claim below   (the default)
+   *   e1      no SIMM in any socket - the walk finds nothing, $E1
+   *   s1..s3  one, two, three sockets populated - the walk reports each
+   *   alias   four sockets, a 1M module in socket 0 - the walk rejects it and
+   *           the machine boots on socket 1
    *   e2      a tile byte corrupted behind the ROM's back - it must report $E2
-   *   alias   a 1M module in socket 0 - the ROM's own stage 2 PASSES, and the
-   *           independent check must say where its bytes really went
    *
    * ⛔ WHY THE LAST THREE EXIST. An error path that never runs is an error path
    * that does not work, and a claim that cannot fail is not a claim. Each one
    * is a run in which the right answer is a failure, asserted as such. */
   string scenario = "main";
   initial void'($value$plusargs("scenario=%s", scenario));
+
+  // What each population must produce: the bitmap the walk reports, and the
+  // socket everything else lands in. ram.md 5.2: socket n is dram[n << 22].
+  function automatic int pop_bitmap();
+    case (scenario)
+      "e1": return 'h0;  "s1": return 'h1;  "s2": return 'h3;  "s3": return 'h7;
+      "alias": return 'hE;
+      default: return 'hF;
+    endcase
+  endfunction
+  function automatic int pop_base();
+    return (scenario == "alias") ? (1 << 22) : 0;
+  endfunction
+  function automatic int pop_count();
+    int c = 0;
+    for (int b = 0; b < 4; b++) if (pop_bitmap() & (1 << b)) c++;
+    return c;
+  endfunction
+
+  /* ---- ram.md 6.4.1's walk, watched on the bus -------------------------- *
+   * Every write to $FF90 before the stack is up is the walk pointing block 0
+   * at the next socket. The order and the count are the claim that it visited
+   * all four whatever it found. */
+  logic [7:0] walk_hi [0:7];
+  int         walk_n = 0;
+  always @(negedge e)
+    if (progress == 8'h00 && run && la == 16'hFF90 && !rw) begin
+      if (walk_n < 8) walk_hi[walk_n] = cpu_dout;
+      walk_n++;
+    end
 
   /* ---- boot.asm stage 2, read independently of the ROM ------------------ *
    *
@@ -208,7 +239,8 @@ module machine_tb;
    * to $C000 in stage 2 must be in dram[$00C000] one E cycle later (block 6 is
    * SIMM 0 + 6 x 8 KB), and every load of $C000 must be a DRIVEN byte - not the
    * bus holding its last value, ram.md 6.4.1's trap - equal to that cell. */
-  localparam int DRAM_C000 = 32'h00C000;
+  int         DRAM_C000;
+  initial DRAM_C000 = 32'h00C000;
   int         st2_stores = 0, st2_store_bad = 0, st2_loads = 0, st2_load_bad = 0;
   logic [7:0] st2_seq [0:3];
   logic [7:0] st2_pend_v;
@@ -541,30 +573,102 @@ module machine_tb;
                  fx < 0 ? "" : $sformatf(", first at x=%0d line=%0d: got %04h", fx, fy, shot[fy][fx])));
   endtask
 
+  // ---- claims shared by the boot and the population runs -----------------
+  task automatic walk_claims();
+    bit order;
+    order = (walk_n >= 4);
+    for (int k = 0; k < 4 && k < walk_n; k++)
+      if (walk_hi[k] !== 8'((k + 1) * 2)) order = 0;
+    ok(order,
+       $sformatf("⭐ ram.md 6.4.1's walk visits all four sockets in order - block 0 -> $02, $04, $06, $08 (%0d writes)",
+                 walk_n));
+    // ... and then the fix-up points block 0 at the socket it chose, or, with
+    // nothing found, nothing more is written.
+    if (pop_bitmap() == 0)
+      ok(walk_n == 4, $sformatf("and with nothing found, no socket is chosen (%0d writes)", walk_n));
+    else
+      ok(walk_n == 5 && walk_hi[4] === (pop_base() == 0 ? 8'h02 : 8'h04),
+         $sformatf("and block 0 is then pointed at the lowest socket that passed (%0d writes, last %02h)",
+                   walk_n, walk_n > 4 ? walk_hi[4] : 8'h00));
+  endtask
+
+  task automatic boot_claims();
+    int want_hi, bad;
+    want_hi = pop_base() == 0 ? 8'h02 : 8'h04;
+    // The descriptor, at the base of the lowest socket that passed.
+    ok(m.mb.peek_dram(pop_base()) === 8'(pop_bitmap())
+       && {m.mb.peek_dram(pop_base() + 1), m.mb.peek_dram(pop_base() + 2)} === 16'(pop_count() * 512),
+       $sformatf("⭐ THE ROM REPORTS A SIZE: the descriptor at socket %0d's base says bitmap %02h and %0d blocks (want %02h and %0d)",
+                 pop_base() >> 22, m.mb.peek_dram(pop_base()),
+                 {m.mb.peek_dram(pop_base() + 1), m.mb.peek_dram(pop_base() + 2)},
+                 pop_bitmap(), pop_count() * 512));
+    // Every one of the sixteen map entries, not three of them.
+    bad = 0;
+    for (int t = 0; t < 2; t++)
+      for (int b = 0; b < 8; b++) begin
+        logic [7:0] lo, hi;
+        case (b)
+          1: begin lo = 8'h40; hi = 8'h00; end
+          2: begin lo = 8'h41; hi = 8'h00; end
+          7: begin lo = 8'h00; hi = 8'h01; end
+          default: begin
+            lo = (t == 1 && b == 5) ? 8'h07 : 8'(b);
+            hi = 8'(want_hi);
+          end
+        endcase
+        if (m.mb.map_lo_at(t * 8 + b) !== lo || m.mb.map_hi_at(t * 8 + b) !== hi) bad++;
+      end
+    ok(bad == 0,
+       $sformatf("all sixteen map entries are what boot.asm means - both tasks, SIMM pages in socket %0d (%0d wrong)",
+                 pop_base() >> 22, bad));
+  endtask
+
+  task automatic stage2_claims();
+    ok(st2_stores == 2 && st2_seq[0] === 8'hA5 && st2_seq[1] === 8'h5A && st2_store_bad == 0,
+       $sformatf("⭐ and the stores are in the SIMM, read without the ROM: $A5 then $5A reached dram[$%06h], each within one E cycle (%0d stores, %0d not in the cell)",
+                 DRAM_C000, st2_stores, st2_store_bad));
+    ok(st2_loads == 2 && st2_load_bad == 0,
+       $sformatf("⭐ and each load was a DRIVEN byte equal to that cell - not the bus holding its last value (%0d loads, %0d wrong or undriven)",
+                 st2_loads, st2_load_bad));
+  endtask
+
+  task automatic task_claims();
+    ok(m.mb.peek_dram(pop_base() + 32'h00A000) === 8'hC3
+       && m.mb.peek_dram(pop_base() + 32'h00E000) === 8'h3C,
+       $sformatf("⭐ ONE LOGICAL ADDRESS, TWO PHYSICAL BYTES: $A000 under TASK 0 is SIMM page 5 (holds %02h, want C3) and under TASK 1 is page 7 (holds %02h, want 3C)",
+                 m.mb.peek_dram(pop_base() + 32'h00A000), m.mb.peek_dram(pop_base() + 32'h00E000)));
+  endtask
+
   // ---- the scenarios that must fail, asserted as failures ----------------
   task automatic run_scenario();
     if (scenario == "e1") begin
       $display("");
-      $display("E1. No SIMM in any socket - boot.asm's rambad");
+      $display("E1. No SIMM in any socket - ram.md 6.4.1's walk finds nothing");
       $display("");
-      wait_progress(8'h01, 2000, "the machine leaves boot mode with no SIMM fitted");
-      wait_progress(8'hE1, 4000, "⭐ and stage 2 reports $E1 - the SIMM did not answer");
-      ok(st2_stores == 1 && st2_loads == 1,
-         $sformatf("after exactly one store and one load: the first compare is the one that fails (%0d, %0d)",
-                   st2_stores, st2_loads));
-      ok(progress_writes == 2,
-         $sformatf("and nothing is reported after it - rambad halts (%0d progress writes)", progress_writes));
-    end else if (scenario == "alias") begin
+      wait_progress(8'hE1, 4000, "⭐ the walk reports $E1 - no socket answered");
+      walk_claims();
+      ok(st2_stores == 0 && progress_writes == 1,
+         $sformatf("and nothing ran after it - no stack, no stage 2, one progress write (%0d stores to $C000, %0d writes)",
+                   st2_stores, progress_writes));
+    end else if (scenario == "s1" || scenario == "s2" || scenario == "s3"
+                 || scenario == "alias") begin
       $display("");
-      $display("ALIAS. A 1M x 8 module in socket 0 - ram.md 11 item 7");
+      if (scenario == "alias")
+        $display("ALIAS. Four sockets, a 1M x 8 module in socket 0 - ram.md 11 item 7");
+      else
+        $display("%s. %0d socket(s) populated - ram.md 6.4.1", scenario.toupper(), pop_count());
       $display("");
-      wait_progress(8'h02, 4000, "the ROM's own stage 2 PASSES against an aliasing module");
-      ok(st2_store_bad > 0,
-         $sformatf("⭐ and the independent check does not: the stores are not in dram[$00C000] (%0d of %0d missing)",
-                   st2_store_bad, st2_stores));
-      ok(m.mb.peek_dram(32'h006000) === 8'h5A,
-         $sformatf("⭐ they are at $006000, where a module with no MA10 puts logical $C000 (holds %02h)",
-                   m.mb.peek_dram(32'h006000)));
+      wait_progress(8'h01, 2000, "the walk passes and the stack is up");
+      walk_claims();
+      boot_claims();
+      wait_progress(8'h02, 4000, "stage 2 passes, in the socket the walk chose");
+      stage2_claims();
+      wait_progress(8'h07, 4000, "TASK 1's map is live");
+      task_claims();
+      if (scenario == "alias")
+        ok(m.mb.peek_dram(32'h00C000) !== 8'h5A,
+           $sformatf("⭐ and socket 0's aliasing module holds none of stage 2's bytes - the machine is not using it (dram[$00C000] = %02h)",
+                     m.mb.peek_dram(32'h00C000)));
     end else if (scenario == "e2") begin
       $display("");
       $display("E2. A tile byte corrupted behind the ROM's back - boot.asm's vbad");
@@ -635,7 +739,11 @@ module machine_tb;
     // is the core's own synchroniser depth; this is twenty.
     // The populations are set before reset, as a socket is filled before power.
     if (scenario == "e1")    m.mb.set_simms(0);
+    if (scenario == "s1")    m.mb.set_simms(1);
+    if (scenario == "s2")    m.mb.set_simms(2);
+    if (scenario == "s3")    m.mb.set_simms(3);
     if (scenario == "alias") m.mb.set_small(4'b0001);
+    DRAM_C000 = pop_base() + 32'h00C000;
 
     repeat (240) @(posedge CLK25);
     n_reset = 1;
@@ -660,18 +768,17 @@ module machine_tb;
          "block 1 points at the video ring, physical A20:A19 = 01 - ram.md 5.2");
       ok(m.mb.map_lo_at(6) === 8'h06 && m.mb.map_hi_at(6) === 8'h02,
          "block 6 points at the first SIMM, physical 4 MB");
+      walk_claims();
+      boot_claims();
     end
 
     $display("");
     $display("2. The SIMM - ram.md 6.4.1's read-back through a driven bus");
     $display("");
     wait_progress(8'h02, 4000, "a byte survives a round trip to DRAM and back");
-    ok(st2_stores == 2 && st2_seq[0] === 8'hA5 && st2_seq[1] === 8'h5A && st2_store_bad == 0,
-       $sformatf("⭐ and the stores are in the SIMM, read without the ROM: $A5 then $5A reached dram[$00C000], each within one E cycle (%0d stores, %0d not in the cell)",
-                 st2_stores, st2_store_bad));
-    ok(st2_loads == 2 && st2_load_bad == 0,
-       $sformatf("⭐ and each load was a DRIVEN byte equal to that cell - not the bus holding its last value (%0d loads, %0d wrong or undriven)",
-                 st2_loads, st2_load_bad));
+    stage2_claims();
+    wait_progress(8'h07, 4000, "TASK 1's map is live and distinct from TASK 0's");
+    task_claims();
 
     $display("");
     $display("3. The palette - 256 entries through 13's write path");

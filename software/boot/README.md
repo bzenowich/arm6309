@@ -12,9 +12,21 @@ npm run check:machine  # ... and run it on the real design
 | | |
 |---|---|
 | `boot.asm` | the source |
-| `boot.bin` | the 8 KB image — what goes in the first page of the `SST39SF040` |
+| `boot.bin` | the 8 KB image — what goes in the first page of the `SST39SF040`. ⭐ **Tracked** |
 | `boot.hex` | the same bytes as `$readmemh` records, loaded by `mainboard.v` |
 | `boot.lst` | A09's listing, and the only place the encodings are visible |
+
+⭐ **`boot.bin` is committed, and the other two are not.** The image is what the machine
+executes, so it is a design output in the sense `CLAUDE.md` means: the fitted `.jed`
+files are tracked for the same reason. It also makes the assembler a visible dependency.
+`fetch-a09.sh` builds A09 from `master`, so a change in A09's output shows up as a diff
+in `boot.bin` the next time `npm run rom` runs. `boot.hex` and `boot.lst` are derived
+from the same assembly and are rebuilt with it.
+
+`npm run rom` checks the image, not just that it assembled: 8,192 bytes, 8,192 `$readmemh`
+records, and all seven vectors. For each one, the two bytes in the image, the value in
+A09's listing and the address of the label its `FDB` names must agree, and RESET must
+be `$E000`.
 
 ## The assembler is not ours
 
@@ -102,6 +114,50 @@ that says so, `LRUN`, had **no path to the data bus**: `+$0F` `BSTAT` is a regis
 address and `LRUN` is a live macrocell, so a read returned a zero that meant nothing.
 The tilemap went into a pointer the engine was still walking. `LRUN` is `VSTAT` b4 now.
 
+## Sizing memory, and the descriptor it leaves
+
+§1a is `hardware/ram.md` §6.4.1's walk. It runs after `RUN` and before `LDS`, so it is
+stackless: its state is `B` (the socket under test) and `U` (the bitmap). For each socket,
+block 0 is pointed at its base, then:
+
+1. `$A5` and `$5A` are each stored and read back, with a ROM read in between. `D0`–`D7`
+   has no pull-ups, so without that read an empty socket returns the stored byte.
+2. `$11` is stored at `+$0000` and `$22` at `+$0400`, and `+$0000` must still read `$11`.
+   A 1M × 8 module ignores physical `A10` and fails this.
+
+The ten SIMM map entries (blocks 0, 3, 4, 5 and 6 of both tasks) then point at the
+**lowest socket that passed**, and the stack and variables go there. No socket is
+mandatory. If none passes, the ROM reports `$E1` and halts.
+
+**The memory descriptor**, at the base of that socket (logical `$0000`):
+
+| offset | contents |
+|---|---|
+| `+0` | bitmap of the sockets that passed, b0 = socket 0 |
+| `+1`–`+2` | total memory in 8 KB blocks, big-endian — 512 per 4 MB socket |
+
+§2b then proves `TASK` selects half the map. The two tasks' block 5 entries name
+different SIMM pages, so `$A000` is two physical bytes. The ROM stores `$C3` under
+TASK 0 and `$3C` under TASK 1, reads both back, and reports `$07`, or `$E3` on a mismatch.
+
+## Every wait in this ROM is unbounded, deliberately
+
+The ROM polls `VSTAT` in twelve loops and none of them has a timeout, so **a video card
+that never clears `SPANBUSY`, or never enters vertical blank, hangs the machine.** That
+is the design for a boot ROM with no output device:
+
+- **A timeout would have nowhere to report.** The progress port at `$FF2F` decodes
+  nowhere on real hardware, so a bounded loop that fails lands in `halt`. On the bench,
+  halting and hanging look the same.
+- **A bound is a timing claim about the card**, and `graphics.md` §7.4's spans take up
+  to 40.7 µs of `/WAIT` legitimately. Bounding twelve loops means choosing and
+  maintaining twelve numbers that buy no diagnosis.
+
+⚠ **The simulation cannot show this failure mode.** `machine_tb` bounds every stage in E
+cycles and has a global backstop, so a stuck card fails the bench in seconds, while real
+hardware would sit there indefinitely. **Revisit this when the ROM has a console:** then
+a timeout can say which wait expired, and it should.
+
 ## What `machine_tb` checks without asking the ROM
 
 ⛔ **A stage that passes because its own `cmpa` passed is self-verified.** Stage 2 and
@@ -110,17 +166,21 @@ cell, passes that compare. So `machine_tb` also checks these stages from outside
 
 | stage | read independently |
 |---|---|
-| 2 | each store to `$C000` is in `dram[$00C000]` one E cycle later, and each load is a byte the board *drove*, not the bus holding its last value |
+| 1a | the walk's four `$FF90` writes in order; the descriptor; all sixteen map entries |
+| 2 | each store to `$C000` is in the chosen socket's cell one E cycle later, and each load is a byte the board *drove*, not the bus holding its last value |
+| 2b | `$C3` in SIMM page 5 and `$3C` in page 7 of that socket |
 | 2a | the 96 stores at `STORET`: 32 × `$50`, then 64 × `$51` |
 | 10 | all 1,250 bytes the CPU loads from VRAM, window and `VDATA`, against the read sequence restated in the testbench. VRAM itself is peeked at both span starts and at the end |
 
 **And the error paths run.** `npm run check:machine` is four runs of the bench
 (`+scenario=`), and in three of them the right answer is a failure:
 
-| scenario | fault | asserted |
+| scenario | population or fault | asserted |
 |---|---|---|
-| `e1` | no SIMM in any socket | `rambad` reports `$E1` after one store and one load, then halts |
-| `alias` | a 1M × 8 module in socket 0 (`ram.md` §11 item 7) | the ROM's stage 2 **passes**, and the independent check finds its bytes at `$006000` |
+| `main` | four sockets | the whole ROM |
+| `e1` | no SIMM in any socket | the walk visits all four, reports `$E1`, and nothing runs after it |
+| `s1`, `s2`, `s3` | one, two, three sockets | the descriptor's bitmap and size, all sixteen map entries, stage 2 and the two tasks, in socket 0 |
+| `alias` | four sockets, a 1M × 8 in socket 0 (`ram.md` §11 item 7) | the walk rejects socket 0: bitmap `$0E`, 1,536 blocks, and everything lands in socket 1 |
 | `e2` | tile byte 17 corrupted after it is written | section 10 reports `$E2` with `vidx` = 17, after exactly 18 loads |
 
 ## What it does not do yet
@@ -129,9 +189,5 @@ cell, passes that compare. So `machine_tb` also checks these stages from outside
   reset and nothing unmasks them, and the image contains no `SWI`, so the vector table is
   checked only as two bytes of ROM. All six vectors point at `halt`.
 
-- **No `ram.md` §6.4.1 sizing walk.** It proves the first SIMM answers with a
-  two-pattern read-back through a driven bus, which is that section's *method* on one
-  socket; the four-socket walk that discovers how much memory the machine has is still
-  to write.
 - **No console, no monitor, no DriveWire loader.** `machine.md` §7.2 says what page 0
   is eventually for. `software/6809/README.md` has what retargeting ASSIST09 costs.
