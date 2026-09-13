@@ -28,16 +28,22 @@ POST_ONLY=1 sh hardware/gal/verilog/run-demo.sh   # the checks and the file agai
 
 `build/` is not tracked: everything in it is regenerated.
 
-## ⚠ The two assets are stand-ins
+## The picture and the module
 
-The sandbox this was built in allows GitHub, PyPI and npm and nothing else, so neither a
-photograph nor a module from the Mod Archive could be fetched. Both are replaceable without
-touching code:
+The demo is built from two files in `build/`, which is not tracked:
 
-- **The picture** is an illustration drawn by `mkparrots.py`. Run
-  `python3 tools/mkparrots.py build/parrots.raw build/parrots.png --src photo.jpg` and rebuild.
-- **The module** is an original four-channel tune from `mkmod.py`, with synthesised samples.
-  `MOD=song.mod sh build.sh` builds the ROM around any 31-sample `M.K.` module.
+```sh
+python3 tools/mkparrots.py build/parrots.raw build/parrots.png --src build/parrots-image.jpg
+MOD=build/Guitar-Slinger.mod sh build.sh
+```
+
+- **The picture** is centre-cropped to 4:3, resized to 640 × 480 and Floyd–Steinberg
+  dithered onto RGB332. Without `--src`, `mkparrots.py` draws a stand-in illustration.
+- **The module** is any 31-sample, 4-channel `M.K.` file. Without `MOD`, `mkmod.py`
+  writes an original stand-in tune that uses every effect the replayer implements.
+  "Guitar Slinger" is 406 KB: 41 patterns and 363 KB of samples. The samples go in the
+  audio card's 512 KB, and the file takes 50 of the ROM's 128 pages. The 6809 uploads
+  them in about 5 s of machine time, which is the black screen before the music starts.
 
 ## The ROM, and how boot finds it
 

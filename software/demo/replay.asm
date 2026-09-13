@@ -1545,11 +1545,11 @@ ml14    lda     t24s+2
 * modplayer.md 4.2: card RAM is offset binary, the file is two's complement,
 * and the loader is where the flip happens (audio.md 16 item 27).
 *******************************************************************************
-upload  ldd     t24b+1
+upload  ldd     t24b+1          the count, 24 bits
         std     ucount
         lda     t24b
         sta     ucount2
-        ldd     t24s            Y = logical address in block 0, A = page
+        ldd     t24s            the file offset, 24 bits
         std     t24c
         lda     t24s+2
         sta     t24c+2
@@ -1557,6 +1557,10 @@ up1     lda     ucount2         done?
         bne     up2
         ldd     ucount
         beq     up9
+* ⭐ ONE CHUNK PER ROM PAGE. The first version re-mapped nothing but counted and
+* offset 24 bits PER BYTE, ~70 E cycles a byte, and a 363 KB module took 12 s of
+* machine time to load. So: map the page, copy to its end or the count's, and
+* do the 24-bit arithmetic once per chunk. ~29 E cycles a byte.
 up2     lda     t24c+1          page = off >> 13, window = off & $1FFF
         lsra
         lsra
@@ -1575,29 +1579,35 @@ up2     lda     t24c+1          page = off >> 13, window = off & $1FFF
         anda    #$1F
         ldb     t24c+2
         tfr     d,y
-up3     lda     ,y+
-        eora    #$80
-up4     ldb     <ASTAT          9.2's handshake, per byte
-        bitb    #$40
-        bne     up4
-        sta     <SDATA
-        ldd     ucount          count down (24 bits)
-        subd    #1
-        std     ucount
-        bcc     up5
-        dec     ucount2
-up5     inc     t24c+2          offset up
-        bne     up6
-        inc     t24c+1
-        bne     up6
-        inc     t24c
-up6     lda     ucount2
-        bne     up7
-        ldd     ucount
-        beq     up9
-up7     cmpy    #$2000          off the end of the window: re-map
+        ldd     #$2000          chunk = bytes to the window's end ...
+        pshs    y
+        subd    ,s++
+        tst     ucount2         ... or to the count's, if that is nearer
         bne     up3
-        bra     up2
+        cmpd    ucount
+        bls     up3
+        ldd     ucount
+up3     std     tmpw2           this chunk
+        tfr     d,x
+up4     lda     ,y+
+        eora    #$80
+up5     ldb     <ASTAT          9.2's handshake, per byte
+        bitb    #$40
+        bne     up5
+        sta     <SDATA
+        leax    -1,x
+        bne     up4
+        ldd     ucount          count -= chunk
+        subd    tmpw2
+        std     ucount
+        bcc     up6
+        dec     ucount2
+up6     ldd     t24c+1          offset += chunk
+        addd    tmpw2
+        std     t24c+1
+        bcc     up1
+        inc     t24c
+        bra     up1
 up9     rts
 
 *******************************************************************************
