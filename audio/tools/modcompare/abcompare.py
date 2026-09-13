@@ -133,62 +133,37 @@ def logspec(x, nfft=4096, hop=1024, bins_per_oct=24, f0=55.0, f1=16000.0):
     return np.log10(out + 1e-6), edges[:-1]
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("mod")
-    ap.add_argument("--seconds", type=float, default=None)
-    ap.add_argument("--player", default="build-host/refplayer")
-    ap.add_argument("--amiga", default="a500")
-    # ⭐ --wav: score a WAV that already exists, instead of running the player.
-    # Added 2026-09-10 so that the SAME metric and the SAME reference can be
-    # pointed at hardware/gal/verilog/modplay_tb.sv's render of the real card.
-    # Without it this file could only ever measure the C model, which is the
-    # thing the oracle README warns about: "two independent implementations of
-    # one paragraph, and the A/B only ever tested one of them."
-    ap.add_argument("--wav", default=None,
-                    help="score this WAV instead of running --player")
-    ap.add_argument("--label", default=None, help="what to call it in the output")
-    args = ap.parse_args()
-
-    tmp = tempfile.mkdtemp()
-    ours_path = os.path.join(tmp, "ours.wav")
-
-    ref, ref_dur = omptrender.render(args.mod, RATE, args.seconds, args.amiga)
-    if args.wav:
-        ours_path = args.wav
-        label = args.label or os.path.basename(args.wav)
-    else:
-        label = args.label or "refplayer"
-        cmd = [args.player, "--wav", ours_path]
-        if args.seconds:
-            cmd += ["--seconds", str(args.seconds)]
-        cmd.append(args.mod)
-        out = subprocess.run(cmd, capture_output=True, text=True)
-        if out.returncode != 0:
-            print(out.stdout, out.stderr); sys.exit(1)
-    ours = read_wav(ours_path)
-
-    print(f"module        {os.path.basename(args.mod)}")
-    print(f"libopenmpt    {len(ref)/RATE:8.2f} s   (reported duration {ref_dur:.2f} s)")
-    print(f"{label:<13} {len(ours)/RATE:8.2f} s")
-    d = abs(len(ref) - len(ours)) / RATE
-    print(f"length delta  {d:8.3f} s   {'OK' if d < 0.25 else '*** MISMATCH ***'}")
-    print()
-
+def score(ref, ours, label):
+    """Print the comparison of `ours` against `ref` and return its metrics."""
     m = min(len(ref), len(ours))
     ref, ours = ref[:m], ours[:m]
     hop = 480                                    # 10 ms
+    out = {}
     for ci, cname in ((0, "left  (ch 0,3)"), (1, "right (ch 1,2)")):
         r, o = ref[:, ci], ours[:, ci]
-        # normalise level: absolute gain is not part of the comparison
+        # A side that is silent in the reference has nothing to score: a
+        # single-channel probe leaves one pair empty, and correlating silence
+        # against silence printed a +100-cent PITCH MISMATCH on every healthy
+        # run (audio.md 16 item 46).
+        if np.sqrt((r ** 2).mean()) < 1.0:
+            print(f"{cname}\n  silent in the reference - not scored\n")
+            continue
+        # normalise level: absolute gain against libopenmpt is not part of
+        # this comparison, because its output stage is not the card's.
+        # --control compares level where it IS comparable.
         r = r / (np.sqrt((r ** 2).mean()) + 1e-9)
         o = o / (np.sqrt((o ** 2).mean()) + 1e-9)
         er, eo = envelope(r, hop), envelope(o, hop)
         lag = best_lag(er, eo, hop)
+        # best_lag peaks where r[n + lag] matches o[n]: a negative lag means
+        # `ours` is LATE, so it is `ours` that loses its head. Trimming the other
+        # signal doubles the offset instead of removing it - which is what this
+        # did until 2026-09-12, and why a card 20 ms late scored an envelope
+        # correlation near zero (audio.md 16 item 46).
         if lag > 0:
-            o2, r2 = o[lag:], r[:len(o) - lag]
+            r2, o2 = r[lag:], o
         else:
-            r2, o2 = r[-lag:], o[:len(r) + lag]
+            r2, o2 = r, o[-lag:]
         n = min(len(r2), len(o2)); r2, o2 = r2[:n], o2[:n]
         er2, eo2 = envelope(r2, hop), envelope(o2, hop)
         k = min(len(er2), len(eo2))
@@ -219,10 +194,135 @@ def main():
         worst = [f"{order[i]*frame_t:.1f}s({fc[order[i]]:.2f})" for i in range(min(5, len(order)))]
         print(f"  worst frames         {' '.join(worst)}")
         print()
+        out[ci] = dict(env=env_c, cents=cents, spec_med=float(np.median(fc)),
+                       spec_p5=float(np.percentile(fc, 5)), lag=lag)
+    return out
 
+
+def rms_db(x):
+    return 20.0 * np.log10(np.sqrt((x ** 2).mean()) + 1e-9)
+
+
+# ⭐ THE GATE (--control). The run script's own rule - a card that scores worse
+# than refplayer is hardware - made into an exit code. Before 2026-09-12 both
+# scorings ran under `|| true` and nothing here was thresholded, so no acoustic
+# result could fail check:modplay.
+#
+# LEVEL is first because it is the defect class that has already escaped: the
+# 12 dB volume error scored 0.9903 against a control's 0.9901, because every
+# metric above normalises level away. The card and refplayer share render.c's
+# analogue chain, so between THEM absolute level is meaningful, and it is
+# compared directly after removing their relative lag.
+GATE_LEVEL_DB = 0.5        # card RMS against control RMS, per side
+GATE_ENV = 0.05            # envelope correlation, below the control's
+GATE_SPEC_MED = 0.02       # spectral median, below the control's
+GATE_SPEC_P5 = 0.10        # spectral 5th percentile, below the control's
+GATE_CENTS = 12.0          # absolute tuning offset
+
+
+def gate(card, ctrl, card_scores, ctrl_scores):
+    hop = 480
+    fails = []
+    m = min(len(card), len(ctrl))
+    card, ctrl = card[:m], ctrl[:m]
+    print("gate: card against control")
+    for ci, cname in ((0, "left "), (1, "right")):
+        c, r = card[:, ci], ctrl[:, ci]
+        if ci not in ctrl_scores:
+            print(f"  {cname} silent in the reference - not gated")
+            continue
+        lag = best_lag(envelope(r, hop), envelope(c, hop), hop)
+        r2, c2 = (r[lag:], c) if lag > 0 else (r, c[-lag:])
+        n = min(len(r2), len(c2))
+        d = rms_db(c2[:n]) - rms_db(r2[:n])
+        rows = [
+            ("level vs control", f"{d:+.2f} dB", abs(d) <= GATE_LEVEL_DB,
+             f"|d| <= {GATE_LEVEL_DB} dB"),
+        ]
+        cs, rs = card_scores.get(ci), ctrl_scores[ci]
+        if cs is None:
+            rows.append(("scored", "no", False, "a side the reference plays"))
+        else:
+            rows += [
+                ("envelope corr", f"{cs['env']:.4f} vs {rs['env']:.4f}",
+                 cs["env"] >= rs["env"] - GATE_ENV, f">= control - {GATE_ENV}"),
+                ("spectral median", f"{cs['spec_med']:.4f} vs {rs['spec_med']:.4f}",
+                 cs["spec_med"] >= rs["spec_med"] - GATE_SPEC_MED,
+                 f">= control - {GATE_SPEC_MED}"),
+                ("spectral 5th pct", f"{cs['spec_p5']:.4f} vs {rs['spec_p5']:.4f}",
+                 cs["spec_p5"] >= rs["spec_p5"] - GATE_SPEC_P5,
+                 f">= control - {GATE_SPEC_P5}"),
+                ("tuning", f"{cs['cents']:+.2f} cents",
+                 abs(cs["cents"]) <= GATE_CENTS, f"|c| <= {GATE_CENTS}"),
+            ]
+        for what, val, good, rule in rows:
+            print(f"  {'ok  ' if good else 'FAIL'}  {cname} {what:<17} {val:<22} ({rule})")
+            if not good:
+                fails.append(f"{cname.strip()} {what}")
+    return fails
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("mod")
+    ap.add_argument("--seconds", type=float, default=None)
+    ap.add_argument("--player", default="build-host/refplayer")
+    ap.add_argument("--amiga", default="a500")
+    # ⭐ --wav: score a WAV that already exists, instead of running the player.
+    # Added 2026-09-10 so that the SAME metric and the SAME reference can be
+    # pointed at hardware/gal/verilog/modplay_tb.sv's render of the real card.
+    # Without it this file could only ever measure the C model, which is the
+    # thing the oracle README warns about: "two independent implementations of
+    # one paragraph, and the A/B only ever tested one of them."
+    ap.add_argument("--wav", default=None,
+                    help="score this WAV instead of running --player")
+    ap.add_argument("--label", default=None, help="what to call it in the output")
+    ap.add_argument("--control", default=None,
+                    help="also score this WAV, and exit 1 if --wav is worse than it")
+    args = ap.parse_args()
+
+    tmp = tempfile.mkdtemp()
+    ours_path = os.path.join(tmp, "ours.wav")
+
+    ref, ref_dur = omptrender.render(args.mod, RATE, args.seconds, args.amiga)
+    if args.wav:
+        ours_path = args.wav
+        label = args.label or os.path.basename(args.wav)
+    else:
+        label = args.label or "refplayer"
+        cmd = [args.player, "--wav", ours_path]
+        if args.seconds:
+            cmd += ["--seconds", str(args.seconds)]
+        cmd.append(args.mod)
+        out = subprocess.run(cmd, capture_output=True, text=True)
+        if out.returncode != 0:
+            print(out.stdout, out.stderr); sys.exit(1)
+    ours = read_wav(ours_path)
+
+    print(f"module        {os.path.basename(args.mod)}")
+    print(f"libopenmpt    {len(ref)/RATE:8.2f} s   (reported duration {ref_dur:.2f} s)")
+    print(f"{label:<13} {len(ours)/RATE:8.2f} s")
+    d = abs(len(ref) - len(ours)) / RATE
+    print(f"length delta  {d:8.3f} s   {'OK' if d < 0.25 else '*** MISMATCH ***'}")
+    print()
+    scores = score(ref, ours, label)
     if not args.wav:
         os.remove(ours_path)
     os.rmdir(tmp)
+
+    if args.control:
+        ctrl = read_wav(args.control)
+        print(f"-- control: {os.path.basename(args.control)}")
+        print()
+        ctrl_scores = score(ref, ctrl, "control")
+        fails = gate(ours, ctrl, scores, ctrl_scores)
+        if d >= 0.25:
+            fails.append("length")
+        print()
+        if fails:
+            print(f"FAIL  the card scores worse than the control: {', '.join(fails)}")
+            sys.exit(1)
+        print("ok    the card scores no worse than the control on every gated metric")
 
 
 if __name__ == "__main__":

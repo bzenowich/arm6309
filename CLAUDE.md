@@ -70,9 +70,10 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 | `npm run rom` | assembles `software/boot/boot.asm` with A09 → `boot.bin`, `boot.hex`, `boot.lst` |
 | ⭐ **`npm run check:reach`** | **every signal the machine produces must reach something.** `design-review2.md` closed the direction "a fitted part reads what nothing produces"; this is the other one — a signal that is *produced* and that nothing reads, which for a register bit means **a feature the host can write and the card cannot perform**. Part of `npm run check` |
 | ⭐ **`npm run check:pins`** | **every programmable part's pin has the sense of what it is wired to.** The generated Verilog is in asserted sense and the wrappers invert by hand, so **no simulation can see a pin declared with the wrong polarity** — nine passed every check until 2026-09-11. Asserts backplane `/` signals are active-low, a signal crossing between two parts has one sense at both ends, and each pin in its `CONSUMERS` table matches the discrete part pin it drives. Part of `npm run check` |
-| ⭐ **`npm run check:modplay`** | **a module plays on `audio_card.v`** and its converter codes are rendered to a WAV and A/B'd against libopenmpt, with `refplayer` as the control. Needs `libopenmpt.so.0`, numpy, and probes from `audio/tools/modcompare/mkprobe.py` |
+| ⭐ **`npm run check:modplay`** | **a module plays on `audio_card.v`** — `14_fourchan.mod`, both stereo pairs — and its converter codes are rendered to a WAV and A/B'd against libopenmpt, with `refplayer` as the control. ⛔ **The A/B is a gate**: a card that scores worse than `refplayer` (level ±0.5 dB, envelope, spectral, tuning) fails the check. The bench log is kept as `/tmp/arm6309-modplay/<module>.log`. Needs `libopenmpt.so.0` and numpy, and says so before simulating |
+| ⭐ **`npm run check:audio:all`** | `check:sim:audio`, `check:oracle` and `check:modplay` — **the audio card's three benches, ~5 min.** Not in `npm run check` (it needs Verilator and libopenmpt); `build:all` ends with it. ⛔ `audio_tb` alone passed through two audio regressions that `check:modplay` caught (`audio.md` §16 item 47) |
 | `npm run build` | renders every `.circuit.tsx` to `dist/` with `tsci` |
-| `npm run build:all` | all of the above in order — `gen:pld`, `build`, `check`, `check:netlist`, `check:sim`, `check:video` |
+| `npm run build:all` | all of the above in order — `gen:pld`, `build`, `check`, `check:netlist`, `check:sim`, `check:video`, `check:machine`, `check:audio:all` |
 
 ### `check:reach` — the census, and why it is not optional
 
@@ -177,7 +178,7 @@ change to the video card, the mainboard, or `emit.ts` itself:
 
 | changed | run |
 |---|---|
-| `audio.jedec.ts`, `aseq.*`, `audio_card.v`, `audio_tb.sv` | `npm run check:sim:audio` (~25 s) |
+| `audio.jedec.ts`, `aseq.*`, `audio_card.v`, `audio_tb.sv` | `npm run check:sim:audio` (~25 s), then ⭐ **`npm run check:audio:all`** before committing |
 | the mainboard, `u9`/`u10` | `npm run check:sim:board` |
 | the video card, or `verilog/emit.ts` | `npm run check:video` (everything) |
 | anything the CPU touches — the map, the boot path, `boot.asm`, `machine.v` | ⭐ **`npm run check:machine`** |

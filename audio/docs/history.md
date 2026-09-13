@@ -2525,3 +2525,96 @@ That table recorded the pre-re-timing margins as 12x and 3.8x and the peak fan-i
 window**, which is the defect the re-timing existed to fix. Whatever replaces it has to
 keep `check:modplay` green on both probes, and the host's `SDATA` upload path — which is
 what the nine wait steps disturbed — is the thing to watch.
+
+
+## §9.2 / §9.4.4 / §10.1 / §10.2.6 / §16 items 46, 47 — the host strobe is taken only when it queues work and b6 is clear (2026-09-12)
+
+§16 item 46 was closed and item 47 opened and closed on 2026-09-12. The four-channel
+probe item 46 asked for froze three channels in two seconds. The cause was two defects in
+U2's host strobe: a host read while a write was pending reloaded that write's `HA`/`HRW`,
+and a poll that found b6 clear queued a work item b6 did not show. The repair gates
+`HSTB` on `!PWBUSY` and on the access needing work, and widens b6 to every access taken.
+
+The U2 figures below were already stale before this change. The fit of the committed
+design was **124 / 128 cells, 63 / 64 I/O, 52 foldback, 2 cascades (`SFOE`, `SDH2`),
+436 PT, seven of eight blocks at 36 of 40 fan-in, pass 2**, measured 2026-09-12 by
+refitting its own `aseq.pld`. §10.1 and §10.2.6 still quoted 128 / 128, 62 / 64, 47
+foldback, one cascade, 433 PT, and `audio/README.md` quoted 124 / 128 with "four cells
+and one pin spare". After the repair: **126 / 128, 63 / 64, 52 foldback, 2 cascades
+(`SFOE`, `SDH2`), 445 PT, six of eight blocks at 37, pass 2.**
+
+⚠ **Two intermediate repairs.** The first gated `HA`, `HRW`, `HGBL`, `AIDXLD` and
+`PWCK` on `!PWBUSY` and left `HDUE` alone. It fitted, but its figures were not recorded,
+and it re-ran the previous write whenever a poll strobed in `HACK`'s slot: 127 of 130
+upload bytes misplaced. The second added `HDUE` to that list, or equivalently gated
+`HSTB` itself. Both forms fitted identically, because the fitter collapses `HSTB` either
+way: **pass 1, 124 / 128, 19 cascades** (on `T0`, `T2`, `T3`, `BUSY`, `SFA0`–`SFA4`,
+`WC0`, `SDH1`, `SFOE`, `SDH2` and one buried node), 422 PT. It played `14_fourchan`
+correctly, but `audio_tb`'s bus-polled write then showed the second defect. Restricting
+the strobe to accesses that queue work fixed that and took the fit back to pass 2 with
+two cascades.
+
+### What §9.2, the `ASTAT` b6 row said
+
+| `ASTAT` b6 | **host access busy** — 1 from the strobe of **any** host write, index writes included, until the sequencer's work item for it has **finished**. A further write while b6 = 1 is lost and sets `AINTREQ` b5 (§8.1). |
+
+### What §9.4.4, the acknowledgement rule block said
+
+```
+  HACK   = RUN & WT2 & !WT1 & !WT0 & LAST      ; W3's final step
+  HDUE   = HSTB # HDUE & !HACK
+  PWBUSY = HSTB & !RW # PWBUSY & !HACK
+```
+
+`HDUE` staying asserted for the whole sequence cannot restart anything, because `START`
+requires `!BUSY`.
+
+### What §10.1, the U2 row of the fitted table said
+
+| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⛔ **128 of 128 cells, 62 of 64 I/O** — §10.2.6 |
+
+### What §10.1, the fit paragraph said
+
+both: U2 at **128 of 128 cells**, 62 of 64 I/O, **47 foldback nodes, one cascade and 433
+product terms**, seven of eight blocks at **36 of 40 LAB fan-in**; U1 at **107 of 128 cells**,
+
+### What §10.1, the TQFP-100 sentence said
+
+pins from 62 of 64 to 62 of 80 and leaves the cells at 128 of 128, because both packages
+
+### What §10.1, the JTAG sentence said
+
+⚠ **JTAG is off on U2**, which is the four pins that made it fit: 62 of 64 against 62 of
+60.
+
+### What §10.2.6, the opening paragraph said
+
+U2 is **38 outputs and 26 inputs**, and the fitter reports **62 of 64 I/O and 128 of
+128 logic cells** — "Design fits successfully", with **47 foldback nodes, one cascade and
+433 product terms**, and **seven of eight logic blocks at 36 of 40 LAB fan-in**
+(§16 item 44, 2026-09-11).
+
+### What §16 item 46, as opened said
+
+46. **⚠ OPEN 2026-09-12 — `check:modplay`'s default probe is single-channel, so every
+    healthy run prints two failure banners.** `package.json` plays `00_notes.mod`, and
+    `mkprobe.py` writes that probe on **channel 0 only**. `abcompare.py` splits the
+    render into left (channels 0, 3) and right (1, 2), so the right pair is silence
+    correlated against silence: **`spectral corr median 0.0000`** and a
+    **`*** PITCH MISMATCH ***`** of exactly +100.00 cents, on every run. ⛔ **It is
+    printed identically for the card and for the control**, which is the only reason it
+    is recognisable as an artefact rather than a defect — the run script's own rule is
+    that a card scoring worse than `refplayer` is hardware.
+
+    ⚠ **The left channel's `envelope correlation −0.1840` is the same trap.** It sits
+    beside `spectral corr median 0.9964` (control: 0.9988) at a **−20.0 ms alignment
+    lag**, and envelope correlation is a time-domain measure, so the lag decorrelates it
+    while the card is in fact playing correctly.
+
+    **This is the `grep '^FAIL'` defect class from `CLAUDE.md` inverted**: output that
+    reads like a failure and is not, which trains the reader to ignore it. The fix is a
+    four-channel default (`14_fourchan`) so both pairs carry signal, and it needs its own
+    verification run because it changes what the check asserts. ⚠ **The −20 ms lag is
+    separately unexplained** and is worth one look: the card's register stream is
+    delivered on its own §8.2 tick interrupt, so a constant offset is plausible, but
+    nothing has checked that it is constant rather than drifting.

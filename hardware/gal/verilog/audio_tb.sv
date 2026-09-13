@@ -92,6 +92,33 @@ module audio_tb;
   endtask
 
   task automatic aidx(input int v); pwwait(); wr('h0, v[7:0]); endtask
+
+  // A write followed at once by ASTAT polls OVER THE BUS until b6 clears -
+  // the host 9.2 describes, and the only one that can see 16 item 47. No idle
+  // tail between accesses, so the first poll strobes ~16 slots after the
+  // write's. `busy` is how many polls saw b6 set. Bounded.
+  task automatic wrpoll(input int off, input logic [7:0] v, output int busy);
+    pwwait();
+    @(negedge SLOTCLK); IOSEL = 1; A = 7'h40 | off[3:0]; RW = 0; hostD = v; hostDrv = 1;
+    repeat (3) @(negedge SLOTCLK);
+    E = 1;
+    repeat (7) @(negedge SLOTCLK);
+    E = 0; @(negedge SLOTCLK); idle();
+    busy = 0;
+    for (int k = 0; k < 512; k++) begin
+      @(negedge SLOTCLK); IOSEL = 1; A = 7'h4A; RW = 1;
+      repeat (2) @(negedge SLOTCLK);
+      E = 1;
+      repeat (4) @(negedge SLOTCLK);
+      rdval = HD;
+      repeat (2) @(negedge SLOTCLK);
+      E = 0; @(negedge SLOTCLK); idle(); @(negedge SLOTCLK);
+      if (!rdval[6]) break;
+      busy++;
+    end
+    if (busy >= 512) ok(1'b0, "ASTAT b6 cleared within 512 bus polls");
+  endtask
+  int poll_busy;
   /* ⛔ ADATA IS FLOW-CONTROLLED AND THIS TASK DID NOT HONOUR IT.
    *
    * There is ONE posted-write latch. `PWBUSY` (ASTAT b6, 9.2) is high from the
@@ -530,6 +557,35 @@ module audio_tb;
     ok(!aidxbad,
        $sformatf("⭐ AIDX never moves under a running HOST sequence, across %0d of them - the precondition every frozen decode rests on, and what 9.4.4's handshake buys",
                  aidxseq));
+
+    $display("");
+    $display("9.2 - polling ASTAT over the bus does not disturb the write it waits for");
+    $display("");
+    // ⛔ 16 item 47. Every write in this file waits on b6 by PEEKING
+    // card.u2.PWBUSY, so no read ever reached the card while a write was
+    // pending - and a read was exactly what destroyed one: the strobe reloaded
+    // HA and HRW, and W3 ran for a read of ASTAT instead of the ADATA store.
+    // modplay_tb polls over the bus, which is how it was found. Here the four
+    // channels above are still playing at PER = 30, so HDUE (last in START's
+    // priority) waits, and the polls land inside the busy window by
+    // construction; the count of polls that saw b6 set is a claim, so this
+    // cannot pass without exercising the case.
+    aidx(0 * 16 + 5);
+    poll_busy = 0;
+    wrpoll('h1, 8'h00, n); poll_busy += n;
+    wrpoll('h1, 8'h1F, n); poll_busy += n;
+    wrpoll('h1, 8'h3C, n); poll_busy += n;
+    ok(poll_busy > 0,
+       $sformatf("the host's ASTAT polls landed while a write was still pending (%0d of them saw b6 set)",
+                 poll_busy));
+    ok(sfl(4) == 16'h001F && sfh(6) == 8'h3C
+       && {card.u2.AIDX5, card.u2.AIDX4, card.u2.AIDX3,
+           card.u2.AIDX2, card.u2.AIDX1, card.u2.AIDX0} == 6'd8,
+       $sformatf("⭐ and every byte landed where the index put it - PER %04h (wrote 001F), VOL %02h (wrote 3C), AIDX %0d (want 8)",
+                 sfl(4), sfh(6),
+                 {card.u2.AIDX5, card.u2.AIDX4, card.u2.AIDX3,
+                  card.u2.AIDX2, card.u2.AIDX1, card.u2.AIDX0}));
+    aidx(0 * 16 + 5); adata(8'h00); adata(8'h1E); adata(8'h40);   // PER 30, VOL $40 again
 
     $display("");
     $display("9.4.4 - the handshake: PWBUSY spans the WHOLE sequence");

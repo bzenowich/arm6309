@@ -215,9 +215,41 @@ const sources: Cell[] = [
 const host: Cell[] = [
   { pin: 0, name: "HSY1", assertedLow: false, s0: 1, registered: true, terms: ["SEL & E"] },
   { pin: 0, name: "HSY2", assertedLow: false, s0: 1, registered: true, terms: ["HSY1"] },
+  /* ⛔ `!PWBUSY`, AND WITHOUT IT THE BUSY POLL DESTROYED THE WRITE IT WAS
+   * WAITING FOR (audio.md 16 item 47, 2026-09-12). Every strobe - reads
+   * included - reloaded HA and HRW and raised HDUE. A write queued behind
+   * channel work sets b6; the host polls ASTAT exactly as 9.2 asks; the poll
+   * reloaded HA with $A and HRW with 1, and W3 then ran for a READ OF ASTAT.
+   * The byte was never stored, AINC (which decodes HA at LAST) never fired,
+   * and every later byte of that channel landed one offset low: LEN $0020
+   * became $2001, PER $011D became $1DFF, and the channel froze. Three
+   * channels in two seconds of 14_fourchan.mod; a single-channel probe rarely
+   * queues W3 long enough to see it.
+   *
+   * ⚠ ON THE STROBE, NOT ON THE LOADS. The first repair gated HA, HRW, HGBL,
+   * AIDXLD and PWCK and left HDUE alone - and an idle card retires a write so
+   * fast that the next poll strobes in the very slot HACK fires, PWBUSY still
+   * high. HA ignored it, HDUE queued a work item for it, and W3 re-ran the
+   * previous write: SDATA stored twice, 127 of 130 upload bytes misplaced.
+   * Every consumer of the strobe needs the same gate, so the strobe carries it.
+   *
+   * The rule is 9.2's own: while b6 is set an access is not taken. A write
+   * then is lost and raises AINTREQ b5 - which is why FIRE5 reads the RAW
+   * strobe. The fitter collapses HSTB either way; both forms fit identically.
+   *
+   * ⛔ AND ONLY AN ACCESS THAT NEEDS WORK IS TAKEN AT ALL. With the gate alone
+   * a poll that found b6 CLEAR was still taken, queued a W3 for a read of
+   * ASTAT that does nothing, and b6 - writes only - did not show it. The
+   * host's next write then strobed while that W3 was running, reloaded HA
+   * under it past its store step, and the sequence ended as an ADATA access:
+   * AINC fired, HACK cleared HDUE, and the write's own W3 never ran. Index
+   * advanced, byte lost. audio_tb's bus-polled write found it the first time
+   * it ran. So: every write, and a read of the two side-effecting ports
+   * (ADATA, SDATA: post-increment and prefetch). A read of ASTAT or AINTREQ
+   * is U1's alone and never touches the sequencer. */
   { pin: 0, name: "HSTB", assertedLow: false, s0: 1, registered: false,
-    why: "9.4.4: one slot wide, on the leading edge of a synchronised access",
-    terms: ["HSY1 & !HSY2"] },
+    why: "9.4.4: one slot wide, on the leading edge of an access that is TAKEN",
+    terms: ["HSY1 & !HSY2 & !PWBUSY & !RW", "HSY1 & !HSY2 & !PWBUSY & A0 & !A1 & !A2"] },
   ...[0, 1, 2, 3].map((i) => ({
     pin: 0, name: `HA${i}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [`HSTB & A${i}`, `HA${i} & !HSTB`],
@@ -598,8 +630,11 @@ const port: Cell[] = [
    * work item now (9.3's "writing AIDX prefetches that entry"), so every one
    * is acknowledged, and covering the index write means a host that honours
    * b6 cannot move `AIDX` under a running sequence either. */
+  /* ⭐ `HSTB`, NOT `HSTB & !RW`: b6 covers every access that is taken, which
+   * since 16 item 47 is every access that queues work - all writes, and reads
+   * of ADATA and SDATA. A host cannot honour a busy it cannot see. */
   { pin: 0, name: "PWBUSY", assertedLow: false, s0: 1, registered: true,
-    terms: ["HSTB & !RW", "PWBUSY & !HACK"] },
+    terms: ["HSTB", "PWBUSY & !HACK"] },
   { pin: 0, name: "PFVALID", assertedLow: false, s0: 1, registered: true,
     terms: ["PFCK", "PFVALID & !AIDXLD & !AINC"] },
 ]
@@ -716,7 +751,7 @@ const irq: Cell[] = [
    * counter (8.2). FIRE4 left with W4 on 2026-09-11. */
   { pin: 0, name: "FIRE5", assertedLow: false, s0: 1, registered: false,
     why: "8.1 bit 5: a posted write arrived while the previous had not retired",
-    terms: ["HSTB & !RW & PWBUSY"] },
+    terms: ["HSY1 & !HSY2 & !RW & PWBUSY"] },
   { pin: 0, name: "NOFIRE", assertedLow: false, s0: 1, registered: false,
     terms: ["!FIRE0 & !FIRE1 & !FIRE2 & !FIRE3 & !FIRE5"] },
   { pin: 0, name: "SETA", assertedLow: false, s0: 1, registered: false,

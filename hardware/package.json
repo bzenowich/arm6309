@@ -21,7 +21,7 @@
     "render:boards": "bun run place/render.ts",
     "check:sim": "cd gal && verilator --binary --timing -Wall -Wno-DECLFILENAME --top-module mmu_tb mmu.v mmu_tb.sv -o mmu_tb && ./obj_dir/mmu_tb && verilator --binary --timing -Wall -Wno-DECLFILENAME --top-module clkdec_tb clkdec.v clkdec_tb.sv -o clkdec_tb && ./obj_dir/clkdec_tb",
     "build": "for f in mainboard/mainboard.circuit.tsx cards/*.circuit.tsx; do echo \"-- $f\"; tsci build \"$f\" || exit 1; done",
-    "build:all": "npm run gen:pld && npm run build && npm run check && npm run check:netlist && npm run check:sim && npm run check:video && npm run check:machine",
+    "build:all": "npm run gen:pld && npm run build && npm run check && npm run check:netlist && npm run check:sim && npm run check:video && npm run check:machine && npm run check:audio:all",
     "dev": "tsci dev",
     "census": "bun run gal/census.ts",
     "census:audio": "bun run gal/audio.census.ts",
@@ -39,7 +39,8 @@
     "check:decode": "bun run lib/decode.check.ts",
     "rom": "sh ../software/tools/mkrom.sh",
     "check:machine": "bun run gal/verilog/gen.ts && sh gal/verilog/run-machine.sh",
-    "check:modplay": "bun run gal/verilog/gen.ts && sh gal/verilog/run-modplay.sh \"$(sh gal/verilog/probes.sh)/00_notes.mod\" 2",
+    "check:modplay": "bun run gal/verilog/gen.ts && sh gal/verilog/run-modplay.sh \"$(sh gal/verilog/probes.sh)/14_fourchan.mod\" 2",
+    "check:audio:all": "npm run check:sim:audio && npm run check:oracle && npm run check:modplay",
     "check:reach": "bun run gal/reach.check.ts",
     "check:fold": "bun run gal/fold.check.ts",
     "check:pins": "bun run gal/pins.check.ts"

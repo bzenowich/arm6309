@@ -35,11 +35,11 @@ PIN = DMAEN2 ;
 PIN = DMAEN3 ;
 PIN = SEL ;
 PIN = E ;
+PIN = RW ;
 PIN = A0 ;
 PIN = A1 ;
 PIN = A2 ;
 PIN = A3 ;
-PIN = RW ;
 PIN = D0 ;
 PIN = D1 ;
 PIN = D2 ;
@@ -252,7 +252,8 @@ RCLR2 = RPICK2 ;
 RCLR3 = RPICK3 ;
 HSY1.d = SEL & E ;
 HSY2.d = HSY1 ;
-HSTB = HSY1 & !HSY2 ;
+HSTB = HSY1 & !HSY2 & !PWBUSY & !RW
+       # HSY1 & !HSY2 & !PWBUSY & A0 & !A1 & !A2 ;
 HA0.d = HSTB & A0
         # HA0 & !HSTB ;
 HA1.d = HSTB & A1
@@ -589,7 +590,7 @@ PWOE = RUN & WT2 & !WT1 & !WT0 & !T0 & !T1 & !T2 & !T3 & !HRW & HWE
 PFCK = RUN & WT2 & !WT1 & !WT0 & T0 & !T1 & T2 & !T3 & !HGBL
        # RUN & WT2 & !WT1 & !WT0 & T0 & T1 & !T2 & !T3 & ISSDATA & HRW ;
 PFLANE = HL0 ;
-PWBUSY.d = HSTB & !RW
+PWBUSY.d = HSTB
            # PWBUSY & !HACK ;
 PFVALID.d = PFCK
             # PFVALID & !AIDXLD & !AINC ;
@@ -652,7 +653,7 @@ FIRE0 = ENDNOW & !WC0 & !WC1 ;
 FIRE1 = ENDNOW & WC0 & !WC1 ;
 FIRE2 = ENDNOW & !WC0 & WC1 ;
 FIRE3 = ENDNOW & WC0 & WC1 ;
-FIRE5 = HSTB & !RW & PWBUSY ;
+FIRE5 = HSY1 & !HSY2 & !RW & PWBUSY ;
 NOFIRE = !FIRE0 & !FIRE1 & !FIRE2 & !FIRE3 & !FIRE5 ;
 SETA = FIRE1
        # FIRE3

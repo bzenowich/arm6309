@@ -48,6 +48,11 @@ DACWAV="$ROOT/build-host/dacwav"
 [ -x "$REF" ] || { echo "build-host/refplayer missing - cmake --build build-host" >&2; exit 1; }
 [ -x "$DACWAV" ] || { echo "build-host/dacwav missing - cmake --build build-host" >&2; exit 1; }
 
+# The A/B needs numpy and libopenmpt. Checked HERE, before two minutes of
+# simulation, and fatal: an A/B that cannot run is a check that did not run.
+python3 -c "import numpy, sys; sys.path.insert(0, '$ROOT/audio/tools/modcompare'); import omptrender; omptrender._lib()" \
+  || { echo "FAIL  the A/B cannot run: python3 needs numpy and libopenmpt.so.0" >&2; exit 1; }
+
 echo "-- 1. the software: the loader's sample image and the replayer's trace"
 "$REF" --wav "$OUT/$name.ref.wav" --trace "$OUT/$name.trace" \
        --sram "$OUT/$name.sram" --seconds "$SECS" "$MOD"
@@ -61,8 +66,9 @@ $V --top-module modplay_tb audio_card.v audio.v aseq.v modplay_tb.sv \
 
 # 3546895 colour clocks per second - the card's own rate (audio.md §4.1).
 CC=$(awk "BEGIN{printf \"%d\", $SECS * 3546895}")
-out=$(mktemp)
-trap 'rm -f "$out"' EXIT
+# The bench's output is KEPT beside the renders. It used to go to a mktemp file
+# removed on EXIT, so a failing run deleted the FAIL lines it had just counted.
+out="$OUT/$name.log"
 ./obj_dir/modplay_tb +sram="$OUT/$name.sram" +trace="$OUT/$name.trace" \
                      +dac="$OUT/$name.dac" +cc="$CC" | tee "$out"
 
@@ -71,15 +77,26 @@ echo "-- 3. the analogue chain, and the file"
 "$DACWAV" "$OUT/$name.card.wav" "$OUT/$name.dac"
 
 echo
-echo "-- 4. the A/B, both against libopenmpt"
+echo "-- 4. the A/B, both against libopenmpt, and the card gated against the control"
+# ⭐ ONE INVOCATION, AND ITS EXIT CODE COUNTS. Both scorings used to run under
+# `|| true`, so no acoustic result could fail this check - the 12 dB volume
+# error and 2026-09-12's frozen channels both printed and passed. --control
+# applies this file's own rule: a card that scores worse than refplayer is
+# hardware. abcompare.py records the margins.
+#
+# ⚠ The verdict is read from the LOG, not from the pipeline: sh has no pipefail,
+# so `python3 ... | tee` returns tee's status. A crash prints no verdict line
+# and fails too.
 python3 "$ROOT/audio/tools/modcompare/abcompare.py" "$MOD" --seconds "$SECS" \
-        --wav "$OUT/$name.card.wav" --label "card RTL" || true
-echo
-python3 "$ROOT/audio/tools/modcompare/abcompare.py" "$MOD" --seconds "$SECS" \
-        --wav "$OUT/$name.ref.wav" --label "refplayer (control)" || true
+        --wav "$OUT/$name.card.wav" --label "card RTL" \
+        --control "$OUT/$name.ref.wav" 2>&1 | tee -a "$out" || true
+acoustic=0
+grep -q '^ok    the card scores no worse than the control' "$out" || acoustic=1
+[ "$acoustic" -eq 0 ] || grep -q '^FAIL' "$out" \
+  || echo "FAIL  the A/B produced no verdict" | tee -a "$out"
 
 ok=$(grep -c '^ok' "$out" || true)
 bad=$(grep -c '^FAIL' "$out" || true)
 echo
-echo "$ok claims, $bad failed        (renders in $OUT)"
-[ "$bad" -eq 0 ]
+echo "$ok claims, $bad failed        (renders and $name.log in $OUT)"
+[ "$bad" -eq 0 ] && [ "$acoustic" -eq 0 ]

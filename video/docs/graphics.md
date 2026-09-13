@@ -3891,6 +3891,7 @@ left is measurement. They are grouped by what would settle them.
     | the vendored core | `vendor/mc6809/mc6809e.v` **is** cycle-accurate — and it is a **6809**. It gives emulation mode, which is the baseline native mode claims to beat, not native mode |
     | the project's own firmware | `cpu/src/` is the **timing spike** (`gpio.c`, `spike_dma.c`, `stub_core.c`); there is no instruction table in it to read a cycle count out of. Native-mode timing is a *choice* this project has not yet made — the same shape as `TFM` in `machine.md` §6 |
     | count a real loop | ⭐ **DONE — this is the half that closed.** A09 is installed (`software/tools/fetch-a09.sh`) and `boot.asm` §2a counts one directly |
+    | a primary native-mode source | ⭐ **NOW IN THE REPOSITORY, NOT YET READ.** `reference/manuals/The 6309 Book (Burke & Burke).pdf`, appendix A, lists every 6309 opcode with its cycle count in the `#` column. This is the source the item was waiting for |
 
     ⭐ **THE 6809 HALF IS CLOSED, BY SUBTRACTION: `STA ,X+` IS SIX E CYCLES.**
     `boot.asm` §2a runs two straight-line blocks — 32 stores and 64 — bracketed

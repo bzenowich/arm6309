@@ -22,7 +22,7 @@ DIR=${ARM6309_MOD:-/tmp/arm6309-mod}
 # Regenerate only when the probe check:modplay plays is absent. mkprobe.py
 # creates the directory itself (os.makedirs(exist_ok=True)) and is deterministic,
 # so a partial corpus is repaired by the same command.
-if [ ! -f "$DIR/00_notes.mod" ]; then
+if [ ! -f "$DIR/14_fourchan.mod" ]; then
   echo "-- regenerating the probe corpus in $DIR" >&2
   python3 "$ROOT/audio/tools/modcompare/mkprobe.py" "$DIR" >&2
 fi

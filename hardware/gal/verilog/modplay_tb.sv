@@ -251,6 +251,68 @@ module modplay_tb;
     end
   end
 
+  /* ---- +hadbg=N: the host port's latched address around colour clock N --
+   * Every host strobe, every W3 last step and every AIDX change for 2000
+   * colour clocks. Added for the 2026-09-12 frozen-channel finding. */
+  int hadbg = -1;
+  initial void'($value$plusargs("hadbg=%d", hadbg));
+  logic [5:0] aidx_prev = 6'h00;
+  always @(negedge SLOTCLK)
+    if (hadbg >= 0 && cc >= hadbg && cc < hadbg + 2000) begin
+      if (card.u2.HSTB || card.u2.HACK || card.u2.AINC
+          || {card.u2.AIDX5, card.u2.AIDX4, card.u2.AIDX3, card.u2.AIDX2, card.u2.AIDX1, card.u2.AIDX0} != aidx_prev)
+        $display("      HA cc=%0d HSTB=%b A=%h RW=%b | HA=%b%b%b%b HRW=%b PWBUSY=%b WT=%b%b%b T=%b%b%b%b LAST=%b HACK=%b AINC=%b AIDX=%02h",
+                 cc, card.u2.HSTB, A[3:0], RW,
+                 card.u2.HA3, card.u2.HA2, card.u2.HA1, card.u2.HA0, card.u2.HRW,
+                 card.u2.PWBUSY, card.u2.WT2, card.u2.WT1, card.u2.WT0,
+                 card.u2.T3, card.u2.T2, card.u2.T1, card.u2.T0, card.u2.LAST,
+                 card.u2.HACK, card.u2.AINC,
+                 {card.u2.AIDX5, card.u2.AIDX4, card.u2.AIDX3, card.u2.AIDX2, card.u2.AIDX1, card.u2.AIDX0});
+      aidx_prev = {card.u2.AIDX5, card.u2.AIDX4, card.u2.AIDX3, card.u2.AIDX2, card.u2.AIDX1, card.u2.AIDX0};
+    end
+
+  /* ---- every audible channel keeps playing ----------------------------- *
+   *
+   * ⛔ THE CLAIM THAT WAS MISSING ON 2026-09-12. Every claim above asks whether
+   * a capture that HAPPENED was right, and a channel that stops capturing makes
+   * no wrong captures: on 14_fourchan.mod two channels froze for a whole note
+   * group at a DMACON retrigger and all eighteen claims passed. So this asks
+   * the other question - does PTR (state word 2) advance while the channel is
+   * audible (VOL, word 6 lane 2, non-zero)?
+   *
+   * ProTracker's longest period is 1076 colour clocks, so a pointer that has
+   * not moved in 2048 has missed a sample event, whatever the queue latency. */
+  localparam int PTR_GAP_MAX = 2048;
+  longint ptr_last [0:3];
+  logic [18:0] ptr_prev [0:3];
+  longint ptr_gap_max [0:3];
+  int ptr_stalls = 0;
+  bit ptr_told = 0;
+  initial for (int n = 0; n < 4; n++) begin
+    ptr_last[n] = 0; ptr_prev[n] = 19'h0; ptr_gap_max[n] = 0;
+  end
+  always @(posedge SLOTCLK) if (counting && cc > 0) begin
+    for (int n = 0; n < 4; n++) begin
+      logic [18:0] p;
+      p = {card.SF[n * 8 + 2][18:16], card.SF[n * 8 + 2][15:0]};
+      if (card.SF[n * 8 + 6][23:16] == 8'h00 || p !== ptr_prev[n]) begin
+        ptr_last[n] = cc;
+        ptr_prev[n] = p;
+      end else if (cc - ptr_last[n] > ptr_gap_max[n]) begin
+        ptr_gap_max[n] = cc - ptr_last[n];
+        if (ptr_gap_max[n] == PTR_GAP_MAX + 1) begin
+          ptr_stalls++;
+          if (!ptr_told) begin
+            ptr_told = 1;
+            $display("      [ptr] channel %0d stalled from cc=%0d: PTR=%05h NEXT=%04h PER=%04h COUNT=%04h CNT=%05h",
+                     n, ptr_last[n], p, card.SF[n * 8][15:0], card.SF[n * 8 + 4][15:0],
+                     COUNT, {card.SF[n * 8 + 1][16], card.SF[n * 8 + 1][15:0]});
+          end
+        end
+      end
+    end
+  end
+
   /* ---- the trace ------------------------------------------------------- */
   // audio/refplayer's format: "%06lu %-7s %02X" - tick, register name, byte.
   function automatic int reg_of(input string name);
@@ -419,6 +481,11 @@ module modplay_tb;
 
     // Run on to the requested length, so the tail of the last note is rendered.
     while (cc < run_cc) @(posedge SLOTCLK);
+
+    ok(ptr_stalls == 0,
+       $sformatf("⭐ every audible channel keeps playing - PTR advances at least every %0d colour clocks while VOL is non-zero (%0d channels stalled; longest gap per channel %0d %0d %0d %0d cc)",
+                 PTR_GAP_MAX, ptr_stalls, ptr_gap_max[0], ptr_gap_max[1],
+                 ptr_gap_max[2], ptr_gap_max[3]));
 
     if (dacfd != 0) begin
       dac_emit();                       // a final row, so the hold has an end

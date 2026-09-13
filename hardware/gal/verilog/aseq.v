@@ -20,11 +20,11 @@ module aseq (
     input  wire DMAEN3,
     input  wire SEL,
     input  wire E,
+    input  wire RW,
     input  wire A0,
     input  wire A1,
     input  wire A2,
     input  wire A3,
-    input  wire RW,
     input  wire D0,
     input  wire D1,
     input  wire D2,
@@ -391,9 +391,10 @@ module aseq (
   // buried
   assign RCLR3 =
          (RPICK3);
-  // buried - 9.4.4: one slot wide, on the leading edge of a synchronised access
+  // buried - 9.4.4: one slot wide, on the leading edge of an access that is TAKEN
   assign HSTB =
-         (HSY1 & ~HSY2);
+         (HSY1 & ~HSY2 & ~PWBUSY & ~RW)
+         | (HSY1 & ~HSY2 & ~PWBUSY & A0 & ~A1 & ~A2);
   // buried - 9.2: the host's access is retired when its sequence ENDS
   assign HACK =
          (RUN & WT2 & ~WT1 & ~WT0 & LAST);
@@ -717,7 +718,7 @@ module aseq (
          (ENDNOW & WC0 & WC1);
   // buried - 8.1 bit 5: a posted write arrived while the previous had not retired
   assign FIRE5 =
-         (HSTB & ~RW & PWBUSY);
+         (HSY1 & ~HSY2 & ~RW & PWBUSY);
   // buried
   assign NOFIRE =
          (~FIRE0 & ~FIRE1 & ~FIRE2 & ~FIRE3 & ~FIRE5);
@@ -1044,7 +1045,7 @@ module aseq (
          (SDHCAP & SDH2)
          | (SDQ2 & ~SDHCAP);
       r_PWBUSY <=
-         (HSTB & ~RW)
+         (HSTB)
          | (PWBUSY & ~HACK);
       r_PFVALID <=
          (PFCK)

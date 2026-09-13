@@ -1189,7 +1189,7 @@ never issue it.
 | Bit | Definition | Behaviour on this machine |
 |---|---|---|
 | `ACTRL` b4 | ⛔ **reserved.** §11.2's 8-channel mode was dropped 2026-09-10 — Paula has four channels. The bit reads back and selects nothing, `check:reach` asserts that no cell takes it, and `card.h` follows. |
-| `ASTAT` b6 | **host access busy** — 1 from the strobe of **any** host write, index writes included, until the sequencer's work item for it has **finished**. A further write while b6 = 1 is lost and sets `AINTREQ` b5 (§8.1). | ⚠ **It is a real handshake now, not observability.** Measured worst wait: **63 slots, 2.2 µs** — comparable to a 6309 store at ~5 E cycles (2.38 µs), so a polling host will occasionally see it set. §9.4.4 has why it must span the whole sequence. |
+| `ASTAT` b6 | **host access busy** — 1 from the strobe of **any access that queues work** until the sequencer's work item for it has **finished**: every write, index writes included, and a **read of `ADATA` or `SDATA`** (post-increment and prefetch). **While b6 = 1 no access is taken**: a write is lost and sets `AINTREQ` b5 (§8.1), and a read of `ADATA`/`SDATA` neither advances nor prefetches. A read of `ASTAT` or `AINTREQ` is U1's alone, queues nothing, and is safe at any time — which is what makes polling b6 safe (§16 item 47). | ⚠ **It is a real handshake now, not observability.** Measured worst wait: **63 slots, 2.2 µs** — comparable to a 6309 store at ~5 E cycles (2.38 µs), so a polling host will occasionally see it set. §9.4.4 has why it must span the whole sequence. |
 | `ASTAT` b7 | **prefetch valid** — 1 when the `ADATA`/`SDATA` prefetch latch (§9.3) holds the byte for the *current* index. Cleared by a write to `AIDX`/`SPTR` and by the post-increment; set when slot 5 retires the prefetch. | The same arithmetic as b6 from the other side: the prefetch completes within one colour clock (281.9 ns) and the soonest a 6309 can look is 2.38 µs later, so **b7 reads 1 every time this machine polls it** and §9.3's "reads never stall" holds. It is not a handshake the 6309 has to honour; it is the observability that makes that claim checkable on a logic analyser, and it is a real handshake for any host fast enough to need one. |
 
 ### 9.3 The state file — index/data, and why that is not a cost
@@ -1413,13 +1413,23 @@ other, and the first fix looked complete. [history.md](history.md) has both.
 ⭐ **The rule now: `HACK` is the last step of the host's own sequence.**
 
 ```
-  HACK   = RUN & WT2 & !WT1 & !WT0 & LAST      ; W3's final step
+  HSTB   = HSY1 & !HSY2 & !PWBUSY & !RW                 ; a write, taken
+         # HSY1 & !HSY2 & !PWBUSY & A0 & !A1 & !A2      ; a read of ADATA or SDATA, taken
+  HACK   = RUN & WT2 & !WT1 & !WT0 & LAST               ; W3's final step
   HDUE   = HSTB # HDUE & !HACK
-  PWBUSY = HSTB & !RW # PWBUSY & !HACK
+  PWBUSY = HSTB # PWBUSY & !HACK
+  FIRE5  = HSY1 & !HSY2 & !RW & PWBUSY                  ; the RAW strobe: a write refused
 ```
 
 `HDUE` staying asserted for the whole sequence cannot restart anything, because `START`
-requires `!BUSY`. And **`!AIDXLD` goes from `PWBUSY`**: it was there because an index
+requires `!BUSY`.
+
+⭐ **An access is taken only if it queues work and b6 is clear** (§16 item 47). `HA`,
+`HRW`, `HGBL`, `AIDXLD`, `HDUE` and the posted-write latch clock all consume `HSTB`, so
+gating the strobe gates every one of them: nothing a host does while b6 is set can change
+what the pending sequence reads. And a read of `ASTAT` or `AINTREQ` is never taken at
+all — it is served by U1 and needs no sequence — so the poll §9.2 requires cannot queue a
+work item the host has no way to see. And **`!AIDXLD` goes from `PWBUSY`**: it was there because an index
 load queued no work and so could never be acknowledged, but since §9.3's "writing `AIDX`
 prefetches that entry" every access queues a work item and every one is acknowledged — so
 covering the index write closes the same hole for it.
@@ -1591,19 +1601,19 @@ pins and spends cells. There is no one-part arrangement of this card.
 | | holds | fitted |
 |---|---|---|
 | **U1** `ATF1508AS` PLCC-84, socketed | the host register block — §9.1's decode, `ADMACON`, `AINTENA`, `AINTREQ` and its pending register, `/FIRQ`, `ACTRL`, the `AINTREQ` read synchroniser, the slot walk, the ÷5 tempo reference and §8.2's CIA count — **plus §4.2's free-running counter and comparator and §9.3's read-back latch**, which is seven packages for sixteen pins | **107 of 128 cells, 62 of 64 I/O** — §10.1.1 |
-| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⛔ **128 of 128 cells, 62 of 64 I/O** — §10.2.6 |
+| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⛔ **126 of 128 cells, 63 of 64 I/O** — §10.2.6 |
 
 ⚠ **U2 IS EXACTLY FULL AND U1 IS NOT**, which is the whole shape of this card's logic
 and the reason every reduction moved work *towards* U1. "Design fits successfully" on
-both: U2 at **128 of 128 cells**, 62 of 64 I/O, **47 foldback nodes, one cascade and 433
-product terms**, seven of eight blocks at **36 of 40 LAB fan-in**; U1 at **107 of 128 cells**,
+both: U2 at **126 of 128 cells**, 63 of 64 I/O, **52 foldback nodes, two cascades and 445
+product terms**, six of eight blocks at **37 of 40 LAB fan-in**; U1 at **107 of 128 cells**,
 62 of 64 I/O, 34 foldback, two cascades and 353 product terms. A **TQFP-100 was tried and does not help**: it takes the
-pins from 62 of 64 to 62 of 80 and leaves the cells at 128 of 128, because both packages
+pins from 63 of 64 to 63 of 80 and leaves the cells at 126 of 128, because both packages
 carry the same 128 macrocells. So the PLCC-84 is the right package — it keeps the socket
 and the TQFP-100 would buy eighteen pins the design does not need — and **there is
 nothing left on U2 for anything else** — which §11.2's departure does not change, because that mode was never built.
 
-⚠ **JTAG is off on U2**, which is the four pins that made it fit: 62 of 64 against 62 of
+⚠ **JTAG is off on U2**, which is the four pins that made it fit: 63 of 64 against 63 of
 60. Both parts are programmed out of circuit, so this is the arrangement the card already
 had (§10.1.1), not a concession.
 
@@ -1957,10 +1967,10 @@ work slots per colour clock instead of three. Both are archived.
 
 #### 10.2.6 The pin budget, and the one lever that was pulled
 
-U2 is **38 outputs and 26 inputs**, and the fitter reports **62 of 64 I/O and 128 of
-128 logic cells** — "Design fits successfully", with **47 foldback nodes, one cascade and
-433 product terms**, and **seven of eight logic blocks at 36 of 40 LAB fan-in**
-(§16 item 44, 2026-09-11). ⚠ **The two cascades are on `SFOE` and `SDH2`**, the state
+U2 is **38 outputs and 26 inputs**, and the fitter reports **63 of 64 I/O and 126 of
+128 logic cells** — "Design fits successfully" on pass 2, with **52 foldback nodes, two
+cascades and 445 product terms**, and **six of eight logic blocks at 37 of 40 LAB fan-in**
+(§16 item 47, 2026-09-12). ⚠ **The two cascades are on `SFOE` and `SDH2`**, the state
 file's output enable and the high lane's arithmetic. `SFOE` is on the card's one tight
 path (§3.2), and nothing here times it. `npm run check:audio` prints the interface and asserts
 it is **closed in both directions**: every signal U1 reads is produced by U2, the
@@ -3766,28 +3776,98 @@ specification that has not been tested.
     39(b)'s load at the `PEND` write traded that away. **Measure the spread on real modules
     before deciding whether it matters**: an event-to-capture histogram in `modplay_tb`.
 
-46. **⚠ OPEN 2026-09-12 — `check:modplay`'s default probe is single-channel, so every
-    healthy run prints two failure banners.** `package.json` plays `00_notes.mod`, and
-    `mkprobe.py` writes that probe on **channel 0 only**. `abcompare.py` splits the
-    render into left (channels 0, 3) and right (1, 2), so the right pair is silence
-    correlated against silence: **`spectral corr median 0.0000`** and a
-    **`*** PITCH MISMATCH ***`** of exactly +100.00 cents, on every run. ⛔ **It is
-    printed identically for the card and for the control**, which is the only reason it
-    is recognisable as an artefact rather than a defect — the run script's own rule is
-    that a card scoring worse than `refplayer` is hardware.
+46. **⭐ CLOSED 2026-09-12 — `check:modplay` plays four channels, and an acoustic result can
+    fail it.** The default probe is `14_fourchan.mod`, so both stereo pairs carry signal.
+    `abcompare.py` scores a side the reference leaves silent as *not scored* rather than
+    printing a +100-cent `PITCH MISMATCH`. Its `--control` mode is the gate
+    `run-modplay.sh` applies: **a card that scores worse than `refplayer` is hardware**,
+    as an exit code.
 
-    ⚠ **The left channel's `envelope correlation −0.1840` is the same trap.** It sits
-    beside `spectral corr median 0.9964` (control: 0.9988) at a **−20.0 ms alignment
-    lag**, and envelope correlation is a time-domain measure, so the lag decorrelates it
-    while the card is in fact playing correctly.
+    | gated, card against control, per side | margin |
+    |---|---|
+    | absolute level — card and `refplayer` share `render.c`'s analogue chain, so between them it is comparable | ±0.5 dB |
+    | envelope correlation against libopenmpt | ≥ control − 0.05 |
+    | spectral median / 5th percentile | ≥ control − 0.02 / − 0.10 |
+    | tuning | ±12 cents |
 
-    **This is the `grep '^FAIL'` defect class from `CLAUDE.md` inverted**: output that
-    reads like a failure and is not, which trains the reader to ignore it. The fix is a
-    four-channel default (`14_fourchan`) so both pairs carry signal, and it needs its own
-    verification run because it changes what the check asserts. ⚠ **The −20 ms lag is
-    separately unexplained** and is worth one look: the card's register stream is
-    delivered on its own §8.2 tick interrupt, so a constant offset is plausible, but
-    nothing has checked that it is constant rather than drifting.
+    ⭐ **Verified in both directions** against renders of the control: delayed one tick,
+    it passes; with gain errors of −1.0 dB and +0.6 dB, it fails on level alone.
+
+    ⛔ **The "−20 ms envelope trap" was a scoring bug.** `best_lag` peaks where
+    `r[n + lag]` matches `o[n]`, and the alignment trimmed the wrong signal, doubling
+    every lag it measured. A copy of the control delayed exactly 20 ms scored 0.40 before
+    the fix and 1.00 after. **The card's offset is constant**: one tick, 20.00 ms, in
+    every quarter-second window of `14_fourchan`, which rules out drift. ⚠ **Its cause is
+    not established.** It is the same in every window, so the alignment removes it, and
+    the gate does not depend on it.
+
+    ⛔ **And the four-channel probe found §16 item 47 on its first run**, which every
+    aggregate command had passed.
+
+    `run-modplay.sh` keeps its bench log as `$OUT/<module>.log` beside the renders. It
+    used to be a `mktemp` removed on exit, deleting the `FAIL` lines of a failing run.
+    `npm run check:audio:all` runs `check:sim:audio`, `check:oracle` and `check:modplay`,
+    and `npm run build:all` ends with it.
+
+47. **⭐ CLOSED 2026-09-12 — polling `ASTAT` destroyed the write it was waiting for.** Found
+    by item 46's four-channel probe, whose first run froze **three channels in two
+    seconds**. `modplay_tb`'s new claim that *PTR advances while `VOL` is non-zero* reported
+    channel 2 stalled with **`PER = $1DFF`** where the trace wrote `$011D`, and
+    `LEN = $2001` where it wrote `$0020`: every byte from one offset on had landed one
+    lower.
+
+    **Two defects in the host strobe, each read off a waveform** (`modplay_tb +hadbg=`):
+
+    - **A read reloaded the pending write's identity.** `HA`/`HRW` loaded on every
+      strobe. A write queued behind channel work holds b6. The host polls `ASTAT` as §9.2
+      requires, the poll reloads `HA = $A`, `HRW = 1`, and W3 runs for a **read of
+      `ASTAT`**: the byte is never stored and `AINC` (decoded from `HA` at `LAST`) never
+      fires. The next byte lands on the same offset.
+    - **A poll that found b6 clear still queued work the host could not see.** Every
+      access raised `HDUE`, and b6 covered writes only. The host's next write strobed
+      while the poll's W3 was running and reloaded `HA` past its store step. The sequence
+      ended as an `ADATA` access: `AINC` fired, `HACK` cleared `HDUE`, and **the write's
+      own W3 never ran**. Index advanced, byte lost. `audio_tb`'s new bus-polled write
+      found this one on its first run, after the first repair.
+
+    **The repair is §9.4.4's `HSTB`**: an access is taken only if it queues work (a write,
+    or a read of `ADATA`/`SDATA`) and b6 is clear. b6 covers every taken access, and
+    `FIRE5` reads the raw strobe. ⛔ **Gating the loads instead of the strobe does not
+    work**: that repair gated `HA`, `HRW`, `HGBL`, `AIDXLD` and `PWCK` and missed `HDUE`.
+    An idle card retires a write so fast that the next poll strobes in `HACK`'s own slot,
+    and W3 re-ran the previous write — `SDATA` stored twice, 127 of 130 upload bytes
+    misplaced.
+
+    | fitted U2 | before | after |
+    |---|---|---|
+    | cells, I/O | 124 / 128, 63 / 64 | **126 / 128, 63 / 64** |
+    | foldback, cascades, PT | 52, 2 (`SFOE`, `SDH2`), 436 | **52, 2 (`SFOE`, `SDH2`), 445** |
+    | LAB fan-in | seven of eight at 36 | **six of eight at 37** |
+    | fitter pass | 2 | 2 |
+
+    ⚠ **The intermediate gate-the-loads design fitted on pass 1 with 19 cascades**, on
+    `T0`/`T2`/`T3`, `BUSY`, `SFA0`–`SFA4`, `WC0` and `SDH1`: the step counter and the
+    state-file address. The final design has the same two cascades as the design before
+    it, so it adds no cascade delay. Both counts are from fits.
+
+    **The claims:**
+
+    - `audio_tb` (67 → 69): four channels at `PER` = 30 starve W3, and three `ADATA`
+      writes are each followed at once by `ASTAT` polls over the bus. At least one poll
+      must see b6 set, and `PER`, `VOL` and `AIDX` must be exactly what was written.
+      ⭐ **It fails on the previous U2** (`PER $001E`, `VOL $40`, `AIDX 7`).
+    - `modplay_tb` (18 → 19): every audible channel's `PTR` advances at least every 2048
+      colour clocks. On the previous U2: 3 channels stalled. Now: 0; the longest gap is 664 cc.
+    - `check:modplay` on `14_fourchan`, this tree: **20 claims, 0 failed**. Card against
+      control: level **+0.00 dB** both sides, envelope correlation 0.988 / 0.995 (control
+      0.989 / 0.997), spectral 5th percentile 0.996 / 0.994 (control 0.993 / 0.994).
+
+    ⚠ **Why nothing caught it.** `audio_tb` waits on b6 by peeking `card.u2.PWBUSY`, so no
+    read ever reached the card while a write was pending. `modplay_tb` polls over the bus,
+    but its default probe used one channel, which rarely queues W3 long enough. This is
+    `CLAUDE.md`'s *"a testbench that drives `E` from its own free-running counter has a
+    CPU that cannot be waited"*, on the host port. **A handshake the testbench peeks is a
+    handshake it has not tested.**
 
 ---
 
