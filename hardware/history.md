@@ -8,6 +8,21 @@ kept verbatim or lightly trimmed, because the archive is the record.
 
 ---
 
+## `vctrl` 53 → 56 of 64 I/O — the list writes `HSCROLL[1:0]` on both parts (2026-09-13)
+
+`video/docs/graphics.md` §19 item 49: a display-list `MOVE` to `HSCROLL` wrote `vsup`'s copy
+of the fine pair and not `vctrl`'s, which `seqph`'s `MUXSEL` reads, so a listed
+`HSCROLL[1:0]` ≠ 0 rotated every four-pixel group. `vctrl`'s pair gained the list's write
+port: `LWHSL` from `vsup` and the operand's two bits (`DB0`, `DB1`) from the card's internal
+data bus. Three input pins. Every present-tense "53 of 64" for `vctrl` in the specs became
+"56 of 64"; cells (93 of 128), cascades (5) and peak LAB fan-in (25 of 40) did not move, and
+the part still places on the fitter's first pass.
+
+The alternative that was fitted first and is **not** taken: delete `vctrl`'s copy and read
+`vsup`'s across two pins. It fitted only on pass 2, at 128 of 128 cells and no cascades
+(pass 1: "Placement fail"), including with the two inputs on the free dedicated pins, which
+this flow's `Preassign = IGNORE` does not honour.
+
 ## `ram.md` §3.1, §6.3.1 and `lib/parts.ts` — the motherboard's HC parts become HCT; U6's `/WAIT` sense (2026-09-11)
 
 A three-board review found two motherboard defects that no check could see.

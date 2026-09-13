@@ -2244,7 +2244,7 @@ pins are fitted; `check:tile` asserts what they compute, including both axes of 
 (§6.4.6 limit 2); and `check:cadence` runs the second fetch cadence over a whole line
 (§6.4.9). ⚠ The package decision is unchanged but its **headroom is gone**: the
 cadence filled `vctrl`'s I/O and took it to 122 of its 128 cells as the fit then
-stood; it is 53 of 64 I/O and 93 of 128 cells today (§14 has the live figure).
+stood; it is 56 of 64 I/O and 93 of 128 cells today (§14 has the live figure).
 
 **What §7 keeps.** The span writer is not deleted — it is the text engine, the fill
 and clear engine, and §6.4.6's limit 1 means bitmap regions need it regardless.
@@ -2316,7 +2316,7 @@ list — the whole of v1:
 | | Package | Holds | Logic cells | I/O pins |
 |---|---|---|---|---|
 | **`vaddr`** | PLCC-84 | scan and `WPTR` counters (`WPTR` doubling as the list engine's pointer, §10.3.1), scroll and tile registers, **the map byte's two-stage pipeline**, the write-strobe decode, the four-source address mux, **§7.2's reload walk**, **§10.3.2's descriptor engine** | **113 of 128** | **59 of 64** |
-| **`vctrl`** | PLCC-84 | sync trio, sequencer, span control, **the mask serialiser**, `CTRL`, `HSCROLL[1:0]`, `WADV`, §6.4's fetch cadence, the register decode, **the spare-access arbiter** (§10.1.6.3) | **93 of 128** | **53 of 64** |
+| **`vctrl`** | PLCC-84 | sync trio, sequencer, span control, **the mask serialiser**, `CTRL`, `HSCROLL[1:0]`, `WADV`, §6.4's fetch cadence, the register decode, **the spare-access arbiter** (§10.1.6.3) | **93 of 128** | **56 of 64** |
 | ⭐ **`vsup`** | PLCC-84 | the register-file address (`RA0`–`RA4`, `WSTB`), §7.4's mask-bit colour path and `SPANLEN` counter, §8.2's rank select, §9's palette write path, §10.3's descriptor decode — **`rfa`, `vlen` and `pxsel` absorbed** (§10.1.7) | **91 of 128** | **61 of 64** |
 
 The three-line table is the whole card's programmable logic. `DOTCLK` lands on a
@@ -2412,7 +2412,7 @@ combinations by `gal/jedec/cupl.check.ts`. `hardware/gal/video.cpld.ts` and
 to signal through the freed pins.
 
 **The spare-access arbiter is inside `vctrl`.** With `rfa`'s fourteen pins and
-Variant B's four freed, `vctrl` holds the arbiter at **53 of 64 I/O and 93 of 128
+Variant B's four freed, `vctrl` holds the arbiter at **56 of 64 I/O and 93 of 128
 cells**. The pins fell with §11's deletion of the CPU grant; one came back for
 `VDATA`'s select (§19 item 47) and one for `HSCROLL[2]` (§19 item 48). A CPLD at two-thirds capacity sitting beside a
 `GAL22V10` doing ten macrocells of work would be a package nobody is buying
@@ -2633,6 +2633,16 @@ neither triggers `/WAIT`.
    practice rule 1 costs 7.1 µs per *frame* — **0.05 % of a 14.27 ms frame**, against the
    0 % it would cost with a separate pointer and the package that pointer did not fit in.
 
+⚠ **The VBL interrupt's acknowledgement is a register write, and it arrives in the same
+blank.** §12.1's handler clears the request by writing `VSTAT`, and §10.3.3 says a CPU
+register write in a dot the engine is granted costs the list a descriptor byte. `/IRQ`
+reaches the CPU a dozen lines after `VBLANK` rises (`software/demo/README.md`, the budget),
+so a driver that masks interrupts around its `GO` takes the request just after the `GO`,
+with the list walking. `software/demo/gui.asm`'s `golist` serves the request itself while
+it waits in the blank, and `software/demo/emu/` reports any register write under `LRUN`.
+Unverified on the machine: the collision is §10.3.3's statement, and the emulator's
+interrupt timing is `demo_tb`'s measurement.
+
 > ⭐ **THE ENGINE WALKS AND TERMINATES SINCE 2026-09-09.** It could do neither: `LADV`
 > was produced by `vaddr` and read by nothing — `wcol` counts on `WINC`, which no rename
 > tied to it — and `LGRANT` was declared external on `vctrl` with no cell behind it, so
@@ -2712,10 +2722,11 @@ everything else here.
 - ⭐ **An operand of `$FF` is a value, not a terminator.** `LFETCH` carries `!LPH`, so
   `LD` latches **opcodes only**. The byte-fetcher could not have had a `MOVE` at all for
   this reason: `HSCROLL = $FF` would have ended the list. `vspan_tb` asserts it.
-- ⭐ **A list MOVE scrolls by one pixel, not four.** It scrolled in fours while §8.2's
-  fine pair lived only on `vctrl`, which the engine could not reach; `vsup` holds a
-  second copy written by the same descriptor in the same dot, so a listed scroll is as
-  smooth as a CPU one. `vpal_tb` checks both halves land from one `MOVE`.
+- ⭐ **A list MOVE scrolls by one pixel, not four.** `HSCROLL[1:0]` has two copies,
+  `vsup`'s for §8.2's rank enables and `vctrl`'s for `seqph`'s `MUXSEL`, and the
+  descriptor writes both in the same dot (`LWHSL`, with the operand's two bits from the
+  internal data bus on `vctrl`), exactly as the CPU's `LDHS` does. `vaddr_tb` sweeps a
+  listed `HSCROLL` from 1 to 7 and compares all 640 pixels of the line (§19 item 49).
 ⚠ **`WAIT` counts scanlines, not displayed lines, and one `WAIT` really is one
 line.** `LWAIT` is released by `HLOAD`, a purely horizontal decode of the sync pulse
 and back porch with no vertical term, so a blanked line consumes a `WAIT` exactly as a
@@ -3189,7 +3200,7 @@ arithmetic line by line. (The GAL-build table this section used to carry — 41 
 | **2** | **74HC573** | ⭐ **`PDATL`/`PDATH`, §13's `+$11`/`+$12`** — the LUT entry is 16 bits and the card's bus is 8, so the pair has to be assembled somewhere. Transparent latches, because a `'574` clocked on a register write's *rising* edge samples before a 6809E has driven the data (§3.1) | **new** |
 | **1** | **74HCT244** | ⭐ **§10.3.3's descriptor-byte buffer** — the display list's fetched byte, from the pixel bus onto the card's internal data bus for the dot a granted engine slot lasts. It is what makes a list `MOVE` reach a register at all | **new** |
 | 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vaddr`** — scan address, `WPTR`/span pointer, tile address sources. **59 of 64 I/O, 113 of 128 cells** (`hardware/gal/cpld/vaddr.fit`) | |
-| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, span-mask handling, §19 item 35's blanking delay, `VDATA`'s `/WAIT` and posted-write select. **53 of 64 I/O, 93 of 128 cells** (`hardware/gal/cpld/vctrl.fit`), placed on the fitter's first pass; §19 item 46. ⚠ **It was 56 of 64 and 128 of 128 until 2026-09-12**, when two sets of duplicated equations came out — §19 item 23(a)'s four identical `FCLK` outputs, and `CELLTICK`, which was `MCADV`'s equation letter for letter. **The last cell used to be `CTRL` b7**: the display enable is a second term on `BLANKD` (§9.2), and while the part was full that was the cell it cost | |
+| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, span-mask handling, §19 item 35's blanking delay, `VDATA`'s `/WAIT` and posted-write select. **56 of 64 I/O, 93 of 128 cells** (`hardware/gal/cpld/vctrl.fit`), placed on the fitter's first pass; §19 item 46. ⚠ **It was 56 of 64 and 128 of 128 until 2026-09-12**, when two sets of duplicated equations came out — §19 item 23(a)'s four identical `FCLK` outputs, and `CELLTICK`, which was `MCADV`'s equation letter for letter. **The last cell used to be `CTRL` b7**: the display enable is a second term on `BLANKD` (§9.2), and while the part was full that was the cell it cost | |
 | **1** | `ATF1508AS-15JC84`, PLCC-84 | ⭐ **`vsup`** — §10.1.7, **new 2026-09-09**. The register-file address, §7.4's `SPANLEN` counter, §8.2's rank select, §9's palette write path and §10.3's descriptor decode. It **replaces three `GAL22V10`s** (`rfa`, `vlen`, `pxsel`), so a third PLCC-84 is −2 packages before it does anything else. Since 2026-09-11 also §11's read prefetch and `VDATA`'s decode. **61 of 64 I/O, 91 of 128 cells** (`hardware/gal/cpld/vsup.fit`) | |
 | 1 | 74HC574 | posted-write **data** latch | = |
 | 1 | 32K×8 20 ns | register file | = |
@@ -3981,7 +3992,7 @@ left is measurement. They are grouped by what would settle them.
     `INTERNAL ERROR` on the fan-in wall, and ten shadow registers gave `Grouping fail`.
 
     ⚠ **§7.4's own cost paragraph reasons about the wrong resource.** It says "the pins
-    are not a problem… `vctrl` sits at 64 of 64" — `vctrl` is at **53 of 64 pins and
+    are not a problem… `vctrl` sits at 64 of 64" — `vctrl` is at **56 of 64 pins and
     93 of 128 cells**, so pins stopped being the constraint and the section has not
     been re-read since. **The honest estimate is: cheap in pins, free on `vsup`, and
     probably room on `vctrl`** — 35 cells spare and peak LAB fan-in 25 of 40 — but only
@@ -4013,7 +4024,7 @@ left is measurement. They are grouped by what would settle them.
 
     | | |
     |---|---|
-    | ⛔ **Two output pins on `vctrl`, and they buy nothing** | the arbiter becomes **2 grants instead of 4**. ⚠ **Re-checked against `cpld/*.fit` on 2026-09-12 and this row was wrong.** It said *six* pins; four of those were `GCPU0`–`GCPU3`, **already banked on 2026-09-11** when `CPUIDLE` made them constant and buried them. Only `GSPN2`/`GSPN3` are left to return — and `vctrl` is **93/128 cells with 53 of 64 pins**, so pins are not what it is short of |
+    | ⛔ **Two output pins on `vctrl`, and they buy nothing** | the arbiter becomes **2 grants instead of 4**. ⚠ **Re-checked against `cpld/*.fit` on 2026-09-12 and this row was wrong.** It said *six* pins; four of those were `GCPU0`–`GCPU3`, **already banked on 2026-09-11** when `CPUIDLE` made them constant and buried them. Only `GSPN2`/`GSPN3` are left to return — and `vctrl` is **93/128 cells with 56 of 64 pins**, so pins are not what it is short of |
     | 25.1 MB/s solid fill | §14.2's broadcast write: four bytes in one access, against 6.29 MB/s today (`features.md` §3.1) |
     | 205–405 mA | §14.2's power saving, and §19 item 10 is the measurement that confirms it |
     | `/WAIT` bounded at 10.2 µs | instead of 40.7 µs (§7.4, `machine.md` §5 item 10) |
@@ -4025,7 +4036,7 @@ left is measurement. They are grouped by what would settle them.
 
     | part | cells | I/O | peak LAB fan-in |
     |---|---|---|---|
-    | `vctrl` | **93/128, 35 spare** | 53/64, **11 spare** | 25 of 40 |
+    | `vctrl` | **93/128, 35 spare** | 56/64, **8 spare** | 25 of 40 |
     | `vaddr` | **113/128, 15 spare** | 59/64 | 35 of 40 |
     | `vsup` | 91/128, 37 spare | 61/64, 3 spare | 25 of 40 |
 
@@ -4171,7 +4182,7 @@ left is measurement. They are grouped by what would settle them.
     | part | cells | I/O | cascades | peak LAB fan-in | pass |
     |---|---|---|---|---|---|
     | `vaddr` | 113 of 128 | 59 of 64 | 4 | 35 of 40 | **1** |
-    | `vctrl` | 93 of 128 | 53 of 64 | 5 | 25 of 40 | **1** |
+    | `vctrl` | 93 of 128 | 56 of 64 | 5 | 25 of 40 | **1** |
     | `vsup` | 91 of 128 | 61 of 64 | 2 | 25 of 40 | 2 |
 
 47. **⭐ CLOSED 2026-09-11 — `+$15` `VDATA` is built: the VRAM port in the I/O page.**
@@ -4228,6 +4239,31 @@ left is measurement. They are grouped by what would settle them.
     finding and the partial fixes that each left one fetch wrong are in
     [history.md](history.md).
 
+49. **⭐ CLOSED 2026-09-13 — a display-list `MOVE` to `HSCROLL` with bits 1..0 ≠ 0 scrambled
+    the line.** Found by `software/demo/bench/calib.asm` on the whole machine
+    (`run-calib.sh`), which lists `HSCROLL` = 1, 2, 3, 5, 6 and 7 on successive bands of
+    a striped screen. A **CPU** write of 3 or 5 displays exactly. A **listed** one shows,
+    in every four-pixel group of the line, the four bytes that group should show, rotated:
+    pixel *x* shows the ring column *a* ≡ *x* (mod 4) with
+    4⌊*x*/4⌋ + *f* ≤ *a* < 4⌊*x*/4⌋ + *f* + 4, where *f* is the listed `HSCROLL[1:0]`.
+
+    **The mechanism is the two copies of `HSCROLL[1:0]`.** The descriptor writes `vsup`'s
+    (`pxsel.jedec.ts`, `LWHSL`), and §8.2's `OEA`/`OEB` ranks follow it, so the fetched
+    group moves by *f*. The `'153` select `MUXSEL` is `seqph`'s dot phase plus `vctrl`'s
+    `HS0`/`HS1` (`video_card.v`'s `sel`), and `video.parts.ts` records that the engine
+    cannot reach those. Under a CPU write both copies agree, which is why every bench
+    that scrolls from the CPU passed.
+
+    **The fix is a second write port on the mux-phase copy**: the list's strobe and the
+    operand's bits `DB0`/`DB1` from the card's internal data bus, three input pins. `vctrl`
+    is 56 of 64 I/O and still 93 of 128 cells on the first pass. `MUXSEL` needs the offset
+    — the mux must start each slot on chip `p` — so the copy cannot simply go, and reading
+    the other part's copy across two pins placed only on the fitter's second pass
+    ([`hardware/history.md`](../../hardware/history.md) has the figures). `vaddr_tb` now sweeps a listed
+    `HSCROLL` from 1 to 7 over all 640 pixels; on the old equations it fails six of the
+    seven. `software/demo/`'s paint program scrolls its canvas a pixel at a time and warps
+    it with a per-line list.
+
 ### 19.6 Closed
 
 | Items | Closed | Where the argument is |
@@ -4251,6 +4287,7 @@ left is measurement. They are grouped by what would settle them.
 | ⛔ **48** cell mode drew half of every cell from its neighbour at `HSCROLL[2]` = 1 | **2026-09-13** | **§6.4.9, §19 item 48** — the map pipeline's cell phase is `H0` ⊕ `HSCROLL[2]`, and a half-cell-scrolled line takes 81 codes. One pin, five product terms |
 | **9** `74HC593` availability | **2026-09-09** | **§9** — the part is discontinued; `PIDX` is 2 × `'163` + 1 × `'244` |
 | **28** byte-granular horizontal scroll | **2026-09-09** | **§8.2** — two ranks and an output-enable select, +4 packages |
+| ⛔ **49** a listed fine `HSCROLL` rotated every four-pixel group | **2026-09-13** | **§8.2, §10.3.2, §19 item 49** — `vctrl`'s copy of `HSCROLL[1:0]` gained the list's write port: three pins, no cells |
 | ⭐ **35** the picture was five dots right of the active window | **2026-09-10** | **§19 item 35 above** — five registered macrocells on `vctrl`, zero pins, and `vsync_tb` pins the depth |
 | ⛔ **36** the arbiter deadlocked the machine on its first span | **2026-09-10** | **§5.2.1** — a posted CPU VRAM write claimed a framebuffer chip it does not need, and then blocked the span it had just started, while `/WAIT` held `E` waiting for that span. One literal (`R/W`) on `GCPU`, one product term on `GSPN` |
 | ⛔ **37** the posted-write strobe re-armed the span for ever | **2026-09-10** | **§7.4** — `SPANBUSY` was set by a LEVEL over `E`-high, and `/WAIT` makes `E`-high unbounded. `WPQ`/`WSTART` make it a one-dot **E-fall** edge, which is what §3.1.1's `'574`s always did. One registered macrocell |

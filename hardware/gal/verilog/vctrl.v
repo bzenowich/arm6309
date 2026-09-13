@@ -25,6 +25,9 @@ module vctrl (
     input  wire RW,
     input  wire VDSEL,
     input  wire LDHS,
+    input  wire LWHSL,
+    input  wire DB0,
+    input  wire DB1,
     input  wire LDADV,
     input  wire D2,
     input  wire HS2,
@@ -773,10 +776,12 @@ module vctrl (
          (BD3);
       r_HS0 <=
          (LDHS & D0)
-         | (HS0 & ~LDHS);
+         | (LWHSL & DB0)
+         | (HS0 & ~LDHS & ~LWHSL);
       r_HS1 <=
          (LDHS & D1)
-         | (HS1 & ~LDHS);
+         | (LWHSL & DB1)
+         | (HS1 & ~LDHS & ~LWHSL);
       r_WADV0 <=
          (LDADV & D0)
          | (WADV0 & ~LDADV);

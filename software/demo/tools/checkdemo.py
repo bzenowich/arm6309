@@ -6,9 +6,16 @@
 OUT is demo_tb's output directory, BUILD software/demo/build. Every claim is
 printed "ok" or "FAIL", and the exit code is the answer.
 
-⭐ THE PICTURE IS COMPARED PIXEL FOR PIXEL. Once the paint has finished, every
-640 x 480 frame must be parrots.raw pushed through the palette demo.asm loads -
-the whole address path, the VDATA stream, the ring and the LUT, from outside.
+OUT may equally be emu/run-emu.sh's directory: the emulator writes the same
+frames.bin.
+
+⭐ THE SHOW IS COMPARED PIXEL FOR PIXEL, AT EVERY CHECKPOINT. show.Model ran
+the script and kept a picture at each CHECK; the bench read the checkpoint word
+at each frame's first and last active dots. A frame whose two readings agree
+was scanned while nothing was drawn, and it must be that picture through its
+palette - with the raster phase its display list held, if it has one, and only
+if a list was running at line 1. Every checkpoint must have reached the
+connector at least once.
 
 ⭐ AND SO IS THE GAME, against a model that does not share code with the 6809.
 mkgame.py's render() draws world + hero for a (camera record, hero record) pair
@@ -18,12 +25,13 @@ own state says it was showing - scroll, strips, tiles, hero composite, flip -
 and the checker also asks whether that state moved like a game: the camera
 record advancing one frame per frame, and how often it did not.
 """
-import os, sys
+import os, pickle, sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
 import frames as fr
 import mkgame
+import show
 
 out = sys.argv[1]
 build = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "..", "build")
@@ -38,13 +46,18 @@ def ok(good, msg):
 
 
 pal = fr.palette565()
-pic = np.frombuffer(open(os.path.join(build, "parrots.raw"), "rb").read(), dtype=np.uint8).reshape(480, 640)
-pic565 = pal[pic]
 inv = np.full(65536, -1, dtype=np.int32)
 inv[pal] = np.arange(256)
 model = np.load(os.path.join(build, "model.npz"))
 
-n_pic = pic_bad = 0
+# the show's pictures: show.Model's, one per CHECK in the script
+shows = np.load(os.path.join(build, "show.npz"))
+rasts = pickle.load(open(os.path.join(build, "show_rast.pkl"), "rb"))
+names = dict(l.rstrip("\n").split(" ", 1) for l in open(os.path.join(build, "checks.txt")))
+pictures = {int(k): dict(idx=shows[f"idx{k}"], pal=shows[f"pal{k}"], list=bool(shows[f"lst{k}"]),
+                         **rasts.get(int(k), dict(rast=None, wave=None, ring=None))) for k in shows["ids"]}
+seen, exact, bad_show = {}, {}, []
+n_rast = n_rast_skip = n_nolist = 0
 n_game = game_exact = game_stale = 0
 game_bad_frames = []
 first_bad = None
@@ -55,13 +68,29 @@ dbl_bad = 0
 n_total = 0
 for meta, px in fr.read(os.path.join(out, "frames.bin")):
     n_total += 1
-    if meta["prog"] == 0x84 and meta["vmode"] == 3:
-        n_pic += 1
-        if px.shape != (480, 640) or not np.array_equal(px, pic565):
-            pic_bad += 1
+    ck0, ck1 = meta["ck"]
+    if ck0 and ck0 == ck1 and ck0 in pictures and meta["prog"] != 0x85:
+        pic = pictures[ck0]
+        ph = None
+        if pic["list"] and not meta["lrun"]:
+            # the picture needs a display list and none was running at line 1
+            n_nolist += 1
+            continue
+        if pic["rast"] is not None or pic["wave"] is not None:
+            if not (meta["ph"][0] and meta["ph"][0] == meta["ph"][1] and meta["lrun"]):
+                n_rast_skip += 1
+                continue
+            ph = meta["ph"][0] - 1
+            n_rast += 1
+        want = show.picture_rgb(pic, ph)
+        seen[ck0] = seen.get(ck0, 0) + 1
+        if px.shape == want.shape and np.array_equal(px, want):
+            exact[ck0] = exact.get(ck0, 0) + 1
+        else:
+            bad_show.append((meta["n"], ck0, ph, int(np.count_nonzero(px != want)) if px.shape == want.shape else -1))
             if first_bad is None:
-                first_bad = ("picture", meta, px)
-    if meta["prog"] == 0x85 and meta["vmode"] == 0 and px.shape == (400, 640):
+                first_bad = ("show", meta, px, want)
+    if meta["prog"] == 0x85 and meta["vmode"] == 0 and px.shape == (400, 640) and meta["ck"] == (0, 0):
         n_game += 1
         if not np.array_equal(px[0::2], px[1::2]):
             dbl_bad += 1
@@ -90,9 +119,20 @@ for meta, px in fr.read(os.path.join(out, "frames.bin")):
         prev_camk = k
         last_missed = meta["missed"]
 
-print(f"      {n_total} frames captured; {n_pic} of the finished picture, {n_game} of the game")
-if n_pic:
-    ok(pic_bad == 0, f"⭐ the picture at the connector is parrots.raw through the RGB332 palette, every pixel, in all {n_pic} frames ({pic_bad} differ)")
+print(f"      {n_total} frames captured; {sum(seen.values())} at a checkpoint, {n_game} of the game")
+missing = [k for k in sorted(pictures) if k not in seen]
+ok(not missing, f"⭐ every one of the script's {len(pictures)} checkpoints reached the connector"
+   + ("" if not missing else f" - never seen: {', '.join(f'{k} ({names[str(k)]})' for k in missing[:6])}"))
+ok(not bad_show, f"⭐ every checkpoint frame is show.Model's picture, pixel for pixel: {sum(exact.values())} of "
+   f"{sum(seen.values())} frames" + ("" if not bad_show else
+   f"; first wrong: frame {bad_show[0][0]}, checkpoint {bad_show[0][1]} ({names[str(bad_show[0][1])]}), "
+   f"raster phase {bad_show[0][2]}, {bad_show[0][3]} pixels"))
+ok(n_nolist <= max(1, sum(seen.values()) // 100),
+   f"a checkpoint that needs a display list found one running in all but {n_nolist} of its frames (1% may not)")
+if n_rast or n_rast_skip:
+    ok(n_rast > 0 and n_rast_skip <= n_rast // 10,
+       f"⭐ the raster bars and the paint program's wave: {n_rast} frames judged at the phase their list held, "
+       f"{n_rast_skip} with no list started in time (no more than 10% may be)")
 if n_game:
     ok(dbl_bad == 0, f"VMODE 00 doubles every row in all {n_game} game frames ({dbl_bad} do not)")
     ok(game_stale == 0,
@@ -151,10 +191,13 @@ if first_bad is not None:
     from PIL import Image
     kind, meta, px = first_bad[0], first_bad[1], first_bad[2]
     Image.fromarray(fr.rgb565_to_rgb8(px)).save(os.path.join(out, f"first_bad_{kind}.png"))
+    want = first_bad[3]
     if kind == "game":
-        want = first_bad[3]
-        Image.fromarray(mkgame_expand := fr.rgb565_to_rgb8(pal[np.repeat(want, 2, axis=0)])).save(
-            os.path.join(out, "first_bad_game_want.png"))
+        want = pal[np.repeat(want, 2, axis=0)]
+    if want.shape == px.shape:
+        Image.fromarray(fr.rgb565_to_rgb8(want)).save(os.path.join(out, f"first_bad_{kind}_want.png"))
+        diff = (px != want)
+        Image.fromarray((diff * 255).astype(np.uint8)).save(os.path.join(out, f"first_bad_{kind}_diff.png"))
     print(f"      wrote {out}/first_bad_{kind}.png (frame {meta['n']})")
 
 sys.exit(1 if fails else 0)

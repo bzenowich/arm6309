@@ -356,7 +356,7 @@ rather than ranges.
 The obvious problem with a map above 2 MB is that **cards decode only
 `A0`–`A20`**, so an access at 2.5 MB looks to a card exactly like one at
 0.5 MB. Giving every card `A21`–`A24` is four backplane pins the slot does not
-have. `vctrl` has the pins, at **53 of 64 I/O** (`gal/cpld/vctrl.fit`), and it has cells
+have. `vctrl` has the pins, at **56 of 64 I/O** (`gal/cpld/vctrl.fit`), and it has cells
 too — **93 of 128** since 2026-09-13, on the fitter's first pass (`graphics.md` §19
 item 46). ⚠ **That does not reopen this.**
 The reason `A21`–`A24` never reach a slot is that the **backplane** has no pins

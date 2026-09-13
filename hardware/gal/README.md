@@ -205,7 +205,7 @@ is the *earlier* excursion in which the same pin was spent by accident.
 
 > ⚠ **U3 IS PIN-FULL AND CANNOT TAKE ANOTHER SIGNAL.** The video card's `vctrl` was the
 > other one until 2026-09-11, when `graphics.md` §11 deleted the CPU's chip grant. It is
-> **53 of 64 I/O and 93 of 128 cells** since 2026-09-13, placed on the fitter's
+> **56 of 64 I/O and 93 of 128 cells** since 2026-09-13, placed on the fitter's
 > first pass (§19 items 46 and 48). ⚠ It was 56/64 and **128 of 128** until the four
 > identical `FCLK` outputs — the residue of §19 item 23(a)'s deleted per-chip
 > clock scheme — collapsed into one (125 cells, 53 pins), and `CELLTICK` merged into
@@ -428,7 +428,7 @@ The video card's programmable logic is **three ATF1508AS PLCC-84s and no GALs**
 | | I/O | logic cells | |
 |---|---|---|---|
 | `vaddr` | **59 of 64** | **113 of 128** | scan address, `WPTR`, tile address sources |
-| `vctrl` | **53 of 64** | **93 of 128** | sync, sequencer, span control, the arbiter, `CTRL` |
+| `vctrl` | **56 of 64** | **93 of 128** | sync, sequencer, span control, the arbiter, `CTRL` |
 | `vsup` | **61 of 64** | **91 of 128** | register-file address, `SPANLEN`, §8.2's rank select, §9's palette write path, §10.3's descriptor decode |
 
 ⭐ **`vsup` absorbed all three of the card's `GAL22V10`s** — `rfa`, `vlen` and `pxsel` —

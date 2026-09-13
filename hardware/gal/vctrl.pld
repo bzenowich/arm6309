@@ -40,6 +40,9 @@ PIN = D7 ;
 PIN = RW ;
 PIN = VDSEL ;
 PIN = LDHS ;
+PIN = LWHSL ;
+PIN = DB0 ;
+PIN = DB1 ;
 PIN = LDADV ;
 PIN = D2 ;
 PIN = HS2 ;
@@ -416,9 +419,11 @@ BD4.d = BD3 ;
 BLANKD = BD4
          # !DISPEN ;
 HS0.d = LDHS & D0
-        # HS0 & !LDHS ;
+        # LWHSL & DB0
+        # HS0 & !LDHS & !LWHSL ;
 HS1.d = LDHS & D1
-        # HS1 & !LDHS ;
+        # LWHSL & DB1
+        # HS1 & !LDHS & !LWHSL ;
 WADV0.d = LDADV & D0
           # WADV0 & !LDADV ;
 WADV1.d = LDADV & D1

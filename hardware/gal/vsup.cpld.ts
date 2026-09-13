@@ -110,9 +110,12 @@ export const vsupCpld: Merged = merge(
       /* ⭐ +$15 VDATA's select, to vctrl's posted-write strobe and /WAIT - 19
        * item 47. vctrl has no A0-A4 to decode it. */
       "VDSEL",
-      /* ⛔ 8.2's HSCROLL[1:0] and 7.2's WADV, to vctrl - which had input pins
-       * for both and no part exporting either, until 2026-09-11. vsup.parts.ts. */
-      "LDHS", "LDADV",
+      /* ⛔ 7.2's WADV strobe, to vctrl - which had an input pin for it and no
+       * part exporting it, until 2026-09-11. vsup.parts.ts. */
+      "LDADV",
+      /* 8.2's HSCROLL[1:0] strobe, to vctrl's copy - which the list's LWHSL
+       * (above) also loads since 2026-09-13, graphics.md 19 item 49. */
+      "LDHS",
     ]),
   },
 )

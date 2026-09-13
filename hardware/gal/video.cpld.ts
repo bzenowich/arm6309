@@ -154,6 +154,18 @@ const loadable2 = (name: string, strobe: string): Cell[] =>
     terms: [`${strobe} & D${b}`, `${name}${b} & !${strobe}`],
   }))
 
+/* ⛔ AND THE LIST WRITES HSCROLL[1:0] HERE TOO, since 2026-09-13 - graphics.md
+ * 19 item 49. This copy was loaded by the CPU's LDHS alone, while vsup's -
+ * the one 8.2's rank enables read - also took 10.3's list MOVE. A listed
+ * HSCROLL[1:0] then moved the ranks and not MUXSEL, and every four-pixel group
+ * came out rotated. LWHSL and the operand's two bits on the card's internal
+ * data bus (DB0, DB1 - this part's D0..D7 are the backplane's, 10.3.4) give it
+ * the second port vaddr's HSCROLL[9:2] and vsup's pair already have. */
+const listedHs: Cell[] = [0, 1].map((b) => ({
+  pin: 0, name: `HS${b}`, assertedLow: false, s0: 1 as const, registered: true,
+  terms: [`LDHS & D${b}`, `LWHSL & DB${b}`, `HS${b} & !LDHS & !LWHSL`],
+}))
+
 const comb = (name: string, terms: string[]): Cell =>
   ({ pin: 0, name, assertedLow: false, s0: 1, registered: false, terms })
 
@@ -375,7 +387,7 @@ export const vctrlCpld: Merged = withActiveLow(merge(
   [rename(hgenDesign, SLOT_CE), rename(vgenDesign, SLOT_CE), vdecDesign,
    seqphDesign, rename(seqctlDesign, SPAN_STB), arbGalDesign],
   [...ctrl, ...ctrlFanout, ...vramWriteStrobe, ...blankDelay,
-   ...loadable2("HS", "LDHS"), ...loadable2("WADV", "LDADV"),
+   ...listedHs, ...loadable2("WADV", "LDADV"),
    ...maskSerialiser, ...tileCadence, ...decodeCells],
   {
     name: "vctrl", partNo: "ARM6309-UV0B", location: "video card - sync and sequencer",

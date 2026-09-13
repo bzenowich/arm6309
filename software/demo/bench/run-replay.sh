@@ -20,7 +20,7 @@ $V --top-module replay_tb -Mdir $B/obj_replay \
 "$ROOT/build-host/refplayer" --trace $B/ref.trace --sram $B/ref.sram --seconds "$SECS" $B/demo.mod > /dev/null
 TICKS=$(tail -1 $B/ref.trace | awk '{print $1+0}')
 
-$B/obj_replay/replay_tb +rom=$B/rom.hex +trace=$B/replay.trace +sram=$B/replay.sram +ticks=$((TICKS + 1))
+$B/obj_replay/replay_tb +rom=$B/rom-replay.hex +trace=$B/replay.trace +sram=$B/replay.sram +ticks=$((TICKS + 1))
 
 # compare through the last tick both reached
 awk -v t="$TICKS" '$1+0 <= t' $B/replay.trace > $B/replay.cmp

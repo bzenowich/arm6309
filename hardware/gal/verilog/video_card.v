@@ -160,9 +160,12 @@ module video_card (
 
   vctrl u_vctrl (
     .DOTCLK(DOTCLK), .RESET(RESET),
-    // ⚠ vctrl's LDHS is vsup's decode, and LDADV is vsup's too - since
-    // 2026-09-11 they are the copies that leave a package (reach.check.ts).
+    // ⚠ vctrl's LDADV is vsup's decode - since 2026-09-11 it is the copy that
+    // leaves a package (reach.check.ts).
     .VSTATWR(VSTATWR), .LDHS(VS_LDHS), .LDADV(LDADV), .TC(TC), .LRUN(LRUN),
+    // ⛔ 10.3.2's list MOVE to +$03, and its operand's two bits off the card's
+    // internal data bus - graphics.md 19 item 49
+    .LWHSL(LWHSL), .DB0(DBUS[0]), .DB1(DBUS[1]),
     .IOPAGE(IOPAGE),
     .SPNA0(WA0), .SPNA1(WA1), .E(E), .WCTRL(WCTRL),
     .D0(DIN[0]),.D1(DIN[1]),.D2(DIN[2]),.D3(DIN[3]),

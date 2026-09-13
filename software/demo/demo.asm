@@ -1,38 +1,38 @@
 *******************************************************************************
-* demo.asm -- three parrots, a scrolling overworld, and a module playing
-* underneath both, on the whole machine.
+* demo.asm -- the show, then the overworld, with a module playing under both,
+* on the whole machine.
 *
-*   sh software/demo/build.sh          assemble and lay out the 1 MB ROM
-*   sh hardware/gal/verilog/run-demo.sh    run it, and make the video
+*   sh software/demo/build.sh              assemble and lay out the 1 MB ROM
+*   sh software/demo/emu/run-emu.sh 100    the show on the host emulator
+*   sh hardware/gal/verilog/run-demo.sh 97 the show on the machine, and the video
 *
-* WHAT IT IS FOR. Every bench in this repository before this one runs the video
-* card or the audio card; machine_tb runs the CPU with the video card; nothing
-* has run all three together, taken an interrupt, or played a note from 6809
-* code. This does all of that at once, for long enough to watch: the replayer
-* runs from the audio card's /FIRQ (audio.md 8.1) the whole time, the game
-* loop counts frames from the video card's VBL /IRQ (graphics.md 12.1), and the
-* main line never stops using the bus between them.
+* WHAT IT IS FOR. features.md 0 lists what the video card can do; this runs all
+* of it that is built, the way software would use it, and checks every picture
+* that should be still against a model that shares no drawing code with the
+* 6809 (README.md, "How it is checked"). The replayer runs from the audio
+* card's /FIRQ (audio.md 8.1), frames are counted from the video card's VBL
+* /IRQ (graphics.md 12.1), and the main line never stops using the bus between.
 *
 * THE SEQUENCE
 *   1. boot.asm runs its own tests, finds "6309" at ROM page 1, maps pages 1-2
 *      at $8000 and jumps to $8004
-*   2. mod_load uploads the samples through SPTR/SDATA and mod_start starts
-*      the tempo timer; /FIRQ is unmasked and the music plays from here on
-*   3. 256 palette entries: entry i is RGB332(i) in RGB565
-*   4. VRAM rows 0-479 cleared with span-solid writes, VMODE 11 on
-*   5. the picture, 307,200 bytes from ROM through VDATA, painting down
-*   6. five seconds of it (300 VBL interrupts at 59.94 Hz) - and while it
-*      stands, the tile set and the first view of the world go into VRAM
-*      below row 480, where VMODE 11 does not look
-*   7. cell mode, VMODE 00, and the game loop, for ever
+*   2. the vectors, the IRQ unmasked, and gui.asm's interpreter on the script:
+*      a desktop, a paint program, a BBS, a raster window. The script's MUSIC
+*      loads the module and starts the tempo timer
+*   3. the script's GAME: the overworld's palette, tile set and first view with
+*      the display off, then cell mode, VMODE 00, and the game loop for one pass
+*      of its frame records; then back to the script, the desktop, and the
+*      audio player's STOP
 *
 * THE MAP (logical, task 0)
-*   $0000 block 0   ROM window W0 - world, frames, sprites, the module header
-*   $2000 block 1   ROM window W1 - the picture, tiles, and W0's next page
+*   $0000 block 0   ROM: the script while the show runs; the world, frames,
+*                   sprites and module header for the game and the loader
+*   $2000 block 1   ROM: fonts, icons, the picture; tiles and W0's next page
 *   $4000 blocks 2-3  the replayer's pattern window. /FIRQ's alone
 *   $8000 blocks 4-5  this code, ROM pages 1-2
 *   $C000 block 6   SIMM: boot's variables and RAM vectors, this file's
-*                   variables from $C200, the stack below $E000
+*                   variables from $C200, gui.asm's from $C600, the stack
+*                   below $E000
 *   $E000 block 7   ROM page 0, boot.asm, and the vectors
 *******************************************************************************
 
@@ -55,9 +55,11 @@ HSCROLL EQU     $FF63
 HSCRLH  EQU     $FF64
 SPANLEN EQU     $FF65
 WFG     EQU     $FF66
+WBG     EQU     $FF67
 WPTR0   EQU     $FF68
 WPTR1   EQU     $FF69
 WPTR2   EQU     $FF6A
+BCTRL   EQU     $FF6E
 PIDX    EQU     $FF70
 PDATL   EQU     $FF71
 PDATH   EQU     $FF72
@@ -95,6 +97,8 @@ P_PAL   EQU     $82
 P_CLEAR EQU     $83
 P_PIC   EQU     $84
 P_GAME  EQU     $85
+P_BACK  EQU     $86             the game is over and the show goes on
+P_STOP  EQU     $87             the audio player stopped the module
 
 *------------------------------------------------------------------ variables
 * In block 6, clear of boot.asm's $C000-$C1FF. EQUs rather than RMB so the
@@ -206,12 +210,15 @@ chans   EQU     V+$300          4 * 40
         JMP     start
 
         INCLUDE "replay.asm"
+        INCLUDE "gui.asm"
+        INCLUDE "build/show.inc"
         INCLUDE "build/tables.inc"
 
         SETDP   $FF
 
 *==============================================================================
-* 1-2. Take over, and start the music.
+* 1. Take over, and run the show. The script decides when the music starts
+*    (MUSIC) and when the overworld does (GAME).
 *==============================================================================
 start   orcc    #$50            both masked while the vectors are pointed
         lds     #$E000
@@ -224,26 +231,42 @@ start   orcc    #$50            both masked while the vectors are pointed
         ldx     #V
         ldd     #0
 st1     std     ,x++
-        cmpx    #V+$400
+        cmpx    #V+$0E00        this file's variables and gui.asm's
         bne     st1
         ldx     #irqh
         stx     IRQVEC
         ldx     #firqh
         stx     FIRQVEC
-
+        IFD     REPLAY
+* The replayer and nothing else: build/rom-replay.bin, for the benches that run
+* the CPU without a video card (bench/run-replay.sh, emu/test/run.sh), where
+* the show would wait for a vertical blank that never comes.
         lbsr    mod_load
-        beq     st2
-        sta     <SIMPORT        the loader's reason, and stop
+        beq     rp1
+        sta     <SIMPORT
         bra     *
-st2     lbsr    mod_start
-        andcc   #$BF            unmask FIRQ: the replayer runs from here on
+rp1     lbsr    mod_start
+        andcc   #$BF
         lda     #P_MUSIC
         sta     <SIMPORT
+        bra     *
+        ENDIF
+        andcc   #$EF            unmask IRQ: the frame counter runs from here on
+        lbra    run
 
 *==============================================================================
-* 3. The palette. graphics.md 13.1: commit with the display off and nothing snows.
-*    Entry i = RGB332(i): PDATH = RRRRRGGG, PDATL = GGGBBBBB.
+* gamego - GAME: the overworld's palette, tile set and first view, then the
+* game loop for one pass of its records (gexit). The display is off while it loads.
 *==============================================================================
+gamego  lbsr    idle
+        clr     <VCTRL
+        clr     <WADV
+        clr     <HSCROLL
+        clr     <HSCRLH
+        clr     <VSCROLL
+        clr     <VSCRLH
+* The palette. graphics.md 13.1: commit with the display off and nothing snows.
+* Entry i = RGB332(i): PDATH = RRRRRGGG, PDATL = GGGBBBBB.
         clr     <PIDX
         clrb
 pal1    tfr     b,a             R: i >> 5
@@ -287,96 +310,6 @@ pal1    tfr     b,a             R: i >> 5
         bne     pal1
         lda     #P_PAL
         sta     <SIMPORT
-
-*==============================================================================
-* 4. Clear rows 0-479: three 256-byte span-solids a row, colour 0.
-*==============================================================================
-        lda     #CT_SOL
-        sta     <VCTRL
-        clr     <WFG
-        lda     #255
-        sta     <SPANLEN
-        ldd     #0
-        std     ptrow
-cl1     lbsr    rowptr10        WPTR := ptrow << 10
-        ldb     #3
-cl2     lbsr    idle
-        sta     <VDATA          the trigger
-        decb
-        bne     cl2
-        ldd     ptrow
-        addd    #1
-        std     ptrow
-        cmpd    #480
-        bne     cl1
-        lbsr    idle
-        clr     <VSCROLL
-        clr     <VSCRLH
-        clr     <HSCROLL
-        clr     <HSCRLH
-        clr     <WADV
-        lda     #P_CLEAR
-        sta     <SIMPORT
-
-*==============================================================================
-* 5. The picture. VMODE 11 is on while it paints, so it comes in down the screen
-*    at the rate this CPU can move bytes - which is the honest thing to show.
-*==============================================================================
-        lda     #CT_PIC
-        sta     <VCTRL
-        ldd     #0
-        std     fcnt
-        std     lastf
-        andcc   #$EF            unmask IRQ: the frame counter runs from here on
-        lda     #PICPAGE
-        sta     gpage
-        lbsr    mapw1
-        ldx     #$2000
-        ldd     #0
-        std     ptrow
-pic1    lbsr    rowptr10
-        ldu     #640            bytes left in this row
-pic2    tfr     x,d             D = bytes to the end of the window
-        coma
-        comb
-        addd    #$4001
-        cmpd    #255
-        bls     pic3
-        ldd     #255
-pic3    pshs    d               ... and no more than the row has
-        cmpu    ,s
-        bhs     pic4
-        tfr     u,d
-        std     ,s
-pic4    tfr     u,d
-        subd    ,s
-        tfr     d,u
-        puls    d               B = this chunk (1..255)
-pic5    lda     ,x+
-        sta     <VDATA
-        decb
-        bne     pic5
-        cmpx    #$4000
-        bne     pic6
-        inc     gpage
-        lbsr    mapw1
-        ldx     #$2000
-pic6    cmpu    #0
-        bne     pic2
-        ldd     ptrow
-        addd    #1
-        std     ptrow
-        cmpd    #PICROWS
-        bne     pic1
-        lda     #P_PIC
-        sta     <SIMPORT
-
-*==============================================================================
-* 6. Hold it for five seconds - and use them.
-*==============================================================================
-        ldd     fcnt
-        addd    #HOLDF
-        std     ptrow           the deadline
 
 * the tile set: 256 * 64 bytes at $78000, one 1024-byte ring row at a time -
 * a VDATA stream cannot leave its row (boot/README.md, "the display list")
@@ -434,11 +367,6 @@ fv1     lda     rt
         ldd     #$FFFF          no hero on the screen yet - the bench reads this
         std     herok
         clr     jstate
-
-* the rest of the five seconds
-hold1   ldd     fcnt
-        cmpd    ptrow
-        blo     hold1
 
 *==============================================================================
 * 7. The game. Switch in vertical blank, then run.
@@ -498,8 +426,7 @@ gf2     tst     sready
         addd    gdelta
 gf3     cmpd    #NFRAMES
         blo     gf4
-        subd    #NFRAMES
-        bra     gf3
+        lbra    gexit           one pass of the world, and back to the desktop
 gf4     std     k
         lbsr    readrec
         ldd     pcamx
@@ -571,6 +498,22 @@ gf12    sta     jbase
         lda     #1
         sta     jstate
         lbra    gloop
+
+* gexit - the game's end: the display off in a vertical blank, the scroll
+* back to 0, and back to gui.asm's GAME, which called gamego
+gexit   clr     sready
+        lbsr    vblank
+        orcc    #$50
+        clr     <VCTRL
+        andcc   #$AF
+        lbsr    idle
+        clr     <HSCROLL
+        clr     <HSCRLH
+        clr     <VSCROLL
+        clr     <VSCRLH
+        lda     #P_BACK
+        sta     <SIMPORT
+        rts
 
 *******************************************************************************
 * scrollp - the pending camera into HSCROLL/VSCROLL. VSCROLL loads through
@@ -1151,7 +1094,11 @@ b5tab   FCB     0,10,21,31
 *******************************************************************************
 * /IRQ - the video card's VBL (graphics.md 12.1). Count it, and clear it.
 irqh    orcc    #$40            HSCROLL is two registers: no /FIRQ between them
-        ldd     fcnt
+        bsr     vblwork
+        rti
+* vblwork - what a VBL interrupt does. gui.asm's golist calls it too, with both
+* interrupts masked, to serve a request that arrived while it waited to GO.
+vblwork ldd     fcnt
         addd    #1
         std     fcnt
         lda     tickend         which replayer tick had finished at this blank
@@ -1160,8 +1107,15 @@ irqh    orcc    #$40            HSCROLL is two registers: no /FIRQ between them
         beq     ih1
         lbsr    scrollp
         clr     sready
-ih1     sta     <VSTAT          any write clears the request
-        rti
+* ⚠ NOT UNDER A SPAN. graphics.md 7.4: a span takes its colour, and WADV 01
+* its column reload, from the register file, and a CPU register access takes
+* the file away. This interrupt lands mid-fill: on the machine one VSTAT write
+* under a chained span-solid ended the desktop's background a strip and a
+* half early. A span lasts 41 us at most.
+ih1     tst     <VSTAT
+        bmi     ih1
+        sta     <VSTAT          any write clears the request
+        rts
 
 * /FIRQ - the audio card's tempo timer (audio.md 8.1). FIRQ stacks only PC and
 * CC, so everything the replayer uses is saved here.

@@ -56,7 +56,7 @@ transistors, a diode and fifteen resistors — which is what closed `design-revi
 ⚠ **`vaddr` is bound by pins and LAB fan-in. `vctrl` was bound by cells from
 2026-09-11 until 2026-09-12, and is not now** — the four identical `FCLK` outputs
 gave back three cells and three pins.
-`vctrl` is 53 of 64 I/O.
+`vctrl` is 56 of 64 I/O.
 `vaddr` is 59 of 64 I/O.
 `vsup` is 61 of 64 I/O.
 Their cell counts are **93**, 113 and 91 of 128, and `vctrl` places on the fitter's

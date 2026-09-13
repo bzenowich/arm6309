@@ -198,6 +198,13 @@ module demo_tb;
   logic [15:0] st_dispk = 0, st_herok = 0, st_missed = 0;
   logic [7:0] st_prog = 0;
   logic [1:0] st_vmode = 0;
+  // the show's checkpoint and raster phase (software/demo/gui.asm, $C600 and
+  // $C602) at the frame's first active dot and at its last, and whether a
+  // display list was running at line 1 - tools/checkdemo.py judges a frame
+  // against a model picture only when the two readings agree
+  logic [15:0] st_ck0 = 0, st_ck1 = 0, st_ph0 = 0, st_ph1 = 0;
+  logic [7:0] st_lrun = 0;
+  bit rowchg [0:MAXH-1];
   int frfd, syncfd;
 
   wire hs_on = VMODE[0] ? 1'b1 : 1'b0;
@@ -207,31 +214,52 @@ module demo_tb;
     return {m.mb.peek_dram(adr), m.mb.peek_dram(adr + 1)};
   endfunction
 
+  // A record is the whole picture (repeat 0), nothing (1: the last one
+  // again), or (2) a bitmap of the rows that changed and those rows - a pointer
+  // moving over a still desktop is one or two rows a frame. tools/frames.py.
   task automatic emit_frame();
-    int w, h, same;
+    int w, h, same, nchg, kind;
     longint t;
+    logic [7:0] bm;
     w = 0; h = lines > MAXH ? MAXH : lines;
     for (int i = 0; i < h; i++) if (linew[i] > w) w = linew[i];
     if (w > MAXW) w = MAXW;
     same = (w == prv_w && h == prv_h);
-    for (int yy = 0; yy < h && same; yy++)
-      for (int xx = 0; xx < w; xx++)
-        if (cur[yy][xx] !== prv[yy][xx]) begin same = 0; break; end
+    nchg = 0;
+    for (int yy = 0; yy < h; yy++) begin
+      rowchg[yy] = 0;
+      for (int xx = 0; xx < w; xx++) begin
+        logic [15:0] c;
+        c = (xx < linew[yy]) ? cur[yy][xx] : 16'h0000;
+        if (c !== prv[yy][xx]) begin rowchg[yy] = 1; break; end
+      end
+      if (rowchg[yy]) nchg++;
+    end
+    kind = !same ? 0 : (nchg == 0 ? 1 : 2);
     t = $time;
     $fwrite(frfd, "F%c%c%c%c", frame_n[7:0], frame_n[15:8], frame_n[23:16], frame_n[31:24]);
     for (int b = 0; b < 64; b += 8) $fwrite(frfd, "%c", t[b +: 8]);
     $fwrite(frfd, "%c%c%c%c", w[7:0], w[15:8], h[7:0], h[15:8]);
     $fwrite(frfd, "%c%c%c%c%c%c", st_dispk[7:0], st_dispk[15:8], st_herok[7:0], st_herok[15:8],
             st_missed[7:0], st_missed[15:8]);
-    $fwrite(frfd, "%c%c%c", st_prog, {6'b0, st_vmode}, same ? 8'd1 : 8'd0);
-    if (!same) begin
+    $fwrite(frfd, "%c%c%c", st_prog, {6'b0, st_vmode}, kind[7:0]);
+    $fwrite(frfd, "%c%c%c%c%c%c%c%c%c", st_ck0[7:0], st_ck0[15:8], st_ck1[7:0], st_ck1[15:8],
+            st_ph0[7:0], st_ph0[15:8], st_ph1[7:0], st_ph1[15:8], st_lrun);
+    if (kind == 2)
+      for (int yy = 0; yy < h; yy += 8) begin
+        bm = 0;
+        for (int i = 0; i < 8 && yy + i < h; i++) bm[i] = rowchg[yy + i];
+        $fwrite(frfd, "%c", bm);
+      end
+    if (kind != 1) begin
       for (int yy = 0; yy < h; yy++)
-        for (int xx = 0; xx < w; xx++) begin
-          logic [15:0] c;
-          c = (xx < linew[yy]) ? cur[yy][xx] : 16'h0000;
-          prv[yy][xx] = c;
-          $fwrite(frfd, "%c%c", c[7:0], c[15:8]);
-        end
+        if (kind == 0 || rowchg[yy])
+          for (int xx = 0; xx < w; xx++) begin
+            logic [15:0] c;
+            c = (xx < linew[yy]) ? cur[yy][xx] : 16'h0000;
+            prv[yy][xx] = c;
+            $fwrite(frfd, "%c%c", c[7:0], c[15:8]);
+          end
       prv_w = w; prv_h = h;
     end else dup_n++;
     frame_n++;
@@ -255,6 +283,15 @@ module demo_tb;
       st_missed = ram16(32'h00C225);
       st_prog = progress;
       st_vmode = VMODE;
+      if (lines == 0 && x == 0) begin
+        st_ck0 = ram16(32'h00C600);
+        st_ph0 = ram16(32'h00C602);
+      end
+      if (lines == 1 && x == 0) st_lrun = {7'b0, m.vid_lrun};
+      if (x == 639) begin
+        st_ck1 = ram16(32'h00C600);
+        st_ph1 = ram16(32'h00C602);
+      end
       if (lines < MAXH && x < MAXW) cur[lines][x] = RGB;
       x++;
     end
@@ -317,7 +354,7 @@ module demo_tb;
     end
 
     $display("");
-    ok(progress == 8'h85, $sformatf("the demo reached the game - progress $85 (got $%02h)", progress));
+    ok(progress == 8'h87, $sformatf("the show ran to its end - the game played, the desktop came back and the audio player stopped the module: progress $87 (got $%02h)", progress));
     ok(firq_edges > 0, $sformatf("⭐ /FIRQ WAS TAKEN: the audio card's tempo timer interrupted the CPU %0d times", firq_edges));
     ok(irq_edges > 0, $sformatf("⭐ /IRQ WAS TAKEN: the video card's VBL interrupted the CPU %0d times", irq_edges));
     ok(!saw_bus_conflict, "no cycle had two drivers on D0-D7 - with two cards on the bus");

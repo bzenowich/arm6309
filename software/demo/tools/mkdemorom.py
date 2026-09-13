@@ -28,7 +28,10 @@ FIRST_ASSET_PAGE = 3
 # (EQU prefix, file in BUILD, required)
 ASSETS = [
     ("MOD", "demo.mod"),        # the module, verbatim - the loader parses it
-    ("PIC", "parrots.raw"),     # 640 x 480 RGB332 indices
+    ("SCR", "script.bin"),      # the show's bytecode - tools/show.py
+    ("GFX", "gfx.bin"),         # the 8x16 and 8x8 fonts
+    ("ICN", "icons.bin"),       # the icons, a (page, offset) table first
+    ("IMG", "image.bin"),       # parrot.img, 640 x 345, the desktop palette
     ("TIL", "tiles.bin"),       # 256 x 64 bytes: the tile set
     ("WLD", "world.bin"),       # world cell codes, 256-cell row stride
     ("SPR", "sprites.bin"),     # Link's frames, 32 x 16 bytes each
@@ -87,13 +90,13 @@ def tables(build):
     open(os.path.join(build, "tables.inc"), "w").write("\n".join(out) + "\n")
 
 
-def image(build):
+def image(build, code="demo.bin", out="rom"):
     rom = bytearray(b"\xFF" * ROMSIZE)
     boot = open(os.path.join(ROOT, "software/boot/boot.bin"), "rb").read()
     if len(boot) != PAGE:
         sys.exit(f"FAIL  boot.bin is {len(boot)} bytes, want {PAGE}")
     rom[0:PAGE] = boot
-    demo = open(os.path.join(build, "demo.bin"), "rb").read()
+    demo = open(os.path.join(build, code), "rb").read()
     if len(demo) > 2 * PAGE:
         sys.exit(f"FAIL  demo.bin is {len(demo)} bytes; pages 1-2 hold {2 * PAGE}")
     rom[PAGE:PAGE + len(demo)] = demo
@@ -103,12 +106,12 @@ def image(build):
         if len(data) != int(size):
             sys.exit(f"FAIL  {name} changed size since layout ({len(data)} != {size}) - run layout again")
         rom[int(page) * PAGE:int(page) * PAGE + len(data)] = data
-    open(os.path.join(build, "rom.bin"), "wb").write(rom)
-    with open(os.path.join(build, "rom.hex"), "w") as f:
+    open(os.path.join(build, out + ".bin"), "wb").write(rom)
+    with open(os.path.join(build, out + ".hex"), "w") as f:
         for b in rom:
             f.write(f"{b:02x}\n")
-    print(f"ok    rom.bin: boot page 0, demo {len(demo)} bytes in pages 1-2, assets from page {FIRST_ASSET_PAGE}")
+    print(f"ok    {out}.bin: boot page 0, {code} {len(demo)} bytes in pages 1-2, assets from page {FIRST_ASSET_PAGE}")
 
 
 if __name__ == "__main__":
-    {"layout": layout, "image": image}[sys.argv[1]](sys.argv[2])
+    {"layout": layout, "image": image}[sys.argv[1]](*sys.argv[2:])

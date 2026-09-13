@@ -9,6 +9,41 @@ to `graphics.md` unless marked otherwise. "Vid-*" identifiers are findings of th
 
 ---
 
+## §10.3.2 and `features.md` §4 — a listed scroll is not byte-granular (2026-09-13)
+
+`software/demo/bench/calib.asm` listed `HSCROLL` = 1, 2, 3, 5, 6 and 7 on the whole machine
+and found every four-pixel group of those lines rotated (§19 item 49). The two statements
+that it was byte-granular are replaced by that item. They read:
+
+§10.3.2, "Three things that follow from the format":
+
+> - ⭐ **A list MOVE scrolls by one pixel, not four.** It scrolled in fours while §8.2's
+>   fine pair lived only on `vctrl`, which the engine could not reach; `vsup` holds a
+>   second copy written by the same descriptor in the same dot, so a listed scroll is as
+>   smooth as a CPU one. `vpal_tb` checks both halves land from one `MOVE`.
+
+`features.md` §4, per-scanline `HSCROLL`:
+
+> ⭐ **Byte-granular, not in fours**: `vsup` holds a second copy of `HSCROLL[1:0]` written
+> by the same descriptor in the same dot, so a listed scroll is exactly as smooth as a
+> CPU one (`graphics.md` §8.2).
+
+The second copy is real and does land. What neither statement accounted for is the third
+consumer of `HSCROLL[1:0]`: `seqph`'s `MUXSEL`, fed from `vctrl`'s copy.
+
+The same day the defect was fixed (§19 item 49 closed) and the byte-granular statements were
+restored. Between the two, §10.3.2 read:
+
+> - ⛔ **A list MOVE scrolls correctly only in fours — §19 item 49.** `vsup` holds a
+>   second copy of `HSCROLL[1:0]` that the descriptor writes, and §8.2's output-enable
+>   ranks follow it; the four `'153` pixel muxes select on `MUXSEL`, which `seqph` builds
+>   from `vctrl`'s copy, and the engine cannot reach that one.
+
+and `features.md` §4: "⛔ **In fours only, today**: a listed `HSCROLL[1:0]` ≠ 0 reaches the
+output-enable ranks but not the pixel mux select … A CPU write is byte-granular."
+
+---
+
 ## §8.2, §9.2, §10.1.6.3, §13, §14 — four pin senses corrected, and `CTRL` b7 built (2026-09-11)
 
 A three-board review found the video card's CPLDs declaring four pins with the wrong sense.

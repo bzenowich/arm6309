@@ -17,6 +17,9 @@ Both screen modes are shown the way a VGA monitor shows them - full screen,
 4:3 - at 1280 x 960: 640 x 480 is doubled, 640 x 400 is doubled across and
 stretched 2.4x down with whole rows repeated, so pixels stay sharp.
 
+--wav FILE takes the sound from FILE instead of card.dac - emu/run-emu.sh passes
+tracewav's render of the emulator's register writes.
+
 ffmpeg comes from software/tools/fetch-ffmpeg.sh (libx265); FFMPEG=/path overrides it.
 """
 import os, subprocess, sys
@@ -62,9 +65,12 @@ def main():
     sync = dict(l.split() for l in open(os.path.join(out, "sync.txt")))
     end_s = int(sync.get("end_ps", 0)) / 1e12
 
-    wav = os.path.join(out, "card.wav")
-    subprocess.run([os.path.join(ROOT, "build-host", "dacwav"), wav, os.path.join(out, "card.dac")],
-                   check=True, stdout=subprocess.DEVNULL)
+    if "--wav" in sys.argv:
+        wav = sys.argv[sys.argv.index("--wav") + 1]      # emu/run-emu.sh: tracewav's render
+    else:
+        wav = os.path.join(out, "card.wav")
+        subprocess.run([os.path.join(ROOT, "build-host", "dacwav"), wav, os.path.join(out, "card.dac")],
+                       check=True, stdout=subprocess.DEVNULL)
     audio_offset = int(sync["cc0_ps"]) / 1e12
 
     gop = int(round(fps))

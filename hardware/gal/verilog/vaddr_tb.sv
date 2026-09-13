@@ -180,6 +180,39 @@ module vaddr_tb;
     ok(1'b1, "every HSCROLL from 0 to 7 emits the row shifted by exactly that many pixels - byte-granular, in both fine-scroll phases of two groups");
     wr('h03, 8'h00); wr('h04, 8'h00);
 
+    // ---- 19 item 49: the same sweep with every value written by a LIST ------
+    //
+    // ⛔ THE SWEEP ABOVE WRITES FROM THE CPU, and that is why a listed fine
+    // scroll came out scrambled for four days with this bench green: 10.3.2's
+    // MOVE wrote vsup's copy of HSCROLL[1:0], the rank enables followed it, and
+    // vctrl's MUXSEL read a second copy only the CPU could write. The list here
+    // is "MOVE HSCROLL, hs / MOVE HSCROLLH, 0 / END" in ring row 200, far from
+    // the pattern rows, and the line is judged exactly as above.
+    for (int hs = 1; hs < 8; hs++) begin
+      int errs3; int want_px; int guard;
+      card.poke(200 * 1024 + 0, 8'h03); card.poke(200 * 1024 + 1, hs[7:0]);
+      card.poke(200 * 1024 + 2, 8'h04); card.poke(200 * 1024 + 3, 8'h00);
+      card.poke(200 * 1024 + 4, 8'hFF);
+      wr('h08, 8'h00); wr('h09, 8'h20); wr('h0a, 8'h03);   // WPTR := 200 << 10
+      wr('h0e, 8'h01);                                     // GO
+      guard = 0;
+      do begin @(posedge DOTCLK); guard++; end while (card.LRUN !== 1'b0 && guard < 200000);
+      ok(guard < 200000, $sformatf("the HSCROLL=%0d list ran to its END", hs));
+      errs3 = 0;
+      to_line(100, 36);
+      for (int px = 0; px < 640; px++) begin
+        want_px = ((hs + px) % 1024) % 256;
+        if (PIXEL !== want_px[7:0]) begin
+          if (errs3 == 0)
+            $display("      listed HSCROLL %0d, pixel %0d: got %02h want %02h", hs, px, PIXEL, want_px[7:0]);
+          errs3++;
+        end
+        @(posedge DOTCLK); #0;
+      end
+      ok(errs3 == 0, $sformatf("⭐ a LISTED HSCROLL=%0d shifts the line by exactly that many pixels - 19 item 49 (%0d wrong of 640)", hs, errs3));
+    end
+    wr('h03, 8'h00); wr('h04, 8'h00);
+
     wr('h01, 8'd7); wr('h02, 8'h00);                  // VSCROLL = 7
     check_line_addresses(100, 70, 0, "VSCROLL=7 - the row counter takes the scroll");
 

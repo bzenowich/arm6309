@@ -313,9 +313,11 @@ data bus by the part that decodes the descriptor (`graphics.md` §10.3.2, §10.3
 
 - ⭐ **Per-scanline `HSCROLL`** — parallax layers, sine warps, split-scroll status
   bars. **Built and simulated**; `MOVE $03` and `MOVE $04` write `HSCROLL`/`HSCROLLH`,
-  and `vspan_tb` runs a list that does it. ⭐ **Byte-granular, not in fours**: `vsup`
-  holds a second copy of `HSCROLL[1:0]` written by the same descriptor in the same dot,
-  so a listed scroll is exactly as smooth as a CPU one (`graphics.md` §8.2).
+  and `vspan_tb` runs a list that does it. ⭐ **Byte-granular, not in fours**: the
+  descriptor writes both copies of `HSCROLL[1:0]` — `vsup`'s for the rank enables,
+  `vctrl`'s for the pixel mux — in the same dot, so a listed scroll is as smooth as a CPU
+  one. `vaddr_tb` compares every pixel of a line at each listed value from 1 to 7
+  (`graphics.md` §19 item 49).
 - ⭐ **Per-scanline palette** — raster bars, gradient skies, more than 256 colours on
   screen at once. **Built and simulated.** `MOVE $10/$11/$12` write
   `PIDX`/`PDATL`/`PDATH`, and `vpal_tb` runs a list that writes `LUT[$A0] = $ABCD` and
@@ -589,7 +591,7 @@ majority of what a desktop actually moves.
 >
 > ⚠ **The pins came back another way.** §14.2's consolidation was expected to return
 > them; instead `graphics.md` §11 deleted the CPU's chip grant and the per-chip `FCLK`
-> outputs collapsed into one, and `vctrl` is 53 of 64 I/O and 2 of 4 dedicated today,
+> outputs collapsed into one, and `vctrl` is 56 of 64 I/O and 2 of 4 dedicated today,
 > with 35 cells spare (`graphics.md` §19 item 46).
 
 #### The question this answered, and it was the right question to ask

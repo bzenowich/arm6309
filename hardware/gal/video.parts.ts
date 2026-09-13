@@ -48,9 +48,8 @@ export const scrollHolds: Cell[] = [
    * because the engine's cycle is a granted VRAM slot), so the hold term
    * simply carries both negations.
    *
-   * !! THE ENGINE CANNOT REACH HS0 OR HS1 ON vctrl - it has no input pin left.
-   * 8.2's fine pair on vsup, which is the one the picture uses, IS reachable:
-   * it is written by the same descriptor, in the same dot. */
+   * HS0 and HS1 are on vctrl and vsup both, and since 2026-09-13 the
+   * descriptor writes both (video.cpld.ts listedHs) - graphics.md 19 item 49. */
   ...[2, 3, 4, 5, 6, 7].map((b) => ({
     pin: 0, name: `HS${b}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [`LDHS & D${b}`, `LWHSL & PB${b}`, `HS${b} & !LDHS & !LWHSL`],
