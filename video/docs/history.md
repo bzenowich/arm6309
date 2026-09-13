@@ -2321,3 +2321,182 @@ at 120 of 128 cells on pass 1 with fourteen cascades. The text these changes rep
     fitting is the normal state of this project's CPLDs rather than a `vctrl` condition,
     and the timing question above is open for four parts, not one.
 
+## §6.4.9 / §19 items 46 and 48 — the map handover follows the scrolled cell boundary (2026-09-13)
+
+`software/demo/` scrolled a tilemap by half a cell on the whole machine and found item 48:
+at `HSCROLL[2]` = 1 the first half of every cell showed the code of the cell to its left.
+The cause was `MAPREQ` and `MCADV` phased on `H0`, the unscrolled slot counter. Item 16
+had been closed on 2026-09-08 on the condition that the map byte arrive before a cell's
+first pixel, and item 29's pipeline broke that condition on 2026-09-09. No claim scrolled
+by less than a cell.
+
+The fix took three tries, each measured by `vtile_tb` at the new sub-cell claims. With
+the phase flipped alone, 2 of 160 fetches were wrong: slot 34, the second half of the
+first cell, had no fetch before it. With the window moved to slots 32 … 190, 1 was
+wrong: a half-cell-scrolled line shows half of an 81st cell, fetched in slot 192 and
+handed over in slot 193. The equations that pass fetch 81 codes at that phase.
+
+The refit put `vctrl` back on the fitter's first pass, which the committed design without
+the fix does not reach (123 cells on pass 2, fitted the same day). Every utilisation
+figure that quoted the old reports was brought to them. The replaced text follows.
+
+### video/docs/graphics.md — §6.4.9, the cell phase
+
+A cell is two slots and **its phase is `H0`, the slot counter's own low bit** — cell
+mode needs no counter of its own to know where it is.
+
+### video/docs/graphics.md — §19 item 46, as it stood
+
+46. **⚠ OPEN 2026-09-11 — `vctrl` fits on the fitter's second pass, and the cell count
+    is the second pass's.** Deleting §5.2.1's CPU grant (§11) on 2026-09-11 took `vctrl` from 62 to
+    **55 of 64 I/O** and from 11 cascades to **3**, and it stopped the first pass from
+    placing: `Placement fail`, then `Fitter_Pass 2 … CASCADE_LOGIC : (TRY)`, then *"Design
+    fits successfully"* at **127 of 128 cells**, 0 foldback, 439 product terms, peak LAB
+    fan-in 29. Before the change it was 105 cells, 18 foldback and 296 terms, placed on
+    pass 1.
+
+    **Bisected on scratch copies, and it is not a resource.**
+    - Dropping the read path's two terms still needs pass 2.
+    - Declaring the freed pins, or driving four constant outputs on them, still needs
+      pass 2.
+    - Exporting `SPNGRANT` or `SPNREQG` as a pin still needs pass 2, at 123–127 cells.
+    - **Restoring the CPU grant with the read path kept places on pass 1** at 104 cells,
+      63 of 64 I/O and 10 cascades. It cannot be kept, because it is §11's deadlock.
+
+    So the second pass's accounting is what `vctrl` reports now. The next addition to it
+    may not fit, and whether pass 2 is slower than pass 1 is the fitter's timing report's
+    business, which nothing here reads.
+
+    ⚠ **And it is not only `vctrl`.** Every current report was read on 2026-09-12:
+    `vsup` also fails pass-1 placement and fits on pass 2, and so does the audio card's
+    U1 (`audio.md` §10.1.1). **`vaddr` and the audio card's U2 place on pass 1** — U2 since
+    `audio.md` §16 item 37's re-timing, with fourteen cascades. Second-pass fitting is
+    common on this project's CPLDs rather than a `vctrl` condition, and the timing
+    question above is open for all five.
+
+    | part | cells | I/O | cascades | pass |
+    |---|---|---|---|---|
+    | `vaddr` | 113 of 128 | 58 of 64 | 4 | **1** |
+    | `vctrl` | 123 of 128 | 52 of 64 | 3 | 2 |
+    | `vsup` | 91 of 128 | 61 of 64 | 2 | 2 |
+
+### video/docs/graphics.md — §19 item 48, as it was opened
+
+48. **⛔ OPEN 2026-09-13 — cell mode draws the first half of every cell from the previous
+    cell's code when `HSCROLL[2:0]` = 4.** Found by `software/demo/` on the whole machine
+    (`hardware/gal/verilog/demo_tb.sv`), the first program to scroll a tilemap
+    horizontally by less than a cell. At `HSCROLL[2:0]` = 0 every frame matches the model.
+    At 4, every frame matches a model in which pixel columns 0–3 of each cell use the code
+    of the cell to their left, and columns 4–7 are right. The check is `software/demo/tools/checkdemo.py`,
+    which compares every captured frame with `mkgame.render_cells(..., stale_half=True)`
+    and gets 0 wrong pixels against about 12,000 for the correct model. The pixel column
+    within the cell is right. Only the choice of cell is wrong.
+
+    **Why nothing caught it.** Item 16 (closed 2026-09-08) made fine horizontal scroll free
+    on one condition: "the map byte for a cell must be held before that cell's first pixel
+    is emitted, so when a line starts mid-cell the map fetch leads by one cell". Item 29
+    (2026-09-09) then made the map byte a two-stage pipeline, handed from `MAP` to `MAPQ`
+    by `CELLTICK` at "the cell boundary", whose phase §6.4.9 gives as `H0`, the unscrolled
+    slot counter's low bit. When `HSCROLL[2]` = 1 the displayed cell boundary is half a
+    cell from that one, so the handover lands mid-cell. `vtile_tb` scrolls horizontally
+    only by whole cells (`HSCROLL` = 24 and 768), and `machine_tb`'s cell-mode scene is at
+    `HSCROLL` = 0.
+
+    **The vertical offset has no analogue.** The same run scrolls vertically by 2 rows a
+    frame, and every frame at `VSCROLL[2:0]` = 2, 4 and 6 matches the correct model.
+    **Not yet known:** `HSCROLL[1:0]` ≠ 0, because the demo moves in fours. **What closes it:** `CELLTICK`, or `MAPQ`'s load, taken from the scrolled
+    column (`SA2` and the mux phase) rather than `H0`; a `vtile_tb` claim at
+    `HSCROLL[2:0]` = 1..7 that fails today; and a `vaddr` refit, which item 46 says has no
+    fan-in to spare.
+
+### video/README.md — the per-part I/O
+
+`vctrl` is 52 of 64 I/O.
+`vaddr` is 58 of 64 I/O.
+
+### video/README.md — the cell counts
+
+Their cell counts are **123**, 113 and 91 of 128 — ⚠ `vctrl` was 128 of 128 until
+2026-09-12, when two sets of duplicated equations came out: §19 item 23(a)'s four
+identical `FCLK` outputs collapsed into one, and `CELLTICK` merged into `MCADV`.
+Five cells and four pins on `vctrl`, and a pin on `vaddr` — and `vctrl`'s is the fitter's second pass
+(`docs/graphics.md` §19 item 46).
+
+### video/docs/graphics.md — §6.4.5, the current fit
+
+The current fit is **`vctrl` 123 of 128 and `vaddr` 113 of 128**
+
+### video/docs/graphics.md — §10.1.5, the headroom
+
+it is 52 of 64 I/O and 123 of 128 cells today (§14 has the live figure).
+
+### video/docs/graphics.md — §10.1.6, what the partition spends
+
+`vaddr` is at **113 of 128
+  logic cells and 58 of 64 I/O**
+
+### video/docs/graphics.md — §10.1.6, the partition table
+
+**the map byte's two-stage pipeline**, the write-strobe decode, the four-source address mux, **§7.2's reload walk**, **§10.3.2's descriptor engine** | **113 of 128** | **58 of 64** |
+| **`vctrl`** | PLCC-84 | sync trio, sequencer, span control, **the mask serialiser**, `CTRL`, `HSCROLL[1:0]`, `WADV`, §6.4's fetch cadence, the register decode, **the spare-access arbiter** (§10.1.6.3) | **123 of 128** | **52 of 64** |
+
+### video/docs/graphics.md — §10.3.1, the JTAG note
+
+`vaddr` is at 58 of 64 I/O
+> with the display list in
+
+### video/docs/graphics.md — §10.1.6.3, the arbiter's fit
+
+`vctrl` holds the arbiter at **52 of 64 I/O and 123 of 128
+cells**. The pins fell with §11's deletion of the CPU grant, and one came back for
+`VDATA`'s select (§19 item 47); the cells rose with the fitter's second pass, §19 item 46.
+
+### video/docs/graphics.md — §10.1.6.3, the JTAG pin-room table
+
+| `vaddr` | 58 | 62 of 64 | 2 of 4 | 113 of 128 |
+| `vctrl` | 52 | 56 of 64 | 2 of 4 | **123 of 128** |
+
+### video/docs/graphics.md — §10.1.6.3, both fit a PLCC-84
+
+⚠ `vctrl` is the tight one: 123 of
+128 cells, with pins to spare.
+
+### video/docs/graphics.md — §14, the vaddr row
+
+**58 of 64 I/O, 113 of 128 cells** (`hardware/gal/cpld/vaddr.fit`)
+
+### video/docs/graphics.md — §14, the vctrl row
+
+**52 of 64 I/O, 123 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) — ⚠ the fitter's first pass no longer places it and the second, with cascade logic, reports the cells; §19 item 46.
+
+### video/docs/graphics.md — §19 item 33, wcol's part
+
+on a part at
+    **123 of 128 cells**. A by-four increment
+
+### video/docs/graphics.md — §19 item 33, §7.4's cost paragraph
+
+`vctrl` is at **52 of 64 pins and
+    123 of 128 cells**, so pins stopped being the constraint and the section has not
+    been re-read since. **The honest estimate is: cheap in pins, free on `vsup`, and a
+    coin-flip on `vctrl`'s cells** — `vctrl` does have 0/128 foldback and only 29 of 40
+    fan-in, so the expanders may absorb it, and only `fit1508.exe` can say.
+
+### video/docs/graphics.md — §19 item 34, what it buys
+
+and `vctrl` is **123/128 cells with 52 of 64 pins**, so pins are not what it is short of (§19 item 46)
+
+### video/docs/graphics.md — §19 item 34, the per-part table
+
+    | `vctrl` | **123/128, 5 spare** | 52/64, **12 spare** | 29 of 40 |
+    | `vaddr` | **113/128, 15 spare** | 58/64 | 35 of 40 |
+
+### video/docs/graphics.md — §19 item 34, after the per-part table
+
+    `vaddr` has fifteen cells, not four. `vctrl` has twelve spare pins and **five spare
+    cells**, so returning pins to it is not the lever — §19 item 46 is.
+
+### video/docs/features.md — §2, the display list's fit, vctrl today
+
+> outputs collapsed into one, and `vctrl` is 52 of 64 I/O and 2 of 4 dedicated today.
+> Its limit now is cells (`graphics.md` §19 items 33, 46).

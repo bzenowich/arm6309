@@ -170,6 +170,10 @@ module video_card (
     .RW(RW),        // MAPA0/1 left vctrl with MAPHOLD, 2026-09-11 - graphics.md 11
     .A19(PA[19]), .A20(PA[20]),
     .HS0(HS0), .HS1(HS1), .WADV0(WADV0), .WADV1(WADV1),
+    // ⛔ HSCROLL[2] from vaddr: the map cadence's cell phase is H0 ^ HS2 -
+    // graphics.md 19 item 48. Without this port the input is tied off and the
+    // defect survives the equation that fixes it.
+    .HS2(HS2),
     .MASKBIT(MASKBIT), .WSTBV(WSTBV), .WPQ(WPQ), .WSTART(WSTART), .SPNREQ(SPNREQ), .SPNTICK(SPNTICK),
     .SGRANT(SGRANT), .RDVALID(RDVALID),
     .SR0(SR0),.SR1(SR1),.SR2(SR2),.SR3(SR3),

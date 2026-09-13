@@ -27,6 +27,7 @@ module vctrl (
     input  wire LDHS,
     input  wire LDADV,
     input  wire D2,
+    input  wire HS2,
     input  wire RDVALID,
     input  wire A19,
     input  wire A20,
@@ -404,8 +405,7 @@ module vctrl (
          (TFETCH & SLOTTICK);
   // EXTERNAL
   assign HLOAD =
-         (~H7 & ~H6 & ~H5)
-         | (~H7 & ~H6 & ~H4 & ~H3 & ~H2 & ~H1 & ~H0);
+         (~H7 & ~H6 & ~H5);
   // buried
   assign HEND =
          (H7 & H6 & H2 & H1 & H0);
@@ -415,10 +415,14 @@ module vctrl (
          | (~VBLANK & HEND & SLOTTICK & ~V0);
   // buried
   assign MAPREQ =
-         (TILEMODE & MFETCH & H0);
+         (TILEMODE & MFETCH & H0 & ~HS2)
+         | (TILEMODE & MFETCH & ~H0 & HS2)
+         | (TILEMODE & HS2 & ~H7 & ~H6 & H5 & ~H4 & ~H3 & ~H2 & ~H1 & ~H0);
   // EXTERNAL
   assign MCADV =
-         (TILEMODE & MFETCH & ~H0 & SLOTTICK);
+         (TILEMODE & MFETCH & ~H0 & ~HS2 & SLOTTICK)
+         | (TILEMODE & MFETCH & H0 & HS2 & SLOTTICK)
+         | (TILEMODE & HS2 & H7 & H6 & ~H5 & ~H4 & ~H3 & ~H2 & ~H1 & H0 & SLOTTICK);
   // EXTERNAL
   assign MAPLD =
          (MAPREQ & ~PH1 & PH0);

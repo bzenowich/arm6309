@@ -946,3 +946,35 @@ plus JTAG: `vaddr` **58 + 4 = 62 of 64**, `vctrl` **60 + 4 = 64 of 64**. `vctrl`
 exactly full, and `vaddr` is the part with the cells nearly gone — 124 of 128 since
 `graphics.md` §10.3.2's descriptor format.
 
+## Utilisation figures after graphics.md §19 item 48's refit (2026-09-13)
+
+The fix for cell mode's fine-scroll handover gave `vaddr` one output pin and `vctrl` one
+input and two product terms, and `vctrl` placed on the fitter's first pass: 53 of 64 I/O
+and 93 of 128 cells, from 52 and 123 on pass 2. `vaddr` is 59 of 64 I/O. The replaced
+text follows.
+
+### hardware/gal/README.md — the U3 pin-full note, vctrl's figures
+
+**52 of 64 I/O and 123 of 128 cells** since 2026-09-12, still on the fitter's
+> second pass (§19 item 46).
+
+### hardware/gal/README.md — the video card's fitted-logic table
+
+| `vaddr` | **58 of 64** | **113 of 128** | scan address, `WPTR`, tile address sources |
+| `vctrl` | **52 of 64** | **123 of 128** | sync, sequencer, span control, the arbiter, `CTRL` |
+
+### hardware/gal/README.md — the JTAG paragraphs
+
+`vaddr` 58 + 4 = 62 pins and `vctrl` 52 + 4 = 56 have room, and
+`vsup` 61 + 4 = 65 does not. `vctrl` is the part with the cells nearly gone: 123 of 128.
+
+### hardware/ram.md — §4, what vctrl has room for
+
+`vctrl` has the pins, at **52 of 64 I/O** (`gal/cpld/vctrl.fit`), and since
+2026-09-12 it has cells too — **123 of 128**, five back from two cleanups: §19 item
+23(a)'s four identical `FCLK` outputs collapsed into one, and `CELLTICK` merged into
+`MCADV`, which was its equation letter for letter.
+
+### hardware/ram.md — the slot, not the CPLD
+
+`vctrl` is at **123 of 128 cells** since 2026-09-12

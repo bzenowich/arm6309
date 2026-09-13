@@ -93,6 +93,8 @@ const dotWorld = (slot: number, ph: number, extra: Record<string, number> = {}) 
      * running in this world - the engine's slot accounting is vspan_tb's. */
     ["LRUN", 0],
     ["MAPA0", 0], ["MAPA1", 0],
+    /* HSCROLL[2]: 0 is an unscrolled cell boundary. Section 2b walks 1. */
+    ["HS2", 0],
     /* graphics.md 11's read prefetch: the read latch is full, so nothing asks. */
     ["RDVALID", 1],
     /* the CPU's access: none of the VRAM port's two addresses (19 item 47) */
@@ -123,9 +125,13 @@ for (let slot = 0; slot < SLOTS_PER_LINE; slot++) {
   check(mf0 === tf0! - 2 && mf1 === tf1! - 2,
     "MFETCH leads it by exactly one cell - two slots - which is 6.4.1's " +
     "\"pipelined one cell ahead\" and the reason MC exists", `${mf0}..${mf1}`)
-  check(span("HLOAD")[1] === mf0! - 1,
-    "HLOAD closes the slot before MFETCH opens, so both column counters have " +
-    "their scroll offset before the first map byte is fetched", `${span("HLOAD")}`)
+  /* ⚠ TWO slots before MFETCH since 2026-09-13: at HSCROLL[2] = 1 the first
+   * map access is the slot before MFETCH opens (section 2b, graphics.md 19
+   * item 48). */
+  check(span("HLOAD")[1] === mf0! - 2,
+    "HLOAD closes before the earliest map access at either cell phase, so both " +
+    "column counters have their scroll offset before the first map byte is fetched",
+    `${span("HLOAD")}`)
   /* 640 pixels is 160 slots is 80 cells. */
   check(tf1! - tf0! + 1 === 160 && (tf1! - tf0! + 1) / 2 === MAP_COLS,
     `the fetch window is 160 slots = ${MAP_COLS} cells = 640 pixels`)
@@ -181,6 +187,46 @@ for (let slot = 0; slot < SLOTS_PER_LINE; slot++) {
     `the map byte for a cell lands ${leadDots} dots before that cell's first ` +
     "tile fetch - a full slot of slack, not the 4.4 ns a same-slot fetch leaves",
     `${leadDots}`)
+}
+
+/* -- 2b. the handover follows the SCROLLED cell boundary - 19 item 48 ----- */
+{
+  /* ⛔ Sections 1 and 2 walk an unscrolled line, and so did every claim here
+   * until 2026-09-13 - which is how MAPQ's handover rode on H0, the slot
+   * counter's parity, for four days while the tile address's half-of-cell is
+   * SA2, the COLUMN counter's low bit, loaded from HSCROLL[2]. software/demo/
+   * drew the first half of every cell from its left neighbour at HSCROLL[2] = 1.
+   *
+   * So model the pipeline as the silicon clocks it - one register update per
+   * dot - at both phases, and ask the question the picture asks: at every
+   * tile fetch, is the code in MAPQ the code of the cell the column counter
+   * names? Cells are relative to HSCROLL[9:3]; the column counter at tile
+   * fetch slot s is (s - TFETCH's first slot) + HSCROLL[2]. */
+  for (const hs2 of [0, 1]) {
+    const l = [] as { slot: number; ph: number; v: Map<string, number> }[]
+    for (let slot = 0; slot < SLOTS_PER_LINE; slot++)
+      for (let ph = 0; ph < DOTS_PER_SLOT; ph++) l.push({ slot, ph, v: dotWorld(slot, ph, { HS2: hs2 }) })
+    const tf0 = l.find((d) => d.v.get("TFETCH") === 1)!.slot
+    let mc = 0, map = -1, mapq = -1, accesses = 0, steps = 0, bad = 0, first = ""
+    for (const d of l) {
+      if (d.v.get("TFETCH") === 1 && d.ph === 2) {
+        const sa = d.slot - tf0 + hs2
+        if (mapq !== sa >> 1) { if (!first) first = `slot ${d.slot}: cell ${sa >> 1}, MAPQ holds ${mapq}`; bad++ }
+      }
+      if (d.ph === 0 && d.v.get("MAPREQ") === 1) accesses++
+      const ld = d.v.get("MAPLD") === 1, adv = d.v.get("MCADV") === 1
+      if (adv) { mapq = map; mc++; steps++ }
+      if (ld) map = mc - (adv ? 1 : 0)
+    }
+    const want = MAP_COLS + hs2
+    check(bad === 0,
+      `⭐ HSCROLL[2] = ${hs2}: every one of the 160 tile fetches reads the code of the cell ` +
+      "its column counter names - graphics.md 19 item 48", first || `${bad} wrong`)
+    check(accesses === want && steps === want,
+      `and the line takes ${want} map accesses and ${want} steps - ` +
+      (hs2 ? "half a cell each end is one cell more than an unscrolled line" : "one per cell"),
+      `${accesses} and ${steps}`)
+  }
 }
 
 /* -- 3. 6.4.2's access arithmetic ---------------------------------------- */

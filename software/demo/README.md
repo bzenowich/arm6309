@@ -69,14 +69,14 @@ makes the writes, and a row tick takes it up to about 4 ms. Every note therefore
 later than refplayer's, and scoring the card against refplayer measures the CPU. `tracewav`
 replays the run's own timed writes through `card.c`, so what remains is the card.
 
-## ⛔ What it found: cell mode's fine horizontal scroll
+## What it found: cell mode's fine horizontal scroll, since fixed
 
-`graphics.md` §19 item 48. At `HSCROLL[2:0]` = 4, every frame the card produces equals a
-model in which pixel columns 0–3 of each cell come from the cell to their left.
-`mkgame.render_cells(..., stale_half=True)` is that model, and `checkdemo.py` counts frames
-against it separately. The video shows it during every horizontal screen transition.
-The demo moves the camera in steps of 4 on purpose, and it has not been changed to avoid
-the defect.
+`graphics.md` §19 item 48, closed 2026-09-13. At `HSCROLL[2:0]` = 4 every frame the card
+produced equalled a model in which pixel columns 0–3 of each cell came from the cell to
+their left. The map pipeline's handover was phased on the unscrolled slot counter.
+`mkgame.render_cells(..., stale_half=True)` is that model, and `checkdemo.py` still counts
+frames against it, so a regression would be named rather than just counted. The demo
+moves the camera in steps of 4, which is what exposed the defect.
 
 ## The budget, measured
 

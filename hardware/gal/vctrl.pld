@@ -42,6 +42,7 @@ PIN = VDSEL ;
 PIN = LDHS ;
 PIN = LDADV ;
 PIN = D2 ;
+PIN = HS2 ;
 PIN = RDVALID ;
 PIN = A19 ;
 PIN = A20 ;
@@ -465,13 +466,16 @@ MFETCH = H5 & H0
          # H7 & !H6
          # H6 & !H2 & !H1 & !H0 ;
 FETCH = TFETCH & SLOTTICK ;
-HLOAD = !H7 & !H6 & !H5
-        # !H7 & !H6 & !H4 & !H3 & !H2 & !H1 & !H0 ;
+HLOAD = !H7 & !H6 & !H5 ;
 HEND = H7 & H6 & H2 & H1 & H0 ;
 ROWADV = !VBLANK & HEND & SLOTTICK & VMODE1
          # !VBLANK & HEND & SLOTTICK & !V0 ;
-MAPREQ = TILEMODE & MFETCH & H0 ;
-MCADV = TILEMODE & MFETCH & !H0 & SLOTTICK ;
+MAPREQ = TILEMODE & MFETCH & H0 & !HS2
+         # TILEMODE & MFETCH & !H0 & HS2
+         # TILEMODE & HS2 & !H7 & !H6 & H5 & !H4 & !H3 & !H2 & !H1 & !H0 ;
+MCADV = TILEMODE & MFETCH & !H0 & !HS2 & SLOTTICK
+        # TILEMODE & MFETCH & H0 & HS2 & SLOTTICK
+        # TILEMODE & HS2 & H7 & H6 & !H5 & !H4 & !H3 & !H2 & !H1 & H0 & SLOTTICK ;
 MAPLD = MAPREQ & !PH1 & PH0 ;
 MAPSEL = MAPREQ & !PH1 ;
 TILESEL = TILEMODE & PH1 & !SPNGRANT ;

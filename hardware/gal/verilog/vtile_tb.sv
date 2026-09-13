@@ -234,6 +234,41 @@ module vtile_tb;
       if (seen_map[i] != map_addr(cell_row, (96 + i) % 128)) bad++;
     ok(bad == 0, "HSCROLL = 768 wraps the 128-cell horizontal ring inside the line");
 
+    // ⛔ horizontal, SUB-CELL - graphics.md 19 item 48. Every claim above scrolls
+    // by whole cells, which is why a handover on the unscrolled cell boundary
+    // passed them all: at HSCROLL[2] = 1 the column counter's cell pairs are
+    // one slot away from H0's, and software/demo/ drew the first half of every
+    // cell from its left neighbour. So state the whole fetch from the column
+    // counter: tile fetch i is at SA = HSCROLL[9:2] + i, which is cell SA >> 1,
+    // half SA & 1, and it must carry THAT cell's map byte. HSCROLL[1:0] is the
+    // mux phase (8.2) and moves no address, and is swept anyway.
+    begin
+      int offs [9] = '{1, 2, 3, 4, 5, 6, 7, 12, 772};
+      foreach (offs[k]) begin
+        int h, sa, codebad, addrbad;
+        h = offs[k];
+        wr('h03, h[7:0]); wr('h04, 8'(h >> 8));
+        walk_line(100, 0, h);
+        cell_row = (disp_row / 8) % 32;
+        row_in_cell = disp_row % 8;
+        codebad = 0; addrbad = 0;
+        for (i = 0; i < 160; i++) begin
+          sa = (h >> 2) + i;
+          mapbyte = ((cell_row * 5) + (((sa >> 1) % 128) * 3)) & 8'hFF;
+          if (seen_code[i] != mapbyte) begin
+            if (codebad == 0)
+              $display("      HSCROLL=%0d tile slot %0d (cell %0d half %0d): code %0h, want %0h",
+                       h, i, (sa >> 1) % 128, sa & 1, seen_code[i], mapbyte);
+            codebad++;
+          end
+          if (seen_tile[i] != (tile_addr(mapbyte, row_in_cell, sa & 1) >> 2)) addrbad++;
+        end
+        ok(codebad == 0 && addrbad == 0,
+           $sformatf("HSCROLL = %0d: every tile fetch carries its own cell's code and half - the handover follows the scrolled cell boundary (%0d codes, %0d addresses wrong of 160)",
+                     h, codebad, addrbad));
+      end
+    end
+
     $display("");
     $display("The vertical ring is 32 cell rows - 6.4.6's asymmetry");
     $display("");

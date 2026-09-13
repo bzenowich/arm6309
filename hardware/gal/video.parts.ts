@@ -385,8 +385,12 @@ export const tileCadence: Cell[] = [
    * column counters were being LOADED while the map fetch was already using
    * them. cadence.check.ts caught it as an overlap the moment it was taught
    * about LRUN and put back into `npm run check`. */
+  /* ⚠ AND ONE SLOT SHORTER AGAIN SINCE 2026-09-13, for the same reason it
+   * moved on 2026-09-09: at HSCROLL[2] = 1 the first map access is slot 32
+   * (MAPREQ below, graphics.md 19 item 48), and the counter it reads must not
+   * still be loading. */
   { pin: 0, name: "HLOAD", assertedLow: false, s0: 1, registered: false,
-    terms: rangeTerms({ bits: HB, lo: 0, hi: H.backEnd - 3, max: H.last }) },
+    terms: rangeTerms({ bits: HB, lo: 0, hi: H.backEnd - 4, max: H.last }) },
 
   /* ---- the vertical window, §8 ------------------------------------------ *
    *
@@ -438,13 +442,53 @@ export const tileCadence: Cell[] = [
    * so an odd shift swaps every cell's two halves for the rest of the line -
    * vtile_tb reported exactly that, 80 wrong of 160. An even shift cannot:
    * both windows move by 2 and H0 means what it always meant. */
+  /* ⛔ AND THE CELL PHASE IS H0 XOR HS2 SINCE 2026-09-13 - graphics.md 19
+   * item 48. H0 is the SLOT counter's parity and it does not scroll; the tile
+   * address's half-of-cell is SA2, the COLUMN counter's low bit, which §8 loads
+   * from HSCROLL[2]. At HSCROLL[2] = 0 the two pair up and nothing changes.
+   * At 1 the column counter's cells start one slot later than H0's, so MAPQ
+   * was handed over between a cell's two halves and the first half of every
+   * cell was drawn with its left neighbour's code - software/demo/ showed it on
+   * the whole machine, and vtile_tb's whole-cell scroll claims could not.
+   *
+   * Flipping the phase moves both signals by one slot. With HS2 = 1 the first
+   * MCADV of MFETCH now comes BEFORE the first map access - slot 33 steps MC
+   * from HSCROLL[9:3] to the next cell, and slot 34 fetches that cell's code -
+   * which is right, because the first tile fetch at slot 35 is SA = HSCROLL[9:2]
+   * + 1, the first half of the next cell. Still 80 accesses and 80 steps a
+   * line, still one lead cell, and the 5.2.2 sub-slot position of MAPLD does
+   * not move.
+   *
+   * HS2 comes from vaddr, which holds HSCROLL[9:2] and is the copy the display
+   * list's MOVE writes too, so a per-scanline HSCROLL keeps the phase right.
+   * One pin out of vaddr, one in on vctrl, and a second product term on each
+   * of these two cells. */
+  /* ⚠ AND THE WINDOW MOVES WITH THE PHASE. Flipping it alone left the first
+   * displayed slot, 34, without a fetch: at HS2 = 1 that slot is the SECOND
+   * half of HSCROLL's own cell, whose code has to be fetched before it - in
+   * slot 32. And a line scrolled by half a cell shows half of that cell, 79
+   * whole cells and half of an 81st, so it needs 81 codes where an unscrolled
+   * line needs 80: the last is fetched in slot 192 and handed over in slot
+   * 193, one slot past MFETCH. vtile_tb measured each end on its own - 2
+   * wrong of 160 with the flip alone, 1 with the window moved and slot 192
+   * dropped - and neither end is visible to a claim that scrolls by cells.
+   *
+   *   HS2 = 0   access 33, 35 .. 191   step 34, 36 .. 192   80 and 80
+   *   HS2 = 1   access 32, 34 .. 192   step 33, 35 .. 193   81 and 81
+   *
+   * Slots 32 and 193 are one product term each. */
   { pin: 0, name: "MAPREQ", assertedLow: false, s0: 1, registered: false,
-    terms: ["TILEMODE & MFETCH & H0"] },
+    terms: [
+      "TILEMODE & MFETCH & H0 & !HS2",
+      "TILEMODE & MFETCH & !H0 & HS2",
+      "TILEMODE & HS2 & !H7 & !H6 & H5 & !H4 & !H3 & !H2 & !H1 & !H0",
+    ] },
   { pin: 0, name: "MCADV", assertedLow: false, s0: 1, registered: false,
-    terms: ["TILEMODE & MFETCH & !H0 & SLOTTICK"] },
-  /* 5.2.2's spare access is dots 0-1 (SPAREWIN = !PH1) and the display fetch is
-   * dots 2-3. The map byte is latched on the boundary between them - true
-   * during dot 1, so the register clocks at the dot 1 -> 2 edge. */
+    terms: [
+      "TILEMODE & MFETCH & !H0 & !HS2 & SLOTTICK",
+      "TILEMODE & MFETCH & H0 & HS2 & SLOTTICK",
+      "TILEMODE & HS2 & H7 & H6 & !H5 & !H4 & !H3 & !H2 & !H1 & H0 & SLOTTICK",
+    ] },
   { pin: 0, name: "MAPLD", assertedLow: false, s0: 1, registered: false,
     terms: ["MAPREQ & !PH1 & PH0"] },
   /* ⛔ CELLTICK WAS HERE, and it was MCADV's equation letter for letter -

@@ -1024,3 +1024,20 @@ text they replaced follows.
 
 — two cells deleted
 > and the fitter still reports 128 of 128, because it packs the array.
+
+## Utilisation figures after graphics.md §19 item 48's refit (2026-09-13)
+
+`vctrl` is 53 of 64 I/O and 93 of 128 cells on the fitter's first pass, and `vaddr` 59 of
+64 I/O; `graphics.md` §19 items 46 and 48. The replaced text follows.
+
+### docs/machine.md — §5 open-items table, the vctrl row
+
+**⚠ `vctrl` is the tight part on cells, and `vaddr` on fan-in.** `vctrl` is **123 of 128 cells, 52 of 64 I/O and 2 of 4 dedicated inputs** — pin-full until §11 deleted the CPU chip grant and the four per-chip `FCLK` outputs collapsed into one, so what the next feature on it spends is cells.
+
+### docs/machine.md — §5 open-items table, vaddr's I/O
+
+`vaddr` is **113 of 128 cells and 58 of 64 I/O**, and ⛔
+
+### docs/machine.md — §5 open-items table, the second pass
+
+⚠ `vctrl` and `vsup` both fit only on the fitter's second pass (`graphics.md` §19 item 46)

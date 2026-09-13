@@ -88,6 +88,9 @@ export const vaddrCpld: Merged = withActiveLow(merge(
        * way: MAPA[1:0] = cellCol[1:0]. Two pins out, and three come back below
        * - V0..V2 are no longer imported at all. */
       "MAPA0", "MAPA1",
+      /* HSCROLL[2], to vctrl's map cadence: the cell phase is H0 XOR HS2
+       * (graphics.md 19 item 48, video.parts.ts tileCadence). */
+      "HS2",
       /* ⚠ 10.3 EXPORTS NOTHING FROM THIS PART SINCE 2026-09-09. LRUN and LWHSL
        * were both here; the engine's descriptor half is on vsup now and this
        * part keeps only WPTR's increment, so the three signals cross the other

@@ -589,8 +589,8 @@ majority of what a desktop actually moves.
 >
 > ⚠ **The pins came back another way.** §14.2's consolidation was expected to return
 > them; instead `graphics.md` §11 deleted the CPU's chip grant and the per-chip `FCLK`
-> outputs collapsed into one, and `vctrl` is 52 of 64 I/O and 2 of 4 dedicated today.
-> Its limit now is cells (`graphics.md` §19 items 33, 46).
+> outputs collapsed into one, and `vctrl` is 53 of 64 I/O and 2 of 4 dedicated today,
+> with 35 cells spare (`graphics.md` §19 item 46).
 
 #### The question this answered, and it was the right question to ask
 
