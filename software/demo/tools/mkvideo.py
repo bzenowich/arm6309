@@ -2,6 +2,7 @@
 """Turn demo_tb's recordings into an H.265 file.
 
     python3 software/demo/tools/mkvideo.py OUT demo.mp4 [--fps 70]
+    python3 software/demo/tools/mkvideo.py OUT demo-web.mp4 --web
 
   picture   frames.bin: every frame the connector carried, with the simulated
             time it started. Resampled to a constant rate by showing, at each
@@ -48,9 +49,16 @@ def scale(rgb):
     return rgb[rows_map(h)][:, cols]
 
 
+# A frame that began longer ago than this is not on the screen any more. With the
+# display off the card sends no active video at all, and demo_tb writes no frame -
+# so holding the last one would show a picture a monitor is not showing.
+STALE_S = 0.05
+
+
 def main():
     out, mp4 = sys.argv[1], sys.argv[2]
-    fps = float(sys.argv[sys.argv.index("--fps") + 1]) if "--fps" in sys.argv else 70.0
+    web = "--web" in sys.argv
+    fps = float(sys.argv[sys.argv.index("--fps") + 1]) if "--fps" in sys.argv else (60.0 if web else 70.0)
     sync = dict(l.split() for l in open(os.path.join(out, "sync.txt")))
     end_s = int(sync.get("end_ps", 0)) / 1e12
 
@@ -59,38 +67,50 @@ def main():
                    check=True, stdout=subprocess.DEVNULL)
     audio_offset = int(sync["cc0_ps"]) / 1e12
 
+    gop = int(round(fps))
+    if web:
+        # ⭐ FOR A BROWSER, NOT FOR REVIEW AT FULL FIDELITY. Google Drive, like most
+        # web players, transcodes HEVC and caps the frame rate at 60, and when it
+        # changes quality mid-play it restarts from the last keyframe. With x265's
+        # default keyframes (every 3.6 s, and one at the scene cut before the
+        # paint) that replayed the whole paint. So: H.264, 60 fps resampled here
+        # rather than by the player, a keyframe every second with no scene-cut
+        # extras, and the index at the front of the file.
+        vcodec = ["-c:v", "libx264", "-preset", "slow", "-crf", "18", "-profile:v", "high",
+                  "-pix_fmt", "yuv420p", "-g", str(gop), "-keyint_min", str(gop), "-sc_threshold", "0"]
+        label = "H.264 + AAC, web"
+    else:
+        vcodec = ["-c:v", "libx265", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p",
+                  "-tag:v", "hvc1",
+                  "-x265-params", f"log-level=error:keyint={gop}:min-keyint={gop}:scenecut=0"]
+        label = "H.265 + AAC"
     ff = ffmpeg_path()
     cmd = [ff, "-y", "-hide_banner", "-loglevel", "error",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{OW}x{OH}", "-r", f"{fps}", "-i", "-",
            "-itsoffset", f"{audio_offset:.6f}", "-i", wav,
-           "-map", "0:v", "-map", "1:a",
-           "-c:v", "libx265", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p",
-           "-tag:v", "hvc1", "-x265-params", "log-level=error",
-           "-c:a", "aac", "-b:a", "192k", "-shortest", mp4]
+           "-map", "0:v", "-map", "1:a", *vcodec,
+           "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", mp4]
     enc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
+    black = np.zeros((OH, OW, 3), np.uint8)
     it = fr.read(os.path.join(out, "frames.bin"))
-    cur = np.zeros((OH, OW, 3), np.uint8)
     pending = next(it, None)
+    shown, shown_t = black, -1.0
     k = 0
-    last_t = 0.0
     while True:
         t = k / fps
         if end_s and t >= end_s:
             break
-        advanced = False
-        while pending is not None and pending[0]["t"] <= t:
-            meta, px = pending
-            last_t = meta["t"]
-            if not advanced or True:
-                cur_px, cur_meta = px, meta
-            advanced = True
-            pending = next(it, None)
-        if advanced:
-            cur = scale(fr.rgb565_to_rgb8(cur_px))
-        elif pending is None and t > last_t + 0.5:
+        if not end_s and pending is None and t > shown_t + 0.5:
             break
-        enc.stdin.write(cur.tobytes())
+        latest = None
+        while pending is not None and pending[0]["t"] <= t:
+            latest = pending
+            pending = next(it, None)
+        if latest is not None:
+            shown, shown_t = scale(fr.rgb565_to_rgb8(latest[1])), latest[0]["t"]
+        frame = shown if t - shown_t <= STALE_S else black
+        enc.stdin.write(frame.tobytes())
         k += 1
         if k % 700 == 0:
             print(f"      {t:6.1f} s encoded", flush=True)
@@ -98,7 +118,7 @@ def main():
     rc = enc.wait()
     if rc != 0:
         sys.exit(f"FAIL  ffmpeg exited {rc}")
-    print(f"ok    wrote {mp4}: {k} frames at {fps} fps ({k / fps:.1f} s), H.265 + AAC")
+    print(f"ok    wrote {mp4}: {k} frames at {fps:g} fps ({k / fps:.1f} s), {label}")
 
 
 if __name__ == "__main__":

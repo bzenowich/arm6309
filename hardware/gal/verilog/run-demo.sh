@@ -112,4 +112,5 @@ python3 "$ROOT/software/demo/tools/checkdemo.py" "$OUT" "$ROOT/software/demo/bui
 echo
 echo "-- the file"
 python3 "$ROOT/software/demo/tools/mkvideo.py" "$OUT" "$OUT/demo.mp4" || fail=1
+python3 "$ROOT/software/demo/tools/mkvideo.py" "$OUT" "$OUT/demo-web.mp4" --web || fail=1
 exit $fail

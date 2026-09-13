@@ -10,7 +10,8 @@ sh software/demo/build.sh                      # assets, layout, assemble -> bui
 QUICK=1 sh software/demo/build.sh              # ... with a 16-row picture and a short hold
 sh software/demo/bench/run-replay.sh 40        # the replayer vs refplayer, CPU alone (~2 min)
 sh hardware/gal/verilog/run-demo.sh 27         # the whole machine (~1.5-2 h), every check
-                                               # below, and /tmp/arm6309-demo/demo.mp4
+                                               # below, /tmp/arm6309-demo/demo.mp4 (H.265,
+                                               # 70 fps) and demo-web.mp4 (H.264, 60 fps)
 POST_ONLY=1 sh hardware/gal/verilog/run-demo.sh   # the checks and the file again, no simulation
 ```
 
