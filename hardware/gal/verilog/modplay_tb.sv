@@ -61,6 +61,7 @@ module modplay_tb;
   endtask
 
   `include "conv_claims.svh"
+  `include "adder_window.svh"
 
   /* ---- the host port, as a 6809E cycle -------------------------------- *
    * audio.md §9.4: the port is asynchronous to the card and the address is
@@ -361,6 +362,8 @@ module modplay_tb;
   int      tick_now, tick_line, n, v, got;
   string   rname;
   int      writes_played = 0, ticks_played = 0, unknown_regs = 0;
+  int      first_bad;
+  logic [7:0] first_bad_want;
   int      firq_timeouts = 0;
   logic [7:0] byte_v;
 
@@ -418,16 +421,28 @@ module modplay_tb;
      * returns the byte the PREVIOUS pointer named - and SDATA post-increments,
      * so a second read is of the next address, not a retry of this one. The
      * item is open; this testbench does not pretend otherwise. */
+    /* ⚠ AND WAIT FOR THE LAST WRITE TO RETIRE FIRST, the same way a host
+     * must. This compared the RAM straight after the final wr() returned,
+     * which held only because W3 used to finish inside wr()'s eight-slot tail.
+     * audio.md 16 item 37's re-timing made W3 nine steps starting in slot 7,
+     * and the last byte read as not uploaded - a testbench that skipped 9.2's
+     * handshake before looking, not a card that lost a byte. */
+    pwwait();
     srfd = $fopen(sram_path, "r");
-    n = 0; got = 0;
+    n = 0; got = 0; first_bad = -1;
     while ($fscanf(srfd, "%h", v) == 1) begin
-      if (card.SRAM[n] !== v[7:0]) got++;
+      if (card.SRAM[n] !== v[7:0]) begin
+        if (first_bad < 0) begin first_bad = n; first_bad_want = v[7:0]; end
+        got++;
+      end
       n++;
     end
     $fclose(srfd);
     ok(got == 0,
-       $sformatf("all %0d bytes are in the card's sample RAM, byte for byte (%0d wrong)",
-                 n, got));
+       $sformatf("all %0d bytes are in the card's sample RAM, byte for byte (%0d wrong%s)",
+                 n, got, first_bad < 0 ? "" :
+                 $sformatf(", first at %0d: holds %02h, want %02h",
+                           first_bad, card.SRAM[first_bad], first_bad_want)));
 
     // ---- 2. the module ---------------------------------------------------
     tick_now = 0;
@@ -472,6 +487,7 @@ module modplay_tb;
     ok(vol_checks > 100,
        $sformatf("and the volume path was sampled enough times to mean it (%0d)", vol_checks));
     conv_report();
+    adder_window_report();
     ok(vol_max == 255,
        $sformatf("16 item 40: a volume converter reaches full scale, code 255 (highest seen %0d)",
                  vol_max));

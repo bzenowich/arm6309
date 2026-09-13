@@ -1,4 +1,4 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Sat Sep 12 22:25:22 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Sat Sep 12 23:47:33 2026
 
 
 fit1508 aseq.tt2 -device P1508C84 -preassign ignore -JTAG off
@@ -57,12 +57,6 @@ Info: aseq uses 95% of the pins available in device PLCC84
 Info: aseq uses 90% of the logic resources in device PLCC84
   If you wish to have more pins available for future logic change
   Atmel recommends using a larger device.
- ## Warning : Placement fail 
----------------------------------------------------------
- Fitter_Pass 2, Preassign = IGNORE, CASCADE_LOGIC : (TRY) 
- ... 
-  If you wish to have more pins available for future logic change
-  Atmel recommends using a larger device.
 
 Performing global Output Enable pin assignments ...
 
@@ -85,252 +79,245 @@ RESET assigned to pin  1
 
 Attempt to place floating signals ...
 ------------------------------------
-AIDX1 is placed at feedback node 601 (MC 1)
-AIDX4 is placed at feedback node 602 (MC 2)
-S1 is placed at pin 12 (MC 3)
-HA1 is placed at feedback node 603 (MC 3)
-AIDX2 is placed at feedback node 604 (MC 4)
-ACOUT is placed at pin 11 (MC 5)
+T1 is placed at feedback node 601 (MC 1)
+AIDX3 is placed at feedback node 602 (MC 2)
+DMAEN0 is placed at pin 12 (MC 3)
+HA2 is placed at feedback node 603 (MC 3)
+AIDX1 is placed at feedback node 604 (MC 4)
+DMAEN3 is placed at pin 11 (MC 5)
 HA0 is placed at feedback node 605 (MC 5)
-XXL_557 is placed at foldback expander node 305 (MC 5)
-RW is placed at pin 10 (MC 6)
-AIDX0 is placed at feedback node 606 (MC 6)
-XXL_556 is placed at foldback expander node 306 (MC 6)
-AIDX5 is placed at feedback node 607 (MC 7)
-XXL_404 is placed at foldback expander node 307 (MC 7)
+DMAEN2 is placed at pin 10 (MC 6)
+HA1 is placed at feedback node 606 (MC 6)
+AIDX4 is placed at feedback node 607 (MC 7)
 SBOE is placed at pin 9 (MC 8)
-XXL_401 is placed at foldback expander node 308 (MC 8)
-XXL_640 is placed at feedback node 609 (MC 9)
-XXL_639 is placed at feedback node 610 (MC 10)
-CNTOE is placed at pin 8 (MC 11)
-XXL_400 is placed at foldback expander node 311 (MC 11)
-XXL_641 is placed at feedback node 612 (MC 12)
-ACIN is placed at pin 6 (MC 13)
-XXL_399 is placed at foldback expander node 313 (MC 13)
-ONESOE is placed at pin 5 (MC 14)
-XXL_388 is placed at foldback expander node 314 (MC 14)
-AIDX3 is placed at feedback node 615 (MC 15)
-PFVALID is placed at pin 4 (MC 16)
-XXL_374 is placed at foldback expander node 316 (MC 16)
-BLATCK is placed at pin 22 (MC 17)
-HCOMMIT is placed at feedback node 618 (MC 18)
-SRWE is placed at pin 21 (MC 19)
-XXL_618 is placed at foldback expander node 319 (MC 19)
-VDIRTY is placed at feedback node 620 (MC 20)
-XXL_617 is placed at foldback expander node 320 (MC 20)
-SROE is placed at pin 20 (MC 21)
-XXL_543 is placed at foldback expander node 321 (MC 21)
-HL1 is placed at feedback node 622 (MC 22)
-XXL_444 is placed at foldback expander node 322 (MC 22)
-WT2 is placed at feedback node 623 (MC 23)
-XXL_537 is placed at foldback expander node 323 (MC 23)
-PWOE is placed at pin 18 (MC 24)
-XXL_447 is placed at foldback expander node 324 (MC 24)
-PFCK is placed at pin 17 (MC 25)
-XXL_446 is placed at foldback expander node 325 (MC 25)
-HWE is placed at feedback node 626 (MC 26)
-XXL_542 is placed at foldback expander node 326 (MC 26)
-ALATCK is placed at pin 16 (MC 27)
-XXL_441 is placed at foldback expander node 327 (MC 27)
-WT0 is placed at feedback node 628 (MC 28)
-XXL_374 is placed at foldback expander node 328 (MC 28)
-PFLANE is placed at pin 15 (MC 29)
+XXL_557 is placed at foldback expander node 308 (MC 8)
+XXL_403 is placed at foldback expander node 309 (MC 9)
+T2 is placed at feedback node 610 (MC 10)
+XXL_401 is placed at foldback expander node 310 (MC 10)
+ONESOE is placed at pin 8 (MC 11)
+XXL_398 is placed at foldback expander node 311 (MC 11)
+AIDX2 is placed at feedback node 612 (MC 12)
+BLATOE is placed at pin 6 (MC 13)
+XXL_387 is placed at foldback expander node 313 (MC 13)
+CNTOE is placed at pin 5 (MC 14)
+XXL_374 is placed at foldback expander node 314 (MC 14)
+AIDX5 is placed at feedback node 615 (MC 15)
+ACIN is placed at pin 4 (MC 16)
+XXL_373 is placed at foldback expander node 316 (MC 16)
+DMAEN1 is placed at pin 22 (MC 17)
+XXL_444 is placed at feedback node 617 (MC 17)
+VDIRTY is placed at feedback node 618 (MC 18)
+XXL_595 is placed at foldback expander node 318 (MC 18)
+D5 is placed at pin 21 (MC 19)
+XXL_376 is placed at feedback node 619 (MC 19)
+XXL_590 is placed at foldback expander node 319 (MC 19)
+HWE is placed at feedback node 620 (MC 20)
+XXL_548 is placed at foldback expander node 320 (MC 20)
+D2 is placed at pin 20 (MC 21)
+HCOMMIT is placed at feedback node 621 (MC 21)
+XXL_547 is placed at foldback expander node 321 (MC 21)
+WT2 is placed at feedback node 622 (MC 22)
+XXL_540 is placed at foldback expander node 322 (MC 22)
+WT0 is placed at feedback node 623 (MC 23)
+XXL_431 is placed at foldback expander node 323 (MC 23)
+SRWE is placed at pin 18 (MC 24)
+XXL_430 is placed at foldback expander node 324 (MC 24)
+SROE is placed at pin 17 (MC 25)
+XXL_429 is placed at foldback expander node 325 (MC 25)
+HL1 is placed at feedback node 626 (MC 26)
+XXL_426 is placed at foldback expander node 326 (MC 26)
+PWOE is placed at pin 16 (MC 27)
+XXL_374 is placed at foldback expander node 327 (MC 27)
+HW1 is placed at feedback node 628 (MC 28)
+PFCK is placed at pin 15 (MC 29)
+XXL_373 is placed at foldback expander node 329 (MC 29)
 WT1 is placed at feedback node 630 (MC 30)
-SFOE is placed at pin 14 (MC 32)
-XXL_635 is placed at feedback node 633 (MC 33)
-WROTE1 is placed at feedback node 634 (MC 34)
-SETC is placed at pin 31 (MC 35)
-WROTE0 is placed at feedback node 636 (MC 36)
-SETA is placed at pin 30 (MC 37)
-SETB is placed at pin 29 (MC 38)
-WROTE2 is placed at feedback node 639 (MC 39)
-FB_620 is placed at foldback expander node 339 (MC 39)
-SUMOE is placed at pin 28 (MC 40)
-XXL_564 is placed at foldback expander node 340 (MC 40)
-Com_Ctrl_367 is placed at feedback node 641 (MC 41)
-XXL_438 is placed at foldback expander node 341 (MC 41)
-XXL_632 is placed at feedback node 642 (MC 42)
-CVC1 is placed at pin 27 (MC 43)
-XXL_411 is placed at foldback expander node 343 (MC 43)
-XXL_647 is placed at feedback node 644 (MC 44)
-SFWE0 is placed at pin 25 (MC 45)
-XXL_410 is placed at foldback expander node 345 (MC 45)
-SFWE1 is placed at pin 24 (MC 46)
-XXL_378 is placed at foldback expander node 346 (MC 46)
-WROTE3 is placed at feedback node 647 (MC 47)
-SFWE2 is placed at pin 23 (MC 48)
-XXL_374 is placed at foldback expander node 348 (MC 48)
-S3 is placed at pin 41 (MC 49)
-XXL_643 is placed at feedback node 649 (MC 49)
-HDUE is placed at feedback node 650 (MC 50)
-A0 is placed at pin 40 (MC 51)
-RST2 is placed at feedback node 651 (MC 51)
-RST1 is placed at feedback node 652 (MC 52)
-FB_630 is placed at foldback expander node 352 (MC 52)
-A1 is placed at pin 39 (MC 53)
-BUSY is placed at feedback node 653 (MC 53)
-FB_624 is placed at foldback expander node 353 (MC 53)
-DUE1 is placed at feedback node 654 (MC 54)
-XXL_622 is placed at foldback expander node 354 (MC 54)
-RST3 is placed at feedback node 655 (MC 55)
-XXL_621 is placed at foldback expander node 355 (MC 55)
-A2 is placed at pin 37 (MC 56)
-DUE0 is placed at feedback node 656 (MC 56)
-XXL_616 is placed at foldback expander node 356 (MC 56)
-A3 is placed at pin 36 (MC 57)
-DUE2 is placed at feedback node 657 (MC 57)
-XXL_561 is placed at foldback expander node 357 (MC 57)
-XXL_646 is placed at feedback node 658 (MC 58)
-DMAEN3 is placed at pin 35 (MC 59)
-DUE3 is placed at feedback node 659 (MC 59)
-XXL_544 is placed at foldback expander node 359 (MC 59)
-T1 is placed at feedback node 660 (MC 60)
-CVC0 is placed at pin 34 (MC 61)
-XXL_537 is placed at foldback expander node 361 (MC 61)
-RST0 is placed at feedback node 662 (MC 62)
-WC1 is placed at feedback node 663 (MC 63)
-CVC2 is placed at pin 33 (MC 64)
-XXL_374 is placed at foldback expander node 364 (MC 64)
-DMAEN1 is placed at pin 44 (MC 65)
-VPB is placed at feedback node 665 (MC 65)
-XXL_628 is placed at foldback expander node 365 (MC 65)
-T2 is placed at feedback node 666 (MC 66)
-XXL_627 is placed at foldback expander node 366 (MC 66)
-DMAEN2 is placed at pin 45 (MC 67)
-VPA is placed at feedback node 667 (MC 67)
-XXL_626 is placed at foldback expander node 367 (MC 67)
-XXL_642 is placed at feedback node 668 (MC 68)
-DMAEN0 is placed at pin 46 (MC 69)
-XXL_496 is placed at feedback node 669 (MC 69)
-XXL_625 is placed at foldback expander node 369 (MC 69)
-XXL_637 is placed at feedback node 670 (MC 70)
-XXL_633 is placed at feedback node 671 (MC 71)
-D3 is placed at pin 48 (MC 72)
-XXL_405 is placed at feedback node 672 (MC 72)
-XXL_614 is placed at foldback expander node 372 (MC 72)
-SFA2 is placed at pin 49 (MC 73)
-XXL_446 is placed at foldback expander node 373 (MC 73)
-XXL_638 is placed at feedback node 674 (MC 74)
-BLATOE is placed at pin 50 (MC 75)
-XXL_411 is placed at foldback expander node 375 (MC 75)
-T3 is placed at feedback node 676 (MC 76)
-PWBUSY is placed at pin 51 (MC 77)
-XXL_410 is placed at foldback expander node 377 (MC 77)
-XXL_631 is placed at feedback node 678 (MC 78)
-XXL_636 is placed at feedback node 679 (MC 79)
-SFA5 is placed at pin 52 (MC 80)
-XXL_374 is placed at foldback expander node 380 (MC 80)
-XXL_598 is placed at feedback node 681 (MC 81)
-HGBL is placed at feedback node 682 (MC 82)
-D5 is placed at pin 54 (MC 83)
-HSY2 is placed at feedback node 683 (MC 83)
-HA3 is placed at feedback node 684 (MC 84)
-D2 is placed at pin 55 (MC 85)
-SDQ2 is placed at feedback node 685 (MC 85)
-D4 is placed at pin 56 (MC 86)
-SDQ1 is placed at feedback node 686 (MC 86)
-XXL_520 is placed at feedback node 687 (MC 87)
-D1 is placed at pin 57 (MC 88)
-SDQ0 is placed at feedback node 688 (MC 88)
-HA2 is placed at feedback node 689 (MC 89)
-XXL_565 is placed at foldback expander node 389 (MC 89)
-HW0 is placed at feedback node 690 (MC 90)
-XXL_543 is placed at foldback expander node 390 (MC 90)
-D0 is placed at pin 58 (MC 91)
-XXL_418 is placed at feedback node 691 (MC 91)
-XXL_444 is placed at foldback expander node 391 (MC 91)
-HW1 is placed at feedback node 692 (MC 92)
-CTRL7 is placed at pin 60 (MC 93)
-HSTAGE is placed at feedback node 693 (MC 93)
-XXL_443 is placed at foldback expander node 393 (MC 93)
-NEQH is placed at pin 61 (MC 94)
-HW2 is placed at feedback node 694 (MC 94)
-XXL_401 is placed at foldback expander node 394 (MC 94)
-HRW is placed at feedback node 695 (MC 95)
-PWCK is placed at pin 62 (MC 96)
-XXL_374 is placed at foldback expander node 396 (MC 96)
-NEQL is placed at pin 63 (MC 97)
-T0 is placed at feedback node 697 (MC 97)
-XXL_380 is placed at feedback node 698 (MC 98)
-E is placed at pin 64 (MC 99)
-XXL_413 is placed at feedback node 699 (MC 99)
-XXL_419 is placed at feedback node 700 (MC 100)
-SEL is placed at pin 65 (MC 101)
-XXL_392 is placed at feedback node 701 (MC 101)
-XXL_379 is placed at feedback node 702 (MC 102)
-XXL_499 is placed at feedback node 703 (MC 103)
-XXL_426 is placed at feedback node 704 (MC 104)
-SFA4 is placed at pin 68 (MC 105)
-XXL_385 is placed at feedback node 706 (MC 106)
-SFA3 is placed at pin 69 (MC 107)
-XXL_614 is placed at foldback expander node 407 (MC 107)
-XXL_417 is placed at feedback node 708 (MC 108)
-XXL_376 is placed at foldback expander node 408 (MC 108)
-SFA1 is placed at pin 70 (MC 109)
-XXL_634 is placed at feedback node 710 (MC 110)
-XXL_645 is placed at feedback node 711 (MC 111)
-SFA0 is placed at pin 71 (MC 112)
-DMAQ2 is placed at feedback node 713 (MC 113)
-DMAQ0 is placed at feedback node 714 (MC 114)
-S2 is placed at pin 73 (MC 115)
-DMAQ1 is placed at feedback node 716 (MC 116)
-S0 is placed at pin 74 (MC 117)
-CSSL is placed at pin 75 (MC 118)
-DMAQ3 is placed at feedback node 719 (MC 119)
-SDH1 is placed at pin 76 (MC 120)
-HSY1 is placed at feedback node 721 (MC 121)
-WC0 is placed at feedback node 722 (MC 122)
-CSSR is placed at pin 77 (MC 123)
-XXL_644 is placed at feedback node 724 (MC 124)
-CSV is placed at pin 79 (MC 125)
-XXL_555 is placed at foldback expander node 425 (MC 125)
-SDH0 is placed at pin 80 (MC 126)
+BUSY is placed at feedback node 631 (MC 31)
+PFLANE is placed at pin 14 (MC 32)
+WROTE2 is placed at feedback node 633 (MC 33)
+WROTE0 is placed at feedback node 634 (MC 34)
+D4 is placed at pin 31 (MC 35)
+XXL_425 is placed at feedback node 635 (MC 35)
+DUE1 is placed at feedback node 636 (MC 36)
+D1 is placed at pin 30 (MC 37)
+XXL_495 is placed at feedback node 637 (MC 37)
+D3 is placed at pin 29 (MC 38)
+DUE2 is placed at feedback node 638 (MC 38)
+XXL_592 is placed at foldback expander node 338 (MC 38)
+DUE0 is placed at feedback node 639 (MC 39)
+XXL_594 is placed at foldback expander node 339 (MC 39)
+CTRL7 is placed at pin 28 (MC 40)
+WROTE3 is placed at feedback node 640 (MC 40)
+XXL_593 is placed at foldback expander node 340 (MC 40)
+XXL_394 is placed at feedback node 641 (MC 41)
+DUE3 is placed at feedback node 642 (MC 42)
+XXL_591 is placed at foldback expander node 342 (MC 42)
+S2 is placed at pin 27 (MC 43)
+XXL_550 is placed at foldback expander node 343 (MC 43)
+WC0 is placed at feedback node 644 (MC 44)
+XXL_540 is placed at foldback expander node 344 (MC 44)
+CVC0 is placed at pin 25 (MC 45)
+XXL_411 is placed at foldback expander node 345 (MC 45)
+CVC2 is placed at pin 24 (MC 46)
+XXL_410 is placed at foldback expander node 346 (MC 46)
+WC1 is placed at feedback node 647 (MC 47)
+CVC1 is placed at pin 23 (MC 48)
+XXL_373 is placed at foldback expander node 348 (MC 48)
+NEQH is placed at pin 41 (MC 49)
+HSY2 is placed at feedback node 649 (MC 49)
+S0 is placed at pin 40 (MC 51)
+XXL_408 is placed at feedback node 652 (MC 52)
+SETA is placed at pin 39 (MC 53)
+XXL_599 is placed at foldback expander node 353 (MC 53)
+XXL_381 is placed at feedback node 654 (MC 54)
+XXL_598 is placed at foldback expander node 354 (MC 54)
+XXL_589 is placed at feedback node 655 (MC 55)
+FB_597 is placed at foldback expander node 355 (MC 55)
+SETC is placed at pin 37 (MC 56)
+XXL_428 is placed at foldback expander node 356 (MC 56)
+PWBUSY is placed at pin 36 (MC 57)
+XXL_413 is placed at foldback expander node 357 (MC 57)
+HRW is placed at feedback node 658 (MC 58)
+XXL_403 is placed at foldback expander node 358 (MC 58)
+SETB is placed at pin 35 (MC 59)
+XXL_401 is placed at foldback expander node 359 (MC 59)
+XXL_532 is placed at feedback node 660 (MC 60)
+XXL_398 is placed at foldback expander node 360 (MC 60)
+PFVALID is placed at pin 34 (MC 61)
+XXL_377 is placed at foldback expander node 361 (MC 61)
+AIDX0 is placed at feedback node 662 (MC 62)
+XXL_374 is placed at foldback expander node 362 (MC 62)
+XXL_373 is placed at foldback expander node 363 (MC 63)
+SFOE is placed at pin 33 (MC 64)
+SFWE0 is placed at pin 44 (MC 65)
+VPA is placed at feedback node 666 (MC 66)
+SFWE1 is placed at pin 45 (MC 67)
+WROTE1 is placed at feedback node 668 (MC 68)
+ALATCK is placed at pin 46 (MC 69)
+Com_Ctrl_367 is placed at feedback node 670 (MC 70)
+XXL_600 is placed at foldback expander node 371 (MC 71)
+SFA1 is placed at pin 48 (MC 72)
+XXL_564 is placed at foldback expander node 372 (MC 72)
+SFWE2 is placed at pin 49 (MC 73)
+XXL_554 is placed at foldback expander node 373 (MC 73)
+XXL_546 is placed at foldback expander node 374 (MC 74)
+SFA2 is placed at pin 50 (MC 75)
+XXL_542 is placed at foldback expander node 375 (MC 75)
+SFA3 is placed at pin 51 (MC 77)
+XXL_411 is placed at foldback expander node 378 (MC 78)
+XXL_374 is placed at foldback expander node 379 (MC 79)
+SFA4 is placed at pin 52 (MC 80)
+XXL_373 is placed at foldback expander node 380 (MC 80)
+XXL_409 is placed at feedback node 681 (MC 81)
+VPB is placed at feedback node 682 (MC 82)
+NEQL is placed at pin 54 (MC 83)
+DMAQ3 is placed at feedback node 683 (MC 83)
+XXL_462 is placed at feedback node 684 (MC 84)
+D0 is placed at pin 55 (MC 85)
+XXL_382 is placed at feedback node 685 (MC 85)
+E is placed at pin 56 (MC 86)
+XXL_391 is placed at feedback node 686 (MC 86)
+HDUE is placed at feedback node 687 (MC 87)
+SUMOE is placed at pin 57 (MC 88)
+FB_606 is placed at foldback expander node 388 (MC 88)
+RST3 is placed at feedback node 689 (MC 89)
+FB_604 is placed at foldback expander node 389 (MC 89)
+T3 is placed at feedback node 690 (MC 90)
+FB_602 is placed at foldback expander node 390 (MC 90)
+BLATCK is placed at pin 58 (MC 91)
+XXL_560 is placed at foldback expander node 391 (MC 91)
+T0 is placed at feedback node 692 (MC 92)
+SFA5 is placed at pin 60 (MC 93)
+XXL_542 is placed at foldback expander node 393 (MC 93)
+S1 is placed at pin 61 (MC 94)
+XXL_410 is placed at foldback expander node 394 (MC 94)
+XXL_374 is placed at foldback expander node 395 (MC 95)
+SFA0 is placed at pin 62 (MC 96)
+XXL_373 is placed at foldback expander node 396 (MC 96)
+S3 is placed at pin 63 (MC 97)
+DMAQ1 is placed at feedback node 698 (MC 98)
+A0 is placed at pin 64 (MC 99)
+RST2 is placed at feedback node 700 (MC 100)
+A1 is placed at pin 65 (MC 101)
+HW2 is placed at feedback node 702 (MC 102)
+HSTAGE is placed at feedback node 703 (MC 103)
+A2 is placed at pin 67 (MC 104)
+SEL is placed at pin 68 (MC 105)
+DMAQ2 is placed at feedback node 705 (MC 105)
+RST1 is placed at feedback node 706 (MC 106)
+DMAQ0 is placed at feedback node 707 (MC 107)
+XXL_567 is placed at foldback expander node 407 (MC 107)
+HA3 is placed at feedback node 708 (MC 108)
+XXL_566 is placed at foldback expander node 408 (MC 108)
+PWCK is placed at pin 70 (MC 109)
+XXL_540 is placed at foldback expander node 409 (MC 109)
+HW0 is placed at feedback node 710 (MC 110)
+XXL_429 is placed at foldback expander node 410 (MC 110)
+HGBL is placed at feedback node 711 (MC 111)
+CSSL is placed at pin 71 (MC 112)
+XXL_373 is placed at foldback expander node 412 (MC 112)
+A3 is placed at pin 73 (MC 115)
+HSY1 is placed at feedback node 716 (MC 116)
+RW is placed at pin 74 (MC 117)
+CSV is placed at pin 75 (MC 118)
+SDQ1 is placed at feedback node 719 (MC 119)
+CSSR is placed at pin 76 (MC 120)
+SDQ0 is placed at feedback node 721 (MC 121)
+RST0 is placed at feedback node 722 (MC 122)
+SDH0 is placed at pin 77 (MC 123)
+SDQ2 is placed at feedback node 724 (MC 124)
+XXL_556 is placed at foldback expander node 424 (MC 124)
+ACOUT is placed at pin 79 (MC 125)
+XXL_540 is placed at foldback expander node 425 (MC 125)
+SDH1 is placed at pin 80 (MC 126)
+XXL_373 is placed at foldback expander node 426 (MC 126)
 SDH2 is placed at pin 81 (MC 128)
 
                                                                                     
                                                                                     
                                                                                     
                                                                                     
-                                    P        S                                      
-                                  O F        L                                      
-                     A      C     N V     R  O                                      
-                     C    S N   A E A     E  T   S S     C S C                      
-                     O    B T G C S L V   S  C G D D C V S D S                      
-                     U R  O O N I O I C   E  L N H H S C S H S                      
-                     T W  E E D N E D C   T  K D 2 0 V C R 1 L                      
+                                             S                                      
+                     D D    O   B            L                                      
+                     M M    N   L C       R  O       A                              
+                     A A  S E   A N A     E  T   S S C   S C                        
+                     E E  B S G T T C V   S  C G D D O V D S C                      
+                     N N  O O N O O I C   E  L N H H U C H S S                      
+                     3 2  E E D E E N C   T  K D 2 1 T C 0 R V                      
                     -------------------------------------------                     
                    / 11   9   7   5   3   1  83  81  79  77  75 \                  
                   /    10   8   6   4   2  84  82  80  78  76    \                 
-              S1 | 12                    (*)                   74 | S0              
-             VCC | 13                                          73 | S2              
-            SFOE | 14                                          72 | GND             
-          PFLANE | 15                                          71 | SFA0            
-          ALATCK | 16                                          70 | SFA1            
-            PFCK | 17                                          69 | SFA3            
-            PWOE | 18                                          68 | SFA4            
-             GND | 19                                          67 |                 
-            SROE | 20                                          66 | VCC             
-            SRWE | 21                                          65 | SEL             
-          BLATCK | 22                 ATF1508                  64 | E               
-           SFWE2 | 23               84-Lead PLCC               63 | NEQL            
-           SFWE1 | 24                                          62 | PWCK            
-           SFWE0 | 25                                          61 | NEQH            
-             VCC | 26                                          60 | CTRL7           
-            CVC1 | 27                                          59 | GND             
-           SUMOE | 28                                          58 | D0              
-            SETB | 29                                          57 | D1              
-            SETA | 30                                          56 | D4              
-            SETC | 31                                          55 | D2              
-             GND | 32                                          54 | D5              
+          DMAEN0 | 12                    (*)                   74 | RW              
+             VCC | 13                                          73 | A3              
+          PFLANE | 14                                          72 | GND             
+            PFCK | 15                                          71 | CSSL            
+            PWOE | 16                                          70 | PWCK            
+            SROE | 17                                          69 |                 
+            SRWE | 18                                          68 | SEL             
+             GND | 19                                          67 | A2              
+              D2 | 20                                          66 | VCC             
+              D5 | 21                                          65 | A1              
+          DMAEN1 | 22                 ATF1508                  64 | A0              
+            CVC1 | 23               84-Lead PLCC               63 | S3              
+            CVC2 | 24                                          62 | SFA0            
+            CVC0 | 25                                          61 | S1              
+             VCC | 26                                          60 | SFA5            
+              S2 | 27                                          59 | GND             
+           CTRL7 | 28                                          58 | BLATCK          
+              D3 | 29                                          57 | SUMOE           
+              D1 | 30                                          56 | E               
+              D4 | 31                                          55 | D0              
+             GND | 32                                          54 | NEQL            
                   \     34  36  38  40  42  44  46  48  50  52   /                 
                    \  33  35  37  39  41  43  45  47  49  51  53/                  
               	    --------------------------------------------                     
-                      C C D A A V A A S G V D D D G D S B P S V                     
-                      V V M 3 2 C 1 0 3 N C M M M N 3 F L W F C                     
-                      C C A     C       D C A A A D   A A B A C                     
-                      2 0 E                 E E E     2 T U 5                       
-                          N                 N N N       O S                         
-                          3                 1 2 0       E Y                         
+                      S P S P S V S S N G V S S A G S S S S S V                     
+                      F F E W E C E 0 E N C F F L N F F F F F C                     
+                      O V T B T C T   Q D C W W A D A W A A A C                     
+                      E A B U C   A   H     E E T   1 E 2 3 4                       
+                        L   S               0 1 C     2                             
+                        I   Y                   K                                   
+                        D                                                           
 
 
 
@@ -342,482 +329,470 @@ NC = Unused I/O pins which must be unconnected on the board
 
 Universal-Interconnect-Multiplexer assignments
 ------------------------------------------------
-FanIn assignment for block A [37]
+FanIn assignment for block A [34]
 {
-A1,A3,AIDX0,A2,AIDX2,AIDX5,AIDX3,AIDX1,A0,AIDX4,
+A0,AIDX5,A1,AIDX1,AIDX3,AIDX4,AIDX2,A3,A2,AIDX0,
 BUSY,
-D5,D3,D2,D0,D4,D1,
-HA0,HSY1,HA3,HA1,HSY2,HA2,
-PWBUSY,PFVALID,PFCK,
+D1,D5,D4,D3,D2,
+HA0,HA1,HSY2,HA2,HA3,HSY1,
+PWBUSY,
 RW,
 S1,S2,S0,
-T2,T3,T1,T0,
-WT0,WT2,WT1,
+T1,T3,T2,T0,
+WT1,WT2,WT0,
 }
 Multiplexer assignment for block A
-PWBUSY			(MC18	P)   : MUX 0		Ref (E77p)
-D5			(MC31	P)   : MUX 1		Ref (F83p)
-HA0			(MC5	FB)  : MUX 2		Ref (A5fb)
-A1			(MC27	P)   : MUX 3		Ref (D53p)
-PFVALID			(MC9	P)   : MUX 4		Ref (A16p)
-D3			(MC30	P)   : MUX 5		Ref (E72p)
-A3			(MC29	P)   : MUX 6		Ref (D57p)
-S1			(MC24	P)   : MUX 7		Ref (A3p)
-T2			(MC16	FB)  : MUX 8		Ref (E66fb)
-S2			(MC36	P)   : MUX 9		Ref (H115p)
-BUSY			(MC14	FB)  : MUX 10		Ref (D53fb)
-T3			(MC17	FB)  : MUX 11		Ref (E76fb)
-AIDX0			(MC6	FB)  : MUX 12		Ref (A6fb)
-D2			(MC32	P)   : MUX 13		Ref (F85p)
-PFCK			(MC11	P)   : MUX 14		Ref (B25p)
-A2			(MC28	P)   : MUX 15		Ref (D56p)
-D0			(MC35	P)   : MUX 16		Ref (F91p)
-HSY1			(MC23	FB)  : MUX 17		Ref (H121fb)
-HA3			(MC20	FB)  : MUX 18		Ref (F84fb)
-D4			(MC33	P)   : MUX 19		Ref (F86p)
-AIDX2			(MC4	FB)  : MUX 20		Ref (A4fb)
-S0			(MC37	P)   : MUX 21		Ref (H117p)
-AIDX5			(MC7	FB)  : MUX 22		Ref (A7fb)
-AIDX3			(MC8	FB)  : MUX 23		Ref (A15fb)
-HA1			(MC3	FB)  : MUX 24		Ref (A3fb)
-T1			(MC15	FB)  : MUX 25		Ref (D60fb)
-AIDX1			(MC1	FB)  : MUX 26		Ref (A1fb)
-A0			(MC26	P)   : MUX 27		Ref (D51p)
-HSY2			(MC19	FB)  : MUX 30		Ref (F83fb)
-WT0			(MC12	FB)  : MUX 31		Ref (B28fb)
-WT2			(MC10	FB)  : MUX 32		Ref (B23fb)
-RW			(MC25	P)   : MUX 33		Ref (A6p)
-D1			(MC34	P)   : MUX 35		Ref (F88p)
-T0			(MC22	FB)  : MUX 36		Ref (G97fb)
-WT1			(MC13	FB)  : MUX 37		Ref (B30fb)
-AIDX4			(MC2	FB)  : MUX 38		Ref (A2fb)
-HA2			(MC21	FB)  : MUX 39		Ref (F89fb)
+A0			(MC30	P)   : MUX 1		Ref (G99p)
+T1			(MC1	FB)  : MUX 2		Ref (A1fb)
+D1			(MC25	P)   : MUX 3		Ref (C37p)
+PWBUSY			(MC16	P)   : MUX 4		Ref (D57p)
+AIDX5			(MC10	FB)  : MUX 5		Ref (A15fb)
+HA0			(MC5	FB)  : MUX 6		Ref (A5fb)
+A1			(MC31	P)   : MUX 7		Ref (G101p)
+S1			(MC29	P)   : MUX 8		Ref (F94p)
+D5			(MC22	P)   : MUX 9		Ref (B19p)
+S2			(MC27	P)   : MUX 10		Ref (C43p)
+T3			(MC18	FB)  : MUX 11		Ref (F90fb)
+HA1			(MC6	FB)  : MUX 12		Ref (A6fb)
+S0			(MC28	P)   : MUX 13		Ref (D51p)
+AIDX1			(MC4	FB)  : MUX 14		Ref (A4fb)
+D4			(MC24	P)   : MUX 15		Ref (C35p)
+AIDX3			(MC2	FB)  : MUX 16		Ref (A2fb)
+BUSY			(MC14	FB)  : MUX 17		Ref (B31fb)
+WT1			(MC13	FB)  : MUX 19		Ref (B30fb)
+AIDX4			(MC7	FB)  : MUX 20		Ref (A7fb)
+AIDX2			(MC9	FB)  : MUX 21		Ref (A12fb)
+HSY2			(MC15	FB)  : MUX 22		Ref (D49fb)
+A3			(MC33	P)   : MUX 23		Ref (H115p)
+HA2			(MC3	FB)  : MUX 24		Ref (A3fb)
+D3			(MC26	P)   : MUX 25		Ref (C38p)
+WT2			(MC11	FB)  : MUX 26		Ref (B22fb)
+T2			(MC8	FB)  : MUX 27		Ref (A10fb)
+HA3			(MC20	FB)  : MUX 29		Ref (G108fb)
+RW			(MC34	P)   : MUX 31		Ref (H117p)
+D2			(MC23	P)   : MUX 33		Ref (B21p)
+A2			(MC32	P)   : MUX 35		Ref (G104p)
+HSY1			(MC21	FB)  : MUX 36		Ref (H116fb)
+T0			(MC19	FB)  : MUX 37		Ref (F92fb)
+WT0			(MC12	FB)  : MUX 38		Ref (B23fb)
+AIDX0			(MC17	FB)  : MUX 39		Ref (D62fb)
 
-FanIn assignment for block B [37]
+FanIn assignment for block B [34]
 {
-AIDX1,AIDX3,AIDX2,ACOUT,AIDX0,
+ACOUT,AIDX2,AIDX3,AIDX0,AIDX1,
 BUSY,
-DUE1,DUE0,DUE2,DUE3,
-HCOMMIT,HWE,HA0,HDUE,HA1,HA2,HGBL,HRW,HA3,
-RST0,RST3,RST1,RST2,
-S1,S2,SLOTCLK,S0,
-T2,T3,T1,T0,
+DUE1,DUE3,DUE2,DUE0,
+HRW,HA2,HDUE,HGBL,HWE,HA1,HA0,HA3,
+RST3,RST1,RST0,RST2,
+S2,S0,S1,
+T1,T0,T2,T3,
 VDIRTY,
 WT1,WT0,WT2,
-XXL_385,XXL_379,
+XXL_394,
 }
 Multiplexer assignment for block B
-HCOMMIT			(MC7	FB)  : MUX 0		Ref (B18fb)
-RST0			(MC23	FB)  : MUX 1		Ref (D62fb)
-AIDX1			(MC1	FB)  : MUX 2		Ref (A1fb)
-HWE			(MC10	FB)  : MUX 3		Ref (B26fb)
-VDIRTY			(MC8	FB)  : MUX 4		Ref (B20fb)
-AIDX3			(MC6	FB)  : MUX 5		Ref (A15fb)
-HA0			(MC4	FB)  : MUX 6		Ref (A5fb)
-S1			(MC33	P)   : MUX 7		Ref (A3p)
-T2			(MC24	FB)  : MUX 8		Ref (E66fb)
-S2			(MC35	P)   : MUX 9		Ref (H115p)
-HDUE			(MC13	FB)  : MUX 10		Ref (D50fb)
-T3			(MC25	FB)  : MUX 11		Ref (E76fb)
-DUE1			(MC17	FB)  : MUX 12		Ref (D54fb)
-WT1			(MC12	FB)  : MUX 13		Ref (B30fb)
-AIDX2			(MC3	FB)  : MUX 14		Ref (A4fb)
-XXL_385			(MC32	FB)  : MUX 15		Ref (G106fb)
-RST3			(MC18	FB)  : MUX 16		Ref (D55fb)
-SLOTCLK			(MC37	FB)  : MUX 17		Ref (GCLK)
-HA1			(MC2	FB)  : MUX 18		Ref (A3fb)
-ACOUT			(MC34	P)   : MUX 19		Ref (A5p)
-RST1			(MC15	FB)  : MUX 20		Ref (D52fb)
-HA2			(MC28	FB)  : MUX 21		Ref (F89fb)
-DUE0			(MC19	FB)  : MUX 22		Ref (D56fb)
-DUE2			(MC20	FB)  : MUX 23		Ref (D57fb)
-BUSY			(MC16	FB)  : MUX 24		Ref (D53fb)
-T1			(MC22	FB)  : MUX 25		Ref (D60fb)
-AIDX0			(MC5	FB)  : MUX 26		Ref (A6fb)
-WT0			(MC11	FB)  : MUX 27		Ref (B28fb)
-HGBL			(MC26	FB)  : MUX 28		Ref (F82fb)
-HRW			(MC29	FB)  : MUX 29		Ref (F95fb)
-RST2			(MC14	FB)  : MUX 30		Ref (D51fb)
-S0			(MC36	P)   : MUX 31		Ref (H117p)
-WT2			(MC9	FB)  : MUX 32		Ref (B23fb)
-HA3			(MC27	FB)  : MUX 34		Ref (F84fb)
-T0			(MC30	FB)  : MUX 36		Ref (G97fb)
-DUE3			(MC21	FB)  : MUX 37		Ref (D59fb)
-XXL_379			(MC31	FB)  : MUX 38		Ref (G102fb)
+S2			(MC31	P)   : MUX 0		Ref (C43p)
+HRW			(MC20	FB)  : MUX 1		Ref (D58fb)
+T1			(MC1	FB)  : MUX 2		Ref (A1fb)
+BUSY			(MC14	FB)  : MUX 3		Ref (B31fb)
+ACOUT			(MC34	P)   : MUX 4		Ref (H125p)
+AIDX2			(MC8	FB)  : MUX 5		Ref (A12fb)
+HA2			(MC3	FB)  : MUX 6		Ref (A3fb)
+RST3			(MC23	FB)  : MUX 7		Ref (F89fb)
+DUE1			(MC15	FB)  : MUX 8		Ref (C36fb)
+S0			(MC32	P)   : MUX 9		Ref (D51p)
+HDUE			(MC22	FB)  : MUX 10		Ref (F87fb)
+DUE3			(MC19	FB)  : MUX 11		Ref (C42fb)
+WT1			(MC13	FB)  : MUX 13		Ref (B30fb)
+VDIRTY			(MC9	FB)  : MUX 14		Ref (B18fb)
+HGBL			(MC29	FB)  : MUX 15		Ref (G111fb)
+AIDX3			(MC2	FB)  : MUX 16		Ref (A2fb)
+T0			(MC25	FB)  : MUX 17		Ref (F92fb)
+WT0			(MC12	FB)  : MUX 18		Ref (B23fb)
+RST1			(MC27	FB)  : MUX 19		Ref (G106fb)
+HWE			(MC10	FB)  : MUX 20		Ref (B20fb)
+AIDX0			(MC21	FB)  : MUX 21		Ref (D62fb)
+S1			(MC33	P)   : MUX 22		Ref (F94p)
+RST0			(MC30	FB)  : MUX 23		Ref (H122fb)
+DUE2			(MC16	FB)  : MUX 24		Ref (C38fb)
+XXL_394			(MC18	FB)  : MUX 25		Ref (C41fb)
+HA1			(MC6	FB)  : MUX 26		Ref (A6fb)
+T2			(MC7	FB)  : MUX 27		Ref (A10fb)
+HA0			(MC5	FB)  : MUX 28		Ref (A5fb)
+WT2			(MC11	FB)  : MUX 30		Ref (B22fb)
+HA3			(MC28	FB)  : MUX 31		Ref (G108fb)
+RST2			(MC26	FB)  : MUX 34		Ref (G100fb)
+DUE0			(MC17	FB)  : MUX 36		Ref (C39fb)
+T3			(MC24	FB)  : MUX 37		Ref (F90fb)
+AIDX1			(MC4	FB)  : MUX 38		Ref (A4fb)
 
-FanIn assignment for block C [37]
-{
-ACOUT,
-BUSY,
-HCOMMIT,HA0,HA3,HA1,HSY1,HWE,HSY2,HRW,HL1,HW1,HA2,
-PFLANE,PWBUSY,
-RW,
-S0,S1,S2,S3,
-T2,T1,T0,T3,
-WC1,WROTE3,WT2,WT1,WROTE1,WC0,WROTE0,WT0,WROTE2,
-XXL_413,XXL_385,XXL_426,XXL_379,
-}
-Multiplexer assignment for block C
-HCOMMIT			(MC3	FB)  : MUX 0		Ref (B18fb)
-ACOUT			(MC33	P)   : MUX 1		Ref (A5p)
-HA0			(MC2	FB)  : MUX 2		Ref (A5fb)
-S0			(MC37	P)   : MUX 3		Ref (H117p)
-HA3			(MC21	FB)  : MUX 4		Ref (F84fb)
-WC1			(MC16	FB)  : MUX 5		Ref (D63fb)
-HA1			(MC1	FB)  : MUX 6		Ref (A3fb)
-S1			(MC32	P)   : MUX 7		Ref (A3p)
-T2			(MC17	FB)  : MUX 8		Ref (E66fb)
-T1			(MC15	FB)  : MUX 9		Ref (D60fb)
-BUSY			(MC14	FB)  : MUX 10		Ref (D53fb)
-WROTE3			(MC13	FB)  : MUX 11		Ref (C47fb)
-XXL_413			(MC26	FB)  : MUX 12		Ref (G99fb)
-S2			(MC36	P)   : MUX 13		Ref (H115p)
-PFLANE			(MC8	P)   : MUX 14		Ref (B29p)
-RW			(MC34	P)   : MUX 15		Ref (A6p)
-PWBUSY			(MC19	P)   : MUX 16		Ref (E77p)
-HSY1			(MC30	FB)  : MUX 17		Ref (H121fb)
-WT2			(MC5	FB)  : MUX 18		Ref (B23fb)
-WT1			(MC9	FB)  : MUX 19		Ref (B30fb)
-HWE			(MC6	FB)  : MUX 21		Ref (B26fb)
-WROTE1			(MC10	FB)  : MUX 22		Ref (C34fb)
-S3			(MC35	P)   : MUX 23		Ref (D49p)
-HSY2			(MC20	FB)  : MUX 24		Ref (F83fb)
-WC0			(MC31	FB)  : MUX 25		Ref (H122fb)
-WROTE0			(MC11	FB)  : MUX 26		Ref (C36fb)
-WT0			(MC7	FB)  : MUX 27		Ref (B28fb)
-T0			(MC25	FB)  : MUX 28		Ref (G97fb)
-HRW			(MC24	FB)  : MUX 29		Ref (F95fb)
-HL1			(MC4	FB)  : MUX 30		Ref (B22fb)
-HW1			(MC23	FB)  : MUX 31		Ref (F92fb)
-XXL_385			(MC29	FB)  : MUX 33		Ref (G106fb)
-XXL_426			(MC28	FB)  : MUX 34		Ref (G104fb)
-T3			(MC18	FB)  : MUX 35		Ref (E76fb)
-WROTE2			(MC12	FB)  : MUX 36		Ref (C39fb)
-XXL_379			(MC27	FB)  : MUX 38		Ref (G102fb)
-HA2			(MC22	FB)  : MUX 39		Ref (F89fb)
-
-FanIn assignment for block D [37]
+FanIn assignment for block C [34]
 {
 BUSY,
 CTRL7,
-DMAQ3,DMAEN0,DMAEN3,DMAEN1,DUE1,DUE3,DMAQ2,DUE0,DMAQ1,DMAEN2,DMAQ0,DUE2,
+DMAEN3,DMAEN0,DUE3,DUE2,DMAEN2,DUE1,DMAEN1,DUE0,
 HDUE,
 NEQL,NEQH,
-RST2,RST1,RST3,RST0,
-S1,S2,S0,
-T2,T1,T0,T3,
+RST0,RST1,RST2,RST3,
+S1,S3,S0,S2,
+T1,T2,T3,T0,
 VDIRTY,
-WT2,WC0,WT1,WC1,WT0,
-XXL_631,XXL_598,XXL_419,
+WT0,WROTE0,WC0,WT2,WT1,WROTE3,WROTE2,WC1,
+}
+Multiplexer assignment for block C
+WT0			(MC5	FB)  : MUX 0		Ref (B23fb)
+DMAEN3			(MC25	P)   : MUX 1		Ref (A5p)
+T1			(MC1	FB)  : MUX 2		Ref (A1fb)
+CTRL7			(MC28	P)   : MUX 3		Ref (C40p)
+WROTE0			(MC9	FB)  : MUX 4		Ref (C34fb)
+WC0			(MC15	FB)  : MUX 5		Ref (C44fb)
+VDIRTY			(MC3	FB)  : MUX 6		Ref (B18fb)
+DMAEN0			(MC24	P)   : MUX 7		Ref (A3p)
+S1			(MC33	P)   : MUX 8		Ref (F94p)
+S3			(MC34	P)   : MUX 9		Ref (G97p)
+DUE3			(MC14	FB)  : MUX 11		Ref (C42fb)
+DUE2			(MC11	FB)  : MUX 12		Ref (C38fb)
+T2			(MC2	FB)  : MUX 13		Ref (A10fb)
+DMAEN2			(MC26	P)   : MUX 15		Ref (A6p)
+WT2			(MC4	FB)  : MUX 16		Ref (B22fb)
+BUSY			(MC7	FB)  : MUX 17		Ref (B31fb)
+WT1			(MC6	FB)  : MUX 19		Ref (B30fb)
+WROTE3			(MC13	FB)  : MUX 20		Ref (C40fb)
+NEQL			(MC32	P)   : MUX 21		Ref (F83p)
+NEQH			(MC30	P)   : MUX 23		Ref (D49p)
+WROTE2			(MC8	FB)  : MUX 24		Ref (C33fb)
+RST0			(MC23	FB)  : MUX 25		Ref (H122fb)
+DUE1			(MC10	FB)  : MUX 26		Ref (C36fb)
+S0			(MC31	P)   : MUX 27		Ref (D51p)
+S2			(MC29	P)   : MUX 28		Ref (C43p)
+WC1			(MC16	FB)  : MUX 29		Ref (C47fb)
+DMAEN1			(MC27	P)   : MUX 31		Ref (B17p)
+HDUE			(MC17	FB)  : MUX 32		Ref (F87fb)
+RST1			(MC22	FB)  : MUX 33		Ref (G106fb)
+T3			(MC19	FB)  : MUX 35		Ref (F90fb)
+DUE0			(MC12	FB)  : MUX 36		Ref (C39fb)
+T0			(MC20	FB)  : MUX 37		Ref (F92fb)
+RST2			(MC21	FB)  : MUX 38		Ref (G100fb)
+RST3			(MC18	FB)  : MUX 39		Ref (F89fb)
+
+FanIn assignment for block D [34]
+{
+A0,ACOUT,A1,A3,A2,AIDX0,
+BUSY,
+D0,
+HRW,HSY2,HA0,HA1,HCOMMIT,HSY1,HA2,HA3,
+PWBUSY,PFCK,PFVALID,
+RW,
+S2,S1,S0,
+T1,T2,T0,T3,
+WT1,WT2,WC0,WC1,WT0,
+XXL_381,XXL_532,
 }
 Multiplexer assignment for block D
-WT2			(MC2	FB)  : MUX 0		Ref (B23fb)
-WC0			(MC27	FB)  : MUX 1		Ref (H122fb)
-VDIRTY			(MC1	FB)  : MUX 2		Ref (B20fb)
-CTRL7			(MC33	P)   : MUX 4		Ref (F93p)
-WT1			(MC4	FB)  : MUX 5		Ref (B30fb)
-DMAQ3			(MC26	FB)  : MUX 6		Ref (H119fb)
-S1			(MC28	P)   : MUX 7		Ref (A3p)
-T2			(MC17	FB)  : MUX 8		Ref (E66fb)
-NEQL			(MC35	P)   : MUX 9		Ref (G97p)
-HDUE			(MC5	FB)  : MUX 10		Ref (D50fb)
-DMAEN0			(MC32	P)   : MUX 11		Ref (E69p)
-DMAEN3			(MC29	P)   : MUX 12		Ref (D59p)
-DMAEN1			(MC30	P)   : MUX 13		Ref (E65p)
-RST2			(MC6	FB)  : MUX 14		Ref (D51fb)
-XXL_631			(MC19	FB)  : MUX 15		Ref (E78fb)
-DUE1			(MC9	FB)  : MUX 16		Ref (D54fb)
-DUE3			(MC13	FB)  : MUX 17		Ref (D59fb)
-DMAQ2			(MC23	FB)  : MUX 18		Ref (H113fb)
-WC1			(MC16	FB)  : MUX 19		Ref (D63fb)
-RST1			(MC7	FB)  : MUX 20		Ref (D52fb)
-DUE0			(MC11	FB)  : MUX 22		Ref (D56fb)
-S2			(MC36	P)   : MUX 23		Ref (H115p)
-BUSY			(MC8	FB)  : MUX 24		Ref (D53fb)
-T1			(MC14	FB)  : MUX 25		Ref (D60fb)
-XXL_598			(MC20	FB)  : MUX 26		Ref (F81fb)
-WT0			(MC3	FB)  : MUX 27		Ref (B28fb)
-T0			(MC21	FB)  : MUX 28		Ref (G97fb)
-T3			(MC18	FB)  : MUX 29		Ref (E76fb)
-DMAQ1			(MC25	FB)  : MUX 30		Ref (H116fb)
-S0			(MC37	P)   : MUX 31		Ref (H117p)
-RST3			(MC10	FB)  : MUX 32		Ref (D55fb)
-DMAEN2			(MC31	P)   : MUX 33		Ref (E67p)
-NEQH			(MC34	P)   : MUX 34		Ref (F94p)
-DMAQ0			(MC24	FB)  : MUX 36		Ref (H114fb)
-DUE2			(MC12	FB)  : MUX 37		Ref (D57fb)
-XXL_419			(MC22	FB)  : MUX 38		Ref (G100fb)
-RST0			(MC15	FB)  : MUX 39		Ref (D62fb)
+S2			(MC25	P)   : MUX 0		Ref (C43p)
+A0			(MC29	P)   : MUX 1		Ref (G99p)
+T1			(MC1	FB)  : MUX 2		Ref (A1fb)
+RW			(MC33	P)   : MUX 3		Ref (H117p)
+ACOUT			(MC34	P)   : MUX 4		Ref (H125p)
+WT1			(MC10	FB)  : MUX 5		Ref (B30fb)
+PWBUSY			(MC16	P)   : MUX 6		Ref (D57p)
+A1			(MC30	P)   : MUX 7		Ref (G101p)
+S1			(MC28	P)   : MUX 8		Ref (F94p)
+S0			(MC26	P)   : MUX 9		Ref (D51p)
+HRW			(MC17	FB)  : MUX 11		Ref (D58fb)
+XXL_381			(MC15	FB)  : MUX 12		Ref (D54fb)
+A3			(MC32	P)   : MUX 13		Ref (H115p)
+PFCK			(MC9	P)   : MUX 14		Ref (B29p)
+A2			(MC31	P)   : MUX 15		Ref (G104p)
+WT2			(MC7	FB)  : MUX 16		Ref (B22fb)
+BUSY			(MC11	FB)  : MUX 17		Ref (B31fb)
+PFVALID			(MC19	P)   : MUX 20		Ref (D61p)
+AIDX0			(MC20	FB)  : MUX 21		Ref (D62fb)
+HSY2			(MC14	FB)  : MUX 22		Ref (D49fb)
+D0			(MC27	P)   : MUX 23		Ref (F85p)
+HA0			(MC3	FB)  : MUX 24		Ref (A5fb)
+XXL_532			(MC18	FB)  : MUX 25		Ref (D60fb)
+HA1			(MC4	FB)  : MUX 26		Ref (A6fb)
+T2			(MC5	FB)  : MUX 27		Ref (A10fb)
+WC0			(MC12	FB)  : MUX 29		Ref (C44fb)
+HCOMMIT			(MC6	FB)  : MUX 30		Ref (B21fb)
+T0			(MC22	FB)  : MUX 31		Ref (F92fb)
+HSY1			(MC24	FB)  : MUX 32		Ref (H116fb)
+WC1			(MC13	FB)  : MUX 33		Ref (C47fb)
+T3			(MC21	FB)  : MUX 35		Ref (F90fb)
+HA2			(MC2	FB)  : MUX 36		Ref (A3fb)
+HA3			(MC23	FB)  : MUX 37		Ref (G108fb)
+WT0			(MC8	FB)  : MUX 38		Ref (B23fb)
 
-FanIn assignment for block E [37]
+FanIn assignment for block E [34]
 {
-ACOUT,
+AIDX4,AIDX5,
 BUSY,
-HA0,HA1,HA3,HSTAGE,HW2,HW0,HA2,
-PWBUSY,
-S1,S2,S0,S3,
-T1,T2,T3,T0,
-VPA,VPB,
-WT1,WT2,WC1,WC0,WT0,
-XXL_641,XXL_418,XXL_496,XXL_640,XXL_636,XXL_499,XXL_520,XXL_642,XXL_380,XXL_419,XXL_392,XXL_379,
+HGBL,HWE,HL1,HSTAGE,HW1,HCOMMIT,HW2,HRW,
+PFLANE,
+S3,S0,S2,S1,SLOTCLK,
+T1,T2,T0,T3,
+VPA,
+WT1,WC0,WROTE1,WT2,WC1,WT0,
+XXL_462,XXL_382,XXL_381,XXL_425,XXL_391,XXL_495,
 }
 Multiplexer assignment for block E
-PWBUSY			(MC17	P)   : MUX 0		Ref (E77p)
-XXL_641			(MC4	FB)  : MUX 1		Ref (A12fb)
-HA0			(MC2	FB)  : MUX 2		Ref (A5fb)
-XXL_418			(MC23	FB)  : MUX 3		Ref (F91fb)
-WT1			(MC7	FB)  : MUX 5		Ref (B30fb)
-HA1			(MC1	FB)  : MUX 6		Ref (A3fb)
-S1			(MC33	P)   : MUX 7		Ref (A3p)
-XXL_496			(MC15	FB)  : MUX 8		Ref (E69fb)
-T1			(MC9	FB)  : MUX 9		Ref (D60fb)
-BUSY			(MC8	FB)  : MUX 10		Ref (D53fb)
-XXL_640			(MC3	FB)  : MUX 11		Ref (A9fb)
-VPA			(MC13	FB)  : MUX 12		Ref (E67fb)
-S2			(MC36	P)   : MUX 13		Ref (H115p)
-WT2			(MC5	FB)  : MUX 14		Ref (B23fb)
-WC1			(MC10	FB)  : MUX 15		Ref (D63fb)
-HA3			(MC19	FB)  : MUX 16		Ref (F84fb)
-XXL_636			(MC18	FB)  : MUX 17		Ref (E79fb)
-T2			(MC12	FB)  : MUX 18		Ref (E66fb)
-HSTAGE			(MC24	FB)  : MUX 19		Ref (F93fb)
-XXL_499			(MC31	FB)  : MUX 20		Ref (G103fb)
-S0			(MC37	P)   : MUX 21		Ref (H117p)
-XXL_520			(MC20	FB)  : MUX 22		Ref (F87fb)
-S3			(MC35	P)   : MUX 23		Ref (D49p)
-XXL_642			(MC14	FB)  : MUX 24		Ref (E68fb)
-WC0			(MC32	FB)  : MUX 25		Ref (H122fb)
-WT0			(MC6	FB)  : MUX 27		Ref (B28fb)
-VPB			(MC11	FB)  : MUX 28		Ref (E65fb)
-T3			(MC16	FB)  : MUX 29		Ref (E76fb)
-XXL_380			(MC27	FB)  : MUX 30		Ref (G98fb)
-ACOUT			(MC34	P)   : MUX 31		Ref (A5p)
-T0			(MC26	FB)  : MUX 32		Ref (G97fb)
-XXL_419			(MC28	FB)  : MUX 34		Ref (G100fb)
-HW2			(MC25	FB)  : MUX 35		Ref (F94fb)
-XXL_392			(MC29	FB)  : MUX 36		Ref (G101fb)
-HW0			(MC22	FB)  : MUX 37		Ref (F90fb)
-XXL_379			(MC30	FB)  : MUX 38		Ref (G102fb)
-HA2			(MC21	FB)  : MUX 39		Ref (F89fb)
+XXL_462			(MC22	FB)  : MUX 0		Ref (F84fb)
+HGBL			(MC29	FB)  : MUX 1		Ref (G111fb)
+T1			(MC1	FB)  : MUX 2		Ref (A1fb)
+BUSY			(MC12	FB)  : MUX 3		Ref (B31fb)
+XXL_382			(MC23	FB)  : MUX 4		Ref (F85fb)
+WT1			(MC11	FB)  : MUX 5		Ref (B30fb)
+PFLANE			(MC13	P)   : MUX 6		Ref (B32p)
+S3			(MC33	P)   : MUX 7		Ref (G97p)
+VPA			(MC20	FB)  : MUX 8		Ref (E66fb)
+S0			(MC31	P)   : MUX 9		Ref (D51p)
+S2			(MC30	P)   : MUX 10		Ref (C43p)
+XXL_381			(MC18	FB)  : MUX 12		Ref (D54fb)
+T2			(MC3	FB)  : MUX 13		Ref (A10fb)
+S1			(MC32	P)   : MUX 14		Ref (F94p)
+XXL_425			(MC14	FB)  : MUX 16		Ref (C35fb)
+HWE			(MC5	FB)  : MUX 18		Ref (B20fb)
+WC0			(MC16	FB)  : MUX 19		Ref (C44fb)
+AIDX4			(MC2	FB)  : MUX 20		Ref (A7fb)
+HL1			(MC9	FB)  : MUX 21		Ref (B26fb)
+HSTAGE			(MC28	FB)  : MUX 22		Ref (G103fb)
+SLOTCLK			(MC34	FB)  : MUX 23		Ref (GCLK)
+WROTE1			(MC21	FB)  : MUX 24		Ref (E68fb)
+AIDX5			(MC4	FB)  : MUX 25		Ref (A15fb)
+WT2			(MC7	FB)  : MUX 26		Ref (B22fb)
+HW1			(MC10	FB)  : MUX 27		Ref (B28fb)
+HCOMMIT			(MC6	FB)  : MUX 28		Ref (B21fb)
+WC1			(MC17	FB)  : MUX 29		Ref (C47fb)
+XXL_391			(MC24	FB)  : MUX 30		Ref (F86fb)
+T0			(MC26	FB)  : MUX 31		Ref (F92fb)
+WT0			(MC8	FB)  : MUX 32		Ref (B23fb)
+XXL_495			(MC15	FB)  : MUX 36		Ref (C37fb)
+T3			(MC25	FB)  : MUX 37		Ref (F90fb)
+HW2			(MC27	FB)  : MUX 38		Ref (G102fb)
+HRW			(MC19	FB)  : MUX 39		Ref (D58fb)
 
-FanIn assignment for block F [36]
+FanIn assignment for block F [34]
 {
-A1,A3,AIDX3,AIDX0,A2,AIDX2,AIDX1,A0,
 BUSY,
-HA0,HA2,HRW,HA3,HSY1,HA1,HGBL,HSY2,
-PWBUSY,
-RW,
-SDH1,S2,SDH2,SDQ0,SDH0,S1,S0,SLOTCLK,SDQ1,SDQ2,
-T3,T0,T1,
-XXL_520,XXL_598,XXL_405,XXL_417,
+DMAEN3,DMAQ3,
+HDUE,HRW,HGBL,HW0,HSTAGE,HCOMMIT,
+RST3,RST0,RST2,RST1,
+S2,S0,S3,S1,SLOTCLK,
+T1,T2,T3,T0,
+VPB,
+WT1,WT0,WT2,
+XXL_462,XXL_382,XXL_444,XXL_425,XXL_376,XXL_381,XXL_391,XXL_589,
 }
 Multiplexer assignment for block F
-PWBUSY			(MC11	P)   : MUX 0		Ref (E77p)
-SDH1			(MC24	P)   : MUX 1		Ref (H120p)
-HA0			(MC4	FB)  : MUX 2		Ref (A5fb)
-A1			(MC31	P)   : MUX 3		Ref (D53p)
-A3			(MC33	P)   : MUX 4		Ref (D57p)
-AIDX3			(MC6	FB)  : MUX 5		Ref (A15fb)
-BUSY			(MC7	FB)  : MUX 6		Ref (D53fb)
-HA2			(MC20	FB)  : MUX 7		Ref (F89fb)
-XXL_520			(MC18	FB)  : MUX 8		Ref (F87fb)
-S2			(MC34	P)   : MUX 9		Ref (H115p)
-SDH2			(MC27	P)   : MUX 10		Ref (H128p)
-HRW			(MC21	FB)  : MUX 11		Ref (F95fb)
-AIDX0			(MC5	FB)  : MUX 12		Ref (A6fb)
-SDQ0			(MC19	FB)  : MUX 14		Ref (F88fb)
-A2			(MC32	P)   : MUX 15		Ref (D56p)
-SDH0			(MC26	P)   : MUX 16		Ref (H126p)
-S1			(MC28	P)   : MUX 17		Ref (A3p)
-HA3			(MC15	FB)  : MUX 18		Ref (F84fb)
-HSY1			(MC25	FB)  : MUX 19		Ref (H121fb)
-AIDX2			(MC3	FB)  : MUX 20		Ref (A4fb)
-S0			(MC35	P)   : MUX 21		Ref (H117p)
-AIDX1			(MC1	FB)  : MUX 22		Ref (A1fb)
-SLOTCLK			(MC36	FB)  : MUX 23		Ref (GCLK)
-HA1			(MC2	FB)  : MUX 24		Ref (A3fb)
-T3			(MC10	FB)  : MUX 25		Ref (E76fb)
-XXL_598			(MC12	FB)  : MUX 26		Ref (F81fb)
-HGBL			(MC13	FB)  : MUX 28		Ref (F82fb)
-HSY2			(MC14	FB)  : MUX 30		Ref (F83fb)
-A0			(MC30	P)   : MUX 31		Ref (D51p)
-T0			(MC22	FB)  : MUX 32		Ref (G97fb)
-RW			(MC29	P)   : MUX 33		Ref (A6p)
-SDQ1			(MC17	FB)  : MUX 34		Ref (F86fb)
-XXL_405			(MC9	FB)  : MUX 36		Ref (E72fb)
-XXL_417			(MC23	FB)  : MUX 37		Ref (G108fb)
-SDQ2			(MC16	FB)  : MUX 38		Ref (F85fb)
-T1			(MC8	FB)  : MUX 39		Ref (D60fb)
+S2			(MC30	P)   : MUX 0		Ref (C43p)
+DMAEN3			(MC29	P)   : MUX 1		Ref (A5p)
+T1			(MC1	FB)  : MUX 2		Ref (A1fb)
+BUSY			(MC9	FB)  : MUX 3		Ref (B31fb)
+XXL_462			(MC16	FB)  : MUX 4		Ref (F84fb)
+WT1			(MC8	FB)  : MUX 5		Ref (B30fb)
+XXL_382			(MC17	FB)  : MUX 6		Ref (F85fb)
+RST3			(MC20	FB)  : MUX 7		Ref (F89fb)
+HDUE			(MC19	FB)  : MUX 8		Ref (F87fb)
+XXL_444			(MC3	FB)  : MUX 10		Ref (B17fb)
+HRW			(MC13	FB)  : MUX 11		Ref (D58fb)
+XXL_425			(MC10	FB)  : MUX 12		Ref (C35fb)
+S0			(MC31	P)   : MUX 13		Ref (D51p)
+HGBL			(MC27	FB)  : MUX 15		Ref (G111fb)
+XXL_376			(MC4	FB)  : MUX 16		Ref (B19fb)
+HW0			(MC26	FB)  : MUX 17		Ref (G110fb)
+WT0			(MC7	FB)  : MUX 18		Ref (B23fb)
+XXL_381			(MC11	FB)  : MUX 20		Ref (D54fb)
+HSTAGE			(MC24	FB)  : MUX 22		Ref (G103fb)
+DMAQ3			(MC15	FB)  : MUX 24		Ref (F83fb)
+RST0			(MC28	FB)  : MUX 25		Ref (H122fb)
+XXL_391			(MC18	FB)  : MUX 26		Ref (F86fb)
+S3			(MC33	P)   : MUX 27		Ref (G97p)
+HCOMMIT			(MC5	FB)  : MUX 28		Ref (B21fb)
+T2			(MC2	FB)  : MUX 29		Ref (A10fb)
+WT2			(MC6	FB)  : MUX 30		Ref (B22fb)
+XXL_589			(MC12	FB)  : MUX 32		Ref (D55fb)
+T3			(MC21	FB)  : MUX 33		Ref (F90fb)
+S1			(MC32	P)   : MUX 34		Ref (F94p)
+SLOTCLK			(MC34	FB)  : MUX 35		Ref (GCLK)
+VPB			(MC14	FB)  : MUX 36		Ref (F82fb)
+T0			(MC22	FB)  : MUX 37		Ref (F92fb)
+RST2			(MC23	FB)  : MUX 38		Ref (G100fb)
+RST1			(MC25	FB)  : MUX 39		Ref (G106fb)
 
-FanIn assignment for block G [32]
+FanIn assignment for block G [34]
 {
-AIDX5,AIDX4,
-HSTAGE,HA1,HCOMMIT,HA3,HRW,HW1,HA0,HA2,
-S0,S1,S2,
-T1,T0,T2,
-WT1,WT2,WT0,
-XXL_633,XXL_646,XXL_392,XXL_639,XXL_632,XXL_647,XXL_635,XXL_499,XXL_380,XXL_634,XXL_638,XXL_645,XXL_637,
+A0,A3,AIDX1,AIDX0,A1,AIDX3,A2,AIDX2,
+BUSY,
+CSSL,
+DMAQ2,DMAEN0,DMAEN2,DMAQ1,DMAEN1,
+HA3,HSY1,HSY2,HGBL,
+PWBUSY,
+RST0,RESET,RST1,RW,RST2,
+S2,S3,S0,S1,SLOTCLK,
+WROTE3,WROTE0,
+XXL_532,XXL_589,
 }
 Multiplexer assignment for block G
-XXL_633			(MC17	FB)  : MUX 0		Ref (E71fb)
-HSTAGE			(MC22	FB)  : MUX 1		Ref (F93fb)
-S0			(MC32	P)   : MUX 3		Ref (H117p)
-WT1			(MC9	FB)  : MUX 5		Ref (B30fb)
-HA1			(MC2	FB)  : MUX 6		Ref (A3fb)
-S1			(MC30	P)   : MUX 7		Ref (A3p)
-AIDX5			(MC4	FB)  : MUX 8		Ref (A7fb)
-S2			(MC31	P)   : MUX 9		Ref (H115p)
-AIDX4			(MC1	FB)  : MUX 10		Ref (A2fb)
-XXL_646			(MC13	FB)  : MUX 11		Ref (D58fb)
-XXL_392			(MC26	FB)  : MUX 12		Ref (G101fb)
-XXL_639			(MC5	FB)  : MUX 13		Ref (A10fb)
-HCOMMIT			(MC6	FB)  : MUX 14		Ref (B18fb)
-XXL_632			(MC11	FB)  : MUX 15		Ref (C42fb)
-HA3			(MC19	FB)  : MUX 16		Ref (F84fb)
-WT2			(MC7	FB)  : MUX 18		Ref (B23fb)
-XXL_647			(MC12	FB)  : MUX 19		Ref (C44fb)
-XXL_635			(MC10	FB)  : MUX 24		Ref (C33fb)
-T1			(MC14	FB)  : MUX 25		Ref (D60fb)
-WT0			(MC8	FB)  : MUX 27		Ref (B28fb)
-XXL_499			(MC27	FB)  : MUX 28		Ref (G103fb)
-HRW			(MC23	FB)  : MUX 29		Ref (F95fb)
-XXL_380			(MC25	FB)  : MUX 30		Ref (G98fb)
-XXL_634			(MC28	FB)  : MUX 31		Ref (G110fb)
-T0			(MC24	FB)  : MUX 32		Ref (G97fb)
-XXL_638			(MC18	FB)  : MUX 33		Ref (E74fb)
-T2			(MC15	FB)  : MUX 34		Ref (E66fb)
-XXL_645			(MC29	FB)  : MUX 35		Ref (G111fb)
-XXL_637			(MC16	FB)  : MUX 36		Ref (E70fb)
-HW1			(MC21	FB)  : MUX 37		Ref (F92fb)
-HA0			(MC3	FB)  : MUX 38		Ref (A5fb)
-HA2			(MC20	FB)  : MUX 39		Ref (F89fb)
+S2			(MC24	P)   : MUX 0		Ref (C43p)
+RST0			(MC20	FB)  : MUX 1		Ref (H122fb)
+RESET			(MC34	FB)  : MUX 2		Ref (GCLR)
+DMAQ2			(MC14	FB)  : MUX 3		Ref (G105fb)
+PWBUSY			(MC9	P)   : MUX 4		Ref (D57p)
+A0			(MC28	P)   : MUX 5		Ref (G99p)
+WROTE3			(MC6	FB)  : MUX 6		Ref (C40fb)
+DMAEN0			(MC21	P)   : MUX 7		Ref (A3p)
+S3			(MC27	P)   : MUX 9		Ref (G97p)
+WROTE0			(MC5	FB)  : MUX 10		Ref (C34fb)
+HA3			(MC16	FB)  : MUX 11		Ref (G108fb)
+CSSL			(MC18	P)   : MUX 12		Ref (G112p)
+A3			(MC31	P)   : MUX 13		Ref (H115p)
+HSY1			(MC19	FB)  : MUX 14		Ref (H116fb)
+DMAEN2			(MC22	P)   : MUX 15		Ref (A6p)
+DMAQ1			(MC12	FB)  : MUX 16		Ref (G98fb)
+BUSY			(MC4	FB)  : MUX 17		Ref (B31fb)
+RST1			(MC15	FB)  : MUX 19		Ref (G106fb)
+AIDX1			(MC2	FB)  : MUX 20		Ref (A4fb)
+AIDX0			(MC11	FB)  : MUX 21		Ref (D62fb)
+A1			(MC29	P)   : MUX 23		Ref (G101p)
+XXL_532			(MC10	FB)  : MUX 25		Ref (D60fb)
+HSY2			(MC7	FB)  : MUX 26		Ref (D49fb)
+S0			(MC25	P)   : MUX 27		Ref (D51p)
+AIDX3			(MC1	FB)  : MUX 28		Ref (A2fb)
+HGBL			(MC17	FB)  : MUX 29		Ref (G111fb)
+RW			(MC32	P)   : MUX 31		Ref (H117p)
+XXL_589			(MC8	FB)  : MUX 32		Ref (D55fb)
+DMAEN1			(MC23	P)   : MUX 33		Ref (B17p)
+S1			(MC26	P)   : MUX 34		Ref (F94p)
+A2			(MC30	P)   : MUX 35		Ref (G104p)
+AIDX2			(MC3	FB)  : MUX 37		Ref (A12fb)
+RST2			(MC13	FB)  : MUX 38		Ref (G100fb)
+SLOTCLK			(MC33	FB)  : MUX 39		Ref (GCLK)
 
-FanIn assignment for block H [37]
+FanIn assignment for block H [31]
 {
 ACIN,ACOUT,
-BLATOE,
-CSV,CSSL,CSSR,Com_Ctrl_367,
-DMAEN0,DMAEN1,DMAEN2,DMAEN3,DUE0,DUE2,
+BLATOE,BUSY,
+CSSR,CSV,Com_Ctrl_367,
+DMAEN0,DMAQ0,
 E,
-HDUE,
 ONESOE,
-RST0,RESET,RST2,
-S0,S3,SDQ0,S1,S2,SEL,SDQ1,SDQ2,
-VDIRTY,VPA,VPB,
-WROTE0,WC0,WROTE1,WROTE2,WROTE3,
-XXL_643,XXL_644,
+RST0,RESET,
+SDQ2,SDQ0,S3,SDH2,SDQ1,S0,S2,S1,SEL,SDH0,SDH1,
+T3,
+VPA,VPB,
+WROTE2,WROTE1,
+XXL_408,XXL_409,
 }
 Multiplexer assignment for block H
-ACIN			(MC1	P)   : MUX 0		Ref (A13p)
-ACOUT			(MC27	P)   : MUX 1		Ref (A5p)
-VDIRTY			(MC3	FB)  : MUX 2		Ref (B20fb)
-S0			(MC36	P)   : MUX 3		Ref (H117p)
-CSV			(MC25	P)   : MUX 4		Ref (H125p)
-S3			(MC28	P)   : MUX 5		Ref (D49p)
-BLATOE			(MC17	P)   : MUX 6		Ref (E75p)
-CSSL			(MC21	P)   : MUX 7		Ref (H118p)
-CSSR			(MC23	P)   : MUX 8		Ref (H123p)
-HDUE			(MC10	FB)  : MUX 10		Ref (D50fb)
-DMAEN0			(MC32	P)   : MUX 11		Ref (E69p)
-ONESOE			(MC2	P)   : MUX 12		Ref (A14p)
-DMAEN1			(MC30	P)   : MUX 13		Ref (E65p)
-SDQ0			(MC20	FB)  : MUX 14		Ref (F88fb)
-DMAEN2			(MC31	P)   : MUX 15		Ref (E67p)
-DMAEN3			(MC29	P)   : MUX 16		Ref (D59p)
-S1			(MC26	P)   : MUX 17		Ref (A3p)
-WROTE0			(MC5	FB)  : MUX 18		Ref (C36fb)
-E			(MC33	P)   : MUX 19		Ref (G99p)
-VPA			(MC16	FB)  : MUX 20		Ref (E67fb)
-RST0			(MC14	FB)  : MUX 21		Ref (D62fb)
-DUE0			(MC12	FB)  : MUX 22		Ref (D56fb)
-RESET			(MC37	FB)  : MUX 24		Ref (GCLR)
-WC0			(MC22	FB)  : MUX 25		Ref (H122fb)
-XXL_643			(MC9	FB)  : MUX 26		Ref (D49fb)
-S2			(MC35	P)   : MUX 27		Ref (H115p)
-WROTE1			(MC4	FB)  : MUX 28		Ref (C34fb)
-SEL			(MC34	P)   : MUX 29		Ref (G101p)
-RST2			(MC11	FB)  : MUX 30		Ref (D51fb)
-DUE2			(MC13	FB)  : MUX 31		Ref (D57fb)
-WROTE2			(MC6	FB)  : MUX 32		Ref (C39fb)
-SDQ1			(MC19	FB)  : MUX 34		Ref (F86fb)
-Com_Ctrl_367		(MC7	FB)  : MUX 35		Ref (C41fb)
-VPB			(MC15	FB)  : MUX 36		Ref (E65fb)
-WROTE3			(MC8	FB)  : MUX 37		Ref (C47fb)
-SDQ2			(MC18	FB)  : MUX 38		Ref (F85fb)
-XXL_644			(MC24	FB)  : MUX 39		Ref (H124fb)
+BLATOE			(MC2	P)   : MUX 0		Ref (A13p)
+CSSR			(MC16	P)   : MUX 1		Ref (H120p)
+SDQ2			(MC20	FB)  : MUX 3		Ref (H124fb)
+ACIN			(MC3	P)   : MUX 4		Ref (A16p)
+SDQ0			(MC17	FB)  : MUX 5		Ref (H121fb)
+ONESOE			(MC1	P)   : MUX 6		Ref (A11p)
+CSV			(MC14	P)   : MUX 7		Ref (H118p)
+ACOUT			(MC30	P)   : MUX 8		Ref (H125p)
+S3			(MC28	P)   : MUX 9		Ref (G97p)
+SDH2			(MC22	P)   : MUX 10		Ref (H128p)
+E			(MC26	P)   : MUX 11		Ref (F86p)
+SDQ1			(MC15	FB)  : MUX 12		Ref (H119fb)
+S0			(MC25	P)   : MUX 13		Ref (D51p)
+VPA			(MC7	FB)  : MUX 14		Ref (E66fb)
+T3			(MC12	FB)  : MUX 15		Ref (F90fb)
+Com_Ctrl_367		(MC9	FB)  : MUX 16		Ref (E70fb)
+DMAEN0			(MC23	P)   : MUX 17		Ref (A3p)
+S2			(MC24	P)   : MUX 18		Ref (C43p)
+XXL_408			(MC6	FB)  : MUX 20		Ref (D52fb)
+RST0			(MC18	FB)  : MUX 21		Ref (H122fb)
+S1			(MC27	P)   : MUX 22		Ref (F94p)
+SEL			(MC29	P)   : MUX 24		Ref (G105p)
+SDH0			(MC19	P)   : MUX 26		Ref (H123p)
+VPB			(MC11	FB)  : MUX 28		Ref (F82fb)
+SDH1			(MC21	P)   : MUX 30		Ref (H126p)
+BUSY			(MC4	FB)  : MUX 31		Ref (B31fb)
+WROTE2			(MC5	FB)  : MUX 32		Ref (C33fb)
+RESET			(MC31	FB)  : MUX 34		Ref (GCLR)
+DMAQ0			(MC13	FB)  : MUX 35		Ref (G107fb)
+WROTE1			(MC8	FB)  : MUX 36		Ref (E68fb)
+XXL_409			(MC10	FB)  : MUX 38		Ref (F81fb)
 
 Creating JEDEC file aseq.jed ...
 
 PLCC84 programmed logic:
 -----------------------------------
-ACIN = ((BUSY.Q & S2 & !T1.Q & !T3.Q & !WT1.Q & XXL_374 & T0.Q & !WT0.Q & !T2.Q & !WT2.Q)
-	# (BUSY.Q & S2 & !T1.Q & !T3.Q & !WT1.Q & XXL_374 & !T0.Q & !WT0.Q & T2.Q & WT2.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q));
+ACIN = ((BUSY.Q & S2 & T0.Q & !T3.Q & !WT0.Q & !WT1.Q & XXL_373 & !T1.Q & !T2.Q & !WT2.Q)
+	# (BUSY.Q & S2 & T0.Q & !T3.Q & !WT0.Q & !WT1.Q & XXL_373 & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & T1.Q & T2.Q & WT2.Q));
 
-AIDX0.D = ((D0 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
-	# (XXL_404 & !AIDX0.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & T0.Q & !T3.Q)
-	# (XXL_404 & AIDX0.Q & XXL_400));
+AIDX0.D = ((XXL_403 & AIDX0.Q & XXL_398)
+	# (D0 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
+	# (XXL_403 & !AIDX0.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & T3.Q & !WT1.Q & WT2.Q & XXL_373 & !T0.Q & !T2.Q & !T1.Q & !WT0.Q));
 
-AIDX1.D = ((D1 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
-	# (XXL_404 & !AIDX1.Q & AIDX0.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & T0.Q & !T3.Q)
-	# (XXL_404 & AIDX1.Q & XXL_399));
+AIDX1.D = ((XXL_403 & !AIDX1.Q & AIDX0.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & T3.Q & !WT1.Q & WT2.Q & XXL_373 & !T0.Q & !T2.Q & !T1.Q & !WT0.Q)
+	# (XXL_403 & AIDX1.Q & !AIDX0.Q)
+	# (XXL_403 & AIDX1.Q & XXL_398)
+	# (D1 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW));
 
-AIDX2.D = ((XXL_404 & AIDX2.Q & XXL_399)
-	# (D2 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
-	# (XXL_404 & !AIDX2.Q & AIDX1.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & AIDX0.Q & T0.Q & !T3.Q)
-	# (XXL_404 & AIDX2.Q & !AIDX1.Q));
+AIDX2.D = ((XXL_403 & !AIDX2.Q & AIDX0.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & T3.Q & !WT1.Q & WT2.Q & XXL_373 & AIDX1.Q & !T0.Q & !T2.Q & !T1.Q & !WT0.Q)
+	# (XXL_403 & AIDX2.Q & !AIDX1.Q)
+	# (XXL_403 & AIDX2.Q & !AIDX0.Q)
+	# (XXL_403 & AIDX2.Q & XXL_398)
+	# (D2 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW));
 
-AIDX3.D = ((XXL_404 & AIDX3.Q & !AIDX2.Q)
-	# (XXL_404 & AIDX3.Q & !AIDX1.Q)
-	# (XXL_404 & AIDX3.Q & XXL_399)
-	# (D3 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
-	# (XXL_404 & !AIDX3.Q & AIDX2.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & AIDX0.Q & AIDX1.Q & T0.Q & !T3.Q));
+AIDX3.D = ((D3 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
+	# (XXL_403 & !AIDX3.Q & AIDX2.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & T3.Q & !WT1.Q & WT2.Q & XXL_373 & AIDX0.Q & AIDX1.Q & !T0.Q & !T2.Q & !T1.Q & !WT0.Q)
+	# (XXL_403 & AIDX3.Q & XXL_387));
 
-AIDX4.D = ((XXL_404 & !AIDX4.Q & AIDX2.Q & AIDX3.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & AIDX0.Q & AIDX1.Q & T0.Q & !T3.Q)
-	# (XXL_404 & AIDX4.Q & XXL_388)
-	# (D4 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW));
+AIDX4.D = ((XXL_403 & AIDX4.Q & !AIDX3.Q)
+	# (XXL_403 & AIDX4.Q & XXL_387)
+	# (D4 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
+	# (XXL_403 & !AIDX4.Q & AIDX3.Q & AIDX2.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & T3.Q & !WT1.Q & WT2.Q & XXL_373 & AIDX0.Q & AIDX1.Q & !T0.Q & !T2.Q & !T1.Q & !WT0.Q));
 
-AIDX5.D = ((XXL_404 & AIDX5.Q & XXL_388)
-	# (D5 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
-	# (XXL_404 & !AIDX5.Q & AIDX4.Q & AIDX2.Q & AIDX3.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & AIDX0.Q & AIDX1.Q & T0.Q & !T3.Q)
-	# (XXL_404 & AIDX5.Q & !AIDX4.Q));
+AIDX5.D = ((XXL_403 & !AIDX5.Q & AIDX3.Q & AIDX4.Q & AIDX2.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & T3.Q & !WT1.Q & WT2.Q & XXL_373 & AIDX0.Q & AIDX1.Q & !T0.Q & !T2.Q & !T1.Q & !WT0.Q)
+	# (XXL_403 & AIDX5.Q & !AIDX4.Q)
+	# (XXL_403 & AIDX5.Q & !AIDX3.Q)
+	# (XXL_403 & AIDX5.Q & XXL_387)
+	# (D5 & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW));
 
-BLATCK = (BUSY.Q & S2 & !SLOTCLK & !T0.Q & T1.Q & !T2.Q & XXL_374 & XXL_446 & !T3.Q & !WT2.Q);
+BLATCK = ((BUSY.Q & S2 & !SLOTCLK & T1.Q & !T2.Q & !T3.Q & !WT2.Q & XXL_373 & WT0.Q & T0.Q & !WT1.Q)
+	# (BUSY.Q & S2 & !SLOTCLK & T1.Q & !T2.Q & !T3.Q & !WT2.Q & XXL_373 & !WT0.Q & XXL_425));
 
-!BLATOE = ((BUSY.Q & S2 & XXL_374 & T0.Q & T1.Q & !T2.Q & !T3.Q & !WT2.Q & XXL_392)
-	# (BUSY.Q & S2 & XXL_374 & !T0.Q & !T1.Q & T2.Q & !T3.Q & !WT2.Q & !WT1.Q & !WT0.Q));
+!BLATOE = (BUSY.Q & S2 & !T0.Q & !T1.Q & T2.Q & !T3.Q & !WT2.Q & XXL_373 & XXL_374);
 
-ALATCK = ((BUSY.Q & S2 & !SLOTCLK & !T3.Q & XXL_374 & T0.Q & !WT1.Q & !T1.Q & XXL_379)
-	# (BUSY.Q & S2 & !SLOTCLK & !T3.Q & XXL_374 & !T0.Q & !WT2.Q & XXL_385)
-	# (BUSY.Q & S2 & !SLOTCLK & !T3.Q & XXL_374 & T0.Q & !WT1.Q & T1.Q & !T2.Q & !WT0.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q)
-	# (BUSY.Q & S2 & !SLOTCLK & !T3.Q & XXL_374 & T0.Q & !WT1.Q & T1.Q & !T2.Q & !WT0.Q & !WT2.Q));
+ALATCK = ((BUSY.Q & S2 & !SLOTCLK & !T0.Q & !T3.Q & XXL_391)
+	# (BUSY.Q & S2 & !SLOTCLK & T0.Q & !T2.Q & XXL_373 & T3.Q & !T1.Q & WT1.Q & !WT2.Q & !WT0.Q)
+	# (BUSY.Q & S2 & !SLOTCLK & T0.Q & !T2.Q & XXL_373 & !T3.Q & T1.Q & XXL_381));
 
-!BUSY.D = (XXL_631
-	# (!BUSY.Q & !DUE0.Q & !DUE1.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !HDUE.Q & !VDIRTY.Q & !DUE2.Q & !DUE3.Q));
+!BUSY.D = ((!BUSY.Q & !DUE0.Q & !DUE1.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !HDUE.Q & !VDIRTY.Q & !DUE2.Q & !DUE3.Q)
+	# (!BUSY.Q & !S2)
+	# (!BUSY.Q & !S0 & !S1)
+	# (BUSY.Q & S2 & XXL_373 & !WT1.Q & T1.Q & !WT2.Q & T0.Q & !T3.Q & XXL_430 & T2.Q)
+	# (BUSY.Q & S2 & XXL_373 & !WT1.Q & !T1.Q & WT2.Q & !T0.Q & T3.Q & XXL_394));
 
-CNTOE = (BUSY.Q & S2 & !T0.Q & T1.Q & WT1.Q & XXL_374 & T2.Q & !WT0.Q & !T3.Q & !WT2.Q);
+CNTOE = (BUSY.Q & S2 & T0.Q & !T2.Q & T3.Q & WT1.Q & !WT2.Q & XXL_373 & !T1.Q & !WT0.Q);
 
-!CSSL.D = ((!S2 & S1 & !CSSL.Q)
-	# (!S2 & S0 & !S1 & !S3 & WROTE0.Q)
-	# (!S2 & S0 & !S1 & S3 & WROTE3.Q));
+!CSSL.D = ((!S2 & S0 & !S1 & S3 & WROTE3.Q)
+	# (!S2 & S1 & !CSSL.Q)
+	# (!S2 & S0 & !S1 & !S3 & WROTE0.Q));
 
-!CSSR.D = ((!S2 & S1 & !CSSR.Q)
-	# (!S2 & S0 & !S1 & !S3 & WROTE1.Q)
-	# (!S2 & S0 & !S1 & S3 & WROTE2.Q));
+!CSSR.D = ((!S2 & S0 & !S1 & S3 & WROTE2.Q)
+	# (!S2 & S1 & !CSSR.Q)
+	# (!S2 & S0 & !S1 & !S3 & WROTE1.Q));
 
-!CSV.D = ((!S2 & S1 & !CSV.Q)
-	# (!S2 & S0 & !S1 & !S3 & VPA.Q)
-	# (!S2 & S0 & !S1 & S3 & VPB.Q));
+!CSV.D = ((!S2 & S0 & !S1 & S3 & VPB.Q)
+	# (!S2 & S1 & !CSV.Q)
+	# (!S2 & S0 & !S1 & !S3 & VPA.Q));
 
-CVC2 = ((BUSY.Q & S2 & !T3.Q & !WT1.Q & XXL_374 & T0.Q & T1.Q & WT2.Q & T2.Q & WT0.Q)
-	# (BUSY.Q & S2 & !T3.Q & !WT1.Q & XXL_374 & !T0.Q & !T1.Q & !WT2.Q & T2.Q & !WT0.Q & WC0.Q & WC1.Q));
+CVC2 = ((BUSY.Q & S2 & T2.Q & !T3.Q & !WT1.Q & XXL_373 & !T0.Q & !WT2.Q & !T1.Q & !WT0.Q & WC0.Q & WC1.Q)
+	# (BUSY.Q & S2 & T2.Q & !T3.Q & !WT1.Q & XXL_373 & T0.Q & WT2.Q & T1.Q & WT0.Q));
 
-CVC0 = ((BUSY.Q & S2 & !T0.Q & !T3.Q & !WT1.Q & XXL_374 & WT2.Q & T2.Q & WT0.Q)
-	# (BUSY.Q & S2 & !T0.Q & !T3.Q & !WT1.Q & XXL_374 & !WT2.Q & T2.Q & !WT0.Q & !T1.Q & !WC0.Q));
+CVC0 = ((BUSY.Q & S2 & !T0.Q & T2.Q & !T3.Q & !WT1.Q & XXL_373 & !WT2.Q & !WT0.Q & !WC0.Q & !T1.Q)
+	# (BUSY.Q & S2 & !T0.Q & T2.Q & !T3.Q & !WT1.Q & XXL_373 & WT2.Q & WT0.Q));
 
-CVC1 = ((BUSY.Q & S2 & !T3.Q & !WT1.Q & XXL_374 & T1.Q & !T0.Q & WT2.Q & T2.Q & WT0.Q)
-	# (BUSY.Q & S2 & !T3.Q & !WT1.Q & XXL_374 & !T1.Q & !T0.Q & !WT2.Q & T2.Q & !WT0.Q & !WC0.Q & WC1.Q)
-	# (BUSY.Q & S2 & !T3.Q & !WT1.Q & XXL_374 & !T1.Q & !T0.Q & !WT2.Q & T2.Q & !WT0.Q & WC0.Q & !WC1.Q)
-	# (BUSY.Q & S2 & !T3.Q & !WT1.Q & XXL_374 & !T1.Q & T0.Q & WT2.Q & T2.Q & WT0.Q));
+CVC1 = ((BUSY.Q & S2 & T2.Q & !T3.Q & !WT1.Q & XXL_373 & !T1.Q & !T0.Q & !WT0.Q & !WT2.Q & WC0.Q & !WC1.Q)
+	# (BUSY.Q & S2 & T2.Q & !T3.Q & !WT1.Q & XXL_373 & !T1.Q & T0.Q & WT0.Q & WT2.Q)
+	# (BUSY.Q & S2 & T2.Q & !T3.Q & !WT1.Q & XXL_373 & T1.Q & !T0.Q & WT0.Q & WT2.Q)
+	# (BUSY.Q & S2 & T2.Q & !T3.Q & !WT1.Q & XXL_373 & !T1.Q & !T0.Q & !WT0.Q & !WT2.Q & !WC0.Q & WC1.Q));
 
 DMAQ0.D = DMAEN0;
 
@@ -827,517 +802,458 @@ DMAQ2.D = DMAEN2;
 
 DMAQ3.D = DMAEN3;
 
-DUE0.D = ((CTRL7 & DMAEN0 & !NEQH & !NEQL & !S2 & !S0 & !S1)
-	# (DUE0.Q & XXL_616));
+!DUE0.D = ((!DUE0.Q & XXL_594)
+	# (BUSY.Q & S2 & !T0.Q & T1.Q & !T2.Q & T3.Q & !WC0.Q & !WC1.Q & !WT0.Q & WT1.Q & !WT2.Q & XXL_373)
+	# (!BUSY.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & S2 & XXL_373));
 
-!DUE2.D = ((!BUSY.Q & !DUE0.Q & !DUE1.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & S2 & XXL_374)
-	# (!DUE2.Q & XXL_622));
+!DUE2.D = ((!DUE2.Q & XXL_592)
+	# (BUSY.Q & S2 & !T0.Q & T1.Q & !T2.Q & T3.Q & !WC0.Q & WC1.Q & !WT0.Q & WT1.Q & !WT2.Q & XXL_373)
+	# (!BUSY.Q & !DUE0.Q & !DUE1.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & S2 & XXL_373));
 
-DUE1.D = ((CTRL7 & DMAEN1 & !NEQH & !NEQL & S0 & !S1 & !S2)
-	# (DUE1.Q & DUE0.Q)
-	# (DUE1.Q & XXL_616));
+!DUE1.D = ((!DUE1.Q & XXL_593)
+	# (BUSY.Q & S2 & !T0.Q & T1.Q & !T2.Q & T3.Q & WC0.Q & !WC1.Q & !WT0.Q & WT1.Q & !WT2.Q & XXL_373)
+	# (!BUSY.Q & !DUE0.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & S2 & XXL_373));
 
-!DUE3.D = ((!BUSY.Q & !DUE0.Q & !DUE1.Q & !DUE2.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & S2 & XXL_374)
-	# (!DUE3.Q & XXL_621));
+!DUE3.D = ((!DUE3.Q & XXL_591)
+	# (BUSY.Q & S2 & !T0.Q & T1.Q & !T2.Q & T3.Q & WC0.Q & WC1.Q & !WT0.Q & WT1.Q & !WT2.Q & XXL_373)
+	# (!BUSY.Q & !DUE0.Q & !DUE1.Q & !DUE2.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & S2 & XXL_373));
 
-HA0.D = ((HSY1.Q & !HSY2.Q & !PWBUSY.Q & A0 & !RW)
-	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & A0 & !A1 & !A2)
-	# (HA0.Q & XXL_401));
+HA0.D = ((HA0.Q & XXL_401)
+	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & A0 & !RW)
+	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & A0 & !A1 & !A2));
 
-!HA1.D = ((HSY1.Q & !HSY2.Q & !PWBUSY.Q & !A1 & !RW)
-	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !A1 & A0 & !A2)
-	# (!HA1.Q & XXL_401));
+!HA1.D = ((!HA1.Q & XXL_401)
+	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !A1 & !RW)
+	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & A0 & !A1 & !A2));
 
-!HA2.D = ((HSY1.Q & !HSY2.Q & !PWBUSY.Q & !A2 & !RW)
-	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !A2 & A0 & !A1)
-	# (!HA2.Q & XXL_401));
+!HA2.D = ((!HA2.Q & XXL_401)
+	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !A2 & !RW)
+	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & A0 & !A1 & !A2));
 
-HA3.D = ((HA3.Q & XXL_520)
-	# (A3 & XXL_598)
-	# (HA3.Q & PWBUSY.Q));
+HA3.D = ((HA3.Q & PWBUSY.Q)
+	# (HA3.Q & XXL_532)
+	# (A3 & XXL_589));
 
-HCOMMIT.D = ((!HA1.Q & HA0.Q & !HA3.Q & !AIDX0.Q & !AIDX3.Q & !HA2.Q & XXL_542)
-	# (!HA1.Q & !HA0.Q & HA3.Q & HGBL.Q));
+HCOMMIT.D = ((!HA1.Q & !HA0.Q & HA3.Q & HGBL.Q)
+	# (!HA1.Q & !AIDX0.Q & !AIDX3.Q & HA0.Q & !HA2.Q & !HA3.Q & XXL_547));
 
-HDUE.D = ((HDUE.Q & FB_624)
-	# XXL_598
-	# (HDUE.Q & !S0 & !S1));
+HDUE.D = ((HDUE.Q & !S0 & !S1)
+	# (HDUE.Q & FB_602)
+	# XXL_589);
 
-HGBL.D = ((HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW & !A3 & A1 & A2)
+HGBL.D = ((HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW & A3 & A0 & A1 & !A2)
+	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW & !A3 & A1 & A2)
 	# (PWBUSY.Q & HGBL.Q)
-	# (HGBL.Q & XXL_520)
-	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW & A3 & !A0 & !A1)
-	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW & A3 & A0 & A1 & !A2));
+	# (HGBL.Q & XXL_532)
+	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW & A3 & !A0 & !A1));
 
-PFLANE.D = ((HGBL.Q & HA0.Q & HA1.Q & HA2.Q & !HA3.Q)
+PFLANE.D = ((!HGBL.Q & !AIDX0.Q & AIDX2.Q & AIDX3.Q)
+	# (HGBL.Q & HA0.Q & HA1.Q & HA2.Q & !HA3.Q)
 	# (HGBL.Q & HA0.Q & HA1.Q & !HA2.Q & HA3.Q)
-	# (!HGBL.Q & AIDX0.Q & !AIDX3.Q & XXL_543)
-	# (!HGBL.Q & AIDX0.Q & !AIDX2.Q & !AIDX1.Q)
-	# (!HGBL.Q & !AIDX0.Q & AIDX2.Q & AIDX3.Q));
+	# (!HGBL.Q & AIDX0.Q & !AIDX3.Q & XXL_548)
+	# (!HGBL.Q & AIDX0.Q & !AIDX1.Q & !AIDX2.Q));
 
-HL1.D = ((!HGBL.Q & !AIDX3.Q & !AIDX2.Q & !AIDX1.Q & !AIDX0.Q)
+HL1.D = ((HGBL.Q & !HA0.Q & HA1.Q & HA2.Q & !HA3.Q)
+	# (!HGBL.Q & !AIDX3.Q & !AIDX2.Q & !AIDX1.Q & !AIDX0.Q)
 	# (!HGBL.Q & !AIDX3.Q & AIDX2.Q & AIDX1.Q & AIDX0.Q)
-	# (!HGBL.Q & AIDX3.Q & !AIDX2.Q & AIDX1.Q)
-	# (HGBL.Q & !HA0.Q & HA1.Q & HA2.Q & !HA3.Q));
+	# (!HGBL.Q & AIDX3.Q & !AIDX2.Q & AIDX1.Q));
 
-HRW.D = ((HRW.Q & XXL_401)
-	# (RW & HSY1.Q & !HSY2.Q & !PWBUSY.Q & A0 & !A1 & !A2));
+HRW.D = ((RW & HSY1.Q & !HSY2.Q & !PWBUSY.Q & A0 & !A1 & !A2)
+	# (HRW.Q & XXL_401));
 
-!HSTAGE.D = ((!HGBL.Q & AIDX3.Q)
-	# (!HGBL.Q & AIDX2.Q & AIDX0.Q & AIDX1.Q));
+!HSTAGE.D = ((!HGBL.Q & AIDX2.Q & AIDX0.Q & AIDX1.Q)
+	# (!HGBL.Q & AIDX3.Q));
 
 HSY1.D = (E & SEL);
 
 HSY2.D = HSY1.Q;
 
-HW0.D = ((!HGBL.Q & !AIDX3.Q & !AIDX2.Q)
-	# (!HGBL.Q & AIDX1.Q & AIDX3.Q & !AIDX0.Q)
-	# (!HGBL.Q & !AIDX1.Q & !AIDX3.Q & !AIDX0.Q)
-	# (!HGBL.Q & AIDX1.Q & AIDX3.Q & AIDX2.Q));
+HW0.D = ((!HGBL.Q & AIDX1.Q & AIDX3.Q & AIDX2.Q)
+	# (!HGBL.Q & !AIDX3.Q & !AIDX2.Q)
+	# (!HGBL.Q & !AIDX0.Q & AIDX1.Q & AIDX3.Q)
+	# (!HGBL.Q & !AIDX0.Q & !AIDX1.Q & !AIDX3.Q));
 
-HW2.D = ((!HGBL.Q & AIDX3.Q & !AIDX2.Q & XXL_444)
-	# (!HGBL.Q & !AIDX3.Q & XXL_565));
+HW2.D = ((!HGBL.Q & !AIDX3.Q & XXL_567)
+	# (!HGBL.Q & AIDX3.Q & !AIDX2.Q & XXL_429));
 
-HW1.D = ((!HGBL.Q & !AIDX2.Q & XXL_444)
+HW1.D = ((!HGBL.Q & AIDX3.Q & XXL_548)
+	# (!HGBL.Q & !AIDX2.Q & XXL_429)
 	# (HGBL.Q & HA1.Q & HA2.Q & !HA3.Q)
 	# (HGBL.Q & !HA1.Q & !HA2.Q & HA3.Q & !HA0.Q)
-	# (!HGBL.Q & !AIDX3.Q & AIDX2.Q & AIDX0.Q & AIDX1.Q)
-	# (!HGBL.Q & AIDX3.Q & XXL_543));
+	# (!HGBL.Q & AIDX2.Q & !AIDX3.Q & AIDX0.Q & AIDX1.Q));
 
-HWE.D = ((HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & !AIDX3.Q)
-	# (HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & !AIDX2.Q & XXL_444)
-	# HGBL.Q);
+HWE.D = (HGBL.Q
+	# (HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & !AIDX3.Q)
+	# (HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & !AIDX2.Q & XXL_429));
 
-!ONESOE = ((BUSY.Q & S2 & XXL_374 & T0.Q & !T1.Q & !WT1.Q & T2.Q & WT0.Q & !T3.Q & !WT2.Q)
-	# (BUSY.Q & S2 & XXL_374 & !T0.Q & T1.Q & !WT1.Q & T2.Q & !WT0.Q & !T3.Q & !WT2.Q)
-	# (BUSY.Q & S2 & XXL_374 & T0.Q & !T1.Q & WT1.Q & T2.Q & !WT0.Q & !T3.Q & !WT2.Q));
+!ONESOE = (BUSY.Q & S2 & T1.Q & !WT2.Q & XXL_373 & XXL_374 & T0.Q & T2.Q & !T3.Q);
 
-PFCK = ((BUSY.Q & S2 & !WT1.Q & WT2.Q & XXL_374 & !T1.Q & T2.Q & !WT0.Q & T0.Q & !T3.Q & !HGBL.Q)
-	# (BUSY.Q & S2 & !WT1.Q & WT2.Q & XXL_374 & T1.Q & !T2.Q & !WT0.Q & T0.Q & !T3.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & HRW.Q));
+PFCK = ((BUSY.Q & S2 & !WT0.Q & !WT1.Q & WT2.Q & XXL_373 & !T0.Q & !T1.Q & !T2.Q & T3.Q & !HGBL.Q)
+	# (BUSY.Q & S2 & !WT0.Q & !WT1.Q & WT2.Q & XXL_373 & !T0.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & HRW.Q & T1.Q & T2.Q & !T3.Q));
 
-!PWBUSY.D = ((!PWBUSY.Q & XXL_520)
-	# (PWBUSY.Q & BUSY.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & T0.Q & !T3.Q));
+!PWBUSY.D = ((PWBUSY.Q & BUSY.Q & S2 & T3.Q & !WT1.Q & WT2.Q & XXL_373 & !T0.Q & !T2.Q & !T1.Q & !WT0.Q)
+	# (!PWBUSY.Q & XXL_532));
 
 PWCK = (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW & !SLOTCLK);
 
-!PWOE = ((BUSY.Q & !HRW.Q & S2 & !T2.Q & !T3.Q & WT2.Q & XXL_374 & T0.Q & T1.Q & !WT0.Q & !WT1.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q)
-	# (BUSY.Q & !HRW.Q & S2 & !T2.Q & !T3.Q & WT2.Q & XXL_374 & !T0.Q & !T1.Q & !WT0.Q & !WT1.Q & HWE.Q));
+!PWOE = ((BUSY.Q & !HRW.Q & S2 & !T0.Q & !T3.Q & !WT0.Q & !WT1.Q & WT2.Q & T1.Q & T2.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & XXL_373)
+	# (BUSY.Q & !HRW.Q & S2 & !T0.Q & !T3.Q & !WT0.Q & !WT1.Q & WT2.Q & !T1.Q & !T2.Q & HWE.Q & S0 & S1));
 
-RST1.D = ((DMAEN1 & !DMAQ1.Q)
-	# (RST1.Q & RST0.Q)
-	# (RST1.Q & XXL_537));
+RST1.D = ((RST1.Q & XXL_540)
+	# (DMAEN1 & !DMAQ1.Q)
+	# (RST1.Q & RST0.Q));
 
-RST0.D = ((RST0.Q & XXL_537)
-	# (DMAEN0 & !DMAQ0.Q));
+RST0.D = ((DMAEN0 & !DMAQ0.Q)
+	# (RST0.Q & XXL_540));
 
-RST2.D = ((RST2.Q & XXL_561)
-	# (DMAEN2 & !DMAQ2.Q));
+RST2.D = ((DMAEN2 & !DMAQ2.Q)
+	# (RST2.Q & XXL_566));
 
-!RST3.D = ((DMAQ3.Q & !RST3.Q)
-	# (!RST2.Q & !RST1.Q & !RST0.Q & !BUSY.Q & S2 & XXL_374 & !DMAEN3)
-	# (!RST3.Q & !DMAEN3)
-	# (DMAQ3.Q & !RST2.Q & !RST1.Q & !RST0.Q & !BUSY.Q & S2 & XXL_374));
+!RST3.D = ((!RST3.Q & !DMAEN3)
+	# (DMAQ3.Q & !RST3.Q)
+	# (!RST2.Q & !RST1.Q & !RST0.Q & !BUSY.Q & S2 & XXL_373 & !DMAEN3)
+	# (!RST2.Q & DMAQ3.Q & !RST1.Q & !RST0.Q & !BUSY.Q & S2 & XXL_373));
 
-!SBOE = (BUSY.Q & S2 & !T0.Q & !T1.Q & !WT1.Q & XXL_374 & T2.Q & !WT0.Q & !T3.Q & !WT2.Q);
+!SBOE = (BUSY.Q & S2 & !T0.Q & T2.Q & !T3.Q & !WT1.Q & !WT2.Q & XXL_373 & !T1.Q & !WT0.Q);
 
-SDQ0.D = ((SDQ0.Q & XXL_417)
-	# (BUSY.Q & S2 & SDH0.PIN & !T3.Q & XXL_374 & XXL_405));
+!SDQ0.D = ((!SDQ0.Q & XXL_408)
+	# (BUSY.Q & S2 & !SDH0.PIN & !T3.Q & XXL_409));
 
-SDQ1.D = ((SDQ1.Q & XXL_417)
-	# (BUSY.Q & S2 & SDH1.PIN & !T3.Q & XXL_374 & XXL_405));
+!SDQ1.D = ((!SDQ1.Q & XXL_408)
+	# (BUSY.Q & S2 & !SDH1.PIN & !T3.Q & XXL_409));
 
-SDQ2.D = ((SDQ2.Q & XXL_417)
-	# (BUSY.Q & S2 & SDH2.PIN & !T3.Q & XXL_374 & XXL_405));
+!SDQ2.D = ((!SDQ2.Q & XXL_408)
+	# (BUSY.Q & S2 & !SDH2.PIN & !T3.Q & XXL_409));
 
-!SETA = (!ACOUT & BUSY.Q & S2 & !T0.Q & T1.Q & !WC0.Q & !WT1.Q & XXL_374 & XXL_378 & T2.Q & !WT0.Q & !T3.Q & !WT2.Q);
+!SETA = (BUSY.Q & S2 & T1.Q & !WC0.Q & !WT1.Q & !WT2.Q & XXL_373 & XXL_377 & !ACOUT & !WT0.Q & T0.Q & T2.Q & !T3.Q);
 
-!SETB = ((HSY1.Q & !HSY2.Q & PWBUSY.Q & !RW & FB_620)
-	# (!ACOUT & BUSY.Q & S2 & !T0.Q & T1.Q & T2.Q & !T3.Q & !WC1.Q & !WT0.Q & !WT1.Q & !WT2.Q & XXL_374)
-	# (HSY1.Q & !HSY2.Q & PWBUSY.Q & !RW & !S0 & !S1));
+!SETB = ((HSY1.Q & !HSY2.Q & PWBUSY.Q & !RW & !S0 & !S1)
+	# (HSY1.Q & !HSY2.Q & PWBUSY.Q & !RW & FB_597)
+	# (!ACOUT & BUSY.Q & S2 & T0.Q & T1.Q & T2.Q & !T3.Q & !WC1.Q & !WT0.Q & !WT1.Q & !WT2.Q & XXL_373));
 
-!SETC = (!ACOUT & BUSY.Q & S2 & !T0.Q & T1.Q & !WT1.Q & XXL_374 & XXL_378 & T2.Q & !WT0.Q & !T3.Q & !WT2.Q);
+!SETC = (BUSY.Q & S2 & T1.Q & !WT1.Q & !WT2.Q & XXL_373 & XXL_377 & !ACOUT & !WT0.Q & T0.Q & T2.Q & !T3.Q);
 
-!SFA0 = ((!T2.Q & !WT2.Q & !WT0.Q & !WT1.Q)
-	# (T2.Q & T1.Q & XXL_614)
-	# XXL_632
-	# XXL_633
-	# (!T2.Q & !T1.Q & T0.Q & !WT2.Q));
+SFA0 = ((BUSY.Q & S2 & !T3.Q & !T1.Q & WT1.Q & !WT2.Q & !T0.Q & !WT0.Q & S0 & S1)
+	# (BUSY.Q & S2 & !T3.Q & !T1.Q & !WT1.Q & WT2.Q & !T0.Q & !WT0.Q & S0 & S1 & HW0.Q)
+	# (BUSY.Q & S2 & !T3.Q & !T1.Q & !WT1.Q & !WT2.Q & !T0.Q & WT0.Q & S0 & S1)
+	# (BUSY.Q & S2 & !T3.Q & XXL_373 & !WT1.Q & !WT2.Q & T2.Q & !T0.Q & WT0.Q)
+	# (BUSY.Q & S2 & !T3.Q & XXL_373 & WT1.Q & !WT2.Q & T2.Q & !T0.Q & !WT0.Q)
+	# (BUSY.Q & S2 & !T3.Q & !T1.Q & !WT1.Q & WT2.Q & !T2.Q & !T0.Q & !WT0.Q & S0 & S1 & HSTAGE.Q)
+	# (BUSY.Q & S2 & T3.Q & !T1.Q & XXL_373 & !WT1.Q & WT2.Q & !T2.Q & !T0.Q & !WT0.Q & HW0.Q)
+	# (BUSY.Q & S2 & !T3.Q & !T1.Q & XXL_373 & !WT1.Q & WT2.Q & T2.Q & !T0.Q & !WT0.Q & HW0.Q)
+	# (BUSY.Q & S2 & !T3.Q & T1.Q & XXL_373 & !WT1.Q & !WT2.Q & T0.Q & WT0.Q)
+	# (BUSY.Q & S2 & !T3.Q & T1.Q & XXL_373 & !WT1.Q & WT2.Q & !T2.Q & T0.Q & !WT0.Q)
+	# (BUSY.Q & S2 & !T3.Q & T1.Q & XXL_373 & WT1.Q & !WT2.Q & T0.Q & !WT0.Q)
+	# (BUSY.Q & S2 & !T3.Q & T1.Q & XXL_373 & !WT1.Q & !WT2.Q & T2.Q));
 
-SFA5 = ((S2 & BUSY.Q & !T3.Q & !WT1.Q & WT2.Q & !T1.Q & !T2.Q & !WT0.Q & HSTAGE.Q)
-	# (S2 & BUSY.Q & !T3.Q & !WT1.Q & WT2.Q & !T2.Q & !WT0.Q & XXL_418)
-	# (S2 & BUSY.Q & !T3.Q & !WT1.Q & WT2.Q & !T1.Q & T2.Q & !WT0.Q & !T0.Q)
+SFA5 = ((S2 & S0 & S1 & BUSY.Q & !T3.Q & !WT0.Q & !WT1.Q & WT2.Q & !T1.Q & !T0.Q & HSTAGE.Q & !T2.Q)
+	# (S2 & BUSY.Q & !T3.Q & !WT0.Q & !WT1.Q & WT2.Q & !T0.Q & T2.Q & HGBL.Q)
+	# (S2 & BUSY.Q & !T3.Q & !WT0.Q & !WT1.Q & WT2.Q & T1.Q & XXL_542)
 	# (S2 & !S0 & !S1));
 
-!SFA1 = ((WT2.Q & WT1.Q)
-	# (WT2.Q & !XXL_499)
-	# XXL_634
-	# XXL_635
-	# (WT2.Q & !T2.Q & WT0.Q));
+SFA1 = ((BUSY.Q & S2 & !WT2.Q & !T3.Q & T0.Q & !T2.Q & XXL_373 & !T1.Q & XXL_374)
+	# (BUSY.Q & S2 & !WT2.Q & !T3.Q & !T2.Q & !T1.Q & XXL_374 & S0 & S1)
+	# (BUSY.Q & S2 & !WT1.Q & WT2.Q & !T3.Q & T2.Q & XXL_373 & XXL_546)
+	# (BUSY.Q & S2 & !WT1.Q & WT2.Q & !T3.Q & HW1.Q & !T0.Q & !T1.Q & S0 & S1 & !WT0.Q & !HSTAGE.Q)
+	# (BUSY.Q & S2 & !WT1.Q & WT2.Q & T3.Q & HW1.Q & !T0.Q & !T2.Q & XXL_373 & !T1.Q & !WT0.Q)
+	# (BUSY.Q & S2 & !WT1.Q & WT2.Q & !T3.Q & HW1.Q & !T0.Q & T2.Q & XXL_373));
 
-SFA2 = (XXL_636
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & T0.Q & !T1.Q & !WT1.Q & WT2.Q & !WT0.Q & HW2.Q));
+SFA2 = ((BUSY.Q & S2 & !WT1.Q & WT2.Q & !T3.Q & !T0.Q & HW2.Q & !T1.Q & T2.Q & XXL_373)
+	# (BUSY.Q & S2 & !WT1.Q & !WT2.Q & !T3.Q & WT0.Q & T0.Q & T1.Q & !T2.Q & XXL_373)
+	# (BUSY.Q & S2 & !WT1.Q & WT2.Q & !T3.Q & !WT0.Q & T0.Q & T1.Q & !T2.Q & XXL_373)
+	# (BUSY.Q & S2 & !WT2.Q & !T3.Q & !WT0.Q & T1.Q & !T2.Q & XXL_373 & XXL_425)
+	# (BUSY.Q & S2 & !WT1.Q & WT2.Q & !T3.Q & !WT0.Q & !T0.Q & !T1.Q & !T2.Q & HSTAGE.Q & S0 & S1)
+	# (BUSY.Q & S2 & !WT1.Q & WT2.Q & !T3.Q & WT0.Q & T2.Q & XXL_373)
+	# (BUSY.Q & S2 & !WT1.Q & WT2.Q & !T3.Q & !WT0.Q & !T0.Q & HW2.Q & !T1.Q & S0 & S1)
+	# (BUSY.Q & S2 & !WT1.Q & WT2.Q & T3.Q & !WT0.Q & !T0.Q & HW2.Q & !T1.Q & !T2.Q & XXL_373));
 
-!SFA3 = (XXL_637
+!SFA3 = ((!S0 & XXL_600)
+	# (S2 & WT0.Q & WT1.Q & WT2.Q)
+	# (HSTAGE.Q & S2 & !T0.Q & !T1.Q & !T2.Q & !T3.Q & !WT1.Q & WT2.Q)
+	# (!S1 & S2 & !T0.Q & !T1.Q & !T2.Q & !T3.Q)
+	# (S2 & !WC0.Q & !WT2.Q)
+	# (!BUSY.Q & S2)
+	# (S2 & WT0.Q & WT2.Q & XXL_554)
+	# (S2 & T1.Q & !T3.Q & !WT0.Q & !WT1.Q & WT2.Q & XXL_542)
+	# (HGBL.Q & S2 & !T0.Q & T2.Q & !T3.Q & !WT1.Q & WT2.Q)
 	# (!AIDX4.Q & S2 & !WT0.Q & WT2.Q));
 
-!SFA4 = (XXL_638
-	# (!AIDX5.Q & S2 & !WT0.Q & WT2.Q));
+!SFA4 = ((S2 & WT2.Q & !WT0.Q & !WT1.Q & !T3.Q & HGBL.Q & !T0.Q & T2.Q)
+	# (S2 & WT2.Q & !WT1.Q & !T3.Q & !T1.Q & !T0.Q & !T2.Q & HSTAGE.Q)
+	# (S2 & !T3.Q & !T1.Q & !T0.Q & !T2.Q & !S0)
+	# (S2 & !WT2.Q & !WC1.Q)
+	# (S2 & !BUSY.Q)
+	# (!S1 & XXL_495)
+	# (!S0 & !S1)
+	# (S2 & WT2.Q & WT0.Q & XXL_564)
+	# (S2 & WT2.Q & !WT0.Q & !AIDX5.Q)
+	# (S2 & WT2.Q & WT0.Q & WT1.Q)
+	# (S2 & WT2.Q & !WT0.Q & !WT1.Q & !T3.Q & T1.Q & XXL_542));
 
-!SFOE = ((BUSY.Q & !WT0.Q & !WT1.Q & !T3.Q & !T1.Q & T0.Q & T2.Q)
+!SFOE = ((BUSY.Q & T3.Q & !T2.Q & !WT1.Q & WT2.Q & !WT0.Q & !T1.Q & !T0.Q)
 	# !S2
 	# (!S0 & !S1)
-	# (BUSY.Q & !T3.Q & !T0.Q & !T2.Q & !WT2.Q & XXL_446)
-	# (BUSY.Q & !WT0.Q & WT1.Q & !T3.Q & !T1.Q & !T0.Q & !WT2.Q)
-	# (BUSY.Q & !WT0.Q & !WT1.Q & !T3.Q & T1.Q & !T2.Q & !WT2.Q)
-	# (BUSY.Q & WT0.Q & !WT1.Q & !T3.Q & !T1.Q & !T0.Q & T2.Q)
-	# (BUSY.Q & WT0.Q & !WT1.Q & !T3.Q & T2.Q & WT2.Q)
-	# (BUSY.Q & !WT0.Q & !WT1.Q & !T3.Q & !T1.Q & T0.Q & WT2.Q & HCOMMIT.Q & !HRW.Q)
-	# (BUSY.Q & !WT0.Q & !WT1.Q & !T3.Q & T1.Q & T0.Q & !T2.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q));
+	# (BUSY.Q & !T3.Q & !T2.Q & !WT2.Q & !T1.Q & !T0.Q & S0 & S1 & XXL_374)
+	# (BUSY.Q & !T3.Q & T2.Q & !WT2.Q & T1.Q & !T0.Q & XXL_374)
+	# (BUSY.Q & !T3.Q & T2.Q & !WT1.Q & T1.Q & !T0.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q)
+	# (BUSY.Q & !T3.Q & !T2.Q & T1.Q & T0.Q & XXL_381)
+	# (BUSY.Q & !T3.Q & !T2.Q & !WT1.Q & !WT2.Q & !WT0.Q & T1.Q)
+	# (BUSY.Q & !T3.Q & T2.Q & !WT1.Q & WT2.Q & WT0.Q));
 
-SFWE0 = ((BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & WT2.Q & !WT1.Q & !T2.Q & !WT0.Q & T1.Q & HCOMMIT.Q & !HRW.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & WT2.Q & !WT1.Q & !T2.Q & !WT0.Q & !T1.Q & !HRW.Q & !PFLANE.Q & !HL1.Q & HWE.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & !WT1.Q & T2.Q & !WT0.Q & XXL_426)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & T0.Q & !WT2.Q & XXL_385));
+SFWE0 = ((BUSY.Q & S2 & XXL_373 & XXL_462)
+	# (BUSY.Q & S2 & !PFLANE.Q & !HL1.Q & !HRW.Q & HWE.Q & !T0.Q & !T3.Q & !WT1.Q & WT2.Q & !T2.Q & !T1.Q & !WT0.Q & S0 & S1));
 
-!SROE = ((BUSY.Q & S2 & !T2.Q & !T3.Q & XXL_374 & !T0.Q & !T1.Q & !WT2.Q & !WT0.Q & !WT1.Q)
-	# (BUSY.Q & S2 & !T2.Q & !T3.Q & XXL_374 & T0.Q & T1.Q & WT2.Q & !WT0.Q & !WT1.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & HRW.Q));
+!SROE = ((BUSY.Q & S2 & !T0.Q & !T3.Q & !WT1.Q & !WT2.Q & !T2.Q & !T1.Q & !WT0.Q & S0 & S1)
+	# (BUSY.Q & S2 & !T0.Q & !T3.Q & !WT1.Q & WT2.Q & T2.Q & T1.Q & !WT0.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & HRW.Q & XXL_373));
 
-SFWE1 = ((BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & !WT1.Q & T2.Q & !WT0.Q & XXL_426)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & WT2.Q & !WT1.Q & !T2.Q & !WT0.Q & T1.Q & !HRW.Q & HCOMMIT.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & WT2.Q & !WT1.Q & !T2.Q & !WT0.Q & !T1.Q & !HRW.Q & PFLANE.Q & !HL1.Q & HWE.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & T0.Q & !WT2.Q & XXL_385));
+SFWE1 = ((BUSY.Q & S2 & XXL_373 & XXL_462)
+	# (BUSY.Q & S2 & PFLANE.Q & !HL1.Q & !HRW.Q & HWE.Q & !T0.Q & !T3.Q & !WT1.Q & WT2.Q & !T2.Q & !T1.Q & !WT0.Q & S0 & S1));
 
-SFWE2 = ((BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & WT2.Q & !WT1.Q & !T2.Q & !WT0.Q & T1.Q & HW1.Q & HCOMMIT.Q & !HRW.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & WT2.Q & !WT1.Q & !T2.Q & !WT0.Q & !T1.Q & !HRW.Q & !PFLANE.Q & HL1.Q & HWE.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & !WT1.Q & T2.Q & !WT0.Q & XXL_426)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & T0.Q & !WT2.Q & XXL_413));
+SFWE2 = ((BUSY.Q & S2 & !T3.Q & T0.Q & XXL_373 & XXL_382)
+	# (BUSY.Q & S2 & !T3.Q & !T0.Q & T2.Q & !T1.Q & XXL_373 & !WT2.Q & XXL_374)
+	# (BUSY.Q & S2 & !T3.Q & !T0.Q & !T2.Q & !HRW.Q & !WT1.Q & !T1.Q & !WT0.Q & WT2.Q & !PFLANE.Q & HL1.Q & HWE.Q & S0 & S1)
+	# (BUSY.Q & S2 & !T3.Q & !T0.Q & T2.Q & !HRW.Q & !WT1.Q & !T1.Q & !WT0.Q & XXL_373 & HCOMMIT.Q & HW1.Q));
 
-!SRWE = (BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & !HRW.Q & S2 & T1.Q & !T2.Q & WT2.Q & XXL_374 & T0.Q & !T3.Q & !WT0.Q & !WT1.Q);
+!SRWE = (BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & !HRW.Q & S2 & !T0.Q & !WT0.Q & !WT1.Q & WT2.Q & XXL_373 & T1.Q & T2.Q & !T3.Q);
 
-!SUMOE = ((BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & !WT1.Q & !T2.Q & !WT0.Q & WT2.Q & T1.Q & HCOMMIT.Q & !HRW.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & T0.Q & !WT2.Q & XXL_385)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & !WT1.Q & T2.Q & !WT0.Q & XXL_426));
+!SUMOE = (BUSY.Q & S2 & XXL_373 & XXL_462);
 
-!T0.D = (XXL_639
-	# (!T0.Q & !S0 & !S1));
+!T0.D = ((!S0 & !S1 & !T0.Q)
+	# (!T0.Q & !T1.Q & !T2.Q & !T3.Q & XXL_560)
+	# (!T0.Q & T3.Q & XXL_444)
+	# (!T0.Q & FB_606)
+	# (BUSY.Q & S2 & T0.Q & XXL_373));
 
-!T1.D = ((!T1.Q & !T3.Q & !WT1.Q & XXL_419)
-	# (!T1.Q & FB_630)
-	# (T1.Q & !T3.Q & !WT1.Q & BUSY.Q & S2 & T2.Q & !WT0.Q & !WT2.Q & XXL_374)
-	# (T1.Q & BUSY.Q & S2 & XXL_374 & T0.Q)
-	# (!S0 & !S1 & !T1.Q));
+!T1.D = ((T1.Q & BUSY.Q & S2 & XXL_373 & !T2.Q & T3.Q & !WT0.Q & WT1.Q & !WT2.Q)
+	# (T1.Q & BUSY.Q & S2 & XXL_373 & T0.Q)
+	# (!T1.Q & XXL_557));
 
-T2.D = ((!T1.Q & T2.Q & WT1.Q)
-	# XXL_640
-	# XXL_641
-	# (!T1.Q & T2.Q & WT2.Q & T0.Q & WT0.Q));
+!T2.D = ((!T2.Q & !S0 & !S1)
+	# (!T1.Q & S2 & BUSY.Q & XXL_373 & !T0.Q & T3.Q & WT0.Q & !WT1.Q & WT2.Q)
+	# (T2.Q & T1.Q & S2 & BUSY.Q & XXL_373 & T0.Q)
+	# (!T2.Q & !T0.Q)
+	# (!T2.Q & !BUSY.Q)
+	# (!T2.Q & !S2)
+	# (!T2.Q & !T1.Q));
 
-!T3.D = ((BUSY.Q & S2 & T0.Q & T1.Q & T2.Q & XXL_374 & T3.Q)
-	# (!WT0.Q & WT1.Q & !WT2.Q & !T3.Q)
-	# (!BUSY.Q & !T3.Q)
-	# XXL_642
-	# (BUSY.Q & S2 & !T0.Q & !T1.Q & T2.Q & WT0.Q & !WT1.Q & WT2.Q & XXL_374));
+!T3.D = ((!T3.Q & !WT1.Q & !WT2.Q)
+	# (!T3.Q & FB_604)
+	# (BUSY.Q & S2 & T0.Q & T1.Q & T2.Q & T3.Q & XXL_373)
+	# (BUSY.Q & S2 & !T0.Q & XXL_373 & XXL_444));
 
-VDIRTY.D = ((AIDX0.Q & AIDX1.Q & AIDX2.Q & !AIDX3.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & !HRW.Q & S2 & !T0.Q & !T1.Q & !T2.Q & !T3.Q & !WT0.Q & !WT1.Q & WT2.Q & XXL_374)
-	# (VDIRTY.Q & XXL_617));
+VDIRTY.D = ((VDIRTY.Q & XXL_590)
+	# (AIDX0.Q & AIDX1.Q & AIDX2.Q & !AIDX3.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & !HRW.Q & S0 & S1 & S2 & !T0.Q & !T1.Q & !T2.Q & !T3.Q & !WT0.Q & !WT1.Q & WT2.Q));
 
-VPA.D = ((VPA.Q & XXL_411)
-	# (BUSY.Q & S2 & !T1.Q & T2.Q & WT0.Q & !WT1.Q & WT2.Q & XXL_374 & T0.Q & !T3.Q));
+VPA.D = ((BUSY.Q & S2 & !T1.Q & WT0.Q & !WT1.Q & WT2.Q & XXL_373 & T0.Q & T2.Q & !T3.Q)
+	# (VPA.Q & XXL_411));
 
-VPB.D = ((VPB.Q & XXL_410)
-	# (BUSY.Q & S2 & T0.Q & WT0.Q & !WT1.Q & WT2.Q & XXL_374 & T1.Q & T2.Q & !T3.Q));
+VPB.D = ((BUSY.Q & S2 & T1.Q & WT0.Q & !WT1.Q & WT2.Q & XXL_373 & T0.Q & T2.Q & !T3.Q)
+	# (VPB.Q & XXL_410));
 
-WC0.D = (XXL_643
-	# (!RST0.Q & !RST2.Q & !DUE0.Q & !DUE2.Q & WC0.Q & !HDUE.Q & !VDIRTY.Q));
+WC0.D = ((!RST0.Q & !RST2.Q & !DUE0.Q & !DUE2.Q & WC0.Q & !HDUE.Q & !VDIRTY.Q)
+	# (!RST0.Q & !RST2.Q & !DUE0.Q & !BUSY.Q & S2 & XXL_373 & DUE1.Q)
+	# (WC0.Q & XXL_540)
+	# (!RST0.Q & !RST2.Q & !BUSY.Q & S2 & XXL_373 & RST3.Q)
+	# (!RST0.Q & !BUSY.Q & S2 & XXL_373 & RST1.Q)
+	# (!RST0.Q & !RST2.Q & !DUE0.Q & !DUE2.Q & DUE3.Q & !BUSY.Q & S2 & XXL_373));
 
-WROTE0.D = ((BUSY.Q & S2 & !T0.Q & !T1.Q & !WC0.Q & !WC1.Q & !WT1.Q & XXL_374 & T2.Q & !WT0.Q & !T3.Q & !WT2.Q)
+WROTE0.D = ((BUSY.Q & S2 & !T0.Q & T2.Q & !T3.Q & !WC0.Q & !WC1.Q & !WT1.Q & !WT2.Q & XXL_373 & !T1.Q & !WT0.Q)
 	# (WROTE0.Q & XXL_411));
 
-WC1.D = ((WC1.Q & XXL_537)
-	# (!RST0.Q & !RST1.Q & !DUE0.Q & !DUE1.Q & !BUSY.Q & S2 & XXL_374 & XXL_544)
-	# (!RST0.Q & !RST1.Q & !BUSY.Q & S2 & XXL_374 & RST2.Q)
-	# (!RST0.Q & !RST1.Q & !BUSY.Q & S2 & XXL_374 & RST3.Q)
-	# (!RST0.Q & !RST1.Q & !DUE0.Q & !DUE1.Q & WC1.Q & !HDUE.Q & !VDIRTY.Q));
+WC1.D = ((!RST1.Q & !RST0.Q & !BUSY.Q & S2 & XXL_373 & RST2.Q)
+	# (!RST1.Q & !RST0.Q & !BUSY.Q & S2 & XXL_373 & RST3.Q)
+	# (!DUE0.Q & !DUE1.Q & !RST1.Q & !RST0.Q & WC1.Q & !HDUE.Q & !VDIRTY.Q)
+	# (WC1.Q & XXL_540)
+	# (!DUE0.Q & !DUE1.Q & XXL_550 & !RST1.Q & !RST0.Q & !BUSY.Q & S2 & XXL_373));
 
-WROTE1.D = ((BUSY.Q & S2 & !T0.Q & !T1.Q & WC0.Q & !WC1.Q & !WT1.Q & XXL_374 & T2.Q & !WT0.Q & !T3.Q & !WT2.Q)
+WROTE1.D = ((BUSY.Q & S2 & !T0.Q & T2.Q & !T3.Q & WC0.Q & !WC1.Q & !WT1.Q & !WT2.Q & XXL_373 & !T1.Q & !WT0.Q)
 	# (WROTE1.Q & XXL_411));
 
-WROTE2.D = ((BUSY.Q & S2 & !T0.Q & !T1.Q & !WC0.Q & WC1.Q & !WT1.Q & XXL_374 & T2.Q & !WT0.Q & !T3.Q & !WT2.Q)
+WROTE2.D = ((BUSY.Q & S2 & !T0.Q & T2.Q & !T3.Q & !WC0.Q & WC1.Q & !WT1.Q & !WT2.Q & XXL_373 & !T1.Q & !WT0.Q)
 	# (WROTE2.Q & XXL_410));
 
-WROTE3.D = ((BUSY.Q & S2 & !T0.Q & !T1.Q & WC0.Q & WC1.Q & !WT1.Q & XXL_374 & T2.Q & !WT0.Q & !T3.Q & !WT2.Q)
+WROTE3.D = ((BUSY.Q & S2 & !T0.Q & T2.Q & !T3.Q & WC0.Q & WC1.Q & !WT1.Q & !WT2.Q & XXL_373 & !T1.Q & !WT0.Q)
 	# (WROTE3.Q & XXL_410));
 
-WT0.D = ((!BUSY.Q & S2 & XXL_374 & !DUE0.Q & !DUE1.Q & !HDUE.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !DUE2.Q & !DUE3.Q & VDIRTY.Q)
-	# (!DUE0.Q & !DUE1.Q & !HDUE.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !DUE2.Q & !DUE3.Q & WT0.Q)
-	# (WT0.Q & XXL_537)
-	# (BUSY.Q & S2 & XXL_374 & !ACOUT & !T0.Q & !WT1.Q & !WT2.Q & T1.Q & T2.Q & !T3.Q));
+WT0.D = ((BUSY.Q & S2 & XXL_373 & !ACOUT & T1.Q & !WT1.Q & !WT2.Q & T0.Q & T2.Q & !T3.Q)
+	# (!BUSY.Q & S2 & XXL_373 & !DUE0.Q & !DUE1.Q & !HDUE.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !DUE2.Q & !DUE3.Q & VDIRTY.Q)
+	# (WT0.Q & !DUE0.Q & !DUE1.Q & !HDUE.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !DUE2.Q & !DUE3.Q)
+	# (WT0.Q & XXL_540));
 
-WT1.D = ((WT1.Q & !S2)
-	# (WT1.Q & !S0 & !S1)
-	# (!BUSY.Q & S2 & XXL_374 & XXL_447)
-	# (!BUSY.Q & WT1.Q & !DUE0.Q & !DUE1.Q & !DUE2.Q & !DUE3.Q & !HDUE.Q & !VDIRTY.Q)
-	# (BUSY.Q & WT1.Q & XXL_618));
+WT1.D = ((BUSY.Q & WT1.Q & XXL_595)
+	# (!S0 & !S1 & WT1.Q)
+	# (!BUSY.Q & S2 & XXL_373 & XXL_431)
+	# (!BUSY.Q & !DUE0.Q & !DUE1.Q & !DUE2.Q & !DUE3.Q & !HDUE.Q & !VDIRTY.Q & WT1.Q)
+	# (!S2 & WT1.Q));
 
-WT2.D = ((!DUE0.Q & !DUE1.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !DUE2.Q & !DUE3.Q & WT2.Q)
-	# (WT2.Q & XXL_537)
-	# (!DUE0.Q & !DUE1.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & XXL_441 & !BUSY.Q & S2 & XXL_374 & !DUE2.Q & !DUE3.Q));
+WT2.D = ((!DUE0.Q & !DUE1.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & XXL_426 & !BUSY.Q & S2 & XXL_373 & !DUE2.Q & !DUE3.Q)
+	# (WT2.Q & !DUE0.Q & !DUE1.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !DUE2.Q & !DUE3.Q)
+	# (WT2.Q & XXL_540));
 
-!PFVALID.D = ((!PFCK & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
-	# (!PFCK & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & T0.Q & !T3.Q)
-	# (!PFCK & !PFVALID.Q));
+!PFVALID.D = ((!PFCK & !PFVALID.Q)
+	# (!PFCK & !A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
+	# (!PFCK & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & T3.Q & !WT1.Q & WT2.Q & XXL_373 & !T0.Q & !T2.Q & !T1.Q & !WT0.Q));
 
-!SDH0 = ((!ACOUT & !SDQ0.Q & ONESOE)
-	# (ACOUT & SDQ0.Q & ACIN & ONESOE & BLATOE)
-	# (ACOUT & !SDQ0.Q & !ACIN & BLATOE)
-	# (!ACOUT & SDQ0.Q & !ACIN & XXL_555));
+!SDH0 = ((!ACOUT & SDQ0.Q & !ACIN & XXL_556)
+	# (!ACOUT & !SDQ0.Q & ONESOE)
+	# (ACOUT & SDQ0.Q & ACIN & BLATOE & ONESOE)
+	# (ACOUT & !SDQ0.Q & !ACIN & BLATOE));
 
-SDH1 = ((SDQ1.Q & !ONESOE & ACOUT)
-	# XXL_644
-	# (SDQ1.Q & ONESOE & !ACIN & BLATOE));
+SDH1 = ((SDQ1.Q & !ACOUT & ACIN)
+	# (!SDQ1.Q & !ACOUT & !ONESOE & !SDQ0.Q)
+	# (SDQ1.Q & ACIN & !SDQ0.Q)
+	# (SDQ1.Q & !ONESOE & SDQ0.Q)
+	# (!SDQ1.Q & ACOUT & ACIN & SDQ0.Q)
+	# (SDQ1.Q & ONESOE & !ACIN & BLATOE)
+	# (SDQ1.Q & ACOUT & !ONESOE));
 
-SDH2 = ((SDQ2.Q & !ONESOE & SDQ1.Q)
-	# (SDQ2.Q & ONESOE & !ACIN & BLATOE)
-	# (!SDQ2.Q & ACOUT & SDQ1.Q & ACIN & SDQ0.Q)
+SDH2 = ((SDQ2.Q & !ONESOE & ACOUT)
+	# (SDQ2.Q & SDQ1.Q & !ONESOE)
+	# (SDQ2.Q & !ACIN & ONESOE & BLATOE)
+	# (!SDQ2.Q & ACIN & SDQ1.Q & ACOUT & SDQ0.Q)
 	# (SDQ2.Q & !ONESOE & SDQ0.Q)
-	# (!SDQ2.Q & !ONESOE & !ACOUT & !SDQ1.Q & !SDQ0.Q)
-	# (SDQ2.Q & !ACOUT & ACIN)
+	# (!SDQ2.Q & !SDQ1.Q & !ONESOE & !ACOUT & !SDQ0.Q)
+	# (SDQ2.Q & ACIN & !ACOUT)
 	# (SDQ2.Q & ACIN & !SDQ0.Q)
-	# (SDQ2.Q & !SDQ1.Q & ACIN)
-	# (SDQ2.Q & !ONESOE & ACOUT));
+	# (SDQ2.Q & ACIN & !SDQ1.Q));
 
-Com_Ctrl_367 = ((BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & !WT1.Q & T1.Q & XXL_379)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & WT2.Q & !WT1.Q & !T1.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & T2.Q & !WT0.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & T0.Q & !WT2.Q & XXL_413));
+Com_Ctrl_367 = ((BUSY.Q & S2 & !T3.Q & XXL_373 & !T0.Q & !T1.Q & T2.Q & !WT1.Q & !WT0.Q & WT2.Q & HCOMMIT.Q & !HRW.Q)
+	# (BUSY.Q & S2 & !T3.Q & XXL_373 & !T0.Q & !T1.Q & T2.Q & WT1.Q & !WT0.Q & !WT2.Q)
+	# (BUSY.Q & S2 & !T3.Q & XXL_373 & T0.Q & XXL_382)
+	# (BUSY.Q & S2 & !T3.Q & XXL_373 & !T0.Q & !T1.Q & T2.Q & !WT1.Q & WT0.Q & !WT2.Q));
 
-!XXL_374 = (!S0 & !S1);
+!XXL_373 = (!S0 & !S1);
 
-!XXL_376 = (T2.Q & !WT0.Q);
+!XXL_374 = (WT0.Q & WT1.Q);
 
-!XXL_378 = (HSY1.Q & !HSY2.Q & PWBUSY.Q & !RW);
+XXL_376 = ((HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & !WT0.Q & !WT1.Q)
+	# (!WT2.Q & XXL_374));
 
-XXL_379 = ((WT2.Q & !T2.Q & !WT0.Q & HCOMMIT.Q & !HRW.Q)
-	# (!WT2.Q & T2.Q & !WT0.Q));
+!XXL_377 = (HSY1.Q & !HSY2.Q & PWBUSY.Q & !RW);
 
-XXL_380 = ((!WT1.Q & XXL_376)
-	# (WT1.Q & !WT0.Q));
+XXL_381 = ((HCOMMIT.Q & !HRW.Q & !WT0.Q & !WT1.Q)
+	# (!WT2.Q & XXL_374));
 
-XXL_385 = ((WT1.Q & !WT0.Q)
-	# (!WT1.Q & !T1.Q & XXL_376)
-	# (!WT1.Q & !T2.Q & WT0.Q));
+XXL_382 = ((!T1.Q & !T2.Q & !WT2.Q & XXL_374)
+	# (T1.Q & T2.Q & XXL_376));
 
-!XXL_388 = (AIDX2.Q & AIDX3.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & AIDX0.Q & AIDX1.Q & T0.Q & !T3.Q);
+!XXL_387 = (AIDX2.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & T3.Q & !WT1.Q & WT2.Q & XXL_373 & AIDX0.Q & AIDX1.Q & !T0.Q & !T2.Q & !T1.Q & !WT0.Q);
 
-XXL_392 = ((WT0.Q & !WT1.Q)
-	# (!WT0.Q & WT1.Q));
+XXL_391 = ((T1.Q & T2.Q & XXL_373 & XXL_376)
+	# (!T1.Q & !T2.Q & !WT2.Q & XXL_374 & S0 & S1));
 
-!XXL_399 = (AIDX0.Q & BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & T0.Q & !T3.Q);
+XXL_394 = ((T2.Q & WT0.Q)
+	# (!T2.Q & !WT0.Q));
 
-!XXL_400 = (BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & !T1.Q & !WT1.Q & WT2.Q & XXL_374 & T2.Q & !WT0.Q & T0.Q & !T3.Q);
+!XXL_398 = (BUSY.Q & HA0.Q & !HA1.Q & !HA2.Q & !HA3.Q & S2 & T3.Q & !WT1.Q & WT2.Q & XXL_373 & !T0.Q & !T2.Q & !T1.Q & !WT0.Q);
 
 !XXL_401 = (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW);
 
-!XXL_404 = (!A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW);
+!XXL_403 = (!A0 & !A1 & !A2 & !A3 & HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW);
 
-XXL_405 = ((!T0.Q & !T1.Q & !WT2.Q & XXL_380)
-	# (T0.Q & !WT1.Q & !T1.Q & XXL_379)
-	# (T0.Q & !WT1.Q & T1.Q & HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & !T2.Q & !WT0.Q & WT2.Q));
+XXL_408 = ((!T0.Q & WT2.Q & XXL_599)
+	# (T0.Q & XXL_598)
+	# (!T1.Q & WT2.Q)
+	# (WT0.Q & WT2.Q)
+	# (WT1.Q & WT2.Q)
+	# !BUSY.Q
+	# !S2
+	# T3.Q
+	# (!S0 & !S1)
+	# (WT0.Q & WT1.Q)
+	# (!T0.Q & T1.Q & !T2.Q)
+	# (!T1.Q & XXL_413));
+
+XXL_409 = ((T0.Q & HCOMMIT.Q & !HRW.Q & T1.Q & !T2.Q & !WT0.Q & !WT1.Q & WT2.Q & XXL_373)
+	# (!T0.Q & XXL_391));
 
 !XXL_410 = (S0 & !S1 & !S2 & S3);
 
 !XXL_411 = (S0 & !S1 & !S2 & !S3);
 
-XXL_413 = ((!T2.Q & XXL_392)
-	# (!T1.Q & XXL_380));
+!XXL_413 = (!T2.Q & S0 & S1);
 
-XXL_417 = (XXL_645
-	# XXL_646
-	# XXL_647
-	# (T0.Q & XXL_614));
+XXL_425 = ((T0.Q & WT1.Q)
+	# (!T0.Q & !WT1.Q));
 
-XXL_418 = ((HGBL.Q & T1.Q)
-	# T0.Q);
+!XXL_426 = (!HDUE.Q & !VDIRTY.Q);
 
-XXL_419 = ((!WT2.Q & T2.Q & WT0.Q)
-	# (WT2.Q & T2.Q & !WT0.Q));
+!XXL_428 = (A0 & !A1 & !A2);
 
-XXL_426 = ((HA0.Q & !HA1.Q & !HA2.Q & HA3.Q & !T1.Q)
-	# !WT2.Q);
+!XXL_429 = (AIDX0.Q & AIDX1.Q);
 
-!XXL_438 = (HCOMMIT.Q & !HRW.Q);
+!XXL_430 = (!ACOUT & !WT0.Q);
 
-!XXL_441 = (!HDUE.Q & !VDIRTY.Q);
+!XXL_431 = (!RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q);
 
-!XXL_443 = (A0 & !A1 & !A2);
+XXL_444 = ((T1.Q & WT1.Q & !WT2.Q & !T2.Q & !WT0.Q)
+	# (!T1.Q & !WT1.Q & WT2.Q & XXL_394));
 
-!XXL_444 = (AIDX0.Q & AIDX1.Q);
+XXL_462 = ((T3.Q & !T0.Q & T1.Q & !T2.Q & !WT0.Q & WT1.Q & !WT2.Q)
+	# (!T3.Q & T0.Q & XXL_382)
+	# (!T3.Q & !T0.Q & !T1.Q & T2.Q & XXL_381));
 
-!XXL_446 = (WT0.Q & WT1.Q);
-
-!XXL_447 = (!RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q);
-
-XXL_496 = ((!T0.Q & !T1.Q & T2.Q)
-	# (!T2.Q & XXL_418)
-	# (!T0.Q & !T1.Q & HSTAGE.Q));
-
-XXL_499 = (T2.Q
-	# (!HSTAGE.Q & !T0.Q)
-	# T1.Q);
-
-XXL_520 = (HSY2.Q
-	# (RW & XXL_443)
-	# !HSY1.Q);
-
-!XXL_537 = (!BUSY.Q & S2 & XXL_374);
-
-!XXL_542 = (!AIDX1.Q & !AIDX2.Q);
-
-!XXL_543 = (AIDX1.Q & AIDX2.Q);
-
-!XXL_544 = (!DUE2.Q & !DUE3.Q);
-
-!XXL_555 = (BLATOE & ONESOE);
-
-!XXL_556 = (!T1.Q & T3.Q);
-
-!XXL_557 = (!T3.Q & !WT2.Q);
-
-!XXL_561 = (!RST1.Q & !RST0.Q & !BUSY.Q & S2 & XXL_374);
-
-!XXL_564 = (!T2.Q & !WT2.Q);
-
-!XXL_565 = (!AIDX2.Q & XXL_444);
-
-XXL_598 = ((HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW)
-	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & A0 & !A1 & !A2));
-
-!XXL_614 = (!WT0.Q & !WT1.Q);
-
-!XXL_616 = (!RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !BUSY.Q & S2 & XXL_374);
-
-!XXL_617 = (!DUE0.Q & !DUE1.Q & !HDUE.Q & !DUE2.Q & !DUE3.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !BUSY.Q & S2 & XXL_374);
-
-!XXL_618 = (T1.Q & !WT2.Q & T2.Q & !WT0.Q & T0.Q & !T3.Q);
-
-!FB_620 = (T1.Q & !WT1.Q & !ACOUT & BUSY.Q & S2 & !T0.Q & T2.Q & !WT0.Q & !T3.Q & !WT2.Q);
-
-!XXL_621 = (CTRL7 & DMAEN3 & !NEQH & !NEQL & S0 & S1 & !S2);
-
-!XXL_622 = (CTRL7 & DMAEN2 & !NEQH & !NEQL & !S0 & S1 & !S2);
-
-!FB_624 = (!WT1.Q & WT2.Q & BUSY.Q & S2 & !T1.Q & T2.Q & !WT0.Q & T0.Q & !T3.Q);
-
-!XXL_625 = (S0 & S2);
-
-!XXL_626 = (!WT1.Q & T1.Q & T2.Q & !T3.Q);
-
-!XXL_627 = (S1 & S2);
-
-!XXL_628 = (!WT1.Q & T0.Q & !T3.Q);
-
-!FB_630 = (T0.Q & BUSY.Q & S2);
-
-XXL_631 = ((!BUSY.Q & !S0 & !S1)
-	# (BUSY.Q & S2 & XXL_374 & !WT1.Q & T1.Q & !T0.Q & T2.Q & !WT0.Q & ACOUT & !T3.Q & !WT2.Q)
-	# (BUSY.Q & S2 & XXL_374 & !WT1.Q & !T1.Q & T0.Q & !T3.Q & XXL_419)
-	# (BUSY.Q & S2 & XXL_374 & !WT1.Q & !T1.Q & !T0.Q & T2.Q & WT0.Q & T3.Q & WT2.Q)
-	# (!BUSY.Q & !S2));
-
-XXL_632 = ((!T1.Q & !T0.Q & !WT2.Q & !WT0.Q & !WT1.Q)
-	# (!T0.Q & WT2.Q & T2.Q)
-	# (WT0.Q & WT1.Q)
-	# !BUSY.Q
-	# (T1.Q & XXL_564 & T0.Q));
-
-XXL_633 = (T3.Q
-	# (!S0 & !S1)
-	# (WT2.Q & !HW0.Q & XXL_499)
-	# (WT2.Q & XXL_614)
+XXL_495 = ((!T1.Q & !T3.Q & !T0.Q & !T2.Q)
 	# !S2);
 
-XXL_634 = ((T1.Q & T2.Q & !WT0.Q)
-	# (T2.Q & !WT0.Q & !HW1.Q & T0.Q)
-	# (!WT2.Q & T2.Q)
-	# (WT0.Q & WT1.Q)
-	# (!WT2.Q & T1.Q));
+XXL_532 = (!HSY1.Q
+	# HSY2.Q
+	# (RW & XXL_428));
 
-XXL_635 = (!S2
-	# T3.Q
-	# (!S0 & !S1)
-	# (WT2.Q & !T2.Q & !HW1.Q & !T0.Q)
-	# !BUSY.Q);
+!XXL_540 = (!BUSY.Q & S2 & XXL_373);
 
-XXL_636 = ((BUSY.Q & S2 & !T3.Q & XXL_374 & !T1.Q & !WT1.Q & WT2.Q & !WT0.Q & !T2.Q & HSTAGE.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & !WT1.Q & WT2.Q & !WT0.Q & !T2.Q & HW2.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !WT1.Q & WT2.Q & WT0.Q & T2.Q)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & !T0.Q & T1.Q & !WT2.Q & !T2.Q & XXL_446)
-	# (BUSY.Q & S2 & !T3.Q & XXL_374 & T0.Q & !T1.Q & !WT1.Q & WT2.Q & !WT0.Q & !T2.Q));
+!XXL_542 = (!T0.Q & !T2.Q);
 
-XXL_637 = ((!S0 & XXL_627)
-	# (S2 & !WT2.Q & !WC0.Q)
-	# (S2 & !BUSY.Q)
-	# (S2 & WT2.Q & !T3.Q & !WT1.Q & XXL_496)
-	# (S2 & WT0.Q & WT2.Q & XXL_628));
+!XXL_546 = (!T1.Q & !WT0.Q);
 
-XXL_638 = ((!S1 & XXL_625)
-	# (S2 & !WT2.Q & !WC1.Q)
-	# (S2 & !BUSY.Q)
-	# (S2 & WT2.Q & !T3.Q & !WT1.Q & XXL_496)
-	# (S2 & WT0.Q & WT2.Q & XXL_626));
+!XXL_547 = (!AIDX1.Q & !AIDX2.Q);
 
-XXL_639 = ((!T0.Q & !WT1.Q & T1.Q & T2.Q & !WT0.Q & !T3.Q & !WT2.Q)
-	# (!T0.Q & !WT1.Q & !T1.Q & T2.Q & WT0.Q & T3.Q & WT2.Q)
-	# (!T0.Q & !BUSY.Q)
-	# (!T0.Q & !S2)
-	# (T0.Q & S2 & BUSY.Q & XXL_374));
+!XXL_548 = (AIDX1.Q & AIDX2.Q);
 
-XXL_640 = ((T2.Q & !BUSY.Q)
-	# (T2.Q & !S2)
-	# (T2.Q & !S0 & !S1)
-	# (T2.Q & !T0.Q & !WT0.Q & XXL_557)
-	# (!T1.Q & T2.Q & !WT2.Q & T3.Q));
+!XXL_550 = (!DUE2.Q & !DUE3.Q);
 
-XXL_641 = ((T2.Q & !T0.Q & WT1.Q)
-	# (!T2.Q & T0.Q & T1.Q & BUSY.Q & S2 & XXL_374)
-	# (T2.Q & !WT0.Q & !T1.Q & !WT2.Q)
-	# (T2.Q & !WT0.Q & !T1.Q & T3.Q)
-	# (T2.Q & !T0.Q & WT0.Q & XXL_556));
+!XXL_554 = (T0.Q & T2.Q & !T3.Q);
 
-XXL_642 = ((!T3.Q & !T0.Q)
-	# (!T3.Q & !T1.Q)
-	# (!T3.Q & !T2.Q)
-	# (!T3.Q & !S0 & !S1)
-	# (!T3.Q & !S2));
+!XXL_556 = (BLATOE & ONESOE);
 
-XXL_643 = ((!RST0.Q & !BUSY.Q & S2 & XXL_374 & RST1.Q)
-	# (WC0.Q & XXL_537)
-	# (!RST0.Q & !RST2.Q & !BUSY.Q & S2 & XXL_374 & !DUE0.Q & !DUE2.Q & DUE3.Q)
-	# (!RST0.Q & !RST2.Q & !BUSY.Q & S2 & XXL_374 & !DUE0.Q & DUE1.Q)
-	# (!RST0.Q & !RST2.Q & RST3.Q & !BUSY.Q & S2 & XXL_374));
+!XXL_557 = (BUSY.Q & S2 & T0.Q & XXL_373);
 
-XXL_644 = ((!SDQ1.Q & !ACOUT & !ONESOE & !SDQ0.Q)
-	# (SDQ1.Q & ACIN & !SDQ0.Q)
-	# (SDQ1.Q & !ONESOE & SDQ0.Q)
-	# (!SDQ1.Q & ACOUT & ACIN & SDQ0.Q)
-	# (SDQ1.Q & !ACOUT & ACIN));
+!XXL_560 = (S0 & S1);
 
-XXL_645 = ((T1.Q & !HA0.Q)
-	# (T1.Q & HA1.Q)
-	# (T1.Q & HA2.Q)
-	# (T1.Q & !HA3.Q)
-	# (T0.Q & !T2.Q & !WT2.Q));
+!XXL_564 = (T1.Q & T2.Q & !T3.Q);
 
-XXL_646 = (!BUSY.Q
-	# !S2
-	# T3.Q
-	# (!S0 & !S1)
-	# (!WT2.Q & T1.Q));
+!XXL_566 = (!RST1.Q & !RST0.Q & !BUSY.Q & S2 & XXL_373);
 
-XXL_647 = ((!WT0.Q & !WT1.Q & !T0.Q & T2.Q)
-	# (WT2.Q & !T1.Q & XXL_438)
-	# (!T0.Q & WT2.Q)
-	# (T2.Q & WT2.Q)
-	# (WT0.Q & WT1.Q));
+!XXL_567 = (!AIDX2.Q & XXL_429);
+
+XXL_589 = ((HSY1.Q & !HSY2.Q & !PWBUSY.Q & A0 & !A1 & !A2)
+	# (HSY1.Q & !HSY2.Q & !PWBUSY.Q & !RW));
+
+!XXL_590 = (!DUE0.Q & !DUE1.Q & !HDUE.Q & !RST0.Q & !RST1.Q & !RST2.Q & !RST3.Q & !BUSY.Q & S2 & XXL_373 & !DUE2.Q & !DUE3.Q);
+
+!XXL_591 = (CTRL7 & DMAEN3 & !NEQH & !NEQL & !S2 & S0 & S1);
+
+!XXL_592 = (CTRL7 & DMAEN2 & !NEQH & !NEQL & !S0 & S1 & !S2);
+
+!XXL_593 = (CTRL7 & DMAEN1 & !NEQH & !NEQL & S0 & !S1 & !S2);
+
+!XXL_594 = (CTRL7 & DMAEN0 & !NEQH & !NEQL & !S2 & !S0 & !S1);
+
+!XXL_595 = (T1.Q & T3.Q & !WT0.Q & !WT2.Q & !T0.Q & !T2.Q);
+
+!FB_597 = (!WT2.Q & BUSY.Q & S2 & T1.Q & !WT1.Q & !ACOUT & !WT0.Q & T0.Q & T2.Q & !T3.Q);
+
+!XXL_598 = (HCOMMIT.Q & !HRW.Q & !T2.Q & WT2.Q);
+
+!XXL_599 = (HA0.Q & !HA1.Q & !HA2.Q & HA3.Q);
+
+!XXL_600 = (S1 & !XXL_495);
+
+!FB_602 = (!WT1.Q & WT2.Q & BUSY.Q & S2 & T3.Q & !T0.Q & !T2.Q & !T1.Q & !WT0.Q);
+
+!FB_604 = (T1.Q & T2.Q & BUSY.Q & S2 & T0.Q & XXL_373);
+
+!FB_606 = (BUSY.Q & S2);
 
 AIDX0.C = SLOTCLK;
 
@@ -1589,208 +1505,200 @@ SDH2.OE = Com_Ctrl_367;
 PLCC84 Pin/Node Placement:
 ------------------------------------
 Pin 1  = RESET;
-Pin 4  = PFVALID; /* MC 16 */
-Pin 5  = ONESOE; /* MC 14 */
-Pin 6  = ACIN; /* MC 13 */
-Pin 8  = CNTOE; /* MC 11 */
+Pin 4  = ACIN; /* MC 16 */
+Pin 5  = CNTOE; /* MC 14 */
+Pin 6  = BLATOE; /* MC 13 */
+Pin 8  = ONESOE; /* MC 11 */
 Pin 9  = SBOE; /* MC 8 */
-Pin 10 = RW; /* MC  6 */
-Pin 11 = ACOUT; /* MC  5 */
-Pin 12 = S1; /* MC  3 */
-Pin 14 = SFOE; /* MC 32 */ 
-Pin 15 = PFLANE; /* MC 29 */ 
-Pin 16 = ALATCK; /* MC 27 */ 
-Pin 17 = PFCK; /* MC 25 */ 
-Pin 18 = PWOE; /* MC 24 */ 
-Pin 20 = SROE; /* MC 21 */ 
-Pin 21 = SRWE; /* MC 19 */ 
-Pin 22 = BLATCK; /* MC 17 */ 
-Pin 23 = SFWE2; /* MC 48 */ 
-Pin 24 = SFWE1; /* MC 46 */ 
-Pin 25 = SFWE0; /* MC 45 */ 
-Pin 27 = CVC1; /* MC 43 */ 
-Pin 28 = SUMOE; /* MC 40 */ 
-Pin 29 = SETB; /* MC 38 */ 
-Pin 30 = SETA; /* MC 37 */ 
-Pin 31 = SETC; /* MC 35 */ 
-Pin 33 = CVC2; /* MC 64 */ 
-Pin 34 = CVC0; /* MC 61 */ 
-Pin 35 = DMAEN3; /* MC 59 */ 
-Pin 36 = A3; /* MC 57 */ 
-Pin 37 = A2; /* MC 56 */ 
-Pin 39 = A1; /* MC 53 */ 
-Pin 40 = A0; /* MC 51 */ 
-Pin 41 = S3; /* MC 49 */ 
-Pin 44 = DMAEN1; /* MC 65 */ 
-Pin 45 = DMAEN2; /* MC 67 */ 
-Pin 46 = DMAEN0; /* MC 69 */ 
-Pin 48 = D3; /* MC 72 */ 
-Pin 49 = SFA2; /* MC 73 */ 
-Pin 50 = BLATOE; /* MC 75 */ 
-Pin 51 = PWBUSY; /* MC 77 */ 
-Pin 52 = SFA5; /* MC 80 */ 
-Pin 54 = D5; /* MC 83 */ 
-Pin 55 = D2; /* MC 85 */ 
-Pin 56 = D4; /* MC 86 */ 
-Pin 57 = D1; /* MC 88 */ 
-Pin 58 = D0; /* MC 91 */ 
-Pin 60 = CTRL7; /* MC 93 */ 
-Pin 61 = NEQH; /* MC 94 */ 
-Pin 62 = PWCK; /* MC 96 */ 
-Pin 63 = NEQL; /* MC 97 */ 
-Pin 64 = E; /* MC 99 */ 
-Pin 65 = SEL; /* MC 101 */ 
-Pin 68 = SFA4; /* MC 105 */ 
-Pin 69 = SFA3; /* MC 107 */ 
-Pin 70 = SFA1; /* MC 109 */ 
-Pin 71 = SFA0; /* MC 112 */ 
-Pin 73 = S2; /* MC 115 */ 
-Pin 74 = S0; /* MC 117 */ 
-Pin 75 = CSSL; /* MC 118 */ 
-Pin 76 = SDH1; /* MC 120 */ 
-Pin 77 = CSSR; /* MC 123 */ 
-Pin 79 = CSV; /* MC 125 */ 
-Pin 80 = SDH0; /* MC 126 */ 
+Pin 10 = DMAEN2; /* MC  6 */
+Pin 11 = DMAEN3; /* MC  5 */
+Pin 12 = DMAEN0; /* MC  3 */
+Pin 14 = PFLANE; /* MC 32 */ 
+Pin 15 = PFCK; /* MC 29 */ 
+Pin 16 = PWOE; /* MC 27 */ 
+Pin 17 = SROE; /* MC 25 */ 
+Pin 18 = SRWE; /* MC 24 */ 
+Pin 20 = D2; /* MC 21 */ 
+Pin 21 = D5; /* MC 19 */ 
+Pin 22 = DMAEN1; /* MC 17 */ 
+Pin 23 = CVC1; /* MC 48 */ 
+Pin 24 = CVC2; /* MC 46 */ 
+Pin 25 = CVC0; /* MC 45 */ 
+Pin 27 = S2; /* MC 43 */ 
+Pin 28 = CTRL7; /* MC 40 */ 
+Pin 29 = D3; /* MC 38 */ 
+Pin 30 = D1; /* MC 37 */ 
+Pin 31 = D4; /* MC 35 */ 
+Pin 33 = SFOE; /* MC 64 */ 
+Pin 34 = PFVALID; /* MC 61 */ 
+Pin 35 = SETB; /* MC 59 */ 
+Pin 36 = PWBUSY; /* MC 57 */ 
+Pin 37 = SETC; /* MC 56 */ 
+Pin 39 = SETA; /* MC 53 */ 
+Pin 40 = S0; /* MC 51 */ 
+Pin 41 = NEQH; /* MC 49 */ 
+Pin 44 = SFWE0; /* MC 65 */ 
+Pin 45 = SFWE1; /* MC 67 */ 
+Pin 46 = ALATCK; /* MC 69 */ 
+Pin 48 = SFA1; /* MC 72 */ 
+Pin 49 = SFWE2; /* MC 73 */ 
+Pin 50 = SFA2; /* MC 75 */ 
+Pin 51 = SFA3; /* MC 77 */ 
+Pin 52 = SFA4; /* MC 80 */ 
+Pin 54 = NEQL; /* MC 83 */ 
+Pin 55 = D0; /* MC 85 */ 
+Pin 56 = E; /* MC 86 */ 
+Pin 57 = SUMOE; /* MC 88 */ 
+Pin 58 = BLATCK; /* MC 91 */ 
+Pin 60 = SFA5; /* MC 93 */ 
+Pin 61 = S1; /* MC 94 */ 
+Pin 62 = SFA0; /* MC 96 */ 
+Pin 63 = S3; /* MC 97 */ 
+Pin 64 = A0; /* MC 99 */ 
+Pin 65 = A1; /* MC 101 */ 
+Pin 67 = A2; /* MC 104 */ 
+Pin 68 = SEL; /* MC 105 */ 
+Pin 70 = PWCK; /* MC 109 */ 
+Pin 71 = CSSL; /* MC 112 */ 
+Pin 73 = A3; /* MC 115 */ 
+Pin 74 = RW; /* MC 117 */ 
+Pin 75 = CSV; /* MC 118 */ 
+Pin 76 = CSSR; /* MC 120 */ 
+Pin 77 = SDH0; /* MC 123 */ 
+Pin 79 = ACOUT; /* MC 125 */ 
+Pin 80 = SDH1; /* MC 126 */ 
 Pin 81 = SDH2; /* MC 128 */ 
 Pin 83 = SLOTCLK;
-PINNODE 305 = XXL_557; /* MC 5 Foldback */
-PINNODE 306 = XXL_556; /* MC 6 Foldback */
-PINNODE 307 = XXL_404; /* MC 7 Foldback */
-PINNODE 308 = XXL_401; /* MC 8 Foldback */
-PINNODE 311 = XXL_400; /* MC 11 Foldback */
-PINNODE 313 = XXL_399; /* MC 13 Foldback */
-PINNODE 314 = XXL_388; /* MC 14 Foldback */
-PINNODE 316 = XXL_374; /* MC 16 Foldback */
-PINNODE 319 = XXL_618; /* MC 19 Foldback */
-PINNODE 320 = XXL_617; /* MC 20 Foldback */
-PINNODE 321 = XXL_543; /* MC 21 Foldback */
-PINNODE 322 = XXL_444; /* MC 22 Foldback */
-PINNODE 323 = XXL_537; /* MC 23 Foldback */
-PINNODE 324 = XXL_447; /* MC 24 Foldback */
-PINNODE 325 = XXL_446; /* MC 25 Foldback */
-PINNODE 326 = XXL_542; /* MC 26 Foldback */
-PINNODE 327 = XXL_441; /* MC 27 Foldback */
-PINNODE 328 = XXL_374; /* MC 28 Foldback */
-PINNODE 339 = FB_620; /* MC 39 Foldback */
-PINNODE 340 = XXL_564; /* MC 40 Foldback */
-PINNODE 341 = XXL_438; /* MC 41 Foldback */
-PINNODE 343 = XXL_411; /* MC 43 Foldback */
-PINNODE 345 = XXL_410; /* MC 45 Foldback */
-PINNODE 346 = XXL_378; /* MC 46 Foldback */
-PINNODE 348 = XXL_374; /* MC 48 Foldback */
-PINNODE 352 = FB_630; /* MC 52 Foldback */
-PINNODE 353 = FB_624; /* MC 53 Foldback */
-PINNODE 354 = XXL_622; /* MC 54 Foldback */
-PINNODE 355 = XXL_621; /* MC 55 Foldback */
-PINNODE 356 = XXL_616; /* MC 56 Foldback */
-PINNODE 357 = XXL_561; /* MC 57 Foldback */
-PINNODE 359 = XXL_544; /* MC 59 Foldback */
-PINNODE 361 = XXL_537; /* MC 61 Foldback */
-PINNODE 364 = XXL_374; /* MC 64 Foldback */
-PINNODE 365 = XXL_628; /* MC 65 Foldback */
-PINNODE 366 = XXL_627; /* MC 66 Foldback */
-PINNODE 367 = XXL_626; /* MC 67 Foldback */
-PINNODE 369 = XXL_625; /* MC 69 Foldback */
-PINNODE 372 = XXL_614; /* MC 72 Foldback */
-PINNODE 373 = XXL_446; /* MC 73 Foldback */
-PINNODE 375 = XXL_411; /* MC 75 Foldback */
-PINNODE 377 = XXL_410; /* MC 77 Foldback */
-PINNODE 380 = XXL_374; /* MC 80 Foldback */
-PINNODE 389 = XXL_565; /* MC 89 Foldback */
-PINNODE 390 = XXL_543; /* MC 90 Foldback */
-PINNODE 391 = XXL_444; /* MC 91 Foldback */
-PINNODE 393 = XXL_443; /* MC 93 Foldback */
-PINNODE 394 = XXL_401; /* MC 94 Foldback */
-PINNODE 396 = XXL_374; /* MC 96 Foldback */
-PINNODE 407 = XXL_614; /* MC 107 Foldback */
-PINNODE 408 = XXL_376; /* MC 108 Foldback */
-PINNODE 425 = XXL_555; /* MC 125 Foldback */
-PINNODE 601 = AIDX1; /* MC 1 Feedback */
-PINNODE 602 = AIDX4; /* MC 2 Feedback */
-PINNODE 603 = HA1; /* MC 3 Feedback */
-PINNODE 604 = AIDX2; /* MC 4 Feedback */
+PINNODE 308 = XXL_557; /* MC 8 Foldback */
+PINNODE 309 = XXL_403; /* MC 9 Foldback */
+PINNODE 310 = XXL_401; /* MC 10 Foldback */
+PINNODE 311 = XXL_398; /* MC 11 Foldback */
+PINNODE 313 = XXL_387; /* MC 13 Foldback */
+PINNODE 314 = XXL_374; /* MC 14 Foldback */
+PINNODE 316 = XXL_373; /* MC 16 Foldback */
+PINNODE 318 = XXL_595; /* MC 18 Foldback */
+PINNODE 319 = XXL_590; /* MC 19 Foldback */
+PINNODE 320 = XXL_548; /* MC 20 Foldback */
+PINNODE 321 = XXL_547; /* MC 21 Foldback */
+PINNODE 322 = XXL_540; /* MC 22 Foldback */
+PINNODE 323 = XXL_431; /* MC 23 Foldback */
+PINNODE 324 = XXL_430; /* MC 24 Foldback */
+PINNODE 325 = XXL_429; /* MC 25 Foldback */
+PINNODE 326 = XXL_426; /* MC 26 Foldback */
+PINNODE 327 = XXL_374; /* MC 27 Foldback */
+PINNODE 329 = XXL_373; /* MC 29 Foldback */
+PINNODE 338 = XXL_592; /* MC 38 Foldback */
+PINNODE 339 = XXL_594; /* MC 39 Foldback */
+PINNODE 340 = XXL_593; /* MC 40 Foldback */
+PINNODE 342 = XXL_591; /* MC 42 Foldback */
+PINNODE 343 = XXL_550; /* MC 43 Foldback */
+PINNODE 344 = XXL_540; /* MC 44 Foldback */
+PINNODE 345 = XXL_411; /* MC 45 Foldback */
+PINNODE 346 = XXL_410; /* MC 46 Foldback */
+PINNODE 348 = XXL_373; /* MC 48 Foldback */
+PINNODE 353 = XXL_599; /* MC 53 Foldback */
+PINNODE 354 = XXL_598; /* MC 54 Foldback */
+PINNODE 355 = FB_597; /* MC 55 Foldback */
+PINNODE 356 = XXL_428; /* MC 56 Foldback */
+PINNODE 357 = XXL_413; /* MC 57 Foldback */
+PINNODE 358 = XXL_403; /* MC 58 Foldback */
+PINNODE 359 = XXL_401; /* MC 59 Foldback */
+PINNODE 360 = XXL_398; /* MC 60 Foldback */
+PINNODE 361 = XXL_377; /* MC 61 Foldback */
+PINNODE 362 = XXL_374; /* MC 62 Foldback */
+PINNODE 363 = XXL_373; /* MC 63 Foldback */
+PINNODE 371 = XXL_600; /* MC 71 Foldback */
+PINNODE 372 = XXL_564; /* MC 72 Foldback */
+PINNODE 373 = XXL_554; /* MC 73 Foldback */
+PINNODE 374 = XXL_546; /* MC 74 Foldback */
+PINNODE 375 = XXL_542; /* MC 75 Foldback */
+PINNODE 378 = XXL_411; /* MC 78 Foldback */
+PINNODE 379 = XXL_374; /* MC 79 Foldback */
+PINNODE 380 = XXL_373; /* MC 80 Foldback */
+PINNODE 388 = FB_606; /* MC 88 Foldback */
+PINNODE 389 = FB_604; /* MC 89 Foldback */
+PINNODE 390 = FB_602; /* MC 90 Foldback */
+PINNODE 391 = XXL_560; /* MC 91 Foldback */
+PINNODE 393 = XXL_542; /* MC 93 Foldback */
+PINNODE 394 = XXL_410; /* MC 94 Foldback */
+PINNODE 395 = XXL_374; /* MC 95 Foldback */
+PINNODE 396 = XXL_373; /* MC 96 Foldback */
+PINNODE 407 = XXL_567; /* MC 107 Foldback */
+PINNODE 408 = XXL_566; /* MC 108 Foldback */
+PINNODE 409 = XXL_540; /* MC 109 Foldback */
+PINNODE 410 = XXL_429; /* MC 110 Foldback */
+PINNODE 412 = XXL_373; /* MC 112 Foldback */
+PINNODE 424 = XXL_556; /* MC 124 Foldback */
+PINNODE 425 = XXL_540; /* MC 125 Foldback */
+PINNODE 426 = XXL_373; /* MC 126 Foldback */
+PINNODE 601 = T1; /* MC 1 Feedback */
+PINNODE 602 = AIDX3; /* MC 2 Feedback */
+PINNODE 603 = HA2; /* MC 3 Feedback */
+PINNODE 604 = AIDX1; /* MC 4 Feedback */
 PINNODE 605 = HA0; /* MC 5 Feedback */
-PINNODE 606 = AIDX0; /* MC 6 Feedback */
-PINNODE 607 = AIDX5; /* MC 7 Feedback */
-PINNODE 609 = XXL_640; /* MC 9 Feedback */
-PINNODE 610 = XXL_639; /* MC 10 Feedback */
-PINNODE 612 = XXL_641; /* MC 12 Feedback */
-PINNODE 615 = AIDX3; /* MC 15 Feedback */
-PINNODE 618 = HCOMMIT; /* MC 18 Feedback */
-PINNODE 620 = VDIRTY; /* MC 20 Feedback */
-PINNODE 622 = HL1; /* MC 22 Feedback */
-PINNODE 623 = WT2; /* MC 23 Feedback */
-PINNODE 626 = HWE; /* MC 26 Feedback */
-PINNODE 628 = WT0; /* MC 28 Feedback */
+PINNODE 606 = HA1; /* MC 6 Feedback */
+PINNODE 607 = AIDX4; /* MC 7 Feedback */
+PINNODE 610 = T2; /* MC 10 Feedback */
+PINNODE 612 = AIDX2; /* MC 12 Feedback */
+PINNODE 615 = AIDX5; /* MC 15 Feedback */
+PINNODE 617 = XXL_444; /* MC 17 Feedback */
+PINNODE 618 = VDIRTY; /* MC 18 Feedback */
+PINNODE 619 = XXL_376; /* MC 19 Feedback */
+PINNODE 620 = HWE; /* MC 20 Feedback */
+PINNODE 621 = HCOMMIT; /* MC 21 Feedback */
+PINNODE 622 = WT2; /* MC 22 Feedback */
+PINNODE 623 = WT0; /* MC 23 Feedback */
+PINNODE 626 = HL1; /* MC 26 Feedback */
+PINNODE 628 = HW1; /* MC 28 Feedback */
 PINNODE 630 = WT1; /* MC 30 Feedback */
-PINNODE 633 = XXL_635; /* MC 33 Feedback */
-PINNODE 634 = WROTE1; /* MC 34 Feedback */
-PINNODE 636 = WROTE0; /* MC 36 Feedback */
-PINNODE 639 = WROTE2; /* MC 39 Feedback */
-PINNODE 641 = Com_Ctrl_367; /* MC 41 Feedback */
-PINNODE 642 = XXL_632; /* MC 42 Feedback */
-PINNODE 644 = XXL_647; /* MC 44 Feedback */
-PINNODE 647 = WROTE3; /* MC 47 Feedback */
-PINNODE 649 = XXL_643; /* MC 49 Feedback */
-PINNODE 650 = HDUE; /* MC 50 Feedback */
-PINNODE 651 = RST2; /* MC 51 Feedback */
-PINNODE 652 = RST1; /* MC 52 Feedback */
-PINNODE 653 = BUSY; /* MC 53 Feedback */
-PINNODE 654 = DUE1; /* MC 54 Feedback */
-PINNODE 655 = RST3; /* MC 55 Feedback */
-PINNODE 656 = DUE0; /* MC 56 Feedback */
-PINNODE 657 = DUE2; /* MC 57 Feedback */
-PINNODE 658 = XXL_646; /* MC 58 Feedback */
-PINNODE 659 = DUE3; /* MC 59 Feedback */
-PINNODE 660 = T1; /* MC 60 Feedback */
-PINNODE 662 = RST0; /* MC 62 Feedback */
-PINNODE 663 = WC1; /* MC 63 Feedback */
-PINNODE 665 = VPB; /* MC 65 Feedback */
-PINNODE 666 = T2; /* MC 66 Feedback */
-PINNODE 667 = VPA; /* MC 67 Feedback */
-PINNODE 668 = XXL_642; /* MC 68 Feedback */
-PINNODE 669 = XXL_496; /* MC 69 Feedback */
-PINNODE 670 = XXL_637; /* MC 70 Feedback */
-PINNODE 671 = XXL_633; /* MC 71 Feedback */
-PINNODE 672 = XXL_405; /* MC 72 Feedback */
-PINNODE 674 = XXL_638; /* MC 74 Feedback */
-PINNODE 676 = T3; /* MC 76 Feedback */
-PINNODE 678 = XXL_631; /* MC 78 Feedback */
-PINNODE 679 = XXL_636; /* MC 79 Feedback */
-PINNODE 681 = XXL_598; /* MC 81 Feedback */
-PINNODE 682 = HGBL; /* MC 82 Feedback */
-PINNODE 683 = HSY2; /* MC 83 Feedback */
-PINNODE 684 = HA3; /* MC 84 Feedback */
-PINNODE 685 = SDQ2; /* MC 85 Feedback */
-PINNODE 686 = SDQ1; /* MC 86 Feedback */
-PINNODE 687 = XXL_520; /* MC 87 Feedback */
-PINNODE 688 = SDQ0; /* MC 88 Feedback */
-PINNODE 689 = HA2; /* MC 89 Feedback */
-PINNODE 690 = HW0; /* MC 90 Feedback */
-PINNODE 691 = XXL_418; /* MC 91 Feedback */
-PINNODE 692 = HW1; /* MC 92 Feedback */
-PINNODE 693 = HSTAGE; /* MC 93 Feedback */
-PINNODE 694 = HW2; /* MC 94 Feedback */
-PINNODE 695 = HRW; /* MC 95 Feedback */
-PINNODE 697 = T0; /* MC 97 Feedback */
-PINNODE 698 = XXL_380; /* MC 98 Feedback */
-PINNODE 699 = XXL_413; /* MC 99 Feedback */
-PINNODE 700 = XXL_419; /* MC 100 Feedback */
-PINNODE 701 = XXL_392; /* MC 101 Feedback */
-PINNODE 702 = XXL_379; /* MC 102 Feedback */
-PINNODE 703 = XXL_499; /* MC 103 Feedback */
-PINNODE 704 = XXL_426; /* MC 104 Feedback */
-PINNODE 706 = XXL_385; /* MC 106 Feedback */
-PINNODE 708 = XXL_417; /* MC 108 Feedback */
-PINNODE 710 = XXL_634; /* MC 110 Feedback */
-PINNODE 711 = XXL_645; /* MC 111 Feedback */
-PINNODE 713 = DMAQ2; /* MC 113 Feedback */
-PINNODE 714 = DMAQ0; /* MC 114 Feedback */
-PINNODE 716 = DMAQ1; /* MC 116 Feedback */
-PINNODE 719 = DMAQ3; /* MC 119 Feedback */
-PINNODE 721 = HSY1; /* MC 121 Feedback */
-PINNODE 722 = WC0; /* MC 122 Feedback */
-PINNODE 724 = XXL_644; /* MC 124 Feedback */
+PINNODE 631 = BUSY; /* MC 31 Feedback */
+PINNODE 633 = WROTE2; /* MC 33 Feedback */
+PINNODE 634 = WROTE0; /* MC 34 Feedback */
+PINNODE 635 = XXL_425; /* MC 35 Feedback */
+PINNODE 636 = DUE1; /* MC 36 Feedback */
+PINNODE 637 = XXL_495; /* MC 37 Feedback */
+PINNODE 638 = DUE2; /* MC 38 Feedback */
+PINNODE 639 = DUE0; /* MC 39 Feedback */
+PINNODE 640 = WROTE3; /* MC 40 Feedback */
+PINNODE 641 = XXL_394; /* MC 41 Feedback */
+PINNODE 642 = DUE3; /* MC 42 Feedback */
+PINNODE 644 = WC0; /* MC 44 Feedback */
+PINNODE 647 = WC1; /* MC 47 Feedback */
+PINNODE 649 = HSY2; /* MC 49 Feedback */
+PINNODE 652 = XXL_408; /* MC 52 Feedback */
+PINNODE 654 = XXL_381; /* MC 54 Feedback */
+PINNODE 655 = XXL_589; /* MC 55 Feedback */
+PINNODE 658 = HRW; /* MC 58 Feedback */
+PINNODE 660 = XXL_532; /* MC 60 Feedback */
+PINNODE 662 = AIDX0; /* MC 62 Feedback */
+PINNODE 666 = VPA; /* MC 66 Feedback */
+PINNODE 668 = WROTE1; /* MC 68 Feedback */
+PINNODE 670 = Com_Ctrl_367; /* MC 70 Feedback */
+PINNODE 681 = XXL_409; /* MC 81 Feedback */
+PINNODE 682 = VPB; /* MC 82 Feedback */
+PINNODE 683 = DMAQ3; /* MC 83 Feedback */
+PINNODE 684 = XXL_462; /* MC 84 Feedback */
+PINNODE 685 = XXL_382; /* MC 85 Feedback */
+PINNODE 686 = XXL_391; /* MC 86 Feedback */
+PINNODE 687 = HDUE; /* MC 87 Feedback */
+PINNODE 689 = RST3; /* MC 89 Feedback */
+PINNODE 690 = T3; /* MC 90 Feedback */
+PINNODE 692 = T0; /* MC 92 Feedback */
+PINNODE 698 = DMAQ1; /* MC 98 Feedback */
+PINNODE 700 = RST2; /* MC 100 Feedback */
+PINNODE 702 = HW2; /* MC 102 Feedback */
+PINNODE 703 = HSTAGE; /* MC 103 Feedback */
+PINNODE 705 = DMAQ2; /* MC 105 Feedback */
+PINNODE 706 = RST1; /* MC 106 Feedback */
+PINNODE 707 = DMAQ0; /* MC 107 Feedback */
+PINNODE 708 = HA3; /* MC 108 Feedback */
+PINNODE 710 = HW0; /* MC 110 Feedback */
+PINNODE 711 = HGBL; /* MC 111 Feedback */
+PINNODE 716 = HSY1; /* MC 116 Feedback */
+PINNODE 719 = SDQ1; /* MC 119 Feedback */
+PINNODE 721 = SDQ0; /* MC 121 Feedback */
+PINNODE 722 = RST0; /* MC 122 Feedback */
+PINNODE 724 = SDQ2; /* MC 124 Feedback */
 
 ** Resource Usage **
 
@@ -1810,132 +1718,132 @@ DCERP Field = Summary of Allocations.
 For input only = INPUT.
 
 MCell Pin# Oe   PinDrive  DCERP  FBDrive      DCERP  Foldback  CascadeOut     TotPT output_slew
-MC1   0         --               AIDX1        Dg-g-  --        --             3     slow
-MC2   0         --               AIDX4        Dg-g-  --        --             3     slow
-MC3   12   --   S1        INPUT  HA1          Dg-g-  --        --             3     slow
-MC4   0         --               AIDX2        Dg-g-  --        --             4     slow
-MC5   11   --   ACOUT     INPUT  HA0          Dg-g-  XXL_557   --             4     slow
-MC6   10   --   RW        INPUT  AIDX0        Dg-g-  XXL_556   --             4     slow
-MC7   0         --               AIDX5        Dg-g-  XXL_404   --             5     slow
-MC8   9    on   SBOE      C----  --                  XXL_401   --             2     slow
-MC9   0         --               XXL_640      C----  NA        --             5     slow
-MC10  0         --               XXL_639      C----  NA        --             5     slow
-MC11  8    on   CNTOE     C----  --                  XXL_400   --             2     slow
-MC12  0         --               XXL_641      C----  NA        --             5     slow
-MC13  6    on   ACIN      C----  --                  XXL_399   --             3     slow
-MC14  5    on   ONESOE    C----  --                  XXL_388   --             4     slow
-MC15  0         --               AIDX3        Dg-g-  NA        --             5     slow
-MC16  4    on   PFVALID   Dg-g-  --                  XXL_374   --             4     slow
-MC17  22   on   BLATCK    C----  --                  --        --             1     slow
-MC18  0         --               HCOMMIT      Dg-g-  --        --             2     slow
-MC19  21   on   SRWE      C----  --                  XXL_618   --             2     slow
-MC20  0         --               VDIRTY       Dg-g-  XXL_617   --             3     slow
-MC21  20   on   SROE      C----  --                  XXL_543   --             3     slow
-MC22  0         --               HL1          Dg-g-  XXL_444   --             5     slow
-MC23  0         --               WT2          Dg-g-  XXL_537   --             4     slow
-MC24  18   on   PWOE      C----  --                  XXL_447   --             3     slow
-MC25  17   on   PFCK      C----  --                  XXL_446   --             3     slow
-MC26  0         --               HWE          Dg-g-  XXL_542   --             4     slow
-MC27  16   on   ALATCK    C----  --                  XXL_441   --             5     slow
-MC28  0         --               WT0          Dg-g-  XXL_374   --             5     slow
-MC29  15   on   PFLANE    Dg-g-  --                  NA        --             5     slow
+MC1   0         --               T1           Dg-g-  --        --             3     slow
+MC2   0         --               AIDX3        Dg-g-  --        --             3     slow
+MC3   12   --   DMAEN0    INPUT  HA2          Dg-g-  --        --             3     slow
+MC4   0         --               AIDX1        Dg-g-  --        --             4     slow
+MC5   11   --   DMAEN3    INPUT  HA0          Dg-g-  --        --             3     slow
+MC6   10   --   DMAEN2    INPUT  HA1          Dg-g-  --        --             3     slow
+MC7   0         --               AIDX4        Dg-g-  --        --             4     slow
+MC8   9    on   SBOE      C----  --                  XXL_557   --             2     slow
+MC9   0         --               --                  XXL_403   -> T2          5     slow
+MC10  0         --               T2           Dg-g-  XXL_401   --             4     slow
+MC11  8    on   ONESOE    C----  --                  XXL_398   --             2     slow
+MC12  0         --               AIDX2        Dg-g-  NA        --             5     slow
+MC13  6    on   BLATOE    C----  --                  XXL_387   --             2     slow
+MC14  5    on   CNTOE     C----  --                  XXL_374   --             2     slow
+MC15  0         --               AIDX5        Dg-g-  NA        --             5     slow
+MC16  4    on   ACIN      C----  --                  XXL_373   --             3     slow
+MC17  22   --   DMAEN1    INPUT  XXL_444      C----  --        --             2     slow
+MC18  0         --               VDIRTY       Dg-g-  XXL_595   --             3     slow
+MC19  21   --   D5        INPUT  XXL_376      C----  XXL_590   --             3     slow
+MC20  0         --               HWE          Dg-g-  XXL_548   --             4     slow
+MC21  20   --   D2        INPUT  HCOMMIT      Dg-g-  XXL_547   --             3     slow
+MC22  0         --               WT2          Dg-g-  XXL_540   --             4     slow
+MC23  0         --               WT0          Dg-g-  XXL_431   --             5     slow
+MC24  18   on   SRWE      C----  --                  XXL_430   --             2     slow
+MC25  17   on   SROE      C----  --                  XXL_429   --             3     slow
+MC26  0         --               HL1          Dg-g-  XXL_426   --             5     slow
+MC27  16   on   PWOE      C----  --                  XXL_374   --             3     slow
+MC28  0         --               HW1          Dg-g-  NA        --             5     slow
+MC29  15   on   PFCK      C----  --                  XXL_373   --             3     slow
 MC30  0         --               WT1          Dg-g-  NA        --             5     slow
-MC31  0         --               --                  NA        -> SFOE        5     slow
-MC32  14   on   SFOE      C----  --                  NA        --             5     slow
-MC33  0         --               XXL_635      C----  NA        --             5     slow
-MC34  0         --               WROTE1       Dg-g-  --        --             2     slow
-MC35  31   on   SETC      C----  --                  --        --             1     slow
-MC36  0         --               WROTE0       Dg-g-  --        --             2     slow
-MC37  30   on   SETA      C----  --                  --        --             1     slow
-MC38  29   on   SETB      C----  --                  --        --             3     slow
-MC39  0         --               WROTE2       Dg-g-  FB_620    --             3     slow
-MC40  28   on   SUMOE     C----  --                  XXL_564   --             4     slow
-MC41  0         --               Com_Ctrl_367 C----  XXL_438   --             4     slow
-MC42  0         --               XXL_632      C----  NA        --             5     slow
-MC43  27   on   CVC1      C----  --                  XXL_411   --             5     slow
-MC44  0         --               XXL_647      C----  NA        --             5     slow
-MC45  25   on   SFWE0     C----  --                  XXL_410   --             5     slow
-MC46  24   on   SFWE1     C----  --                  XXL_378   --             5     slow
-MC47  0         --               WROTE3       Dg-g-  --        --             2     slow
-MC48  23   on   SFWE2     C----  --                  XXL_374   --             5     slow
-MC49  41   --   S3        INPUT  XXL_643      C----  NA        --             5     slow
-MC50  0         --               HDUE         Dg-g-  --        --             3     slow
-MC51  40   --   A0        INPUT  RST2         Dg-g-  --        --             2     slow
-MC52  0         --               RST1         Dg-g-  FB_630    --             4     slow
-MC53  39   --   A1        INPUT  BUSY         Dg-g-  FB_624    --             3     slow
-MC54  0         --               DUE1         Dg-g-  XXL_622   --             4     slow
-MC55  0         --               RST3         Dg-g-  XXL_621   --             5     slow
-MC56  37   --   A2        INPUT  DUE0         Dg-g-  XXL_616   --             3     slow
-MC57  36   --   A3        INPUT  DUE2         Dg-g-  XXL_561   --             3     slow
-MC58  0         --               XXL_646      C----  NA        --             5     slow
-MC59  35   --   DMAEN3    INPUT  DUE3         Dg-g-  XXL_544   --             3     slow
-MC60  0         --               T1           Dg-g-  NA        --             5     slow
-MC61  34   on   CVC0      C----  --                  XXL_537   --             3     slow
-MC62  0         --               RST0         Dg-g-  --        --             2     slow
-MC63  0         --               WC1          Dg-g-  NA        --             5     slow
-MC64  33   on   CVC2      C----  --                  XXL_374   --             3     slow
-MC65  44   --   DMAEN1    INPUT  VPB          Dg-g-  XXL_628   --             3     slow
-MC66  0         --               T2           Dg-g-  XXL_627   --             5     slow
-MC67  45   --   DMAEN2    INPUT  VPA          Dg-g-  XXL_626   --             3     slow
-MC68  0         --               XXL_642      C----  NA        --             5     slow
-MC69  46   --   DMAEN0    INPUT  XXL_496      C----  XXL_625   --             4     slow
-MC70  0         --               XXL_637      C----  NA        --             5     slow
-MC71  0         --               XXL_633      C----  NA        --             5     slow
-MC72  48   --   D3        INPUT  XXL_405      C----  XXL_614   --             4     slow
-MC73  49   on   SFA2      C----  --                  XXL_446   --             3     slow
-MC74  0         --               XXL_638      C----  NA        --             5     slow
-MC75  50   on   BLATOE    C----  --                  XXL_411   --             3     slow
-MC76  0         --               T3           Dg-g-  NA        --             5     slow
-MC77  51   on   PWBUSY    Dg-g-  --                  XXL_410   --             3     slow
-MC78  0         --               XXL_631      C----  NA        --             5     slow
-MC79  0         --               XXL_636      C----  NA        --             5     slow
-MC80  52   on   SFA5      C----  --                  XXL_374   --             5     slow
-MC81  0         --               XXL_598      C----  --        --             2     slow
-MC82  0         --               HGBL         Dg-g-  NA        --             5     slow
-MC83  54   --   D5        INPUT  HSY2         Dg-g-  --        --             1     slow
-MC84  0         --               HA3          Dg-g-  --        --             3     slow
-MC85  55   --   D2        INPUT  SDQ2         Dg-g-  --        --             2     slow
-MC86  56   --   D4        INPUT  SDQ1         Dg-g-  --        --             2     slow
-MC87  0         --               XXL_520      C----  --        --             3     slow
-MC88  57   --   D1        INPUT  SDQ0         Dg-g-  --        --             2     slow
-MC89  0         --               HA2          Dg-g-  XXL_565   --             4     slow
-MC90  0         --               HW0          Dg-g-  XXL_543   --             5     slow
-MC91  58   --   D0        INPUT  XXL_418      C----  XXL_444   --             3     slow
-MC92  0         --               HW1          Dg-g-  NA        --             5     slow
-MC93  60   --   CTRL7     INPUT  HSTAGE       Dg-g-  XXL_443   --             3     slow
-MC94  61   --   NEQH      INPUT  HW2          Dg-g-  XXL_401   --             3     slow
-MC95  0         --               HRW          Dg-g-  --        --             2     slow
-MC96  62   on   PWCK      C----  --                  XXL_374   --             2     slow
-MC97  63   --   NEQL      INPUT  T0           Dg-g-  --        --             2     slow
-MC98  0         --               XXL_380      C----  --        --             2     slow
-MC99  64   --   E         INPUT  XXL_413      C----  --        --             2     slow
-MC100 0         --               XXL_419      C----  --        --             2     slow
-MC101 65   --   SEL       INPUT  XXL_392      C----  --        --             2     slow
-MC102 0         --               XXL_379      C----  --        --             2     slow
-MC103 0         --               XXL_499      C----  --        --             3     slow
-MC104 67        --               XXL_426      C----  --        --             2     slow
-MC105 68   on   SFA4      C----  --                  --        --             2     slow
-MC106 0         --               XXL_385      C----  --        --             3     slow
-MC107 69   on   SFA3      C----  --                  XXL_614   --             3     slow
-MC108 0         --               XXL_417      C----  XXL_376   --             5     slow
-MC109 70   on   SFA1      C----  --                  NA        --             5     slow
-MC110 0         --               XXL_634      C----  NA        --             5     slow
-MC111 0         --               XXL_645      C----  NA        --             5     slow
-MC112 71   on   SFA0      C----  --                  NA        --             5     slow
-MC113 0         --               DMAQ2        Dg-g-  --        --             1     slow
-MC114 0         --               DMAQ0        Dg-g-  --        --             1     slow
-MC115 73   --   S2        INPUT  --                  --        --             0     slow
-MC116 0         --               DMAQ1        Dg-g-  --        --             1     slow
-MC117 74   --   S0        INPUT  --                  --        --             0     slow
-MC118 75   on   CSSL      Dg--p  --                  --        --             4     slow
-MC119 0         --               DMAQ3        Dg-g-  --        --             1     slow
-MC120 76   PT   SDH1      C----  --                  --        --             4     slow
-MC121 0         --               HSY1         Dg-g-  --        --             1     slow
-MC122 0         --               WC0          Dg-g-  --        --             2     slow
-MC123 77   on   CSSR      Dg--p  --                  --        --             4     slow
-MC124 0         --               XXL_644      C----  NA        --             5     slow
-MC125 79   on   CSV       Dg--p  --                  XXL_555   --             5     slow
-MC126 80   PT   SDH0      C----  --                  NA        --             5     slow
+MC31  0         --               BUSY         Dg-g-  NA        --             5     slow
+MC32  14   on   PFLANE    Dg-g-  --                  NA        --             5     slow
+MC33  0         --               WROTE2       Dg-g-  --        --             2     slow
+MC34  0         --               WROTE0       Dg-g-  --        --             2     slow
+MC35  31   --   D4        INPUT  XXL_425      C----  --        --             2     slow
+MC36  0         --               DUE1         Dg-g-  --        --             3     slow
+MC37  30   --   D1        INPUT  XXL_495      C----  --        --             2     slow
+MC38  29   --   D3        INPUT  DUE2         Dg-g-  XXL_592   --             4     slow
+MC39  0         --               DUE0         Dg-g-  XXL_594   --             4     slow
+MC40  28   --   CTRL7     INPUT  WROTE3       Dg-g-  XXL_593   --             3     slow
+MC41  0         --               XXL_394      C----  --        --             2     slow
+MC42  0         --               DUE3         Dg-g-  XXL_591   --             4     slow
+MC43  27   --   S2        INPUT  --                  XXL_550   -> WC0         5     slow
+MC44  0         --               WC0          Dg-g-  XXL_540   --             3     slow
+MC45  25   on   CVC0      C----  --                  XXL_411   --             3     slow
+MC46  24   on   CVC2      C----  --                  XXL_410   --             3     slow
+MC47  0         --               WC1          Dg-g-  NA        --             5     slow
+MC48  23   on   CVC1      C----  --                  XXL_373   --             5     slow
+MC49  41   --   NEQH      INPUT  HSY2         Dg-g-  --        --             1     slow
+MC50  0         --               --                  --        -> XXL_408     5     slow
+MC51  40   --   S0        INPUT  --                  --        -> XXL_408     5     slow
+MC52  0         --               XXL_408      C----  --        --             2     slow
+MC53  39   on   SETA      C----  --                  XXL_599   --             2     slow
+MC54  0         --               XXL_381      C----  XXL_598   --             3     slow
+MC55  0         --               XXL_589      C----  FB_597    --             3     slow
+MC56  37   on   SETC      C----  --                  XXL_428   --             2     slow
+MC57  36   on   PWBUSY    Dg-g-  --                  XXL_413   --             3     slow
+MC58  0         --               HRW          Dg-g-  XXL_403   --             3     slow
+MC59  35   on   SETB      C----  --                  XXL_401   --             4     slow
+MC60  0         --               XXL_532      C----  XXL_398   --             4     slow
+MC61  34   on   PFVALID   Dg-g-  --                  XXL_377   --             4     slow
+MC62  0         --               AIDX0        Dg-g-  XXL_374   --             4     slow
+MC63  0         --               --                  XXL_373   -> SFOE        5     slow
+MC64  33   on   SFOE      C----  --                  NA        --             5     slow
+MC65  44   on   SFWE0     C----  --                  --        --             2     slow
+MC66  0         --               VPA          Dg-g-  --        --             2     slow
+MC67  45   on   SFWE1     C----  --                  --        --             2     slow
+MC68  0         --               WROTE1       Dg-g-  --        --             2     slow
+MC69  46   on   ALATCK    C----  --                  --        --             3     slow
+MC70  0         --               Com_Ctrl_367 C----  --        --             4     slow
+MC71  0         --               --                  XXL_600   -> SFA1        5     slow
+MC72  48   on   SFA1      C----  --                  XXL_564   --             3     slow
+MC73  49   on   SFWE2     C----  --                  XXL_554   --             5     slow
+MC74  0         --               --                  XXL_546   -> SFA2        5     slow
+MC75  50   on   SFA2      C----  --                  XXL_542   --             5     slow
+MC76  0         --               --                  NA        -> SFA3        5     slow
+MC77  51   on   SFA3      C----  --                  NA        --             5     slow
+MC78  0         --               --                  XXL_411   -> SFA4        5     slow
+MC79  0         --               --                  XXL_374   -> SFA4        5     slow
+MC80  52   on   SFA4      C----  --                  XXL_373   --             4     slow
+MC81  0         --               XXL_409      C----  --        --             2     slow
+MC82  0         --               VPB          Dg-g-  --        --             2     slow
+MC83  54   --   NEQL      INPUT  DMAQ3        Dg-g-  --        --             1     slow
+MC84  0         --               XXL_462      C----  --        --             3     slow
+MC85  55   --   D0        INPUT  XXL_382      C----  --        --             2     slow
+MC86  56   --   E         INPUT  XXL_391      C----  --        --             2     slow
+MC87  0         --               HDUE         Dg-g-  --        --             3     slow
+MC88  57   on   SUMOE     C----  --                  FB_606    --             2     slow
+MC89  0         --               RST3         Dg-g-  FB_604    --             5     slow
+MC90  0         --               T3           Dg-g-  FB_602    --             5     slow
+MC91  58   on   BLATCK    C----  --                  XXL_560   --             3     slow
+MC92  0         --               T0           Dg-g-  NA        --             5     slow
+MC93  60   on   SFA5      C----  --                  XXL_542   --             5     slow
+MC94  61   --   S1        INPUT  --                  XXL_410   -> SFA0        5     slow
+MC95  0         --               --                  XXL_374   -> SFA0        5     slow
+MC96  62   on   SFA0      C----  --                  XXL_373   --             5     slow
+MC97  63   --   S3        INPUT  --                  --        --             0     slow
+MC98  0         --               DMAQ1        Dg-g-  --        --             1     slow
+MC99  64   --   A0        INPUT  --                  --        --             0     slow
+MC100 0         --               RST2         Dg-g-  --        --             2     slow
+MC101 65   --   A1        INPUT  --                  --        --             0     slow
+MC102 0         --               HW2          Dg-g-  --        --             2     slow
+MC103 0         --               HSTAGE       Dg-g-  --        --             2     slow
+MC104 67   --   A2        INPUT  --                  --        --             0     slow
+MC105 68   --   SEL       INPUT  DMAQ2        Dg-g-  --        --             1     slow
+MC106 0         --               RST1         Dg-g-  --        --             3     slow
+MC107 69        --               DMAQ0        Dg-g-  XXL_567   --             2     slow
+MC108 0         --               HA3          Dg-g-  XXL_566   --             4     slow
+MC109 70   on   PWCK      C----  --                  XXL_540   --             2     slow
+MC110 0         --               HW0          Dg-g-  XXL_429   --             5     slow
+MC111 0         --               HGBL         Dg-g-  NA        --             5     slow
+MC112 71   on   CSSL      Dg--p  --                  XXL_373   --             5     slow
+MC113 0         --               --                  --        --             0     slow
+MC114 0         --               --                  --        --             0     slow
+MC115 73   --   A3        INPUT  --                  --        --             0     slow
+MC116 0         --               HSY1         Dg-g-  --        --             1     slow
+MC117 74   --   RW        INPUT  --                  --        --             0     slow
+MC118 75   on   CSV       Dg--p  --                  --        --             4     slow
+MC119 0         --               SDQ1         Dg-g-  --        --             2     slow
+MC120 76   on   CSSR      Dg--p  --                  --        --             4     slow
+MC121 0         --               SDQ0         Dg-g-  --        --             2     slow
+MC122 0         --               RST0         Dg-g-  --        --             2     slow
+MC123 77   PT   SDH0      C----  --                  NA        --             5     slow
+MC124 0         --               SDQ2         Dg-g-  XXL_556   --             3     slow
+MC125 79   --   ACOUT     INPUT  --                  XXL_540   -> SDH1        5     slow
+MC126 80   PT   SDH1      C----  --                  XXL_373   --             5     slow
 MC127 0         --               --                  NA        -> SDH2        5     slow
 MC128 81   PT   SDH2      C----  --                  NA        --             5     slow
 MC0   2         --               --                  --        --             0     slow
@@ -1944,25 +1852,25 @@ MC0   84        --               --                  --        --             0 
 MC0   83        SLOTCLK   INPUT  --                  --        --             0     slow
 
 Logic Array Block	Logic Cells	I/O Pins	Foldbacks	TotalPT		FanIN	Cascades
-A: LC1	- LC16		16/16(100%)	8/16(50%)	8/16(50%)	61/80(76%)	(37)	0
-B: LC17	- LC32		15/16(93%)	8/16(50%)	10/16(62%)	60/80(75%)	(37)	1
-C: LC33	- LC48		16/16(100%)	8/16(50%)	7/16(43%)	57/80(71%)	(37)	0
-D: LC49	- LC64		16/16(100%)	8/16(50%)	9/16(56%)	58/80(72%)	(37)	0
-E: LC65	- LC80		16/16(100%)	8/16(50%)	9/16(56%)	68/80(85%)	(37)	0
-F: LC81	- LC96		16/16(100%)	8/16(50%)	6/16(37%)	47/80(58%)	(36)	0
-G: LC97	- LC112		16/16(100%)	7/16(43%)	2/16(12%)	50/80(62%)	(32)	0
-H: LC113- LC128		13/16(81%)	8/16(50%)	1/16(6%)	44/80(55%)	(37)	1
+A: LC1	- LC16		15/16(93%)	8/16(50%)	7/16(43%)	53/80(66%)	(34)	1
+B: LC17	- LC32		16/16(100%)	8/16(50%)	11/16(68%)	60/80(75%)	(34)	0
+C: LC33	- LC48		15/16(93%)	8/16(50%)	9/16(56%)	52/80(65%)	(34)	1
+D: LC49	- LC64		13/16(81%)	8/16(50%)	11/16(68%)	55/80(68%)	(34)	3
+E: LC65	- LC80		11/16(68%)	8/16(50%)	8/16(50%)	62/80(77%)	(34)	5
+F: LC81	- LC96		14/16(87%)	8/16(50%)	8/16(50%)	55/80(68%)	(34)	2
+G: LC97	- LC112		12/16(75%)	7/16(43%)	5/16(31%)	34/80(42%)	(34)	0
+H: LC113- LC128		10/16(62%)	8/16(50%)	3/16(18%)	43/80(53%)	(31)	2
 
 Total dedicated input used:	2/4 	(50%)
 Total I/O pins used		63/64 	(98%)
-Total Logic cells used 		126/128 	(98%)
+Total Logic cells used 		120/128 	(93%)
 Total Flip-Flop used 		60/128 	(46%)
-Total Foldback logic used 	52/128 	(40%)
-Total Nodes+FB/MCells 		176/128 	(137%)
-Total cascade used 		2
+Total Foldback logic used 	62/128 	(48%)
+Total Nodes+FB/MCells 		168/128 	(131%)
+Total cascade used 		14
 Total input pins 		27
 Total output pins 		38
-Total Pts 			445
+Total Pts 			414
 Creating pla file aseq.tt3 with 0 inputs 0 outputs, 0 pins 0 nodes and 0 pterms...
 
 ----------------  End fitter, Design FITS

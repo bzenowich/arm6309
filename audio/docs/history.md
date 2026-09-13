@@ -2664,3 +2664,219 @@ U2 at 128 of 128 cells with **six of eight blocks at 36 of 40
 
 because U2 has no headroom at all — 128 of 128 logic cells:
 
+## §0 / §3 / §4.3 / §10 / §16 items 32, 37, 38, 48 — the across-the-walk re-timing is rebuilt on the repaired host strobe (2026-09-13)
+
+`ba57e14`'s re-timing was re-applied on top of §16 item 47's host-strobe repair and
+played both `check:modplay` probes. Two defects it exposed were repaired (§16 item 48
+and a testbench that read the sample RAM before its last write retired), and the
+adder window was measured at 211 ns rather than the 229 ns derived before. U2 refitted
+at 120 of 128 cells on pass 1 with fourteen cascades. The text these changes replaced:
+
+### audio/docs/audio.md — §0, item 37 note
+
+the datasheet says it is
+**192 ns into a 53 ns window**. It is fixable in either architecture by the same move —
+put the read and its write on either side of the walk, one update per colour clock — and
+that is what the margin figures above are quoted against.
+
+### audio/docs/audio.md — §3.1, the work-slot margin
+
+second, **seven work slots each** (§10.2.3), against **10.64 M work slots per second**:
+a **12× margin** at ProTracker's top note and **3.2×** at §4.3's extended floor.
+§10.2.5 has the table, and `audio_tb` counts the seven rather than asserting them.
+
+### audio/docs/audio.md — §3.2, the refill's slot count
+
+`LC`/`LEN` when the buffer ends — §3.3), and write the byte into `PEND`: **seven slots,
+and eleven at a buffer end**.
+
+### audio/docs/audio.md — §3.2, the throughput floor
+
+four coincident
+channels need **twenty-eight**, so the queue drains in ten colour clocks and the
+throughput floor is `PER` ≥ 10 (§10.2.5).
+
+### audio/docs/audio.md — §4.3, the PER floor
+
+⚠ **And there is a floor, at `PER` = 10.** §10.2.5's micro-ops are seven work slots
+per channel event against three work slots per colour clock, so four channels at
+`PER` < 10 ask for more slots than exist. `PER` = 0 or 1 — which §4.2 wanted clamped in
+the sequencer, and which Case A's U2 cannot see (§16 item 31) — is the pathological case
+of it. **The rule is the host's: never write `PER` < 10.**
+
+### audio/docs/audio.md — §10, the parts table note
+
+⚠ **This table is the present design, and one row of it is not timed.** §16 item 37:
+the four `74HC283` are a 192 ns path into a 53 ns window, which §10.3.5 fixes by
+re-timing rather than by re-specifying.
+
+### audio/docs/audio.md — §10.1, the U2 row
+
+| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⛔ **126 of 128 cells, 63 of 64 I/O** — §10.2.6 |
+
+### audio/docs/audio.md — §10.1, the heading sentence
+
+⚠ **U2 IS EXACTLY FULL AND U1 IS NOT**, which is the whole shape of this card's logic
+
+### audio/docs/audio.md — §10.1, the fit paragraph
+
+both: U2 at **126 of 128 cells**, 63 of 64 I/O, **52 foldback nodes, two cascades and 445
+product terms**, six of eight blocks at **37 of 40 LAB fan-in**;
+
+### audio/docs/audio.md — §10.1, the TQFP-100 sentence
+
+pins from 63 of 64 to 63 of 80 and leaves the cells at 126 of 128, because both packages
+
+### audio/docs/audio.md — §10.1, nothing left on U2
+
+nothing left on U2 for anything else** — which
+
+### audio/docs/audio.md — §10 parts list, the U2 row
+
+**1** | **`ATF1508AS` PLCC-84 — U2** | **the sequencer (§10.2). Fitted at 126 of 128 cells and 63 of 64 I/O** (§10.2.6) |
+
+### audio/docs/audio.md — §10.2.3, the re-timing paragraphs
+
+⛔ **A SEQUENCE'S STEPS RUN IN CONSECUTIVE WORK SLOTS, AND THE `'283` CHAIN GETS 53 ns.**
+§16 item 37's re-timing — step 0 in slot 7 and every step after it in the next work slot,
+which gives the adder **229 ns** across the walk (§10.3.5) — was built on 2026-09-12 and
+**reverted the same day, because it stopped the card playing** (`history.md`; §16 item 37).
+The window is 53 ns again and the item is open.
+
+⚠ **When it is rebuilt, the phase must be held in `RUN` and not in `START`**, because
+`START` is what clears `DUE`: gating the start throttles the channel picker instead of the
+engine, and `RSTANY` and `HDUE` outrank `DUEANY`, so a busy host starves the channels
+outright.
+
+### audio/docs/audio.md — §10.2.3, the fan-in paragraph
+
+**Seven of U2's eight logic blocks stand at 36 of 40 signals** (`cpld/aseq.fit`), which
+
+### audio/docs/audio.md — §10.2.5, heading
+
+#### 10.2.5 What it costs in slots — and §3.1's 56× is 46×
+
+### audio/docs/audio.md — §10.2.5, the slot table and floor
+
+A channel event is **seven work slots**, measured by `audio_tb` rather than counted by
+hand, and thirteen when the buffer ends — W1 then W2. Against **10.64 M work slots/s**
+(three per colour clock, §10.2.3):
+
+| | events/s, 4 ch | slots/s | margin |
+|---|---|---|---|
+| `PER` = 428 (C-2) | 33,148 | 232 k | **46×** |
+| `PER` = 113 (B-3, ProTracker's top note) | 125,552 | 879 k | **12×** |
+| `PER` = 30 (§4.3's extended floor) | 472,919 | 3.31 M | **3.2×** |
+| …plus a 6309 saturating `SDATA` at 400 k stores/s × 6 | | 5.71 M | **1.9×** |
+
+**The throughput floor is `PER` ≥ 10**, from 4 × 7 slots per `PER` colour clocks against
+three slots per colour clock. §4.3's conservative ~30 sits three times above it — and
+
+### audio/docs/audio.md — §10.2.5, the measured margins
+
+note use **44 of 600 work slots — a 13.6× margin**, and at `PER` = 30 the engine uses
+**196 of 600 — 3.0×**. ⚠ Both fall when §16 item 37's across-the-walk re-timing is
+rebuilt — it measured 56 of 600 (10.7×) and 217 of 600 (2.7×) while it was in — and that
+difference is what the `'283` chain's 229 ns costs.
+
+### audio/docs/audio.md — §10.2.6, the fit paragraph
+
+U2 is **38 outputs and 26 inputs**, and the fitter reports **63 of 64 I/O and 126 of
+128 logic cells** — "Design fits successfully" on pass 2, with **52 foldback nodes, two
+cascades and 445 product terms**, and **six of eight logic blocks at 37 of 40 LAB fan-in**
+(§16 item 47, 2026-09-12). ⚠ **The two cascades are on `SFOE` and `SDH2`**, the state
+file's output enable and the high lane's arithmetic. `SFOE` is on the card's one tight
+path (§3.2), and nothing here times it.
+
+### audio/docs/audio.md — §10.2.6, the cell history sentence
+
+after §16 item 47's host-strobe repair U2 is at **126 of 128**.
+
+### audio/docs/audio.md — §10.3.5, the 53 ns sentence
+
+back-to-back read slot and write slot offer it **53 ns**.
+
+### audio/docs/audio.md — §10.3, the adder paragraph
+
+What decides is that U2 is at 126 of 128 cells.
+
+### audio/docs/audio.md — §15, step 4
+
+and U2 — the shadow reload, the deferred queue and the host-counter increments — at 126 of 128 (§10.2.6).
+
+### audio/docs/audio.md — §16 item 32
+
+U2 is **126 of 128 cells**, 63 of
+    64 I/O, two cascades, 52 foldback nodes, and six of eight logic blocks at 37 of 40
+    fan-in, after §16 item 47's host-strobe repair.
+
+### audio/docs/audio.md — §16 item 38
+
+U2 at 126 of 128 cells with **six of eight blocks at 37 of 40
+    fan-in**
+
+### audio/docs/audio.md — §16 item 37, the repair paragraph
+
+**229 ns** in §10.2's arrangement, **211 ns** in §10.3's.
+
+### audio/docs/audio.md — §16 item 37, sub-item 1
+
+1. ⚠ **Over temperature nothing closes** — 240 ns against 229.
+
+### audio/docs/audio.md — §16 item 37, the 74ACT283 sum
+
+that is **93 ns into the 229 ns
+
+### audio/docs/audio.md — §16 item 37, the 74ACT283 margin
+
+temperature range with 2.4× margin, and it stays a `74HC` card**
+
+### audio/docs/audio.md — §16 item 37, sub-item 3
+
+    3. ⛔ **BUILT AND REVERTED 2026-09-12 — IT STOPPED THE CARD PLAYING.** `PROGRAM` was
+       re-timed to the across-the-walk rule and `audio_tb` passed 67 claims, 0 failed — but
+       `check:modplay` fell to **12 of 18** on every probe, the sample upload landed 129 of
+       130 bytes at one address, `TIMER` never committed, and the converters went silent
+       (42-byte render against 464 KB). Bisected to this change and reverted; `history.md`
+       has the evidence. ⚠ **`audio_tb` passing is what made it look safe**, and it is the
+       gap §16 item 36 already names. What the re-timing did, and must do again without
+       this defect: nine wait steps
+       (W1 one, W2 two, W3 three, W6 three) put **every one of the twelve adder writes
+       in slot 5 with the read that feeds it in slot 7** of the colour clock before, so
+       the sum settles across the walk for **229 ns** against the 53 ns §10.2.3's two
+       adjacent work slots gave it. The phase is pinned in `RUN` — step 0 runs only in
+       slot 7 — so it no longer depends on which slot the request happened to arrive in.
+
+       ⛔ **The first attempt pinned `START` instead, and it starves the card.** `DUE` is
+       cleared only when a start *picks* it, so gating the start gates the channel
+       picker, and `RSTANY`/`HDUE` outrank `DUEANY`: a busy host took every opportunity
+       and **channel 0 ticked 0 times in 300 colour clocks** while W1 burned 154 slots on
+       other work. ⚠ **A structural check could not see it** — the adder writes were all
+       correctly across the walk; only `audio_tb` caught it. Geometry is not liveness.
+
+       ⚠ **What it cost while it was in: U2 went exactly full.** 124 → **128 of 128
+       cells**, 63 → 62 I/O, two cascades → one, and six of eight logic blocks at **38 of
+       40 fan-in** against 36. The revert returns all five figures. It fits on the fitter's second pass, as it did before. The throughput
+       is §10.2.5's, and item 32's "the next repair of this kind will not fit" was literal
+       for the one day this change was in. ⚠ The testbench still cannot verify the *timing* — the `'283`s are
+       outside both CPLDs and the Verilog models logic, not delay; what it verifies is
+       that the microprogram still plays a buffer once the steps have moved.
+
+### audio/README.md — the item 37 note, first sentence
+
+datasheet says it is 192 ns into a 53 ns window** (§16 item 37).
+
+### audio/README.md — the item 37 note, the repair
+
+read and its write on either side of it gives the sum 229 ns. ⛔ **It was built on
+2026-09-12 and reverted the same day, because it stopped the card playing** — §16 item 37
+and `docs/history.md`.
+
+### audio/README.md — the U2 row
+
+| **U2** the sequencer (§10.2) | `aseq` | **126 of 128 cells**, 63 of 64 I/O, two cascades, **six of eight blocks at 37 of 40 fan-in** |
+
+### audio/README.md — the spare-cells sentence
+
+— two cells and one pin spare against U1's
+

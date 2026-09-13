@@ -37,6 +37,7 @@ module audio_tb;
   endtask
 
   `include "conv_claims.svh"
+  `include "adder_window.svh"
 
   logic [7:0] rdval;
 
@@ -119,6 +120,21 @@ module audio_tb;
     if (busy >= 512) ok(1'b0, "ASTAT b6 cleared within 512 bus polls");
   endtask
   int poll_busy;
+
+  /* 16 item 48: the first two W1s on channel 0 after an enable, in colour
+   * clocks. W6 chains into one W1 and the next is due PER later; a DUE raised
+   * against the stale NEXT while W6 ran put the second a few colour clocks
+   * after the first. Watches W1's last step (WT 000) with WC = 0. */
+  bit w1gap_arm = 0;
+  int w1gap_n = 0, w1gap_cc = 0, w1gap_at [0:1];
+  always @(posedge SLOTCLK) if (w1gap_arm) begin
+    if (card.CCLK) w1gap_cc <= w1gap_cc + 1;
+    if (card.u2.RUN && card.u2.LAST && {card.u2.WT2, card.u2.WT1, card.u2.WT0} == 3'd0
+        && !card.u2.WC0 && !card.u2.WC1 && w1gap_n < 2) begin
+      w1gap_at[w1gap_n] <= w1gap_cc;
+      w1gap_n <= w1gap_n + 1;
+    end
+  end
   /* ⛔ ADATA IS FLOW-CONTROLLED AND THIS TASK DID NOT HONOUR IT.
    *
    * There is ONE posted-write latch. `PWBUSY` (ASTAT b6, 9.2) is high from the
@@ -380,7 +396,11 @@ module audio_tb;
        $sformatf("and PEND holds the NEXT sample, fetched in advance (%02h)", sfh(0)));
 
     // How many work slots one channel event actually costs - 10.2.5 says
-    // seven, and the margins in that table are quoted against the count.
+    // EIGHT since audio.md 16 item 37's re-timing, and the margins in that
+    // table are quoted against the count. It was seven until 2026-09-12: W1
+    // gained one wait step so that its third adder write lands in slot 5 with
+    // its read in slot 7 of the colour clock before, which is what gives the
+    // '283 chain 229 ns instead of 53 (10.3.5).
     // Count from the sequence's own first step, not from BUSY - BUSY is set on
     // the edge that ends the START slot and the first RUN is already gone.
     n = 0;
@@ -394,7 +414,7 @@ module audio_tb;
       if (card.u2.RUN) n++;
       if (card.u2.RUN && card.u2.LAST) i = 999;
     end
-    ok(n == 7, $sformatf("a channel event is seven work slots, and 10.2.5 is priced on it (%0d)", n));
+    ok(n == 8, $sformatf("a channel event is eight work slots, and 10.2.5 is priced on it (%0d)", n));
 
     $display("");
     $display("6.2 - and the byte reaches the converter, one frame behind");
@@ -687,10 +707,12 @@ module audio_tb;
     ok(sfp(3) == 19'h02000 && sfl(5) == 16'd2 && sfl(4) == 16'd16,
        $sformatf("ISOLATION: the buffer under test landed before it was measured (LC %05h LEN %0d PER %0d)",
                  sfp(3), sfl(5), sfl(4)));
+    w1gap_arm = 1; w1gap_n = 0; w1gap_cc = 0;
     wr('h2, 8'h81);                                   // enable
     repeat (80) @(posedge SLOTCLK);
     ok(sfc(1) == 17'd2,
        $sformatf("and CNT is 2*LEN - 1 = 3 less the chained W1's byte (%0d)", sfc(1)));
+
 
     // Count W1s between buffer ends. ⚠ Bounded, per CLAUDE.md's fifth trap:
     // a hang here would present as "budget more time" and not as a failure.
@@ -723,6 +745,10 @@ module audio_tb;
     ok(bad_pass == 0,
        $sformatf("⭐ D-1: every steady-state loop yields exactly 2*LEN = 4 samples, not 5 (%0d bad of %0d)",
                  bad_pass, passes));
+    w1gap_arm = 0;
+    ok(w1gap_n == 2 && w1gap_at[1] - w1gap_at[0] >= 16 / 2,
+       $sformatf("⭐ 16 item 48: after an enable the second sample is PER after the first, not a stale deadline's few colour clocks (%0d W1s, %0d cc apart, PER 16)",
+                 w1gap_n, w1gap_n == 2 ? w1gap_at[1] - w1gap_at[0] : -1));
 
     // ---- D-2: LEN = 0 is Paula's 65,536 words, not one byte --------------
     // ⚠ SAME ISOLATION, and it is the claim that went vacuously green last
@@ -867,6 +893,7 @@ module audio_tb;
     $display("6.2 and 16 item 43 - every converter write of the run, against the AD7528");
     $display("");
     conv_report();
+    adder_window_report();
 
     $display("");
     if (fails == 0) $display("audio_tb OK");

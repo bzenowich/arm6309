@@ -87,10 +87,11 @@ measured (`npm run check:arom`, 59 claims) and **not fitted**, so §0's headline
 35 ICs until §16 item 38's gate is passed.
 
 ⛔ **And §16 item 37 belongs to the design as it stands, not to §10.3.** The 16-bit
-`74HC283` chain has never been given a propagation budget, and the datasheet says it is
-**192 ns into a 53 ns window**. It is fixable in either architecture by the same move —
-put the read and its write on either side of the walk, one update per colour clock — and
-that is what the margin figures above are quoted against. ⚠ It also **withdraws §16 item
+`74HC283` chain has never been given a propagation budget, and the datasheet puts it at
+**192 ns**, which two adjacent work slots cannot hold. Both architectures fix it the same
+way — the read and its write on either side of the walk, one update per colour clock — and
+§10.2 is built that way: `audio_tb` and `modplay_tb` measure every sum write waiting at
+least **211 ns**. The margin figures above are quoted against it. ⚠ It also **withdraws §16 item
 34's 8-bit datapath**, which is why the control store costs five packages and not one.
 
 **E-rate compatibility.** The card is **unaffected by the machine's E rate**. Every
@@ -210,9 +211,9 @@ Slots 0–3 run **unconditionally every colour clock**, which is what makes the
 design jitter-free: a channel's sample transition always lands on its true
 Paula boundary, never on a "whenever the sequencer got round to it" boundary.
 Slots 5–7 are where the rare, expensive work goes — at most 126,000 channel events per
-second, **seven work slots each** (§10.2.3), against **10.64 M work slots per second**:
-a **12× margin** at ProTracker's top note and **3.2×** at §4.3's extended floor.
-§10.2.5 has the table, and `audio_tb` counts the seven rather than asserting them.
+second, **eight work slots each** (§10.2.3), against **10.64 M work slots per second**:
+a **10.6× margin** at ProTracker's top note and **2.8×** at §4.3's extended floor.
+§10.2.5 has the table, and `audio_tb` counts the eight rather than asserting them.
 
 ### 3.2 The pipeline
 
@@ -247,12 +248,12 @@ when the compare hits — sets one flag. Nothing else.
 
 **The refill has slack, and §10.2.3 says how much.** After a hit the work slots
 fetch the next sample byte from card RAM, advance `PTR`/`CNT` (and reload from
-`LC`/`LEN` when the buffer ends — §3.3), and write the byte into `PEND`: **seven slots,
-and eleven at a buffer end**. Each is a read-modify-write of one state-file word, and a
+`LC`/`LEN` when the buffer ends — §3.3), and write the byte into `PEND`: **eight slots,
+and sixteen at a buffer end**. Each is a read-modify-write of one state-file word, and a
 read-modify-write is two slots. The next event on that channel is at least 30 colour
 clocks away even at §4.3's 118 kHz extreme, which is **90 work slots**; four coincident
-channels need **twenty-eight**, so the queue drains in ten colour clocks and the
-throughput floor is `PER` ≥ 10 (§10.2.5).
+channels need **thirty-two**, so the queue drains in eleven colour clocks and the
+throughput floor is `PER` ≥ 11 (§10.2.5).
 
 **And a volume write does not wait for a sample event.** `VOL` goes to the volume
 converter, not through `PEND` (§6.1), so a host write queues its own deferred write to
@@ -403,11 +404,11 @@ This card fetches from local SRAM in a deferred slot with a 56× margin (§3.1),
 | Maximum rate per channel | 28.6 kHz | **118 kHz** |
 | Aggregate fetch rate at the floor | 4 × 28.6 kHz | **4 × 118 kHz = 473 k/s, vs 7.1 M/s available** |
 
-⚠ **And there is a floor, at `PER` = 10.** §10.2.5's micro-ops are seven work slots
+⚠ **And there is a floor, at `PER` = 11 — call it 14 in practice.** §10.2.5's micro-ops are eight work slots
 per channel event against three work slots per colour clock, so four channels at
-`PER` < 10 ask for more slots than exist. `PER` = 0 or 1 — which §4.2 wanted clamped in
+`PER` < 11 ask for more slots than exist, and the engine also idles up to two slots per sequence waiting for slot 7 (§10.2.3). `PER` = 0 or 1 — which §4.2 wanted clamped in
 the sequencer, and which Case A's U2 cannot see (§16 item 31) — is the pathological case
-of it. **The rule is the host's: never write `PER` < 10.** No replayer can: ProTracker's
+of it. **The rule is the host's: never write `PER` < 14.** No replayer can: ProTracker's
 own table stops at 113, and the sample-offset and portamento commands cannot take it
 below 113 either.
 
@@ -1552,7 +1553,7 @@ a 16-bit adder chain; the top three bits are a carry-in increment in the sequenc
 | 1 | 74HC574 | posted-write data latch (host → sample RAM) |
 
 | **1** | **`ATF1508AS-…JC84`, PLCC-84, socketed — U1** | the host register block: §9.1's seven-bit decode, `ADMACON`, `AINTENA`, `AINTREQ` and its pending register, `/FIRQ`, `ACTRL`, the synchronisers, §9.3's read-back path, the slot counter, the ÷5 prescale and §8.2's tempo count. **Fitted at 107 of 128 cells and 62 of 64 I/O** (§10.1.1) |
-| **1** | **`ATF1508AS` PLCC-84 — U2** | **the sequencer (§10.2). Fitted at 126 of 128 cells and 63 of 64 I/O** (§10.2.6) |
+| **1** | **`ATF1508AS` PLCC-84 — U2** | **the sequencer (§10.2). Fitted at 120 of 128 cells and 63 of 64 I/O** (§10.2.6) |
 | 1 | 28.37516 MHz osc | PAL Amiga master (§4.1) |
 | (1) | (28.63636 MHz osc) | (NTSC, socketed option, §4.1) |
 | — | 3.5 mm stereo jack | **headphone output on the card's rear edge — §7.1.** The backplane pair is the line output and is a different signal |
@@ -1571,9 +1572,9 @@ state-file byte lane), a `74HC138` for §10.2.6's lever, and a `74HC00` to gate 
 enables with the slot clock's second half. ⚠ **The analogue side is still an enumeration
 and not a layout** — §16 item 19.
 
-⚠ **This table is the present design, and one row of it is not timed.** §16 item 37:
-the four `74HC283` are a 192 ns path into a 53 ns window, which §10.3.5 fixes by
-re-timing rather than by re-specifying. §10.3 prices a different arrangement at **40** —
+⚠ **This table is the present design, and one row of it is timed only at 25 °C.** §16
+item 37: the four `74HC283` are a 192 ns path (240 ns over temperature), and the
+sequencer gives them 211 ns by re-timing rather than by re-specifying. §10.3 prices a different arrangement at **40** —
 four `27C512` and a `74HC163` in, nothing out — and §16 item 38 is the decision.
 
 ### 10.1 Two CPLDs, and why the counter and comparator stay outside
@@ -1601,17 +1602,17 @@ pins and spends cells. There is no one-part arrangement of this card.
 | | holds | fitted |
 |---|---|---|
 | **U1** `ATF1508AS` PLCC-84, socketed | the host register block — §9.1's decode, `ADMACON`, `AINTENA`, `AINTREQ` and its pending register, `/FIRQ`, `ACTRL`, the `AINTREQ` read synchroniser, the slot walk, the ÷5 tempo reference and §8.2's CIA count — **plus §4.2's free-running counter and comparator and §9.3's read-back latch**, which is seven packages for sixteen pins | **107 of 128 cells, 62 of 64 I/O** — §10.1.1 |
-| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⛔ **126 of 128 cells, 63 of 64 I/O** — §10.2.6 |
+| **U2** `ATF1508AS` PLCC-84, socketed | the sequencer — §10.2 | ⚠ **120 of 128 cells, 63 of 64 I/O** — §10.2.6 |
 
-⚠ **U2 IS EXACTLY FULL AND U1 IS NOT**, which is the whole shape of this card's logic
+⚠ **U2 IS THE TIGHT PART AND U1 IS NOT**, which is the whole shape of this card's logic
 and the reason every reduction moved work *towards* U1. "Design fits successfully" on
-both: U2 at **126 of 128 cells**, 63 of 64 I/O, **52 foldback nodes, two cascades and 445
-product terms**, six of eight blocks at **37 of 40 LAB fan-in**; U1 at **107 of 128 cells**,
+both: U2 at **120 of 128 cells**, 63 of 64 I/O, **62 foldback nodes, fourteen cascades and
+414 product terms**, seven of eight blocks at **34 of 40 LAB fan-in**; U1 at **107 of 128 cells**,
 62 of 64 I/O, 34 foldback, two cascades and 353 product terms. A **TQFP-100 was tried and does not help**: it takes the
-pins from 63 of 64 to 63 of 80 and leaves the cells at 126 of 128, because both packages
+pins from 63 of 64 to 63 of 80 and leaves the cells at 120 of 128, because both packages
 carry the same 128 macrocells. So the PLCC-84 is the right package — it keeps the socket
 and the TQFP-100 would buy eighteen pins the design does not need — and **there is
-nothing left on U2 for anything else** — which §11.2's departure does not change, because that mode was never built.
+little left on U2 for anything else** — which §11.2's departure does not change, because that mode was never built.
 
 ⚠ **JTAG is off on U2**, which is the four pins that made it fit: 63 of 64 against 63 of
 60. Both parts are programmed out of circuit, so this is the arrangement the card already
@@ -1857,16 +1858,17 @@ competes for all three — **10.6 M work slots per second** rather than 7.09 M. 
 is one slot, and a state-file read holds its data for as long as the address holds
 (§9.5), so a read-modify-write is two slots and never three.
 
-⛔ **A SEQUENCE'S STEPS RUN IN CONSECUTIVE WORK SLOTS, AND THE `'283` CHAIN GETS 53 ns.**
-§16 item 37's re-timing — step 0 in slot 7 and every step after it in the next work slot,
-which gives the adder **229 ns** across the walk (§10.3.5) — was built on 2026-09-12 and
-**reverted the same day, because it stopped the card playing** (`history.md`; §16 item 37).
-The window is 53 ns again and the item is open.
+⭐ **A SEQUENCE'S STEP 0 RUNS IN SLOT 7, AND EVERY STEP AFTER IT IN THE NEXT WORK SLOT**
+(§16 item 37). The phase is therefore `[7, 5, 6, 7, …]` whatever slot the request
+arrived in, and **every adder write lands in slot 5 with its operands latched in slot 7**
+of the colour clock before — so the `'283` chain settles across the walk. `audio_tb` and
+`modplay_tb` measure it on every sum write: **the shortest window is six slots, 211 ns**,
+against the 192 ns the datasheet path needs at 25 °C. Nine wait steps do it — W1 one,
+W2 two, W3 three, W6 three — and no logic.
 
-⚠ **When it is rebuilt, the phase must be held in `RUN` and not in `START`**, because
-`START` is what clears `DUE`: gating the start throttles the channel picker instead of the
-engine, and `RSTANY` and `HDUE` outrank `DUEANY`, so a busy host starves the channels
-outright.
+⚠ **The phase is held in `RUN` and not in `START`**, because `START` is what clears `DUE`:
+gating the start throttles the channel picker instead of the engine, and `RSTANY` and
+`HDUE` outrank `DUEANY`, so a busy host starves the channels outright.
 
 ⛔ **"EVEN `T` IS A READ, ODD `T` IS A WRITE" WAS ASSERTED HERE AND `PROGRAM` NEVER
 OBEYED IT.** W1 steps 2 and 3 are both reads, W3 step 0 is an even write, and W5 is
@@ -1876,7 +1878,7 @@ rule, which is the property the adder's window actually rests on. *An invariant 
 document states and a table does not hold is not an invariant* (§10.3.4).
 
 ⚠ **THE STEP DECODE IS THE PART THAT IS FULL, and it is not the host qualifiers.**
-**Seven of U2's eight logic blocks stand at 36 of 40 signals** (`cpld/aseq.fit`), which
+**Seven of U2's eight logic blocks stand at 34 of 40 signals** (`cpld/aseq.fit`), which
 is why the 8-bit datapath does not fit (§16 item 34). The obvious cure — ask a host access's meaning once
 and register the answer, so `SFWE0` reads one signal where it reads six — was built on
 §9.4.4's repaired handshake, simulates clean, and **makes fan-in worse**: 35 → 38,
@@ -1937,29 +1939,30 @@ volume windows fire. A compare that hits meanwhile queues like any other.
 | `PER` = 0 or 1 | ⚠ **not clamped in hardware** — §10.2.2 |
 | Attach (`ADKCON`), ch *n* → ch *n*+1 | **not implemented** — no ProTracker replayer writes `ADKCON`, and no MOD effect can ask for it (§11.3) |
 
-#### 10.2.5 What it costs in slots — and §3.1's 56× is 46×
+#### 10.2.5 What it costs in slots — and §3.1's 56× is 40×
 
-A channel event is **seven work slots**, measured by `audio_tb` rather than counted by
-hand, and thirteen when the buffer ends — W1 then W2. Against **10.64 M work slots/s**
-(three per colour clock, §10.2.3):
+A channel event is **eight work slots**, measured by `audio_tb` rather than counted by
+hand, and sixteen when the buffer ends — W1 then W2, both eight. Against **10.64 M work
+slots/s** (three per colour clock, §10.2.3):
 
 | | events/s, 4 ch | slots/s | margin |
 |---|---|---|---|
-| `PER` = 428 (C-2) | 33,148 | 232 k | **46×** |
-| `PER` = 113 (B-3, ProTracker's top note) | 125,552 | 879 k | **12×** |
-| `PER` = 30 (§4.3's extended floor) | 472,919 | 3.31 M | **3.2×** |
-| …plus a 6309 saturating `SDATA` at 400 k stores/s × 6 | | 5.71 M | **1.9×** |
+| `PER` = 428 (C-2) | 33,148 | 265 k | **40×** |
+| `PER` = 113 (B-3, ProTracker's top note) | 125,552 | 1.00 M | **10.6×** |
+| `PER` = 30 (§4.3's extended floor) | 472,919 | 3.78 M | **2.8×** |
+| …plus a 6309 saturating `SDATA` at 400 k stores/s × 9 | | 7.38 M | **1.4×** |
 
-**The throughput floor is `PER` ≥ 10**, from 4 × 7 slots per `PER` colour clocks against
-three slots per colour clock. §4.3's conservative ~30 sits three times above it — and
+**The throughput floor is `PER` ≥ 11**, from 4 × 8 slots per `PER` colour clocks against
+three slots per colour clock. ⚠ **Call it `PER` ≥ 14 in practice**: the engine also idles
+up to two slots per sequence waiting for slot 7, which this arithmetic does not count.
+§4.3's conservative ~30 sits twice above it — and
 `audio_tb` runs four channels at `PER` = 16 and asserts that no channel is left
 permanently due.
 
 ⭐ **Measured** (`npm run check:sim:audio`, 2026-09-12): four channels at ProTracker's top
-note use **44 of 600 work slots — a 13.6× margin**, and at `PER` = 30 the engine uses
-**196 of 600 — 3.0×**. ⚠ Both fall when §16 item 37's across-the-walk re-timing is
-rebuilt — it measured 56 of 600 (10.7×) and 217 of 600 (2.7×) while it was in — and that
-difference is what the `'283` chain's 229 ns costs.
+note use **56 of 600 work slots — a 10.7× margin**, and at `PER` = 30 the engine uses
+**217 of 600 — 2.7×**. Before §16 item 37's re-timing they were 44 (13.6×) and 196
+(3.0×); that difference is what the `'283` chain's 211 ns costs.
 
 ⚠ **§3.1's 56× was never the right number and neither was §10.2's first 7×.** The first
 counted pointer updates rather than slots; the second counted seven slots against two
@@ -1967,12 +1970,14 @@ work slots per colour clock instead of three. Both are archived.
 
 #### 10.2.6 The pin budget, and the one lever that was pulled
 
-U2 is **38 outputs and 26 inputs**, and the fitter reports **63 of 64 I/O and 126 of
-128 logic cells** — "Design fits successfully" on pass 2, with **52 foldback nodes, two
-cascades and 445 product terms**, and **six of eight logic blocks at 37 of 40 LAB fan-in**
-(§16 item 47, 2026-09-12). ⚠ **The two cascades are on `SFOE` and `SDH2`**, the state
-file's output enable and the high lane's arithmetic. `SFOE` is on the card's one tight
-path (§3.2), and nothing here times it. `npm run check:audio` prints the interface and asserts
+U2 is **38 outputs and 26 inputs**, and the fitter reports **63 of 64 I/O and 120 of
+128 logic cells** — "Design fits successfully" on pass 1, with **62 foldback nodes,
+fourteen cascades and 414 product terms**, and **seven of eight logic blocks at 34 of 40
+LAB fan-in** (§16 item 37). ⚠ **The cascades include the state-file address `SFA0`–`SFA4`
+and `SFOE`** — the card's one tight path (§3.2), two links deep on `SFA0` and `SFA4` — as
+well as `T2`, `WC0`, `SDH1` and `SDH2`. The `ATF1508AS` sheet puts a cascade link at
+0.8–1.2 ns (`tPEXP`) and a foldback term at 4–12 ns (`tSEXP`) across its speed grades;
+U2's grade is not specified (§10's `ATF1508AS-…JC84`), and nothing here times it. `npm run check:audio` prints the interface and asserts
 it is **closed in both directions**: every signal U1 reads is produced by U2, the
 backplane or the board, and every signal U2 reads is a U1 output or the `'688` and the
 `'283` chain answering it. Sixteen nets cross from U1 to U2 and five come back.
@@ -1983,7 +1988,7 @@ stopped duplicating a fetch W1 already does — and item 39(b) then spent it, on
 that loads the converter port register at the `PEND` write. ⭐ **The pair together cost
 nothing and bought two audible repairs**: 487 product terms to 473, peak LAB fan-in 39
 to **36**, and a pin back. ⚠ It filled again, and §16 item 44 moving the tempo timer to U1 is the only way
-this part has ever got room; after §16 item 47's host-strobe repair U2 is at **126 of 128**. A **TQFP-100 was fitted as well** and takes the pins to 62 of 80 while leaving the
+this part has ever got room; after §16 item 47's host-strobe repair U2 was at 126 of 128, and §16 item 37's re-timing — nine wait steps, no logic — took it to **120**. A **TQFP-100 was fitted as well** and takes the pins to 62 of 80 while leaving the
 cells where they are — both packages carry the same 128 macrocells — so the larger package
 buys pin headroom this design does not need and costs the socket. **The PLCC-84 with JTAG
 off is the answer, and the next thing added to this card has to displace something.**
@@ -2156,7 +2161,7 @@ the repository). **192 ns, and 240 ns over temperature.**
 §0 says the card has "**no tight path at all** — the fastest thing on the card is a
 state-file read at 30 ns inside a 35.24 ns slot". **The `'283` chain is not in that
 sentence and has never been budgeted anywhere in this document**, and §10.2.3's
-back-to-back read slot and write slot offer it **53 ns**.
+back-to-back read slot and write slot offered it **53 ns** until §16 item 37's re-timing.
 
 ⚠ **Nothing on the card can see it.** CLAUDE.md says it plainly — the Verilog models the
 logic and not the timing, and `cpld/*.fit` is where propagation lives — and the `'283`s
@@ -2261,7 +2266,7 @@ That one step is the whole difference.
 | throughput floor | `PER` ≥ 16 | **`PER` ≥ 20** | `PER` ≥ 32 ⛔ |
 
 ⭐ **The adder costs the two architectures almost the same, which is the useful result:
-it does not decide between them.** What decides is that U2 is at 126 of 128 cells.
+it does not decide between them.** What decides is that U2 is at 120 of 128 cells.
 
 **What the control store buys, item by item:**
 
@@ -2670,7 +2675,7 @@ Paula in any way that matters to the acceptance test, and that is deliberate.
 | 1 | **Build the MCU card** (§12.5): STM32G431 + one `AD7528` + §7's filters. It sums in software and drives one converter pair, not §6.2's eight halves — what it validates is the register map and the replayer, and the cascade is step 7's job | plays a known module correctly through the §9 register map |
 | 2 | **Write the loader, replayer and converter** against the MCU card | acceptance test: 20 varied modules, A/B against a real Amiga or a reference emulator, by ear and by capture |
 | 3 | **Bench the §3.2 stage-A path** at 35 ns on a breadboard — sequencer address out → `IS61C6416AL-12` state file → compare-input setup, 27 ns budgeted | closes with margin |
-| 4 | **Fit the card's logic** with all eight slots, the shadow reload, the deferred queue, the host-counter increments and the interrupt block | ⭐ **done.** U1 is fitted at 107 of 128 logic cells (§10.1.1), and U2 — the shadow reload, the deferred queue and the host-counter increments — at 126 of 128 (§10.2.6). §16 item 7's 8-channel slot allocation is not needed: §11.2 was dropped |
+| 4 | **Fit the card's logic** with all eight slots, the shadow reload, the deferred queue, the host-counter increments and the interrupt block | ⭐ **done.** U1 is fitted at 107 of 128 logic cells (§10.1.1), and U2 — the shadow reload, the deferred queue and the host-counter increments — at 120 of 128 (§10.2.6). §16 item 7's 8-channel slot allocation is not needed: §11.2 was dropped |
 | 5 | **Discrete card rev A**, driven by the STM32 bus exerciser ([`graphics.md`](../../video/docs/graphics.md) §16.1) — no 6309 core needed | state file reads back; a single channel plays a sine from card RAM at a known `PER` |
 | 6 | **All four channels + the shadow reload** | the step-2 module set plays **identically** to the MCU card, sample-for-sample where captured |
 | 7 | **Analogue bring-up**: four sample I/V stages, the cascade into the volume halves, the two summing amplifiers, both filters, bypass, grounding | THD and noise floor measured; **converter glitch measured** (§16 item 9); **channel-to-channel gain matched** (§16 item 23); no digital hash from the SRAMs in the output |
@@ -2989,9 +2994,9 @@ specification that has not been tested.
     ⚠ **IT CAME TRUE ONCE, AND THAT CHANGE WAS REVERTED.** Item 37's re-timing fitted on
     2026-09-12 at **128 of 128 cells** — nine *wait* steps and four more literals on `RUN`,
     no new logic at all, and it consumed the last four cells. It then stopped the card
-    playing and was reverted the same day (`history.md`). U2 is **126 of 128 cells**, 63 of
-    64 I/O, two cascades, 52 foldback nodes, and six of eight logic blocks at 37 of 40
-    fan-in, after §16 item 47's host-strobe repair. **The forecast stands, and it has now been tested once.** ⭐ **§10.3 is the answer to it.** 38 of U2's
+    playing and was reverted the same day (`history.md`). U2 is **120 of 128 cells**, 63 of
+    64 I/O, fourteen cascades, 62 foldback nodes, and seven of eight logic blocks at 34 of
+    40 fan-in, after item 37's re-timing was rebuilt. **The forecast stands, and it has now been tested once.** ⭐ **§10.3 is the answer to it.** 38 of U2's
     cells become table content, 19 more stop reading `(WT, T)`, and U1 — which holds
     §8.2's count since item 44 — takes a copy of `TIMER` so slot 4 is freed. §16 item 38
     is the gate.
@@ -3234,7 +3239,7 @@ specification that has not been tested.
     ⭐ **THE REPAIR IS FREE AND IT IS A RE-TIMING, NOT A RE-SPECIFICATION.** The walk
     never adds, so its four slots are free settling time: put a read at the end of one
     colour clock's engine window and its write at the start of the next and the sum gets
-    **229 ns** in §10.2's arrangement, **211 ns** in §10.3's. One read-modify-write per
+    **211 ns** in §10.2's arrangement — measured, sub-item 3 — and **211 ns** in §10.3's. One read-modify-write per
     colour clock in both, W1 = 4 colour clocks and a throughput floor of `PER` ≥ 16
     (§10.2), or 5 and `PER` ≥ 20 (§10.3) — both inside §4.3's conservative 30, and
     computed by `npm run check:arom`.
@@ -3261,7 +3266,7 @@ specification that has not been tested.
 
     **Still open, in order:**
 
-    1. ⚠ **Over temperature nothing closes** — 240 ns against 229. The card is a
+    1. ⚠ **Over temperature nothing closes** — 240 ns against 211. The card is a
        commercial-temperature design as it stands, and that should be a stated
        specification rather than an accident. The lever is a faster family for those
        four packages, and **this item said to get the datasheet before costing one.
@@ -3292,9 +3297,9 @@ specification that has not been tested.
 
        A 16-bit ripple is `A`/`B`→`C_OUT` + `C_IN`→`C_OUT` × 2 + `C_IN`→`S3` =
        **64 ns over temperature**, against the `'HC283`'s 163 at 25 °C and 205 over it.
-       With the `74HC244`'s 23 and the state file's 6 that is **93 ns into the 229 ns
+       With the `74HC244`'s 23 and the state file's 6 that is **93 ns into the 211 ns
        §10.2 gives it** — and 93 into §10.3's 211. ⭐ **The card closes over its full
-       temperature range with 2.4× margin, and it stays a `74HC` card**: `V_OH` 4.4 V
+       temperature range with 2.3× margin, and it stays a `74HC` card**: `V_OH` 4.4 V
        is a CMOS level, so nothing downstream becomes `74HCT` and item 9's
        fast-bipolar-edges risk does not arise. It is also a CMOS part, so `I_CC` is
        microamps static rather than the `'F283`'s 55 mA.
@@ -3308,34 +3313,53 @@ specification that has not been tested.
 
     2. **Closed 2026-09-10** — the `IS61C6416` datasheet is in the repository and
        `t_SD` = 6 ns is verified for the `-12` grade. See the block above.
-    3. ⛔ **BUILT AND REVERTED 2026-09-12 — IT STOPPED THE CARD PLAYING.** `PROGRAM` was
-       re-timed to the across-the-walk rule and `audio_tb` passed 67 claims, 0 failed — but
-       `check:modplay` fell to **12 of 18** on every probe, the sample upload landed 129 of
-       130 bytes at one address, `TIMER` never committed, and the converters went silent
-       (42-byte render against 464 KB). Bisected to this change and reverted; `history.md`
-       has the evidence. ⚠ **`audio_tb` passing is what made it look safe**, and it is the
-       gap §16 item 36 already names. What the re-timing did, and must do again without
-       this defect: nine wait steps
-       (W1 one, W2 two, W3 three, W6 three) put **every one of the twelve adder writes
-       in slot 5 with the read that feeds it in slot 7** of the colour clock before, so
-       the sum settles across the walk for **229 ns** against the 53 ns §10.2.3's two
-       adjacent work slots gave it. The phase is pinned in `RUN` — step 0 runs only in
-       slot 7 — so it no longer depends on which slot the request happened to arrive in.
+    3. ⭐ **BUILT 2026-09-13, AND THE WINDOW IS MEASURED: 211 ns.** Nine wait steps (W1
+       one, W2 two, W3 three, W6 three) put **every adder write in slot 5 with its
+       operands latched in slot 7** of the colour clock before, and the phase is pinned in
+       `RUN` (step 0 only in slot 7), so it does not depend on which slot a request
+       arrived in. ⭐ `adder_window.svh`, in both `audio_tb` and `modplay_tb`, times every
+       sum write from the last change to the adder's inputs: **the shortest of 1,878
+       writes in `audio_tb` is six slots, 211.4 ns**, against the datasheet path's 192 ns
+       at 25 °C. On the design before the re-timing the same claim measures **17.6 ns** —
+       half a slot, not even the 53 ns two adjacent work slots were assumed to give.
+       ⚠ The "229 ns" this item quoted was geometry; latch to write is six slot edges.
 
-       ⛔ **The first attempt pinned `START` instead, and it starves the card.** `DUE` is
+       ⛔ **The first build, on 2026-09-12, stopped the card playing, and it was not this
+       change's fault.** `check:modplay` fell to 12 of 18, the upload landed 129 of 130
+       bytes at one address and `TIMER` never committed. That is §16 item 47: a host
+       `ASTAT` poll overwrote a pending write's identity, and nine more W3 steps made the
+       poll land on a pending write almost every time. Rebuilt on the repaired host
+       strobe, the same `PROGRAM` plays both probes. Two things it still exposed:
+
+       - **§16 item 48** — a stale `DUE` after an enable, whose window W6's three wait
+         steps tripled. Repaired in `CLRn`.
+       - **`modplay_tb` compared the sample RAM before its last write retired**, which
+         worked only while W3 finished inside the write task's eight-slot tail. It waits
+         on `ASTAT` b6 now, as a host must.
+
+       ⛔ **An earlier attempt pinned `START` instead, and it starves the card.** `DUE` is
        cleared only when a start *picks* it, so gating the start gates the channel
        picker, and `RSTANY`/`HDUE` outrank `DUEANY`: a busy host took every opportunity
        and **channel 0 ticked 0 times in 300 colour clocks** while W1 burned 154 slots on
        other work. ⚠ **A structural check could not see it** — the adder writes were all
        correctly across the walk; only `audio_tb` caught it. Geometry is not liveness.
 
-       ⚠ **What it cost while it was in: U2 went exactly full.** 124 → **128 of 128
-       cells**, 63 → 62 I/O, two cascades → one, and six of eight logic blocks at **38 of
-       40 fan-in** against 36. The revert returns all five figures. It fits on the fitter's second pass, as it did before. The throughput
-       is §10.2.5's, and item 32's "the next repair of this kind will not fit" was literal
-       for the one day this change was in. ⚠ The testbench still cannot verify the *timing* — the `'283`s are
-       outside both CPLDs and the Verilog models logic, not delay; what it verifies is
-       that the microprogram still plays a buffer once the steps have moved.
+       | measured on this tree | before | after |
+       |---|---|---|
+       | shortest adder window | 17.6 ns | **211.4 ns** |
+       | channel event | 7 work slots | **8** |
+       | margin, 4 ch at `PER` = 113 / 30 | 13.6× / 3.0× | **10.7× / 2.7×** |
+       | U2 cells, I/O | 126 / 128, 63 / 64 | **120 / 128, 63 / 64** |
+       | U2 foldback, cascades, PT, fitter pass | 52, 2, 445, pass 2 | **62, 14, 414, pass 1** |
+       | `audio_tb` / `check:modplay` both probes | 69 / 20 / 20 | **71 / 21 / 21**, 0 failed |
+
+       ⚠ **What it did to U2 is a placement change, not a size change.** The part got six
+       cells *smaller* and the fitter placed it on pass 1 with fourteen cascades —
+       including `SFA0`–`SFA4` and `SFOE`, on §3.2's tight path — where the previous design
+       failed pass 1 and fitted on pass 2 with two. A cascade link is 0.8–1.2 ns and a
+       foldback term 4–12 ns across the `ATF1508AS` grades, U2's grade is unspecified,
+       and nothing here reads a timing report. ⚠ **And the testbench still cannot verify
+       silicon timing**: the window is logic time between edges, with no delay modelled.
 
 38. **⚠ NEW 2026-09-10 — the decision on §10.3's control store, and what has to happen
     before it can be made.** §10.3 designs the sequencer's third arrangement: the
@@ -3383,7 +3407,7 @@ specification that has not been tested.
 
     ⚠ **What that does to this item is narrow the case rather than close it.** The two
     audible defects were the strongest argument for §10.3 and they are gone. What remains
-    is §16 item 32 — U2 at 126 of 128 cells with **six of eight blocks at 37 of 40
+    is §16 item 32 — U2 at 120 of 128 cells with **seven of eight blocks at 34 of 40
     fan-in** — so **the next repair of this kind will not fit.** No feature is waiting on
     it: §11.2's eight channels and §11.3's attach chain are both dropped.
     §10.3 is now a question about headroom for future work, not about a card that
@@ -3868,6 +3892,26 @@ specification that has not been tested.
     `CLAUDE.md`'s *"a testbench that drives `E` from its own free-running counter has a
     CPU that cannot be waited"*, on the host port. **A handshake the testbench peeks is a
     handshake it has not tested.**
+
+48. **⭐ CLOSED 2026-09-13 — after an enable, a stale `DUE` played the note's first sample
+    for a few colour clocks instead of `PER`.** `NEXT` keeps the value it had when the
+    channel was disabled until W6 rewrites it on its last step, and the compare keeps
+    running while the enable edge waits in `RST` and while W6 runs. If `COUNT` crosses the
+    old `NEXT` in that window, a `DUE` is raised — it cannot be picked, because `RSTANY`
+    outranks `DUEANY` and W6 holds `BUSY` — and it is served straight after W6's chained
+    W1 as a second sample event. The buffer still yields the right number of samples;
+    the first one is short.
+
+    Found by item 37's rebuild: W6's three wait steps tripled the window, and
+    `audio_tb`'s *"CNT is 2 × LEN − 1 less the chained W1's byte"* read 1 where it
+    expects 2. Traced: `NEXT = $17FD` three colour clocks ahead of `COUNT` at the enable,
+    W6 running slots 4–34 while `COUNT` crossed it, and a W1 at slot 60 after the chained
+    one at 36. ⚠ **The window exists without the re-timing too**, only shorter.
+
+    **The repair** clears a channel's `DUE` on the last step of its own W6 — one term per
+    channel in `CLR0`–`CLR3`, no cell. **The claim** is in `audio_tb`: after an enable at
+    `PER` = 16, the first two W1s on the channel are **15 colour clocks apart**. With the
+    term removed they are **3 apart** and it fails, and so does the `CNT` claim.
 
 ---
 

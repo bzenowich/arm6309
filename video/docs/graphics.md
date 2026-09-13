@@ -4165,10 +4165,11 @@ left is measurement. They are grouped by what would settle them.
     business, which nothing here reads.
 
     ⚠ **And it is not only `vctrl`.** Every current report was read on 2026-09-12:
-    `vsup` also fails pass-1 placement and fits on pass 2, and so do the audio card's U1
-    and U2 (`audio.md` §10.1.1, §10.2.6). **Only `vaddr` places on pass 1.** Second-pass
-    fitting is the normal state of this project's CPLDs rather than a `vctrl` condition,
-    and the timing question above is open for four parts, not one.
+    `vsup` also fails pass-1 placement and fits on pass 2, and so does the audio card's
+    U1 (`audio.md` §10.1.1). **`vaddr` and the audio card's U2 place on pass 1** — U2 since
+    `audio.md` §16 item 37's re-timing, with fourteen cascades. Second-pass fitting is
+    common on this project's CPLDs rather than a `vctrl` condition, and the timing
+    question above is open for all five.
 
     | part | cells | I/O | cascades | pass |
     |---|---|---|---|---|

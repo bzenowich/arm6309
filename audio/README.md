@@ -156,21 +156,21 @@ costs 25 % of the throughput — 7.1× to 5.7× at ProTracker's top note — and
 
 ⛔ **One more thing designing it found, and it belongs to the design as it stands, not
 to §10.3: the 16-bit `74HC283` chain was never given a propagation budget, and the
-datasheet says it is 192 ns into a 53 ns window** (§16 item 37). Nothing on the card can
+datasheet puts it at 192 ns, which two adjacent work slots cannot hold** (§16 item 37). Nothing on the card can
 see that — the Verilog models logic and not timing, and the adder is inside neither
 CPLD. ⭐ **The repair is free and it is a re-timing**: the walk never adds, so putting a
-read and its write on either side of it gives the sum 229 ns. ⛔ **It was built on
-2026-09-12 and reverted the same day, because it stopped the card playing** — §16 item 37
-and `docs/history.md`. ⛔ What it costs is §16
+read and its write on either side of it gives the sum **211 ns**, measured on every sum
+write by `audio_tb` and `modplay_tb`. It is built (2026-09-13); the first build was
+reverted because §16 item 47's host-port defect stopped the card playing. ⛔ What it costs is §16
 item 34's 8-bit datapath, which is now withdrawn — and that is why §10.3 is five
 packages rather than one.
 
 | | | |
 |---|---|---|
 | **U1** the host register block, plus §4.2's counter and comparator, §9.3's read-back latch, §6.2's frame parity and §8.2's tempo count | `audio` | 107 of 128 cells, 62 of 64 I/O, two cascades |
-| **U2** the sequencer (§10.2) | `aseq` | **126 of 128 cells**, 63 of 64 I/O, two cascades, **six of eight blocks at 37 of 40 fan-in** |
+| **U2** the sequencer (§10.2) | `aseq` | **120 of 128 cells**, 63 of 64 I/O, fourteen cascades, **seven of eight blocks at 34 of 40 fan-in** |
 
-⚠ **U2 is the tight part and U1 is not** — two cells and one pin spare against U1's
+⚠ **U2 is the tight part and U1 is not** — eight cells and one pin spare against U1's
 twenty-one — which is why every reduction this pass moved work
 *to* U1 — sixteen state-file data pins there bought seven packages, because the counter,
 the comparator and the read-back latch all want the same bus. **What is not closed is the analogue half**: the converter glitch, the cascaded

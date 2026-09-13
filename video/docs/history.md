@@ -2305,3 +2305,19 @@ The fit is
     2026-09-09. `npm run check:netlist` therefore has nothing to assert about this card,
     and `check:place` can only check that the package *count* matches
     `hardware/place/parts.ts`.
+
+## §0 / §3 / §4.3 / §10 / §16 items 32, 37, 38, 48 — the across-the-walk re-timing is rebuilt on the repaired host strobe (2026-09-13)
+
+`ba57e14`'s re-timing was re-applied on top of §16 item 47's host-strobe repair and
+played both `check:modplay` probes. Two defects it exposed were repaired (§16 item 48
+and a testbench that read the sample RAM before its last write retired), and the
+adder window was measured at 211 ns rather than the 229 ns derived before. U2 refitted
+at 120 of 128 cells on pass 1 with fourteen cascades. The text these changes replaced:
+
+### video/docs/graphics.md — §19 item 46, the other parts
+
+`vsup` also fails pass-1 placement and fits on pass 2, and so do the audio card's U1
+    and U2 (`audio.md` §10.1.1, §10.2.6). **Only `vaddr` places on pass 1.** Second-pass
+    fitting is the normal state of this project's CPLDs rather than a `vctrl` condition,
+    and the timing question above is open for four parts, not one.
+
