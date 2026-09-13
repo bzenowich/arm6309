@@ -4213,6 +4213,33 @@ left is measurement. They are grouped by what would settle them.
     ⚠ **The `'245`'s exclusion is modelled, not drawn** — the board's read-back enable is
     item 34's partial netlist, and `VSTAT`'s `+$13` has the same requirement.
 
+48. **⛔ OPEN 2026-09-13 — cell mode draws the first half of every cell from the previous
+    cell's code when `HSCROLL[2:0]` = 4.** Found by `software/demo/` on the whole machine
+    (`hardware/gal/verilog/demo_tb.sv`), the first program to scroll a tilemap
+    horizontally by less than a cell. At `HSCROLL[2:0]` = 0 every frame matches the model.
+    At 4, every frame matches a model in which pixel columns 0–3 of each cell use the code
+    of the cell to their left, and columns 4–7 are right. The check is `software/demo/tools/checkdemo.py`,
+    which compares every captured frame with `mkgame.render_cells(..., stale_half=True)`
+    and gets 0 wrong pixels against about 12,000 for the correct model. The pixel column
+    within the cell is right. Only the choice of cell is wrong.
+
+    **Why nothing caught it.** Item 16 (closed 2026-09-08) made fine horizontal scroll free
+    on one condition: "the map byte for a cell must be held before that cell's first pixel
+    is emitted, so when a line starts mid-cell the map fetch leads by one cell". Item 29
+    (2026-09-09) then made the map byte a two-stage pipeline, handed from `MAP` to `MAPQ`
+    by `CELLTICK` at "the cell boundary", whose phase §6.4.9 gives as `H0`, the unscrolled
+    slot counter's low bit. When `HSCROLL[2]` = 1 the displayed cell boundary is half a
+    cell from that one, so the handover lands mid-cell. `vtile_tb` scrolls horizontally
+    only by whole cells (`HSCROLL` = 24 and 768), and `machine_tb`'s cell-mode scene is at
+    `HSCROLL` = 0.
+
+    **The vertical offset has no analogue.** The same run scrolls vertically by 2 rows a
+    frame, and every frame at `VSCROLL[2:0]` = 2, 4 and 6 matches the correct model.
+    **Not yet known:** `HSCROLL[1:0]` ≠ 0, because the demo moves in fours. **What closes it:** `CELLTICK`, or `MAPQ`'s load, taken from the scrolled
+    column (`SA2` and the mux phase) rather than `H0`; a `vtile_tb` claim at
+    `HSCROLL[2:0]` = 1..7 that fails today; and a `vaddr` refit, which item 46 says has no
+    fan-in to spare.
+
 ### 19.6 Closed
 
 | Items | Closed | Where the argument is |

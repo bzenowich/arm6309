@@ -33,9 +33,15 @@
 `default_nettype none
 
 module machine #(
-    parameter int SIMMS = 4
+    parameter int SIMMS = 4,
+    // ⭐ AUDIO = 1 puts audio_card.v in a slot at $FF40 - audio.md 9.1 - on its
+    // own 28.37516 MHz crystal, asynchronous to CLK25 exactly as the two cards
+    // are on the backplane. 0 (the default) leaves the slot empty, and
+    // check:machine's seven runs are unchanged by it.
+    parameter bit AUDIO = 0
 ) (
     input  wire        CLK25,        // 25.175 MHz - the dot clock AND the divider's input
+    input  wire        SLOTCLK,      // 28.37516 MHz - the audio card's crystal, used only if AUDIO
     input  wire        n_reset,
     input  wire        fast_e,
 
@@ -71,7 +77,14 @@ module machine #(
     // ---- the three things that must never happen ------------------------
     output wire        bus_conflict,       // two drivers on D0-D7
     output wire        pa_conflict,        // two drivers on physical A20-A13
-    output wire        vram_read           // a VRAM read cycle - §11, counted
+    output wire        vram_read,          // a VRAM read cycle - §11, counted
+
+    // ---- the audio card, when AUDIO: what its four AD7528 pairs are given
+    output wire [7:0]  DACSAMP0, DACSAMP1, DACSAMP2, DACSAMP3,
+    output wire [7:0]  DACVOL0,  DACVOL1,  DACVOL2,  DACVOL3,
+    output wire [15:0] ACOUNT,
+    output wire        firq_asserted,
+    output wire        irq_asserted
 );
 
   // ---- the CPU ------------------------------------------------------------
@@ -163,7 +176,35 @@ module machine #(
   // card added must not need this line rewritten.
   assign wait_asserted = vid_wait_oe;
   assign n_irq  = ~vid_irq_oe;
-  assign n_firq = 1'b1;                  // the audio card's line; no audio card here
+  assign irq_asserted = vid_irq_oe;
+
+  // ---- the audio card -----------------------------------------------------
+  // audio.md 9.1: SEL = /IOSEL & A6 & !A5 & !A4, $FF40-$FF4F. The card's port
+  // is D0-D7 itself, bidirectional: the CPU drives it for a write to the
+  // card's window, and the card drives it (U1's macrocells, the prefetch
+  // '574s) for a read of it.
+  wire aud_sel = iosel & pa[6] & ~pa[5] & ~pa[4];
+  wire aud_firq_oe;
+  wire [7:0] aud_hd;
+  generate if (AUDIO) begin : slot_audio
+    assign aud_hd = (aud_sel & ~cpu_rnw) ? cpu_d_out : 8'hzz;
+    audio_card aud (
+        .SLOTCLK(SLOTCLK), .RESET(~n_reset),
+        .IOSEL(iosel), .E(e), .RW(cpu_rnw), .A(pa[6:0]), .HD(aud_hd),
+        .FIRQ_OE(aud_firq_oe), .COUNT(ACOUNT),
+        .DACSAMP0(DACSAMP0), .DACSAMP1(DACSAMP1), .DACSAMP2(DACSAMP2), .DACSAMP3(DACSAMP3),
+        .DACVOL0(DACVOL0), .DACVOL1(DACVOL1), .DACVOL2(DACVOL2), .DACVOL3(DACVOL3));
+  end else begin : slot_empty
+    assign aud_hd = 8'h00;
+    assign aud_firq_oe = 1'b0;
+    assign ACOUNT = 16'h0;
+    assign {DACSAMP0, DACSAMP1, DACSAMP2, DACSAMP3} = 32'h0;
+    assign {DACVOL0, DACVOL1, DACVOL2, DACVOL3} = 32'h0;
+  end endgenerate
+  // §2.1: open-drain, pulled up on the motherboard - one card on the line now
+  assign n_firq = ~aud_firq_oe;
+  assign firq_asserted = aud_firq_oe;
+  wire aud_drives = (AUDIO != 0) & aud_sel & cpu_rnw;
 
   // ---- D0-D7 --------------------------------------------------------------
   // 1. graphics.md §3.2's '245, whose enable is rfa's own decode: the card owns
@@ -215,7 +256,7 @@ module machine #(
   wire [7:0] vid_d = vstat_sel ? vstat : vid_rd;
 
   // 3. The motherboard, which answers for everything that is not a card.
-  wire mb_drives = mb_din_valid & cpu_rnw & ~(iosel & pa[6] & pa[5]);
+  wire mb_drives = mb_din_valid & cpu_rnw & ~(iosel & pa[6] & pa[5]) & ~aud_drives;
 
   // ⛔ TWO DRIVERS IS THE FAILURE /IOPAGE EXISTS TO PREVENT (machine.md §2), so
   // this reports it rather than ORing it. design-review2.md §10: "a model that
@@ -225,9 +266,11 @@ module machine #(
   //    E-high.
   wire vram_drives  = vid_rdoe & cpu_rnw;
 
-  assign bus_conflict = (mb_drives & (vid_drives | vram_drives)) | (vid_drives & vram_drives);
+  assign bus_conflict = (mb_drives & (vid_drives | vram_drives | aud_drives))
+                      | (vid_drives & vram_drives)
+                      | (aud_drives & (vid_drives | vram_drives));
 
-  assign cpu_d_in = vram_drives ? vid_vread : vid_drives ? vid_d : mb_din;
+  assign cpu_d_in = vram_drives ? vid_vread : vid_drives ? vid_d : aud_drives ? aud_hd : mb_din;
 
   // no `& e`: a testbench samples this on E's fall, where e is already 0
   assign vram_read = cpu_rnw & ~iopage & ~pa[20] & pa[19];

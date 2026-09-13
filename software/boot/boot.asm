@@ -70,6 +70,13 @@ STORET  EQU     RAMWIN+$100     19 item 1's 96-byte store target, clear of the
 STACK   EQU     $E000           grows down through block 6
 TASKT   EQU     $A000           block 5: a different SIMM page in each task
 DESCMAP EQU     $0000           the memory descriptor, block 0 (1a)
+* ⭐ THE RAM VECTORS. machine.md 7.2: the vectors are in ROM and point at a fixed
+* RAM jump table, "a software convention the boot monitor has to publish" - and
+* this is where it is published. IRQ and FIRQ jump through these two words,
+* which boot points at `halt` as soon as there is RAM. Block 6, clear of stage
+* 2's store at $C000 and the variables at +$10.
+IRQVEC  EQU     $C004
+FIRQVEC EQU     $C006
 DESCBLK EQU     $0001
 
 * machine.md 3: $FF00-$FF2F is free and decodes nowhere.  The last byte of it
@@ -221,6 +228,9 @@ wnext   addb    #2
         sta     DESCBLK+1
 
         lds     #STACK          the first instruction after which a JSR works
+        ldx     #halt           nothing has claimed an interrupt yet
+        stx     IRQVEC
+        stx     FIRQVEC
         lda     #P_BOOT
         sta     SIMPORT
 
@@ -1071,7 +1081,41 @@ vri     lda     VDATA
         clr     wpage
         lda     #P_VREAD
         sta     SIMPORT
+
+*==============================================================================
+* 11. A program in ROM. machine.md 7.2: everything after page 0 is for "a
+*     read-only ROM disk", and until there is one the handoff is the simplest
+*     that could work - ROM pages 1 and 2 at blocks 4 and 5, and if $8000 holds
+*     "6309", jump to $8004 with the stack, the RAM vectors and every test above
+*     behind it. Otherwise the two blocks go back to the SIMM and the ROM stops,
+*     exactly as it did before this section existed.
+*==============================================================================
+        lda     #$01            ROM page 1 at $8000, page 2 at $A000
+        sta     MAPLO+4
+        sta     MAPHI+4
+        lda     #$02
+        sta     MAPLO+5
+        lda     #$01
+        sta     MAPHI+5
+        ldx     $8000
+        cmpx    #$3633          "63"
+        bne     noprog
+        ldx     $8002
+        cmpx    #$3039          "09"
+        bne     noprog
+        jmp     $8004
+noprog  lda     #$04
+        sta     MAPLO+4
+        lda     #$05
+        sta     MAPLO+5
+        lda     MAPHI+6         the SIMM socket 1a chose
+        sta     MAPHI+4
+        sta     MAPHI+5
 halt    bra     halt
+
+* The interrupt vectors' way into RAM - see IRQVEC.
+irqtr   jmp     [IRQVEC]
+firqtr  jmp     [FIRQVEC]
 
 vbad    lda     #P_BADV         vidx holds the index, vgot the byte
         sta     SIMPORT
@@ -1274,8 +1318,8 @@ vgot    EQU     RAMWIN+$1B      ... and the byte that was read
         ORG     $FFF2
         FDB     halt            SWI3
         FDB     halt            SWI2
-        FDB     halt            FIRQ
-        FDB     halt            IRQ
+        FDB     firqtr          FIRQ - through FIRQVEC
+        FDB     irqtr           IRQ - through IRQVEC
         FDB     halt            SWI
         FDB     halt            NMI
         FDB     reset           RESET

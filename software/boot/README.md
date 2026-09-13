@@ -183,11 +183,30 @@ cell, passes that compare. So `machine_tb` also checks these stages from outside
 | `alias` | four sockets, a 1M × 8 in socket 0 (`ram.md` §11 item 7) | the walk rejects socket 0: bitmap `$0E`, 1,536 blocks, and everything lands in socket 1 |
 | `e2` | tile byte 17 corrupted after it is written | section 10 reports `$E2` with `vidx` = 17, after exactly 18 loads |
 
+## The RAM vectors, and a program in ROM
+
+`machine.md` §7.2 puts the vectors in ROM, pointing "at a fixed RAM jump table", and says
+the boot monitor has to publish that convention. This is it:
+
+| | |
+|---|---|
+| IRQ | the ROM vector jumps through the word at **`$C004`** |
+| FIRQ | ... through **`$C006`** |
+
+Both words are in block 6, the SIMM. Boot sets both to `halt` as soon as the stack is up.
+SWI, SWI2, SWI3 and NMI still point at `halt` directly.
+
+**Section 11** hands over to a program in ROM. After the VRAM read-back, boot maps ROM
+pages 1 and 2 at `$8000` and `$A000`. If `$8000` holds `"6309"`, it jumps to `$8004`, with
+the stack, the map and the RAM vectors set up. Otherwise it points the two blocks back at
+the SIMM and halts as before. `machine_tb` loads page 0 only, so it takes the second path.
+`software/demo/` takes the first.
+
 ## What it does not do yet
 
-- **No interrupt vector is ever taken.** NMI is not wired, FIRQ and IRQ are masked from
-  reset and nothing unmasks them, and the image contains no `SWI`, so the vector table is
-  checked only as two bytes of ROM. All six vectors point at `halt`.
+- **Boot itself takes no interrupt.** FIRQ and IRQ stay masked through every test here,
+  and the image contains no `SWI`. `software/demo/` is what takes both: the video card's
+  VBL `/IRQ` and the audio card's `/FIRQ`, through the RAM vectors above.
 
 - **No console, no monitor, no DriveWire loader.** `machine.md` §7.2 says what page 0
   is eventually for. `software/6809/README.md` has what retargeting ASSIST09 costs.

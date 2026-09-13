@@ -39,6 +39,7 @@ V="$V -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC $WAIVE --timescale 1ns/1ps"
 
 SRC="machine.v mainboard.v ../clkdec.v ../mmu.v u9.v u10.v"
 SRC="$SRC video_card.v vctrl.v vaddr.v vsup.v"
+SRC="$SRC audio_card.v audio.v aseq.v"       # elaborated only when AUDIO = 1
 SRC="$SRC ../../vendor/mc6809/mc6809e.v ../../vendor/mc6809/mc6809i.v"
 
 $V --top-module machine_tb $SRC machine_tb.sv -o machine_tb > /dev/null

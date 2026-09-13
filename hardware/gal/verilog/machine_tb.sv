@@ -33,6 +33,11 @@ module machine_tb;
   // ---- 25.175 MHz. One dot per 2 timesteps; E is this divided by 12. ------
   logic CLK25 = 0;
   always #1 CLK25 <= ~CLK25;
+  logic SLOTCLK = 0;                     // no audio card in this bench's machine
+  wire [7:0] DACSAMP0, DACSAMP1, DACSAMP2, DACSAMP3;
+  wire [7:0] DACVOL0, DACVOL1, DACVOL2, DACVOL3;
+  wire [15:0] ACOUNT;
+  wire firq_asserted, irq_asserted;
 
   logic n_reset = 0, fast_e = 0;
 
