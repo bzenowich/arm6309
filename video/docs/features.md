@@ -355,9 +355,9 @@ data bus by the part that decodes the descriptor (`graphics.md` §10.3.2, §10.3
 >
 > ⭐ **Both halves of that sentence were the fix.** Delete the engine's own pointer so it
 > **shares `WPTR`** — 19 registers, 19 mux inputs and the mux's *sixth* product term per
-> bit, all gone — and drop §2.2's character generator, and it lands on the PLCC-84 the
-> card already has: `vaddr` at **64/64 I/O and 102/128 cells**, `vctrl` down to 46/64
-> and 87/128. **Zero extra packages.**
+> bit, all gone — and drop §2.2's character generator, and it landed on the PLCC-84 the
+> card already has: `vaddr` was at **64/64 I/O and 102/128 cells**, `vctrl` down to 46/64
+> and 87/128 (`graphics.md` §14.1 has today's figures). **Zero extra packages.**
 >
 > ⚠ **Two prices.** The engine **clobbers the CPU's write pointer**, so anything that
 > starts a list reloads `WPTR` afterwards — three writes, ~7.1 µs, and a rule software
@@ -584,13 +584,13 @@ majority of what a desktop actually moves.
 
 > ⚠ **AND IT SPENT THE LAST TWO PINS ON THE PART.** `vctrl` was quoted at "64 of 64 I/O"
 > everywhere, and that number was never the whole story: an `ATF1508AS` PLCC-84 also has
-> **four dedicated input pins** that are not I/O, and two of them were free. The fit is
-> now **64/64 I/O *and* 4/4 dedicated** — `cpld/vctrl.fit`, "Design fits successfully".
+> **four dedicated input pins** that are not I/O, and two of them were free. The fit was
+> then **64/64 I/O *and* 4/4 dedicated**.
 >
-> **Nothing else can be added to `vctrl` at all.** §14.2's consolidation is what returns
-> pins: two ×16 framebuffer parts make the arbiter 2 grants instead of 8 and hand back
-> six outputs. That was already worth doing; it is now the thing standing between this
-> card and its next feature.
+> ⚠ **The pins came back another way.** §14.2's consolidation was expected to return
+> them; instead `graphics.md` §11 deleted the CPU's chip grant and the per-chip `FCLK`
+> outputs collapsed into one, and `vctrl` is 52 of 64 I/O and 2 of 4 dedicated today.
+> Its limit now is cells (`graphics.md` §19 items 33, 46).
 
 #### The question this answered, and it was the right question to ask
 

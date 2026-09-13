@@ -118,8 +118,8 @@ count, and a measurement in place of an estimate wherever one can be taken.
 >
 > **What the retirements bought, measured:** U1 **62 → 61 I/O**, and that pin is
 > the one earmarked for §6.1's ×4 select (not needed since 2026-09-11); `vaddr` **63 → 59 I/O**, on the video part §19
-> item 33 is blocked on. ⚠ **U2 gained nothing measurable** — two cells deleted
-> and the fitter still reports 128 of 128, because it packs the array.
+> item 33 is blocked on. ⚠ **U2 gained nothing measurable** — two cells were deleted
+> and the fitter still reported 128 of 128, because it packs the array.
 
 > ⛔ **The audio card played a module the same day, and the volume converter was
 > being fed the SAMPLE byte.** After the first volume change of a module, on every

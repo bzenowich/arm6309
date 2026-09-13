@@ -2189,3 +2189,119 @@ asserted HSYNC level *changes* with the family, which §6.2.1 says it does not. 
 counter is computed and never claimed, so it is dead measurement rather than a wrong
 claim; it is recorded here because the next person to assert on it would inherit the
 error.
+
+## Utilisation figures brought to the fit, after `docs.check` stopped missing them (2026-09-12)
+
+`hardware/lib/docs.check.ts` scanned one line at a time, matched only "N of N", and
+exempted a whole line on one past-tense word. Widened to paragraphs, table rows and
+clauses (workplan 2026-09-12 P3 item 12), it reported these present-tense figures as
+stale against `gal/cpld/*.fit`. Each was corrected or put visibly in the past; the
+text they replaced follows.
+
+### video/docs/graphics.md — §6.4, the headroom paragraph
+
+The current fit is **`vctrl` 125 of 128 and `vaddr` 113 of 128**
+
+### video/docs/graphics.md — §8, VLOAD is VBLANK
+
+costs nothing on a part at 64 of 64 I/O.
+
+### video/docs/graphics.md — §8.2, where the HSCROLL[1:0] bits live
+
+`vctrl`
+holds a pair for `seqph`'s mux phase and is at 64 of 64 I/O, so it can neither export
+them nor take them back;
+
+### video/docs/graphics.md — §7, the package decision
+
+it is 61 of 64 I/O and 104 of 128 cells today (§14 has the live figure).
+
+### video/docs/graphics.md — §14.1, crossing delay
+
+`vaddr` is at **124 of 128
+  logic cells and 62 of 64 I/O** — so the choice is no longer free.
+
+### video/docs/graphics.md — §14.1, the partition table
+
+| **`vaddr`** | PLCC-84 | scan and `WPTR` counters (`WPTR` doubling as the list engine's pointer, §10.3.1), scroll and tile registers, **the map byte's two-stage pipeline**, the write-strobe decode, the four-source address mux, **§7.2's reload walk**, **§10.3.2's descriptor engine** | **124 of 128** | **62 of 64** |
+| **`vctrl`** | PLCC-84 | sync trio, sequencer, span control, **the mask serialiser**, `CTRL`, `HSCROLL[1:0]`, `WADV`, §6.4's fetch cadence, the register decode, **the spare-access arbiter** (§10.1.6.3) | **104 of 128** | **64 of 64** |
+| **`rfa`** | **`GAL22V10`** | the register-file address — `RA0`–`RA4`, `WSTB`, §7.4's mask-bit colour path, and `CTRL`'s and `VSTAT`'s write strobes | 8 of 10 | — |
+| ⭐ **`vlen`** | **`GAL22V10`** | §7.4's span-solid length counter — a package because it loads from the register file's read bus | 10 of 10 | — |
+
+The four-line table is the whole card's programmable logic.
+
+### video/docs/graphics.md — §10.3.1, the JTAG note
+
+The display list fits `vaddr`
+> at 59 of 64 I/O;
+
+### video/docs/graphics.md — §10.1.6.3, the JTAG pin-room table
+
+| `vaddr` | 59 | 63 of 64 | 2 of 4 | 113 of 128 |
+| `vctrl` | 56 | 60 of 64 | 2 of 4 | **128 of 128** |
+
+### video/docs/graphics.md — §10.1.6.3, both fit a PLCC-84
+
+`vctrl` is the tight one: 128 of
+128 cells, with pins to spare.
+
+### video/docs/graphics.md — §10.1.7, the absorbed-GAL table
+
+`vctrl` is at 64 of 64 and cannot export two bits
+
+### video/docs/graphics.md — §19 item 33 (c)
+
+on a part at
+    **128 of 128 cells**.
+
+### video/docs/graphics.md — §19 item 33, §7.4's cost paragraph
+
+`vctrl` is at **56 of 64 pins and
+    128 of 128 cells**, so pins stopped being the constraint and the section has not
+    been re-read since.
+
+### video/docs/graphics.md — §19 item 34, what it buys
+
+`vctrl` is **128/128 cells with 56 of 64 pins**, so pins are not what it is short of
+
+### video/docs/graphics.md — §19 item 34, the per-part table
+
+    | `vctrl` | **128/128 — full** | 56/64, **8 spare** | 29 of 40 |
+    | `vaddr` | **113/128, 15 spare** | 59/64 | 35 of 40 |
+
+### video/docs/graphics.md — §19 item 34, after the per-part table
+
+`vctrl` has eight spare pins and **no spare
+    cells**
+
+### video/docs/graphics.md — §19 item 35, the BLANK delay
+
+macrocells, zero pins, 100 → 104 of 128 cells.
+
+### video/docs/graphics.md — §19 item 46, the last paragraph
+
+    So the second pass's accounting is what `vctrl` reports now. The next addition to it
+    may not fit, and whether pass 2 is slower than pass 1 is the fitter's timing report's
+    business, which nothing here reads.
+
+### video/docs/features.md — §2, the display list's fit
+
+and it lands on the PLCC-84 the
+> card already has: `vaddr` at **64/64 I/O and 102/128 cells**, `vctrl` down to 46/64
+> and 87/128.
+
+### video/docs/features.md — §8.4, sprite mode's cost
+
+The fit is
+> now **64/64 I/O *and* 4/4 dedicated** — `cpld/vctrl.fit`, "Design fits successfully".
+>
+> **Nothing else can be added to `vctrl` at all.** §14.2's consolidation is what returns
+> pins: two ×16 framebuffer parts make the arbiter 2 grants instead of 8 and hand back
+> six outputs. That was already worth doing; it is now the thing standing between this
+> card and its next feature.
+
+### video/docs/graphics.md — §19 item 34, what check:netlist can assert (2026-09-12, the video card got netlist claims)
+
+    2026-09-09. `npm run check:netlist` therefore has nothing to assert about this card,
+    and `check:place` can only check that the package *count* matches
+    `hardware/place/parts.ts`.

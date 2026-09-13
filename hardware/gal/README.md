@@ -205,10 +205,11 @@ is the *earlier* excursion in which the same pin was spent by accident.
 
 > ⚠ **U3 IS PIN-FULL AND CANNOT TAKE ANOTHER SIGNAL.** The video card's `vctrl` was the
 > other one until 2026-09-11, when `graphics.md` §11 deleted the CPU's chip grant. It is
-> **53 of 64 I/O and 125 of 128 cells** since 2026-09-12, still on the fitter's
+> **52 of 64 I/O and 123 of 128 cells** since 2026-09-12, still on the fitter's
 > second pass (§19 item 46). ⚠ It was 56/64 and **128 of 128** until the four
 > identical `FCLK` outputs — the residue of §19 item 23(a)'s deleted per-chip
-> clock scheme — collapsed into one. That is the constraint to check first when a
+> clock scheme — collapsed into one (125 cells, 53 pins), and `CELLTICK` merged into
+> `MCADV` (123, 52). That is the constraint to check first when a
 > feature "just needs one more input", **and the one to re-measure before
 > believing it**: this part was "full" for two days on a withdrawn feature's
 > leftovers.
@@ -426,9 +427,9 @@ The video card's programmable logic is **three ATF1508AS PLCC-84s and no GALs**
 
 | | I/O | logic cells | |
 |---|---|---|---|
-| `vaddr` | **63 of 64** | **113 of 128** | scan address, `WPTR`, tile address sources |
-| `vctrl` | **64 of 64** | **98 of 128** | sync, sequencer, span control, the arbiter, `CTRL` |
-| `vsup` | **58 of 64** | **84 of 128** | register-file address, `SPANLEN`, §8.2's rank select, §9's palette write path, §10.3's descriptor decode |
+| `vaddr` | **58 of 64** | **113 of 128** | scan address, `WPTR`, tile address sources |
+| `vctrl` | **52 of 64** | **123 of 128** | sync, sequencer, span control, the arbiter, `CTRL` |
+| `vsup` | **61 of 64** | **91 of 128** | register-file address, `SPANLEN`, §8.2's rank select, §9's palette write path, §10.3's descriptor decode |
 
 ⭐ **`vsup` absorbed all three of the card's `GAL22V10`s** — `rfa`, `vlen` and `pxsel` —
 so the third PLCC-84 **reduced** the package count by two. `graphics.md` §10.1.7 has the
@@ -442,16 +443,12 @@ fit`, one `INTERNAL ERROR` — and each left the previous `.fit` in place, so on
 comparison saw them. **Fan-in is the third thing this family runs out of, after cells and
 pins, and the `.fit` is the only place it is visible.**
 
-⭐ **Both fits reserve JTAG and both still fit**, so the video card's CPLDs are
-programmed **in circuit** — unlike the audio card's U1. `JTAG=on prjbureau/fit1508.sh
-vctrl.pld` is the run that says so; the fitter places `TMS`/`TDI`/`TDO`/`TCK` and
-reports "Design fits successfully".
-
-⚠ **JTAG's four are four of the 64 I/O, not four more.** The `ATF1508AS` shares them
-with ordinary I/O (PLCC-84 pins 14, 23, 62, 71), so the reported totals are logic pins
-plus JTAG: `vaddr` **58 + 4 = 62 of 64**, `vctrl` **60 + 4 = 64 of 64**. `vctrl` is
-exactly full, and `vaddr` is the part with the cells nearly gone — 124 of 128 since
-`graphics.md` §10.3.2's descriptor format.
+⚠ **No CPLD on the video card reserves JTAG.** Every `cpld/*.fit` is run with
+`-JTAG off`, and the parts are socketed and programmed out of circuit, like the audio
+card's (`graphics.md` §10.1.6.3). JTAG's four are four of the 64 I/O, not four more — the
+`ATF1508AS` shares them with ordinary I/O (PLCC-84 pins 14, 23, 62, 71) — so reserving
+them costs logic pins: `vaddr` 58 + 4 = 62 pins and `vctrl` 52 + 4 = 56 have room, and
+`vsup` 61 + 4 = 65 does not. `vctrl` is the part with the cells nearly gone: 123 of 128.
 
 > The route here — a committed fit that silently targeted a TQFP100 where the design
 > declared a PLCC-84, an arbiter moved out to a `GAL22V10` and merged back the same day —

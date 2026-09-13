@@ -1007,3 +1007,20 @@ falls out of it with no term of its own. `design-review2.md` §3.4.
 
     ⚠ **What is still owed is `software/`**: the memory descriptor the monitor leaves for
     NitrOS-9, and the tool that builds the ROM at all — `ram.md` §11 item 10.
+
+## Utilisation figures brought to the fit, after `docs.check` stopped missing them (2026-09-12)
+
+`hardware/lib/docs.check.ts` scanned one line at a time, matched only "N of N", and
+exempted a whole line on one past-tense word. Widened to paragraphs, table rows and
+clauses (workplan 2026-09-12 P3 item 12), it reported these present-tense figures as
+stale against `gal/cpld/*.fit`. Each was corrected or put visibly in the past; the
+text they replaced follows.
+
+### docs/machine.md — §5 open-items table, the vctrl row
+
+| **video** | **⚠ `vctrl` IS FULL — every pin on the package.** §6.4.9's cadence and §8.1's window signals took it to 64 of 64 I/O, and `features.md` §8.4's sprite mode (2026-09-09) spent the **two dedicated input pins nobody had counted**: the fit is **64/64 I/O, 3/4 dedicated, 98 of 128 cells**, JTAG reserved, "Design fits successfully" — the cells came back when `graphics.md` §14.1 encoded the mux selects, the pins did not. ⚠ **`vaddr` is 113 of 128 cells and 62 of 64 I/O**, and ⛔ **the binding limit on that part is neither: it is SWITCH-MATRIX FAN-IN.** An `ATF1508AS` logic block admits 40 signals and `vaddr` sits at **40 of 40 in all eight blocks**, so three separate one-literal changes were refused on 2026-09-09 — two `Grouping fail` and one `INTERNAL ERROR`, each leaving the previous `.fit` in place. **Fan-in is the third thing this family runs out of, after cells and pins**, and it is the one nothing warns you about. A third part, `vsup`, joined the card the same day at 84 of 128 cells and 58 of 64 I/O. **Nothing more can be added to `vctrl` at all** — §14.2's two ×16 framebuffer parts return six output pins by making the arbiter 2 grants instead of 8, and that is now what the card's next feature waits on — **both** CPLDs wait on it now, `graphics.md` §19 item 33 | `cpld/vctrl.fit`, `graphics.md` §19 item 33 |
+
+### README.md — the retirements note
+
+— two cells deleted
+> and the fitter still reports 128 of 128, because it packs the array.

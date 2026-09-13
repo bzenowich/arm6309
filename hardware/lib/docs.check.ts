@@ -72,7 +72,9 @@ const EXEMPT = (p: string) =>
   /(^|\/)node_modules\//.test(p) ||
   /(^|\/)\.agents\//.test(p) ||
   /(^|\/)reference\//.test(p) ||
-  /(^|\/)coco3_c64\.md$/.test(p)
+  /(^|\/)coco3_c64\.md$/.test(p) ||
+  // a dated plan, disposable, and quoting the figures it was written against
+  /(^|\/)workplan-[\d-]+\.md$/.test(p)
 
 /* A line that visibly narrates the past may quote a superseded figure. Keep
  * this vocabulary SHORT - every entry is a hole in the check. */
@@ -104,15 +106,32 @@ walk(ROOT)
 
 /* -- the claims themselves ------------------------------------------------
  *
- * Two shapes appear in the prose and both are checked:
+ * ⛔ UNTIL 2026-09-12 THIS SCANNED ONE LINE AT A TIME, AND STALE FIGURES LIVED
+ * IN THE GAPS. Three holes, each verified by running the old regexes against
+ * the lines they passed over (workplan 2026-09-12 P3 item 12):
  *
- *   "122 of 128 cells" / "122 of 128 logic cells"   -> cells
- *   "64 of 64 I/O"     / "62 of 64"                 -> io
- *   "3 of 4 dedicated"                              -> dedicated inputs
+ *   - the past-tense test was LINE-scoped, so one "was" anywhere on a line
+ *     exempted a live figure later on the same line;
+ *   - only "N of N" matched, and the specs also write 128/128 and 56 / 64;
+ *   - a figure whose part name was on the previous line was skipped, and
+ *     "N of 64 pins" never matched a regex that demanded "I/O".
  *
- * The part a figure belongs to is whichever part name appears nearest before
- * it on the line - `vaddr`, `vctrl` or `audio`. A figure with no part name on
- * its line is not attributable and is skipped rather than guessed at. */
+ * So the unit of scanning is now a PARAGRAPH, a LIST ITEM or a TABLE ROW; the
+ * tense test applies to the CLAUSE holding the figure; both shapes match; and
+ * "pins" is I/O. Shapes:
+ *
+ *   "122 of 128 cells", "122/128 logic cells", "125 / 128"   -> cells
+ *   "62 of 64 I/O", "56/64 pins", "53 / 64" beside a cells figure  -> io
+ *   "3 of 4 dedicated"                                       -> dedicated
+ *
+ * A bare N/64 is I/O only where the clause also carries that part's cells
+ * figure, or where its table column is headed I/O or pins - a bare 64 is also
+ * a sample count or a level. A figure followed by another resource's name
+ * (foldback, fan-in, PT, cascades) is not a cells figure.
+ *
+ * ATTRIBUTION: the nearest part name before the figure in its clause, then in
+ * its unit, then the first in the unit. In audio/ the parts are also called U1
+ * (`audio`) and U2 (`aseq`). A figure with no part name in its unit is skipped. */
 /* ⚠ EVERY PART THE FITTER PRODUCES A REPORT FOR MUST BE NAMED HERE, or its
  * figures are silently unguarded. `aseq` (the audio sequencer, U2) and `vsup`
  * (the video card's third CPLD) were both born on 2026-09-09 and neither was
@@ -122,36 +141,107 @@ walk(ROOT)
  * from the .fit files rather than hard-coding it, so the next part added is
  * covered the moment it is fitted. */
 const PART_RE = new RegExp(`\\b(${[...fits.keys()].join("|")})\\b`, "gi")
+const ALIASES: [RegExp, RegExp, string][] = [
+  [/^audio\//, /\bU1\b/g, "audio"],
+  [/^audio\//, /\bU2\b/g, "aseq"],
+]
 
 interface Claim { file: string; line: number; text: string; part: string; kind: keyof Fit; value: number }
 const claims: Claim[] = []
+
+/* A table with a column headed like this is a record of a change. */
+const PAST_COLUMN = /\b(before|was|old|previous|then|from)\b/i
+/* Not a cells or I/O figure: another resource's count out of 128 or 64. */
+const OTHER_RESOURCE = /^\s*(?:\*\*)?\s*(foldback|fan-?in|PT|product|cascade|nodes|flip|FF|registers|%)/i
+const FIG = /\*{0,2}(\d+)\*{0,2}\s*(?:of|\/)\s*\*{0,2}(\d+)\*{0,2}(\s*(?:logic\s*)?(cells|macrocells|I\/O|pins|dedicated))?/gi
+const CLAUSE_END = /\. |; | — |\||\n\n/
 
 for (const file of mdFiles) {
   const rel = relative(ROOT, file)
   if (EXEMPT(rel)) continue
   const lines = readFileSync(file, "utf8").split("\n")
-  lines.forEach((text, i) => {
-    if (PAST_TENSE.test(text)) return
-    const parts = [...text.matchAll(PART_RE)]
-    if (parts.length === 0) return
-    const nearest = (at: number) => {
-      let best: string | null = null
-      for (const m of parts) if (m.index! < at) best = m[1].toLowerCase()
-      return best ?? parts[0][1].toLowerCase()
+
+  // Units, each with the table header that governs it (if any).
+  interface Unit { start: number; text: string; header?: string[] }
+  const units: Unit[] = []
+  let cur: Unit | null = null
+  let header: string[] | undefined
+  const cellsOf = (row: string) => row.trim().replace(/^\||\|$/g, "").split("|")
+  lines.forEach((l, i) => {
+    const t = l.trim()
+    if (t.startsWith("|")) {
+      if (cur) { units.push(cur); cur = null }
+      const prev = lines[i - 1]?.trim() ?? ""
+      if (!prev.startsWith("|")) header = cellsOf(t)
+      else if (!/^\|[\s:|-]+\|?$/.test(t)) units.push({ start: i + 1, text: l, header })
+      return
     }
-    const add = (re: RegExp, kind: keyof Fit, denom: number) => {
-      for (const m of text.matchAll(re)) {
-        if (Number(m[2]) !== denom) continue
-        claims.push({
-          file: rel, line: i + 1, text: text.trim(),
-          part: nearest(m.index!), kind, value: Number(m[1]),
-        })
-      }
-    }
-    add(/\*?\*?(\d+)\*?\*? of \*?\*?(\d+)\*?\*?\s*(?:logic\s*)?cells/gi, "cells", 128)
-    add(/\*?\*?(\d+)\*?\*? of \*?\*?(\d+)\*?\*?\s*(?:I\/O|i\/o)/gi, "io", 64)
-    add(/\*?\*?(\d+)\*?\*? of \*?\*?(\d+)\*?\*?\s*dedicated/gi, "ded", 4)
+    header = undefined
+    if (t === "" || t.startsWith("#") || t.startsWith("```")) { if (cur) { units.push(cur); cur = null } return }
+    if (/^\s*(?:>\s*)?([-*]|\d+\.)\s/.test(l) && cur) { units.push(cur); cur = null }
+    if (!cur) cur = { start: i + 1, text: l }
+    else cur.text += "\n" + l
   })
+  if (cur) units.push(cur)
+
+  for (const u of units) {
+    const names: { at: number; part: string }[] = [...u.text.matchAll(PART_RE)]
+      .map((m) => ({ at: m.index!, part: m[1].toLowerCase() }))
+    for (const [dir, re, part] of ALIASES)
+      if (dir.test(rel)) for (const m of u.text.matchAll(re)) names.push({ at: m.index!, part })
+    if (names.length === 0) continue
+    names.sort((a, b) => a.at - b.at)
+    // The paragraph that opens a closed, dated item is that item's record.
+    if (/CLOSED\s+20\d\d-\d\d-\d\d/.test(u.text)) continue
+
+    const figs = [...u.text.matchAll(FIG)].map((m) => {
+      const at = m.index!
+      const before = u.text.slice(0, at)
+      const cs = Math.max(...[". ", "; ", " — ", "|", "\n\n"].map((d) => before.lastIndexOf(d)))
+      const rest = u.text.slice(at + m[0].length).search(CLAUSE_END)
+      const ce = rest < 0 ? u.text.length : at + m[0].length + rest
+      return { m, at, cs, ce, clause: u.text.slice(cs + 1, ce) }
+    })
+    for (const f of figs) {
+      const { m, at, cs, clause } = f
+      const a = Number(m[1]), b = Number(m[2])
+      const unit = (m[4] ?? "").toLowerCase()
+      if (!unit && OTHER_RESOURCE.test(u.text.slice(at + m[0].length))) continue
+      if (PAST_TENSE.test(clause)) continue
+      // A dated clause is a record, not a claim - unless the date is when the
+      // figure STARTED being true, which is a claim that it still is.
+      if (/\b20\d\d-\d\d-\d\d\b/.test(clause) && !/\b(since|as of)\s+\*{0,2}20\d\d-/i.test(clause)) continue
+
+      let col: string | undefined
+      if (u.header) col = u.header[u.text.slice(0, at).split("|").length - 2]
+      // A table with a "before" column records a CHANGE: its after column is
+      // what the change produced on its date, not a claim about today.
+      if (u.header && u.header.some((h) => PAST_COLUMN.test(h))) continue
+      // ... and so does a table whose header carries a date.
+      if (u.header && u.header.some((h) => /\b20\d\d-\d\d-\d\d\b/.test(h))) continue
+      // An estimate is not a fit.
+      if (/\bestimat/i.test(clause)) continue
+
+      const inClause = names.filter((n) => n.at > cs && n.at < at)
+      const inUnit = names.filter((n) => n.at < at)
+      const part = (inClause.at(-1) ?? inUnit.at(-1) ?? names[0]).part
+
+      let kind: keyof Fit | undefined
+      if (unit === "dedicated") { if (b === 4) kind = "ded" }
+      else if (unit === "cells" || unit === "macrocells") { if (b === 128) kind = "cells" }
+      else if (unit === "i/o" || unit === "pins") { if (b === 64) kind = "io" }
+      else if (b === 128) kind = "cells"
+      else if (b === 64) {
+        const paired = figs.some((g) => g !== f && g.cs === f.cs && Number(g.m[2]) === 128)
+        if (paired || (col && /I\/O|pins/i.test(col))) kind = "io"
+      }
+      if (!kind) continue
+      claims.push({
+        file: rel, line: u.start + u.text.slice(0, at).split("\n").length - 1,
+        text: clause.replace(/\s+/g, " ").trim(), part, kind, value: a,
+      })
+    }
+  }
 }
 
 check(claims.length > 0,
@@ -168,7 +258,7 @@ if (wrong.length) {
     const f = fits.get(c.part)!
     console.error(`      ${c.file}:${c.line}  ${c.part} ${c.kind}: says ${c.value}, ` +
       `cpld/${c.part}.fit says ${f[c.kind]}`)
-    console.error(`        ${c.text.slice(0, 140)}`)
+    console.error(`        ${c.text.slice(0, 260)}`)
   }
   console.error("")
 }

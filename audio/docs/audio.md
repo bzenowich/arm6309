@@ -1552,7 +1552,7 @@ a 16-bit adder chain; the top three bits are a carry-in increment in the sequenc
 | 1 | 74HC574 | posted-write data latch (host → sample RAM) |
 
 | **1** | **`ATF1508AS-…JC84`, PLCC-84, socketed — U1** | the host register block: §9.1's seven-bit decode, `ADMACON`, `AINTENA`, `AINTREQ` and its pending register, `/FIRQ`, `ACTRL`, the synchronisers, §9.3's read-back path, the slot counter, the ÷5 prescale and §8.2's tempo count. **Fitted at 107 of 128 cells and 62 of 64 I/O** (§10.1.1) |
-| **1** | **`ATF1508AS` PLCC-84 — U2** | **the sequencer (§10.2). Fitted at 128 of 128 cells and 62 of 64 I/O** (§10.2.6) |
+| **1** | **`ATF1508AS` PLCC-84 — U2** | **the sequencer (§10.2). Fitted at 126 of 128 cells and 63 of 64 I/O** (§10.2.6) |
 | 1 | 28.37516 MHz osc | PAL Amiga master (§4.1) |
 | (1) | (28.63636 MHz osc) | (NTSC, socketed option, §4.1) |
 | — | 3.5 mm stereo jack | **headphone output on the card's rear edge — §7.1.** The backplane pair is the line output and is a different signal |
@@ -1982,8 +1982,8 @@ backplane or the board, and every signal U2 reads is a U1 output or the `'688` a
 stopped duplicating a fetch W1 already does — and item 39(b) then spent it, on the term
 that loads the converter port register at the `PEND` write. ⭐ **The pair together cost
 nothing and bought two audible repairs**: 487 product terms to 473, peak LAB fan-in 39
-to **36**, and a pin back. ⚠ It went back to 128 of 128 — and is at **124** since §16
-item 44 took the tempo timer to U1, which is the only way this part has ever got room. A **TQFP-100 was fitted as well** and takes the pins to 62 of 80 while leaving the
+to **36**, and a pin back. ⚠ It filled again, and §16 item 44 moving the tempo timer to U1 is the only way
+this part has ever got room; after §16 item 47's host-strobe repair U2 is at **126 of 128**. A **TQFP-100 was fitted as well** and takes the pins to 62 of 80 while leaving the
 cells where they are — both packages carry the same 128 macrocells — so the larger package
 buys pin headroom this design does not need and costs the socket. **The PLCC-84 with JTAG
 off is the answer, and the next thing added to this card has to displace something.**
@@ -2261,7 +2261,7 @@ That one step is the whole difference.
 | throughput floor | `PER` ≥ 16 | **`PER` ≥ 20** | `PER` ≥ 32 ⛔ |
 
 ⭐ **The adder costs the two architectures almost the same, which is the useful result:
-it does not decide between them.** What decides is that U2 is at 128 of 128 cells.
+it does not decide between them.** What decides is that U2 is at 126 of 128 cells.
 
 **What the control store buys, item by item:**
 
@@ -2670,7 +2670,7 @@ Paula in any way that matters to the acceptance test, and that is deliberate.
 | 1 | **Build the MCU card** (§12.5): STM32G431 + one `AD7528` + §7's filters. It sums in software and drives one converter pair, not §6.2's eight halves — what it validates is the register map and the replayer, and the cascade is step 7's job | plays a known module correctly through the §9 register map |
 | 2 | **Write the loader, replayer and converter** against the MCU card | acceptance test: 20 varied modules, A/B against a real Amiga or a reference emulator, by ear and by capture |
 | 3 | **Bench the §3.2 stage-A path** at 35 ns on a breadboard — sequencer address out → `IS61C6416AL-12` state file → compare-input setup, 27 ns budgeted | closes with margin |
-| 4 | **Fit the card's logic** with all eight slots, the shadow reload, the deferred queue, the host-counter increments and the interrupt block | ⛔ **half done, and the half that is done is the host block.** §10.1.1's U1 carries the slot walk, the interrupt block, `ACTRL`, the decode and the read-back path, fitted at 89 of 128 logic cells. **The shadow reload, the deferred queue and the host-counter increments are U2** — specified in §10.2, not fitted, §16 item 00. §16 item 7's 8-channel slot allocation is downstream of that again |
+| 4 | **Fit the card's logic** with all eight slots, the shadow reload, the deferred queue, the host-counter increments and the interrupt block | ⭐ **done.** U1 is fitted at 107 of 128 logic cells (§10.1.1), and U2 — the shadow reload, the deferred queue and the host-counter increments — at 126 of 128 (§10.2.6). §16 item 7's 8-channel slot allocation is not needed: §11.2 was dropped |
 | 5 | **Discrete card rev A**, driven by the STM32 bus exerciser ([`graphics.md`](../../video/docs/graphics.md) §16.1) — no 6309 core needed | state file reads back; a single channel plays a sine from card RAM at a known `PER` |
 | 6 | **All four channels + the shadow reload** | the step-2 module set plays **identically** to the MCU card, sample-for-sample where captured |
 | 7 | **Analogue bring-up**: four sample I/V stages, the cascade into the volume halves, the two summing amplifiers, both filters, bypass, grounding | THD and noise floor measured; **converter glitch measured** (§16 item 9); **channel-to-channel gain matched** (§16 item 23); no digital hash from the SRAMs in the output |
@@ -2930,7 +2930,7 @@ specification that has not been tested.
     §3.3's flag bits into word 0, or — the bigger one — moving `PEND[7:0]`
     into the CPLD and dropping the state file to **one** ×16 package (§10, "where it
     could shrink"). ⚠ **The second got harder on 2026-09-09**: it would put `PEND` on
-    U2, and U2 is the part with no pins to spare (§10.2.6). U1 has the room, at 89 of
+    U2, and U2 is the part with no pins to spare (§10.2.6). U1 has the room, at 107 of
     128 logic cells — and is on the wrong side of the card.
 
 29. **CLOSED 2026-09-09 — the jack gets a driver and the backplane keeps the line
@@ -2989,9 +2989,9 @@ specification that has not been tested.
     ⚠ **IT CAME TRUE ONCE, AND THAT CHANGE WAS REVERTED.** Item 37's re-timing fitted on
     2026-09-12 at **128 of 128 cells** — nine *wait* steps and four more literals on `RUN`,
     no new logic at all, and it consumed the last four cells. It then stopped the card
-    playing and was reverted the same day (`history.md`). U2 is **124 of 128 cells**, 63 of
-    64 I/O, two cascades, 52 foldback nodes, and seven of eight logic blocks at 36 of 40
-    fan-in. **The forecast stands, and it has now been tested once.** ⭐ **§10.3 is the answer to it.** 38 of U2's
+    playing and was reverted the same day (`history.md`). U2 is **126 of 128 cells**, 63 of
+    64 I/O, two cascades, 52 foldback nodes, and six of eight logic blocks at 37 of 40
+    fan-in, after §16 item 47's host-strobe repair. **The forecast stands, and it has now been tested once.** ⭐ **§10.3 is the answer to it.** 38 of U2's
     cells become table content, 19 more stop reading `(WT, T)`, and U1 — which holds
     §8.2's count since item 44 — takes a copy of `TIMER` so slot 4 is freed. §16 item 38
     is the gate.
@@ -3383,7 +3383,7 @@ specification that has not been tested.
 
     ⚠ **What that does to this item is narrow the case rather than close it.** The two
     audible defects were the strongest argument for §10.3 and they are gone. What remains
-    is §16 item 32 — U2 at 128 of 128 cells with **six of eight blocks at 36 of 40
+    is §16 item 32 — U2 at 126 of 128 cells with **six of eight blocks at 37 of 40
     fan-in** — so **the next repair of this kind will not fit.** No feature is waiting on
     it: §11.2's eight channels and §11.3's attach chain are both dropped.
     §10.3 is now a question about headroom for future work, not about a card that
@@ -3576,7 +3576,7 @@ specification that has not been tested.
     on `WROTE`, which is set by the same write that now does the loading.
 
     ⚠ **TWO OTHER REPAIRS WERE TRIED FIRST AND NEITHER FITS**, which is worth
-    recording because U2 has no headroom at all — 128 of 128 logic cells:
+    recording because U2 had no headroom at all — it was at 128 of 128 logic cells:
 
     | | |
     |---|---|

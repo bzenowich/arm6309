@@ -2618,3 +2618,49 @@ U2 is **38 outputs and 26 inputs**, and the fitter reports **62 of 64 I/O and 12
     separately unexplained** and is worth one look: the card's register stream is
     delivered on its own §8.2 tick interrupt, so a constant offset is plausible, but
     nothing has checked that it is constant rather than drifting.
+
+## Utilisation figures brought to the fit, after `docs.check` stopped missing them (2026-09-12)
+
+`hardware/lib/docs.check.ts` scanned one line at a time, matched only "N of N", and
+exempted a whole line on one past-tense word. Widened to paragraphs, table rows and
+clauses (workplan 2026-09-12 P3 item 12), it reported these present-tense figures as
+stale against `gal/cpld/*.fit`. Each was corrected or put visibly in the past; the
+text they replaced follows.
+
+### audio/docs/audio.md — §10 parts list, the U2 row
+
+**the sequencer (§10.2). Fitted at 128 of 128 cells and 62 of 64 I/O** (§10.2.6)
+
+### audio/docs/audio.md — §10.2.6, the sentence after the W6-into-W1 chain
+
+⚠ It went back to 128 of 128 — and is at **124** since §16
+item 44 took the tempo timer to U1, which is the only way this part has ever got room.
+
+### audio/docs/audio.md — §10.3, the adder paragraph
+
+What decides is that U2 is at 128 of 128 cells.
+
+### audio/docs/audio.md — §15 build order, step 4's status
+
+⛔ **half done, and the half that is done is the host block.** §10.1.1's U1 carries the slot walk, the interrupt block, `ACTRL`, the decode and the read-back path, fitted at 89 of 128 logic cells. **The shadow reload, the deferred queue and the host-counter increments are U2** — specified in §10.2, not fitted, §16 item 00. §16 item 7's 8-channel slot allocation is downstream of that again |
+
+### audio/docs/audio.md — §16 item 28
+
+U1 has the room, at 89 of
+    128 logic cells
+
+### audio/docs/audio.md — §16 item 32
+
+U2 is **124 of 128 cells**, 63 of
+    64 I/O, two cascades, 52 foldback nodes, and seven of eight logic blocks at 36 of 40
+    fan-in.
+
+### audio/docs/audio.md — §16 item 38
+
+U2 at 128 of 128 cells with **six of eight blocks at 36 of 40
+    fan-in**
+
+### audio/docs/audio.md — §16 item 41
+
+because U2 has no headroom at all — 128 of 128 logic cells:
+

@@ -910,3 +910,39 @@ populated socket, and NitrOS-9's boot reads it there rather than probing again. 
 format is `software/` work and belongs with §11 item 10's "nothing burns the ROM yet";
 what is decided here is that **the hardware will never tell anybody, so something in the
 ROM must.**
+
+## Utilisation figures brought to the fit, after `docs.check` stopped missing them (2026-09-12)
+
+`hardware/lib/docs.check.ts` scanned one line at a time, matched only "N of N", and
+exempted a whole line on one past-tense word. Widened to paragraphs, table rows and
+clauses (workplan 2026-09-12 P3 item 12), it reported these present-tense figures as
+stale against `gal/cpld/*.fit`. Each was corrected or put visibly in the past; the
+text they replaced follows.
+
+### hardware/gal/README.md — the U3 pin-full note, vctrl's figures
+
+**53 of 64 I/O and 125 of 128 cells** since 2026-09-12
+
+### hardware/gal/README.md — the U3 pin-full note, the FCLK sentence
+
+clock scheme — collapsed into one.
+
+### hardware/gal/README.md — the video card's fitted-logic table
+
+| `vaddr` | **63 of 64** | **113 of 128** | scan address, `WPTR`, tile address sources |
+| `vctrl` | **64 of 64** | **98 of 128** | sync, sequencer, span control, the arbiter, `CTRL` |
+| `vsup` | **58 of 64** | **84 of 128** | register-file address, `SPANLEN`, §8.2's rank select, §9's palette write path, §10.3's descriptor decode |
+
+### hardware/gal/README.md — the JTAG paragraphs
+
+⭐ **Both fits reserve JTAG and both still fit**, so the video card's CPLDs are
+programmed **in circuit** — unlike the audio card's U1. `JTAG=on prjbureau/fit1508.sh
+vctrl.pld` is the run that says so; the fitter places `TMS`/`TDI`/`TDO`/`TCK` and
+reports "Design fits successfully".
+
+⚠ **JTAG's four are four of the 64 I/O, not four more.** The `ATF1508AS` shares them
+with ordinary I/O (PLCC-84 pins 14, 23, 62, 71), so the reported totals are logic pins
+plus JTAG: `vaddr` **58 + 4 = 62 of 64**, `vctrl` **60 + 4 = 64 of 64**. `vctrl` is
+exactly full, and `vaddr` is the part with the cells nearly gone — 124 of 128 since
+`graphics.md` §10.3.2's descriptor format.
+

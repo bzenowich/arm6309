@@ -1,4 +1,6 @@
-/* Netlist assertions for the motherboard.
+/* Netlist assertions for the motherboard and the video card.
+ *   bun run lib/netlist.check.ts                                 (motherboard)
+ *   bun run lib/netlist.check.ts dist/cards/video/circuit.json   (video card)
  *
  * A build that succeeds only proves every selector resolved. These are the
  * connectivity claims the machine documents make, checked against the circuit
@@ -39,6 +41,115 @@ let failures = 0
 const check = (ok: boolean, claim: string, detail = "") => {
   if (!ok) { failures++; console.error(`FAIL  ${claim}${detail ? `  (${detail})` : ""}`) }
   else console.log(`ok    ${claim}`)
+}
+
+/* ======================= the cards ========================================
+ *
+ * ⛔ UNTIL 2026-09-12 THIS FILE CHECKED THE MOTHERBOARD AND NOTHING ELSE.
+ * Pointed at a card's artefact it reported 95 failures, every one a mainboard
+ * refdes, so no card's connectivity was asserted anywhere - and CLAUDE.md's
+ * `board` class in check:reach had no checker that could ever close one
+ * (workplan 2026-09-12 P3 item 13). The artefact path now picks the claims.
+ *
+ * ⚠ THE VIDEO CARD IS A PARTIAL BOARD (graphics.md 19 item 34), so what is
+ * claimed is what is DRAWN, and what is not drawn is a claim too: the nets
+ * whose producer sits on an undrawn package are listed, and the list is
+ * checked in both directions, like check:reach's RESERVED - drawing a CPLD
+ * has to take its nets off it. */
+const board = /cards\/([a-z0-9]+)\//.exec(path)?.[1] ?? "mainboard"
+const netPorts = (net: string) =>
+  ports.filter((p) => portNet.get(p.source_port_id)?.has(net))
+    .map((p) => `${compName.get(p.source_component_id)}.${p.name}`)
+const compByName = (n: string) => comps.find((c) => c.name === n)
+
+if (board === "video") {
+  const J = "J1"                      // the card edge (lib/Card.tsx)
+
+  /* graphics.md 14's register read-back '245. A->B with DIR high and DIR is
+   * R/W, so a CPU read is card-to-host: B must be the backplane. It was drawn
+   * the other way round until 2026-09-11, with B unconnected. */
+  for (let i = 0; i < 8; i++) {
+    check(pinsOn("U1", `D${i}`).join() === `B${i + 1}` && pinsOn("U1", `VD${i}`).join() === `A${i + 1}`,
+      `U1 '245 bridges the card's VD${i} (A${i + 1}) to backplane D${i} (B${i + 1})`,
+      `D${i}: ${pinsOn("U1", `D${i}`)} VD${i}: ${pinsOn("U1", `VD${i}`)}`)
+  }
+  check(pinsOn("U1", "R_W").join() === "DIR", "and its DIR is R/W, so a read drives the host bus from the card")
+
+  /* graphics.md 12.2: HSYNC and VSYNC go back to the CPU slot through U3. */
+  check(pinsOn("U3", "HSYNC_INT").join() === "1A1" && pinsOn("U3", "HSYNC").join() === "1Y1"
+     && pinsOn("U3", "VSYNC_INT").join() === "1A2" && pinsOn("U3", "VSYNC").join() === "1Y2",
+    "U3 '244 buffers the card's HSYNC and VSYNC onto the backplane - graphics.md 12.2")
+  check(pinsOn(J, "HSYNC").length === 1 && pinsOn(J, "VSYNC").length === 1,
+    "and both reach the card edge")
+  check(["n1OE", "n2OE"].every((pin) => pinsOn("U3", "GND").includes(pin)),
+    "U3's enables are tied low - it always drives")
+
+  /* graphics.md 9.1's drive stage, per channel. */
+  const ohms = (n: string) => compByName(n)?.resistance
+  for (const [ch, n] of [["R", 0], ["G", 1], ["B", 2]] as const) {
+    const q = `Q${n + 1}`, sh = `R${3 + n * 3}`, re = `R${4 + n * 3}`, rs = `R${5 + n * 3}`
+    check(pinsOn(q, `RLAD_${ch}`).join() === "B" && pinsOn(q, "V5").join() === "C"
+       && pinsOn(q, `EMIT_${ch}`).join() === "E",
+      `${ch}: ${q} is a follower - base on the ladder, collector on +5 V, emitter out (C-B-E, the BC547's order)`)
+    check(pinsOn(sh, `RLAD_${ch}`).length === 1 && pinsOn(sh, "LADDER_RTN").length === 1 && ohms(sh) === 402,
+      `${ch}: ${sh}, 402 ohm, shunts the ladder to the V_be return - 1.40 V open-circuit at full scale`)
+    check(pinsOn(re, `EMIT_${ch}`).length === 1 && pinsOn(re, "LADDER_RTN").length === 1 && ohms(re) === 1000,
+      `${ch}: ${re}, 1 k, loads the emitter to the same return, so code 0 still conducts`)
+    check(pinsOn(rs, `EMIT_${ch}`).length === 1 && pinsOn(rs, `VGA_${ch}`).length === 1 && ohms(rs) === 75,
+      `${ch}: ${rs}, 75 ohm, is the source termination into the connector`)
+  }
+  check(pinsOn("D1", "LADDER_RTN").join() === "pin1" && pinsOn("D1", "GND").join() === "pin2",
+    "D1's anode is the ladder return and its cathode is ground: the return sits one V_be up")
+  check(pinsOn("R1", "V5").length === 1 && pinsOn("R1", "LADDER_RTN").length === 1
+     && netPorts("LADDER_RTN").filter((p) => /^R\d+\./.test(p) && !/^R1\./.test(p)
+          && ports.some((q) => compName.get(q.source_component_id) === p.split(".")[0]
+               && portNet.get(q.source_port_id)?.has("GND"))).length === 0,
+    "R1 biases D1 from +5 V, and no resistor runs the return to ground - the divider drawn before 2026-09-11 put it at 2.2 V")
+
+  /* graphics.md 9.1: the DE-15. */
+  check(pinsOn("J2", "VGA_R").join() === "RED" && pinsOn("J2", "VGA_G").join() === "GREEN"
+     && pinsOn("J2", "VGA_B").join() === "BLUE",
+    "the DE-15 carries R, G and B on pins 1-3")
+  check(["RGND", "GGND", "BGND", "SGND"].every((pin) => pinsOn("J2", "GND").includes(pin))
+     && pinsOn("J2", "AGND").length === 0,
+    "and its RGB and sync returns are the card's ground, not AGND")
+  check(pinsOn("J2", "HSYNC_INT").join() === "HS" && pinsOn("J2", "VSYNC_INT").join() === "VS",
+    "and HS and VS on pins 13 and 14")
+  check(netPorts("AGND").every((p) => p.startsWith(`${J}.`)),
+    "AGND reaches the card edge and nothing on the card - slot B33/B35 are the audio pair's returns",
+    netPorts("AGND").join(" "))
+
+  /* ⛔ WHAT IS NOT DRAWN, as a checked list. A net named here has no producer
+   * on the board: its driver is one of the packages graphics.md 19 item 34
+   * says this file does not carry yet. */
+  const UNDRAWN: Record<string, string> = {
+    VD0: "vsup/vctrl/SRAM internal data bus", VD1: "", VD2: "", VD3: "", VD4: "", VD5: "", VD6: "", VD7: "",
+    RBOE: "the read-back enable - no CPLD pin list carries it yet (V-07)",
+    HSYNC_INT: "vctrl's sync outputs", VSYNC_INT: "",
+    RLAD_R: "the R-2R ladders off the post-LUT '273 pair", RLAD_G: "", RLAD_B: "",
+  }
+  const onCard = (net: string) => netPorts(net).filter((p) => !p.startsWith(`${J}.`))
+  // A net with no producer: one card-side pin, or only the pins that consume it.
+  const CONSUMERS = /^(U1\.A\d|U1\.nOE|U3\.1A[12]|J2\.(HS|VS)|Q\d\.B|R\d+\.pin1)$/
+  // A net that reaches the card edge has its other end on the backplane.
+  const orphans = nets.map((n) => n.name).filter((n) => {
+    if (netPorts(n).some((p) => p.startsWith(`${J}.`))) return false
+    const ps = onCard(n)
+    return ps.length > 0 && (ps.length === 1 || ps.every((p) => CONSUMERS.test(p)))
+  }).sort()
+  const expected = Object.keys(UNDRAWN).sort()
+  check(orphans.join() === expected.join(),
+    `the nets with no producer on the board are exactly the ${expected.length} graphics.md 19 item 34 accounts for - ` +
+    `and drawing a package has to take its nets off the list`,
+    `have [${orphans.join(" ")}] expected [${expected.join(" ")}]`)
+  const drawnIcs = comps.filter((c) => /^U\d+$/.test(c.name)).length
+  console.log(`      ${drawnIcs} ICs drawn of the card's 33 (place/parts.ts) - graphics.md 19 item 34 is open`)
+
+  console.log(failures === 0 ? "\nvideo card netlist OK" : `\n${failures} failure(s)`)
+  process.exit(failures === 0 ? 0 : 1)
+} else if (board !== "mainboard") {
+  check(false, `there are no netlist claims for the ${board} card yet`)
+  process.exit(1)
 }
 
 /* -- machine.md 2: logical A13-A15 stay on the motherboard --------------- */

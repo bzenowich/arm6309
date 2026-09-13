@@ -16,7 +16,7 @@
     "check:cadence": "bun run gal/cadence.check.ts",
     "check:audio": "bun run gal/audio.check.ts",
     "check:arom": "bun run gal/arom.check.ts",
-    "check:netlist": "bun run lib/netlist.check.ts",
+    "check:netlist": "bun run lib/netlist.check.ts && bun run lib/netlist.check.ts dist/cards/video/circuit.json",
     "check:place": "bun run place/place.check.ts",
     "render:boards": "bun run place/render.ts",
     "check:sim": "cd gal && verilator --binary --timing -Wall -Wno-DECLFILENAME --top-module mmu_tb mmu.v mmu_tb.sv -o mmu_tb && ./obj_dir/mmu_tb && verilator --binary --timing -Wall -Wno-DECLFILENAME --top-module clkdec_tb clkdec.v clkdec_tb.sv -o clkdec_tb && ./obj_dir/clkdec_tb",
