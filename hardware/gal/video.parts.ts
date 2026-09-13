@@ -113,10 +113,20 @@ export const tileRegisters: Cell[] = [
    * MAP is the fetch target and MAPQ is what the address mux reads, handed
    * over at the CELL boundary - which is where 6.4.9's "pipelined one cell
    * ahead" was always describing. Eight macrocells on the part that has them:
-   * vaddr was at 109 of 128. */
+   * vaddr was at 109 of 128.
+   *
+   * ⭐ THE HANDOVER RIDES ON MCADV SINCE 2026-09-12, and it used to ride on a
+   * signal of its own called CELLTICK. The two had converged on the identical
+   * equation - `TILEMODE & MFETCH & !H0 & SLOTTICK` - so the card was paying a
+   * pin on vctrl, a pin on vaddr and a macrocell on each to carry one value
+   * under two names. ⚠ They were written for DIFFERENT intents (step the map's
+   * column counter; hand the map byte to the rank the mux reads), and both
+   * happen at the same instant by construction: the counter steps as the cell
+   * ends, which is exactly when the new code becomes the one to read. If a
+   * future cadence ever needs them apart, that is a SPLIT and not a surprise. */
   ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({
     pin: 0, name: `MAPQ${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: [`CELLTICK & MAP${b}`, `MAPQ${b} & !CELLTICK`],
+    terms: [`MCADV & MAP${b}`, `MAPQ${b} & !MCADV`],
   })),
 ]
 
@@ -437,15 +447,19 @@ export const tileCadence: Cell[] = [
    * during dot 1, so the register clocks at the dot 1 -> 2 edge. */
   { pin: 0, name: "MAPLD", assertedLow: false, s0: 1, registered: false,
     terms: ["MAPREQ & !PH1 & PH0"] },
-  /* ⭐ THE CELL BOUNDARY - the second half of V-5's repair. MAPLD fills the
-   * fetch rank in the front half of the cell's FIRST slot; this hands it to
-   * the rank the address mux reads, at the end of the cell's LAST slot, where
-   * nothing is using the old value any more. One dot per cell.
+  /* ⛔ CELLTICK WAS HERE, and it was MCADV's equation letter for letter -
+   * deleted 2026-09-12. It carried V-5's second half: MAPLD fills the fetch
+   * rank in the front half of the cell's FIRST slot, and the rank the address
+   * mux reads takes it at the end of the cell's LAST slot, where nothing is
+   * using the old value any more. One dot per cell - which is the same dot the
+   * map's column counter steps on, so MCADV above IS that tick and mapColumn's
+   * MAPQ latch takes it directly. A pin on vctrl, a pin on vaddr and a
+   * macrocell on each.
    *
-   * H0 is the cell phase (6.4.9), so the last dot of the odd slot is
-   * H0 & SLOTTICK - and MFETCH bounds it to the cells that have a code. */
-  { pin: 0, name: "CELLTICK", assertedLow: false, s0: 1, registered: false,
-    terms: ["TILEMODE & MFETCH & !H0 & SLOTTICK"] },
+   * ⚠ Its comment claimed "the last dot of the odd slot is H0 & SLOTTICK" and
+   * its equation used !H0. The equation was right - vtile_tb asserts every
+   * cell renders its own code, 0 wrong of 160 - and the comment was not, which
+   * is how two identical signals kept two different rationales for two days. */
 
   /* ---- who owns the address bus ---------------------------------------- *
    *

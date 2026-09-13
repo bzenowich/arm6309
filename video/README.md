@@ -56,12 +56,13 @@ transistors, a diode and fifteen resistors — which is what closed `design-revi
 ⚠ **`vaddr` is bound by pins and LAB fan-in. `vctrl` was bound by cells from
 2026-09-11 until 2026-09-12, and is not now** — the four identical `FCLK` outputs
 gave back three cells and three pins.
-`vctrl` is 53 of 64 I/O.
-`vaddr` is 59 of 64 I/O.
+`vctrl` is 52 of 64 I/O.
+`vaddr` is 58 of 64 I/O.
 `vsup` is 61 of 64 I/O.
-Their cell counts are **125**, 113 and 91 of 128 — ⚠ `vctrl` was 128 of 128 until
-2026-09-12, when §19 item 23(a)'s four identical `FCLK` outputs collapsed into one
-and gave back three cells and three pins — and `vctrl`'s is the fitter's second pass
+Their cell counts are **123**, 113 and 91 of 128 — ⚠ `vctrl` was 128 of 128 until
+2026-09-12, when two sets of duplicated equations came out: §19 item 23(a)'s four
+identical `FCLK` outputs collapsed into one, and `CELLTICK` merged into `MCADV`.
+Five cells and four pins on `vctrl`, and a pin on `vaddr` — and `vctrl`'s is the fitter's second pass
 (`docs/graphics.md` §19 item 46). ⚠ All three are fitted with **JTAG off**
 (`cpld/*.fit`: the four JTAG pins carry signals), so they are programmed out of circuit.
 

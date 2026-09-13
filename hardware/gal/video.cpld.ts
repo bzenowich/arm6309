@@ -433,7 +433,11 @@ export const vctrlCpld: Merged = withActiveLow(merge(
       "SGRANT",
       /* ⭐ 7.4's mask bit, to rfa's RA0 - which is the colour path - and the
        * cell-boundary tick that hands the map byte over on vaddr. */
-      "MASKBIT", "CELLTICK",
+      /* ⛔ CELLTICK LEFT THIS LIST 2026-09-12 with its cell: it was MCADV's
+       * equation exactly, so the cell boundary and the map column step are one
+       * signal and MCADV (exported above) carries both. A pin back here and a
+       * pin back on vaddr. */
+      "MASKBIT",
       /* 7.2's row advance. It was produced here and NOT exported, so on
        * silicon WPTR's row could not advance at all - design-review2.md V-6. */
       "WROWADV",

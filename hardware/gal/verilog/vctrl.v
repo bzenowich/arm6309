@@ -125,7 +125,6 @@ module vctrl (
     output wire MAPREQ,
     output wire MCADV,
     output wire MAPLD,
-    output wire CELLTICK,
     output wire MAPSEL,
     output wire TILESEL,
     output wire LINEAR,
@@ -461,9 +460,6 @@ module vctrl (
   // EXTERNAL
   assign MAPLD =
          (MAPREQ & ~PH1 & PH0);
-  // EXTERNAL
-  assign CELLTICK =
-         (TILEMODE & MFETCH & ~H0 & SLOTTICK);
   // buried
   assign MAPSEL =
          (MAPREQ & ~PH1);

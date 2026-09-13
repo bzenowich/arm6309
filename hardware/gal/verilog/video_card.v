@@ -113,7 +113,9 @@ module video_card (
   // level over E-high re-arms the span for ever once /WAIT stretches the cycle.
   // graphics.md 7.4, 19 item 37; video.cpld.ts has the derivation.
   wire WPQ, WSTART;
-  wire SPNREQ, SPNTICK, LGRANT, CELLTICK, WINC;   // LGRANT is vsup's since 2026-09-11
+  wire SPNREQ, SPNTICK, LGRANT, WINC;   // LGRANT is vsup's since 2026-09-11
+  // ⛔ CELLTICK is gone (2026-09-12): it was MCADV's equation letter for letter,
+  // so the cell boundary and the map column step are one signal - video.parts.ts.
   wire SR0,SR1,SR2,SR3,SR4,SR5,SR6,SR7;
   wire LDADV;
 
@@ -167,7 +169,7 @@ module video_card (
     .A19(PA[19]), .A20(PA[20]),
     .HS0(HS0), .HS1(HS1), .WADV0(WADV0), .WADV1(WADV1),
     .MASKBIT(MASKBIT), .WSTBV(WSTBV), .WPQ(WPQ), .WSTART(WSTART), .SPNREQ(SPNREQ), .SPNTICK(SPNTICK),
-    .SGRANT(SGRANT), .RDVALID(RDVALID), .CELLTICK(CELLTICK),
+    .SGRANT(SGRANT), .RDVALID(RDVALID),
     .SR0(SR0),.SR1(SR1),.SR2(SR2),.SR3(SR3),
     .SR4(SR4),.SR5(SR5),.SR6(SR6),.SR7(SR7),
     .H0(H0),.H1(H1),.H2(H2),.H3(H3),.H4(H4),.H5(H5),.H6(H6),.H7(H7),
@@ -201,7 +203,7 @@ module video_card (
     .DOTCLK(DOTCLK), .RESET(RESET),
     .FETCH(FETCH), .HLOAD(HLOAD), .ROWADV(ROWADV), .VBLANK(VBLANK_w),
     .MAPLD(MAPLD),
-    .MCADV(MCADV), .SRC0(SRC0), .SRC1(SRC1), .CELLTICK(CELLTICK),
+    .MCADV(MCADV), .SRC0(SRC0), .SRC1(SRC1),
     .RP0(RP0), .RP1(RP1), .RLDA(RLDA), .RLDB(RLDB),
     .RETIRE(RETIRE), .WROWADV(WROWADV_w), .WSTB(WSTB_REG),
     .RA0(RA[0]),.RA1(RA[1]),.RA2(RA[2]),.RA3(RA[3]),.RA4(RA[4]),

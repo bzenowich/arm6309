@@ -356,9 +356,10 @@ rather than ranges.
 The obvious problem with a map above 2 MB is that **cards decode only
 `A0`–`A20`**, so an access at 2.5 MB looks to a card exactly like one at
 0.5 MB. Giving every card `A21`–`A24` is four backplane pins the slot does not
-have. `vctrl` has the pins, at **53 of 64 I/O** (`gal/cpld/vctrl.fit`), and since
-2026-09-12 it has cells too — **125 of 128**, three back from collapsing §19 item
-23(a)'s four identical `FCLK` outputs into one. ⚠ **That does not reopen this.**
+have. `vctrl` has the pins, at **52 of 64 I/O** (`gal/cpld/vctrl.fit`), and since
+2026-09-12 it has cells too — **123 of 128**, five back from two cleanups: §19 item
+23(a)'s four identical `FCLK` outputs collapsed into one, and `CELLTICK` merged into
+`MCADV`, which was its equation letter for letter. ⚠ **That does not reopen this.**
 The reason `A21`–`A24` never reach a slot is that the **backplane** has no pins
 for them, and three macrocells on one card do not change a connector.
 
@@ -783,7 +784,7 @@ see. **Zero new pins.**
 
 **Which is fortunate**, because the slot has none to give —
 [`lib/slot.ts`](lib/slot.ts) spent its last position on physical `A20` — and
-`vctrl` is at **125 of 128 cells** since 2026-09-12 — ⚠ but it is the **slot**,
+`vctrl` is at **123 of 128 cells** since 2026-09-12 — ⚠ but it is the **slot**,
 not the CPLD, that has nothing left to give, so the conclusion is unchanged.
 
 > **What is still true** is that the connector's own justification expired when the

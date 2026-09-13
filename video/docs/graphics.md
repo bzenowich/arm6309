@@ -2410,7 +2410,7 @@ combinations by `gal/jedec/cupl.check.ts`. `hardware/gal/video.cpld.ts` and
 to signal through the freed pins.
 
 **The spare-access arbiter is inside `vctrl`.** With `rfa`'s fourteen pins and
-Variant B's four freed, `vctrl` holds the arbiter at **53 of 64 I/O and 125 of 128
+Variant B's four freed, `vctrl` holds the arbiter at **52 of 64 I/O and 123 of 128
 cells**. The pins fell with §11's deletion of the CPU grant, and one came back for
 `VDATA`'s select (§19 item 47); the cells rose with the fitter's second pass, §19 item 46. A CPLD at two-thirds capacity sitting beside a
 `GAL22V10` doing ten macrocells of work would be a package nobody is buying
@@ -3186,8 +3186,8 @@ arithmetic line by line. (The GAL-build table this section used to carry — 41 
 | **1** | **74AHCT244** | ⭐ **the index onto the LUT's address bus** — §13.1's turnaround, `/OE` from `vsup` | **new** |
 | **2** | **74HC573** | ⭐ **`PDATL`/`PDATH`, §13's `+$11`/`+$12`** — the LUT entry is 16 bits and the card's bus is 8, so the pair has to be assembled somewhere. Transparent latches, because a `'574` clocked on a register write's *rising* edge samples before a 6809E has driven the data (§3.1) | **new** |
 | **1** | **74HCT244** | ⭐ **§10.3.3's descriptor-byte buffer** — the display list's fetched byte, from the pixel bus onto the card's internal data bus for the dot a granted engine slot lasts. It is what makes a list `MOVE` reach a register at all | **new** |
-| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vaddr`** — scan address, `WPTR`/span pointer, tile address sources. **59 of 64 I/O, 113 of 128 cells** (`hardware/gal/cpld/vaddr.fit`) | |
-| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, span-mask handling, §19 item 35's blanking delay, `VDATA`'s `/WAIT` and posted-write select. **56 of 64 I/O, 128 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) — ⚠ the fitter's first pass no longer places it and the second, with cascade logic, reports the cells; §19 item 46. **The last cell is `CTRL` b7**: the display enable is a second term on `BLANKD` (§9.2), and without it the part fits at 127 | |
+| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vaddr`** — scan address, `WPTR`/span pointer, tile address sources. **58 of 64 I/O, 113 of 128 cells** (`hardware/gal/cpld/vaddr.fit`) | |
+| 1 | `ATF1508AS-15JC84`, PLCC-84 | **`vctrl`** — sync (§6.2.1's polarity, VBL IRQ), sequencer, span control, the spare-access arbiter (§10.1.6.3), `CTRL`, span-mask handling, §19 item 35's blanking delay, `VDATA`'s `/WAIT` and posted-write select. **52 of 64 I/O, 123 of 128 cells** (`hardware/gal/cpld/vctrl.fit`) — ⚠ the fitter's first pass no longer places it and the second, with cascade logic, reports the cells; §19 item 46. ⚠ **It was 56 of 64 and 128 of 128 until 2026-09-12**, when two sets of duplicated equations came out — §19 item 23(a)'s four identical `FCLK` outputs, and `CELLTICK`, which was `MCADV`'s equation letter for letter. **The last cell used to be `CTRL` b7**: the display enable is a second term on `BLANKD` (§9.2), and while the part was full that was the cell it cost | |
 | **1** | `ATF1508AS-15JC84`, PLCC-84 | ⭐ **`vsup`** — §10.1.7, **new 2026-09-09**. The register-file address, §7.4's `SPANLEN` counter, §8.2's rank select, §9's palette write path and §10.3's descriptor decode. It **replaces three `GAL22V10`s** (`rfa`, `vlen`, `pxsel`), so a third PLCC-84 is −2 packages before it does anything else. Since 2026-09-11 also §11's read prefetch and `VDATA`'s decode. **61 of 64 I/O, 91 of 128 cells** (`hardware/gal/cpld/vsup.fit`) | |
 | 1 | 74HC574 | posted-write **data** latch | = |
 | 1 | 32K×8 20 ns | register file | = |

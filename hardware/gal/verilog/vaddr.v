@@ -32,7 +32,6 @@ module vaddr (
     input  wire PB0,
     input  wire PB1,
     input  wire MAPLD,
-    input  wire CELLTICK,
     input  wire MCADV,
     input  wire WSTB,
     input  wire RA4,
@@ -1009,29 +1008,29 @@ module vaddr (
          (MAPLD & PB7)
          | (MAP7 & ~MAPLD);
       r_MAPQ0 <=
-         (CELLTICK & MAP0)
-         | (MAPQ0 & ~CELLTICK);
+         (MCADV & MAP0)
+         | (MAPQ0 & ~MCADV);
       r_MAPQ1 <=
-         (CELLTICK & MAP1)
-         | (MAPQ1 & ~CELLTICK);
+         (MCADV & MAP1)
+         | (MAPQ1 & ~MCADV);
       r_MAPQ2 <=
-         (CELLTICK & MAP2)
-         | (MAPQ2 & ~CELLTICK);
+         (MCADV & MAP2)
+         | (MAPQ2 & ~MCADV);
       r_MAPQ3 <=
-         (CELLTICK & MAP3)
-         | (MAPQ3 & ~CELLTICK);
+         (MCADV & MAP3)
+         | (MAPQ3 & ~MCADV);
       r_MAPQ4 <=
-         (CELLTICK & MAP4)
-         | (MAPQ4 & ~CELLTICK);
+         (MCADV & MAP4)
+         | (MAPQ4 & ~MCADV);
       r_MAPQ5 <=
-         (CELLTICK & MAP5)
-         | (MAPQ5 & ~CELLTICK);
+         (MCADV & MAP5)
+         | (MAPQ5 & ~MCADV);
       r_MAPQ6 <=
-         (CELLTICK & MAP6)
-         | (MAPQ6 & ~CELLTICK);
+         (MCADV & MAP6)
+         | (MAPQ6 & ~MCADV);
       r_MAPQ7 <=
-         (CELLTICK & MAP7)
-         | (MAPQ7 & ~CELLTICK);
+         (MCADV & MAP7)
+         | (MAPQ7 & ~MCADV);
       r_MC0 <=
          (HLOAD & HS3)
          | (~HLOAD & MCADV & ~MC0)

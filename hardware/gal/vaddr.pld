@@ -47,7 +47,6 @@ PIN = LWHSH ;
 PIN = PB0 ;
 PIN = PB1 ;
 PIN = MAPLD ;
-PIN = CELLTICK ;
 PIN = MCADV ;
 PIN = !WSTB ;
 PIN = RA4 ;
@@ -523,22 +522,22 @@ MAP6.d = MAPLD & PB6
          # MAP6 & !MAPLD ;
 MAP7.d = MAPLD & PB7
          # MAP7 & !MAPLD ;
-MAPQ0.d = CELLTICK & MAP0
-          # MAPQ0 & !CELLTICK ;
-MAPQ1.d = CELLTICK & MAP1
-          # MAPQ1 & !CELLTICK ;
-MAPQ2.d = CELLTICK & MAP2
-          # MAPQ2 & !CELLTICK ;
-MAPQ3.d = CELLTICK & MAP3
-          # MAPQ3 & !CELLTICK ;
-MAPQ4.d = CELLTICK & MAP4
-          # MAPQ4 & !CELLTICK ;
-MAPQ5.d = CELLTICK & MAP5
-          # MAPQ5 & !CELLTICK ;
-MAPQ6.d = CELLTICK & MAP6
-          # MAPQ6 & !CELLTICK ;
-MAPQ7.d = CELLTICK & MAP7
-          # MAPQ7 & !CELLTICK ;
+MAPQ0.d = MCADV & MAP0
+          # MAPQ0 & !MCADV ;
+MAPQ1.d = MCADV & MAP1
+          # MAPQ1 & !MCADV ;
+MAPQ2.d = MCADV & MAP2
+          # MAPQ2 & !MCADV ;
+MAPQ3.d = MCADV & MAP3
+          # MAPQ3 & !MCADV ;
+MAPQ4.d = MCADV & MAP4
+          # MAPQ4 & !MCADV ;
+MAPQ5.d = MCADV & MAP5
+          # MAPQ5 & !MCADV ;
+MAPQ6.d = MCADV & MAP6
+          # MAPQ6 & !MCADV ;
+MAPQ7.d = MCADV & MAP7
+          # MAPQ7 & !MCADV ;
 MC0.d = HLOAD & HS3
         # !HLOAD & MCADV & !MC0
         # !HLOAD & !MCADV & MC0 ;
