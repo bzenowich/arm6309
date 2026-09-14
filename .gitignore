@@ -56,3 +56,8 @@ reference/**/*.zip
 awincupl.exe.zip
 *wincupl*.zip
 hardware/gal/verilog/*.ppm
+
+# LWTOOLS and ToolShed, built by software/tools/fetch-nitros9-tools.sh, and the
+# LWTOOLS source archive it builds from (GPL v3, not ours to redistribute).
+.tools/
+software/tools/lwtools-*.tar.gz

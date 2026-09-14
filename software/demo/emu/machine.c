@@ -32,7 +32,19 @@
  *     one under a span (7.4: the span's colour and column reload are read from
  *     the register file);
  *   - the audio card's tempo timer on /FIRQ, and its register stream in
- *     demo_tb's card.trace format, so it can be diffed against refplayer.
+ *     demo_tb's card.trace format, so it can be diffed against refplayer;
+ *   - the map's two tasks: TASK is bit 0 of any write to $FFB0-$FFBF
+ *     (machine.md 3: U3's CTRLCP does not see A0), and the entry for a
+ *     logical block is {TASK, block};
+ *   - the video card's register file: a register reads back the last byte
+ *     the CPU wrote to it (graphics.md 13), except VSTAT and VDATA;
+ *   - the TL16C550C at $FF38 (io/serial/docs/serial.md 7): divisor latch,
+ *     16-byte FIFOs drained and filled at the programmed baud rate, IIR's
+ *     priorities, and INTR on the shared /IRQ. Transmitted bytes go to
+ *     OUTDIR/serial.out and stdout; SERIAL_IN names a file whose bytes are
+ *     received from SERIAL_AT seconds on, and SERIAL_STOP a string that ends
+ *     the run when it has been transmitted. That is how software/nitros9/
+ *     boots NitrOS-9 here.
  *
  * What it records is demo_tb's frames.bin, so tools/checkdemo.py and
  * tools/mkvideo.py read either.
@@ -52,6 +64,7 @@ typedef struct {
     uint8_t rom[1 << 20];
     uint8_t *ram[65536];         /* SIMM pages, allocated on first touch */
     uint8_t maphi[16], maplo[16];
+    uint8_t task;                /* $FFB0-$FFBF bit 0 */
     uint8_t progress;
 
     /* video */
@@ -60,6 +73,7 @@ typedef struct {
     uint8_t wp0, wp1;            /* the register file's +$08/+$09: WADV 01's column */
     uint32_t wptr;
     uint8_t pidx, pdatl, tilebase, mapbase;
+    uint8_t regfile[32];         /* graphics.md 13: what a register reads back */
     uint16_t pal[256];
     int irq_pending;
     int irq_line_due;            /* the line /IRQ reaches the CPU on, or -1 */
@@ -79,6 +93,19 @@ typedef struct {
     int trace_tick, music_marked;
     FILE *trace, *times;
 
+    /* serial: TL16C550C */
+    uint8_t u_ier, u_lcr, u_mcr, u_scr, u_dll, u_dlm, u_fcr;
+    uint8_t rx[16]; int rx_n, rx_head;
+    int tx_n;                    /* bytes in the transmit FIFO + shift register */
+    int thre_int;                /* THRE interrupt pending (cleared by IIR read / THR write) */
+    uint64_t tx_next, rx_next;   /* cycles */
+    uint64_t rx_last;            /* cycles: the last character in or out of the RX FIFO (the timeout's clock) */
+    FILE *ser_out;
+    const uint8_t *ser_in; long ser_in_n, ser_in_pos;
+    uint64_t ser_at;             /* cycles */
+    const char *ser_stop; size_t ser_stop_len, ser_match;
+    int stop;
+
     /* frames */
     FILE *frames;
     uint16_t *cur, *prv;
@@ -89,6 +116,8 @@ typedef struct {
 } M;
 
 static M *m;
+static uint16_t *atexit_ring;
+static unsigned *atexit_ri;
 
 /* ------------------------------------------------------------------ memory */
 static uint8_t *rampage(uint8_t hi, uint8_t lo)
@@ -98,9 +127,11 @@ static uint8_t *rampage(uint8_t hi, uint8_t lo)
     return m->ram[k];
 }
 
+static unsigned entry(uint16_t la) { return ((unsigned)m->task << 3) | (la >> 13); }
+
 static uint16_t ram16(uint16_t la)
 {
-    uint8_t *p = rampage(m->maphi[la >> 13], m->maplo[la >> 13]);
+    uint8_t *p = rampage(m->maphi[la >> 13], m->maplo[la >> 13]);   /* task 0: the demo's */
     uint16_t o = la & 0x1FFF;
     return (uint16_t)((p[o] << 8) | p[(o + 1) & 0x1FFF]);
 }
@@ -165,6 +196,7 @@ static void list_run(void);
 
 static void video_write(uint8_t r, uint8_t v)
 {
+    if (r != 0x15) m->regfile[r & 31] = v;
     switch (r) {
     case 0x00: m->ctrl = v; break;
     case 0x01: m->vs_lo = v; break;
@@ -205,7 +237,7 @@ static uint8_t video_read(uint8_t r)
                          | (col >= 640 ? 0x20 : 0) | (m->lrun ? 0x10 : 0) | (m->irq_pending ? 1 : 0));
     }
     case 0x15: return vram_read();
-    default: return 0x00;
+    default: return m->regfile[r & 31];
     }
 }
 
@@ -252,17 +284,126 @@ static void audio_write(uint8_t r, uint8_t v)
     }
 }
 
+/* ------------------------------------------------------------------ serial */
+static uint64_t uart_bit_cycles(void)
+{
+    unsigned div = ((unsigned)m->u_dlm << 8) | m->u_dll;
+    if (!div) div = 1;
+    /* 10 bits a character at 7,372,800 / 16 / div baud, in E cycles */
+    return (10ULL * 16 * div * 2097917ULL) / 7372800ULL;
+}
+
+/* The receive interrupt is the FIFO reaching FCR's trigger level, or a
+ * character-timeout four character times after the FIFO last moved with
+ * anything in it (IIR $0C). sc16550 reads exactly the trigger level's bytes
+ * on IIR $04 without checking LSR, so this distinction is not cosmetic. */
+static int uart_rx_level(void)
+{
+    static const int trig[4] = {1, 4, 8, 14};
+    int t = (m->u_fcr & 1) ? trig[(m->u_fcr >> 6) & 3] : 1;
+    return m->rx_n >= t;
+}
+
+static int uart_rx_timeout(void)
+{
+    return m->rx_n && m->cpu.cycles >= m->rx_last + 4 * uart_bit_cycles();
+}
+
+static int uart_irq(void)
+{
+    if ((m->u_ier & 1) && (uart_rx_level() || uart_rx_timeout())) return 1;
+    if ((m->u_ier & 2) && m->thre_int) return 1;
+    return 0;
+}
+
+static uint8_t uart_read(uint8_t r)
+{
+    int dlab = m->u_lcr & 0x80;
+    switch (r) {
+    case 0:
+        if (dlab) return m->u_dll;
+        if (m->rx_n) { uint8_t v = m->rx[m->rx_head]; m->rx_head = (m->rx_head + 1) & 15; m->rx_n--; m->rx_last = m->cpu.cycles; return v; }
+        return 0;
+    case 1: return dlab ? m->u_dlm : m->u_ier;
+    case 2: {
+        uint8_t fifo = (m->u_fcr & 1) ? 0xC0 : 0;
+        if ((m->u_ier & 1) && uart_rx_level()) return fifo | 0x04;
+        if ((m->u_ier & 1) && uart_rx_timeout()) return fifo | 0x0C;
+        if ((m->u_ier & 2) && m->thre_int) { m->thre_int = 0; return fifo | 0x02; }
+        return fifo | 0x01;
+    }
+    case 3: return m->u_lcr;
+    case 4: return m->u_mcr;
+    case 5: return (uint8_t)((m->rx_n ? 0x01 : 0) | (m->tx_n == 0 ? 0x60 : (m->tx_n < 16 ? 0x00 : 0x00)));
+    case 6: return 0xB0;                   /* DCD, DSR, CTS asserted, no deltas */
+    default: return m->u_scr;
+    }
+}
+
+static void uart_write(uint8_t r, uint8_t v)
+{
+    int dlab = m->u_lcr & 0x80;
+    switch (r) {
+    case 0:
+        if (dlab) { m->u_dll = v; break; }
+        if (m->tx_n == 0) m->tx_next = m->cpu.cycles + uart_bit_cycles();
+        if (m->tx_n < 17) m->tx_n++;
+        m->thre_int = 0;
+        fputc(v, m->ser_out);
+        fputc(v, stdout);
+        fflush(stdout);
+        if (m->ser_stop && v) {         /* NULs are padding, not text: they never break a match */
+            if ((char)v == m->ser_stop[m->ser_match]) {
+                if (++m->ser_match == m->ser_stop_len) m->stop = 1;
+            } else m->ser_match = ((char)v == m->ser_stop[0]) ? 1 : 0;
+        }
+        break;
+    case 1:
+        if (dlab) { m->u_dlm = v; break; }
+        if ((v & 2) && !(m->u_ier & 2) && m->tx_n == 0) m->thre_int = 1;
+        m->u_ier = v & 0x0F;
+        break;
+    case 2:
+        m->u_fcr = v;
+        if (v & 2) { m->rx_n = 0; m->rx_head = 0; }
+        if (v & 4) { m->tx_n = 0; }
+        break;
+    case 3: m->u_lcr = v; break;
+    case 4: m->u_mcr = v; break;
+    case 7: m->u_scr = v; break;
+    default: break;
+    }
+}
+
+static void uart_step(void)
+{
+    if (m->tx_n && m->cpu.cycles >= m->tx_next) {
+        m->tx_n--;
+        m->tx_next += uart_bit_cycles();
+        if (m->tx_n == 0) m->thre_int = 1;
+    }
+    if (m->ser_in && m->ser_in_pos < m->ser_in_n && m->cpu.cycles >= m->ser_at && m->cpu.cycles >= m->rx_next) {
+        if (m->rx_n < 16) {
+            m->rx[(m->rx_head + m->rx_n) & 15] = m->ser_in[m->ser_in_pos++];
+            m->rx_n++;
+        }
+        m->rx_last = m->cpu.cycles;
+        m->rx_next = m->cpu.cycles + uart_bit_cycles();
+    }
+}
+
 static uint8_t rd(void *ctx, uint16_t a)
 {
     (void)ctx;
     if (a >= 0xFFC0) return m->rom[a & 0x1FFF];
     if (a >= 0xFF00) {
         if (a >= 0xFF60 && a <= 0xFF7F) return video_read((uint8_t)(a - 0xFF60));
+        if (a >= 0xFF38 && a <= 0xFF3F) return uart_read((uint8_t)(a - 0xFF38));
         if (a >= 0xFF90 && a <= 0xFF9F) return m->maphi[a & 15];
         if (a >= 0xFFA0 && a <= 0xFFAF) return m->maplo[a & 15];
         return 0x00;                      /* ASTAT never busy */
     }
-    uint8_t hi = m->maphi[a >> 13], lo = m->maplo[a >> 13];
+    uint8_t hi = m->maphi[entry(a)], lo = m->maplo[entry(a)];
     if (hi == 0x01) return m->rom[((uint32_t)lo << 13 | (a & 0x1FFF)) & 0xFFFFF];
     return rampage(hi, lo)[a & 0x1FFF];
 }
@@ -287,13 +428,15 @@ static void wr(void *ctx, uint16_t a, uint8_t v)
         else if (a >= 0xFF90 && a <= 0xFF9F) m->maphi[a & 15] = v;
         else if (a >= 0xFFA0 && a <= 0xFFAF) m->maplo[a & 15] = v;
         else if (a >= 0xFF40 && a <= 0xFF4F) audio_write((uint8_t)(a & 15), v);
+        else if (a >= 0xFF38 && a <= 0xFF3F) uart_write((uint8_t)(a - 0xFF38), v);
+        else if (a >= 0xFFB0 && a <= 0xFFBF) m->task = v & 1;
         else if (a == 0xFF2F) {
             m->progress = v;
             fprintf(stderr, "      %8.3f s  progress $%02X\n", (double)m->dots * DOT_PS / 1e12, v);
         }
         return;
     }
-    uint8_t hi = m->maphi[a >> 13], lo = m->maplo[a >> 13];
+    uint8_t hi = m->maphi[entry(a)], lo = m->maplo[entry(a)];
     if (hi == 0x01) return;
     rampage(hi, lo)[a & 0x1FFF] = v;
 }
@@ -410,7 +553,22 @@ int main(int argc, char **argv)
     m->trace = fopen(path, "w");
     snprintf(path, sizeof path, "%s/card.times", argv[2]);
     m->times = fopen(path, "w");
-    if (!m->frames || !m->trace) { fprintf(stderr, "FAIL  cannot write in %s\n", argv[2]); return 1; }
+    snprintf(path, sizeof path, "%s/serial.out", argv[2]);
+    m->ser_out = fopen(path, "wb");
+    if (!m->frames || !m->trace || !m->ser_out) { fprintf(stderr, "FAIL  cannot write in %s\n", argv[2]); return 1; }
+    if (getenv("SERIAL_IN")) {
+        FILE *si = fopen(getenv("SERIAL_IN"), "rb");
+        if (!si) { fprintf(stderr, "FAIL  cannot read SERIAL_IN %s\n", getenv("SERIAL_IN")); return 1; }
+        static uint8_t buf[1 << 16];
+        m->ser_in_n = (long)fread(buf, 1, sizeof buf, si);
+        fclose(si);
+        m->ser_in = buf;
+        m->ser_at = (uint64_t)(atof(getenv("SERIAL_AT") ? getenv("SERIAL_AT") : "0") * 2097917.0);
+    }
+    if (getenv("SERIAL_STOP") && *getenv("SERIAL_STOP")) {
+        m->ser_stop = getenv("SERIAL_STOP");
+        m->ser_stop_len = strlen(m->ser_stop);
+    }
     m->cur = calloc(640 * 512, 2);
     m->prv = calloc(640 * 512, 2);
     double secs = atof(argv[3]);
@@ -429,11 +587,27 @@ int main(int argc, char **argv)
     cpu6809_reset(&m->cpu);
     m->cpu.pc = 0x8004;
 
+    /* TRACE=n prints the PC and registers of the first n instructions */
+    long trace_n = getenv("TRACE") ? atol(getenv("TRACE")) : 0;
     uint64_t end_dots = (uint64_t)(secs * 1e12 / DOT_PS);
     uint64_t next_report = 0;
     while (m->dots < end_dots) {
-        m->cpu.irq = m->irq_pending && (m->ctrl & 0x40);
+        m->cpu.irq = (m->irq_pending && (m->ctrl & 0x40)) || uart_irq();
         m->cpu.firq = m->firq;
+        {   /* the last 256 PCs, for RINGDUMP; WILD stops at 16 NEG <$00s in a row, a CPU running through empty RAM */
+            static uint16_t ring[256]; static unsigned ri, zeros;
+            ring[ri++ & 255] = (uint16_t)m->cpu.pc;
+            if (getenv("RINGDUMP")) { atexit_ring = ring; atexit_ri = &ri; }
+            if (getenv("WILD")) {
+                zeros = (rd(m, m->cpu.pc) == 0 && rd(m, (uint16_t)(m->cpu.pc + 1)) == 0) ? zeros + 1 : 0;
+                if (zeros == 16) { fprintf(stderr, "WILD at %.3f s, task %d\n", (double)m->dots * DOT_PS / 1e12, m->task); atexit_ring = ring; atexit_ri = &ri; break; }
+            }
+        }
+        if (trace_n > 0 && (!getenv("TRACE_AT") || m->dots * DOT_PS >= (uint64_t)(atof(getenv("TRACE_AT")) * 1e12))) {
+            trace_n--;
+            fprintf(stderr, "PC %04X A %02X B %02X X %04X Y %04X U %04X S %04X CC %02X DP %02X T %d\n", m->cpu.pc, m->cpu.a,
+                    m->cpu.b, m->cpu.x, m->cpu.y, m->cpu.u, m->cpu.s, m->cpu.cc, m->cpu.dp, m->task);
+        }
         int e = cpu6809_step(&m->cpu);
         m->dots = m->cpu.cycles * DOTS_PER_E;
         if (m->timer_on && m->cpu.cycles >= m->next_fire) {
@@ -441,6 +615,8 @@ int main(int argc, char **argv)
             m->next_fire += (5ULL * m->timer * 2097917ULL) / 3546895ULL;
         }
         raster();
+        uart_step();
+        if (m->stop) { fprintf(stderr, "      %8.3f s  SERIAL_STOP seen\n", (double)m->dots * DOT_PS / 1e12); break; }
         (void)e;
         if (m->dots >= next_report) {
             fprintf(stderr, "      %8.3f s  prog $%02X  frames %d  ck %u\n", (double)m->dots * DOT_PS / 1e12,
@@ -452,10 +628,27 @@ int main(int argc, char **argv)
     fclose(m->frames);
     fclose(m->trace);
     fclose(m->times);
+    fclose(m->ser_out);
     snprintf(path, sizeof path, "%s/sync.txt", argv[2]);
     f = fopen(path, "w");
     fprintf(f, "cc0_ps 0\nend_ps %llu\n", (unsigned long long)(m->dots * DOT_PS));
     fclose(f);
+    if (getenv("DUMP")) {   /* DUMP=addr,len: logical memory through task 0's map, at exit */
+        unsigned da = 0, dl = 0;
+        sscanf(getenv("DUMP"), "%x,%x", &da, &dl);
+        uint8_t t = m->task; m->task = 0;
+        for (unsigned i = 0; i < dl; i++) {
+            if (i % 32 == 0) fprintf(stderr, "\n%04X:", (da + i) & 0xFFFF);
+            fprintf(stderr, " %02X", rd(m, (uint16_t)(da + i)));
+        }
+        fprintf(stderr, "\n");
+        m->task = t;
+    }
+    if (atexit_ring) {
+        fprintf(stderr, "last PCs:");
+        for (unsigned i = 0; i < 256; i++) fprintf(stderr, "%s%04X", i % 16 ? " " : "\n  ", atexit_ring[(*atexit_ri + i) & 255]);
+        fprintf(stderr, "\n");
+    }
     fprintf(stderr, "emu: %d frames, progress $%02X, %.1f s of machine, %ld register writes under a list, %ld under a span\n",
             m->frame_n, m->progress, (double)m->dots * DOT_PS / 1e12, m->list_violations, m->span_violations);
     return m->list_violations || m->span_violations ? 1 : 0;

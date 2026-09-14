@@ -1133,7 +1133,7 @@ around.
 | | |
 |---|---|
 | ⭐ **"Drop a real HD63C09E in the socket"** | `graphics.md` §16 item 8's standing sanity check **holds again**. The reset vector, the boot ROM and the interrupt vectors are all on the bus; nothing about boot is inside the CPU module any more |
-| ⭐ **Two divergence-ledger entries go away** | §5 item 6's ledger loses the shadow ROM *and* the vector page. `$FFC0`–`$FFFF` in ROM pointing at a fixed RAM jump table **is what a CoCo does**, so NitrOS-9's vector handling stops needing a patch instead of needing a different one |
+| ⭐ **Two divergence-ledger entries go away** | §5 item 6's ledger loses the shadow ROM *and* the vector page. The six interrupt vectors point at **`$FEEE`–`$FEFD`, the CoCo 3's addresses**, so NitrOS-9's kernel keeps its own stubs there (`software/boot/README.md`). ⚠ **What remains is the constant page**: a GIME keeps `$FE00`–`$FEFF` on block `$3F` in every task and this map does not, so the port forces slot 7 of every task to the kernel's block, as the Pico-Thing port does — `software/nitros9/README.md` |
 | **The CPU module gets simpler** | `plan.md` §4.5's per-address range test goes — it was one comparison on every *formed* address, in the microcode step §3.3(d) measures rather than on the `t_AD` path — and the `PF1` machine strap with it, so **the pinout has a spare pin and the drop-in and homebrew SKUs run byte-identical firmware** |
 | **`ram.md` §6.4's scratch-RAM proposal is withdrawn** | it existed to give a stackless boot somewhere to put a stack, and there is no stack to put |
 

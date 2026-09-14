@@ -1315,13 +1315,30 @@ vgot    EQU     RAMWIN+$1B      ... and the byte that was read
 * unconditionally, which is the whole reason $FFFE is a reset vector and not an
 * undriven bus.  In ROM these are at $1FF2-$1FFF.
 *==============================================================================
+*
+* ⭐ THE SIX INTERRUPT VECTORS POINT AT $FEEE-$FEFD, WHICH IS WHERE A CoCo 3's
+* DO. That is not in this page's fixed $FFC0-$FFFF window: it is logical
+* block 7, so what runs is whatever block 7 holds. In boot mode, and under any
+* program handed page 1 (software/demo/), block 7 is this ROM page and the six
+* entries below are its own jumps - to the same RAM vectors as before. Under
+* NitrOS-9 block 7 is the kernel's RAM block in every map, and NitrOS-9's krn
+* ends at $FF00 with its BRA stubs at exactly these addresses
+* (docs/nitros9-av-plan.md 8 item X3). One ROM serves both.
+        ORG     $FEEE
+vswi3   jmp     halt            $FEEE  SWI3
+vswi2   jmp     halt            $FEF1  SWI2
+vfirq   jmp     firqtr          $FEF4  FIRQ - through FIRQVEC
+virq    jmp     irqtr           $FEF7  IRQ - through IRQVEC
+vswi    jmp     halt            $FEFA  SWI
+vnmi    jmp     halt            $FEFD  NMI
+
         ORG     $FFF2
-        FDB     halt            SWI3
-        FDB     halt            SWI2
-        FDB     firqtr          FIRQ - through FIRQVEC
-        FDB     irqtr           IRQ - through IRQVEC
-        FDB     halt            SWI
-        FDB     halt            NMI
+        FDB     vswi3           SWI3
+        FDB     vswi2           SWI2
+        FDB     vfirq           FIRQ
+        FDB     virq            IRQ
+        FDB     vswi            SWI
+        FDB     vnmi            NMI
         FDB     reset           RESET
 
         END     reset

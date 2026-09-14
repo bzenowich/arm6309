@@ -186,21 +186,26 @@ cell, passes that compare. So `machine_tb` also checks these stages from outside
 ## The RAM vectors, and a program in ROM
 
 `machine.md` §7.2 puts the vectors in ROM, pointing "at a fixed RAM jump table", and says
-the boot monitor has to publish that convention. This is it:
+the boot monitor has to publish that convention. This is it.
 
-| | |
+**The six interrupt vectors point at `$FEEE`–`$FEFD`, the CoCo 3's addresses.** That is
+logical block 7, not the fixed `$FFC0`–`$FFFF` window, so what runs there depends on what
+block 7 holds:
+
+| Block 7 holds | `$FEEE`–`$FEFD` is |
 |---|---|
-| IRQ | the ROM vector jumps through the word at **`$C004`** |
-| FIRQ | ... through **`$C006`** |
+| **this ROM page**: boot mode, and any program handed page 1 (`software/demo/`) | page 0's own jumps. IRQ goes through the word at **`$C004`**, FIRQ through **`$C006`**, and SWI, SWI2, SWI3 and NMI go to `halt` |
+| **NitrOS-9's kernel block** (`software/nitros9/`) | `krn`'s BRA stubs. The kernel ends at `$FF00` so they land exactly here |
 
-Both words are in block 6, the SIMM. Boot sets both to `halt` as soon as the stack is up.
-SWI, SWI2, SWI3 and NMI still point at `halt` directly.
+`$C004` and `$C006` are in block 6, the SIMM. Boot sets both to `halt` as soon as the
+stack is up. `mkrom.sh` checks each vector against its label, so the table and the jumps
+are one claim.
 
 **Section 11** hands over to a program in ROM. After the VRAM read-back, boot maps ROM
 pages 1 and 2 at `$8000` and `$A000`. If `$8000` holds `"6309"`, it jumps to `$8004`, with
 the stack, the map and the RAM vectors set up. Otherwise it points the two blocks back at
 the SIMM and halts as before. `machine_tb` loads page 0 only, so it takes the second path.
-`software/demo/` takes the first.
+`software/demo/` and `software/nitros9/` take the first.
 
 ## What it does not do yet
 

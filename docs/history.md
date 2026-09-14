@@ -12,6 +12,19 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## §7.2 — the vectors point at `$FEEE`, and the constant page is the entry that remains (2026-09-14)
+
+`software/nitros9/` booted NitrOS-9 Level 2 to a shell on the host emulator, and in doing so
+fixed the vector convention concretely. The boot ROM's six interrupt vectors used to point
+at `halt` and at two jumps through RAM words, and now point at `$FEEE`–`$FEFD`. §7.2's
+"what it buys back" row claimed more than the port found: the vectors need no patch, but a
+constant page is missing, and the kernel needed that.
+
+**machine.md §7.2 — "What it buys back" — said:**
+
+> | ⭐ **Two divergence-ledger entries go away** | §5 item 6's ledger loses the shadow ROM *and* the vector page. `$FFC0`–`$FFFF` in ROM pointing at a fixed RAM jump table **is what a CoCo does**, so NitrOS-9's vector handling stops needing a patch instead of needing a different one |
+
+
 ## §0, §2, §8 and the root README — the video card is 33 ICs, and the totals follow the parts list (2026-09-11)
 
 `graphics.md` §19 item 44 deleted the video card's three unclocked address latches (36 → 33).

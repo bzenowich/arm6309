@@ -499,13 +499,13 @@ None of these is driver code, but no driver runs without them.
 
 | # | Item | Why it blocks | Where |
 |---|---|---|---|
-| X1 | `level2/arm6309/` port: `port.mak`, `defsfile`, `defs/arm6309.d` (`DAT.Regs`=`$FFA0`, high-byte window `$FF90`, `TASK` at `$FFB0`, `KrnBlk`, `HW.Page`) and a recipe | everything | nitros9 `recipes/` |
-| X2 | Memory-manager patch for the 16-bit map and `TASK` | boots nothing without it | machine.md §5 item 6 |
-| X3 | Vectors: IRQ/FIRQ jump through `$C004`/`$C006`, which is task-mapped. Either the ROM points somewhere the kernel keeps mapped, or `krn.asm` patches | kernel entry | software/boot/README.md |
+| X1 | ✅ **landed 2026-09-14**: `software/nitros9/README.md` | | |
+| X2 | Memory-manager patch for a block number wider than 8 bits. ⭐ **No longer blocks booting**: 8-bit blocks on a fixed high byte give 2 MB (`software/nitros9/README.md`). It is what the other 14 MB need | more than 2 MB of RAM | machine.md §5 item 6, `ram.md` §9 |
+| X3 | ✅ **landed 2026-09-14**: the vectors point at `$FEEE`–`$FEFD` (`software/boot/README.md`) | | |
 | X4 | Clock: VBL tick through `F$IRQ` on `$FF73`, **with a runtime ticks-per-second** instead of assembly-time `TkPerSec`; a fractional accumulator for 70.086 Hz | V11; timekeeping drifts ~86–106 s/day otherwise | `level2/modules/clock.asm` |
 | X5 | FIRQ stub (§3.7) | audio | `krn.asm` |
-| X6 | A serial console first (16C550; NitrOS-9's `sc6551` does not apply) | lets the OS boot before `VTArm` exists | serial.md §13 item 2 |
-| X7 | **Emulator upgrades**: MMU tasks, register-file read-back (returns 0 today), VBL 10 lines in the 525 family, `WADV 10`, PS/2, and the audio host boundary from `audio/refplayer/card.c` (`machine.c` reads `$FF40`–`$FF4F` as 0, never busy) | every driver iteration; the machine run is 4.5 h | audio.md §16 item 14, g.md §19 item 13 |
+| X6 | ✅ **landed 2026-09-14**: `/Term` on Wildbits' `sc16550` | | |
+| X7 | **Emulator upgrades.** MMU tasks, register-file read-back and the 16C550 landed 2026-09-14. Still to do: VBL 10 lines in the 525 family, `WADV 10`, PS/2, and the audio host boundary from `audio/refplayer/card.c` (`machine.c` reads `$FF40`–`$FF4F` as 0, never busy) | every driver iteration; the machine run is 4.5 h | audio.md §16 item 14, g.md §19 item 13 |
 | X8 | **Measure** Level 2 system-call round trip, IRQ dispatch cost and `TFM` into `VDATA`/`SDATA` | sizes batching (§3.5), decides §3.4.1, validates §3.3 | ps2.md §14 item 3 |
 
 ⚠ **`/IOPAGE` may move** (machine.md §5 item 15, decided and not built): per-slot 32-byte
@@ -517,7 +517,7 @@ windows at `$FE00`–`$FEFF`. **Every base address comes from a descriptor from 
 
 | Phase | Work | Closed by |
 |---|---|---|
-| **P0** | X1–X7; boot NitrOS-9 to a serial shell on the emulator | `emu` reaches `Shell` and runs `dir` from the ROM disk; the same on `machine_tb` as a new scenario |
+| **P0** | X1–X7; boot NitrOS-9 to a serial shell on the emulator. ⭐ **The emulator half landed 2026-09-14** (`software/nitros9/run-emu.sh`, 11 claims). Still open: X4, X5, the rest of X7, and the `machine_tb` scenario | `emu` reaches `Shell` and runs `dir` from the ROM disk; the same on `machine_tb` as a new scenario |
 | **P1** | `VidCore` (V1–V12 and the VBL service); fast-text `/Term` on cell mode; `KbdArm`; CoWin control codes `$01`–`$0D`, `$1F` | a scripted client's output: emulator frames vs a Python model of the expected text screen; `VidCore` IRQ-masked time measured |
 | **P2** | `CoArm` bitmap screens and windows: `DWSet`/`OWSet`/`Select`, span-mask text, cell shadow, `Bar`/`Box`/`Line`/`Circle`/`Ellipse`/`Arc`/`FFill`, GP buffers, `Get`/`PutBlk`, fonts, palettes, backing store and screen switch, `MseArm` + `GCSet` pointer | `show` (§7) re-run through the driver, frames judged by `checkdemo.py`; decide §3.2's task question on measured size |
 | **P3** | Extensions: `PatBar`, `PutMask`, `Icon`, `Poly`, `Image`, `AnsiSw`; `SS.Raster`; `SS.Batch`/`FrmSig`/`FrmWait`; `SS.Excl` + `libvid`; tile screens | raster and wave checkpoints at every phase (`show.raster_colours`); overworld frames vs `mkgame.render()`, and the flip budget (≤2 % into active video, as `checkdemo.py` asserts today) |
