@@ -505,7 +505,7 @@ None of these is driver code, but no driver runs without them.
 | X4 | ✅ **landed 2026-09-14**: a per-tick period from `VMODE0` and a 2^-20 s accumulator (`software/nitros9/README.md`) | | |
 | X5 | ✅ **landed 2026-09-14**: `krn.asm`'s `ArmFIRQ`, checked by `firqtst` (`software/nitros9/README.md`) | | |
 | X6 | ✅ **landed 2026-09-14**: `/Term` on Wildbits' `sc16550` | | |
-| X7 | **Emulator upgrades.** MMU tasks, register-file read-back and the 16C550 landed 2026-09-14. Still to do: VBL 10 lines in the 525 family, `WADV 10`, PS/2, and the audio host boundary from `audio/refplayer/card.c` (`machine.c` reads `$FF40`–`$FF4F` as 0, never busy) | every driver iteration; the machine run is 4.5 h | audio.md §16 item 14, g.md §19 item 13 |
+| X7 | **Emulator upgrades.** Landed 2026-09-14: MMU tasks, register-file read-back, the 16C550, VBL 10 lines in the 525 family, `WADV 10`, the audio card's interrupt path, and PS/2 (the card and both devices, checked by `ps2tst`). Still to do: the audio card's channels, sample RAM and `ASTAT` busy, from `audio/refplayer/card.c` | every driver iteration; the machine run is 4.5 h | audio.md §16 item 14, g.md §19 item 13 |
 | X8 | **Measure** Level 2 system-call round trip, IRQ dispatch cost and `TFM` into `VDATA`/`SDATA` | sizes batching (§3.5), decides §3.4.1, validates §3.3 | ps2.md §14 item 3 |
 
 ⚠ **`/IOPAGE` may move** (machine.md §5 item 15, decided and not built): per-slot 32-byte

@@ -6,7 +6,7 @@ phase P0: the port skeleton that the video and audio drivers will be built on.
 
 ```sh
 sh software/tools/fetch-nitros9-tools.sh       # LWTOOLS and ToolShed into .tools/ (once)
-sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 16 claims, ~20 s
+sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 18 claims, ~20 s
 ```
 
 ```sh
@@ -134,7 +134,10 @@ check can fail.** A stub built to corrupt `Y` before its `RTI` made the second l
   card (`AUDIO = 0`), so nothing raises `/FIRQ` on the RTL yet.
 - **2 MB of RAM**, from one socket. Using more needs the memory manager to handle a block
   number wider than 8 bits (plan item X2, `hardware/ram.md` §9).
-- **No input device but the UART.** PS/2 is phase P1.
+- **No input device but the UART.** The PS/2 drivers are phase P1. `ps2tst` initialises
+  both ports by `ps2.md` §7 and §11.2 and echoes what they send. The emulator models the
+  card's receive counter literally, so a transmit that skips §7 step 1 (holding `KRST`)
+  receives garbage there, as it would on the card.
 - **The emulator's audio card models only its interrupt path.** That is `AINTENA`,
   `AINTREQ`, `ACTRL` b6, and `ASTAT` b4. It has no channels, no sample RAM and no busy
   bit (plan item X7).

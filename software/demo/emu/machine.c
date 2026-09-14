@@ -48,7 +48,10 @@
  *     OUTDIR/serial.out and stdout; SERIAL_IN names a file whose bytes are
  *     received from SERIAL_AT seconds on, and SERIAL_STOP a string that ends
  *     the run when it has been transmitted. That is how software/nitros9/
- *     boots NitrOS-9 here.
+ *     boots NitrOS-9 here;
+ *   - the PS/2 card and a keyboard and mouse at the line level - ps2_* below,
+ *     which says what it models. PS2_KBD, PS2_MOUSE and PS2_AT script them,
+ *     and PS2_DEBUG traces the devices' state.
  *
  * What it records is demo_tb's frames.bin, so tools/checkdemo.py and
  * tools/mkvideo.py read either.
@@ -110,6 +113,10 @@ typedef struct {
     uint64_t ser_at;             /* cycles */
     const char *ser_stop; size_t ser_stop_len, ser_match;
     int stop;
+
+    /* PS/2 - io/ps2/docs/ps2.md 8; the ports and devices are ps2_* below */
+    uint8_t ioctrl;
+    uint8_t kdata[2], kdr[2];
 
     /* frames */
     FILE *frames;
@@ -401,6 +408,198 @@ static void uart_step(void)
     }
 }
 
+/* ------------------------------------------------------------------ PS/2 */
+/* io/ps2/docs/ps2.md, port 0 the keyboard and port 1 the mouse.
+ *
+ * THE CARD is modelled as §6 builds it, not as a byte pipe: each port's '193
+ * counts falling edges of the CLK LINE - whoever pulls it - with a period of
+ * eleven, the '595 shifts the DATA line on each, and the eleventh latches the
+ * frame's bits 1-8 into KDATA and sets KDR. KRST/MRST hold the counter at its
+ * preload. So a driver that transmits without holding KRST gets the garbage
+ * §7 step 1 warns about, and one that never releases it hears nothing.
+ * IOSTAT's line bits read 1 for a line held LOW (§8.1).
+ *
+ * THE DEVICES are PS/2 devices at the line level: they clock their own frames
+ * at 80 us a bit, back off when the host holds CLK low, see a request to send
+ * (CLK low >= 100 us, released with DATA low), clock the host's eleven bits in,
+ * ACK, and answer §11.2's commands. A keyboard's scan codes and a mouse's
+ * packets come from PS2_KBD and PS2_MOUSE, lists of hex bytes, delivered from
+ * PS2_AT seconds on - the mouse's only once reporting is enabled (F4).
+ *
+ * WHAT IT DOES NOT: parity errors in either direction (a device answers FE to
+ * a bad parity, which is all a driver can see), typematic repeat, and the
+ * electrical rise time §4.2 is about. */
+#define PS2_HALF 84                     /* E cycles: 40 us, half a clock period */
+typedef struct {
+    int mouse;
+    /* the card */
+    int count;                          /* the '193: edges into this frame */
+    uint16_t shift;                     /* the '595, fed LSB-first */
+    int clk_prev;
+    /* the device */
+    int dev_clk_low, dev_dat_low;
+    enum { D_IDLE, D_INHIBIT, D_RTS_WAIT, D_RX, D_TX } st;
+    uint64_t t;                         /* the next event, or when the inhibit began */
+    int bit, phase;                     /* bit index; 0 = clock low next, 1 = high next */
+    uint16_t frame;
+    uint8_t out[64]; int out_n;         /* bytes the device has to send */
+    uint8_t last_sent;
+    int enabled;                        /* keyboard scanning / mouse reporting */
+    int f4_seen;                        /* a script plays only after the host's first F4 */
+    int want_arg;                       /* the command whose argument comes next */
+    const char *script; uint64_t script_at, script_next;
+} ps2dev;
+static ps2dev ps2[2];
+
+static int ps2_clk_low(int p) { return ((m->ioctrl >> (p * 2)) & 1) || ps2[p].dev_clk_low; }
+static int ps2_dat_low(int p) { return ((m->ioctrl >> (p * 2 + 1)) & 1) || ps2[p].dev_dat_low; }
+
+static void ps2_send(ps2dev *d, uint8_t b) { if (d->out_n < 64) d->out[d->out_n++] = b; }
+
+static void ps2_command(ps2dev *d, uint8_t c)
+{
+    if (d->want_arg) {                  /* ED, F3, E8: the argument byte */
+        d->want_arg = 0;
+        ps2_send(d, 0xFA);
+        return;
+    }
+    switch (c) {
+    case 0xFF:                          /* reset: ACK, then the self-test result */
+        d->out_n = 0; d->enabled = !d->mouse;
+        ps2_send(d, 0xFA); ps2_send(d, 0xAA);
+        if (d->mouse) ps2_send(d, 0x00);
+        break;
+    case 0xFE: ps2_send(d, d->last_sent); break;
+    case 0xF2: ps2_send(d, 0xFA); if (d->mouse) ps2_send(d, 0x00); else { ps2_send(d, 0xAB); ps2_send(d, 0x83); } break;
+    case 0xF4: d->enabled = 1; d->f4_seen = 1; ps2_send(d, 0xFA); break;
+    case 0xF5: d->enabled = 0; ps2_send(d, 0xFA); break;
+    case 0xEE: if (!d->mouse) { ps2_send(d, 0xEE); break; } /* fall through */
+    case 0xED: case 0xF3: case 0xE8:
+        d->want_arg = 1; ps2_send(d, 0xFA); break;
+    default: ps2_send(d, 0xFA); break;
+    }
+}
+
+/* the card sees a falling edge of the CLK line */
+static void ps2_card_edge(int p)
+{
+    ps2dev *d = &ps2[p];
+    if ((m->ioctrl >> (4 + p)) & 1) { d->count = 0; return; }   /* KRST/MRST: held at preload */
+    d->shift = (uint16_t)((d->shift >> 1) | (ps2_dat_low(p) ? 0 : 0x400));
+    if (++d->count == 11) {
+        d->count = 0;
+        m->kdata[p] = (uint8_t)(d->shift >> 1);     /* bits 1-8 of the frame */
+        m->kdr[p] = 1;
+    }
+}
+
+static void ps2_step(int p)
+{
+    ps2dev *d = &ps2[p];
+    uint64_t now = m->cpu.cycles;
+    int host_clk = (m->ioctrl >> (p * 2)) & 1, host_dat = (m->ioctrl >> (p * 2 + 1)) & 1;
+
+    /* scripted bytes, one per 10 ms, once the device would send them */
+    if (d->script && *d->script && now >= d->script_at && now >= d->script_next && d->enabled && d->f4_seen && d->out_n == 0) {
+        unsigned v; int n;
+        if (sscanf(d->script, " %x%n", &v, &n) == 1) { ps2_send(d, (uint8_t)v); d->script += n; }
+        else d->script = NULL;
+        d->script_next = now + 20979;
+    }
+
+    switch (d->st) {
+    case D_IDLE:
+        if (host_clk) { d->st = D_INHIBIT; d->t = now; break; }
+        if (d->out_n && now >= d->t) {  /* start a frame: start, 8 data, odd parity, stop */
+            uint8_t b = d->out[0], par = 1;
+            for (int i = 0; i < 8; i++) par ^= (b >> i) & 1;
+            d->frame = (uint16_t)(((uint16_t)b << 1) | ((uint16_t)par << 9) | 0x400);
+            d->st = D_TX; d->bit = 0; d->phase = 0; d->t = now;
+        }
+        break;
+    case D_INHIBIT:
+        if (!host_clk) {
+            if (now - d->t >= 2 * PS2_HALF + PS2_HALF / 2 && host_dat) {   /* >= 100 us, and a start bit */
+                d->st = D_RTS_WAIT; d->t = now + 20 * PS2_HALF;
+            } else {
+                d->st = D_IDLE; d->t = now + 2 * PS2_HALF;
+            }
+        }
+        break;
+    case D_RTS_WAIT:
+        if (now >= d->t) { d->st = D_RX; d->bit = 0; d->phase = 0; d->frame = 0; d->t = now; }
+        break;
+    case D_RX:                          /* eleven clocks: 8 data, parity, stop, then the ACK */
+        if (now < d->t) break;
+        if (d->phase == 0) {
+            d->dev_clk_low = 1;
+            if (d->bit == 10) d->dev_dat_low = 1;                       /* ACK */
+            d->phase = 1;
+        } else {
+            d->dev_clk_low = 0;
+            if (d->bit < 10) d->frame |= (uint16_t)((ps2_dat_low(p) ? 0 : 1) << d->bit);
+            if (d->bit == 10) {
+                d->dev_dat_low = 0;
+                uint8_t c = (uint8_t)(d->frame & 0xFF), par = 1;
+                for (int i = 0; i < 8; i++) par ^= (c >> i) & 1;
+                d->st = D_IDLE; d->t = now + 20 * PS2_HALF;
+                if (((d->frame >> 8) & 1) != par) ps2_send(d, 0xFE);
+                else ps2_command(d, c);
+            }
+            d->bit++;
+            d->phase = 0;
+        }
+        d->t = now + PS2_HALF;
+        break;
+    case D_TX:
+        if (now < d->t) break;
+        if (d->phase == 0) {
+            if (host_clk) {             /* the host inhibits: abandon the frame, keep the byte */
+                d->dev_dat_low = 0; d->st = D_INHIBIT; d->t = now; break;
+            }
+            d->dev_dat_low = !((d->frame >> d->bit) & 1);
+            d->dev_clk_low = 1;
+            d->phase = 1;
+        } else {
+            d->dev_clk_low = 0;
+            if (++d->bit == 11) {
+                d->dev_dat_low = 0;
+                d->last_sent = d->out[0];
+                memmove(d->out, d->out + 1, (size_t)--d->out_n);
+                d->st = D_IDLE; d->t = now + 20 * PS2_HALF;
+            }
+            d->phase = 0;
+        }
+        d->t = now + PS2_HALF;
+        break;
+    }
+
+    if (getenv("PS2_DEBUG")) {
+        static int last_st[2] = {-1, -1};
+        if ((int)d->st != last_st[p]) {
+            fprintf(stderr, "ps2[%d] %.6f s st %d ioctrl %02X bit %d frame %03X out_n %d\n", p,
+                    (double)now / 2097917.0, (int)d->st, m->ioctrl, d->bit, d->frame, d->out_n);
+            last_st[p] = (int)d->st;
+        }
+    }
+    int clk = ps2_clk_low(p);
+    if (clk && !d->clk_prev) ps2_card_edge(p);
+    d->clk_prev = clk;
+}
+
+static uint8_t ps2_read(uint8_t r)
+{
+    switch (r) {
+    case 0: m->kdr[0] = 0; return m->kdata[0];
+    case 1: m->kdr[1] = 0; return m->kdata[1];
+    case 2: return (uint8_t)(m->kdr[0] | (m->kdr[1] << 1) | (ps2_clk_low(0) << 2) | (ps2_dat_low(0) << 3)
+                             | (ps2_clk_low(1) << 4) | (ps2_dat_low(1) << 5));
+    default: return 0x00;               /* IOCTRL is write-only */
+    }
+}
+
+static int ps2_irq(void) { return (m->ioctrl & 0x40) && (m->kdr[0] || m->kdr[1]); }
+
 static uint8_t rd(void *ctx, uint16_t a)
 {
     (void)ctx;
@@ -408,6 +607,7 @@ static uint8_t rd(void *ctx, uint16_t a)
     if (a >= 0xFF00) {
         if (a >= 0xFF60 && a <= 0xFF7F) return video_read((uint8_t)(a - 0xFF60));
         if (a >= 0xFF38 && a <= 0xFF3F) return uart_read((uint8_t)(a - 0xFF38));
+        if (a >= 0xFF30 && a <= 0xFF33) return ps2_read((uint8_t)(a - 0xFF30));
         if (a == 0xFF44) return m->aintreq;                      /* AINTREQ: pending */
         if (a == 0xFF4A) return (m->actrl & 0x40) ? 0x10 : 0x00; /* ASTAT: b4 = ACTRL b6, never busy */
         if (a >= 0xFF90 && a <= 0xFF9F) return m->maphi[a & 15];
@@ -440,6 +640,7 @@ static void wr(void *ctx, uint16_t a, uint8_t v)
         else if (a >= 0xFFA0 && a <= 0xFFAF) m->maplo[a & 15] = v;
         else if (a >= 0xFF40 && a <= 0xFF4F) audio_write((uint8_t)(a & 15), v);
         else if (a >= 0xFF38 && a <= 0xFF3F) uart_write((uint8_t)(a - 0xFF38), v);
+        else if (a == 0xFF33) m->ioctrl = v;
         else if (a >= 0xFFB0 && a <= 0xFFBF) m->task = v & 1;
         else if (a == 0xFF2F) {
             m->progress = v;
@@ -579,6 +780,17 @@ int main(int argc, char **argv)
         m->ser_in = buf;
         m->ser_at = (uint64_t)(atof(getenv("SERIAL_AT") ? getenv("SERIAL_AT") : "0") * 2097917.0);
     }
+    /* the PS/2 devices power up: a keyboard sends its self-test result and
+     * scans; a mouse sends AA 00 and waits for F4 (ps2.md 2.3, 11.2) */
+    ps2[1].mouse = 1;
+    for (int p = 0; p < 2; p++) {
+        ps2[p].enabled = !ps2[p].mouse;
+        ps2_send(&ps2[p], 0xAA);
+        if (ps2[p].mouse) ps2_send(&ps2[p], 0x00);
+        ps2[p].t = 104895;              /* 50 ms after reset */
+        ps2[p].script = getenv(p ? "PS2_MOUSE" : "PS2_KBD");
+        ps2[p].script_at = (uint64_t)(atof(getenv("PS2_AT") ? getenv("PS2_AT") : "0") * 2097917.0);
+    }
     if (getenv("SERIAL_STOP") && *getenv("SERIAL_STOP")) {
         m->ser_stop = getenv("SERIAL_STOP");
         m->ser_stop_len = strlen(m->ser_stop);
@@ -606,7 +818,7 @@ int main(int argc, char **argv)
     uint64_t end_dots = (uint64_t)(secs * 1e12 / DOT_PS);
     uint64_t next_report = 0;
     while (m->dots < end_dots) {
-        m->cpu.irq = (m->irq_pending && (m->ctrl & 0x40)) || uart_irq();
+        m->cpu.irq = (m->irq_pending && (m->ctrl & 0x40)) || uart_irq() || ps2_irq();
         m->firq = (m->aintreq & m->aintena & 0x3F) != 0;   /* /FIRQ = OR(REQ & ENA), audio.cpld.ts */
         m->cpu.firq = m->firq;
         {   /* the last 256 PCs, for RINGDUMP; WILD stops at 16 NEG <$00s in a row, a CPU running through empty RAM */
@@ -631,6 +843,8 @@ int main(int argc, char **argv)
         }
         raster();
         uart_step();
+        ps2_step(0);
+        ps2_step(1);
         if (m->stop) { fprintf(stderr, "      %8.3f s  SERIAL_STOP seen\n", (double)m->dots * DOT_PS / 1e12); break; }
         (void)e;
         if (m->dots >= next_report) {

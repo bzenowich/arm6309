@@ -38,11 +38,15 @@ cc -O2 -Wall -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809
 # to the second, which is what defs/arm6309.d's per-tick period replaced.
 # `firqtst` runs twice: the second run is after the driver's Term has put the
 # previous FIRQ service back, so it is the install/remove path as well.
-printf 'dir\rdir /dd/cmds\rmfree\rdate -t\rsleep 2100\rdate -t\rprocs\rvmodetst 1\rdate -t\rsleep 1800\rdate -t\rvmodetst 0\rload /dd/modules/firqtst\rfirqtst\rfirqtst\recho DONE-arm6309\r' > "$OUT/typed.txt"
+printf 'dir\rdir /dd/cmds\rmfree\rdate -t\rsleep 2100\rdate -t\rprocs\rvmodetst 1\rdate -t\rsleep 1800\rdate -t\rvmodetst 0\rload /dd/modules/firqtst\rfirqtst\rfirqtst\rps2tst\recho DONE-arm6309\r' > "$OUT/typed.txt"
 
 # SERIAL_STOP is the echo's OUTPUT line: a line feed then the word, which the
 # typed command line ("echo DONE-...") does not contain.
 STOP=$(printf '\nDONE-arm6309')
+# ps2tst initialises both PS/2 ports by ps2.md 7 and 11.2, then echoes three
+# bytes from each: these, which the emulator's devices send once they are
+# enabled.
+export PS2_KBD="1C F0 1C" PS2_MOUSE="09 05 FB"
 (cd "$OUT" && SERIAL_IN=typed.txt SERIAL_AT=8 SERIAL_STOP="$STOP" WILD=1 ./emu "$ROM" . "$SECONDS_OF_MACHINE" > /dev/null 2> emu.log) || true
 tr -d '\000' < "$OUT/serial.out" | tr -d '\r' > "$OUT/console.txt"
 
@@ -80,6 +84,8 @@ claim "FIRQ in user state, twice: $(echo $usr) (100-140 each)" inrange "$usr" 10
 claim "and every register the stub saves came back, both times" test "$(grep -c 'FIRQs in user state: [0-9]*, registers intact' "$OUT/console.txt")" -eq 2
 claim "no crash: nothing printed D.Crash's '!'" sh -c "! grep -q '![0-9A-F][0-9A-F]' '$OUT/console.txt'"
 
+claim "PS/2 keyboard: FF, F2, F4 each answered, by ps2.md 7's software transmit, then the scan codes" has '^kbd: FA AA FA AB 83 FA 1C F0 1C$'
+claim "PS/2 mouse: FF, F3 3C, F4 each answered, then a packet" has '^mouse: FA AA 00 FA FA FA 09 05 FB$'
 claim "sleep 1800 in VMODE 01 took 30 s of the clock: the 59.940 Hz family keeps time too (got ${d525:-none}; a fixed 70 would be 26)" test "${d525:-0}" -ge 30 -a "${d525:-0}" -le 32
 
 echo "$n claims, $fail failed        (console in $OUT/console.txt)"
