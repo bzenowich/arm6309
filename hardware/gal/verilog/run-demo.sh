@@ -48,6 +48,13 @@ SECS=$(awk '/^end_ps/ {printf "%d", $2 / 1e12}' "$OUT/sync.txt")
 "$ROOT/build-host/refplayer" --trace "$OUT/ref.trace" --seconds $((SECS + 2)) \
     "$ROOT/software/demo/build/demo.mod" > /dev/null
 T=$(tail -1 "$OUT/card.trace" | awk '{print $1 - 1}')
+# ⚠ AND NOT PAST THE AUDIO PLAYER'S STOP. software/demo/gui.asm's STOP writes
+# AINTENA, ADMACON, ACTRL := $00 and then AINTREQ := $10, which this bench counts
+# as a tick's first write - so the stop's writes land inside the last whole tick
+# and refplayer, which never stops, has none of them. The comparison ends at the
+# tick before the first ACTRL write that clears the card's enable.
+STOPT=$(awk '$2 == "ACTRL" { if (index("89ABCDEF", substr($3, 1, 1))) on = 1; else if (on) { print $1 - 1; exit } }' "$OUT/card.trace")
+if [ -n "$STOPT" ] && [ "$STOPT" -lt "$T" ]; then T=$STOPT; fi
 awk -v t="$T" '$1+0 <= t' "$OUT/card.trace" > "$OUT/card.cmp"
 awk -v t="$T" '$1+0 <= t' "$OUT/ref.trace" > "$OUT/ref.cmp"
 if [ "$T" -gt 0 ] && cmp -s "$OUT/card.cmp" "$OUT/ref.cmp"; then
@@ -76,6 +83,17 @@ out = sys.argv[1]
 sync = dict(l.split() for l in open(out + "/sync.txt"))
 start = (int(sync["music_ps"]) - int(sync["cc0_ps"])) / 1e12
 end = (int(sync["end_ps"]) - int(sync["cc0_ps"])) / 1e12 - 0.5
+# ... or the audio player's Stop, the first ACTRL write (register 5) that clears
+# the enable - after it the card is silent and libopenmpt is not
+on = False
+for line in open(out + "/card.times"):
+    cc, reg, val = line.split()
+    if reg == "5":
+        if int(val, 16) & 0x80:
+            on = True
+        elif on:
+            end = min(end, int(cc) / 3546895.0 - 0.5)
+            break
 for name in ("card", "model"):
     w = wave.open(f"{out}/{name}.wav"); r = w.getframerate()
     w.setpos(int(start * r)); data = w.readframes(int((end - start) * r))
