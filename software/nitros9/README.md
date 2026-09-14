@@ -6,11 +6,12 @@ phase P0: the port skeleton that the video and audio drivers will be built on.
 
 ```sh
 sh software/tools/fetch-nitros9-tools.sh       # LWTOOLS and ToolShed into .tools/ (once)
-sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 21 claims, ~30 s
+sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 23 claims, ~30 s
 ```
 
 ```sh
-SCENARIOS=nitros9 npm run check:machine        # the same ROM on the RTL machine: 14 claims, ~4 min (from hardware/)
+SCENARIOS=nitros9 npm run check:machine        # the same ROM on the RTL machine: 19 claims, ~13 min (from hardware/)
+SCENARIOS=reboot npm run check:machine         # ... and reboot through the boot ROM: 11 claims, ~14 min
 ```
 
 `run-emu.sh` rebuilds `software/boot/boot.bin` and the NitrOS-9 ROM (`mkrom.sh`, which also
@@ -56,6 +57,11 @@ vector, runs every stage of `boot.asm`, and then:
 | 2.22 s | the shell's prompt |
 | 2.61 s | `dir`, typed at the UART, lists `OS9Boot CMDS MODULES SYS startup` |
 | 3.10 s | `mfree` reports 8,112 KB: RAM sized from `boot.asm`'s descriptor, on 16-bit blocks |
+| 4.5 s | `firqtst q`: the audio card's timer on `/FIRQ`, 13 in 20 ticks and 30 in user state, registers intact |
+
+`+scenario=reboot` boots, types `reboot`, and asserts that `boot.asm`'s POST ran again from its
+reset vector (17 more progress codes, no `$E0`–`$EF`), that NitrOS-9 came back to a second
+prompt at 4.9 s, and that `dir` works there.
 
 It also asserts that the VBL tick was acknowledged (83 times by the second prompt) and
 that the UART's INTR rose on the shared `/IRQ` (438 times). No cycle had two drivers on
@@ -114,6 +120,24 @@ previous service back, so it also checks installing and removing a service. ⭐ 
 check can fail.** A stub built to corrupt `Y` before its `RTI` made the second line read
 `CORRUPTED`.
 
+## `reboot`
+
+`F$Debug` with `A` = 255 (superuser only; the `reboot` command) is a cold start on a CoCo 3,
+into Disk BASIC by way of GIME registers. Here it runs the power-on path again, without a
+`/RESET`, which software cannot assert:
+
+1. It turns off every interrupt source the boot ROM does not reprogram: the audio card's
+   `ACTRL`, `AINTENA`, `ADMACON` and `AINTREQ` (polling `ASTAT` b6); the PS/2 card's
+   `IOCTRL`; the UART's `IER`; and the video card's `CTRL`, after `SPANBUSY`.
+2. It copies a stub to block 0, the one slot it does not move. The stub maps ROM page 0 at
+   slot 7 and jumps through the reset vector.
+3. `boot.asm` runs its whole POST with the map already live. Its first act rewrites all
+   sixteen map entries, with block 7 on the page it is running from, and setting `RUN`
+   again does nothing. It then hands page 1 the machine, and NitrOS-9 boots.
+
+The emulator shows it too. Running `boot.asm` there needed the MMU's VRAM window, which
+`machine.c` did not model: `boot.asm` writes its display lists through it.
+
 ## What differs from a CoCo 3, and what the kernel does about it
 
 | | CoCo 3 | This machine | Handled by |
@@ -131,13 +155,9 @@ check can fail.** A stub built to corrupt `Y` before its `RTI` made the second l
 - **A 6809 build only.** The machine's CPU core is `mc6809e.v` and the emulator follows it.
   The recipe builds `CPU=6309` too (both kernels place their stubs at `$FEEE`), but nothing
   has run the 6309 build.
-- **The FIRQ stub is checked on the emulator only.** `machine_tb`'s machine has no audio
-  card (`AUDIO = 0`), so nothing raises `/FIRQ` on the RTL yet.
 - **8 MB of RAM, not 16.** `F$GBlkMp` hands its caller a 1,024-byte buffer, so the block map
   stops at 1,024 blocks. RAM must start at socket 0: a machine whose socket 0 is empty (or
   holds an aliasing module) halts in the loader. `pmap` prints only a block's low byte.
-- **`F$Debug`'s reboot is the CoCo 3's**, and writes `$FF90`, which is this machine's map.
-  Nothing calls it.
 - **No input device but the UART.** The PS/2 drivers are phase P1. `ps2tst` initialises
   both ports by `ps2.md` §7 and §11.2 and echoes what they send. The emulator models the
   card's receive counter literally, so a transmit that skips §7 step 1 (holding `KRST`)

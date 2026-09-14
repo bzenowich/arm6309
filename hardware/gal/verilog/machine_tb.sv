@@ -33,7 +33,12 @@ module machine_tb;
   // ---- 25.175 MHz. One dot per 2 timesteps; E is this divided by 12. ------
   logic CLK25 = 0;
   always #1 CLK25 <= ~CLK25;
-  logic SLOTCLK = 0;                     // no audio card in this bench's machine
+  // ⭐ THE AUDIO CARD'S CRYSTAL, 28.37516 MHz (audio.md 4.1), in this bench's
+  // time base: a dot is two timesteps, so a half period is 17.621 / 19.861 of
+  // one. Neither clock is a multiple of the other, so the card's host port
+  // sees E at every phase, as on the backplane. demo_tb does the same in ps.
+  logic SLOTCLK = 0;
+  always #0.8872 SLOTCLK <= ~SLOTCLK;
   wire [7:0] DACSAMP0, DACSAMP1, DACSAMP2, DACSAMP3;
   wire [7:0] DACVOL0, DACVOL1, DACVOL2, DACVOL3;
   wire [15:0] ACOUNT;
@@ -58,7 +63,10 @@ module machine_tb;
 
   // SERIAL: the TL16C550C console at $FF38. Only +scenario=nitros9 addresses
   // it; boot.asm never does, so the seven boot runs are the machine they were.
-  machine #(.SIMMS(4), .SERIAL(1)) m (.*);
+  // AUDIO: the audio card at $FF40 on /FIRQ, in every run. boot.asm never
+  // addresses it and reset leaves it silent with no interrupt enabled, so
+  // the seven boot runs see an idle slot; NitrOS-9's firqtst is what drives it.
+  machine #(.SIMMS(4), .SERIAL(1), .AUDIO(1)) m (.*);
 
   int fails = 0;
   int claims = 0;
@@ -198,8 +206,11 @@ module machine_tb;
    *           the machine boots on socket 1
    *   e2      a tile byte corrupted behind the ROM's back - it must report $E2
    *   nitros9 the NitrOS-9 ROM (software/nitros9/): boot.asm hands page 1 the
-   *           machine, NitrOS-9 boots to a shell on the UART, and `dir` runs.
-   *           ⚠ Minutes, not seconds - so it is not in the default list.
+   *           machine, NitrOS-9 boots to a shell on the UART, and dir, mfree
+   *           and `firqtst q` run - the last on the audio card's /FIRQ.
+   *   reboot  the same ROM: boot, then `reboot`, which re-enters boot.asm at
+   *           its reset vector; the POST runs again and NitrOS-9 comes back.
+   *           ⚠ Both are minutes, not seconds - so neither is in the default list.
    *
    * ⛔ WHY THE LAST THREE EXIST. An error path that never runs is an error path
    * that does not work, and a claim that cannot fail is not a claim. Each one
@@ -657,7 +668,7 @@ module machine_tb;
   always @(posedge CLK25)
     if (m.ser_tx_strobe && m.ser_tx_byte != 8'h00 && m.ser_tx_byte != 8'h0D) begin
       console = {console, $sformatf("%c", m.ser_tx_byte)};
-      if (scenario == "nitros9") $write("%c", m.ser_tx_byte);
+      if (scenario == "nitros9" || scenario == "reboot") $write("%c", m.ser_tx_byte);
     end
 
   bit saw_8004 = 0;
@@ -675,6 +686,31 @@ module machine_tb;
       if (console.substr(i, i + needle.len() - 1) == needle) return i;
     return -1;
   endfunction
+
+  task automatic type_text(input string typed);
+    for (int i = 0; i < typed.len(); i++) m.ser.rx_push(typed[i]);
+  endtask
+
+  // The decimal number printed right after `needle`, or -1.
+  function automatic int number_after(input string needle, input int from);
+    int at, v;
+    at = find_text(needle, from);
+    if (at < 0) return -1;
+    v = 0;
+    for (int i = at + needle.len(); i < console.len() && console[i] >= "0" && console[i] <= "9"; i++)
+      v = v * 10 + (console[i] - "0");
+    return v;
+  endfunction
+
+  int firq_rises = 0;
+  bit firq_d = 0;
+  always @(posedge CLK25) begin
+    if (firq_asserted && !firq_d) firq_rises++;
+    firq_d <= firq_asserted;
+  end
+  bit saw_progress_error = 0;
+  always @(negedge e)
+    if (!n_iosel && pa[7:0] == 8'h2F && !rw && cpu_dout[7:4] == 4'hE) saw_progress_error = 1;
 
   // Wait for `needle` to appear in the console at or after `from`, bounded in
   // E cycles (2,097,917 a second). Returns where it was found, or -1 after a
@@ -733,11 +769,62 @@ module machine_tb;
               "mfree reports 8 MB: the loader sized RAM from boot.asm's own SIMM descriptor, and NitrOS-9's 16-bit blocks map past the first 2 MB", at);
     if (at < 0) return;
     wait_text("{Term|02}/DD:", at, 2 * SEC, "and the shell prompted a third time", at);
+    if (at < 0) return;
+    // ⭐ /FIRQ, which no bench on this machine had raised: firqtst's driver runs
+    // the audio card's tempo timer at 50 Hz and counts through krn's FIRQ stub.
+    type_text("load /dd/modules/firqtst\r");
+    wait_text("{Term|02}/DD:", at + 1, 3 * SEC, "load put the FIRQ test driver in memory", at);
+    if (at < 0) return;
+    type_text("firqtst q\r");
+    wait_text("registers intact", at, 4 * SEC,
+              "firqtst q: FIRQs taken in the kernel and in a user busy loop, every register the stub saves intact", at);
+    begin
+      int sys_n, usr_n;
+      sys_n = number_after("FIRQs in 20 ticks: ", 0);
+      usr_n = number_after("FIRQs in user state: ", 0);
+      ok(sys_n >= 11 && sys_n <= 16,
+         $sformatf("the audio card's 50 Hz timer over 20 VBL ticks (0.285 s): %0d FIRQs, 11-16 expected - two crystals, one count", sys_n));
+      ok(usr_n >= 15 && usr_n <= 60,
+         $sformatf("and %0d in user state, in the user's map", usr_n));
+      ok(firq_rises >= sys_n + usr_n,
+         $sformatf("/FIRQ rose %0d times at the CPU - at least the %0d the driver counted", firq_rises, sys_n + usr_n));
+    end
+    if (at < 0) return;
     ok(vstat_acks >= 70,
        $sformatf("the VBL tick was acknowledged %0d times - NitrOS-9's clock on the video card's /IRQ", vstat_acks));
     ok(ser_irqs >= 10,
        $sformatf("the UART's INTR rose %0d times on the shared /IRQ - sc16550 is interrupt-driven", ser_irqs));
-    ok(!saw_bus_conflict, "no cycle had two drivers on D0-D7, the UART's reads included");
+    ok(!saw_bus_conflict, "no cycle had two drivers on D0-D7, the UART's and the audio card's reads included");
+    ok(!saw_pa_conflict,  "no cycle had two drivers on physical A20-A13");
+  endtask
+
+  // +scenario=reboot: F$Debug's reboot, through the boot ROM and back.
+  task automatic run_reboot();
+    int at, writes0;
+    localparam int SEC = 2097917;
+    $display("REBOOT. software/nitros9/: boot, `reboot`, the POST again, and NitrOS-9 again");
+    $display("");
+    wait_text("{Term|02}/DD:", 0, 4 * SEC, "NitrOS-9 booted to the shell", at);
+    if (at < 0) return;
+    ok(progress == 8'h40 && !saw_progress_error,
+       $sformatf("boot.asm ran every stage the first time (last progress $%02h)", progress));
+    writes0 = progress_writes;
+    type_text("reboot\r");
+    wait_text("RK", at, 4 * SEC,
+              "reboot: the kernel quieted the cards and re-entered the boot ROM, and its handoff reached the loader again", at);
+    if (at < 0) return;
+    ok(progress_writes - writes0 >= 17 && progress == 8'h40,
+       $sformatf("boot.asm's POST ran again from its reset vector: %0d more progress writes, ending at $%02h - with the map already live, which it rewrites first",
+                 progress_writes - writes0, progress));
+    ok(!saw_progress_error, "and it reported no error ($E0-$EF) - SIMM walk, TASK 1, palette, spans, lists, tiles and VRAM read-back all passed again");
+    wait_text("\narm6309\n", at, 3 * SEC, "SysGo printed the banner a second time", at);
+    if (at < 0) return;
+    wait_text("{Term|02}/DD:", at, 3 * SEC, "and the shell prompted", at);
+    if (at < 0) return;
+    type_text("dir\r");
+    wait_text("OS9Boot         CMDS            MODULES         SYS             startup", at, 3 * SEC,
+              "dir runs on the rebooted system", at);
+    ok(!saw_bus_conflict, "no cycle had two drivers on D0-D7");
     ok(!saw_pa_conflict,  "no cycle had two drivers on physical A20-A13");
   endtask
 
@@ -796,6 +883,8 @@ module machine_tb;
          $sformatf("after exactly 18 loads - the ROM stopped at the first wrong one (%0d)", vrd_n));
     end else if (scenario == "nitros9") begin
       run_nitros9();
+    end else if (scenario == "reboot") begin
+      run_reboot();
     end else
       ok(1'b0, $sformatf("+scenario=%s is not a scenario this bench has", scenario));
   endtask
@@ -809,7 +898,7 @@ module machine_tb;
   initial begin
     rom_path = "../../../software/boot/boot.hex";
     // +scenario=nitros9 loads the whole 1 MB ROM, whose page 0 is boot.hex
-    if (scenario == "nitros9") begin
+    if (scenario == "nitros9" || scenario == "reboot") begin
       rom_path = "/tmp/arm6309-nitros9/arm6309_rom.hex";
       void'($value$plusargs("rom=%s", rom_path));
     end
@@ -1218,7 +1307,7 @@ module machine_tb;
   initial begin
     #1;
     // ~7.9 s of machine (one dot is two timesteps), and ~20 s for NitrOS-9
-    if (scenario == "nitros9") #999999999;
+    if (scenario == "nitros9" || scenario == "reboot") #999999999;
     else #399999999;
     $display("FAIL  machine_tb: global timeout - progress $%02h at %0d E cycles",
              progress, e_cycles);

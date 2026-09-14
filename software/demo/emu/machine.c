@@ -17,7 +17,9 @@
  *     in its row;
  *   - SPANBUSY as time: four dots a retired byte (one fetch slot), twice that
  *     in cell mode, and a VDATA access under it stalls the CPU (/WAIT);
- *   - VDATA reads at WPTR, post-increment;
+ *   - VDATA reads at WPTR, post-increment - at $FF75, and through the MMU's
+ *     VRAM window: a map entry of $00:$40-$7F (physical 0.5-1.0 MB), where
+ *     every address is the same port (graphics.md 6.3, vctrl.v's VRAMSEL);
  *   - the palette: PDATH commits and PIDX steps;
  *   - VSCROLL latched at the top of the frame, HSCROLL at every line;
  *   - cell mode's concatenated tile address (graphics.md 6.4.1);
@@ -626,6 +628,7 @@ static uint8_t rd(void *ctx, uint16_t a)
     }
     uint8_t hi = m->maphi[entry(a)], lo = m->maplo[entry(a)];
     if (hi == 0x01) return m->rom[((uint32_t)lo << 13 | (a & 0x1FFF)) & 0xFFFFF];
+    if (hi == 0x00 && (lo & 0xC0) == 0x40) return vram_read();  /* the VRAM window: VDATA at every address */
     return rampage(hi, lo)[a & 0x1FFF];
 }
 
@@ -660,6 +663,7 @@ static void wr(void *ctx, uint16_t a, uint8_t v)
     }
     uint8_t hi = m->maphi[entry(a)], lo = m->maplo[entry(a)];
     if (hi == 0x01) return;
+    if (hi == 0x00 && (lo & 0xC0) == 0x40) { vram_write(v); return; }   /* the VRAM window */
     rampage(hi, lo)[a & 0x1FFF] = v;
 }
 
@@ -871,7 +875,9 @@ int main(int argc, char **argv)
                     m->progress, m->frame_n, ram16(0xC600));
             next_report += (uint64_t)(5e12 / DOT_PS);
         }
-        if (m->progress >= 0xE0) { fprintf(stderr, "FAIL  the ROM reported $%02X\n", m->progress); break; }
+        /* $E0-$EF are errors (boot.asm's $E1-$E3); $FF is boot.asm's "done", which
+         * a reboot back through the boot ROM reaches on its way to page 1 */
+        if ((m->progress & 0xF0) == 0xE0) { fprintf(stderr, "FAIL  the ROM reported $%02X\n", m->progress); break; }
     }
     fclose(m->frames);
     fclose(m->trace);

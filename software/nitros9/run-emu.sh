@@ -100,5 +100,15 @@ mkdir -p "$OUT/one"
 tr -d '\000' < "$OUT/one/serial.out" | tr -d '\r' > "$OUT/one/console.txt"
 claim "with one SIMM socket, mfree reports 4 MB: the size comes from the boot ROM's descriptor" grep -q 'Total: *1F6 *4016k' "$OUT/one/console.txt"
 
+# A reboot: F$Debug 255 re-enters boot.asm at its reset vector with the map
+# live; the POST runs again (the emulator reports its progress codes) and
+# NitrOS-9 boots a second time.
+printf 'reboot\r' > "$OUT/typedr.txt"
+mkdir -p "$OUT/reboot"
+(cd "$OUT/reboot" && SERIAL_IN=../typedr.txt SERIAL_AT=4 ../emu "$ROM" . 14 > /dev/null 2> emu.log) || true
+tr -d '\000' < "$OUT/reboot/serial.out" | tr -d '\r' > "$OUT/reboot/console.txt"
+claim "reboot: boot.asm's POST ran again, every stage to \$40, with no error" sh -c "grep -q 'progress \$40' '$OUT/reboot/emu.log' && ! grep -q 'FAIL' '$OUT/reboot/emu.log'"
+claim "and NitrOS-9 booted a second time, to the shell" test "$(grep -c '{Term|02}/DD:' "$OUT/reboot/console.txt")" -ge 2
+
 echo "$n claims, $fail failed        (console in $OUT/console.txt)"
 [ "$fail" -eq 0 ]
