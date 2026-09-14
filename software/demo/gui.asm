@@ -132,6 +132,7 @@ wy0     EQU     G+$630          2  first line of the wave
 wn      EQU     G+$632          2  lines in it
 gsaveu  EQU     G+$634          2  the script pointer while the game runs
 wamp    EQU     G+$636          1  the amplitude wsc was scaled for
+lgodue  EQU     G+$637          1  a VBL has come and its frame's list is not started
 wsc     EQU     G+$640          560 the scaled wave, tab repeated
 
 LROW    EQU     500             the ring row the display lists live in
@@ -153,7 +154,8 @@ run     lda     #SCRPAGE
         std     ox
         std     oy
         lbsr    resync
-run1    lbsr    sb
+run1    lbsr    lyield          an op's operands can outlast the blank's end
+        lbsr    sb
         cmpa    #NOPS
         bhs     runbad
         lsla
@@ -239,14 +241,26 @@ clrck   pshs    d
 *******************************************************************************
 * wready - SPANBUSY and LRUN both clear: graphics.md 7.4 and 10.3.1 - WPTR and
 * the span registers may not be loaded under a span or while a list walks WPTR
+*
+* ⚠ AND WHILE A LIST IS ACTIVE IT RETURNS WITH /FIRQ MASKED, until golist's GO
+* (or LISTOFF) unmasks it. A replayer tick costs up to 4 ms, and one that began
+* in the ~3 ms between a list's END and the blank ran past line 0, so that
+* frame had no list - every 42nd frame of the paint scroll, on the beat of the
+* 50 Hz timer against the 59.94 Hz frame. Held off, the tick runs while the
+* next list walks, which is time the CPU cannot draw in anyway; it is late by
+* 3 ms at most, and the tempo timer's period is the card's, so none is lost.
 wready  pshs    a
 wry1    lda     <VSTAT
         bita    #$90
         bne     wry1
-        puls    a,pc
+        tst     lact
+        beq     wry9
+        orcc    #$40            a list is active: no replayer tick until its GO
+wry9    puls    a,pc
 
 * setxy - WPTR := (ay << 10) | ax, once it may be loaded
-setxy   bsr     wready
+setxy   lbsr    lyield
+        bsr     wready
         pshs    d
         ldd     ay
         lslb
@@ -303,6 +317,45 @@ spl     cmpa    splv
         sta     <SPANLEN
 g_sp9     rts
 
+* lyield - start this frame's display list, if the blank's VBL has come and
+* nothing has started the list yet.
+*
+* ⛔ WITHOUT THIS THE PAINT SCROLL FLICKERED AT 30 HZ. The list owns WPTR from
+* its GO to its END (10.3.1). For the paint canvas that is line 430, so the CPU
+* draws only in the ~2 ms before the blank. A scroll-bar drag step was ~16 ms
+* of drawing (HIDE, the thumb's FILLs, CURS, SHOW), and only SYNC started the
+* list, at the end of the step. So the list ran in one frame of two, and every
+* other frame showed the whole canvas at HSCROLL 0. The emulator's recording
+* and the machine's video both had LRUN at line 1 going 1, 0, 1, 0 through the
+* drag. A 60 fps player that kept one frame in two showed a jump or a smooth
+* scroll, depending on which frame it kept, and VLC showed the flicker.
+* checkdemo.py now counts those frames.
+*
+* It is called from setxy, which is where every primitive loads WPTR from
+* scratch, so a GO just before costs no primitive its pointer: setxy's wready
+* then waits the list out before it loads. It is also called before each script
+* op, because an op's operands can carry it past the blank's end. ax and ay
+* belong to the caller, and golist uses them, so they are kept across it.
+lyield  tst     lact
+        beq     ly9
+        tst     lgodue
+        beq     ly9
+        pshs    a
+        lda     <VSTAT
+        bita    #$40            still in the vertical blank?
+        puls    a
+        beq     ly9             no: this frame has gone without its list
+        pshs    d,x
+        ldd     ax
+        ldx     ay
+        pshs    d,x
+        lbsr    golist
+        puls    d,x
+        std     ax
+        stx     ay
+        puls    d,x
+ly9     rts
+
 *******************************************************************************
 * END, SYNC, CHECK, CTRL, PAL, ORG, PATDEF, RATE
 *******************************************************************************
@@ -334,6 +387,8 @@ sy8     dec     scnt
 * instead, in the blank, before the GO.
 golist  lbsr    wready          the last list has ended
         orcc    #$50
+        clr     lgodue          our own setxy must not start it (lyield). Not
+*                               before the orcc: a VBL served in wready sets it
 gl1     lda     <VSTAT          into the vertical blank
         bita    #$40
         beq     gl1
@@ -356,6 +411,7 @@ gl3a    bita    #$40
         bne     gl3
 gl4     lda     #1
         sta     <BCTRL          GO
+        clr     lgodue          this frame's list is started
         andcc   #$AF
         rts
 
@@ -998,9 +1054,24 @@ im6     ldd     arem
         rts
 
 *******************************************************************************
-* The pointer. Save-behind is read back through VDATA; the arrow is two
+* The pointer. Save-behind is read back through VRAM; the arrow is two
 * layers in sprite mode, so nothing outside its shape is written.
 *******************************************************************************
+* vwin - block 1 := the VRAM window (graphics.md 6.3), where every address is
+* the VDATA port: a load or a store of D there moves two bytes at WPTR.
+*
+* ⚠ THE POINTER IS HALF OF A SCROLL-BAR DRAG STEP'S TIME. With a display list
+* running every frame the CPU draws only between the list's END and the next
+* blank (lyield), and a byte at a time, lda <VDATA / sta ,x+, the save-behind
+* alone took 3.5 ms of it. ldd VRAMW / std ,x++ is 14 E cycles a pair against 30.
+* Every other user of block 1 maps it before it reads (mapgp, romat), so it is
+* left pointing here.
+VRAMW   EQU     $2000           block 1, when vwin has pointed it
+vwin    clr     <MAPHI+1
+        lda     #$40
+        sta     <MAPLO+1
+        rts
+
 opcurs  lbsr    clrck
         lbsr    sw
         std     tmp1
@@ -1032,15 +1103,27 @@ chide   tst     cvis
         std     ax
         ldd     cy
         std     ay
+        lbsr    vwin
         ldx     #cbuf
         lda     #CURH
         sta     ccnt
 ch1     lbsr    setxy
-        ldb     #CURW
-ch2     lda     ,x+
-        sta     <VDATA
-        decb
-        bne     ch2
+        ldd     ,x++            eight pairs: CURW is 16 (show.py)
+        std     VRAMW
+        ldd     ,x++
+        std     VRAMW
+        ldd     ,x++
+        std     VRAMW
+        ldd     ,x++
+        std     VRAMW
+        ldd     ,x++
+        std     VRAMW
+        ldd     ,x++
+        std     VRAMW
+        ldd     ,x++
+        std     VRAMW
+        ldd     ,x++
+        std     VRAMW
         ldd     ay
         addd    #1
         std     ay
@@ -1060,15 +1143,27 @@ cshow   tst     cvis
         std     ax
         ldd     cy
         std     ay
+        lbsr    vwin
         ldx     #cbuf
         lda     #CURH
         sta     ccnt
 cs1     lbsr    setxy
-        ldb     #CURW
-cs2     lda     <VDATA          graphics.md 11: the byte at WPTR, and WPTR steps
-        sta     ,x+
-        decb
-        bne     cs2
+        ldd     VRAMW            graphics.md 11: the byte at WPTR, and WPTR steps
+        std     ,x++
+        ldd     VRAMW
+        std     ,x++
+        ldd     VRAMW
+        std     ,x++
+        ldd     VRAMW
+        std     ,x++
+        ldd     VRAMW
+        std     ,x++
+        ldd     VRAMW
+        std     ,x++
+        ldd     VRAMW
+        std     ,x++
+        ldd     VRAMW
+        std     ,x++
         ldd     ay
         addd    #1
         std     ay
@@ -1249,6 +1344,7 @@ oplistof
         clr     <HSCRLH
         ldd     #0
         std     ckph
+        andcc   #$BF            wready held the replayer off for the GO: no more GOs
         rts
 
 *******************************************************************************

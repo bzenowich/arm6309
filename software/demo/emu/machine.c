@@ -59,6 +59,12 @@
  *
  * What it records is demo_tb's frames.bin, so tools/checkdemo.py and
  * tools/mkvideo.py read either.
+ *
+ * LISTLOG=from,to,pc[,pc...] logs, between two machine seconds, every change of
+ * LRUN and every arrival at the given PCs (up to 16, from build/demo.lst), each
+ * with its raster line. Use it to find which work pushes a frame's display
+ * list past line 0. It is how gui.asm's lyield and wready's /FIRQ hold were
+ * found.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -855,6 +861,28 @@ int main(int argc, char **argv)
             if (getenv("WILD")) {
                 zeros = (rd(m, m->cpu.pc) == 0 && rd(m, (uint16_t)(m->cpu.pc + 1)) == 0) ? zeros + 1 : 0;
                 if (zeros == 16) { fprintf(stderr, "WILD at %.3f s, task %d\n", (double)m->dots * DOT_PS / 1e12, m->task); atexit_ring = ring; atexit_ri = &ri; break; }
+            }
+        }
+        {   /* LISTLOG=from,to,addr[,addr...]: between two machine seconds, log each
+             * frame's list GO, list END and arrivals at the given PCs, with the
+             * raster line - for finding where a frame's work overruns the blank */
+            static int init, nadr; static unsigned adr[16]; static double lf, lt; static int lr_prev;
+            if (!init) {
+                init = 1;
+                const char *e = getenv("LISTLOG");
+                if (e) {
+                    char buf[256]; strncpy(buf, e, 255); buf[255] = 0;
+                    char *tok = strtok(buf, ",");
+                    lf = atof(tok ? tok : "0"); tok = strtok(NULL, ","); lt = atof(tok ? tok : "0");
+                    while ((tok = strtok(NULL, ",")) && nadr < 16) adr[nadr++] = (unsigned)strtoul(tok, NULL, 16);
+                } else lt = -1;
+            }
+            double now_s = (double)m->dots * DOT_PS / 1e12;
+            if (now_s >= lf && now_s <= lt) {
+                for (int i = 0; i < nadr; i++)
+                    if (m->cpu.pc == adr[i]) fprintf(stderr, "LL %.4f line %3d pc %04X\n", now_s, m->line, m->cpu.pc);
+                if (m->lrun != lr_prev) fprintf(stderr, "LL %.4f line %3d LRUN %d\n", now_s, m->line, m->lrun);
+                lr_prev = m->lrun;
             }
         }
         if (trace_n > 0 && (!getenv("TRACE_AT") || m->dots * DOT_PS >= (uint64_t)(atof(getenv("TRACE_AT")) * 1e12))) {

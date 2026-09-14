@@ -66,8 +66,10 @@ prev_camk = None
 last_missed = 0
 dbl_bad = 0
 n_total = 0
+lruns = []
 for meta, px in fr.read(os.path.join(out, "frames.bin")):
     n_total += 1
+    lruns.append(meta["lrun"])
     ck0, ck1 = meta["ck"]
     if ck0 and ck0 == ck1 and ck0 in pictures and meta["prog"] != 0x85:
         pic = pictures[ck0]
@@ -129,6 +131,20 @@ ok(not bad_show, f"⭐ every checkpoint frame is show.Model's picture, pixel for
    f"raster phase {bad_show[0][2]}, {bad_show[0][3]} pixels"))
 ok(n_nolist <= max(1, sum(seen.values()) // 100),
    f"a checkpoint that needs a display list found one running in all but {n_nolist} of its frames (1% may not)")
+# A list that is running is restarted every frame, so a gap of one or two frames
+# between two frames with a list is a frame that lost its list and showed its
+# lines unsplit. Until gui.asm's lyield, the paint scroll lost every other one.
+n_listed, n_dropped, i = sum(lruns), 0, 0
+while i < len(lruns):
+    j = i
+    while j < len(lruns) and not lruns[j]:
+        j += 1
+    if 0 < i < j < len(lruns) and j - i <= 2:
+        n_dropped += j - i
+    i = max(j, i + 1)
+ok(n_dropped <= n_listed * 3 // 100,
+   f"⭐ a running display list is started every frame: {n_dropped} frames dropped it between frames that had "
+   f"it, of {n_listed} with it (3% may)")
 if n_rast or n_rast_skip:
     ok(n_rast > 0 and n_rast_skip <= n_rast // 10,
        f"⭐ the raster bars and the paint program's wave: {n_rast} frames judged at the phase their list held, "

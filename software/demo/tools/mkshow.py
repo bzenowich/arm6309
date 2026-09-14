@@ -949,9 +949,29 @@ def main():
             bevel(S, 0, SB_Y, 18, 18)
             bevel(S, SW - 18, SB_Y, 18, 18)
             S.fill(18, SB_Y + 1, SW - 36, 16, C["itab"])
-        else:
-            S.fill(thumb_x(old), SB_Y + 1, 400, 16, C["itab"])
-        bevel(S, thumb_x(v), SB_Y + 1, 400, 16)
+            bevel(S, thumb_x(v), SB_Y + 1, 400, 16)
+            return
+        # Only the columns that change: a drag step is drawn between one list's
+        # END and the next blank, ~3 ms a frame, and two whole 400 x 16 thumbs
+        # were half of it (gui.asm's lyield). The picture is bevel()'s exactly.
+        x0, x1, y = thumb_x(old), thumb_x(v), SB_Y + 1
+        lt, dk = C["light"], C["frame"]
+        if x1 > x0:
+            d = x1 - x0
+            S.fill(x0, y, d, 16, C["itab"])              # the columns left behind
+            S.fill(x0 + 399, y, d, 16, C["panel"])       # the old right edge and the new interior
+            S.fill(x0 + 399, y, d, 1, lt)
+            S.fill(x0 + 399, y + 15, d, 1, dk)
+            S.fill(x1 + 399, y, 1, 16, dk)               # the new right edge
+            S.fill(x1, y + 1, 1, 14, lt)                 # the new left edge
+        elif x1 < x0:
+            d = x0 - x1
+            S.fill(x1 + 400, y, d, 16, C["itab"])
+            S.fill(x1, y, d + 1, 16, C["panel"])         # the new left edge, and the old one's column
+            S.fill(x1, y, d + 1, 1, lt)
+            S.fill(x1, y + 15, d + 1, 1, dk)
+            S.fill(x1, y + 1, 1, 14, lt)
+            S.fill(x1 + 399, y, 1, 16, dk)
 
     def open_paint():
         S.hide()

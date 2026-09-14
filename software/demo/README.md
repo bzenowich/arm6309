@@ -12,7 +12,7 @@ sh software/demo/build.sh                      # assets, script, layout, assembl
 sh software/demo/emu/run-emu.sh 120            # the show on the host emulator, in seconds
 VIDEO=1 sh software/demo/emu/run-emu.sh 120    # ... and /tmp/arm6309-emu/emu.mp4, with sound
 python3 software/demo/tools/checkdemo.py /tmp/arm6309-emu software/demo/build
-sh hardware/gal/verilog/run-demo.sh 112        # the whole machine, every check below,
+sh hardware/gal/verilog/run-demo.sh 118        # the whole machine, every check below,
                                                # /tmp/arm6309-demo/demo.mp4 (H.264, for the web)
 POST_ONLY=1 sh hardware/gal/verilog/run-demo.sh   # the checks and the files again, no simulation
 sh software/demo/bench/run-replay.sh 40        # the replayer vs refplayer, CPU alone (~2 min)
@@ -20,7 +20,7 @@ sh software/demo/bench/run-calib.sh            # bench/calib.asm on the whole ma
 ```
 
 ⚠ **Budget for the machine run.** It is about two and a half minutes of wall clock per
-second of machine on a quiet host, so the 110-second show is four and a half hours, and several times
+second of machine on a quiet host, so the 115-second show is nearly five hours, and several times
 that with other simulations running. The emulator runs the same ROM in about four seconds.
 
 | | |
@@ -203,8 +203,22 @@ A tick can run up to 4.2 ms and entering FIRQ masks IRQ too, so `firqh` unmasks 
 that, a tick running at the VBL interrupt pushed the scroll write 13 rows into the picture.
 
 ⚠ **And a tick can cost a display list its frame.** A list must be started inside line 0 for
-its `WAIT`s to mean lines, so `gui.asm`'s `golist` masks both interrupts from the end of the
-last list to the `GO`. The replayer's tick waits up to a few milliseconds for it.
+its `WAIT`s to mean lines. So while a list is active, `gui.asm`'s `wready` returns with
+`/FIRQ` masked from the end of one list to the next `GO`, and `golist` masks `/IRQ` too for
+the blank. The replayer's tick waits up to about 3 ms and then runs while the list walks.
+Without that, a tick that began just before the blank ran past line 0 every 42nd frame of the
+paint scroll: 50 Hz beating against 59.94 Hz.
+
+⚠ **A list that runs every frame leaves the CPU the rest of the frame to draw in, and no
+more.** The list owns `WPTR` from its `GO` to its `END` (`graphics.md` §10.3.1). The paint
+canvas's list ends at line 430, which leaves about 2 ms before the blank. Each drag step of
+the scroll bar is ~8 ms of drawing: the pointer's save-behind and restore, and the thumb's
+changed columns. So a step takes about five frames, and the list has to be restarted from
+*inside* the drawing. `lyield`, at the top of every `setxy` and every script op, does that
+once the blank's VBL has come. Until 2026-09-14 only `SYNC` started the list, at the end of
+a step. The list then ran in one frame of two, and every other frame showed the canvas at
+`HSCROLL` 0: a 30 Hz flicker that a 60 fps player showed as flicker, or as a jump, depending
+on which frames it kept.
 
 ⚠ **The VBL interrupt is served inside `golist`.** Its handler acknowledges by writing
 `VSTAT`, and a register write while a list walks costs the list a descriptor byte

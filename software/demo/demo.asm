@@ -1101,6 +1101,8 @@ irqh    orcc    #$40            HSCROLL is two registers: no /FIRQ between them
 vblwork ldd     fcnt
         addd    #1
         std     fcnt
+        lda     #1              gui.asm's lyield: this frame's list is due
+        sta     lgodue
         lda     tickend         which replayer tick had finished at this blank
         sta     tickirq
         tst     sready          the main line left a camera ready: scroll to it
