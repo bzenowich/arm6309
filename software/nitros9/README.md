@@ -9,7 +9,12 @@ sh software/tools/fetch-nitros9-tools.sh       # LWTOOLS and ToolShed into .tool
 sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 11 claims, ~15 s
 ```
 
-`run-emu.sh` rebuilds `software/boot/boot.bin` and the NitrOS-9 ROM. It then boots on
+```sh
+SCENARIOS=nitros9 npm run check:machine        # the same ROM on the RTL machine: 12 claims, ~3 min (from hardware/)
+```
+
+`run-emu.sh` rebuilds `software/boot/boot.bin` and the NitrOS-9 ROM (`mkrom.sh`, which also
+writes the `.hex` the RTL loads). It then boots on
 `software/demo/emu/`, types `dir`, `mfree`, `date -t`, `sleep 2100` and `procs` at the
 shell, and checks the console output. **Its exit code is the answer.** The full console
 is kept as `/tmp/arm6309-nitros9/console.txt`.
@@ -34,6 +39,25 @@ holds what the port depends on: the boot ROM's vector page, the emulator, and th
 The edits to shared files are `IFNE`-guarded. **Every other port's modules assemble
 byte-identical to `main`**, checked on 2026-09-14 for Pico-Thing, CoCo 3 and Wildbits:
 `krn`, `clock`, `init`, `sysgo` and `sc16550`, each as a 6809 and a 6309 build.
+
+## ⭐ On the RTL machine
+
+`machine_tb +scenario=nitros9` runs the whole path on `mc6809e.v`, `mainboard.v` and
+`video_card.v`, with `tl16c550.v` at `$FF38` as the console. It starts at the reset
+vector, runs every stage of `boot.asm`, and then:
+
+| Machine time | The console shows |
+|---|---|
+| 0.76 s | `RK`: `boot.asm` handed over at `$8004` and the loader entered `krn` |
+| 1.03 s | the bootfile's module list, read from the ROM disk through the map's ROM pages |
+| 1.40 s | the banner, `arm6309` |
+| 2.22 s | the shell's prompt |
+| 2.61 s | `dir`, typed at the UART, lists `OS9Boot CMDS SYS startup` |
+
+It also asserts that the VBL tick was acknowledged (83 times by the second prompt) and
+that the UART's INTR rose on the shared `/IRQ` (438 times). No cycle had two drivers on
+`D0`–`D7` or on `A20`–`A13`. The emulator reaches the prompt at 1.55 s because it starts
+at the handoff rather than at reset.
 
 ## How it boots
 
@@ -70,9 +94,6 @@ a dot per bootfile sector, then the module directory and the banner.
 
 ## ⚠ What P0 does not do yet
 
-- **It has not run on `machine_tb`.** Only the emulator has booted it. The ROM loads in the
-  RTL the same way, but a boot to the shell is about 3 s of machine time, which is roughly
-  eight minutes of wall clock there. That run is the next check to write.
 - **A 6809 build only.** The machine's CPU core is `mc6809e.v` and the emulator follows it.
   The recipe builds `CPU=6309` too (both kernels place their stubs at `$FEEE`), but nothing
   has run the 6309 build.

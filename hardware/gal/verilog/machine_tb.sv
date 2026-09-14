@@ -56,7 +56,9 @@ module machine_tb;
   wire SPANBUSY, VBLANK, HBLANK;
   wire bus_conflict, pa_conflict, vram_read;
 
-  machine #(.SIMMS(4)) m (.*);
+  // SERIAL: the TL16C550C console at $FF38. Only +scenario=nitros9 addresses
+  // it; boot.asm never does, so the seven boot runs are the machine they were.
+  machine #(.SIMMS(4), .SERIAL(1)) m (.*);
 
   int fails = 0;
   int claims = 0;
@@ -195,6 +197,9 @@ module machine_tb;
    *   alias   four sockets, a 1M module in socket 0 - the walk rejects it and
    *           the machine boots on socket 1
    *   e2      a tile byte corrupted behind the ROM's back - it must report $E2
+   *   nitros9 the NitrOS-9 ROM (software/nitros9/): boot.asm hands page 1 the
+   *           machine, NitrOS-9 boots to a shell on the UART, and `dir` runs.
+   *           ⚠ Minutes, not seconds - so it is not in the default list.
    *
    * ⛔ WHY THE LAST THREE EXIST. An error path that never runs is an error path
    * that does not work, and a claim that cannot fail is not a claim. Each one
@@ -644,6 +649,88 @@ module machine_tb;
                  m.mb.peek_dram(pop_base() + 32'h00A000), m.mb.peek_dram(pop_base() + 32'h00E000)));
   endtask
 
+  // ---- +scenario=nitros9: the console ------------------------------------
+  // Every character the UART finishes sending, NULs dropped (sc16550 pads the
+  // echo of a command line with them - software/nitros9/README.md). Printed as
+  // it arrives, so the log is the console.
+  string console = "";
+  always @(posedge CLK25)
+    if (m.ser_tx_strobe && m.ser_tx_byte != 8'h00 && m.ser_tx_byte != 8'h0D) begin
+      console = {console, $sformatf("%c", m.ser_tx_byte)};
+      if (scenario == "nitros9") $write("%c", m.ser_tx_byte);
+    end
+
+  bit saw_8004 = 0;
+  always @(negedge e) if (run && rw && la == 16'h8004) saw_8004 = 1;
+  int vstat_acks = 0, ser_irqs = 0;
+  bit ser_intr_d = 0;
+  always @(negedge e) if (!n_iosel && pa[7:0] == 8'h73 && !rw) vstat_acks++;
+  always @(posedge CLK25) begin
+    if (m.ser_intr && !ser_intr_d) ser_irqs++;
+    ser_intr_d <= m.ser_intr;
+  end
+
+  function automatic int find_text(input string needle, input int from);
+    for (int i = from; i + needle.len() <= console.len(); i++)
+      if (console.substr(i, i + needle.len() - 1) == needle) return i;
+    return -1;
+  endfunction
+
+  // Wait for `needle` to appear in the console at or after `from`, bounded in
+  // E cycles (2,097,917 a second). Returns where it was found, or -1 after a
+  // FAIL line.
+  int e_at_found;
+  task automatic wait_text(input string needle, input int from, input int budget_e,
+                           input string what, output int at);
+    int start;
+    start = e_cycles;
+    at = -1;
+    while (at < 0) begin
+      repeat (2000) @(negedge e);
+      at = find_text(needle, from);
+      if (at < 0 && e_cycles - start > budget_e) begin
+        $display("");
+        ok(1'b0, $sformatf("%s: no \"%s\" on the console within %0d E cycles", what, needle, budget_e));
+        return;
+      end
+    end
+    e_at_found = e_cycles;
+    $display("");
+    ok(1'b1, $sformatf("%s (at %.2f s of machine)", what, real'(e_cycles) / 2097917.0));
+  endtask
+
+  task automatic run_nitros9();
+    int at, prompt1;
+    localparam int SEC = 2097917;
+    $display("NITROS9. software/nitros9/: boot.asm, the loader, krn, and a shell on the UART");
+    $display("");
+    wait_text("RK", 0, 2 * SEC, "boot.asm handed page 1 the machine, and the loader entered krn (R, K)", at);
+    ok(saw_8004, "the CPU fetched $8004 - boot.asm's handoff, not a crash that printed");
+    if (at < 0) return;
+    wait_text("rbromdisk DD R0 SCF sc16550 Term", at, 2 * SEC,
+              "krn's Boot read OS9Boot from the ROM disk, through the map's ROM pages", at);
+    if (at < 0) return;
+    wait_text("\narm6309\n", at, 2 * SEC, "SysGo printed the banner, naming this machine", at);
+    if (at < 0) return;
+    wait_text("{Term|02}/DD:", at, 3 * SEC, "the shell prompted on /Term", prompt1);
+    if (prompt1 < 0) return;
+    begin
+      string typed;
+      typed = "dir\r";
+      for (int i = 0; i < typed.len(); i++) m.ser.rx_push(typed[i]);
+    end
+    wait_text("OS9Boot         CMDS            SYS             startup", prompt1, 3 * SEC,
+              "dir, typed at the UART, lists the ROM disk's root", at);
+    if (at < 0) return;
+    wait_text("{Term|02}/DD:", at, 2 * SEC, "and the shell prompted again", at);
+    ok(vstat_acks >= 70,
+       $sformatf("the VBL tick was acknowledged %0d times - NitrOS-9's clock on the video card's /IRQ", vstat_acks));
+    ok(ser_irqs >= 10,
+       $sformatf("the UART's INTR rose %0d times on the shared /IRQ - sc16550 is interrupt-driven", ser_irqs));
+    ok(!saw_bus_conflict, "no cycle had two drivers on D0-D7, the UART's reads included");
+    ok(!saw_pa_conflict,  "no cycle had two drivers on physical A20-A13");
+  endtask
+
   // ---- the scenarios that must fail, asserted as failures ----------------
   task automatic run_scenario();
     if (scenario == "e1") begin
@@ -697,6 +784,8 @@ module machine_tb;
                    m.mb.peek_dram(32'h00C01A)));
       ok(vrd_n == 18,
          $sformatf("after exactly 18 loads - the ROM stopped at the first wrong one (%0d)", vrd_n));
+    end else if (scenario == "nitros9") begin
+      run_nitros9();
     end else
       ok(1'b0, $sformatf("+scenario=%s is not a scenario this bench has", scenario));
   endtask
@@ -709,6 +798,11 @@ module machine_tb;
 
   initial begin
     rom_path = "../../../software/boot/boot.hex";
+    // +scenario=nitros9 loads the whole 1 MB ROM, whose page 0 is boot.hex
+    if (scenario == "nitros9") begin
+      rom_path = "/tmp/arm6309-nitros9/arm6309_rom.hex";
+      void'($value$plusargs("rom=%s", rom_path));
+    end
     m.mb.load_rom_file(rom_path);
     // A byte of the image, read back through the model that will fetch it, so
     // "the ROM loaded" is a claim and not an assumption.
@@ -1112,7 +1206,10 @@ module machine_tb;
   // this ends the run rather than letting it spin. CLAUDE.md: a hang is worse
   // than a failure, and run.sh's exit code cannot see one.
   initial begin
-    #400000000;
+    #1;
+    // ~7.9 s of machine (one dot is two timesteps), and ~20 s for NitrOS-9
+    if (scenario == "nitros9") #999999999;
+    else #399999999;
     $display("FAIL  machine_tb: global timeout - progress $%02h at %0d E cycles",
              progress, e_cycles);
     $display("      %0d VRAM writes, %0d VSTAT reads, %0d register writes, %0d /WAIT dots",

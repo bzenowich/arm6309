@@ -29,7 +29,7 @@ WAIVE="$WAIVE -Wno-UNSIGNED -Wno-CMPCONST -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-
 V="verilator --binary --timing -Wall -Wno-DECLFILENAME $WAIVE --timescale 1ns/1ps -O3"
 
 SRC="machine.v mainboard.v ../clkdec.v ../mmu.v u9.v u10.v"
-SRC="$SRC video_card.v vctrl.v vaddr.v vsup.v audio_card.v audio.v aseq.v"
+SRC="$SRC video_card.v vctrl.v vaddr.v vsup.v audio_card.v audio.v aseq.v tl16c550.v"
 SRC="$SRC ../../vendor/mc6809/mc6809e.v ../../vendor/mc6809/mc6809i.v"
 $V --top-module demo_tb -Mdir obj_demo $SRC demo_tb.sv -o demo_tb > "$OUT/build.log" 2>&1 \
   || { tail -30 "$OUT/build.log"; exit 1; }

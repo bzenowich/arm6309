@@ -26,6 +26,7 @@ A simulator sees seams, because it has to wire them.
 | `video_card.v` | hand-written: the card wired up — three parts, four interleaved framebuffer chips, the fetch latches and the `'153` mux. Board-level, transcribed from `hardware/cards/` and `video.cpld.ts` |
 | `vshim.v` | hand-written, and ⚠ **it is a finding rather than a component**: every signal in it is an input to a fitted part that nothing on the card produces. Its size is the size of `design-review2.md` §1.2 |
 | `mainboard.v` | hand-written: U3, U6, U9, U10, both map SRAMs, the `'157`, the `TASK` `'574`, the boot `'244`, both flash devices and the SIMM bank. Transcribed from `hardware/mainboard/mainboard.circuit.tsx`, which is the netlist of record |
+| `tl16c550.v` | hand-written, and ⚠ **a bus model of a bought part, not a design output**: the serial card's TL16C550C (`io/serial/docs/serial.md` §7), for `machine.v`'s `SERIAL = 1`. It is the console that `machine_tb +scenario=nitros9` types at, and it must behave as `software/demo/emu/machine.c`'s UART does |
 | `*_tb.sv` | hand-written. `vsync`, `vaddr`, `vtile`, `vspan`, `audio`, `mainboard` |
 
 `../clkdec.v` and `../mmu.v` are older, hand-written models of the same two GALs

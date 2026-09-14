@@ -20,22 +20,13 @@ set -e
 cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
 OUT=${OUT:-/tmp/arm6309-nitros9}
-NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
-export PATH="$ROOT/.tools/bin:$PATH"
 mkdir -p "$OUT"
 
-[ -n "$NITROS9DIR" ] && [ -d "$NITROS9DIR/recipes/arm6309" ] || {
-  echo "FAIL  no NitrOS-9 tree with recipes/arm6309 (set NITROS9DIR; branch arm6309)"; exit 1; }
-command -v lwasm >/dev/null && command -v os9 >/dev/null || {
-  echo "FAIL  no lwasm/os9: run sh software/tools/fetch-nitros9-tools.sh"; exit 1; }
-
-ROM="$NITROS9DIR/recipes/arm6309/l2/arm6309_rom.bin"
 if [ -z "$NOBUILD" ]; then
-  sh software/tools/mkrom.sh > "$OUT/mkrom.log" 2>&1 || { tail -5 "$OUT/mkrom.log"; exit 1; }
-  make -C "$NITROS9DIR/recipes/arm6309/l2" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" \
-    > "$OUT/build.log" 2>&1 || { grep -v '^lwasm\|^lwlink' "$OUT/build.log" | tail -20; echo "FAIL  the ROM did not build"; exit 1; }
+  sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-nitros9.log" 2>&1 || { cat "$OUT/mkrom-nitros9.log"; exit 1; }
 fi
+ROM="$OUT/arm6309_rom.bin"
 [ -f "$ROM" ] || { echo "FAIL  no $ROM"; exit 1; }
 
 cc -O2 -Wall -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c

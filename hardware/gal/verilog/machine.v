@@ -38,7 +38,11 @@ module machine #(
     // own 28.37516 MHz crystal, asynchronous to CLK25 exactly as the two cards
     // are on the backplane. 0 (the default) leaves the slot empty, and
     // check:machine's seven runs are unchanged by it.
-    parameter bit AUDIO = 0
+    parameter bit AUDIO = 0,
+    // ⭐ SERIAL = 1 puts a TL16C550C (tl16c550.v, a bus model of the bought
+    // part) at $FF38 - io/serial/docs/serial.md 7.1 - with its INTR on the
+    // shared /IRQ. It is NitrOS-9's console. 0 leaves the window empty.
+    parameter bit SERIAL = 0
 ) (
     input  wire        CLK25,        // 25.175 MHz - the dot clock AND the divider's input
     input  wire        SLOTCLK,      // 28.37516 MHz - the audio card's crystal, used only if AUDIO
@@ -169,14 +173,29 @@ module machine #(
       .VREAD(vid_vread), .RDOE_o(vid_rdoe)
   );
 
+  // ---- the serial card's UART ----------------------------------------------
+  // serial.md 7.1: $FF38-$FF3F, the upper half of the I/O card's sixteen-byte
+  // window at $FF30. $38 is 011 1xxx: A6 = 0, A5 = A4 = A3 = 1, and the part
+  // decodes A2-A0 itself. ⚠ The strobe does not imply A6 (serial.md 7.1).
+  // The INTR-to-open-drain inverter is on the card; here it is the OR above.
+  wire ser_sel = (SERIAL != 0) & iosel & ~pa[6] & pa[5] & pa[4] & pa[3];
+  wire ser_intr_raw, ser_tx_strobe;
+  wire [7:0] ser_rd, ser_tx_byte;
+  tl16c550 ser (
+      .CLK25(CLK25), .RESET(~n_reset), .SEL(ser_sel), .E(e), .RW(cpu_rnw),
+      .A(pa[2:0]), .DIN(cpu_d_out), .DOUT(ser_rd), .INTR(ser_intr_raw),
+      .tx_strobe(ser_tx_strobe), .tx_byte(ser_tx_byte));
+  wire ser_intr = (SERIAL != 0) & ser_intr_raw;
+  wire ser_drives = ser_sel & cpu_rnw;
+
   // ---- the open-drain control lines ---------------------------------------
   // §2.1: /IRQ, /FIRQ, /WAIT are open-drain with pull-ups on the motherboard,
   // so a card that is not pulling contributes nothing. One card here, so the
   // wired-AND is one term - written as a reduction anyway, because the next
   // card added must not need this line rewritten.
   assign wait_asserted = vid_wait_oe;
-  assign n_irq  = ~vid_irq_oe;
-  assign irq_asserted = vid_irq_oe;
+  assign n_irq  = ~(vid_irq_oe | ser_intr);
+  assign irq_asserted = vid_irq_oe | ser_intr;
 
   // ---- the audio card -----------------------------------------------------
   // audio.md 9.1: SEL = /IOSEL & A6 & !A5 & !A4, $FF40-$FF4F. The card's port
@@ -256,7 +275,7 @@ module machine #(
   wire [7:0] vid_d = vstat_sel ? vstat : vid_rd;
 
   // 3. The motherboard, which answers for everything that is not a card.
-  wire mb_drives = mb_din_valid & cpu_rnw & ~(iosel & pa[6] & pa[5]) & ~aud_drives;
+  wire mb_drives = mb_din_valid & cpu_rnw & ~(iosel & pa[6] & pa[5]) & ~aud_drives & ~ser_drives;
 
   // ⛔ TWO DRIVERS IS THE FAILURE /IOPAGE EXISTS TO PREVENT (machine.md §2), so
   // this reports it rather than ORing it. design-review2.md §10: "a model that
@@ -266,11 +285,13 @@ module machine #(
   //    E-high.
   wire vram_drives  = vid_rdoe & cpu_rnw;
 
-  assign bus_conflict = (mb_drives & (vid_drives | vram_drives | aud_drives))
+  assign bus_conflict = (mb_drives & (vid_drives | vram_drives | aud_drives | ser_drives))
                       | (vid_drives & vram_drives)
-                      | (aud_drives & (vid_drives | vram_drives));
+                      | (aud_drives & (vid_drives | vram_drives))
+                      | (ser_drives & (vid_drives | vram_drives | aud_drives));
 
-  assign cpu_d_in = vram_drives ? vid_vread : vid_drives ? vid_d : aud_drives ? aud_hd : mb_din;
+  assign cpu_d_in = vram_drives ? vid_vread : vid_drives ? vid_d : aud_drives ? aud_hd
+                  : ser_drives ? ser_rd : mb_din;
 
   // no `& e`: a testbench samples this on E's fall, where e is already 0
   assign vram_read = cpu_rnw & ~iopage & ~pa[20] & pa[19];

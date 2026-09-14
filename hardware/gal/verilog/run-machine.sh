@@ -40,6 +40,7 @@ V="$V -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC $WAIVE --timescale 1ns/1ps"
 SRC="machine.v mainboard.v ../clkdec.v ../mmu.v u9.v u10.v"
 SRC="$SRC video_card.v vctrl.v vaddr.v vsup.v"
 SRC="$SRC audio_card.v audio.v aseq.v"       # elaborated only when AUDIO = 1
+SRC="$SRC tl16c550.v"                         # the console; answers only when SERIAL = 1
 SRC="$SRC ../../vendor/mc6809/mc6809e.v ../../vendor/mc6809/mc6809i.v"
 
 $V --top-module machine_tb $SRC machine_tb.sv -o machine_tb > /dev/null
@@ -60,6 +61,14 @@ ARGS=""
 # error path is the right answer and is asserted as such. SCENARIOS narrows it:
 # SCENARIOS=main for the boot alone.
 SCENARIOS=${SCENARIOS:-"main e1 s1 s2 s3 alias e2"}
+# ⭐ AND AN EIGHTH THAT IS NOT IN THAT LIST: `nitros9` boots NitrOS-9 Level 2
+# from reset through boot.asm to a shell on the UART and types `dir` - about
+# 2.5 s of machine, which is minutes here, so it is asked for by name:
+#   SCENARIOS=nitros9 npm run check:machine
+# It needs the port's ROM, built from $NITROS9DIR (software/nitros9/README.md).
+case " $SCENARIOS " in *" nitros9 "*)
+  sh ../../../software/nitros9/mkrom.sh /tmp/arm6309-nitros9 || exit 1 ;;
+esac
 ok=0; bad=0; missing=0
 for sc in $SCENARIOS; do
   log="$OUT/$sc.log"
