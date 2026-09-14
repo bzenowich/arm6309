@@ -500,7 +500,7 @@ None of these is driver code, but no driver runs without them.
 | # | Item | Why it blocks | Where |
 |---|---|---|---|
 | X1 | ✅ **landed 2026-09-14**: `software/nitros9/README.md` | | |
-| X2 | Memory-manager patch for a block number wider than 8 bits. ⭐ **No longer blocks booting**: 8-bit blocks on a fixed high byte give 2 MB (`software/nitros9/README.md`). It is what the other 14 MB need | more than 2 MB of RAM | machine.md §5 item 6, `ram.md` §9 |
+| X2 | ✅ **landed 2026-09-14**: 16-bit blocks, 8 MB, sized from `boot.asm`'s descriptor, checked by `memtst` (`software/nitros9/README.md`). ⚠ Capped at 1,024 blocks by `F$GBlkMp`'s buffer | | |
 | X3 | ✅ **landed 2026-09-14**: the vectors point at `$FEEE`–`$FEFD` (`software/boot/README.md`) | | |
 | X4 | ✅ **landed 2026-09-14**: a per-tick period from `VMODE0` and a 2^-20 s accumulator (`software/nitros9/README.md`) | | |
 | X5 | ✅ **landed 2026-09-14**: `krn.asm`'s `ArmFIRQ`, checked by `firqtst` (`software/nitros9/README.md`) | | |
@@ -517,7 +517,7 @@ windows at `$FE00`–`$FEFF`. **Every base address comes from a descriptor from 
 
 | Phase | Work | Closed by |
 |---|---|---|
-| **P0** | X1–X7; boot NitrOS-9 to a serial shell on the emulator. ⭐ **Both halves landed 2026-09-14**: `software/nitros9/run-emu.sh` (11 claims) and `machine_tb +scenario=nitros9` (12 claims, from reset on the RTL). Still open: X2 | `emu` reaches `Shell` and runs `dir` from the ROM disk; the same on `machine_tb` as a new scenario |
+| **P0** | X1–X7; boot NitrOS-9 to a serial shell on the emulator. ⭐ **Both halves landed 2026-09-14**: `software/nitros9/run-emu.sh` (11 claims) and `machine_tb +scenario=nitros9` (12 claims, from reset on the RTL). ⭐ **P0 closed 2026-09-14**: X1-X7 landed | `emu` reaches `Shell` and runs `dir` from the ROM disk; the same on `machine_tb` as a new scenario |
 | **P1** | `VidCore` (V1–V12 and the VBL service); fast-text `/Term` on cell mode; `KbdArm`; CoWin control codes `$01`–`$0D`, `$1F` | a scripted client's output: emulator frames vs a Python model of the expected text screen; `VidCore` IRQ-masked time measured |
 | **P2** | `CoArm` bitmap screens and windows: `DWSet`/`OWSet`/`Select`, span-mask text, cell shadow, `Bar`/`Box`/`Line`/`Circle`/`Ellipse`/`Arc`/`FFill`, GP buffers, `Get`/`PutBlk`, fonts, palettes, backing store and screen switch, `MseArm` + `GCSet` pointer | `show` (§7) re-run through the driver, frames judged by `checkdemo.py`; decide §3.2's task question on measured size |
 | **P3** | Extensions: `PatBar`, `PutMask`, `Icon`, `Poly`, `Image`, `AnsiSw`; `SS.Raster`; `SS.Batch`/`FrmSig`/`FrmWait`; `SS.Excl` + `libvid`; tile screens | raster and wave checkpoints at every phase (`show.raster_colours`); overworld frames vs `mkgame.render()`, and the flip budget (≤2 % into active video, as `checkdemo.py` asserts today) |

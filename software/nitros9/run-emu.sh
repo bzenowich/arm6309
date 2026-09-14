@@ -38,7 +38,7 @@ cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c softwar
 # to the second, which is what defs/arm6309.d's per-tick period replaced.
 # `firqtst` runs twice: the second run is after the driver's Term has put the
 # previous FIRQ service back, so it is the install/remove path as well.
-printf 'dir\rdir /dd/cmds\rmfree\rdate -t\rsleep 2100\rdate -t\rprocs\rvmodetst 1\rdate -t\rsleep 1800\rdate -t\rvmodetst 0\rload /dd/modules/firqtst\rfirqtst\rfirqtst\rps2tst\recho DONE-arm6309\r' > "$OUT/typed.txt"
+printf 'dir\rdir /dd/cmds\rmfree\rdate -t\rsleep 2100\rdate -t\rprocs\rvmodetst 1\rdate -t\rsleep 1800\rdate -t\rvmodetst 0\rload /dd/modules/firqtst\rfirqtst\rfirqtst\rps2tst\rload pmap\rmemtst\recho DONE-arm6309\r' > "$OUT/typed.txt"
 
 # SERIAL_STOP is the echo's OUTPUT line: a line feed then the word, which the
 # typed command line ("echo DONE-...") does not contain.
@@ -63,7 +63,7 @@ claim "SysGo printed the banner, naming this machine"        has '^arm6309$'
 claim "the shell prompted on /Term"                          has '{Term|02}/DD:'
 claim "dir lists the ROM disk's root"                        has 'OS9Boot *CMDS *MODULES *SYS *startup'
 claim "dir /dd/cmds lists commands on the ROM disk"          has 'mfree *mmap *more'
-claim "mfree reports 2 MB of RAM mapped"                     has 'Total: *F6 *1968k'
+claim "mfree reports 8 MB of RAM mapped: four SIMM sockets, capped at F\$GBlkMp's 1024 blocks" has 'Total: *3F6 *8112k'
 claim "procs shows the shell running procs"                  has 'Procs *$'
 claim "the run ended at the last command, not by the clock"  grep -q 'SERIAL_STOP seen' "$OUT/emu.log"
 claim "the CPU never ran through empty RAM (WILD)"           sh -c "! grep -q '^WILD' '$OUT/emu.log'"
@@ -86,7 +86,19 @@ claim "no crash: nothing printed D.Crash's '!'" sh -c "! grep -q '![0-9A-F][0-9A
 
 claim "PS/2 keyboard: FF, F2, F4 each answered, by ps2.md 7's software transmit, then the scan codes" has '^kbd: FA AA FA AB 83 FA 1C F0 1C$'
 claim "PS/2 mouse: FF, F3 3C, F4 each answered, then a packet" has '^mouse: FA AA 00 FA FA FA 09 05 FB$'
+# memtst takes every free block and checks each is its own memory, through
+# F$MapBlk and F$CpyMem, with pmap forked into the six highest (pmap is
+# loaded first, so the fork does no file I/O that would free a low block).
+claim "memtst: every free block, up to \$3F9, is distinct memory by F\$MapBlk and F\$CpyMem" has '^memtst: 03F[0-9A-F] blocks to \$03F9, MapBlk ok, CpyMem ok$'
+claim "and pmap ran from the high blocks memtst gave back" has '^  4   FB \.\. \.\. \.\. \.\. \.\. [0-9A-F][0-9A-F] 3F  PMap'
 claim "sleep 1800 in VMODE 01 took 30 s of the clock: the 59.940 Hz family keeps time too (got ${d525:-none}; a fixed 70 would be 26)" test "${d525:-0}" -ge 30 -a "${d525:-0}" -le 32
+
+# A one-socket machine: the loader sizes RAM from the boot ROM's descriptor.
+printf 'mfree\recho DONE-arm6309\r' > "$OUT/typed1.txt"
+mkdir -p "$OUT/one"
+(cd "$OUT/one" && EMU_SIMMS=1 SERIAL_IN=../typed1.txt SERIAL_AT=4 SERIAL_STOP="$STOP" ../emu "$ROM" . 30 > /dev/null 2> emu.log) || true
+tr -d '\000' < "$OUT/one/serial.out" | tr -d '\r' > "$OUT/one/console.txt"
+claim "with one SIMM socket, mfree reports 4 MB: the size comes from the boot ROM's descriptor" grep -q 'Total: *1F6 *4016k' "$OUT/one/console.txt"
 
 echo "$n claims, $fail failed        (console in $OUT/console.txt)"
 [ "$fail" -eq 0 ]

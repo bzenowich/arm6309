@@ -6,11 +6,11 @@ phase P0: the port skeleton that the video and audio drivers will be built on.
 
 ```sh
 sh software/tools/fetch-nitros9-tools.sh       # LWTOOLS and ToolShed into .tools/ (once)
-sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 18 claims, ~20 s
+sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 21 claims, ~30 s
 ```
 
 ```sh
-SCENARIOS=nitros9 npm run check:machine        # the same ROM on the RTL machine: 12 claims, ~3 min (from hardware/)
+SCENARIOS=nitros9 npm run check:machine        # the same ROM on the RTL machine: 14 claims, ~4 min (from hardware/)
 ```
 
 `run-emu.sh` rebuilds `software/boot/boot.bin` and the NitrOS-9 ROM (`mkrom.sh`, which also
@@ -55,6 +55,7 @@ vector, runs every stage of `boot.asm`, and then:
 | 1.40 s | the banner, `arm6309` |
 | 2.22 s | the shell's prompt |
 | 2.61 s | `dir`, typed at the UART, lists `OS9Boot CMDS MODULES SYS startup` |
+| 3.10 s | `mfree` reports 8,112 KB: RAM sized from `boot.asm`'s descriptor, on 16-bit blocks |
 
 It also asserts that the VBL tick was acknowledged (83 times by the second prompt) and
 that the UART's INTR rose on the shared `/IRQ` (438 times). No cycle had two drivers on
@@ -123,7 +124,7 @@ check can fail.** A stub built to corrupt `Y` before its `RTI` made the second l
 | **Vectors** | ROM points at `$FEEE`–`$FEFD` | **the same.** `boot.asm` was changed to match | the kernel is padded to end at `$FF00`; the assembly fails if the stubs would miss |
 | **FIRQ** | unused, and it crashes | the audio card's timer and buffers | `ArmFIRQ`: its own stack in slot 7, the system map, `jsr [D.FIRQ]` |
 | **Tick** | GIME VSYNC, 60 Hz | video card VBL, `VSTAT` b0, acknowledged by any write: **70.086 Hz or 59.940 Hz**, as `VMODE0` says | `clock.asm` waits out `SPANBUSY` before acknowledging (`graphics.md` §19 item 39). Each tick adds its own length, in 2^-20 s, to a 24-bit accumulator, so neither rate needs to be an integer and a `VMODE` change needs no call into the clock (`defs/arm6309.d`). `vmodetst` checks both families |
-| **RAM** | up to 2 MB, blocks `$00`–`$FF` | up to 16 MB on the high byte | **2 MB for now**, the first socket's first 2 MB |
+| **RAM** | up to 2 MB, blocks `$00`–`$FF`, sized by a probe | up to 16 MB, on a 16-bit map entry | **8 MB**, blocks `$000`–`$3FF`, from SIMM socket 0 up. A block number is 16 bits end to end: every kernel site that points a map slot at a block writes both bytes (`RAM.Hi` plus the high byte), and none of them touches the stack while a slot is moved. The block map is 1,024 bytes at `$E000` in the kernel's block. The size comes from `boot.asm`'s own SIMM descriptor, not a probe. ⚠ 1,024 blocks because `F$GBlkMp`'s callers pass a 1,024-byte buffer; the rest of a full bank needs another call. `memtst` checks every free block is distinct memory |
 
 ## ⚠ What P0 does not do yet
 
@@ -132,8 +133,11 @@ check can fail.** A stub built to corrupt `Y` before its `RTI` made the second l
   has run the 6309 build.
 - **The FIRQ stub is checked on the emulator only.** `machine_tb`'s machine has no audio
   card (`AUDIO = 0`), so nothing raises `/FIRQ` on the RTL yet.
-- **2 MB of RAM**, from one socket. Using more needs the memory manager to handle a block
-  number wider than 8 bits (plan item X2, `hardware/ram.md` §9).
+- **8 MB of RAM, not 16.** `F$GBlkMp` hands its caller a 1,024-byte buffer, so the block map
+  stops at 1,024 blocks. RAM must start at socket 0: a machine whose socket 0 is empty (or
+  holds an aliasing module) halts in the loader. `pmap` prints only a block's low byte.
+- **`F$Debug`'s reboot is the CoCo 3's**, and writes `$FF90`, which is this machine's map.
+  Nothing calls it.
 - **No input device but the UART.** The PS/2 drivers are phase P1. `ps2tst` initialises
   both ports by `ps2.md` §7 and §11.2 and echoes what they send. The emulator models the
   card's receive counter literally, so a transmit that skips §7 step 1 (holding `KRST`)

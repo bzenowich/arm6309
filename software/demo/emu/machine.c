@@ -816,6 +816,17 @@ int main(int argc, char **argv)
     m->maphi[4] = 1; m->maplo[4] = 1;
     m->maphi[5] = 1; m->maplo[5] = 2;
     m->maphi[7] = 1; m->maplo[7] = 0;
+    /* ... and the memory descriptor its SIMM walk leaves at logical $0000 of
+     * the lowest populated socket (software/boot/README.md): the socket
+     * bitmap, then the total in 8 KB blocks. EMU_SIMMS sockets, from 0; 4 by
+     * default. The demo never reads it. */
+    {
+        int n = getenv("EMU_SIMMS") ? atoi(getenv("EMU_SIMMS")) : 4;
+        uint8_t *p0 = rampage(0x02, 0x00);
+        p0[0] = (uint8_t)((1 << n) - 1);
+        p0[1] = (uint8_t)((n * 512) >> 8);
+        p0[2] = (uint8_t)((n * 512) & 0xFF);
+    }
 
     m->irq_line_due = -1;
     m->cpu.ctx = m;
