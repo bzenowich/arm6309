@@ -6,7 +6,7 @@ phase P0: the port skeleton that the video and audio drivers will be built on.
 
 ```sh
 sh software/tools/fetch-nitros9-tools.sh       # LWTOOLS and ToolShed into .tools/ (once)
-sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 15 claims, ~20 s
+sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 16 claims, ~20 s
 ```
 
 ```sh
@@ -122,7 +122,7 @@ check can fail.** A stub built to corrupt `Y` before its `RTI` made the second l
 | **Constant page** | `$FE00`–`$FEFF` is always block `$3F` | **none** | slot 7 of every map is `KrnBlk`, forced at each task switch, as on the Pico-Thing |
 | **Vectors** | ROM points at `$FEEE`–`$FEFD` | **the same.** `boot.asm` was changed to match | the kernel is padded to end at `$FF00`; the assembly fails if the stubs would miss |
 | **FIRQ** | unused, and it crashes | the audio card's timer and buffers | `ArmFIRQ`: its own stack in slot 7, the system map, `jsr [D.FIRQ]` |
-| **Tick** | GIME VSYNC | video card VBL, `VSTAT` b0, acknowledged by any write | `clock.asm`, which waits out `SPANBUSY` first (`graphics.md` §19 item 39) |
+| **Tick** | GIME VSYNC, 60 Hz | video card VBL, `VSTAT` b0, acknowledged by any write: **70.086 Hz or 59.940 Hz**, as `VMODE0` says | `clock.asm` waits out `SPANBUSY` before acknowledging (`graphics.md` §19 item 39). Each tick adds its own length, in 2^-20 s, to a 24-bit accumulator, so neither rate needs to be an integer and a `VMODE` change needs no call into the clock (`defs/arm6309.d`). `vmodetst` checks both families |
 | **RAM** | up to 2 MB, blocks `$00`–`$FF` | up to 16 MB on the high byte | **2 MB for now**, the first socket's first 2 MB |
 
 ## ⚠ What P0 does not do yet
@@ -132,8 +132,6 @@ check can fail.** A stub built to corrupt `Y` before its `RTI` made the second l
   has run the 6309 build.
 - **The FIRQ stub is checked on the emulator only.** `machine_tb`'s machine has no audio
   card (`AUDIO = 0`), so nothing raises `/FIRQ` on the RTL yet.
-- **The tick rate is fixed at 70 Hz.** A `VMODE` change to the 525-line family would make
-  the clock run 14 % slow. Plan item X4.
 - **2 MB of RAM**, from one socket. Using more needs the memory manager to handle a block
   number wider than 8 bits (plan item X2, `hardware/ram.md` §9).
 - **No input device but the UART.** PS/2 is phase P1.

@@ -502,7 +502,7 @@ None of these is driver code, but no driver runs without them.
 | X1 | ✅ **landed 2026-09-14**: `software/nitros9/README.md` | | |
 | X2 | Memory-manager patch for a block number wider than 8 bits. ⭐ **No longer blocks booting**: 8-bit blocks on a fixed high byte give 2 MB (`software/nitros9/README.md`). It is what the other 14 MB need | more than 2 MB of RAM | machine.md §5 item 6, `ram.md` §9 |
 | X3 | ✅ **landed 2026-09-14**: the vectors point at `$FEEE`–`$FEFD` (`software/boot/README.md`) | | |
-| X4 | Clock: VBL tick through `F$IRQ` on `$FF73`, **with a runtime ticks-per-second** instead of assembly-time `TkPerSec`; a fractional accumulator for 70.086 Hz | V11; timekeeping drifts ~86–106 s/day otherwise | `level2/modules/clock.asm` |
+| X4 | ✅ **landed 2026-09-14**: a per-tick period from `VMODE0` and a 2^-20 s accumulator (`software/nitros9/README.md`) | | |
 | X5 | ✅ **landed 2026-09-14**: `krn.asm`'s `ArmFIRQ`, checked by `firqtst` (`software/nitros9/README.md`) | | |
 | X6 | ✅ **landed 2026-09-14**: `/Term` on Wildbits' `sc16550` | | |
 | X7 | **Emulator upgrades.** MMU tasks, register-file read-back and the 16C550 landed 2026-09-14. Still to do: VBL 10 lines in the 525 family, `WADV 10`, PS/2, and the audio host boundary from `audio/refplayer/card.c` (`machine.c` reads `$FF40`–`$FF4F` as 0, never busy) | every driver iteration; the machine run is 4.5 h | audio.md §16 item 14, g.md §19 item 13 |
@@ -517,7 +517,7 @@ windows at `$FE00`–`$FEFF`. **Every base address comes from a descriptor from 
 
 | Phase | Work | Closed by |
 |---|---|---|
-| **P0** | X1–X7; boot NitrOS-9 to a serial shell on the emulator. ⭐ **Both halves landed 2026-09-14**: `software/nitros9/run-emu.sh` (11 claims) and `machine_tb +scenario=nitros9` (12 claims, from reset on the RTL). Still open: X4 and the rest of X7 | `emu` reaches `Shell` and runs `dir` from the ROM disk; the same on `machine_tb` as a new scenario |
+| **P0** | X1–X7; boot NitrOS-9 to a serial shell on the emulator. ⭐ **Both halves landed 2026-09-14**: `software/nitros9/run-emu.sh` (11 claims) and `machine_tb +scenario=nitros9` (12 claims, from reset on the RTL). Still open: the rest of X7 | `emu` reaches `Shell` and runs `dir` from the ROM disk; the same on `machine_tb` as a new scenario |
 | **P1** | `VidCore` (V1–V12 and the VBL service); fast-text `/Term` on cell mode; `KbdArm`; CoWin control codes `$01`–`$0D`, `$1F` | a scripted client's output: emulator frames vs a Python model of the expected text screen; `VidCore` IRQ-masked time measured |
 | **P2** | `CoArm` bitmap screens and windows: `DWSet`/`OWSet`/`Select`, span-mask text, cell shadow, `Bar`/`Box`/`Line`/`Circle`/`Ellipse`/`Arc`/`FFill`, GP buffers, `Get`/`PutBlk`, fonts, palettes, backing store and screen switch, `MseArm` + `GCSet` pointer | `show` (§7) re-run through the driver, frames judged by `checkdemo.py`; decide §3.2's task question on measured size |
 | **P3** | Extensions: `PatBar`, `PutMask`, `Icon`, `Poly`, `Image`, `AnsiSw`; `SS.Raster`; `SS.Batch`/`FrmSig`/`FrmWait`; `SS.Excl` + `libvid`; tile screens | raster and wave checkpoints at every phase (`show.raster_colours`); overworld frames vs `mkgame.render()`, and the flip budget (≤2 % into active video, as `checkdemo.py` asserts today) |
