@@ -505,7 +505,7 @@ None of these is driver code, but no driver runs without them.
 | X4 | ✅ **landed 2026-09-14**: a per-tick period from `VMODE0` and a 2^-20 s accumulator (`software/nitros9/README.md`) | | |
 | X5 | ✅ **landed 2026-09-14**: `krn.asm`'s `ArmFIRQ`, checked by `firqtst` (`software/nitros9/README.md`) | | |
 | X6 | ✅ **landed 2026-09-14**: `/Term` on Wildbits' `sc16550` | | |
-| X7 | **Emulator upgrades.** Landed 2026-09-14: MMU tasks, register-file read-back, the 16C550, VBL 10 lines in the 525 family, `WADV 10`, the audio card's interrupt path, and PS/2 (the card and both devices, checked by `ps2tst`). Still to do: the audio card's channels, sample RAM and `ASTAT` busy, from `audio/refplayer/card.c` | every driver iteration; the machine run is 4.5 h | audio.md §16 item 14, g.md §19 item 13 |
+| X7 | ✅ **landed 2026-09-14**: MMU tasks, register-file read-back, the 16C550, VBL 10 lines in the 525 family, `WADV 10`, PS/2 (the card and both devices, checked by `ps2tst`), and the audio card as `audio/refplayer/card.c`. ⚠ `ASTAT` b6 (the host port's busy bit) is never set, because `card.c` does not model the slot walk. A driver's poll loop is exercised only on `modplay_tb` and the machine | | | every driver iteration; the machine run is 4.5 h | audio.md §16 item 14, g.md §19 item 13 |
 | X8 | **Measure** Level 2 system-call round trip, IRQ dispatch cost and `TFM` into `VDATA`/`SDATA` | sizes batching (§3.5), decides §3.4.1, validates §3.3 | ps2.md §14 item 3 |
 
 ⚠ **`/IOPAGE` may move** (machine.md §5 item 15, decided and not built): per-slot 32-byte
@@ -517,7 +517,7 @@ windows at `$FE00`–`$FEFF`. **Every base address comes from a descriptor from 
 
 | Phase | Work | Closed by |
 |---|---|---|
-| **P0** | X1–X7; boot NitrOS-9 to a serial shell on the emulator. ⭐ **Both halves landed 2026-09-14**: `software/nitros9/run-emu.sh` (11 claims) and `machine_tb +scenario=nitros9` (12 claims, from reset on the RTL). Still open: the rest of X7 | `emu` reaches `Shell` and runs `dir` from the ROM disk; the same on `machine_tb` as a new scenario |
+| **P0** | X1–X7; boot NitrOS-9 to a serial shell on the emulator. ⭐ **Both halves landed 2026-09-14**: `software/nitros9/run-emu.sh` (11 claims) and `machine_tb +scenario=nitros9` (12 claims, from reset on the RTL). Still open: X2 | `emu` reaches `Shell` and runs `dir` from the ROM disk; the same on `machine_tb` as a new scenario |
 | **P1** | `VidCore` (V1–V12 and the VBL service); fast-text `/Term` on cell mode; `KbdArm`; CoWin control codes `$01`–`$0D`, `$1F` | a scripted client's output: emulator frames vs a Python model of the expected text screen; `VidCore` IRQ-masked time measured |
 | **P2** | `CoArm` bitmap screens and windows: `DWSet`/`OWSet`/`Select`, span-mask text, cell shadow, `Bar`/`Box`/`Line`/`Circle`/`Ellipse`/`Arc`/`FFill`, GP buffers, `Get`/`PutBlk`, fonts, palettes, backing store and screen switch, `MseArm` + `GCSet` pointer | `show` (§7) re-run through the driver, frames judged by `checkdemo.py`; decide §3.2's task question on measured size |
 | **P3** | Extensions: `PatBar`, `PutMask`, `Icon`, `Poly`, `Image`, `AnsiSw`; `SS.Raster`; `SS.Batch`/`FrmSig`/`FrmWait`; `SS.Excl` + `libvid`; tile screens | raster and wave checkpoints at every phase (`show.raster_colours`); overworld frames vs `mkgame.render()`, and the flip budget (≤2 % into active video, as `checkdemo.py` asserts today) |

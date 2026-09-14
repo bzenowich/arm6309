@@ -29,7 +29,7 @@ fi
 ROM="$OUT/arm6309_rom.bin"
 [ -f "$ROM" ] || { echo "FAIL  no $ROM"; exit 1; }
 
-cc -O2 -Wall -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c
+cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c audio/refplayer/card.c
 
 # What is typed, from 8 s of machine time on: the shell is up by ~3 s.
 # `sleep 2100` is 2100 ticks: 30 s at VMODE 00's 70.086 Hz. Then `vmodetst 1`

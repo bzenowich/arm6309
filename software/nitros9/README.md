@@ -138,9 +138,9 @@ check can fail.** A stub built to corrupt `Y` before its `RTI` made the second l
   both ports by `ps2.md` §7 and §11.2 and echoes what they send. The emulator models the
   card's receive counter literally, so a transmit that skips §7 step 1 (holding `KRST`)
   receives garbage there, as it would on the card.
-- **The emulator's audio card models only its interrupt path.** That is `AINTENA`,
-  `AINTREQ`, `ACTRL` b6, and `ASTAT` b4. It has no channels, no sample RAM and no busy
-  bit (plan item X7).
+- **The emulator's audio card is `audio/refplayer/card.c`**, register level, stepped per
+  colour clock. Its host port is never busy (`ASTAT` b6), so a driver's wait on that bit
+  runs only on the RTL.
 - **Five NUL bytes follow the echo of every command line.** The descriptor's end-of-line
   null count is 0, so where they come from is not found yet. They are cosmetic, and
   `run-emu.sh` strips them before it checks anything.
