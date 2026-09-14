@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Turn demo_tb's recordings into an H.265 file.
+"""Turn demo_tb's recordings into an H.264 file for the web.
 
-    python3 software/demo/tools/mkvideo.py OUT demo.mp4 [--fps 70]
-    python3 software/demo/tools/mkvideo.py OUT demo-web.mp4 --web
+    python3 software/demo/tools/mkvideo.py OUT demo.mp4 [--fps 60]
+
+One file, H.264 + AAC at 60 fps. There is no H.265 master: nobody used it
+(2026-09-14), and the web file is the one that plays everywhere. --web is still
+accepted and means nothing.
 
   picture   frames.bin: every frame the connector carried, with the simulated
             time it started. Resampled to a constant rate by showing, at each
@@ -20,7 +23,7 @@ stretched 2.4x down with whole rows repeated, so pixels stay sharp.
 --wav FILE takes the sound from FILE instead of card.dac - emu/run-emu.sh passes
 tracewav's render of the emulator's register writes.
 
-ffmpeg comes from software/tools/fetch-ffmpeg.sh (libx265); FFMPEG=/path overrides it.
+ffmpeg comes from software/tools/fetch-ffmpeg.sh (libx264); FFMPEG=/path overrides it.
 """
 import os, subprocess, sys
 import numpy as np
@@ -60,8 +63,7 @@ STALE_S = 0.05
 
 def main():
     out, mp4 = sys.argv[1], sys.argv[2]
-    web = "--web" in sys.argv
-    fps = float(sys.argv[sys.argv.index("--fps") + 1]) if "--fps" in sys.argv else (60.0 if web else 70.0)
+    fps = float(sys.argv[sys.argv.index("--fps") + 1]) if "--fps" in sys.argv else 60.0
     sync = dict(l.split() for l in open(os.path.join(out, "sync.txt")))
     end_s = int(sync.get("end_ps", 0)) / 1e12
 
@@ -74,22 +76,15 @@ def main():
     audio_offset = int(sync["cc0_ps"]) / 1e12
 
     gop = int(round(fps))
-    if web:
-        # ⭐ FOR A BROWSER, NOT FOR REVIEW AT FULL FIDELITY. Google Drive, like most
-        # web players, transcodes HEVC and caps the frame rate at 60, and when it
-        # changes quality mid-play it restarts from the last keyframe. With x265's
-        # default keyframes (every 3.6 s, and one at the scene cut before the
-        # paint) that replayed the whole paint. So: H.264, 60 fps resampled here
-        # rather than by the player, a keyframe every second with no scene-cut
-        # extras, and the index at the front of the file.
-        vcodec = ["-c:v", "libx264", "-preset", "slow", "-crf", "18", "-profile:v", "high",
-                  "-pix_fmt", "yuv420p", "-g", str(gop), "-keyint_min", str(gop), "-sc_threshold", "0"]
-        label = "H.264 + AAC, web"
-    else:
-        vcodec = ["-c:v", "libx265", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p",
-                  "-tag:v", "hvc1",
-                  "-x265-params", f"log-level=error:keyint={gop}:min-keyint={gop}:scenecut=0"]
-        label = "H.265 + AAC"
+    # ⭐ FOR A BROWSER. Google Drive, like most web players, transcodes HEVC and
+    # caps the frame rate at 60, and when it changes quality mid-play it restarts
+    # from the last keyframe. With x265's default keyframes (every 3.6 s, and one
+    # at the scene cut before the paint) that replayed the whole paint. So: H.264,
+    # 60 fps resampled here rather than by the player, a keyframe every second
+    # with no scene-cut extras, and the index at the front of the file.
+    vcodec = ["-c:v", "libx264", "-preset", "slow", "-crf", "18", "-profile:v", "high",
+              "-pix_fmt", "yuv420p", "-g", str(gop), "-keyint_min", str(gop), "-sc_threshold", "0"]
+    label = "H.264 + AAC, web"
     ff = ffmpeg_path()
     cmd = [ff, "-y", "-hide_banner", "-loglevel", "error",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{OW}x{OH}", "-r", f"{fps}", "-i", "-",

@@ -20,4 +20,4 @@ ROOT=$(cd ../.. && pwd)
 cc -O2 -w -I"$ROOT/audio/refplayer" -o "$OUT/tracewav" tools/tracewav.c \
    "$ROOT/audio/refplayer/card.c" "$ROOT/audio/refplayer/mod_load.c" "$ROOT/audio/refplayer/render.c" -lm
 "$OUT/tracewav" "$OUT/emu.wav" build/demo.mod "$OUT/card.times"
-python3 tools/mkvideo.py "$OUT" "$OUT/emu.mp4" --web --wav "$OUT/emu.wav"
+python3 tools/mkvideo.py "$OUT" "$OUT/emu.mp4" --wav "$OUT/emu.wav"

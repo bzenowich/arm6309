@@ -13,7 +13,7 @@ sh software/demo/emu/run-emu.sh 120            # the show on the host emulator, 
 VIDEO=1 sh software/demo/emu/run-emu.sh 120    # ... and /tmp/arm6309-emu/emu.mp4, with sound
 python3 software/demo/tools/checkdemo.py /tmp/arm6309-emu software/demo/build
 sh hardware/gal/verilog/run-demo.sh 112        # the whole machine, every check below,
-                                               # /tmp/arm6309-demo/demo.mp4 and demo-web.mp4
+                                               # /tmp/arm6309-demo/demo.mp4 (H.264, for the web)
 POST_ONLY=1 sh hardware/gal/verilog/run-demo.sh   # the checks and the files again, no simulation
 sh software/demo/bench/run-replay.sh 40        # the replayer vs refplayer, CPU alone (~2 min)
 sh software/demo/bench/run-calib.sh            # bench/calib.asm on the whole machine (~15 min)
@@ -35,7 +35,7 @@ that with other simulations running. The emulator runs the same ROM in about fou
 | `tools/mkparrots.py` | ⚠ **the stand-in picture**, drawn from primitives, when there is no photograph in `build/` |
 | `tools/mkdemorom.py` | the 1 MB ROM layout, and `period_table.c` copied into an include |
 | `tools/checkdemo.py` | the frame checker, for either the machine's recording or the emulator's |
-| `tools/mkvideo.py` | the H.265 and H.264 encoders for a recording |
+| `tools/mkvideo.py` | the H.264 encoder for a recording |
 | `tools/tracewav.c` | the audio control: `card.c` driven by a run's timed register writes |
 | `emu/` | the host emulator: `cpu6809.c`, and `machine.c`, the map and both cards as the documents describe them |
 | `emu/test/run.sh` | the emulator's CPU core against `mc6809e.v`, instruction by instruction |
