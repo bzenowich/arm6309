@@ -429,7 +429,7 @@ The video card's programmable logic is **three ATF1508AS PLCC-84s and no GALs**
 |---|---|---|---|
 | `vaddr` | **59 of 64** | **113 of 128** | scan address, `WPTR`, tile address sources |
 | `vctrl` | **56 of 64** | **93 of 128** | sync, sequencer, span control, the arbiter, `CTRL` |
-| `vsup` | **61 of 64** | **91 of 128** | register-file address, `SPANLEN`, §8.2's rank select, §9's palette write path, §10.3's descriptor decode |
+| `vsup` | **61 of 64** | **89 of 128** | register-file address, `SPANLEN`, §8.2's rank select, §9's palette write path, §10.3's descriptor decode |
 
 ⭐ **`vsup` absorbed all three of the card's `GAL22V10`s** — `rfa`, `vlen` and `pxsel` —
 so the third PLCC-84 **reduced** the package count by two. `graphics.md` §10.1.7 has the

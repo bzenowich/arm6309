@@ -9,6 +9,20 @@ to `graphics.md` unless marked otherwise. "Vid-*" identifiers are findings of th
 
 ---
 
+## §19 item 46 — its headline, before `vsup` placed on pass 1 (2026-09-13)
+
+Item 50's fix placed `vsup` on the fitter's first pass. The item's headline and first
+paragraph read:
+
+> 46. **⚠ OPEN — `vsup` fits on the fitter's second pass, and the cell count is the second
+>     pass's.** Placement fails on pass 1 and `Fitter_Pass 2 … CASCADE_LOGIC : (TRY)`
+>     reports *"Design fits successfully"*. The audio card's U1 does the same
+>     (`audio.md` §10.1.1).
+
+and its table's row was `| vsup | 91 of 128 | 61 of 64 | 2 | 25 of 40 | 2 |`.
+
+---
+
 ## §10.3.2 and `features.md` §4 — a listed scroll is not byte-granular (2026-09-13)
 
 `software/demo/bench/calib.asm` listed `HSCROLL` = 1, 2, 3, 5, 6 and 7 on the whole machine

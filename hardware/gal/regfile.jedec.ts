@@ -57,7 +57,19 @@ const gated = (x: string) => NOT_REGSEL.map((n) => `${n} & ${x}`)
  * a span was costed and not taken: it is one product term on the arbiter's
  * output enable plus a REGSEL pin vctrl does not have, to buy a case the
  * polling rule already covers. */
-const CPUSEL = `${REGSEL} & !SPANBUSY`
+/* ⛔ AND NOT DURING 7.2's RELOAD EITHER - 2026-09-13, graphics.md 19 item 50.
+ *
+ * The walk below runs RP1:RP0 through two dots on the edge SPANBUSY falls,
+ * and it was gated on !REGSEL: a CPU access in progress kept the file's address.
+ * A VSTAT poll is exactly such an access, and the poll is how software waits
+ * for a span to end - so the poll that saw SPANBUSY fall routinely held the
+ * file at +$13, and the column reloaded from VSTAT's byte instead of WPTR's.
+ * software/demo/ drew a window tab at column $40, which the VBL handler had
+ * last written to VSTAT. The reload wins its two dots now; a CPU READ of a
+ * file register in those dots sees WPTR's byte (VSTAT is the '244 and is not
+ * affected), and a WRITE there is the same rule-break as a write under a span.
+ * vspan_tb polls across the end of a chained span at 24 phases. */
+const CPUSEL = `${REGSEL} & !SPANBUSY & !RP0 & !RP1`
 /** The CPU is not taking the file: `!REGSEL` (three terms) or a span is. */
 const notCpu = (x: string) => [...gated(x), `SPANBUSY & ${x}`]
 
@@ -96,8 +108,8 @@ const SPAN = ["SPANBUSY"]
  * and it is what makes the text engine's 13 writes per cell real rather than
  * 26. design-review2.md V-6. */
 const IDLE = gated("!SPANBUSY & !RP0 & !RP1")
-const RELOAD_A = gated("RP0")      // $08, WPTR's low byte
-const RELOAD_B = gated("RP1")      // $09, its middle byte
+const RELOAD_A = ["RP0"]          // $08, WPTR's low byte - ungated: 19 item 50
+const RELOAD_B = ["RP1"]          // $09, its middle byte
 
 const cells: Cell[] = [
   /* ⛔ AND NOT AT +$15, WHICH IS VDATA - 2026-09-11, graphics.md 11, 19 item 47.

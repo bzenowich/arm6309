@@ -175,13 +175,16 @@ never comes.
   the list wrote `vsup`'s copy of the fine bits and not `vctrl`'s, which the pixel mux selects
   on. `vctrl`'s copy now has the list's write port, and `vaddr_tb` sweeps a listed `HSCROLL`
   over every pixel of a line. The paint program's scroll and its wave use it.
-- ⛔ **The VBL interrupt's acknowledgement broke a chained fill** — a software rule, now kept.
-  The first machine run drew one and a half strips of the desktop's background and stopped:
-  the handler's `VSTAT` write landed under a `WADV 01` span-solid, and §7.4 says a register
-  access takes the register file (the span's colour and its column reload) from a running
-  span. `vblwork` waits out `SPANBUSY` first, and the emulator now fails a run that writes a
-  card register under a span. The emulator's own span timing is shorter than the machine's,
-  so it saw three such writes where the machine was hit at once.
+- ⛔ **The VBL interrupt's acknowledgement broke chained fills, twice.** The first machine
+  run drew one and a half strips of the desktop's background and stopped: the handler's
+  `VSTAT` write landed under a `WADV 01` span-solid, which §7.4's rule forbids, and
+  `vblwork` now waits out `SPANBUSY` first. The next run drew the Files window's tab at
+  column 64, which was a **card defect** — `graphics.md` §19 item 50, closed 2026-09-13: the
+  column reload after a chained span is two register-file reads on the dot `SPANBUSY`
+  falls, and the `VSTAT` poll that saw it fall kept the file's address, so the column
+  loaded `VSTAT`'s byte (the handler's last acknowledgement, `$40`). The reload owns the
+  address for its two dots now, and `vspan_tb` polls across a chained span's end at 24
+  phases. The emulator reports a card register write under a span or a running list.
 - **Cell mode's fine horizontal scroll** — `graphics.md` §19 item 48, closed 2026-09-13. At
   `HSCROLL[2:0]` = 4 every frame the card produced equalled a model in which pixel columns
   0–3 of each cell came from the cell to their left. `mkgame.render_cells(...,

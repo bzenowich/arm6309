@@ -59,7 +59,7 @@ gave back three cells and three pins.
 `vctrl` is 56 of 64 I/O.
 `vaddr` is 59 of 64 I/O.
 `vsup` is 61 of 64 I/O.
-Their cell counts are **93**, 113 and 91 of 128, and `vctrl` places on the fitter's
+Their cell counts are **93**, 113 and 89 of 128, and `vctrl` places on the fitter's
 first pass again since §19 item 48's fix (`docs/graphics.md` §19 item 46). ⚠ All three are fitted with **JTAG off**
 (`cpld/*.fit`: the four JTAG pins carry signals), so they are programmed out of circuit.
 
@@ -82,7 +82,7 @@ strobes — the same count as today. §19 items 33 and 34 carry the corrected sc
 what that rewrite still buys is §14.2.3's broadcast write and a 10.2 µs `/WAIT` bound,
 not headroom.
 
-⚠ **`vsup`'s spare room is 37 macrocells and 3 pins** (`cpld/vsup.fit`: 91 of 128
+⚠ **`vsup`'s spare room is 39 macrocells and 3 pins** (`cpld/vsup.fit`: 89 of 128
 cells, 61 of 64 I/O), which is the shape of every
 constraint on this card: a blit datapath (`blitter.md`) fits the cells and does not fit
 the pins. **Blitter room is a pin question here, not a macrocell question.**

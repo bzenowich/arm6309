@@ -5,7 +5,7 @@
 #   OUT=/some/dir sh gal/verilog/run-demo.sh 30
 #
 # Budget for it: about two and a half minutes of wall clock per second of
-# machine on a quiet host - the show is 97 s. software/demo/emu/run-emu.sh runs
+# machine on a quiet host - the show is 110 s. software/demo/emu/run-emu.sh runs
 # the same ROM in seconds, and checkdemo.py reads either recording.
 set -e
 cd "$(dirname "$0")"

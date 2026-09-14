@@ -239,6 +239,35 @@ module vspan_tb;
     ok(WPTR == 4096 + 1024,
        $sformatf("at span end WPTR is one row on and back at the same column: got %0d, want %0d", WPTR, 4096 + 1024));
 
+    /* ⛔ 19 item 50: THE RELOAD IS TWO FILE READS, AND THE CPU'S POLL TOOK THE FILE.
+     * RP1:RP0 walks on the dot SPANBUSY falls and points the register file at
+     * +$08/+$09 - but a CPU access to $FF60-$FF7F claimed the file's address for
+     * its whole bus cycle, so a VSTAT poll spanning the fall made the reload
+     * load the file's byte at +$13 (the last VSTAT write) as the column. The
+     * machine drew the Files window's tab at column 64 because the VBL handler's
+     * acknowledgement had written $40 there. This is 7.4's own polling loop, a
+     * few thousand times: every one must leave the next chained span at its
+     * column. (A chained write nobody polled for is held by /WAIT, which this
+     * bench's free-running E cannot do - machine_tb and software/demo/ can.) */
+    begin
+      int bad_poll, runs;
+      bad_poll = 0; runs = 0;
+      bus_cycle(21'h0060 + 7'h13, 1, 1, 8'h40);     // the file's +$13 holds $40, as the VBL handler leaves it
+      for (int ph = 0; ph < 24; ph++) begin
+        // polled: VSTAT read until SPANBUSY reads 0, with ph dots of phase shift
+        wreg('h00, 8'h90); wreg('h05, 8'd3); wreg('h14, 8'h01);
+        set_wptr(4096 + 97);
+        repeat (ph) @(negedge DOTCLK);
+        wvram(0, 8'h00);
+        n = 0;
+        do begin bus_cycle(21'h0060 + 7'h13, 1, 0, 8'h00); n++; end while (card.SPANBUSY !== 1'b0 && n < 2000);
+        repeat (12) @(posedge DOTCLK);
+        if (WPTR !== 5120 + 97) bad_poll++;
+        runs++;
+      end
+      ok(bad_poll == 0, $sformatf("⛔ 19 item 50: a VSTAT poll across a chained span's end leaves the column reload alone - %0d of %0d phases put the next row elsewhere", bad_poll, runs));
+    end
+
     $display("");
     $display("The display list - graphics.md 10.3, 10.3.1");
     $display("");
