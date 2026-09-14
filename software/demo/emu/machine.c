@@ -58,7 +58,10 @@
  *     and PS2_DEBUG traces the devices' state.
  *
  * What it records is demo_tb's frames.bin, so tools/checkdemo.py and
- * tools/mkvideo.py read either.
+ * tools/mkvideo.py read either. MARKS=addr moves the words each frame records
+ * (checkpoint, raster phase, camera and hero records, missed flips) to five
+ * words at a logical address, and writes marks.txt as demo_tb does - how
+ * software/nitros9/ reads them from the video console's globals.
  *
  * LISTLOG=from,to,pc[,pc...] logs, between two machine seconds, every change of
  * LRUN and every arrival at the given PCs (up to 16, from build/demo.lst), each
@@ -132,6 +135,8 @@ typedef struct {
     uint16_t *cur, *prv;
     int frame_n, prv_w, prv_h, have_prev;
     uint16_t ck0, ph0, lrun1;
+    uint16_t mk_ck, mk_ph, mk_camk, mk_herok, mk_missed;   /* where the frame words are read (MARKS) */
+    FILE *marks;                        /* MARKS: marks.txt, as demo_tb writes it */
     uint64_t frame_t;
     int frame_active;
 } M;
@@ -619,6 +624,105 @@ static uint8_t ps2_read(uint8_t r)
 
 static int ps2_irq(void) { return (m->ioctrl & 0x40) && (m->kdr[0] || m->kdr[1]); }
 
+/* ------------------------------------------------------------------ masked time */
+/* MASKLOG=from: from that machine second on, every stretch with CC's I bit
+ * set is timed, and at exit the longest are listed by where the stretch began
+ * - the instruction after the ORCC, or the handler an interrupt entered - as a
+ * NitrOS-9 module and offset. It is how software/nitros9/run-vid.sh measures
+ * docs/nitros9-av-plan.md 3.4's "IRQ-masked time per primitive". */
+static uint8_t peek(uint16_t a)          /* rd() without a device's side effects */
+{
+    if (a >= 0xFF00) return 0;
+    uint8_t hi = m->maphi[entry(a)], lo = m->maplo[entry(a)];
+    if (hi == 0x01) return m->rom[((uint32_t)lo << 13 | (a & 0x1FFF)) & 0xFFFFF];
+    if (hi == 0x00 && (lo & 0xC0) == 0x40) return 0;
+    return rampage(hi, lo)[a & 0x1FFF];
+}
+
+/* the module holding `a`: its name and a's offset in it, or "?" */
+static void module_of(uint16_t a, char *name, size_t n, unsigned *off)
+{
+    snprintf(name, n, "?");
+    *off = a;
+    for (unsigned back = 0; back < 0x8000 && back <= a; back++) {
+        uint16_t h = (uint16_t)(a - back);
+        if (peek(h) != 0x87 || peek((uint16_t)(h + 1)) != 0xCD) continue;
+        uint8_t par = 0;
+        for (int i = 0; i < 9; i++) par ^= peek((uint16_t)(h + i));
+        if (par != 0xFF) continue;
+        unsigned size = ((unsigned)peek((uint16_t)(h + 2)) << 8) | peek((uint16_t)(h + 3));
+        if (back >= size) continue;
+        uint16_t np = (uint16_t)(h + (((unsigned)peek((uint16_t)(h + 4)) << 8) | peek((uint16_t)(h + 5))));
+        size_t k = 0;
+        for (; k + 1 < n && k < 15; k++) {
+            uint8_t c = peek((uint16_t)(np + k));
+            name[k] = (char)(c & 0x7F);
+            if (c & 0x80) { k++; break; }
+        }
+        name[k] = 0;
+        *off = back;
+        return;
+    }
+}
+
+typedef struct { uint16_t pc, endpc; uint8_t task; uint64_t max; long n; char mod[16]; unsigned off; char endmod[16]; unsigned endoff; } maskrec;
+static maskrec masks[256];
+static int nmasks;
+
+static void mask_record(uint16_t pc, uint64_t len, uint16_t endpc)
+{
+    int i;
+    for (i = 0; i < nmasks; i++)
+        if (masks[i].pc == pc && masks[i].task == m->task) break;
+    if (i == nmasks) {
+        if (nmasks == 256) return;
+        nmasks++;
+        masks[i].pc = pc; masks[i].task = m->task; masks[i].max = 0; masks[i].n = 0;
+        module_of(pc, masks[i].mod, sizeof masks[i].mod, &masks[i].off);
+    }
+    masks[i].n++;
+    if (len > masks[i].max) {
+        masks[i].max = len;
+        masks[i].endpc = endpc;
+        module_of(endpc, masks[i].endmod, sizeof masks[i].endmod, &masks[i].endoff);
+    }
+}
+
+static int mask_cmp(const void *a, const void *b)
+{
+    const maskrec *x = a, *y = b;
+    return x->max < y->max ? 1 : x->max > y->max ? -1 : 0;
+}
+
+/* CALLTIME=Module+$off: time every call of the routine at that offset in the
+ * named module (task 0's map), from arrival to the RTS that returns past it,
+ * and report the longest, the mean and the count at exit. It is how
+ * run-vid.sh measures the VBL service itself, not the kernel's IRQ path around
+ * it. The module is found by name once it is in memory. */
+static struct { char name[16]; unsigned off; uint16_t addr; int resolved; int in; uint64_t t0; uint16_t s0, ret;
+                uint64_t max, total; long n; } ct;
+
+static void calltime_resolve(void)
+{
+    uint8_t t = m->task; m->task = 0;
+    for (unsigned h = 0; h + 16 < 0xFF00; h++) {
+        if (peek((uint16_t)h) != 0x87 || peek((uint16_t)(h + 1)) != 0xCD) continue;
+        if (m->maphi[entry((uint16_t)h)] == 0x01) { h |= 0x1FFF; continue; }   /* a ROM page the ROM disk has mapped: not a loaded module */
+        uint8_t par = 0;
+        for (int i = 0; i < 9; i++) par ^= peek((uint16_t)(h + i));
+        if (par != 0xFF) continue;
+        uint16_t np = (uint16_t)(h + (((unsigned)peek((uint16_t)(h + 4)) << 8) | peek((uint16_t)(h + 5))));
+        size_t k = 0; int match = 1;
+        for (;; k++) {
+            uint8_t c = peek((uint16_t)(np + k));
+            if (k >= sizeof ct.name || (char)(c & 0x7F) != ct.name[k]) { match = 0; break; }
+            if (c & 0x80) { match = ct.name[k + 1] == 0; break; }
+        }
+        if (match) { ct.addr = (uint16_t)(h + ct.off); ct.resolved = 1; break; }
+    }
+    m->task = t;
+}
+
 static uint8_t rd(void *ctx, uint16_t a)
 {
     (void)ctx;
@@ -661,6 +765,8 @@ static void wr(void *ctx, uint16_t a, uint8_t v)
         else if (a >= 0xFF38 && a <= 0xFF3F) uart_write((uint8_t)(a - 0xFF38), v);
         else if (a == 0xFF33) m->ioctrl = v;
         else if (a >= 0xFFB0 && a <= 0xFFBF) m->task = v & 1;
+        else if (a == 0xFF2E && m->marks)     /* a timing mark: demo.asm's MARK */
+            fprintf(m->marks, "%llu M%u\n", (unsigned long long)(m->dots * DOT_PS), v);
         else if (a == 0xFF2F) {
             m->progress = v;
             fprintf(stderr, "      %8.3f s  progress $%02X\n", (double)m->dots * DOT_PS / 1e12, v);
@@ -682,9 +788,10 @@ static void render_line(int y)
 {
     if (y == 0) {
         m->vs_frame = (uint16_t)((m->vs_hi << 8) | m->vs_lo);
-        m->ck0 = ram16(0xC600);
-        m->ph0 = ram16(0xC602);
+        m->ck0 = ram16(m->mk_ck);
+        m->ph0 = ram16(m->mk_ph);
         m->frame_t = m->dots * DOT_PS;
+        if (m->marks) fprintf(m->marks, "%llu A\n", (unsigned long long)(m->dots * DOT_PS));
     }
     if (y == 1) m->lrun1 = (uint16_t)m->lrun;
     uint16_t *row = m->cur + (size_t)y * 640;
@@ -720,8 +827,8 @@ static void emit_frame(void)
             }
     }
     uint8_t rep = !same ? 0 : changed == 0 ? 1 : 2;
-    uint16_t camk = ram16(0xC208), herok = ram16(0xC20A), missed = ram16(0xC225);
-    uint16_t ck1 = ram16(0xC600), ph1 = ram16(0xC602);
+    uint16_t camk = ram16(m->mk_camk), herok = ram16(m->mk_herok), missed = ram16(m->mk_missed);
+    uint16_t ck1 = ram16(m->mk_ck), ph1 = ram16(m->mk_ph);
     uint64_t t = m->frame_t;
     fputc('F', m->frames);
     fwrite(&m->frame_n, 4, 1, m->frames);
@@ -753,6 +860,7 @@ static void raster(void)
         m->line++;
         int act = active_lines();
         if (m->line == act) {                 /* VBLANK rises */
+            if (m->marks) fprintf(m->marks, "%llu V\n", (unsigned long long)(m->line_start * DOT_PS));
             /* ... and /IRQ follows at VSYNC's leading edge: after the front porch,
              * which is 12 lines in the 449-line family and 10 in the 525-line one
              * (hardware/gal/sync.timing.ts). demo_tb measured the 12. */
@@ -791,6 +899,17 @@ int main(int argc, char **argv)
     snprintf(path, sizeof path, "%s/serial.out", argv[2]);
     m->ser_out = fopen(path, "wb");
     if (!m->frames || !m->trace || !m->ser_out) { fprintf(stderr, "FAIL  cannot write in %s\n", argv[2]); return 1; }
+    /* the frame words: demo.asm's and gui.asm's by default; MARKS=addr (hex, task 0's
+     * logical map) reads them as five words there - checkpoint, raster phase, camera
+     * record, hero record, missed flips - and writes OUTDIR/marks.txt: VBLANK's
+     * rise (V), each frame's first active line (A) and writes to $FF2E (M<n>), in ps */
+    m->mk_ck = 0xC600; m->mk_ph = 0xC602; m->mk_camk = 0xC208; m->mk_herok = 0xC20A; m->mk_missed = 0xC225;
+    if (getenv("MARKS")) {
+        uint16_t b = (uint16_t)strtoul(getenv("MARKS"), NULL, 16);
+        m->mk_ck = b; m->mk_ph = b + 2; m->mk_camk = b + 4; m->mk_herok = b + 6; m->mk_missed = b + 8;
+        snprintf(path, sizeof path, "%s/marks.txt", argv[2]);
+        m->marks = fopen(path, "w");
+    }
     if (getenv("SERIAL_IN")) {
         FILE *si = fopen(getenv("SERIAL_IN"), "rb");
         if (!si) { fprintf(stderr, "FAIL  cannot read SERIAL_IN %s\n", getenv("SERIAL_IN")); return 1; }
@@ -890,7 +1009,59 @@ int main(int argc, char **argv)
             fprintf(stderr, "PC %04X A %02X B %02X X %04X Y %04X U %04X S %04X CC %02X DP %02X T %d\n", m->cpu.pc, m->cpu.a,
                     m->cpu.b, m->cpu.x, m->cpu.y, m->cpu.u, m->cpu.s, m->cpu.cc, m->cpu.dp, m->task);
         }
+        {   /* CALLTIME */
+            static int init;
+            if (!init) {
+                init = 1;
+                const char *e = getenv("CALLTIME");
+                if (e && sscanf(e, "%15[^+]+$%x", ct.name, &ct.off) == 2) ct.name[15] = 0; else ct.name[0] = 0;
+            }
+            if (ct.name[0]) {
+                static long tick;
+                if (!ct.resolved && (tick++ & 0xFFFF) == 0) calltime_resolve();
+                if (ct.resolved && m->task == 0) {
+                    if (!ct.in && m->cpu.pc == ct.addr) {
+                        ct.in = 1; ct.t0 = m->cpu.cycles; ct.s0 = m->cpu.s;
+                        ct.ret = (uint16_t)((peek(m->cpu.s) << 8) | peek((uint16_t)(m->cpu.s + 1)));
+                    } else if (ct.in && m->cpu.pc == ct.ret && m->cpu.s == (uint16_t)(ct.s0 + 2)) {
+                        uint64_t d = m->cpu.cycles - ct.t0;
+                        ct.in = 0; ct.n++; ct.total += d;
+                        if (d > ct.max) ct.max = d;
+                    }
+                }
+            }
+        }
+        uint8_t cc_was = m->cpu.cc;
         int e = cpu6809_step(&m->cpu);
+        {
+            static int init; static double from = -1; static uint64_t since; static uint16_t since_pc;
+            if (!init) { init = 1; if (getenv("MASKLOG")) from = atof(getenv("MASKLOG")); }
+            if (from >= 0 && (double)m->dots * DOT_PS / 1e12 >= from) {
+                if (!(cc_was & 0x10) && (m->cpu.cc & 0x10)) { since = m->cpu.cycles - (uint64_t)e; since_pc = m->cpu.pc; }
+                else if ((cc_was & 0x10) && !(m->cpu.cc & 0x10) && since) mask_record(since_pc, m->cpu.cycles - since, m->cpu.pc);
+                /* MASKTRACE=from,to: each change of I between two machine seconds, where it happened */
+                if (getenv("MASKTRACE") && ((cc_was ^ m->cpu.cc) & 0x10)) {
+                    double f = 0, t = 0; sscanf(getenv("MASKTRACE"), "%lf,%lf", &f, &t);
+                    double now_s = (double)m->dots * DOT_PS / 1e12;
+                    if (now_s >= f && now_s <= t) {
+                        char nm[16]; unsigned off;
+                        module_of(m->cpu.pc, nm, sizeof nm, &off);
+                        fprintf(stderr, "I=%d %.6f s  PC $%04X %s+$%04X task %d S $%04X\n", (m->cpu.cc & 0x10) ? 1 : 0, now_s, m->cpu.pc, nm, off, m->task, m->cpu.s);
+                    }
+                }
+                /* MASKSAMPLE=us: inside a masked stretch longer than that, where the time goes */
+                if ((m->cpu.cc & 0x10) && since && getenv("MASKSAMPLE") && m->cpu.cycles - since > (uint64_t)(atof(getenv("MASKSAMPLE")) * 2.097917)) {
+                    static uint64_t last_sample; static int nsamples;
+                    if (m->cpu.cycles - last_sample > 2000 && nsamples < 64) {
+                        char nm[16]; unsigned off;
+                        module_of(m->cpu.pc, nm, sizeof nm, &off);
+                        fprintf(stderr, "MASKED %.4f s  %.1f ms in  %s+$%04X\n", (double)m->dots * DOT_PS / 1e12,
+                                (double)(m->cpu.cycles - since) / 2097.917, nm, off);
+                        last_sample = m->cpu.cycles; nsamples++;
+                    }
+                }
+            }
+        }
         m->dots = m->cpu.cycles * DOTS_PER_E;
         raster();
         uart_step();
@@ -915,6 +1086,10 @@ int main(int argc, char **argv)
     f = fopen(path, "w");
     fprintf(f, "cc0_ps 0\nend_ps %llu\n", (unsigned long long)(m->dots * DOT_PS));
     fclose(f);
+    if (getenv("VRAMDUMP")) {   /* VRAMDUMP=file: all 512 KB of VRAM, at exit */
+        FILE *vf = fopen(getenv("VRAMDUMP"), "wb");
+        if (vf) { fwrite(m->vram, 1, sizeof m->vram, vf); fclose(vf); }
+    }
     if (getenv("DUMP")) {   /* DUMP=addr,len: logical memory through task 0's map, at exit */
         unsigned da = 0, dl = 0;
         sscanf(getenv("DUMP"), "%x,%x", &da, &dl);
@@ -925,6 +1100,17 @@ int main(int argc, char **argv)
         }
         fprintf(stderr, "\n");
         m->task = t;
+    }
+    if (ct.name[0])
+        fprintf(stderr, "CALLTIME %s+$%04X: %ld calls, longest %.1f us, mean %.1f us%s\n", ct.name, ct.off, ct.n,
+                (double)ct.max * 1e6 / 2097917.0, ct.n ? (double)ct.total / ct.n * 1e6 / 2097917.0 : 0.0,
+                ct.resolved ? "" : " (the module never appeared)");
+    if (nmasks) {
+        qsort(masks, (size_t)nmasks, sizeof masks[0], mask_cmp);
+        for (int i = 0; i < nmasks && i < 24; i++)
+            fprintf(stderr, "MASK %8.1f us  %s+$%04X to %s+$%04X  (PC $%04X task %d, %ld stretches)\n",
+                    (double)masks[i].max * 1e6 / 2097917.0, masks[i].mod, masks[i].off, masks[i].endmod, masks[i].endoff,
+                    masks[i].pc, masks[i].task, masks[i].n);
     }
     if (atexit_ring) {
         fprintf(stderr, "last PCs:");

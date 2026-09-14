@@ -36,7 +36,9 @@ holds what the port depends on: the boot ROM's vector page, the emulator, and th
 | `level2/modules/kernel/krn.asm` (`IFNE arm6309`) | ends at `$FF00`, so the vector stubs sit at `$FEEE`; forces slot 7 to `KrnBlk` |
 | `level2/modules/kernel/krn.asm` (`ArmFIRQ`) | the `/FIRQ` stub, below |
 | `level2/arm6309/modules/firqtstdrv.asm`, `firqtstdesc.asm`, `cmds/firqtst.asm` | the stub's test: the audio card's timer at 50 Hz, counted. In `/DD/MODULES` and `CMDS` |
-| `level2/modules/clock.asm` (`picothing+arm6309`) | the video card's VBL as the tick, polled through `VSTAT` |
+| `level2/modules/clock.asm` (`picothing+arm6309`) | the video card's VBL as the tick, polled through `VSTAT`; the video console's VBL service called from `VBLTick`, on the system stack; `DoPoll`'s carry set explicitly (below) |
+| `level1/modules/kernel/fnproc.asm` (`IFNE arm6309`) | the idle loop calls the video console's idle work (`D.VBLSt`'s second vector) before it waits for an interrupt: the mouse pointer, which is too long for an IRQ |
+| `level2/arm6309/modules/armio.asm` … `libvid.asm`, `defs/armvid.d`, `cmds/rastbar.asm`, `wave.asm`, `overworld.asm` | the video console and its test clients: `docs/video-console.md` |
 | `recipes/arm6309/l2` | `make` builds `arm6309_rom.bin`, 1 MB |
 
 The edits to shared files are `IFNE`-guarded. **Every other port's modules assemble
@@ -53,11 +55,11 @@ vector, runs every stage of `boot.asm`, and then:
 |---|---|
 | 0.76 s | `RK`: `boot.asm` handed over at `$8004` and the loader entered `krn` |
 | 1.03 s | the bootfile's module list, read from the ROM disk through the map's ROM pages |
-| 1.40 s | the banner, `arm6309` |
-| 2.22 s | the shell's prompt |
-| 2.61 s | `dir`, typed at the UART, lists `OS9Boot CMDS MODULES SYS startup` |
-| 3.10 s | `mfree` reports 8,112 KB: RAM sized from `boot.asm`'s descriptor, on 16-bit blocks |
-| 4.5 s | `firqtst q`: the audio card's timer on `/FIRQ`, 13 in 20 ticks and 30 in user state, registers intact |
+| 1.41 s | the banner, `arm6309` |
+| 3.06 s | the shell's prompt, the shell loaded from `/DD/CMDS` |
+| 3.57 s | `dir`, typed at the UART, lists `OS9Boot CMDS MODULES SYS startup` |
+| 4.10 s | `mfree` reports 8,104 KB free: RAM sized from `boot.asm`'s descriptor, on 16-bit blocks |
+| 5.63 s | `firqtst q`: the audio card's timer on `/FIRQ`, 13 in 20 ticks and 30 in user state, registers intact |
 
 `+scenario=reboot` boots, types `reboot`, and asserts that `boot.asm`'s POST ran again from its
 reset vector (17 more progress codes, no `$E0`–`$EF`), that NitrOS-9 came back to a second
@@ -85,7 +87,9 @@ at the handoff rather than at reset.
    - maps block `$3F` at slot 7 and enters `krn`.
 3. **`krn`** sizes RAM to 2 MB, validates `Boot` and itself, and calls `F$Boot`.
 4. **`Boot`** reads LSN 0 and the bootfile through map slot 1, pointed at the ROM page.
-5. **`SysGo`** prints the banner and runs `startup`, then `Shell i=/term`.
+5. **`SysGo`** prints the banner and runs `startup`, then `Shell i=/term`. The shell is
+   not in the bootfile: `SysGo` forks it from `/DD/CMDS`, and the 7 K it would take of the
+   64 K system map is left for drivers attached after boot (`docs/video-console.md`).
 
 The console shows every stage: `R` (loader), `K` (kernel), the module names, `t` `b` `0`,
 a dot per bootfile sector, then the module directory and the banner.
@@ -149,6 +153,13 @@ The emulator shows it too. Running `boot.asm` there needed the MMU's VRAM window
 | **FIRQ** | unused, and it crashes | the audio card's timer and buffers | `ArmFIRQ`: its own stack in slot 7, the system map, `jsr [D.FIRQ]` |
 | **Tick** | GIME VSYNC, 60 Hz | video card VBL, `VSTAT` b0, acknowledged by any write: **70.086 Hz or 59.940 Hz**, as `VMODE0` says | `clock.asm` waits out `SPANBUSY` before acknowledging (`graphics.md` §19 item 39). Each tick adds its own length, in 2^-20 s, to a 24-bit accumulator, so neither rate needs to be an integer and a `VMODE` change needs no call into the clock (`defs/arm6309.d`). `vmodetst` checks both families |
 | **RAM** | up to 2 MB, blocks `$00`–`$FF`, sized by a probe | up to 16 MB, on a 16-bit map entry | **8 MB**, blocks `$000`–`$3FF`, from SIMM socket 0 up. A block number is 16 bits end to end: every kernel site that points a map slot at a block writes both bytes (`RAM.Hi` plus the high byte), and none of them touches the stack while a slot is moved. The block map is 1,024 bytes at `$E000` in the kernel's block. The size comes from `boot.asm`'s own SIMM descriptor, not a probe. ⚠ 1,024 blocks because `F$GBlkMp`'s callers pass a 1,024-byte buffer; the rest of a full bank needs another call. `memtst` checks every free block is distinct memory |
+
+⛔ **`clock.asm`'s `DoPoll` returned carry set for every device IRQ.** It ends with `TSTB`,
+which leaves carry alone, and carry there is `D.Poll`'s "no more devices" from the last call.
+The kernel took every non-tick IRQ as unclaimed and returned to the interrupted code with
+`/IRQ` masked, until something unmasked it: 3 ms under the shell, measured by the video
+console's `run-vid.sh`. The arm6309 build sets carry explicitly. ⚠ Pico-Thing's build shares
+the code and is left as `main` has it.
 
 ## ⚠ What P0 does not do yet
 

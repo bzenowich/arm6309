@@ -154,11 +154,12 @@ of screen memory. `CoArm` needs no screen mapping: `VDATA` is in the I/O page, v
 every map. The renderer runs as ordinary system-state driver code, which removes
 `D.Flip0`/`D.Flip1`, `G.GrfStk` and `G.GfBusy`.
 
-⚠ **The price is system address space.** The CoCo keeps GrfDrv out of the bootfile for that
-reason, and Wildbits caps its L2 bootfile at 32,256 bytes. Fonts, GP buffers and backing
-stores live in `F$AllRAM` blocks mapped only while in use. **If `CoArm` outgrows the system
-map, fall back to GrfDrv's arrangement** (its own task, entered through a flip), which
-changes nothing above it. Measure the size at the end of phase 2 and decide then.
+⭐ **Decided 2026-09-14, in P1, on a measurement: CoArm runs in software task 1, GrfDrv's
+arrangement.** With P1's 4 K CoArm in the bootfile the system map had 15 K free after boot,
+and `load /dd/modules/firqtst` failed with `E$MFull`. ArmIO loads CoArm with `F$NMLoad` and
+enters it through `D.Flip1`; `VG` lives in block 0, which both maps see.
+`software/nitros9/docs/video-console.md` has the mechanism. VidCore is therefore a source
+file (`vidcore.asm` in CoArm, `vidsvc.asm` in ArmIO), not a subroutine module.
 
 ### 3.3 Five span operations, two back-ends
 
@@ -348,8 +349,14 @@ exposes it (§5).
 
 ## 5. API draft
 
-Numbers are **proposals** and need to be frozen in `defs/arm6309.d` before any program uses
-them. Existing CoWin codes keep their meaning.
+Numbers were proposals; **P3 froze the ones it built** (2026-09-14): the status calls in
+`defs/arm6309.d`, their tables in `defs/armvid.d`, the escapes in `coarm.asm`'s table.
+`software/nitros9/docs/video-console.md` is the reference, and says where they differ from
+this draft: `Poly`/`PolyPat` take a left and a right chain (`gui.asm`'s format), `PatDef` also
+selects the pattern, `SS.Raster` takes one table of either kind, `SS.Batch` is records, and
+tile screens are `$1C`/`$1D` with `SS.TileLd` taking a bank. Not built: `SS.VInfo`,
+`SS.Pal565`, `SS.VRead`, `SS.VWrite`, `SS.Scroll`, `SS.Flip`, `SS.LineSig`. Existing CoWin codes
+keep their meaning.
 
 ### 5.1 Screen types (`DWSet` STY)
 
@@ -518,9 +525,9 @@ windows at `$FE00`–`$FEFF`. **Every base address comes from a descriptor from 
 | Phase | Work | Closed by |
 |---|---|---|
 | **P0** | X1–X7; boot NitrOS-9 to a serial shell on the emulator. ⭐ **Both halves landed 2026-09-14**: `software/nitros9/run-emu.sh` (11 claims) and `machine_tb +scenario=nitros9` (12 claims, from reset on the RTL). ⭐ **P0 closed 2026-09-14**: X1-X7 landed | `emu` reaches `Shell` and runs `dir` from the ROM disk; the same on `machine_tb` as a new scenario |
-| **P1** | `VidCore` (V1–V12 and the VBL service); fast-text `/Term` on cell mode; `KbdArm`; CoWin control codes `$01`–`$0D`, `$1F` | a scripted client's output: emulator frames vs a Python model of the expected text screen; `VidCore` IRQ-masked time measured |
-| **P2** | `CoArm` bitmap screens and windows: `DWSet`/`OWSet`/`Select`, span-mask text, cell shadow, `Bar`/`Box`/`Line`/`Circle`/`Ellipse`/`Arc`/`FFill`, GP buffers, `Get`/`PutBlk`, fonts, palettes, backing store and screen switch, `MseArm` + `GCSet` pointer | `show` (§7) re-run through the driver, frames judged by `checkdemo.py`; decide §3.2's task question on measured size |
-| **P3** | Extensions: `PatBar`, `PutMask`, `Icon`, `Poly`, `Image`, `AnsiSw`; `SS.Raster`; `SS.Batch`/`FrmSig`/`FrmWait`; `SS.Excl` + `libvid`; tile screens | raster and wave checkpoints at every phase (`show.raster_colours`); overworld frames vs `mkgame.render()`, and the flip budget (≤2 % into active video, as `checkdemo.py` asserts today) |
+| **P1** | `VidCore` (V1–V12 and the VBL service); fast-text `/Term` on cell mode; `KbdArm`; CoWin control codes `$01`–`$0D`, `$1F`. ⭐ **P1 closed 2026-09-14**: `software/nitros9/run-vid.sh` (14 claims) and `software/nitros9/docs/video-console.md`. The console is `/W1`–`/W2`, not `/Term`, which stays the UART's | a scripted client's output: emulator frames vs a Python model of the expected text screen; `VidCore` IRQ-masked time measured |
+| **P2** | `CoArm` bitmap screens and windows: `DWSet`/`OWSet`/`Select`, span-mask text, cell shadow, `Bar`/`Box`/`Line`/`Circle`/`Ellipse`/`Arc`/`FFill`, GP buffers, `Get`/`PutBlk`, fonts, palettes, backing store and screen switch, `MseArm` + `GCSet` pointer. ⭐ **P2 closed 2026-09-14 on scripted clients**: `run-vid.sh`'s `p2` and `mouse` runs (13 more claims) against `tools/vgmodel.py`, pixel-exact. The mouse is `KbdArm`'s second port, and the pointer moves from the kernel's idle loop (a move is 15.6 ms). ⚠ **`show` through the driver moves to P5**, with the applications it is made of: it needs P3's extensions and `SS.Raster`, and a player of `script.bin`. §3.2 was decided in P1 | `show` (§7) re-run through the driver, frames judged by `checkdemo.py`; decide §3.2's task question on measured size |
+| **P3** | Extensions: `PatBar`, `PutMask`, `Icon`, `Poly`, `Image`, `AnsiSw`; `SS.Raster`; `SS.Batch`/`FrmSig`/`FrmWait`; `SS.Excl` + `libvid`; tile screens. ⭐ **P3 closed 2026-09-14**: `run-vid.sh`'s `p3`, `rast`, `wave` and `game` runs (27 more claims, 54 in all). The raster bars and the warp are `show.raster_colours` and `gui.asm`'s arithmetic at the phase each frame's list held, every frame; the overworld (`overworld`, `demo.asm`'s loop on `SS.Excl`, `SS.TileLd`, `SS.MapWr`, `libvid` and `SS.Batch`) is `mkgame.render()` in all 1,519 frames, with 94% one-record camera steps and no flip into the picture. ⚠ A list costs 1.66 ms of IRQ a frame (§3.4.1 (a); `docs/nitros9-hardware-improvements.md` H14). `libvid` has waits, puts, gets, fills, pokes and rectangles, not text, icons, polygons or images. CoArm is 15,342 bytes of task 1's 16 K code window | raster and wave checkpoints at every phase (`show.raster_colours`); overworld frames vs `mkgame.render()`, and the flip budget (≤2 % into active video, as `checkdemo.py` asserts today) |
 | **P4** *(parallel with P1–P3 once X5 and X7 land)* | `AudDrv`, bell/`SS.Tone`, `modplay`, `sfx` | `modplay`'s committed register stream vs `refplayer`'s trace, **byte for byte and tick for tick**; `dacwav` render A/B'd against libopenmpt with the `check:modplay` gate |
 | **P5** | The six applications of §7 | each scene's checkpoints, in the emulator; one `run-demo.sh`-style machine run at the end |
 | **P6** | CoCo screen-type mapping (§5.1), a BASIC09 subroutine module (Wildbits' `wild.asm` is the pattern), GFX2 | stock `display`-driven window scripts render |

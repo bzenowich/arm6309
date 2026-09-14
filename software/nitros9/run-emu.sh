@@ -63,7 +63,8 @@ claim "SysGo printed the banner, naming this machine"        has '^arm6309$'
 claim "the shell prompted on /Term"                          has '{Term|02}/DD:'
 claim "dir lists the ROM disk's root"                        has 'OS9Boot *CMDS *MODULES *SYS *startup'
 claim "dir /dd/cmds lists commands on the ROM disk"          has 'mfree *mmap *more'
-claim "mfree reports 8 MB of RAM mapped: four SIMM sockets, capped at F\$GBlkMp's 1024 blocks" has 'Total: *3F6 *8112k'
+# (free blocks: the bootfile, system memory and the shell, loaded from /DD/CMDS, have the rest)
+claim "mfree reports 8 MB of RAM mapped: four SIMM sockets, capped at F\$GBlkMp's 1024 blocks" has 'Total: *3F5 *8104k'
 claim "procs shows the shell running procs"                  has 'Procs *$'
 claim "the run ended at the last command, not by the clock"  grep -q 'SERIAL_STOP seen' "$OUT/emu.log"
 claim "the CPU never ran through empty RAM (WILD)"           sh -c "! grep -q '^WILD' '$OUT/emu.log'"
@@ -98,7 +99,7 @@ printf 'mfree\recho DONE-arm6309\r' > "$OUT/typed1.txt"
 mkdir -p "$OUT/one"
 (cd "$OUT/one" && EMU_SIMMS=1 SERIAL_IN=../typed1.txt SERIAL_AT=4 SERIAL_STOP="$STOP" ../emu "$ROM" . 30 > /dev/null 2> emu.log) || true
 tr -d '\000' < "$OUT/one/serial.out" | tr -d '\r' > "$OUT/one/console.txt"
-claim "with one SIMM socket, mfree reports 4 MB: the size comes from the boot ROM's descriptor" grep -q 'Total: *1F6 *4016k' "$OUT/one/console.txt"
+claim "with one SIMM socket, mfree reports 4 MB: the size comes from the boot ROM's descriptor" grep -q 'Total: *1F5 *4008k' "$OUT/one/console.txt"
 
 # A reboot: F$Debug 255 re-enters boot.asm at its reset vector with the map
 # live; the POST runs again (the emulator reports its progress codes) and

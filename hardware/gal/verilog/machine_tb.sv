@@ -765,7 +765,7 @@ module machine_tb;
       typed = "mfree\r";
       for (int i = 0; i < typed.len(); i++) m.ser.rx_push(typed[i]);
     end
-    wait_text("Total:  3F6  8112k", at, 3 * SEC,
+    wait_text("Total:  3F5  8104k", at, 3 * SEC,
               "mfree reports 8 MB: the loader sized RAM from boot.asm's own SIMM descriptor, and NitrOS-9's 16-bit blocks map past the first 2 MB", at);
     if (at < 0) return;
     wait_text("{Term|02}/DD:", at, 2 * SEC, "and the shell prompted a third time", at);
