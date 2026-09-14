@@ -25,8 +25,10 @@
  *     effect lands: a MOVE after n WAITs from a GO inside line 0 shows on line
  *     n, and a MOVE before the first WAIT on line 1. Resuming at each line's
  *     start and rendering the line after is exactly that;
- *   - the VBL interrupt twelve lines after VBLANK's rise, which is when demo_tb
- *     saw /IRQ reach the CPU, pending until VSTAT is written;
+ *   - the VBL interrupt at VSYNC's leading edge - twelve lines after VBLANK's
+ *     rise in the 449-line family, which is when demo_tb saw /IRQ reach the
+ *     CPU, and ten in the 525-line family (sync.timing.ts) - pending until
+ *     VSTAT is written;
  *   - graphics.md 10.3.3's rule, enforced: a CPU write to the card's
  *     registers while a list runs is reported, and fails the run - and so is
  *     one under a span (7.4: the span's colour and column reload are read from
@@ -157,7 +159,7 @@ static void wstep(void)
 
 static void span_end(void)
 {
-    if (m->wadv == 1 && !m->lrun) {
+    if (m->wadv != 0 && !m->lrun) {     /* 01, 10 and 11 all advance a row: vctrl.v's WROWADV */
         uint32_t row = ((m->wptr >> 10) + 1) & 511;
         uint32_t col = (((uint32_t)m->wp1 & 3) << 8) | m->wp0;
         m->wptr = (row << 10) | col;
@@ -530,7 +532,10 @@ static void raster(void)
         m->line++;
         int act = active_lines();
         if (m->line == act) {                 /* VBLANK rises */
-            m->irq_line_due = act + 12;       /* ... and /IRQ follows, as demo_tb measured */
+            /* ... and /IRQ follows at VSYNC's leading edge: after the front porch,
+             * which is 12 lines in the 449-line family and 10 in the 525-line one
+             * (hardware/gal/sync.timing.ts). demo_tb measured the 12. */
+            m->irq_line_due = act + ((m->ctrl & 1) ? 10 : 12);
             if (m->frame_active) emit_frame();
             m->frame_active = 0;
         }
