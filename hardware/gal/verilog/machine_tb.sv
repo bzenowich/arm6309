@@ -719,7 +719,7 @@ module machine_tb;
       typed = "dir\r";
       for (int i = 0; i < typed.len(); i++) m.ser.rx_push(typed[i]);
     end
-    wait_text("OS9Boot         CMDS            SYS             startup", prompt1, 3 * SEC,
+    wait_text("OS9Boot         CMDS            MODULES         SYS             startup", prompt1, 3 * SEC,
               "dir, typed at the UART, lists the ROM disk's root", at);
     if (at < 0) return;
     wait_text("{Term|02}/DD:", at, 2 * SEC, "and the shell prompted again", at);

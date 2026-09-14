@@ -183,7 +183,7 @@ change to the video card, the mainboard, or `emit.ts` itself:
 | the mainboard, `u9`/`u10` | `npm run check:sim:board` |
 | the video card, or `verilog/emit.ts` | `npm run check:video` (everything) |
 | anything the CPU touches — the map, the boot path, `boot.asm`, `machine.v` | ⭐ **`npm run check:machine`** |
-| the NitrOS-9 port, `tl16c550.v`, or anything NitrOS-9 boots through (the vectors, the map, the tick, the UART) | `sh software/nitros9/run-emu.sh` (~15 s) first, then ⭐ **`SCENARIOS=nitros9 npm run check:machine`** |
+| the NitrOS-9 port, `tl16c550.v`, or anything NitrOS-9 boots through (the vectors, the map, the tick, the UART) | `sh software/nitros9/run-emu.sh` (~20 s) first, then ⭐ **`SCENARIOS=nitros9 npm run check:machine`** |
 | the audio card's *behaviour* | ⭐ **`npm run check:oracle`** as well — this card against an independent Paula (`gal/verilog/oracle/`). It is what found `audio.md` §16 items 36 and 39, and `audio_tb` could not |
 
 Or one at a time, from `hardware/gal/verilog/`:

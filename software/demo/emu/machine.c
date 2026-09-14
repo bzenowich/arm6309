@@ -31,7 +31,9 @@
  *     registers while a list runs is reported, and fails the run - and so is
  *     one under a span (7.4: the span's colour and column reload are read from
  *     the register file);
- *   - the audio card's tempo timer on /FIRQ, and its register stream in
+ *   - the audio card's tempo timer on /FIRQ - AINTENA and AINTREQ's set/clear,
+ *     /FIRQ as their AND, ACTRL b6 starting and stopping it, and AINTREQ and
+ *     ASTAT b4 read back - and its register stream in
  *     demo_tb's card.trace format, so it can be diffed against refplayer;
  *   - the map's two tasks: TASK is bit 0 of any write to $FFB0-$FFBF
  *     (machine.md 3: U3's CTRLCP does not see A0), and the entry for a
@@ -88,6 +90,7 @@ typedef struct {
     /* audio */
     uint16_t timer;
     int timer_on;
+    uint8_t aintena, aintreq, actrl;   /* audio.md 9.2: set/clear on b7, pending, ACTRL's shadow */
     uint64_t next_fire;          /* cycles */
     int firq;
     int trace_tick, music_marked;
@@ -274,12 +277,16 @@ static void audio_write(uint8_t r, uint8_t v)
     case 0x0B: m->timer = (uint16_t)((m->timer & 0xFF) | (v << 8)); break;
     case 0x0C: m->timer = (uint16_t)((m->timer & 0xFF00) | v); break;
     case 0x05:
+        m->actrl = v;
         if ((v & 0x40) && !m->timer_on) {
             m->timer_on = 1;
             m->next_fire = m->cpu.cycles + (5ULL * m->timer * 2097917ULL) / 3546895ULL;
+        } else if (!(v & 0x40)) {
+            m->timer_on = 0;                  /* audio.md 8.2: b6 = 0 is a real stop */
         }
         break;
-    case 0x04: if (!(v & 0x80) && (v & 0x10)) m->firq = 0; break;
+    case 0x03: if (v & 0x80) m->aintena |= v & 0x3F; else m->aintena &= (uint8_t)~(v & 0x3F); break;
+    case 0x04: if (v & 0x80) m->aintreq |= v & 0x3F; else m->aintreq &= (uint8_t)~(v & 0x3F); break;
     default: break;
     }
 }
@@ -399,6 +406,8 @@ static uint8_t rd(void *ctx, uint16_t a)
     if (a >= 0xFF00) {
         if (a >= 0xFF60 && a <= 0xFF7F) return video_read((uint8_t)(a - 0xFF60));
         if (a >= 0xFF38 && a <= 0xFF3F) return uart_read((uint8_t)(a - 0xFF38));
+        if (a == 0xFF44) return m->aintreq;                      /* AINTREQ: pending */
+        if (a == 0xFF4A) return (m->actrl & 0x40) ? 0x10 : 0x00; /* ASTAT: b4 = ACTRL b6, never busy */
         if (a >= 0xFF90 && a <= 0xFF9F) return m->maphi[a & 15];
         if (a >= 0xFFA0 && a <= 0xFFAF) return m->maplo[a & 15];
         return 0x00;                      /* ASTAT never busy */
@@ -593,6 +602,7 @@ int main(int argc, char **argv)
     uint64_t next_report = 0;
     while (m->dots < end_dots) {
         m->cpu.irq = (m->irq_pending && (m->ctrl & 0x40)) || uart_irq();
+        m->firq = (m->aintreq & m->aintena & 0x3F) != 0;   /* /FIRQ = OR(REQ & ENA), audio.cpld.ts */
         m->cpu.firq = m->firq;
         {   /* the last 256 PCs, for RINGDUMP; WILD stops at 16 NEG <$00s in a row, a CPU running through empty RAM */
             static uint16_t ring[256]; static unsigned ri, zeros;
@@ -611,7 +621,7 @@ int main(int argc, char **argv)
         int e = cpu6809_step(&m->cpu);
         m->dots = m->cpu.cycles * DOTS_PER_E;
         if (m->timer_on && m->cpu.cycles >= m->next_fire) {
-            m->firq = 1;
+            m->aintreq |= 0x10;
             m->next_fire += (5ULL * m->timer * 2097917ULL) / 3546895ULL;
         }
         raster();
