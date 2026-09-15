@@ -57,6 +57,15 @@
  *     which says what it models. PS2_KBD, PS2_MOUSE and PS2_AT script them,
  *     and PS2_DEBUG traces the devices' state.
  *
+ * For a session scripted like a person at the terminal (software/nitros9/
+ * video/): SERIAL_GATE=str holds each line of SERIAL_IN until str has been
+ * transmitted since the line before it (the shell's prompt), SERIAL_TYPE=ms
+ * spaces the characters, SERIAL_THINK=ms waits after the gate opens, and a
+ * $01 byte in SERIAL_IN is a one-second pause that is not sent.
+ * SERIAL_TIMES=file writes "ps hex" for every transmitted byte.
+ * PS2_KBD_GATE and PS2_MOUSE_GATE hold that device's script until the string
+ * has been transmitted, and "w<ms>" in a PS/2 script is a pause.
+ *
  * What it records is demo_tb's frames.bin, so tools/checkdemo.py and
  * tools/mkvideo.py read either. MARKS=addr moves the words each frame records
  * (checkpoint, raster phase, camera and hero records, missed flips) to five
@@ -73,6 +82,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* a string the serial port must transmit before something may proceed */
+typedef struct { const char *s; size_t n, match; int open; } gate_t;
+static void gate_init(gate_t *g, const char *env)
+{
+    g->s = getenv(env); g->n = g->s ? strlen(g->s) : 0; g->match = 0; g->open = g->n == 0;
+}
+static void gate_feed(gate_t *g, uint8_t v)
+{
+    if (g->open || !v) return;
+    if ((char)v == g->s[g->match]) { if (++g->match == g->n) { g->open = 1; g->match = 0; } }
+    else g->match = ((char)v == g->s[0]) ? 1 : 0;
+}
+static gate_t ser_gate, kbd_gate, mouse_gate;
 #include "cpu6809.h"
 #include "card.h"                   /* audio/refplayer: the audio card, register level */
 
@@ -125,6 +148,8 @@ typedef struct {
     uint64_t ser_at;             /* cycles */
     const char *ser_stop; size_t ser_stop_len, ser_match;
     int stop;
+    FILE *ser_times;
+    uint64_t ser_type, ser_think; /* cycles */
 
     /* PS/2 - io/ps2/docs/ps2.md 8; the ports and devices are ps2_* below */
     uint8_t ioctrl;
@@ -425,6 +450,12 @@ static void uart_write(uint8_t r, uint8_t v)
         if (m->tx_n < 17) m->tx_n++;
         m->thre_int = 0;
         fputc(v, m->ser_out);
+        if (m->ser_times) fprintf(m->ser_times, "%llu %02X\n", (unsigned long long)(m->dots * DOT_PS), v);
+        {
+            int was = ser_gate.open;
+            gate_feed(&ser_gate, v); gate_feed(&kbd_gate, v); gate_feed(&mouse_gate, v);
+            if (!was && ser_gate.open && m->ser_at < m->cpu.cycles + m->ser_think) m->ser_at = m->cpu.cycles + m->ser_think;
+        }
         fputc(v, stdout);
         fflush(stdout);
         if (m->ser_stop && v) {         /* NULs are padding, not text: they never break a match */
@@ -457,13 +488,21 @@ static void uart_step(void)
         m->tx_next += uart_bit_cycles();
         if (m->tx_n == 0) m->thre_int = 1;
     }
-    if (m->ser_in && m->ser_in_pos < m->ser_in_n && m->cpu.cycles >= m->ser_at && m->cpu.cycles >= m->rx_next) {
+    if (m->ser_in && m->ser_in_pos < m->ser_in_n && ser_gate.open && m->cpu.cycles >= m->ser_at && m->cpu.cycles >= m->rx_next) {
+        uint8_t c = m->ser_in[m->ser_in_pos];
+        if (c == 0x01) {                /* a pause, not sent */
+            m->ser_in_pos++;
+            m->ser_at = m->cpu.cycles + 2097917;
+            return;
+        }
         if (m->rx_n < 16) {
-            m->rx[(m->rx_head + m->rx_n) & 15] = m->ser_in[m->ser_in_pos++];
+            m->rx[(m->rx_head + m->rx_n) & 15] = c;
+            m->ser_in_pos++;
             m->rx_n++;
+            if (c == '\r' && ser_gate.n) ser_gate.open = 0;
         }
         m->rx_last = m->cpu.cycles;
-        m->rx_next = m->cpu.cycles + uart_bit_cycles();
+        m->rx_next = m->cpu.cycles + (m->ser_type > uart_bit_cycles() ? m->ser_type : uart_bit_cycles());
     }
 }
 
@@ -559,8 +598,15 @@ static void ps2_step(int p)
     int host_clk = (m->ioctrl >> (p * 2)) & 1, host_dat = (m->ioctrl >> (p * 2 + 1)) & 1;
 
     /* scripted bytes, one per 10 ms, once the device would send them */
-    if (d->script && *d->script && now >= d->script_at && now >= d->script_next && d->enabled && d->f4_seen && d->out_n == 0) {
+    if (d->script && *d->script && (d->mouse ? mouse_gate.open : kbd_gate.open)
+        && now >= d->script_at && now >= d->script_next && d->enabled && d->f4_seen && d->out_n == 0) {
         unsigned v; int n;
+        while (*d->script == ' ') d->script++;
+        if (*d->script == 'w' && sscanf(d->script + 1, "%u%n", &v, &n) == 1) {   /* w<ms>: a pause */
+            d->script += n + 1;
+            d->script_next = now + (uint64_t)v * 2098;
+            return;
+        }
         if (sscanf(d->script, " %x%n", &v, &n) == 1) { ps2_send(d, (uint8_t)v); d->script += n; }
         else d->script = NULL;
         d->script_next = now + 20979;
@@ -976,6 +1022,14 @@ int main(int argc, char **argv)
         ps2[p].script = getenv(p ? "PS2_MOUSE" : "PS2_KBD");
         ps2[p].script_at = (uint64_t)(atof(getenv("PS2_AT") ? getenv("PS2_AT") : "0") * 2097917.0);
     }
+    gate_init(&ser_gate, "SERIAL_GATE");
+    gate_init(&kbd_gate, "PS2_KBD_GATE");
+    gate_init(&mouse_gate, "PS2_MOUSE_GATE");
+    m->ser_type = (uint64_t)(atof(getenv("SERIAL_TYPE") ? getenv("SERIAL_TYPE") : "0") * 2097.917);
+    m->ser_think = (uint64_t)(atof(getenv("SERIAL_THINK") ? getenv("SERIAL_THINK") : "0") * 2097.917);
+    if (getenv("SERIAL_TIMES") && !(m->ser_times = fopen(getenv("SERIAL_TIMES"), "w"))) {
+        fprintf(stderr, "FAIL  cannot write SERIAL_TIMES %s\n", getenv("SERIAL_TIMES")); return 1;
+    }
     if (getenv("SERIAL_STOP") && *getenv("SERIAL_STOP")) {
         m->ser_stop = getenv("SERIAL_STOP");
         m->ser_stop_len = strlen(m->ser_stop);
@@ -1140,6 +1194,7 @@ int main(int argc, char **argv)
     fclose(m->trace);
     fclose(m->times);
     fclose(m->ser_out);
+    if (m->ser_times) fclose(m->ser_times);
     snprintf(path, sizeof path, "%s/sync.txt", argv[2]);
     f = fopen(path, "w");
     fprintf(f, "cc0_ps 0\nend_ps %llu\n", (unsigned long long)(m->dots * DOT_PS));
