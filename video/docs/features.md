@@ -75,10 +75,11 @@ it is *per pixel* — there is no cell attribute, no colour clash, no per-scanli
 An RGB332 identity palette is loaded at boot, so software that wants to treat the index
 *as* a colour can (`graphics.md` §9).
 
-⚠ **Palette writes during active display snow**, and the card has no mechanism to
-prevent it — the LUT address bus is shared by tri-state turnaround between the scanner
-and the CPU. Write the palette during blanking. This is a software rule and
-`graphics.md` §13.1 states it as one.
+**A CPU palette write never snows**: the LUT address bus is shared by tri-state
+turnaround between the scanner and the write path, so the card holds a `PDATH` commit
+to the next line's horizontal blank (at once in vertical blank) and shows it pending on
+`VSTAT` b1. The rule left is one bit — do not write the palette while b1 is set —
+and `graphics.md` §13.1 states it.
 
 **512 KB of VRAM against a 128,000-byte screen is four full buffers.** Double
 buffering, triple buffering and off-screen composition areas are free, and the flip is

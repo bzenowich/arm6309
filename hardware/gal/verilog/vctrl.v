@@ -90,6 +90,7 @@ module vctrl (
     output wire CELL,
     output wire IRQEN,
     output wire DISPEN,
+    output wire FRAMEEND,
     output wire M0,
     output wire HPOL,
     output wire TILEMODE,
@@ -174,6 +175,7 @@ module vctrl (
   reg  r_CELL;
   reg  r_IRQEN;
   reg  r_DISPEN;
+  reg  r_M0;
   reg  r_WPQ;
   reg  r_BD0;
   reg  r_BD1;
@@ -226,6 +228,7 @@ module vctrl (
   assign CELL = r_CELL;
   assign IRQEN = r_IRQEN;
   assign DISPEN = r_DISPEN;
+  assign M0 = r_M0;
   assign WPQ = r_WPQ;
   assign BD0 = r_BD0;
   assign BD1 = r_BD1;
@@ -354,8 +357,8 @@ module vctrl (
   assign WAIT =
          1'b0;
   // buried
-  assign M0 =
-         (VMODE0);
+  assign FRAMEEND =
+         (SLOTTICK & H7 & H6 & H2 & H1 & H0 & VTC);
   // buried
   assign HPOL =
          (VMODE0)
@@ -516,6 +519,7 @@ module vctrl (
       r_CELL <= 1'b0;
       r_IRQEN <= 1'b0;
       r_DISPEN <= 1'b0;
+      r_M0 <= 1'b0;
       r_WPQ <= 1'b0;
       r_BD0 <= 1'b0;
       r_BD1 <= 1'b0;
@@ -761,6 +765,9 @@ module vctrl (
       r_DISPEN <=
          (WCTRL & D7)
          | (DISPEN & ~WCTRL);
+      r_M0 <=
+         (VMODE0 & FRAMEEND)
+         | (M0 & ~FRAMEEND);
       r_WPQ <=
          (VRAMSEL & ~RW & E)
          | (VDSEL & ~RW & E);

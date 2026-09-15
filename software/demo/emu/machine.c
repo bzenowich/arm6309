@@ -135,8 +135,14 @@ typedef struct {
     uint16_t *cur, *prv;
     int frame_n, prv_w, prv_h, have_prev;
     uint16_t ck0, ph0, lrun1;
+    uint8_t m0;                         /* VMODE0 as the last frame ended: vctrl's M0 (H8) */
+    uint8_t lgo;                        /* a GO written in vertical blank, held to its end: vsup's LGO (H14) */
+    uint8_t ppend, in_list;             /* a CPU palette commit posted to the next HLOAD: vsup's PPEND (H7) */
+    uint16_t ppval;
+    long pal_violations;
     uint16_t mk_ck, mk_ph, mk_camk, mk_herok, mk_missed;   /* where the frame words are read (MARKS) */
     FILE *marks;                        /* MARKS: marks.txt, as demo_tb writes it */
+    int mk_latched; uint8_t mk_hi, mk_lo; /* MARKS: the block the words live in, as mapped 5 s in */
     uint64_t frame_t;
     int frame_active;
 } M;
@@ -157,6 +163,18 @@ static unsigned entry(uint16_t la) { return ((unsigned)m->task << 3) | (la >> 13
 
 static uint16_t ram16(uint16_t la)
 {
+    /* MARKS's words are read from the block that held them 5 machine seconds in:
+     * a kernel moving a map slot for a moment must not make a frame's words garbage */
+    if (m->marks && la >= m->mk_ck && la < (uint16_t)(m->mk_ck + 10)) {
+        if (!m->mk_latched && m->dots * DOT_PS >= 5000000000000ULL) {
+            m->mk_hi = m->maphi[la >> 13]; m->mk_lo = m->maplo[la >> 13]; m->mk_latched = 1;
+        }
+        if (m->mk_latched) {
+            uint8_t *q = rampage(m->mk_hi, m->mk_lo);
+            uint16_t o = la & 0x1FFF;
+            return (uint16_t)((q[o] << 8) | q[(o + 1) & 0x1FFF]);
+        }
+    }
     uint8_t *p = rampage(m->maphi[la >> 13], m->maplo[la >> 13]);   /* task 0: the demo's */
     uint16_t o = la & 0x1FFF;
     return (uint16_t)((p[o] << 8) | p[(o + 1) & 0x1FFF]);
@@ -220,6 +238,8 @@ static uint8_t vram_read(void)
 
 static void list_run(void);
 
+static int in_vblank(void);
+
 static void video_write(uint8_t r, uint8_t v)
 {
     if (r != 0x15) m->regfile[r & 31] = v;
@@ -235,12 +255,25 @@ static void video_write(uint8_t r, uint8_t v)
     case 0x08: m->wp0 = v; m->wptr = (m->wptr & ~(uint32_t)0xFF) | v; break;
     case 0x09: m->wp1 = v; m->wptr = (m->wptr & ~(uint32_t)0xFF00) | ((uint32_t)v << 8); break;
     case 0x0A: m->wptr = (m->wptr & 0xFFFF) | ((uint32_t)(v & 7) << 16); break;
-    case 0x0E:
-        if (v & 1) { m->lrun = 1; m->lwait = 0; list_run(); }
+    case 0x0E:                          /* GO: at once, or armed to the blank's end (graphics.md 10.3.1) */
+        if (v & 1) {
+            if (in_vblank()) m->lgo = 1;
+            else { m->lrun = 1; m->lwait = 0; list_run(); }
+        }
         break;
-    case 0x10: m->pidx = v; break;
-    case 0x11: m->pdatl = v; break;
-    case 0x12: m->pal[m->pidx++] = (uint16_t)((v << 8) | m->pdatl); break;
+    case 0x10: case 0x11: case 0x12:
+        /* graphics.md 13.1: a CPU's PDATH write posts the commit to the next
+         * HLOAD, and VSTAT b1 holds until it is done; in vertical blanking, and
+         * for a list's MOVE, it commits at once. A palette write while one is
+         * posted breaks the rule. */
+        if (m->ppend && !m->in_list && ++m->pal_violations <= 8)
+            fprintf(stderr, "FAIL  %.3f s: the CPU wrote $%04X := $%02X while a palette commit was posted (PC $%04X)\n",
+                    (double)m->dots * DOT_PS / 1e12, 0xFF60 + r, v, m->cpu.pc);
+        if (r == 0x10) m->pidx = v;
+        else if (r == 0x11) m->pdatl = v;
+        else if (m->in_list || in_vblank()) m->pal[m->pidx++] = (uint16_t)((v << 8) | m->pdatl);
+        else { m->ppend = 1; m->ppval = (uint16_t)((v << 8) | m->pdatl); }
+        break;
     case 0x13: m->irq_pending = 0; break;
     case 0x14: m->wadv = v & 3; break;
     case 0x15: vram_write(v); break;
@@ -252,7 +285,7 @@ static void video_write(uint8_t r, uint8_t v)
 
 
 static int active_lines(void);
-static int in_vblank(void);
+
 
 static uint8_t video_read(uint8_t r)
 {
@@ -260,7 +293,8 @@ static uint8_t video_read(uint8_t r)
     case 0x13: {
         uint64_t col = m->dots - m->line_start;
         return (uint8_t)((m->busy_until > m->dots ? 0x80 : 0) | (in_vblank() ? 0x40 : 0)
-                         | (col >= 640 ? 0x20 : 0) | (m->lrun ? 0x10 : 0) | (m->irq_pending ? 1 : 0));
+                         | (col >= 640 ? 0x20 : 0) | (m->lrun ? 0x10 : 0) | (m->ppend ? 0x02 : 0)
+                         | (m->irq_pending ? 1 : 0));
     }
     case 0x15: return vram_read();
     default: return m->regfile[r & 31];
@@ -279,8 +313,9 @@ static void list_run(void)
         } else {
             uint8_t v = m->vram[m->wptr]; wstep();
             uint8_t r = op & 0x1F;
-            if (r == 0x03 || r == 0x04 || r == 0x10 || r == 0x11 || r == 0x12)
-                video_write(r, v);
+            if (r == 0x03 || r == 0x04 || r == 0x10 || r == 0x11 || r == 0x12) {
+                m->in_list = 1; video_write(r, v); m->in_list = 0;
+            }
         }
     }
 }
@@ -622,7 +657,8 @@ static uint8_t ps2_read(uint8_t r)
     }
 }
 
-static int ps2_irq(void) { return (m->ioctrl & 0x40) && (m->kdr[0] || m->kdr[1]); }
+/* ps2.md 3.1: one enable per port, IOCTRL b6 for the keyboard and b7 for the mouse */
+static int ps2_irq(void) { return ((m->ioctrl & 0x40) && m->kdr[0]) || ((m->ioctrl & 0x80) && m->kdr[1]); }
 
 /* ------------------------------------------------------------------ masked time */
 /* MASKLOG=from: from that machine second on, every stretch with CC's I bit
@@ -698,9 +734,12 @@ static int mask_cmp(const void *a, const void *b)
  * named module (task 0's map), from arrival to the RTS that returns past it,
  * and report the longest, the mean and the count at exit. It is how
  * run-vid.sh measures the VBL service itself, not the kernel's IRQ path around
- * it. The module is found by name once it is in memory. */
+ * it. The module is found by name once it is in memory. It also reports each
+ * call's time outside the interrupts taken during it (entered at krn's
+ * $FEF4/$FEF7 stubs, left when the interrupted PC and S come back). */
 static struct { char name[16]; unsigned off; uint16_t addr; int resolved; int in; uint64_t t0; uint16_t s0, ret;
-                uint64_t max, total; long n; } ct;
+                uint64_t max, total; long n;
+                int intr; uint16_t int_pc, int_s; uint64_t int_t0, excl, netmax, nettotal; } ct;
 
 static void calltime_resolve(void)
 {
@@ -780,8 +819,10 @@ static void wr(void *ctx, uint16_t a, uint8_t v)
 }
 
 /* ------------------------------------------------------------------ video out */
-static int vlines(void) { return (m->ctrl & 1) ? 525 : 449; }
-static int active_lines(void) { return (m->ctrl & 1) ? 480 : 400; }
+/* The line-count family is vctrl's M0: VMODE0 taken where a frame ends, so a
+ * CTRL write mid-frame changes the family at the next frame (graphics.md 6.2) */
+static int vlines(void) { return m->m0 ? 525 : 449; }
+static int active_lines(void) { return m->m0 ? 480 : 400; }
 static int in_vblank(void) { return m->line >= active_lines(); }
 
 static void render_line(int y)
@@ -858,13 +899,14 @@ static void raster(void)
     while (m->dots >= m->line_start + DOTS_LINE) {
         m->line_start += DOTS_LINE;
         m->line++;
+        if (m->ppend) { m->pal[m->pidx++] = m->ppval; m->ppend = 0; }   /* the posted commit, in this line's HLOAD */
         int act = active_lines();
         if (m->line == act) {                 /* VBLANK rises */
             if (m->marks) fprintf(m->marks, "%llu V\n", (unsigned long long)(m->line_start * DOT_PS));
             /* ... and /IRQ follows at VSYNC's leading edge: after the front porch,
              * which is 12 lines in the 449-line family and 10 in the 525-line one
              * (hardware/gal/sync.timing.ts). demo_tb measured the 12. */
-            m->irq_line_due = act + ((m->ctrl & 1) ? 10 : 12);
+            m->irq_line_due = act + (m->m0 ? 10 : 12);
             if (m->frame_active) emit_frame();
             m->frame_active = 0;
         }
@@ -872,8 +914,12 @@ static void raster(void)
             if (m->ctrl & 0x40) m->irq_pending = 1;
             m->irq_line_due = -1;
         }
-        if (m->line >= vlines()) m->line = 0;
+        int armed = 0;
+        if (m->line >= vlines()) { m->line = 0; m->m0 = m->ctrl & 1; armed = m->lgo; }
         if (m->lrun && m->lwait) { m->lwait = 0; list_run(); }
+        /* after the WAIT release: an armed list starts inside line 0, as a GO
+         * written there would, and its first WAIT is line 1's (10.3.2) */
+        if (armed) { m->lgo = 0; m->lrun = 1; m->lwait = 0; list_run(); }
         if (m->line < act) {
             if (m->line == 0) m->frame_active = (m->ctrl & 0x80) != 0;
             if (m->frame_active) render_line(m->line);
@@ -1021,18 +1067,30 @@ int main(int argc, char **argv)
                 if (!ct.resolved && (tick++ & 0xFFFF) == 0) calltime_resolve();
                 if (ct.resolved && m->task == 0) {
                     if (!ct.in && m->cpu.pc == ct.addr) {
-                        ct.in = 1; ct.t0 = m->cpu.cycles; ct.s0 = m->cpu.s;
+                        ct.in = 1; ct.t0 = m->cpu.cycles; ct.s0 = m->cpu.s; ct.intr = 0; ct.excl = 0;
                         ct.ret = (uint16_t)((peek(m->cpu.s) << 8) | peek((uint16_t)(m->cpu.s + 1)));
                     } else if (ct.in && m->cpu.pc == ct.ret && m->cpu.s == (uint16_t)(ct.s0 + 2)) {
                         uint64_t d = m->cpu.cycles - ct.t0;
                         ct.in = 0; ct.n++; ct.total += d;
                         if (d > ct.max) ct.max = d;
+                        uint64_t net = d - ct.excl;
+                        ct.nettotal += net;
+                        if (net > ct.netmax) ct.netmax = net;
                     }
                 }
             }
         }
         uint8_t cc_was = m->cpu.cc;
+        uint16_t pc_was = m->cpu.pc, s_was = m->cpu.s;
+        uint64_t cyc_was = m->cpu.cycles;
         int e = cpu6809_step(&m->cpu);
+        if (ct.in) {                        /* CALLTIME: an interrupt inside the timed call */
+            if (!ct.intr && (m->cpu.pc == 0xFEF7 || m->cpu.pc == 0xFEF4) && (pc_was >> 8) != 0xFE) {
+                ct.intr = 1; ct.int_pc = pc_was; ct.int_s = s_was; ct.int_t0 = cyc_was;
+            } else if (ct.intr && m->cpu.pc == ct.int_pc && m->cpu.s == ct.int_s) {
+                ct.intr = 0; ct.excl += m->cpu.cycles - ct.int_t0;
+            }
+        }
         {
             static int init; static double from = -1; static uint64_t since; static uint16_t since_pc;
             if (!init) { init = 1; if (getenv("MASKLOG")) from = atof(getenv("MASKLOG")); }
@@ -1102,8 +1160,10 @@ int main(int argc, char **argv)
         m->task = t;
     }
     if (ct.name[0])
-        fprintf(stderr, "CALLTIME %s+$%04X: %ld calls, longest %.1f us, mean %.1f us%s\n", ct.name, ct.off, ct.n,
+        fprintf(stderr, "CALLTIME %s+$%04X: %ld calls, longest %.1f us, mean %.1f us; outside interrupts longest %.1f us, mean %.1f us%s\n",
+                ct.name, ct.off, ct.n,
                 (double)ct.max * 1e6 / 2097917.0, ct.n ? (double)ct.total / ct.n * 1e6 / 2097917.0 : 0.0,
+                (double)ct.netmax * 1e6 / 2097917.0, ct.n ? (double)ct.nettotal / ct.n * 1e6 / 2097917.0 : 0.0,
                 ct.resolved ? "" : " (the module never appeared)");
     if (nmasks) {
         qsort(masks, (size_t)nmasks, sizeof masks[0], mask_cmp);

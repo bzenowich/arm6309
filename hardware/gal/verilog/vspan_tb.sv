@@ -55,6 +55,14 @@ module vspan_tb;
     E = 0; RW = 1; IOSEL = 0; IOPAGE = 1; DIN = 0; PA = 0;
   endtask
 
+  // Until VBLANK is low, so a GO starts the engine at once rather than arming
+  // (graphics.md 10.3.1). Bounded by two frames of dots.
+  task automatic to_active();
+    for (int k = 0; k < 2 * 525 * 800 && VBLANK; k++) @(posedge DOTCLK);
+    #0;
+    if (VBLANK) begin fails++; $display("FAIL  to_active: VBLANK never fell"); end
+  endtask
+
   task automatic wreg(input int off, input logic [7:0] v);
     bus_cycle(21'h0060 + off[6:0], 1, 1, v);
   endtask
@@ -288,6 +296,7 @@ module vspan_tb;
     card.poke(8192 + 7, 8'hFF);
     wreg('h03, 8'h00); wreg('h04, 8'h00);   // HSCROLL = 0 before the list runs
     set_wptr(8192);
+    to_active();                // a GO in the blank is armed (below): these start at once
     wreg('h0e, 8'h01);          // BCTRL.GO
     /* ⚠ AND THE WAIT HAS TO BE ONE LINE, which nothing counted until
      * 2026-09-10. graphics.md 10.3 sells the list engine as per-scanline -
@@ -326,6 +335,7 @@ module vspan_tb;
     card.poke(8192 + 0, 8'h03); card.poke(8192 + 1, 8'h11);
     card.poke(8192 + 2, 8'hFF);
     set_wptr(8192);
+    to_active();
     wreg('h0e, 8'h01);
     for (i = 0; i < 40000; i++) begin
       @(posedge DOTCLK); #0;
@@ -334,6 +344,77 @@ module vspan_tb;
     ok(WPTR == 8192 + 3,
        $sformatf("⭐ 19 item 24: a list started with WADV = 10 still steps by one, not by the 1,024 stride (got %0d)", WPTR));
     wreg('h14, 8'h00);
+
+    /* ⭐ THE ARMED GO - docs/nitros9-hardware-improvements.md H14, 2026-09-14.
+     * WAIT n is line n only for a GO inside line 0 (10.3.2), and the VBL
+     * interrupt arrives a dozen lines into a 49-line blank, so a driver had to
+     * poll VBLANK with /IRQ masked to issue it: 1.66 ms a frame, measured. A GO
+     * written while VBLANK is high now holds in LGO and the engine starts on the
+     * dot after VBLANK falls. Written outside the blank it starts at once, as
+     * the list above did. */
+    begin
+      bit hit = 0, early = 0;
+      int after = -1;
+      for (i = 0; i < 800000 && !hit; i++) begin
+        @(posedge DOTCLK); #0; if (VBLANK) hit = 1;
+      end
+      ok(hit, "the armed GO: VBLANK was reached");
+      card.poke(8192 + 0, 8'h03); card.poke(8192 + 1, 8'h22);
+      card.poke(8192 + 2, 8'hFF);
+      wreg('h03, 8'h00); wreg('h04, 8'h00);
+      set_wptr(8192);
+      wreg('h0e, 8'h01);          // GO, inside the blank
+      ok(VBLANK == 1'b1, "the GO was written inside the blank");
+      for (i = 0; i < 800000; i++) begin
+        @(posedge DOTCLK); #0;
+        if (VBLANK && LRUN) early = 1;
+        if (!VBLANK) begin
+          if (after < 0) after = 0; else after++;
+          if (LRUN || after > 8) break;
+        end
+      end
+      ok(!early, "⭐ a GO written in the blank does not start the engine while VBLANK is high");
+      ok(after >= 0 && after <= 1,
+         $sformatf("⭐ and it starts on the dot VBLANK falls: LRUN %0d dots after (want 0 or 1)", after));
+      for (i = 0; i < 40000; i++) begin
+        @(posedge DOTCLK); #0;
+        if (!LRUN) break;
+      end
+      ok(LRUN == 1'b0 && HSCR == 8'h08,
+         $sformatf("and the armed list ran to its END: HSCROLL[9:2] = $08 (got $%02h)", HSCR));
+    end
+    /* ⭐ AND ITS FIRST WAIT ENDS AT THE NEXT LINE: WAIT n is line n counted from
+     * the first active line, which is what software composes against and what
+     * software/demo/emu/ assumes. WAIT, MOVE HSCROLL, END - armed in the blank -
+     * and the MOVE has to land on the line after the one the engine started in. */
+    begin
+      bit hit = 0;
+      int v_start = -1, v_move = -1;
+      for (i = 0; i < 800000 && !hit; i++) begin
+        @(posedge DOTCLK); #0; if (VBLANK) hit = 1;
+      end
+      ok(hit, "the armed GO's WAIT: VBLANK was reached");
+      card.poke(8192 + 0, 8'h80);
+      card.poke(8192 + 1, 8'h03); card.poke(8192 + 2, 8'h44);
+      card.poke(8192 + 3, 8'hFF);
+      wreg('h03, 8'h00); wreg('h04, 8'h00);
+      set_wptr(8192);
+      wreg('h0e, 8'h01);
+      for (i = 0; i < 800000; i++) begin
+        @(posedge DOTCLK); #0;
+        if (v_start < 0 && LRUN) v_start = card.u_vctrl.V0 + 2*card.u_vctrl.V1 + 4*card.u_vctrl.V2
+            + 8*card.u_vctrl.V3 + 16*card.u_vctrl.V4 + 32*card.u_vctrl.V5 + 64*card.u_vctrl.V6
+            + 128*card.u_vctrl.V7 + 256*card.u_vctrl.V8 + 512*card.u_vctrl.V9;
+        if (v_start >= 0 && HSCR == 8'h11) begin
+          v_move = card.u_vctrl.V0 + 2*card.u_vctrl.V1 + 4*card.u_vctrl.V2
+            + 8*card.u_vctrl.V3 + 16*card.u_vctrl.V4 + 32*card.u_vctrl.V5 + 64*card.u_vctrl.V6
+            + 128*card.u_vctrl.V7 + 256*card.u_vctrl.V8 + 512*card.u_vctrl.V9;
+          break;
+        end
+      end
+      ok(v_start >= 0 && v_move == v_start + 1,
+         $sformatf("⭐ an armed list's first WAIT ends at the next line: started on line %0d, MOVE on line %0d", v_start, v_move));
+    end
 
     $display("");
     $display("One strobe per job - design-review2.md V-2");

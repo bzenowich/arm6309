@@ -161,7 +161,14 @@ line is what `/IRQ` is for.
 `/NMI` is free and is the wrong answer: being non-maskable, a keypress would pre-empt the
 replayer tick that `/FIRQ`'s exclusivity exists to protect.
 
-**So: `/IRQ`, open-drain, maskable by `IOCTRL.IRQEN`.**
+**So: `/IRQ`, open-drain, maskable per port by `IOCTRL.KIRQEN` and `IOCTRL.MIRQEN`.**
+
+⭐ **One enable per port, since 2026-09-14.** A port nobody services must not be able to
+hold the shared line. With one enable for both, NitrOS-9's first keyboard driver took only
+`KDR`; the mouse's power-on bytes sat in `MDR`, `/IRQ` stayed low for a port no service
+claimed, and the kernel returned from the interrupt with interrupts masked for 40 ms
+([`docs/nitros9-hardware-improvements.md`](../../../docs/nitros9-hardware-improvements.md)
+H11). Bit 7 of `IOCTRL` was spare, and the GAL had two spare inputs: no package.
 
 | | |
 |---|---|
@@ -655,7 +662,8 @@ boundary. Then:
 3. `~TCD` (borrow) asserts on edge 11 and does **three** things at once: it reloads the
    counter with 10 through `/PL`, it **sets the port's `DR` latch**, and the latch's
    rising edge **clocks the `'574`** (§5.1), capturing the storage register before
-   anything can disturb it. `DR` drives `/IRQ` if `IOCTRL.IRQEN`.
+   anything can disturb it. `DR` drives `/IRQ` if that port's enable is set
+   (`IOCTRL.KIRQEN` or `MIRQEN`).
 4. The driver reads `KDATA`/`MDATA`. The read strobe enables the `'574`'s `/OE` onto the
    data bus **and clears `DR`** — one strobe, both jobs, exactly as Slu4's `/KO`.
 
@@ -891,8 +899,8 @@ There are no error bits, because §6.2 detects no errors.
 | 3 | `MDATD` | drive mouse `DATA` low | 0 — released |
 | 4 | `KRST` | hold the keyboard `'193` **at its preload** (`/PL` asserted, *not* `MR`) — §6.1, §6.2, §7 step 1 | 0 — running, phase undefined |
 | 5 | `MRST` | hold the mouse `'193` at its preload | 0 — running, phase undefined |
-| 6 | `IRQEN` | enable `/IRQ` from either `DR` — §3.1 | **0 — masked** |
-| 7 | — | reserved, write 0 | 0 |
+| 6 | `KIRQEN` | enable `/IRQ` from the keyboard port's `KDR` — §3.1 | **0 — masked** |
+| 7 | `MIRQEN` | enable `/IRQ` from the mouse port's `MDR` — §3.1 | **0 — masked** |
 
 `IOCTRL` is write-only and the driver must shadow it, which is the conventional cost of
 not spending a register on read-back.
@@ -943,13 +951,13 @@ construct it, and what it prevents is not cosmetic.
 | Undefined | Consequence |
 |---|---|
 | `IOCTRL` bits 0–3 (the `'574`'s power-up state) | the card may come up **holding one or both ports' `CLK` low**, which is the PS/2 inhibit condition — the device never completes its power-on self-test, and the port looks dead in a way no software probe distinguishes from an unplugged connector |
-| `IOCTRL` bit 6, `IRQEN` | may come up **1** |
+| `IOCTRL` bits 6–7, `KIRQEN` and `MIRQEN` | may come up **1** |
 | The GAL's two `DR` latches | may come up **set** |
 
 The third and second together are the boot hang. NitrOS-9 enables `/IRQ` for the VBL
 system tick **before** the PS/2 driver initialises `IOCTRL` — the tick is what the
-scheduler runs on, so it has to come first — and a `DR` latch stuck set with `IRQEN` stuck
-1 holds the shared open-drain `/IRQ` low with **no handler in the chain that can clear
+scheduler runs on, so it has to come first — and a `DR` latch stuck set with its enable
+stuck 1 holds the shared open-drain `/IRQ` low with **no handler in the chain that can clear
 it**: the read that clears `DR` lives in a driver that has not been loaded. That is an
 interrupt storm at boot, on the line the system tick uses, and the machine does not get to
 a prompt.
@@ -958,15 +966,15 @@ a prompt.
 
 1. **`IOCTRL` is a `74HC273`** with `/MR` on backplane `/RESET`. All eight bits clear:
    both ports' lines released (devices run their BAT normally), `KRST`/`MRST` clear, and
-   **`IRQEN` = 0**, which is the bit that matters.
+   **`KIRQEN` = `MIRQEN` = 0**, which are the bits that matter.
 2. **`/RESET` is a GAL input** that clears both `DR` latches. The GAL already forms
    them (§9), so this is one product term on each, not a package.
 
 **What is still undefined after reset, deliberately:** the two `'193`s' *phase*. `/RESET`
 leaves `KRST`/`MRST` clear and the counters free-running, so they self-align to some frame
 boundary (the `/PL` feedback of §6.1 guarantees a period of 11, not a phase) and may
-deliver garbage bytes into `KDATA`/`MDATA`. **That is harmless, because `IRQEN` = 0 and
-nothing is listening**, and §11.2's initialisation establishes the phase properly by
+deliver garbage bytes into `KDATA`/`MDATA`. **That is harmless, because both enables are 0
+and nothing is listening**, and §11.2's initialisation establishes the phase properly by
 asserting `KRST`, waiting for `IOSTAT` to show `CLK` idle, and releasing. Making reset
 *also* assert `KRST` would need an inverting stage between the `'273` and `/PL`, or a
 negative-logic redefinition of the bit; neither is worth a gate for a state the driver
@@ -980,7 +988,7 @@ must establish deliberately anyway.
 
 | # | Part | Function |
 |---|---|---|
-| 1 | GAL22V10 | decode from `/IOSEL`; four register strobes; the two `DR` latches (set by `~TCD`, cleared by the data read, **cleared by `/RESET`** — §8.4); the two `/PL` terms (`~TCD` or `KRST`/`MRST` — §6.1); `/IRQ` open-drain |
+| 1 | GAL22V10 | decode from `/IOSEL`; four register strobes; the two `DR` latches (set by `~TCD`, cleared by the data read, **cleared by `/RESET`** — §8.4); the two `/PL` terms (`~TCD` or `KRST`/`MRST` — §6.1); `/IRQ` open-drain, `KDR & KIRQEN # MDR & MIRQEN` (§3.1: `IOCTRL` b6 and b7 on two inputs that were spare) |
 | 2 | **74HC273** | `IOCTRL` — the eight control bits of §8.2, **cleared by backplane `/RESET`** — §8.4 |
 | 3 | 74HC244 | `IOSTAT` — six status bits onto the bus, 3-state; bits 2–5 are **inverted line states**, §8.1 |
 | 4 | 7407 | open-collector drive, 4 lines of 6 — the whole transmit datapath |

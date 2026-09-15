@@ -15,7 +15,7 @@
 
 import { merge, rename, toCupl, withActiveLow, type Merged } from "./jedec/cupl"
 import type { Cell } from "./jedec/assemble"
-import { hgenDesign, vgenDesign, vdecDesign } from "./sync.jedec"
+import { hgenDesign, vgenDesign, vdecDesign, H_LAST } from "./sync.jedec"
 import { hadrDesign, vadrDesign } from "./scan.jedec"
 import { arbDesign, wcolCellsFor, wcolDesign, wrowDesign } from "./access.jedec"
 import { seqphDesign } from "./seqph.jedec"
@@ -276,8 +276,25 @@ export const vramWriteStrobe: Cell[] = [
 ]
 
 const ctrlFanout: Cell[] = [
-  /* vdec spells VMODE's low bit M0. */
-  comb("M0", ["VMODE0"]),
+  /* vdec spells VMODE's low bit M0 - and M0 IS VMODE0 AS IT STOOD WHEN THE LAST
+   * FRAME ENDED, since 2026-09-14 (docs/nitros9-hardware-improvements.md H8).
+   *
+   * ⛔ IT WAS `comb("M0", ["VMODE0"])`, AND A FAMILY CHANGE IN THE WRONG PART OF
+   * A FRAME RAN THAT FRAME TO LINE 960. VTC decodes line 448 when !M0 and 524
+   * when M0, against a 525-line bound, so writing the 449-line family while the
+   * counter stood between 449 and 524 left nothing to match until 448 + 512,
+   * which the partial decode also accepts: vsync_tb measured 461 extra lines. Software had to write CTRL just after VBLANK fell
+   * (nitros9-av-plan.md V8, inferred and checked by nothing), and the NitrOS-9
+   * driver spent a frame's yield and a VBLANK poll on every screen switch.
+   *
+   * FRAMEEND is the dot on which vgen wraps: the slot tick of the last slot of
+   * the terminal line. M0 takes VMODE0 there and holds it, so VTC, VSYNC's
+   * polarity and VBLANK change family together at a frame boundary, whatever
+   * instant CTRL is written. Two cells, no pins. vsync_tb writes the change
+   * past line 448 of a 525-line frame and counts both frames. */
+  comb("FRAMEEND", [`SLOTTICK & ${H_LAST} & VTC`]),
+  { pin: 0, name: "M0", assertedLow: false, s0: 1, registered: true,
+    terms: ["VMODE0 & FRAMEEND", "M0 & !FRAMEEND"] },
   /* ⛔ HPOL IS A CONSTANT AND THIS READ `!VMODE0` UNTIL 2026-09-09.
    *
    * 10.1.6.1 derived it from "the 70 Hz pair is the positive-H pair", and

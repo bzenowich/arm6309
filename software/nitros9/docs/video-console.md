@@ -105,8 +105,9 @@ card. The rules are plan §2.1's V1–V12:
 | V2: nothing while `LRUN` | `VcWait` polls b4. A VDATA stream re-checks between chunks |
 | V3: `WPTR` is the list's pointer | `VG.PtrGen` counts the service's uses of `WPTR`. A stream that sees it move waits the list out and reloads its own position (`VcRePtr`) |
 | V4: shadow everything | `VG.Ctrl`, both scrolls, `WFG`, `WBG`, `WADV`, `SPANLEN`, both bases. `ArmIO` reads the register file into them once, at start |
-| V5–V7: acknowledge, palette, scrolls | only the VBL service writes `VSTAT`, the palette and the scroll pairs, from the frame batch |
-| V8: a family change after VBLANK falls | `VcVMode`, from CoArm's main line: it yields until a VBL has been served, polls VBLANK with `/IRQ` open, and masks only for the write. The service never waits for it |
+| V5, V7: acknowledge, scrolls | only the VBL service writes `VSTAT` and the scroll pairs, from the frame batch |
+| V6: a palette commit is posted, and `PBUSY` must be clear | `VcPal`, from CoArm's main line: an entry at a time behind a masked `VcWait`, then a poll of `VSTAT` b1 with `/IRQ` open (bounded like `VcWait`). The card holds the commit to the next line's blank, so the service does not carry palettes |
+| V8: a family change | nothing: `CTRL` goes in the frame batch and the card takes the new family at the end of the frame (`graphics.md` §6.2) |
 | V11: the tick follows `VMODE0` | the service returns `VMODE0` in carry, and the clock chooses the tick's length from it |
 
 ⛔ **The clock calls the service from `VBLTick`, on the system stack.** The first build called
@@ -124,13 +125,15 @@ masked for 7.4 ms.
 
 **The VBL service** (`VcSvc`): the clock calls it on each VBL through `D.VBLSt`, once the
 console is up. It waits out a span, counts a list still running (`VG.LRunV`), acknowledges,
-then commits the batch: both scroll pairs, `TILEBASE`/`MAPBASE`, `CTRL` with the main line's
-`WMODE` kept, and 16 palette entries (V6). **Measured** by the emulator's `CALLTIME`: at most
-**412 µs**, mean 60 µs, against plan §3.4's 0.5 ms.
+then commits the batch: both scroll pairs, `TILEBASE`/`MAPBASE`, and `CTRL` with the main
+line's `WMODE` kept. **Measured** by the emulator's `CALLTIME`: at most **183 µs**, mean
+97 µs, against plan §3.4's 0.5 ms. It returns the `VMODE0` of `CTRL` as it found it
+(`VG.TkFam`), since the frame that just ended was in that family whatever the batch wrote.
 
 ⛔ **The first measurement was 1.57 ms.** The service waited for VBLANK to fall on a
-family change (1.2 ms after the IRQ) and committed 32 palette entries. The wait moved
-to `VcVMode`, and the commit dropped to 16 entries.
+family change (1.2 ms after the IRQ) and committed 32 palette entries a blank; then 468 µs
+with a main-line family wait and 16 entries. The card's frame-end family latch and posted
+palette commit (`docs/nitros9-hardware-improvements.md`, "Taken") removed both.
 
 ## The fast-text screen (types `$18`, `$19`)
 
@@ -149,8 +152,7 @@ bank is 2,048 span-mask writes, eight to a glyph with `WADV` 00. The map is at `
   displayed is drawn in the shadow only. Select repaints the map from it.
 - **Select** turns the display off in the next blank. It rebuilds the font bank if the
   colours differ, paints the map, and queues the palette, the bases and the scroll. Then
-  it changes family if it must (`VcVMode`), waits the palette out (16 blanks), and turns
-  the display on. Nothing half-drawn is seen.
+  it writes the palette (`VcPal`: a line an entry, at once in vertical blank) and turns the display on. Nothing half-drawn is seen.
 - **`FColor` and `BColor` change the whole screen**, and rebuild the bank: 256 codes hold
   one colour pair (`graphics.md` §6.4.8).
 
@@ -193,13 +195,16 @@ primitive draws into the card or the store through one row layer (`ca_row.asm`:
 
 `KbdArm` takes the mouse's 3-byte packets on the second port, clamps the position to the
 displayed screen and records it in `VG`. **The pointer is drawn into VRAM** (`vidptr.asm`):
-the 16 × 16 pixels under it are read back through `VDATA` and kept, and the arrow is two
-sprite layers. CoArm takes it off wherever its drawing would cover it (`PtrGuard`) and puts
+only the pixels under the arrow's row runs are kept (`PtrRun`, 106 of the 16 × 16 box), read
+back through `VDATA` a run at a time, and the arrow is composed into the same runs from
+`PtrArt` (outline, fill, or keep). A row is one masked stretch: a fast `VSTAT` check, one
+`WPTR` load (`PtrLoad`), and the run. CoArm takes it off wherever its drawing would cover it (`PtrGuard`) and puts
 it back when the call ends. `GCSet` turns it on and off, `PutGC` places it, and `SS.Mouse`
 returns CoWin's packet: buttons, the screen position, and the position in the working area.
 
-⛔ **A move is ~15.6 ms of VDATA traffic, measured, so it is not done in the IRQ.** The first
-build moved it from KbdArm's service: every packet masked `/IRQ` for 15 ms, and the
+⛔ **A move is 7.9 ms of VDATA traffic, 7.3 ms of it outside interrupts, measured, so it is
+not done in the IRQ.** Saving the whole box took 15.6 ms. The first build moved it from
+KbdArm's service: every packet masked `/IRQ` for 15 ms, and the
 16C550's FIFO covers 1.4 ms at 115.2 kbaud. The service now only records the position.
 **The kernel's idle loop moves it**: `fnproc.asm` calls `VG.Idle` (ArmIO's `PtrIdle`)
 with `/IRQ` masked before it waits for an interrupt, and PtrIdle moves the pointer with
@@ -223,11 +228,12 @@ ring row of 1,024 bytes. It writes it into the one of two ring rows below the sc
 service is not starting, and points the service at it in one masked store, so no frame starts
 a list half written.
 
-**The VBL service starts it as the blank ends** (`vidsvc.asm` `VcGo`, plan §3.4.1 (a)): a
-`GO` inside line 0 is the only one whose `WAIT` *n* is line *n*, so the service polls
-`VBLANK` with `/IRQ` masked. ⚠ **That is 1.66 ms masked every frame a list is on, measured,
-past the 16C550 FIFO's 1.4 ms at 115.2 kbaud** (`docs/nitros9-hardware-improvements.md` H14).
-A service that finds the blank already over starts nothing that frame. The tag + 1 of the
+**The VBL service arms it** (`vidsvc.asm` `VcGo`): it loads `WPTR` and writes `GO` while
+`VBLANK` is high, and the card starts the walk as the blank ends (`graphics.md` §10.3.1's armed
+`GO`), so `WAIT` *n* is line *n* with no poll. `VG.LArm` records that the list owns `WPTR`
+before `LRUN` shows it, and `VcWait` waits the blank out while it is set. **The longest IRQ
+with a list on is 722 µs, measured**; polling for the blank's end took 1.66 ms. A service
+that finds the blank already over starts nothing that frame (`VG.LLate`). The tag + 1 of the
 list started is `VG.MkPh`, which the emulator's `MARKS` records with each frame.
 
 A bitmap screen's ring columns 640–1023 are colour 0 after Select, so an `HSCROLL` list shows
@@ -298,10 +304,12 @@ picture; `BT.Poke`, and committing the batch before the palette, fixed that.
 `FA`. Transmit is `ps2tst`'s, with `/IRQ` masked for **1.9 ms** a byte, at Init only. It puts
 one service on the polling table for **both** ports' ready bits.
 
-⛔ **Both, because `IRQEN` is one bit for the card.** The first build took only `KDR`. The
+It sets both of `IOCTRL`'s enables, b6 `KIRQEN` and b7 `MIRQEN` (`ps2.md` §8.2), and clears
+them at Term. ⛔ **The first build took only `KDR` when one `IRQEN` served both ports**: the
 mouse's power-on bytes were waiting in `MDR`, so enabling the keyboard raised `/IRQ` for a
-port no service claimed. IOMan's poll found no claimant, and the kernel returned from the IRQ
-with interrupts masked. CoArm then ran for 40 ms masked. KbdArm takes both ports now.
+port no service claimed, IOMan's poll found no claimant, and the kernel returned from the IRQ
+with interrupts masked for 40 ms. A port with no service now stays quiet with its enable
+clear.
 
 Scan codes (set 2, Wildbits' tables) become CoCo 3 key values. The arrows are `$0C $0A $08
 $09`, Esc is BREAK `$05`, and F1/F2 are `$B1`/`$B2`. Shift, Ctrl, Alt and Caps Lock are
@@ -316,6 +324,4 @@ characters signal rather than buffer. Keys go to the window whose screen is disp
 - **Pointer shapes.** Any `GCSet` group but 0 is the arrow.
 - **LEDs and typematic.** A transmit masks `/IRQ` for ~10 ms (`ps2.md` §7.1), so Caps Lock's
   state is kept and not shown.
-- **V8 is not modelled by the emulator**, so `VcVMode`'s timing is not checked. It is
-  inferred from `vctrl.v`.
 - **A console only on the emulator.** Nothing has run it on `machine_tb`.

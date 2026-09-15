@@ -47,7 +47,7 @@ WPTR2   EQU     VBASE+$0A       A18..A16
 PIDX    EQU     VBASE+$10       palette index, auto-increments after PDATH
 PDATL   EQU     VBASE+$11       GGGBBBBB
 PDATH   EQU     VBASE+$12       RRRRRGGG -- the write commits the entry
-VSTAT   EQU     VBASE+$13       b7 SPANBUSY, b6 VBLANK, b5 HBLANK, b0 IRQ
+VSTAT   EQU     VBASE+$13       b7 SPANBUSY, b6 VBLANK, b5 HBLANK, b4 LRUN, b1 PBUSY, b0 IRQ
 VDATA   EQU     VBASE+$15       graphics.md 11 - the VRAM port at WPTR, in the I/O page
 WADV    EQU     VBASE+$14       00 continue, 01 next row same column
 TILEBAS EQU     VBASE+$17       6.4.1's TB4..TB0 -- the tile set's A18..A14
@@ -435,6 +435,11 @@ palette lda     #CT_OFF
         clrb
 pall    stb     PDATL           GGGBBBBB
         stb     PDATH           RRRRRGGG -- and this commits, and bumps PIDX
+* graphics.md 13.1: outside vertical blanking the card posts the commit to the
+* next line's HLOAD and holds VSTAT b1 until PIDX has stepped - at most a line
+palw    lda     VSTAT
+        bita    #$02
+        bne     palw
         incb
         bne     pall
 

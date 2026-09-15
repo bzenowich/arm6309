@@ -109,7 +109,8 @@ ok(f"every IRQ, the VBL service's batch included, returns within {worst_irq:.0f}
 m = re.search(r"CALLTIME ArmIO\+\$[0-9A-F]+: (\d+) calls, longest ([\d.]+) us, mean ([\d.]+) us", log)
 calls, svc_max, svc_mean = (int(m.group(1)), float(m.group(2)), float(m.group(3))) if m else (0, 0.0, 0.0)
 ok(f"the VBL service itself: {calls} VBLs, the longest {svc_max:.0f} us and the mean {svc_mean:.0f} us "
-   "(a palette's 16 entries included; plan 3.4's budget is 0.5 ms)", calls > 500 and svc_max <= 500)
+   "(plan 3.4's budget is 0.5 ms; the palette is not the service's since the card posts a commit to HLOAD)",
+   calls > 500 and svc_max <= 500)
 kbd = [r for r in ms if r[1].startswith("KbdArm+")]
 ok(f"KbdArm's transmit masks /IRQ for {max((r[0] for r in kbd), default=0):.0f} us, at Init only (ps2.md 7.1, <= 3 ms)",
    max((r[0] for r in kbd), default=0) <= 3000)
@@ -182,9 +183,11 @@ ok(f"the pointer followed {len(gm.MOVES)} PS/2 mouse packets: every position's s
    f"order, the last clamped to x 639 and the last row (frames {seen})", at == len(want))
 if mfs:
     ok("and the last frame is the last position's", np.array_equal(mfs[-1][1], want[-1]))
-m = re.search(r"CALLTIME ArmIO\+\$[0-9A-F]+: (\d+) calls, longest ([\d.]+) us, mean ([\d.]+) us", mlog)
-calls, mv_max = (int(m.group(1)), float(m.group(2))) if m else (0, 0.0)
-ok(f"the longest pointer move is {mv_max / 1000:.1f} ms of VDATA traffic - too long for an IRQ service, "
+m = re.search(r"CALLTIME ArmIO\+\$[0-9A-F]+: (\d+) calls, longest ([\d.]+) us, mean ([\d.]+) us; "
+              r"outside interrupts longest ([\d.]+) us", mlog)
+calls, mv_max, mv_net = (int(m.group(1)), float(m.group(2)), float(m.group(4))) if m else (0, 0.0, 0.0)
+ok(f"the longest pointer move is {mv_max / 1000:.1f} ms, {mv_net / 1000:.1f} ms of it outside interrupts: the "
+   "arrow's 106 pixels of runs saved, restored and composed, a row a masked stretch - too long for an IRQ service, "
    "so it runs from the kernel's idle loop with IRQs enabled", calls > 0)
 mms = masks("mouse")
 worst_armio = max((r[0] for r in mms if r[1].startswith("ArmIO+")), default=0.0)
@@ -256,8 +259,9 @@ for run, what, stream, model_of in (
     ok(f"{run}: CoArm's longest IRQ-masked stretch is {worst:.0f} us (<= 500 us): it waits a running list out "
        "with /IRQ open", 0 < worst <= 500)
     irq = max((r[0] for r in rms if r[1].endswith("+$FEF7")), default=0.0)
-    ok(f"{run}: ⚠ with a list on, the longest IRQ is {irq:.0f} us - the VBL service polls VBLANK to GO as "
-       "the blank ends (plan 3.4.1 (a)), past the 16C550 FIFO's 1.4 ms at 115.2 kbaud (<= 2 ms)", 0 < irq <= 2000)
+    ok(f"{run}: ⭐ with a list on, the longest IRQ is {irq:.0f} us - the VBL service writes GO in the blank and the "
+       "card starts the list as the blank ends (graphics.md 10.3.1's armed GO), under the 16C550 FIFO's 1.4 ms",
+       0 < irq <= 1400)
 
 # --------------------------------------------------------------------- P3: the overworld
 import bisect
@@ -284,6 +288,10 @@ for meta, px in frames_of("game"):
             continue
     n_game += 1
     n_undoubled += int(not np.array_equal(px[0::2], px[1::2]))
+    if k >= len(gm_model["frames"]) or (hk != 0xFFFF and hk >= len(gm_model["frames"])):
+        if first_bad is None:
+            first_bad = (meta["n"], k, hk, -1)
+        continue
     idx = inv[px[0::2]]
     want = mkgame.render(nokey, k) if hk == 0xFFFF else mkgame.render(gm_model, k, hk)
     if np.array_equal(idx, want):

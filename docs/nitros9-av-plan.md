@@ -89,9 +89,9 @@ that knows them.** Everything above it calls `VidCore`.
 | V3 | **`WPTR` is the list pointer.** Reload after every `GO`. Little-endian: `+$08` low, `+$0A` high | `vaddr.v:724` |
 | V4 | Register reads return **the last byte the CPU wrote** (a SRAM register file), except `VSTAT` and `VDATA`. Keep shadows of everything | `machine.v:239-256` |
 | V5 | VBL acknowledge is **any write** to `VSTAT`; reading does not clear. The write is itself subject to V1/V2 | `sync.jedec.ts:266` |
-| V6 | Palette `PDATH` commits snow 3 dots, so commit in blanking. Blank left after the IRQ is 1.176 ms (449-line family) or 1.112 ms (525) | g.md §13.1; `sync.timing.ts:54-72` |
+| V6 | **Retired 2026-09-14.** A CPU `PDATH` commit is posted to the next `HLOAD` (at once in VBLANK) and does not snow. Do not write `+$10`–`$12` while `VSTAT` b1 `PBUSY` | g.md §13.1; `vsup.parts.ts` `PPEND` |
 | V7 | `HSCROLL`/`HSCROLLH` load every line; `VSCROLL` pair loads throughout VBLANK. Write each pair atomically | `vaddr` `HLOAD`/`VLOAD` |
-| V8 | Switch `VMODE` family only just after VBLANK falls (the terminal-count decode is partial) | `vctrl.v:262-264` (inferred, not in any doc) |
+| V8 | **Retired 2026-09-14.** A `VMODE` family change takes effect at the end of the frame in progress, whenever it is written | g.md §6.2; `video.cpld.ts` `M0` |
 | V9 | Cell mode is `VMODE` 00/01 only, and halves the span retire rate | g.md §6.4.1, §6.4.2 |
 | V10 | A display list must fit in one ring row (the walk wraps at column 1024 without carrying). MOVE reaches only `+$03 +$04 +$10 +$11 +$12` | g.md §10.3.2 |
 | V11 | The VBL tick is **70.086 Hz or 59.940 Hz** depending on `VMODE0` | g.md §6.2 |
@@ -218,7 +218,8 @@ service** first. In order, it:
    acknowledge anyway.
 3. Writes `VSTAT` (acknowledge).
 4. **Commits the frame batch.** This holds pending `CTRL`, both scroll pairs, `TILEBASE`,
-   palette entries (32 per blank, V6: a full 256 is 1.2 ms) and small queued VRAM patches (`WPTR` + bytes).
+   and small queued VRAM patches (`WPTR` + bytes). Palettes are not in it: since the posted
+   commit (V6) `VcPal` writes them from the main line.
    The budget is about 0.5 ms, **measured and enforced**, and anything over carries to the
    next frame.
 5. **Starts the displayed screen's list**: load `WPTR`, then `GO` (§3.4.1).
@@ -250,11 +251,11 @@ the OS there are three options:
   bars jitter visibly.
 - **(c) An armed `GO`, a hardware change.** A `GO` written during VBLANK arms, and VBLANK's
   falling edge starts the list. Software then issues `GO` from step 5 with zero jitter and no
-  masked wait. ⚠ `vsup`'s fit margin is thin (g.md §19 item 46), so this needs a fit before
-  it is a plan.
+  masked wait.
 
-**Recommendation: (a) now, (c) proposed as a hardware item** (§10). (b) is the fallback if
-(a)'s masked time hurts serial.
+**(c) is built (2026-09-14, g.md §10.3.1 rule 3)**, and `VcGo` issues an armed `GO` from step
+5. A service that finds the blank already over does not `GO` that frame (`VG.LLate`). The
+longest IRQ with a list on went from 1.66 ms under (a) to 0.72 ms.
 
 ### 3.5 Exclusive screens and `libvid`
 
@@ -323,7 +324,7 @@ exposes it (§5).
 
 | Card feature | Driver mechanism | API | Demo that needs it |
 |---|---|---|---|
-| 4 × `VMODE`, 640×200/240/400/480 8bpp | Screen types; mode set in the VBL batch (V8) | `DWSet` types `$10`–`$13` | all |
+| 4 × `VMODE`, 640×200/240/400/480 8bpp | Screen types; mode set in the VBL batch (V8, retired: it takes effect at frame end) | `DWSet` types `$10`–`$13` | all |
 | Display enable | Blank the screen during select and palette load | internal | all |
 | 256 of 65,536 colours, RGB565 LUT | Per-screen 256-entry palette shadow, committed across blanks | `Palette` (6-bit, legacy), `Pal565`, `SS.Pal565` | desktop, BBS, game |
 | 1024×512 ring, free scroll both axes | Console `VSCROLL`; exclusive `SS.Scroll` via the batch | `SS.Scroll` | BBS, game, paint |
@@ -526,7 +527,7 @@ windows at `$FE00`–`$FEFF`. **Every base address comes from a descriptor from 
 |---|---|---|
 | **P0** | X1–X7; boot NitrOS-9 to a serial shell on the emulator. ⭐ **Both halves landed 2026-09-14**: `software/nitros9/run-emu.sh` (11 claims) and `machine_tb +scenario=nitros9` (12 claims, from reset on the RTL). ⭐ **P0 closed 2026-09-14**: X1-X7 landed | `emu` reaches `Shell` and runs `dir` from the ROM disk; the same on `machine_tb` as a new scenario |
 | **P1** | `VidCore` (V1–V12 and the VBL service); fast-text `/Term` on cell mode; `KbdArm`; CoWin control codes `$01`–`$0D`, `$1F`. ⭐ **P1 closed 2026-09-14**: `software/nitros9/run-vid.sh` (14 claims) and `software/nitros9/docs/video-console.md`. The console is `/W1`–`/W2`, not `/Term`, which stays the UART's | a scripted client's output: emulator frames vs a Python model of the expected text screen; `VidCore` IRQ-masked time measured |
-| **P2** | `CoArm` bitmap screens and windows: `DWSet`/`OWSet`/`Select`, span-mask text, cell shadow, `Bar`/`Box`/`Line`/`Circle`/`Ellipse`/`Arc`/`FFill`, GP buffers, `Get`/`PutBlk`, fonts, palettes, backing store and screen switch, `MseArm` + `GCSet` pointer. ⭐ **P2 closed 2026-09-14 on scripted clients**: `run-vid.sh`'s `p2` and `mouse` runs (13 more claims) against `tools/vgmodel.py`, pixel-exact. The mouse is `KbdArm`'s second port, and the pointer moves from the kernel's idle loop (a move is 15.6 ms). ⚠ **`show` through the driver moves to P5**, with the applications it is made of: it needs P3's extensions and `SS.Raster`, and a player of `script.bin`. §3.2 was decided in P1 | `show` (§7) re-run through the driver, frames judged by `checkdemo.py`; decide §3.2's task question on measured size |
+| **P2** | `CoArm` bitmap screens and windows: `DWSet`/`OWSet`/`Select`, span-mask text, cell shadow, `Bar`/`Box`/`Line`/`Circle`/`Ellipse`/`Arc`/`FFill`, GP buffers, `Get`/`PutBlk`, fonts, palettes, backing store and screen switch, `MseArm` + `GCSet` pointer. ⭐ **P2 closed 2026-09-14 on scripted clients**: `run-vid.sh`'s `p2` and `mouse` runs (13 more claims) against `tools/vgmodel.py`, pixel-exact. The mouse is `KbdArm`'s second port, and the pointer moves from the kernel's idle loop (a move is 7.9 ms; 15.6 ms before the run-only rewrite). ⚠ **`show` through the driver moves to P5**, with the applications it is made of: it needs P3's extensions and `SS.Raster`, and a player of `script.bin`. §3.2 was decided in P1 | `show` (§7) re-run through the driver, frames judged by `checkdemo.py`; decide §3.2's task question on measured size |
 | **P3** | Extensions: `PatBar`, `PutMask`, `Icon`, `Poly`, `Image`, `AnsiSw`; `SS.Raster`; `SS.Batch`/`FrmSig`/`FrmWait`; `SS.Excl` + `libvid`; tile screens. ⭐ **P3 closed 2026-09-14**: `run-vid.sh`'s `p3`, `rast`, `wave` and `game` runs (27 more claims, 54 in all). The raster bars and the warp are `show.raster_colours` and `gui.asm`'s arithmetic at the phase each frame's list held, every frame; the overworld (`overworld`, `demo.asm`'s loop on `SS.Excl`, `SS.TileLd`, `SS.MapWr`, `libvid` and `SS.Batch`) is `mkgame.render()` in all 1,519 frames, with 94% one-record camera steps and no flip into the picture. ⚠ A list costs 1.66 ms of IRQ a frame (§3.4.1 (a); `docs/nitros9-hardware-improvements.md` H14). `libvid` has waits, puts, gets, fills, pokes and rectangles, not text, icons, polygons or images. CoArm is 15,342 bytes of task 1's 16 K code window | raster and wave checkpoints at every phase (`show.raster_colours`); overworld frames vs `mkgame.render()`, and the flip budget (≤2 % into active video, as `checkdemo.py` asserts today) |
 | **P4** *(parallel with P1–P3 once X5 and X7 land)* | `AudDrv`, bell/`SS.Tone`, `modplay`, `sfx` | `modplay`'s committed register stream vs `refplayer`'s trace, **byte for byte and tick for tick**; `dacwav` render A/B'd against libopenmpt with the `check:modplay` gate |
 | **P5** | The six applications of §7 | each scene's checkpoints, in the emulator; one `run-demo.sh`-style machine run at the end |
@@ -538,8 +539,9 @@ windows at `$FE00`–`$FEFF`. **Every base address comes from a descriptor from 
 
 Each needs the repository's usual treatment (a fit, a check, a spec entry) before it counts.
 
-1. **Armed `GO`** (§3.4.1c). A `GO` during VBLANK starts the list on VBLANK's fall. It
-   removes ~1.1 ms of masked time per frame, or visible jitter.
+1. **Armed `GO`** (§3.4.1c). ⭐ **Built 2026-09-14** (g.md §10.3.1), with a `VMODE` family
+   latch (g.md §6.2) and a posted palette commit (g.md §13.1) in the same pass —
+   `docs/nitros9-hardware-improvements.md`'s "Taken" table.
 2. **A list-END event** (a `VSTAT` bit, optionally an IRQ). `VidCore` would not have to
    infer when drawing may resume (§3.4).
 3. **A tick without a video card.** Nothing drives the NitrOS-9 tick if the video card is

@@ -306,6 +306,9 @@ pal1    tfr     b,a             R: i >> 5
         sta     <PDATL
         lda     gtmp
         sta     <PDATH          commits, and PIDX steps
+pal2    lda     <VSTAT          graphics.md 13.1: display off, not in the blank - the
+        bita    #$02            commit waits for the line's HLOAD, VSTAT b1 until done
+        bne     pal2
         incb
         bne     pal1
         lda     #P_PAL

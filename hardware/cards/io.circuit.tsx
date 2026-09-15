@@ -114,7 +114,7 @@ export default () => (
       pinLabels={{
         pin1: "CLK", pin2: "CARD_SEL", pin3: "A0", pin4: "A1", pin5: "E",
         pin6: "R_W", pin7: "nRESET", pin8: "KB_TCD", pin9: "MS_TCD",
-        pin10: "A3", pin12: "GND",
+        pin10: "A3", pin11: "KIRQEN", pin12: "GND", pin13: "MIRQEN",
         pin18: "KB_PL", pin19: "MS_PL", pin20: "KB_DR", pin21: "MS_DR",
         pin22: "KB_RD", pin23: "nIRQ", pin24: "VCC",
       }}
@@ -130,6 +130,9 @@ export default () => (
         KB_TCD: "net.KB_TCD", MS_TCD: "net.MS_TCD",
         KB_PL: "net.KB_PL", MS_PL: "net.MS_PL",
         KB_DR: "net.KB_DR", MS_DR: "net.MS_DR", KB_RD: "net.KB_RD",
+        /* ps2.md 3.1: one /IRQ enable per port, IOCTRL b6 and b7 from U2 - so a
+         * port nobody services cannot hold the shared line (2026-09-14). */
+        KIRQEN: "net.KIRQEN", MIRQEN: "net.MIRQEN",
       }}
       noConnect={["CLK"]}
     />
@@ -150,6 +153,7 @@ export default () => (
         VCC: "net.V5", GND: "net.GND", nMR: "net.nRESET",
         D1: "net.D0", D2: "net.D1", D3: "net.D2", D4: "net.D3",
         D5: "net.D4", D6: "net.D5", D7: "net.D6", D8: "net.D7",
+        Q7: "net.KIRQEN", Q8: "net.MIRQEN",
       }}
     />
 

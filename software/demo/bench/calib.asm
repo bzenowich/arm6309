@@ -110,6 +110,9 @@ pal1    tfr     b,a
         sta     <PDATL
         lda     tmp
         sta     <PDATH
+pal2    lda     <VSTAT          graphics.md 13.1: the commit waits for the line's HLOAD
+        bita    #$02
+        bne     pal2
         incb
         bne     pal1
 

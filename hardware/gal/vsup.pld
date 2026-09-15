@@ -47,6 +47,7 @@ PIN = D4 ;
 PIN = D5 ;
 PIN = D6 ;
 PIN = D7 ;
+PIN = VBLANK ;
 PIN = SGRANT ;
 PIN = HLOAD ;
 PIN = VRAMSEL ;
@@ -81,6 +82,7 @@ PIN = PINC ;
 PIN = !PDOE ;
 PIN = !PIXOE ;
 PIN = !PWE ;
+PIN = PBUSY ;
 PIN = VDSEL ;
 PIN = !RDCK ;
 PIN = RDVALID ;
@@ -116,6 +118,7 @@ PINNODE = LD2 ;
 PINNODE = LD3 ;
 PINNODE = LD4 ;
 PINNODE = LD7 ;
+PINNODE = PPEND ;
 PINNODE = PS0 ;
 PINNODE = PS1 ;
 PINNODE = PS2 ;
@@ -244,8 +247,9 @@ SL7.d = WSPL & D7
         # SL7 & !WSPL ;
 BCTRLGO = WSTB & !RA4 & RA3 & RA2 & RA1 & !RA0 & D0 ;
 LGO.d = BCTRLGO
-        # LGO & WSTB ;
-LRUN.d = LGO & !WSTB
+        # LGO & WSTB
+        # LGO & VBLANK ;
+LRUN.d = LGO & !WSTB & !VBLANK
          # LRUN & !LSTOP ;
 LSTOP = LRUN & LD7 & LD4 & LD3 & LD2 & LD1 & LD0 ;
 LGRANT = LRUN & SGRANT ;
@@ -284,7 +288,10 @@ PLOAD = WPIDX
         # LWPI ;
 PDHW = WPDH
        # LWPDH ;
-PS0.d = PDHW ;
+PPEND.d = WPDH
+          # PPEND & !PS0 ;
+PS0.d = LWPDH
+        # PPEND & !WPDH & HLOAD & !PS0 & !PS1 & !PS2 & !PS3 ;
 PS1.d = PS0 & !PDHW ;
 PS2.d = PS1 ;
 PS3.d = PS2 ;
@@ -298,6 +305,11 @@ PDOE = PS1
        # PS3 ;
 PIXOE = !PDOE ;
 PWE = PS2 ;
+PBUSY = PPEND
+        # PS0
+        # PS1
+        # PS2
+        # PS3 ;
 VDSEL = IOSEL & A6 & A5 & A4 & !A3 & A2 & !A1 & A0 ;
 RPQ.d = VRAMSEL & RW & E
         # VDSEL & RW & E ;
@@ -314,9 +326,9 @@ VINC = LADV
  * referred to its own oscillator (3.1), so there is only one. */
 [NSL0,NSL1,NSL2,NSL3,NSL4,NSL5,NSL6,NSL7,HS0,HS1,SL0,SL1,SL2].ck = DOTCLK ;
 [SL3,SL4,SL5,SL6,SL7,LGO,LRUN,LPH,LREL,LWAIT,LD0,LD1,LD2,LD3].ck = DOTCLK ;
-[LD4,LD7,PS0,PS1,PS2,PS3,RPQ,RDVALID].ck = DOTCLK ;
+[LD4,LD7,PPEND,PS0,PS1,PS2,PS3,RPQ,RDVALID].ck = DOTCLK ;
 
 /* One asynchronous reset for every register, as on the GALs. */
 [NSL0,NSL1,NSL2,NSL3,NSL4,NSL5,NSL6,NSL7,HS0,HS1,SL0,SL1,SL2].ar = RESET ;
 [SL3,SL4,SL5,SL6,SL7,LGO,LRUN,LPH,LREL,LWAIT,LD0,LD1,LD2,LD3].ar = RESET ;
-[LD4,LD7,PS0,PS1,PS2,PS3,RPQ,RDVALID].ar = RESET ;
+[LD4,LD7,PPEND,PS0,PS1,PS2,PS3,RPQ,RDVALID].ar = RESET ;

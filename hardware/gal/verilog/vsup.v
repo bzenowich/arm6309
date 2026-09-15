@@ -32,6 +32,7 @@ module vsup (
     input  wire D5,
     input  wire D6,
     input  wire D7,
+    input  wire VBLANK,
     input  wire SGRANT,
     input  wire HLOAD,
     input  wire VRAMSEL,
@@ -102,6 +103,7 @@ module vsup (
     output wire LWPDH,
     output wire PLOAD,
     output wire PDHW,
+    output wire PPEND,
     output wire PS0,
     output wire PS1,
     output wire PS2,
@@ -113,6 +115,7 @@ module vsup (
     output wire PDOE,
     output wire PIXOE,
     output wire PWE,
+    output wire PBUSY,
     output wire VDSEL,
     output wire RPQ,
     output wire RSTART,
@@ -151,6 +154,7 @@ module vsup (
   reg  r_LD3;
   reg  r_LD4;
   reg  r_LD7;
+  reg  r_PPEND;
   reg  r_PS0;
   reg  r_PS1;
   reg  r_PS2;
@@ -187,6 +191,7 @@ module vsup (
   assign LD3 = r_LD3;
   assign LD4 = r_LD4;
   assign LD7 = r_LD7;
+  assign PPEND = r_PPEND;
   assign PS0 = r_PS0;
   assign PS1 = r_PS1;
   assign PS2 = r_PS2;
@@ -353,6 +358,13 @@ module vsup (
   // EXTERNAL - the LUT's /WE - one dot, inside PDOE at both ends
   assign PWE =
          (PS2);
+  // EXTERNAL - VSTAT b1: a CPU commit is posted or in flight - the next palette write waits
+  assign PBUSY =
+         (PPEND)
+         | (PS0)
+         | (PS1)
+         | (PS2)
+         | (PS3);
   // EXTERNAL - 13: +$15 VDATA, the VRAM port in the I/O page - to vctrl's strobe and /WAIT
   assign VDSEL =
          (IOSEL & A6 & A5 & A4 & ~A3 & A2 & ~A1 & A0);
@@ -404,6 +416,7 @@ module vsup (
       r_LD3 <= 1'b0;
       r_LD4 <= 1'b0;
       r_LD7 <= 1'b0;
+      r_PPEND <= 1'b0;
       r_PS0 <= 1'b0;
       r_PS1 <= 1'b0;
       r_PS2 <= 1'b0;
@@ -505,9 +518,10 @@ module vsup (
          | (SL7 & ~WSPL);
       r_LGO <=
          (BCTRLGO)
-         | (LGO & WSTB);
+         | (LGO & WSTB)
+         | (LGO & VBLANK);
       r_LRUN <=
-         (LGO & ~WSTB)
+         (LGO & ~WSTB & ~VBLANK)
          | (LRUN & ~LSTOP);
       r_LPH <=
          (LFETCH & ~D7)
@@ -537,8 +551,13 @@ module vsup (
       r_LD7 <=
          (LFETCH & D7)
          | (LD7 & ~LFETCH & ~LGO);
+      r_PPEND <=
+         (WPDH)
+         | (PPEND & ~PS0);
       r_PS0 <=
-         (PDHW);
+         (LWPDH)
+         | (PPEND & ~WPDH & HLOAD & ~PS0 & ~PS1 & ~PS2 & ~PS3)
+         | (PPEND & ~WPDH & VBLANK & ~PS0 & ~PS1 & ~PS2 & ~PS3);
       r_PS1 <=
          (PS0 & ~PDHW);
       r_PS2 <=

@@ -97,7 +97,7 @@ module video_card (
   // onto CPUIDLE, so every one read `VPORT & !CPUIDLE & CPUIDLE & ...` - false
   // by inspection. merge() folds constants now and drops what dies.
   wire VMODE0,VMODE1,WM0,WM1,CELL,IRQEN,DISPEN;
-  wire M0,HPOL,TILEMODE;
+  wire FRAMEEND,M0,HPOL,TILEMODE;   // M0: VMODE0 as the last frame ended (H8)
   wire TFETCH,MFETCH,FETCH,HLOAD,HEND,ROWADV,MCADV;
   wire SPNREQG, WAITSRC, CPUIDLE, VRAMSEL;
   // 13's +$15 VDATA - vsup's decode of the raw address, and vctrl's port select
@@ -145,6 +145,7 @@ module video_card (
   wire LPH, LWAIT, LWHSL, LWHSH, LBYTE, LWPI, LWPDL, LWPDH;
   wire LREL;                          // 10.3.2's one release per line
   wire LDBOE, RFOE, PLOAD, PDHW, PINC, PILD, PS0,PS1,PS2,PS3;
+  wire PPEND, PBUSY;   // 13.1's posted CPU commit, and VSTAT b1 (H7)
   wire LDPDL, LDPDH, PDOE, PIXOE, PWE;
   wire WSPL, WPIDX, WPDL, WPDH;
   // ⚠ vsup DECODES +$03 FOR ITSELF, and vaddr decodes it too - for vctrl's
@@ -197,7 +198,7 @@ module video_card (
     .SPNGRANT(SPNGRANT), .WAIT(WAIT), .WAIT_OE(WAIT_OE),
     .VMODE0(VMODE0),.VMODE1(VMODE1),.WM0(WM0),.WM1(WM1),
     .CELL(CELL),.IRQEN(IRQEN),.DISPEN(DISPEN),
-    .M0(M0),.HPOL(HPOL),.TILEMODE(TILEMODE),
+    .FRAMEEND(FRAMEEND),.M0(M0),.HPOL(HPOL),.TILEMODE(TILEMODE),
     .TFETCH(TFETCH),.MFETCH(MFETCH),.FETCH(FETCH),.HLOAD(HLOAD),.HEND(HEND),
     .ROWADV(ROWADV),.MAPREQ(MAPREQ),.MCADV(MCADV),.MAPLD(MAPLD),
     .MAPSEL(MAPSEL),.TILESEL(TILESEL),.LINEAR(LINEAR),
@@ -290,6 +291,7 @@ module video_card (
     .OEA0(OEA0), .OEA1(OEA1), .OEA2(OEA2),
     .OEB0(OEB0), .OEB1(OEB1), .OEB2(OEB2),
     // 10.3's descriptor decode, whole - and 10.3.1's deferred GO
+    .VBLANK(VBLANK),          // the armed GO holds to the blank's end (H14)
     .BCTRLGO(BCTRLGO), .LGO(LGO), .LRUN(LRUN), .LSTOP(LSTOP),
     .LADV(LADV), .LFETCH(LFETCH), .LMOVE(LMOVE), .LPH(LPH), .LWAIT(LWAIT),
     .LREL(LREL),
@@ -300,6 +302,7 @@ module video_card (
     // 9's palette write path
     .WPIDX(WPIDX), .WPDL(WPDL), .WPDH(WPDH), .PLOAD(PLOAD), .PDHW(PDHW),
     .PINC(PINC), .PILD(PILD), .PS0(PS0),.PS1(PS1),.PS2(PS2),.PS3(PS3),
+    .PPEND(PPEND), .PBUSY(PBUSY),
     .LDPDL(LDPDL), .LDPDH(LDPDH),
     .PDOE(PDOE), .PIXOE(PIXOE), .PWE(PWE)
   );

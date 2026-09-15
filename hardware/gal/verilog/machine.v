@@ -270,7 +270,11 @@ module machine #(
    * the tilemap upload, its 256 bytes landing at addresses that skipped. The
    * '244 that exists carries four bits of eight and LRUN is already a pin, so
    * this is one net and no package. */
-  wire [7:0] vstat = {SPANBUSY, VBLANK, HBLANK, vid_lrun, 3'b000, vid_irq_oe};
+  /* ⭐ b1 IS PBUSY since 2026-09-14 - graphics.md 13.1's posted palette commit,
+   * a live macrocell on vsup exactly as LRUN is, on a channel of the same '244
+   * that was spare. (A hierarchical reference, so the testbenches that bind
+   * video_card with .* need no new port.) */
+  wire [7:0] vstat = {SPANBUSY, VBLANK, HBLANK, vid_lrun, 2'b00, card.PBUSY, vid_irq_oe};
 
   wire [7:0] vid_d = vstat_sel ? vstat : vid_rd;
 

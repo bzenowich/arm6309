@@ -449,6 +449,9 @@ pa2     lda     ac
 pa3     lbsr    sw
         stb     <PDATL
         sta     <PDATH          commits; PIDX steps
+pa4     lda     <VSTAT          graphics.md 13.1: outside vertical blanking the commit
+        bita    #$02            waits for the line's HLOAD, and b1 holds until it is done
+        bne     pa4
         inc     ac
         dec     an
         beq     pa9

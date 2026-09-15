@@ -9,6 +9,78 @@ to `graphics.md` unless marked otherwise. "Vid-*" identifiers are findings of th
 
 ---
 
+## §6.2, §9, §10.3.1, §10.3.2, §12.1, §13, §13.1, §14, §19 items 8, 46 — armed `GO`, the family change at frame end, and the posted palette commit (2026-09-14)
+
+`docs/nitros9-hardware-improvements.md` items H7, H8 and H14 were built: `vsup`'s `LGO`
+holds through `VBLANK`, `vctrl`'s `M0` latches `VMODE[0]` at frame end, and `vsup`'s
+`PPEND`/`PBUSY` post a CPU `PDATH` commit to the next `HLOAD`. NitrOS-9's video driver
+(`software/nitros9/docs/video-console.md`) had been polling for the blank's end inside
+its VBL service (1.66 ms IRQs), yielding before a family change, and spreading palette
+loads over sixteen blanks; each of those workarounds went with its item.
+
+**§13.1** said a CPU commit takes the bus at once and chose response 1:
+
+> **`PDATH` commits during active display will snow, and the card has no mechanism to
+> prevent it.**
+
+> Three responses, and the card takes the first:
+>
+> 1. **Specified rule: write the palette during blanking.** `VSTAT` already exposes
+>    `VBLANK` (b6) and `HBLANK` (b5) precisely so software can gate on them, and §2.1
+>    shows blanking is 40 slots per line plus 49 whole lines per frame — room for
+>    **all 256 entries** in one vertical blank at 2 writes per entry (512 writes ×
+>    ~2.4 µs = 1.2 ms against a 1.56 ms vertical blank at 70.09 Hz, so it fits, but
+>    only just; a fade should update half the palette per frame). ⭐ **Two writes per
+>    entry is real, not an approximation**: `PIDX` auto-increments after `PDATH`, so a
+>    run of entries costs one index write and then a `PDATL`/`PDATH` pair each — which
+>    `vpal_tb` checks by loading 256 entries from a single write to `+$10`. The VBL
+>    handler (§12.1) is where a palette update belongs anyway, because that is the
+>    tear-free instant for the *picture* as well as for the LUT. **Zero packages.**
+> 2. Accept the glitch. Legitimate for effects that are already per-scanline: a
+>    gradient written from the raster-compare handler during hblank is response 1 at a
+>    finer grain; one written mid-line is this.
+> 3. Post the write into a holding register and retire it at the next hblank — a
+>    `'574` plus a busy bit and sequencer terms, on the pair §19 item 8 already calls
+>    the tightest fit on the card. **Not taken**: it buys a case response 1 covers for
+>    free.
+
+**§9** said of the write path: *"So `+$12` closes its latch at the end of E-high, and four
+dots later the LUT sees a settled address and a settled 16-bit word."* **§13**'s `+$12`
+row read *"palette entry `RRRRRGGG`; write commits"*, `+$0E` *"writing b0 starts the walk
+from `WPTR` (§10.3.1)"*, and `+$13` carried no b1. **§12.1**'s `'244` row: *"⭐ **It
+carries five bits of eight since 2026-09-10** — b4 is the list engine's `LRUN`, which had
+the same problem and no buffer of its own (§19 item 43)."*
+
+**§10.3.2** read:
+
+> **Issue `GO` at blank's *end*** (load `WPTR` at its start, where the instant is
+> tear-free) and `WAIT` number *n* is line *n*; `software/boot/boot.asm`'s `runlist` is
+> that shape.
+
+and **§10.3.1**'s acknowledgement paragraph said *"so a driver that masks interrupts
+around its `GO` takes the request just after the `GO`, with the list walking."*
+
+**§6.2** said nothing about a family change. The raster read `CTRL`'s `VMODE[0]`
+combinatorially, so a 525 → 449 write at a line past 449 missed `VTC`'s exact compare
+and the counter ran to line 960 before it wrapped; `vsync_tb`'s new claims fail two on
+that design.
+
+**`features.md` §1.2** (the palette paragraph) read:
+
+> ⚠ **Palette writes during active display snow**, and the card has no mechanism to
+> prevent it — the LUT address bus is shared by tri-state turnaround between the scanner
+> and the CPU. Write the palette during blanking. This is a software rule and
+> `graphics.md` §13.1 states it as one.
+
+**Utilisation.** `vctrl` was 93 of 128 cells (35 spare), 56 of 64 I/O, 5 cascades, pass
+1; it is 95. `vsup` was 89 of 128 (39 spare), 61 of 64 (3 spare), 24 cascades, pass 1;
+it is 94 of 128, 63 of 64, 2 cascades, on pass 2. §19 item 46 read *"⭐ **`vsup` places
+on pass 1 since item 50's fix, 2026-09-13**, at 89 cells and 24 cascades; the committed
+design before it refits on pass 2 at 91 and 2, measured the same day."* §10.1.7's
+shape note read *"thirty-seven spare macrocells beside three spare pins"*.
+
+---
+
 ## §19 item 46 — its headline, before `vsup` placed on pass 1 (2026-09-13)
 
 Item 50's fix placed `vsup` on the fitter's first pass. The item's headline and first

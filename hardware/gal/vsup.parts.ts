@@ -135,9 +135,16 @@ export const listDecode: Cell[] = [
    * owns the bus it fetches through. */
   comb("BCTRLGO", [`WSTB & ${isReg(REGS.BCTRL)} & D0`],
     "10.3.1's GO - a strobe, because LRUN is what holds"),
-  reg("LGO", ["BCTRLGO", "LGO & WSTB"],
-    "the GO, held until the write cycle that issued it has ended"),
-  reg("LRUN", ["LGO & !WSTB", "LRUN & !LSTOP"], "13's +$0F, BSTAT b0"),
+  /* ⭐ AND LGO HOLDS THROUGH VERTICAL BLANKING - the armed GO, 2026-09-14
+   * (docs/nitros9-hardware-improvements.md H14). WAIT n is line n only for a
+   * GO inside line 0, and a VBL handler runs a dozen lines into a 49-line
+   * blank: the NitrOS-9 driver polled VBLANK with /IRQ masked to issue it,
+   * 1.66 ms a frame. A GO written in the blank now waits in LGO and the engine
+   * starts on the dot after VBLANK falls; outside the blank nothing changes.
+   * One pin (VBLANK from vctrl) and a literal on each of two cells. */
+  reg("LGO", ["BCTRLGO", "LGO & WSTB", "LGO & VBLANK"],
+    "the GO, held until the write cycle that issued it has ended - and to the blank's end"),
+  reg("LRUN", ["LGO & !WSTB & !VBLANK", "LRUN & !LSTOP"], "13's +$0F, BSTAT b0"),
   comb("LSTOP", ["LRUN & LD7 & LD4 & LD3 & LD2 & LD1 & LD0"],
     "END is any b7 byte with b4..b0 set - canonically $FF"),
 
@@ -305,7 +312,23 @@ export const paletteWrite: Cell[] = [
   comb("PLOAD", ["WPIDX", "LWPI"], "13's +$10, from either port"),
   comb("PDHW", ["WPDH", "LWPDH"], "13's +$12, the commit, from either port"),
 
-  reg("PS0", ["PDHW"]),
+  /* ⭐ A CPU'S COMMIT WAITS FOR THE NEXT HLOAD - 2026-09-14,
+   * docs/nitros9-hardware-improvements.md H7, graphics.md 13.1's response 3.
+   * The entry is already held: PDATL and PDATH are '573s that closed at the
+   * end of their writes, and PIDX is a counter. So nothing more is latched;
+   * the four-dot sequence below simply starts later. PPEND is set by the
+   * PDATH write and the commit runs in the next sync-and-back-porch window,
+   * where the picture is blanked (HLOAD, 10.3.2): no snow, from any instant.
+   * In vertical blanking it runs at once, as it always did, so a VBL handler's
+   * palette load is as fast as before. PBUSY is VSTAT b1 until PIDX has
+   * stepped, and software waits on it before the next palette write - at most
+   * a line, 31.8 us: boot.asm's and the demo's display-off loads do. A list's
+   * MOVE commits at once: it is already at the line's start. Two cells, one
+   * pin and a '244 channel that was spare; no package. */
+  reg("PPEND", ["WPDH", "PPEND & !PS0"]),
+  reg("PS0", ["LWPDH",
+    "PPEND & !WPDH & HLOAD & !PS0 & !PS1 & !PS2 & !PS3",
+    "PPEND & !WPDH & VBLANK & !PS0 & !PS1 & !PS2 & !PS3"]),
   reg("PS1", ["PS0 & !PDHW"]),
   reg("PS2", ["PS1"]),
   reg("PS3", ["PS2"]),
@@ -336,6 +359,8 @@ export const paletteWrite: Cell[] = [
     why: "the pixel-index '574 drives the LUT's address AND the LUT drives its data",
     terms: ["!PDOE"] },
   lowPin("PWE", ["PS2"], "the LUT's /WE - one dot, inside PDOE at both ends"),
+  comb("PBUSY", ["PPEND", "PS0", "PS1", "PS2", "PS3"],
+    "VSTAT b1: a CPU commit is posted or in flight - the next palette write waits"),
 ]
 
 /* ---- graphics.md 11: readable VRAM, at WPTR, prefetched ------------------

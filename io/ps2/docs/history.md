@@ -263,3 +263,20 @@ the 2026-09-04 design review… 9 → 11"). Both replaced by present-tense state
 `serial.md` §4.5's `16C550` needed eight registers where a 6551 had four
 (`serial.md` §7.1, `machine.md` §3). The row said the card had moved away from the
 address it had just moved to.
+
+## §3.1, §8.2 — one `IRQEN` for both ports (replaced 2026-09-14)
+
+Archived text, §8.2's table:
+
+> | 6 | `IRQEN` | enable `/IRQ` from either `DR` — §3.1 | **0 — masked** |
+> | 7 | — | reserved, write 0 | 0 |
+
+and §3.1: "**So: `/IRQ`, open-drain, maskable by `IOCTRL.IRQEN`.**"
+
+Why it moved: NitrOS-9's first keyboard driver serviced only `KDR`. The mouse's power-on
+bytes were waiting in `MDR`, so enabling the keyboard's interrupt raised `/IRQ` for a port
+no service claimed; IOMan's poll found no claimant and the kernel returned from the
+interrupt with interrupts masked for 40 ms (`software/nitros9/docs/video-console.md`,
+`docs/nitros9-hardware-improvements.md` H11). Replaced by: `KIRQEN` (b6) and `MIRQEN`
+(b7), one per port, on two GAL inputs that were spare — no package (`ps2.md` §3.1, §8.2).
+

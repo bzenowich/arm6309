@@ -62,10 +62,23 @@ module vpal_tb;
   endtask
 
   // 13's three-write palette entry: index once, then a pair per colour.
+  // graphics.md 13.1: a CPU commit is posted to the next HLOAD, and VSTAT b1
+  // (PBUSY) holds until PIDX has stepped. The next palette write waits on it:
+  // a line is 800 dots, and two lines is the bound.
+  int pbusy_max = 0;
+  task automatic pdone();
+    int k;
+    for (k = 0; k < 1600 && card.PBUSY; k++) @(posedge DOTCLK);
+    #0;
+    if (k > pbusy_max) pbusy_max = k;
+    if (card.PBUSY) ok(0, "pdone: PBUSY did not fall within two lines");
+  endtask
+
   task automatic wpal(input int idx, input logic [15:0] rgb);
     wreg('h10, idx[7:0]);
     wreg('h11, rgb[7:0]);
     wreg('h12, rgb[15:8]);
+    pdone();
   endtask
 
   task automatic set_wptr(input int a);
@@ -81,7 +94,7 @@ module vpal_tb;
     ident = {r, g, b};
   endfunction
 
-  int i, n, wrong, fights, moves;
+  int i, k, n, m, wrong, fights, moves;
   // 10.3.3's two claims run for the whole of the list, GO included, so they
   // are a process and not a loop body.
   bit watching = 0;
@@ -119,8 +132,8 @@ module vpal_tb;
     // Two entries from one index write - which is what makes 13.1's "all 256
     // in one vertical blank at 2 writes per entry" true rather than 3.
     wreg('h10, 8'h40);
-    wreg('h11, 8'h11); wreg('h12, 8'h22);
-    wreg('h11, 8'h33); wreg('h12, 8'h44);
+    wreg('h11, 8'h11); wreg('h12, 8'h22); pdone();
+    wreg('h11, 8'h33); wreg('h12, 8'h44); pdone();
     ok(card.peek_pal('h40) == 16'h2211 && card.peek_pal('h41) == 16'h4433,
        $sformatf("and the counter runs: $40 = $%04h, $41 = $%04h, from ONE index write",
                  card.peek_pal('h40), card.peek_pal('h41)));
@@ -132,6 +145,7 @@ module vpal_tb;
       want = ident(i[7:0]);
       wreg('h11, want[7:0]);
       wreg('h12, want[15:8]);
+      pdone();
     end
     wrong = 0;
     for (i = 0; i < 256; i++)
@@ -158,13 +172,26 @@ module vpal_tb;
 
     // 13.1 says a palette write costs the pixel path some dots. Count them, so
     // the rule has a number rather than "one or two".
-    n = 0;
+    // In the picture, or the claims below are vacuous: a commit in vertical
+    // blanking runs at once and never waits for HLOAD.
+    for (i = 0; i < 200000 && (VBLANK || card.HLOAD); i++) @(posedge DOTCLK);
+    ok(!VBLANK && !card.HLOAD, $sformatf("the next commit is written in the active picture (after %0d dots)", i));
+    n = 0; m = 0; k = 0;
     fork
       begin wreg('h12, 8'h00); end
-      begin repeat (200) @(posedge DOTCLK) if (!PIXOE_o) n++; end
+      begin repeat (2000) @(posedge DOTCLK) if (card.PBUSY) k++; end
+      begin repeat (2000) @(posedge DOTCLK) begin
+        if (!PIXOE_o) begin n++; if (!card.HLOAD && !VBLANK) m++; end
+      end end
     join
+    pdone();
     ok(n > 0 && n <= 8,
-       $sformatf("⚠ 13.1's snow is bounded and measured: %0d dots of turnaround per commit", n));
+       $sformatf("13.1's turnaround is bounded and measured: %0d dots per commit", n));
+    ok(m == 0,
+       $sformatf("⭐ and a CPU commit is posted to HLOAD: every one of those dots is in the blanked sync-and-back-porch window or vertical blanking (%0d outside) - no snow from any instant", m));
+    if (k > pbusy_max) pbusy_max = k;
+    ok(k > 0 && pbusy_max <= 800,
+       $sformatf("⭐ PBUSY (VSTAT b1) holds a commit at most a line: %0d dots for the one written in the picture, the longest wait %0d (a line is 800)", k, pbusy_max));
 
     $display("");
     $display("The dot path - '153 -> index '574 -> LUT -> '273 (graphics.md 6.1)");
@@ -183,6 +210,7 @@ module vpal_tb;
       want = ident(i[7:0]);
       wreg('h11, want[7:0]);
       wreg('h12, want[15:8]);
+      pdone();
     end
     for (i = 0; i < 8192; i++) card.poke(i, i[7:0]);
     wreg('h01, 8'h00); wreg('h02, 8'h00);       // VSCROLL = 0

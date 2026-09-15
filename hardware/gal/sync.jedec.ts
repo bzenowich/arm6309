@@ -35,7 +35,7 @@ const VB = ["V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9"]
 
 /* The slot counter never passes 199, so its terminal count is a partial
  * decode: H7 & H6 puts it at 192 or above and the low three bits pick 199. */
-const H_LAST = rangeTerms({ bits: HB, lo: H.last, hi: H.last, max: H.last })[0]
+export const H_LAST = rangeTerms({ bits: HB, lo: H.last, hi: H.last, max: H.last })[0]
 
 /* The line counter's largest reachable value is 524, in the 525-line family.
  * Every V decode is generated against that bound and not against the bound of

@@ -94,6 +94,8 @@ export const vsupCpld: Merged = merge(
        * '163 pair's load and count, and the two '573 latch enables. PIDX is
        * three packages off this die - vsup.parts.ts has why. */
       "PIXOE", "PDOE", "PWE", "PILD", "PINC", "LDPDL", "LDPDH",
+      /* ⭐ and the posted commit's busy bit, to VSTAT's '244 as b1 (H7) */
+      "PBUSY",
       /* 10.3.3's descriptor buffer and the register file's output enable -
        * the two halves of one turnaround on the card's internal data bus. */
       "LDBOE", "RFOE",

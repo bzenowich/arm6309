@@ -198,6 +198,65 @@ module vsync_tb;
     run_mode(2'b11, 525, 480, 0, "VMODE 11  640x480 progressive");
 
     $display("");
+    $display("A VMODE family change takes effect where the frame ends, whenever it is written");
+    $display("");
+    /* ⭐ docs/nitros9-hardware-improvements.md H8. With M0 a plain copy of
+     * VMODE0, the 449-line family written at line 500 of a 525-line frame left
+     * the terminal-count decode nothing to match until line 960: 461 more
+     * lines here, not 25 (measured against the old term list). */
+    set_ctrl(8'h03); to_frame_start();
+    begin
+      bit hit = 0;
+      for (int k = 0; k < WAIT_MAX && !hit; k++) begin
+        @(posedge DOTCLK); #0; if (vnum() == 500) hit = 1;
+      end
+      ok(hit, "a 525-line frame reached line 500");
+    end
+    set_ctrl(8'h00);
+    begin
+      int left = 0, v_prev = vnum();
+      bit wrapped = 0;
+      for (int k = 0; k < WAIT_MAX && !wrapped; k++) begin
+        @(posedge DOTCLK); #0;
+        if (vnum() != v_prev) begin
+          v_prev = vnum(); left++;
+          if (vnum() == 0) wrapped = 1;
+        end
+      end
+      ok(wrapped && left == 25,
+         $sformatf("the 449-line family written at line 500: that frame still ends after line 524 (%0d more lines, want 25)", left));
+    end
+    for (int k = 0; k < WAIT_MAX && hnum() != 1; k++) begin @(posedge DOTCLK); #0; end
+    measure_frame(449, 400);          // from inside line 0: lines, not dots
+    ok(lines == 449 && active_lines == 400,
+       $sformatf("and the next frame is the new family's: %0d lines, %0d active (want 449, 400)", lines, active_lines));
+    begin
+      bit hit = 0;
+      for (int k = 0; k < WAIT_MAX && !hit; k++) begin
+        @(posedge DOTCLK); #0; if (vnum() == 300) hit = 1;
+      end
+      ok(hit, "a 449-line frame reached line 300");
+    end
+    set_ctrl(8'h01);
+    begin
+      int left = 0, v_prev = vnum();
+      bit wrapped = 0;
+      for (int k = 0; k < WAIT_MAX && !wrapped; k++) begin
+        @(posedge DOTCLK); #0;
+        if (vnum() != v_prev) begin
+          v_prev = vnum(); left++;
+          if (vnum() == 0) wrapped = 1;
+        end
+      end
+      ok(wrapped && left == 149,
+         $sformatf("the 525-line family written at line 300: that frame still ends after line 448 (%0d more lines, want 149)", left));
+    end
+    for (int k = 0; k < WAIT_MAX && hnum() != 1; k++) begin @(posedge DOTCLK); #0; end
+    measure_frame(525, 480);
+    ok(lines == 525 && active_lines == 480,
+       $sformatf("and the next frame is the new family's: %0d lines, %0d active (want 525, 480)", lines, active_lines));
+
+    $display("");
     $display("Sync widths, shared horizontal timing");
     $display("");
     set_ctrl(8'h00); to_frame_start();
