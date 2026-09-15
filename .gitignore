@@ -61,3 +61,7 @@ hardware/gal/verilog/*.ppm
 # LWTOOLS source archive it builds from (GPL v3, not ours to redistribute).
 .tools/
 software/tools/lwtools-*.tar.gz
+
+# rendered videos (software/nitros9/video/run-video.sh, software/demo/tools/mkvideo.py):
+# regenerated from the scripts, and too large for history
+*.mp4
