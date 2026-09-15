@@ -85,6 +85,9 @@ blocks included:
    card or for a VBL, or needs blocks allocated or freed, it yields (`VG.CWait`: batch,
    frame, alloc, free). ArmIO sleeps or makes the call, then calls `CF.Resume`, and CoArm
    continues from the same stack. `VG.CBusy` keeps other windows' calls out meanwhile.
+   ⛔ **CoArm's entry does not touch `S` until it knows the call.** A resumed call's stack is
+   under `Co.Stack` and `/IRQ` is open, so an entry that loaded `Co.Stack` first let an IRQ
+   stack over it, and `Resume` returned into the clock (`video/README.md`).
 
 **What both maps see is block 0.** `VG`, the video globals, is at `$1100`, in the page a
 CoCo 3 gives GrfDrv's globals. CoArm's stack is under `$1F00`, and the flip's frame is above

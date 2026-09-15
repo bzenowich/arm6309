@@ -277,6 +277,8 @@ def stream_p1():
     s += xy(0, 16) + b"\x1f\x30inserted at 16"
     s += xy(0, 3) + b"\x1f\x31"             # row 3 goes; 4.. move up
     s += b"\x1b\x2b\xc8\x02\x05\x00\x08\x00\x08\x00\x10" + bytes([0x1B, 0x0C] * 8)   # GPLoad: 16 bytes swallowed
+    s += b"\x1b\x2a\xc8\x00"                    # KillBuf: GP buffers are CoArm's, not the window's -
+    #                                             left, group $C8 is too small for vgp2a's GPLoad
     s += b"\x1b\x39\x01\x02"                    # GCSet: swallowed
     s += b"\x07\x00"                            # bell, null
     s += xy(0, 20) + b"\x0bafter erase-to-end-of-screen"

@@ -40,16 +40,18 @@ Select `/W4` and back. `vgp3`'s extension escapes and ANSI overlay. `rastbar`, `
 
 ## ⛔ What making it found
 
-With `vtp1` drawn on `/W1` and `/W1` still defined, **`copy /dd/sys/vgp2a /w3` fails at open
-with error 64**. In the longer session, the next `Select` of `/W4` then sent CoArm (task 1)
-wild. It is repeatable in a few emulator seconds:
+Two defects in the port, fixed on `../nitros9`'s `arm6309` branch. `run-vid.sh` could see neither:
+each of its runs is a fresh boot with one client, and neither defect shows in that shape.
 
-```
-iniz w1 / copy /dd/sys/vtp1 /w1 / iniz w3 / copy /dd/sys/vgp2a /w3   -> Error #064
-```
-
-The failure needs `vtp1`'s content. `vtw2` on `/W2`, a bare `iniz w1`, a shell on `/W1`, and
-drawing `/W3` before `vtp1` all work, and so does `deiniz w1` first. `iniz w3` before `vtp1`
-does not help. `run-vid.sh` never sees it
-because each of its runs is a fresh boot with one client. The session ends `/W1` after
-`vtp1` (`deiniz w1`) to get past it. **Not fixed.**
+- **`copy /dd/sys/vgp2a /w3` failed with "Error #064"** once `vtp1` had been drawn on `/W1`.
+  GP buffers belong to CoArm, not to a window. `vtp1` loaded 16 bytes into group `$C8`
+  buffer 2 and left them, so `vgp2a`'s 1,024-byte GPLoad into the same buffer was correctly
+  refused with `E$BufSiz` ($BF). `ca_gpb.asm`'s `Swallow` then returned with `COMB`, which
+  complements B, so the caller saw $40. `Swallow` now sets carry with `ORCC`, and `vtp1` kills
+  its group after the load (`tools/vtmodel.py`).
+- **CoArm went wild at a Select**, 115 s into a session with a shell typed at on `/W1`.
+  `coarm.asm`'s entry loaded `S` with `Co.Stack` before it looked at the call. For
+  `CF.Resume`, CoArm's yielded registers and return addresses are under `Co.Stack`, and `/IRQ`
+  is open, so an IRQ in those three instructions stacked over them and `Resume` returned
+  into the clock. The entry now stays on the flip's frame until it knows the call. It
+  depends on timing: the same session without keyboard input missed the window.

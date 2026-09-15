@@ -26,12 +26,10 @@ def pause(s):
 LINES = [
     ("dir", 2), ("mfree", 3), ("procs", 2),
     # the text console: /W1 80 x 25 in cell mode, then /W2 80 x 30 made while /W1 shows
-    # ⚠ /W1 is ended after vtp1: with vtp1's /W1 still defined, opening /W3 fails
-    # with error 64 and a later Select sends CoArm wild (README.md)
-    ("iniz w1", 0), ("copy /dd/sys/vtp1 /w1", 4), ("deiniz w1", 0),
+    ("iniz w1", 0), ("copy /dd/sys/vtp1 /w1", 4),
     ("iniz w2", 0), ("copy /dd/sys/vtw2 /w2", 0), ("display 1b 21 >/w2", 4),
-    # a second shell, on a new /W1, fed by the PS/2 keyboard (kbd.txt waits for this line)
-    ("iniz w1", 0), ("shell i=/w1&", 0), ("display 1b 21 >/w1", 1),
+    # a second shell, on /W1, fed by the PS/2 keyboard (kbd.txt waits for this line)
+    ("display 1b 21 >/w1", 1), ("shell i=/w1&", 0),
     ("echo now typing on the PS/2 keyboard", 23),
     # bitmap windows: /W3 640 x 200, the pointer toured by the PS/2 mouse
     ("iniz w3", 0), ("copy /dd/sys/vgp2a /w3", 0), ("display 1b 21 >/w3", 1),
@@ -61,7 +59,7 @@ CAPTIONS = [
     ("RKBoot", "NitrOS-9 Level 2 boots from ROM: loader, kernel, bootfile from the ROM disk"),
     ("DD:dir", "A shell on the TL16C550C: dir, mfree (8 MB on 16-bit blocks), procs"),
     ("vtp1 /w1", "/W1: an 80x25 text window in cell mode, one write a character"),
-    ("21 >/w2", "Select /W2: an 80x30 text window, drawn off screen"),
+    ("21 >/w2", "Select /W2: 80x30, drawn while /W1 was on the screen"),
     ("i=/w1&", "A second shell on /W1, typed at on the PS/2 keyboard"),
     ("vgp2a /w3", "/W3: a 640x200 bitmap window - text styles, lines, circles, fills, GP buffers"),
     ("PS/2 mouse", "The PS/2 mouse: the pointer is drawn into VRAM from the kernel's idle loop"),

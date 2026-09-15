@@ -1106,8 +1106,10 @@ int main(int argc, char **argv)
         }
         if (trace_n > 0 && (!getenv("TRACE_AT") || m->dots * DOT_PS >= (uint64_t)(atof(getenv("TRACE_AT")) * 1e12))) {
             trace_n--;
-            fprintf(stderr, "PC %04X A %02X B %02X X %04X Y %04X U %04X S %04X CC %02X DP %02X T %d\n", m->cpu.pc, m->cpu.a,
-                    m->cpu.b, m->cpu.x, m->cpu.y, m->cpu.u, m->cpu.s, m->cpu.cc, m->cpu.dp, m->task);
+            char nm[16]; unsigned off;
+            module_of(m->cpu.pc, nm, sizeof nm, &off);
+            fprintf(stderr, "PC %04X A %02X B %02X X %04X Y %04X U %04X S %04X CC %02X DP %02X T %d %s+$%04X\n", m->cpu.pc, m->cpu.a,
+                    m->cpu.b, m->cpu.x, m->cpu.y, m->cpu.u, m->cpu.s, m->cpu.cc, m->cpu.dp, m->task, nm, off);
         }
         {   /* CALLTIME */
             static int init;
