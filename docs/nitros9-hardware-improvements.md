@@ -62,6 +62,31 @@ The card is **33 ICs** today (`graphics.md` §14.1), the PS/2 card **11** (`ps2.
 | **H13**, a larger system address space | a question for the MMU and the motherboard, not the video card. Taking the shell out of the bootfile bought P3 what it needed |
 | **H10** | nothing to build |
 
+### ⭐ Re-ranked 2026-09-16 — three corrections, and a new item
+
+`docs/video-copyrect.md` asked what a blitter-first card would buy and measured
+the store rate that every cost below is denominated in
+(`software/demo/bench/vramrate.asm`). **Four things changed, and none of them is
+a fit.**
+
+| | Was | Is |
+|---|---|---|
+| ⭐ **VidCore's ~10 µs a byte** | a fixed cost the H-items are priced against | **measured: 20.86 E cycles a byte, and 16 of them are the loop.** Unrolling with direct-page stores is **2.2× for a copy, 2.7× for a fill, and ~2.5× again through a mapped VRAM window**, at no hardware, with the masking rule intact (it masks *less*) — so **every row below is worth less than it reads** until the streams are rewritten |
+| ⭐ **H3**, logic `WMODE`s | "needs the span writer to read before it writes, which is the blitter's datapath" — priced with H5/H2/H6 at **~14 ICs** | ⛔ **that stopped being true on 2026-09-11.** `graphics.md` §11 built the read path: read at `WPTR` into the `vread` latch, ALU with `WFG`, write back. **3.15 MB/s, 4.5× `TFM`, ~3 packages** — ⚠ byte-wide only, so it gives up broadcast width |
+| ⭐ **H4**, more VRAM | "≈ +2–3 packages (another pair of `AS6C8016`s, and a page select)" | ⛔ **the memory is already fitted.** `graphics.md` §14.2.2: each `AS6C8016` is 512K×16 with two address pins tied off, so the two parts hold **2 MB** and address 512 KB — "precisely the 2 MB upgrade path the moment the pointers widen to 21 bits". **0 packages of SRAM**; the cost is two more bits on the scan address and `WPTR`, both on `vaddr` |
+| ⭐ **H1**, a hardware cursor | rank 5, the thing to buy first | **displaced by H20.** Copyrect makes a pointer move ~125 µs — inside the mouse's IRQ — *and* delivers H4, H5 and H15, without touching the pixel path that `features.md` §8 says has 11.7 ns of margin |
+
+**The order that falls out**, and the first two need no silicon:
+
+| | Item | Why here |
+|---|---|---|
+| **1** | **Rewrite VidCore's streams** (`video-copyrect.md` §6) | measured, free, and it changes what everything below is worth |
+| **2** | **Spend an 8 KB map slot on the VRAM window** | `graphics.md` §11: every address in a mapped window is `VDATA`, so a 16-bit store carries two bytes. The fastest path on the card, and it exists |
+| **3** | **H3**, logic `WMODE`s | ~3 packages, and it is what QuickDraw's `srcXor`/`srcOr` need (`video-copyrect.md` §5.4) |
+| **4** | ⭐ **H20**, copyrect — **vertical-only first** | the missing third engine. ≈ +5–6 packages, ⚠ estimated |
+| **5** | **H9**, the six-bit cell row, **and H18's attribute plane** | both land on `vaddr` and both are the console. ⭐ **H4, H9, H18 and H20 all want the same `vaddr` re-partition** — designing them as one fourth CPLD is the difference between one re-partition and four |
+| ⛔ | **H1** (hardware cursor), **H19** (1/2/4bpp scan), flat-mapped VRAM | superseded, or priced and lost — `video-copyrect.md` §2.1, §4 |
+
 ### The software was measured again before buying rank 5
 
 `features.md` §9 estimates a pointer move at **~0.92 ms**; the first driver took **15.6 ms**,
@@ -91,6 +116,9 @@ Ranks 6–9 are a card revision, not an amendment.
 | H15 | **A moving figure on a tile screen is fifteen tiles the CPU composites**: each cell under the hero is the world's tile read back through `VDATA` with the sprite's bytes laid over it, written to a spare tile code, and the map cells swapped in the blank (`overworld.asm`, as `demo.asm` does it) | 64 reads and 64 writes a tile, so the hero is rebuilt a tile a frame and moves 4.4 times a second at 70 Hz; the swap is an `SS.Batch` of up to 30 map writes, **0.47–0.75 ms of a 1.56 ms blank**, measured, with the IRQ at 1.35 ms | **Hardware sprites**: H1's overlay, a few of them and larger, over cell mode as well as bitmap. The figure is a position and a frame, and the map never changes |
 | H16 | **A column of map cells is a `WPTR` load per cell**: map rows are 128 bytes apart, and `WADV` steps a ring row, 1,024 (`libvid.asm` `VlPoke`) | a column of 26 is 26 × 3 register writes and 26 bytes; as 26 separate calls it cost one frame in five, and as two masked pokes it is ~0.35 ms each | **A `WADV` stride of 128 in cell mode** (the map's row), so a column is one `WPTR` load and a stream |
 | H17 | **A display list cannot scroll vertically.** A `MOVE` reaches `HSCROLL` but not `VSCROLL` (its second write port was refused by the fitter, `graphics.md` §10.3.2), and the row counter loads from `VSCROLL` only in vertical blanking (`VLOAD`, §6.4.1). The armed `GO` does not change either | no mid-frame vertical split: a status line under a scrolling playfield is two screens' worth of redraw instead of a register | **A `VSCROLL` load at a line**, on `vaddr`, and a list `MOVE` to reach it — both on the part with no fan-in left |
+| H18 | **A fast-text cell is a (glyph, colour) pair**, so `FColor`/`BColor` rebuild the whole 16 KB bank (~6 ms) and there is no per-character colour, underline or blink (`graphics.md` §6.4.8). ⛔ **And `$80`–`$FF` are spent on the inverted half of the font**, so CP437 — which is where every box and block character of ANSI art lives — does not fit a bank at all | ANSI art changes colour mid-line constantly, so **the fast console cannot render it**; it is bitmap text at 11–13 writes a cell, 63–74 ms a screen (`software/nitros9/docs/video-compat.md` §6.7) | ⭐ **An attribute plane, and `graphics.md` §6.4.10 now costs one** — two map bytes a cell, the attribute driving the **LUT's dead high address lines** (63.5 KB of its 64 are unused) rather than a 1bpp serialiser, which is what §6.4.6 limit 3 refuses. **2 writes a cell, 256 simultaneous (fg, bg) pairs from all 65,536**: 16-colour ANSI exactly, most 256-colour content in practice, and all 256 code points. ⚠ **≈ +1–2 packages and a `vaddr` re-partition**, unfitted; the load-bearing claim is that the attribute is constant across a cell so no stage joins the 11.7 ns dot path. ⭐ **The software half needs no silicon**: two halves of 128 glyphs in two colour pairs |
+| H19 | **The scan path is 8bpp only**, so CoCo 3 screen types 1–4 must be rendered into 8bpp and no CoCo image is byte-compatible | 4–8× the memory for the same picture, and an asset converter for everything ported | **A 1/2/4bpp scan mode.** ⛔ **Not recommended**: it lands on the index → LUT path, which has 11.7 ns of margin (`graphics.md` §6.1). A build-time converter buys the compatibility more cheaply |
+| ⭐ H20 | **There is no VRAM-to-VRAM path at all.** Every byte that moves inside VRAM goes out through `VDATA` into the CPU and back — which is H1, H4, H5 and H15, all of them | ~16.2 MB/s of spare access sits unused while a 192-row scroll takes ~350 ms and a `Select` takes seconds | **Copyrect.** ⭐ **The 1024-byte stride removes the adder** that usually makes it expensive — end-of-row is `WADV` 01, already built — so it is a second `WADV`-shaped pointer, two counters and a read-write sequence, not `features.md` §5's general blitter. ⚠ **≈ +5–6 packages, estimated**; `vaddr`'s fifth mux source is the risk (`docs/video-copyrect.md` §2, §3) |
 
 ## PS/2 card
 

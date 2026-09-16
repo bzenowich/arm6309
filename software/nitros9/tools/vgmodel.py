@@ -333,9 +333,20 @@ class Console:
                     w.scr.pix[y0 + r, x0 + i] = w.fg if g[r] & (0x80 >> i) else w.bg
             w.cx += 1
 
-    @staticmethod
-    def _an_col(d, w):
-        w.fg, w.bg = d.an_fg + (8 if d.an_bold else 0), d.an_bg
+    # ca_ext.asm AnsiPal: ANSI 0-15 onto xterm-256's cube, which PalDef puts at
+    # 16-231 with its greys at 232-255.  16-255 are already a palette index.
+    ANSI_PAL = [16, 160, 40, 184, 21, 165, 45, 254, 244, 196, 46, 226, 63, 201, 51, 231]
+
+    @classmethod
+    def _an_map(cls, v):
+        return cls.ANSI_PAL[v] if v < 16 else v
+
+    @classmethod
+    def _an_col(cls, d, w):
+        f = d.an_fg
+        if f < 8 and d.an_bold:          # AnCol: 8-255 are already bright or direct
+            f += 8
+        w.fg, w.bg = cls._an_map(f), cls._an_map(d.an_bg)
 
     def _an_lf(self, d, w):
         w.bg = 0
@@ -346,6 +357,16 @@ class Console:
         cols, rows = w.aw // 8, w.ah // 8
         n1 = ps[0] or 1
         if final == "m":
+            ps = list(ps)
+            # An256: 38;5;n and 48;5;n are taken before the loop and blanked to
+            # 255, which no other branch claims
+            for i in range(max(0, len(ps) - 2)):
+                if ps[i] in (38, 48) and ps[i + 1] == 5:
+                    if ps[i] == 38:
+                        d.an_fg = ps[i + 2]
+                    else:
+                        d.an_bg = ps[i + 2]
+                    ps[i] = ps[i + 1] = ps[i + 2] = 255
             for v in ps:
                 if v == 0:
                     d.an_fg, d.an_bg, d.an_bold = 7, 0, 0
@@ -361,6 +382,10 @@ class Console:
                     d.an_fg = v - 30
                 elif 40 <= v <= 47:
                     d.an_bg = v - 40
+                elif 90 <= v <= 97:            # aixterm's bright foregrounds
+                    d.an_fg = v - 90 + 8
+                elif 100 <= v <= 107:          # ... and its bright backgrounds
+                    d.an_bg = v - 100 + 8
             self._an_col(d, w)
         elif final == "J":
             if ps[0] == 2:
@@ -995,6 +1020,12 @@ def stream_p3():
     for i in range(12):
         s += b"\x1b[3%dmline %d scrolls the terminal\r\n" % (i % 8, i)
     s += b"\x1b[2;10Hat 2,10\x1b[K" + b"\x1b[31m\x1b[3A^\x1b[2B\x1b[4C>\x1b[2D<" + b"\x1b[9;59HWXYZ!"
+    # the 2026-09-16 additions: aixterm's bright ranges and xterm's 256-colour
+    # indexed form.  One of 38;5;n / 48;5;n fits a CSI - WT.AnP is four deep -
+    # so a pair that sets both is two of them (docs/video-compat.md 6.7)
+    s += b"\x1b[2J\x1b[91mbright red\x1b[0m \x1b[102m bright green bg \x1b[0m\r\n"
+    s += b"\x1b[38;5;208m208 orange\x1b[0m \x1b[48;5;19m\x1b[38;5;226m226 on 19\x1b[0m\r\n"
+    s += b"\x1b[38;5;244mgrey 244\x1b[0m \x1b[38;5;9m9 is bright red\x1b[0m"
     s += b"\x1b" + bytes([0x69, 0]) + esc(0x32, 7) + xy(0, 9) + b"CoWin again"
     return bytes(s)
 

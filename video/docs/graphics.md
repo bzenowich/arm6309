@@ -1321,6 +1321,78 @@ unfitted decode half"* — nothing generated them, in either mode. They are two 
 compares on `hgen`'s slot counter, which is on the same part. The vertical half —
 `ROWADV`, and the load that turned out not to need building — is **§8.1**.
 
+#### 6.4.10 An attribute plane — a costed variant, NOT BUILT (2026-09-16)
+
+⚠ **Nothing here is fitted, placed or checked.** It is recorded beside §6.4.3's
+dropped Variant B because it answers the same want — *per-cell colour in cell
+mode* — by a route that does **not** land on the path that killed Variant B.
+`docs/nitros9-hardware-improvements.md` H18 is its entry; the want comes from
+`software/nitros9/docs/video-compat.md` §3.1 and §6.7 (ANSI art changes colour
+mid-line and cell mode cannot).
+
+**What Variant B could not afford**, and §6.4.6 limit 3 says binds any rebuild: a
+1bpp glyph serialiser shifts a bit per dot and muxes `WFG`/`WBG` from it, which
+puts a shift register and a mux **in the dot path** — and §6.1 leaves index → LUT
+→ output **11.7 ns of margin at a 39.72 ns dot**. That is the same wall
+`features.md` §8 and §9 hit for sprites and a hardware cursor.
+
+⭐ **This variant spends the LUT's dead depth instead of the dot path.** §14.2.4's
+own line: *"63.5 KB of the LUT's 64"* is unused — the `IS61C6416AL` is **64K×16**
+and 256 words are written.
+
+| | |
+|---|---|
+| the tile byte | stays the **low eight bits** of the LUT index, fetched exactly as §6.4.2 fetches it — eight bytes a cell, the `'153` mux, the index latch, all unchanged |
+| the attribute byte | the **high eight bits** of the LUT index: one of **256 sub-palettes** |
+| a sub-palette | needs entries 0 and 1 only — background and foreground. 256 pairs is **512 entries, 1,024 CPU writes, ~2.9 ms, once** |
+| the glyph bank | **one** bank of 256 glyphs stored as 0/1 bytes, 16 KB, loaded once and **never rebaked for a colour** (§6.4.8 rebakes 16 KB per pair) |
+
+⭐ **The argument that makes it affordable, and the one to attack first: the
+attribute is constant for all eight dots of a cell.** The high half of the LUT
+address does not toggle at dot rate; the low half is the same byte, from the same
+latch, on the same path as today. **No stage is added to index → LUT → output.**
+⚠ That is a timing *argument*, not a timing *analysis* — the LUT's address setup
+now has eight more lines driven from a different register, and §14.2.6's TTL-level
+note applies to them as much as to the rest.
+
+**Tile values 2–255 stay legal**, so a sub-palette loaded past entry 1 renders
+antialiased glyphs blending background to foreground — §6.4.8's "antialiased
+glyphs are legal", now per cell.
+
+##### What it costs
+
+| | |
+|---|---|
+| the map | **two bytes a cell** — code and attribute. A ×16 spare access carries both, so the cadence of §6.4.9 is unchanged: still nine accesses per eight dots, still 2.25 per chip. The region goes 4 KB → 8 KB and the row stride 128 → 256 bytes, both still concatenations (§6.4.1) |
+| ⛔ `vaddr` | §6.4.9's `MAP`/`MAPQ` two-stage latch **doubles, 8 → 16 macrocells**, on the part at **113 of 128 cells and 40 of 40 block fan-in**. This is the binding constraint, as it is for §19's H4, H9 and the copyrect engine — and it is why all four want one re-partition rather than four |
+| `PIDX` | widens 8 → 16 bits to address the whole LUT: §13.1's two `74AHCT163A` become four, its `'244` onto the LUT address bus widens, and `+$10` becomes two bytes. ⚠ §13.1's three-dot turnaround is unchanged in *shape* but now steals a wider bus |
+| estimate | **+1 to +2 packages and a `vaddr` re-partition** |
+
+##### What it does and does not reach
+
+| | |
+|---|---|
+| ⭐ 16-colour ANSI | **exact**: 16 × 16 = 256, which is one attribute byte, and is the CGA/EGA attribute in all but the colours being ours |
+| ⭐ in practice, most 256-colour content | 256 *simultaneous* (fg, bg) pairs, each chosen from all 65,536 — a screen rarely needs more distinct pairs than that |
+| ⛔ 256-colour in general | 256 × 256 = 65,536 pairs needs **sixteen** attribute bits, three bytes a cell and a 24-bit LUT address. It is bitmap mode's job (§7) |
+| ⭐ all 256 code points | inverse video becomes an attribute bit, so `$80`–`$FF` stop being the inverted half of the font — which is what blocks CP437 today |
+| ⭐ `TILEBASE` | goes back to selecting **glyph sets** rather than colour pairs |
+| ⚠ the 32-row ring | **unchanged** — still 80×25 and 80×30 (§6.4.6 limit 2). H9 is the same part and wants the same re-partition |
+| ⚠ blink | the attribute's top bit XORing one LUT address line against a frame counter: one gate, **at dot rate**, so it needs the timing argument this section only gestures at |
+| ⚠ underline | row == 7 forcing the index — cheaper, because the row is constant across a scanline |
+
+| 80×25 | writes a cell | a full redraw |
+|---|---|---|
+| cell mode, §6.4.8 | 1 | 5.7 ms, one colour pair a screen |
+| **cell mode + this variant** | **2** | **11.4 ms, 256 pairs** |
+| bitmap, span-mask (§7.3) | 11 same-colour, 13 on a change | 63–74 ms, 256 × 256 |
+
+> ⚠ **What would refute it, in order**: a timing analysis of the widened LUT
+> address; then a fit of `vaddr` carrying sixteen map macrocells; then `pack.ts`
+> on a parts list with the wider `PIDX`. Until the first of those, the row above
+> that says "no stage is added" is the whole of the case.
+
+
 ## 7. 80×25 text — software glyphs, and a correction to colormin's cost
 
 **The span writer is the card's general text engine.** §6.4.3's Variant B — a

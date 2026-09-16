@@ -54,8 +54,16 @@ def coco(v):
 
 
 def default_palette():
+    """0-15 CoWin's eight twice; 16-231 xterm-256's 6x6x6 cube; 232-255 its
+    greys.  ca_scr.asm PalDef is the authority; ca_ext.asm AnsiPal maps ANSI
+    0-15 onto the cube so that SGR 38;5;n is a direct index for n >= 16."""
     pal = [coco(COWIN_DEFAULTS[i & 7]) for i in range(16)]
-    pal += [rgb565(LVL5OF7[i >> 5], ((i >> 2) & 7) * 9, LVL5[i & 3]) for i in range(16, 256)]
+    lvl = [0, 95, 135, 175, 215, 255]
+    for r in lvl:
+        for g in lvl:
+            for b in lvl:
+                pal.append(rgb565(r >> 3, g >> 2, b >> 3))
+    pal += [rgb565(v >> 3, v >> 2, v >> 3) for v in range(8, 248, 10)]
     return pal
 
 
