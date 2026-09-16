@@ -36,6 +36,7 @@
     "gen:pld": "bun run gal/cpld.gen.ts",
     "check:pxsel": "bun run gal/pxsel.check.ts",
     "check:docs": "bun run lib/docs.check.ts",
+    "check:video3": "bun run video3/timing.check.ts",
     "check:decode": "bun run lib/decode.check.ts",
     "rom": "sh ../software/tools/mkrom.sh",
     "check:machine": "bun run gal/verilog/gen.ts && sh gal/verilog/run-machine.sh",

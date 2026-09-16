@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-import { CARDS, LENGTHS, BOARD_H, icCount, footprintCount, type CardSpec } from "./parts"
+import { CARDS, ALTERNATES, LENGTHS, BOARD_H, icCount, footprintCount, type CardSpec } from "./parts"
 import { pack, fits } from "./pack"
 import { MB, MB_PARTS } from "./svg"
 import { FAMILY, MB_ROLE, ROLE } from "./parts.info"
@@ -68,13 +68,40 @@ for (const f of ["video", "audio", "net", "storage", "io"]) {
   if (!m) { check(false, `cards/${f}.circuit.tsx declares icBudget`); continue }
   budgets.set(f, Number(m[1]))
 }
+/* ⛔ THE `ics` ASSERTION USED TO SIT BEHIND THE `continue` BELOW, so a card
+ * with no board file had its self-consistency check SILENTLY SKIPPED - it
+ * could claim `ics: 33` against a forty-part list and nothing would say so.
+ * That is this repository's own trap: a check that reports nothing reads
+ * exactly like passing. The parts-list total is checked for EVERY card and
+ * every alternate; only the board-file tie is conditional. */
+for (const [key, c] of [...Object.entries(CARDS), ...Object.entries(ALTERNATES)]) {
+  check(icCount(c) === c.ics, `${key}: the parts list totals its own claim`,
+    `${icCount(c)} vs ${c.ics}`)
+}
 for (const [key, c] of Object.entries(CARDS)) {
   const b = budgets.get(key)
   if (b === undefined) continue
-  check(icCount(c) === c.ics, `${key}: the parts list totals its own claim`,
-    `${icCount(c)} vs ${c.ics}`)
   check(icCount(c) === b, `${key}: and agrees with cards/${key}.circuit.tsx`,
     `${icCount(c)} vs icBudget ${b}`)
+}
+
+/* -- the alternates place too, but own no window -------------------------
+ *
+ * docs/video-options.md §7 item 4: "Neither new design is in
+ * hardware/place/parts.ts. Until each has an entry and a board file with an
+ * icBudget, npm run check:place asserts none of §3.1." An alternate has no
+ * board file and no window, so what is asserted here is what CAN be: that it
+ * places on the length it claims, and that the length is the shortest that
+ * works. */
+for (const [key, c] of Object.entries(ALTERNATES)) {
+  check((LENGTHS as readonly number[]).includes(c.length),
+    `${key} (alternate) is 12, 18 or 24 cm`, `${c.length} mm`)
+  const r = pack(c)
+  check(r.over.length === 0, `${key} (alternate): every package places on ${c.length / 10} cm`,
+    r.over.join(", "))
+  const shortest = LENGTHS.find((L) => pack(c, L).over.length === 0)
+  check(shortest === c.length, `${key} (alternate): ${c.length / 10} cm is the shortest that works`,
+    shortest ? `${shortest / 10} cm is enough` : "none of the three is enough")
 }
 
 /* -- every card in the study has a window, and vice versa ----------------- */

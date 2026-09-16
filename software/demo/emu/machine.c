@@ -119,6 +119,21 @@ typedef struct {
     uint8_t pidx, pdatl, tilebase, mapbase;
     uint8_t regfile[32];         /* graphics.md 13: what a register reads back */
     uint16_t pal[256];
+
+    /* ⭐ video3 (video3/docs/plan.md), selected by VIDEO3=1. A SECOND CARD
+     * MODEL, not a replacement: run-emu.sh, run-vid.sh and run-nitros9 all
+     * drive `video`, and swapping it out would take the regression suite with
+     * it. The five functions that ARE the card - video_write, video_read,
+     * vram_write, vram_read, render_line - dispatch on m->v3. */
+    int v3;
+    uint16_t pal3[1 << 16];      /* plan 3: the LUT is 64Kx16 and video3 uses it all */
+    uint16_t pidx3;              /* plan 10: 16 bits, +$0E/+$0F */
+    uint32_t cptr;               /* plan 6: copyrect source */
+    uint16_t cwidth, cheight;
+    uint8_t cctrl;
+    uint8_t sprx_lo, spry_lo, sprh, spridx, sprshape[16];
+    long v3_violations;
+
     int irq_pending;
     int irq_line_due;            /* the line /IRQ reaches the CPU on, or -1 */
     long list_violations, span_violations;
@@ -265,8 +280,126 @@ static void list_run(void);
 
 static int in_vblank(void);
 
+/* ===================== video3 =====================================
+ *
+ * video3/docs/plan.md. What differs from `video`, and nothing else does:
+ *   §10  a different register map - MODE in CTRL b3..2, PIDX 16 bits,
+ *        copyrect at +$12..+$17, the sprite at +$1A..+$1E
+ *   §3   the LUT address is SIXTEEN bits: the pixel byte on A7..A0 and an
+ *        ATTRIBUTE on A15..A8 - the cell's in character mode, the sprite's
+ *        code in bitmap mode
+ *   §2.5 the character map is TWO bytes a cell on a 1024-byte stride, six-bit
+ *        cell row, NO ring and NO horizontal scroll
+ *   §6   a copy engine
+ *   §7   one 8x8 two-bit sprite, bitmap mode only
+ *   §0   no display list
+ *
+ * ⚠ THIS IS A FUNCTIONAL MODEL. It answers "does the ATTR path produce the
+ * right pixels", which is the half of plan §14 item 1 that a model can reach.
+ * It does NOT model the fetch cadence, so plan §14 item 8 - five requesters
+ * against one spare access a slot - is still open and still needs Verilator.
+ */
+
+#define V3_MODE(m_)   (((m_)->ctrl >> 2) & 3)      /* 0 bitmap, 1 character, 2 tile */
+#define V3_WMODE(m_)  (((m_)->ctrl >> 4) & 3)
+
+static void vram_write(uint8_t v);
+static uint8_t vram_read(void);
+
+/* plan §6: the copy, done at once. The engine's TIME is modelled as busy_until
+ * the way a span is; its ORDER is modelled exactly, because an overlapping
+ * scroll that runs the wrong way is the defect this model exists to catch. */
+static void v3_copy(void)
+{
+    uint32_t w = m->cwidth, h = m->cheight;
+    if (!w || !h) return;
+    int rowdir = (m->cctrl & 2) ? -1 : 1, coldir = (m->cctrl & 4) ? -1 : 1;
+    uint32_t sc = m->cptr & 1023, sr = (m->cptr >> 10) & 511;
+    uint32_t dc = m->wptr & 1023, dr = (m->wptr >> 10) & 511;
+    for (uint32_t y = 0; y < h; y++) {
+        /* ⭐ CPTR and WPTR name the rectangle's ORIGIN in both axes; the two
+         * direction bits say which way the engine walks INSIDE it (plan §6.2).
+         * One convention for both axes - the model had two, which is the kind
+         * of thing only an overlapping copy in the wrong axis would have found. */
+        uint32_t oy = (rowdir > 0) ? y : h - 1 - y;
+        uint32_t syr = (sr + oy) & 511, dyr = (dr + oy) & 511;
+        for (uint32_t x = 0; x < w; x++) {
+            uint32_t ox = (coldir > 0) ? x : w - 1 - x;
+            uint32_t sx = (sc + ox) & 1023, dx = (dc + ox) & 1023;
+            m->vram[((dyr << 10) | dx) & 0x7FFFF] = m->vram[((syr << 10) | sx) & 0x7FFFF];
+        }
+    }
+    /* plan §6.1: one read access and one write access a four-byte group where
+     * the columns are congruent mod 4, one byte an access otherwise. */
+    int wide = ((sc & 3) == (dc & 3));
+    uint64_t groups = wide ? ((uint64_t)w + 3) / 4 * h : (uint64_t)w * h;
+    m->busy_until = m->dots + DOTS_PER_E + groups * 8;
+}
+
+static void v3_video_write(uint8_t r, uint8_t v)
+{
+    if (r != 0x0C) m->regfile[r & 31] = v;
+    switch (r) {
+    case 0x00: m->ctrl = v; break;
+    case 0x01: m->vs_lo = v; break;
+    case 0x02: m->vs_hi = v & 1; break;
+    case 0x03: m->hs_lo = v; break;
+    case 0x04: m->hs_hi = v & 3; break;
+    case 0x05: m->spanlen = v; break;
+    case 0x06: m->wfg = v; break;
+    case 0x07: m->wbg = v; break;
+    case 0x08: m->wp0 = v; m->wptr = (m->wptr & ~(uint32_t)0xFF) | v; break;
+    case 0x09: m->wp1 = v; m->wptr = (m->wptr & ~(uint32_t)0xFF00) | ((uint32_t)v << 8); break;
+    case 0x0A: m->wptr = (m->wptr & 0xFFFF) | ((uint32_t)(v & 7) << 16); break;
+    case 0x0B: m->wadv = v & 3; break;
+    case 0x0C: vram_write(v); break;
+    case 0x0D: m->irq_pending = 0; break;
+    case 0x0E: m->pidx3 = (uint16_t)((m->pidx3 & 0xFF00) | v); break;
+    case 0x0F: m->pidx3 = (uint16_t)((m->pidx3 & 0x00FF) | ((uint16_t)v << 8)); break;
+    case 0x10: m->pdatl = v; break;
+    case 0x11: m->pal3[m->pidx3++] = (uint16_t)((v << 8) | m->pdatl); break;
+    case 0x12: m->cptr = (m->cptr & ~(uint32_t)0xFF) | v; break;
+    case 0x13: m->cptr = (m->cptr & ~(uint32_t)0xFF00) | ((uint32_t)v << 8); break;
+    case 0x14: m->cptr = (m->cptr & 0xFFFF) | ((uint32_t)(v & 7) << 16); break;
+    case 0x15: m->cwidth = (uint16_t)((m->cwidth & 0x300) | v); break;
+    case 0x16: m->cheight = (uint16_t)((m->cheight & 0x100) | v); break;
+    case 0x17:
+        m->cwidth  = (uint16_t)((m->cwidth  & 0xFF) | ((v & 0x18) << 5));
+        m->cheight = (uint16_t)((m->cheight & 0xFF) | ((v & 0x20) << 3));
+        m->cctrl = v;
+        if (v & 1) v3_copy();
+        break;
+    case 0x18: m->tilebase = v & 31; break;
+    case 0x19: m->mapbase = v & 7; break;
+    case 0x1A: m->sprx_lo = v; break;
+    case 0x1B: m->spry_lo = v; break;
+    case 0x1C: m->sprh = v; break;
+    case 0x1D: m->spridx = v & 15; break;
+    case 0x1E: m->sprshape[m->spridx & 15] = v; m->spridx = (uint8_t)((m->spridx + 1) & 15); break;
+    default: break;
+    }
+}
+
+static int in_vblank(void);
+
+static uint8_t v3_video_read(uint8_t r)
+{
+    switch (r) {
+    case 0x0C: return vram_read();
+    case 0x0D: {
+        uint64_t col = m->dots - m->line_start;
+        return (uint8_t)((m->busy_until > m->dots ? 0x80 : 0) | (in_vblank() ? 0x40 : 0)
+                         | (col >= 640 ? 0x20 : 0) | (m->irq_pending ? 1 : 0));
+    }
+    default: return m->regfile[r & 31];
+    }
+}
+
+/* ===================== end video3 ================================= */
+
 static void video_write(uint8_t r, uint8_t v)
 {
+    if (m->v3) { v3_video_write(r, v); return; }
     if (r != 0x15) m->regfile[r & 31] = v;
     switch (r) {
     case 0x00: m->ctrl = v; break;
@@ -314,6 +447,7 @@ static int active_lines(void);
 
 static uint8_t video_read(uint8_t r)
 {
+    if (m->v3) return v3_video_read(r);
     switch (r) {
     case 0x13: {
         uint64_t col = m->dots - m->line_start;
@@ -871,6 +1005,8 @@ static int vlines(void) { return m->m0 ? 525 : 449; }
 static int active_lines(void) { return m->m0 ? 480 : 400; }
 static int in_vblank(void) { return m->line >= active_lines(); }
 
+static void v3_render_line(int y);
+
 static void render_line(int y)
 {
     if (y == 0) {
@@ -881,6 +1017,7 @@ static void render_line(int y)
         if (m->marks) fprintf(m->marks, "%llu A\n", (unsigned long long)(m->dots * DOT_PS));
     }
     if (y == 1) m->lrun1 = (uint16_t)m->lrun;
+    if (m->v3) { v3_render_line(y); return; }
     uint16_t *row = m->cur + (size_t)y * 640;
     uint32_t hs = ((uint32_t)m->hs_hi << 8) | m->hs_lo;
     int vmode = m->ctrl & 3;
@@ -896,6 +1033,56 @@ static void render_line(int y)
     } else {
         const uint8_t *src = m->vram + (ry << 10);
         for (int x = 0; x < 640; x++) row[x] = m->pal[src[(hs + x) & 1023]];
+    }
+}
+
+/* plan §3: row[x] = LUT[ (ATTR << 8) | pixel ]. The three modes differ only in
+ * where the two halves come from. */
+static void v3_render_line(int y)
+{
+    uint16_t *row = m->cur + (size_t)y * 640;
+    int vmode = m->ctrl & 3;
+    uint32_t py = (vmode == 0 || vmode == 1) ? (uint32_t)(y / 2) : (uint32_t)y;
+    uint32_t hs = ((uint32_t)m->hs_hi << 8) | m->hs_lo;
+    uint32_t tb = (uint32_t)m->tilebase << 14, mb = (uint32_t)m->mapbase << 16;
+    int mode = V3_MODE(m);
+
+    if (mode == 1) {
+        /* plan §2.5: two bytes a cell on a 1024-byte stride, six-bit cell row,
+         * ⛔ NO ring and NO horizontal scroll - a line is 80 codes, not 81. */
+        uint32_t crow = (py >> 3) & 63, grow = py & 7;
+        for (int x = 0; x < 640; x++) {
+            uint32_t ma = (mb + (crow << 10) + (((uint32_t)x >> 3) << 1)) & 0x7FFFF;
+            uint8_t code = m->vram[ma], attr = m->vram[(ma + 1) & 0x7FFFF];
+            uint8_t px = m->vram[(tb + ((uint32_t)code << 6) + (grow << 3)
+                                     + ((uint32_t)x & 7)) & 0x7FFFF];
+            row[x] = m->pal3[((uint16_t)attr << 8) | px];
+        }
+        return;
+    }
+    uint32_t ry = (m->vs_frame + py) & 511;
+    if (mode == 2) {                    /* tile: one map byte, ATTR is zero */
+        for (int x = 0; x < 640; x++) {
+            uint32_t cx = (hs + x) & 1023;
+            uint8_t code = m->vram[(mb + (((ry >> 3) & 63) << 10) + ((cx >> 3) & 127)) & 0x7FFFF];
+            row[x] = m->pal3[m->vram[(tb + ((uint32_t)code << 6) + ((ry & 7) << 3)
+                                        + (cx & 7)) & 0x7FFFF]];
+        }
+        return;
+    }
+    /* bitmap: ⭐ ATTR carries the sprite, and ONLY here (plan §7) */
+    const uint8_t *src = m->vram + (ry << 10);
+    uint32_t sx = ((uint32_t)(m->sprh & 3) << 8) | m->sprx_lo;
+    uint32_t sy = ((uint32_t)(m->sprh & 4) << 6) | m->spry_lo;
+    int on = (m->sprh & 0x80) != 0;
+    for (int x = 0; x < 640; x++) {
+        uint16_t attr = 0;
+        if (on && py >= sy && py < sy + 8 && (uint32_t)x >= sx && (uint32_t)x < sx + 8) {
+            uint32_t sr = py - sy, sc = (uint32_t)x - sx;
+            uint8_t b0 = m->sprshape[sr * 2], b1 = m->sprshape[sr * 2 + 1];
+            attr = (uint16_t)(((b1 >> (7 - sc)) & 1) * 2 + ((b0 >> (7 - sc)) & 1));
+        }
+        row[x] = m->pal3[(attr << 8) | src[(hs + x) & 1023]];
     }
 }
 
@@ -1034,6 +1221,8 @@ int main(int argc, char **argv)
         m->ser_stop = getenv("SERIAL_STOP");
         m->ser_stop_len = strlen(m->ser_stop);
     }
+    m->v3 = getenv("VIDEO3") && atoi(getenv("VIDEO3"));
+    if (m->v3) fprintf(stderr, "emu: ⭐ VIDEO3 - video3/docs/plan.md's card, not video/'s\n");
     card_reset(&m->card, m->sram, CARD_SRAM_BYTES);
     m->cur = calloc(640 * 512, 2);
     m->prv = calloc(640 * 512, 2);

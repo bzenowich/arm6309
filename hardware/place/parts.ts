@@ -241,6 +241,70 @@ export const CARDS: Record<string, CardSpec> = {
   },
 }
 
+/* ------------------------------------------------------------------------
+ * ALTERNATES — card designs that are NOT in the machine.
+ *
+ * ⚠ CARDS is the machine's slot population: place.check.ts asserts every key
+ * there owns a window in cards/windows.ts, and two cards cannot own $FF60.
+ * video2, the VIC-II derivative and video3 are ALTERNATIVES TO `video`, not
+ * additions to it, so they cannot live there - which is exactly why
+ * docs/video-options.md §7 item 4 records that none of its package counts is
+ * asserted by anything.
+ *
+ * This record closes that. An alternate is placed and length-checked like a
+ * card and totalled against its own claim; it is not window-checked and needs
+ * no board file until someone draws one.
+ * ---------------------------------------------------------------------- */
+export const ALTERNATES: Record<string, CardSpec> = {
+  /* video3/docs/plan.md §13, derived part by part from §0-§9 rather than by
+   * diffing `video`. ⛔ THE PROGRAMMABLE-LOGIC COUNT IS A PLACEHOLDER: plan
+   * §14 item 4 says video3 has no partition, so `pld3` assumes three parts and
+   * `pld4` four. What check:place answers is whether the DISCRETE list plus
+   * that assumption still places - which is a design input, not bookkeeping. */
+  video3: {
+    title: "Video3", length: 240, ics: 39, source: "video3/docs/plan.md 13.1",
+    note: "character + bitmap + tile, copyrect, one sprite - AS DRAWN, 3 PLD assumed",
+    rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
+           { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
+    parts: [
+      pkg(33, 33, "ATF1508AS (assumed 3)", "pld", 3, "1508"),
+      pkg(18.4, 11.8, "AS6C8016 512Kx16", "mem", 2, "8016"),
+      pkg(18.4, 11.8, "IS61C6416 64Kx16 LUT", "mem", 1, "6416"),
+      dip(28, 0.6, "32Kx8 regfile", "mem"),
+      /* plan 13.1: four hold one access's 32 bits, four more are graphics.md
+       * 8.2's second rank - byte-granular HSCROLL needs two fetch groups live
+       * at once. Trade 2 of plan 13.3 deletes the second rank. */
+      dip(20, 0.3, "74AHCT574 fetch", "bus", 8),
+      dip(16, 0.3, "74AHCT153 mux", "bus", 4),
+      dip(20, 0.3, "74AHCT574 index", "bus"),
+      /* ⭐ NEW - plan 3: LUT A15..A8, the cell attribute or the sprite code. */
+      dip(20, 0.3, "74AHCT574 ATTR", "bus"),
+      dip(20, 0.3, "74AHCT273 out", "bus", 2),
+      /* ⭐ PIDX is 16 bits (plan 10) but its high byte NEVER COUNTS - software
+       * sets a sub-palette and walks within it - so it is a latch, and that is
+       * one package rather than two more '163. */
+      dip(16, 0.3, "74AHCT163A PIDXlo", "bus", 2),
+      dip(20, 0.3, "74AHCT574 PIDXhi", "bus"),
+      dip(20, 0.3, "74AHCT244 pidx-oe", "bus", 2),
+      dip(20, 0.3, "74HC573 PDAT", "bus", 2),
+      dip(20, 0.3, "74HC574 pw-data", "bus"),
+      /* ⛔ THE ONE NEW DATAPATH - plan 6. pw-data fans ONE byte to four lanes,
+       * which is what makes the broadcast write free; a copy needs four
+       * DISTINCT bytes on the write bus. Trade 1 of plan 13.3 asks whether the
+       * second fetch rank can do this instead, and it is the biggest swing. */
+      dip(20, 0.3, "74AHCT574 copy", "bus", 4),
+      dip(20, 0.3, "74HCT245 rdbk", "bus"),
+      dip(20, 0.3, "74HCT574 vread", "bus"),
+      dip(20, 0.3, "74HC244 VSTAT", "bus"),
+      dip(20, 0.3, "74HC244 fanout", "bus"),
+      /* ⚠ NO list-descriptor '244 (graphics.md 10.3.3) - no display list.
+       * ⚠ NO posted-write ADDRESS latches - graphics.md 19 item 44: `video`
+       * listed three and no design ever clocked them. Recorded so a fresh
+       * card does not re-add them. */
+    ],
+  },
+}
+
 /** ICs as the card's own document counts them — see Part.counted. */
 export const icCount = (c: CardSpec) =>
   c.parts.reduce((n, p) => n + (p.counted ? p.qty : 0), 0)
