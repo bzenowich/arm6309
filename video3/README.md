@@ -28,6 +28,7 @@ refuse. ⚠ That claim is §14 item 1 and it is not yet analysed.
 
 | | |
 |---|---|
+| [`docs/signals.md`](docs/signals.md) | the control lines and their inputs — the census a partition needs |
 | [`../video/docs/graphics.md`](../video/docs/graphics.md) | the fitted card video3 borrows from, component by component (plan §11) |
 | [`../docs/video-options.md`](../docs/video-options.md) | how `video/`, `video2/` and the VIC-II derivative compare |
 | [`../docs/video-copyrect.md`](../docs/video-copyrect.md) | where the copy engine's rates and the no-adder argument were worked out |
