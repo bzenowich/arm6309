@@ -14,7 +14,7 @@ has room" do not — plan §14 item 4.
 | **Bitmap mode** | 640×200 / 240 / 400 / 480 chunky 8bpp, the span writer, **full copyrect** |
 | **Tile mode** | 8×8 8bpp tiles, as `video/docs/graphics.md` §6.4.2 |
 | **One 8×8 sprite** | the mouse pointer, bitmap mode only |
-| **Scrolling** | `VSCROLL` and `HSCROLL`, byte-granular, **bitmap and tile only** — character mode scrolls by copying (plan §8.2), so it has no ring and no runway defect |
+| **Scrolling** | `VSCROLL` and `HSCROLL`, **one pixel at a time**, **bitmap and tile only** — character mode scrolls by copying (plan §8.2), so it has no ring and no runway defect |
 | ⛔ **No display list** | and so nothing per-scanline: no raster bars, no sine warp, no `SS.Raster` |
 
 **The one idea the card turns on:** the palette LUT is `64K×16` and `video/` writes

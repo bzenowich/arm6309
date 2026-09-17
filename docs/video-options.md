@@ -162,7 +162,7 @@ other designs give it up. On a card whose documented bottleneck is the CPU
 
 | | `video/` | `video2` | VIC-II ext. |
 |---|---|---|---|
-| Horizontal | **byte-granular**, 1024-column torus | **byte-granular** | fine, 0–7 px, by shifter delay |
+| Horizontal | **one pixel** (byte-granular — these are 8bpp), 1024-column torus | **one pixel** | fine, 0–7 px, by shifter delay |
 | Vertical | pixel, 512-row torus | pixel / cell | cell + fine |
 | Cost of a scroll | one register write | one register write | one register write |
 | Per-scanline scroll | ✅ from the display list | ❌ | ❌ |

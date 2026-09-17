@@ -3,7 +3,7 @@
 
 video3/docs/plan.md §2.4 (graphics.md §6.4.2's Variant A) and §8.1.  What only
 this can catch: the ONE-byte map, 8bpp tiles with no per-cell colour limit,
-both scroll axes byte-granular including their ring wraps, the six-bit cell
+both scroll axes one pixel at a time including their ring wraps, the six-bit cell
 row - and ⭐ that ATTR is ZERO in tile mode, which the palette is loaded to
 prove.
 
@@ -73,7 +73,7 @@ src = f"""**********************************************************************
 *   sh video3/bench/run-v3tile.sh
 *
 * plan 2.4 and 8.1.  A ONE-byte map, 8bpp tiles with no per-cell colour limit,
-* HSCROLL and VSCROLL byte-granular with their ring wraps, and a six-bit cell
+* HSCROLL and VSCROLL one pixel at a time with their ring wraps, and a six-bit cell
 * row.  The palette is loaded so that ANY sub-palette but 0 is bright green -
 * so if the attribute path leaks into tile mode, the screen says so.
 *

@@ -282,6 +282,11 @@ gates the macrocell budget, and the partition has slack it did not have this mor
 What it cost is **4× the copy time** — 30 ms for a 192-row window scroll against 350 ms
 without an engine at all.
 
+**Trade 2 is settled too, and the other way**: `HSCROLL` keeps its one-pixel step and its
+second fetch rank, because trade 1 already paid for the escapes that rank's four packages
+used to be earmarked for. plan §13.3 has the reasoning; ⚠ plan §14 item 13 — **there is no
+power budget** — is the only thing that could reopen it.
+
 ---
 
 ## 6. What to do with it

@@ -5,7 +5,7 @@
 *   sh video3/bench/run-v3tile.sh
 *
 * plan 2.4 and 8.1.  A ONE-byte map, 8bpp tiles with no per-cell colour limit,
-* HSCROLL and VSCROLL byte-granular with their ring wraps, and a six-bit cell
+* HSCROLL and VSCROLL one pixel at a time with their ring wraps, and a six-bit cell
 * row.  The palette is loaded so that ANY sub-palette but 0 is bright green -
 * so if the attribute path leaks into tile mode, the screen says so.
 *

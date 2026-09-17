@@ -40,7 +40,7 @@ bearing claim, and §15 is the verification this card would need before a board.
 | **Bitmap mode** | 640×200 / 240 / 400 / 480, chunky 8bpp, a span writer, **full copyrect** |
 | **Tile mode** | 8×8 8bpp tiles, as `graphics.md` §6.4.2 |
 | **One 8×8 sprite** | the mouse pointer, **bitmap mode only** |
-| **Scrolling** | `VSCROLL` and `HSCROLL`, byte-granular — **in bitmap and tile mode only**. Character mode scrolls with §6's copy engine |
+| **Scrolling** | `VSCROLL` and `HSCROLL`, **one pixel at a time** — **in bitmap and tile mode only**. Character mode scrolls with §6's copy engine |
 | ⛔ **Deleted** | **the display-list engine** — and with it per-scanline `HSCROLL`, per-scanline palette, raster bars and `SS.Raster` |
 
 **Scrolling is the playfield's, not the console's.** The overworld's camera is one
@@ -345,7 +345,7 @@ and sync generation is untouched.
 | | |
 |---|---|
 | Vertical | the row counter loads from `VSCROLL` in vertical blanking and steps once a displayed row (§8.1). A 512-row torus in bitmap, 64 cell rows in tile mode |
-| Horizontal | `HSCROLL`, 10 bits, a **1024-column torus** — §8.2's two ranks of fetch latches with an output-enable select, because `c < HSCROLL[1:0]` is constant for a line |
+| Horizontal | `HSCROLL`, **10 bits — 0 to 1023**, a **1024-column torus**, stepping **one pixel** at a time. `graphics.md` §8.2's two ranks of fetch latches with an output-enable select, because `c < HSCROLL[1:0]` is constant for a line |
 
 ⛔ **Per-*scanline* scrolling is gone, not scrolling.** One `HSCROLL` a frame is a
 register write from the VBL service, which is how `overworld` moves its camera.
@@ -502,7 +502,7 @@ partition yet.
 | **`IS61C6416AL-12` 64K×16** | **1** | §3. ⭐ **And video3 is the first design that needs the whole part**: `video/` bought 64K words for *width* and wrote 256 of them; here A15..A8 carry the attribute |
 | **32K×8 register file** | **1** | §5. ⛔ **It cannot be macrocells**: the span-mask bit *is* this SRAM's address bit 0, which is what makes per-pixel colour selection free. It also holds `SPANLEN`, `WPTR`'s and `CPTR`'s column shadows and §7's sprite shape |
 | **R-2R ladders, 5/6/5 bits + 3 buffers** | 3 + 3 | §9.1. RGB565 out of the output register. **Not ICs**, counted on their own line as in `video/` |
-| `74AHCT574` fetch latches | **8** | §2.3 and §8.1. Four hold one access's 32 bits; the second four are `graphics.md` §8.2's — byte-granular `HSCROLL` needs two fetch groups live at once. ⚠ **§13.3 has the trade** |
+| `74AHCT574` fetch latches | **8** | §2.3 and §8.1. Four hold one access's 32 bits; the second four are `graphics.md` §8.2's — **one-pixel** `HSCROLL` needs two fetch groups live at once, because a four-byte fetch group is four pixels. ⚠ **§13.3 trade 2** |
 | `74AHCT153` 4:1 mux | **4** | §2.3. One of the four latched bytes per dot. ⚠ 0 if the tri-state turnaround closes at 39.72 ns — `graphics.md` §19 item 2, unchanged here |
 | `74AHCT574` index latch | **1** | §3. LUT A7..A0 |
 | ⭐ `74AHCT574` **`ATTR` latch** | **1** | §3. **NEW.** LUT A15..A8 — the cell attribute in character mode |
@@ -548,11 +548,38 @@ count unknown** (§14 item 4) — and §13.5 says what the board allows.
    **It costs 4× the copy time and buys four packages** — and those four are what pays
    for the cell-budget escape (`partition.md` §8). ⭐ It also deletes an alignment rule:
    with no fast path, column congruence stops mattering to software.
-2. **Byte-granular `HSCROLL` costs four packages.** The second fetch rank exists
-   only so a line can start part-way through a fetch group. **Four-pixel granularity
-   needs one rank** and saves four ICs; a scrolling playfield at four-pixel steps is
-   visibly chunky. **A gameplay decision, not an engineering one** — it should be taken
-   deliberately rather than inherited.
+2. ⭐ **SETTLED 2026-09-16: `HSCROLL` steps ONE PIXEL, and the second fetch rank stays.**
+
+   ⚠ **First, the words.** A fetch group is four bytes, and this card is chunky 8bpp, so
+   a fetch group is **four pixels**. `graphics.md` §8.2's "byte-granular" therefore means
+   **one pixel** — the finest step there is — and the alternative is **four**. The same
+   phrase means the *coarsest* step on the GIME, where a byte is two or four pixels
+   (`docs/coco3_c64.md` §5), and that ambiguity has already misled one reading of this
+   section. **video3 says "one pixel".**
+
+   | | `HSCROLL[1:0]` | fetch ranks | step |
+   |---|---|---|---|
+   | **as built** | used | **2** — 8 × `'574` | **1 pixel** |
+   | the alternative | forced to 0 | 1 — 4 × `'574` | 4 pixels |
+
+   **What the second rank buys is not resolution, it is a floor on speed.** 4 px a frame
+   at 70 Hz is 280 px/s and looks fine — it is what the demo does. What one-pixel
+   granularity adds is everything *slower*: a walking-pace camera at 1 px a frame is
+   70 px/s, and at four-pixel steps that becomes **4 px every four frames, 17.5 steps a
+   second**, which is visible judder.
+
+   ⚠ **And the demo does not exercise it.** `software/demo/tools/mkgame.py`'s overworld
+   is `carry(±4, 0, 160)`: over 512 frames the camera's X takes 161 distinct values and
+   **every one is a multiple of 4**. The other one-pixel user, `wave`'s sine warp, went
+   with the display list (§0).
+
+   ⭐ **It is kept anyway, and the reason is asymmetry rather than need.** §13.3 trade 1
+   returned the four packages this trade used to be the payer for, so the board places at
+   **42 ICs, 75 %** with everything — the cost is affordable *now*, and the capability is
+   **unrecoverable later**. Nothing on this card can substitute: there is one 8 × 8
+   sprite and it is bitmap-only, and copyrect is 31.6 ms a screen, twice a frame.
+
+   ⚠ **The one thing that would reopen it is power** — §14 item 13.
 3. ⛔ **SETTLED 2026-09-16: the `'153` mux stays, and this trade yields no board room.**
    `npm run check:video3` has the arithmetic. The `'153` path — `MUXSEL` → `'153` →
    index latch — is **25 ns in a 39.72 ns dot, 14.7 ns of margin**, the same depth as
@@ -617,7 +644,7 @@ a table in this document.
 | … + `MAP`/`MAPQ` discrete (`partition.md` §8's escape) | 36 | **40** | **places, 73 %** |
 | … + the sprite's shift registers too | 38 | **42** | **places, 75 %** |
 | ⛔ trade 3, the tri-state pixel bus | — | — | **settled the other way** |
-| trade 2, four-pixel `HSCROLL` | −4 | | ⚠ still open, and a gameplay decision |
+| ⛔ trade 2, four-pixel `HSCROLL` | — | | **settled the other way** — one pixel is kept |
 
 ⚠ **The `ics` figure in `parts.ts` assumes three programmable parts and says so in its
 own comment.** It is a placeholder, not a finding; what is *asserted* is that the list
@@ -688,6 +715,14 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     CPU move is **10.0 ms a line** (§8.2), so if copyrect does not fit, character mode
     does not work at terminal speeds and the ring has to come back with its defect.
     They are not independent features.
+13. ⛔ **THERE IS NO POWER BUDGET, and §13 measures packages and never watts.**
+    `graphics.md` §14.1 costs `video/` at **~0.6–0.95 A** from its datasheets; video3 has
+    a fourth programmable part, an extra dot-rate `'574` and possibly six more discrete
+    packages, and **not one of them has been costed in current.** ⚠ The dot path is where
+    it would bite: §14.1's figure has ~15 AHCT packages switching at 25.175 MHz at 9–22 mA
+    each. **This is the only open item that could reopen a settled trade** — §13.3 trade
+    2's four fetch latches are the cheapest thing to give back, and giving them back is a
+    deletion rather than a redesign.
 12. ⚠ **One stride or two — open** (§2.5). This draft gives the map the framebuffer's
     1024-byte stride so §6's engine needs no second one, at **48 KB**. The alternative
     is a stride select — a mux on which bit the row step lands — for 16 KB of map.

@@ -21,7 +21,7 @@ Everything here runs at 39.72 ns and is the card's tightest timing (§14 item 1)
 | | n | Drives | A function of |
 |---|---|---|---|
 | `FCLK0`, `FCLK1` | 2 | the two fetch-latch ranks, 4 × `'574` each | the slot phase, and which rank this line's `HSCROLL[1:0]` wants |
-| `FOE0`, `FOE1` | 2 | the ranks' `/OE` | ⭐ **constant for a whole line** — `graphics.md` §8.2: `c < HSCROLL[1:0]` is why the rank select is an output enable and not a mux |
+| `FOE0`, `FOE1` | 2 | the ranks' `/OE` | ⭐ **constant for a whole line** — `graphics.md` §8.2: `c < HSCROLL[1:0]` is why the rank select is an output enable and not a mux. The second rank is what buys **one-pixel** `HSCROLL` |
 | `MUXSEL[1:0]` | 2 | the four `'153` | the dot phase within the slot |
 | `IXCLK` | 1 | the index `'574` | every dot |
 | `ATCLK` | 1 | the `ATTR` `'574` | every dot — see §3.2 for **why not per cell** |

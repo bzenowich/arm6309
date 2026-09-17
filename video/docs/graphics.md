@@ -1864,6 +1864,15 @@ write to `VSCROLL`. 112 rows (114,688 B) plus the column margin left over.
 
 ### 8.2 ⭐ Byte-granular horizontal scroll — two ranks, and the select is an output enable
 
+> ⚠ **"Byte-granular" here means ONE PIXEL, and the phrase is two-faced across this
+> repository.** This card is chunky 8bpp (§2.1), so a byte *is* a pixel and byte
+> granularity is the **finest** step there is. On the GIME it is the **coarsest**: a
+> byte there is two or four pixels, which is why
+> [`../../docs/coco3_c64.md`](../../docs/coco3_c64.md) §5 lists "byte granular at best"
+> as a *limitation* against the VIC-II's per-pixel scroll. Same words, opposite
+> connotation, and a reader who knows both cards can read this heading backwards.
+> `video3/docs/` says **"one pixel"** throughout for that reason.
+
 **Built 2026-09-09.** §8's "sub-pixel horizontal smoothness costs zero parts, because
 the phase counter already drives the 4:1 selection" is half right: the *mux phase* is
 free, and it is not the hard part.
