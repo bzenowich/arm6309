@@ -619,9 +619,10 @@ totals its own claim and that 24 cm is the shortest length that holds it.
    result), so five is *at* the budget and a sixth source is where cascading starts.
    ⛔ **This is a number to design against and then check, not a limit inherited from
    anywhere** — see item 4.
-4. ⛔ **THE PARTITION IS UNWRITTEN — but §13.5 bounds it at FOUR programmable parts**,
-   because a fifth PLCC-84 does not place on a 240 mm board. **NO NUMBER FROM
-   `video/`'s FIT APPLIES HERE.**
+4. ⚠ **The partition is drafted — [`partition.md`](partition.md) — and it comes out at
+   FOUR parts, which §13.5 says is the most that places.** ⛔ **video3 is therefore at
+   its ceiling**, and every count in it is an estimate rather than a fit. **NO NUMBER
+   FROM `video/`'s FIT APPLIES HERE.**
    `video/` is three `ATF1508AS` whose utilisation is recorded in
    `hardware/gal/cpld/*.fit`; **those figures describe a different design** — one with
    a display list, per-scanline scrolling, a one-byte map and no copy engine. video3
@@ -671,7 +672,8 @@ Each step gates the next, and the first two are **done**.
 | ✅ 2b | **A functional model in the host emulator**, beside `video/`'s and selected by `VIDEO3=1` | `sh video3/bench/run-v3.sh` — **character mode, tile mode, the copy engine and the sprite, all pixel-exact** against `tools/v3model.py`, which renders from §2.2/§2.4/§2.5/§3/§6/§7/§8.1 and shares only *data* with the ROM. Mutation-tested. **This is where the driver gets written.** ⚠ It cannot see the cadence (§14 item 8) |
 | ✅ 2c | **The control-line census** — [`signals.md`](signals.md) | what the lines are and what generates them, block by block. It is the input to the partition, and it surfaced three things: the LUT address bus now has masters on **both** halves, `ATCLK` must not be mode-dependent, and the copy engine is the only requester wanting **two** spare accesses |
 | 3 | **The dot path as a schematic**, and nothing else yet | it is settled by §3 and §13, it does **not** depend on the partition, and it is what §14 item 1's *other* half needs. ⛔ Drawing the rest first would encode a partition that does not exist |
-| 4 | **A partition, then term lists, then a fit** | in that order. How many programmable parts video3 takes is an **output** of this step, and §13.5 bounds it at four |
+| ✅ 4a | **The partition** — [`partition.md`](partition.md) | **four parts**, which §13.5 says is the most that places. ⛔ **So video3 is exactly at its ceiling**: there is no fifth part, and no room for a feature that needs one |
+| 4b | **Term lists, then a pin census from them, then a fit** | in that order. `partition.md` §6 |
 | 5 | **`reach` and `census` from the first term list, not retrofitted** | they are the pair that caught `ACTRL` b3 unbuilt for two days and `design-review2`'s eleven blocks described as fitted with nothing behind them |
 | 6 | **A cadence check** — §14 item 8 | five requesters, one spare access a slot |
 | 7 | **Verilator** — §15.1 |
