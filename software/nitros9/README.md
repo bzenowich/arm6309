@@ -76,7 +76,9 @@ at the handoff rather than at reset.
 |---|---|---|
 | 0 | `software/boot/boot.bin`: the monitor and the vector page | `$E000` |
 | 1–2 | `"6309"`, `rel_arm6309`, then `OS9Kernel` (`Boot` padded to 1 K, then `krn`) | `$8000` |
-| 3–127 | an RBF image of 4,000 sectors: `OS9Boot`, `CMDS`, `SYS`, `startup` | through the map |
+| 3–63 | an RBF image of 1,952 sectors: `OS9Boot`, `CMDS`, `SYS`, `startup` | through the map |
+| 64 | the **ROM toolbox**'s code (`tbox.asm`): Haiku's window chrome, anti-aliased text, icons, bevels, scroll bars and pictures, for CoArm's `ESC $6A` | in place, at `Co.WinA` in CoArm's map |
+| 65–127 | its data (`tools/mktbox.py`): the directory, the Haiku palette, Noto Sans 12 px regular and bold, the icons, the paint document | through CoArm's `Co.WinB` |
 
 1. **The monitor** finds `"6309"` and jumps to `$8004` (`software/boot/README.md`).
 2. **The loader** does the following:

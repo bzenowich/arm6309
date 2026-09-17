@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """session3.py OUT - the VIDEO3 demo session, as the emulator's inputs.
 
-The brief (video3/docs/demo-report.md): boot in 80 x 60 character mode, move to
-a 640 x 480 bitmap desktop, a two-pane file manager whose panes are filled by
-REAL NitrOS-9 commands, a window dragged by the card's copy engine, the paint
-canvas, a CP437 ANSI BBS in 80 x 25, and the game.
+The brief (video3/docs/demo-report.md): boot in 80 x 60 character mode, an
+ANSI BBS in 80 x 25, a 640 x 480 Haiku desktop whose Tracker windows list the
+real ROM disk, a window dragged by the card's copy engine, the pointer on the
+card's sprite, Paint with a canvas scrolled by the copy engine, and the game.
 
 ⭐ EVERY SCENE IS ORDINARY NITROS-9. The chrome arrives as escape streams that
-`copy` sends to a window device, the panes are filled by redirecting `dir` and
-`mfree` into them, and the drag is a command that calls SS.Copy. Nothing here
-is a bare-metal ROM writing registers.
+`copy` sends to a window device - most of them calls into the ROM toolbox -
+the Tracker lists are v3trk reading the directories, and the drag and the
+scroll are commands that call SS.Copy. Nothing here is a bare-metal ROM
+writing registers.
 """
 import math, os, sys
 
@@ -24,54 +25,50 @@ def pause(s):
     return P * s
 
 
-# The working areas of the two panes, in cells of the 640 x 480 screen.
-# ESC $25 is CWArea: the window's text goes inside that rectangle and scrolls
-# there, so a redirected `dir` lands in the pane and nowhere else.
-# ⛔ `display` takes HEX. Writing the cell counts as they read in decimal
-# gave the left pane 54 x 48 cells instead of 36 x 29 - accepted, because it
-# still fitted - and the right pane 42 + 54 > 80, which is E$IWDef. A wrong
-# window that fits is worse than one that does not.
-PANE_L = "display 1b 25 02 05 24 1d >/w3"     # x 2, y 5, 36 x 29 cells
-PANE_R = "display 1b 25 2a 05 24 1d >/w3"     # x 42, same size
-FULL   = "display 1b 25 00 00 50 3c >/w3"     # the whole 80 x 60 screen
-# ⚠ ESC $32 is the foreground and ESC $33 the BACKGROUND, and text carries
-# its background with it: without this the pane's listing arrived as black
-# on the desktop's blue, in blocks, over the grey paper the chrome drew.
-# 0x02 is CoWin's black, 0xFE the xterm grey the panes are painted in.
-PANEINK = "display 1b 32 02 1b 33 fe >/w3"
+import v3show                                          # the layout, in one place
 
+T = v3show.T
+DCMD = "%d %d" % (T.ICON["folder16"], T.ICON["doc16"])
+DAPP = "%d %d" % (T.ICON["folder16"], T.ICON["app16"])
+
+# ⭐ EVERY WINDOW IS SHOWN BEFORE IT IS DRAWN ON.  The streams begin with
+# DWSet and Select, so the display blanks, comes back on the new screen,
+# and the viewer watches the chrome being drawn - by the ROM toolbox, for
+# the desktop and Paint (v3show.py says how).
 LINES = [
     # ---- 80 x 60 character mode, which video/ cannot do at all
     ("dir", 2),
     ("iniz w1", 0), ("display 1b 21 >/w1", 1),
     ("shell i=/w1&", 0),
-    ("echo now typing on the PS/2 keyboard", 20),
-    # ---- the 640 x 480 desktop, and the file manager
-    ("iniz w3", 0), ("copy /dd/sys/v3desk /w3", 0), ("display 1b 21 >/w3", 2),
-    (PANEINK, 0),
-    (PANE_L, 0), ("dir /dd >/w3", 2),
-    (PANE_R, 0), ("dir /dd/cmds >/w3", 3),
-    (FULL, 0),
-    # ---- the window, and the copyrect drag
+    # the PS/2 keyboard types KBD_LINES on /W1 while this waits: the
+    # listing is long enough to scroll the 80 x 60 screen by copyrect
+    ("echo now typing on the PS/2 keyboard", 46),
+    # ---- the BBS: CP437, gruvbox and 256-colour pairs, 80 x 25
+    ("iniz w2", 0), ("copy /dd/sys/v3bbs /w2", 10),
+    # ---- the Haiku desktop, drawn by the ROM toolbox as you watch
+    ("iniz w3", 0), ("copy /dd/sys/v3desk /w3", 1),
+    ("v3trk " + v3show.TRK_DD.args("/dd") + " " + DCMD + " >/w3", 1),
+    ("copy /dd/sys/v3cmds /w3", 0),
+    ("v3trk " + v3show.TRK_CMDS.args("/dd/cmds") + " " + DAPP + " >/w3", 2),
+    # ---- a window, and the copyrect drag
     ("copy /dd/sys/v3about /w3", 2),
-    ("v3drag >/w3", 2),
+    ("v3drag >/w3", 1),
     # ---- the pointer, on the card's sprite
-    ("echo now moving the PS/2 mouse", 12),
-    # ---- paint
-    ("iniz w4", 0), ("copy /dd/sys/v3paint /w4", 0), ("display 1b 21 >/w4", 4),
-    # ---- the BBS: CP437 and ANSI, in 80 x 25 character mode
-    ("iniz w2", 0), ("copy /dd/sys/v3bbs /w2", 0), ("display 1b 21 >/w2", 6),
+    ("echo now moving the PS/2 mouse", 17),
+    # ---- Paint, a window on the same screen; its canvas scrolls by copyrect
+    ("iniz w4", 0), ("copy /dd/sys/v3paint /w4", 1),
+    ("v3scrl >/w4", 1),
+    ("copy /dd/sys/v3doodle /w4", 6),
     # ---- the game
     # ⚠ DWEnd ($24), not Select ($21): overworld makes its own window, and
-    # /W3 still has the desktop's. Select on a window that exists is fine;
-    # a second DWSet on it is E$WADef.
-    ("display 1b 24 >/w3", 0), ("overworld >/w3", 1),
+    # /W3 still has the desktop's.  A second DWSet on it is E$WADef.
+    ("display 1b 24 >/w4", 0), ("display 1b 24 >/w3", 0), ("overworld >/w3", 1),
     ("display 1b 21 >/w1", 0), ("procs", 3),
     ("echo DONE-arm6309", 0),
 ]
 
 KBD_GATE = "PS/2 keyboard"
-KBD_LINES = ["dir /dd/cmds", "mfree", "echo 80 x 60 CP437 per cell colour >/term"]
+KBD_LINES = ["dir /dd/cmds", "mfree", "list /dd/sys/video3.txt", "echo 80 x 60 CP437 - scrolled by copyrect"]
 
 MOUSE_GATE = "PS/2 mouse"
 
@@ -79,16 +76,19 @@ CAPTIONS = [
     ("RKBoot", "NitrOS-9 Level 2 boots from ROM onto video3 - four CPLDs, no display list"),
     ("DD:dir", "A shell on the serial port. The console is about to move to the card"),
     ("21 >/w1", "/W1: 80 x 60 CHARACTER MODE - 640x480, 256 CP437 glyphs, colour per cell"),
-    ("i=/w1&", "A shell on /W1, typed at on the PS/2 keyboard. It scrolls by COPYRECT"),
-    ("v3desk /w3", "/W3: a 640 x 480 desktop. The chrome is escape codes sent by `copy`"),
-    ("dir /dd >", "The left pane is a CWArea: the real `dir` command writes into it"),
-    ("dir /dd/cmds >", "And the right pane the same - a file manager made of NitrOS-9 commands"),
+    ("i=/w1&", "A shell on /W1, typed at on the PS/2 keyboard"),
+    ("PS/2 keyboard", "`list` a long file: every new line moves 59 rows with the COPY ENGINE"),
+    ("v3bbs /w2", "/W2: 80 x 25 ANSI art in gruvbox - and 256-colour pairs, 38;5 on 48;5"),
+    ("v3desk /w3", "/W3: a Haiku desktop, drawn as you watch by the TOOLBOX IN ROM (page 64)"),
+    ("v3trk /dd ", "v3trk: Tracker lists the real /DD - icons and Noto Sans from ROM"),
+    ("v3trk /dd/cmds", "... and /DD/CMDS, two columns; the scroll bar knows how much is hidden"),
     ("v3about /w3", "A window, drawn once. Its pixels are now the only copy that exists"),
-    ("v3drag >", "v3drag: the card's COPY ENGINE moves it. Seven registers a step, no CPU pixels"),
+    ("v3drag >", "v3drag: the card's COPY ENGINE moves it. No backing store, no CPU pixels"),
     ("PS/2 mouse", "The pointer is video3's 8x8 HARDWARE SPRITE - five registers, nothing saved"),
-    ("v3paint /w4", "paint: patterns, ellipses, arcs and a 216-colour strip from the xterm cube"),
-    ("v3bbs /w2", "/W2: 80 x 25 CP437 ANSI art - the ATTR plane, 16 colours crossed with 16"),
-    ("overworld >", "overworld: the game on an exclusive tile screen"),
+    ("v3paint /w4", "Paint: its document goes into VRAM's off-screen margin, x 640-1023"),
+    ("v3scrl >", "v3scrl: the canvas scrolls by two copies a step - the view, and the strip"),
+    ("v3doodle /w4", "... and is painted on: CoWin's ellipses and lines, and toolbox text"),
+    ("overworld >", "overworld: the game on an exclusive tile screen, hero and all"),
     ("DD:procs", "procs: both shells still running"),
 ]
 

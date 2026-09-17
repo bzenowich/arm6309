@@ -33,6 +33,9 @@ python3 software/nitros9/tools/vgmodel.py --emit "$OUT/sys" || { echo "FAIL  vgm
 python3 software/demo/tools/mkgame.py "$OUT/gamedata" > "$OUT/gamedata.log" || { cat "$OUT/gamedata.log"; echo "FAIL  mkgame.py"; exit 1; }
 for f in tiles world sprites frames; do cp "$OUT/gamedata/$f.bin" "$OUT/sys/$f.bin"; done
 SYSFILES=$(ls "$OUT"/sys/* | tr '\n' ' ')
+# ⭐ the ROM toolbox's data - fonts, icons, the Haiku palette, the paint
+# document - for ROM pages 65 on (tbox.asm; mktbox.py says what is where)
+python3 software/nitros9/tools/mktbox.py "$OUT/tbox.bin" > "$OUT/tbox.log" || { cat "$OUT/tbox.log"; echo "FAIL  mktbox.py"; exit 1; }
 
 # ⭐ V3=1 builds the port against video3 (video3/docs/plan.md) instead of
 # video/ (graphics.md).  The difference is defs/armvid.d's register map and
@@ -50,7 +53,7 @@ if [ "$(cat "$REC/.flavour" 2>/dev/null)" != "$FLAV" ]; then
   rm -rf "$REC/.mods" "$REC/.lib"
   echo "$FLAV" > "$REC/.flavour"
 fi
-make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" SYSFILES="$SYSFILES" \
+make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" SYSFILES="$SYSFILES" TBOXDATA="$OUT/tbox.bin" \
   AFLAGS_EXTRA="${V3:+-DV3=1}" \
   > "$OUT/build.log" 2>&1 || { grep -v '^lwasm\|^lwlink' "$OUT/build.log" | tail -20; echo "FAIL  the ROM did not build"; exit 1; }
 

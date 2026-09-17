@@ -7,6 +7,9 @@
 #
 #   sh software/nitros9/video/run-video3.sh        (from the repository root)
 #   NOBUILD=1   use the ROM already in build/
+#   SHEET=1     contact sheets instead of the H.264 file: build3/sheet-*.png
+#               (sheet3.py), in seconds rather than minutes - what a pass is
+#               reviewed from before the full-motion file is worth making
 #
 # Writes software/nitros9/video/video3-demo.mp4. build/ keeps the ROM, the
 # emulator's recordings and the console. ⚠ THE EMULATOR, NOT THE MACHINE: the
@@ -34,6 +37,10 @@ grep -q "SERIAL_STOP seen" "$OUT/emu.log" || { grep -m1 -A3 "WILD\|FAIL" "$OUT/e
 tr -d '\000' < "$OUT/serial.out" | tr -d '\r' > "$OUT/console.txt"
 if grep -n "Error #" "$OUT/console.txt"; then echo "FAIL  a command failed (build/console.txt)"; exit 1; fi
 
+if [ -n "$SHEET" ]; then
+  python3 $V/sheet3.py "$OUT" 3
+  exit 0
+fi
 SESSION=session3 python3 $V/mkvideo.py "$OUT" "$ROOT/$V/video3-demo.mp4"
 # ⛔ And CHECK IT, because a large recent file is not a finished one: ffmpeg
 # writes the moov atom last. checkmp4.py says why this is a separate step.
