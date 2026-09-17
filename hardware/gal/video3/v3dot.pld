@@ -31,13 +31,12 @@ PIN = D4 ;
 PIN = D5 ;
 PIN = D6 ;
 PIN = D7 ;
-PIN = LDCTRL ;
-PIN = LDHSL ;
-PIN = LDSPRX ;
-PIN = LDSPRY ;
-PIN = LDSPRH ;
-PIN = LDSPRIX ;
-PIN = LDSPRDA ;
+PIN = REGWR ;
+PIN = RA0 ;
+PIN = RA1 ;
+PIN = RA2 ;
+PIN = RA3 ;
+PIN = RA4 ;
 PIN = RMAP ;
 PIN = RRD ;
 PIN = RCPY ;
@@ -162,11 +161,19 @@ PINNODE = SR2 ;
 PINNODE = DBLHOLD ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * FRAMEEND, LINETICK, SPRACT, HLAST, ACTIVE, VACTIVE, VBLANKRAW, VTC
- * SPRVHIT, SPRHIT, SPRROW, VMODE0
+ * LDCTRL, LDHSL, LDSPRX, LDSPRY, LDSPRH, LDSPRIX, LDSPRDA, FRAMEEND
+ * LINETICK, SPRACT, HLAST, ACTIVE, VACTIVE, VBLANKRAW, VTC, SPRVHIT
+ * SPRHIT, SPRROW, VMODE0
  */
 
 /* --- equations ---------------------------------------------------- */
+LDCTRL = REGWR & !RA4 & !RA3 & !RA2 & !RA1 & !RA0 ;
+LDHSL = REGWR & !RA4 & !RA3 & !RA2 & RA1 & RA0 ;
+LDSPRX = REGWR & RA4 & RA3 & !RA2 & RA1 & !RA0 ;
+LDSPRY = REGWR & RA4 & RA3 & !RA2 & RA1 & RA0 ;
+LDSPRH = REGWR & RA4 & RA3 & RA2 & !RA1 & !RA0 ;
+LDSPRIX = REGWR & RA4 & RA3 & RA2 & !RA1 & RA0 ;
+LDSPRDA = REGWR & RA4 & RA3 & RA2 & RA1 & !RA0 ;
 DP0.d = !DP0 ;
 DP1.d = DP1 & !DP0
         # !DP1 & DP0 ;

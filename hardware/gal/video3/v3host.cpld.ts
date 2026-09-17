@@ -13,6 +13,7 @@
 
 import { toCupl, type Merged } from "../jedec/cupl"
 import type { Cell } from "../jedec/assemble"
+import { REGS, hostTerm, type RegName } from "./regmap"
 
 const reg = (name: string, terms: string[]): Cell =>
   ({ pin: 0, name, assertedLow: false, s0: 1 as const, registered: true, terms })
@@ -32,28 +33,26 @@ const VRAMSEL = "!IOSEL & A19 & !A20"
 
 /* ⭐ THE ESCAPE, and this part is the reason it exists.
  *
- * "strobes" gives every register its own load line, which is what the three
- * fitted parts declare as inputs - and it puts this part at 64/64 pins, full,
- * with 78 macrocells idle.  "broadcast" sends A4-A0 + REGWR instead and lets
- * each part decode its own offsets (partition.md §3), which costs each RECEIVER
- * a handful of cells it has spare and buys this part back the pins it does not.
+ * ⭐ "broadcast" IS THE BUILD since 2026-09-16.  It sends RA4..RA0 + REGWR and
+ * each part decodes its own offsets from the shared table in `regmap.ts`.
  *
- * ⚠ The variant is priced, not adopted: adopting it rewires v3scan, v3ptr and
- * v3dot, and all three are fitted against the strobe convention today. */
-const DECODE = (process.env.V3_DECODE ?? "strobes") as "strobes" | "broadcast"
-const WR = (a: number) => `${REGSEL} & WRCYC & ` +
-  [4, 3, 2, 1, 0].map((b) => `${(a >> b) & 1 ? "" : "!"}A${b}`).join(" & ")
+ * "strobes" is the variant it replaced, kept fitted because it is the evidence:
+ * one load line per register put this part at 64/64 pins with 78 macrocells
+ * idle.  ⛔ And it could not express a register wider than the bus at all - a
+ * strobe per REGISTER cannot load WPTR's three bytes separately, which is how
+ * `LDWCOL & D0` came to drive both WC0 and WC8 on v3ptr. */
+const DECODE = (process.env.V3_DECODE ?? "broadcast") as "strobes" | "broadcast"
+/* the decode, off the backplane.  ⭐ The offsets live in regmap.ts and nowhere
+ * else: three other parts decode the same table, and a private copy here is
+ * exactly the drift this card cannot afford - a decode that disagrees with the
+ * spec fits perfectly well and answers the wrong address. */
+const WRQ = `${REGSEL} & WRCYC`
+const WR = (r: RegName) => hostTerm(r, WRQ)
 
-const strobes: [string, number][] = [
-  ["LDCTRL", 0x00], ["LDVSL", 0x01], ["LDVSH", 0x02], ["LDHSL", 0x03],
-  ["LDHSH", 0x04], ["LDSPLEN", 0x05], ["LDWFG", 0x06], ["LDWBG", 0x07],
-  ["LDWCOL", 0x08], ["LDWCOLH", 0x09], ["LDWROW", 0x0A], ["LDWADV", 0x0B],
-  ["LDPIDXL", 0x0E], ["LDPIDXH", 0x0F], ["LDPDATL", 0x10], ["LDPDATH", 0x11],
-  ["LDCCOL", 0x12], ["LDCCOLH", 0x13], ["LDCROW", 0x14], ["LDCW", 0x15],
-  ["LDCH", 0x16], ["LDCCTRL", 0x17], ["LDTB", 0x18], ["LDMB", 0x19],
-  ["LDSPRX", 0x1A], ["LDSPRY", 0x1B], ["LDSPRH", 0x1C], ["LDSPRIX", 0x1D],
-  ["LDSPRDA", 0x1E],
-]
+/* every offset, for the "strobes" variant */
+const ALL_REGS = Object.keys(REGS) as RegName[]
+/* the ones this part acts on ITSELF, whichever way the offsets travel */
+const MINE: RegName[] = ["LDPDATH", "LDIRQACK"]
 
 /* -- the palette commit: graphics.md §13.1 response 3 ---------------------
  *
@@ -65,8 +64,8 @@ const strobes: [string, number][] = [
  * The turnaround is three dots (vpal_tb counted them), so PS0..PS3 walk it and
  * PALTURN is the window v3dot stands the pixel path off for. */
 const palette: Cell[] = [
-  reg("PPEND", [`${WR(0x11)} & !VBLANK`, "PPEND & !PS0"]),
-  reg("PS0", ["PPEND & HLOAD", `${WR(0x11)} & VBLANK`, "PS0 & !PS1"]),
+  reg("PPEND", ["LDPDATH & !VBLANK", "PPEND & !PS0"]),
+  reg("PS0", ["PPEND & HLOAD", "LDPDATH & VBLANK", "PS0 & !PS1"]),
   reg("PS1", ["PS0", "PS1 & !PS2"]),
   reg("PS2", ["PS1", "PS2 & !PS3"]),
   reg("PS3", ["PS2"]),
@@ -95,7 +94,7 @@ const port: Cell[] = [
   reg("IRQPEND", ["VBLRISE", "IRQPEND & !IRQACK"]),
   reg("VBLQ", ["VBLANK"]),
   comb("VBLRISE", ["VBLANK & !VBLQ"]),
-  comb("IRQACK", [`${WR(0x0D)}`]),
+  comb("IRQACK", ["LDIRQACK"]),
   comb("IRQN", [], "IRQPEND & IRQEN"),
   /* VSTAT is read through a '244 (graphics.md §12.1): SPANBUSY, CBUSY and
    * PBUSY are live macrocells and the register file has no path to them. */
@@ -104,7 +103,7 @@ const port: Cell[] = [
 ]
 
 export const v3host: Merged = {
-  name: DECODE === "strobes" ? "v3host" : "v3host_bc",
+  name: DECODE === "strobes" ? "v3host_st" : "v3host",
   partNo: "ARM6309-V3H",
   location: "video3 - backplane, register decode, palette write path",
   device: "f1508ispplcc84",
@@ -124,16 +123,20 @@ export const v3host: Merged = {
   ],
   cells: [
     ...(DECODE === "strobes"
-      ? strobes.map(([n, a]) => comb(n, [WR(a)]))
-      : /* the broadcast: the offset and one qualifier, decoded at each receiver */
-        [comb("REGWR", [`${REGSEL} & WRCYC`]),
+      ? ALL_REGS.map((r) => comb(r, [WR(r)]))
+      : /* ⭐ the broadcast: the offset and one qualifier, decoded at each
+         * receiver.  Six pins carry all 30 offsets - and, unlike a strobe per
+         * register, it can carry an offset a receiver invents later. */
+        [comb("REGWR", [WRQ]),
          ...[0, 1, 2, 3, 4].map((b) => comb(`RA${b}`, [`A${b}`]))]),
+    /* the two this part acts on itself are decoded here either way */
+    ...(DECODE === "strobes" ? [] : MINE.map((r) => comb(r, [WR(r)]))),
     ...palette,
     ...port,
   ],
   external: new Set([
     ...(DECODE === "strobes"
-      ? strobes.map(([n]) => n)
+      ? ALL_REGS
       : ["REGWR", "RA0", "RA1", "RA2", "RA3", "RA4"]),
     "PALTURN", "PBUSY", "LUTWE", "PIDXCE",
     "WSTBV", "WSTB", "RDOE", "RDREQ", "WAITN", "IRQN", "VSTATOE", "RDBKOE",

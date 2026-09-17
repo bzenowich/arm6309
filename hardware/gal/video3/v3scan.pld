@@ -56,12 +56,12 @@ PIN = PA4 ;
 PIN = PA5 ;
 PIN = PA6 ;
 PIN = PA7 ;
-PIN = LDHSL ;
-PIN = LDHSH ;
-PIN = LDVSL ;
-PIN = LDVSH ;
-PIN = LDTB ;
-PIN = LDMB ;
+PIN = REGWR ;
+PIN = RA0 ;
+PIN = RA1 ;
+PIN = RA2 ;
+PIN = RA3 ;
+PIN = RA4 ;
 
 /* --- outputs ------------------------------------------------------ */
 PIN = ATO0 ;
@@ -166,10 +166,16 @@ PINNODE = SA17 ;
 PINNODE = SA18 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * 
+ * LDHSL, LDHSH, LDVSL, LDVSH, LDTB, LDMB
  */
 
 /* --- equations ---------------------------------------------------- */
+LDHSL = REGWR & !RA4 & !RA3 & !RA2 & RA1 & RA0 ;
+LDHSH = REGWR & !RA4 & !RA3 & RA2 & !RA1 & !RA0 ;
+LDVSL = REGWR & !RA4 & !RA3 & !RA2 & !RA1 & RA0 ;
+LDVSH = REGWR & !RA4 & !RA3 & !RA2 & RA1 & !RA0 ;
+LDTB = REGWR & RA4 & RA3 & !RA2 & !RA1 & !RA0 ;
+LDMB = REGWR & RA4 & RA3 & !RA2 & !RA1 & RA0 ;
 HS2.d = LDHSL & D2
         # HS2 & !LDHSL ;
 HS3.d = LDHSL & D3

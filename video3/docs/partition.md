@@ -10,34 +10,51 @@ comes before term lists, and how many parts video3 takes is an *output* of it.
 > **128 macrocells and 64 I/O**.
 > ⚠ **No figure from `video/`'s fit applies here** (plan §14 item 4).
 
-### ⛔ What the fourth fit corrected — `v3host` is **full**
+### ⭐ The broadcast, adopted 2026-09-16 — and it paid on every part
 
-| | estimated | **fitted** | |
-|---|---|---|---|
-| `v3host` cells | ~24 | **50 / 128** | the decode is wider than a bit count suggests |
-| `v3host` I/O | ~45 | ⛔ **64 / 64** | ⛔ **not one spare pin** |
+`v3host` first fitted **full — every I/O pin taken**, with 77 macrocells idle and no next
+step in it ([`history.md`](history.md) has the figures). §2.4's estimate was 19 pins light for a reason worth stating plainly — **a
+per-register load strobe is a pin, and video3 has 30 of them.**
 
-⛔ **This part has no margin at all.** 39 % of its macrocells are used and **every pin is
-taken** — 22 in, 44 out, 0 cascades. It fits, and the next signal anyone adds to it does
-not. §2.4's estimate was 19 pins light for a reason worth stating plainly: a **per-register
-load strobe is a pin, and video3 has 29 registers.**
+§3's answer was already in this document: broadcast `RA4..RA0` + `REGWR` and let each part
+decode the offsets it cares about. **All four parts are now wired that way and re-fitted**,
+and the offsets live in one shared table, `hardware/gal/video3/regmap.ts`, read by all four
+designs — a private copy per part is exactly the drift this card cannot afford, because a
+decode that disagrees with the spec fits perfectly well and answers the wrong address.
 
-⭐ **§3 already proposed the fix and this fit prices it.** Broadcast `RA4..RA0` + `REGWR`
-and let each part decode its own offsets, and the same design is:
+⭐ **What each part costs now** — and [`history.md`](history.md) has what it cost before,
+which is where the comparison lives, because a superseded utilisation figure in a spec is
+a number `check:docs` cannot tell from a live one:
 
-| | cells | I/O | cascades | out pins |
+| | cells | I/O | cascades | what the swap did |
 |---|---|---|---|---|
-| `v3host`, one strobe per register | 50 / 128 (39 %) | ⛔ **64 / 64 (100 %)** | 0 | 44 |
-| `v3host_bc`, `RA4..RA0` + `REGWR` | **27 / 128 (21 %)** | ⭐ **42 / 64 (65 %)** | 0 | 21 |
+| `v3host` | **27 / 128** | ⭐ **42 / 64** | 0 | **22 pins back**, off a part that had none |
+| `v3scan` | ⭐ **100 / 128** | 63 / 64 | ⭐ **2** | 14 cells and 14 cascades *cheaper* |
+| `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⛔ 25 cells and 25 cascades dearer |
+| `v3ptr` | **110 / 128** | **44 / 64** | 3 | free — and it gained the fix below |
+| `v3dot` | **116 / 128** | **52 / 64** | 1 | a cell for a pin |
 
-**22 pins and 23 cells**, and the receivers pay for it in the currency each of them has
-spare: ~6 cells of offset decode apiece, against an input count that barely moves
-(`v3scan` swaps 6 strobes for 6 broadcast lines, `v3ptr` 7 for 6, `v3dot` 7 for 6).
+⚠ **The receivers mostly did not pay, and the fitter is why — which means none of these
+deltas is a property of the design.** The expectation was ~6 cells of decode each against an
+unchanged pin count. What happened is that the same six-cell edit made `v3scan` 14 cells
+cheaper and `v3scan_mq` 25 cells dearer, in opposite directions, with 41 cascades on the
+variant §5 recommends. **That is placement heuristics above 80 % utilisation**, and the only
+figure here worth designing against is `v3host`'s 22 pins, which is arithmetic.
 
-⚠ **Priced, not adopted.** All three receivers are fitted *against the strobe convention*,
-so the swap is a four-part rewire and four re-fits — and `v3scan` is the one to watch,
-because it goes in at 114 / 128 cells and 63 / 64 pins and the decode is additive on the
-axis it has least of. **Recommended, and it is §0's first entry in what to do next.**
+⛔ **And it bought something the strobe wiring could not express at any price.** A strobe per
+*register* cannot load a register **wider than the bus**, and v3ptr has six of them — `WPTR`
+and `CPTR` are 19 bits across three bytes, `CWIDTH` is 10 with its top two in `CCTRL`,
+`CHEIGHT` is 9 with its top one there. Every one was loading all its bits from a single
+strobe, so a store to `+$08` put `D0` into **both `WC0` and `WC8`**. On the broadcast an
+extra offset is a decode cell, not a pin: `v3ptr` went from 7 strobes to 10 offsets, the
+loads are per-bit, and **the fix cost nothing** — same 110 cells, one pin fewer. §6.1 has it
+as a finding, because it is a third instance of the shape that section is about.
+
+⚠ **`v3ptr_rows` and `v3ptr_both` now refuse outright** (`INTERNAL ERROR`), where the strobe
+wiring fitted them at 128 / 128. The per-bit load costs product terms in exactly the block
+whose cost grows with width, so plan §6.2's rejection of the direction bits is no longer a
+judgement about cascades — it is the fitter declining. Their stale `.fit`s were deleted
+rather than kept: they describe a term list that no longer exists.
 
 ### ⛔ What the first fit corrected
 
@@ -61,8 +78,15 @@ enters this part: the code arrives already staged, and the attribute goes straig
 
 | | cells | I/O | cascades |
 |---|---|---|---|
-| `v3scan`, map word in silicon | 114 / 128 (89 %) | **63 / 64 (98 %)** | 16 |
-| `v3scan_mq`, map word discrete | **82 / 128 (64 %)** | **46 / 64 (71 %)** | 16 |
+| `v3scan`, map word in silicon | 100 / 128 (78 %) | **63 / 64 (98 %)** | 2 |
+| `v3scan_mq`, map word discrete | **107 / 128 (83 %)** | **46 / 64 (71 %)** | ⚠ **41** |
+
+⚠ **Both figures moved when the broadcast went in, and they moved in opposite
+directions** — the silicon variant lost 14 cells and 14 cascades, the discrete one gained
+25 cells and 25 cascades, from the same six-cell edit. That is placement heuristics at 83 %
+utilisation, not logic, and it means **neither cascade count should be read as a property
+of the design**. ⛔ **41 cascades on the variant this section recommends is a delay
+question that only a timing analysis answers**, and it is now §5's first risk.
 
 ⛔ **63 of 64 I/O is one pin of headroom**, which is the state `graphics.md` flags on
 `vsup` as a standing hazard. **The discrete variant is not an emergency valve any more —
@@ -83,10 +107,10 @@ should be read before anything is added to plan §0.
 
 | | Cells, est. | I/O, est. | What it is |
 |---|---|---|---|
-| **`v3dot`** | ⭐ **115 / 128, FITTED** | **53 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
-| **`v3scan`** | ⭐ **114 / 128, FITTED** | ⚠ **63 / 64, FITTED** | the scan and cell addresses, the map word |
-| **`v3ptr`** | ⭐ **110 / 128, FITTED** | **45 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
-| **`v3host`** | **50 / 128, FITTED** | ⛔ **64 / 64, FITTED** | the backplane, the registers, the palette write path |
+| **`v3dot`** | ⭐ **116 / 128, FITTED** | **52 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
+| **`v3scan`** | ⭐ **100 / 128, FITTED** | ⚠ **63 / 64, FITTED** | the scan and cell addresses, the map word |
+| **`v3ptr`** | ⭐ **110 / 128, FITTED** | **44 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
+| **`v3host`** | **27 / 128, FITTED** | **42 / 64, FITTED** | the backplane, the registers, the palette write path |
 
 ⚠ **`v3host` is pin-bound, not cell-bound** — a fifth full of macrocells and two thirds
 full of pins, because it is the part the backplane lands on. **It is not cells that stop
@@ -255,8 +279,8 @@ needs `PB[7:0]` on it, which is eight more pins than this.
    §8 measured that the board would not take them *and* four CPLDs — until plan §13.3
    trade 1 returned four packages. **It now places at 40 ICs, 73 %.**
 3. ⛔ **`v3dot` NEEDS its escape — it is not optional.** With the sprite's shift
-   registers in silicon the fitter answers **`INTERNAL ERROR`**; with them in two
-   `'165` it is **115/128 cells, 53/64 I/O, 1 cascade**. §8's escape is therefore a
+   registers in silicon the fitter answers **`Design does not fit`**; with them in two
+   `'165` it is **116/128 cells, 52/64 I/O, 1 cascade**. §8's escape is therefore a
    requirement, and plan §13.3 trade 1 is what paid for it.
 4. ⚠ **The `VA` tri-state discipline.** Two parts on seventeen nets, and the rule that
    they never drive together has to be *checked*, not asserted —
@@ -366,8 +390,10 @@ Steps 1 and 3 are **done** — four term lists, four fits, seven variants betwee
    `INTERNAL ERROR` and wrote a convincing report anyway, and a `v3ptr` figure was quoted
    from a `.fit` the next variant had already overwritten.
 4. **`reach` and `census` from the first term list, not retrofitted** (plan §15 step 5).
-5. ⭐ **Adopt the broadcast** (§0's fourth-fit table): `v3host` at 64 / 64 pins is not a
-   design with a next step in it.
+5. ~~Adopt the broadcast~~ — **done 2026-09-16**, all four parts re-fitted, offsets in
+   `gal/video3/regmap.ts`.
+6. ⛔ **Explain `v3scan_mq`'s 41 cascades, or accept them with a timing number.** It is
+   the recommended variant and it is the only figure on the card that got worse.
 
 ### 6.1 ⛔ What is fitted is not what is specified — two signals with no cell behind them
 
@@ -380,12 +406,14 @@ assigns the job, and no `Cell` performs it:
 | | this document says | the term list has |
 |---|---|---|
 | `RFA`, `RFWE`, `RFOE` — the register file's address and controls | §2.3: *"the mask serialiser and the register-file address must share a part … so `RFA`, `RFWE` and `RFOE` are here"*, on `v3ptr` | ⛔ **nothing.** One mention, in a comment. `v3ptr` produces `MS0..MS7` and never turns the serial bit into an address |
-| `WCOL`'s end-of-row reload | §7.2: the column shadow reloads `WPTR`'s column at every row advance, which is what makes a span a *rectangle* and not a line | ⚠ `LDWCOL` takes **only the CPU strobe**; `WROWADV` does not reload it |
+| `WPTR`'s end-of-row reload | §7.2: the column shadow reloads `WPTR`'s column at every row advance, which is what makes a span a *rectangle* and not a line | ⚠ `LDWP0`/`LDWP1` take **only the CPU write**; `WROWADV` does not reload them. Blocked on the row above — the reload *is* a register-file read |
+| ⭐ **the multi-byte loads** — `WPTR`, `CPTR`, `CWIDTH`, `CHEIGHT` | plan §10: 19 bits across three bytes, and `CCTRL` carries `CWIDTH[9:8]` and `CHEIGHT[8]` | ⭐ **FIXED 2026-09-16.** Every bit took one strobe, so `+$08`'s `D0` drove `WC0` *and* `WC8`. Now per-bit, off the broadcast, at no cost |
 
-⭐ **Neither is a fit risk** — `v3ptr` is the roomiest part at 110 / 128 and 45 / 64, and
-both additions are small. **Both are correctness gaps**, and the second is the one that
+⭐ **Neither of the two open ones is a fit risk** — `v3ptr` sits at 110 / 128 cells and
+44 / 64 I/O, and both additions are small. **Both are correctness gaps**, and the second
 bites silently: a span writer whose column never reloads paints the first row and then
-walks off down the framebuffer, which is a picture, just not the right one.
+walks off down the framebuffer, which is a picture, just not the right one. ⚠ They are
+also **one gap, not two** — the reload is a register-file read, so it is blocked on `RFA`.
 
 ⛔ **This is exactly what plan §15 step 5's `reach` check is for**, and it is the reason
 that step is not optional paperwork: it asks *which signals does the design produce that

@@ -16,6 +16,7 @@
 
 import { toCupl, type Merged } from "../jedec/cupl"
 import type { Cell } from "../jedec/assemble"
+import { BROADCAST, decodeCells, type RegName } from "./regmap"
 import { counterTerms, loadable } from "../jedec/counter"
 
 /* ⭐ V3_COPYDIR picks which of the copy engine's direction bits are BUILT.
@@ -29,19 +30,36 @@ export const COPYDIR = process.env.V3_COPYDIR ?? "none"
 const DIRC = COPYDIR === "both" ? "CDIRC" : null
 const DIRR = COPYDIR === "none" ? null : "CDIRR"
 
+/* -- a load whose strobe differs per bit ---------------------------------
+ *
+ * ⛔ counter.ts's `loadable` takes ONE strobe, and this part's registers are
+ * wider than the bus: WPTR is 19 bits arriving as three bytes, CPTR likewise,
+ * and CWIDTH's top two bits and CHEIGHT's top bit ride in CCTRL (plan §10).
+ * With one strobe per register, `LDWCOL & D0` drove WC0 AND WC8 - one store
+ * landing in two bits. So the strobe is per bit, and the hold is too: bit i
+ * holds unless ITS OWN byte is the one being written. */
+const loadableM = (bits: string[], enable: string, load: string[],
+                   from: string[]): string[][] => {
+  const counted = counterTerms({ bits, enable })
+  return bits.map((_, i) => [
+    `${load[i]} & ${from[i]}`,
+    ...counted[i].map((t) => `!${load[i]} & ${t}`),
+  ])
+}
+
 /* -- an up/down counter, which counter.ts does not have ------------------
  *
  * Bit i toggles when every lower bit is 1 counting up, or 0 counting down.
  * ⚠ This is the one block on the part whose product-term cost grows with
  * width, so it is where a refusal would come from. */
-const upDown = (bits: string[], en: string, dir: string | null, load?: string,
+const upDown = (bits: string[], en: string, dir: string | null, load?: string[],
                 from?: string[]): Cell[] =>
   dir === null
     /* up only: counter.ts's own terms, which cost a fraction of the pair */
     ? bits.map((q, i) => ({
         pin: 0, name: q, assertedLow: false, s0: 1 as const, registered: true,
         terms: load && from
-          ? loadable(bits, en, load, from)[i]
+          ? loadableM(bits, en, load, from)[i]
           : counterTerms({ bits, enable: en })[i],
       }))
   : bits.map((q, i) => {
@@ -60,7 +78,9 @@ const upDown = (bits: string[], en: string, dir: string | null, load?: string,
     ]
     return {
       pin: 0, name: q, assertedLow: false, s0: 1 as const, registered: true,
-      terms: load && from ? [`${load} & ${from[i]}`, ...terms.map((t) => `!${load} & ${t}`)] : terms,
+      terms: load && from
+        ? [`${load[i]} & ${from[i]}`, ...terms.map((t) => `!${load[i]} & ${t}`)]
+        : terms,
     }
   })
 
@@ -72,24 +92,38 @@ const upDown = (bits: string[], en: string, dir: string | null, load?: string,
  * is LDWA/LDWB driven by the sequencer instead of by a store. */
 const WCOL = [...Array(10).keys()].map((b) => `WC${b}`)
 const WROW = [...Array(9).keys()].map((b) => `WR${b}`)
+/* ⭐ The 19-bit pointer packs little-endian across +$08..+$0A, so the byte a
+ * bit arrives in is what names its strobe:
+ *   +$08  D7..D0 -> WC7..WC0
+ *   +$09  D1..D0 -> WC9..WC8   and   D7..D2 -> WR5..WR0
+ *   +$0A  D2..D0 -> WR8..WR6
+ * The bit-to-D mapping below is the one this part already had, and it was
+ * right; only the strobe was wrong. CPTR at +$12..+$14 is the same shape. */
+const PTRCOL_LD = (b: number) => (b < 8 ? 0 : 1)
+const PTRCOL_D = (b: number) => (b < 8 ? `D${b}` : `D${b - 8}`)
+const PTRROW_LD = (b: number) => (b < 6 ? 1 : 2)
+const PTRROW_D = (b: number) => (b < 6 ? `D${b + 2}` : `D${b - 6}`)
+const ptrLd = (pfx: string, f: (b: number) => number, n: number) =>
+  [...Array(n).keys()].map((b) => `LD${pfx}P${f(b)}`)
+
 const wptr: Cell[] = [
   ...WCOL.map((name, i) => ({
     pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
-    terms: loadable(WCOL, "WINC", "LDWCOL",
-      [...Array(10).keys()].map((b) => (b < 8 ? `D${b}` : `D${b - 8}`)))[i],
+    terms: loadableM(WCOL, "WINC", ptrLd("W", PTRCOL_LD, 10),
+      [...Array(10).keys()].map(PTRCOL_D))[i],
   })),
-  ...upDown(WROW, "WROWADV", DIRR, "LDWROW",
-    [...Array(9).keys()].map((b) => (b < 6 ? `D${b + 2}` : `D${b - 6}`))),
+  ...upDown(WROW, "WROWADV", DIRR, ptrLd("W", PTRROW_LD, 9),
+    [...Array(9).keys()].map(PTRROW_D)),
 ]
 
 /* -- CPTR: the copy engine's source -------------------------------------- */
 const CCOL = [...Array(10).keys()].map((b) => `CC${b}`)
 const CROW = [...Array(9).keys()].map((b) => `CR${b}`)
 const cptr: Cell[] = [
-  ...upDown(CCOL, "CSTEP", DIRC, "LDCCOL",
-    [...Array(10).keys()].map((b) => (b < 8 ? `D${b}` : `D${b - 8}`))),
-  ...upDown(CROW, "CROWADV", DIRR, "LDCROW",
-    [...Array(9).keys()].map((b) => (b < 6 ? `D${b + 2}` : `D${b - 6}`))),
+  ...upDown(CCOL, "CSTEP", DIRC, ptrLd("C", PTRCOL_LD, 10),
+    [...Array(10).keys()].map(PTRCOL_D)),
+  ...upDown(CROW, "CROWADV", DIRR, ptrLd("C", PTRROW_LD, 9),
+    [...Array(9).keys()].map(PTRROW_D)),
 ]
 
 /* -- the copy's width and height ----------------------------------------
@@ -101,18 +135,26 @@ const CW = [...Array(10).keys()].map((b) => `CW${b}`)
 const CWN = [...Array(10).keys()].map((b) => `CWN${b}`)
 const CH = [...Array(9).keys()].map((b) => `CH${b}`)
 const counters: Cell[] = [
-  ...CW.map((name, i) => ({
-    pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
-    terms: [`LDCW & ${i < 8 ? `D${i}` : `D${i - 8}`}`, `${name} & !LDCW`],
-  })),
+  /* ⚠ plan §10: CCTRL b4..3 IS CWIDTH[9:8], so the top two bits load from a
+   * different offset than the bottom eight - one register in the programmer's
+   * model, two bytes on the bus. */
+  ...CW.map((name, i) => {
+    const ld = i < 8 ? "LDCW" : "LDCCTRL"
+    return {
+      pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
+      terms: [`${ld} & ${i < 8 ? `D${i}` : `D${i - 5}`}`, `${name} & !${ld}`],
+    }
+  }),
   ...CWN.map((name, i) => ({
     pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
     terms: loadable(CWN, "CSTEP", "CWLOAD", CW)[i],
   })),
+  /* and CCTRL b5 is CHEIGHT[8], the same way */
   ...CH.map((name, i) => ({
     pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
-    terms: loadable(CH, "CROWADV", "LDCH", [...Array(9).keys()].map((b) =>
-      (b < 8 ? `D${b}` : "D0")))[i],
+    terms: loadableM(CH, "CROWADV",
+      [...Array(9).keys()].map((b) => (b < 8 ? "LDCH" : "LDCCTRL")),
+      [...Array(9).keys()].map((b) => (b < 8 ? `D${b}` : "D5")))[i],
   })),
 ]
 
@@ -161,6 +203,15 @@ const addressMux: Cell[] = [...Array(17).keys()].map((i) => {
   }
 })
 
+/* the offsets this part answers to.  ⭐ Ten, where the strobe wiring gave it
+ * seven - and the three extra are the multi-byte loads that wiring could not
+ * express at all, because a strobe per REGISTER cannot load a register wider
+ * than the bus. On the broadcast an extra offset is a decode cell, not a pin. */
+const MY_REGS: RegName[] = [
+  "LDWP0", "LDWP1", "LDWP2", "LDWADV",
+  "LDCP0", "LDCP1", "LDCP2", "LDCW", "LDCH", "LDCCTRL",
+]
+
 export const v3ptr: Merged = {
   name: "v3ptr",
   partNo: "ARM6309-V3P",
@@ -172,16 +223,18 @@ export const v3ptr: Merged = {
     ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({ name: `D${b}` })),
     /* the span writer's handshake, from v3dot */
     { name: "WSTB" }, { name: "RETIRE" }, { name: "SPANEND" }, { name: "WINC" },
-    { name: "WROWADV" }, { name: "LDWCOL" }, { name: "LDWROW" }, { name: "LDWADV" },
+    { name: "WROWADV" },
     /* the copy engine's, likewise */
     { name: "CGO" }, { name: "CDONE" }, { name: "CSTEP" }, { name: "CROWADV" },
     { name: "CWLOAD" }, ...(DIRR ? [{ name: "CDIRR" }] : []),
     ...(DIRC ? [{ name: "CDIRC" }] : []), { name: "CRDSEL" },
-    { name: "LDCCOL" }, { name: "LDCROW" }, { name: "LDCW" }, { name: "LDCH" },
+    /* ⭐ the register broadcast, decoded HERE (partition.md §3) */
+    ...BROADCAST.map((n) => ({ name: n })),
     /* the bus grant - one signal, from one place */
     { name: "FBOE" },
   ],
-  cells: [...wptr, ...cptr, ...counters, ...spanWriter, ...addressMux],
+  cells: [
+    ...decodeCells(MY_REGS),...wptr, ...cptr, ...counters, ...spanWriter, ...addressMux],
   /* the address bus, and the three status bits v3host assembles into VSTAT */
   external: new Set([
     ...[...Array(17).keys()].map((i) => `FBA${i + 2}`),

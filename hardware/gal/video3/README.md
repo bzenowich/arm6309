@@ -14,17 +14,20 @@ appears only in the fitter's stdout, never in the `.fit`**: `fit1508.sh` require
 sentence, which is the only thing standing between a failed fit and a *convincing*
 `.fit` left over from the last one. `CLAUDE.md`'s trap list has both.
 
+⭐ **All four parts take the register broadcast** (`RA4..RA0` + `REGWR`) and decode their
+own offsets from `regmap.ts`, which is the single table plan §10 specifies. **2026-09-16.**
+
 | | cells | I/O | cascades | |
 |---|---|---|---|---|
-| `v3scan` | 114 / 128 | ⚠ **63 / 64** | 16 | the map word in silicon |
-| `v3scan_mq` | 82 / 128 | 46 / 64 | 16 | ⭐ the map word in four `'574` |
-| **`v3dot`** | **115 / 128** | 53 / 64 | **1** | ⭐ the build — sprite shifters in 2 × `'165` |
-| `v3dot_si` | — | — | — | ⛔ shifters in silicon: **`INTERNAL ERROR`** |
-| **`v3ptr`** | **110 / 128** | 45 / 64 | **3** | ⭐ the build — ascending copies only |
-| `v3ptr_rows` | 128 / 128 | 46 / 64 | 21 | row direction only |
-| `v3ptr_both` | 128 / 128 | 47 / 64 | 19 | both directions — **rejected** |
-| **`v3host`** | **50 / 128** | ⛔ **64 / 64** | **0** | the build — one load strobe per register |
-| `v3host_bc` | 27 / 128 | ⭐ **42 / 64** | 0 | ⭐ `RA4..RA0` + `REGWR` broadcast — **recommended** |
+| `v3scan` | 100 / 128 | ⚠ **63 / 64** | 2 | the map word in silicon |
+| `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⭐ the map word in four `'574` |
+| **`v3dot`** | **116 / 128** | 52 / 64 | **1** | ⭐ the build — sprite shifters in 2 × `'165` |
+| `v3dot_si` | — | — | — | ⛔ shifters in silicon: **`Design does not fit`** |
+| **`v3ptr`** | **110 / 128** | 44 / 64 | **3** | ⭐ the build — ascending copies only |
+| `v3ptr_rows` | — | — | — | ⛔ row direction: **`INTERNAL ERROR`** |
+| `v3ptr_both` | — | — | — | ⛔ both directions: **`INTERNAL ERROR`** |
+| **`v3host`** | **27 / 128** | **42 / 64** | **0** | ⭐ the build — the broadcast |
+| `v3host_st` | 51 / 128 | ⛔ **64 / 64** | 0 | one load strobe per register — **replaced** |
 
 ⛔ **Keep a rejected variant's fit, do not overwrite it.** The three `v3ptr` rows are the
 evidence for plan §6.2's decision, and the first write-up quoted a figure after the run
@@ -32,13 +35,18 @@ that produced it had already been overwritten by the next variant — `check:doc
 number with no design output behind it. `CLAUDE.md`'s first trap, wearing different
 clothes.
 
-⛔ **`v3host` fits at exactly 64 / 64 pins** — every pin taken, 78 macrocells idle. A
-per-register load strobe is a pin and video3 has 29 registers; `V3_DECODE=broadcast`
-sends the offset instead and gives back 22 pins and 23 cells. It is **priced and not
-adopted**, because the other three parts are fitted against the strobe convention —
-`partition.md` §0's fourth-fit table has the swap and what each receiver pays.
+⛔ **`v3host_st` is kept fitted because it is the evidence**, not because it is an option:
+one load strobe per register puts that part at 64 / 64 pins with 77 macrocells idle. It is
+also **unable to load a register wider than the bus** — `WPTR` is 19 bits across three
+bytes — which is how `+$08`'s `D0` came to drive both `WC0` and `WC8`. `partition.md` §0
+has what the swap cost each part; the short version is that only `v3dot` paid, one cell.
 
-⭐ **`V3_MAPQ`, `V3_COPYDIR` and `V3_DECODE` are switches and not comments**, the way `ARM6309_LIST`
+⛔ **`v3ptr_rows` and `v3ptr_both` have no `.fit` here any more.** They fitted at 128 / 128
+under the strobe wiring and **refuse outright** under the per-bit loads, so their old
+reports were deleted: a `.fit` that describes a term list which no longer exists is the
+same trap as a stale one, wearing a date that looks current.
+
+⭐ **`V3_MAPQ`, `V3_COPYDIR`, `V3_SPRSHIFT` and `V3_DECODE` are switches and not comments**, the way `ARM6309_LIST`
 is in `gal/video.cpld.ts`: every side of both is fitted, and the differences *are* the
 answers to `partition.md` §5 risk 2 and plan §6.2.
 

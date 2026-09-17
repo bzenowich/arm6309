@@ -25,6 +25,7 @@
 
 import { toCupl, type Merged } from "../jedec/cupl"
 import type { Cell } from "../jedec/assemble"
+import { BROADCAST, decodeCells, type RegName } from "./regmap"
 import { loadable } from "../jedec/counter"
 
 /* -- the scroll registers ------------------------------------------------
@@ -141,6 +142,10 @@ const HS_COL = [2, 3, 4, 5, 6, 7, 8, 9].map((b) => `HS${b}`)
 const SA_ROW = [10, 11, 12, 13, 14, 15, 16, 17, 18].map((b) => `SA${b}`)
 const VS_ROW = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((b) => `VS${b}`)
 
+/* the offsets this part answers to.  LDHSL is also decoded on v3dot - the
+ * broadcast makes a shared register free, where a strobe made it a fan-out. */
+const MY_REGS: RegName[] = ["LDHSL", "LDHSH", "LDVSL", "LDVSH", "LDTB", "LDMB"]
+
 export const v3scan: Merged = {
   name: "v3scan",
   partNo: "ARM6309-V3S",
@@ -163,11 +168,13 @@ export const v3scan: Merged = {
       ? [0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({ name: `MAPQ${b}` }))
       : [...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({ name: `PB${b}` })),
          ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({ name: `PA${b}` }))]),
-    /* register write strobes, decoded on v3host */
-    { name: "LDHSL" }, { name: "LDHSH" }, { name: "LDVSL" }, { name: "LDVSH" },
-    { name: "LDTB" }, { name: "LDMB" },
+    /* ⭐ the register broadcast, decoded HERE (partition.md §3).  Six lines
+     * carry all 30 offsets; the six strobes this part used to take were six
+     * pins on v3host too, and that part had none to spare. */
+    ...BROADCAST.map((n) => ({ name: n })),
   ],
   cells: [
+    ...decodeCells(MY_REGS),
     ...scrollHolds,
     ...bases,
     ...mapWord,

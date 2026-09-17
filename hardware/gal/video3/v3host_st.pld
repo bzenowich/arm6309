@@ -1,4 +1,4 @@
-Name       v3host_bc ;
+Name       v3host_st ;
 PartNo     ARM6309-V3H ;
 Date       generated ;
 Revision   01 ;
@@ -47,12 +47,36 @@ PIN = RSTART ;
 PIN = IRQEN ;
 
 /* --- outputs ------------------------------------------------------ */
-PIN = REGWR ;
-PIN = RA0 ;
-PIN = RA1 ;
-PIN = RA2 ;
-PIN = RA3 ;
-PIN = RA4 ;
+PIN = LDCTRL ;
+PIN = LDVSL ;
+PIN = LDVSH ;
+PIN = LDHSL ;
+PIN = LDHSH ;
+PIN = LDSPLEN ;
+PIN = LDWFG ;
+PIN = LDWBG ;
+PIN = LDWP0 ;
+PIN = LDWP1 ;
+PIN = LDWP2 ;
+PIN = LDWADV ;
+PIN = LDIRQACK ;
+PIN = LDPIDXL ;
+PIN = LDPIDXH ;
+PIN = LDPDATL ;
+PIN = LDPDATH ;
+PIN = LDCP0 ;
+PIN = LDCP1 ;
+PIN = LDCP2 ;
+PIN = LDCW ;
+PIN = LDCH ;
+PIN = LDCCTRL ;
+PIN = LDTB ;
+PIN = LDMB ;
+PIN = LDSPRX ;
+PIN = LDSPRY ;
+PIN = LDSPRH ;
+PIN = LDSPRIX ;
+PIN = LDSPRDA ;
 PIN = PALTURN ;
 PIN = PBUSY ;
 PIN = LUTWE ;
@@ -83,16 +107,40 @@ PINNODE = VBLQ ;
  */
 
 /* --- equations ---------------------------------------------------- */
-REGWR = IOSEL & A6 & A5 & WRCYC ;
-RA0 = A0 ;
-RA1 = A1 ;
-RA2 = A2 ;
-RA3 = A3 ;
-RA4 = A4 ;
-PPEND.d = IOSEL & A6 & A5 & WRCYC & A4 & !A3 & !A2 & !A1 & A0 & !VBLANK
+LDCTRL = IOSEL & A6 & A5 & WRCYC & !A4 & !A3 & !A2 & !A1 & !A0 ;
+LDVSL = IOSEL & A6 & A5 & WRCYC & !A4 & !A3 & !A2 & !A1 & A0 ;
+LDVSH = IOSEL & A6 & A5 & WRCYC & !A4 & !A3 & !A2 & A1 & !A0 ;
+LDHSL = IOSEL & A6 & A5 & WRCYC & !A4 & !A3 & !A2 & A1 & A0 ;
+LDHSH = IOSEL & A6 & A5 & WRCYC & !A4 & !A3 & A2 & !A1 & !A0 ;
+LDSPLEN = IOSEL & A6 & A5 & WRCYC & !A4 & !A3 & A2 & !A1 & A0 ;
+LDWFG = IOSEL & A6 & A5 & WRCYC & !A4 & !A3 & A2 & A1 & !A0 ;
+LDWBG = IOSEL & A6 & A5 & WRCYC & !A4 & !A3 & A2 & A1 & A0 ;
+LDWP0 = IOSEL & A6 & A5 & WRCYC & !A4 & A3 & !A2 & !A1 & !A0 ;
+LDWP1 = IOSEL & A6 & A5 & WRCYC & !A4 & A3 & !A2 & !A1 & A0 ;
+LDWP2 = IOSEL & A6 & A5 & WRCYC & !A4 & A3 & !A2 & A1 & !A0 ;
+LDWADV = IOSEL & A6 & A5 & WRCYC & !A4 & A3 & !A2 & A1 & A0 ;
+LDIRQACK = IOSEL & A6 & A5 & WRCYC & !A4 & A3 & A2 & !A1 & A0 ;
+LDPIDXL = IOSEL & A6 & A5 & WRCYC & !A4 & A3 & A2 & A1 & !A0 ;
+LDPIDXH = IOSEL & A6 & A5 & WRCYC & !A4 & A3 & A2 & A1 & A0 ;
+LDPDATL = IOSEL & A6 & A5 & WRCYC & A4 & !A3 & !A2 & !A1 & !A0 ;
+LDPDATH = IOSEL & A6 & A5 & WRCYC & A4 & !A3 & !A2 & !A1 & A0 ;
+LDCP0 = IOSEL & A6 & A5 & WRCYC & A4 & !A3 & !A2 & A1 & !A0 ;
+LDCP1 = IOSEL & A6 & A5 & WRCYC & A4 & !A3 & !A2 & A1 & A0 ;
+LDCP2 = IOSEL & A6 & A5 & WRCYC & A4 & !A3 & A2 & !A1 & !A0 ;
+LDCW = IOSEL & A6 & A5 & WRCYC & A4 & !A3 & A2 & !A1 & A0 ;
+LDCH = IOSEL & A6 & A5 & WRCYC & A4 & !A3 & A2 & A1 & !A0 ;
+LDCCTRL = IOSEL & A6 & A5 & WRCYC & A4 & !A3 & A2 & A1 & A0 ;
+LDTB = IOSEL & A6 & A5 & WRCYC & A4 & A3 & !A2 & !A1 & !A0 ;
+LDMB = IOSEL & A6 & A5 & WRCYC & A4 & A3 & !A2 & !A1 & A0 ;
+LDSPRX = IOSEL & A6 & A5 & WRCYC & A4 & A3 & !A2 & A1 & !A0 ;
+LDSPRY = IOSEL & A6 & A5 & WRCYC & A4 & A3 & !A2 & A1 & A0 ;
+LDSPRH = IOSEL & A6 & A5 & WRCYC & A4 & A3 & A2 & !A1 & !A0 ;
+LDSPRIX = IOSEL & A6 & A5 & WRCYC & A4 & A3 & A2 & !A1 & A0 ;
+LDSPRDA = IOSEL & A6 & A5 & WRCYC & A4 & A3 & A2 & A1 & !A0 ;
+PPEND.d = LDPDATH & !VBLANK
           # PPEND & !PS0 ;
 PS0.d = PPEND & HLOAD
-        # IOSEL & A6 & A5 & WRCYC & A4 & !A3 & !A2 & !A1 & A0 & VBLANK
+        # LDPDATH & VBLANK
         # PS0 & !PS1 ;
 PS1.d = PS0
         # PS1 & !PS2 ;
@@ -127,7 +175,7 @@ IRQPEND.d = VBLRISE
             # IRQPEND & !IRQACK ;
 VBLQ.d = VBLANK ;
 VBLRISE = VBLANK & !VBLQ ;
-IRQACK = IOSEL & A6 & A5 & WRCYC & !A4 & A3 & A2 & !A1 & A0 ;
+IRQACK = LDIRQACK ;
 IRQN = 'b'0 ;
 IRQN.oe = IRQPEND & IRQEN ;
 VSTATOE = IOSEL & A6 & A5 & !A4 & A3 & A2 & !A1 & A0 & RW & E ;

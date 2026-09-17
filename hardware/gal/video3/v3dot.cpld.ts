@@ -14,6 +14,7 @@
 
 import { toCupl, type Merged } from "../jedec/cupl"
 import type { Cell } from "../jedec/assemble"
+import { BROADCAST, decodeCells, type RegName } from "./regmap"
 import { counterTerms, loadable } from "../jedec/counter"
 
 /* ⭐ partition.md §8's costed escape: the sprite's two shift registers as 2 x
@@ -192,6 +193,11 @@ const dotPath: Cell[] = [
   comb("VMODE0", ["CT0"]),
 ]
 
+/* the offsets this part answers to */
+const MY_REGS: RegName[] = [
+  "LDCTRL", "LDHSL", "LDSPRX", "LDSPRY", "LDSPRH", "LDSPRIX", "LDSPRDA",
+]
+
 export const v3dot: Merged = {
   name: "v3dot",
   partNo: "ARM6309-V3D",
@@ -204,12 +210,15 @@ export const v3dot: Merged = {
     /* ⛔ the sprite's shape arrives on D, not on sixteen pins of its own.  An
      * earlier draft invented SPA/SPB and the fitter refused the part at 75 IOs;
      * the register file already drives this bus and this part is already on it. */
-    { name: "LDCTRL" }, { name: "LDHSL" }, { name: "LDSPRX" }, { name: "LDSPRY" },
-    { name: "LDSPRH" }, { name: "LDSPRIX" }, { name: "LDSPRDA" },
+    /* ⭐ the register broadcast, decoded HERE (partition.md §3).  LDHSL is
+     * decoded on v3scan too - a shared register is free on the broadcast,
+     * where a strobe made it a fan-out. */
+    ...BROADCAST.map((n) => ({ name: n })),
     { name: "RMAP" }, { name: "RRD" }, { name: "RCPY" }, { name: "RSPN" },
     { name: "PALTURN" },
   ],
-  cells: [...hcount, ...vcount, ...ctrl, ...sprite, ...dotPath],
+  cells: [
+    ...decodeCells(MY_REGS),...hcount, ...vcount, ...ctrl, ...sprite, ...dotPath],
   external: new Set([
     "HSYNC", "VSYNC", "BLANK", "OMR", "MUXSEL0", "MUXSEL1", "PIXOE", "ATOE",
     "PIDXOE", "FOE0", "FOE1", ...(SPRSHIFT_DISCRETE ? ["SPRLD", "SPRSH"] : ["SPRA0", "SPRA1"]),
