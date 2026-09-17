@@ -29,7 +29,25 @@ python3 software/nitros9/tools/vgmodel.py --emit "$OUT/sys" || { echo "FAIL  vgm
 python3 software/demo/tools/mkgame.py "$OUT/gamedata" > "$OUT/gamedata.log" || { cat "$OUT/gamedata.log"; echo "FAIL  mkgame.py"; exit 1; }
 for f in tiles world sprites frames; do cp "$OUT/gamedata/$f.bin" "$OUT/sys/$f.bin"; done
 SYSFILES=$(ls "$OUT"/sys/* | tr '\n' ' ')
-make -C "$NITROS9DIR/recipes/arm6309/l2" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" SYSFILES="$SYSFILES" \
+
+# ⭐ V3=1 builds the port against video3 (video3/docs/plan.md) instead of
+# video/ (graphics.md).  The difference is defs/armvid.d's register map and
+# the code guarded by IFNE V3; see video3/docs/demo-report.md.
+#
+# ⛔ THE RECIPE HAS ONE OBJECT DIRECTORY, and changing AFLAGS does not make
+# anything out of date - so switching flavour without a clean links modules
+# built against the OTHER card's register offsets, which assembles, boots,
+# and writes VDATA to VSTAT. The flavour is stamped and a change forces the
+# clean.  (CLAUDE.md's stale-artefact trap, in a makefile.)
+REC="$NITROS9DIR/recipes/arm6309/l2"
+FLAV=${V3:+v3}; FLAV=${FLAV:-v1}
+if [ "$(cat "$REC/.flavour" 2>/dev/null)" != "$FLAV" ]; then
+  make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" clean >/dev/null 2>&1 || true
+  rm -rf "$REC/.mods" "$REC/.lib"
+  echo "$FLAV" > "$REC/.flavour"
+fi
+make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" SYSFILES="$SYSFILES" \
+  AFLAGS_EXTRA="${V3:+-DV3=1}" \
   > "$OUT/build.log" 2>&1 || { grep -v '^lwasm\|^lwlink' "$OUT/build.log" | tail -20; echo "FAIL  the ROM did not build"; exit 1; }
 
 cp "$NITROS9DIR/recipes/arm6309/l2/arm6309_rom.bin" "$OUT/arm6309_rom.bin"

@@ -248,7 +248,11 @@ static void span_end(void)
 static void vram_write(uint8_t v)
 {
     stall_for_span();
-    int mode = (m->ctrl >> 3) & 3, n;
+    /* ⛔ WMODE IS IN DIFFERENT BITS ON THE TWO CARDS - b4..3 on video/ and
+     * b5..4 on video3, where b3..2 became the MODE field (plan §10).  Reading
+     * video/'s position on a video3 CTRL turns span-mask into span-solid,
+     * which is what painted the CP437 font as 2,048 solid pixels. */
+    int mode = m->v3 ? ((m->ctrl >> 4) & 3) : ((m->ctrl >> 3) & 3), n;
     switch (mode) {
     case 0:
         m->vram[m->wptr] = v; wstep(); n = 1; break;
@@ -264,7 +268,10 @@ static void vram_write(uint8_t v)
         n = 8; break;
     }
     span_end();
-    int slot = (m->ctrl & 0x20) ? 8 : 4;   /* cell mode takes the bus one slot in two */
+    /* a cell mode takes the bus one slot in two: video/'s CELL is b5, and
+     * video3's MODE field is b3..2 with 0 = bitmap */
+    int cell = m->v3 ? (((m->ctrl >> 2) & 3) != 0) : ((m->ctrl & 0x20) != 0);
+    int slot = cell ? 8 : 4;
     m->busy_until = m->dots + DOTS_PER_E + (uint64_t)n * slot;
 }
 
@@ -980,7 +987,12 @@ static void wr(void *ctx, uint16_t a, uint8_t v)
                         (double)m->dots * DOT_PS / 1e12, a, v, m->cpu.pc);
             /* graphics.md 7.4: a span's colour and WADV 01's column reload are read
              * from the register file, and a CPU register access takes it away */
-            if (a != 0xFF75 && m->busy_until > m->dots && ++m->span_violations <= 8)
+            /* ⚠ VDATA IS AT A DIFFERENT OFFSET ON EACH CARD - $15 on video/,
+             * $0C on video3 (plan §10) - and it is the one register exempt
+             * from the rule, because a VRAM byte is not a register-file read.
+             * Hard-coding $FF75 made every video3 font stream a violation. */
+            if (a != (m->v3 ? 0xFF6CU : 0xFF75U) && m->busy_until > m->dots
+                && ++m->span_violations <= 8)
                 fprintf(stderr, "FAIL  %.3f s: the CPU wrote $%04X := $%02X under a span (PC $%04X)\n",
                         (double)m->dots * DOT_PS / 1e12, a, v, m->cpu.pc);
             video_write((uint8_t)(a - 0xFF60), v);
@@ -1429,6 +1441,32 @@ int main(int argc, char **argv)
         fprintf(stderr, "last PCs:");
         for (unsigned i = 0; i < 256; i++) fprintf(stderr, "%s%04X", i % 16 ? " " : "\n  ", atexit_ring[(*atexit_ri + i) & 255]);
         fprintf(stderr, "\n");
+    }
+    /* ⭐ VRAMOUT=file writes the whole 512 K of VRAM at exit.  Debugging a
+     * driver against a card that has no memory-mapped VRAM is otherwise
+     * guesswork: the map, the glyph bank and the bitmap are all just
+     * "somewhere the span writer put them". */
+    {
+        const char *vo = getenv("VRAMOUT");
+        if (vo) {
+            FILE *f = fopen(vo, "wb");
+            if (f) { fwrite(m->vram, 1, sizeof m->vram, f); fclose(f);
+                     fprintf(stderr, "emu: VRAM -> %s (%zu bytes)\n", vo, sizeof m->vram); }
+        }
+        const char *ro = getenv("REGOUT");
+        if (ro) {
+            FILE *f = fopen(ro, "w");
+            if (f) {
+                fprintf(f, "ctrl %02X vmode %d mode %d wmode %d\n", m->ctrl, m->ctrl & 3,
+                        (m->ctrl >> 2) & 3, (m->ctrl >> 4) & 3);
+                fprintf(f, "tilebase %02X mapbase %02X vs %d hs %d\n", m->tilebase, m->mapbase,
+                        (m->vs_hi << 8) | m->vs_lo, (m->hs_hi << 8) | m->hs_lo);
+                fprintf(f, "sprh %02X sprx %d spry %d\n", m->sprh,
+                        ((m->sprh & 3) << 8) | m->sprx_lo, ((m->sprh & 4) << 6) | m->spry_lo);
+                for (int i = 0; i < 32; i++) fprintf(f, "reg %02X = %02X\n", i, m->regfile[i]);
+                fclose(f);
+            }
+        }
     }
     fprintf(stderr, "emu: %d frames, progress $%02X, %.1f s of machine, %ld register writes under a list, %ld under a span\n",
             m->frame_n, m->progress, (double)m->dots * DOT_PS / 1e12, m->list_violations, m->span_violations);
