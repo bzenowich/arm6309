@@ -89,6 +89,8 @@ module v3dot (
     output wire SI1,
     output wire SI2,
     output wire SI3,
+    output wire SI4,
+    output wire SI5,
     output wire SHC0,
     output wire SHC1,
     output wire SHC2,
@@ -111,9 +113,11 @@ module v3dot (
     output wire SW0,
     output wire SW1,
     output wire SW2,
+    output wire SW3,
     output wire SR0,
     output wire SR1,
     output wire SR2,
+    output wire SR3,
     output wire SLOTTICK,
     output wire HBLANK,
     output wire HSYNC,
@@ -218,6 +222,8 @@ module v3dot (
   reg  r_SI1;
   reg  r_SI2;
   reg  r_SI3;
+  reg  r_SI4;
+  reg  r_SI5;
   reg  r_SHC0;
   reg  r_SHC1;
   reg  r_SHC2;
@@ -240,9 +246,11 @@ module v3dot (
   reg  r_SW0;
   reg  r_SW1;
   reg  r_SW2;
+  reg  r_SW3;
   reg  r_SR0;
   reg  r_SR1;
   reg  r_SR2;
+  reg  r_SR3;
   reg  r_DBLHOLD;
 
   assign DP0 = r_DP0;
@@ -300,6 +308,8 @@ module v3dot (
   assign SI1 = r_SI1;
   assign SI2 = r_SI2;
   assign SI3 = r_SI3;
+  assign SI4 = r_SI4;
+  assign SI5 = r_SI5;
   assign SHC0 = r_SHC0;
   assign SHC1 = r_SHC1;
   assign SHC2 = r_SHC2;
@@ -322,9 +332,11 @@ module v3dot (
   assign SW0 = r_SW0;
   assign SW1 = r_SW1;
   assign SW2 = r_SW2;
+  assign SW3 = r_SW3;
   assign SR0 = r_SR0;
   assign SR1 = r_SR1;
   assign SR2 = r_SR2;
+  assign SR3 = r_SR3;
   assign DBLHOLD = r_DBLHOLD;
 
   // buried
@@ -425,7 +437,7 @@ module v3dot (
          (~HS0 & ~HS1);
   // buried
   assign SPRACT =
-         (SPREN & ~MODE1 & ~MODE0 & SPRROW & ~SW2);
+         (SPREN & ~MODE1 & ~MODE0 & SPRROW & ~SW3);
   // EXTERNAL
   assign SPRSH =
          (SPRACT);
@@ -490,7 +502,7 @@ module v3dot (
   // buried
   assign SPRROW =
          (SPRVHIT)
-         | (~SR2);
+         | (~SR3);
   // EXTERNAL
   assign MODE0 =
          (CT2);
@@ -753,6 +765,23 @@ module v3dot (
          | (~LDSPRIX & LDSPRDA & SI3 & ~SI2)
          | (~LDSPRIX & LDSPRDA & ~SI3 & SI0 & SI1 & SI2)
          | (~LDSPRIX & ~LDSPRDA & SI3);
+      r_SI4 <=
+         (LDSPRIX & D4)
+         | (~LDSPRIX & LDSPRDA & SI4 & ~SI0)
+         | (~LDSPRIX & LDSPRDA & SI4 & ~SI1)
+         | (~LDSPRIX & LDSPRDA & SI4 & ~SI2)
+         | (~LDSPRIX & LDSPRDA & SI4 & ~SI3)
+         | (~LDSPRIX & LDSPRDA & ~SI4 & SI0 & SI1 & SI2 & SI3)
+         | (~LDSPRIX & ~LDSPRDA & SI4);
+      r_SI5 <=
+         (LDSPRIX & D5)
+         | (~LDSPRIX & LDSPRDA & SI5 & ~SI0)
+         | (~LDSPRIX & LDSPRDA & SI5 & ~SI1)
+         | (~LDSPRIX & LDSPRDA & SI5 & ~SI2)
+         | (~LDSPRIX & LDSPRDA & SI5 & ~SI3)
+         | (~LDSPRIX & LDSPRDA & SI5 & ~SI4)
+         | (~LDSPRIX & LDSPRDA & ~SI5 & SI0 & SI1 & SI2 & SI3 & SI4)
+         | (~LDSPRIX & ~LDSPRDA & SI5);
       r_SHC0 <=
          (HLOAD & SX0)
          | (~HLOAD & ~ACTIVE & SHC0)
@@ -875,6 +904,12 @@ module v3dot (
          | (SPRSH & ~SPRHIT & SW2 & ~SW1)
          | (SPRSH & ~SPRHIT & ~SW2 & SW0 & SW1)
          | (~SPRSH & SW2);
+      r_SW3 <=
+         (SPRSH & ~SPRHIT & SW3 & ~SW0)
+         | (SPRSH & ~SPRHIT & SW3 & ~SW1)
+         | (SPRSH & ~SPRHIT & SW3 & ~SW2)
+         | (SPRSH & ~SPRHIT & ~SW3 & SW0 & SW1 & SW2)
+         | (~SPRSH & SW3);
       r_SR0 <=
          (ROWADV & ~SPRVHIT & ~SR0)
          | (~ROWADV & SR0);
@@ -887,6 +922,12 @@ module v3dot (
          | (ROWADV & ~SPRVHIT & SR2 & ~SR1)
          | (ROWADV & ~SPRVHIT & ~SR2 & SR0 & SR1)
          | (~ROWADV & SR2);
+      r_SR3 <=
+         (ROWADV & ~SPRVHIT & SR3 & ~SR0)
+         | (ROWADV & ~SPRVHIT & SR3 & ~SR1)
+         | (ROWADV & ~SPRVHIT & SR3 & ~SR2)
+         | (ROWADV & ~SPRVHIT & ~SR3 & SR0 & SR1 & SR2)
+         | (~ROWADV & SR3);
       r_DBLHOLD <=
          (LINETICK & ~DBLHOLD & ~CT1)
          | (DBLHOLD & ~LINETICK);

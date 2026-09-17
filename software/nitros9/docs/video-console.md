@@ -264,20 +264,31 @@ The owner has:
 | `SS.MapWr` | a rectangle of map codes, `WPTR` reloaded where the ring's 128 columns wrap |
 | `SS.TBank` | `TILEBASE` in the next blank |
 | `SS.Batch` | records the next VBL commits, in order, first thing in the service: register writes (the scroll pairs, the bases), puts, pokes (a byte each at many addresses, one `WPTR2` load), and two tags for `VG.MkCam` and `VG.MkHero`. A batch waiting for its blank makes the next one wait (`VG.MkMiss` counts it) |
-| `SS.FrmWait`, `SS.FrmSig` | sleep until a VBL is served (X := the count), or a signal every *n* frames. ⚠ `SS.FrmSig` is built and no run exercises it |
+| `SS.FrmWait`, `SS.FrmSig` | sleep until a VBL is served (X := the count), or a signal every *n* frames. ⚠ `SS.FrmSig` is built and no run exercises it. ⭐ **On video3 the service also writes the count's low byte into the card's spare register** (`plan.md` §10's `+$1F`), so a process holding the screen reads a frame end instead of calling: the call costs ~1.4 ms, which is a tenth of a frame |
 | **`libvid`** | a subroutine module the owner links: `VlWait`, `VlPut` and `VlGet` (a `WPTR` and up to 16 bytes), `VlFill`, `VlPoke` (up to 13 addresses) and `VlRect` (span-solid). Each waits for the card, reloads `WPTR`, reads `CTRL`'s `WMODE` and `WADV` back and sets them, and masks `/IRQ` for the call: **398 µs** at most, measured. Not built: text, icons, polygons and images |
 
 **`overworld` is the demo's game on these** (`software/demo/demo.asm`'s loop): it steps the
 camera through the frame records by the frames `SS.FrmWait` says passed, writes the map
-strips that scroll into view with `libvid`, builds the hero's fifteen tiles a tile a frame by
-reading the background tiles back out of VRAM, and hands the scroll, the hero's flip and the two
+strips that scroll into view with `libvid`, builds the hero's fifteen tiles by reading the
+background tiles back out of VRAM, and hands the scroll, the hero's flip and the two
 record numbers to one `SS.Batch`. So camera and hero change in the same blank. **Measured:
-every one of 1,519 frames is `render()`'s; the camera steps one record a frame in 94% of
-pairs; the 90 flips start 0.50–0.62 ms after `VBLANK` rises and take 0.47–0.75 ms, none into
+every one of 1,519 frames is `render()`'s; the camera steps one record a frame in 90% of
+pairs; the 67 flips start 0.51–0.64 ms after `VBLANK` rises and take 0.47–0.78 ms, none into
 the picture.**
 
+⭐ **How much of a frame the hero gets is the card's difference.** On video3 the build runs
+stages until the frame ends, because the frame count is a register read (`+$1F`) — **a hero
+every 5 frames**, where ten stages a frame and then sleeping was 16. On video/ the count is a
+~1.4 ms system call, and asking for it mid-build cost the camera its one-record-a-frame claim
+and took the flip's IRQ over the 16C550's 1.4 ms, so video/ still builds **a tile a frame**.
+Both keep the rest: `cbuf` **is** four `libvid` records, so a tile is read and written in place
+rather than copied; the sprite loop visits only the columns inside the sprite; and there are
+**three hero buffers**, so the next build starts in the frame of the flip.
+`video3/docs/demo-report.md` §10.3 has the trace and the numbers.
+
 ⛔ **Three things the first runs found.** The hero's next build began in the pass that queued
-the flip, and wrote into the buffer still on the screen until that batch's blank. A map column
+the flip, and wrote into the buffer still on the screen until that batch's blank — which is
+why there are three buffers now, and not two. A map column
 as 26 `libvid` puts cost enough to miss one frame in five; one poke per half-column fixed it.
 And 15 single-cell puts in the flip took up to 1.04 ms of the blank, 4% of flips into the
 picture; `BT.Poke`, and committing the batch before the palette, fixed that.

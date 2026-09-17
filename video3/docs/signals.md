@@ -77,9 +77,9 @@ Everything here runs at 39.72 ns and is the card's tightest timing (§14 item 1)
 
 | | n | |
 |---|---|---|
-| `SPRLD` | 1 | load the two 8-bit shift registers from the register file, once per displayed sprite row |
+| `SPRLD` | 1 | load the **four** `'165` from the register file — 16×16 is four bytes — once per displayed sprite row |
 | `SPRSH` | 1 | shift, once per dot inside the sprite's eight columns |
-| `SPRHIT` | 1 | the sprite covers this dot: an **equality** against the column counter, then an eight-state window counter |
+| `SPRHIT` | 1 | the sprite covers this dot: an **equality** against the column counter, then a **sixteen**-state window counter |
 
 ### 1.7 The address mux — plan §14 item 3
 
@@ -163,7 +163,7 @@ that no design ever clocked. **video3 must not re-add them.**
 | `CPTR` + its shadow | 19 + 10 | copyrect's source — ⭐ **the shadow is a register-file location**, not macrocells (§7.2's trick) |
 | `SPANLEN`, the mask serialiser, the 3-bit mask counter | 19 | the span writer |
 | `CWIDTH`, `CHEIGHT`, `CCTRL` | 22 | the copy engine |
-| `SPRX`, `SPRY`, `SPRH`, two shift registers | 36 | the sprite |
+| `SPRX`, `SPRY`, `SPRH`, the window counters | 36 | the sprite — the shift registers are the four `'165` |
 | `TILEBASE`, `MAPBASE` | 8 | the cell address concatenation |
 | `PIDX`, `PPEND`, `PS0`–`PS3` | 22 | the palette commit and `PBUSY` |
 | `RDVALID` | 1 | the prefetch |

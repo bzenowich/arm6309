@@ -32,7 +32,7 @@ a number `check:docs` cannot tell from a live one:
 | `v3scan` | ⭐ **100 / 128** | 63 / 64 | ⭐ **2** | 14 cells and 14 cascades *cheaper* |
 | `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⛔ 25 cells and 25 cascades dearer |
 | `v3ptr` | **110 / 128** | **44 / 64** | 3 | free — and it gained the fix below |
-| `v3dot` | **117 / 128** | **52 / 64** | 4 | a cell for a pin, then the raster fix |
+| `v3dot` | **122 / 128** | **52 / 64** | 0 | a cell for a pin, the raster fix, then the 16×16 sprite |
 
 ⚠ **The receivers mostly did not pay, and the fitter is why — which means none of these
 deltas is a property of the design.** The expectation was ~6 cells of decode each against an
@@ -107,7 +107,7 @@ should be read before anything is added to plan §0.
 
 | | Cells, est. | I/O, est. | What it is |
 |---|---|---|---|
-| **`v3dot`** | ⭐ **117 / 128, FITTED** | **52 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
+| **`v3dot`** | ⭐ **122 / 128, FITTED** | **52 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
 | **`v3scan`** | ⭐ **100 / 128, FITTED** | ⚠ **63 / 64, FITTED** | the scan and cell addresses, the map word |
 | **`v3ptr`** | ⭐ **110 / 128, FITTED** | **44 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
 | **`v3host`** | **27 / 128, FITTED** | **42 / 64, FITTED** | the backplane, the registers, the palette write path |
@@ -280,7 +280,8 @@ needs `PB[7:0]` on it, which is eight more pins than this.
    trade 1 returned four packages. **It now places at 40 ICs, 73 %.**
 3. ⛔ **`v3dot` NEEDS its escape — it is not optional.** With the sprite's shift
    registers in silicon the fitter answers **`Design does not fit`**; with them in two
-   `'165` it is **117/128 cells, 52/64 I/O, 1 cascade**. §8's escape is therefore a
+   `'165` it is **122/128 cells, 52/64 I/O, 0 cascades** (four of them since the sprite
+   became 16×16 — plan §7). §8's escape is therefore a
    requirement, and plan §13.3 trade 1 is what paid for it.
 4. ⚠ **The `VA` tri-state discipline.** Two parts on seventeen nets, and the rule that
    they never drive together has to be *checked*, not asserted —
@@ -323,7 +324,7 @@ Two moves take logic out of silicon without adding a pin:
 | | Buys | Costs |
 |---|---|---|
 | **`MAP`/`MAPQ` → 4 × `'574`** | **−32 cells** on `v3scan`, the tightest part. ⭐ And the **attribute half never enters a CPLD at all** — `PB` → `MAPQ` → the `ATTR` latch → the LUT — so `v3scan` loses eight output pins and gains eight input pins for the code half: **pin-neutral** | 4 packages |
-| **the sprite's two shift registers → 2 × `'165`** | **−16 cells and −2 pins** on `v3dot`. The serial outputs go straight to LUT `A9..A8`, so they never come back | 2 packages |
+| **the sprite's shift registers → `'165`** | **−32 cells and −2 pins** on `v3dot` (−16 when the sprite was 8×8). The serial outputs go straight to LUT `A9..A8`, so they never come back | **4 packages** — two cascaded a plane, because a 16×16 row is 32 bits |
 
 ⛔ **But the board is full, and `npm run check:place`'s packer says so:**
 

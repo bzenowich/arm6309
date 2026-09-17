@@ -337,16 +337,27 @@ been fitted.
 this engine replaces — and `video-copyrect.md` §2 records that those five are one
 capability class with no software substitute.
 
-## 7. The mouse sprite — 8×8, bitmap mode only
+## 7. The mouse sprite — 16×16, bitmap mode only
 
 | | |
 |---|---|
-| Shape | **8×8, two bits a pixel**: 0 transparent, 1 and 2 the two cursor colours, 3 reserved. **16 bytes**, written through `SPRIDX`/`SPRDAT` |
+| Shape | **16×16, two bits a pixel**: 0 transparent, 1 and 2 the two cursor colours, 3 reserved. **64 bytes** — four a row, the low plane's columns 0–7 and 8–15 then the high plane's — written through `SPRIDX` (six bits) / `SPRDAT` |
 | Where it lives | ⭐ **the register file**, not VRAM — so the spare-access arbiter, the map latch and the fetch cadence are all untouched |
-| Per displayed sprite row | **one** register-file read of two bytes into two eight-bit shift registers |
-| Per dot of the sprite's eight columns | two bits shift out into the **`ATTR` latch** |
+| Per displayed sprite row | **four** register-file bytes into **four `'165`** — two cascaded a plane, so each plane is a sixteen-bit shift chain (`partition.md` §8's escape, which §5 risk 3 says is a requirement) |
+| Per dot of the sprite's sixteen columns | two bits shift out into the **`ATTR` latch** |
 | Colour | sub-palettes 1 and 2, all 256 entries of each loaded with one colour: **1,024 writes, ~2.9 ms**, and only when the cursor's colours change |
-| Position | `SPRX` 10 bits, `SPRY` 9 bits, enable in `SPRH` b7 |
+| Position | `SPRX` 10 bits, `SPRY` 9 bits, enable in `SPRH` b7 — the hotspot is the shape's top-left corner |
+
+⭐ **Why 16×16 and not 8×8** (2026-09-17; `history.md` has the 8×8 text). An arrow with
+a tail does not fit in eight rows — `software/demo`'s pointer is 16×16 and its shape is
+now this card's, pixel for pixel — and eight rows made the cursor an arrowhead whose
+fill reached the outline's outer edge. The price is 48 more bytes of register file, two
+more `'165`, and four macrocells on `v3dot`: the column and row window counters go from
+three bits to four and `SPRIDX` from four to six. ⭐ **`v3dot` refitted at 122/128 cells,
+52/64 I/O and 0 cascades** — cascades *fell* from four, so the timing argument got no
+worse. `video3/bench/run-v3sprite.sh` renders every X phase, both 4-byte phases, the
+edges, the line-doubling boundary and all four `VMODE`s against `v3model.py`, and all 36
+positions match pixel for pixel.
 
 ⭐ **Why a serialiser is affordable here and was not for Variant B.** §6.4.6 limit 3
 refuses a glyph serialiser because its output feeds a foreground/background mux
@@ -355,7 +366,7 @@ the `ATTR` latch before it reaches the LUT**, so the serialiser has a whole dot 
 to settle and the critical path is untouched. **The register is the difference.**
 
 ⚠ **The X compare is the part to check.** "This dot is the sprite's first" is an
-equality against a 10-bit counter, and then an 8-state down-counter runs the window —
+equality against a 10-bit counter, and then a **16**-state down-counter runs the window —
 equality, not magnitude, and `graphics.md` §6.4.9 already runs compares at this rate.
 But it is dot-rate logic in a CPLD and it has not been fitted. §14 item 2.
 
@@ -458,7 +469,12 @@ for it.
 | `+$1C` | `SPRH` | b1..0 `SPRX[9:8]`, b2 `SPRY[8]`, b7 sprite enable |
 | `+$1D` | `SPRIDX` | shape byte index 0–15, auto-increments after `SPRDAT` |
 | `+$1E` | `SPRDAT` | shape byte |
-| `+$1F` | — | reserved |
+| `+$1F` | `FCNT` | ⭐ **spare — no logic reads or writes it**, and a byte of the register file like the others, so it reads back what was written. **The VBL service keeps the low byte of its frame count there**, which is how a process holding the screen sees a frame end for the price of one read where asking the driver is a ~1.4 ms system call (`overworld`'s hero — `demo-report.md` §10) |
+
+⚠ **`+$1F` assumes the register file decodes all 32 offsets**, which is what a 32-byte
+file addressed by `RA4..RA0` does and what the emulator's model does. Nothing in the
+design reads the byte, so no fit and no equation depends on it; if a future revision
+gives `+$1F` a function, the driver loses a convenience and not a feature.
 
 **There is no `BCTRL`, no `BSTAT` and no `BORDER`** — no display list to start, and
 VGA has no overscan (§9.3). Reset forces `CTRL = 0`: display off, bitmap, direct
@@ -672,7 +688,7 @@ a table in this document.
 |---|---|---|---|
 | Trade 1 taken — **the built configuration** | **32** | **36** | **places, 68 %** |
 | … + `MAP`/`MAPQ` discrete (`partition.md` §8's escape) | 36 | **40** | **places, 73 %** |
-| … + the sprite's shift registers too | 38 | **42** | **places, 75 %** |
+| … + the sprite's **four** `'165` (16×16, §7) | 40 | **44** | **places** — `check:place` asserts placement on 24 cm, and `parts.ts` now carries the four, so the card's own list totals **39** with three parts assumed |
 | ⛔ trade 3, the tri-state pixel bus | — | — | **settled the other way** |
 | ⛔ trade 2, four-pixel `HSCROLL` | — | | **settled the other way** — one pixel is kept |
 
@@ -690,7 +706,8 @@ totals its own claim and that 24 cm is the shortest length that holds it.
 0. ⭐ **CLOSED 2026-09-16 — both cell-budget escapes are paid for.** §13.3 trade 1 is
    settled: the copy engine is byte-granular and needs no latch, which returns four
    packages. `npm run check:place` then places **all** of it — the four parts, the
-   discrete `MAP`/`MAPQ` latches *and* the sprite's shift registers, at **42 ICs, 75 %**.
+   discrete `MAP`/`MAPQ` latches *and* the sprite's shift registers — **44 ICs** with the
+   four `'165` §7 now needs.
    So `partition.md` §5's risks 2 and 3 both have an escape that fits, and the package
    budget no longer gates the macrocell budget.
 1. ⛔ **§3's timing claim has not been analysed.** *"Sixteen address lines settling
@@ -711,7 +728,7 @@ totals its own claim and that 24 cm is the shortest length that holds it.
    anywhere** — see item 4.
 4. ⚠ **The partition is drafted — [`partition.md`](partition.md) — at FOUR parts, which
    §13.5 says is the most that places, so **video3 is at its ceiling**. ⭐ **ALL FOUR
-   ARE FITTED.** `v3dot` is **117/128 cells and 52/64 I/O**; `v3ptr` is **110/128 and
+   ARE FITTED.** `v3dot` is **122/128 cells and 52/64 I/O**; `v3ptr` is **110/128 and
    44/64**; `v3host` is **27/128 and 42/64**. `v3scan` — the map word in silicon — is
    **100/128 cells and 63/64 I/O**, and `v3scan_mq` — the same part with the map word in
    four `'574` — is **107/128 cells and 46/64 I/O**. **NO NUMBER FROM `video/`'s FIT APPLIES HERE.**

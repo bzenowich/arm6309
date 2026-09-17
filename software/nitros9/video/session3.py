@@ -83,10 +83,10 @@ CAPTIONS = [
     ("v3trk /dd ", "v3trk: Tracker lists the real /DD - icons and Noto Sans from ROM"),
     ("v3trk /dd/cmds", "... and /DD/CMDS, two columns; the scroll bar knows how much is hidden"),
     ("v3about /w3", "A window, drawn once. Its pixels are now the only copy that exists"),
-    ("v3drag >", "v3drag: the card's COPY ENGINE moves it. No backing store, no CPU pixels"),
+    ("v3drag >", "v3drag: the pointer grabs the tab; the card's COPY ENGINE moves the window"),
     ("PS/2 mouse", "The pointer is video3's 8x8 HARDWARE SPRITE - five registers, nothing saved"),
     ("v3paint /w4", "Paint: its document goes into VRAM's off-screen margin, x 640-1023"),
-    ("v3scrl >", "v3scrl: the canvas scrolls by two copies a step - the view, and the strip"),
+    ("v3scrl >", "v3scrl: two copies a step - the view, and the strip - and a copy for each thumb"),
     ("v3doodle /w4", "... and is painted on: CoWin's ellipses and lines, and toolbox text"),
     ("overworld >", "overworld: the game on an exclusive tile screen, hero and all"),
     ("DD:procs", "procs: both shells still running"),
@@ -108,22 +108,25 @@ def keys():
 
 
 def mouse():
-    """A tour of the 640 x 480 desktop: to the corner, then a figure of eight."""
+    """A tour of the 640 x 480 desktop.  It starts where v3drag left the
+    pointer (v3show.GRAB - PutGC moves the mouse position too), glides to
+    the middle, and draws a figure of eight."""
     out = ["w800"]
-    steps = [(-127, 127)] * 8
-    x, y = 0.0, 0.0
-    px, py = 0, 0
+    px, py = v3show.GRAB
+    path = []
+    n = 40
+    for i in range(1, n + 1):
+        f = (1 - math.cos(math.pi * i / n)) / 2
+        path.append((px + (320 - px) * f, py + (240 - py) * f))
     n = 300
     for i in range(1, n + 1):
         a = 2 * math.pi * i / n
-        x, y = 320 + 280 * math.sin(a), 240 - 180 * math.sin(2 * a)
-        if i == 1:
-            steps.append((int(x), -int(y)))
-            px, py = int(x), int(y)
-            continue
+        path.append((320 + 280 * math.sin(a), 240 - 180 * math.sin(2 * a)))
+    steps = []
+    for x, y in path:
         dx, dy = int(round(x)) - px, int(round(y)) - py
         px, py = px + dx, py + dy
-        steps.append((dx, -dy))
+        steps.append((dx, -dy))                  # PS/2's y is up
     for dx, dy in steps:
         while dx or dy:
             sx, sy = max(-127, min(127, dx)), max(-127, min(127, dy))

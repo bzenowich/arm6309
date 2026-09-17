@@ -5,6 +5,41 @@ Superseded claims from [`plan.md`](plan.md), [`signals.md`](signals.md) and
 `CLAUDE.md`'s rule: **specs describe only the present design**, and a superseded
 utilisation figure is a number `check:docs` cannot distinguish from a live one.
 
+## `plan.md` §7 — the sprite was 8×8, and `v3dot`'s fit with it (2026-09-17)
+
+Until 2026-09-17 the sprite was **8×8**, and §7's first three rows read:
+
+| | |
+|---|---|
+| Shape | **8×8, two bits a pixel**: 0 transparent, 1 and 2 the two cursor colours, 3 reserved. **16 bytes**, written through `SPRIDX`/`SPRDAT` |
+| Per displayed sprite row | **one** register-file read of two bytes into two eight-bit shift registers |
+| Per dot of the sprite's eight columns | two bits shift out into the **`ATTR` latch** |
+
+`SPRIDX` was four bits, both window counters three, and `partition.md` §8's escape was
+**two** `'165` for **−16 cells and −2 pins**. With that sprite `v3dot` fitted at
+**117 / 128 cells, 52 / 64 I/O and 4 cascades**, and `partition.md` §5 risk 3 quoted the
+same fit as 117 / 128 with 1 cascade.
+
+Eight rows cannot hold an arrow with a tail: the cursor was an arrowhead, and its
+bottom row put a fill pixel outside the outline. `software/demo`'s pointer is 16×16, so
+the sprite became 16×16 — four bytes a row, 64 in the register file, four `'165`, four
+more macrocells — and refitted at **122 / 128, 0 cascades**. `demo-report.md` §10.6 is
+the pass that did it.
+
+## `plan.md` §10 — `+$1F` was reserved (2026-09-17)
+
+Until 2026-09-17 the register map's last row read:
+
+| Off | Name | |
+|---|---|---|
+| `+$1F` | — | reserved |
+
+It is now the driver's frame count (`VR.FCnt`). Nothing in the hardware changed: the
+byte was always a cell of the register file, and no logic reads it. What changed is
+that the VBL service writes the low byte of `VG.Frames` there every frame, because
+`overworld` needed to know whether a frame had ended without paying for a system call
+— the third pass's measurement is `demo-report.md` §10.
+
 ## `partition.md` §0 — the register decode, before the broadcast (2026-09-16)
 
 Until 2026-09-16 `v3host` emitted **one load strobe per register** and the other three

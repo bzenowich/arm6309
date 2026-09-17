@@ -17,9 +17,12 @@ import type { Cell } from "../jedec/assemble"
 import { BROADCAST, decodeCells, type RegName } from "./regmap"
 import { counterTerms, loadable } from "../jedec/counter"
 
-/* ⭐ partition.md §8's costed escape: the sprite's two shift registers as 2 x
- * '165 rather than sixteen macrocells.  A switch, not a comment - both sides
- * fitted, the way ARM6309_LIST is in gal/video.cpld.ts. */
+/* ⭐ partition.md §8's costed escape: the sprite's shift registers as '165
+ * rather than macrocells.  A switch, not a comment - both sides fitted, the
+ * way ARM6309_LIST is in gal/video.cpld.ts.
+ *
+ * ⚠ FOUR OF THEM SINCE 2026-09-17, not two: the sprite is 16 x 16 (plan §7),
+ * so a row is 32 bits and each plane is two cascaded '165. */
 export const SPRSHIFT_DISCRETE = (process.env.V3_SPRSHIFT ?? "discrete") === "discrete"
 
 const reg = (name: string, terms: string[]): Cell =>
@@ -108,16 +111,19 @@ const sprite: Cell[] = [
   ...SPRYB.map((n, i) => reg(n, [`LD${i < 8 ? "SPRY" : "SPRH"} & D${i < 8 ? i : 2}`,
                                  `${n} & !LD${i < 8 ? "SPRY" : "SPRH"}`])),
   reg("SPREN", ["LDSPRH & D7", "SPREN & !LDSPRH"]),
-  ...[0, 1, 2, 3].map((b) => reg(`SI${b}`,
-    [`LDSPRIX & D${b}`, ...counterTerms({ bits: [0,1,2,3].map((i) => `SI${i}`), enable: "LDSPRDA" })[b]
+  /* SPRIDX: 64 shape bytes (16 rows x 4), so six bits where 8 x 8 had four */
+  ...[0, 1, 2, 3, 4, 5].map((b) => reg(`SI${b}`,
+    [`LDSPRIX & D${b}`, ...counterTerms({ bits: [0,1,2,3,4,5].map((i) => `SI${i}`), enable: "LDSPRDA" })[b]
       .map((t) => `!LDSPRIX & ${t}`)])),
   ...downTo0(SHC, "ACTIVE", "HLOAD", SPRXB),
   ...downTo0(SVC, "ROWADV", "VLOAD", SPRYB),
-  ...[0, 1, 2].map((b) => reg(`SW${b}`, counterTerms({
-    bits: [0, 1, 2].map((i) => `SW${i}`), enable: "SPRSH", clear: "SPRHIT",
+  /* the window counters: sixteen columns and sixteen rows (plan §7), so four
+   * bits each where the 8 x 8 sprite had three */
+  ...[0, 1, 2, 3].map((b) => reg(`SW${b}`, counterTerms({
+    bits: [0, 1, 2, 3].map((i) => `SW${i}`), enable: "SPRSH", clear: "SPRHIT",
   })[b])),
-  ...[0, 1, 2].map((b) => reg(`SR${b}`, counterTerms({
-    bits: [0, 1, 2].map((i) => `SR${i}`), enable: "ROWADV", clear: "SPRVHIT",
+  ...[0, 1, 2, 3].map((b) => reg(`SR${b}`, counterTerms({
+    bits: [0, 1, 2, 3].map((i) => `SR${i}`), enable: "ROWADV", clear: "SPRVHIT",
   })[b])),
   /* the row's two bytes, serialised a dot at a time into the ATTR path.
    * ⭐ Affordable here and not for graphics.md §6.4.3's Variant B, and the
@@ -126,10 +132,10 @@ const sprite: Cell[] = [
    * ⚠ V3_SPRSHIFT=discrete puts it in two '165 instead - partition.md §8's
    * costed escape, and the board has already paid for it. */
   ...(SPRSHIFT_DISCRETE ? [] :
-    [0, 1].map((h) => [...Array(8).keys()].map((b) => reg(`SH${h}${b}`,
-      b === 7
-        ? [`SPRLD & D7`, `!SPRLD & !SPRSH & SH${h}7`]
-        : [`SPRLD & D${b}`, `!SPRLD & SPRSH & SH${h}${b + 1}`,
+    [0, 1].map((h) => [...Array(16).keys()].map((b) => reg(`SH${h}${b}`,
+      b === 15
+        ? [`SPRLD & D7`, `!SPRLD & !SPRSH & SH${h}15`]
+        : [`SPRLD & D${b % 8}`, `!SPRLD & SPRSH & SH${h}${b + 1}`,
            `!SPRLD & !SPRSH & SH${h}${b}`]))).flat()),
 ]
 
@@ -189,7 +195,7 @@ const dotPath: Cell[] = [
   comb("FOE1", ["!HS0 & !HS1"]),
   ...(SPRSHIFT_DISCRETE ? [] : [comb("SPRA0", ["SPRACT & SH00"]),
                                 comb("SPRA1", ["SPRACT & SH10"])]),
-  comb("SPRACT", ["SPREN & !MODE1 & !MODE0 & SPRROW & !SW2"]),
+  comb("SPRACT", ["SPREN & !MODE1 & !MODE0 & SPRROW & !SW3"]),
   comb("SPRSH", ["SPRACT"]),
   comb("SPRLD", ["HBLANK & SPRROW & HC3 & !HC4"]),
   /* ⭐ the arbiter.  ONE place decides the spare access, and FBOE follows from
@@ -229,7 +235,7 @@ const dotPath: Cell[] = [
   comb("VTC", ["VC8 & VC7 & VC6 & !M0", "VC9 & VC3 & VC2 & M0"]),
   comb("SPRVHIT", SVC.map((b) => `!${b}`).join(" & ").split("\u0000")),
   comb("SPRHIT", SHC.map((b) => `!${b}`).join(" & ").split("\u0000")),
-  comb("SPRROW", ["SPRVHIT", "!SR2"]),
+  comb("SPRROW", ["SPRVHIT", "!SR3"]),
   comb("MODE0", ["CT2"]),
   comb("MODE1", ["CT3"]),
   comb("VMODE0", ["CT0"]),

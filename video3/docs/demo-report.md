@@ -242,7 +242,8 @@ route and meet timing; the fitter has no opinion about whether `VC9` can be set 
 449-line frame. This is `CLAUDE.md`'s standing point in its sharpest form — *a fit is
 not a check* — and it is the answer to what the Verilator stage is for.
 
-`v3dot` is now **117 / 128 cells, 52 / 64 I/O, 4 cascades**, and `v3dot_tb` reports
+`v3dot` is now **122 / 128 cells, 52 / 64 I/O, 0 cascades** (§10.6 refitted it for the
+16×16 sprite; `history.md` has what it was), and `v3dot_tb` reports
 **17 claims, 0 failed**: 800-dot lines, 96-dot HSYNC, 449 / 525 lines a frame and
 400 / 480 active lines, in every VMODE.
 
@@ -484,3 +485,181 @@ only under `-DV3=1`, so `sh software/nitros9/run-emu.sh` failed to build. The vi
 commands and the toolbox page are now video3's alone; the video/ ROM's page 64 is blank.
 `run-emu.sh`: 23 claims, 0 failed; `SCENARIOS=nitros9 npm run check:machine`: 19 claims,
 0 failed.
+
+---
+
+## 10. The third pass — 2026-09-17, from the review of the second video
+
+Three points came back from the second video: the pointer was malformed and appeared
+only for the mouse tour, Paint's horizontal scroll ran four times faster than its
+vertical one, and the hero jumped from tile to tile where `software/demo`'s walks.
+All three were measured before they were touched, from the session's own recording.
+
+### 10.1 The pointer was never missing — it was at (0, 0)
+
+The desktop stream sent `GCSet` as its **last** escape, so the sprite came on when the
+chrome was finished and sat in the top-left corner until the first mouse packet moved
+it: thirteen white pixels against the desk, for 37 s. And the arrow's eighth row was
+`##@#`, which leaves a **fill pixel on the outline's outside edge** — the malformed
+look. `vidptr3.asm`'s art is now closed all the way round (eight rows leave no room
+for a tail, so it is an arrowhead), `v3desk` turns the pointer on immediately after
+`Select` and parks it on the open desk with `PutGC`, and:
+
+⭐ **`v3drag` drags with the pointer.** It glides to the About window's tab, a point a
+tick, and every step of the drag moves the pointer with the window — `PutGC`, so the
+sprite's five registers and no pixels, beside the copy engine's window and no pixels.
+`session3.py`'s mouse tour then starts from where the drag left it, instead of jumping
+to a corner.
+
+### 10.2 Paint's vertical scroll was the scroll bar, not the copy
+
+A step's two copies are the same size in both axes, and the measurement said
+otherwise: **6 frames a horizontal step, 25 a vertical one**, with the vertical bar
+changing on every one of those frames. The toolbox's `Scroll` repaints the whole bar
+— trough, two arrow buttons, thumb, three grips — and a 320-pixel vertical bar is 320
+rows of short fills where a 256-pixel horizontal one is 14.
+
+`v3scrl` now moves **the thumb alone, by the copy engine**: one `SS.Copy` of the
+thumb's rectangle, then one bar in the trough's colour over the few pixels it
+uncovered. Per leg, measured on the session:
+
+| leg | before | now |
+|---|---|---|
+| horizontal, 128 px | 0.58 s | **0.58 s** |
+| vertical, 160 px | ~6 s | **0.67 s** |
+| the whole scroll scene | 32 s | **9.4 s** |
+
+### 10.3 ⭐ The hero: 16 frames a build became 5, and where the time went
+
+`software/demo`'s hero is not rebuilt every frame either — on the host emulator it is
+rebuilt **every 4 frames**, and at two pixels a frame that is an 8-pixel step at 17 Hz,
+which reads as walking. `overworld` was rebuilding **every 16**, a 32-pixel jump.
+
+The cause was not the OS: `overworld` did **ten compose stages a frame and then
+slept**, and a hero is 150 stages. Lifting that alone gave 10 frames; a trace of
+600,000 instructions said where the rest was.
+
+| | share of the CPU |
+|---|---|
+| `compose1` and `copy16` | 34 % |
+| `libvid`'s reads and writes | 18 % |
+| the kernel and the I/O stack | **40 %** |
+
+Four changes, in the order they paid:
+
+| | |
+|---|---|
+| ⭐ **the clock became free** | a system call to ask whether a frame had ended costs **~1.4 ms** measured, and the loop made two or three a frame. The VBL service now writes its frame count into the card's spare register (`plan.md` §10's `+$1F`), so the check is one read and can be made after every stage |
+| ⭐ **nothing is copied** | `cbuf` **is** four `libvid` records, so the background is read into the tile being built and written out from it in place. `copy16` is gone, and with it 12 % of the CPU |
+| **the sprite's columns only** | the pixel loop ran all eight columns of every cell through two bounds tests each; it now computes the overlap once and visits only the columns inside the sprite |
+| ⭐ **a third tile buffer** | with two, a build could not start until the last flip's batch was on the card, so **two frames of every hero went to waiting**. The third (codes 211–225; `mkgame.py`'s world uses 53 and now asserts it stays below `SPRA-15`) lets the next build start in the frame of the flip |
+
+**The result, measured over 1,282 game frames: a hero every 5 frames** — 191 of 209
+gaps are exactly 5 — against 16 before and 4 for the bare-metal demo. No batch waited
+a blank for a busy one (`VG.MkMiss` is 0), and the camera advances one record a frame
+in every frame but twelve, which are the 16 px/frame transitions.
+
+⛔ **And one defect the change introduced, worth keeping.** The next frame's work must
+start on the first VBL **after the batch went in**, not after the frame began. A VBL
+that lands between the two commits nothing, and starting a frame on it hands `SS.Batch`
+a second batch while the first is still waiting — which then waits a blank, and so does
+every frame after it. The hero fell to **one build every 45 frames** and `VG.MkMiss`
+climbed by one a frame. `bf` is the count when the batch went in, and it is what the
+compose loop compares against.
+
+### 10.4 video/ keeps the old cadence, and run-vid.sh is why
+
+`overworld` builds both flavours. video/ has no spare register to read the count from,
+and building on past the frame's start cost it two claims: the camera advanced one
+record in 78 % of frame pairs where 90 % is the rule, and **the longest IRQ went to
+1,403 µs against a 1,400 µs budget** — the VBL that commits a flip, taken while the
+process is *running* rather than asleep, costs ~10 µs more for the map switch. So
+under `-DV3=0` the hero is still a tile a frame and the flip still waits out its
+commit asleep; video/ keeps the other three changes, which only remove work.
+`run-vid.sh`: **54 claims, 0 failed** — including the camera claim, at 90.2 %, which
+the same run fails at 88 % without these changes.
+
+### 10.5 What a keyed copyrect would buy, and what it would cost
+
+⚠ **Not built, and not proposed here** — this is the arithmetic for the question, so
+the next pass does not have to redo it.
+
+**The hardware.** `CCTRL` b1 and b2 are reserved since the direction bits were dropped
+(§6.2). A *keyed* copy — skip the write when the source byte is the sprite key — needs
+no adder, no latch and no direction: the byte is already latched in `vread` on the read
+access and goes out through the posted-write `'574` on the write (§6's last row), so the
+compare gates the write access. `v3ptr` has **18 macrocells and 20 pins spare**
+(`partition.md` §2.3): ~8 pins to bring `vread` into the part, or one pin and a `'688`
+comparator, plus a `CCTRL` bit and a term. ⚠ **It needs a fit.** `v3ptr_rows` and
+`v3ptr_both` went from 3 cascades to 19–21 and filled the part, and `CLAUDE.md` is
+explicit that cascades are a timing change even when cells are flat.
+
+**What software could do with it, in tile mode: a hero every 1–2 frames, not
+instantly.** ⛔ **A tile is not a rectangle to the engine**: the engine steps a row by
+the 1024-byte stride, and a tile's eight rows are one 64-byte run at `TILEBASE +
+code × 64`. So a hero is ~15 plain copies (a background tile is one 64-byte row) plus
+~80 keyed row copies of 8 bytes, each seven or eight register writes from the CPU. The
+engine's own time is nothing; the register writes are the cost.
+
+**In bitmap mode a keyed copy would be one copy for the whole figure** — 32 × 16 is a
+rectangle on the stride — plus one to restore what it covered. That is the attractive
+version, and ⛔ **the scroll is what refuses it.** In tile mode the playfield is a map
+and `HSCROLL` moves it for one register write; in bitmap mode the incoming columns have
+to be drawn, and at 16 px a frame that is two tile columns — 50 tiles, 400 row copies a
+frame. Switching modes does not help either: **in tile mode the picture exists only as
+map codes and tiles**, composed at scan time, so there are no playfield pixels in VRAM
+for a bitmap pass to overlay. A bitmap playfield would have to be blitted from the tile
+bank first — 2,000 tiles, ~16,000 row copies a screen.
+
+⭐ **And the save-and-restore the scheme is built around is already free in tile mode**:
+the hero's background is the world's tile code, so giving a cell back is writing that
+code into the map. That is what `flip` does, in the same batch as the scroll, in one
+blank — which is also the page flip. The two hero buffers (now three) *are* the flip.
+
+**Page flipping, since the question was asked directly.** VRAM is 512 KB — `WPTR` is 19
+bits — on a fixed 1024-byte stride, so the address space is **512 rows** and a page
+costs its full height in rows whatever its width:
+
+| mode | one page | two pages | fits in 512 rows |
+|---|---|---|---|
+| 640 × 480 | 480 rows | 960 | ⛔ **no** |
+| 640 × 400 | 400 | 800 | ⛔ **no** |
+| 640 × 240 | 240 | 480 | ⭐ yes, with rows 480–511 left for staging — exactly |
+| 640 × 200 (the game's, row-doubled to 400) | 200 | 400 | ⭐ yes, 112 rows spare |
+
+So **640 × 480 cannot be page-flipped on this card and 640 × 200 can**, with 112 rows
+(114 KB) over for sprite art and saves — and the flip is one `VSCROLL` write in the
+blank, since §8.1's row counter loads from it over a 512-row torus. ⚠ The 384 off-screen
+columns of every row (196 KB, §4) are the other place art can live, and cost no rows.
+
+### 10.6 ⭐ The sprite is 16 × 16
+
+Asked for after the pointer landed: `software/demo`'s arrow, which is 16 × 16 with a
+tail, in place of eight rows that could only hold an arrowhead. The shape is
+`show.py`'s `cursor_masks()` art character for character, and it is now in three places
+that agree — `vidptr3.asm`'s 64 bytes, `video3/bench/mkv3sprite.py`'s generator, and the
+emulator.
+
+| | 8 × 8 | 16 × 16 |
+|---|---|---|
+| shape | 16 bytes, two a row | **64 bytes, four a row** — the low plane's columns 0–7 and 8–15, then the high plane's |
+| `SPRIDX` | 4 bits | **6** |
+| the window counters | 3 bits each | **4 each** (sixteen columns, sixteen rows) |
+| the shift registers | 2 × `'165` | **4 × `'165`**, two cascaded a plane |
+| `v3dot` | `history.md` has the 8×8 fit | ⭐ **122 / 128 cells, 0 cascades, `Design fits successfully`** |
+| the card's parts list | the `'165` were not in it at all | **39 ICs**, the four `'165` included — `partition.md` §5 risk 3 calls them a requirement, so they belong in the list |
+
+⭐ **Cascades fell from four to zero**, so the part got *easier* to route, which
+`CLAUDE.md`'s rule about cascades being a timing change makes worth saying out loud.
+`video3/bench/run-v3sprite.sh` is the check that matters: 36 positions — every X phase,
+both 4-byte phases, the left and right edges, the line-doubling boundary and all four
+`VMODE`s — every pixel the model's.
+
+⛔ **And one thing this did NOT fix, because it was already broken.** The sprite's row
+*fetch* has no design output behind it: `v3dot` emits one `SPRLD` and the `'165` take
+their parallel data from `D`, but **nothing drives `RFA`** — the register file's address
+— during the fetch, so one strobe cannot deliver two different bytes, let alone four.
+`partition.md` §6.1 already carries this as one of its two open correctness gaps (with
+`WPTR`'s end-of-row reload, which is blocked on the same missing address generator), and
+16 × 16 makes it four bytes a row instead of two. **The counters, the store and the
+`'165` are sized for it; the fetch sequencer is still owed.**

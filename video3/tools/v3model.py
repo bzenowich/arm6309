@@ -97,14 +97,16 @@ def render_sprite(d, height, sx, sy, vram, dbl=2):
     shape = d["shape"]
     for y in range(height):
         py = y // dbl
-        if not (sy <= py < sy + 8):
+        if not (sy <= py < sy + 16):
             continue
         for x in range(640):
-            if not (sx <= x < sx + 8):
+            if not (sx <= x < sx + 16):
                 continue
+            # 16 x 16 since 2026-09-17: a row is four bytes, the low plane's
+            # columns 0-7 and 8-15 then the high plane's
             sr, sc = py - sy, x - sx
-            lo, hi = shape[sr * 2], shape[sr * 2 + 1]
-            attr = ((hi >> (7 - sc)) & 1) * 2 + ((lo >> (7 - sc)) & 1)
+            lo, hi = shape[sr * 4 + (sc >> 3)], shape[sr * 4 + 2 + (sc >> 3)]
+            attr = ((hi >> (7 - sc % 8)) & 1) * 2 + ((lo >> (7 - sc % 8)) & 1)
             if attr == 1:   out[y][x] = 0xF800
             elif attr == 2: out[y][x] = 0x001F
     return out

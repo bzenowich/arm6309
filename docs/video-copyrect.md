@@ -91,7 +91,7 @@ one write access:
 | **H5** 192-row window scroll | ~350 ms | **7.6 ms** | 46× |
 | **H4** `Select`, 640 × 200 | ~2.6 s each way | **7.9 ms** | ~320× |
 | `GetBlk`/`PutBlk`, 64 × 64 | ~41 ms | **0.25 ms** | 160× |
-| **H15** the hero's fifteen tiles | one tile a frame | the figure, every frame | |
+| **H15** the hero's fifteen tiles | a hero every 5 frames (2026-09-17, measured) | ~95 copies a hero **with a key**, so 1–2 frames; one copy for the figure in bitmap mode | ⚠ a tile is a 64-byte run, not a rectangle on the stride — `video3/docs/demo-report.md` §10.5 |
 
 ⭐ **It makes the hardware cursor unnecessary.** `H1` is ranked 5 at ≈ +4–5
 packages for a 16 × 16 overlay that `features.md` §8 says may not fit the pixel

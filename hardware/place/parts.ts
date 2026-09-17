@@ -262,8 +262,8 @@ export const ALTERNATES: Record<string, CardSpec> = {
    * `pld4` four. What check:place answers is whether the DISCRETE list plus
    * that assumption still places - which is a design input, not bookkeeping. */
   video3: {
-    title: "Video3", length: 240, ics: 35, source: "video3/docs/plan.md 13.1",
-    note: "character + bitmap + tile, copyrect, one sprite - AS DRAWN, 3 PLD assumed",
+    title: "Video3", length: 240, ics: 39, source: "video3/docs/plan.md 13.1",
+    note: "character + bitmap + tile, copyrect, one 16x16 sprite - AS DRAWN, 3 PLD assumed",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
     parts: [
@@ -299,6 +299,12 @@ export const ALTERNATES: Record<string, CardSpec> = {
       dip(20, 0.3, "74HCT574 vread", "bus"),
       dip(20, 0.3, "74HC244 VSTAT", "bus"),
       dip(20, 0.3, "74HC244 fanout", "bus"),
+      /* ⭐ the sprite's shift registers, partition.md §8's escape - and §5
+       * risk 3 says it is a REQUIREMENT, not an option: with them in silicon
+       * v3dot answers `Design does not fit`. FOUR since 2026-09-17, when the
+       * sprite became 16 x 16 (plan §7): a row is 32 bits, so two cascaded
+       * '165 a plane, and their serial outputs go straight to LUT A9..A8. */
+      dip(16, 0.3, "74HC165 sprite", "bus", 4),
       /* ⚠ NO list-descriptor '244 (graphics.md 10.3.3) - no display list.
        * ⚠ NO posted-write ADDRESS latches - graphics.md 19 item 44: `video`
        * listed three and no design ever clocked them. Recorded so a fresh

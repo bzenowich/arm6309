@@ -103,6 +103,15 @@ def dwset(sty, x, y, w, h, fg, bg, bg3=None):
 SELECT = esc(0x21)
 CURSOR_OFF = b"\x05\x20"
 POINTER_ON = esc(0x39, 0xCA, 0x01)          # GCSet: the arrow, on the card's sprite
+# ⚠ where the pointer waits while the desktop is drawn: v3drag.asm's glide
+# starts here, and ends on the About window's tab at GRAB, where
+# session3.py's mouse tour starts.  Change one, change both.
+PARK = (470, 430)
+GRAB = (96 + 60, 392 - 19 + 9)
+
+
+def put_gc(x, y):
+    return esc(0x4E) + W(x, y)
 
 
 # --------------------------------------------------------------- layout
@@ -129,6 +138,7 @@ class Tracker:
 TRK_DD = Tracker(96, 30, 230, 170, "/DD", 1)
 TRK_CMDS = Tracker(236, 120, 390, 250, "/DD/CMDS", 2)
 ABOUT = (96, 392, 250, 80)          # v3drag.asm: StartX 96, StartY 373, 250 x 99
+assert GRAB == (ABOUT[0] + 60, ABOUT[1] - 19 + 9), "v3drag.asm's GrabX, GrabY"
 DESKBAR_X = 500
 
 # the Paint window: /W4 is cells (1, 1, 78, 58) of the screen, so its origin
@@ -172,6 +182,7 @@ def stream_desk():
     s = bytearray()
     s += dwset(0x13, 0, 0, 80, 60, PAL["white"], 2, 2)    # 640 x 480; 2 is CoWin's black
     s += SELECT + CURSOR_OFF
+    s += POINTER_ON + put_gc(*PARK)                      # on from the start, on the desk
     s += palette()                                       # Haiku's 256, from the ROM
     s += rect(0, 0, 640, 480, "desk")
     for i, (n, label) in enumerate([("home", "home"), ("disk", "arm6309"), ("files", "Tracker"),
@@ -195,7 +206,6 @@ def stream_desk():
     # the first Tracker window; v3trk lists what /DD really holds, and the
     # second window comes after that, on top of it (stream_cmds)
     s += tracker_chrome(TRK_DD, 0)
-    s += POINTER_ON
     return bytes(s)
 
 

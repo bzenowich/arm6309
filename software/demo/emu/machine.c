@@ -131,7 +131,7 @@ typedef struct {
     uint32_t cptr;               /* plan 6: copyrect source */
     uint16_t cwidth, cheight;
     uint8_t cctrl;
-    uint8_t sprx_lo, spry_lo, sprh, spridx, sprshape[16];
+    uint8_t sprx_lo, spry_lo, sprh, spridx, sprshape[64];   /* plan §7: 16 x 16, four bytes a row */
     long v3_violations;
 
     int irq_pending;
@@ -388,8 +388,8 @@ static void v3_video_write(uint8_t r, uint8_t v)
     case 0x1A: m->sprx_lo = v; break;
     case 0x1B: m->spry_lo = v; break;
     case 0x1C: m->sprh = v; break;
-    case 0x1D: m->spridx = v & 15; break;
-    case 0x1E: m->sprshape[m->spridx & 15] = v; m->spridx = (uint8_t)((m->spridx + 1) & 15); break;
+    case 0x1D: m->spridx = v & 63; break;
+    case 0x1E: m->sprshape[m->spridx & 63] = v; m->spridx = (uint8_t)((m->spridx + 1) & 63); break;
     default: break;
     }
 }
@@ -1096,10 +1096,12 @@ static void v3_render_line(int y)
     int on = (m->sprh & 0x80) != 0;
     for (int x = 0; x < 640; x++) {
         uint16_t attr = 0;
-        if (on && py >= sy && py < sy + 8 && (uint32_t)x >= sx && (uint32_t)x < sx + 8) {
+        if (on && py >= sy && py < sy + 16 && (uint32_t)x >= sx && (uint32_t)x < sx + 16) {
+            /* a row is four bytes: the low plane's two, then the high plane's */
             uint32_t sr = py - sy, sc = (uint32_t)x - sx;
-            uint8_t b0 = m->sprshape[sr * 2], b1 = m->sprshape[sr * 2 + 1];
-            attr = (uint16_t)(((b1 >> (7 - sc)) & 1) * 2 + ((b0 >> (7 - sc)) & 1));
+            const uint8_t *sh = m->sprshape + sr * 4 + (sc >> 3);
+            unsigned b = 7 - (sc & 7);
+            attr = (uint16_t)(((sh[2] >> b) & 1) * 2 + ((sh[0] >> b) & 1));
         }
         row[x] = m->pal3[(attr << 8) | src[(hs + x) & 1023]];
     }

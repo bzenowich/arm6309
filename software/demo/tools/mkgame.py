@@ -385,8 +385,9 @@ def build(outdir):
         a = art(text)                           # 16 rows x 32 bytes
         cells = [[code_of(a[r * 8:(r + 1) * 8, c * 8:(c + 1) * 8]) for c in range(4)] for r in range(2)]
         meta_cells[name] = cells
-    if len(tilelist) > SPRA:
-        sys.exit(f"FAIL  {len(tilelist)} distinct tiles; codes {SPRA}+ are the hero's")
+    # NitrOS-9's overworld keeps a third hero buffer at SPRA-15 (demo.asm uses two)
+    if len(tilelist) > SPRA - 15:
+        sys.exit(f"FAIL  {len(tilelist)} distinct tiles; codes {SPRA - 15}+ are the hero's")
 
     tileset = np.zeros((256, 64), dtype=np.uint8)
     for n, t in enumerate(tilelist):
