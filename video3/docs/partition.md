@@ -27,11 +27,16 @@ should be read before anything is added to plan §0.
 | **`v3dot`** | ~102 / 128 | ~60 / 64 | the raster, the dot path, the sprite, the arbiter |
 | **`v3scan`** | ~108 / 128 | ~50 / 64 | the scan and cell addresses, the map word |
 | **`v3ptr`** | ~99 / 128 | ~55 / 64 | `WPTR`, `CPTR`, the span writer, the copy engine |
-| **`v3host`** | ~40 / 128 | ~55 / 64 | the backplane, the registers, the palette write path |
+| **`v3host`** | ~24 / 128 | ~45 / 64 | the backplane, the registers, the palette write path |
 
-⚠ **`v3host` is pin-bound, not cell-bound** — it is a third full of macrocells and
-nearly full of pins, because it is the part the backplane lands on. Merging it into
-either neighbour overflows 128 cells, which is why it exists.
+⚠ **`v3host` is pin-bound, not cell-bound** — a fifth full of macrocells and two thirds
+full of pins, because it is the part the backplane lands on. **It is not cells that stop
+it merging** — §7 has the arithmetic, and it is pins every time.
+
+> ⚠ **Corrected 2026-09-16**: an earlier draft put `v3host` at ~40 cells by counting
+> `PIDX`'s sixteen bits. `PIDX` is **discrete** in `hardware/place/parts.ts` — two
+> `'163` and a `'574` — so those bits are not macrocells at all. The conclusion does not
+> move, because the constraint was never cells.
 
 ---
 
@@ -127,13 +132,14 @@ locations, not macrocells (§7.2's trick, and the reason a second pointer is aff
 | Holds | bits |
 |---|---|
 | the register decode, `VSTAT` assembly | ~10 |
-| `PIDX` (16), `PPEND`, `PS0`–`PS3` | 21 |
+| `PPEND`, `PS0`–`PS3` — ⚠ **not `PIDX`, which is discrete** | 5 |
 | `RDVALID` and the prefetch | ~4 |
 | `/WAIT`, `/IRQ`, the `'245` and `'244` controls | ~5 |
 
-It is **~40 cells and ~55 pins**: the backplane is 27 signals on its own
-(`signals.md` §2.1), and the palette path's `'163`/`'574`/`'244`/`'573` controls are
-seven more.
+It is **~24 cells and ~45 pins**: the backplane is 27 signals on its own
+(`signals.md` §2.1) and the palette path's `'163`/`'574`/`'244`/`'573` controls are seven
+more. ⭐ **And it needs no `IDB`** — every register it touches is a discrete latch or
+counter that loads from the bus itself, so `v3host` only strobes them.
 
 ---
 
@@ -184,9 +190,10 @@ needs `PB[7:0]` on it, which is eight more pins than this.
 ## 5. Risks, in the order they would bite
 
 1. ⛔ **There is no fifth part.** §0. Any later feature needing one is a card revision.
-2. ⚠ **`v3scan` at ~108 estimated cells is the tightest**, and a third of it is
-   `MAP`/`MAPQ`. The escape is two `'574` (plan §13.4) — packages the board has room
-   for.
+2. ⛔ **`v3scan` at ~108 estimated cells is the tightest, and its escape is not free.**
+   A third of it is `MAP`/`MAPQ`, and plan §13.4 offers discrete latches instead — but
+   **the board is full**: §8 measured that four CPLDs plus those latches **does not
+   place**. The escape has to be *paid for* by one of plan §13.3's trades.
 3. ⚠ **`v3dot` at ~60 estimated pins is the tightest on I/O**, and the census's cadence
    and grant lines are what fill it. If it overflows, the arbiter is the movable piece —
    but it wants the cadence, so moving it costs the cadence pins instead.
@@ -195,6 +202,66 @@ needs `PB[7:0]` on it, which is eight more pins than this.
    `graphics.md`'s lesson that **a model which ORs its drivers cannot see a bus fight**
    applies directly.
 5. ⚠ **Estimates, not fits.** Every number above except 128 and 64.
+
+---
+
+## 7. ⛔ Three parts does not close, and cells are not why
+
+The macrocell total is **~333 against three parts' 384**, so cells were never the wall.
+Every three-way merge fails on something else:
+
+| Merge | Fails on |
+|---|---|
+| `v3host` into `v3ptr` | **pins.** Their external clusters alone are ~39 and ~38; the merge is ~84 against 64 |
+| `v3host` into `v3dot` | **pins** — ~68 |
+| `v3host` into `v3scan` | **pins** — ~72 |
+| `v3scan` into `v3ptr` — the two `VA` drivers, which would also delete the tri-state | ⛔ **cells: ~207 against 128**, and this is the merge §1 exists to refuse |
+
+⭐ **So the tri-stated `VA` bus is not a workaround for a partition; it *is* the
+partition.** Undoing it is the one merge that fails by 60 %.
+
+### 7.1 Why a GAL does not rescue it
+
+| | |
+|---|---|
+| **A GAL cannot be the `VA` mux** | a 17-bit five-source mux is **85 inputs**; a `GAL22V10` has 22 pins |
+| **There is no "tri-state problem" for a part to solve** | the discipline is a **one-hot grant**, and §2.1 puts it in one place for exactly that reason. It is ~6 macrocells, not a package |
+| ⛔ **And the repository already measured the direction** | `graphics.md` §14.1: *"+1 × `ATF1508AS`, −3 × `GAL22V10` → **−2**"* — `vsup` absorbed `rfa`, `vlen` and `pxsel`, and **a third PLCC-84 REDUCED the package count**. §10.1.2 says why: *half the pin count is the packaging talking to itself* |
+| **The ratio is the argument** | a `GAL22V10` is **10 macrocells for ~22 pins**. On a card whose binding constraint is pins, that is the worst available shape — ⭐ whereas a `'574` or a `'165` has **zero pin overhead**, because its pins *are* its data |
+
+---
+
+## 8. ⭐ What does buy headroom — and what the board charges for it
+
+Two moves take logic out of silicon without adding a pin:
+
+| | Buys | Costs |
+|---|---|---|
+| **`MAP`/`MAPQ` → 4 × `'574`** | **−32 cells** on `v3scan`, the tightest part. ⭐ And the **attribute half never enters a CPLD at all** — `PB` → `MAPQ` → the `ATTR` latch → the LUT — so `v3scan` loses eight output pins and gains eight input pins for the code half: **pin-neutral** | 4 packages |
+| **the sprite's two shift registers → 2 × `'165`** | **−16 cells and −2 pins** on `v3dot`. The serial outputs go straight to LUT `A9..A8`, so they never come back | 2 packages |
+
+⛔ **But the board is full, and `npm run check:place`'s packer says so:**
+
+| | ICs | 240 mm |
+|---|---|---|
+| 4 CPLD, as drawn | 40 | **places, 73 %** |
+| 4 CPLD **+ `MAP`/`MAPQ` discrete** | 44 | ⛔ **does not place** |
+| 4 CPLD + `MAP`/`MAPQ` + the sprite shifters | 46 | ⛔ **does not place** |
+| 5 CPLD | 41 | ⛔ **does not place** |
+
+⭐ **So relief in silicon has to be paid for in packages, and only plan §13.3's trades
+have any to give:**
+
+| | ICs | |
+|---|---|---|
+| 4 CPLD + `MAP`/`MAPQ`, **minus the `'153` mux** (trade 3: the tri-state pixel bus closes) | 40 | **places, 74 %** |
+| 4 CPLD + `MAP`/`MAPQ`, **minus the copy latch** (trade 1: it borrows the fetch rank) | 40 | **places, 73 %** |
+| 4 CPLD + both discrete moves, minus either | 42 | **places, 75–76 %** |
+
+⛔ **This couples two decisions that plan §13.3 and §14 item 4 treat as independent.**
+If `v3scan` does not fit 128 cells, the escape plan §13.4 promised is only available
+**after** one of the pixel-bus or copy-latch trades has been settled. **Settle those
+first**, because they are what the cell budget's relief valve is plumbed to.
 
 ---
 

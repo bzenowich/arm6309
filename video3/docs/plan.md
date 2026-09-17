@@ -603,6 +603,12 @@ totals its own claim and that 24 cm is the shortest length that holds it.
 
 ## 14. Open items
 
+0. ⛔ **Settle §13.3's trades before anything else needs them.**
+   [`partition.md`](partition.md) §8 measured that the board is full: four programmable
+   parts **plus** the discrete `MAP`/`MAPQ` latches §13.4 offers as a cell-budget escape
+   **do not place**. The escape only exists after the `'153` mux or the copy latch has
+   come out. **The package budget and the macrocell budget are coupled, and this
+   document treated them as independent.**
 1. ⛔ **§3's timing claim has not been analysed.** *"Sixteen address lines settling
    together cost what eight do"* is the card's load-bearing assumption, and everything
    in §2.2 and §7 rests on it. It wants the LUT's datasheet numbers against a real
