@@ -254,14 +254,20 @@ have any to give:**
 
 | | ICs | |
 |---|---|---|
-| 4 CPLD + `MAP`/`MAPQ`, **minus the `'153` mux** (trade 3: the tri-state pixel bus closes) | 40 | **places, 74 %** |
+| ⛔ ~~minus the `'153` mux~~ (trade 3) | — | **withdrawn** — trade 3 is settled the other way, plan §13.3 |
 | 4 CPLD + `MAP`/`MAPQ`, **minus the copy latch** (trade 1: it borrows the fetch rank) | 40 | **places, 73 %** |
-| 4 CPLD + both discrete moves, minus either | 42 | **places, 75–76 %** |
+| 4 CPLD + both discrete moves, minus the copy latch | 42 | **places, 75 %** |
 
-⛔ **This couples two decisions that plan §13.3 and §14 item 4 treat as independent.**
-If `v3scan` does not fit 128 cells, the escape plan §13.4 promised is only available
-**after** one of the pixel-bus or copy-latch trades has been settled. **Settle those
-first**, because they are what the cell budget's relief valve is plumbed to.
+⛔ **And since 2026-09-16 there is only one payer.** plan §13.3 trade 3 is settled —
+the `'153` mux stays, because the tri-state bus must break before make and §8.2's second
+rank doubled the drivers after §6.1 costed four of them. **So the whole of the cell
+budget's relief depends on trade 1: whether the copy engine's read latch can borrow that
+same second fetch rank.**
+
+⛔ **That makes a cadence question the gate on a macrocell question.** If the ranks
+cannot be shared, `v3scan` has no escape from 128 cells and the partition has no slack —
+and §0 already says there is no fifth part. **Trade 1 is now the critical path of the
+whole design**, ahead of everything in plan §15 except §14 item 1.
 
 ---
 

@@ -542,10 +542,25 @@ count unknown** (§14 item 4) — and §13.5 says what the board allows.
    needs one rank** and saves four ICs; a scrolling playfield at four-pixel steps is
    visibly chunky. **A gameplay decision, not an engineering one** — it should be taken
    deliberately rather than inherited.
-3. **The `'153` mux is four packages or none**, exactly as on `video/`: the alternative
-   is tri-stating the fetch latches onto a shared bus, which `graphics.md` §6.1 says
-   "very likely does not close" at a 39.72 ns dot and §19 item 2 leaves as a bench
-   question. video3 inherits the *question*, not an answer.
+3. ⛔ **SETTLED 2026-09-16: the `'153` mux stays, and this trade yields no board room.**
+   `npm run check:video3` has the arithmetic. The `'153` path — `MUXSEL` → `'153` →
+   index latch — is **25 ns in a 39.72 ns dot, 14.7 ns of margin**, the same depth as
+   the LUT path. The tri-state alternative must **break before make**, because two
+   `'574` on one net with opposite values is a fight and not a slow path, so `t_PHZ`
+   and `t_PZH` are **in series**: 33 ns, **6.7 ns of margin**, under the design point.
+
+   ⚠ **And it is a decision, not a proof.** The miss is ~3 ns and what the bus would
+   need — `t_PHZ` and `t_PZH` each under ~8.4 ns — is *inside* the 74AHCT family's
+   range, so the arithmetic narrows the question rather than closing it; `graphics.md`
+   §14.2.6 records that the repository has no 74AHCT datasheet.
+
+   ⭐ **What decides it is a count, not an estimate.** §6.1's table costs "**4** tri-state
+   `'574`". §8.2's second rank of fetch latches — added *after* that estimate — makes it
+   **eight** outputs on one net, all of them contributing off-state capacitance whether
+   their rank is selected or not, and AHCT enable and disable times are specified into
+   50 pF. **The number that kept the tri-state bus alive as a candidate was taken before
+   the bus doubled.** `graphics.md` §19 item 2 has already taken the same decision for
+   `video/`: four `'153` are in the BOM and `MUXSEL1:0` drives them.
 
 ### 13.4 ⚠ Two things that could move between silicon and packages
 
@@ -603,12 +618,14 @@ totals its own claim and that 24 cm is the shortest length that holds it.
 
 ## 14. Open items
 
-0. ⛔ **Settle §13.3's trades before anything else needs them.**
+0. ⛔ **ONLY TRADE 1 CAN PAY FOR THE CELL BUDGET'S ESCAPE, and it is unsettled.**
    [`partition.md`](partition.md) §8 measured that the board is full: four programmable
    parts **plus** the discrete `MAP`/`MAPQ` latches §13.4 offers as a cell-budget escape
-   **do not place**. The escape only exists after the `'153` mux or the copy latch has
-   come out. **The package budget and the macrocell budget are coupled, and this
-   document treated them as independent.**
+   **do not place**. §13.3 trade 3 is now settled the other way — the `'153` mux stays —
+   so **the only remaining payer is trade 1: whether the copy engine's read latch can
+   borrow §8.2's second fetch rank.** ⛔ That makes a *cadence* question (§14 item 8)
+   the gate on a *macrocell* question (§14 item 4), and nothing else on the card
+   couples those two.
 1. ⛔ **§3's timing claim has not been analysed.** *"Sixteen address lines settling
    together cost what eight do"* is the card's load-bearing assumption, and everything
    in §2.2 and §7 rests on it. It wants the LUT's datasheet numbers against a real

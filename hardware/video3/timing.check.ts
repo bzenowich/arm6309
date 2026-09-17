@@ -89,6 +89,74 @@ for (const [part, aa, want] of [["IS61C6416AL-12", 12, true],
     `${m.toFixed(1)} ns of margin`)
 }
 
+/* -- ⭐ TRADE 3 SETTLED: the '153 mux stays, the tri-state pixel bus does not
+ *
+ * plan §13.3 trade 3 carried graphics.md §6.1's open question: four `74AHCT153`
+ * as the default, "bench the tri-state version as the saving".  Here is the
+ * arithmetic, and §19 item 2's decision for `video` already points the same way.
+ *
+ * ⚠ THE 74AHCT NUMBERS BELOW ARE FAMILY-TYPICAL AND NOT CITED.  graphics.md
+ * §14.2.6 records that there is no 74AHCT datasheet in reference/datasheets/.
+ * So the last claim in this block is the one that matters: it asks how good the
+ * part would have to be for the answer to change, and the answer does not
+ * depend on the estimate. */
+const CPLD_CO  = 8        // ATF1508AS-15, a registered output
+const MUX153   = 12       // '153 select -> Y
+const T_PZH    = 10       // '574 OE asserted -> the bus is driven
+const T_PHZ    = 10       // '574 OE released -> high-Z
+
+const viaMux = CPLD_CO + MUX153 + REG_SETUP
+ok(viaMux <= DOT_NS - MIN_MARGIN,
+  `the '153 path closes with margin: MUXSEL -> '153 -> index latch is ${viaMux} ns`,
+  `${(DOT_NS - viaMux).toFixed(1)} ns`)
+
+/* ⛔ The tri-state bus must BREAK BEFORE MAKE.  Two '574s driving one net with
+ * opposite values is not a slow path, it is a fight - so the outgoing latch has
+ * to reach high-Z before the incoming one is enabled, and the two delays are
+ * SEQUENTIAL inside one dot. */
+const viaTri = CPLD_CO + T_PHZ + T_PZH + REG_SETUP
+ok(viaTri > DOT_NS - MIN_MARGIN,
+  "⛔ and the tri-state pixel bus does NOT: break-before-make puts t_PHZ and " +
+  `t_PZH in series, ${viaTri} ns in a ${DOT_NS.toFixed(1)} ns dot`,
+  `${(DOT_NS - viaTri).toFixed(1)} ns of margin, against a ${MIN_MARGIN} ns design point`)
+
+/* ⚠ AND THE ARITHMETIC ALONE DOES NOT SETTLE IT - say so rather than dress it up.
+ * The tri-state path misses the design point by ~3 ns under the estimates above,
+ * and what it would need - t_PHZ and t_PZH each under ~8.4 ns - is INSIDE the
+ * 74AHCT family's range, not outside it.  A cited datasheet could go either way,
+ * which is precisely why graphics.md §14.2.6 flags that the repository does not
+ * have one. */
+const turnaroundBudget = DOT_NS - MIN_MARGIN - CPLD_CO - REG_SETUP
+ok(turnaroundBudget / 2 > 7 && turnaroundBudget / 2 < 10,
+  "⚠ the tri-state bus needs t_PHZ and t_PZH each under " +
+  `${(turnaroundBudget / 2).toFixed(1)} ns - INSIDE the 74AHCT range, so the ` +
+  "arithmetic narrows the question and does not close it",
+  `${turnaroundBudget.toFixed(1)} ns for both, against ${T_PHZ + T_PZH} estimated`)
+
+/* ⭐ WHAT DOES DECIDE IT IS THE LOADING, and that is not an estimate - it is a
+ * count.  §6.1's table says "4 tri-state '574"; §8.2's second rank of fetch
+ * latches, added AFTER that estimate, makes it eight outputs on one net.  AHCT
+ * enable and disable times are specified into 50 pF, and eight off-state outputs
+ * plus the index latch plus trace is comfortably past it - so the number that
+ * kept the tri-state bus alive as a candidate was taken before the bus doubled. */
+
+/* ⚠ And video3's bus is worse than the one §6.1 costed.  That table says
+ * "4 tri-state '574"; §8.2's second rank of fetch latches - added later - makes
+ * it EIGHT outputs on one net, all of them contributing off-state capacitance
+ * whether their rank is selected or not. */
+const DRIVERS = 8, DRIVERS_COSTED = 4
+ok(DRIVERS > DRIVERS_COSTED,
+  `⭐ eight '574 outputs would share the net, not the ${DRIVERS_COSTED} §6.1's estimate ` +
+  "assumed - §8.2's second rank post-dates it, and it moves the margin the wrong way")
+
+/* ⛔ THE DECISION, and it is a decision rather than a proof: the '153 mux stays.
+ * It clears the design point; its alternative does not, under estimates whose
+ * error bar is the same size as the miss, with a bus that has doubled since the
+ * estimate - and graphics.md §19 item 2 already records the same choice taken for
+ * `video`, with four '153 in the BOM and MUXSEL1:0 driving them.
+ * ⛔ SO plan §13.3 TRADE 3 YIELDS NO BOARD ROOM, and partition.md §8's relief for
+ * the cell budget has to come from trade 1 instead. */
+
 /* -- the framebuffer side, graphics.md §2.1's cliff ----------------------- */
 const SLOT_NS = 4 * DOT_NS          // four dots, four bytes across two x16 parts
 const ACCESS_NS = 12 + 55 + 5       // mux + AS6C8016-55 + latch setup
