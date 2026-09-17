@@ -4,11 +4,41 @@
 [`signals.md`](signals.md)'s census. This is plan §15 step 4's first half: a partition
 comes before term lists, and how many parts video3 takes is an *output* of it.
 
-> ⛔ **NOTHING HERE IS FITTED.** Macrocell counts are bits of state plus an estimate of
-> the combinational logic around them; pin counts are read off the census. An
-> `ATF1508AS` in PLCC-84 is **128 macrocells and 64 I/O** — that is a datasheet
-> property, and it is the only number in this document that is not an estimate.
+> ⭐ **`v3scan` IS FITTED since 2026-09-16** — `hardware/gal/video3/v3scan.cpld.ts`,
+> `gal/cpld/v3scan.fit`. Every other number below is still bits of state plus an
+> estimate of the combinational logic around them. An `ATF1508AS` in PLCC-84 is **128
+> macrocells and 64 I/O**.
 > ⚠ **No figure from `video/`'s fit applies here** (plan §14 item 4).
+
+### ⛔ What the first fit corrected
+
+| | estimated | **fitted** | |
+|---|---|---|---|
+| `v3scan` cells | ~108 | **114** | close |
+| `v3scan` I/O | ~50 | ⚠ **63 of 64** | ⛔ **the estimate was wrong by thirteen pins** |
+
+**Both misses have one cause: the map is a *word*.**
+
+| missed | pins | |
+|---|---|---|
+| `ATO7..ATO0` | 8 | the attribute byte **leaving** for the `ATTR` latch — §3's crossing table never listed it |
+| `PA7..PA0` | 8 | the pixel bus is **sixteen** bits here, because one ×16 spare access carries both map bytes |
+
+⭐ **And the escape §5 risk 2 is plumbed to turns out to buy pins as well as cells** —
+which an earlier analysis got wrong by calling it "pin-neutral", having forgotten the
+same sixteen bits. With the pipeline in four `'574` on the pixel bus, neither map byte
+enters this part: the code arrives already staged, and the attribute goes straight to the
+`ATTR` latch. **Both fitted:**
+
+| | cells | I/O | cascades |
+|---|---|---|---|
+| `v3scan`, map word in silicon | 114 / 128 (89 %) | **63 / 64 (98 %)** | 16 |
+| `v3scan_mq`, map word discrete | **82 / 128 (64 %)** | **46 / 64 (71 %)** | 16 |
+
+⛔ **63 of 64 I/O is one pin of headroom**, which is the state `graphics.md` flags on
+`vsup` as a standing hazard. **The discrete variant is not an emergency valve any more —
+it is the sensible default**, and plan §13.3 trade 1 already bought the four packages
+for it.
 
 ---
 
@@ -25,7 +55,7 @@ should be read before anything is added to plan §0.
 | | Cells, est. | I/O, est. | What it is |
 |---|---|---|---|
 | **`v3dot`** | ~102 / 128 | ~60 / 64 | the raster, the dot path, the sprite, the arbiter |
-| **`v3scan`** | ~108 / 128 | ~50 / 64 | the scan and cell addresses, the map word |
+| **`v3scan`** | ⭐ **114 / 128, FITTED** | ⚠ **63 / 64, FITTED** | the scan and cell addresses, the map word |
 | **`v3ptr`** | ~99 / 128 | ~55 / 64 | `WPTR`, `CPTR`, the span writer, the copy engine |
 | **`v3host`** | ~24 / 128 | ~45 / 64 | the backplane, the registers, the palette write path |
 
