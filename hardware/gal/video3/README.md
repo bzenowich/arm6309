@@ -23,6 +23,8 @@ sentence, which is the only thing standing between a failed fit and a *convincin
 | **`v3ptr`** | **110 / 128** | 45 / 64 | **3** | ⭐ the build — ascending copies only |
 | `v3ptr_rows` | 128 / 128 | 46 / 64 | 21 | row direction only |
 | `v3ptr_both` | 128 / 128 | 47 / 64 | 19 | both directions — **rejected** |
+| **`v3host`** | **50 / 128** | ⛔ **64 / 64** | **0** | the build — one load strobe per register |
+| `v3host_bc` | 27 / 128 | ⭐ **42 / 64** | 0 | ⭐ `RA4..RA0` + `REGWR` broadcast — **recommended** |
 
 ⛔ **Keep a rejected variant's fit, do not overwrite it.** The three `v3ptr` rows are the
 evidence for plan §6.2's decision, and the first write-up quoted a figure after the run
@@ -30,7 +32,13 @@ that produced it had already been overwritten by the next variant — `check:doc
 number with no design output behind it. `CLAUDE.md`'s first trap, wearing different
 clothes.
 
-⭐ **`V3_MAPQ` and `V3_COPYDIR` are switches and not comments**, the way `ARM6309_LIST`
+⛔ **`v3host` fits at exactly 64 / 64 pins** — every pin taken, 78 macrocells idle. A
+per-register load strobe is a pin and video3 has 29 registers; `V3_DECODE=broadcast`
+sends the offset instead and gives back 22 pins and 23 cells. It is **priced and not
+adopted**, because the other three parts are fitted against the strobe convention —
+`partition.md` §0's fourth-fit table has the swap and what each receiver pays.
+
+⭐ **`V3_MAPQ`, `V3_COPYDIR` and `V3_DECODE` are switches and not comments**, the way `ARM6309_LIST`
 is in `gal/video.cpld.ts`: every side of both is fitted, and the differences *are* the
 answers to `partition.md` §5 risk 2 and plan §6.2.
 

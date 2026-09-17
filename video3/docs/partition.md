@@ -4,11 +4,40 @@
 [`signals.md`](signals.md)'s census. This is plan §15 step 4's first half: a partition
 comes before term lists, and how many parts video3 takes is an *output* of it.
 
-> ⭐ **`v3scan`, `v3ptr` AND `v3dot` ARE FITTED since 2026-09-16** — only `v3host` is an estimate — `hardware/gal/video3/v3scan.cpld.ts`,
-> `gal/cpld/v3scan.fit`. Every other number below is still bits of state plus an
-> estimate of the combinational logic around them. An `ATF1508AS` in PLCC-84 is **128
-> macrocells and 64 I/O**.
+> ⭐ **ALL FOUR PARTS ARE FITTED since 2026-09-16** — `hardware/gal/video3/*.cpld.ts`,
+> `gal/cpld/*.fit`. Numbers below that are *not* marked FITTED are still bits of state
+> plus an estimate of the combinational logic around them. An `ATF1508AS` in PLCC-84 is
+> **128 macrocells and 64 I/O**.
 > ⚠ **No figure from `video/`'s fit applies here** (plan §14 item 4).
+
+### ⛔ What the fourth fit corrected — `v3host` is **full**
+
+| | estimated | **fitted** | |
+|---|---|---|---|
+| `v3host` cells | ~24 | **50 / 128** | the decode is wider than a bit count suggests |
+| `v3host` I/O | ~45 | ⛔ **64 / 64** | ⛔ **not one spare pin** |
+
+⛔ **This part has no margin at all.** 39 % of its macrocells are used and **every pin is
+taken** — 22 in, 44 out, 0 cascades. It fits, and the next signal anyone adds to it does
+not. §2.4's estimate was 19 pins light for a reason worth stating plainly: a **per-register
+load strobe is a pin, and video3 has 29 registers.**
+
+⭐ **§3 already proposed the fix and this fit prices it.** Broadcast `RA4..RA0` + `REGWR`
+and let each part decode its own offsets, and the same design is:
+
+| | cells | I/O | cascades | out pins |
+|---|---|---|---|---|
+| `v3host`, one strobe per register | 50 / 128 (39 %) | ⛔ **64 / 64 (100 %)** | 0 | 44 |
+| `v3host_bc`, `RA4..RA0` + `REGWR` | **27 / 128 (21 %)** | ⭐ **42 / 64 (65 %)** | 0 | 21 |
+
+**22 pins and 23 cells**, and the receivers pay for it in the currency each of them has
+spare: ~6 cells of offset decode apiece, against an input count that barely moves
+(`v3scan` swaps 6 strobes for 6 broadcast lines, `v3ptr` 7 for 6, `v3dot` 7 for 6).
+
+⚠ **Priced, not adopted.** All three receivers are fitted *against the strobe convention*,
+so the swap is a four-part rewire and four re-fits — and `v3scan` is the one to watch,
+because it goes in at 114 / 128 cells and 63 / 64 pins and the decode is additive on the
+axis it has least of. **Recommended, and it is §0's first entry in what to do next.**
 
 ### ⛔ What the first fit corrected
 
@@ -57,7 +86,7 @@ should be read before anything is added to plan §0.
 | **`v3dot`** | ⭐ **115 / 128, FITTED** | **53 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
 | **`v3scan`** | ⭐ **114 / 128, FITTED** | ⚠ **63 / 64, FITTED** | the scan and cell addresses, the map word |
 | **`v3ptr`** | ⭐ **110 / 128, FITTED** | **45 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
-| **`v3host`** | ~24 / 128 | ~45 / 64 | the backplane, the registers, the palette write path |
+| **`v3host`** | **50 / 128, FITTED** | ⛔ **64 / 64, FITTED** | the backplane, the registers, the palette write path |
 
 ⚠ **`v3host` is pin-bound, not cell-bound** — a fifth full of macrocells and two thirds
 full of pins, because it is the part the backplane lands on. **It is not cells that stop
@@ -327,12 +356,38 @@ power budget** — is the only thing that could reopen it.
 
 ## 6. What to do with it
 
-1. **Term lists per part**, in the shape `hardware/gal/*.jedec.ts` already uses, so
-   `emit.ts` can generate Verilog from the same `Cell` lists the fitter compiles.
+Steps 1 and 3 are **done** — four term lists, four fits, seven variants between them.
+
+1. ~~Term lists per part~~ — `hardware/gal/video3/v3{dot,scan,ptr,host}.cpld.ts`.
 2. ⭐ **A pin census from the term lists, not from this document** —
    `graphics.md` §10.1.2's `npm run census` is the precedent, and it is what turns §3's
-   estimate into a measurement.
-3. **A fit, one part at a time** — and `CLAUDE.md`'s trap: *"Design fits successfully"
-   appears only in the fitter's stdout, never in the `.fit`*, and a failed fit leaves
-   the previous report in place.
+   estimate into a measurement. **Still to do, and §6.1 is why it matters.**
+3. ~~A fit, one part at a time~~ — and `CLAUDE.md`'s trap held twice: `v3dot_si` answered
+   `INTERNAL ERROR` and wrote a convincing report anyway, and a `v3ptr` figure was quoted
+   from a `.fit` the next variant had already overwritten.
 4. **`reach` and `census` from the first term list, not retrofitted** (plan §15 step 5).
+5. ⭐ **Adopt the broadcast** (§0's fourth-fit table): `v3host` at 64 / 64 pins is not a
+   design with a next step in it.
+
+### 6.1 ⛔ What is fitted is not what is specified — two signals with no cell behind them
+
+⚠ **Four green fits do not mean the card is described.** `CLAUDE.md`'s standing warning
+is that *a design output can be absent and prose does not notice*, and
+`design-review2.md` found eleven such blocks on `video/`. Writing `v3host` against the
+other three term lists surfaced **two on video3**, both of the same shape — this document
+assigns the job, and no `Cell` performs it:
+
+| | this document says | the term list has |
+|---|---|---|
+| `RFA`, `RFWE`, `RFOE` — the register file's address and controls | §2.3: *"the mask serialiser and the register-file address must share a part … so `RFA`, `RFWE` and `RFOE` are here"*, on `v3ptr` | ⛔ **nothing.** One mention, in a comment. `v3ptr` produces `MS0..MS7` and never turns the serial bit into an address |
+| `WCOL`'s end-of-row reload | §7.2: the column shadow reloads `WPTR`'s column at every row advance, which is what makes a span a *rectangle* and not a line | ⚠ `LDWCOL` takes **only the CPU strobe**; `WROWADV` does not reload it |
+
+⭐ **Neither is a fit risk** — `v3ptr` is the roomiest part at 110 / 128 and 45 / 64, and
+both additions are small. **Both are correctness gaps**, and the second is the one that
+bites silently: a span writer whose column never reloads paints the first row and then
+walks off down the framebuffer, which is a picture, just not the right one.
+
+⛔ **This is exactly what plan §15 step 5's `reach` check is for**, and it is the reason
+that step is not optional paperwork: it asks *which signals does the design produce that
+nothing reads*, and its mirror — a signal this document names that nothing produces — is
+what caught these two by hand. Doing it by hand does not scale to four parts.
