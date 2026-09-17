@@ -155,7 +155,7 @@ that no design ever clocked. **video3 must not re-add them.**
 | line counter | ~10 | `VSYNC`, `BLANK`, `VBL`, the row counter's load |
 | **`M0`** | 1 | ⭐ the **latched** `VMODE[0]` — the family, taken at frame end, or a mid-frame write costs 1.5 s of lost sync |
 | `CTRL` | 8 | `VMODE`, `MODE`, `WMODE`, IRQ enable, display enable — **`MODE` reaches almost everything** |
-| `HSCROLL`, `VSCROLL` | 19 | the scan counters' loads, `FOE0/1` |
+| `HSCROLL`, `VSCROLL` | 19 | the scan counters' loads, `FOE0/1`. ⭐ **Both widths are minimal, not chosen**: `ceil(log2(1024))` and `ceil(log2(512))` — a scroll register has to be able to name any column of the ring, and the ring is the stride, and the stride is the smallest power of two ≥ 640 (`graphics.md` §6.1's no-adder property). ⚠ `HSCROLL[1:0]` is duplicated on `v3dot` — §3.4 |
 | scan row/column counters | ~19 | `VA` in bitmap and tile modes |
 | cell counters | ~13 | six-bit row, seven-bit column |
 | `MAP` / `MAPQ` | **32** | ⚠ **the map is a WORD now**, so `graphics.md` §6.4.9's two-stage pipeline doubles |

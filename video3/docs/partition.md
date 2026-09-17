@@ -157,6 +157,7 @@ counter that loads from the bus itself, so `v3host` only strobes them.
 | status — `SPANBUSY`, `CBUSY`, `PBUSY` | 3 | → `v3host`, for `VSTAT` and `/WAIT` |
 | the palette commit — `PCREQ`, `PCGO` | 2 | `v3host` ↔ `v3dot` |
 | ⚠ the sprite shape read — `SPRRD`, `SPRROW[2:0]` | 4 | `v3dot` → `v3ptr` |
+| ⭐ `HSCROLL[1:0]` | **0** | **duplicated on `v3dot`, not routed** — both parts are on `IDB` and the register bus, so the same store writes both copies: 2 macrocells against 2 pins (`signals.md` §3.4) |
 
 ### 3.1 ⚠ The sprite shape is the one cross-part read, and it is a cost plan §7 did not price
 
