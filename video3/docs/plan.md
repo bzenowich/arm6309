@@ -710,8 +710,9 @@ totals its own claim and that 24 cm is the shortest length that holds it.
    ⛔ **This is a number to design against and then check, not a limit inherited from
    anywhere** — see item 4.
 4. ⚠ **The partition is drafted — [`partition.md`](partition.md) — at FOUR parts, which
-   §13.5 says is the most that places, so **video3 is at its ceiling**. ⭐ **One of the
-   four is now fitted.** `v3scan` — the map word in silicon — is **114/128 cells and
+   §13.5 says is the most that places, so **video3 is at its ceiling**. ⭐ **Three of the
+   four are now fitted.** `v3dot` is **115/128 cells and 53/64 I/O**; `v3ptr` is
+   **110/128 and 45/64**. `v3scan` — the map word in silicon — is **114/128 cells and
    63/64 I/O**. `v3scan_mq` — the same part with the map word in four `'574` — is
    **82/128 cells and 46/64 I/O**. The other three parts are still estimates. **NO NUMBER FROM `video/`'s FIT APPLIES HERE.**
    `video/` is three `ATF1508AS` whose utilisation is recorded in

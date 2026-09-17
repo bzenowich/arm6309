@@ -4,7 +4,7 @@
 [`signals.md`](signals.md)'s census. This is plan §15 step 4's first half: a partition
 comes before term lists, and how many parts video3 takes is an *output* of it.
 
-> ⭐ **`v3scan` AND `v3ptr` ARE FITTED since 2026-09-16** — `hardware/gal/video3/v3scan.cpld.ts`,
+> ⭐ **`v3scan`, `v3ptr` AND `v3dot` ARE FITTED since 2026-09-16** — only `v3host` is an estimate — `hardware/gal/video3/v3scan.cpld.ts`,
 > `gal/cpld/v3scan.fit`. Every other number below is still bits of state plus an
 > estimate of the combinational logic around them. An `ATF1508AS` in PLCC-84 is **128
 > macrocells and 64 I/O**.
@@ -54,7 +54,7 @@ should be read before anything is added to plan §0.
 
 | | Cells, est. | I/O, est. | What it is |
 |---|---|---|---|
-| **`v3dot`** | ~102 / 128 | ~60 / 64 | the raster, the dot path, the sprite, the arbiter |
+| **`v3dot`** | ⭐ **115 / 128, FITTED** | **53 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
 | **`v3scan`** | ⭐ **114 / 128, FITTED** | ⚠ **63 / 64, FITTED** | the scan and cell addresses, the map word |
 | **`v3ptr`** | ⭐ **110 / 128, FITTED** | **45 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
 | **`v3host`** | ~24 / 128 | ~45 / 64 | the backplane, the registers, the palette write path |
@@ -225,11 +225,10 @@ needs `PB[7:0]` on it, which is eight more pins than this.
    for.** A third of it is `MAP`/`MAPQ`, and plan §13.4 offers discrete latches instead.
    §8 measured that the board would not take them *and* four CPLDs — until plan §13.3
    trade 1 returned four packages. **It now places at 40 ICs, 73 %.**
-3. ⚠ **`v3dot` at ~60 estimated pins is the tightest on I/O**, and the census's cadence
-   and grant lines are what fill it. Its escape is also paid for now: the sprite's two
-   shift registers as `'165` take **16 cells and 2 pins** off it, and **42 ICs still
-   places at 75 %**. If it overflows further, the arbiter is the movable piece — but it
-   wants the cadence, so moving it costs the cadence pins instead.
+3. ⛔ **`v3dot` NEEDS its escape — it is not optional.** With the sprite's shift
+   registers in silicon the fitter answers **`INTERNAL ERROR`**; with them in two
+   `'165` it is **115/128 cells, 53/64 I/O, 1 cascade**. §8's escape is therefore a
+   requirement, and plan §13.3 trade 1 is what paid for it.
 4. ⚠ **The `VA` tri-state discipline.** Two parts on seventeen nets, and the rule that
    they never drive together has to be *checked*, not asserted —
    `graphics.md`'s lesson that **a model which ORs its drivers cannot see a bus fight**
@@ -308,8 +307,14 @@ packages**:
 | … + `MAP`/`MAPQ` discrete — §5 risk 2's escape | **40** | **places, 73 %** |
 | … + the sprite's shift registers — §5 risk 3's escape | **42** | **places, 75 %** |
 
-⭐ **So both of §5's tight parts have an escape that fits**, the package budget no longer
-gates the macrocell budget, and the partition has slack it did not have this morning.
+⛔ **AND BOTH ESCAPES TURNED OUT TO BE MANDATORY, not optional.** The fits say so:
+`v3dot` with its shifters in silicon is refused outright, and `v3scan` with the map word
+in silicon is **63 of 64 I/O** — one pin, the state `graphics.md` flags on `vsup` as a
+standing hazard. **So the six discrete packages are part of the design, not a reserve**,
+and the board places them: 42 ICs at 75 %.
+
+⭐ **The package budget no longer gates the macrocell budget**, and the partition has
+slack it did not have this morning.
 What it cost is **4× the copy time** — 30 ms for a 192-row window scroll against 350 ms
 without an engine at all.
 
