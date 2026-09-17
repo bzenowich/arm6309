@@ -170,10 +170,31 @@ cw02    lda     <VSTAT
         sta     <CCTRL          GO
 cw03    lda     <VSTAT
         bmi     cw03
-* overlapping scroll DOWN, rows descend
+* scroll DOWN, pass 1: to scratch
         lda     #$01
         sta     <CPTR2
         lda     #$E0
+        sta     <CPTR1
+        lda     #$00
+        sta     <CPTR0
+        lda     #$04
+        sta     <WPTR2
+        lda     #$B0
+        sta     <WPTR1
+        lda     #$00
+        sta     <WPTR0
+        lda     #$80
+        sta     <CWIDTH
+        lda     #$20
+        sta     <CHEIGHT
+        lda     #$01
+        sta     <CCTRL          GO
+cw04    lda     <VSTAT
+        bmi     cw04
+* scroll DOWN, pass 2: back, 8 lower
+        lda     #$04
+        sta     <CPTR2
+        lda     #$B0
         sta     <CPTR1
         lda     #$00
         sta     <CPTR0
@@ -187,14 +208,35 @@ cw03    lda     <VSTAT
         sta     <CWIDTH
         lda     #$20
         sta     <CHEIGHT
-        lda     #$03
+        lda     #$01
         sta     <CCTRL          GO
-cw04    lda     <VSTAT
-        bmi     cw04
-* overlapping RIGHT, columns descend
+cw05    lda     <VSTAT
+        bmi     cw05
+* shift RIGHT, pass 1: to scratch
         lda     #$02
         sta     <CPTR2
         lda     #$80
+        sta     <CPTR1
+        lda     #$00
+        sta     <CPTR0
+        lda     #$05
+        sta     <WPTR2
+        lda     #$00
+        sta     <WPTR1
+        lda     #$00
+        sta     <WPTR0
+        lda     #$40
+        sta     <CWIDTH
+        lda     #$08
+        sta     <CHEIGHT
+        lda     #$01
+        sta     <CCTRL          GO
+cw06    lda     <VSTAT
+        bmi     cw06
+* shift RIGHT, pass 2: back, 8 right
+        lda     #$05
+        sta     <CPTR2
+        lda     #$00
         sta     <CPTR1
         lda     #$00
         sta     <CPTR0
@@ -208,10 +250,10 @@ cw04    lda     <VSTAT
         sta     <CWIDTH
         lda     #$08
         sta     <CHEIGHT
-        lda     #$05
+        lda     #$01
         sta     <CCTRL          GO
-cw05    lda     <VSTAT
-        bmi     cw05
+cw07    lda     <VSTAT
+        bmi     cw07
 * overlapping LEFT, columns ascend
         lda     #$02
         sta     <CPTR2
@@ -231,8 +273,8 @@ cw05    lda     <VSTAT
         sta     <CHEIGHT
         lda     #$01
         sta     <CCTRL          GO
-cw06    lda     <VSTAT
-        bmi     cw06
+cw08    lda     <VSTAT
+        bmi     cw08
 * one row, one byte
         lda     #$01
         sta     <CPTR2
@@ -252,8 +294,8 @@ cw06    lda     <VSTAT
         sta     <CHEIGHT
         lda     #$01
         sta     <CCTRL          GO
-cw07    lda     <VSTAT
-        bmi     cw07
+cw09    lda     <VSTAT
+        bmi     cw09
 
 * --- bitmap mode, 640x200, display on
         lda     #$80            b7 display, MODE 00 bitmap, VMODE 00

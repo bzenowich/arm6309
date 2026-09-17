@@ -4,7 +4,7 @@
 [`signals.md`](signals.md)'s census. This is plan §15 step 4's first half: a partition
 comes before term lists, and how many parts video3 takes is an *output* of it.
 
-> ⭐ **`v3scan` IS FITTED since 2026-09-16** — `hardware/gal/video3/v3scan.cpld.ts`,
+> ⭐ **`v3scan` AND `v3ptr` ARE FITTED since 2026-09-16** — `hardware/gal/video3/v3scan.cpld.ts`,
 > `gal/cpld/v3scan.fit`. Every other number below is still bits of state plus an
 > estimate of the combinational logic around them. An `ATF1508AS` in PLCC-84 is **128
 > macrocells and 64 I/O**.
@@ -56,7 +56,7 @@ should be read before anything is added to plan §0.
 |---|---|---|---|
 | **`v3dot`** | ~102 / 128 | ~60 / 64 | the raster, the dot path, the sprite, the arbiter |
 | **`v3scan`** | ⭐ **114 / 128, FITTED** | ⚠ **63 / 64, FITTED** | the scan and cell addresses, the map word |
-| **`v3ptr`** | ~99 / 128 | ~55 / 64 | `WPTR`, `CPTR`, the span writer, the copy engine |
+| **`v3ptr`** | ⭐ **110 / 128, FITTED** | **45 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
 | **`v3host`** | ~24 / 128 | ~45 / 64 | the backplane, the registers, the palette write path |
 
 ⚠ **`v3host` is pin-bound, not cell-bound** — a fifth full of macrocells and two thirds

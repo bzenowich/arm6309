@@ -11,15 +11,23 @@ import json, sys
 W, H = 640, 200                     # the visible window at VMODE 00
 
 # (label, src_row, src_col, dst_row, dst_col, w, h, rowdir, coldir)
-#   rowdir/coldir: 0 ascending, 1 descending.  CPTR and WPTR name the ORIGIN of
-#   the rectangle in both axes; the bits say which way the engine walks in it.
+#   ⛔ rowdir/coldir are ALWAYS 0.  v3ptr's fit priced the up/down counters at
+#   18 macrocells and 16 cascades - the difference between 128/128 and 110/128 -
+#   so the engine counts UP only and an overlapping copy stages through scratch
+#   in two passes, which plan 6.2 always offered as the fallback.  The tuple
+#   keeps its two fields so the model can ASSERT they are zero.
 COPIES = [
     ("vertical only, non-overlapping",        0,   0, 100,   0,  64, 16, 0, 0),
     ("horizontal, columns congruent mod 4",  20,   0,  28,  64,  32,  8, 0, 0),
     ("horizontal, NOT congruent mod 4",      40,   1,  48,  66,  33,  8, 0, 0),
     ("overlapping scroll UP, rows ascend",   60,   0,  52,   0, 128, 32, 0, 0),
-    ("overlapping scroll DOWN, rows descend",120,  0, 128,   0, 128, 32, 1, 0),
-    ("overlapping RIGHT, columns descend",  160,   0, 160,   8,  64,  8, 0, 1),
+    # ⭐ the card has NO direction bits (plan 6.2, settled by v3ptr's fit), so an
+    # overlapping DOWNWARD scroll is two ascending passes through scratch - and
+    # the result must equal what a descending copy would have produced.
+    ("scroll DOWN, pass 1: to scratch",      120,  0, 300,   0, 128, 32, 0, 0),
+    ("scroll DOWN, pass 2: back, 8 lower",   300,  0, 128,   0, 128, 32, 0, 0),
+    ("shift RIGHT, pass 1: to scratch",      160,  0, 320,   0,  64,  8, 0, 0),
+    ("shift RIGHT, pass 2: back, 8 right",   320,  0, 160,   8,  64,  8, 0, 0),
     ("overlapping LEFT, columns ascend",    180,   8, 180,   0,  64,  8, 0, 0),
     ("one row, one byte",                    99, 639,  98, 320,   1,  1, 0, 0),
 ]

@@ -18,13 +18,22 @@ sentence, which is the only thing standing between a failed fit and a *convincin
 |---|---|---|---|---|
 | `v3scan` | 114 / 128 | ⚠ **63 / 64** | 16 | the map word in silicon |
 | `v3scan_mq` | 82 / 128 | 46 / 64 | 16 | ⭐ the map word in four `'574` |
+| **`v3ptr`** | **110 / 128** | 45 / 64 | **3** | ⭐ the build — ascending copies only |
+| `v3ptr_rows` | 128 / 128 | 47 / 64 | 21 | row direction only |
+| `v3ptr_both` | 128 / 128 | 47 / 64 | 19 | both directions — **rejected** |
 
-⭐ **`V3_MAPQ=discrete` is a switch and not a comment**, the way `ARM6309_LIST` is in
-`gal/video.cpld.ts`, because both sides of it are fitted and the difference is the
-answer to `video3/docs/partition.md` §5 risk 2.
+⛔ **Keep a rejected variant's fit, do not overwrite it.** The three `v3ptr` rows are the
+evidence for plan §6.2's decision, and the first write-up quoted 128/128 after the run
+that produced it had already been overwritten by the next variant — `check:docs` found a
+number with no design output behind it. `CLAUDE.md`'s first trap, wearing different
+clothes.
+
+⭐ **`V3_MAPQ` and `V3_COPYDIR` are switches and not comments**, the way `ARM6309_LIST`
+is in `gal/video.cpld.ts`: every side of both is fitted, and the differences *are* the
+answers to `partition.md` §5 risk 2 and plan §6.2.
 
 ## Not written yet
 
-`v3dot`, `v3ptr`, `v3host`. `v3scan` was fitted first because `partition.md` §2.2 called
+`v3dot` and `v3host`. `v3scan` was fitted first because `partition.md` §2.2 called
 it the tightest, and because it carries the address mux — `graphics.md` §10.1.2's "the
 one place merging costs silicon rather than saving it".

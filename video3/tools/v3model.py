@@ -50,20 +50,23 @@ import frames as fr
 
 
 def copy_result(d):
-    """plan §6, applied to VRAM as an array.  ⭐ CPTR and WPTR name the
-    rectangle's ORIGIN in both axes and the direction bits say which way the
-    engine walks inside it - one convention for both axes (plan §6.2)."""
+    """plan §6, applied to VRAM as an array.  ⭐ CPTR and WPTR name the FIRST
+    CELL PROCESSED and the direction bits step from there - naming the origin
+    and walking inside the rectangle would need origin + h - 1, an adder the
+    card does not have (plan §6.2, corrected 2026-09-16)."""
     W, H = d["w"], d["h"]
     vram = np.zeros((512, 1024), dtype=np.uint8)
     r = np.arange(H)[:, None]; c = np.arange(W)[None, :]
     vram[:H, :W] = ((r * 7 + c * 3) & 0xFF).astype(np.uint8)
     for _, sr, sc, dr, dc, w, h, rd, cd in d["copies"]:
+        assert rd == 0 and cd == 0, (
+            "the card has no direction bits - v3ptr's fit priced them at 18 "
+            "macrocells, so an overlapping copy stages through scratch")
         for y in range(h):
-            oy = y if rd == 0 else h - 1 - y
+            sy, dy = (sr + y if rd == 0 else sr - y), (dr + y if rd == 0 else dr - y)
             for x in range(w):
-                ox = x if cd == 0 else w - 1 - x
-                vram[(dr + oy) & 511, (dc + ox) & 1023] = \
-                    vram[(sr + oy) & 511, (sc + ox) & 1023]
+                sx, dx = (sc + x if cd == 0 else sc - x), (dc + x if cd == 0 else dc - x)
+                vram[dy & 511, dx & 1023] = vram[sy & 511, sx & 1023]
     return vram
 
 
@@ -248,9 +251,10 @@ if __name__ == "__main__":
         y, x = int(ys[0]), int(xs[0])
         print(f"      first difference at ({x},{y}) - cell ({x >> 3},{y // 2 >> 3}): "
               f"want ${int(want[y][x]):04X}, got ${int(last[y][x]):04X}")
-    what = (f"⭐ the copy engine: {len(d['copies'])} copies - aligned, unaligned, "
-            "both directions in both axes, four of them overlapping - every pixel "
-            "is the plan's" if "copies" in d else
+    what = (f"⭐ the copy engine: {len(d['copies'])} copies - aligned and unaligned, "
+            "and two overlapping ones STAGED THROUGH SCRATCH in two ascending "
+            "passes, which is the only way the card can do them - every pixel is "
+            "the plan's" if "copies" in d else
             "⭐ character mode: every pixel is the plan's - the attribute reaches "
             "the LUT's high eight address lines")
     print(("FAIL  " if bad else "ok    ") + what + f" ({bad} pixels differ)")

@@ -313,19 +313,26 @@ static void v3_copy(void)
 {
     uint32_t w = m->cwidth, h = m->cheight;
     if (!w || !h) return;
-    int rowdir = (m->cctrl & 2) ? -1 : 1, coldir = (m->cctrl & 4) ? -1 : 1;
+    /* ⛔ CCTRL b1 and b2 are RESERVED since v3ptr's fit (2026-09-16): the
+     * up/down counters cost 18 macrocells and 16 cascades, the difference
+     * between 128/128 and 110/128, so the engine counts UP only.  An
+     * overlapping copy stages through scratch in two ascending passes. */
+    int rowdir = 1, coldir = 1;
+    if (m->cctrl & 6) fprintf(stderr, "FAIL  %.3f s: CCTRL b1/b2 are reserved - "
+                              "the copy engine has no direction bits\n",
+                              (double)m->dots * DOT_PS / 1e12);
     uint32_t sc = m->cptr & 1023, sr = (m->cptr >> 10) & 511;
     uint32_t dc = m->wptr & 1023, dr = (m->wptr >> 10) & 511;
     for (uint32_t y = 0; y < h; y++) {
-        /* ⭐ CPTR and WPTR name the rectangle's ORIGIN in both axes; the two
-         * direction bits say which way the engine walks INSIDE it (plan §6.2).
-         * One convention for both axes - the model had two, which is the kind
-         * of thing only an overlapping copy in the wrong axis would have found. */
-        uint32_t oy = (rowdir > 0) ? y : h - 1 - y;
-        uint32_t syr = (sr + oy) & 511, dyr = (dr + oy) & 511;
+        /* ⭐ CPTR and WPTR name the FIRST CELL PROCESSED and the direction bits
+         * step from there (plan §6.2, corrected 2026-09-16).  Naming the ORIGIN
+         * and walking inside the rectangle would need origin + h - 1, which is
+         * an adder, and graphics.md 6.4.1 says this card has none. */
+        uint32_t syr = (rowdir > 0 ? sr + y : sr - y) & 511;
+        uint32_t dyr = (rowdir > 0 ? dr + y : dr - y) & 511;
         for (uint32_t x = 0; x < w; x++) {
-            uint32_t ox = (coldir > 0) ? x : w - 1 - x;
-            uint32_t sx = (sc + ox) & 1023, dx = (dc + ox) & 1023;
+            uint32_t sx = (coldir > 0 ? sc + x : sc - x) & 1023;
+            uint32_t dx = (coldir > 0 ? dc + x : dc - x) & 1023;
             m->vram[((dyr << 10) | dx) & 0x7FFFF] = m->vram[((syr << 10) | sx) & 0x7FFFF];
         }
     }

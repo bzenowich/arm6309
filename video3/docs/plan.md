@@ -283,15 +283,45 @@ gets the spare access it asks for — §14 item 8.
 
 ### 6.2 Overlap
 
-`CCTRL` carries **b1 row direction** and **b2 column direction**, so a copy that
-overlaps its own source runs away from the overlap in either axis.
+⛔ **SETTLED 2026-09-16 BY `v3ptr`'s FIT: there are no direction bits.** The engine
+counts **up only**, and `CCTRL` b1 and b2 are reserved.
 
-⭐ **`CPTR` and `WPTR` name the rectangle's ORIGIN in both axes, and the direction
-bits say which way the engine walks *inside* it.** One convention for both axes: a
-descending copy does not mean the pointers name the far corner. ⚠ The first model
-written to §6 had two conventions — rows counting down from the origin, columns
-counting in from the far edge — and **only an overlapping copy in the wrong axis
-would have caught it**, which is what `bench/v3copy` exists to do.
+The up/down counters are what the fitter charged for, and the price is not marginal:
+
+| fit | cells | cascades |
+|---|---|---|
+| `v3ptr_both` — both directions | **128 / 128** | 19 |
+| `v3ptr_rows` — rows only | **128 / 128** | 21 |
+| ⭐ **`v3ptr` — neither, and this is the build** | **110 / 128** | **3** |
+
+**18 macrocells and 16 cascades, and dropping one bit buys nothing** — it is
+all-or-nothing. ⚠ All three are kept as fits rather than as prose: the first draft of
+this table quoted 128/128 after the run that produced it had been *overwritten* by the
+next variant, so `check:docs` found a number with no design output behind it. That is
+`CLAUDE.md`'s first trap wearing different clothes. ⚠ And `CLAUDE.md` is explicit that *a change in cascades is a timing
+change even when the cell count is flat*, so 19 → 3 is the larger half of that.
+
+⭐ **An overlapping copy stages through scratch in two ascending passes**, which this
+section always offered as the fallback for columns and which plan §4 already reserves
+rows 480–511 for. `bench/v3copy` does exactly that in two of its ten copies, so the
+fallback is checked and not merely promised.
+
+**What it costs is 2× on an overlapping copy, and the common cases do not overlap
+backwards**: a terminal scrolls *up*, which reads ahead of where it writes and is
+ascending by construction; `Select` and `GetBlk` are disjoint regions.
+
+⛔ **CORRECTED 2026-09-16, WRITING THE EQUATIONS.** An earlier draft said the pointers
+name the rectangle's *origin* and the direction bits walk inside it. **That needs an
+adder** — a descending copy would start at `origin_row + height − 1` — and
+`graphics.md` §6.4.1 and §7.2 build this whole card on not having one. It was
+unbuildable, and only writing `v3ptr` found it.
+
+⭐ **`CPTR` and `WPTR` name the FIRST CELL PROCESSED**, and the direction bits say which
+way to step from there. Software already computes both addresses; adding `h−1` to one of
+them for a descending copy costs it nothing, and the card stays adder-free.
+
+⚠ The end-of-row reload is unaffected: the column shadow holds **the column the copy
+started at**, whichever end that is, so one mechanism serves both directions.
 
 ⭐ **And there is a free fallback if b2 turns out expensive**: stage through the
 off-screen columns (§4) in two passes. 384 columns × 512 rows of scratch exist for
@@ -695,9 +725,10 @@ totals its own claim and that 24 cm is the shortest length that holds it.
    transfer is utilisation.**
 5. ⚠ **`vlen` and `rfa`** (§11's last two rows) exist on `video/` for partition
    reasons that may not survive a re-partition.
-6. **§6.2's column-direction bit is uncosted.** If it turns out expensive, overlapping
-   horizontal copies stage through the off-screen columns in two passes — **a software
-   rule, not a lost capability**.
+6. ⭐ **CLOSED by `v3ptr`'s fit.** The direction bits cost **18 macrocells and 16
+   cascades** — `v3ptr_both` against `v3ptr`, §6.2's table — so they are not built, and
+   an overlapping copy stages through scratch in two ascending passes.
+   `bench/v3copy` checks it.
 7. ⚠ **The sub-palette load cost is a software rule**: 512 entries for character
    mode's 256 pairs, 512 more for the sprite's two colours, ~2.9 ms each, and §13.1's
    `PBUSY` rule applies to every one of them.
