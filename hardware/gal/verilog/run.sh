@@ -11,7 +11,7 @@ set -e
 cd "$(dirname "$0")"
 V="verilator --binary --timing -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC"
 CARD="video_card.v vctrl.v vaddr.v vsup.v"
-TBS=${TBS:-"vsync vaddr vtile vspan vpal audio mainboard"}
+TBS=${TBS:-"vsync vaddr vtile vspan vpal audio mainboard v3dot"}
 out=$(mktemp)
 trap 'rm -f "$out"' EXIT
 
@@ -24,6 +24,9 @@ for tb in $TBS; do
     vsync)     SRC="$CARD" ;;
     audio)     SRC="audio_card.v audio.v aseq.v" ;;
     mainboard) SRC="mainboard.v ../clkdec.v ../mmu.v u9.v u10.v" ;;
+    # ⭐ video3: the raster part alone. There is no video3_card.v yet - the
+    # cadence needs one, and this does not pretend to be it.
+    v3dot)     SRC="v3dot.v" ;;
     *)         SRC="$CARD" ;;
   esac
   $V --top-module "${tb}_tb" $SRC "${tb}_tb.sv" -o "${tb}_tb" > /dev/null

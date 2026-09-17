@@ -24,13 +24,27 @@
 import type { Cell, Design } from "../jedec/assemble"
 import type { Merged } from "../jedec/cupl"
 
+/* ⛔ A TERM IS NOT ALWAYS A PURE PRODUCT.  CUPL takes `#` as OR inside one
+ * term string, and `&` binds tighter than `#` there exactly as `&` binds
+ * tighter than `|` in Verilog - so the two grammars agree and the operator
+ * is a substitution.  This was missed until video3's down-counters, whose
+ * terminal-count terms are written `Q & !A # !B # !C`: the fitter compiled
+ * them, the fit was real, and `toVerilog` emitted `#` into a .v file that
+ * would not parse.  A term list the fitter accepts and emit.ts cannot render
+ * is a design whose Verilog and whose JEDEC are not the same design. */
+const literal = (l: string): string => {
+  const s = l.trim()
+  return s.startsWith("!") ? `~${s.slice(1).trim()}` : s
+}
+
 const expr = (terms: string[]): string => {
   if (terms.length === 0) return "1'b0"
   return terms
-    .map((t) => t.split("&").map((l) => {
-      const s = l.trim()
-      return s.startsWith("!") ? `~${s.slice(1).trim()}` : s
-    }).join(" & "))
+    .map((t) =>
+      t
+        .split("#")
+        .map((alt) => alt.split("&").map(literal).join(" & "))
+        .join(" | "))
     .map((t) => `(${t})`)
     .join("\n         | ")
 }

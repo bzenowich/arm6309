@@ -18,7 +18,11 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 sys.path.insert(0, os.path.join(ROOT, "software", "demo", "tools"))
 import frames as fr  # noqa: E402
 import show  # noqa: E402
-import session  # noqa: E402
+# ⭐ SESSION=session3 renders the video3 demo's captions instead.  The two
+# sessions are different machines - video/ and video3 - and only their
+# captions differ here, so the renderer takes the module by name.
+import importlib  # noqa: E402
+session = importlib.import_module(os.environ.get("SESSION", "session"))  # noqa: E402
 
 W, H, FPS = 1920, 1080, 60
 SX, SY, SW, SH = 0, 60, 1280, 960           # the monitor

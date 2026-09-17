@@ -423,20 +423,47 @@ def build(outdir):
             link[0] += dx; link[1] += dy
             emit()
 
-    def carry(dx, dy, n):
-        """A screen transition: the camera moves a whole screen and the hero is
-        carried from where he stands to the opposite edge of the new screen,
-        MARGIN inside it, in a straight line on the screen. He never leaves the
-        view - and must not, because cells above or below it alias into the
-        32-row map ring's visible rows (graphics.md 6.4.6)."""
+    def ramp(dist, vmax=16):
+        """Per-frame steps that sum to `dist`, accelerating 1 -> vmax and back.
+
+        ⭐ A transition used to be a constant 4 px a frame for 160 frames. It now
+        ramps 1, 2, 3 ... up to 16 px a frame, cruises, and eases back to 1, so
+        the scroll starts and stops rather than switching on and off. The card
+        does not care - HSCROLL is a register - but the eye does, and 16 px a
+        frame at 70 Hz is 1,120 px/s, which is what the hardware scroll is for.
+
+        vmax falls back if the ramp alone would overshoot: a 200-pixel vertical
+        transition cannot reach 16 and settle, so it peaks lower."""
+        v = vmax
+        while v > 1 and (v * (v + 1)) // 2 + ((v - 1) * v) // 2 > dist:
+            v -= 1
+        up = list(range(1, v + 1))
+        down = list(range(v - 1, 0, -1))
+        rem = dist - sum(up) - sum(down)
+        cruise = [v] * (rem // v) + ([rem % v] if rem % v else [])
+        steps = up + cruise + down
+        assert sum(steps) == dist, (dist, sum(steps))
+        return steps
+
+    def carry(sx, sy, dist):
+        """A screen transition: the camera moves `dist` pixels in direction
+        (sx, sy) on an accelerating ramp, and the hero is carried from where he
+        stands to the opposite edge of the new screen, MARGIN inside it, in a
+        straight line on the screen. He never leaves the view - and must not,
+        because cells above or below it alias into the 32-row map ring's
+        visible rows (graphics.md 6.4.6)."""
         MARGIN = 8
         wx0, wy0 = link[0], link[1]
-        ex, ey = cam[0] + dx * n, cam[1] + dy * n
-        tx = ex + (MARGIN if dx > 0 else 640 - 32 - MARGIN if dx < 0 else wx0 - cam[0])
-        ty = ey + (MARGIN if dy > 0 else 200 - 16 - MARGIN if dy < 0 else wy0 - cam[1])
-        for k in range(1, n + 1):
-            cam[0] += dx; cam[1] += dy
-            link[0] = wx0 + round((tx - wx0) * k / n); link[1] = wy0 + round((ty - wy0) * k / n)
+        steps = ramp(dist)
+        ex, ey = cam[0] + sx * dist, cam[1] + sy * dist
+        tx = ex + (MARGIN if sx > 0 else 640 - 32 - MARGIN if sx < 0 else wx0 - cam[0])
+        ty = ey + (MARGIN if sy > 0 else 200 - 16 - MARGIN if sy < 0 else wy0 - cam[1])
+        gone = 0
+        for st in steps:
+            gone += st
+            cam[0] += sx * st; cam[1] += sy * st
+            link[0] = wx0 + round((tx - wx0) * gone / dist)
+            link[1] = wy0 + round((ty - wy0) * gone / dist)
             emit()
 
     def stand(n):
@@ -453,17 +480,17 @@ def build(outdir):
     stand(35)
     walk_to(304, 56)                             # up to the path
     walk_to(600, 56)                             # east, to the edge of screen (0,0)
-    carry(4, 0, 160)                             # east -> screen (1,0)
+    carry(1, 0, 640)                             # east -> screen (1,0), on the ramp
     walk_to(8, 140)                              # south, in the gap
     walk_to(304, 140)
     walk_to(304, 176)                            # to the bottom edge
-    carry(0, 2, 96)                              # south -> screen (1,1)
+    carry(0, 1, 192)                             # south -> screen (1,1)
     walk_to(304, 56)
     walk_to(8, 56)                               # west
-    carry(-4, 0, 160)                            # west -> screen (0,1)
+    carry(-1, 0, 640)                            # west -> screen (0,1)
     walk_to(304, 40)
     walk_to(304, 8)                              # to the top edge
-    carry(0, -2, 96)                             # north -> screen (0,0)
+    carry(0, -1, 192)                            # north -> screen (0,0)
     walk_to(304, 96)
     stand(35)
     frames_arr = np.array(frames, dtype=np.int32)

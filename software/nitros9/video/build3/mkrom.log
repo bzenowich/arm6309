@@ -1,0 +1,5 @@
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3desk: 324 bytes
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3about: 291 bytes
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3paint: 1517 bytes
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3bbs: 5931 bytes
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/arm6309_rom.bin and .hex, page 0 = software/boot/boot.bin

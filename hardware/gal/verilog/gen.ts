@@ -13,6 +13,10 @@ import { audioCpld } from "../audio.cpld"
 import { aseqCpld } from "../aseq.cpld"
 import { u9Design } from "../u9.jedec"
 import { u10Design } from "../u10.jedec"
+import { v3dot } from "../video3/v3dot.cpld"
+import { v3scan } from "../video3/v3scan.cpld"
+import { v3ptr } from "../video3/v3ptr.cpld"
+import { v3host } from "../video3/v3host.cpld"
 import { fromDesign, fromMerged, toVerilog } from "./emit"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -33,3 +37,11 @@ write("audio", toVerilog(fromMerged(audioCpld)))
 write("aseq", toVerilog(fromMerged(aseqCpld)))
 write("u9", toVerilog(fromDesign(u9Design)))
 write("u10", toVerilog(fromDesign(u10Design)))
+
+/* ⭐ video3's four parts (video3/docs/partition.md).  The same `Cell` term
+ * lists the fitter compiles, so a testbench runs the DESIGN and not a second
+ * description of it - which is the whole reason emit.ts exists. */
+write("v3dot", toVerilog(fromMerged(v3dot)))
+write("v3scan", toVerilog(fromMerged(v3scan)))
+write("v3ptr", toVerilog(fromMerged(v3ptr)))
+write("v3host", toVerilog(fromMerged(v3host)))

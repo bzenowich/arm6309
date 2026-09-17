@@ -25,6 +25,10 @@ sh software/tools/mkrom.sh > "$OUT/mkrom.log" 2>&1 || { tail -5 "$OUT/mkrom.log"
 # the scripted clients' byte streams, into /DD/SYS (software/nitros9/tools/vtmodel.py)
 python3 software/nitros9/tools/vtmodel.py --emit "$OUT/sys" || { echo "FAIL  vtmodel.py --emit"; exit 1; }
 python3 software/nitros9/tools/vgmodel.py --emit "$OUT/sys" || { echo "FAIL  vgmodel.py --emit"; exit 1; }
+# ⭐ video3's demo streams (the desktop, the draggable window, the paint
+# canvas, the CP437 BBS).  Only under V3=1: they are 640 x 480 and 80 x 25
+# character screens, neither of which video/ can show.
+[ -n "$V3" ] && { python3 software/nitros9/tools/v3show.py "$OUT/sys" || { echo "FAIL  v3show.py"; exit 1; }; }
 # and the overworld's data (software/demo/tools/mkgame.py), with its model for the checker
 python3 software/demo/tools/mkgame.py "$OUT/gamedata" > "$OUT/gamedata.log" || { cat "$OUT/gamedata.log"; echo "FAIL  mkgame.py"; exit 1; }
 for f in tiles world sprites frames; do cp "$OUT/gamedata/$f.bin" "$OUT/sys/$f.bin"; done

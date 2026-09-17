@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "tscircuit": {
+      "source": "tscircuit/skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "0e66c974c979d8b2673acfc8dea3fd83de717fe8b199776692447937ce8f18de"
+    }
+  }
+}

@@ -1,0 +1,79 @@
+RKBoot Krn tb0..................................................................................................bKrnP2 KrnP3 Init IOMan RBF rbromdisk DD R0 SCF sc16550 Term NDrv Nil ArmIO KbdArm W1 W2 W3 W4 PipeMan Piper Pipe Clock Clock2 SysGo i2xoCNitrOS-9/6809 Level 2-DEV
+arm6309
+(C) 2014 The NitrOS-9 Project
+Wed Sep 16 23:21:55 2026
+http://www.nitros9.org
+
+
+Shell+ v2.2a 86/01/01 00:00:00
+
+{Term|02}/DD:dir
+
+ Directory of .  1986/01/01 00:00 
+OS9Boot         CMDS            MODULES         SYS             startup 
+
+
+{Term|02}/DD:iniz w1
+
+{Term|02}/DD:display 1b 21 >/w1
+
+{Term|02}/DD:shell i=/w1&
+&003
+
+{Term|02}/DD:echo now typing on the PS/2 keyboard
+now typing on the PS/2 keyboard
+
+{Term|02}/DD:80 x 60 CP437 per cell colour 
+iniz w3
+
+{Term|02}/DD:copy /dd/sys/v3desk /w3
+
+{Term|02}/DD:display 1b 21 >/w3
+
+{Term|02}/DD:display 1b 25 02 05 24 1d >/w3
+
+{Term|02}/DD:dir /dd >/w3
+
+{Term|02}/DD:display 1b 25 2a 05 24 1d >/w3
+
+{Term|02}/DD:dir /dd/cmds >/w3
+
+{Term|02}/DD:display 1b 25 00 00 50 3c >/w3
+
+{Term|02}/DD:copy /dd/sys/v3about /w3
+
+{Term|02}/DD:v3drag >/w3
+
+{Term|02}/DD:echo now moving the PS/2 mouse
+now moving the PS/2 mouse
+
+{Term|02}/DD:iniz w4
+
+{Term|02}/DD:copy /dd/sys/v3paint /w4
+
+{Term|02}/DD:display 1b 21 >/w4
+
+{Term|02}/DD:iniz w2
+
+{Term|02}/DD:copy /dd/sys/v3bbs /w2
+copy: can't open /w2 - Error #183 - Illegal window type
+
+{Term|02}/DD:display 1b 21 >/w2
+
+{Term|02}/DD:display 1b 24 >/w3
+
+{Term|02}/DD:overworld >/w3
+
+{Term|02}/DD:display 1b 21 >/w1
+
+{Term|02}/DD:procs
+
+         User                     Mem Stack
+Id  PId Number  Pty Age Sts Signl Siz  Ptr   Primary Module
+--- --- ------- --- --- --- ----- --- ----- ----------------
+  2   1     0   128 131 $80    0   31 $74E2 Shell 
+  3   2     0   128 128 $80    0   31 $71E2 Shell 
+  4   2     0   128 128 $80    0   31 $1EF3 Procs 
+
+{Term|02}/DD:echo DONE-arm6309
+DONE-arm6309
