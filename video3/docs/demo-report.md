@@ -663,3 +663,32 @@ their parallel data from `D`, but **nothing drives `RFA`** — the register file
 `WPTR`'s end-of-row reload, which is blocked on the same missing address generator), and
 16 × 16 makes it four bytes a row instead of two. **The counters, the store and the
 `'165` are sized for it; the fetch sequencer is still owed.**
+
+### 10.7 The top row of trees had black between the canopies
+
+From watching the third pass's video: after the last vertical scroll, the top border
+row's trees have black between them where the sand should be. ⭐ **It was the tile art,
+and the measurement is what said so** — `mkgame.py`'s `tree` metatile is sixteen art
+pixels wide and its canopy filled that width, so the outline colour sat in the edge
+columns of the six widest rows. Border trees are placed side by side, so two outlines
+met and the pair read as a black gap rather than as two outlines. The canopy's widest
+rows now start one pixel in, which leaves **four screen pixels of sand** between
+adjacent canopies, and the tree keeps its outline all the way round.
+
+⚠ **It was never a defect of this card, this driver or this pass**, and three
+measurements are what establish that before anything was changed:
+
+| | |
+|---|---|
+| every video3 game frame is `mkgame.render()` | **1,382 of 1,382**, pixel for pixel — the comparison `checkvid.py` makes for `video/` and which nothing had run against a video3 recording until now (`gamediff.py`, in the session's scratch) |
+| the top 48 scanlines after the last vertical scroll | **byte-identical** to the same screen at the game's start, so nothing degraded during the scroll |
+| the art | unchanged since `b446902`, the commit that first ran the demo on the whole machine — the same black is in `software/demo`'s own video |
+
+It reads as new at that moment because the camera only returns to screen (0, 0) at the
+end, where that border row lies along the top of the picture with sand behind it. The
+bottom border row has the same edges and always hid them against the cliff band: 1,120
+black pixels in the top sixteen rows against 128 in the bottom sixteen.
+
+⚠ **Both shows change appearance**, because both draw from `tiles.bin`:
+`software/demo`'s emulator run and `checkdemo.py` re-ran against the regenerated model —
+**1,169 of 1,169 game frames exact** — and the video3 session was re-run and re-encoded.

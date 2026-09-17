@@ -84,17 +84,23 @@ META = {
 .,..........,...
 ................
 ......,.........""",
+    # ⚠ THE CANOPY DOES NOT TOUCH THE METATILE'S EDGE COLUMNS, and that is why
+    # the six widest rows start at column 1: border trees are placed side by
+    # side, so an outline on column 0 or 15 meets its neighbour's and the pair
+    # reads as a BLACK GAP between the canopies rather than as two outlines.
+    # It showed on the top border row of screen (0, 0), where the gap is against
+    # sand; the bottom row hid the same edges against the cliff band.
     'tree': """
 ....kgggggggk...
 ..kgGGlGGGGGgk..
 .kgGlGGGGgGGGGk.
 .gGGGGgGGGGlGGg.
-kgGlGGGGGGGGGGgk
-kGGGGGGGlGGGgGGk
-kgGGgGGGGGGGGGgk
-kGGGGGGgGGlGGGGk
-kgGlGGGGGGGGgGgk
-kgGGGGgGGGGGGGgk
+.kGlGGGGGGGGGGk.
+.kGGGGGGlGGGgGk.
+.kGGgGGGGGGGGGk.
+.kGGGGGgGGlGGGk.
+.kGlGGGGGGGGgGk.
+.kGGGGgGGGGGGGk.
 .kgGGGGGGlGGGgk.
 ..kggGGGGGGggk..
 ...kkggggggkk...
