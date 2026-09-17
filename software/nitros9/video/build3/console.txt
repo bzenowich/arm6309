@@ -56,7 +56,6 @@ now moving the PS/2 mouse
 {Term|02}/DD:iniz w2
 
 {Term|02}/DD:copy /dd/sys/v3bbs /w2
-copy: can't open /w2 - Error #183 - Illegal window type
 
 {Term|02}/DD:display 1b 21 >/w2
 

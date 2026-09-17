@@ -1,7 +1,16 @@
 # video3 — the NitrOS-9 demo, and what it took
 
-**Started 2026-09-16, overnight.** A running log, newest findings appended. The
-brief: boot NitrOS-9 in 80×60 text on video3, switch to 640×480 bitmap, and build
+**2026-09-16, overnight.** The short version: **it runs.** NitrOS-9 boots to an
+80 × 60 CP437 console on video3, moves to a 640 × 480 desktop whose file-manager panes
+are filled by the real `dir` command, drags a window with the card's copy engine, shows
+CP437 ANSI art through the attribute plane, and plays the game on an accelerating
+scroll. The video is `software/nitros9/video/video3-demo.mp4`; §8 has what works and
+what does not.
+
+⭐ **Two answers to the brief up front.** There was no GrfDrv to replace — §0. And the
+Verilator stage found **four real defects in `v3dot` that the fitter could not** — §6.
+
+The brief: boot NitrOS-9 in 80×60 text on video3, switch to 640×480 bitmap, and build
 the old `software/demo` show out of **real NitrOS-9 commands** — desktop, two-pane
 file manager with a copyrect window drag, the paint program (no wave), an ANSI BBS
 in 80×25 with CP437, and the Zelda game with a scroll that accelerates 1→16 px a
@@ -210,3 +219,111 @@ back, so `ramp()` drops the peak until the ramp fits. **16 px a frame at 70.086 
 1,120 px/s**, and the card does not care — `HSCROLL` is a register — but the game's own
 per-frame work doubles, because two tile columns scroll into view a frame instead of
 one. The catch-up loop was already a `while` and not a fixed count, so it absorbs it.
+
+---
+
+## 6. ⭐ Verilator found four defects the fitter could not
+
+The four term lists now generate Verilog through `gal/verilog/emit.ts` — the *same*
+`Cell` lists the fitter compiles, so a testbench runs the design and not a second
+description of it. `v3dot_tb` runs the raster for whole frames in all four VMODE
+codes, and **the first time that part ran as a design rather than as a utilisation
+figure, four of its terms turned out to be wrong**:
+
+| | was | is |
+|---|---|---|
+| `HSYNC` | `HC < 8` — **32 dots** | `HC < 24` — 96 dots, which is what VGA at 25.175 MHz needs |
+| `ACTIVE` | three disjoint runs totalling **272 dots** | `HC >= 36 AND NOT HC >= 196` — 640 dots |
+| `VBLANKRAW`, 449-line family | `VC9 & VC8`, i.e. **VC ≥ 768 in a 449-line frame** — never true | `VC8 & VC7 & VC6` or `VC8 & VC7 & VC5 & VC4` — VC ≥ 432 |
+| `VTC` | `VC9 & …` for a terminal count of **448**, where VC9 is clear | `VC8 & VC7 & VC6` (449) and `VC9 & VC3 & VC2` (525) |
+
+⛔ **Every one of them fitted.** They are syntactically valid sums of products that
+route and meet timing; the fitter has no opinion about whether `VC9` can be set in a
+449-line frame. This is `CLAUDE.md`'s standing point in its sharpest form — *a fit is
+not a check* — and it is the answer to what the Verilator stage is for.
+
+`v3dot` is now **117 / 128 cells, 52 / 64 I/O, 4 cascades**, and `v3dot_tb` reports
+**17 claims, 0 failed**: 800-dot lines, 96-dot HSYNC, 449 / 525 lines a frame and
+400 / 480 active lines, in every VMODE.
+
+⚠ **Two of my own testbench bugs came first, and both read as design failures.**
+`LINETICK` and `FRAMEEND` are *one dot* wide — `FRAMEEND` is `LINETICK & VTC` — and
+they fall together, so reading `FRAMEEND` after `LINETICK`'s negedge is always false
+and the loop runs to its own bound. It reported *"a frame never ended"* for a design
+whose frames end correctly. A testbench is a claim about two things.
+
+⛔ And before any of that, **`emit.ts` could not render a term containing CUPL's
+`#`.** video3's down-counters write their terminal count as `Q & !A # !B # !C`; the
+fitter compiled them and the fit is real, but `toVerilog` emitted `#` into a `.v` file
+that would not parse. **A term list the fitter accepts and `emit.ts` cannot render is a
+design whose Verilog and whose JEDEC are not the same design** — and nothing checked
+that until a video3 part was asked for both. `&` binds tighter than `#` in CUPL exactly
+as it does than `|` in Verilog, so the fix is a substitution.
+
+### 6.1 ⚠ What the Verilator stage does NOT yet reach
+
+There is **no `video3_card.v`**. `v3dot_tb` instantiates one part, which is honest
+about what it proves: the raster lives entirely inside `v3dot` and needs no board. It
+does not touch plan §14 item 8 — the cadence, five requesters against one spare access
+a slot — because that is a claim about all four parts, the SRAMs and the latches
+together. That wrapper is the next piece of work, and the brief's "see how it interacts
+with our mainboard" needs it.
+
+## 7. The game
+
+The tile path needed three changes that the bitmap and character paths did not:
+
+| | |
+|---|---|
+| ⛔ `CT.Cell` is defined as `MD.Char` so the shared "not bitmap" code keeps working — which made a **tile** screen select **character** mode, where the card reads two bytes a cell and the game's one-byte map rendered as glyph codes and attributes | `ca_tile.asm` says `MD.Tile` |
+| video3's `MAPBASE` is **three** bits selecting a whole 64 K region, where `video/`'s is seven selecting a 4 K one — so a tile map cannot sit at 124 | `TL.MBase` is 6 (`$60000`) and `TL.TBank` 28 (`$70000`) under `-DV3=1` |
+| the map is on the card's **one 1024-byte stride** with no 32-row ring, so a cell is `MAPBASE × 64K + (row & 63) × 1024 + (col & 127)` | `MapAt` in `vidxcl.asm`, and `overworld.asm`'s own `maddr` |
+
+⚠ **The world renders and scrolls; the hero does not.** `overworld` builds the hero's
+fifteen tiles a tile a frame by **reading the background out of VRAM** and compositing,
+and that read path still uses `video/`'s bank geometry. The hero shows as a black
+square. That is the one scene in the demo that is not finished, and it is a known,
+located cause rather than a mystery.
+
+---
+
+## 8. Where it stands, and what is left
+
+**`software/nitros9/video/video3-demo.mp4`** — `sh software/nitros9/video/run-video3.sh`
+rebuilds it end to end (`V3=1` for the ROM, `VIDEO3=1` for the card model).
+
+| scene | |
+|---|---|
+| NitrOS-9 boots to a shell on **80 × 60 CP437**, typed at over PS/2, scrolling by copyrect | ⭐ works |
+| a **640 × 480 desktop**, two panes filled by real `dir` output | ⭐ works |
+| a window **dragged by the copy engine**, `SS.Copy` a step | ⭐ works |
+| the **hardware sprite** pointer, toured by the PS/2 mouse | ⭐ works |
+| the **paint** canvas — patterns, ellipses, arcs, the xterm colour strip | ⭐ works |
+| **80 × 25 CP437 ANSI art**, the 16 × 16 attribute table | ⭐ works |
+| the **overworld**, scrolling on an accelerating ramp | ⚠ world yes, hero no (§7) |
+
+### What I would do next, in order
+
+1. ⛔ **The hero's tiles** (§7) — the one unfinished scene, and the cause is located.
+2. ⛔ **`video3_card.v`**, so the Verilator stage reaches plan §14 item 8's cadence and
+   the brief's "how it interacts with our mainboard". `v3dot_tb` proves the raster; a
+   card wrapper is what proves the card.
+3. ⚠ **The drag leaves a title-bar artefact** on the last leg. The staging is correct
+   for the cases I traced; this is not yet explained.
+4. ⚠ **256-colour text.** `ATTR` is the VGA byte, so `SGR 38;5;n` above 15 is masked to
+   four bits in character mode. 256 foregrounds needs a second `ATTR` scheme — the LUT
+   already holds 65,536 entries, so it is a software decision, not a hardware one.
+5. ⚠ **`v3scan_mq`'s 41 cascades** (`partition.md` §6 item 6) — still the only figure on
+   the card that got worse, and still unexplained.
+
+### ⭐ Three things worth keeping from tonight
+
+- **The `VR.*` seam is the port's most valuable asset.** ~2,900 lines of bitmap drawing
+  moved cards without a single conditional, because `vidcore.asm` is the only module
+  that names a register. It was not designed for this.
+- **A fit is not a check.** Four of `v3dot`'s terms were wrong and all four fitted. The
+  fitter has no opinion about whether `VC9` can be set in a 449-line frame.
+- **The failures that cost the most time were silent ones**: an ANSI terminal that
+  dropped every byte and returned no error; a dispatch placed after an `rts`; a stale
+  `.fit`; a makefile that did not rebuild what I had changed; `display` taking hex where
+  I wrote decimal. Every one of them produced a *plausible* result.

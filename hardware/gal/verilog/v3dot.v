@@ -149,6 +149,8 @@ module v3dot (
     output wire FBOESCAN,
     output wire FBOEPTR,
     output wire HLAST,
+    output wire HGE36,
+    output wire HGE196,
     output wire ACTIVE,
     output wire VACTIVE,
     output wire VBLANKRAW,
@@ -354,13 +356,11 @@ module v3dot (
          (~ACTIVE);
   // EXTERNAL
   assign HSYNC =
-         (~HC7 & ~HC6 & ~HC5 & ~HC4 & ~HC3);
+         (~HC7 & ~HC6 & ~HC5 & ~HC4)
+         | (~HC7 & ~HC6 & ~HC5 & ~HC3);
   // EXTERNAL
   assign VSYNC =
-         (~VC9 & ~VC8 & ~VC7 & ~VC6 & ~VC5 & ~VC4 & ~VC3 & ~VC2 & ~VC1 & ~VMODE0)
-         | (VC1 & VMODE0)
-         | (VC2 & VMODE0)
-         | (VC3 & VMODE0);
+         (~VC9 & ~VC8 & ~VC7 & ~VC6 & ~VC5 & ~VC4 & ~VC3 & ~VC2 & ~VC1);
   // EXTERNAL
   assign VBLANK =
          (VBLANKRAW);
@@ -457,8 +457,17 @@ module v3dot (
   assign HLAST =
          (HC7 & HC6 & HC2 & HC1 & HC0);
   // buried
+  assign HGE36 =
+         (HC7)
+         | (HC6)
+         | (HC5 & HC4)
+         | (HC5 & HC2);
+  // buried
+  assign HGE196 =
+         (HC7 & HC6 & HC2);
+  // buried
   assign ACTIVE =
-         (HC5 & ~HC7 | HC7 & ~HC6 & ~HC5 & ~HC4 & ~HC3 & ~HC2);
+         (HGE36 & ~HGE196);
   // buried
   assign VACTIVE =
          (~VBLANKRAW);
@@ -466,11 +475,12 @@ module v3dot (
   assign VBLANKRAW =
          (~VC9 & ~VC8 & ~VC7 & ~VC6 & ~VC5)
          | (VC9 & M0)
-         | (VC9 & VC8 & ~M0);
+         | (VC8 & VC7 & VC6 & ~M0)
+         | (VC8 & VC7 & VC5 & VC4 & ~M0);
   // buried
   assign VTC =
-         (VC9 & VC7 & VC6 & VC4 & ~M0)
-         | (VC9 & VC8 & VC3 & VC2 & M0);
+         (VC8 & VC7 & VC6 & ~M0)
+         | (VC9 & VC3 & VC2 & M0);
   // buried
   assign SPRVHIT =
          (~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8);

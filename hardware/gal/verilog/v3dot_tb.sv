@@ -32,8 +32,8 @@ module v3dot_tb;
        SVC8, SW0, SW1, SW2, SR0, SR1, SR2, SLOTTICK, HBLANK, HSYNC, VSYNC, VBLANK, BLANK,
        FRAMEEND, LINETICK, FETCH, SPARE, CELLTICK, HLOAD, VLOAD, ROWADV, MCADV, MAPLD, DBLHOLD,
        MUXSEL0, MUXSEL1, PIXOE, ATOE, PIDXOE, OMR, FOE0, FOE1, SPRACT, SPRSH, SPRLD, GMAP, GRD,
-       GCPY, GSPN, FBOESCAN, FBOEPTR, HLAST, ACTIVE, VACTIVE, VBLANKRAW, VTC, SPRVHIT, SPRHIT,
-       SPRROW, MODE0, MODE1, VMODE0;
+       GCPY, GSPN, FBOESCAN, FBOEPTR, HLAST, HGE36, HGE196, ACTIVE, VACTIVE, VBLANKRAW, VTC,
+       SPRVHIT, SPRHIT, SPRROW, MODE0, MODE1, VMODE0;
 
   v3dot dut (.*);
 
@@ -105,13 +105,25 @@ module v3dot_tb;
       @(posedge LINETICK);
       lines++;
       if (VACTIVE) act++;
+      // ⚠ FRAMEEND AND LINETICK ARE BOTH ONE DOT WIDE and fall together -
+      // FRAMEEND is LINETICK qualified by VTC - so it has to be read WHILE
+      // LINETICK is high. Reading it after the negedge is always false, and
+      // the loop then runs to its own bound and reports the design as
+      // never ending a frame.
+      if (FRAMEEND) begin @(negedge LINETICK); break; end
       @(negedge LINETICK);
-      if (FRAMEEND) break;
       if (lines > 900) begin
         $display("FAIL  a frame never ended"); fails++; break;
       end
     end
   endtask
+
+  int dots, slo, shi, lines, act, vm;
+  // plan §2.2: 800 dots a line always; 449 lines in VMODE 00/10 and 525 in
+  // 01/11, and the active height is 200/240/400/480 ROWS - which is 400/480
+  // LINES in every mode, because 00 and 01 double every row.
+  int want_lines [4] = '{449, 525, 449, 525};
+  int want_act   [4] = '{400, 480, 400, 480};
 
   initial begin
     repeat (8) @(posedge CLK25);

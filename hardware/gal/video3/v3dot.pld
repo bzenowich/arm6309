@@ -162,8 +162,8 @@ PINNODE = DBLHOLD ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * LDCTRL, LDHSL, LDSPRX, LDSPRY, LDSPRH, LDSPRIX, LDSPRDA, FRAMEEND
- * LINETICK, SPRACT, HLAST, ACTIVE, VACTIVE, VBLANKRAW, VTC, SPRVHIT
- * SPRHIT, SPRROW, VMODE0
+ * LINETICK, SPRACT, HLAST, HGE36, HGE196, ACTIVE, VACTIVE, VBLANKRAW
+ * VTC, SPRVHIT, SPRHIT, SPRROW, VMODE0
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -480,11 +480,9 @@ SR2.d = ROWADV & !SPRVHIT & SR2 & !SR0
         # !ROWADV & SR2 ;
 SLOTTICK = DP1 & DP0 ;
 HBLANK = !ACTIVE ;
-HSYNC = !HC7 & !HC6 & !HC5 & !HC4 & !HC3 ;
-VSYNC = !VC9 & !VC8 & !VC7 & !VC6 & !VC5 & !VC4 & !VC3 & !VC2 & !VC1 & !VMODE0
-        # VC1 & VMODE0
-        # VC2 & VMODE0
-        # VC3 & VMODE0 ;
+HSYNC = !HC7 & !HC6 & !HC5 & !HC4
+        # !HC7 & !HC6 & !HC5 & !HC3 ;
+VSYNC = !VC9 & !VC8 & !VC7 & !VC6 & !VC5 & !VC4 & !VC3 & !VC2 & !VC1 ;
 VBLANK = VBLANKRAW ;
 BLANK = HBLANK
         # VBLANK
@@ -522,13 +520,19 @@ FBOEPTR = GRD
           # GCPY
           # GSPN ;
 HLAST = HC7 & HC6 & HC2 & HC1 & HC0 ;
-ACTIVE = HC5 & !HC7 # HC7 & !HC6 & !HC5 & !HC4 & !HC3 & !HC2 ;
+HGE36 = HC7
+        # HC6
+        # HC5 & HC4
+        # HC5 & HC2 ;
+HGE196 = HC7 & HC6 & HC2 ;
+ACTIVE = HGE36 & !HGE196 ;
 VACTIVE = !VBLANKRAW ;
 VBLANKRAW = !VC9 & !VC8 & !VC7 & !VC6 & !VC5
             # VC9 & M0
-            # VC9 & VC8 & !M0 ;
-VTC = VC9 & VC7 & VC6 & VC4 & !M0
-      # VC9 & VC8 & VC3 & VC2 & M0 ;
+            # VC8 & VC7 & VC6 & !M0
+            # VC8 & VC7 & VC5 & VC4 & !M0 ;
+VTC = VC8 & VC7 & VC6 & !M0
+      # VC9 & VC3 & VC2 & M0 ;
 SPRVHIT = !SVC0 & !SVC1 & !SVC2 & !SVC3 & !SVC4 & !SVC5 & !SVC6 & !SVC7 & !SVC8 ;
 SPRHIT = !SHC0 & !SHC1 & !SHC2 & !SHC3 & !SHC4 & !SHC5 & !SHC6 & !SHC7 & !SHC8 & !SHC9 ;
 SPRROW = SPRVHIT

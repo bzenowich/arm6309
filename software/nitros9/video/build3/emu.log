@@ -4,3 +4,34 @@ emu: ⭐ VIDEO3 - video3/docs/plan.md's card, not video/'s
         10.000 s  prog $00  frames 115  ck 49406
         15.000 s  prog $00  frames 415  ck 49406
         20.000 s  prog $00  frames 715  ck 49406
+        25.000 s  prog $00  frames 1015  ck 49406
+        30.000 s  prog $00  frames 1314  ck 49406
+        35.000 s  prog $00  frames 1614  ck 49406
+        40.000 s  prog $00  frames 1914  ck 49406
+        45.000 s  prog $00  frames 2213  ck 49406
+        50.000 s  prog $00  frames 2513  ck 49406
+        55.000 s  prog $00  frames 2813  ck 49406
+        60.000 s  prog $00  frames 3112  ck 49406
+        65.000 s  prog $00  frames 3332  ck 49406
+        70.000 s  prog $00  frames 3332  ck 49406
+        75.000 s  prog $00  frames 3453  ck 49406
+        80.000 s  prog $00  frames 3752  ck 49406
+        85.000 s  prog $00  frames 4052  ck 49406
+        90.000 s  prog $00  frames 4352  ck 49406
+        95.000 s  prog $00  frames 4651  ck 49406
+       100.000 s  prog $00  frames 4951  ck 49406
+       105.000 s  prog $00  frames 5251  ck 49406
+       110.000 s  prog $00  frames 5551  ck 49406
+       115.000 s  prog $00  frames 5850  ck 49406
+       120.000 s  prog $00  frames 6150  ck 49406
+       125.000 s  prog $00  frames 6450  ck 49406
+       130.000 s  prog $00  frames 6749  ck 49406
+       135.000 s  prog $00  frames 7049  ck 49406
+       140.000 s  prog $00  frames 7349  ck 49406
+       145.000 s  prog $00  frames 7648  ck 49406
+       150.000 s  prog $00  frames 7948  ck 49406
+       155.000 s  prog $00  frames 8248  ck 49406
+       160.000 s  prog $00  frames 8548  ck 49406
+       165.000 s  prog $00  frames 8847  ck 49406
+       170.000 s  prog $00  frames 9147  ck 49406
+       175.000 s  prog $00  frames 9197  ck 49406

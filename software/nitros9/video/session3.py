@@ -34,6 +34,11 @@ def pause(s):
 PANE_L = "display 1b 25 02 05 24 1d >/w3"     # x 2, y 5, 36 x 29 cells
 PANE_R = "display 1b 25 2a 05 24 1d >/w3"     # x 42, same size
 FULL   = "display 1b 25 00 00 50 3c >/w3"     # the whole 80 x 60 screen
+# ⚠ ESC $32 is the foreground and ESC $33 the BACKGROUND, and text carries
+# its background with it: without this the pane's listing arrived as black
+# on the desktop's blue, in blocks, over the grey paper the chrome drew.
+# 0x02 is CoWin's black, 0xFE the xterm grey the panes are painted in.
+PANEINK = "display 1b 32 02 1b 33 fe >/w3"
 
 LINES = [
     # ---- 80 x 60 character mode, which video/ cannot do at all
@@ -43,6 +48,7 @@ LINES = [
     ("echo now typing on the PS/2 keyboard", 20),
     # ---- the 640 x 480 desktop, and the file manager
     ("iniz w3", 0), ("copy /dd/sys/v3desk /w3", 0), ("display 1b 21 >/w3", 2),
+    (PANEINK, 0),
     (PANE_L, 0), ("dir /dd >/w3", 2),
     (PANE_R, 0), ("dir /dd/cmds >/w3", 3),
     (FULL, 0),

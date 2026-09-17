@@ -134,13 +134,36 @@ const sprite: Cell[] = [
 ]
 
 /* -- the dot path, the cadence, the arbiter ------------------------------ */
-const ACTIVE_H = "HC5 & !HC7 # HC7 & !HC6 & !HC5 & !HC4 & !HC3 & !HC2"
+/* ⛔ THE DOT PATH'S THREE WINDOW TERMS WERE WRONG, and the fitter had no way
+ * to say so - they are syntactically fine and they routed.  `v3dot_tb`
+ * measured them the first time the part ran as a design rather than as a
+ * utilisation figure:
+ *
+ *   HSYNC    32 dots, where VGA 640x480 at 25.175 MHz needs 96
+ *   ACTIVE   272 dots in three disjoint runs, where it needs 640
+ *   VSYNC    `VC1 # VC2 # VC3` in the 525-line family, which is not a range
+ *            at all - it is high for most of the frame
+ *
+ * HC counts SLOTS of four dots, 0..199 (HLAST is 199), so the line is:
+ *   HC   0.. 23   HSYNC          96 dots
+ *   HC  24.. 35   back porch     48
+ *   HC  36..195   ACTIVE        640
+ *   HC 196..199   front porch    16   = 800
+ *
+ * The two range comparators are their own cells: a CPLD has about five
+ * product terms before it cascades, and `HC >= 36 AND NOT HC >= 196` as one
+ * flat sum is far more than that. */
+const HGE36 = ["HC7", "HC6", "HC5 & HC4", "HC5 & HC2"]      // HC >= 36
+const HGE196 = ["HC7 & HC6 & HC2"]                          // HC >= 196
 const dotPath: Cell[] = [
   comb("SLOTTICK", ["DP1 & DP0"]),
   comb("HBLANK", ["!ACTIVE"]),
-  comb("HSYNC", ["!HC7 & !HC6 & !HC5 & !HC4 & !HC3"]),
-  comb("VSYNC", ["!VC9 & !VC8 & !VC7 & !VC6 & !VC5 & !VC4 & !VC3 & !VC2 & !VC1 & !VMODE0",
-                 "VC1 & VMODE0", "VC2 & VMODE0", "VC3 & VMODE0"]),
+  /* HC < 24: 96 dots */
+  comb("HSYNC", ["!HC7 & !HC6 & !HC5 & !HC4", "!HC7 & !HC6 & !HC5 & !HC3"]),
+  /* VC < 2: two lines, in BOTH families.  640x400 at 70 Hz and 640x480 at
+   * 60 Hz both take a two-line VSYNC; what differs between them is the
+   * POLARITY, and that is not this term's business. */
+  comb("VSYNC", ["!VC9 & !VC8 & !VC7 & !VC6 & !VC5 & !VC4 & !VC3 & !VC2 & !VC1"]),
   comb("VBLANK", ["VBLANKRAW"]),
   comb("BLANK", ["HBLANK", "VBLANK", "!CT7"]),
   comb("FRAMEEND", ["SLOTTICK & HLAST & VTC"]),
@@ -181,10 +204,29 @@ const dotPath: Cell[] = [
    * is a decode of this part's own counters: importing them spent five pins on
    * signals nothing else produces. */
   comb("HLAST", ["HC7 & HC6 & HC2 & HC1 & HC0"]),
-  comb("ACTIVE", [ACTIVE_H]),
+  comb("HGE36", HGE36),
+  comb("HGE196", HGE196),
+  comb("ACTIVE", ["HGE36 & !HGE196"]),
   comb("VACTIVE", ["!VBLANKRAW"]),
-  comb("VBLANKRAW", ["!VC9 & !VC8 & !VC7 & !VC6 & !VC5", "VC9 & M0", "VC9 & VC8 & !M0"]),
-  comb("VTC", ["VC9 & VC7 & VC6 & VC4 & !M0", "VC9 & VC8 & VC3 & VC2 & M0"]),
+  /* ⛔ THE 449-LINE FAMILY'S BOTTOM BLANKING NEVER FIRED.  `VC9 & VC8` needs
+   * VC >= 768 and that frame is 449 lines, so the picture ran to the last
+   * line and the frame never ended - which is what v3dot_tb measured as "901
+   * lines" (its own bound), in every mode.
+   *
+   *   449 lines:  0..31 blank, 32..431 active (400), 432..448 blank
+   *   525 lines:  0..31 blank, 32..511 active (480), 512..524 blank
+   *
+   * The 525 family's `VC9 & M0` was right; the other needed VC >= 432, which
+   * over 0..448 is VC8&VC7&VC6 (448 itself) or VC8&VC7&VC5&VC4 (432..447). */
+  comb("VBLANKRAW", ["!VC9 & !VC8 & !VC7 & !VC6 & !VC5",
+                     "VC9 & M0",
+                     "VC8 & VC7 & VC6 & !M0",
+                     "VC8 & VC7 & VC5 & VC4 & !M0"]),
+  /* ⛔ AND SO DID THE TERMINAL COUNT, for the same reason: 448 is
+   * 0b0111000000, so VC9 is CLEAR there and `VC9 & ...` can never match; 524
+   * is 0b1000001100, where VC8 is clear and `VC9 & VC8 & ...` cannot either.
+   * Each value is unique in its own range, so three literals name it. */
+  comb("VTC", ["VC8 & VC7 & VC6 & !M0", "VC9 & VC3 & VC2 & M0"]),
   comb("SPRVHIT", SVC.map((b) => `!${b}`).join(" & ").split("\u0000")),
   comb("SPRHIT", SHC.map((b) => `!${b}`).join(" & ").split("\u0000")),
   comb("SPRROW", ["SPRVHIT", "!SR2"]),
