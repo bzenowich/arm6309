@@ -316,6 +316,27 @@ rebuilds it end to end (`V3=1` for the ROM, `VIDEO3=1` for the card model).
 5. ⚠ **`v3scan_mq`'s 41 cascades** (`partition.md` §6 item 6) — still the only figure on
    the card that got worse, and still unexplained.
 
+### ⛔ A correction: I reported the video finished before it was
+
+I told you the MP4 was done — 15,114 frames, 252 seconds — on the strength of a
+`DONE=` marker in a log and an `ls -lh` showing a 27 MB file with a current
+timestamp. **Both were wrong.**
+
+- The `DONE=` belonged to an **earlier invocation of the same script**, which had
+  been redirected to the same log path. A later run was still going.
+- The file was **mid-write**. It had `ftyp`, `free` and `mdat` and **no `moov`
+  atom** — ffmpeg writes that last, so a truncated MP4 is a large, recent,
+  entirely unplayable one. It was still growing while I was describing it.
+
+⚠ This is `CLAUDE.md`'s own trap, twice over: *a marker is not the job's completion*,
+and *a stale artefact reads exactly like a fresh one*. I had quoted that trap in this
+very report two sections earlier and then walked into it.
+
+`software/nitros9/video/checkmp4.py` now decides the question instead of a size
+glance: it parses the atom chain, requires it to close at exactly the file's length
+with `moov` present, and checks the file is not growing. `run-video3.sh` exits on it,
+so the script can no longer report success on a partial file.
+
 ### ⭐ Three things worth keeping from tonight
 
 - **The `VR.*` seam is the port's most valuable asset.** ~2,900 lines of bitmap drawing
@@ -326,4 +347,5 @@ rebuilds it end to end (`V3=1` for the ROM, `VIDEO3=1` for the card model).
 - **The failures that cost the most time were silent ones**: an ANSI terminal that
   dropped every byte and returned no error; a dispatch placed after an `rts`; a stale
   `.fit`; a makefile that did not rebuild what I had changed; `display` taking hex where
-  I wrote decimal. Every one of them produced a *plausible* result.
+  I wrote decimal; and a half-written MP4 with a convincing size and timestamp. Every one
+  of them produced a *plausible* result, and the last one I reported to you as finished.

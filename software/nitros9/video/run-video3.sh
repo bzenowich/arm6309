@@ -35,3 +35,6 @@ tr -d '\000' < "$OUT/serial.out" | tr -d '\r' > "$OUT/console.txt"
 if grep -n "Error #" "$OUT/console.txt"; then echo "FAIL  a command failed (build/console.txt)"; exit 1; fi
 
 SESSION=session3 python3 $V/mkvideo.py "$OUT" "$ROOT/$V/video3-demo.mp4"
+# ⛔ And CHECK IT, because a large recent file is not a finished one: ffmpeg
+# writes the moov atom last. checkmp4.py says why this is a separate step.
+python3 $V/checkmp4.py "$ROOT/$V/video3-demo.mp4" || exit 1

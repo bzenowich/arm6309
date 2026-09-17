@@ -30,6 +30,8 @@ iniz w3
 
 {Term|02}/DD:display 1b 21 >/w3
 
+{Term|02}/DD:display 1b 32 02 1b 33 fe >/w3
+
 {Term|02}/DD:display 1b 25 02 05 24 1d >/w3
 
 {Term|02}/DD:dir /dd >/w3

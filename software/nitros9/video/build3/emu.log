@@ -35,3 +35,20 @@ emu: ⭐ VIDEO3 - video3/docs/plan.md's card, not video/'s
        165.000 s  prog $00  frames 8847  ck 49406
        170.000 s  prog $00  frames 9147  ck 49406
        175.000 s  prog $00  frames 9197  ck 49406
+       180.000 s  prog $00  frames 9197  ck 49406
+       185.000 s  prog $00  frames 9197  ck 49406
+       190.000 s  prog $00  frames 9245  ck 49406
+       195.000 s  prog $00  frames 9544  ck 49406
+       200.000 s  prog $00  frames 9844  ck 49406
+       205.000 s  prog $00  frames 10144  ck 49406
+       210.000 s  prog $00  frames 10444  ck 49406
+       215.000 s  prog $00  frames 10724  ck 49406
+       220.000 s  prog $00  frames 10724  ck 49406
+       225.000 s  prog $00  frames 10809  ck 49406
+       230.000 s  prog $00  frames 11160  ck 49406
+       235.000 s  prog $00  frames 11510  ck 49406
+       240.000 s  prog $00  frames 11861  ck 49406
+       245.000 s  prog $00  frames 12211  ck 49406
+       250.000 s  prog $00  frames 12505  ck 49406
+       252.760 s  SERIAL_STOP seen
+emu: 12671 frames, progress $00, 252.8 s of machine, 0 register writes under a list, 0 under a span
