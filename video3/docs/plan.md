@@ -254,28 +254,29 @@ considered and what the general form costs on top.
 
 | | |
 |---|---|
-| Write side | **`WPTR`** — the pointer the span writer and the CPU port already use, with `WADV = 01`'s end-of-row behaviour (reload the column from the register-file shadow, step the row) |
-| Read side | **`CPTR`**, a second nineteen-bit pointer with its own column counter, its own shadow and its own row register. ⭐ **Its shadow is a register-file location**, not macrocells — §7.2's trick, and the reason a second pointer is affordable at all |
+| Write side | **`WPTR`** — the pointer the span writer and the CPU port already use, with `WADV = 01`'s end-of-row behaviour (reload the column from the register-file shadow, step the row). Its byte goes out through the posted-write `'574` |
+| Read side | **`CPTR`**, a second nineteen-bit pointer — its byte arrives in `vread` — with its own column counter, its own shadow and its own row register. ⭐ **Its shadow is a register-file location**, not macrocells — §7.2's trick, and the reason a second pointer is affordable at all |
 | Counters | a width down-counter and a height down-counter |
 | ⭐ **No adder anywhere** | end-of-row is *reload the column, step the row*; the stride is 1024, a power of two; and **the CPU loads both start addresses**, so the card does no arithmetic. `graphics.md` §6.4.1 and §7.2's property is preserved |
-| **No shifter anywhere** | a byte-granular copy needs none. The four-byte fast path is taken **only when the source and destination columns are congruent mod 4** — otherwise the engine falls to one byte an access |
+| **No shifter and ⭐ NO LATCH either** | §13.3 trade 1, settled: the engine is **byte-granular**, so it reuses §11's `vread` for the read and §5's posted-write `'574` for the write. **Nothing new on the data path** |
 
 ### 6.1 What it runs at
 
 From `graphics.md` §2.1's budget — 115,600 spare accesses a frame, 8.1 M a second —
 with a copy costing one read access and one write access:
 
-| | rate | |
-|---|---|---|
-| Columns congruent mod 4 — **every vertical move, and every 8-pixel-aligned blit** | **16.2 MB/s** | four bytes an access |
-| Any other x | **4.05 MB/s** | one byte an access, **and still 40× what a `VDATA` stream costs** (`video-copyrect.md` §6) |
+⛔ **The four-byte group is withdrawn** (§13.3 trade 1). One read access and one write
+access move **one byte**, so the engine runs at **4.05 MB/s** in every case — and column
+congruence stops mattering, which also deletes an alignment rule software would have had
+to keep.
 
-| | on `video/` today | here |
-|---|---|---|
-| A window scroll, 192 rows | ~350 ms (H5) | **7.6 ms** |
-| `Select` between two 200-line pages | ~2.6 s each way (H4) | **7.9 ms** |
-| `GetBlk` → `PutBlk`, 64 × 64 at an arbitrary x | ~41 ms | **1.0 ms** |
-| `OWSet` save and restore | a `VDATA` stream | a copy |
+| | on `video/` today | here | |
+|---|---|---|---|
+| A window scroll, 192 rows | ~350 ms (H5) | **30.3 ms** | 12× |
+| `Select` between two 200-line pages | ~2.6 s each way (H4) | **31.6 ms** | 82× |
+| `GetBlk` → `PutBlk`, 64 × 64 at any x | ~41 ms | **1.0 ms** | 41× |
+| A character-mode scrolled line (§8.2) | 10.0 ms of **CPU** | **0.95 ms of engine** | |
+| `OWSet` save and restore | a `VDATA` stream | a copy | |
 
 ⚠ **Derived from the access budget, not measured**, and every row assumes the engine
 gets the spare access it asks for — §14 item 8.
@@ -294,7 +295,7 @@ would have caught it**, which is what `bench/v3copy` exists to do.
 
 ⭐ **And there is a free fallback if b2 turns out expensive**: stage through the
 off-screen columns (§4) in two passes. 384 columns × 512 rows of scratch exist for
-exactly this kind of thing, and two passes of a 16.2 MB/s engine still beat one pass of
+exactly this kind of thing, and two passes of a 4.05 MB/s engine still beat one pass of
 anything else on the card. **So b2 is an optimisation, not a requirement** — §14
 item 6. ⚠ Whether it *is* expensive is a question for the equations; nothing here has
 been fitted.
@@ -358,13 +359,14 @@ taste. One scrolled line at 80×25 — 24 rows of 160 bytes moved, one row clear
 | | card work | CPU work |
 |---|---|---|
 | `VSCROLL += 8` | one register write | **clear one row: 271 µs** |
-| **§6's copyrect** | 3,840 bytes at 16.2 MB/s = **237 µs of engine** | six register writes + **the same 271 µs clear** |
+| **§6's copyrect** | 3,840 bytes at 4.05 MB/s = **948 µs of engine** | six register writes + **the same 271 µs clear** |
 | the same move by CPU, no engine | — | ⛔ **10.0 ms** |
 
-⭐ **The clear dominates and both paths pay it**, so at 115.2 kbaud (~144 lines a
-second) the two cost **3.9 % and 4.1 % of the CPU**. The difference is noise; the
-copy is the engine's time, not the CPU's. At 80×60 the engine's share is 583 µs and
-the CPU's is unchanged.
+⭐ **The clear dominates the CPU and both paths pay it**, so at 115.2 kbaud (~144 lines
+a second) the two cost **3.9 % and 4.1 % of the CPU**. The difference is noise. ⚠ The
+copy is **948 µs of *engine*** — 14 % of the engine at that line rate, and the engine
+becomes the limit only past ~1,000 lines a second, which no serial port reaches. At
+80×60 it is 2.3 ms of engine and the CPU's share is unchanged.
 
 **What copying buys for that 0.2 %:**
 
@@ -514,9 +516,8 @@ partition yet.
 | `74HCT574` `vread` | **1** | §6 and `VDATA`. The prefetched VRAM byte |
 | `74HC244` `VSTAT` | **1** | §10. `SPANBUSY`, `CBUSY` and `PBUSY` are live macrocells with no register-file path |
 | `74HC244` fan-out | **1** | §9 and `graphics.md` §12.2 — `HSYNC`/`VSYNC` to a backplane pin at TTL, plus clock fan-out |
-| ⚠ `74AHCT574` copy-read latch | **4** | §6. ⛔ **The one genuinely new datapath.** The posted-write `'574` fans *one* byte to four lanes; a copy needs **four distinct bytes** on the write bus, so the engine reads into a 32-bit latch and drives it back. §13.3 asks whether the fetch latches can do this instead |
 
-**Discrete total as drawn: 36**, against `video/`'s 30. ⚠ **Plus programmable logic,
+**Discrete total: 32**, against `video/`'s 30 — ⭐ **and no new datapath at all**, because §13.3 trade 1 made the copy engine byte-granular. ⚠ **Plus programmable logic,
 count unknown** (§14 item 4) — and §13.5 says what the board allows.
 
 ### 13.2 Not required — deleted with a reason
@@ -531,12 +532,22 @@ count unknown** (§14 item 4) — and §13.5 says what the board allows.
 
 ### 13.3 ⚠ Three trades to settle before the equations
 
-1. ⭐ **The copy-read latch may be free.** The second rank of fetch latches
-   (`graphics.md` §8.2) is four `'574` on the same 32-bit bus with output enables
-   already. **If a copy's read can borrow them, §13.1's last row goes to 0 and the
-   discrete total is 31.** The risk is that copies run in spare accesses interleaved
-   with display fetches that want both ranks — **a cadence question** (§14 item 8), and
-   the single largest package swing on the card.
+1. ⛔ **SETTLED 2026-09-16: there is no copy-read latch, and "borrow the fetch rank"
+   was never possible.** A `'574` has **one** output enable, and the fetch rank's output
+   is committed to the *pixel* bus — `graphics.md` §8.2 ties both ranks to the `'153`'s
+   inputs and makes them exclusive with that enable. Wiring a rank to the framebuffer
+   data bus as well would put **both ranks on the `'153`'s inputs** whenever the copy
+   drove. Two outputs, one net.
+
+   ⭐ **But the latch is not needed, because the four-byte group is not.** A
+   byte-granular copy reuses two latches the card already has — §11's `vread` and §5's
+   posted-write `'574` — and both reuses are safe under rules that already exist: a copy
+   moves `WPTR`, which is one of the things `RDVALID` already falls on, and `/WAIT`
+   holds a CPU VRAM access while `CBUSY` exactly as it does while `SPANBUSY`.
+
+   **It costs 4× the copy time and buys four packages** — and those four are what pays
+   for the cell-budget escape (`partition.md` §8). ⭐ It also deletes an alignment rule:
+   with no fast path, column congruence stops mattering to software.
 2. **Byte-granular `HSCROLL` costs four packages.** The second fetch rank exists
    only so a line can start part-way through a fetch group. **Four-pixel granularity
    needs one rank** and saves four ICs; a scrolling playfield at four-pixel steps is
@@ -600,12 +611,13 @@ a table in this document.
 
 **The trades of §13.3 against it:**
 
-| | discrete | with 4 parts |
-|---|---|---|
-| As drawn | **36** | 40 — places |
-| Copy latch borrows the fetch rank (trade 1) | 32 | 36 — places |
-| … and `HSCROLL` goes four-pixel (trade 2) | 28 | 32 |
-| … and the tri-state pixel bus closes (trade 3) | 24 | 28 |
+| | discrete | with 4 parts | |
+|---|---|---|---|
+| Trade 1 taken — **the built configuration** | **32** | **36** | **places, 68 %** |
+| … + `MAP`/`MAPQ` discrete (`partition.md` §8's escape) | 36 | **40** | **places, 73 %** |
+| … + the sprite's shift registers too | 38 | **42** | **places, 75 %** |
+| ⛔ trade 3, the tri-state pixel bus | — | — | **settled the other way** |
+| trade 2, four-pixel `HSCROLL` | −4 | | ⚠ still open, and a gameplay decision |
 
 ⚠ **The `ics` figure in `parts.ts` assumes three programmable parts and says so in its
 own comment.** It is a placeholder, not a finding; what is *asserted* is that the list
@@ -618,14 +630,12 @@ totals its own claim and that 24 cm is the shortest length that holds it.
 
 ## 14. Open items
 
-0. ⛔ **ONLY TRADE 1 CAN PAY FOR THE CELL BUDGET'S ESCAPE, and it is unsettled.**
-   [`partition.md`](partition.md) §8 measured that the board is full: four programmable
-   parts **plus** the discrete `MAP`/`MAPQ` latches §13.4 offers as a cell-budget escape
-   **do not place**. §13.3 trade 3 is now settled the other way — the `'153` mux stays —
-   so **the only remaining payer is trade 1: whether the copy engine's read latch can
-   borrow §8.2's second fetch rank.** ⛔ That makes a *cadence* question (§14 item 8)
-   the gate on a *macrocell* question (§14 item 4), and nothing else on the card
-   couples those two.
+0. ⭐ **CLOSED 2026-09-16 — both cell-budget escapes are paid for.** §13.3 trade 1 is
+   settled: the copy engine is byte-granular and needs no latch, which returns four
+   packages. `npm run check:place` then places **all** of it — the four parts, the
+   discrete `MAP`/`MAPQ` latches *and* the sprite's shift registers, at **42 ICs, 75 %**.
+   So `partition.md` §5's risks 2 and 3 both have an escape that fits, and the package
+   budget no longer gates the macrocell budget.
 1. ⛔ **§3's timing claim has not been analysed.** *"Sixteen address lines settling
    together cost what eight do"* is the card's load-bearing assumption, and everything
    in §2.2 and §7 rests on it. It wants the LUT's datasheet numbers against a real

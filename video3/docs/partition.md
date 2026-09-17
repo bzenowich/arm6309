@@ -190,13 +190,15 @@ needs `PB[7:0]` on it, which is eight more pins than this.
 ## 5. Risks, in the order they would bite
 
 1. ⛔ **There is no fifth part.** §0. Any later feature needing one is a card revision.
-2. ⛔ **`v3scan` at ~108 estimated cells is the tightest, and its escape is not free.**
-   A third of it is `MAP`/`MAPQ`, and plan §13.4 offers discrete latches instead — but
-   **the board is full**: §8 measured that four CPLDs plus those latches **does not
-   place**. The escape has to be *paid for* by one of plan §13.3's trades.
+2. ⚠ **`v3scan` at ~108 estimated cells is the tightest — but its escape is now paid
+   for.** A third of it is `MAP`/`MAPQ`, and plan §13.4 offers discrete latches instead.
+   §8 measured that the board would not take them *and* four CPLDs — until plan §13.3
+   trade 1 returned four packages. **It now places at 40 ICs, 73 %.**
 3. ⚠ **`v3dot` at ~60 estimated pins is the tightest on I/O**, and the census's cadence
-   and grant lines are what fill it. If it overflows, the arbiter is the movable piece —
-   but it wants the cadence, so moving it costs the cadence pins instead.
+   and grant lines are what fill it. Its escape is also paid for now: the sprite's two
+   shift registers as `'165` take **16 cells and 2 pins** off it, and **42 ICs still
+   places at 75 %**. If it overflows further, the arbiter is the movable piece — but it
+   wants the cadence, so moving it costs the cadence pins instead.
 4. ⚠ **The `VA` tri-state discipline.** Two parts on seventeen nets, and the rule that
    they never drive together has to be *checked*, not asserted —
    `graphics.md`'s lesson that **a model which ORs its drivers cannot see a bus fight**
@@ -258,16 +260,27 @@ have any to give:**
 | 4 CPLD + `MAP`/`MAPQ`, **minus the copy latch** (trade 1: it borrows the fetch rank) | 40 | **places, 73 %** |
 | 4 CPLD + both discrete moves, minus the copy latch | 42 | **places, 75 %** |
 
-⛔ **And since 2026-09-16 there is only one payer.** plan §13.3 trade 3 is settled —
-the `'153` mux stays, because the tri-state bus must break before make and §8.2's second
-rank doubled the drivers after §6.1 costed four of them. **So the whole of the cell
-budget's relief depends on trade 1: whether the copy engine's read latch can borrow that
-same second fetch rank.**
+⭐ **BOTH TRADES ARE SETTLED SINCE 2026-09-16, and the coupling is gone.**
 
-⛔ **That makes a cadence question the gate on a macrocell question.** If the ranks
-cannot be shared, `v3scan` has no escape from 128 cells and the partition has no slack —
-and §0 already says there is no fifth part. **Trade 1 is now the critical path of the
-whole design**, ahead of everything in plan §15 except §14 item 1.
+**Trade 3** went the other way — the `'153` mux stays, because the tri-state bus must
+break before make and §8.2's second rank doubled the drivers after §6.1 costed four of
+them. So it yields nothing.
+
+**Trade 1** was never a sharing question: a `'574` has one output enable and the fetch
+rank's is committed to the pixel bus. ⭐ **But the latch is not needed at all** — a
+byte-granular copy reuses `vread` and the posted-write `'574` — and that returns **four
+packages**:
+
+| | ICs | 240 mm |
+|---|---|---|
+| 4 CPLD, trade 1 taken | **36** | **places, 68 %** |
+| … + `MAP`/`MAPQ` discrete — §5 risk 2's escape | **40** | **places, 73 %** |
+| … + the sprite's shift registers — §5 risk 3's escape | **42** | **places, 75 %** |
+
+⭐ **So both of §5's tight parts have an escape that fits**, the package budget no longer
+gates the macrocell budget, and the partition has slack it did not have this morning.
+What it cost is **4× the copy time** — 30 ms for a 192-row window scroll against 350 ms
+without an engine at all.
 
 ---
 

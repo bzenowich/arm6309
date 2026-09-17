@@ -69,7 +69,7 @@ Everything here runs at 39.72 ns and is the card's tightest timing (§14 item 1)
 |---|---|---|
 | `CGO`, `CBUSY` | 2 | start and status (`VSTAT` b4) |
 | `CRD`, `CWR` | 2 | the read access and the write access — ⭐ **two accesses a group**, which makes this the heaviest requester in §1.8 |
-| `CLCK`, `CLOE` | 2 | the copy-read latch, 4 × `'574`, and its `/OE` back onto the framebuffer data bus |
+| ⛔ ~~`CLCK`, `CLOE`~~ | 0 | **deleted** — plan §13.3 trade 1: the copy is byte-granular and reuses `vread` and the posted-write `'574`. There is no copy-read latch |
 | `CCOL`, `CROW` | 2 | the shared column counter's step and the row step, each ±1 by `CCTRL` b1/b2 |
 | `CWCE`, `CHCE` | 2 | the width and height down-counters |
 
@@ -102,7 +102,7 @@ so there is **one spare access a slot**. These want it:
 | the map **word** (character, tile) | one spare access a cell | 1 — refuse it and the cell shows a stale code, every frame |
 | the sprite's row fetch | one *register-file* read a sprite row | — ⭐ **not on this bus at all**, which is why plan §7 put the shape in the register file |
 | the CPU's read prefetch | one spare access after an invalidation | 2 |
-| **the copy engine** | **two** spare accesses a four-byte group | 3 |
+| **the copy engine** | **two** spare accesses a **byte** — a read and a write | 3 |
 | the span writer | one spare access a retire | 4 |
 
 ⛔ **This is plan §14 item 8 and it is the largest unanswered thing about the card.**

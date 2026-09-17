@@ -262,7 +262,7 @@ export const ALTERNATES: Record<string, CardSpec> = {
    * `pld4` four. What check:place answers is whether the DISCRETE list plus
    * that assumption still places - which is a design input, not bookkeeping. */
   video3: {
-    title: "Video3", length: 240, ics: 39, source: "video3/docs/plan.md 13.1",
+    title: "Video3", length: 240, ics: 35, source: "video3/docs/plan.md 13.1",
     note: "character + bitmap + tile, copyrect, one sprite - AS DRAWN, 3 PLD assumed",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
@@ -288,11 +288,13 @@ export const ALTERNATES: Record<string, CardSpec> = {
       dip(20, 0.3, "74AHCT244 pidx-oe", "bus", 2),
       dip(20, 0.3, "74HC573 PDAT", "bus", 2),
       dip(20, 0.3, "74HC574 pw-data", "bus"),
-      /* ⛔ THE ONE NEW DATAPATH - plan 6. pw-data fans ONE byte to four lanes,
-       * which is what makes the broadcast write free; a copy needs four
-       * DISTINCT bytes on the write bus. Trade 1 of plan 13.3 asks whether the
-       * second fetch rank can do this instead, and it is the biggest swing. */
-      dip(20, 0.3, "74AHCT574 copy", "bus", 4),
+      /* ⛔ NO COPY-READ LATCH - plan 13.3 trade 1, SETTLED 2026-09-16. Four
+       * '574 were listed here for a four-byte copy, and the "borrow the fetch
+       * rank" alternative is not electrically possible: a '574 has ONE output
+       * enable and the rank's output is committed to the pixel bus. But the
+       * latch is not needed at all - a BYTE-GRANULAR copy reuses vread and the
+       * posted-write '574, at 4.05 MB/s, and those four packages are what pays
+       * for the cell-budget escape (partition.md 8). */
       dip(20, 0.3, "74HCT245 rdbk", "bus"),
       dip(20, 0.3, "74HCT574 vread", "bus"),
       dip(20, 0.3, "74HC244 VSTAT", "bus"),

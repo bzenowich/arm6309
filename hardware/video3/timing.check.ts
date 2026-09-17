@@ -177,14 +177,49 @@ ok(SPARE_PER_SLOT === 1,
   `⚠ ${requesters.length} requesters share one spare access a slot - plan §14 item 8 ` +
   `is the cadence this file cannot settle`)
 
+/* -- ⭐ TRADE 1 SETTLED: the copy engine is byte-granular and needs NO new latch
+ *
+ * plan §13.3 trade 1 asked whether the copy engine's 32-bit read latch could
+ * "borrow" §8.2's second fetch rank - four '574 already on the framebuffer data
+ * bus.  It cannot, and the reason is not timing:
+ *
+ *   ⛔ A '574 HAS ONE OUTPUT ENABLE, and the fetch rank's output is committed to
+ *   the PIXEL bus - the '153 mux's inputs.  §8.2 ties the two ranks together
+ *   there and makes them exclusive with that enable.  Wiring the rank to the
+ *   framebuffer data bus as well would mean that whenever the copy drove, BOTH
+ *   ranks would be on the '153's inputs at once.  Two outputs, one net.
+ *
+ * ⭐ But the latch is not needed at all, because the four-byte group is not.
+ * A byte-at-a-time copy reuses two latches the card already has: §11's `vread`
+ * for the read and §7.4's posted-write '574 for the write.  Both reuses are safe
+ * under rules that already exist - a copy moves WPTR, which is one of the things
+ * RDVALID already falls on, and /WAIT holds a CPU VRAM access while CBUSY
+ * exactly as it does while SPANBUSY. */
+const COPY_ACC_PER_BYTE = 2          // one read access, one write access
+ok(COPY_ACC_PER_BYTE === 2,
+  "⭐ trade 1: a byte-granular copy is one read access and one write access, " +
+  "and needs no 32-bit latch - `vread` and the posted-write '574 already exist")
+
 /* -- the copy engine's rate, plan §6.1 ------------------------------------ */
 const ACC_PER_FRAME = 115_600      // graphics.md §2.1, 70.09 Hz
 const ACC_PER_S = ACC_PER_FRAME * (DOT_MHZ * 1e6 / DOTS_LINE / LINES["449"])
-const COPY_MBPS = (ACC_PER_S / 2) * 4 / 1e6
-ok(Math.abs(COPY_MBPS - 16.2) < 0.2,
-  "copyrect is 16.2 MB/s where the columns are congruent mod 4", `${COPY_MBPS.toFixed(1)} MB/s`)
-ok(Math.abs(COPY_MBPS / 4 - 4.05) < 0.1,
-  "and 4.05 MB/s byte-granular", `${(COPY_MBPS / 4).toFixed(2)} MB/s`)
+const WIDE_MBPS = (ACC_PER_S / COPY_ACC_PER_BYTE) * 4 / 1e6
+const BYTE_MBPS = (ACC_PER_S / COPY_ACC_PER_BYTE) / 1e6
+ok(Math.abs(WIDE_MBPS - 16.2) < 0.2,
+  "a four-byte group would be 16.2 MB/s - ⛔ WITHDRAWN with trade 1",
+  `${WIDE_MBPS.toFixed(1)} MB/s`)
+ok(Math.abs(BYTE_MBPS - 4.05) < 0.1,
+  "⭐ THE BUILT RATE is 4.05 MB/s, byte-granular", `${BYTE_MBPS.toFixed(2)} MB/s`)
+
+/* what that costs the H-items copyrect exists for, against what they cost now */
+for (const [what, bytes, now] of [["a 192-row window scroll (H5)", 192 * 640, 350],
+                                  ["Select, 640x200 (H4)", 128000, 2600],
+                                  ["GetBlk 64x64", 64 * 64, 41],
+                                  ["a character-mode scrolled line", 24 * 160, 10.0]] as const) {
+  const ms = bytes / (BYTE_MBPS * 1e6) * 1e3
+  ok(ms < now, `${what}: ${ms.toFixed(1)} ms, against ${now} ms without an engine`,
+    `${(now / ms).toFixed(0)}x`)
+}
 
 console.log(`\n${failures === 0 ? "ok" : "FAIL"}  video3's dot path and access budget, ` +
   `as arithmetic\n⚠ the fan-out half of plan §14 item 1 needs a board file and is NOT checked here\n`)
