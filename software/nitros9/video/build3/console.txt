@@ -1,7 +1,7 @@
 RKBoot Krn tb0....................................................................................................bKrnP2 KrnP3 Init IOMan RBF rbromdisk DD R0 SCF sc16550 Term NDrv Nil ArmIO KbdArm W1 W2 W3 W4 W5 PipeMan Piper Pipe Clock Clock2 SysGo i2xoCNitrOS-9/6809 Level 2-DEV
 arm6309
 (C) 2014 The NitrOS-9 Project
-Fri Sep 18 15:06:12 2026
+Fri Sep 18 15:19:06 2026
 http://www.nitros9.org
 
 
