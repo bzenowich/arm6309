@@ -978,6 +978,24 @@ static uint8_t rd(void *ctx, uint16_t a)
 static void wr(void *ctx, uint16_t a, uint8_t v)
 {
     (void)ctx;
+    /* ⭐ WATCH=addr[,addr...]: every write to one of those logical addresses,
+     * with the PC and the task that made it.  For finding who smashes a system
+     * global - the trace shows instructions, not their effects. */
+    {
+        static int init; static uint16_t w[8]; static int nw;
+        if (!init) {
+            init = 1;
+            const char *e = getenv("WATCH");
+            while (e && *e && nw < 8) { w[nw++] = (uint16_t)strtol(e, (char **)&e, 16); if (*e == ',') e++; }
+        }
+        for (int i = 0; i < nw; i++)
+            if (a == w[i])
+                fprintf(stderr, "WATCH %.4f s: $%04X := $%02X  PC $%04X task %d  S $%04X"
+                        "  bytes %02X %02X %02X %02X\n",
+                        (double)m->dots * DOT_PS / 1e12, a, v, m->cpu.pc, m->task, m->cpu.s,
+                        peek((uint16_t)(m->cpu.pc - 2)), peek((uint16_t)(m->cpu.pc - 1)),
+                        peek(m->cpu.pc), peek((uint16_t)(m->cpu.pc + 1)));
+    }
     if (a >= 0xFF00) {
         if (a >= 0xFF60 && a <= 0xFF7F) {
             /* graphics.md 10.3.1 and 10.3.3: while LRUN the engine owns WPTR and a

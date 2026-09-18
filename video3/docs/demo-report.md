@@ -692,3 +692,139 @@ black pixels in the top sixteen rows against 128 in the bottom sixteen.
 ⚠ **Both shows change appearance**, because both draw from `tiles.bin`:
 `software/demo`'s emulator run and `checkdemo.py` re-ran against the regenerated model —
 **1,169 of 1,169 game frames exact** — and the video3 session was re-run and re-encoded.
+
+---
+
+## 11. The console's speed — where it went, and 2.5× of it back
+
+From watching the third pass's video: the 80 × 60 console lists a file at about ten
+lines a second. **Measured, it is 9.7** — 17 line feeds and 665 characters in 1.77 s of
+machine time, ~2.7 ms a character — and the question was what limits it.
+
+### 11.1 Neither the card nor `list`
+
+A 600,000-instruction trace during the listing, by module:
+
+| | share |
+|---|---|
+| **CoArm** | **72%** |
+| ArmIO + SCF + IOMan + the kernel — the trip into the driver, per byte | 24% |
+| RBF + the ROM disk, reading the file | 1.6% |
+| ⭐ **`list` itself** | **0.02%** — 121 instructions in the whole trace |
+
+The card's share is **2.2%**: 17 scrolls at ~2.3 ms of copy engine, plus 2.6% of CPU
+waiting on it. `plan.md` §8.2 costed character-mode scrolling and concluded the scroll
+is nearly free; that holds. **What it never costed is the per-character path**, and that
+is what sets the rate: ~900 instructions a character, of which CoArm's own share is the
+stream loop, the shadow write, **the cursor erased and redrawn once per character**, and
+**the colour-pair allocator looked up once per character**.
+
+### 11.2 SCF already had the answer — for a CoCo 3
+
+⭐ Stock `scf.asm` has a fast path that hands GrfDrv a **whole run** of printable
+characters (`call.grf`, callcode 6). It is gated on the driver module being named
+`VTIO` and on `G.GrfEnt`, so this port fails it at the first compare and falls into the
+byte-at-a-time path. The options were: impersonate VTIO (a name check, CoCo 3's static
+layout at `V.ParmCnt` and `V.WinNum`, a fabricated CoWin window table at `WinBase`
+**which is the page this port's globals live in**, and a second calling convention in
+CoArm), or generalise the test in our own fork. ⚠ **`WGlobal` is `$1000` and `WinBase`
+`$1290`, and `VG.Addr` is `$1100`**: `armvid.d` picked that page *because CoCo 3's
+GrfDrv globals are not used here*, and option A would have made them used again.
+
+So `scf.asm` gained an `IFNE V3` fast path of its own: the same scan for a run of bytes
+≥ `$20`, then a call through **`VBL.WrBlk`** — a vector the video globals publish
+(`D.VBLSt` already points at them). Control characters still go down the stock path, so
+CR, LF, pause and end-of-record are untouched. ArmIO's `WrBlk` copies the run into
+`VG.WBuf` (block 0, which CoArm's task can see) and makes **one** `CF.WriteN` call;
+`TxPutRun` writes the whole run into the shadow and pushes it to the card with **one**
+`WPTR` load, one pair lookup and one cursor update.
+
+| | lines a second |
+|---|---|
+| before | **9.7** |
+| SCF's fast path alone — one driver call and one task flip a run | 11.9 |
+| ⭐ **+ `TxPutRun`: one card write a run** | **24.3** |
+
+The screen is checked against an 80-column simulation of the file: **58 of 59 rows
+identical**, the 59th being the cursor's block. (The file's eighteen 80-character lines
+wrap and *then* take the file's own newline, which is what any 80-column terminal does.)
+
+### 11.3 ⛔ Y IS THE VIDEO GLOBALS, EVERYWHERE IN CoArm
+
+The first two attempts at `TxPutRun` ended in a wild jump in task 1 some calls later.
+The cause is worth the section:
+
+**`vidcore` finds the card with `ldu VG.Base,y`.** Y is CoArm's globals pointer for the
+whole of a call, and `TxPutRun` borrowed it for the run's source pointer. So `VcPtr`
+read *two bytes of the text being listed* as the card's base — `$2036`, a space and a
+'6' — and the card's `WPTR` registers were written into CoArm's own code at `$2040`,
+which became `NEG <$AD`: a direct-page write to **`D.VIRQ`, the kernel's tick vector**.
+The next clock interrupt jumped through it into empty RAM.
+
+⚠ **Everything the static reading suggested was wrong.** It was not the row-wrap path,
+not the growth of CoArm's globals, not an oversized shadow write (a hard clamp changed
+nothing), and not a stack leak — `TxPutRun` entered at `S=$1EFE` and returned balanced
+at `$1F00` every time.
+
+⭐ **What found it in one run: `WATCH=addr` in `software/demo/emu/machine.c`**, added
+during this pass. It prints every write to an address with the PC, the stack pointer and
+the opcode bytes. Watching `D.VIRQ` gave the instruction; watching CoArm's own code gave
+`sta VR.WPTR2,u` with a text-derived `U`. **A trace shows instructions; this shows
+effects**, which is the half that was missing.
+
+⚠ And the rule generalises to the audio card: a `/FIRQ` service is entered with
+**U = `D.FIRQSt`** (`krn.asm`'s `ArmFIRQ`), so U there is what Y is here. The kernel
+stacks D, DP, X, Y and U around the call, which is the guard CoArm's convention lacks.
+
+### 11.4 ⚠ video3 only, and why
+
+Every piece of this is under `IFNE V3` — the SCF path, `VG.WrBlk`, `VG.WBuf`,
+`CF.WriteN`, `WrBlk`, `CoWriteN` and `TxPutRun`. On `video/` the fast path cost two of
+`run-vid.sh`'s claims: the camera's one-record-a-frame share fell to 89% where 90% is
+the rule, and the flip's IRQ went to **1,403 µs against a 1,400 µs budget**, because a
+CoArm call that takes a whole run is longer and the VBL lands inside one more often —
+an IRQ taken in a process costs ~10 µs more for the map switch. ⛔ **And merely growing
+VG moved those numbers too**: both claims sit on their thresholds (88.2%, 89.1%, 90.2%
+across builds), so the `video/` build's globals are byte for byte what they were, and
+`run-vid.sh` is **54 claims, 0 failed** again.
+
+### 11.5 What is left, measured
+
+After the change, during a listing (300,000 instructions):
+
+| | share |
+|---|---|
+| `Strm` — the byte-at-a-time `VDATA` stream | **16.2%** |
+| `TxClrRow` — blanking the new row after a scroll | 3.7% |
+| `TxShC2`, `TxWr`, `TxCard` | 8.3% |
+| `TxPair` + `TxPEnt` | 3.3% |
+| `TxCurOn` (once a run now) | 1.9% |
+| the kernel, SCF and IOMan (one call a run now) | 28% |
+
+### 11.6 ⭐ The scrolled row is blanked by the copy engine
+
+Per line the card took ~90 bytes of text and **~160 bytes of blanks**, so the clear was
+two thirds of the traffic. The map has 64 rows and the tallest character screen is 60,
+so **row 63 holds a row of spaces in the window's own pair** (`TX3.Blank`), and
+`TxClrCd` has the engine copy it into the new bottom row: seven register writes and no
+`VDATA` at all. A clear whose ATTR the template does not hold is streamed as before and
+**becomes** the new template, which pays for itself on the next scrolled line. ⚠ A
+`Select` invalidates it — the template lives in the map of whichever screen is
+displayed.
+
+**Measured**: 28 of 29 clears in a traced listing are engine copies, `Strm` falls from
+**16.2 % to 9.8 %** of the CPU, and the listing's scroll span goes 2.4 s → 2.3 s. The
+rate barely moves because the card was no longer the limit: what remains is the
+per-line trip through the kernel, SCF and IOMan (one `I$Write` a line, which is
+`list`'s business) and CoArm's shadow work.
+
+| the 110-line file | scroll span | lines a second |
+|---|---|---|
+| before this pass | 8.9 s | 9.7 |
+| SCF's fast path | 4.8 s | 11.9 |
+| `TxPutRun` | 2.4 s | 24.3 |
+| ⭐ **+ the engine clear** | **2.3 s** | **~24** |
+
+⭐ **3.9× end to end.** ⚠ Next, and to be measured rather than assumed: `VcChunk`, the
+stream's chunk size — each chunk costs a `VcWait` and a pointer check, and a row of
+text is several of them.

@@ -265,6 +265,25 @@ The owner has:
 | `SS.TBank` | `TILEBASE` in the next blank |
 | `SS.Batch` | records the next VBL commits, in order, first thing in the service: register writes (the scroll pairs, the bases), puts, pokes (a byte each at many addresses, one `WPTR2` load), and two tags for `VG.MkCam` and `VG.MkHero`. A batch waiting for its blank makes the next one wait (`VG.MkMiss` counts it) |
 | `SS.FrmWait`, `SS.FrmSig` | sleep until a VBL is served (X := the count), or a signal every *n* frames. ⚠ `SS.FrmSig` is built and no run exercises it. ⭐ **On video3 the service also writes the count's low byte into the card's spare register** (`plan.md` §10's `+$1F`), so a process holding the screen reads a frame end instead of calling: the call costs ~1.4 ms, which is a tenth of a frame |
+
+⭐ **SCF hands the driver a whole RUN of printable characters on video3**
+(`video3/docs/demo-report.md` §11). Stock `scf.asm` already does this for a CoCo 3 — it
+scans past the control characters and calls GrfDrv once — but the test is the driver's
+name and `G.GrfEnt`, so this port failed it and paid the trip into the driver, a task
+flip and CoArm's per-character setup for **every byte**: ~900 instructions a character,
+and the 80 × 60 console listed at 9.7 lines a second. Under `IFNE V3` the same scan now
+calls the vector the video globals publish at `VBL.WrBlk`; ArmIO's `WrBlk` copies the run
+into `VG.WBuf` and makes one `CF.WriteN` call, and CoArm's `TxPutRun` writes it into the
+shadow and pushes it to the card with one `WPTR` load, one pair lookup and one cursor
+update. **24.3 lines a second**, and the screen is an 80-column simulation of the file
+row for row.
+
+⛔ **Y is the video globals in every CoArm routine** — `vidcore` finds the card with
+`ldu VG.Base,y` — and the first `TxPutRun` borrowed Y for the run's pointer. `VcPtr` then
+read two characters of the listed text as the card's address and wrote `WPTR` into
+CoArm's own code, which became a direct-page store to `D.VIRQ`; the next tick jumped
+through it. The same shape waits for anything entered with a register convention: a
+`/FIRQ` service gets **U = `D.FIRQSt`**.
 | **`libvid`** | a subroutine module the owner links: `VlWait`, `VlPut` and `VlGet` (a `WPTR` and up to 16 bytes), `VlFill`, `VlPoke` (up to 13 addresses) and `VlRect` (span-solid). Each waits for the card, reloads `WPTR`, reads `CTRL`'s `WMODE` and `WADV` back and sets them, and masks `/IRQ` for the call: **398 µs** at most, measured. Not built: text, icons, polygons and images |
 
 **`overworld` is the demo's game on these** (`software/demo/demo.asm`'s loop): it steps the
