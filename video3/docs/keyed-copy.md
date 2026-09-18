@@ -81,13 +81,28 @@ exactly what it is good at:
 | undo it | write the saved rectangle back | one copy, unkeyed |
 | CPU touches pixels | yes, every one | **none** |
 
-At 4.05 MB/s a 32 × 16 copy is 512 bytes ≈ **126 µs**, twice for save-and-show,
-against a CPU that costs ~7.6 µs a byte to write one pixel. ⚠ The comparison
-that matters is not against *today's* copy engine — it already moves the
-rectangle — it is against **the CPU compositing the figure**, which is what a
-key removes. A hand-composed 32 × 16 sprite with 50% coverage is ~256 pixels of
-CPU work ≈ 2 ms; keyed, it is the second copy, ≈ 126 µs. **~16× a figure**, and
-the CPU is left free rather than merely faster.
+⛔ **CORRECTED 2026-09-18, BY THE SAME MEASUREMENT AS §3.2.** What stood here
+compared the engine's 126 µs against ~2 ms of CPU compositing and claimed ~16×.
+That was wrong, because **a copy does not cost its engine time — it costs 5.81
+ms of call overhead** (`v3cpyb`), and the figure needs two of them. 11.6 ms
+against 2 ms of CPU work is a **loss**, not a win.
+
+⭐ **The win is real but it lives in the batch, not in the copy.** `SS.Batch`
+exists precisely so a frame's operations are committed together in one VBL
+(`libvid`, `armvid.d` BT.*), and the game path already uses it; the 5.81 ms is
+the *public per-call* path that a batch is designed to avoid. So the honest
+statement is:
+
+| a 32 × 16 figure | |
+|---|---|
+| engine time for the two copies | **0.25 ms** |
+| ⛔ as two separate `SS.Copy` calls | **11.6 ms — worse than compositing it** |
+| batched, one commit | the batch's cost, **which has not been measured either** |
+
+⚠ **So §3.1 is not proven.** It is plausible and it is the right shape, and it
+now rests on a second unmeasured number rather than the one §3.2 retired. The
+bench that would settle it is `v3cpyb` again, issuing its copies through
+`SS.Batch` instead.
 
 ### 3.2 ⭐⭐ Text compositing in a GUI — the strongest case, and it is measured
 
@@ -125,13 +140,39 @@ already keeps its document), key on the background index, and then:
 A 12 × 17 glyph is 204 bytes ≈ **50 µs** of engine. Forty of them is 2 ms of
 engine plus the per-copy register writes.
 
-⛔ **THE CAVEAT, AND IT IS THE WHOLE RISK.** That estimate assumes a copy issued
-*inside the toolbox* costs roughly its register writes. The **public** path does
-not: an `SS.Copy` through IOMan, ArmIO and CoArm is **milliseconds**, and at
-~10 ms a glyph a keyed cache would be *slower than today*. So this only works if
-the toolbox reaches the engine directly, and **the in-driver cost has never been
-measured**. It is the first thing to measure before anyone designs to this
-number — `run-v3text.sh` is the shape of the bench that would do it.
+⛔ **MEASURED, AND THE CAVEAT WAS RIGHT** (`v3cpyb`, 2026-09-18):
+
+| | |
+|---|---|
+| one `SS.Copy`, 12 × 17 (204 bytes) | **5.807 ms** |
+| one `SS.Copy`, 204 × 1 (204 bytes) | **5.805 ms** |
+| the engine's own share of it | **0.050 ms — 0.9%** |
+
+⛔ **So a glyph-per-copy cache is dead**: 40 glyphs × 5.81 ms = **232 ms, worse
+than the 218.64 ms the software path already costs.** The estimate of "≈6–10 ms"
+above was wrong by a factor of thirty, and it was wrong in the direction that
+would have wasted the silicon.
+
+⭐ **And the same measurement gives the design that does work.** 17 rows and 1
+row cost the *same to a microsecond*, so the cost is **entirely per call** —
+IOMan, ArmIO and CoArm's dispatch, not the engine and not the register writes.
+**One big copy is as cheap as one small one.** So the unit is not a glyph, it is
+a **string**:
+
+| drawing a 40-character label | cost |
+|---|---|
+| today, opaque (§4 ideas 1–2, built) | **218.64 ms** |
+| ⭐ composed once, then **one copy** a redraw | **5.81 ms + 1.03 ms of engine ≈ 6.8 ms** |
+
+⭐ **32×, for text that is drawn more than once** — window titles, menu bars,
+labels repainted on every move or refresh, which is most of a GUI's text. The
+first draw costs what it costs today; every later one is a copy.
+
+⚠ **And it needs no new code at all.** `SS.Copy` is already public: an
+application can compose a label into the margin and copy it back itself. What a
+toolbox call would add is convenience, and what a **key** would add is the same
+trick over a background that is not flat — which is still the thing software
+cannot do.
 
 ⭐ **And this is where the key earns its keep over the cheaper alternatives.**
 Ideas 1–3 in §4 get a *flat-paper* glyph cache with no hardware at all, because a
