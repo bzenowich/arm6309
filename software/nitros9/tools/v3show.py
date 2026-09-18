@@ -25,7 +25,7 @@ Files:
   v3bbs       80 x 25 CP437 ANSI art - gruvbox, and 256-colour pairs
   video3.txt  a long text for `list` on the 80 x 60 console
 """
-import sys, os, pathlib
+import sys, os, re, pathlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mktbox as T                                      # the palette, the icons
@@ -517,6 +517,155 @@ TEXT = """\
 """
 
 
+# --------------------------------------------------------- the ANSI art
+# ⭐ A REAL .ans, drawn by the ANSI terminal itself: "we-tortuga" from
+# Blocktronics' 2016 "Block 'n' Roll" pack (16colo.rs), 80 x 889 of CP437.
+#
+# ⚠ It is PARSED here and re-emitted, rather than copied: the file is 164 KB
+# and the whole piece takes 100 s on the card, because dense art changes
+# colour almost every cell and every cell then pays the per-character path.
+# Re-emitting lets the demo show a window of it, drops CUF for the spaces it
+# stands for, and keeps the stream to the sequences ca_ext.asm implements.
+#
+# ⭐ SAUCE's flags bit 0 is iCE COLOUR: SGR 5 is the bright background, not
+# blink, which is why ca_ext.asm learned SGR 5 and 25.
+ART = pathlib.Path(__file__).resolve().parents[3] / "video3" / "we-tortuga.ans"
+# ⭐ The window the demo scrolls: the top of the blue sky down to the bottom
+# of the pirate with the hook - rows 2270 to 6500 of we-tortuga.ans.png, which
+# is 8 x 16 a cell, so rows 142 to 406 of the grid.
+#
+# ⚠ THE PICTURE IS THE ARBITER OF WHERE THINGS ARE, not this decoder's idea
+# of which index is blue: the window was first chosen 435 rows too low because
+# VGA16 below was in attribute order, so the sky read red.
+ART_FROM = int(os.environ.get("V3ART_FROM", "142"))
+ART_ROWS = int(os.environ.get("V3ART_ROWS", "265"))
+
+
+def have_art():
+    """⚠ we-tortuga.ans IS NOT THIS PROJECT'S WORK and is not in the repository,
+    the same way software/demo's photograph is not: put it in video3/ (it is in
+    Blocktronics' 2016 "Block 'n' Roll" pack, on 16colo.rs) and the scene comes
+    back.  Without it the session simply skips those three commands."""
+    return ART.exists()
+
+
+def art_grid(width=80):
+    """The .ans as rows of (code, fg, bg).  SGR and CUF are all it uses."""
+    d = ART.read_bytes()
+    i = d.rfind(b"SAUCE")
+    if i >= 0 and d[i:i + 5] == b"SAUCE":
+        d = d[:i]
+    d = d.split(b"\x1a")[0]
+    rows, row = [], []
+    fg, bg, bold, ice, rev = 7, 0, 0, 0, 0
+    def cell(c):
+        f, b = (fg + 8) if bold and fg < 8 else fg, (bg + 8) if ice and bg < 8 else bg
+        return (c, b, f) if rev else (c, f, b)
+    p = 0
+    while p < len(d):
+        b = d[p]
+        if b == 0x1B and p + 1 < len(d) and d[p + 1] == ord("["):
+            m = re.match(rb"\x1b\[([0-9;]*)([A-Za-z])", d[p:])
+            if not m:
+                p += 1
+                continue
+            args = [int(x) if x else 0 for x in m.group(1).split(b";")] or [0]
+            if m.group(2) == b"m":
+                for a in args:
+                    if a == 0: fg, bg, bold, ice, rev = 7, 0, 0, 0, 0
+                    elif a == 1: bold = 1
+                    elif a == 5: ice = 1
+                    elif a == 7: rev = 1
+                    elif a == 22: bold = 0
+                    elif a == 25: ice = 0
+                    elif a == 27: rev = 0
+                    elif 30 <= a <= 37: fg = a - 30
+                    elif 40 <= a <= 47: bg = a - 40
+            elif m.group(2) == b"C":
+                for _ in range(max(1, args[0])):
+                    row.append(cell(32))
+                    if len(row) >= width:
+                        rows.append(row); row = []
+            p += m.end()
+            continue
+        if b == 0x0A:
+            rows.append(row); row = []
+        elif b != 0x0D:
+            row.append(cell(b))
+            if len(row) >= width:
+                rows.append(row); row = []
+        p += 1
+    if row:
+        rows.append(row)
+    for r in rows:
+        while len(r) < width:
+            r.append((32, 7, 0))
+    return rows
+
+
+# The DOS palette the artist drew against.  ⚠ The BBS screen before this one
+# puts GRUVBOX in the same sixteen entries - that is its point - so the art
+# loads its own first, and a character screen takes a palette change live
+# (ca_v3txt.asm's TxPalQ reloads the pairs).
+# ⛔ IN SGR ORDER, NOT VGA ATTRIBUTE ORDER.  art_grid() stores the SGR colour
+# number (30+n), and that is the index the card's palette is written with, so
+# 1 is red and 4 is blue - the DOS attribute table has those two the other way
+# round and the sky came out red.  This is we-tortuga.ans.png's own palette.
+VGA16 = ["000000", "aa0000", "00aa00", "aa5500", "0000aa", "aa00aa", "00aaaa", "aaaaaa",
+         "555555", "ff5555", "55ff55", "ffff55", "5555ff", "ff55ff", "55ffff", "ffffff"]
+
+
+def stream_pal():
+    """The DOS palette, on its own.  ⛔ IT CANNOT TRAVEL WITH THE ART: an ANSI
+    terminal passes only ESC [, ESC $69, ESC $21 and ESC $24 through
+    (ca_ext.asm's AnsiByte), so a PalRange sent while ANSI is on is dropped
+    with no error - the art then drew in the BBS screen's gruvbox, which is
+    red where the sky is blue.  The session copies this one first, while the
+    terminal is still off."""
+    return esc(0x61, 0, 16) + b"".join(
+        T.rgb565(tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))).to_bytes(2, "big") for h in VGA16)
+
+
+def stream_art():
+    """ART_ROWS rows of the piece from ART_FROM, as SGR and CP437 - one SGR
+    where the colour changes, and nothing our terminal does not implement."""
+    rows = art_grid()[ART_FROM:ART_FROM + ART_ROWS]
+    out = bytearray()
+    out += b"\x1b[0m\x1b[2J\x1b[H"                  # the piece starts on a clear screen
+    fg = bg = None
+    for r in rows:
+        # ⚠ A ROW THAT FILLS THE WIDTH TAKES NO NEWLINE: the terminal wraps,
+        # and a CR LF after it would leave a blank row between every two - the
+        # same wrap-then-newline the 80-character lines of video3.txt show.
+        end = len(r)
+        while end and r[end - 1][0] == 32 and r[end - 1][2] == 0:
+            end -= 1
+        line = bytearray()
+        for code, f, b in r[:end]:
+            if f != fg or b != bg:
+                # ⚠ bold and iCE are STATE: 1 without a later 22 leaves every
+                # following colour bright, which is 481 cells of this piece
+                p = []
+                if (f >= 8) != (fg is not None and fg >= 8):
+                    p.append(1 if f >= 8 else 22)
+                if (b >= 8) != (bg is not None and bg >= 8):
+                    p.append(5 if b >= 8 else 25)
+                p.append(30 + (f & 7))
+                p.append(40 + (b & 7))
+                line += b"\x1b[" + b";".join(b"%d" % n for n in p) + b"m"
+                fg, bg = f, b
+            line += bytes([code])
+        out += line
+        if end < len(r):
+            # ⚠ The trimmed blanks and the next row's leading ones inherit the
+            # colour state, so a coloured background would run on across them.
+            if bg not in (0, None):
+                out += b"\x1b[0m"
+                fg, bg = 7, 0
+            out += b"\r\n"
+    return bytes(out)
+
+
 def stream_text():
     """A long plain-text file for `list` on the 80 x 60 console, so the
     copy-engine scroll has something to scroll.  OS-9 ends a line with CR;
@@ -526,9 +675,14 @@ def stream_text():
 
 def main(out):
     d = pathlib.Path(out); d.mkdir(parents=True, exist_ok=True)
-    for name, fn in (("v3desk", stream_desk), ("v3cmds", stream_cmds), ("v3about", stream_about),
-                     ("v3paint", stream_paint), ("v3doodle", stream_doodle),
-                     ("v3bbs", stream_bbs), ("video3.txt", stream_text)):
+    streams = [("v3desk", stream_desk), ("v3cmds", stream_cmds), ("v3about", stream_about),
+               ("v3paint", stream_paint), ("v3doodle", stream_doodle),
+               ("v3bbs", stream_bbs), ("video3.txt", stream_text)]
+    if have_art():
+        streams[6:6] = [("v3pal", stream_pal), ("v3art", stream_art)]
+    else:
+        print("note  no %s: the ANSI art scene is left out (see art_grid)" % ART.name)
+    for name, fn in streams:
         b = fn()
         (d / name).write_bytes(b)
         print("ok    %s/%s: %d bytes" % (out, name, len(b)))

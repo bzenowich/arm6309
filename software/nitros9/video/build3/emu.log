@@ -13,39 +13,48 @@ emu: ⭐ VIDEO3 - video3/docs/plan.md's card, not video/'s
         55.000 s  prog $00  frames 2810  ck 6268
         60.000 s  prog $00  frames 3109  ck 6268
         65.000 s  prog $00  frames 3409  ck 6268
-        70.000 s  prog $00  frames 3738  ck 6268
-        75.000 s  prog $00  frames 4089  ck 6268
-        80.000 s  prog $00  frames 4439  ck 6268
-        85.000 s  prog $00  frames 4790  ck 6268
-        90.000 s  prog $00  frames 5140  ck 6268
-        95.000 s  prog $00  frames 5490  ck 6268
-       100.000 s  prog $00  frames 5787  ck 6268
-       105.000 s  prog $00  frames 6087  ck 6268
-       110.000 s  prog $00  frames 6386  ck 6268
-       115.000 s  prog $00  frames 6686  ck 6268
-       120.000 s  prog $00  frames 6986  ck 6268
-       125.000 s  prog $00  frames 7285  ck 6268
-       130.000 s  prog $00  frames 7585  ck 6268
-       135.000 s  prog $00  frames 7885  ck 6268
-       140.000 s  prog $00  frames 8184  ck 6268
-       145.000 s  prog $00  frames 8484  ck 6268
-       150.000 s  prog $00  frames 8784  ck 6268
-       155.000 s  prog $00  frames 9084  ck 6268
-       160.000 s  prog $00  frames 9383  ck 6268
-       165.000 s  prog $00  frames 9683  ck 6268
-       170.000 s  prog $00  frames 9983  ck 6268
-       175.000 s  prog $00  frames 10282  ck 6268
-       180.000 s  prog $00  frames 10582  ck 6268
-       185.000 s  prog $00  frames 10882  ck 6268
-       190.000 s  prog $00  frames 11181  ck 6268
-       195.000 s  prog $00  frames 11481  ck 6268
-       200.000 s  prog $00  frames 11781  ck 6268
-       205.000 s  prog $00  frames 12081  ck 6268
-       210.000 s  prog $00  frames 12420  ck 6268
-       215.000 s  prog $00  frames 12771  ck 6268
-       220.000 s  prog $00  frames 13121  ck 6268
-       225.000 s  prog $00  frames 13472  ck 6268
-       230.000 s  prog $00  frames 13788  ck 6268
-       235.000 s  prog $00  frames 14088  ck 6268
-       235.020 s  SERIAL_STOP seen
-emu: 14089 frames, progress $00, 235.0 s of machine, 0 register writes under a list, 0 under a span
+        70.000 s  prog $00  frames 3740  ck 6268
+        75.000 s  prog $00  frames 4090  ck 6268
+        80.000 s  prog $00  frames 4441  ck 6268
+        85.000 s  prog $00  frames 4791  ck 6268
+        90.000 s  prog $00  frames 5142  ck 6268
+        95.000 s  prog $00  frames 5492  ck 6268
+       100.000 s  prog $00  frames 5843  ck 6268
+       105.000 s  prog $00  frames 6193  ck 6268
+       110.000 s  prog $00  frames 6543  ck 6268
+       115.000 s  prog $00  frames 6894  ck 6268
+       120.000 s  prog $00  frames 7244  ck 6268
+       125.000 s  prog $00  frames 7595  ck 6268
+       130.000 s  prog $00  frames 7945  ck 6268
+       135.000 s  prog $00  frames 8296  ck 6268
+       140.000 s  prog $00  frames 8646  ck 6268
+       145.000 s  prog $00  frames 8996  ck 6268
+       150.000 s  prog $00  frames 9289  ck 6268
+       155.000 s  prog $00  frames 9589  ck 6268
+       160.000 s  prog $00  frames 9888  ck 6268
+       165.000 s  prog $00  frames 10188  ck 6268
+       170.000 s  prog $00  frames 10488  ck 6268
+       175.000 s  prog $00  frames 10788  ck 6268
+       180.000 s  prog $00  frames 11087  ck 6268
+       185.000 s  prog $00  frames 11387  ck 6268
+       190.000 s  prog $00  frames 11687  ck 6268
+       195.000 s  prog $00  frames 11986  ck 6268
+       200.000 s  prog $00  frames 12286  ck 6268
+       205.000 s  prog $00  frames 12586  ck 6268
+       210.000 s  prog $00  frames 12885  ck 6268
+       215.000 s  prog $00  frames 13185  ck 6268
+       220.000 s  prog $00  frames 13485  ck 6268
+       225.000 s  prog $00  frames 13785  ck 6268
+       230.000 s  prog $00  frames 14084  ck 6268
+       235.000 s  prog $00  frames 14384  ck 6268
+       240.000 s  prog $00  frames 14684  ck 6268
+       245.000 s  prog $00  frames 14983  ck 6268
+       250.000 s  prog $00  frames 15283  ck 6268
+       255.000 s  prog $00  frames 15583  ck 6268
+       260.000 s  prog $00  frames 15926  ck 6268
+       265.000 s  prog $00  frames 16277  ck 6268
+       270.000 s  prog $00  frames 16627  ck 6268
+       275.000 s  prog $00  frames 16978  ck 6268
+       280.000 s  prog $00  frames 17291  ck 6268
+       284.663 s  SERIAL_STOP seen
+emu: 17570 frames, progress $00, 284.7 s of machine, 0 register writes under a list, 0 under a span

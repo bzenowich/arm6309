@@ -828,3 +828,57 @@ per-line trip through the kernel, SCF and IOMan (one `I$Write` a line, which is
 ⭐ **3.9× end to end.** ⚠ Next, and to be measured rather than assumed: `VcChunk`, the
 stream's chunk size — each chunk costs a `VcWait` and a pointer check, and a row of
 text is several of them.
+
+## 12. A real `.ans` in the BBS scene — 2026-09-17
+
+Blocktronics' **"we-tortuga"** (80 × 889 of CP437, from the 2016 *Block 'n' Roll*
+pack) scrolls through `/W2` after the colour-pair screen, drawn by `ca_ext.asm`'s
+own ANSI terminal. The window is the piece's middle: the top of the blue sky down
+to the bottom of the pirate with the hook — **grid rows 142–406**, 265 rows.
+
+⚠ **The file is parsed and re-emitted, not copied** (`v3show.py`'s `art_grid`,
+`stream_art`). Copying 164 KB would spend most of it on `CUF` runs and on
+sequences this terminal does not implement; re-emitting keeps the stream to SGR
+and CP437, and lets the demo choose a window.
+
+### 12.1 ⭐ SAUCE flags bit 0 is iCE colour
+
+The piece sets it, so **SGR 5 is a bright background, not blink** — 16 background
+colours, not 8. `ca_ext.asm` learned SGR 5 and 25 and `WT.AnIce`; `AnCol` ORs bit
+3 into the background while it is set. Without this the whole lower half of the
+piece loses its magenta and reads black.
+
+### 12.2 ⛔ The palette is indexed by the SGR NUMBER, not the DOS attribute
+
+`art_grid` stores the SGR colour (30+n) and that is the index `PalRange` writes,
+so entry **1 is red and 4 is blue** — the DOS attribute table has those two the
+other way round. The first version of `VGA16` was in attribute order, which
+swapped red with blue and brown with cyan.
+
+⚠ **And it chose the wrong 51 rows of the piece as well.** The window had been
+picked by measuring "how much blue is in this row"; with blue reading as red the
+measurement landed 435 rows below the sky, on something that only looked like sky
+to a colour-blind test. **The picture is the arbiter of where things are** — the
+window is now stated in `we-tortuga.ans.png`'s own pixel rows (2270–6500), and
+the decoder is checked against that PNG rather than trusted: for all 21,200 cells
+of the window, the colours the reference paints are a subset of the `(fg, bg)`
+pair as decoded. 0 mismatches.
+
+### 12.3 ⚠ A palette load recolours what is still on the screen
+
+Loading the DOS palette while the BBS screen was still up turned it from gruvbox
+to blue for three seconds — a character screen takes a palette change live
+(`TxPalQ` reloads the pairs), which is the feature, but here it showed. The
+session clears `/W2` with `$0C` first.
+
+⛔ **And the palette cannot travel with the art.** `AnsiByte` passes only `ESC [`,
+`ESC $69`, `ESC $21` and `ESC $24` through, so a `PalRange` sent while the ANSI
+terminal is on is **dropped with no error**. It is its own stream, `v3pal`, copied
+before `display 1b 69 01`.
+
+### 12.4 Measured: 4.6 rows a second
+
+265 rows take **57 s** of a 285 s session. This is the per-character path at full
+stretch and §11's work does not help: dense art changes colour almost every cell,
+so `TxPutRun`'s run never starts and every cell pays its own `TxAttr`. The lever
+is the number of rows, not the rate.

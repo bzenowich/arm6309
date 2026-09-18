@@ -27,6 +27,14 @@ now typing on the PS/2 keyboard
 
 {Term|02}/DD:copy /dd/sys/v3bbs /w2
 
+{Term|02}/DD:display 0c >/w2
+
+{Term|02}/DD:copy /dd/sys/v3pal /w2
+
+{Term|02}/DD:display 1b 69 01 >/w2
+
+{Term|02}/DD:copy /dd/sys/v3art /w2
+
 {Term|02}/DD:iniz w3
 
 {Term|02}/DD:copy /dd/sys/v3desk /w3
@@ -65,7 +73,7 @@ now moving the PS/2 mouse
          User                     Mem Stack
 Id  PId Number  Pty Age Sts Signl Siz  Ptr   Primary Module
 --- --- ------- --- --- --- ----- --- ----- ----------------
-  2   1     0   128 128 $80    0   31 $73E2 Shell 
+  2   1     0   128 131 $80    0   31 $73E2 Shell 
   3   2     0   128 128 $80    0   31 $70E2 Shell 
   4   2     0   128 128 $80    0   31 $1EF3 Procs 
 

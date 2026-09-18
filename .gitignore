@@ -71,3 +71,12 @@ software/tools/lwtools-*.tar.gz
 # photograph, which is kept out of history (git 790de82)
 software/nitros9/video/build3/sheet-*.png
 software/nitros9/video/build3/tbox-doc.png
+
+# ⚠ Blocktronics' "we-tortuga", the BBS scene's ANSI art, and the reference
+# render its colours are checked against: NOT THIS PROJECT'S WORK, kept out of
+# history the same way software/demo's photograph is. Put the .ans in video3/
+# (it is in the 2016 "Block 'n' Roll" pack, on 16colo.rs) and v3show.have_art()
+# puts the scene back; without it session3.py leaves those three commands out.
+video3/we-tortuga.ans
+video3/we-tortuga.ans.png
+software/nitros9/video/build3/sys/v3art

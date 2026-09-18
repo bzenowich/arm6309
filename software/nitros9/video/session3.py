@@ -45,6 +45,15 @@ LINES = [
     ("echo now typing on the PS/2 keyboard", 46),
     # ---- the BBS: CP437, gruvbox and 256-colour pairs, 80 x 25
     ("iniz w2", 0), ("copy /dd/sys/v3bbs /w2", 10),
+    # ⭐ and then a REAL .ans scrolls through that window: Blocktronics'
+    # "we-tortuga", drawn by ca_ext.asm's ANSI terminal itself.  ⚠ The BBS
+    # stream turns ANSI off at its end, so it goes back on first.
+    # ⚠ and it is SKIPPED when video3/we-tortuga.ans is not there: it is not
+    # this project's work, so it is not in the repository (v3show.have_art).
+    *([("display 0c >/w2", 0),                      # clear first: a palette load
+       ("copy /dd/sys/v3pal /w2", 0),               # recolours what is still up
+       ("display 1b 69 01 >/w2", 0), ("copy /dd/sys/v3art /w2", 2)]
+      if v3show.have_art() else []),
     # ---- the Haiku desktop, drawn by the ROM toolbox as you watch
     ("iniz w3", 0), ("copy /dd/sys/v3desk /w3", 1),
     ("v3trk " + v3show.TRK_DD.args("/dd") + " " + DCMD + " >/w3", 1),
@@ -79,6 +88,8 @@ CAPTIONS = [
     ("i=/w1&", "A shell on /W1, typed at on the PS/2 keyboard"),
     ("PS/2 keyboard", "`list` a long file: every new line moves 59 rows with the COPY ENGINE"),
     ("v3bbs /w2", "/W2: 80 x 25 ANSI art in gruvbox - and 256-colour pairs, 38;5 on 48;5"),
+    *([("v3art /w2", "a real .ans scrolls by: Blocktronics' we-tortuga, CP437 and iCE colour")]
+      if v3show.have_art() else []),
     ("v3desk /w3", "/W3: a Haiku desktop, drawn as you watch by the TOOLBOX IN ROM (page 64)"),
     ("v3trk /dd ", "v3trk: Tracker lists the real /DD - icons and Noto Sans from ROM"),
     ("v3trk /dd/cmds", "... and /DD/CMDS, two columns; the scroll bar knows how much is hidden"),
