@@ -66,12 +66,11 @@ emu: ⭐ VIDEO3 - video3/docs/plan.md's card, not video/'s
        320.000 s  prog $00  frames 19479  ck 6168
        325.000 s  prog $00  frames 19779  ck 6168
        330.000 s  prog $00  frames 20078  ck 6168
-       335.000 s  prog $00  frames 20378  ck 6168
-       340.000 s  prog $00  frames 20696  ck 6168
-       345.000 s  prog $00  frames 21047  ck 6168
-       350.000 s  prog $00  frames 21397  ck 6168
-       355.000 s  prog $00  frames 21747  ck 6168
-       360.000 s  prog $00  frames 22098  ck 6168
-       365.000 s  prog $00  frames 22386  ck 6168
-       367.254 s  SERIAL_STOP seen
-emu: 22521 frames, progress $00, 367.3 s of machine, 0 register writes under a list, 0 under a span
+       335.000 s  prog $00  frames 20375  ck 6168
+       340.000 s  prog $00  frames 20726  ck 6168
+       345.000 s  prog $00  frames 21076  ck 6168
+       350.000 s  prog $00  frames 21427  ck 6168
+       355.000 s  prog $00  frames 21777  ck 6168
+       360.000 s  prog $00  frames 22087  ck 6168
+       364.334 s  SERIAL_STOP seen
+emu: 22346 frames, progress $00, 364.3 s of machine, 0 register writes under a list, 0 under a span
