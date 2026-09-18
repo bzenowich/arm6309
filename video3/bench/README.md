@@ -60,7 +60,8 @@ screen is up, so those frames are skipped **explicitly**.
 |---|---|
 | ⭐ **Answers** | plan §14 item 1's *functional* half — does the attribute reach the LUT's high eight address lines and produce the right pixel? And it is where a NitrOS-9 driver can be written and run in seconds |
 | ⛔ **Does not answer** | **the fetch cadence.** Plan §14 item 8 — five requesters against one spare access a slot — is invisible here, because the model renders a whole line at once. Only Verilator sees it |
-| ⛔ **Does not answer** | timing. `npm run check:video3` has the arithmetic; the board has the rest |
+| ⛔ **Does not answer** | **the hardware's** timing. `npm run check:video3` has the arithmetic; the board has the rest |
+| ⭐ **Answers, since 2026-09-18** | **the SOFTWARE's** timing, for the ROM toolbox: `run-v3text.sh` times N identical `Text` calls on a booted NitrOS-9 and reports the per-call and per-character cost (`demo-report.md` §16). ⚠ It is the only bench here that boots the OS — the toolbox is reached through CoArm's `ESC $6A`, so there is no bare-metal route |
 
 ## ⚠ One duplication, declared
 

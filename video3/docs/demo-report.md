@@ -1046,11 +1046,44 @@ mapped into ArmIO's two block windows only *while a call runs* — the resolver
 polls every 65,536 instructions and never lands inside one. The timing arm also
 requires `m->task == 0`.
 
-⛔ **So there is still no measurement of a toolbox text call.** `demo-report`
-§13 and `video3/bench/README.md` both said so and it is still true. The only
-figures are derived by hand — ~165 ms for a 19-character line, ~9 ms a
-character, with the `KEY` fill, the run scan and per-run `RowPut` setup at ~28%
-each and the `VDATA` bytes at **~2%**. ⚠ **Those are arithmetic, not a
-measurement, and must not be quoted as one.** The route that does not need the
-emulator changed is a bench: a stream of a known number of `Text` calls, timed
-from `serial.times`.
+⚠ **Superseded the same day by §16, which measures it.** What stood here was
+arithmetic — ~165 ms for a 19-character line, ~9 ms a character — and it was
+**40% low**. The route that does not need the emulator changed is a bench:
+`video3/bench/run-v3text.sh`.
+
+## 16. ⭐ What a toolbox text call costs, measured — 2026-09-18
+
+The first measurement of `tbox.asm` in this repository. `video3/bench/run-v3text.sh`
+boots NitrOS-9 (the toolbox is only reachable through CoArm's `ESC $6A`, so there
+is no bare-metal route), copies streams of **25 identical calls**, and times them
+off the serial console's own timestamps.
+
+⛔ **Every stream is timed TWICE, once to the window and once to `/nil`**, and
+the difference is the drawing. What that subtracts is `copy`, RBF and SCF walking
+the same bytes — which scales with the file, so the 40-character stream would
+otherwise have looked slow for a reason that has nothing to do with text.
+
+| | measured |
+|---|---|
+| a toolbox call that draws nothing (`Rect`) | **13.58 ms** |
+| a `Text` call of one character | **23.87 ms** |
+| ⭐ each further character | **11.52 ms** |
+| a 40-character line | **473 ms** |
+| a 19-character line | 231 ms |
+
+⚠ **The per-character figure is a SLOPE**, taken between two lengths, not a
+total divided by a count: a call's fixed cost is most of a short line. The check
+holds the shape rather than the value, and one of its claims is a cross-check
+that was not tuned — 20 characters measured **246.48 ms** against **242.79 ms**
+predicted by the line through 1 and 40.
+
+⭐ **And it settles §13's open question.** At 11.52 ms a character, a 40-character
+line is 473 ms; its ~885 `VDATA` bytes at 16 E cycles each are **6.8 ms — 1.4%**.
+So the text path is CPU-bound by ~70×, and the emulator charging nothing for a CPU
+VRAM write is the right answer *here*, where it was wrong by 3.1× for the copy
+engine (§14). The cost is `GRow`, the `KEY` fill and `BlitRow`'s run scan — three
+loops of ~25 cycles a byte over the whole text box — and per-run `RowPut` setup at
+~500 cycles for 2.1 bytes a call.
+
+⚠ **This is why the desktop takes seconds to draw**, and it is the number to beat
+if it ever should: the About window's four lines are ~1.3 s between them.
