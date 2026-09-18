@@ -48,6 +48,29 @@ def text_run(n):
     return b"".join(V.text(X, Y, line, "white") for _ in range(N))
 
 
+def opaque_run(n):
+    """⭐ The same line with FONT bit 2 set: tbox.asm fills the row with the
+    ramp's paper instead of KEY, so BlitRow emits ONE run.  What it saves is
+    the KEY fill, the run scan and ~10 RowPut calls a row; what it costs is
+    the paper's bytes over VDATA."""
+    line = SAMPLE[:n]
+    return b"".join(V.text(X, Y, line, "white", opaque=True) for _ in range(N))
+
+
+CMP_Y1, CMP_Y2, CMP_N = 100, 140, 40         # the two bands checkv3text compares
+
+
+def compare_run():
+    """⛔ THE CORRECTNESS GATE for opaque text.  The same line twice, the
+    transparent path at CMP_Y1 and the opaque one at CMP_Y2, on paper that
+    IS the ramp's paper.  Every pixel of the two bands must come out
+    identical - an optimisation that changes how pixels are made has to
+    prove they are the same pixels."""
+    line = SAMPLE[:CMP_N]
+    return (V.text(X, CMP_Y1, line, "white")
+            + V.text(X, CMP_Y2, line, "white", opaque=True))
+
+
 def nop_run():
     """⭐ THE FLOOR.  ESC $34 is Border, which video3 has none of, so CoArm's
     table sends it to EscNop: one parameter collected, nothing done, no
@@ -77,12 +100,14 @@ STREAMS = [("v3tset", setup),
            ("v3t10", lambda: text_run(10)),
            ("v3t20", lambda: text_run(20)),
            ("v3t40", lambda: text_run(40)),
+           ("v3t40p", lambda: opaque_run(40)),
+           ("v3tcmp", compare_run),
            ("v3t01o", lambda: off_run(1)),
            ("v3t40o", lambda: off_run(40)),
            ("v3trct", rect_run)]
 
 # what the timing script copies, in order: each one to /nil and to the window
-TIMED = ["v3tnop", "v3t01", "v3t10", "v3t20", "v3t40",
+TIMED = ["v3tnop", "v3t01", "v3t10", "v3t20", "v3t40", "v3t40p",
          "v3t01o", "v3t40o", "v3trct"]
 
 

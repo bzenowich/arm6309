@@ -94,6 +94,15 @@ def main(out):
            "composing costs more than nothing and less than the whole call",
            "%.2f of %.2f ms" % (compose, whole))
 
+    if {"v3t40", "v3t40p"} <= set(draw):
+        clear = 1000 * draw["v3t40"] / M.N
+        opaq = 1000 * draw["v3t40p"] / M.N
+        print("\n  ⭐ 40 characters, transparent:               %.2f ms" % clear)
+        print("  ⭐ 40 characters, OPAQUE (one run a row):    %.2f ms   %.2fx"
+              % (opaq, clear / opaq if opaq else 0))
+        ok(opaq < clear, "opaque text is faster than transparent",
+           "%.2f ms vs %.2f ms" % (opaq, clear))
+
     if len(draw) == len(M.TIMED):
         call1 = 1000 * draw["v3t01"] / M.N
         call40 = 1000 * draw["v3t40"] / M.N
@@ -119,6 +128,22 @@ def main(out):
            "20 characters lands near the line through 1 and 40",
            "%.2f ms measured, %.2f ms predicted"
            % (1000 * draw["v3t20"] / M.N, lin))
+
+    # ⛔ and the pixels themselves: the two bands must be identical
+    try:
+        vram = open(os.path.join(out, "vram.bin"), "rb").read()
+    except OSError:
+        vram = b""
+    if vram:
+        w = 8 * M.CMP_N + 16                      # generous: the line's box
+        a = b"".join(vram[(M.CMP_Y1 + r) * 1024 + M.X:
+                          (M.CMP_Y1 + r) * 1024 + M.X + w] for r in range(17))
+        b = b"".join(vram[(M.CMP_Y2 + r) * 1024 + M.X:
+                          (M.CMP_Y2 + r) * 1024 + M.X + w] for r in range(17))
+        diff = sum(1 for p, q in zip(a, b) if p != q)
+        ok(any(a) and diff == 0,
+           "⛔ opaque text draws the SAME PIXELS as transparent",
+           "%d of %d bytes differ" % (diff, len(a)))
 
     print("\n%d claims, %d failed" % (ok_n + fail_n, fail_n))
     sys.exit(1 if fail_n else 0)

@@ -99,6 +99,16 @@ def cidx(rgb):
     return _NEAR[rgb]
 
 
+def ramp_papers():
+    """⭐ For each ramp, the palette index its PAPER is, or 255 where the
+    paper is not a palette entry at all.  tbox.asm's opaque text fills a row
+    with this instead of KEY, so a row becomes one run; a ramp with no flat
+    paper (`tab`, which is a step of the tab's gradient) must keep the
+    transparent path, and 255 is how it says so."""
+    byrgb = {rgb: i for i, (_, rgb) in enumerate(UI)}
+    return [byrgb.get(paper, 255) for _, _, paper in RAMPS]
+
+
 def check_asm():
     """tbox.asm's equates must say what this file says."""
     nd = os.environ.get("NITROS9DIR") or os.path.join(ROOT, "..", "nitros9")
@@ -112,6 +122,12 @@ def check_asm():
         m = re.search(r"^%s\s+equ\s+(\d+)" % re.escape(name), src, re.M)
         if not m or int(m.group(1)) != v:
             sys.exit("FAIL  tbox.asm %s is %s, mktbox.py says %d" % (name, m and m.group(1), v))
+    # ⚠ and the paper table, which is data rather than an equate
+    m = re.search(r"^RPaper\s+fcb\s+([0-9,]+)", src, re.M)
+    got = [int(x) for x in m.group(1).split(",")] if m else None
+    if got != ramp_papers():
+        sys.exit("FAIL  tbox.asm RPaper is %s, mktbox.py says %s"
+                 % (got, ramp_papers()))
 
 
 # -------------------------------------------------------------------- fonts

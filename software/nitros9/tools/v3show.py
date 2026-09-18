@@ -61,8 +61,16 @@ def col(c):
     return PAL[c] if isinstance(c, str) else c
 
 
-def text(x, y, s, ramp="panel", bold=False):
-    return tb(0, W(x, y) + bytes([RAMP[ramp], int(bold)]) + s.encode("latin-1"))
+# ⭐ FONT bit 2 is F.Opaq: draw the ramp's paper as well as the ink, so the
+# row is one run instead of ~10 and the CPU skips the KEY fill and the run
+# scan.  ⚠ Only where the background really is that ramp's flat paper - the
+# window tab is a gradient, and tbox.asm refuses it there (RPaper $FF).
+F_OPAQ = 4
+
+
+def text(x, y, s, ramp="panel", bold=False, opaque=False):
+    fnt = int(bold) | (F_OPAQ if opaque else 0)
+    return tb(0, W(x, y) + bytes([RAMP[ramp], fnt]) + s.encode("latin-1"))
 
 
 def textc(x, w, y, s, ramp="panel", bold=False):

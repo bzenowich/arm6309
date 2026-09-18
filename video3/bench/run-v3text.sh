@@ -33,13 +33,14 @@ import mkv3text as M
 lines = ["iniz w5", "copy /dd/sys/v3tset /w5"]
 for n in M.TIMED:                      # /nil first: the stream's own cost
     lines += ["copy /dd/sys/%s /nil" % n, "copy /dd/sys/%s /w5" % n]
+lines += ["copy /dd/sys/v3tcmp /w5"]   # last, so the dump holds both bands
 lines += ["echo DONE-arm6309"]
 open(sys.argv[1] + "/typed.txt", "w").write("\r".join(lines) + "\r")
 PY
 
 STOP=$(printf '\nDONE-arm6309')
 (cd "$OUT" && SERIAL_IN=typed.txt SERIAL_GATE="DD:" SERIAL_TYPE=60 SERIAL_THINK=700 \
-   SERIAL_TIMES=serial.times SERIAL_STOP="$STOP" WILD=1 VIDEO3=1 \
+   SERIAL_TIMES=serial.times SERIAL_STOP="$STOP" WILD=1 VIDEO3=1 VRAMDUMP=vram.bin \
    ./emu arm6309_rom.bin . 600 > /dev/null 2> emu.log) || true
 grep -q "SERIAL_STOP seen" "$OUT/emu.log" || { tail -3 "$OUT/emu.log"; echo "FAIL  the session did not finish"; exit 1; }
 tr -d '\000' < "$OUT/serial.out" | tr -d '\r' > "$OUT/console.txt"
