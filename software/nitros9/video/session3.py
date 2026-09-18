@@ -42,15 +42,12 @@ LINES = [
     ("shell i=/w1&", 0),
     # the PS/2 keyboard types KBD_LINES on /W1 while this waits: the
     # listing is long enough to scroll the 80 x 60 screen by copyrect
-    ("echo now typing on the PS/2 keyboard", 46),
-    # ---- changefont: the console's glyph bank, and nothing redrawn
-    # ⭐ The listing above STAYS ON THE SCREEN while the face changes under
-    # it.  A cell is a code and an ATTR; the card fetches the glyph from a
-    # VRAM bank every frame, so SS.CFont's sixteen writes change all 4,800
-    # cells at once and the map is never touched.
-    *([("changefont " + f + " >/w1", 3)
-       for f in ("uncial", "gothic", "banner", "tech", "cp437")]
-      if v3show.FACES else []),
+    # ⚠ THE WAIT WAS 46 AND THE KEYBOARD FINISHED AT 37, so the demo sat on a
+    # dead screen from 37 s to 64 s.  The changefont commands moved to the
+    # PS/2 keyboard (KBD_LINES) - where a user would actually type them, and
+    # where they fill what used to be the pause.
+    ("echo now typing on the PS/2 keyboard", 20),
+    ("echo and changing the console font", 26),
     # ---- the BBS: CP437, gruvbox and 256-colour pairs, 80 x 25
     ("iniz w2", 0), ("copy /dd/sys/v3bbs /w2", 10),
     # ⭐ and then a REAL .ans scrolls through that window: Blocktronics'
@@ -93,7 +90,13 @@ LINES = [
 ]
 
 KBD_GATE = "PS/2 keyboard"
-KBD_LINES = ["dir /dd/cmds", "mfree", "list /dd/sys/video3.txt", "echo 80 x 60 CP437 - scrolled by copyrect"]
+# ⭐ TYPED ON THE PS/2 KEYBOARD, at the console itself - the shell on /W1 has
+# /W1 for its output, so `changefont uncial` needs no redirect.  That is the
+# point: the font is changed the way a user would change it.
+KBD_LINES = ["dir /dd/cmds", "mfree", "list /dd/sys/video3.txt",
+             "echo 80 x 60 CP437 - scrolled by copyrect"] + (
+    ["changefont " + f for f in ("uncial", "gothic", "banner", "tech", "cp437")]
+    if v3show.FACES else [])
 
 MOUSE_GATE = "PS/2 mouse"
 
@@ -103,8 +106,8 @@ CAPTIONS = [
     ("21 >/w1", "/W1: 80 x 60 CHARACTER MODE - 640x480, 256 CP437 glyphs, colour per cell"),
     ("i=/w1&", "A shell on /W1, typed at on the PS/2 keyboard"),
     ("PS/2 keyboard", "`list` a long file: every new line moves 59 rows with the COPY ENGINE"),
-    *([("changefont uncial", "changefont: 2,048 bytes to the glyph bank - every cell, nothing redrawn"),
-       ("changefont cp437", "... and back to CP437. The listing was never repainted once")]
+    *([("changing the console font",
+        "changefont, typed at the PS/2 keyboard: the glyph bank, and nothing redrawn")]
       if v3show.FACES else []),
     ("v3bbs /w2", "/W2: 80 x 25 ANSI art in gruvbox - and 256-colour pairs, 38;5 on 48;5"),
     *([("v3art /w2", "a real .ans scrolls by: Blocktronics' we-tortuga, CP437 and iCE colour")]
