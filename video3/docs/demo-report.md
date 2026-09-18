@@ -1087,3 +1087,29 @@ loops of ~25 cycles a byte over the whole text box — and per-run `RowPut` setu
 
 ⚠ **This is why the desktop takes seconds to draw**, and it is the number to beat
 if it ever should: the About window's four lines are ~1.3 s between them.
+
+### 16.1 ⭐ Where the 473 ms goes — the split
+
+Four more streams, and the decomposition closes to within 0.3%: `ESC $34` is a
+no-op CoArm parses and throws away; the same `Text` call at `y = 600` composes
+every row and is then clipped away by `BlitRow`, so it is **composition without
+the card**.
+
+| a 40-character line, 473.26 ms | ms | share |
+|---|---|---|
+| the call's floor, before any glyph | 11.14 | 2% |
+| parsing its 40 payload bytes | ~40 | 8% |
+| composition — `GRow`, the `KEY` fill, the run scan | ~228 | **48%** |
+| the card's half — `RowPut` setup and `VDATA` | 194.47 | **41%** |
+| of which `VDATA` pixels | 6.8 | **1.4%** |
+
+Per character **~1.0 + ~5.7 + ~4.9 = 11.55 ms** against a measured slope of
+**11.52**. `ESC $34` alone is **2.69 ms for three bytes**, so CoArm's escape path
+is **~1 ms a byte** — the same order as §11's 2.7 ms a character on the console,
+and the reason a call's floor is 11 ms before it draws anything.
+
+⭐ **It reorders the optimisation list.** ~188 ms of the card's half is per-run
+`RowPut` setup, ~395 runs at **2.1 bytes a call**, and those runs exist only
+because the text is transparent. **Opaque text — one run a row, 395 calls
+becoming 17 — is the single biggest software win**, not the modest one it looked
+like before the split. `video3/docs/keyed-copy.md` carries the rest.

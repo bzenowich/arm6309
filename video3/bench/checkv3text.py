@@ -70,6 +70,30 @@ def main(out):
            "%s draws for longer than it streams" % n,
            "%.3f s" % draw.get(n, 0))
 
+    # ⭐ the split: what a call costs before it draws, and what the card's
+    # own half of the drawing costs
+    if {"v3tnop", "v3t40", "v3t40o", "v3trct"} <= set(draw):
+        nop = 1000 * draw["v3tnop"] / M.N
+        compose = 1000 * draw["v3t40o"] / M.N
+        whole = 1000 * draw["v3t40"] / M.N
+        print("\n  ⭐ ESC $34, parsed and thrown away:          %.2f ms an escape" % nop)
+        print("  ⭐ 40 characters COMPOSED, clipped away:     %.2f ms" % compose)
+        print("  ⭐ the card's half of the same call:         %.2f ms  (%.0f%%)"
+              % (whole - compose, 100 * (whole - compose) / whole))
+        if "v3t01o" in draw:
+            c1 = 1000 * draw["v3t01o"] / M.N
+            # ⭐ the intercept of the CLIPPED line is everything a call pays
+            # before it composes a glyph: the escape's bytes through CoArm,
+            # the toolbox entry, the page mapped.  The slope is composition.
+            slope = (compose - c1) / 39.0
+            print("  ⭐ one character composed and clipped:       %.2f ms" % c1)
+            print("  ⭐ so composing a character costs:           %.2f ms" % slope)
+            print("  ⭐ and a call's FLOOR, before any glyph:     %.2f ms"
+                  % (c1 - slope))
+        ok(compose > 0 and whole > compose,
+           "composing costs more than nothing and less than the whole call",
+           "%.2f of %.2f ms" % (compose, whole))
+
     if len(draw) == len(M.TIMED):
         call1 = 1000 * draw["v3t01"] / M.N
         call40 = 1000 * draw["v3t40"] / M.N

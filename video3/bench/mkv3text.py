@@ -48,6 +48,23 @@ def text_run(n):
     return b"".join(V.text(X, Y, line, "white") for _ in range(N))
 
 
+def nop_run():
+    """⭐ THE FLOOR.  ESC $34 is Border, which video3 has none of, so CoArm's
+    table sends it to EscNop: one parameter collected, nothing done, no
+    toolbox entered.  Three bytes an escape - what the parser costs and
+    nothing else."""
+    return V.esc(0x34, 0) * N
+
+
+def off_run(n):
+    """⭐ THE OTHER HALF.  The same Text call, below the window: TextAt still
+    walks the glyphs and composes every row into TB.Buf, and BlitRow then
+    clips the lot away - so this is COMPOSITION WITHOUT THE CARD, and what
+    it is short of text_run(n) is RowPut's setup and the VDATA bytes."""
+    line = SAMPLE[:n]
+    return b"".join(V.text(X, 600, line, "white") for _ in range(N))
+
+
 def rect_run():
     """⚠ The CONTROL for a toolbox call that draws no glyphs: same escape,
     same dispatch, same ROM page mapped - and a fill instead of text."""
@@ -55,14 +72,18 @@ def rect_run():
 
 
 STREAMS = [("v3tset", setup),
+           ("v3tnop", nop_run),
            ("v3t01", lambda: text_run(1)),
            ("v3t10", lambda: text_run(10)),
            ("v3t20", lambda: text_run(20)),
            ("v3t40", lambda: text_run(40)),
+           ("v3t01o", lambda: off_run(1)),
+           ("v3t40o", lambda: off_run(40)),
            ("v3trct", rect_run)]
 
 # what the timing script copies, in order: each one to /nil and to the window
-TIMED = ["v3t01", "v3t10", "v3t20", "v3t40", "v3trct"]
+TIMED = ["v3tnop", "v3t01", "v3t10", "v3t20", "v3t40",
+         "v3t01o", "v3t40o", "v3trct"]
 
 
 def main(out):
