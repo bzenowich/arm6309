@@ -73,7 +73,24 @@ def fonts():
     return out, bad
 
 
+# ⭐ The BUILT-IN bank too, so the demo can change BACK: coarmfont3.asm is
+# what vidfnt3.asm ships to the card at boot, and it is written in the same
+# `fcb` form, so the same reader gets it.
+CP437 = pathlib.Path(__file__).resolve().parents[4] / "nitros9" / \
+    "level2" / "arm6309" / "modules" / "coarmfont3.asm"
+
+
+def builtin():
+    if not CP437.is_file():
+        return []
+    blob = read_asm(CP437)
+    if len(blob) < NEED or len(blob) % GLYPH:
+        return []
+    return [("cp437", blob[:256 * GLYPH].ljust(256 * GLYPH, b"\0"))]
+
+
 FONTS, SKIPPED = (fonts() if FONTDIR.is_dir() else ([], []))
+BUILTIN = builtin()
 
 
 def have():

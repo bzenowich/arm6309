@@ -9,7 +9,14 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" && pwd)}
 export PATH="$ROOT/.tools/bin:$PATH"
 # the recipe's own command for the module, whether or not it was rebuilt: make -n -W
-cmd=$(cd "$NITROS9DIR/recipes/arm6309/l2" && make -n -W "$NITROS9DIR/level2/arm6309/modules/$SRC" NITROS9DIR="$NITROS9DIR" all 2>/dev/null | grep "^lwasm .*/$SRC " | head -1)
+# ⚠ THE FLAVOUR FLAG IS NOT IN THE MAKEFILE.  mkrom.sh passes -DV3=1 on its
+# own make line as AFLAGS_EXTRA, so `make -n` here reproduces the v1 command
+# and the listing comes out of the ELSE branch of every IFNE V3 - a symbol
+# that only exists under V3 is then silently "not found".  The stamped
+# flavour is what the ROM in OUT was built with, so read it.
+FLAV=$(cat "$NITROS9DIR/recipes/arm6309/l2/.flavour" 2>/dev/null)
+[ "$FLAV" = v3 ] && AFLAGS_EXTRA="-DV3=1"
+cmd=$(cd "$NITROS9DIR/recipes/arm6309/l2" && make -n -W "$NITROS9DIR/level2/arm6309/modules/$SRC" NITROS9DIR="$NITROS9DIR" AFLAGS_EXTRA="$AFLAGS_EXTRA" all 2>/dev/null | grep "^lwasm .*/$SRC " | head -1)
 [ -n "$cmd" ] || { echo "modsym: make -n gives no lwasm line for $SRC" >&2; exit 1; }
 cmd=$(echo "$cmd" | sed "s| -o[^ ]*| -o$OUT/modsym.bin -l$OUT/modsym.lst|")
 (cd "$NITROS9DIR/recipes/arm6309/l2" && eval "$cmd") >/dev/null 2>&1

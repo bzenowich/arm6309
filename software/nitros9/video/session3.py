@@ -43,6 +43,14 @@ LINES = [
     # the PS/2 keyboard types KBD_LINES on /W1 while this waits: the
     # listing is long enough to scroll the 80 x 60 screen by copyrect
     ("echo now typing on the PS/2 keyboard", 46),
+    # ---- changefont: the console's glyph bank, and nothing redrawn
+    # ⭐ The listing above STAYS ON THE SCREEN while the face changes under
+    # it.  A cell is a code and an ATTR; the card fetches the glyph from a
+    # VRAM bank every frame, so SS.CFont's sixteen writes change all 4,800
+    # cells at once and the map is never touched.
+    *([("changefont " + f + " >/w1", 3)
+       for f in ("uncial", "gothic", "banner", "tech", "cp437")]
+      if v3show.FACES else []),
     # ---- the BBS: CP437, gruvbox and 256-colour pairs, 80 x 25
     ("iniz w2", 0), ("copy /dd/sys/v3bbs /w2", 10),
     # ⭐ and then a REAL .ans scrolls through that window: Blocktronics'
@@ -95,6 +103,9 @@ CAPTIONS = [
     ("21 >/w1", "/W1: 80 x 60 CHARACTER MODE - 640x480, 256 CP437 glyphs, colour per cell"),
     ("i=/w1&", "A shell on /W1, typed at on the PS/2 keyboard"),
     ("PS/2 keyboard", "`list` a long file: every new line moves 59 rows with the COPY ENGINE"),
+    *([("changefont uncial", "changefont: 2,048 bytes to the glyph bank - every cell, nothing redrawn"),
+       ("changefont cp437", "... and back to CP437. The listing was never repainted once")]
+      if v3show.FACES else []),
     ("v3bbs /w2", "/W2: 80 x 25 ANSI art in gruvbox - and 256-colour pairs, 38;5 on 48;5"),
     *([("v3art /w2", "a real .ans scrolls by: Blocktronics' we-tortuga, CP437 and iCE colour")]
       if v3show.have_art() else []),

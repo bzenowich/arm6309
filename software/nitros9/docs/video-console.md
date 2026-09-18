@@ -329,7 +329,39 @@ picture; `BT.Poke`, and committing the batch before the palette, fixed that.
 | | |
 |---|---|
 | GetStat | `SS.Ready`, `SS.EOF`, `SS.Mouse` (ArmIO); `SS.ScSiz`, `SS.ScTyp`, `SS.FBRgs`, `SS.Cursr` (CoArm) |
-| SetStat | `SS.SSig`, `SS.Relea`, `SS.FrmWait`, `SS.FrmSig`, `SS.Batch`, `SS.TileLd`, `SS.MapWr`, `SS.TBank` (ArmIO); `SS.Raster`, `SS.RastOff`, `SS.Excl` (CoArm). The codes are `defs/arm6309.d`'s |
+| SetStat | `SS.SSig`, `SS.Relea`, `SS.FrmWait`, `SS.FrmSig`, `SS.Batch`, `SS.TileLd`, `SS.MapWr`, `SS.TBank`, `SS.CFont` (ArmIO); `SS.Raster`, `SS.RastOff`, `SS.Excl` (CoArm). The codes are `defs/arm6309.d`'s |
+
+## ⭐ The console's font, changed under the text (`SS.CFont`)
+
+**A character cell is a code and an ATTR byte, and the card fetches the glyph
+out of a VRAM bank every frame.** So replacing the bank's 2,048 bytes changes
+every character *already on the screen* — all 4,800 cells of an 80 × 60
+console — with **nothing repainted, no cost per cell, and the map never
+touched**. It is sixteen writes of 128 bytes.
+
+```
+/DD: changefont uncial >/w1
+```
+
+`SS.CFont` ($E0, `vidfnt3.asm`'s `XCFont`) takes **X = 2,048 bytes: 256 glyphs,
+8 × 8, one bit a pixel, eight bytes each, in code order**. ⭐ That is the format
+NitrOS-9's own font modules are already in — `level1/wildbits/sys/fonts/*.asm`
+are exactly this — so the 27 wildbits faces drop in without conversion.
+`software/nitros9/tools/mkfonts.py` reads the glyph bytes out of that source and
+writes each face to `/DD/SYS/FONT.<name>`; `changefont` reads one and hands it
+over. **Nothing is assembled and no font module is loaded**: the ROM never links
+them.
+
+It shares `F3Row` with the built-in bank, so a downloaded face and CP437 reach
+the card by the same path, and `changefont cp437` puts the original back.
+
+- ⚠ **The bank is the SCREEN's, not the window's.** Every window on the
+  character screen changes together; there is one bank (`TX3.TBank`).
+- ⛔ **Refused on a bitmap screen** (`E$IllArg`). `TX3.TBank` is a fixed VRAM
+  address a bitmap screen keeps something else at. video3's MODE is CTRL b3..2.
+- ⚠ **A short file is refused too** — a font is 2,048 bytes exactly.
+- ⚠ **It costs no CoArm**, which is why it is a SetStat in ArmIO rather than
+  an escape: CoArm is **16,383 of the 16,384 bytes** ArmIO maps it in.
 
 ## The keyboard
 

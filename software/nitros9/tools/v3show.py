@@ -879,6 +879,14 @@ def main(out):
         streams[6:6] = [("v3pal", stream_pal), ("v3art", stream_art)]
     else:
         print("note  no %s: the ANSI art scene is left out (see art_grid)" % ART.name)
+    # ⭐ every wildbits face as a file of its own, for `changefont`: 2,048
+    # bytes, exactly the glyph bank's format, so the command reads it and
+    # hands it straight to SS.CFont.
+    for name, blob in FACES + F.BUILTIN:
+        (d / ("font." + name)).write_bytes(blob)
+    if FACES:
+        print("ok    %s/font.*: %d faces, %d bytes" %
+              (out, len(FACES), sum(len(b) for _, b in FACES)))
     for name, fn in streams:
         b = fn()
         (d / name).write_bytes(b)
