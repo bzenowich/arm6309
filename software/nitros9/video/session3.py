@@ -113,7 +113,7 @@ CAPTIONS = [
     ("v3trk /dd ", "v3trk: Tracker lists the real /DD - icons and Noto Sans from ROM"),
     ("v3trk /dd/cmds", "... and /DD/CMDS, two columns; the scroll bar knows how much is hidden"),
     ("v3about /w3", "A window, drawn once. Its pixels are now the only copy that exists"),
-    ("v3drag >", "v3drag: the pointer grabs the tab; the card's COPY ENGINE moves the window"),
+    ("v3drag >", "v3drag: a FIGURE-8 by copy engine, over a desktop a BACKING STORE keeps"),
     ("PS/2 mouse", "The pointer is video3's 8x8 HARDWARE SPRITE - five registers, nothing saved"),
     ("v3paint /w4", "Paint: its document goes into VRAM's off-screen margin, x 640-1023"),
     ("v3scrl >", "v3scrl: two copies a step - the view, and the strip - and a copy for each thumb"),
