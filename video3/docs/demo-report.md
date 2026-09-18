@@ -949,3 +949,108 @@ look like a 160-byte file rather than an incomplete 1,031-byte one.
 
 ⚠ `w5.dd` is new: the app gets its own window device rather than borrowing
 Paint's.
+
+## 14. ⛔ The copy engine's model ran 3.1× too fast — 2026-09-18
+
+Asked whether the Paint scroll was physically real, and it was not, by a
+specific and traceable amount.
+
+`software/demo/emu/machine.c` charged a copy like this:
+
+```c
+int wide = ((sc & 3) == (dc & 3));
+uint64_t groups = wide ? ((uint64_t)w + 3) / 4 * h : (uint64_t)w * h;
+```
+
+— the **four-byte group**, which `plan.md` §6.1 withdrew with trade 1
+(`647f4f3`, 2026-09-16): *"One read access and one write access move one byte,
+so the engine runs at 4.05 MB/s in every case."* That commit updated the spec,
+`timing.check.ts`, `partition.md`, `signals.md` and `parts.ts` — and not the
+emulator, whose copy timing was unchanged since video3's first commit
+`173a3b9`. **The model implemented a design that had been deleted**, and
+because Paint's scroll has its columns congruent mod 4 it took the fast path
+every time: **12.59 MB/s against the design's 4.05**.
+
+⛔ **And the worse half is not about speed.** The model's `VSTAT` set b7, b6,
+b5 and b0 and **never b4** — `VSTAT.CBusy`. `vidcpy3.asm`'s `CpWait` and
+`ca_v3txt.asm`'s `TxCWait` poll exactly that bit, and are the only code that
+waits on the copy engine. **They had never once spun.** The copy's time was
+charged through `SPANBUSY` instead and absorbed by the next `VcWait`, so the
+accounting roughly worked by accident while the code that would really wait on
+the card went untested. It is the repository's own trap, again: *a model that
+is more capable than the hardware cannot fail*.
+
+**Fixed**: `COPY_PS` is 246,913 ps a byte (4.05 MB/s, byte-granular, no
+congruence path) and `copy_until` drives b4. The model now agrees with
+`plan.md` §6.1's own table — a 192-row window scroll is **30.3 ms**, a console
+scrolled line **2.33 ms** against its quoted 2.3.
+
+⭐ **And there is a proof the bit works.** Moving the charge off b7 and onto
+b4 made the scroll scene **slower** (6.37 s → 8.82 s). b7 was the only path by
+which that time used to reach the CPU, so it can now only be arriving through
+`CpWait`.
+
+⚠ **What is still not settled**: 4.05 MB/s is arithmetic from the access
+budget, not a measurement; `plan.md` §14 item 8 (five requesters, one spare
+access a slot) is open; the copy is **third** in `v3dot`'s arbiter, behind the
+map fetch and the CPU prefetch; and `CpWait` gives up after `VcPolls` = 16,384
+polls ≈ 39 ms **without reporting anything**, which a 640 × 480 copy (75.9 ms)
+would now hit. `Select`'s 640 × 200 sits at 31.6 ms — 80% of that bound, where
+before it was effectively at zero.
+
+## 15. `changefont`, and two traps on the way — 2026-09-18
+
+The console's glyph bank from the shell: `changefont uncial` and all 4,800 cells
+of the 80 × 60 screen change face, with **nothing repainted**. The mechanism,
+the format and the refusals are in `software/nitros9/docs/video-console.md`
+("The console's font, changed under the text"); this records what it cost.
+
+**Verified two ways, not one.** The screen — a `dir /dd/cmds` listing drawn
+*before* the command still on screen, in uncial afterwards — and the VRAM:
+**256 of 256 glyphs in the bank match `uncial`'s bytes exactly** (`VRAMDUMP`).
+Plus the refusals: `changefont nosuchface` → `Error #216`, `changefont` alone →
+usage and `Error #187`.
+
+### 15.1 ⛔ Adding a field to the middle of VG grew CoArm by two bytes
+
+`VG.F3Buf` and `VG.F3Src` went in beside `VG.WBuf` and the build failed with
+*"coarm is more than the two blocks ArmIO maps it in"*. Nothing in CoArm
+changed: the new fields moved **every VG offset after them**, two of CoArm's
+`,y` operands crossed the 8-bit indexed boundary and took a byte each, and
+CoArm — which is **16,383 of 16,384** — would not link. ⚠ **New VG fields go
+at the END of VG**, and `armvid.d` now says so where they are.
+
+### 15.2 ⛔ The `os9` macro resets lwasm's local-label scope
+
+Five `Undefined symbol x@` errors, every one a `@` label referenced across a
+system call. `v3drag.asm`'s `VErr` and `Exit` are global for this reason;
+`changefont.asm`'s `Usage1`, `RErr`, `Short`, `Say` and `Err` now are too, with
+the reason written where they are defined.
+
+### 15.3 ⚠ Two hours of the debugging was the test harness, not the machine
+
+A hand-written `typed.txt` used `\n`. **OS-9 wants `\r`** — the shell echoed
+every line and ran none of them, the prompt returned instantly, and the run hit
+its wall clock with `frames 0`. It read exactly like a hung machine, and I
+looked at the ROM first. ⭐ **What settled it was running the known-good ROM
+through the same harness** and getting the identical non-answer: the harness was
+the variable, so the harness was the bug. `session3.py`'s own `typed.txt` is
+`\r`-terminated and always was.
+
+### 15.4 ⚠ `CALLTIME` cannot see CoArm — so the toolbox is still unmeasured
+
+`CALLTIME=CoArm+$37B0` answered `0 calls, the module never appeared`, twice
+(the module name is case-sensitive, and fixing that changed nothing).
+`calltime_resolve()` scans **task 0's map** for a module header, and CoArm is
+mapped into ArmIO's two block windows only *while a call runs* — the resolver
+polls every 65,536 instructions and never lands inside one. The timing arm also
+requires `m->task == 0`.
+
+⛔ **So there is still no measurement of a toolbox text call.** `demo-report`
+§13 and `video3/bench/README.md` both said so and it is still true. The only
+figures are derived by hand — ~165 ms for a 19-character line, ~9 ms a
+character, with the `KEY` fill, the run scan and per-run `RowPut` setup at ~28%
+each and the `VDATA` bytes at **~2%**. ⚠ **Those are arithmetic, not a
+measurement, and must not be quoted as one.** The route that does not need the
+emulator changed is a bench: a stream of a known number of `Text` calls, timed
+from `serial.times`.

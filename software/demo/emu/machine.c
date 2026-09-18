@@ -102,6 +102,9 @@ static gate_t ser_gate, kbd_gate, mouse_gate;
 #define DOTS_PER_E   12          /* E = 25.175 MHz / 12 */
 #define DOTS_LINE    800
 #define DOT_PS       39722ULL
+/* ps a byte for the copy engine: two accesses a byte out of graphics.md
+ * §2.1's 8.1 M spare accesses a second = 4.05 MB/s (plan §6.1). */
+#define COPY_PS      246913ULL
 
 typedef struct {
     cpu6809 cpu;
@@ -137,7 +140,8 @@ typedef struct {
     int irq_pending;
     int irq_line_due;            /* the line /IRQ reaches the CPU on, or -1 */
     long list_violations, span_violations;
-    uint64_t busy_until;         /* dots */
+    uint64_t busy_until;         /* dots: the SPAN writer, VSTAT b7 */
+    uint64_t copy_until;         /* dots: the COPY engine, VSTAT b4 */
     int lrun, lwait;
     uint16_t vs_frame;
     uint64_t dots, line_start;
@@ -343,11 +347,16 @@ static void v3_copy(void)
             m->vram[((dyr << 10) | dx) & 0x7FFFF] = m->vram[((syr << 10) | sx) & 0x7FFFF];
         }
     }
-    /* plan §6.1: one read access and one write access a four-byte group where
-     * the columns are congruent mod 4, one byte an access otherwise. */
-    int wide = ((sc & 3) == (dc & 3));
-    uint64_t groups = wide ? ((uint64_t)w + 3) / 4 * h : (uint64_t)w * h;
-    m->busy_until = m->dots + DOTS_PER_E + groups * 8;
+    /* plan §6.1: ⛔ THE FOUR-BYTE GROUP IS WITHDRAWN (§13.3 trade 1, settled
+     * in 647f4f3).  One read access and one write access move ONE byte, so
+     * the engine runs at 4.05 MB/s in EVERY case and column congruence does
+     * not matter.  ⚠ This model charged the withdrawn group until 2026-09-18
+     * and so ran the copy at 12.59 MB/s - 3.1x the design - which is what
+     * made the Paint scroll in the demo video about twice too fast.
+     * hardware/video3/timing.check.ts is the arithmetic; COPY_PS agrees with
+     * its BYTE_MBPS, and plan §6.1's table is the same number in ms. */
+    (void)sc; (void)dc;
+    m->copy_until = m->dots + DOTS_PER_E + (uint64_t)w * h * COPY_PS / DOT_PS;
 }
 
 static void v3_video_write(uint8_t r, uint8_t v)
@@ -402,8 +411,12 @@ static uint8_t v3_video_read(uint8_t r)
     case 0x0C: return vram_read();
     case 0x0D: {
         uint64_t col = m->dots - m->line_start;
+        /* ⚠ b4 IS THE COPY ENGINE, and it was never set here until
+         * 2026-09-18: vidcpy3.asm's CpWait and ca_v3txt.asm's TxCWait poll
+         * exactly this bit, so until it moved they had never once spun. */
         return (uint8_t)((m->busy_until > m->dots ? 0x80 : 0) | (in_vblank() ? 0x40 : 0)
-                         | (col >= 640 ? 0x20 : 0) | (m->irq_pending ? 1 : 0));
+                         | (col >= 640 ? 0x20 : 0) | (m->copy_until > m->dots ? 0x10 : 0)
+                         | (m->irq_pending ? 1 : 0));
     }
     default: return m->regfile[r & 31];
     }
