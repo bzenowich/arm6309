@@ -17,38 +17,65 @@ import math
 import os
 import sys
 
-STEP = int(os.environ.get("STEP", 8))
+N = int(os.environ.get("N", 300))               # samples, as the pointer uses
 WINW, WINH = 250, 99
 HOME = (96, 373)
 
 
-def path(A, CX, B, CY, n=2000):
-    """The lemniscate, from the window's home and back to it."""
-    return ([HOME] +
-            [(CX + A * math.sin(2 * math.pi * i / n),
-              CY + B * math.sin(4 * math.pi * i / n)) for i in range(n + 1)] +
-            [HOME])
+def path(A, CX, B, CY, n=None):
+    """⭐ THE POINTER'S OWN FIGURE-8, scaled to where the window may go.
+    session3.py's mouse tour is x = 320 + 280 sin a, y = 240 - 180 sin 2a over
+    N samples; this is the same curve and the same sampling, with the centre
+    and the amplitudes moved so the window's TOP-LEFT stays on screen and
+    inside the backing region's reach.  A run in from the window's home and
+    back out again, eased, so it does not start with a jerk."""
+    n = n or N
+    out = [HOME]
+    ease = 24
+    first = (CX, CY - 0.0)
+    for i in range(1, ease + 1):                 # home -> the curve's start
+        f = (1 - math.cos(math.pi * i / ease)) / 2
+        out.append((HOME[0] + (first[0] - HOME[0]) * f,
+                    HOME[1] + (first[1] - HOME[1]) * f))
+    for i in range(1, n + 1):
+        a = 2 * math.pi * i / n
+        out.append((CX + A * math.sin(a), CY - B * math.sin(2 * a)))
+    for i in range(1, ease + 1):                 # and back home
+        f = (1 - math.cos(math.pi * i / ease)) / 2
+        out.append((first[0] + (HOME[0] - first[0]) * f,
+                    first[1] + (HOME[1] - first[1]) * f))
+    return out
 
 
 def runs(pts):
-    """Quantise to the STEP grid and gather equal (dx, dy) steps into runs.
-    ⭐ A step moves in BOTH axes when the curve does, which is what makes the
-    figure-8 smooth instead of a staircase."""
-    q = lambda v: round(v / STEP) * STEP
-    cur = (q(pts[0][0]), q(pts[0][1]))
+    """The DELTA between consecutive samples, one step each.
+
+    ⭐ NOT QUANTISED TO A GRID.  An earlier version rounded every point to a
+    STEP-pixel lattice and walked to it, which is what made the drag climb in
+    stairs: on a shallow slope the lattice turns a gentle curve into runs of
+    horizontal steps with an occasional diagonal.  The pointer's figure-8 in
+    session3.py looks smooth because it samples the curve 300 times and moves
+    by whatever the difference is - 1 to 5 pixels, in both axes at once - and
+    this now does the same.
+
+    ⚠ Nothing in the driver had to change for it: Vacate already takes dxs
+    and dys as VALUES, not as a fixed Step, so an arbitrary delta restores the
+    right strips.  ⚠ A delta must fit a signed byte."""
+    cur = (round(pts[0][0]), round(pts[0][1]))
     out, xs, ys = [], [cur[0]], [cur[1]]
     for x, y in pts[1:]:
-        gx, gy = q(x), q(y)
-        while cur != (gx, gy):
-            dx = STEP if gx > cur[0] else -STEP if gx < cur[0] else 0
-            dy = STEP if gy > cur[1] else -STEP if gy < cur[1] else 0
-            cur = (cur[0] + dx, cur[1] + dy)
-            if out and out[-1][0] == (dx, dy) and out[-1][1] < 255:
-                out[-1][1] += 1
-            else:
-                out.append([(dx, dy), 1])
-            xs.append(cur[0])
-            ys.append(cur[1])
+        gx, gy = round(x), round(y)
+        dx, dy = gx - cur[0], gy - cur[1]
+        if not dx and not dy:
+            continue
+        assert -128 <= dx <= 127 and -128 <= dy <= 127, (dx, dy)
+        cur = (gx, gy)
+        if out and out[-1][0] == (dx, dy) and out[-1][1] < 255:
+            out[-1][1] += 1
+        else:
+            out.append([(dx, dy), 1])
+        xs.append(cur[0])
+        ys.append(cur[1])
     return out, xs, ys
 
 
@@ -57,8 +84,10 @@ def main():
     r, xs, ys = runs(path(A, CX, B, CY))
     n = sum(k for _, k in r)
     diag = sum(k for (dx, dy), k in r if dx and dy)
-    sys.stderr.write("A=%d CX=%d B=%d CY=%d -> %d steps (%d diagonal, %d%%), %d runs\n"
-                     % (A, CX, B, CY, n, diag, 100 * diag // n, len(r)))
+    mx = max(max(abs(dx), abs(dy)) for (dx, dy), _ in r)
+    sys.stderr.write("A=%d CX=%d B=%d CY=%d -> %d steps (%d diagonal, %d%%), %d runs, "
+                     "longest step %d px\n"
+                     % (A, CX, B, CY, n, diag, 100 * diag // n, len(r), mx))
     sys.stderr.write("   x %d..%d (right edge %d)   y %d..%d (bottom %d)\n"
                      % (min(xs), max(xs), max(xs) + WINW,
                         min(ys), max(ys), max(ys) + WINH))
@@ -68,8 +97,8 @@ def main():
     print("* so the window moves diagonally where the curve does instead of")
     print("* climbing in stairs.  x = %d + %d sin t, y = %d + %d sin 2t on a"
           % (CX, A, CY, B))
-    print("* %d-pixel grid, from the window's home at (%d, %d) and back."
-          % (STEP, HOME[0], HOME[1]))
+    print("* curve sampled %d times, from the window's home at (%d, %d) and back."
+          % (N, HOME[0], HOME[1]))
     print("* %d steps, %d of them diagonal.  Generated by video3/bench/mklegs.py."
           % (n, diag))
     print("*")

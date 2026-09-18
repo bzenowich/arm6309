@@ -73,14 +73,15 @@ LINES = [
     ("iniz w4", 0), ("copy /dd/sys/v3paint /w4", 1),
     ("v3scrl >/w4", 1),
     ("copy /dd/sys/v3doodle /w4", 6),
-    # ---- the word processor, and NitrOS-9's OWN downloadable fonts
-    # ⚠ v3fonts is 55 KB of glyphs and nothing to look at, so it is copied
-    # while Paint is still up; the buffers live until KillBuf, so both
-    # scenes below select a face without loading one.
-    *([("iniz w5", 0), ("copy /dd/sys/v3fonts /w5", 0),
-       ("copy /dd/sys/v3write /w5", 3), ("copy /dd/sys/v3spec /w5", 3),
-       ("display 1b 24 >/w5", 0)]
-      if v3show.FACES else []),
+    # ⛔ THE WORD PROCESSOR SCENE IS OUT (2026-09-18).  The wildbits faces
+    # are fixed-width, and a word processor is where that shows worst - they
+    # look right at the console, which is where changefont now puts them.
+    # v3show.py still generates v3fonts, v3write and v3spec, so the scene can
+    # come back when there is a way to show PROPORTIONAL text that earns its
+    # place.  ⭐ Dropping it also drops the 25 s v3fonts load: GPLoad's data
+    # path is a per-byte escape callback at ~2.2 KB/s, and nothing else needs
+    # the GP buffers - changefont reads /DD/SYS/FONT.* straight into the
+    # glyph bank.
     # ---- the game
     # ⚠ DWEnd ($24), not Select ($21): overworld makes its own window, and
     # /W3 still has the desktop's.  A second DWSet on it is E$WADef.
@@ -117,13 +118,10 @@ CAPTIONS = [
     ("v3trk /dd/cmds", "... and /DD/CMDS, two columns; the scroll bar knows how much is hidden"),
     ("v3about /w3", "A window, drawn once. Its pixels are now the only copy that exists"),
     ("v3drag >", "v3drag: a FIGURE-8 by copy engine, over a desktop a BACKING STORE keeps"),
-    ("PS/2 mouse", "The pointer is video3's 8x8 HARDWARE SPRITE - five registers, nothing saved"),
+    ("PS/2 mouse", "The pointer is video3's 16x16 HARDWARE SPRITE - five registers, nothing saved"),
     ("v3paint /w4", "Paint: its document goes into VRAM's off-screen margin, x 640-1023"),
     ("v3scrl >", "v3scrl: two copies a step - the view, and the strip - and a copy for each thumb"),
     ("v3doodle /w4", "... and is painted on: CoWin's ellipses and lines, and toolbox text"),
-    *([("v3write /w5", "/W5: a word processor, and the FONT MENU in its own faces"),
-       ("v3spec /w5", "27 wildbits faces: 8 x 8, 1 bpp, GP buffers - none of them in ROM")]
-      if v3show.FACES else []),
     ("overworld >", "overworld: the game on an exclusive tile screen, hero and all"),
     ("DD:procs", "procs: both shells still running"),
 ]

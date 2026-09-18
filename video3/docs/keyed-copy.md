@@ -190,24 +190,66 @@ sprite, five registers and nothing saved.
 
 ---
 
-## 4. What to do first, and why the key is not first
+## 4. The software wins — 1 and 2 BUILT, 3 not
 
-Measured shares say the software wins are large, cheap and independent of any
-fit:
+⭐ **Items 1 and 2 are done** (2026-09-18, `tbox.asm`), and the measured result
+is in `demo-report.md` §16. A 40-character line:
 
-1. **Opaque text** — the `RAMP` already names ink *and* paper, so a row can be
-   written whole: the `KEY` fill goes, the run scan goes, and **395 `RowPut`
-   calls become 17**. Costs +25 ms of `VDATA`, saves ~185. No hardware.
-2. **Table-driven `GRow`** — 256 entries mapping a source byte (4 pixels at
-   2 bpp) to 4 output bytes, one table a ramp, 8 KB in the **38 unused ROM
-   pages**. ~60 cycles a pixel becomes ~10.
-3. **A flat-paper glyph cache in the margin**, blitted by the *existing* engine.
-   No hardware, and it is the same code a keyed cache would use.
+| | ms | |
+|---|---|---|
+| before | **479.03** | |
+| 1. opaque text | 333.27 | 1.44× |
+| 2. a table for `GRow` | 256.16 | |
+|   + the row fill two bytes at a time | **218.64** | **2.19×** |
 
-⭐ **Do 1–3 first regardless.** They are the same work a keyed copy needs
-underneath it, they need no fit, and they answer §3.2's open question (the
-in-driver copy cost) as a side effect. If a key is then added, the cache stops
-caring what is behind the text — which is the part software cannot do.
+⛔ **And every step proved it draws the SAME PIXELS**: `run-v3text.sh` draws
+the line both ways into two bands and compares VRAM — 0 of 5,712 bytes differ.
+
+1. ⭐ **Opaque text — BUILT.** `FONT` bit 2 (`F.Opaq`) fills the row with the
+   ramp's own paper instead of `KEY`, so `BlitRow` emits one run. ⚠ `RPaper`
+   holds each ramp's paper as a palette index, or `$FF` where the ramp has no
+   flat paper — **`tab` is a step of the window tab's gradient, so opaque text
+   is REFUSED there** and falls back to the transparent path. That is the
+   most-drawn text in the GUI, and it is exactly what a key would rescue.
+
+2. ⭐ **A table for `GRow` — BUILT, but NOT the one described here.** This
+   section proposed 256 entries in ROM, one table a ramp, 8 KB in the unused
+   pages. ⛔ **That cannot work**: `GRow` already has the font's ROM page
+   mapped at `Co.WinB`, and there is no second block window for a table. What
+   went in is a **32-byte nibble table in RAM** — sixteen entries of two bytes,
+   a nibble being two pixels — rebuilt per call by `MkTab`. ~60 cycles a pixel
+   became ~15, for 32 bytes and no ROM at all.
+
+3. ⛔ **A flat-paper glyph cache — NOT built**, and §7.1 is why it is no longer
+   obviously worth building: a copy costs a fixed ~725 µs, so a glyph-sized
+   blit is **788 µs against the ~250 µs a character now costs to compose**. The
+   cache only pays for a **whole string** (§3.2), and only when that string is
+   drawn more than once.
+
+⚠ **And this section's closing claim was wrong.** It said 1–3 "answer §3.2's
+open question (the in-driver copy cost) as a side effect". They did not —
+`v3cpyb` did, by measuring it, and the answer retired §3.2's own arithmetic
+along with two more estimates in §7.
+
+---
+
+## 4.1 What is actually outstanding
+
+| | state |
+|---|---|
+| opaque text (§4.1) | ⭐ **built**, gated by `run-v3text.sh` |
+| `GRow`'s table (§4.2) | ⭐ **built**, same gate |
+| `SS.CopyN`, the software copy list | ⭐ **built**, 2.75×, and gated by `run-v3copyn.sh` — the same rectangles as one table and as N calls, 0 of 307,200 bytes differ |
+| a tighter `CpRun` — one `VcWait` a copy | ⭐ **built**: 779 → 695 µs |
+| a **string** cache in the margin (§3.2) | ⛔ not built, and the first thing that would pay |
+| the **hardware descriptor walker** (§7.1.1) | ⛔ not built — and §7.1.2 shows the CPU spends more building a VRAM descriptor (91.6 µs) than writing the registers it replaces (~33 µs), so it only pays for **persistent** lists or for the concurrency |
+| the **colour key** itself | ⛔ not built, no fit, not in `plan.md`. §7.2 prices it at 1 pin + ~2 macrocells + a `74HC688`, and §7 has the real utilisation now |
+| more hardware sprites (§6.4) | ⛔ not built — the answer to genre C, which the key does not serve |
+
+⚠ **Two gaps in the gates, not in the code**: the V3 IRQ-masked stretch that
+one-`VcWait`-a-copy created (~250 µs) has nothing measuring it, and
+`run-v3copyn.sh` copies from unwritten margin, so it is strong on the walk and
+the destinations and weak on source-address errors.
 
 ---
 

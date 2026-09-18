@@ -685,10 +685,10 @@ TEXT = """\
  5. The sprite
 --------------------------------------------------------------------------------
 
-  One 8 x 8 sprite, two bits a pixel, for the mouse pointer.  Its shape
-  lives in the register file, not VRAM, and it is composed at scan time:
-  nothing is saved behind it and nothing has to be put back.  Moving it
-  is three register writes.
+  One 16 x 16 sprite, two bits a pixel, for the mouse pointer.  Its shape
+  lives in the register file, not VRAM - 64 bytes, four `165 shifting two
+  planes - and it is composed at scan time: nothing is saved behind it and
+  nothing has to be put back.  Moving it is three register writes.
 
 --------------------------------------------------------------------------------
  6. Memory
