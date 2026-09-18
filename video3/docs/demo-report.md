@@ -994,9 +994,21 @@ which that time used to reach the CPU, so it can now only be arriving through
 budget, not a measurement; `plan.md` §14 item 8 (five requesters, one spare
 access a slot) is open; the copy is **third** in `v3dot`'s arbiter, behind the
 map fetch and the CPU prefetch; and `CpWait` gives up after `VcPolls` = 16,384
-polls ≈ 39 ms **without reporting anything**, which a 640 × 480 copy (75.9 ms)
-would now hit. `Select`'s 640 × 200 sits at 31.6 ms — 80% of that bound, where
-before it was effectively at zero.
+polls without reporting anything.
+
+⭐ **§14's poll-budget worry is settled, and it was wrong twice over**
+(2026-09-18). The budget is not 39 ms: a poll is ~18 E cycles, so 16,384 of
+them is **140 ms**. And `CpWait` does not come near it — `CALLTIME` over a whole
+demo run is **2,946 calls, longest 20.5 ms, mean 1.87 ms**, seven times inside
+the budget, and the longest is exactly `v3scrl`'s 256 × 320 view copy (81,920
+bytes at 0.247 µs). Its carry is now tested rather than thrown away, and the
+demo runs clean with the test in.
+
+⛔ **What the investigation did find is worse and older**: every exit in
+`DoCopy` used `puls d,x,y,u,pc`, which restores `B` from the `D` pushed on
+entry — so `SS.Copy`'s carry was right and its **error number was whatever the
+caller had in `B`**. A failed copy reported "Error #012". Fixed by dropping the
+saved `D` instead of pulling it.
 
 ## 15. `changefont`, and two traps on the way — 2026-09-18
 
