@@ -882,3 +882,70 @@ before `display 1b 69 01`.
 stretch and §11's work does not help: dense art changes colour almost every cell,
 so `TxPutRun`'s run never starts and every cell pays its own `TxAttr`. The lever
 is the number of rows, not the rate.
+
+## 13. A word processor, and NitrOS-9's other font system — 2026-09-18
+
+⛔ **THE PREMISE WAS WRONG, AND CHECKING IT FIRST IS THE WHOLE STORY.** The
+scene was asked for as "the 18 fonts wildbits included". There is no 18
+anywhere in either tree — the nearest are `RowH equ 18`, the Tracker list's row
+pitch, and the 19 px window tab. What is actually there:
+
+| where | how many | what |
+|---|---|---|
+| the ROM toolbox | **2** | Noto Sans Regular and Bold, 12 px on a 17 px line, proportional, 2 bpp anti-aliased. `FontMap` clamps at **4** and the directory reserves four slots |
+| wildbits | **27 usable of 28** | `level1/wildbits/sys/fonts/*.asm`, 8 × 8, 1 bpp, plain Data modules. **None is in the arm6309 ROM** |
+| NitrOS-9 stock | 5 | `stdfonts` (3 sets), isolatin1, ibmedc — also 8 × 8 |
+
+So the demo shows the **wildbits** faces, through **NitrOS-9's own downloadable
+font path**, not the toolbox's.
+
+### 13.1 ⭐ A font is data on the wire, not a module in the ROM
+
+`ESC $2B GPLoad grp buf sty xs ys n` + n bytes puts a face in a GP buffer
+(`ca_gpb.asm`; type 5 is 1 bpp, and it makes the buffer itself, so `DefGPB`
+is not needed first). `ESC $3A Font grp buf` sets `WT.Font`, and
+`ca_bmtx.asm`'s `GlyphOf` then reads the glyph for a code at **code × 8**.
+Buffers are CoArm's, not a path's, and `GPMax` is **48** — so all 27 are
+resident at once and cost `F$AllRAM` blocks, **not** ROM disk space and not
+any of CoArm's 16 KB window, which has one byte free.
+
+`mkfonts.py` reads the bytes out of the wildbits source. ⚠ **Nothing is
+assembled**: the ROM never loads them as modules.
+
+### 13.2 ⚠ The parse is checked against the picture, not trusted
+
+A font that parses is not a font that is *there*. `mkfonts.py` requires whole
+8-byte glyphs and asserts that codes 32–126 hold real ink, so a face whose
+glyphs live elsewhere cannot load as 2 KB of spaces. `jessefont.asm` is
+rejected by it — 1,031 bytes, not a multiple of 8. ⚠ It also reads **both
+radixes**: most files are `$hex`, `jessefont.asm` draws its glyphs as
+`%binary` so the source looks like the letter, and reading only hex made it
+look like a 160-byte file rather than an incomplete 1,031-byte one.
+
+### 13.3 The two scenes
+
+- **`v3write`** — the window, menu bar and ruler from the ROM toolbox, a letter
+  on the page, and ⭐ **the Font menu pulled down with all 27 names each drawn
+  in its own face**, the current one highlighted and the hardware sprite on it.
+  A dropdown over text is the one thing a word processor shows that a specimen
+  sheet cannot, and here it genuinely occludes: the page and the menu are
+  painted in order into the same window.
+- **`v3spec`** — the same window, menu closed: two columns, the name in the
+  ROM's proportional Noto Sans and the sample beside it in the 8 × 8 face.
+  ⭐ **Both font systems on one line.**
+
+### 13.4 ⚠ Three things the hardware decided
+
+- **Text on a bitmap window is placed in CELLS** (`$02 X+32 Y+32`), and a cell
+  is the 8 × 8 glyph box. Every coordinate in the layout is a multiple of 8;
+  the specimen's line pitch is 24 px because 20 does not exist, and the letter
+  is on a 2-cell pitch because an 8 × 8 face set solid has no room under it.
+- **A toolbox payload is 64 bytes**, so a caption is one line of 58.
+- ⛔ **Only the FIRST stream on a device may `DWSet`.** The second is
+  `E$WADef`, "Window already defined" — the rule `stream_cmds` and
+  `stream_about` already follow on /W3. `v3spec` draws into the window
+  `v3write` left. The session **failed** rather than drawing nothing, because
+  `run-video3.sh` greps the console for `Error #`.
+
+⚠ `w5.dd` is new: the app gets its own window device rather than borrowing
+Paint's.

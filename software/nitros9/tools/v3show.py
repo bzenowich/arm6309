@@ -23,6 +23,12 @@ Files:
               VRAM's scroll margin, where v3scrl scrolls it from
   v3doodle    what is painted on the canvas once it has scrolled
   v3bbs       80 x 25 CP437 ANSI art - gruvbox, and 256-colour pairs
+  v3art       a real .ans re-emitted, when video3/we-tortuga.ans is there
+  v3pal       the DOS palette for it, which cannot travel with it (have_art)
+  v3fonts     the 27 wildbits 8 x 8 faces, one GP buffer each - 55 KB, and
+              nothing to look at, so the session loads it under another scene
+  v3write     the word processor, with the Font menu open in its own faces
+  v3spec      the same window as a specimen: Noto Sans names, 8 x 8 samples
   video3.txt  a long text for `list` on the 80 x 60 console
 """
 import sys, os, re, pathlib
@@ -30,7 +36,10 @@ import sys, os, re, pathlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mktbox as T                                      # the palette, the icons
 
+import mkfonts as F                             # the wildbits 8 x 8 faces
+
 PAL, RAMP = T.PAL, T.RAMP
+FACES = F.FONTS                                 # [(name, 2048 bytes)]
 ICON = T.icon_names()
 
 
@@ -332,6 +341,189 @@ def _bg(n):
 # the stream loads them again with PalRange to show that it can
 GRUVBOX = ["282828", "cc241d", "98971a", "d79921", "458588", "b16286", "689d6a", "a89984",
            "928374", "fb4934", "b8bb26", "fabd2f", "83a598", "d3869b", "8ec07c", "ebdbb2"]
+
+
+# ------------------------------------- NitrOS-9's OWN downloadable fonts
+# ⭐ THE OTHER FONT SYSTEM.  The ROM toolbox has two proportional faces and
+# room for four; these are GrfDrv's - 1 bpp, 8 x 8, one glyph every eight
+# bytes at code * 8 - and they are not in the ROM at all.  Each one is sent
+# to the card as an ESC $2B GPLoad, lands in a GP buffer (CoArm has
+# GPMax = 48), and ESC $3A Font picks it for the window's ordinary text.
+# ca_bmtx.asm's GlyphOf is what reads it; ca_gpb.asm's DoFont what selects it.
+FONT_GRP = 0xC8                                 # stock NitrOS-9's font group
+
+
+def gpfont(buf, blob):
+    """ESC $2B GPLoad grp buf sty xs:w ys:w n:w, then n bytes.  Type 5 is
+    1 bpp; 8 wide and one byte a row, so ys is the byte count."""
+    return esc(0x2B, FONT_GRP, buf, 5) + W(8, len(blob)) + W(len(blob)) + blob
+
+
+def setfont(buf):
+    """⚠ Group 0 means the BUILT-IN font, and DoFont returns before it looks
+    at the second parameter - but the escape's two bytes are collected
+    whatever it does with them, so both are always sent."""
+    return esc(0x3A, FONT_GRP, buf) if buf else esc(0x3A, 0, 0)
+
+
+def curxy(cx, cy):
+    """⚠ Control $02, and it is in CELLS, not pixels: on a bitmap window a
+    cell is the 8 x 8 glyph box, so everything drawn as text here is on an
+    8-pixel grid and the layout below is built out of multiples of 8."""
+    return bytes([0x02, 32 + cx, 32 + cy])
+
+
+def ink(fg, bg):
+    return esc(0x32, col(fg)) + esc(0x33, col(bg))
+
+
+def gptext(cx, cy, s, buf=None):
+    return (setfont(buf) if buf is not None else b"") + curxy(cx, cy) + s.encode("latin-1")
+
+
+def stream_wfonts():
+    """Every wildbits face into a GP buffer of its own, buffers 1..n.
+
+    ⚠ It is its own stream because it is 55 KB of glyphs and nothing to
+    look at: the session copies it while the Paint window is still up, so
+    the load is not a scene.  Buffers survive until KillBuf, so v3write and
+    v3spec can select any face without loading it again."""
+    s = bytearray()
+    for i, (_, blob) in enumerate(FACES):
+        s += gpfont(i + 1, blob)
+    return bytes(s)
+
+
+# ---------------------------------------------------------- the word processor
+WR = (16, 24, 608, 440)                         # the document window
+WR_IN = (24, 48, 592, 408)                      # menu bar, ruler and page
+MENU = ["File", "Edit", "Search", "Format", "Font", "Style"]
+MENU_X = 12                                     # where the first item starts
+MENU_GAP = 26
+
+LETTER = [
+    "Dear NitrOS-9,",
+    "",
+    "Twenty-seven typefaces came with wildbits.  Eight pixels on a",
+    "side, one glyph every eight bytes, and not one of them is in",
+    "this machine's ROM.  They arrive down the same pipe as the",
+    "text -- ESC $2B GPLoad -- and live in CoArm's GP buffers, of",
+    "which there are forty-eight.",
+    "",
+    "ESC $3A Font is how a window changes its mind.  The menu to",
+    "the right draws every name in its own face, which is the only",
+    "honest way to show a font to somebody.",
+    "",
+    "Yours in 8 x 8,",
+    "         a 6309 at 2.1 MHz",
+]
+
+
+def menu_x(i):
+    """Where item i starts, measured in the ROM's own Noto Sans - the same
+    host-side measurement the doodle's balloon uses, because there is no
+    measure-string call on the far side of the escape."""
+    x = MENU_X
+    for m in MENU[:i]:
+        x += T.text_width(m) + MENU_GAP
+    return x
+
+
+def wr_chrome(s, title="Untitled"):
+    """The window, its menu bar and its ruler - all ROM toolbox."""
+    x, y, w, h = WR
+    ix, iy, iw, ih = WR_IN
+    s += window(x, y, w, h, title, 1)
+    s += rect(ix, iy, iw, 24, "panel")
+    s += grad(ix, iy, iw, 24, T.GREYG, 8)
+    for i, m in enumerate(MENU):
+        s += text(ix + menu_x(i), iy + 3, m, "menu")
+    s += rect(ix, iy + 23, iw, 1, "frame")
+    # the ruler: a tick every half inch, a number every inch, and the two
+    # margin markers - 8 px to the inch here, because the page is in cells
+    s += rect(ix, iy + 24, iw, 24, "white")
+    s += rect(ix, iy + 47, iw, 1, "frame")
+    for n in range((iw - 32) // 32 + 1):
+        tx = ix + 16 + n * 32
+        s += rect(tx, iy + 38, 1, 8, "frame")
+        if n % 2 == 0:
+            s += rect(tx, iy + 32, 1, 14, "frame")
+            s += text(tx + 3, iy + 26, str(n // 2), "white")
+    for mx in (ix + 16, ix + iw - 48):           # the margin markers
+        for k in range(5):
+            s += rect(mx - 4 + k, iy + 42 - k, 9 - 2 * k, 1, "black")
+    return s
+
+
+def stream_write():
+    """⭐ THE FONT MENU, EVERY NAME IN ITS OWN FACE - which is the one thing
+    a word processor can show that a specimen sheet cannot.  A letter on the
+    page in one face, and the menu open over it in twenty-seven."""
+    ix, iy, iw, ih = WR_IN
+    px, py = ix, iy + 48                        # the page, below the ruler
+    ph = ih - 48
+    s = bytearray()
+    s += dwset(0xFF, 0, 0, 80, 60, PAL["black"], PAL["desk"])
+    s += SELECT + CURSOR_OFF
+    s = wr_chrome(s)
+    s += rect(px, py, iw, ph, "white")
+    # the letter, in one face, on the page's 8-pixel grid
+    body = next(i for i, (n, _) in enumerate(FACES) if n == "c256serif") + 1
+    s += ink("black", "white")
+    for i, line in enumerate(LETTER):                # two cells a line: an
+        s += gptext(px // 8 + 2, py // 8 + 2 + 2 * i,  # 8 x 8 face set solid
+                    line, body if i == 0 else None)    # has no room under it
+    # ⭐ and the Font menu, pulled down, item by item in its own face
+    mx = ix + menu_x(4) - 6
+    mw, mh = 8 * 13 + 12, len(FACES) * 8 + 8
+    my = iy + 24
+    s += rect(mx + 4, my + 4, mw, mh, "shadow")
+    s += rect(mx, my, mw, mh, "white")
+    s += rect(mx, my, mw, 1, "frame") + rect(mx, my + mh - 1, mw, 1, "frame")
+    s += rect(mx, my, 1, mh, "frame") + rect(mx + mw - 1, my, 1, mh, "frame")
+    for i, (name, _) in enumerate(FACES):
+        row = (my + 4) // 8 + i
+        if i + 1 == body:                       # the one the letter is set in
+            s += rect(mx + 1, row * 8, mw - 2, 8, "sel")
+            s += ink("white", "sel")
+        else:
+            s += ink("black", "white")
+        s += gptext(mx // 8 + 1, row, name[:13], i + 1)
+        if i + 1 == body:
+            sel_y = row * 8
+    s += ink("black", "white")
+    s += put_gc(mx + mw - 24, sel_y)                 # the pointer, on the choice
+    return bytes(s)
+
+
+def stream_spec():
+    """The same window with the menu closed and the page given over to a
+    specimen: two columns, every face setting the same line.
+
+    ⚠ The pitch is 24 px and not 20, because text is placed in CELLS -
+    a row is 8 px and nothing lands between two of them."""
+    ix, iy, iw, ih = WR_IN
+    px, py = ix, iy + 48
+    ph = ih - 48
+    rows = (len(FACES) + 1) // 2
+    s = bytearray()
+    # ⚠ NO DWSet: v3write already defined this device's window and a second
+    # one is E$WADef, "Window already defined" - the same rule stream_cmds
+    # and stream_about follow on /W3.  It draws into the window that is there.
+    s = wr_chrome(s, "Specimen")
+    s += rect(px, py, iw, ph, "white")
+    # ⚠ ONE header line, and the rows start at py + 32: fourteen of them at
+    # a 24 px pitch is 320 px, and the page has 360.  Two header lines pushed
+    # the last row's glyphs past the bottom of the window.
+    s += text(px + 16, py + 6, "the name in Noto Sans, the sample in the face",
+              "white", bold=True)
+    s += ink("black", "white")
+    for i, (name, _) in enumerate(FACES):
+        cx = px + 16 + (i // rows) * (iw // 2 - 8)
+        y = py + 32 + (i % rows) * 24
+        s += text(cx, y - 2, name, "white")
+        s += gptext(cx // 8 + 11, y // 8, "Quick brown fox 019", i + 1)
+    return bytes(s)
 
 
 def stream_bbs():
@@ -678,6 +870,11 @@ def main(out):
     streams = [("v3desk", stream_desk), ("v3cmds", stream_cmds), ("v3about", stream_about),
                ("v3paint", stream_paint), ("v3doodle", stream_doodle),
                ("v3bbs", stream_bbs), ("video3.txt", stream_text)]
+    if FACES:
+        streams[5:5] = [("v3fonts", stream_wfonts), ("v3write", stream_write),
+                        ("v3spec", stream_spec)]
+    else:
+        print("note  no wildbits fonts: the word processor scene is left out")
     if have_art():
         streams[6:6] = [("v3pal", stream_pal), ("v3art", stream_art)]
     else:
