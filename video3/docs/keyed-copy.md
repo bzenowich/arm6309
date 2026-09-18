@@ -254,18 +254,15 @@ game composes *tiles* and lets the map do the work.
 ### 6.2 ⛔ The binding constraint is not the key. It is the per-copy overhead.
 
 Ten sprites need ~20 copies a frame (draw and undo). At the engine's rate that is
-**1.3 ms**. At the measured `SS.Copy` cost it is **116 ms — eight frames**.
+**1.3 ms**. Through one `SS.Copy` a rectangle it is **43 ms — three frames**; through
+the software list `SS.CopyN` that is now built, **15.8 ms — still more than a
+frame** (§7.1, measured).
 
-⭐ **So the feature that unlocks all three genres is a COPY LIST**: many
-rectangles described in one table and issued by one call, exactly as `SS.Raster`
-already does for register writes. The driver would walk the table writing seven
-registers a copy and waiting on `CBUSY`, so a copy should cost its registers and
-its engine time and nothing else.
-
-⚠ **~100 µs a copy is an ESTIMATE and must be measured before anyone designs to
-it** — this study has already had one thirty-fold estimate retired (§3.2), and
-`v3cpyb` is the bench that would settle it by issuing its copies through a list
-instead of one SetStat each.
+⭐ **So the feature that unlocks all three genres is a COPY LIST** — and §7.1
+measures that it has to be a **hardware** one. `SS.CopyN` is built and is 2.75×;
+what it leaves is ~725 µs a copy of driver register sequencing, which is 15.8 ms
+for ten sprites against a 14.3 ms frame. A card that walks descriptors takes that
+to ~78 µs a sprite and 1.6 ms for ten.
 
 ### 6.3 The three genres
 
@@ -360,75 +357,63 @@ cascades** — that is the baseline a refit has to be compared against, not zero
 ⛔ **`v3dot` has six cells** and `v3scan` has **one pin**; neither can take
 anything.
 
-### 7.1 ⭐ The copy list is FREE. It is not a hardware feature at all.
+### 7.1 ⛔ MEASURED, AND IT REVERSES THIS SECTION'S RECOMMENDATION
 
-A new SetStat — `SS.CopyN`, X = a table of rectangles, Y = how many — walked by
-**ArmIO**, which already owns `vidcpy3.asm` and is **not** under CoArm's 16 KB
-cap (it is 6,627 bytes). Per copy it costs seven register writes and a `CBUSY`
-wait, which is what `CpSrc`/`CpDst`/`CpGo` already do; what it deletes is the
-5.81 ms of IOMan, SetStat dispatch and `FromCallerX` **per rectangle**, paying it
-once for the table instead.
+`SS.CopyN` is **built** (`vidcpy3.asm`'s `DoCopyN`, `SS.CopyN` = `$E1`, a table
+of up to 32 rectangles walked by ArmIO). It is worth **2.75×**, not 50×, and
+that is not enough.
 
-| | silicon | est. per copy |
-|---|---|---|
-| today, one `SS.Copy` a rectangle | — | **5.81 ms** (measured) |
-| ⭐ **`SS.CopyN`, software** | **none** | ~50–100 µs — **to be measured** |
-| a card that walks descriptors in VRAM | ~25–40 macrocells, and a **sixth** requester on a spare-access budget `plan.md` §14 item 8 has not re-derived for the current five | engine time only |
+⛔ **First, the number this document was built on was wrong.** §3.2's "one
+`SS.Copy` costs 5.81 ms" came from wall-clock over 200 copies of a *forked
+command*, and **~740 ms of that was the fork** — measured directly by running
+32 and 192 copies and taking the slope. Corrected:
 
-### 7.1.1 ⚠ A hardware list IS faster. Software first is a sequencing call, not a verdict.
+| | per copy, 204 bytes |
+|---|---|
+| one `SS.Copy` a rectangle | **2,143 µs** |
+| ⭐ `SS.CopyN`, 32 a call | **779 µs** — **2.75×** |
+| `CpRun` alone (`CALLTIME`) | 543 µs |
+| `CpWait` — the engine itself | **54 µs** |
 
-An earlier draft read as though a software list made the hardware one
-unnecessary. It does not. Per copy of a 16 × 16 sprite (256 bytes):
+⛔ **And the observation I reasoned from was an artefact of my own bench.**
+§3.2 said "17 rows and 1 row cost the same to a microsecond, so the cost is
+entirely per call". **12 × 17 and 204 × 1 are both 204 bytes** — I varied the
+shape and held the size constant, then concluded size did not matter. Varying
+the size says otherwise:
 
-| | µs | |
-|---|---|---|
-| today, one `SS.Copy` a rectangle | **5,810** | measured |
-| software list: 7 register writes | 33 | |
-|      + the `CBUSY` wait | ~20 | assumed |
-|      + the engine itself | 63 | arithmetic |
-|    **= software list** | **~117** | ⭐ **50×** |
-| **hardware list** — engine + a descriptor fetch | **~71** | ⭐ **82×** |
+| rectangle | bytes | per copy | engine | engine's share |
+|---|---|---|---|---|
+| 12 × 17 | 204 | 779 µs | 50 µs | **6%** |
+| 200 × 100 | 20,000 | 5,658 µs | 4,938 µs | **87%** |
 
-⭐ **Why software gets most of it**: the 5,810 µs is almost all *operating
-system* — IOMan, the SetStat dispatch, `FromCallerX` copying the caller's block
-into the system map — and it is paid **per rectangle**. A list pays it **once for
-N**. That is the 50×, and it is free.
+⭐ **So a copy is a fixed ~725 µs plus 0.247 µs a byte**, and the two rows agree
+on the constant to within 5 µs. The fixed part is the driver's per-copy register
+sequencing — `CpSrc`, `CpDst`, `CpGo`, each with its own `VcWait` — and **software
+cannot remove it, because it IS the software.**
 
-⭐ **Why hardware then adds only 1.64× of throughput**: what is left after the
-list is 7 register writes and a wait against the engine's own 63 µs. **The engine
-is already more than half the remaining cost**, so deleting everything else
-cannot do better than ~1.6×.
+### 7.1.1 ⛔ Which makes a HARDWARE copy list necessary, not an optimisation
 
-⛔ **But throughput is the wrong axis, and this is the real argument for
-silicon.** A software list keeps the **CPU busy for the whole batch**; a hardware
-list starts a descriptor chain and hands the CPU back:
+| | per 16 × 16 sprite | 10 sprites (20 copies) | 30-tile column refill |
+|---|---|---|---|
+| `SS.CopyN`, software | **788 µs** | ⛔ **15.8 ms** | ⛔ **23.7 ms** |
+| a card that walks descriptors | ~78 µs | ⭐ **1.6 ms** | ⭐ **2.4 ms** |
+| **a frame** | | **14.3 ms** | **14.3 ms** |
 
-| | CPU occupied, software | CPU occupied, hardware |
-|---|---|---|
-| 10 sprites, draw and undo (20 copies) | **2.33 ms** | 0.16 ms |
-| a 30-tile column refill | **3.50 ms** | 0.24 ms |
+⛔ **Ten sprites do not fit in a frame with a software list.** Not "cost 16% of
+a frame" — *do not fit*. The hardware list is ~10× on a sprite and it is the
+difference between §6's three genres being reachable and not.
 
-Against a **14.3 ms** frame that is **16–24% of the frame handed back to game
-logic**. For §6's three genres that matters more than the 1.6×.
+⭐ **An earlier draft of §7.1 said the copy list "is FREE, it is not a hardware
+feature at all" and put software first. That was wrong**, and it was wrong
+because it rested on the 5.81 ms figure: if the cost had been the call, a
+software list would have taken it. The cost is the per-copy register work, and
+only silicon takes that.
 
-⭐ **So why software first?** Three reasons, none of them "it is better":
-
-1. It is a **prerequisite either way**. The driver needs an `SS.CopyN` API whether
-   the walking is done by the CPU or handed to the card; the hardware version
-   replaces the *walk*, not the call.
-2. It **measures the residual**, which is what prices the silicon. The 33 µs and
-   the wait above are estimates, and this document has already had one estimate
-   retired by a factor of thirty.
-3. ⛔ **The card has no room for it today.** `v3dot` has **6 cells**, `v3scan`
-   has **one pin**; only `v3host` has space, and it is the host interface, not
-   the VRAM side. And a descriptor-fetching engine is a **sixth requester** on a
-   spare-access budget `plan.md` §14 item 8 has not re-derived for the current
-   five.
-
-⛔ **So build `SS.CopyN` first, before pricing any silicon.** It is the biggest
-single lever in this document, it costs nothing to fabricate, and it turns the
-key from "worth 5.81 ms a sprite" into "worth its engine time" — which is what
-decides whether the key is worth a part.
+⚠ **What is still true**: `SS.CopyN` is the right API either way, it is built,
+and it is 2.75× for free — a hardware walker replaces the *walk* behind the same
+call. And the 725 µs is software that has never been tuned; a tighter `CpRun`
+with one `VcWait` instead of three might halve it. That would make the hardware
+list ~5× rather than ~10×, and **ten sprites would still not fit**.
 
 ### 7.2 The key, three ways
 
@@ -458,13 +443,18 @@ the kind of change that moves cascades.
 
 ### 7.3 What to buy, in order
 
-1. ⭐ **`SS.CopyN`** — no silicon, biggest lever, and it makes every later number
-   honest. Measure it with `v3cpyb` issuing through the list.
-2. **Then price the key against that measurement.** If a copy costs ~60 µs, a
-   keyed 16 × 16 sprite is ~120 µs and ten of them are 1.2 ms of a 14.3 ms
-   frame — and the key is plainly worth a package.
-3. **More hardware sprites** only after — they are the answer to genre C, which
-   the key does not serve at all.
+1. ⭐ **`SS.CopyN`** — done, 2.75×, no silicon. It was worth building for the API
+   alone, and it is what measured the residual.
+2. ⭐ **A tighter `CpRun`** — one `VcWait` a copy instead of eleven (§7.1.2).
+   Free, and it may be the whole answer: ~430 µs a copy puts ten sprites inside
+   a frame.
+3. **Only then the hardware descriptor walker**, and only for the concurrency —
+   §7.1.2 shows the CPU spends more building a VRAM descriptor than writing the
+   registers it replaces.
+4. **Then the key**, which is worth a package once a copy is cheap — and worth
+   nothing while a copy costs 788 µs.
+5. **More hardware sprites** last — the answer to genre C, which the key does
+   not serve at all.
 
 ⭐ **AND THE KEY WOULD BE A DESIGN-IN, NOT A RETROFIT — which makes it cheaper
 than any of the above suggests.** `CDONE`, `CSTEP`, `CROWADV` and `RCPY` are
