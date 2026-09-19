@@ -156,11 +156,19 @@ const sprite: Cell[] = [
  *   HC  36..195   ACTIVE        640
  *   HC 196..199   front porch    16   = 800
  *
- * The two range comparators are their own cells: a CPLD has about five
- * product terms before it cascades, and `HC >= 36 AND NOT HC >= 196` as one
- * flat sum is far more than that. */
-const HGE36 = ["HC7", "HC6", "HC5 & HC4", "HC5 & HC2"]      // HC >= 36
-const HGE196 = ["HC7 & HC6 & HC2"]                          // HC >= 196
+ * ⭐ ACTIVE IS A REGISTER, set on the tick that ends slot 35 and cleared on
+ * the one that ends slot 195. As a decode it was `HC >= 36 AND NOT HC >= 196`,
+ * and CUPL substitutes an intermediate into every product that reads it - so
+ * ACTIVE, HBLANK, BLANK and the sprite counter's enable each carried the
+ * comparators' whole sum, and one term more in HC >= 36 (HC 40..43, 0010 10xx,
+ * matched none of the old four: every line blanked sixteen pixels in, which
+ * v3card_tb's first frame showed and v3dot_tb alone did not) was enough for
+ * the fitter to refuse the part. A register costs one cell and makes every
+ * reader one literal.
+ *   The clear needs no exact 195: `HC7 & HC6 & HC1 & HC0` is 195 or 199 below
+ * HLAST, and at 199 ACTIVE is already clear. */
+const ACTSET = "SLOTTICK & !HC7 & !HC6 & HC5 & !HC4 & !HC3 & !HC2 & HC1 & HC0"  // HC = 35
+const ACTCLR = ["SLOTTICK", "HC7", "HC6", "HC1", "HC0"]                         // HC = 195
 const dotPath: Cell[] = [
   comb("SLOTTICK", ["DP1 & DP0"]),
   comb("HBLANK", ["!ACTIVE"]),
@@ -175,10 +183,29 @@ const dotPath: Cell[] = [
   comb("FRAMEEND", ["SLOTTICK & HLAST & VTC"]),
   comb("LINETICK", ["SLOTTICK & HLAST"]),
   /* the cadence v3scan and v3ptr are timed from (signals.md §1.1) */
-  comb("FETCH", ["ACTIVE"]),
+  /* ⛔ ONCE A SLOT, NOT ONCE A DOT. FETCH is v3scan's column counter's enable,
+   * and it was ACTIVE - a level for the whole visible line - so the bitmap scan
+   * address stepped four times a slot: v3card_tb's first frame showed each
+   * four-byte group 16 bytes on from the last, and ran off the 640 filled
+   * columns a quarter of the way across. The counter steps on the edge that
+   * ends the slot, which is the edge the fetch ranks capture the group on. */
+  /* ⛔ AND TWO SLOTS BEFORE THE PICTURE. A group reaches the '153 two slots
+   * after it is addressed (rank A, then rank B), so a counter that starts with
+   * the picture shows group 0 three times: v3card_tb's frame began `03 00 01 02
+   * 03 00 01 02 03 00 01 02 03 04 ..`, eight pixels late. video/ opened its
+   * fetch early for the same reason ("TFETCH opening one slot early").
+   * ⭐ SO THE COUNTER COUNTS EVERY SLOT, and HLOAD is what places it: the load
+   * wins over the count (counter.ts `loadable`), and HLOAD is HC 32-33, the two
+   * slots before the fetch that has to be group 0. What the counter does in the
+   * rest of the blank only fetches groups nobody sees. A windowed FETCH (HC >= 34
+   * and SLOTTICK) did the same thing and this part could not fit it: "Grouping
+   * fail" at 90%. */
+  comb("FETCH", ["SLOTTICK"]),
   comb("SPARE", ["!DP1"]),
   comb("CELLTICK", ["SLOTTICK & !HC0"]),
-  comb("HLOAD", ["HBLANK & HC4 & !HC5"]),
+  /* HC 32-33: the counter's load, two slots before the picture (FETCH above).
+   * Always blank - ACTIVE starts at 36. */
+  comb("HLOAD", ["!HC7 & !HC6 & HC5 & !HC4 & !HC3 & !HC2 & !HC1"]),
   comb("VLOAD", ["VBLANK"]),
   comb("ROWADV", ["LINETICK & VACTIVE & !DBLHOLD"]),
   comb("MCADV", ["CELLTICK"]),
@@ -190,7 +217,8 @@ const dotPath: Cell[] = [
   comb("PIXOE", ["!PALTURN"]),
   comb("ATOE", ["!PALTURN & MODE1 # !PALTURN & MODE0"]),
   comb("PIDXOE", ["PALTURN"]),
-  comb("OMR", ["!BLANK"]),
+  /* ⛔ OMR IS v3host's NOW - see BD1/BD2 there. The '273's /MR has to see the
+   * blanking the PIXEL sees, two registers late, and this part has no cells. */
   comb("FOE0", ["HS0 # HS1"]),
   comb("FOE1", ["!HS0 & !HS1"]),
   ...(SPRSHIFT_DISCRETE ? [] : [comb("SPRA0", ["SPRACT & SH00"]),
@@ -228,9 +256,7 @@ const dotPath: Cell[] = [
    * is a decode of this part's own counters: importing them spent five pins on
    * signals nothing else produces. */
   comb("HLAST", ["HC7 & HC6 & HC2 & HC1 & HC0"]),
-  comb("HGE36", HGE36),
-  comb("HGE196", HGE196),
-  comb("ACTIVE", ["HGE36 & !HGE196"]),
+  reg("ACTIVE", [ACTSET, ...ACTCLR.map((t) => `ACTIVE & !${t}`)]),
   comb("VACTIVE", ["!VBLANKRAW"]),
   /* ⛔ THE 449-LINE FAMILY'S BOTTOM BLANKING NEVER FIRED.  `VC9 & VC8` needs
    * VC >= 768 and that frame is 449 lines, so the picture ran to the last
@@ -286,7 +312,7 @@ export const v3dot: Merged = {
   cells: [
     ...decodeCells(MY_REGS),...hcount, ...vcount, ...ctrl, ...sprite, ...dotPath],
   external: new Set([
-    "HSYNC", "VSYNC", "BLANK", "OMR", "MUXSEL0", "MUXSEL1", "PIXOE", "ATOE",
+    "HSYNC", "VSYNC", "BLANK", "MUXSEL0", "MUXSEL1", "PIXOE", "ATOE",
     "PIDXOE", "FOE0", "FOE1", ...(SPRSHIFT_DISCRETE ? ["SPRLD", "SPRSH"] : ["SPRA0", "SPRA1"]),
     "SLOTTICK", "FETCH", "SPARE", "CELLTICK", "HLOAD", "VLOAD", "ROWADV",
     "MCADV", "MAPLD", "GMAP", "GRD", "GCPY", "GSPN", "FBOESCAN", "FBOEPTR",

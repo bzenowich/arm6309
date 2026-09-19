@@ -276,6 +276,8 @@ const RESERVED_RE: { re: RegExp; why: Why; note: string }[] = [
   { re: /^(SPRLD)$/, why: "board", note: "plan §7: loads the four '165 that hold the sprite row" },
   { re: /^RFA[0-4]$/, why: "board",
     note: "plan §5: the 32K x 8 register file's address pins. ⛔ RFA0 is v3ptr's and RFA4..RFA1 are v3host's, because §5 makes bit 0 the span-mask bit and the serialiser is on v3ptr - the rest is an ordinary address and the four-dot reload walk that drives it did not fit beside the serialiser" },
+  { re: /^RDCK$/, why: "board",
+    note: "plan §11/§6: the vread '574's clock - the CPU prefetch's (RDCKP) OR the copy's read access. ⚠ Split from RDCKP so a copy byte never marks the prefetch valid" },
   { re: /^WEN$/, why: "board",
     note: "plan §5: the framebuffer write strobe - RETIRE except a transparent pixel in sprite mode. ⚠ NOT the same signal as RETIRE, and a mode that gated the pointer instead would draw the sprite squashed" },
   { re: /^(WSTBV|WADV[01]|RDREQ|PBUSY|WAITN|IRQN)$/, why: "board",
@@ -583,7 +585,10 @@ console.log("      reload and the register file's address followed, and on 2026-
 console.log("      the last six - RMAP, RRD, WRCYC, RDCK, RSTART and IRQEN.")
 console.log("      \u2b50 NOTHING IS UNBUILT. Every signal any video3 part reads is now")
 console.log("      produced by a part, by the board, or by the backplane.")
-console.log("      \u26a0 And the four `alias` entries are NOT progress: they are one net")
-console.log("      under two names, which is a defect the fitter cannot see.")
+console.log("      \u2b50 And no aliases: the four were one net under two names (FBOE) or")
+console.log("      not an alias at all (SRC), and video3_card.v wires every pin from")
+console.log("      the term lists, where v3card_tb runs the card end to end.")
+console.log("      \u26a0 What this census cannot see is a net the BOARD needs and no")
+console.log("      package lets out - video3_card.v's GAP_1..GAP_7.")
 
 process.exit(failures === 0 ? 0 : 1)

@@ -21,15 +21,19 @@ module v3host (
     input  wire A20,
     input  wire E,
     input  wire RW,
-    input  wire WRCYC,
     input  wire SPANBUSY,
     input  wire CBUSY,
     input  wire VBLANK,
     input  wire HLOAD,
-    input  wire RDCK,
+    input  wire BLANK,
     input  wire RETIRE,
-    input  wire RSTART,
-    input  wire IRQEN,
+    input  wire GRD,
+    input  wire D6,
+    input  wire CEOR,
+    input  wire CHLAST,
+    input  wire GCPY,
+    input  wire MUXSEL0,
+    input  wire WROWADV,
     output wire REGWR,
     output wire RA0,
     output wire RA1,
@@ -38,6 +42,9 @@ module v3host (
     output wire RA4,
     output wire LDPDATH,
     output wire LDIRQACK,
+    output wire LDCTRL,
+    output wire PDQ,
+    output wire PDGO,
     output wire PPEND,
     output wire PS0,
     output wire PS1,
@@ -46,48 +53,103 @@ module v3host (
     output wire PALTURN,
     output wire PBUSY,
     output wire LUTWE,
+    output wire BD1,
+    output wire BD2,
+    output wire OMR,
     output wire PIDXCE,
     output wire VDSEL,
     output wire VPORT,
     output wire WSTBV,
+    output wire WPQ,
+    output wire WSTART,
     output wire WSTB,
+    output wire RDCKP,
     output wire RDVALID,
     output wire RDINV,
+    output wire WRCYC,
+    output wire RPQ,
+    output wire RSTART,
+    output wire WSTEP,
+    output wire RDCK,
     output wire RDOE,
     output wire RDREQ,
+    output wire CARDBUSY,
     output wire WAITN,
     output wire IRQPEND,
     output wire VBLQ,
     output wire VBLRISE,
     output wire IRQACK,
+    output wire IRQEN,
     output wire IRQN,
     output wire VSTATOE,
     output wire RDBKOE,
+    output wire CTICK,
+    output wire CPH,
+    output wire CRDSEL,
+    output wire CSTEP,
+    output wire CROWADV,
+    output wire CWLOAD,
+    output wire CDONE,
+    output wire RCPY,
+    output wire CRLD,
+    output wire RP1,
+    output wire RP2,
+    output wire RP3,
+    output wire RP4,
+    output wire RFA1,
+    output wire RFA2,
+    output wire RFA3,
+    output wire RFA4,
+    output wire CPURF,
     output wire WAITN_OE,
     output wire IRQN_OE
 );
 
+  reg  r_PDQ;
   reg  r_PPEND;
   reg  r_PS0;
   reg  r_PS1;
   reg  r_PS2;
   reg  r_PS3;
+  reg  r_BD1;
+  reg  r_BD2;
+  reg  r_WPQ;
   reg  r_RDVALID;
+  reg  r_RPQ;
   reg  r_IRQPEND;
   reg  r_VBLQ;
+  reg  r_IRQEN;
+  reg  r_CPH;
+  reg  r_CRLD;
+  reg  r_RP1;
+  reg  r_RP2;
+  reg  r_RP3;
+  reg  r_RP4;
 
+  assign PDQ = r_PDQ;
   assign PPEND = r_PPEND;
   assign PS0 = r_PS0;
   assign PS1 = r_PS1;
   assign PS2 = r_PS2;
   assign PS3 = r_PS3;
+  assign BD1 = r_BD1;
+  assign BD2 = r_BD2;
+  assign WPQ = r_WPQ;
   assign RDVALID = r_RDVALID;
+  assign RPQ = r_RPQ;
   assign IRQPEND = r_IRQPEND;
   assign VBLQ = r_VBLQ;
+  assign IRQEN = r_IRQEN;
+  assign CPH = r_CPH;
+  assign CRLD = r_CRLD;
+  assign RP1 = r_RP1;
+  assign RP2 = r_RP2;
+  assign RP3 = r_RP3;
+  assign RP4 = r_RP4;
 
   // EXTERNAL
   assign REGWR =
-         (IOSEL & A6 & A5 & WRCYC);
+         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
   // EXTERNAL
   assign RA0 =
          (A0);
@@ -105,10 +167,16 @@ module v3host (
          (A4);
   // buried
   assign LDPDATH =
-         (IOSEL & A6 & A5 & WRCYC & A4 & ~A3 & ~A2 & ~A1 & A0);
+         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & A4 & ~A3 & ~A2 & ~A1 & A0);
   // buried
   assign LDIRQACK =
-         (IOSEL & A6 & A5 & WRCYC & ~A4 & A3 & A2 & ~A1 & A0);
+         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & ~A4 & A3 & A2 & ~A1 & A0);
+  // buried
+  assign LDCTRL =
+         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & ~A4 & ~A3 & ~A2 & ~A1 & ~A0);
+  // buried
+  assign PDGO =
+         (LDPDATH & ~PDQ);
   // EXTERNAL
   assign PALTURN =
          (PS0)
@@ -125,32 +193,64 @@ module v3host (
   assign LUTWE =
          (PS1);
   // EXTERNAL
+  assign OMR =
+         (~BD2);
+  // EXTERNAL
   assign PIDXCE =
          (PS3);
-  // EXTERNAL
+  // buried
   assign VDSEL =
          (IOSEL & A6 & A5 & ~A4 & A3 & A2 & ~A1 & ~A0);
-  // EXTERNAL
+  // buried
   assign VPORT =
-         (~IOSEL & A19 & ~A20)
+         (~IOSEL & ~IOPGH & A19 & ~A20)
          | (VDSEL);
   // EXTERNAL
   assign WSTBV =
-         (VPORT & ~RW & E);
+         (VPORT & ~RW & E & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
+  // EXTERNAL
+  assign WSTART =
+         (WPQ & ~WSTBV);
   // EXTERNAL
   assign WSTB =
-         (IOSEL & A6 & A5 & WRCYC);
+         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
+  // buried
+  assign RDCKP =
+         (GRD & ~RDVALID);
   // buried
   assign RDINV =
          (WSTB)
          | (RETIRE)
+         | (RSTART)
+         | (CSTEP);
+  // buried
+  assign WRCYC =
+         (~RW & E);
+  // buried
+  assign RSTART =
+         (RPQ & ~E);
+  // EXTERNAL
+  assign WSTEP =
+         (CSTEP)
          | (RSTART);
+  // EXTERNAL
+  assign RDCK =
+         (RDCKP)
+         | (CTICK & ~CPH);
   // EXTERNAL
   assign RDOE =
          (VPORT & RW);
   // EXTERNAL
   assign RDREQ =
          (~RDVALID);
+  // buried
+  assign CARDBUSY =
+         (SPANBUSY)
+         | (CBUSY)
+         | (RP1)
+         | (RP2)
+         | (RP3)
+         | (RP4);
   // EXTERNAL
   assign WAITN =
          1'b0;
@@ -168,41 +268,117 @@ module v3host (
          (IOSEL & A6 & A5 & ~A4 & A3 & A2 & ~A1 & A0 & RW & E);
   // EXTERNAL
   assign RDBKOE =
-         (IOSEL & A6 & A5 & RW & E & ~VDSEL);
+         (IOSEL & A6 & A5 & RW & E & A4)
+         | (IOSEL & A6 & A5 & RW & E & ~A3)
+         | (IOSEL & A6 & A5 & RW & E & ~A2)
+         | (IOSEL & A6 & A5 & RW & E & A1);
+  // buried
+  assign CTICK =
+         (GCPY & MUXSEL0);
+  // EXTERNAL
+  assign CRDSEL =
+         (CBUSY & ~CPH);
+  // EXTERNAL
+  assign CSTEP =
+         (CTICK & CPH);
+  // EXTERNAL
+  assign CROWADV =
+         (CSTEP & CEOR);
+  // EXTERNAL
+  assign CWLOAD =
+         (CROWADV)
+         | (~CBUSY);
+  // EXTERNAL
+  assign CDONE =
+         (CROWADV & CHLAST);
+  // EXTERNAL
+  assign RCPY =
+         (CBUSY);
+  // EXTERNAL
+  assign RFA1 =
+         (IOSEL & A6 & A5 & E & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & A1)
+         | (SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4)
+         | (RP3)
+         | (RP4);
+  // EXTERNAL
+  assign RFA2 =
+         (IOSEL & A6 & A5 & E & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & A2)
+         | (~IOSEL & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4)
+         | (~A6 & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4)
+         | (~A5 & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4)
+         | (~E & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4)
+         | (SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
+  // EXTERNAL
+  assign RFA3 =
+         (IOSEL & A6 & A5 & E & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & A3)
+         | (RP1)
+         | (RP2);
+  // EXTERNAL
+  assign RFA4 =
+         (IOSEL & A6 & A5 & E & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & A4)
+         | (RP3)
+         | (RP4);
+  // EXTERNAL
+  assign CPURF =
+         (IOSEL & A6 & A5 & E & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
 
   // WAITN is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign WAITN_OE =
-         (VPORT & ~IOPGH & E & SPANBUSY | VPORT & ~IOPGH & E & RW & ~RDVALID);
+         (VPORT & E & CARDBUSY | IOSEL & A6 & A5 & ~RW & E & CARDBUSY | VPORT & E & RW & ~RDVALID);
   // IRQN is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign IRQN_OE =
          (IRQPEND & IRQEN);
 
   always @(posedge CLK25) begin
+      r_PDQ <=
+         (LDPDATH);
       r_PPEND <=
-         (LDPDATH & ~VBLANK)
+         (PDGO & ~VBLANK)
          | (PPEND & ~PS0);
       r_PS0 <=
          (PPEND & HLOAD)
-         | (LDPDATH & VBLANK)
-         | (PS0 & ~PS1);
+         | (PDGO & VBLANK);
       r_PS1 <=
-         (PS0)
-         | (PS1 & ~PS2);
+         (PS0);
       r_PS2 <=
-         (PS1)
-         | (PS2 & ~PS3);
+         (PS1);
       r_PS3 <=
          (PS2);
+      r_BD1 <=
+         (BLANK);
+      r_BD2 <=
+         (BD1);
+      r_WPQ <=
+         (WSTBV);
       r_RDVALID <=
-         (RDCK)
+         (RDCKP)
          | (RDVALID & ~RDINV);
+      r_RPQ <=
+         (VPORT & RW & E);
       r_IRQPEND <=
          (VBLRISE)
          | (IRQPEND & ~IRQACK);
       r_VBLQ <=
          (VBLANK);
+      r_IRQEN <=
+         (LDCTRL & D6)
+         | (IRQEN & ~LDCTRL);
+      r_CPH <=
+         (CBUSY & CTICK & ~CPH)
+         | (CBUSY & ~CTICK & CPH);
+      r_CRLD <=
+         (CROWADV)
+         | (CRLD & ~RP4);
+      r_RP1 <=
+         (~RP1 & ~RP2 & ~RP3 & ~RP4 & WROWADV);
+      r_RP2 <=
+         (RP1);
+      r_RP3 <=
+         (RP2 & CRLD);
+      r_RP4 <=
+         (RP3);
   end
 
 endmodule

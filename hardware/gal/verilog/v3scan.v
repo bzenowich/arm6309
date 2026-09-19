@@ -14,9 +14,10 @@ module v3scan (
     input  wire ROWADV,
     input  wire MCADV,
     input  wire MAPLD,
-    input  wire SRC0,
-    input  wire SRC1,
-    input  wire FBOE,
+    input  wire GMAP,
+    input  wire MODE0,
+    input  wire MODE1,
+    input  wire FBOESCAN,
     input  wire D0,
     input  wire D1,
     input  wire D2,
@@ -354,156 +355,173 @@ module v3scan (
          (REGWR & RA4 & RA3 & ~RA2 & ~RA1 & RA0);
   // EXTERNAL
   assign FBA2 =
-         (~SRC1 & ~SRC0 & SA2)
-         | (~SRC1 & SRC0 & SA2)
-         | (SRC1 & ~SRC0 & MC1);
+         (~GMAP & ~MODE0 & ~MODE1 & SA2)
+         | (~GMAP & MODE0 & SA2)
+         | (~GMAP & MODE1 & SA2)
+         | (GMAP & MC1);
   // EXTERNAL
   assign FBA3 =
-         (~SRC1 & ~SRC0 & SA3)
-         | (~SRC1 & SRC0 & SA10)
-         | (SRC1 & ~SRC0 & MC2);
+         (~GMAP & ~MODE0 & ~MODE1 & SA3)
+         | (~GMAP & MODE0 & SA10)
+         | (~GMAP & MODE1 & SA10)
+         | (GMAP & MC2);
   // EXTERNAL
   assign FBA4 =
-         (~SRC1 & ~SRC0 & SA4)
-         | (~SRC1 & SRC0 & SA11)
-         | (SRC1 & ~SRC0 & MC3);
+         (~GMAP & ~MODE0 & ~MODE1 & SA4)
+         | (~GMAP & MODE0 & SA11)
+         | (~GMAP & MODE1 & SA11)
+         | (GMAP & MC3);
   // EXTERNAL
   assign FBA5 =
-         (~SRC1 & ~SRC0 & SA5)
-         | (~SRC1 & SRC0 & SA12)
-         | (SRC1 & ~SRC0 & MC4);
+         (~GMAP & ~MODE0 & ~MODE1 & SA5)
+         | (~GMAP & MODE0 & SA12)
+         | (~GMAP & MODE1 & SA12)
+         | (GMAP & MC4);
   // EXTERNAL
   assign FBA6 =
-         (~SRC1 & ~SRC0 & SA6)
-         | (~SRC1 & SRC0 & MAPQ0)
-         | (SRC1 & ~SRC0 & MC5);
+         (~GMAP & ~MODE0 & ~MODE1 & SA6)
+         | (~GMAP & MODE0 & MAPQ0)
+         | (~GMAP & MODE1 & MAPQ0)
+         | (GMAP & MC5);
   // EXTERNAL
   assign FBA7 =
-         (~SRC1 & ~SRC0 & SA7)
-         | (~SRC1 & SRC0 & MAPQ1)
-         | (SRC1 & ~SRC0 & MC6);
+         (~GMAP & ~MODE0 & ~MODE1 & SA7)
+         | (~GMAP & MODE0 & MAPQ1)
+         | (~GMAP & MODE1 & MAPQ1)
+         | (GMAP & MC6);
   // EXTERNAL
   assign FBA8 =
-         (~SRC1 & ~SRC0 & SA8)
-         | (~SRC1 & SRC0 & MAPQ2);
+         (~GMAP & ~MODE0 & ~MODE1 & SA8)
+         | (~GMAP & MODE0 & MAPQ2)
+         | (~GMAP & MODE1 & MAPQ2);
   // EXTERNAL
   assign FBA9 =
-         (~SRC1 & ~SRC0 & SA9)
-         | (~SRC1 & SRC0 & MAPQ3);
+         (~GMAP & ~MODE0 & ~MODE1 & SA9)
+         | (~GMAP & MODE0 & MAPQ3)
+         | (~GMAP & MODE1 & MAPQ3);
   // EXTERNAL
   assign FBA10 =
-         (~SRC1 & ~SRC0 & SA10)
-         | (~SRC1 & SRC0 & MAPQ4)
-         | (SRC1 & ~SRC0 & SA13);
+         (~GMAP & ~MODE0 & ~MODE1 & SA10)
+         | (~GMAP & MODE0 & MAPQ4)
+         | (~GMAP & MODE1 & MAPQ4)
+         | (GMAP & SA13);
   // EXTERNAL
   assign FBA11 =
-         (~SRC1 & ~SRC0 & SA11)
-         | (~SRC1 & SRC0 & MAPQ5)
-         | (SRC1 & ~SRC0 & SA14);
+         (~GMAP & ~MODE0 & ~MODE1 & SA11)
+         | (~GMAP & MODE0 & MAPQ5)
+         | (~GMAP & MODE1 & MAPQ5)
+         | (GMAP & SA14);
   // EXTERNAL
   assign FBA12 =
-         (~SRC1 & ~SRC0 & SA12)
-         | (~SRC1 & SRC0 & MAPQ6)
-         | (SRC1 & ~SRC0 & SA15);
+         (~GMAP & ~MODE0 & ~MODE1 & SA12)
+         | (~GMAP & MODE0 & MAPQ6)
+         | (~GMAP & MODE1 & MAPQ6)
+         | (GMAP & SA15);
   // EXTERNAL
   assign FBA13 =
-         (~SRC1 & ~SRC0 & SA13)
-         | (~SRC1 & SRC0 & MAPQ7)
-         | (SRC1 & ~SRC0 & SA16);
+         (~GMAP & ~MODE0 & ~MODE1 & SA13)
+         | (~GMAP & MODE0 & MAPQ7)
+         | (~GMAP & MODE1 & MAPQ7)
+         | (GMAP & SA16);
   // EXTERNAL
   assign FBA14 =
-         (~SRC1 & ~SRC0 & SA14)
-         | (~SRC1 & SRC0 & TB0)
-         | (SRC1 & ~SRC0 & SA17);
+         (~GMAP & ~MODE0 & ~MODE1 & SA14)
+         | (~GMAP & MODE0 & TB0)
+         | (~GMAP & MODE1 & TB0)
+         | (GMAP & SA17);
   // EXTERNAL
   assign FBA15 =
-         (~SRC1 & ~SRC0 & SA15)
-         | (~SRC1 & SRC0 & TB1)
-         | (SRC1 & ~SRC0 & SA18);
+         (~GMAP & ~MODE0 & ~MODE1 & SA15)
+         | (~GMAP & MODE0 & TB1)
+         | (~GMAP & MODE1 & TB1)
+         | (GMAP & SA18);
   // EXTERNAL
   assign FBA16 =
-         (~SRC1 & ~SRC0 & SA16)
-         | (~SRC1 & SRC0 & TB2)
-         | (SRC1 & ~SRC0 & MB0);
+         (~GMAP & ~MODE0 & ~MODE1 & SA16)
+         | (~GMAP & MODE0 & TB2)
+         | (~GMAP & MODE1 & TB2)
+         | (GMAP & MB0);
   // EXTERNAL
   assign FBA17 =
-         (~SRC1 & ~SRC0 & SA17)
-         | (~SRC1 & SRC0 & TB3)
-         | (SRC1 & ~SRC0 & MB1);
+         (~GMAP & ~MODE0 & ~MODE1 & SA17)
+         | (~GMAP & MODE0 & TB3)
+         | (~GMAP & MODE1 & TB3)
+         | (GMAP & MB1);
   // EXTERNAL
   assign FBA18 =
-         (~SRC1 & ~SRC0 & SA18)
-         | (~SRC1 & SRC0 & TB4)
-         | (SRC1 & ~SRC0 & MB2);
+         (~GMAP & ~MODE0 & ~MODE1 & SA18)
+         | (~GMAP & MODE0 & TB4)
+         | (~GMAP & MODE1 & TB4)
+         | (GMAP & MB2);
 
   // FBA2 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA2_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA3 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA3_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA4 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA4_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA5 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA5_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA6 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA6_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA7 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA7_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA8 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA8_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA9 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA9_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA10 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA10_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA11 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA11_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA12 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA12_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA13 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA13_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA14 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA14_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA15 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA15_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA16 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA16_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA17 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA17_OE =
-         (FBOE);
+         (FBOESCAN);
   // FBA18 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA18_OE =
-         (FBOE);
+         (FBOESCAN);
 
   always @(posedge CLK25) begin
       r_HS2 <=

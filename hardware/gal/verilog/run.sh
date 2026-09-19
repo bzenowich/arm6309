@@ -11,7 +11,7 @@ set -e
 cd "$(dirname "$0")"
 V="verilator --binary --timing -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC"
 CARD="video_card.v vctrl.v vaddr.v vsup.v"
-TBS=${TBS:-"vsync vaddr vtile vspan vpal audio mainboard v3dot"}
+TBS=${TBS:-"vsync vaddr vtile vspan vpal audio mainboard v3dot v3card"}
 out=$(mktemp)
 trap 'rm -f "$out"' EXIT
 
@@ -27,6 +27,10 @@ for tb in $TBS; do
     # ⭐ video3: the raster part alone. There is no video3_card.v yet - the
     # cadence needs one, and this does not pretend to be it.
     v3dot)     SRC="v3dot.v" ;;
+    # ⭐ video3 as a card: the four parts and the board around them. Every
+    # buried cell is left unconnected on purpose - a cell is not a net until
+    # it leaves its package - so PINMISSING is the design, not a slip.
+    v3card)    SRC="-Wno-PINMISSING video3_card.v v3dot.v v3scan.v v3ptr.v v3host.v" ;;
     *)         SRC="$CARD" ;;
   esac
   $V --top-module "${tb}_tb" $SRC "${tb}_tb.sv" -o "${tb}_tb" > /dev/null

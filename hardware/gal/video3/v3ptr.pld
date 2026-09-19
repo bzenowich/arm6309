@@ -31,12 +31,15 @@ PIN = D4 ;
 PIN = D5 ;
 PIN = D6 ;
 PIN = D7 ;
-PIN = WSTB ;
+PIN = WSTBV ;
+PIN = WSTART ;
 PIN = MUXSEL0 ;
 PIN = RP1 ;
 PIN = RP2 ;
 PIN = RP3 ;
 PIN = RP4 ;
+PIN = WSTEP ;
+PIN = CPURF ;
 PIN = GSPN ;
 PIN = CDONE ;
 PIN = CSTEP ;
@@ -55,11 +58,9 @@ PIN = FBOEPTR ;
 PIN = CEOR ;
 PIN = CHLAST ;
 PIN = CBUSY ;
-PIN = MS0 ;
 PIN = SPANBUSY ;
 PIN = RSPN ;
 PIN = RETIRE ;
-PIN = SPANEND ;
 PIN = WEN ;
 PIN = WROWADV ;
 PIN = RFA0 ;
@@ -149,6 +150,8 @@ PINNODE = CH5 ;
 PINNODE = CH6 ;
 PINNODE = CH7 ;
 PINNODE = CH8 ;
+PINNODE = GOQ ;
+PINNODE = MS0 ;
 PINNODE = MS1 ;
 PINNODE = MS2 ;
 PINNODE = MS3 ;
@@ -174,7 +177,7 @@ PINNODE = WM1 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * LDWP0, LDWP1, LDWP2, LDWADV, LDCP0, LDCP1, LDCP2, LDCW, LDCH
- * LDCCTRL, LDCTRL, WINC, RIDLE
+ * LDCCTRL, LDCTRL, SPANEND, WINC, RIDLE
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -645,97 +648,98 @@ CH8.d = LDCCTRL & !D5
         # !LDCCTRL & !CROWADV & CH8 ;
 CEOR = !CWN0 & CWN1 & CWN2 & CWN3 & CWN4 & CWN5 & CWN6 & CWN7 & CWN8 & CWN9 ;
 CHLAST = !CH0 & CH1 & CH2 & CH3 & CH4 & CH5 & CH6 & CH7 & CH8 ;
-CBUSY.d = LDCCTRL & D0
+GOQ.d = LDCCTRL & D0 ;
+CBUSY.d = GOQ & !LDCCTRL
           # CBUSY & !CDONE ;
-MS0.d = WSTB & D0
-        # !WSTB & RETIRE & MS1
-        # !WSTB & !RETIRE & MS0 ;
-MS1.d = WSTB & D1
-        # !WSTB & RETIRE & MS2
-        # !WSTB & !RETIRE & MS1 ;
-MS2.d = WSTB & D2
-        # !WSTB & RETIRE & MS3
-        # !WSTB & !RETIRE & MS2 ;
-MS3.d = WSTB & D3
-        # !WSTB & RETIRE & MS4
-        # !WSTB & !RETIRE & MS3 ;
-MS4.d = WSTB & D4
-        # !WSTB & RETIRE & MS5
-        # !WSTB & !RETIRE & MS4 ;
-MS5.d = WSTB & D5
-        # !WSTB & RETIRE & MS6
-        # !WSTB & !RETIRE & MS5 ;
-MS6.d = WSTB & D6
-        # !WSTB & RETIRE & MS7
-        # !WSTB & !RETIRE & MS6 ;
-MS7.d = WSTB & D7
-        # !WSTB & !RETIRE & MS7 ;
-NSL0.d = WSTB & !D0
-         # !WSTB & RETIRE & !NSL0
-         # !WSTB & !RETIRE & NSL0 ;
-NSL1.d = WSTB & !D1
-         # !WSTB & RETIRE & NSL1 & !NSL0
-         # !WSTB & RETIRE & !NSL1 & NSL0
-         # !WSTB & !RETIRE & NSL1 ;
-NSL2.d = WSTB & !D2
-         # !WSTB & RETIRE & NSL2 & !NSL0
-         # !WSTB & RETIRE & NSL2 & !NSL1
-         # !WSTB & RETIRE & !NSL2 & NSL0 & NSL1
-         # !WSTB & !RETIRE & NSL2 ;
-NSL3.d = WSTB & !D3
-         # !WSTB & RETIRE & NSL3 & !NSL0
-         # !WSTB & RETIRE & NSL3 & !NSL1
-         # !WSTB & RETIRE & NSL3 & !NSL2
-         # !WSTB & RETIRE & !NSL3 & NSL0 & NSL1 & NSL2
-         # !WSTB & !RETIRE & NSL3 ;
-NSL4.d = WSTB & !D4
-         # !WSTB & RETIRE & NSL4 & !NSL0
-         # !WSTB & RETIRE & NSL4 & !NSL1
-         # !WSTB & RETIRE & NSL4 & !NSL2
-         # !WSTB & RETIRE & NSL4 & !NSL3
-         # !WSTB & RETIRE & !NSL4 & NSL0 & NSL1 & NSL2 & NSL3
-         # !WSTB & !RETIRE & NSL4 ;
-NSL5.d = WSTB & !D5
-         # !WSTB & RETIRE & NSL5 & !NSL0
-         # !WSTB & RETIRE & NSL5 & !NSL1
-         # !WSTB & RETIRE & NSL5 & !NSL2
-         # !WSTB & RETIRE & NSL5 & !NSL3
-         # !WSTB & RETIRE & NSL5 & !NSL4
-         # !WSTB & RETIRE & !NSL5 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4
-         # !WSTB & !RETIRE & NSL5 ;
-NSL6.d = WSTB & !D6
-         # !WSTB & RETIRE & NSL6 & !NSL0
-         # !WSTB & RETIRE & NSL6 & !NSL1
-         # !WSTB & RETIRE & NSL6 & !NSL2
-         # !WSTB & RETIRE & NSL6 & !NSL3
-         # !WSTB & RETIRE & NSL6 & !NSL4
-         # !WSTB & RETIRE & NSL6 & !NSL5
-         # !WSTB & RETIRE & !NSL6 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5
-         # !WSTB & !RETIRE & NSL6 ;
-NSL7.d = WSTB & !D7
-         # !WSTB & RETIRE & NSL7 & !NSL0
-         # !WSTB & RETIRE & NSL7 & !NSL1
-         # !WSTB & RETIRE & NSL7 & !NSL2
-         # !WSTB & RETIRE & NSL7 & !NSL3
-         # !WSTB & RETIRE & NSL7 & !NSL4
-         # !WSTB & RETIRE & NSL7 & !NSL5
-         # !WSTB & RETIRE & NSL7 & !NSL6
-         # !WSTB & RETIRE & !NSL7 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6
-         # !WSTB & !RETIRE & NSL7 ;
-MK0.d = RETIRE & !WSTB & !MK0
+MS0.d = WSTBV & D7
+        # !WSTBV & RETIRE & MS1
+        # !WSTBV & !RETIRE & MS0 ;
+MS1.d = WSTBV & D6
+        # !WSTBV & RETIRE & MS2
+        # !WSTBV & !RETIRE & MS1 ;
+MS2.d = WSTBV & D5
+        # !WSTBV & RETIRE & MS3
+        # !WSTBV & !RETIRE & MS2 ;
+MS3.d = WSTBV & D4
+        # !WSTBV & RETIRE & MS4
+        # !WSTBV & !RETIRE & MS3 ;
+MS4.d = WSTBV & D3
+        # !WSTBV & RETIRE & MS5
+        # !WSTBV & !RETIRE & MS4 ;
+MS5.d = WSTBV & D2
+        # !WSTBV & RETIRE & MS6
+        # !WSTBV & !RETIRE & MS5 ;
+MS6.d = WSTBV & D1
+        # !WSTBV & RETIRE & MS7
+        # !WSTBV & !RETIRE & MS6 ;
+MS7.d = WSTBV & D0
+        # !WSTBV & !RETIRE & MS7 ;
+NSL0.d = WSTART & !D0
+         # !WSTART & RETIRE & !NSL0
+         # !WSTART & !RETIRE & NSL0 ;
+NSL1.d = WSTART & !D1
+         # !WSTART & RETIRE & NSL1 & !NSL0
+         # !WSTART & RETIRE & !NSL1 & NSL0
+         # !WSTART & !RETIRE & NSL1 ;
+NSL2.d = WSTART & !D2
+         # !WSTART & RETIRE & NSL2 & !NSL0
+         # !WSTART & RETIRE & NSL2 & !NSL1
+         # !WSTART & RETIRE & !NSL2 & NSL0 & NSL1
+         # !WSTART & !RETIRE & NSL2 ;
+NSL3.d = WSTART & !D3
+         # !WSTART & RETIRE & NSL3 & !NSL0
+         # !WSTART & RETIRE & NSL3 & !NSL1
+         # !WSTART & RETIRE & NSL3 & !NSL2
+         # !WSTART & RETIRE & !NSL3 & NSL0 & NSL1 & NSL2
+         # !WSTART & !RETIRE & NSL3 ;
+NSL4.d = WSTART & !D4
+         # !WSTART & RETIRE & NSL4 & !NSL0
+         # !WSTART & RETIRE & NSL4 & !NSL1
+         # !WSTART & RETIRE & NSL4 & !NSL2
+         # !WSTART & RETIRE & NSL4 & !NSL3
+         # !WSTART & RETIRE & !NSL4 & NSL0 & NSL1 & NSL2 & NSL3
+         # !WSTART & !RETIRE & NSL4 ;
+NSL5.d = WSTART & !D5
+         # !WSTART & RETIRE & NSL5 & !NSL0
+         # !WSTART & RETIRE & NSL5 & !NSL1
+         # !WSTART & RETIRE & NSL5 & !NSL2
+         # !WSTART & RETIRE & NSL5 & !NSL3
+         # !WSTART & RETIRE & NSL5 & !NSL4
+         # !WSTART & RETIRE & !NSL5 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4
+         # !WSTART & !RETIRE & NSL5 ;
+NSL6.d = WSTART & !D6
+         # !WSTART & RETIRE & NSL6 & !NSL0
+         # !WSTART & RETIRE & NSL6 & !NSL1
+         # !WSTART & RETIRE & NSL6 & !NSL2
+         # !WSTART & RETIRE & NSL6 & !NSL3
+         # !WSTART & RETIRE & NSL6 & !NSL4
+         # !WSTART & RETIRE & NSL6 & !NSL5
+         # !WSTART & RETIRE & !NSL6 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5
+         # !WSTART & !RETIRE & NSL6 ;
+NSL7.d = WSTART & !D7
+         # !WSTART & RETIRE & NSL7 & !NSL0
+         # !WSTART & RETIRE & NSL7 & !NSL1
+         # !WSTART & RETIRE & NSL7 & !NSL2
+         # !WSTART & RETIRE & NSL7 & !NSL3
+         # !WSTART & RETIRE & NSL7 & !NSL4
+         # !WSTART & RETIRE & NSL7 & !NSL5
+         # !WSTART & RETIRE & NSL7 & !NSL6
+         # !WSTART & RETIRE & !NSL7 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6
+         # !WSTART & !RETIRE & NSL7 ;
+MK0.d = RETIRE & !WSTART & !MK0
         # !RETIRE & MK0 ;
-MK1.d = RETIRE & !WSTB & MK1 & !MK0
-        # RETIRE & !WSTB & !MK1 & MK0
+MK1.d = RETIRE & !WSTART & MK1 & !MK0
+        # RETIRE & !WSTART & !MK1 & MK0
         # !RETIRE & MK1 ;
-MK2.d = RETIRE & !WSTB & MK2 & !MK0
-        # RETIRE & !WSTB & MK2 & !MK1
-        # RETIRE & !WSTB & !MK2 & MK0 & MK1
+MK2.d = RETIRE & !WSTART & MK2 & !MK0
+        # RETIRE & !WSTART & MK2 & !MK1
+        # RETIRE & !WSTART & !MK2 & MK0 & MK1
         # !RETIRE & MK2 ;
 WADV0.d = LDWADV & D0
           # WADV0 & !LDWADV ;
 WADV1.d = LDWADV & D1
           # WADV1 & !LDWADV ;
-SPANBUSY.d = WSTB
+SPANBUSY.d = WSTART
              # SPANBUSY & !SPANEND ;
 RSPN = SPANBUSY ;
 WM0.d = LDCTRL & D4
@@ -750,13 +754,13 @@ WEN = RETIRE & !WM1
       # RETIRE & !WM0
       # RETIRE & MS0 ;
 WINC = RETIRE
-       # CSTEP ;
+       # WSTEP ;
 WROWADV = SPANEND & WADV0
           # SPANEND & WADV1
           # CROWADV ;
-RFA0 = REGWR & !SPANBUSY & RIDLE & RA0
-       # SPANBUSY & RIDLE & !MS0
-       # !REGWR & !SPANBUSY & RIDLE
+RFA0 = CPURF & RA0
+       # SPANBUSY & RIDLE & !MS0 & WM0
+       # !CPURF & !SPANBUSY & RIDLE
        # RP2
        # RP4 ;
 RIDLE = !RP1 & !RP2 & !RP3 & !RP4 ;
@@ -818,7 +822,7 @@ FBA18.oe = FBOEPTR ;
 [WR5,WR6,WR7,WR8,CC0,CC1,CC2,CC3,CC4,CC5,CC6,CC7,CC8,CC9,CR0].ck = CLK25 ;
 [CR1,CR2,CR3,CR4,CR5,CR6,CR7,CR8,CW0,CW1,CW2,CW3,CW4,CW5,CW6].ck = CLK25 ;
 [CW7,CW8,CW9,CWN0,CWN1,CWN2,CWN3,CWN4,CWN5,CWN6,CWN7,CWN8].ck = CLK25 ;
-[CWN9,CH0,CH1,CH2,CH3,CH4,CH5,CH6,CH7,CH8,CBUSY,MS0,MS1,MS2].ck = CLK25 ;
-[MS3,MS4,MS5,MS6,MS7,NSL0,NSL1,NSL2,NSL3,NSL4,NSL5,NSL6,NSL7].ck = CLK25 ;
-[MK0,MK1,MK2,WADV0,WADV1,SPANBUSY,WM0,WM1].ck = CLK25 ;
+[CWN9,CH0,CH1,CH2,CH3,CH4,CH5,CH6,CH7,CH8,GOQ,CBUSY,MS0,MS1].ck = CLK25 ;
+[MS2,MS3,MS4,MS5,MS6,MS7,NSL0,NSL1,NSL2,NSL3,NSL4,NSL5,NSL6].ck = CLK25 ;
+[NSL7,MK0,MK1,MK2,WADV0,WADV1,SPANBUSY,WM0,WM1].ck = CLK25 ;
 

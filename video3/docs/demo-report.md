@@ -242,8 +242,8 @@ route and meet timing; the fitter has no opinion about whether `VC9` can be set 
 449-line frame. This is `CLAUDE.md`'s standing point in its sharpest form — *a fit is
 not a check* — and it is the answer to what the Verilator stage is for.
 
-`v3dot` is now **122 / 128 cells, 51 / 64 I/O, 5 cascades** (§10.6 refitted it for the
-16×16 sprite; `history.md` has what it was), and `v3dot_tb` reports
+`v3dot` was then **122 / 128 cells, 51 / 64 I/O, 5 cascades** (§10.6 refitted it for the
+16×16 sprite; `plan.md` §14 item 14 has its present fit), and `v3dot_tb` reports
 **17 claims, 0 failed**: 800-dot lines, 96-dot HSYNC, 449 / 525 lines a frame and
 400 / 480 active lines, in every VMODE.
 
@@ -640,7 +640,7 @@ tail, in place of eight rows that could only hold an arrowhead. The shape is
 that agree — `vidptr3.asm`'s 64 bytes, `video3/bench/mkv3sprite.py`'s generator, and the
 emulator.
 
-| | 8 × 8 | 16 × 16 |
+| | 8 × 8 | 16 × 16, as fitted 2026-09-17 |
 |---|---|---|
 | shape | 16 bytes, two a row | **64 bytes, four a row** — the low plane's columns 0–7 and 8–15, then the high plane's |
 | `SPRIDX` | 4 bits | **6** |

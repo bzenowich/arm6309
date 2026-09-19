@@ -22,8 +22,7 @@ module v3dot (
     input  wire RA2,
     input  wire RA3,
     input  wire RA4,
-    input  wire RMAP,
-    input  wire RRD,
+    input  wire RDREQ,
     input  wire RCPY,
     input  wire RSPN,
     input  wire PALTURN,
@@ -140,12 +139,12 @@ module v3dot (
     output wire PIXOE,
     output wire ATOE,
     output wire PIDXOE,
-    output wire OMR,
     output wire FOE0,
     output wire FOE1,
     output wire SPRACT,
     output wire SPRSH,
     output wire SPRLD,
+    output wire MAPREQ,
     output wire GMAP,
     output wire GRD,
     output wire GCPY,
@@ -153,8 +152,6 @@ module v3dot (
     output wire FBOESCAN,
     output wire FBOEPTR,
     output wire HLAST,
-    output wire HGE36,
-    output wire HGE196,
     output wire ACTIVE,
     output wire VACTIVE,
     output wire VBLANKRAW,
@@ -252,6 +249,7 @@ module v3dot (
   reg  r_SR2;
   reg  r_SR3;
   reg  r_DBLHOLD;
+  reg  r_ACTIVE;
 
   assign DP0 = r_DP0;
   assign DP1 = r_DP1;
@@ -338,6 +336,7 @@ module v3dot (
   assign SR2 = r_SR2;
   assign SR3 = r_SR3;
   assign DBLHOLD = r_DBLHOLD;
+  assign ACTIVE = r_ACTIVE;
 
   // buried
   assign LDCTRL =
@@ -389,7 +388,7 @@ module v3dot (
          (SLOTTICK & HLAST);
   // EXTERNAL
   assign FETCH =
-         (ACTIVE);
+         (SLOTTICK);
   // EXTERNAL
   assign SPARE =
          (~DP1);
@@ -398,7 +397,7 @@ module v3dot (
          (SLOTTICK & ~HC0);
   // EXTERNAL
   assign HLOAD =
-         (HBLANK & HC4 & ~HC5);
+         (~HC7 & ~HC6 & HC5 & ~HC4 & ~HC3 & ~HC2 & ~HC1);
   // EXTERNAL
   assign VLOAD =
          (VBLANK);
@@ -427,9 +426,6 @@ module v3dot (
   assign PIDXOE =
          (PALTURN);
   // EXTERNAL
-  assign OMR =
-         (~BLANK);
-  // EXTERNAL
   assign FOE0 =
          (HS0 | HS1);
   // EXTERNAL
@@ -444,18 +440,22 @@ module v3dot (
   // EXTERNAL
   assign SPRLD =
          (HBLANK & SPRROW & HC3 & ~HC4);
+  // buried
+  assign MAPREQ =
+         (CELLTICK & MODE0)
+         | (CELLTICK & MODE1);
   // EXTERNAL
   assign GMAP =
-         (SPARE & RMAP);
+         (SPARE & MAPREQ);
   // EXTERNAL
   assign GRD =
-         (SPARE & ~RMAP & RRD);
+         (SPARE & ~MAPREQ & RDREQ);
   // EXTERNAL
   assign GCPY =
-         (SPARE & ~RMAP & ~RRD & RCPY);
+         (SPARE & ~MAPREQ & ~RDREQ & RCPY);
   // EXTERNAL
   assign GSPN =
-         (SPARE & ~RMAP & ~RRD & ~RCPY & RSPN);
+         (SPARE & ~MAPREQ & ~RDREQ & ~RCPY & RSPN);
   // EXTERNAL
   assign FBOESCAN =
          (~SPARE)
@@ -468,18 +468,6 @@ module v3dot (
   // buried
   assign HLAST =
          (HC7 & HC6 & HC2 & HC1 & HC0);
-  // buried
-  assign HGE36 =
-         (HC7)
-         | (HC6)
-         | (HC5 & HC4)
-         | (HC5 & HC2);
-  // buried
-  assign HGE196 =
-         (HC7 & HC6 & HC2);
-  // buried
-  assign ACTIVE =
-         (HGE36 & ~HGE196);
   // buried
   assign VACTIVE =
          (~VBLANKRAW);
@@ -931,6 +919,13 @@ module v3dot (
       r_DBLHOLD <=
          (LINETICK & ~DBLHOLD & ~CT1)
          | (DBLHOLD & ~LINETICK);
+      r_ACTIVE <=
+         (SLOTTICK & ~HC7 & ~HC6 & HC5 & ~HC4 & ~HC3 & ~HC2 & HC1 & HC0)
+         | (ACTIVE & ~SLOTTICK)
+         | (ACTIVE & ~HC7)
+         | (ACTIVE & ~HC6)
+         | (ACTIVE & ~HC1)
+         | (ACTIVE & ~HC0);
   end
 
 endmodule

@@ -28,18 +28,18 @@ a number `check:docs` cannot tell from a live one:
 
 | | cells | I/O | cascades | what the swap did |
 |---|---|---|---|---|
-| `v3host` | **49 / 128** | ⭐ **63 / 64** | 0 | **22 pins back**, off a part that had none |
+| `v3host` | **55 / 128** | ⛔ **63 / 64** | 0 | **22 pins back**, off a part that had none — and spent since on the copy's phase machine, the reload walk and `IRQEN` (plan §14 item 14) |
 | `v3scan` | ⭐ **100 / 128** | 64 / 64 | ⭐ **2** | 14 cells and 14 cascades *cheaper* |
 | `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⛔ 25 cells and 25 cascades dearer |
-| `v3ptr` | **124 / 128** | **54 / 64** | 3 | free — and it gained the fix below |
-| `v3dot` | **122 / 128** | **51 / 64** | 0 | a cell for a pin, the raster fix, then the 16×16 sprite |
+| `v3ptr` | **125 / 128** | **55 / 64** | 3 | free — and it gained the fix below |
+| `v3dot` | **120 / 128** | **50 / 64** | 5 | a cell for a pin, the raster fix, then the 16×16 sprite |
 
 ⚠ **The receivers mostly did not pay, and the fitter is why — which means none of these
 deltas is a property of the design.** The expectation was ~6 cells of decode each against an
 unchanged pin count. What happened is that the same six-cell edit made `v3scan` 14 cells
 cheaper and `v3scan_mq` 25 cells dearer, in opposite directions, with 41 cascades on the
 variant §5 recommends. **That is placement heuristics above 80 % utilisation**, and the only
-figure here worth designing against is `v3host`'s 22 pins, which is arithmetic.
+figure the swap produced worth designing against is `v3host`'s 22 pins, which is arithmetic.
 
 ⛔ **And it bought something the strobe wiring could not express at any price.** A strobe per
 *register* cannot load a register **wider than the bus**, and v3ptr has six of them — `WPTR`
@@ -88,8 +88,8 @@ utilisation, not logic, and it means **neither cascade count should be read as a
 of the design**. ⛔ **41 cascades on the variant this section recommends is a delay
 question that only a timing analysis answers**, and it is now §5's first risk.
 
-⛔ **63 of 64 I/O is one pin of headroom**, which is the state `graphics.md` flags on
-`vsup` as a standing hazard. **The discrete variant is not an emergency valve any more —
+⛔ **64 of 64 I/O is no headroom at all** — less than the single spare pin `graphics.md`
+already treats as a standing hazard on the other card. **The discrete variant is not an emergency valve any more —
 it is the sensible default**, and plan §13.3 trade 1 already bought the four packages
 for it.
 
@@ -107,13 +107,13 @@ should be read before anything is added to plan §0.
 
 | | Cells, est. | I/O, est. | What it is |
 |---|---|---|---|
-| **`v3dot`** | ⭐ **122 / 128, FITTED** | **51 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
+| **`v3dot`** | ⭐ **120 / 128, FITTED** | **50 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
 | **`v3scan`** | ⭐ **100 / 128, FITTED** | ⚠ **64 / 64, FITTED** | the scan and cell addresses, the map word |
-| **`v3ptr`** | ⭐ **124 / 128, FITTED** | **54 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
-| **`v3host`** | **49 / 128, FITTED** | **63 / 64, FITTED** | the backplane, the registers, the palette write path |
+| **`v3ptr`** | ⭐ **125 / 128, FITTED** | **55 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
+| **`v3host`** | **55 / 128, FITTED** | ⛔ **63 / 64, FITTED** | the backplane, the registers, the palette write path |
 
-⚠ **`v3host` is pin-bound, not cell-bound** — a fifth full of macrocells and two thirds
-full of pins, because it is the part the backplane lands on. **It is not cells that stop
+⚠ **`v3host` is pin-bound, not cell-bound** — under half full of macrocells and one pin
+from full, because it is the part the backplane lands on. **It is not cells that stop
 it merging** — §7 has the arithmetic, and it is pins every time.
 
 > ⚠ **Corrected 2026-09-16**: an earlier draft put `v3host` at ~40 cells by counting
@@ -279,9 +279,9 @@ needs `PB[7:0]` on it, which is eight more pins than this.
    §8 measured that the board would not take them *and* four CPLDs — until plan §13.3
    trade 1 returned four packages. **It now places at 40 ICs, 73 %.**
 3. ⛔ **`v3dot` NEEDS its escape — it is not optional.** With the sprite's shift
-   registers in silicon the fitter answers **`Design does not fit`**; with them in two
-   `'165` it is **122/128 cells, 51/64 I/O, 0 cascades** (four of them since the sprite
-   became 16×16 — plan §7). §8's escape is therefore a
+   registers in silicon the fitter answers **`Design does not fit`**; with them in
+   `'165`s — four since the sprite became 16×16, plan §7 — it is **120/128 cells, 50/64
+   I/O, 5 cascades**. §8's escape is therefore a
    requirement, and plan §13.3 trade 1 is what paid for it.
 4. ⚠ **The `VA` tri-state discipline.** Two parts on seventeen nets, and the rule that
    they never drive together has to be *checked*, not asserted —
@@ -363,7 +363,7 @@ packages**:
 
 ⛔ **AND BOTH ESCAPES TURNED OUT TO BE MANDATORY, not optional.** The fits say so:
 `v3dot` with its shifters in silicon is refused outright, and `v3scan` with the map word
-in silicon is **63 of 64 I/O** — one pin, the state `graphics.md` flags on `vsup` as a
+in silicon is **64 of 64 I/O** — not one pin spare, past the state `graphics.md` flags on `vsup` as a
 standing hazard. **So the six discrete packages are part of the design, not a reserve**,
 and the board places them: 42 ICs at 75 %.
 
@@ -396,27 +396,15 @@ Steps 1 and 3 are **done** — four term lists, four fits, seven variants betwee
 6. ⛔ **Explain `v3scan_mq`'s 41 cascades, or accept them with a timing number.** It is
    the recommended variant and it is the only figure on the card that got worse.
 
-### 6.1 ⛔ What is fitted is not what is specified — two signals with no cell behind them
+### 6.1 What is fitted is not what is specified — two signals with no cell behind them (closed 2026-09-19; see history.md)
 
-⚠ **Four green fits do not mean the card is described.** `CLAUDE.md`'s standing warning
-is that *a design output can be absent and prose does not notice*, and
-`design-review2.md` found eleven such blocks on `video/`. Writing `v3host` against the
-other three term lists surfaced **two on video3**, both of the same shape — this document
-assigns the job, and no `Cell` performs it:
+Both are built (plan §14 item 14): the register file's address is `RFA4..RFA1` from
+`v3host`'s reload walk and `RFA0` from `v3ptr`, and `WPTR`'s end-of-row reload is that
+walk's `RP1`/`RP2`. The third finding of the same shape, the multi-byte loads, was fixed
+on 2026-09-16 and is in §0.
 
-| | this document says | the term list has |
-|---|---|---|
-| `RFA`, `RFWE`, `RFOE` — the register file's address and controls | §2.3: *"the mask serialiser and the register-file address must share a part … so `RFA`, `RFWE` and `RFOE` are here"*, on `v3ptr` | ⛔ **nothing.** One mention, in a comment. `v3ptr` produces `MS0..MS7` and never turns the serial bit into an address |
-| `WPTR`'s end-of-row reload | §7.2: the column shadow reloads `WPTR`'s column at every row advance, which is what makes a span a *rectangle* and not a line | ⚠ `LDWP0`/`LDWP1` take **only the CPU write**; `WROWADV` does not reload them. Blocked on the row above — the reload *is* a register-file read |
-| ⭐ **the multi-byte loads** — `WPTR`, `CPTR`, `CWIDTH`, `CHEIGHT` | plan §10: 19 bits across three bytes, and `CCTRL` carries `CWIDTH[9:8]` and `CHEIGHT[8]` | ⭐ **FIXED 2026-09-16.** Every bit took one strobe, so `+$08`'s `D0` drove `WC0` *and* `WC8`. Now per-bit, off the broadcast, at no cost |
-
-⭐ **Neither of the two open ones is a fit risk** — `v3ptr` sits at 124 / 128 cells and
-54 / 64 I/O, and both additions are small. **Both are correctness gaps**, and the second
-bites silently: a span writer whose column never reloads paints the first row and then
-walks off down the framebuffer, which is a picture, just not the right one. ⚠ They are
-also **one gap, not two** — the reload is a register-file read, so it is blocked on `RFA`.
-
-⛔ **This is exactly what plan §15 step 5's `reach` check is for**, and it is the reason
-that step is not optional paperwork: it asks *which signals does the design produce that
-nothing reads*, and its mirror — a signal this document names that nothing produces — is
-what caught these two by hand. Doing it by hand does not scale to four parts.
+⛔ **The lesson stands, and it is why plan §15 step 5 is not optional paperwork**:
+`check:reach` asks *which signals does the design produce that nothing reads*, and its
+mirror — a signal a document names that nothing produces — is what caught these two by
+hand. ⚠ **Neither direction sees a line only a discrete chip needs**; plan §14 item 18
+has the seven the card wrapper found.

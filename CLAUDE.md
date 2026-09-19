@@ -62,7 +62,7 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 | | |
 |---|---|
 | `npm run check` | every GAL design against its own model, and the live ones against Atmel's CUPL. **770 claims, ~60 s** |
-| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs seven testbenches. **225 claims, ~3 min** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
+| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs nine testbenches. **346 claims, ~4 min** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
 | `npm run check:sim` | the two *hand-written* Verilog models, `gal/mmu.v` and `gal/clkdec.v`, with their own testbenches. Older and separate from `check:video` |
 | `npm run check:netlist` | the motherboard's connectivity, against `dist/mainboard/mainboard/circuit.json`, and the video card's against `dist/cards/video/circuit.json` — what is drawn, and the nets with no producer on the board as a list checked both ways (`graphics.md` §19 item 34). **Build artefacts**, so run `npm run build` first if a `.circuit.tsx` changed. ⚠ `tsci build` prints "Build completed with errors" and exits 0 when it cannot reach the supplier API; connectivity is unaffected |
 | `npm run gen:pld` | writes `gal/{vaddr,vctrl,vsup,audio,aseq}.pld` from the term lists |
@@ -167,7 +167,7 @@ directory, and two concurrent fits write the same `cpld/<name>.fit`.
 ### The Verilator tests
 
 `npm run check:video` is the one that runs the *design* rather than its
-equations. It ends with a line like `225 claims, 0 failed`, and **its exit code
+equations. It ends with a line like `346 claims, 0 failed`, and **its exit code
 is the answer** — a testbench prints a failed claim and then calls `$finish`,
 which exits 0, so the count is what decides the status. Read the `FAIL` lines;
 each names the claim and the observed value.
@@ -182,6 +182,7 @@ change to the video card, the mainboard, or `emit.ts` itself:
 | `audio.jedec.ts`, `aseq.*`, `audio_card.v`, `audio_tb.sv` | `npm run check:sim:audio` (~25 s), then ⭐ **`npm run check:audio:all`** before committing |
 | the mainboard, `u9`/`u10` | `npm run check:sim:board` |
 | the video card, or `verilog/emit.ts` | `npm run check:video` (everything) |
+| the video3 card (`gal/video3/*.cpld.ts`, `video3_card.v`) | `bun run gal/verilog/gen.ts`, then from `gal/verilog/` `TBS="v3dot v3card" sh run.sh` (~1 min), and refit every part you touched |
 | anything the CPU touches — the map, the boot path, `boot.asm`, `machine.v` | ⭐ **`npm run check:machine`** |
 | the NitrOS-9 port, `tl16c550.v`, or anything NitrOS-9 boots through (the vectors, the map, the tick, the UART) | `sh software/nitros9/run-emu.sh` (~30 s) first, then ⭐ **`SCENARIOS=nitros9 npm run check:machine`** |
 | the audio card's *behaviour* | ⭐ **`npm run check:oracle`** as well — this card against an independent Paula (`gal/verilog/oracle/`). It is what found `audio.md` §16 items 36 and 39, and `audio_tb` could not |
@@ -205,6 +206,7 @@ first. After editing a `.jedec.ts`, run `bun run gal/verilog/gen.ts` or a
 | `mainboard_tb` | U3, U6, U9, U10 + the map SRAMs, `'157`, `'574`, boot `'244`, flash and SIMMs | the boot sequence, the 32 MB map, the four SIMM windows, `/IOPAGE`, and that exactly one thing drives physical `A20`–`A13` |
 | ⭐ `machine_tb` | **`mc6809e` + the whole motherboard + the whole video card + the whole audio card**, and a TL16C550C bus model | that the machine executes its own boot ROM: leaves boot mode with a map it wrote, finds its SIMM, loads 256 palette entries, paints 640 × 200 with the span writer, chains 200 spans with `WADV`, and produces a frame whose every pixel is the index the software drew. It reads DRAM and VRAM independently of the ROM's own compares, and runs `$E1`/`$E2` on purpose — **and it is what found `graphics.md` §19 items 36, 37 and 38, which twelve testbenches and 543 model claims could not** |
 | ⭐ `modplay_tb` | **the whole audio card** | that a real module plays: samples uploaded through `SPTR`/`SDATA`, the register stream delivered on the card's own §8.2 tick interrupt, and the four `AD7528` pairs' codes recorded for `audio/tools/dacwav` |
+| ⭐ `v3card_tb` | **the whole video3 card**: `v3dot`, `v3scan`, `v3ptr` and `v3host` + `video3_card.v`'s framebuffer, register file, fetch ranks, `'153`, LUT, latches and read-back, and a 6809E bus model that honours `/WAIT` the way `clkdec` does | the palette path, direct `VDATA` writes and post-incrementing reads, span-mask bit order, spans held by `/WAIT`, span-solid, `WADV` chaining, a copy byte for byte **at two accesses a byte**, a whole 640 × 480 frame pixel for pixel through the LUT, and no fights on `FBA`, `D7`–`D0` or the LUT address. ⚠ The port maps are **generated** (`v3portmap.ts`, from `gen.ts`); where the board needs a signal no package lets out, the wrapper says `GAP_n`. **It found fourteen defects `v3dot_tb` and 770 model claims could not** (`video3/docs/history.md`, 2026-09-19) |
 
 **What is generated and what is written.** `verilog/emit.ts` turns a `Merged`
 or a `Design` into Verilog from **the same `Cell` term lists `jedec/cupl.ts`

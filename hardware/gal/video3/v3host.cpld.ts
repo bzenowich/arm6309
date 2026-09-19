@@ -35,7 +35,13 @@ const comb = (name: string, terms: string[], oe?: string, low = false): Cell =>
 const REGSEL = "IOSEL & A6 & A5"
 /* graphics.md §6.3.2: the ring is A20 = 0, A19 = 1 - the second quarter of a
  * 2 MB map, and NOT the top half of a 1 MB one. */
-const VRAMSEL = "!IOSEL & A19 & !A20"
+/* ⛔ AND NOT IN THE I/O PAGE. graphics.md §6.3.2: physical A19 keeps being
+ * emitted during an I/O cycle, so A19 alone matches every I/O access in the
+ * machine, and §6.3.2 requires the /IOPAGE term "on the posted-write capture
+ * and not only on the read path". It used to sit on /WAIT instead - where it
+ * also caught VDATA, an I/O-page register, so a VDATA write never waited for a
+ * running span and its byte replaced the span's colour on IDB (v3card_tb). */
+const VRAMSEL = "!IOSEL & !IOPGH & A19 & !A20"
 
 /* ⭐ THE ESCAPE, and this part is the reason it exists.
  *
@@ -66,7 +72,20 @@ const RELOAD = (process.env.V3_RELOAD ?? "on") === "on" && COPYHOST
  * else: three other parts decode the same table, and a private copy here is
  * exactly the drift this card cannot afford - a decode that disagrees with the
  * spec fits perfectly well and answers the wrong address. */
-const WRQ = `${REGSEL} & WRCYC`
+/* ⛔ THE CPU DOES NOT GET THE CARD WHILE THE CARD IS BUSY - IT IS HELD.
+ * v3card_tb found the seam: /WAIT stretches E-high, and every strobe below is
+ * an E-high level, so a HELD write still reached the card - the '245 put the
+ * CPU's byte on IDB and the running span retired it as its colour, the mask
+ * serialiser reloaded mid-span, and the register file's /WE fired at the
+ * SPAN's address and overwrote WFG. The same is true of a copy and of §7.2's
+ * reload walk, which reads +$08/+$09 out of the file. So every CPU strobe is
+ * qualified by !BUSY, and /WAIT holds any card write - register or VRAM -
+ * while BUSY, which it did not do for a copy at all (plan §6: "/WAIT holds a
+ * CPU VRAM access while CBUSY exactly as it does while SPANBUSY"). ⚠ !BUSY
+ * is the complement of an OR, so it is ONE product term - no intermediate
+ * blows up the way access.jedec.ts warns. */
+const BUSY = "!SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4"
+const WRQ = `${REGSEL} & WRCYC & ${BUSY}`
 const WR = (r: RegName) => hostTerm(r, WRQ)
 
 /* every offset, for the "strobes" variant */
@@ -84,14 +103,37 @@ const MINE: RegName[] = ["LDPDATH", "LDIRQACK", "LDCTRL"]
  * The turnaround is three dots (vpal_tb counted them), so PS0..PS3 walk it and
  * PALTURN is the window v3dot stands the pixel path off for. */
 const palette: Cell[] = [
-  reg("PPEND", ["LDPDATH & !VBLANK", "PPEND & !PS0"]),
-  reg("PS0", ["PPEND & HLOAD", "LDPDATH & VBLANK", "PS0 & !PS1"]),
-  reg("PS1", ["PS0", "PS1 & !PS2"]),
-  reg("PS2", ["PS1", "PS2 & !PS3"]),
+  /* ⛔ THE COMMIT RUNS ON AN EDGE, NOT ON THE WRITE'S LEVEL. LDPDATH is the
+   * broadcast decode of +$11, so it is asserted for the whole of E-high - six
+   * dots and more under /WAIT - and PS0..PS3 is a four-dot walk. v3card_tb's
+   * first run wrote entry 0's colour into entries 0, 1, 2 and 3: one PDATH
+   * write ran the walk and advanced PIDX several times over. graphics.md §19
+   * item 37 is the same defect on the other card's span writer. */
+  reg("PDQ", ["LDPDATH"]),
+  comb("PDGO", ["LDPDATH & !PDQ"]),
+  reg("PPEND", ["PDGO & !VBLANK", "PPEND & !PS0"]),
+  /* ⛔ A SHIFT REGISTER, ONE DOT A STAGE - as vsup.parts.ts has it. The port
+   * to this part gave each stage a hold (`PS1 & !PS2` and so on), which
+   * stretched every stage to two dots: PIDXCE (PS3) fired twice a commit and
+   * v3card_tb found the palette landing at entries 0, 2 and 4. PS0 is one dot
+   * already, because PPEND clears on it and PDGO is an edge. */
+  reg("PS0", ["PPEND & HLOAD", "PDGO & VBLANK"]),
+  reg("PS1", ["PS0"]),
+  reg("PS2", ["PS1"]),
   reg("PS3", ["PS2"]),
   comb("PALTURN", ["PS0", "PS1", "PS2"]),
   comb("PBUSY", ["PPEND", "PS0", "PS1", "PS2", "PS3"]),
   comb("LUTWE", ["PS1"]),
+  /* ⭐ THE '273 PAIR's /MR, AND IT HAS TO BE THE BLANKING THE PIXEL SEES.
+   * plan §3's own chain puts two registers after the '153 - the index '574,
+   * then the '273 - so a dot reaches the connector two dots after v3dot's
+   * BLANK says it may. /MR on the undelayed BLANK blanked the first two pixels
+   * of every line and showed two from past its end. video/ delayed its blank
+   * for the same reason (BLANKD, five stages there). Two registers, on the
+   * part that has cells: v3dot has none. */
+  reg("BD1", ["BLANK"]),
+  reg("BD2", ["BD1"]),
+  comb("OMR", ["!BD2"]),
   comb("PIDXCE", ["PS3"]),
 ]
 
@@ -104,10 +146,31 @@ const palette: Cell[] = [
 const port: Cell[] = [
   comb("VDSEL", [`${REGSEL} & !A4 & A3 & A2 & !A1 & !A0`]),
   comb("VPORT", [VRAMSEL, "VDSEL"]),
-  comb("WSTBV", ["VPORT & !RW & E"]),
-  comb("WSTB", [`${REGSEL} & WRCYC`]),
-  reg("RDVALID", ["RDCK", "RDVALID & !RDINV"]),
-  comb("RDINV", ["WSTB", "RETIRE", "RSTART"]),
+  comb("WSTBV", [`VPORT & !RW & E & ${BUSY}`]),
+  /* ⭐ THE SPAN STARTS ON THE E-FALL EDGE OF A POSTED VRAM WRITE, and on
+   * nothing else. v3ptr started spans on WSTB - the REGISTER strobe - so every
+   * register write started a span, and WSTB is a level over E-high, so every
+   * one re-armed it: v3card_tb found WPTR moved 21 for eight VDATA writes, the
+   * five set-up writes retiring stale bytes and each VDATA write retiring
+   * twice. graphics.md §19 item 37 again, and video/'s answer again: the
+   * level delayed a dot, and the one-dot edge made from it. ⚠ At that edge
+   * the '245 has let go of IDB and the file is back at +$05, so SPANLEN is
+   * what v3ptr's length counter loads - video/'s "the load needs no address of
+   * its own". */
+  reg("WPQ", ["WSTBV"]),
+  comb("WSTART", ["WPQ & !WSTBV"]),
+  comb("WSTB", [WRQ]),
+  /* ⛔ THE PREFETCH'S CLOCK AND THE LATCH'S CLOCK ARE NOT THE SAME SIGNAL.
+   * The vread '574 has one clock pin and two users now: §11's prefetch, and
+   * the copy engine's READ access, which §6 says lands its byte in vread
+   * (trade 1: no copy latch). Nothing clocked it for the copy. But RDVALID
+   * must be set by the PREFETCH alone - a copy byte in the latch is a byte
+   * from CPTR, not the one at WPTR, and marking it valid would hand the CPU
+   * the wrong byte on its next VDATA read. So RDCKP is the prefetch's, RDCK
+   * is the pin, and a copy step invalidates like any other WPTR move. */
+  comb("RDCKP", ["GRD & !RDVALID"]),
+  reg("RDVALID", ["RDCKP", "RDVALID & !RDINV"]),
+  comb("RDINV", ["WSTB", "RETIRE", "RSTART", "CSTEP"]),
   /* -- ⭐ §11's READ PREFETCH AND THE REGISTER WRITE CYCLE, ported from
    * vsup.parts.ts. ⛔ All four were INPUTS that nothing produced, which meant
    * the card could not be written to (WRCYC qualifies every register write),
@@ -121,16 +184,22 @@ const port: Cell[] = [
    * the name and vsup.parts.ts says otherwise. */
   reg("RPQ", ["VPORT & RW & E"]),
   comb("RSTART", ["RPQ & !E"]),
+  /* ⭐ WSTEP IS WHAT v3ptr's WRITE COLUMN STEPS ON besides its own RETIRE: a
+   * copy's write and a VDATA read's post-increment. Sent as one pin rather than
+   * RSTART beside CSTEP, because every LAB on v3ptr sits at 38 of the fitter's
+   * 40 inputs and a third term in WINC was the one that did not fit. */
+  comb("WSTEP", ["CSTEP", "RSTART"]),
   /* ⚠ ACTIVE LOW, so the '574's RISING edge is the END of the granted access,
    * when the framebuffer has answered. GRD is the arbiter's grant for the
    * prefetch; video/ had `& !LRUN` here and video3 has no list engine. */
-  comb("RDCK", ["GRD & !RDVALID"], undefined, true),
+  comb("RDCK", ["RDCKP", "CTICK & !CPH"], undefined, true),
   comb("RDOE", ["VPORT & RW"]),
   comb("RDREQ", ["!RDVALID"]),
   /* ⭐ open-drain, §1.9's idiom: the value is a constant 0 and the condition
    * rides on the output enable. ACTIVE-LOW, like /WAIT on the slot - audio's
    * FIRQ and vctrl's WAIT are declared the same way. */
-  comb("WAITN", [], "VPORT & !IOPGH & E & SPANBUSY # VPORT & !IOPGH & E & RW & !RDVALID", true),
+  comb("CARDBUSY", ["SPANBUSY", "CBUSY", "RP1", "RP2", "RP3", "RP4"]),
+  comb("WAITN", [], `VPORT & E & CARDBUSY # ${REGSEL} & !RW & E & CARDBUSY # VPORT & E & RW & !RDVALID`, true),
   reg("IRQPEND", ["VBLRISE", "IRQPEND & !IRQACK"]),
   reg("VBLQ", ["VBLANK"]),
   comb("VBLRISE", ["VBLANK & !VBLQ"]),
@@ -147,7 +216,11 @@ const port: Cell[] = [
   /* VSTAT is read through a '244 (graphics.md §12.1): SPANBUSY, CBUSY and
    * PBUSY are live macrocells and the register file has no path to them. */
   comb("VSTATOE", [`${REGSEL} & !A4 & A3 & A2 & !A1 & A0 & RW & E`]),
-  comb("RDBKOE", [`${REGSEL} & RW & E & !VDSEL`]),
+  /* ⛔ NOT +$0D EITHER. RDBKOE excluded VDATA and not VSTAT, so every VSTAT
+   * poll put the read-back '245 and the VSTAT '244 on D7..D0 together - 30
+   * dots of fight in v3card_tb's first run. +$0C and +$0D are 0110x, so the
+   * exclusion is one term per literal of A4..A1 and no intermediate. */
+  comb("RDBKOE", ["A4", "!A3", "!A2", "A1"].map((l) => `${REGSEL} & RW & E & ${l}`)),
 ]
 
 /* the copy engine's sequence: two accesses a byte, one spare access a slot,
@@ -160,7 +233,10 @@ const copyHost: Cell[] = [
   comb("CRDSEL", ["CBUSY & !CPH"]),
   comb("CSTEP", ["CTICK & CPH"]),
   comb("CROWADV", ["CSTEP & CEOR"]),
-  comb("CWLOAD", ["CROWADV"]),
+  /* ⭐ AND WHILE IDLE: the width counter is loaded at the end of every row
+   * and for as long as no copy runs, so the first row starts from CWIDTH too.
+   * The load wins over the count, and CBUSY is what lets the count go. */
+  comb("CWLOAD", ["CROWADV", "!CBUSY"]),
   comb("CDONE", ["CROWADV & CHLAST"]),
   comb("RCPY", ["CBUSY"]),
 ]
@@ -213,17 +289,27 @@ const reloadWalk: Cell[] = [
  *   RP3     +$12  10010   RP4  +$13  10011 */
 const rf: Cell[] = (() => {
   const IDLE = "!RP1 & !RP2 & !RP3 & !RP4"
-  const CPU = `${REGSEL} & !SPANBUSY & ${IDLE}`
+  /* ⚠ THE CPU OWNS THE FILE IN E-HIGH ONLY. Without E, a register access's
+   * address - held a moment past E's fall - kept the file off +$05 on exactly
+   * the dot the span writer loads SPANLEN from it. */
+  const CPU = `${REGSEL} & E & !SPANBUSY & ${IDLE}`
   const SPAN = `SPANBUSY & ${IDLE}`
+  /* not the CPU, not a span, not a reload: +$05. One term per literal of the
+   * CPU's claim, because !CPU would be an intermediate (access.jedec.ts) */
+  const REST = ["!IOSEL", "!A6", "!A5", "!E"].map((l) => `${l} & !SPANBUSY & ${IDLE}`)
   const extra: Record<number, string[]> = {
     1: [SPAN, "RP3", "RP4"],
-    2: [`!${REGSEL} & !SPANBUSY & ${IDLE}`, SPAN],
+    2: [...REST, SPAN],
     3: ["RP1", "RP2"],
     4: ["RP3", "RP4"],
   }
   return [1, 2, 3, 4].map((n) =>
     comb(`RFA${n}`, [`${CPU} & A${n}`, ...extra[n]]))
 })()
+/* ⭐ and the same claim for v3ptr's RFA0, which could only see REGWR - a
+ * WRITE - so every register READ took bit 0 from the idle term and returned
+ * the odd register beside the one asked for. */
+const cpurf = comb("CPURF", [`${REGSEL} & E & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4`])
 
 export const v3host: Merged = {
   name: DECODE === "strobes" ? "v3host_st" : "v3host",
@@ -245,7 +331,7 @@ export const v3host: Merged = {
     /* status, for VSTAT and /WAIT */
     { name: "SPANBUSY" }, { name: "CBUSY" },
     /* the raster, from v3dot */
-    { name: "VBLANK" }, { name: "HLOAD" },
+    { name: "VBLANK" }, { name: "HLOAD" }, { name: "BLANK" },
     /* the read path's own signals */
     { name: "RETIRE" }, { name: "GRD" }, { name: "D6" },
     ...(COPYHOST ? [{ name: "CEOR" }, { name: "CHLAST" },
@@ -265,7 +351,7 @@ export const v3host: Merged = {
     ...palette,
     ...port,
     ...(COPYHOST ? copyHost : []),
-    ...(RELOAD ? [...reloadWalk, ...rf] : []),
+    ...(RELOAD ? [...reloadWalk, ...rf, cpurf] : []),
   ],
   external: new Set([
     ...(DECODE === "strobes"
@@ -273,7 +359,11 @@ export const v3host: Merged = {
       : ["REGWR", "RA0", "RA1", "RA2", "RA3", "RA4"]),
     "PALTURN", "PBUSY", "LUTWE", "PIDXCE",
     "WSTBV", "WSTB", "RDOE", "RDREQ", "WAITN", "IRQN", "VSTATOE", "RDBKOE",
-    "VDSEL", "VPORT", "RDVALID", "WRCYC", "RSTART", "RDCK",
+    /* ⚠ VDSEL, VPORT, RDVALID and WRCYC used to leave here too, and the pin
+     * map showed nothing on the board read any of them - four pins on the
+     * card's pin wall, which is what WSTART and CPURF are paid for with. */
+    "WSTEP", "RDCK", "WSTART", "OMR",
+    ...(RELOAD ? ["CPURF"] : []),
     /* the copy engine's, when the phase machine lives here */
     ...(COPYHOST ? ["CRDSEL", "CSTEP", "CROWADV", "CWLOAD", "CDONE", "RCPY"] : []),
     ...(RELOAD ? ["RP1", "RP2", "RP3", "RP4", "RFA1", "RFA2", "RFA3", "RFA4"] : []),

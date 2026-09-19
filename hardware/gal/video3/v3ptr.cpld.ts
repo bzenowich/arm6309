@@ -239,6 +239,17 @@ const counters: Cell[] = [
    * still no adder anywhere (plan §6).
    * ⚠ N = 0 would copy 1024 bytes rather than none; armvid.d documents
    * CP.W as 1-1023 and both models return early on zero. */
+  /* ⛔ AND LOADED WHEN A COPY STARTS, not only at the end of each row. It was
+   * loaded by CROWADV alone, so a copy's FIRST row counted up from whatever
+   * the counter last held (zero after reset): v3card_tb's 13 x 5 copy spent
+   * 2 x (1023 + 4 x 13) = 2,150 accesses, its first row 1,023 bytes wide. It
+   * passed its byte check anyway, because the overrun copied empty VRAM over
+   * empty VRAM - CLAUDE.md's "a check that holds an input constant cannot see
+   * a defect in it", in the bench this time.
+   * ⭐ The fix is in CWLOAD, not here: it is `CROWADV # !CBUSY` (v3host), so an
+   * idle engine holds CWN loaded from CWIDTH and a copy starts from it. A
+   * second load source on these cells (a GO term beside CWLOAD) was what made
+   * this part stop fitting. */
   ...CWN.map((name, i) => ({
     pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
     terms: loadable(CWN, "CSTEP", "CWLOAD", CW.map((n) => `!${n}`))[i],
@@ -288,8 +299,16 @@ const copyDec: Cell[] = [
     terms: [`!${CWN[0]} & ${CWN.slice(1).join(" & ")}`] },
   { pin: 0, name: "CHLAST", assertedLow: false, s0: 1, registered: false,
     terms: [`!${CH[0]} & ${CH.slice(1).join(" & ")}`] },
+  /* ⛔ THE COPY STARTS WHEN THE GO WRITE ENDS, like a span. It started on the
+   * LEVEL of the CCTRL write, and v3host now holds any card write while the
+   * card is busy (v3card_tb) - so the GO write made the card busy in its own
+   * E-high, was held for the whole copy, and on release asserted GO again: a
+   * copy that restarts for ever. GOQ remembers the GO bit; CBUSY sets on the
+   * dot the write ends, which is the edge WSTART gives the span writer. */
+  { pin: 0, name: "GOQ", assertedLow: false, s0: 1, registered: true,
+    terms: ["LDCCTRL & D0"] },
   { pin: 0, name: "CBUSY", assertedLow: false, s0: 1, registered: true,
-    terms: ["LDCCTRL & D0", "CBUSY & !CDONE"] },
+    terms: ["GOQ & !LDCCTRL", "CBUSY & !CDONE"] },
 ]
 const copyStub: Cell[] = [
   { pin: 0, name: "CBUSY", assertedLow: false, s0: 1, registered: true,
@@ -318,8 +337,8 @@ const copySeq: Cell[] = [
   { pin: 0, name: "CROWADV", assertedLow: false, s0: 1, registered: false,
     terms: ["CSTEP & CEOR"] },
   { pin: 0, name: "CWLOAD", assertedLow: false, s0: 1, registered: false,
-    why: "the width reloads every row; the height does not - software rewrites it",
-    terms: ["CROWADV"] },
+    why: "the width reloads every row and while idle; the height does not - software rewrites it",
+    terms: ["CROWADV", "!CBUSY"] },
   { pin: 0, name: "CHLAST", assertedLow: false, s0: 1, registered: false,
     terms: [`!${CH[0]} & ${CH.slice(1).join(" & ")}`] },
   { pin: 0, name: "CDONE", assertedLow: false, s0: 1, registered: false,
@@ -342,11 +361,17 @@ const copySeq: Cell[] = [
  * on one part by construction, not by choice. */
 const MASK = [...Array(8).keys()].map((b) => `MS${b}`)
 const spanWriter: Cell[] = [
+  /* ⛔ BIT 7 FIRST. The serialiser shifts DOWN - MS0 is the bit that leaves -
+   * and it loaded MS_i from D_i, so a mask byte came out bit 0 first and every
+   * glyph was mirrored: v3card_tb wrote $86 and read back `b2 f1 f1 b2 b2 b2 b2
+   * f1`. The emulator, which NitrOS-9's fonts are built against, is
+   * `v & (0x80 >> i)`. Loading MS_i from D(7-i) is the whole fix: a wire, not
+   * a term. */
   ...MASK.map((name, i) => ({
     pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
     terms: i === 7
-      ? [`WSTB & D7`, `!WSTB & !RETIRE & ${name}`]
-      : [`WSTB & D${i}`, `!WSTB & RETIRE & MS${i + 1}`, `!WSTB & !RETIRE & ${name}`],
+      ? [`WSTBV & D0`, `!WSTBV & !RETIRE & ${name}`]
+      : [`WSTBV & D${7 - i}`, `!WSTBV & RETIRE & MS${i + 1}`, `!WSTBV & !RETIRE & ${name}`],
   })),
   /* ⭐ SPANLEN HOLDS ITS COMPLEMENT AND COUNTS UP, which is vlen.jedec.ts's
    * idiom and the reason counter.ts never needed a down-counter generator:
@@ -359,20 +384,20 @@ const spanWriter: Cell[] = [
    * nothing produced RETIRE to clock it. */
   ...[...Array(8).keys()].map((b) => ({
     pin: 0, name: `NSL${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: loadable([...Array(8).keys()].map((i) => `NSL${i}`), "RETIRE", "WSTB",
+    terms: loadable([...Array(8).keys()].map((i) => `NSL${i}`), "RETIRE", "WSTART",
       [...Array(8).keys()].map((i) => `!D${i}`))[b],
   })),
   ...[...Array(3).keys()].map((b) => ({
     pin: 0, name: `MK${b}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: counterTerms({ bits: [...Array(3).keys()].map((i) => `MK${i}`),
-                          enable: "RETIRE", clear: "WSTB" })[b],
+                          enable: "RETIRE", clear: "WSTART" })[b],
   })),
   ...[0, 1].map((b) => ({
     pin: 0, name: `WADV${b}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [`LDWADV & D${b}`, `WADV${b} & !LDWADV`],
   })),
   { pin: 0, name: "SPANBUSY", assertedLow: false, s0: 1, registered: true,
-    terms: ["WSTB", "SPANBUSY & !SPANEND"] },
+    terms: ["WSTART", "SPANBUSY & !SPANEND"] },
   /* ⭐ the request into v3dot's arbiter: a span in flight IS the request,
    * which is what census.ts records as seqctl.SPANBUSY -> SPNREQ on the other
    * card. A cell and not a spelling coincidence, because a net that depends on
@@ -434,11 +459,16 @@ const spanSeq: Cell[] = [
   { pin: 0, name: "WEN", assertedLow: false, s0: 1, registered: false,
     why: "RETIRE, except a transparent pixel in sprite mode",
     terms: ["RETIRE & !WM1", "RETIRE & !WM0", "RETIRE & MS0"] },
-  /* ⛔ WPTR IS THE COPY'S DESTINATION TOO (plan §6), so both pointers'
-   * advances are ORs of the two engines. Only one can be busy: the arbiter
-   * grants one requester an access. */
+  /* ⛔ WPTR IS THE COPY'S DESTINATION TOO (plan §6), so its advance is an OR
+   * of every engine that moves it. Only one can be busy: the arbiter grants
+   * one requester an access.
+   * ⛔ AND RSTART, §11's post-increment after a CPU VRAM read - which reaches
+   * this part inside WSTEP, with CSTEP (v3host). It was built on
+   * v3host and reached no counter, so reading VDATA twice read the same byte
+   * twice. video/'s VINC is the same OR ("the engine's OR a VRAM read's, on
+   * the same pin"), and building the board is what showed it was missing. */
   { pin: 0, name: "WINC", assertedLow: false, s0: 1, registered: false,
-    terms: ["RETIRE", "CSTEP"] },
+    terms: ["RETIRE", "WSTEP"] },
   { pin: 0, name: "WROWADV", assertedLow: false, s0: 1, registered: false,
     terms: ["SPANEND & WADV0", "SPANEND & WADV1", "CROWADV"] },
 ]
@@ -484,9 +514,17 @@ const reload: Cell[] = [
    * in it (graphics.md 19 item 38). */
   { pin: 0, name: "RFA0", assertedLow: false, s0: 1, registered: false,
     why: "§5: the mask bit IS the register file's address bit 0, inverted",
-    terms: ["REGWR & !SPANBUSY & RIDLE & RA0",
-            "SPANBUSY & RIDLE & !MS0",
-            "!REGWR & !SPANBUSY & RIDLE",      /* idle: +$05, SPANLEN */
+    /* ⛔ CPURF, NOT REGWR: REGWR is a WRITE, so a register READ took bit 0
+     * from the idle term and returned the odd neighbour of every even
+     * register. v3host exports the CPU's claim on the file for this. */
+    terms: ["CPURF & RA0",
+            /* ⛔ & WM0: only mask and sprite mode take their colour from the
+             * mask bit. Span-SOLID is WFG always (plan §5, and the emulator's
+             * `m->vram[..] = m->wfg`) - v3card_tb's first solid span was
+             * twenty bytes of WBG, the serialiser still holding the posted
+             * byte. Solid is WM1 & !WM0 and direct never reads the file. */
+            "SPANBUSY & RIDLE & !MS0 & WM0",
+            "!CPURF & !SPANBUSY & RIDLE",      /* idle: +$05, SPANLEN */
             "RP2", "RP4"],                     /* +$09 and +$13 */
   },
   { pin: 0, name: "RIDLE", assertedLow: false, s0: 1, registered: false,
@@ -529,7 +567,13 @@ export const v3ptr: Merged = {
      * that never produced them. What is left is what genuinely arrives: the
      * posted write's strobe, the two grants, the spare window's last dot, and
      * WMODE - which lives in CTRL on v3host. */
-    { name: "WSTB" },
+    /* ⛔ TWO STROBES WHERE THERE WAS ONE, and on a one-bus card they have to
+     * be: the MASK byte loads while the CPU's byte is on IDB (WSTBV, the
+     * posted write's level), and the span STARTS - and SPANLEN loads from the
+     * file's +$05 - on the E-fall edge after the '245 has let go (WSTART). This
+     * input was WSTB, v3host's REGISTER strobe, and every register write
+     * started a span. v3card_tb's first run. */
+    { name: "WSTBV" }, { name: "WSTART" },
     /* ⭐ MUXSEL0 IS THE DOT PHASE'S LOW BIT, and taking it costs v3dot NOTHING.
      * Both sequencers need the spare window's LAST dot: the arbiter is pure
      * combinational grant logic with no phase term, so GSPN and GCPY are
@@ -544,6 +588,7 @@ export const v3ptr: Merged = {
     ...(SPANSEQ || COPYSEQ ? [{ name: "MUXSEL0" }] : []),
     ...(RELOAD ? [{ name: "RP1" }, { name: "RP2" }, { name: "RP3" },
                   { name: "RP4" }] : []),
+    { name: "WSTEP" }, { name: "CPURF" },
     ...(SPANSEQ ? [{ name: "GSPN" }]
                 : [{ name: "RETIRE" }, { name: "SPANEND" }, { name: "WINC" },
                    { name: "WROWADV" }]),
@@ -572,12 +617,14 @@ export const v3ptr: Merged = {
      * arbiter answers, the write strobe the framebuffer takes, and RETIRE -
      * which also reaches v3host, where it invalidates the CPU's prefetch. */
     "SPANBUSY", "CBUSY",
-    ...(SPANSEQ ? ["RSPN", "RETIRE", "WEN", "SPANEND", "WROWADV"] : []),
+    /* ⚠ SPANEND and MS0 used to leave the package too, and nothing on the
+     * board reads either - two of a pin-bound part's pins, spent on nothing */
+    ...(SPANSEQ ? ["RSPN", "RETIRE", "WEN", "WROWADV"] : []),
     ...(COPYSEQ ? ["RCPY"] : []),
     ...(COPYDEC ? ["CEOR", "CHLAST"] : []),
     /* §7.2's walk, for v3host's register-file address - and MS0, the mask
      * bit, which IS that address's bit 0 (§5) */
-    ...(RELOAD ? ["RFA0", "MS0"] : []),
+    ...(RELOAD ? ["RFA0"] : []),
   ]),
 }
 

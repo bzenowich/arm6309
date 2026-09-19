@@ -16,12 +16,16 @@ module v3ptr (
     input  wire D5,
     input  wire D6,
     input  wire D7,
-    input  wire WSTB,
-    input  wire RETIRE,
-    input  wire SPANEND,
-    input  wire WINC,
-    input  wire WROWADV,
-    input  wire CGO,
+    input  wire WSTBV,
+    input  wire WSTART,
+    input  wire MUXSEL0,
+    input  wire RP1,
+    input  wire RP2,
+    input  wire RP3,
+    input  wire RP4,
+    input  wire WSTEP,
+    input  wire CPURF,
+    input  wire GSPN,
     input  wire CDONE,
     input  wire CSTEP,
     input  wire CROWADV,
@@ -33,7 +37,7 @@ module v3ptr (
     input  wire RA2,
     input  wire RA3,
     input  wire RA4,
-    input  wire FBOE,
+    input  wire FBOEPTR,
     output wire LDWP0,
     output wire LDWP1,
     output wire LDWP2,
@@ -44,6 +48,7 @@ module v3ptr (
     output wire LDCW,
     output wire LDCH,
     output wire LDCCTRL,
+    output wire LDCTRL,
     output wire WC0,
     output wire WC1,
     output wire WC2,
@@ -111,6 +116,10 @@ module v3ptr (
     output wire CH6,
     output wire CH7,
     output wire CH8,
+    output wire CEOR,
+    output wire CHLAST,
+    output wire GOQ,
+    output wire CBUSY,
     output wire MS0,
     output wire MS1,
     output wire MS2,
@@ -119,21 +128,30 @@ module v3ptr (
     output wire MS5,
     output wire MS6,
     output wire MS7,
-    output wire SL0,
-    output wire SL1,
-    output wire SL2,
-    output wire SL3,
-    output wire SL4,
-    output wire SL5,
-    output wire SL6,
-    output wire SL7,
+    output wire NSL0,
+    output wire NSL1,
+    output wire NSL2,
+    output wire NSL3,
+    output wire NSL4,
+    output wire NSL5,
+    output wire NSL6,
+    output wire NSL7,
     output wire MK0,
     output wire MK1,
     output wire MK2,
     output wire WADV0,
     output wire WADV1,
     output wire SPANBUSY,
-    output wire CBUSY,
+    output wire RSPN,
+    output wire WM0,
+    output wire WM1,
+    output wire RETIRE,
+    output wire SPANEND,
+    output wire WEN,
+    output wire WINC,
+    output wire WROWADV,
+    output wire RFA0,
+    output wire RIDLE,
     output wire FBA2,
     output wire FBA3,
     output wire FBA4,
@@ -237,6 +255,8 @@ module v3ptr (
   reg  r_CH6;
   reg  r_CH7;
   reg  r_CH8;
+  reg  r_GOQ;
+  reg  r_CBUSY;
   reg  r_MS0;
   reg  r_MS1;
   reg  r_MS2;
@@ -245,21 +265,22 @@ module v3ptr (
   reg  r_MS5;
   reg  r_MS6;
   reg  r_MS7;
-  reg  r_SL0;
-  reg  r_SL1;
-  reg  r_SL2;
-  reg  r_SL3;
-  reg  r_SL4;
-  reg  r_SL5;
-  reg  r_SL6;
-  reg  r_SL7;
+  reg  r_NSL0;
+  reg  r_NSL1;
+  reg  r_NSL2;
+  reg  r_NSL3;
+  reg  r_NSL4;
+  reg  r_NSL5;
+  reg  r_NSL6;
+  reg  r_NSL7;
   reg  r_MK0;
   reg  r_MK1;
   reg  r_MK2;
   reg  r_WADV0;
   reg  r_WADV1;
   reg  r_SPANBUSY;
-  reg  r_CBUSY;
+  reg  r_WM0;
+  reg  r_WM1;
 
   assign WC0 = r_WC0;
   assign WC1 = r_WC1;
@@ -328,6 +349,8 @@ module v3ptr (
   assign CH6 = r_CH6;
   assign CH7 = r_CH7;
   assign CH8 = r_CH8;
+  assign GOQ = r_GOQ;
+  assign CBUSY = r_CBUSY;
   assign MS0 = r_MS0;
   assign MS1 = r_MS1;
   assign MS2 = r_MS2;
@@ -336,21 +359,22 @@ module v3ptr (
   assign MS5 = r_MS5;
   assign MS6 = r_MS6;
   assign MS7 = r_MS7;
-  assign SL0 = r_SL0;
-  assign SL1 = r_SL1;
-  assign SL2 = r_SL2;
-  assign SL3 = r_SL3;
-  assign SL4 = r_SL4;
-  assign SL5 = r_SL5;
-  assign SL6 = r_SL6;
-  assign SL7 = r_SL7;
+  assign NSL0 = r_NSL0;
+  assign NSL1 = r_NSL1;
+  assign NSL2 = r_NSL2;
+  assign NSL3 = r_NSL3;
+  assign NSL4 = r_NSL4;
+  assign NSL5 = r_NSL5;
+  assign NSL6 = r_NSL6;
+  assign NSL7 = r_NSL7;
   assign MK0 = r_MK0;
   assign MK1 = r_MK1;
   assign MK2 = r_MK2;
   assign WADV0 = r_WADV0;
   assign WADV1 = r_WADV1;
   assign SPANBUSY = r_SPANBUSY;
-  assign CBUSY = r_CBUSY;
+  assign WM0 = r_WM0;
+  assign WM1 = r_WM1;
 
   // buried
   assign LDWP0 =
@@ -382,6 +406,50 @@ module v3ptr (
   // buried
   assign LDCCTRL =
          (REGWR & RA4 & ~RA3 & RA2 & RA1 & RA0);
+  // buried
+  assign LDCTRL =
+         (REGWR & ~RA4 & ~RA3 & ~RA2 & ~RA1 & ~RA0);
+  // EXTERNAL - the last byte of a row - ~N + N - 1, one product term
+  assign CEOR =
+         (~CWN0 & CWN1 & CWN2 & CWN3 & CWN4 & CWN5 & CWN6 & CWN7 & CWN8 & CWN9);
+  // EXTERNAL
+  assign CHLAST =
+         (~CH0 & CH1 & CH2 & CH3 & CH4 & CH5 & CH6 & CH7 & CH8);
+  // EXTERNAL
+  assign RSPN =
+         (SPANBUSY);
+  // EXTERNAL - one byte goes to VRAM: also WPTR's column step, the serialiser's shift and SPANLEN's count
+  assign RETIRE =
+         (SPANBUSY & GSPN & MUXSEL0);
+  // buried
+  assign SPANEND =
+         (RETIRE & ~WM1 & ~WM0)
+         | (RETIRE & WM0 & MK2 & MK1 & MK0)
+         | (RETIRE & WM1 & ~WM0 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6 & NSL7);
+  // EXTERNAL - RETIRE, except a transparent pixel in sprite mode
+  assign WEN =
+         (RETIRE & ~WM1)
+         | (RETIRE & ~WM0)
+         | (RETIRE & MS0);
+  // buried
+  assign WINC =
+         (RETIRE)
+         | (WSTEP);
+  // EXTERNAL
+  assign WROWADV =
+         (SPANEND & WADV0)
+         | (SPANEND & WADV1)
+         | (CROWADV);
+  // EXTERNAL - §5: the mask bit IS the register file's address bit 0, inverted
+  assign RFA0 =
+         (CPURF & RA0)
+         | (SPANBUSY & RIDLE & ~MS0 & WM0)
+         | (~CPURF & ~SPANBUSY & RIDLE)
+         | (RP2)
+         | (RP4);
+  // buried
+  assign RIDLE =
+         (~RP1 & ~RP2 & ~RP3 & ~RP4);
   // EXTERNAL
   assign FBA2 =
          (~CRDSEL & WC2)
@@ -454,158 +522,168 @@ module v3ptr (
   // FBA2 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA2_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA3 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA3_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA4 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA4_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA5 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA5_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA6 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA6_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA7 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA7_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA8 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA8_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA9 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA9_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA10 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA10_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA11 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA11_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA12 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA12_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA13 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA13_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA14 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA14_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA15 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA15_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA16 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA16_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA17 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA17_OE =
-         (FBOE);
+         (FBOEPTR);
   // FBA18 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA18_OE =
-         (FBOE);
+         (FBOEPTR);
 
   always @(posedge CLK25) begin
       r_WC0 <=
          (LDWP0 & D0)
-         | (~LDWP0 & WINC & ~WC0)
-         | (~LDWP0 & ~WINC & WC0);
+         | (RP1 & D0)
+         | (~LDWP0 & ~RP1 & WINC & ~WC0)
+         | (~LDWP0 & ~RP1 & ~WINC & WC0);
       r_WC1 <=
          (LDWP0 & D1)
-         | (~LDWP0 & WINC & WC1 & ~WC0)
-         | (~LDWP0 & WINC & ~WC1 & WC0)
-         | (~LDWP0 & ~WINC & WC1);
+         | (RP1 & D1)
+         | (~LDWP0 & ~RP1 & WINC & WC1 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & ~WC1 & WC0)
+         | (~LDWP0 & ~RP1 & ~WINC & WC1);
       r_WC2 <=
          (LDWP0 & D2)
-         | (~LDWP0 & WINC & WC2 & ~WC0)
-         | (~LDWP0 & WINC & WC2 & ~WC1)
-         | (~LDWP0 & WINC & ~WC2 & WC0 & WC1)
-         | (~LDWP0 & ~WINC & WC2);
+         | (RP1 & D2)
+         | (~LDWP0 & ~RP1 & WINC & WC2 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & WC2 & ~WC1)
+         | (~LDWP0 & ~RP1 & WINC & ~WC2 & WC0 & WC1)
+         | (~LDWP0 & ~RP1 & ~WINC & WC2);
       r_WC3 <=
          (LDWP0 & D3)
-         | (~LDWP0 & WINC & WC3 & ~WC0)
-         | (~LDWP0 & WINC & WC3 & ~WC1)
-         | (~LDWP0 & WINC & WC3 & ~WC2)
-         | (~LDWP0 & WINC & ~WC3 & WC0 & WC1 & WC2)
-         | (~LDWP0 & ~WINC & WC3);
+         | (RP1 & D3)
+         | (~LDWP0 & ~RP1 & WINC & WC3 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & WC3 & ~WC1)
+         | (~LDWP0 & ~RP1 & WINC & WC3 & ~WC2)
+         | (~LDWP0 & ~RP1 & WINC & ~WC3 & WC0 & WC1 & WC2)
+         | (~LDWP0 & ~RP1 & ~WINC & WC3);
       r_WC4 <=
          (LDWP0 & D4)
-         | (~LDWP0 & WINC & WC4 & ~WC0)
-         | (~LDWP0 & WINC & WC4 & ~WC1)
-         | (~LDWP0 & WINC & WC4 & ~WC2)
-         | (~LDWP0 & WINC & WC4 & ~WC3)
-         | (~LDWP0 & WINC & ~WC4 & WC0 & WC1 & WC2 & WC3)
-         | (~LDWP0 & ~WINC & WC4);
+         | (RP1 & D4)
+         | (~LDWP0 & ~RP1 & WINC & WC4 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & WC4 & ~WC1)
+         | (~LDWP0 & ~RP1 & WINC & WC4 & ~WC2)
+         | (~LDWP0 & ~RP1 & WINC & WC4 & ~WC3)
+         | (~LDWP0 & ~RP1 & WINC & ~WC4 & WC0 & WC1 & WC2 & WC3)
+         | (~LDWP0 & ~RP1 & ~WINC & WC4);
       r_WC5 <=
          (LDWP0 & D5)
-         | (~LDWP0 & WINC & WC5 & ~WC0)
-         | (~LDWP0 & WINC & WC5 & ~WC1)
-         | (~LDWP0 & WINC & WC5 & ~WC2)
-         | (~LDWP0 & WINC & WC5 & ~WC3)
-         | (~LDWP0 & WINC & WC5 & ~WC4)
-         | (~LDWP0 & WINC & ~WC5 & WC0 & WC1 & WC2 & WC3 & WC4)
-         | (~LDWP0 & ~WINC & WC5);
+         | (RP1 & D5)
+         | (~LDWP0 & ~RP1 & WINC & WC5 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & WC5 & ~WC1)
+         | (~LDWP0 & ~RP1 & WINC & WC5 & ~WC2)
+         | (~LDWP0 & ~RP1 & WINC & WC5 & ~WC3)
+         | (~LDWP0 & ~RP1 & WINC & WC5 & ~WC4)
+         | (~LDWP0 & ~RP1 & WINC & ~WC5 & WC0 & WC1 & WC2 & WC3 & WC4)
+         | (~LDWP0 & ~RP1 & ~WINC & WC5);
       r_WC6 <=
          (LDWP0 & D6)
-         | (~LDWP0 & WINC & WC6 & ~WC0)
-         | (~LDWP0 & WINC & WC6 & ~WC1)
-         | (~LDWP0 & WINC & WC6 & ~WC2)
-         | (~LDWP0 & WINC & WC6 & ~WC3)
-         | (~LDWP0 & WINC & WC6 & ~WC4)
-         | (~LDWP0 & WINC & WC6 & ~WC5)
-         | (~LDWP0 & WINC & ~WC6 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5)
-         | (~LDWP0 & ~WINC & WC6);
+         | (RP1 & D6)
+         | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC1)
+         | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC2)
+         | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC3)
+         | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC4)
+         | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC5)
+         | (~LDWP0 & ~RP1 & WINC & ~WC6 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5)
+         | (~LDWP0 & ~RP1 & ~WINC & WC6);
       r_WC7 <=
          (LDWP0 & D7)
-         | (~LDWP0 & WINC & WC7 & ~WC0)
-         | (~LDWP0 & WINC & WC7 & ~WC1)
-         | (~LDWP0 & WINC & WC7 & ~WC2)
-         | (~LDWP0 & WINC & WC7 & ~WC3)
-         | (~LDWP0 & WINC & WC7 & ~WC4)
-         | (~LDWP0 & WINC & WC7 & ~WC5)
-         | (~LDWP0 & WINC & WC7 & ~WC6)
-         | (~LDWP0 & WINC & ~WC7 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6)
-         | (~LDWP0 & ~WINC & WC7);
+         | (RP1 & D7)
+         | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC1)
+         | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC2)
+         | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC3)
+         | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC4)
+         | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC5)
+         | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC6)
+         | (~LDWP0 & ~RP1 & WINC & ~WC7 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6)
+         | (~LDWP0 & ~RP1 & ~WINC & WC7);
       r_WC8 <=
          (LDWP1 & D0)
-         | (~LDWP1 & WINC & WC8 & ~WC0)
-         | (~LDWP1 & WINC & WC8 & ~WC1)
-         | (~LDWP1 & WINC & WC8 & ~WC2)
-         | (~LDWP1 & WINC & WC8 & ~WC3)
-         | (~LDWP1 & WINC & WC8 & ~WC4)
-         | (~LDWP1 & WINC & WC8 & ~WC5)
-         | (~LDWP1 & WINC & WC8 & ~WC6)
-         | (~LDWP1 & WINC & WC8 & ~WC7)
-         | (~LDWP1 & WINC & ~WC8 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7)
-         | (~LDWP1 & ~WINC & WC8);
+         | (RP2 & D0)
+         | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC0)
+         | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC1)
+         | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC2)
+         | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC3)
+         | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC4)
+         | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC5)
+         | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC6)
+         | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC7)
+         | (~LDWP1 & ~RP2 & WINC & ~WC8 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7)
+         | (~LDWP1 & ~RP2 & ~WINC & WC8);
       r_WC9 <=
          (LDWP1 & D1)
-         | (~LDWP1 & WINC & WC9 & ~WC0)
-         | (~LDWP1 & WINC & WC9 & ~WC1)
-         | (~LDWP1 & WINC & WC9 & ~WC2)
-         | (~LDWP1 & WINC & WC9 & ~WC3)
-         | (~LDWP1 & WINC & WC9 & ~WC4)
-         | (~LDWP1 & WINC & WC9 & ~WC5)
-         | (~LDWP1 & WINC & WC9 & ~WC6)
-         | (~LDWP1 & WINC & WC9 & ~WC7)
-         | (~LDWP1 & WINC & WC9 & ~WC8)
-         | (~LDWP1 & WINC & ~WC9 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC8)
-         | (~LDWP1 & ~WINC & WC9);
+         | (RP2 & D1)
+         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC0)
+         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC1)
+         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC2)
+         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC3)
+         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC4)
+         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC5)
+         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC6)
+         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC7)
+         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC8)
+         | (~LDWP1 & ~RP2 & WINC & ~WC9 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC8)
+         | (~LDWP1 & ~RP2 & ~WINC & WC9);
       r_WR0 <=
          (LDWP1 & D2)
          | (~LDWP1 & WROWADV & ~WR0)
@@ -680,89 +758,99 @@ module v3ptr (
          | (~LDWP2 & ~WROWADV & WR8);
       r_CC0 <=
          (LDCP0 & D0)
-         | (~LDCP0 & CSTEP & ~CC0)
-         | (~LDCP0 & ~CSTEP & CC0);
+         | (RP3 & D0)
+         | (~LDCP0 & ~RP3 & CSTEP & ~CC0)
+         | (~LDCP0 & ~RP3 & ~CSTEP & CC0);
       r_CC1 <=
          (LDCP0 & D1)
-         | (~LDCP0 & CSTEP & CC1 & ~CC0)
-         | (~LDCP0 & CSTEP & ~CC1 & CC0)
-         | (~LDCP0 & ~CSTEP & CC1);
+         | (RP3 & D1)
+         | (~LDCP0 & ~RP3 & CSTEP & CC1 & ~CC0)
+         | (~LDCP0 & ~RP3 & CSTEP & ~CC1 & CC0)
+         | (~LDCP0 & ~RP3 & ~CSTEP & CC1);
       r_CC2 <=
          (LDCP0 & D2)
-         | (~LDCP0 & CSTEP & CC2 & ~CC0)
-         | (~LDCP0 & CSTEP & CC2 & ~CC1)
-         | (~LDCP0 & CSTEP & ~CC2 & CC0 & CC1)
-         | (~LDCP0 & ~CSTEP & CC2);
+         | (RP3 & D2)
+         | (~LDCP0 & ~RP3 & CSTEP & CC2 & ~CC0)
+         | (~LDCP0 & ~RP3 & CSTEP & CC2 & ~CC1)
+         | (~LDCP0 & ~RP3 & CSTEP & ~CC2 & CC0 & CC1)
+         | (~LDCP0 & ~RP3 & ~CSTEP & CC2);
       r_CC3 <=
          (LDCP0 & D3)
-         | (~LDCP0 & CSTEP & CC3 & ~CC0)
-         | (~LDCP0 & CSTEP & CC3 & ~CC1)
-         | (~LDCP0 & CSTEP & CC3 & ~CC2)
-         | (~LDCP0 & CSTEP & ~CC3 & CC0 & CC1 & CC2)
-         | (~LDCP0 & ~CSTEP & CC3);
+         | (RP3 & D3)
+         | (~LDCP0 & ~RP3 & CSTEP & CC3 & ~CC0)
+         | (~LDCP0 & ~RP3 & CSTEP & CC3 & ~CC1)
+         | (~LDCP0 & ~RP3 & CSTEP & CC3 & ~CC2)
+         | (~LDCP0 & ~RP3 & CSTEP & ~CC3 & CC0 & CC1 & CC2)
+         | (~LDCP0 & ~RP3 & ~CSTEP & CC3);
       r_CC4 <=
          (LDCP0 & D4)
-         | (~LDCP0 & CSTEP & CC4 & ~CC0)
-         | (~LDCP0 & CSTEP & CC4 & ~CC1)
-         | (~LDCP0 & CSTEP & CC4 & ~CC2)
-         | (~LDCP0 & CSTEP & CC4 & ~CC3)
-         | (~LDCP0 & CSTEP & ~CC4 & CC0 & CC1 & CC2 & CC3)
-         | (~LDCP0 & ~CSTEP & CC4);
+         | (RP3 & D4)
+         | (~LDCP0 & ~RP3 & CSTEP & CC4 & ~CC0)
+         | (~LDCP0 & ~RP3 & CSTEP & CC4 & ~CC1)
+         | (~LDCP0 & ~RP3 & CSTEP & CC4 & ~CC2)
+         | (~LDCP0 & ~RP3 & CSTEP & CC4 & ~CC3)
+         | (~LDCP0 & ~RP3 & CSTEP & ~CC4 & CC0 & CC1 & CC2 & CC3)
+         | (~LDCP0 & ~RP3 & ~CSTEP & CC4);
       r_CC5 <=
          (LDCP0 & D5)
-         | (~LDCP0 & CSTEP & CC5 & ~CC0)
-         | (~LDCP0 & CSTEP & CC5 & ~CC1)
-         | (~LDCP0 & CSTEP & CC5 & ~CC2)
-         | (~LDCP0 & CSTEP & CC5 & ~CC3)
-         | (~LDCP0 & CSTEP & CC5 & ~CC4)
-         | (~LDCP0 & CSTEP & ~CC5 & CC0 & CC1 & CC2 & CC3 & CC4)
-         | (~LDCP0 & ~CSTEP & CC5);
+         | (RP3 & D5)
+         | (~LDCP0 & ~RP3 & CSTEP & CC5 & ~CC0)
+         | (~LDCP0 & ~RP3 & CSTEP & CC5 & ~CC1)
+         | (~LDCP0 & ~RP3 & CSTEP & CC5 & ~CC2)
+         | (~LDCP0 & ~RP3 & CSTEP & CC5 & ~CC3)
+         | (~LDCP0 & ~RP3 & CSTEP & CC5 & ~CC4)
+         | (~LDCP0 & ~RP3 & CSTEP & ~CC5 & CC0 & CC1 & CC2 & CC3 & CC4)
+         | (~LDCP0 & ~RP3 & ~CSTEP & CC5);
       r_CC6 <=
          (LDCP0 & D6)
-         | (~LDCP0 & CSTEP & CC6 & ~CC0)
-         | (~LDCP0 & CSTEP & CC6 & ~CC1)
-         | (~LDCP0 & CSTEP & CC6 & ~CC2)
-         | (~LDCP0 & CSTEP & CC6 & ~CC3)
-         | (~LDCP0 & CSTEP & CC6 & ~CC4)
-         | (~LDCP0 & CSTEP & CC6 & ~CC5)
-         | (~LDCP0 & CSTEP & ~CC6 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5)
-         | (~LDCP0 & ~CSTEP & CC6);
+         | (RP3 & D6)
+         | (~LDCP0 & ~RP3 & CSTEP & CC6 & ~CC0)
+         | (~LDCP0 & ~RP3 & CSTEP & CC6 & ~CC1)
+         | (~LDCP0 & ~RP3 & CSTEP & CC6 & ~CC2)
+         | (~LDCP0 & ~RP3 & CSTEP & CC6 & ~CC3)
+         | (~LDCP0 & ~RP3 & CSTEP & CC6 & ~CC4)
+         | (~LDCP0 & ~RP3 & CSTEP & CC6 & ~CC5)
+         | (~LDCP0 & ~RP3 & CSTEP & ~CC6 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5)
+         | (~LDCP0 & ~RP3 & ~CSTEP & CC6);
       r_CC7 <=
          (LDCP0 & D7)
-         | (~LDCP0 & CSTEP & CC7 & ~CC0)
-         | (~LDCP0 & CSTEP & CC7 & ~CC1)
-         | (~LDCP0 & CSTEP & CC7 & ~CC2)
-         | (~LDCP0 & CSTEP & CC7 & ~CC3)
-         | (~LDCP0 & CSTEP & CC7 & ~CC4)
-         | (~LDCP0 & CSTEP & CC7 & ~CC5)
-         | (~LDCP0 & CSTEP & CC7 & ~CC6)
-         | (~LDCP0 & CSTEP & ~CC7 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6)
-         | (~LDCP0 & ~CSTEP & CC7);
+         | (RP3 & D7)
+         | (~LDCP0 & ~RP3 & CSTEP & CC7 & ~CC0)
+         | (~LDCP0 & ~RP3 & CSTEP & CC7 & ~CC1)
+         | (~LDCP0 & ~RP3 & CSTEP & CC7 & ~CC2)
+         | (~LDCP0 & ~RP3 & CSTEP & CC7 & ~CC3)
+         | (~LDCP0 & ~RP3 & CSTEP & CC7 & ~CC4)
+         | (~LDCP0 & ~RP3 & CSTEP & CC7 & ~CC5)
+         | (~LDCP0 & ~RP3 & CSTEP & CC7 & ~CC6)
+         | (~LDCP0 & ~RP3 & CSTEP & ~CC7 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6)
+         | (~LDCP0 & ~RP3 & ~CSTEP & CC7);
       r_CC8 <=
          (LDCP1 & D0)
-         | (~LDCP1 & CSTEP & CC8 & ~CC0)
-         | (~LDCP1 & CSTEP & CC8 & ~CC1)
-         | (~LDCP1 & CSTEP & CC8 & ~CC2)
-         | (~LDCP1 & CSTEP & CC8 & ~CC3)
-         | (~LDCP1 & CSTEP & CC8 & ~CC4)
-         | (~LDCP1 & CSTEP & CC8 & ~CC5)
-         | (~LDCP1 & CSTEP & CC8 & ~CC6)
-         | (~LDCP1 & CSTEP & CC8 & ~CC7)
-         | (~LDCP1 & CSTEP & ~CC8 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6 & CC7)
-         | (~LDCP1 & ~CSTEP & CC8);
+         | (RP4 & D0)
+         | (~LDCP1 & ~RP4 & CSTEP & CC8 & ~CC0)
+         | (~LDCP1 & ~RP4 & CSTEP & CC8 & ~CC1)
+         | (~LDCP1 & ~RP4 & CSTEP & CC8 & ~CC2)
+         | (~LDCP1 & ~RP4 & CSTEP & CC8 & ~CC3)
+         | (~LDCP1 & ~RP4 & CSTEP & CC8 & ~CC4)
+         | (~LDCP1 & ~RP4 & CSTEP & CC8 & ~CC5)
+         | (~LDCP1 & ~RP4 & CSTEP & CC8 & ~CC6)
+         | (~LDCP1 & ~RP4 & CSTEP & CC8 & ~CC7)
+         | (~LDCP1 & ~RP4 & CSTEP & ~CC8 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6 & CC7)
+         | (~LDCP1 & ~RP4 & ~CSTEP & CC8);
       r_CC9 <=
          (LDCP1 & D1)
-         | (~LDCP1 & CSTEP & CC9 & ~CC0)
-         | (~LDCP1 & CSTEP & CC9 & ~CC1)
-         | (~LDCP1 & CSTEP & CC9 & ~CC2)
-         | (~LDCP1 & CSTEP & CC9 & ~CC3)
-         | (~LDCP1 & CSTEP & CC9 & ~CC4)
-         | (~LDCP1 & CSTEP & CC9 & ~CC5)
-         | (~LDCP1 & CSTEP & CC9 & ~CC6)
-         | (~LDCP1 & CSTEP & CC9 & ~CC7)
-         | (~LDCP1 & CSTEP & CC9 & ~CC8)
-         | (~LDCP1 & CSTEP & ~CC9 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6 & CC7 & CC8)
-         | (~LDCP1 & ~CSTEP & CC9);
+         | (RP4 & D1)
+         | (~LDCP1 & ~RP4 & CSTEP & CC9 & ~CC0)
+         | (~LDCP1 & ~RP4 & CSTEP & CC9 & ~CC1)
+         | (~LDCP1 & ~RP4 & CSTEP & CC9 & ~CC2)
+         | (~LDCP1 & ~RP4 & CSTEP & CC9 & ~CC3)
+         | (~LDCP1 & ~RP4 & CSTEP & CC9 & ~CC4)
+         | (~LDCP1 & ~RP4 & CSTEP & CC9 & ~CC5)
+         | (~LDCP1 & ~RP4 & CSTEP & CC9 & ~CC6)
+         | (~LDCP1 & ~RP4 & CSTEP & CC9 & ~CC7)
+         | (~LDCP1 & ~RP4 & CSTEP & CC9 & ~CC8)
+         | (~LDCP1 & ~RP4 & CSTEP & ~CC9 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6 & CC7 & CC8)
+         | (~LDCP1 & ~RP4 & ~CSTEP & CC9);
       r_CR0 <=
          (LDCP1 & D2)
          | (~LDCP1 & CROWADV & ~CR0)
@@ -866,29 +954,29 @@ module v3ptr (
          (LDCCTRL & D4)
          | (CW9 & ~LDCCTRL);
       r_CWN0 <=
-         (CWLOAD & CW0)
+         (CWLOAD & ~CW0)
          | (~CWLOAD & CSTEP & ~CWN0)
          | (~CWLOAD & ~CSTEP & CWN0);
       r_CWN1 <=
-         (CWLOAD & CW1)
+         (CWLOAD & ~CW1)
          | (~CWLOAD & CSTEP & CWN1 & ~CWN0)
          | (~CWLOAD & CSTEP & ~CWN1 & CWN0)
          | (~CWLOAD & ~CSTEP & CWN1);
       r_CWN2 <=
-         (CWLOAD & CW2)
+         (CWLOAD & ~CW2)
          | (~CWLOAD & CSTEP & CWN2 & ~CWN0)
          | (~CWLOAD & CSTEP & CWN2 & ~CWN1)
          | (~CWLOAD & CSTEP & ~CWN2 & CWN0 & CWN1)
          | (~CWLOAD & ~CSTEP & CWN2);
       r_CWN3 <=
-         (CWLOAD & CW3)
+         (CWLOAD & ~CW3)
          | (~CWLOAD & CSTEP & CWN3 & ~CWN0)
          | (~CWLOAD & CSTEP & CWN3 & ~CWN1)
          | (~CWLOAD & CSTEP & CWN3 & ~CWN2)
          | (~CWLOAD & CSTEP & ~CWN3 & CWN0 & CWN1 & CWN2)
          | (~CWLOAD & ~CSTEP & CWN3);
       r_CWN4 <=
-         (CWLOAD & CW4)
+         (CWLOAD & ~CW4)
          | (~CWLOAD & CSTEP & CWN4 & ~CWN0)
          | (~CWLOAD & CSTEP & CWN4 & ~CWN1)
          | (~CWLOAD & CSTEP & CWN4 & ~CWN2)
@@ -896,7 +984,7 @@ module v3ptr (
          | (~CWLOAD & CSTEP & ~CWN4 & CWN0 & CWN1 & CWN2 & CWN3)
          | (~CWLOAD & ~CSTEP & CWN4);
       r_CWN5 <=
-         (CWLOAD & CW5)
+         (CWLOAD & ~CW5)
          | (~CWLOAD & CSTEP & CWN5 & ~CWN0)
          | (~CWLOAD & CSTEP & CWN5 & ~CWN1)
          | (~CWLOAD & CSTEP & CWN5 & ~CWN2)
@@ -905,7 +993,7 @@ module v3ptr (
          | (~CWLOAD & CSTEP & ~CWN5 & CWN0 & CWN1 & CWN2 & CWN3 & CWN4)
          | (~CWLOAD & ~CSTEP & CWN5);
       r_CWN6 <=
-         (CWLOAD & CW6)
+         (CWLOAD & ~CW6)
          | (~CWLOAD & CSTEP & CWN6 & ~CWN0)
          | (~CWLOAD & CSTEP & CWN6 & ~CWN1)
          | (~CWLOAD & CSTEP & CWN6 & ~CWN2)
@@ -915,7 +1003,7 @@ module v3ptr (
          | (~CWLOAD & CSTEP & ~CWN6 & CWN0 & CWN1 & CWN2 & CWN3 & CWN4 & CWN5)
          | (~CWLOAD & ~CSTEP & CWN6);
       r_CWN7 <=
-         (CWLOAD & CW7)
+         (CWLOAD & ~CW7)
          | (~CWLOAD & CSTEP & CWN7 & ~CWN0)
          | (~CWLOAD & CSTEP & CWN7 & ~CWN1)
          | (~CWLOAD & CSTEP & CWN7 & ~CWN2)
@@ -926,7 +1014,7 @@ module v3ptr (
          | (~CWLOAD & CSTEP & ~CWN7 & CWN0 & CWN1 & CWN2 & CWN3 & CWN4 & CWN5 & CWN6)
          | (~CWLOAD & ~CSTEP & CWN7);
       r_CWN8 <=
-         (CWLOAD & CW8)
+         (CWLOAD & ~CW8)
          | (~CWLOAD & CSTEP & CWN8 & ~CWN0)
          | (~CWLOAD & CSTEP & CWN8 & ~CWN1)
          | (~CWLOAD & CSTEP & CWN8 & ~CWN2)
@@ -938,7 +1026,7 @@ module v3ptr (
          | (~CWLOAD & CSTEP & ~CWN8 & CWN0 & CWN1 & CWN2 & CWN3 & CWN4 & CWN5 & CWN6 & CWN7)
          | (~CWLOAD & ~CSTEP & CWN8);
       r_CWN9 <=
-         (CWLOAD & CW9)
+         (CWLOAD & ~CW9)
          | (~CWLOAD & CSTEP & CWN9 & ~CWN0)
          | (~CWLOAD & CSTEP & CWN9 & ~CWN1)
          | (~CWLOAD & CSTEP & CWN9 & ~CWN2)
@@ -951,29 +1039,29 @@ module v3ptr (
          | (~CWLOAD & CSTEP & ~CWN9 & CWN0 & CWN1 & CWN2 & CWN3 & CWN4 & CWN5 & CWN6 & CWN7 & CWN8)
          | (~CWLOAD & ~CSTEP & CWN9);
       r_CH0 <=
-         (LDCH & D0)
+         (LDCH & ~D0)
          | (~LDCH & CROWADV & ~CH0)
          | (~LDCH & ~CROWADV & CH0);
       r_CH1 <=
-         (LDCH & D1)
+         (LDCH & ~D1)
          | (~LDCH & CROWADV & CH1 & ~CH0)
          | (~LDCH & CROWADV & ~CH1 & CH0)
          | (~LDCH & ~CROWADV & CH1);
       r_CH2 <=
-         (LDCH & D2)
+         (LDCH & ~D2)
          | (~LDCH & CROWADV & CH2 & ~CH0)
          | (~LDCH & CROWADV & CH2 & ~CH1)
          | (~LDCH & CROWADV & ~CH2 & CH0 & CH1)
          | (~LDCH & ~CROWADV & CH2);
       r_CH3 <=
-         (LDCH & D3)
+         (LDCH & ~D3)
          | (~LDCH & CROWADV & CH3 & ~CH0)
          | (~LDCH & CROWADV & CH3 & ~CH1)
          | (~LDCH & CROWADV & CH3 & ~CH2)
          | (~LDCH & CROWADV & ~CH3 & CH0 & CH1 & CH2)
          | (~LDCH & ~CROWADV & CH3);
       r_CH4 <=
-         (LDCH & D4)
+         (LDCH & ~D4)
          | (~LDCH & CROWADV & CH4 & ~CH0)
          | (~LDCH & CROWADV & CH4 & ~CH1)
          | (~LDCH & CROWADV & CH4 & ~CH2)
@@ -981,7 +1069,7 @@ module v3ptr (
          | (~LDCH & CROWADV & ~CH4 & CH0 & CH1 & CH2 & CH3)
          | (~LDCH & ~CROWADV & CH4);
       r_CH5 <=
-         (LDCH & D5)
+         (LDCH & ~D5)
          | (~LDCH & CROWADV & CH5 & ~CH0)
          | (~LDCH & CROWADV & CH5 & ~CH1)
          | (~LDCH & CROWADV & CH5 & ~CH2)
@@ -990,7 +1078,7 @@ module v3ptr (
          | (~LDCH & CROWADV & ~CH5 & CH0 & CH1 & CH2 & CH3 & CH4)
          | (~LDCH & ~CROWADV & CH5);
       r_CH6 <=
-         (LDCH & D6)
+         (LDCH & ~D6)
          | (~LDCH & CROWADV & CH6 & ~CH0)
          | (~LDCH & CROWADV & CH6 & ~CH1)
          | (~LDCH & CROWADV & CH6 & ~CH2)
@@ -1000,7 +1088,7 @@ module v3ptr (
          | (~LDCH & CROWADV & ~CH6 & CH0 & CH1 & CH2 & CH3 & CH4 & CH5)
          | (~LDCH & ~CROWADV & CH6);
       r_CH7 <=
-         (LDCH & D7)
+         (LDCH & ~D7)
          | (~LDCH & CROWADV & CH7 & ~CH0)
          | (~LDCH & CROWADV & CH7 & ~CH1)
          | (~LDCH & CROWADV & CH7 & ~CH2)
@@ -1011,7 +1099,7 @@ module v3ptr (
          | (~LDCH & CROWADV & ~CH7 & CH0 & CH1 & CH2 & CH3 & CH4 & CH5 & CH6)
          | (~LDCH & ~CROWADV & CH7);
       r_CH8 <=
-         (LDCCTRL & D5)
+         (LDCCTRL & ~D5)
          | (~LDCCTRL & CROWADV & CH8 & ~CH0)
          | (~LDCCTRL & CROWADV & CH8 & ~CH1)
          | (~LDCCTRL & CROWADV & CH8 & ~CH2)
@@ -1022,108 +1110,113 @@ module v3ptr (
          | (~LDCCTRL & CROWADV & CH8 & ~CH7)
          | (~LDCCTRL & CROWADV & ~CH8 & CH0 & CH1 & CH2 & CH3 & CH4 & CH5 & CH6 & CH7)
          | (~LDCCTRL & ~CROWADV & CH8);
+      r_GOQ <=
+         (LDCCTRL & D0);
+      r_CBUSY <=
+         (GOQ & ~LDCCTRL)
+         | (CBUSY & ~CDONE);
       r_MS0 <=
-         (WSTB & D0)
-         | (~WSTB & RETIRE & MS1)
-         | (~WSTB & ~RETIRE & MS0);
+         (WSTBV & D7)
+         | (~WSTBV & RETIRE & MS1)
+         | (~WSTBV & ~RETIRE & MS0);
       r_MS1 <=
-         (WSTB & D1)
-         | (~WSTB & RETIRE & MS2)
-         | (~WSTB & ~RETIRE & MS1);
+         (WSTBV & D6)
+         | (~WSTBV & RETIRE & MS2)
+         | (~WSTBV & ~RETIRE & MS1);
       r_MS2 <=
-         (WSTB & D2)
-         | (~WSTB & RETIRE & MS3)
-         | (~WSTB & ~RETIRE & MS2);
+         (WSTBV & D5)
+         | (~WSTBV & RETIRE & MS3)
+         | (~WSTBV & ~RETIRE & MS2);
       r_MS3 <=
-         (WSTB & D3)
-         | (~WSTB & RETIRE & MS4)
-         | (~WSTB & ~RETIRE & MS3);
+         (WSTBV & D4)
+         | (~WSTBV & RETIRE & MS4)
+         | (~WSTBV & ~RETIRE & MS3);
       r_MS4 <=
-         (WSTB & D4)
-         | (~WSTB & RETIRE & MS5)
-         | (~WSTB & ~RETIRE & MS4);
+         (WSTBV & D3)
+         | (~WSTBV & RETIRE & MS5)
+         | (~WSTBV & ~RETIRE & MS4);
       r_MS5 <=
-         (WSTB & D5)
-         | (~WSTB & RETIRE & MS6)
-         | (~WSTB & ~RETIRE & MS5);
+         (WSTBV & D2)
+         | (~WSTBV & RETIRE & MS6)
+         | (~WSTBV & ~RETIRE & MS5);
       r_MS6 <=
-         (WSTB & D6)
-         | (~WSTB & RETIRE & MS7)
-         | (~WSTB & ~RETIRE & MS6);
+         (WSTBV & D1)
+         | (~WSTBV & RETIRE & MS7)
+         | (~WSTBV & ~RETIRE & MS6);
       r_MS7 <=
-         (WSTB & D7)
-         | (~WSTB & ~RETIRE & MS7);
-      r_SL0 <=
-         (WSTB & D0)
-         | (~WSTB & RETIRE & ~SL0)
-         | (~WSTB & ~RETIRE & SL0);
-      r_SL1 <=
-         (WSTB & D1)
-         | (~WSTB & RETIRE & SL1 & ~SL0)
-         | (~WSTB & RETIRE & ~SL1 & SL0)
-         | (~WSTB & ~RETIRE & SL1);
-      r_SL2 <=
-         (WSTB & D2)
-         | (~WSTB & RETIRE & SL2 & ~SL0)
-         | (~WSTB & RETIRE & SL2 & ~SL1)
-         | (~WSTB & RETIRE & ~SL2 & SL0 & SL1)
-         | (~WSTB & ~RETIRE & SL2);
-      r_SL3 <=
-         (WSTB & D3)
-         | (~WSTB & RETIRE & SL3 & ~SL0)
-         | (~WSTB & RETIRE & SL3 & ~SL1)
-         | (~WSTB & RETIRE & SL3 & ~SL2)
-         | (~WSTB & RETIRE & ~SL3 & SL0 & SL1 & SL2)
-         | (~WSTB & ~RETIRE & SL3);
-      r_SL4 <=
-         (WSTB & D4)
-         | (~WSTB & RETIRE & SL4 & ~SL0)
-         | (~WSTB & RETIRE & SL4 & ~SL1)
-         | (~WSTB & RETIRE & SL4 & ~SL2)
-         | (~WSTB & RETIRE & SL4 & ~SL3)
-         | (~WSTB & RETIRE & ~SL4 & SL0 & SL1 & SL2 & SL3)
-         | (~WSTB & ~RETIRE & SL4);
-      r_SL5 <=
-         (WSTB & D5)
-         | (~WSTB & RETIRE & SL5 & ~SL0)
-         | (~WSTB & RETIRE & SL5 & ~SL1)
-         | (~WSTB & RETIRE & SL5 & ~SL2)
-         | (~WSTB & RETIRE & SL5 & ~SL3)
-         | (~WSTB & RETIRE & SL5 & ~SL4)
-         | (~WSTB & RETIRE & ~SL5 & SL0 & SL1 & SL2 & SL3 & SL4)
-         | (~WSTB & ~RETIRE & SL5);
-      r_SL6 <=
-         (WSTB & D6)
-         | (~WSTB & RETIRE & SL6 & ~SL0)
-         | (~WSTB & RETIRE & SL6 & ~SL1)
-         | (~WSTB & RETIRE & SL6 & ~SL2)
-         | (~WSTB & RETIRE & SL6 & ~SL3)
-         | (~WSTB & RETIRE & SL6 & ~SL4)
-         | (~WSTB & RETIRE & SL6 & ~SL5)
-         | (~WSTB & RETIRE & ~SL6 & SL0 & SL1 & SL2 & SL3 & SL4 & SL5)
-         | (~WSTB & ~RETIRE & SL6);
-      r_SL7 <=
-         (WSTB & D7)
-         | (~WSTB & RETIRE & SL7 & ~SL0)
-         | (~WSTB & RETIRE & SL7 & ~SL1)
-         | (~WSTB & RETIRE & SL7 & ~SL2)
-         | (~WSTB & RETIRE & SL7 & ~SL3)
-         | (~WSTB & RETIRE & SL7 & ~SL4)
-         | (~WSTB & RETIRE & SL7 & ~SL5)
-         | (~WSTB & RETIRE & SL7 & ~SL6)
-         | (~WSTB & RETIRE & ~SL7 & SL0 & SL1 & SL2 & SL3 & SL4 & SL5 & SL6)
-         | (~WSTB & ~RETIRE & SL7);
+         (WSTBV & D0)
+         | (~WSTBV & ~RETIRE & MS7);
+      r_NSL0 <=
+         (WSTART & ~D0)
+         | (~WSTART & RETIRE & ~NSL0)
+         | (~WSTART & ~RETIRE & NSL0);
+      r_NSL1 <=
+         (WSTART & ~D1)
+         | (~WSTART & RETIRE & NSL1 & ~NSL0)
+         | (~WSTART & RETIRE & ~NSL1 & NSL0)
+         | (~WSTART & ~RETIRE & NSL1);
+      r_NSL2 <=
+         (WSTART & ~D2)
+         | (~WSTART & RETIRE & NSL2 & ~NSL0)
+         | (~WSTART & RETIRE & NSL2 & ~NSL1)
+         | (~WSTART & RETIRE & ~NSL2 & NSL0 & NSL1)
+         | (~WSTART & ~RETIRE & NSL2);
+      r_NSL3 <=
+         (WSTART & ~D3)
+         | (~WSTART & RETIRE & NSL3 & ~NSL0)
+         | (~WSTART & RETIRE & NSL3 & ~NSL1)
+         | (~WSTART & RETIRE & NSL3 & ~NSL2)
+         | (~WSTART & RETIRE & ~NSL3 & NSL0 & NSL1 & NSL2)
+         | (~WSTART & ~RETIRE & NSL3);
+      r_NSL4 <=
+         (WSTART & ~D4)
+         | (~WSTART & RETIRE & NSL4 & ~NSL0)
+         | (~WSTART & RETIRE & NSL4 & ~NSL1)
+         | (~WSTART & RETIRE & NSL4 & ~NSL2)
+         | (~WSTART & RETIRE & NSL4 & ~NSL3)
+         | (~WSTART & RETIRE & ~NSL4 & NSL0 & NSL1 & NSL2 & NSL3)
+         | (~WSTART & ~RETIRE & NSL4);
+      r_NSL5 <=
+         (WSTART & ~D5)
+         | (~WSTART & RETIRE & NSL5 & ~NSL0)
+         | (~WSTART & RETIRE & NSL5 & ~NSL1)
+         | (~WSTART & RETIRE & NSL5 & ~NSL2)
+         | (~WSTART & RETIRE & NSL5 & ~NSL3)
+         | (~WSTART & RETIRE & NSL5 & ~NSL4)
+         | (~WSTART & RETIRE & ~NSL5 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4)
+         | (~WSTART & ~RETIRE & NSL5);
+      r_NSL6 <=
+         (WSTART & ~D6)
+         | (~WSTART & RETIRE & NSL6 & ~NSL0)
+         | (~WSTART & RETIRE & NSL6 & ~NSL1)
+         | (~WSTART & RETIRE & NSL6 & ~NSL2)
+         | (~WSTART & RETIRE & NSL6 & ~NSL3)
+         | (~WSTART & RETIRE & NSL6 & ~NSL4)
+         | (~WSTART & RETIRE & NSL6 & ~NSL5)
+         | (~WSTART & RETIRE & ~NSL6 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5)
+         | (~WSTART & ~RETIRE & NSL6);
+      r_NSL7 <=
+         (WSTART & ~D7)
+         | (~WSTART & RETIRE & NSL7 & ~NSL0)
+         | (~WSTART & RETIRE & NSL7 & ~NSL1)
+         | (~WSTART & RETIRE & NSL7 & ~NSL2)
+         | (~WSTART & RETIRE & NSL7 & ~NSL3)
+         | (~WSTART & RETIRE & NSL7 & ~NSL4)
+         | (~WSTART & RETIRE & NSL7 & ~NSL5)
+         | (~WSTART & RETIRE & NSL7 & ~NSL6)
+         | (~WSTART & RETIRE & ~NSL7 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6)
+         | (~WSTART & ~RETIRE & NSL7);
       r_MK0 <=
-         (RETIRE & ~WSTB & ~MK0)
+         (RETIRE & ~WSTART & ~MK0)
          | (~RETIRE & MK0);
       r_MK1 <=
-         (RETIRE & ~WSTB & MK1 & ~MK0)
-         | (RETIRE & ~WSTB & ~MK1 & MK0)
+         (RETIRE & ~WSTART & MK1 & ~MK0)
+         | (RETIRE & ~WSTART & ~MK1 & MK0)
          | (~RETIRE & MK1);
       r_MK2 <=
-         (RETIRE & ~WSTB & MK2 & ~MK0)
-         | (RETIRE & ~WSTB & MK2 & ~MK1)
-         | (RETIRE & ~WSTB & ~MK2 & MK0 & MK1)
+         (RETIRE & ~WSTART & MK2 & ~MK0)
+         | (RETIRE & ~WSTART & MK2 & ~MK1)
+         | (RETIRE & ~WSTART & ~MK2 & MK0 & MK1)
          | (~RETIRE & MK2);
       r_WADV0 <=
          (LDWADV & D0)
@@ -1132,11 +1225,14 @@ module v3ptr (
          (LDWADV & D1)
          | (WADV1 & ~LDWADV);
       r_SPANBUSY <=
-         (WSTB)
+         (WSTART)
          | (SPANBUSY & ~SPANEND);
-      r_CBUSY <=
-         (CGO)
-         | (CBUSY & ~CDONE);
+      r_WM0 <=
+         (LDCTRL & D4)
+         | (WM0 & ~LDCTRL);
+      r_WM1 <=
+         (LDCTRL & D5)
+         | (WM1 & ~LDCTRL);
   end
 
 endmodule

@@ -288,11 +288,11 @@ counts **up only**, and `CCTRL` b1 and b2 are reserved.
 
 The up/down counters are what the fitter charged for, and the price is not marginal:
 
-| fit | cells | cascades |
+| fit, 2026-09-16, per-register strobes | cells | cascades |
 |---|---|---|
 | `v3ptr_both` — both directions | **128 / 128** | 19 |
 | `v3ptr_rows` — rows only | **128 / 128** | 21 |
-| ⭐ **`v3ptr` — neither, and this is the build** | **124 / 128** | **3** |
+| ⭐ **`v3ptr` — neither, and this is the build** | **110 / 128** | **3** |
 
 **18 macrocells and 16 cascades, and dropping one bit buys nothing** — it is
 all-or-nothing. ⚠ All three are kept as fits rather than as prose: the first draft of
@@ -353,9 +353,10 @@ a tail does not fit in eight rows — `software/demo`'s pointer is 16×16 and it
 now this card's, pixel for pixel — and eight rows made the cursor an arrowhead whose
 fill reached the outline's outer edge. The price is 48 more bytes of register file, two
 more `'165`, and four macrocells on `v3dot`: the column and row window counters go from
-three bits to four and `SPRIDX` from four to six. ⭐ **`v3dot` refitted at 122/128 cells,
-51/64 I/O and 0 cascades** — cascades *fell* from four, so the timing argument got no
-worse. `video3/bench/run-v3sprite.sh` renders every X phase, both 4-byte phases, the
+three bits to four and `SPRIDX` from four to six. ⭐ **The refit for it (2026-09-17)
+took those four cells and cascades *fell* from four to zero**, so the sprite made the
+timing argument no worse; `v3dot`'s present fit, and why its cascades are five, is §14
+item 14. `video3/bench/run-v3sprite.sh` renders every X phase, both 4-byte phases, the
 edges, the line-doubling boundary and all four `VMODE`s against `v3model.py`, and all 36
 positions match pixel for pixel.
 
@@ -728,8 +729,8 @@ totals its own claim and that 24 cm is the shortest length that holds it.
    anywhere** — see item 4.
 4. ⚠ **The partition is drafted — [`partition.md`](partition.md) — at FOUR parts, which
    §13.5 says is the most that places, so **video3 is at its ceiling**. ⭐ **ALL FOUR
-   ARE FITTED.** `v3dot` is **122/128 cells and 51/64 I/O**; `v3ptr` is **124/128 and
-   54/64**; `v3host` is **49/128 and 63/64**. `v3scan` — the map word in silicon — is
+   ARE FITTED.** `v3dot` is **120/128 cells and 50/64 I/O**; `v3ptr` is **125/128 and
+   55/64**; `v3host` is **55/128 and 63/64**. `v3scan` — the map word in silicon — is
    **100/128 cells and 64/64 I/O**, and `v3scan_mq` — the same part with the map word in
    four `'574` — is **107/128 cells and 46/64 I/O**. **NO NUMBER FROM `video/`'s FIT APPLIES HERE.**
    `video/` is three `ATF1508AS` whose utilisation is recorded in
@@ -765,160 +766,85 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     CPU move is **10.0 ms a line** (§8.2), so if copyrect does not fit, character mode
     does not work at terminal speeds and the ring has to come back with its defect.
     They are not independent features.
-14. ⛔ **NEITHER SEQUENCER IS BUILT, AND THE FITS DO NOT CONTAIN THEM** — found
-    2026-09-18 by putting video3 into `npm run check:reach`. The four parts are a
-    **datapath and an arbiter**: pointers, counters, the address mux, the register
-    decode, and `GMAP`/`GRD`/`GCPY`/`GSPN`. What no part produces is **19 control
-    lines**: `RMAP`/`RRD`/`RCPY`/`RSPN` (the four *requests* into v3dot's own
-    arbiter), `RETIRE`/`SPANEND`/`WINC`/`WROWADV`/`RSTART` (§5's span writer), and
-    `CGO`/`CDONE`/`CSTEP`/`CROWADV`/`CWLOAD`/`CRDSEL` (§6's copy engine), plus
-    v3host's `WRCYC`/`RDCK`/`IRQEN`. `v3ptr` counts on `CSTEP`, holds `CBUSY` on
-    `CGO & !CDONE`, and nothing steps or starts it.
-    ⚠ **So `v3ptr` 124/128 and `v3dot` 122/128 are fits of the datapath.**
-    `partition.md` §2.3 budgets **~10 macrocells** for the two sequencers inside
-    `v3ptr` and they are not in that fit; 18 spare cells and 3 existing cascades is
-    what they have to come out of. **This is the number that decides whether there
-    is room for anything else** — a keyed copyrect, a descriptor walker, more
-    sprite. Nothing should be priced against `v3ptr` until it is refitted with
-    them.
-    ⭐ **AND THE EQUATIONS WERE WRITTEN AND FITTED, 2026-09-18** — `V3_SEQ` on
-    `v3ptr.cpld.ts`, the way `V3_COPYDIR` bisected the direction bits. The span
-    writer's is a port of `video/`'s `seqctl.jedec.ts`, which `vspan_tb` verifies,
-    minus the display list's `!LRUN` and with `TC` folded in because SPANLEN is on
-    this part; the copy engine's is new, and is only a phase bit, because two
-    accesses a byte with one spare access a slot means **two slots a byte** and the
-    phase is all the state the sequence needs.
+14. ⭐ **CLOSED 2026-09-19 — both sequencers are built, split across two parts, and
+    `v3card_tb` runs them** (§15.4). `history.md` has the record: the 2026-09-18 census
+    that found the four parts were a datapath and an arbiter with **19 control lines**
+    nothing produced, the `V3_SEQ` variants, and the refusals that forced the split.
 
-    | `v3ptr` | cells | I/O | cascades |
-    |---|---|---|---|
-    | `none` — the build | 124/128 | 54/64 | 3 |
-    | `span` | **115/128** | 48/64 | **3** — no timing change |
-    | `copy` | **117/128** | 41/64 | ⚠ **8** — +5 on its own |
-    | `both` | ⛔ **DOES NOT FIT**, refused under two different file names | | |
+    **The span writer is on `v3ptr`**, a port of `video/`'s `seqctl.jedec.ts` minus the
+    display list's `!LRUN`, with `TC` folded in because `SPANLEN` is on the same part.
+    The mask loads on `WSTBV`, the posted write's level, while the CPU's byte is on
+    `IDB`; the span **starts on `WSTART`**, the one-dot edge `v3host` makes at the end of
+    that write, when the `'245` has let go and the file is back at +$05 — so `SPANLEN`
+    loads with no address of its own.
 
-    ⭐ **AND THE PARTITION MOVE WORKS — BOTH SEQUENCERS ARE BUILT, 2026-09-19.**
-    `V3_SEQ=split` keeps `CEOR` and `CHLAST` on `v3ptr`, beside the ten and nine
-    counter bits they decode, and puts the copy's **phase machine** on `v3host`.
-    Seven signals cross instead of nineteen: `CBUSY` (which `v3host` already took
-    for `VSTAT`), the two decoded bits out, and `CRDSEL`/`CSTEP`/`CROWADV`/
-    `CWLOAD`/`CDONE` back. It is the default build, and all four parts fit:
+    **The copy engine is split.** `CEOR` and `CHLAST` stay on `v3ptr` beside the ten and
+    nine counter bits they decode, and the **phase machine** is on `v3host`. Two accesses
+    a byte with one spare access a slot is **two slots a byte**, so the phase is all the
+    state the sequence needs. Seven signals cross: `CBUSY`, the two decodes, and
+    `CRDSEL`/`CSTEP`/`CROWADV`/`CWLOAD`/`CDONE`. ⚠ **Both sequencers on `v3ptr` does not
+    fit**, and not for cells: the refusal is LAB grouping, with Nodes+FB already over
+    125 % on one — so `partition.md` §2.3's "~10 macrocells for the span and copy
+    sequencers" does not describe this part, and §2.5's "a fifth part for the copy
+    engine — it does not place" closes the other way out.
 
-    | | cells | I/O | cascades |
-    |---|---|---|---|
-    | `v3dot` | 122/128 | 51/64 | 0 | ⭐ **unchanged — not one edit** |
-    | `v3ptr` | **124/128** | 54/64 | **3** | the span sequencer, the two decodes, WMODE |
-    | `v3host` | **49/128** | 63/64 | **0** | the copy engine's phase machine |
-    | `v3scan` | 100/128 | 64/64 | 2 | ⚠ **full** — it now decodes its own address source |
+    ⭐ **The tick is a literal, not a macrocell.** Both sequencers need the spare window's
+    *last* dot, because the arbiter is pure combinational grant logic and a step on every
+    dot of the window would move four bytes a slot (`design-review2.md` V-4). `SPARE` is
+    `!DP1`, the grants contain it, and `MUXSEL0` is `DP0` on a pin already — so
+    `GSPN & MUXSEL0` *is* the tick, for one literal on a term the receiver has anyway.
 
-    ⚠ **`v3ptr`'s cascades are still 3** — the count it had before any of this —
-    so the span writer goes in with no timing change at all.
+    **`WMODE` is held on `v3ptr`**: `v3dot` holds `CTRL` as `CT0..CT7` and has no pin to
+    export b5..4, so `v3ptr` decodes `LDCTRL` off the broadcast and keeps `WM0`/`WM1`
+    itself — `partition.md` §3's idiom, and the same duplication `v3dot` makes of
+    `HSCROLL[1:0]`.
 
-    ⛔ **THE TICK COST A LITERAL AND NOT A MACROCELL, after two refusals.** Both
-    sequencers need the spare window's *last* dot, because the arbiter is pure
-    combinational grant logic with no phase term and a step on every dot of the
-    window would move four bytes a slot (`design-review2.md` V-4). A `SPARETICK`
-    cell on `v3dot` was refused, and so was exporting `DP0` — that part is
-    122/128 with Nodes+FB at 124%, and neither a cell nor forcing a buried
-    counter bit onto a pin goes in. But `SPARE` is `!DP1`, the grants already
-    contain it, and **`comb("MUXSEL0", ["DP0"])` is already an external**. So
-    `GSPN & MUXSEL0` *is* the tick, for one extra literal on a term the receiver
-    has anyway — and `v3dot.pld` did not change by a byte.
+    ⭐ **§7.2's end-of-row column reload** is a one-hot four-dot walk on `v3host`, so the
+    states *are* the strobes: `RP1` → +$08 → `WC7..WC0`, `RP2` → +$09 → `WC9..WC8`, and
+    `RP3`/`RP4` → +$12/+$13 for `CPTR`, only when `CRLD` says the trigger was a copy's.
+    The walk is also what gives the register file an address at all: `RFA4..RFA1` are
+    `v3host`'s, which is the decode, and **`RFA0` is `v3ptr`'s**, because §5 makes the
+    file's bit 0 the mask bit and the serialiser is there. ⚠ **Two strobes a pointer**,
+    because +$09 carries `WC9..WC8` in D1..D0 **and `WR5..WR0` in D7..D2**, so reusing the
+    CPU's `LDWP1` would undo the row advance the same span just made. ⚠ **And separate
+    from the CPU's**: `LDA # RLDA` is the obvious saving, and `access.jedec.ts` records
+    that CUPL substitutes the intermediate, every hold term doubles, and the fitter
+    aborts.
 
-    ⛔ **AND WMODE HAD NO PRODUCER ANYWHERE.** §10 puts it at `CTRL` b5..4 and
-    `v3dot` holds `CTRL` as `CT0..CT7`, but exports `MODE` and `VMODE` and not
-    those two — and cannot grow a pin to do it. `v3ptr` decodes `LDCTRL` off the
-    broadcast and holds `WM0`/`WM1` itself, which is `partition.md` §3's own
-    idiom and the same duplication `v3dot` already makes of `HSCROLL[1:0]`.
-    Three cells, and the span writer has its mode.
-
-    ⚠ **122 is what the two would cost on one part if the cells added, and 122
-    is under 128** — so the refusal is not the cell count. It is LAB grouping:
-    Nodes+FB/MCells is already 125% with one sequencer, and `CEOR` and `CHLAST`
-    need ten and nine counter bits inside one block. **`partition.md` §2.3's
-    "~10 macrocells for the span and copy sequencers" is refuted by the fitter**,
-    and §2.5's "a fifth part for the copy engine — it does not place" closes the
-    other way out. ⭐ The move the numbers point at is **`v3host`, which is
-    49/128 and has 22 spare pins**: keep `CEOR`/`CHLAST` on `v3ptr` beside the
-    counters they decode and put the phase machine there, which is ~7 signals
-    across rather than the 19 counter bits.
-
-    ⭐ **AND §7.2's END-OF-ROW COLUMN RELOAD IS BUILT, 2026-09-19** — the last
-    piece, and the one neither part could do alone. Without it neither engine
-    chains: a glyph steps eight pixels right on every row (`video/` shipped
-    exactly that, `design-review2.md` V-6) and a copy's two columns climb
-    across rows instead of restarting.
-
-    ⛔ **It could not be finished because nothing on this card produced `RFA`
-    at all.** The register file holds the readback bytes, `WFG`/`WBG`,
-    `SPANLEN`, the sprite shape *and* the two column shadows, and its address
-    had no generator. `video/`'s `rfa` is the same block, so this is a port,
-    with three differences: the CPU's offset is already on `v3host`, which IS
-    the decode; the walk is **four** states and not two, because the copy has
-    to restore `CPTR`'s column as well as `WPTR`'s; and **`RFA0` is on
-    `v3ptr`** — §5 makes the file's address bit 0 the **mask bit**, and the
-    serialiser is there.
-
-    ⭐ **One-hot, so the states are the strobes**: a four-dot walk that also
-    needs four load strobes is five cells that way and nine as a counter plus
-    decodes. `RP1` → +$08 → `WC7..WC0`, `RP2` → +$09 → `WC9..WC8`, `RP3` →
-    +$12 and `RP4` → +$13 for `CPTR`, the last two only when `CRLD` says the
-    trigger was a copy's.
-
-    ⚠ **Two strobes a pointer and not one, and the ROW is why**: +$09 carries
-    `WC9..WC8` in D1..D0 **and `WR5..WR0` in D7..D2**, so a reload that reused
-    the CPU's own `LDWP1` would undo the row advance the same span just made.
-    ⚠ **And the strobes must stay separate**: `LDA # RLDA` is the obvious
-    saving and `access.jedec.ts` records what it costs — CUPL substitutes the
-    intermediate, every *hold* term becomes two, and the fitter aborts with
-    INTERNAL ERROR.
-
-    | | cells | I/O | cascades |
-    |---|---|---|---|
-    | `v3ptr` | **124/128** | 54/64 | **3** — still flat |
-    | `v3host` | **49/128** | ⚠ **63/64** | 1 |
-
-    ⭐ **AND THE LAST SIX UNBUILT BLOCKS FOLLOWED, 2026-09-19** — the census is
-    now **empty of `unbuilt`**. Not one of them needed a new block, and four
-    came straight out of `video/`:
+    The requests into `v3dot`'s arbiter and the rest of the control lines:
 
     | | |
     |---|---|
-    | `RMAP` | ⭐ is `v3dot`'s own `CELLTICK`. The map word is fetched once a cell and `MAPLD` was already `SPARE & CELLTICK`, so a separate request was the same decode under a second name. ⚠ **Mode-qualified, which `MAPLD` is not**: bitmap mode has no map, and granting it the slot's only spare access would spend it on a fetch nothing reads |
-    | `RRD` | is `v3host`'s `RDREQ`, `!RDVALID` — §11's request under its own name, and `video/` spells it the same way |
+    | `RMAP` | `v3dot`'s own `CELLTICK`, mode-qualified — bitmap mode has no map, and granting it the slot's only spare access would spend it on a fetch nothing reads. ⛔ But the map *load* never happens — item 16 |
+    | `RRD` | `v3host`'s `RDREQ`, `!RDVALID` — §11's request under its own name, as `video/` spells it |
     | `WRCYC` | `!RW & E`. ⚠ A 6809E write is only valid in E's second half |
-    | `RDCK` | `GRD & !RDVALID`, **active low** so the `'574`'s *rising* edge is the END of the granted access — `vsup.parts.ts`'s, minus its `!LRUN` |
-    | `RSTART` | `RPQ & !E`, §11's **post-increment**. ⚠ Not "the copy has started": that was a guess from the name, and `vsup.parts.ts` says it is the dot after a VRAM read's E falls |
-    | `IRQEN` | `CTRL` b6. ⛔ Tried on `v3ptr`, which has the bus and the `CTRL` decode already, and the fitter refused it at 125/128; it is on `v3host`, which pays its **first data-bus pin** for it |
+    | `RDCK` | the `vread` `'574`'s clock, **active low** so the rising edge ends the access. Two users: the prefetch (`GRD & !RDVALID`) and the copy's read access, which §6 lands in `vread` (trade 1: no copy latch). ⚠ Only the prefetch sets `RDVALID` — a copy byte is from `CPTR`, not the byte at `WPTR` |
+    | `RSTART` | `RPQ & !E`, §11's **post-increment** — the dot after a VRAM read's E falls. It reaches `WPTR` as `v3host`'s `WSTEP = CSTEP # RSTART`: one pin, because every `v3ptr` LAB is at 38 of the fitter's 40 inputs and a third `WINC` term did not fit |
+    | `IRQEN` | `CTRL` b6, on `v3host`, which pays a data-bus pin for it — `v3ptr` refused it |
 
-    ⚠ **`v3dot`'s cascades went 0 → 5** for `MAPREQ` and its mode qualifier.
-    `CLAUDE.md`: a change in cascades is a timing change even when the cell
-    count is flat. Nothing on this card has been timed yet, so it is recorded
-    rather than assessed.
+    **`SPANLEN`, `CWIDTH` and `CHEIGHT` are down-counters built up**: `counter.ts` has only
+    an up-counter, so each holds the complement and counts up, and the terminal decode is
+    one product term (`vlen.jedec.ts`'s idiom). It is `..11110`, not `..11111`, because
+    `CWIDTH` is the plain byte count N and the counter is sampled before the edge that
+    steps it. `CWIDTH` loads at every row end **and while idle** (`CWLOAD = CROWADV #
+    !CBUSY`), so the first row starts from it too.
 
-    ⛔ **`v3host` IS NOW TWO PINS FROM FULL, and that is the card's real
-    ceiling showing.** `partition.md` §7.1 says the binding constraint is pins,
-    and this is what it looks like: `keyed-copy.md` §7.2's keyed compare wanted
-    **eight** pins for the source byte on whichever part gates the write
-    strobe, and there is no part left with eight. The `74HC688` version — one
-    pin — is now the only one that fits anywhere on this card.
+    | | cells | I/O | cascades | |
+    |---|---|---|---|---|
+    | `v3dot` | 120/128 | 50/64 | ⚠ **5** | the raster, the arbiter, `MAPREQ` |
+    | `v3scan` | 100/128 | ⛔ **64/64** | 2 | ⛔ **full** — it decodes its own address source |
+    | `v3ptr` | **125/128** | 55/64 | **3** | the span sequencer, the two copy decodes, `WMODE`, `RFA0` |
+    | `v3host` | 55/128 | ⛔ **63/64** | 0 | the copy's phase machine, the reload walk, `IRQEN` |
 
-    ⚠ **And three counters were built the wrong way round**, which only mattered
-    because nothing clocked them: §5 and §6 specify SPANLEN, CWIDTH and CHEIGHT as
-    **down**-counters and `counter.ts` has only an up-counter, so all three loaded
-    the true value and counted up, past any terminal count. Fixed with
-    `vlen.jedec.ts`'s idiom — hold the complement, count up, and the terminal
-    decode is ONE product term. ⛔ The decode is `..11110` and not `..11111`,
-    because CWIDTH is the plain byte count N (the emulator, the model, both
-    drivers and the bench all agree, none of them biases it) and the counter is
-    sampled before the edge that steps it. Free: the fit is 124/128 and 3
-    cascades either way.
+    ⚠ **`v3dot`'s cascades are five, for `MAPREQ` and its mode qualifier.** `CLAUDE.md`:
+    a change in cascades is a timing change even when the cell count is flat. Nothing on
+    this card has been timed (item 1), so it is recorded rather than assessed.
 
-    ⚠ Two naming defects came out of the same run and are *not* the same thing:
-    `v3scan` reads `SRC0`/`SRC1` where `v3dot` exports `MUXSEL0`/`MUXSEL1`, and
-    **`v3ptr` and `v3scan` each declare a plain `FBOE` while `v3dot` exports two
-    signals, `FBOESCAN` and `FBOEPTR`** — one name on both parts keeps them both
-    on or both off the seventeen address nets `v3scan`'s own comment says `FBOE`
-    exists to arbitrate.
+    ⛔ **`v3host` is one pin from full, and `v3ptr` has three cells** with every LAB at 38
+    of 40 inputs — the card's ceiling, and `partition.md` §7.1's point that the binding
+    constraint is pins. `keyed-copy.md` §7.2's keyed compare wants **eight** pins on
+    whichever part gates the write strobe and there is no such part: its `74HC688`
+    version — one pin — is the only one that fits anywhere on this card.
 
 15. ⭐ **CLOSED 2026-09-18 — three pin senses, by `npm run check:pins`.**
     `v3host`'s `reg`/`comb` helpers hard-coded `assertedLow: false`, so nothing on
@@ -941,6 +867,44 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     is a stride select — a mux on which bit the row step lands — for 16 KB of map.
     **Cost both when the equations are written**; the draft's choice is a default, not
     a finding.
+16. ⛔ **THE MAP WORD IS NEVER LOADED: `MAPLD = SPARE & CELLTICK` on `v3dot` is
+    unsatisfiable.** `SPARE` is dots 0–1 of the slot and `CELLTICK` is dot 3, so the
+    product is never true and `v3scan` never latches a code or an attribute. **Character
+    and tile mode are unbuilt in effect**, whatever the fits say — and **no bench reaches
+    either mode**: `v3card_tb` runs bitmap mode, `v3dot_tb` runs the raster, and the
+    host emulator (§15 step 2b) models the intent rather than the equations. Whatever
+    replaces it is a `v3dot` edit on a part at 120/128, so it is a refit, and it wants a
+    character-mode frame in `v3card_tb` before it is believed.
+17. ⚠ **The sprite is not in the card model.** `video3_card.v` has no `'165`s, because the
+    shape lives in the register file **above +$1F** and `RFA4..RFA0` does not reach it —
+    so the file's address is **five bits where §7's 64 shape bytes need more**, and
+    nothing produces the rest. §7's pixel-exact claims rest on the emulator
+    (`run-v3sprite.sh`) and on `v3dot`'s fit, not on a bench of the parts.
+18. ⚠ **The board needs seven signals no package produces**, and `check:reach` cannot see
+    them: a line only a *discrete* chip reads, and no part produces, falls through both
+    of its directions. `video3_card.v` reaches each by hierarchical reference and names
+    it, so they are counted and not hidden:
+
+    | | |
+    |---|---|
+    | `GAP_1` | **the byte lane of a single-byte access.** `v3ptr`'s mux drives `FBA18..2` and never `WC1:WC0`/`CC1:CC0`, so no discrete part can tell which of the four bytes the span writer, the copy or the prefetch means |
+    | `GAP_2` | **the framebuffer's `/VWE`, `/VOE` and four byte enables** (`signals.md` §1.3). The model derives them from `WEN`, `CSTEP` and the lane — both writers' strobes do leave their packages |
+    | `GAP_3` | **the fetch ranks' clock.** `SLOTTICK` leaves `v3dot`, but it is a combinational tick and a `'574` has no clock enable: the board needs a *clock* |
+    | `GAP_4` | **the map word's part select** — §2.5's `A1` is the cell column's low bit, `MC0`, and `v3scan` is 64/64 and cannot let it out |
+    | `GAP_5` | **`VSTAT` b0, the pending interrupt.** `IRQPEND` is buried in `v3host` |
+    | `GAP_6` | **the copy's write data.** §6's byte goes `vread` → posted-write `'574` → framebuffer (§13.3 trade 1: no copy latch), and no strobe on the card moves it from one to the other |
+    | `GAP_7` | **which source drives the framebuffer's write data** — the posted-write `'574` (direct mode), the register file (span modes: §5's "`WFG` or `WBG` without a mux") or `vread` (the copy). Each needs an output enable, and none is produced |
+
+    ⭐ **And one proposal, not a gap: a `'138` for the palette's four load strobes** —
+    `PIDX` low (`'163` load, +$0E), `PIDX` high (`'574` clock, +$0F), `PDATL` and
+    `PDATH` (`'573` LEs, +$10/+$11). `REGWR` and `RA4..RA0` already leave `v3host`, so one
+    `'138` decodes all four for zero CPLD pins; the model is built that way. It is
+    **+1 IC**, and `hardware/place/parts.ts` does not have it yet.
+19. ⚠ **`HSCROLL`'s fetch-rank select is not byte-granular in the model.** `v3dot`
+    exports `FOE0`/`FOE1` from `HS1..HS0`, but `video3_card.v`'s `'153` takes all four
+    bytes of a group from the one rank `FOE0` picks, so a bitmap scroll that is not a
+    multiple of four pixels is neither modelled nor checked. `v3card_tb`'s frame is at
+    `HSCROLL` 0.
 
 ## 15. What would have to be built to believe it
 
@@ -957,7 +921,7 @@ Each step gates the next, and the first two are **done**.
 | 4b | **Term lists, then a pin census from them, then a fit** | in that order. `partition.md` §6 |
 | 5 | **`reach` and `census` from the first term list, not retrofitted** | they are the pair that caught `ACTRL` b3 unbuilt for two days and `design-review2`'s eleven blocks described as fitted with nothing behind them |
 | 6 | **A cadence check** — §14 item 8 | five requesters, one spare access a slot |
-| 7 | **Verilator** — §15.1 |
+| 7 | **Verilator** — §15.1 | ⭐ **started**: `v3dot_tb` and `v3card_tb` run in `npm run check:video`, and the card bench is §15.4. `v3machine_tb` is not built |
 | 8 | **The board file and `check:netlist`** | and `lib/netlist.check.ts`'s *reachability* form: ⚠ "a stub check is not the fix — U1B's `DQ` pins were never dangling, they were on a net with three other parts and connected to the wrong one" |
 
 ### 15.1 ⭐ Verilator — and the one lesson that decides how it is built
@@ -986,6 +950,7 @@ their own.
 | `v3char_tb` | the whole card | a CP437 screen with 256 attribute pairs, **the 80×50 and 80×60 geometries**, and §8.2's copy-scroll — the modes `video/` cannot reach at all |
 | `v3copy_tb` | the whole card | §6: aligned and unaligned, both directions, an overlapping scroll, and **that a copy under a span waits** |
 | `v3sprite_tb` | the whole card | §7: the sprite at every X phase including the two that straddle a slot boundary, and that it is **off** in character mode |
+| ⭐ **`v3card_tb`** — **built, §15.4** | **the four parts and the board around them**, `video3_card.v`, driven by a 6809E bus model that honours `/WAIT` | the seams between parts and packages: the register file, the palette path, both sequencers, the reload, a whole frame through the LUT, and the bus fights no single part can see |
 | ⭐ **`v3machine_tb`** | **`mc6809e` + the motherboard + video3 + the audio card** | §15.2 — and it is the only one that can be believed |
 
 ⚠ **`v3dot_tb` is the exception to "top down"**, and deliberately: §14 item 1 gates the
@@ -1031,3 +996,54 @@ minutes, and `software/nitros9/run-vid.sh`'s pixel-exact models
 (`tools/vtmodel.py`, `tools/vgmodel.py`) are already written against the *protocol*
 rather than the driver — **so they are reusable, and they are what would catch a
 character-mode attribute bug before any RTL exists.**
+
+### 15.4 ⭐ `v3card_tb` — the card as a card, and what it found
+
+`hardware/gal/verilog/video3_card.v` is the four parts wired to the discrete parts of
+§13.1: the two framebuffer parts, the register file, the fetch ranks, the `'153`, the
+index and `ATTR` `'574`s, the LUT and its `'273`s, the `PIDX`/`PDAT` latches, the
+posted-write and `vread` `'574`s, the `VSTAT` `'244` and the read-back `'245`. ⭐ **Every
+net between two parts is the term lists' own**: the port maps and the wire list are
+generated by `v3portmap.ts` (run by `gen.ts`) from the `.cpld.ts` inputs and externals,
+so a buried cell cannot become a net by being mentioned. Where the board needs a signal
+no package lets out, the wrapper reaches into the part by hierarchical reference and
+names it `GAP_n` — §14 item 18.
+
+`v3card_tb` drives it one 6809E bus cycle at a time, **stretching E-high while `/WAIT` is
+asserted** with `clkdec`'s semantics, and a bound turns a hang into a failure. It runs in
+`npm run check:video` as `v3card` — **34 claims, 0 failed**:
+
+| | |
+|---|---|
+| the palette | four writes land at LUT entries 0..3, and `PIDX` walks |
+| direct `VDATA` | eight writes land at `WPTR`, `WPTR`+1, …, nothing either side moves, and eight reads return them in order, **post-incrementing** |
+| the span writer | a mask of `$86` is `F1 B2 B2 B2 B2 F1 F1 B2` — **bit 7 first** — four back-to-back `$FF` masks are 32 `WFG` pixels with the CPU held by `/WAIT` while each span runs; span-solid is **one `SPANLEN`, many spans**; `WADV` 01 chains four masks down four rows at the same column |
+| the copy | a 13 × 5 copy lands byte for byte in every lane and row, `CBUSY` sets and clears in `VSTAT`, nothing around it moves, and it takes **130 granted accesses for 65 bytes** — two a byte, §6.1's 4.05 MB/s (the claim allows 130–150) |
+| the picture | a whole 640 × 480 `VMODE` 11 frame: 480 lines of 640, VRAM row 0 first, each line the next row, **every pixel the byte at its own address through the LUT** |
+| the board | `v3scan` and `v3ptr` never both on the address bus, never two drivers on D7..D0, never two masters on the LUT address, and `/WAIT` always released |
+
+⛔ **It found fourteen defects, every one of which had fitted.** Each is fixed in the
+term lists with a ⛔ comment at the fix; the list is the card's argument for §15.1's
+"top down":
+
+| | found | the design now |
+|---|---|---|
+| 1 | every register write started a span — `WSTB` is a level over E-high | spans start on `WSTART`, the edge at the end of a VRAM-port write; the mask loads on `WSTBV` |
+| 2 | one `PDATH` write filled entries 0..3, then 0, 2, 4 | the commit runs on an edge (`PDQ`/`PDGO`), and `PS0..PS3` is a pure one-dot shift register, as `video/`'s `vsup` has it |
+| 3 | every `VSTAT` poll put the `'245` and the `'244` on D7..D0 together | `RDBKOE` excludes +$0C and +$0D |
+| 4 | a register read returned the odd neighbour | `CPURF`, the CPU's claim on the file, drives `RFA0` for register accesses — `REGWR` only saw writes |
+| 5 | the span mask came out mirrored | `MS`*i* loads from `D`(7−*i*) — a wire, not a term |
+| 6 | a `VDATA` write did not wait for a running span | `!IOPGH` is in `VRAMSEL`, as `graphics.md` §6.3.2 requires, not on `/WAIT` |
+| 7 | a write held by `/WAIT` still reached the card and corrupted the span | `v3host`'s strobes are qualified by `!BUSY`, and `/WAIT` holds any card write on `CARDBUSY` — a copy and the reload walk included |
+| 8 | a copy restarted for ever, and its first row was 1,023 bytes | `GO` is an edge (`GOQ`), and `CWLOAD = CROWADV # !CBUSY` loads the width while idle |
+| 9 | span-solid painted `WBG` | `RFA0`'s span term is qualified by `WM0`: solid is always `WFG` |
+| 10 | `VDATA` reads did not post-increment | `RSTART` reaches `WPTR`, inside `WSTEP` |
+| 11 | the scan column counter stepped every dot | `FETCH` is `SLOTTICK`, and `HLOAD` moved to HC 32–33, two slots before the picture — the load wins over the count |
+| 12 | `HC >= 36` missed HC 40–43, so every line blanked sixteen pixels in | `ACTIVE` is a **register** on `v3dot`, set at the tick ending slot 35 and cleared at slot 195 — which is also what made `v3dot` fit again |
+| 13 | the `'273`'s `/MR` on undelayed `BLANK` lost the first two pixels | `OMR` is on `v3host` behind two registers, `BD1`/`BD2`, and the model's `/MR` is asynchronous |
+| 14 | `v3dot_tb` had not compiled since `4a7d398`, which replaced its `RMAP`/`RRD` inputs — `check:video` was not run after that change | repaired |
+
+⚠ **What it does not reach**: character and tile mode (§14 item 16 — the map word is
+never loaded), the sprite (item 17), a horizontal scroll that is not a multiple of four
+(item 19), and the timing. It is a model of the logic, as every wrapper in
+`hardware/gal/verilog/` is.
