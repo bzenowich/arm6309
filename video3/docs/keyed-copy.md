@@ -409,7 +409,7 @@ estimates:
 |---|---|---|---|---|
 | `v3dot` | **121/128** — 7 spare | 63/64 — one spare | ⚠ 5 | 39/128 |
 | `v3host` | 58/128 — 70 spare | ⛔ **64/64** — **no** pin spare | 0 | 0 |
-| `v3ptr` | ⛔ **122/128** — 6 spare | 57/64 — 7 spare | **3** | 52/128 |
+| `v3ptr` | ⛔ **124/128** — 4 spare | 58/64 — 6 spare | **3** | 52/128 |
 | `v3scan` | 112/128 — 16 spare | 63/64 — one spare | 3 | 39/128 |
 
 ⚠ **`v3ptr`'s 3 cascades are the baseline a refit is compared against**, not

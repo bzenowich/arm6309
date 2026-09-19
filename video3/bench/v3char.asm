@@ -4,10 +4,14 @@
 *
 *   sh video3/bench/run-v3char.sh
 *
-* plan 2.2 and 3: the map is FOUR bytes a cell (code, attr, two unused) and the attribute is the HIGH
+* plan 2.2 and 3: the map is FOUR bytes a cell - the code at +0, the attribute
+* at +2, and +1/+3 never read - and the attribute is the HIGH
 * eight bits of the LUT address, so a cell's colours are a sub-palette rather
 * than a bank.  A wrong ATTR path renders the right shapes in the wrong
 * colours - which a pixel-exact model catches and a register trace does not.
+*
+* The map goes in with WADV b2 set, the card's step-by-two write (plan 2.5),
+* which is what makes a cell TWO VDATA writes rather than four.
 *******************************************************************************
 
 VCTRL   EQU     $FF60
@@ -89,8 +93,16 @@ gl2     lda     ,x+
         decb
         bne     gl1
 
-* --- the map: four bytes a cell - code, attr, and two the card must not read
-*     (plan 2.5) - one VRAM row a cell row
+* --- the map: four bytes a cell, one VRAM row a cell row, in TWO PASSES and
+*     both of them with WADV b2 set - the card's step-by-two write (plan 2.5).
+*     ⭐ Pass one starts at an ODD address, so stepping by two fills +1 and +3
+*     of every cell with a decoy code and a decoy attribute the card must
+*     never read.  Pass two starts at the even one and writes the cell itself:
+*     the code into lane 0, the attribute into lane 2, two stores a character.
+*     A card that reads the odd lanes, or a pointer that steps by one, paints
+*     the decoy instead of the cell.
+        lda     #$04
+        sta     <WADV           b2: step by two
         ldx     #maptab
         clra
         ldb     #NROWS
@@ -101,22 +113,32 @@ mr1     pshs    a,b
         lsla
         lsla                    row * 4 -> WPTR1, a 1024-byte stride
         sta     <WPTR1
-        clr     <WPTR0
+        lda     #1
+        sta     <WPTR0          the ODD lane of cell 0
+        ldy     #80
+mr0     lda     #$B0
+        sta     <VDATA          lane 1: a decoy code
+        lda     #$77
+        sta     <VDATA          lane 3: a decoy attribute
+        leay    -1,y
+        bne     mr0
+        lda     ,s
+        lsla
+        lsla
+        sta     <WPTR1
+        clr     <WPTR0          and back to the even lane of cell 0
         ldy     #80
 mr2     lda     ,x+
         sta     <VDATA          lane 0: the code
         lda     ,x+
-        sta     <VDATA          lane 1: the attribute
-        lda     #$B0
-        sta     <VDATA          lanes 2 and 3: unused, and not the cell's
-        lda     #$77
-        sta     <VDATA
+        sta     <VDATA          lane 2: the attribute
         leay    -1,y
         bne     mr2
         puls    a,b
         inca
         decb
         bne     mr1
+        clr     <WADV           ⛔ b2 off: everything below steps by one
 
 * --- character mode, every VMODE in turn.  Each is set, allowed to settle -
 *     graphics.md 6.2 latches the family at FRAME END - and only then marked at

@@ -31,7 +31,7 @@ a number `check:docs` cannot tell from a live one:
 |---|---|---|---|---|
 | `v3host` | 58 / 128 | ⛔ **64 / 64** | 0 | the backplane, the decode, the palette commit, the copy's phase machine, the reload walk, `IRQEN`, the lane `DIR` |
 | `v3scan` | 112 / 128 | 63 / 64 | 3 | the map word in silicon |
-| `v3ptr` | **122 / 128** | 57 / 64 | 3 | Nodes+FB 133 % |
+| `v3ptr` | **124 / 128** | 58 / 64 | 3 | Nodes+FB 132 % |
 | `v3dot` | **121 / 128** | 63 / 64 | ⚠ **5** | |
 | `v3lane` | a `GAL22V10`, 10 of 10 macrocells, 10 inputs | | | the lanes and the internal bus's drivers |
 | `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⚠ a fit of the 2026-09-16 term list, not refitted since — §2.2 |
@@ -108,7 +108,7 @@ should be read before anything is added to plan §0.
 |---|---|---|---|
 | **`v3dot`** | **121 / 128, FITTED** | 63 / 64, FITTED | the raster, the dot path, the sprite, the arbiter, the palette's load strobes, `WMODE` |
 | **`v3scan`** | **112 / 128, FITTED** | 63 / 64, FITTED | the scan and cell addresses, the map word, the attribute onto the LUT |
-| **`v3ptr`** | ⭐ **122 / 128, FITTED** | 57 / 64, FITTED | `WPTR`, `CPTR`, the span writer, the copy's counters and decodes, the lane, `VWE` |
+| **`v3ptr`** | ⭐ **124 / 128, FITTED** | 58 / 64, FITTED | `WPTR`, `CPTR`, the span writer, the copy's counters and decodes, the lane, `VWE`, `WADV` b2's step |
 | **`v3host`** | 58 / 128, FITTED | ⛔ **64 / 64, FITTED** | the backplane, the registers, the palette commit, the copy's phase machine, the reload walk |
 | **`v3lane`** | `GAL22V10`, 10 of 10, FITTED | 10 inputs | the lane `'245`s' enables, the byte enables, `PWOE`, `RFOE` |
 

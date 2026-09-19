@@ -273,11 +273,14 @@ module video3_card (
     if (UB1 & LOE3 & DIR) vram[{fba, 2'd3}] <= IDB;
   end
 
-  // ---- the map word: v3scan's PB and PA are part 0's data pins -------------
-  // Lanes 0 and 1, whatever the address - the cell stride is four bytes so
-  // every cell's word is in part 0 (plan §2.5).
+  // ---- the map word: v3scan's PB and PA are the two parts' LOW bytes -------
+  // ⭐ LANE 0 AND LANE 2, not 0 and 1: a cell is a four-byte group with the
+  // code at +0 and the attribute at +2 (plan §2.5), so that WPTR's step-by-two
+  // reaches both with one write each - two stores a character, as a two-byte
+  // cell had. v3scan may be wired to any two lanes; what it cannot have is all
+  // four.
   assign {PB7, PB6, PB5, PB4, PB3, PB2, PB1, PB0} = lane_rd[0];
-  assign {PA7, PA6, PA5, PA4, PA3, PA2, PA1, PA0} = lane_rd[1];
+  assign {PA7, PA6, PA5, PA4, PA3, PA2, PA1, PA0} = lane_rd[2];
 
   // ---- the fetch ranks: eight '574 (plan §2.3, graphics.md §8.2) ---------
   // Clocked by SPARE's rising edge - the edge that ends the display access,

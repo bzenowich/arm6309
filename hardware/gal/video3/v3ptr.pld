@@ -173,6 +173,7 @@ PINNODE = NSL6 ;
 PINNODE = NSL7 ;
 PINNODE = WADV0 ;
 PINNODE = WADV1 ;
+PINNODE = WADV2 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * LDWP0, LDWP1, LDWP2, LDWADV, LDCP0, LDCP1, LDCP2, LDCW, LDCH
@@ -192,67 +193,74 @@ LDCH = REGWR & RA4 & !RA3 & RA2 & RA1 & !RA0 ;
 LDCCTRL = REGWR & RA4 & !RA3 & RA2 & RA1 & RA0 ;
 WC0.d = LDWP0 & D0
         # RP1 & D0
-        # !LDWP0 & !RP1 & WINC & !WC0
+        # !LDWP0 & !RP1 & WINC & !WADV2 & !WC0
+        # !LDWP0 & !RP1 & WINC & WADV2 & WC0
         # !LDWP0 & !RP1 & !WINC & WC0 ;
 WC1.d = LDWP0 & D1
         # RP1 & D1
-        # !LDWP0 & !RP1 & WINC & WC1 & !WC0
+        # !LDWP0 & !RP1 & WINC & WC1 & !WADV2 & !WC0
+        # !LDWP0 & !RP1 & WINC & !WC1 & WADV2
         # !LDWP0 & !RP1 & WINC & !WC1 & WC0
         # !LDWP0 & !RP1 & !WINC & WC1 ;
 WC2.d = LDWP0 & D2
         # RP1 & D2
-        # !LDWP0 & !RP1 & WINC & WC2 & !WC0
         # !LDWP0 & !RP1 & WINC & WC2 & !WC1
-        # !LDWP0 & !RP1 & WINC & !WC2 & WC0 & WC1
+        # !LDWP0 & !RP1 & WINC & WC2 & !WADV2 & !WC0
+        # !LDWP0 & !RP1 & WINC & !WC2 & WC1 & WADV2
+        # !LDWP0 & !RP1 & WINC & !WC2 & WC1 & WC0
         # !LDWP0 & !RP1 & !WINC & WC2 ;
 WC3.d = LDWP0 & D3
         # RP1 & D3
-        # !LDWP0 & !RP1 & WINC & WC3 & !WC0
         # !LDWP0 & !RP1 & WINC & WC3 & !WC1
         # !LDWP0 & !RP1 & WINC & WC3 & !WC2
-        # !LDWP0 & !RP1 & WINC & !WC3 & WC0 & WC1 & WC2
+        # !LDWP0 & !RP1 & WINC & WC3 & !WADV2 & !WC0
+        # !LDWP0 & !RP1 & WINC & !WC3 & WC1 & WC2 & WADV2
+        # !LDWP0 & !RP1 & WINC & !WC3 & WC1 & WC2 & WC0
         # !LDWP0 & !RP1 & !WINC & WC3 ;
 WC4.d = LDWP0 & D4
         # RP1 & D4
-        # !LDWP0 & !RP1 & WINC & WC4 & !WC0
         # !LDWP0 & !RP1 & WINC & WC4 & !WC1
         # !LDWP0 & !RP1 & WINC & WC4 & !WC2
         # !LDWP0 & !RP1 & WINC & WC4 & !WC3
-        # !LDWP0 & !RP1 & WINC & !WC4 & WC0 & WC1 & WC2 & WC3
+        # !LDWP0 & !RP1 & WINC & WC4 & !WADV2 & !WC0
+        # !LDWP0 & !RP1 & WINC & !WC4 & WC1 & WC2 & WC3 & WADV2
+        # !LDWP0 & !RP1 & WINC & !WC4 & WC1 & WC2 & WC3 & WC0
         # !LDWP0 & !RP1 & !WINC & WC4 ;
 WC5.d = LDWP0 & D5
         # RP1 & D5
-        # !LDWP0 & !RP1 & WINC & WC5 & !WC0
         # !LDWP0 & !RP1 & WINC & WC5 & !WC1
         # !LDWP0 & !RP1 & WINC & WC5 & !WC2
         # !LDWP0 & !RP1 & WINC & WC5 & !WC3
         # !LDWP0 & !RP1 & WINC & WC5 & !WC4
-        # !LDWP0 & !RP1 & WINC & !WC5 & WC0 & WC1 & WC2 & WC3 & WC4
+        # !LDWP0 & !RP1 & WINC & WC5 & !WADV2 & !WC0
+        # !LDWP0 & !RP1 & WINC & !WC5 & WC1 & WC2 & WC3 & WC4 & WADV2
+        # !LDWP0 & !RP1 & WINC & !WC5 & WC1 & WC2 & WC3 & WC4 & WC0
         # !LDWP0 & !RP1 & !WINC & WC5 ;
 WC6.d = LDWP0 & D6
         # RP1 & D6
-        # !LDWP0 & !RP1 & WINC & WC6 & !WC0
         # !LDWP0 & !RP1 & WINC & WC6 & !WC1
         # !LDWP0 & !RP1 & WINC & WC6 & !WC2
         # !LDWP0 & !RP1 & WINC & WC6 & !WC3
         # !LDWP0 & !RP1 & WINC & WC6 & !WC4
         # !LDWP0 & !RP1 & WINC & WC6 & !WC5
-        # !LDWP0 & !RP1 & WINC & !WC6 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5
+        # !LDWP0 & !RP1 & WINC & WC6 & !WADV2 & !WC0
+        # !LDWP0 & !RP1 & WINC & !WC6 & WC1 & WC2 & WC3 & WC4 & WC5 & WADV2
+        # !LDWP0 & !RP1 & WINC & !WC6 & WC1 & WC2 & WC3 & WC4 & WC5 & WC0
         # !LDWP0 & !RP1 & !WINC & WC6 ;
 WC7.d = LDWP0 & D7
         # RP1 & D7
-        # !LDWP0 & !RP1 & WINC & WC7 & !WC0
         # !LDWP0 & !RP1 & WINC & WC7 & !WC1
         # !LDWP0 & !RP1 & WINC & WC7 & !WC2
         # !LDWP0 & !RP1 & WINC & WC7 & !WC3
         # !LDWP0 & !RP1 & WINC & WC7 & !WC4
         # !LDWP0 & !RP1 & WINC & WC7 & !WC5
         # !LDWP0 & !RP1 & WINC & WC7 & !WC6
-        # !LDWP0 & !RP1 & WINC & !WC7 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6
+        # !LDWP0 & !RP1 & WINC & WC7 & !WADV2 & !WC0
+        # !LDWP0 & !RP1 & WINC & !WC7 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WADV2
+        # !LDWP0 & !RP1 & WINC & !WC7 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC0
         # !LDWP0 & !RP1 & !WINC & WC7 ;
 WC8.d = LDWP1 & D0
         # RP2 & D0
-        # !LDWP1 & !RP2 & WINC & WC8 & !WC0
         # !LDWP1 & !RP2 & WINC & WC8 & !WC1
         # !LDWP1 & !RP2 & WINC & WC8 & !WC2
         # !LDWP1 & !RP2 & WINC & WC8 & !WC3
@@ -260,11 +268,12 @@ WC8.d = LDWP1 & D0
         # !LDWP1 & !RP2 & WINC & WC8 & !WC5
         # !LDWP1 & !RP2 & WINC & WC8 & !WC6
         # !LDWP1 & !RP2 & WINC & WC8 & !WC7
-        # !LDWP1 & !RP2 & WINC & !WC8 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7
+        # !LDWP1 & !RP2 & WINC & WC8 & !WADV2 & !WC0
+        # !LDWP1 & !RP2 & WINC & !WC8 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WADV2
+        # !LDWP1 & !RP2 & WINC & !WC8 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC0
         # !LDWP1 & !RP2 & !WINC & WC8 ;
 WC9.d = LDWP1 & D1
         # RP2 & D1
-        # !LDWP1 & !RP2 & WINC & WC9 & !WC0
         # !LDWP1 & !RP2 & WINC & WC9 & !WC1
         # !LDWP1 & !RP2 & WINC & WC9 & !WC2
         # !LDWP1 & !RP2 & WINC & WC9 & !WC3
@@ -273,7 +282,9 @@ WC9.d = LDWP1 & D1
         # !LDWP1 & !RP2 & WINC & WC9 & !WC6
         # !LDWP1 & !RP2 & WINC & WC9 & !WC7
         # !LDWP1 & !RP2 & WINC & WC9 & !WC8
-        # !LDWP1 & !RP2 & WINC & !WC9 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC8
+        # !LDWP1 & !RP2 & WINC & WC9 & !WADV2 & !WC0
+        # !LDWP1 & !RP2 & WINC & !WC9 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC8 & WADV2
+        # !LDWP1 & !RP2 & WINC & !WC9 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC8 & WC0
         # !LDWP1 & !RP2 & !WINC & WC9 ;
 WR0.d = LDWP1 & D2
         # !LDWP1 & WROWADV & !WR0
@@ -731,6 +742,8 @@ WADV0.d = LDWADV & D0
           # WADV0 & !LDWADV ;
 WADV1.d = LDWADV & D1
           # WADV1 & !LDWADV ;
+WADV2.d = LDWADV & D2
+          # WADV2 & !LDWADV ;
 SPANBUSY.d = WSTART
              # SPANBUSY & !SPANEND ;
 RETIRE = SPANBUSY & GSPN & DP0 ;
@@ -816,5 +829,5 @@ LANE1 = !CRDSEL & WC1
 [CW7,CW8,CW9,CWN0,CWN1,CWN2,CWN3,CWN4,CWN5,CWN6,CWN7,CWN8].ck = CLK25 ;
 [CWN9,CH0,CH1,CH2,CH3,CH4,CH5,CH6,CH7,CH8,GOQ,CBUSY,MS0,MS1].ck = CLK25 ;
 [MS2,MS3,MS4,MS5,MS6,MS7,MS8,NSL0,NSL1,NSL2,NSL3,NSL4,NSL5].ck = CLK25 ;
-[NSL6,NSL7,WADV0,WADV1,SPANBUSY].ck = CLK25 ;
+[NSL6,NSL7,WADV0,WADV1,WADV2,SPANBUSY].ck = CLK25 ;
 

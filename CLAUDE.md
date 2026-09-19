@@ -62,7 +62,7 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 | | |
 |---|---|
 | `npm run check` | every GAL design against its own model, and the live ones against Atmel's CUPL. **770 claims, ~60 s** |
-| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs nine testbenches. **369 claims, ~6 min** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
+| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs nine testbenches. **373 claims, ~6 min** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
 | `npm run check:sim` | the two *hand-written* Verilog models, `gal/mmu.v` and `gal/clkdec.v`, with their own testbenches. Older and separate from `check:video` |
 | `npm run check:netlist` | the motherboard's connectivity, against `dist/mainboard/mainboard/circuit.json`, and the video card's against `dist/cards/video/circuit.json` — what is drawn, and the nets with no producer on the board as a list checked both ways (`graphics.md` §19 item 34). **Build artefacts**, so run `npm run build` first if a `.circuit.tsx` changed. ⚠ `tsci build` prints "Build completed with errors" and exits 0 when it cannot reach the supplier API; connectivity is unaffected |
 | `npm run gen:pld` | writes `gal/{vaddr,vctrl,vsup,audio,aseq}.pld` from the term lists |
@@ -167,7 +167,7 @@ directory, and two concurrent fits write the same `cpld/<name>.fit`.
 ### The Verilator tests
 
 `npm run check:video` is the one that runs the *design* rather than its
-equations. It ends with a line like `369 claims, 0 failed`, and **its exit code
+equations. It ends with a line like `373 claims, 0 failed`, and **its exit code
 is the answer** — a testbench prints a failed claim and then calls `$finish`,
 which exits 0, so the count is what decides the status. Read the `FAIL` lines;
 each names the claim and the observed value.

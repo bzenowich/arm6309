@@ -7,6 +7,30 @@ Superseded claims from [`plan.md`](plan.md), [`signals.md`](signals.md),
 `CLAUDE.md`'s rule: **specs describe only the present design**, and a superseded
 utilisation figure is a number `check:docs` cannot distinguish from a live one.
 
+## `plan.md` §2.2 and §10 — the attribute's lane, and the pointer's step (2026-09-19)
+
+The four-byte cell landed earlier the same day with **the code in lane 0 and the
+attribute in lane 1**, lanes 2 and 3 unused, and `WPTR` stepping by one:
+
+> ```
+>   map cell    lane 0 glyph code     lane 1 attribute     lanes 2, 3 unused
+> ```
+> `A1..A0   the lane   0 = code, 1 = attribute, 2 and 3 unused`
+>
+> `| +$0B | WADV | 00 continue, 01 next row same column, 10 by the stride |`
+
+**What it cost, and what replaced it.** With both bytes in one part's lanes, a
+character was FOUR stores: the code, the attribute, and two of filler, because
+re-pointing `WPTR` between cells costs three register writes to save two. The
+driver port measured 99.8 → 108.3 µs a character for it.
+
+`v3scan`'s sixteen data pins may be wired to any two of the four lanes, and the two
+parts' LOW bytes — lanes 0 and 2 — are the pair a pointer stepping by TWO reaches with
+one write each. So the attribute moved to lane 2 and `WADV` gained b2, "step by two":
+one more product term on each of `WPTR`'s ten column bits (`v3ptr` 122 → 124 of 128),
+and a character is two stores again. ⚠ The step is the write pointer's, so a span's
+retires and a `VDATA` read's post-increment move by two while the bit is set.
+
 ## `plan.md` §7 — the sprite was 8×8, and `v3dot`'s fit with it (2026-09-17)
 
 Until 2026-09-17 the sprite was **8×8**, and §7's first three rows read:

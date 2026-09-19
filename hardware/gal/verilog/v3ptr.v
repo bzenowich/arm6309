@@ -140,6 +140,7 @@ module v3ptr (
     output wire NSL7,
     output wire WADV0,
     output wire WADV1,
+    output wire WADV2,
     output wire SPANBUSY,
     output wire RETIRE,
     output wire SPANEND,
@@ -274,6 +275,7 @@ module v3ptr (
   reg  r_NSL7;
   reg  r_WADV0;
   reg  r_WADV1;
+  reg  r_WADV2;
   reg  r_SPANBUSY;
 
   assign WC0 = r_WC0;
@@ -364,6 +366,7 @@ module v3ptr (
   assign NSL7 = r_NSL7;
   assign WADV0 = r_WADV0;
   assign WADV1 = r_WADV1;
+  assign WADV2 = r_WADV2;
   assign SPANBUSY = r_SPANBUSY;
 
   // buried
@@ -585,75 +588,82 @@ module v3ptr (
       r_WC0 <=
          (LDWP0 & D0)
          | (RP1 & D0)
-         | (~LDWP0 & ~RP1 & WINC & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & ~WADV2 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & WADV2 & WC0)
          | (~LDWP0 & ~RP1 & ~WINC & WC0);
       r_WC1 <=
          (LDWP0 & D1)
          | (RP1 & D1)
-         | (~LDWP0 & ~RP1 & WINC & WC1 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & WC1 & ~WADV2 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & ~WC1 & WADV2)
          | (~LDWP0 & ~RP1 & WINC & ~WC1 & WC0)
          | (~LDWP0 & ~RP1 & ~WINC & WC1);
       r_WC2 <=
          (LDWP0 & D2)
          | (RP1 & D2)
-         | (~LDWP0 & ~RP1 & WINC & WC2 & ~WC0)
          | (~LDWP0 & ~RP1 & WINC & WC2 & ~WC1)
-         | (~LDWP0 & ~RP1 & WINC & ~WC2 & WC0 & WC1)
+         | (~LDWP0 & ~RP1 & WINC & WC2 & ~WADV2 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & ~WC2 & WC1 & WADV2)
+         | (~LDWP0 & ~RP1 & WINC & ~WC2 & WC1 & WC0)
          | (~LDWP0 & ~RP1 & ~WINC & WC2);
       r_WC3 <=
          (LDWP0 & D3)
          | (RP1 & D3)
-         | (~LDWP0 & ~RP1 & WINC & WC3 & ~WC0)
          | (~LDWP0 & ~RP1 & WINC & WC3 & ~WC1)
          | (~LDWP0 & ~RP1 & WINC & WC3 & ~WC2)
-         | (~LDWP0 & ~RP1 & WINC & ~WC3 & WC0 & WC1 & WC2)
+         | (~LDWP0 & ~RP1 & WINC & WC3 & ~WADV2 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & ~WC3 & WC1 & WC2 & WADV2)
+         | (~LDWP0 & ~RP1 & WINC & ~WC3 & WC1 & WC2 & WC0)
          | (~LDWP0 & ~RP1 & ~WINC & WC3);
       r_WC4 <=
          (LDWP0 & D4)
          | (RP1 & D4)
-         | (~LDWP0 & ~RP1 & WINC & WC4 & ~WC0)
          | (~LDWP0 & ~RP1 & WINC & WC4 & ~WC1)
          | (~LDWP0 & ~RP1 & WINC & WC4 & ~WC2)
          | (~LDWP0 & ~RP1 & WINC & WC4 & ~WC3)
-         | (~LDWP0 & ~RP1 & WINC & ~WC4 & WC0 & WC1 & WC2 & WC3)
+         | (~LDWP0 & ~RP1 & WINC & WC4 & ~WADV2 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & ~WC4 & WC1 & WC2 & WC3 & WADV2)
+         | (~LDWP0 & ~RP1 & WINC & ~WC4 & WC1 & WC2 & WC3 & WC0)
          | (~LDWP0 & ~RP1 & ~WINC & WC4);
       r_WC5 <=
          (LDWP0 & D5)
          | (RP1 & D5)
-         | (~LDWP0 & ~RP1 & WINC & WC5 & ~WC0)
          | (~LDWP0 & ~RP1 & WINC & WC5 & ~WC1)
          | (~LDWP0 & ~RP1 & WINC & WC5 & ~WC2)
          | (~LDWP0 & ~RP1 & WINC & WC5 & ~WC3)
          | (~LDWP0 & ~RP1 & WINC & WC5 & ~WC4)
-         | (~LDWP0 & ~RP1 & WINC & ~WC5 & WC0 & WC1 & WC2 & WC3 & WC4)
+         | (~LDWP0 & ~RP1 & WINC & WC5 & ~WADV2 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & ~WC5 & WC1 & WC2 & WC3 & WC4 & WADV2)
+         | (~LDWP0 & ~RP1 & WINC & ~WC5 & WC1 & WC2 & WC3 & WC4 & WC0)
          | (~LDWP0 & ~RP1 & ~WINC & WC5);
       r_WC6 <=
          (LDWP0 & D6)
          | (RP1 & D6)
-         | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC0)
          | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC1)
          | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC2)
          | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC3)
          | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC4)
          | (~LDWP0 & ~RP1 & WINC & WC6 & ~WC5)
-         | (~LDWP0 & ~RP1 & WINC & ~WC6 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5)
+         | (~LDWP0 & ~RP1 & WINC & WC6 & ~WADV2 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & ~WC6 & WC1 & WC2 & WC3 & WC4 & WC5 & WADV2)
+         | (~LDWP0 & ~RP1 & WINC & ~WC6 & WC1 & WC2 & WC3 & WC4 & WC5 & WC0)
          | (~LDWP0 & ~RP1 & ~WINC & WC6);
       r_WC7 <=
          (LDWP0 & D7)
          | (RP1 & D7)
-         | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC0)
          | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC1)
          | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC2)
          | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC3)
          | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC4)
          | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC5)
          | (~LDWP0 & ~RP1 & WINC & WC7 & ~WC6)
-         | (~LDWP0 & ~RP1 & WINC & ~WC7 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6)
+         | (~LDWP0 & ~RP1 & WINC & WC7 & ~WADV2 & ~WC0)
+         | (~LDWP0 & ~RP1 & WINC & ~WC7 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WADV2)
+         | (~LDWP0 & ~RP1 & WINC & ~WC7 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC0)
          | (~LDWP0 & ~RP1 & ~WINC & WC7);
       r_WC8 <=
          (LDWP1 & D0)
          | (RP2 & D0)
-         | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC0)
          | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC1)
          | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC2)
          | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC3)
@@ -661,12 +671,13 @@ module v3ptr (
          | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC5)
          | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC6)
          | (~LDWP1 & ~RP2 & WINC & WC8 & ~WC7)
-         | (~LDWP1 & ~RP2 & WINC & ~WC8 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7)
+         | (~LDWP1 & ~RP2 & WINC & WC8 & ~WADV2 & ~WC0)
+         | (~LDWP1 & ~RP2 & WINC & ~WC8 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WADV2)
+         | (~LDWP1 & ~RP2 & WINC & ~WC8 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC0)
          | (~LDWP1 & ~RP2 & ~WINC & WC8);
       r_WC9 <=
          (LDWP1 & D1)
          | (RP2 & D1)
-         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC0)
          | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC1)
          | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC2)
          | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC3)
@@ -675,7 +686,9 @@ module v3ptr (
          | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC6)
          | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC7)
          | (~LDWP1 & ~RP2 & WINC & WC9 & ~WC8)
-         | (~LDWP1 & ~RP2 & WINC & ~WC9 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC8)
+         | (~LDWP1 & ~RP2 & WINC & WC9 & ~WADV2 & ~WC0)
+         | (~LDWP1 & ~RP2 & WINC & ~WC9 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC8 & WADV2)
+         | (~LDWP1 & ~RP2 & WINC & ~WC9 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC8 & WC0)
          | (~LDWP1 & ~RP2 & ~WINC & WC9);
       r_WR0 <=
          (LDWP1 & D2)
@@ -1209,6 +1222,9 @@ module v3ptr (
       r_WADV1 <=
          (LDWADV & D1)
          | (WADV1 & ~LDWADV);
+      r_WADV2 <=
+         (LDWADV & D2)
+         | (WADV2 & ~LDWADV);
       r_SPANBUSY <=
          (WSTART)
          | (SPANBUSY & ~SPANEND);

@@ -885,8 +885,10 @@ TEXT = """\
  2. Character mode
 --------------------------------------------------------------------------------
 
-  A cell is four bytes - a CP437 code, an ATTR byte and two the card
-  never reads: the map fetcher has sixteen data pins.
+  A cell is four bytes - a CP437 code at +0, an ATTR byte at +2, and the
+  odd two the card never reads: the map fetcher has sixteen data pins, on
+  the two memory parts' low bytes.  WADV b2 steps WPTR by two, so the
+  console still writes a character in TWO stores.
 
       map word     [15:8] attribute     [7:0] glyph code
       LUT address  [15:8] attribute     [7:0] the glyph's pixel byte

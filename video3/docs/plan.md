@@ -105,15 +105,25 @@ caught.
 a palette selector rather than a colour:
 
 ```
-  map cell    lane 0 glyph code     lane 1 attribute     lanes 2, 3 unused
+  map cell    lane 0 glyph code     lane 2 attribute     lanes 1, 3 unused
   LUT address [15:8] attribute      [7:0] the glyph's pixel byte
 ```
 
 ⛔ **Four bytes and not two, because the map word has to come from one ×16 part.**
-`v3scan` has sixteen data pins — lanes 0 and 1, part 0's — and no pins for part 1's, so
-on a two-byte stride every odd cell's word would sit in the part it cannot read. A
-four-byte stride puts every cell's word in lanes 0 and 1 (§2.5). The unused half costs
-memory, not pins, and the map is 64 KB a `MAPBASE` either way.
+`v3scan` has sixteen data pins and no more, so on a two-byte stride every odd cell's
+word would sit in the part those pins are not on. A four-byte stride puts every cell's
+word in one access (§2.5). The unused half costs memory, not pins, and the map is 64 KB
+a `MAPBASE` either way.
+
+⭐ **AND THE TWO BYTES ARE LANE 0 AND LANE 2, WHICH IS WHAT KEEPS A CHARACTER AT TWO
+STORES.** The sixteen pins may be wired to any two of the four lanes, and the two parts'
+LOW bytes are the pair `WPTR`'s step-by-two reaches: with `WADV` b2 set (§10) a write
+steps the pointer by two, so the code and the attribute are one write each and the
+third write lands on the next cell. Written to lanes 0 and 1 instead, a cell took four
+stores — the two bytes plus two of filler, because re-pointing `WPTR` costs three
+register writes to save two. ⚠ The step is the *write pointer's*, so a span's retires
+and a `VDATA` read's post-increment move by two while the bit is set: it is a mode for
+cell writes, cleared for everything else.
 
 | | |
 |---|---|
@@ -170,12 +180,12 @@ item 12 keeps it open.
   A15..A10   cell row      6 bits, 64 rows
   A9         0             the stride's padding
   A8..A2     cell column   7 bits, 128 cells (80 displayed)
-  A1..A0     the lane      0 = code, 1 = attribute, 2 and 3 unused
+  A1..A0     the lane      0 = code, 2 = attribute, 1 and 3 unused
 ```
 
 Still a concatenation, still no adder — `v3scan`'s address mux takes `MAPBASE`, the cell
 row and its own map column counter `MC6..MC0` straight onto `FBA18..FBA2`, and the word
-arrives on lanes 0 and 1 of one access. **The map costs 64 KB of the 512**, against
+arrives on lanes 0 and 2 of one access. **The map costs 64 KB of the 512**, against
 32 KB at the smallest power-of-two stride that holds 320 bytes — **a real 32 KB**, and
 §14 item 12 is where the alternative is booked.
 
@@ -502,7 +512,7 @@ for it.
 | `+$06` | `WFG` | ⚠ **must stay at an even offset** — §5 |
 | `+$07` | `WBG` | ⚠ **must stay at the odd offset above `WFG`** |
 | `+$08`–`$0A` | `WPTR` | 19 bits, auto-increment. **Copyrect's destination** |
-| `+$0B` | `WADV` | 00 continue, 01 next row same column, 10 by the stride |
+| `+$0B` | `WADV` | b1..0: 00 continue, 01 next row same column, 10 by the stride. ⭐ **b2: `WPTR` steps by TWO**, which is what makes §2.2's cell two stores — ⚠ every advance of `WPTR` steps by two while it is set, a span's retires and a `VDATA` read's post-increment included |
 | `+$0C` | `VDATA` | the VRAM byte at `WPTR`, read or write, post-increment |
 | `+$0D` | `VSTAT` | b7 `SPANBUSY`, b6 `VBLANK`, b5 `HBLANK`, b4 `CBUSY`, b1 `PBUSY`, b0 IRQ pending. **Read through a `'244`** — live macrocells have no register-file path (§12.1's reason) |
 | `+$0E`–`$0F` | `PIDX` | **16 bits** — the whole LUT. Auto-increments after `PDATH` |
@@ -794,7 +804,7 @@ and it is the reason this list exists as a file rather than as a table in this d
    |---|---|---|---|---|
    | `v3dot` | 121/128 | 63/64 | ⚠ **5** | the raster, the dot path, the sprite, the arbiter, the palette's load strobes |
    | `v3scan` | 112/128 | 63/64 | 3 | the scan and cell addresses, the map word, the attribute onto the LUT |
-   | `v3ptr` | **122/128** | 57/64 | 3 | the pointers, the span writer, the copy's decodes, the lane, `VWE` |
+   | `v3ptr` | **124/128** | 58/64 | 3 | the pointers, the span writer, the copy's decodes, the lane, `VWE`, the step |
    | `v3host` | 58/128 | ⛔ **64/64** | 0 | the backplane, the registers, the palette commit, the copy's phase machine, the reload walk |
    | `v3lane` | a `GAL22V10`: 10 of 10 macrocells, 10 inputs | | | the lane `'245`s' enables, the byte enables, `PWOE`, `RFOE` — with a CUPL reference and `gal/video3/v3lane.check.ts` in `npm run check` |
 
@@ -1082,12 +1092,13 @@ board.
 
 `v3card_tb` drives it one 6809E bus cycle at a time, **stretching E-high while `/WAIT` is
 asserted** with `clkdec`'s semantics, and a bound turns a hang into a failure. It runs in
-`npm run check:video` as `v3card` — **57 claims, 0 failed** (the suite: 369, 0 failed):
+`npm run check:video` as `v3card` — **61 claims, 0 failed** (the suite: 373, 0 failed):
 
 | | |
 |---|---|
 | the palette | four writes land at LUT entries 0..3, and `PIDX` walks |
 | direct `VDATA` | eight writes land at `WPTR`, `WPTR`+1, …, nothing either side moves, and eight reads return them in order, **post-incrementing** |
+| the cell write | ⭐ **`WADV` b2**: two `VDATA` writes fill a cell's lanes 0 and 2 and the pointer lands on the next cell, and with the bit clear it steps by one again |
 | the span writer | a mask of `$86` is `F1 B2 B2 B2 B2 F1 F1 B2` — **bit 7 first** — four back-to-back `$FF` masks are 32 `WFG` pixels with the CPU held by `/WAIT` while each span runs; span-solid is **one `SPANLEN`, many spans**; `WADV` 01 chains four masks down four rows at the same column |
 | the copy | a 13 × 5 copy lands byte for byte in every lane and row, `CBUSY` sets and clears in `VSTAT`, nothing around it moves, and it takes **130 granted accesses for 65 bytes** — two a byte, §6.1's 4.05 MB/s (the claim allows 130–150) |
 | bitmap | whole 640 × 480 frames at `HSCROLL`/`VSCROLL` 0/0, 5/0, 2/3, 7/0 and 1021/509 — **fine scrolls 1, 2 and 3 and a wrap of both axes** — each 480 lines of 640 and **every pixel the byte at its scrolled address through the LUT** |

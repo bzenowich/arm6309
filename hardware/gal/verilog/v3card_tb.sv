@@ -365,6 +365,39 @@ module v3card_tb;
     end
     wr(WADV, 8'h00);
 
+    // ============================= §2.5: WADV b2, the step-by-two write
+    // ⭐ A CELL IS TWO STORES. The map's cell is a four-byte group with the
+    // code in lane 0 and the attribute in lane 2, so the console writes a
+    // character with two VDATA writes and the pointer steps by two each time -
+    // the store count a two-byte cell had. Direct mode, four cells in a row.
+    wr(CTRL, 8'h80);                                   // WMODE 00, direct
+    wr(WADV, 8'h04);                                   // b2: step by two
+    set_ptr(WPTR0, 19'h02000);
+    for (int c = 0; c < 4; c++) begin
+      wr(VDATA, 8'h41 + c[7:0]);                       // the code, lane 0
+      wr(VDATA, 8'h90 + c[7:0]);                       // the attribute, lane 2
+    end
+    wait_clear(7, "SPANBUSY after four step-by-two cells");
+    bad = 0;
+    for (int c = 0; c < 4; c++) begin
+      if (dut.peek(19'h02000 + c * 4 + 0) !== 8'h41 + c) bad++;   // code
+      if (dut.peek(19'h02000 + c * 4 + 2) !== 8'h90 + c) bad++;   // attribute
+      if (dut.peek(19'h02000 + c * 4 + 1) !== 8'h00) bad++;       // untouched
+      if (dut.peek(19'h02000 + c * 4 + 3) !== 8'h00) bad++;
+    end
+    ok(bad == 0, $sformatf("WADV b2: two VDATA writes fill a cell's lanes 0 and 2 and step to the next (%0d of 16 wrong)", bad));
+    if (bad) begin
+      $write("      got:"); for (int i = 0; i < 16; i++) $write(" %02h", dut.peek(19'h02000 + i)); $display("");
+    end
+    // and the step goes away with the mode bit
+    wr(WADV, 8'h00);
+    set_ptr(WPTR0, 19'h02100);
+    for (int i = 0; i < 4; i++) wr(VDATA, 8'hE0 + i[7:0]);
+    wait_clear(7, "SPANBUSY after four ordinary writes");
+    bad = 0;
+    for (int i = 0; i < 4; i++) if (dut.peek(19'h02100 + i) !== 8'hE0 + i) bad++;
+    ok(bad == 0, $sformatf("and with b2 clear the pointer steps by one again (%0d wrong)", bad));
+
     end
     if (run_group("copy")) begin
     // =========================================================== the copy
@@ -541,8 +574,8 @@ module v3card_tb;
     for (int row = 0; row < 64; row++)
       for (int col = 0; col < 128; col++) begin
         dut.poke(19'h50000 + row * 1024 + col * 4 + 0, (row * 3 + col) & 8'hFF);   // code
-        dut.poke(19'h50000 + row * 1024 + col * 4 + 1, (row + col * 5) & 8'hFF);   // attribute
-        dut.poke(19'h50000 + row * 1024 + col * 4 + 2, 8'hDE);                     // unused
+        dut.poke(19'h50000 + row * 1024 + col * 4 + 2, (row + col * 5) & 8'hFF);   // attribute
+        dut.poke(19'h50000 + row * 1024 + col * 4 + 1, 8'hDE);                     // unused
         dut.poke(19'h50000 + row * 1024 + col * 4 + 3, 8'hAD);
       end
     wr(HSL, 8'd13); wr(VSL, 8'd11);

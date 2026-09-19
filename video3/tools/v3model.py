@@ -9,7 +9,8 @@ plan §2.2 and §3 agreeing is evidence, one implementation agreeing with itself
 is not.
 
 plan §3:   row[x] = LUT[(attr << 8) | glyphpixel]
-plan §2.5: the map is four bytes a cell (code, attr, two unused) on a
+plan §2.5: the map is four bytes a cell - the code at +0, the attribute at +2,
+           the odd two never read - on a
            1024-byte stride, six-bit cell row,
            no ring and no horizontal scroll - so cell column is x >> 3 and
            nothing wraps.

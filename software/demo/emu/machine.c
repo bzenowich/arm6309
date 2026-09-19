@@ -239,14 +239,21 @@ static void stall_for_span(void)
 }
 
 
+/* ⭐ video3's WADV b2, "step by two" (plan §2.5, v3ptr's stepTerms): every
+ * advance of the write column steps by two instead of one, so a four-byte map
+ * cell is TWO VDATA writes - the code into lane 0, the attribute into lane 2.
+ * ⚠ It is the POINTER's step, so everything that moves WPTR moves by two while
+ * the bit is set: a span writer's retires and a VDATA read's post-increment
+ * included. `video`'s WADV is masked to b1..b0, so only video3 can see it. */
 static void wstep(void)
 {
-    m->wptr = (m->wptr & ~(uint32_t)1023) | ((m->wptr + 1) & 1023);
+    uint32_t st = (m->wadv & 4) ? 2u : 1u;
+    m->wptr = (m->wptr & ~(uint32_t)1023) | ((m->wptr + st) & 1023);
 }
 
 static void span_end(void)
 {
-    if (m->wadv != 0 && !m->lrun) {     /* 01, 10 and 11 all advance a row: vctrl.v's WROWADV */
+    if ((m->wadv & 3) != 0 && !m->lrun) { /* 01, 10 and 11 all advance a row: vctrl.v's WROWADV */
         uint32_t row = ((m->wptr >> 10) + 1) & 511;
         uint32_t col = (((uint32_t)m->wp1 & 3) << 8) | m->wp0;
         m->wptr = (row << 10) | col;
@@ -303,8 +310,10 @@ static int in_vblank(void);
  *   §3   the LUT address is SIXTEEN bits: the pixel byte on A7..A0 and an
  *        ATTRIBUTE on A15..A8 - the cell's in character mode, the sprite's
  *        code in bitmap mode
- *   §2.5 the character map is TWO bytes a cell on a 1024-byte stride, six-bit
- *        cell row, NO ring and NO horizontal scroll
+ *   §2.5 the character map is a FOUR-byte cell on a 1024-byte stride - the
+ *        code at +0 and the attribute at +2, the two lanes the fetcher reads -
+ *        six-bit cell row, NO ring and NO horizontal scroll; WADV b2 steps
+ *        WPTR by two so a cell is two VDATA writes
  *   §6   a copy engine
  *   §7   one 8x8 two-bit sprite, bitmap mode only
  *   §0   no display list
@@ -336,6 +345,14 @@ static void v3_copy(void)
     if (m->cctrl & 6) fprintf(stderr, "FAIL  %.3f s: CCTRL b1/b2 are reserved - "
                               "the copy engine has no direction bits\n",
                               (double)m->dots * DOT_PS / 1e12);
+    /* ⛔ WADV b2 IS THE WRITE POINTER'S STEP, and the copy's destination is
+     * WPTR: a GO with it still set walks the destination two bytes a byte.
+     * This model copies byte by byte and would not show it, so it says so
+     * instead - the driver's rule is that b2 is set around a cell loop and
+     * cleared for everything else (vidcore.asm's q2@/q1@). */
+    if (m->wadv & 4) fprintf(stderr, "FAIL  %.3f s: a copy with WADV b2 set - "
+                             "the destination would step by two (PC $%04X)\n",
+                             (double)m->dots * DOT_PS / 1e12, m->cpu.pc);
     uint32_t sc = m->cptr & 1023, sr = (m->cptr >> 10) & 511;
     uint32_t dc = m->wptr & 1023, dr = (m->wptr >> 10) & 511;
     for (uint32_t y = 0; y < h; y++) {
@@ -378,7 +395,7 @@ static void v3_video_write(uint8_t r, uint8_t v)
     case 0x08: m->wp0 = v; m->wptr = (m->wptr & ~(uint32_t)0xFF) | v; break;
     case 0x09: m->wp1 = v; m->wptr = (m->wptr & ~(uint32_t)0xFF00) | ((uint32_t)v << 8); break;
     case 0x0A: m->wptr = (m->wptr & 0xFFFF) | ((uint32_t)(v & 7) << 16); break;
-    case 0x0B: m->wadv = v & 3; break;
+    case 0x0B: m->wadv = v & 7; break;  /* ⭐ b2 is the step-by-two (wstep) */
     case 0x0C: vram_write(v); break;
     case 0x0D: m->irq_pending = 0; break;
     case 0x0E: m->pidx3 = (uint16_t)((m->pidx3 & 0xFF00) | v); break;
@@ -1102,14 +1119,16 @@ static void v3_render_line(int y)
     int mode = V3_MODE(m);
 
     if (mode == 1) {
-        /* plan §2.5: FOUR bytes a cell (code, attr, two unused) on a 1024-byte
-         * stride, six-bit cell row - the map fetcher has sixteen data pins, so
-         * it reads lanes 0 and 1 of one x16 part and nothing else.
+        /* plan §2.5: FOUR bytes a cell on a 1024-byte stride, six-bit cell row.
+         * ⭐ THE CODE IS AT +0 AND THE ATTRIBUTE AT +2 - lanes 0 and 2, the two
+         * memory parts' LOW bytes - because the map fetcher has sixteen data
+         * pins and the two it does not read (+1, +3) are the odd ones. That is
+         * what lets WADV b2 write a cell in two stores.
          * ⛔ NO ring and NO horizontal scroll - a line is 80 codes, not 81. */
         uint32_t crow = (py >> 3) & 63, grow = py & 7;
         for (int x = 0; x < 640; x++) {
             uint32_t ma = (mb + (crow << 10) + (((uint32_t)x >> 3) << 2)) & 0x7FFFF;
-            uint8_t code = m->vram[ma], attr = m->vram[(ma + 1) & 0x7FFFF];
+            uint8_t code = m->vram[ma], attr = m->vram[(ma + 2) & 0x7FFFF];
             uint8_t px = m->vram[(tb + ((uint32_t)code << 6) + (grow << 3)
                                      + ((uint32_t)x & 7)) & 0x7FFFF];
             row[x] = m->pal3[((uint16_t)attr << 8) | px];

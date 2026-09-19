@@ -105,14 +105,44 @@ const loadableM = (bits: string[], enable: string, load: string[],
  * there was one, across all ten macrocells - and the ATF1508 fitter aborts
  * with INTERNAL ERROR. One term per source, and the hold names both. */
 const loadable2 = (bits: string[], enable: string, load: string[],
-                   from: string[], rld: string[], rfrom: string[]): string[][] => {
-  const counted = counterTerms({ bits, enable })
-  return bits.map((_, i) => [
+                   from: string[], rld: string[], rfrom: string[],
+                   counted = counterTerms({ bits, enable })): string[][] =>
+  bits.map((_, i) => [
     `${load[i]} & ${from[i]}`,
     `${rld[i]} & ${rfrom[i]}`,
     ...counted[i].map((t) => `!${load[i]} & !${rld[i]} & ${t}`),
   ])
-}
+
+/* -- ⭐ +1 OR +2, chosen by a register bit - WADV b2, "step by two" -------
+ *
+ * plan §2.5's map cell is a four-byte group with the code in lane 0 and the
+ * attribute in lane 2, so a cell is TWO writes that each step the pointer by
+ * two - and the console writes a character in two stores again, as it did
+ * when a cell was two bytes. Without it the driver writes the two unused
+ * bytes as filler, because re-pointing WPTR costs three register writes to
+ * save two (plan §12).
+ *
+ * Bit i toggles on the carry into it: counting by one that is every lower bit
+ * set, counting by two it is every lower bit ABOVE bit 0, and bit 0 holds.
+ * One literal decides which, so it is one more product term a bit:
+ *
+ *   D_i = Q_i XOR (A_i & (STEP2 # Q_0)),  A_i = AND of Q_1..Q_i-1
+ *   D_0 = Q_0 XOR !STEP2
+ *
+ * ⚠ It is the WRITE COLUMN's step, so everything that moves WPTR moves by two
+ * while the bit is set - a span's retires and a VDATA read's post-increment
+ * included. It is a mode for the console's cell writes, not a general one. */
+const stepTerms = (bits: string[], en: string, step2: string): string[][] =>
+  bits.map((q, i) => {
+    if (i === 0) return [`${en} & !${step2} & !${q}`, `${en} & ${step2} & ${q}`, `!${en} & ${q}`]
+    const mid = bits.slice(1, i)                        /* A_i's bits */
+    return [
+      ...mid.map((b) => `${en} & ${q} & !${b}`),        /* hold high: no carry in */
+      `${en} & ${q} & !${step2} & !${bits[0]}`,         /* ... nor from bit 0 */
+      ...[step2, bits[0]].map((c) => `${en} & !${q} & ${[...mid, c].join(" & ")}`),
+      `!${en} & ${q}`,
+    ]
+  })
 
 /* -- an up/down counter, which counter.ts does not have ------------------
  *
@@ -180,7 +210,8 @@ const wptr: Cell[] = [
       ? loadable2(WCOL, "WINC", ptrLd("W", PTRCOL_LD, 10),
           [...Array(10).keys()].map(PTRCOL_D),
           [...Array(10).keys()].map((b) => (b < 8 ? "RP1" : "RP2")),
-          [...Array(10).keys()].map(PTRCOL_D))
+          [...Array(10).keys()].map(PTRCOL_D),
+          stepTerms(WCOL, "WINC", "WADV2"))
       : loadableM(WCOL, "WINC", ptrLd("W", PTRCOL_LD, 10),
           [...Array(10).keys()].map(PTRCOL_D)))[i],
   })),
@@ -391,7 +422,9 @@ const spanWriter: Cell[] = [
     terms: loadable([...Array(8).keys()].map((i) => `NSL${i}`), "RETIRE", "WSTART",
       [...Array(8).keys()].map((i) => `!D${i}`))[b],
   })),
-  ...[0, 1].map((b) => ({
+  /* +$0B: b1..0 the row advance at span end, ⭐ b2 the column's step - one
+   * or two (stepTerms above, plan §2.5's four-byte cell) */
+  ...[0, 1, 2].map((b) => ({
     pin: 0, name: `WADV${b}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [`LDWADV & D${b}`, `WADV${b} & !LDWADV`],
   })),

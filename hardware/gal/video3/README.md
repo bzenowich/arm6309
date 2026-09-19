@@ -23,7 +23,7 @@ own offsets from `regmap.ts`, which is the single table plan §10 specifies.
 | `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | the map word in four `'574` — ⚠ a fit of the 2026-09-16 term list, before the four-byte cell and the three-stage attribute |
 | **`v3dot`** | **121 / 128** | 63 / 64 | ⚠ **5** | ⭐ the build — a 16×16 sprite, shifters in 4 × `'165` |
 | `v3dot_si` | — | — | — | ⛔ shifters in silicon: **`Design does not fit`** |
-| **`v3ptr`** | **122 / 128** | 57 / 64 | **3** | ⭐ the build — ascending copies only |
+| **`v3ptr`** | **124 / 128** | 58 / 64 | **3** | ⭐ the build — ascending copies only |
 | `v3ptr_rows` | — | — | — | ⛔ row direction: **`INTERNAL ERROR`** |
 | `v3ptr_both` | — | — | — | ⛔ both directions: **`INTERNAL ERROR`** |
 | **`v3host`** | **58 / 128** | ⛔ **64 / 64** | **0** | ⭐ the build — the broadcast |

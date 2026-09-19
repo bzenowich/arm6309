@@ -170,7 +170,7 @@ that no design ever clocked. **video3 must not re-add them.**
 | `TILEBASE`, `MAPBASE` | 8 | the cell address concatenation |
 | `PIDX`, `PPEND`, `PS0`–`PS3` | 22 | the palette commit and `PBUSY` |
 | `RDVALID` | 1 | the prefetch |
-| the four lanes | 32 | the framebuffer's data — the fetch ranks, `v3scan`'s map word (lanes 0 and 1), the sprite `'165`s, and the internal bus through the lane `'245`s |
+| the four lanes | 32 | the framebuffer's data — the fetch ranks, `v3scan`'s map word (lanes 0 and 2, the two parts' low bytes), the sprite `'165`s, and the internal bus through the lane `'245`s |
 
 **~280 bits of state.** ⚠ That number is the reason §14 item 4 is open: `video/` fits
 three `ATF1508AS` at 128 macrocells each, and video3 deletes a display list from that
