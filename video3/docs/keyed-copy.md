@@ -281,17 +281,18 @@ the gate, not the compare.
       `v3ptr` beside the counters they decode and the phase machine goes to
       `v3host`. Both sequencers are built, all four parts fit, and `v3dot` did
       not change by a byte. **`v3ptr` 124/128 with cascades still at 3;
-      `v3host` 43/128 with 0.**
+      `v3host` 49/128 with 0.**
       ⛔ **Which re-prices the key, and not in its favour.** §7's "18 spare
       cells and 20 spare pins on `v3ptr`" described a part that did not yet
       contain §6's engine; it now has **9 cells and 17 pins spare**, and
       Nodes+FB at **131%**. The compare wants the source byte, which means
       eight pins into whichever part gates the write strobe. ⭐ **That part is
-      now `v3host` — 43/128 cells, 11 spare pins, 0 cascades** — and it is the
+      now `v3host` — 49/128 cells, 11 spare pins, 0 cascades** — and it is the
       one place on this card with room. ⛔ **And then §7.2's column reload was built
-      (2026-09-19) and `v3host` went to 62/64.** There is now **no part on this
-      card with eight spare pins**: `v3dot` has 12 and six cells, `v3scan` has
-      one, `v3ptr` has ten, `v3host` has two. ⭐ So §7.2's **`74HC688` — one
+      (2026-09-19) and `v3host` went to 63/64.** There is now **no part on this
+      card with eight spare pins**: `v3dot` has 13 pins and six cells, `v3scan`
+      has one pin, `v3ptr` has ten, and `v3host` — after the last six blocks
+      went in on 2026-09-19 — has **one**. ⭐ So §7.2's **`74HC688` — one
       pin** — is no longer the cheaper-by-a-package option. It is the only
       version of this feature that fits anywhere.
       ⭐ **The good half of the news stands**: the key is still a term on a
@@ -430,8 +431,8 @@ estimates:
 
 | part | logic cells | I/O pins | cascades | foldback |
 |---|---|---|---|---|
-| `v3dot` | **122/128 (95%)** — 6 spare | 52/64 | 0 | 37/128 |
-| `v3host` | ⭐ **43/128 (21%)** — 101 spare | 62/64 — 22 spare | 0 | 0 |
+| `v3dot` | **122/128 (95%)** — 6 spare | 51/64 | 0 | 37/128 |
+| `v3host` | ⭐ **49/128 (21%)** — 101 spare | 63/64 — 22 spare | 0 | 0 |
 | `v3ptr` | **124/128 (85%)** — 18 spare | 54/64 — 20 spare | **3** | 45/128 |
 | `v3scan` | 100/128 (78%) | ⛔ **63/64 (98%)** — **one** pin spare | 2 | 17/128 |
 

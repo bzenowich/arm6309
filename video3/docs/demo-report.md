@@ -242,7 +242,7 @@ route and meet timing; the fitter has no opinion about whether `VC9` can be set 
 449-line frame. This is `CLAUDE.md`'s standing point in its sharpest form — *a fit is
 not a check* — and it is the answer to what the Verilator stage is for.
 
-`v3dot` is now **122 / 128 cells, 52 / 64 I/O, 0 cascades** (§10.6 refitted it for the
+`v3dot` is now **122 / 128 cells, 51 / 64 I/O, 5 cascades** (§10.6 refitted it for the
 16×16 sprite; `history.md` has what it was), and `v3dot_tb` reports
 **17 claims, 0 failed**: 800-dot lines, 96-dot HSYNC, 449 / 525 lines a frame and
 400 / 480 active lines, in every VMODE.
@@ -1361,8 +1361,25 @@ now **369 s** against 289. Where it goes:
 | the circle, 76 steps | 17 |
 | the hold, the close box, and the desktop | 8 |
 
-⚠ **The two 11-12 s repaints are the toolbox's escape path, not the card.**
-§16.1 measured it: CoArm's `ESC` handling is ~1 ms a byte and a toolbox text
-call's floor is 11 ms before it draws a glyph. The palette strip alone is 38
-calls. Nothing here is the copy engine, which does the scroll's whole document
-and the drag's 76 pictures inside one of those seconds.
+⚠ **Nothing in that table is the copy engine.** It does the scroll's whole
+document and the drag's 76 pictures inside one of those seconds; the two
+11-12 s repaints are `paint_chrome()`, and §16's numbers account for them:
+
+| one `paint_chrome()`, ~10 s | | |
+|---|---|---|
+| the **escape path** — 1,781 bytes at ~0.9 ms | 1.6 s | 16% |
+| **the text** — 16 calls, 348 characters, §16's 23.87 + 11.52 n | 4.2 s | 42% |
+| 34 `Rect` at 13.58 ms | 0.5 s | 5% |
+| 28 `Bevel`, 15 `Icon`, 2 `Scroll`, 1 `Window` | ~3.7 s | 37% |
+
+plus the picture into the margin, which is the toolbox's raw `Image` and not
+the escape path at all: **2.3 s** for the 384 × 480 page and **0.8 s** for the
+264 × 240 photograph, at ~26 E cycles a byte.
+
+⛔ **So the escape path is a sixth of it, not the bulk** — an earlier draft of
+this section said otherwise and was wrong. The bulk is **text**, at §16's
+measured 11.52 ms a character. ⭐ The two obvious trims follow from that and not
+from the transport: the notes sit on flat panel-grey paper, so they qualify for
+**opaque** text (§16.1's 2.19×, ~2 s back across the two repaints), and
+`stream_load` repaints the palette strip, the menu bar and the scroll bars that
+did not change — it only does so because `window()` clears the frame.

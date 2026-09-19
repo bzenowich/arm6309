@@ -28,11 +28,11 @@ a number `check:docs` cannot tell from a live one:
 
 | | cells | I/O | cascades | what the swap did |
 |---|---|---|---|---|
-| `v3host` | **43 / 128** | ⭐ **62 / 64** | 0 | **22 pins back**, off a part that had none |
+| `v3host` | **49 / 128** | ⭐ **63 / 64** | 0 | **22 pins back**, off a part that had none |
 | `v3scan` | ⭐ **100 / 128** | 63 / 64 | ⭐ **2** | 14 cells and 14 cascades *cheaper* |
 | `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⛔ 25 cells and 25 cascades dearer |
 | `v3ptr` | **124 / 128** | **54 / 64** | 3 | free — and it gained the fix below |
-| `v3dot` | **122 / 128** | **52 / 64** | 0 | a cell for a pin, the raster fix, then the 16×16 sprite |
+| `v3dot` | **122 / 128** | **51 / 64** | 0 | a cell for a pin, the raster fix, then the 16×16 sprite |
 
 ⚠ **The receivers mostly did not pay, and the fitter is why — which means none of these
 deltas is a property of the design.** The expectation was ~6 cells of decode each against an
@@ -107,10 +107,10 @@ should be read before anything is added to plan §0.
 
 | | Cells, est. | I/O, est. | What it is |
 |---|---|---|---|
-| **`v3dot`** | ⭐ **122 / 128, FITTED** | **52 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
+| **`v3dot`** | ⭐ **122 / 128, FITTED** | **51 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
 | **`v3scan`** | ⭐ **100 / 128, FITTED** | ⚠ **63 / 64, FITTED** | the scan and cell addresses, the map word |
 | **`v3ptr`** | ⭐ **124 / 128, FITTED** | **54 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
-| **`v3host`** | **43 / 128, FITTED** | **62 / 64, FITTED** | the backplane, the registers, the palette write path |
+| **`v3host`** | **49 / 128, FITTED** | **63 / 64, FITTED** | the backplane, the registers, the palette write path |
 
 ⚠ **`v3host` is pin-bound, not cell-bound** — a fifth full of macrocells and two thirds
 full of pins, because it is the part the backplane lands on. **It is not cells that stop
@@ -280,7 +280,7 @@ needs `PB[7:0]` on it, which is eight more pins than this.
    trade 1 returned four packages. **It now places at 40 ICs, 73 %.**
 3. ⛔ **`v3dot` NEEDS its escape — it is not optional.** With the sprite's shift
    registers in silicon the fitter answers **`Design does not fit`**; with them in two
-   `'165` it is **122/128 cells, 52/64 I/O, 0 cascades** (four of them since the sprite
+   `'165` it is **122/128 cells, 51/64 I/O, 0 cascades** (four of them since the sprite
    became 16×16 — plan §7). §8's escape is therefore a
    requirement, and plan §13.3 trade 1 is what paid for it.
 4. ⚠ **The `VA` tri-state discipline.** Two parts on seventeen nets, and the rule that

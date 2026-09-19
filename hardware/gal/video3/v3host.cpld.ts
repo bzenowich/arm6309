@@ -72,7 +72,7 @@ const WR = (r: RegName) => hostTerm(r, WRQ)
 /* every offset, for the "strobes" variant */
 const ALL_REGS = Object.keys(REGS) as RegName[]
 /* the ones this part acts on ITSELF, whichever way the offsets travel */
-const MINE: RegName[] = ["LDPDATH", "LDIRQACK"]
+const MINE: RegName[] = ["LDPDATH", "LDIRQACK", "LDCTRL"]
 
 /* -- the palette commit: graphics.md §13.1 response 3 ---------------------
  *
@@ -108,6 +108,23 @@ const port: Cell[] = [
   comb("WSTB", [`${REGSEL} & WRCYC`]),
   reg("RDVALID", ["RDCK", "RDVALID & !RDINV"]),
   comb("RDINV", ["WSTB", "RETIRE", "RSTART"]),
+  /* -- ⭐ §11's READ PREFETCH AND THE REGISTER WRITE CYCLE, ported from
+   * vsup.parts.ts. ⛔ All four were INPUTS that nothing produced, which meant
+   * the card could not be written to (WRCYC qualifies every register write),
+   * the CPU could not read VRAM (RDCK clocks the vread '574) and WPTR never
+   * post-incremented after a read (RSTART). */
+  /* ⚠ A 6809E WRITE IS ONLY VALID IN THE SECOND HALF OF E, which is the whole
+   * of this: regfile.jedec.ts qualifies the register strobe the same way. */
+  comb("WRCYC", ["!RW & E"]),
+  /* §11's post-increment: the dot after a VRAM read's E falls. ⚠ NOT "the
+   * copy has started" - an earlier note in reach.check.ts guessed that from
+   * the name and vsup.parts.ts says otherwise. */
+  reg("RPQ", ["VPORT & RW & E"]),
+  comb("RSTART", ["RPQ & !E"]),
+  /* ⚠ ACTIVE LOW, so the '574's RISING edge is the END of the granted access,
+   * when the framebuffer has answered. GRD is the arbiter's grant for the
+   * prefetch; video/ had `& !LRUN` here and video3 has no list engine. */
+  comb("RDCK", ["GRD & !RDVALID"], undefined, true),
   comb("RDOE", ["VPORT & RW"]),
   comb("RDREQ", ["!RDVALID"]),
   /* ⭐ open-drain, §1.9's idiom: the value is a constant 0 and the condition
@@ -118,6 +135,14 @@ const port: Cell[] = [
   reg("VBLQ", ["VBLANK"]),
   comb("VBLRISE", ["VBLANK & !VBLQ"]),
   comb("IRQACK", ["LDIRQACK"]),
+  /* ⛔ CTRL b6, AND IT WAS AN INPUT NOTHING PRODUCED - so the VBL interrupt
+   * could never be enabled. ⚠ It costs this part its FIRST data-bus pin, and
+   * the header's "IT NEEDS NO INTERNAL DATA BUS" is now one bit less true:
+   * every other register it touches is a discrete latch that loads from IDB
+   * itself, and this one is a macrocell here because /IRQ is. ⭐ v3ptr has the
+   * whole bus and decodes WMODE the same way, and it was tried there first -
+   * the fitter refused it at 125/128. */
+  reg("IRQEN", ["LDCTRL & D6", "IRQEN & !LDCTRL"]),
   comb("IRQN", [], "IRQPEND & IRQEN", true),      /* open-drain /IRQ, likewise */
   /* VSTAT is read through a '244 (graphics.md §12.1): SPANBUSY, CBUSY and
    * PBUSY are live macrocells and the register file has no path to them. */
@@ -216,13 +241,13 @@ export const v3host: Merged = {
     { name: "IOSEL", activeLow: true }, { name: "IOPGH" },
     ...[0, 1, 2, 3, 4, 5, 6].map((b) => ({ name: `A${b}` })),
     { name: "A19" }, { name: "A20" }, { name: "E" }, { name: "RW" },
-    { name: "WRCYC" },
+    /* ⛔ WRCYC is a CELL now, not an input - see the read-prefetch block */
     /* status, for VSTAT and /WAIT */
     { name: "SPANBUSY" }, { name: "CBUSY" },
     /* the raster, from v3dot */
     { name: "VBLANK" }, { name: "HLOAD" },
     /* the read path's own signals */
-    { name: "RDCK" }, { name: "RETIRE" }, { name: "RSTART" }, { name: "IRQEN" },
+    { name: "RETIRE" }, { name: "GRD" }, { name: "D6" },
     ...(COPYHOST ? [{ name: "CEOR" }, { name: "CHLAST" },
                     { name: "GCPY" }, { name: "MUXSEL0" }] : []),
     ...(RELOAD ? [{ name: "WROWADV" }] : []),
@@ -248,7 +273,7 @@ export const v3host: Merged = {
       : ["REGWR", "RA0", "RA1", "RA2", "RA3", "RA4"]),
     "PALTURN", "PBUSY", "LUTWE", "PIDXCE",
     "WSTBV", "WSTB", "RDOE", "RDREQ", "WAITN", "IRQN", "VSTATOE", "RDBKOE",
-    "VDSEL", "VPORT", "RDVALID",
+    "VDSEL", "VPORT", "RDVALID", "WRCYC", "RSTART", "RDCK",
     /* the copy engine's, when the phase machine lives here */
     ...(COPYHOST ? ["CRDSEL", "CSTEP", "CROWADV", "CWLOAD", "CDONE", "RCPY"] : []),
     ...(RELOAD ? ["RP1", "RP2", "RP3", "RP4", "RFA1", "RFA2", "RFA3", "RFA4"] : []),

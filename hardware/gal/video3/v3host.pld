@@ -36,15 +36,13 @@ PIN = A19 ;
 PIN = A20 ;
 PIN = E ;
 PIN = RW ;
-PIN = WRCYC ;
 PIN = SPANBUSY ;
 PIN = CBUSY ;
 PIN = VBLANK ;
 PIN = HLOAD ;
-PIN = RDCK ;
 PIN = RETIRE ;
-PIN = RSTART ;
-PIN = IRQEN ;
+PIN = GRD ;
+PIN = D6 ;
 PIN = CEOR ;
 PIN = CHLAST ;
 PIN = GCPY ;
@@ -67,6 +65,9 @@ PIN = VPORT ;
 PIN = WSTBV ;
 PIN = WSTB ;
 PIN = RDVALID ;
+PIN = WRCYC ;
+PIN = RSTART ;
+PIN = !RDCK ;
 PIN = RDOE ;
 PIN = RDREQ ;
 PIN = !WAITN ;
@@ -94,13 +95,15 @@ PINNODE = PS0 ;
 PINNODE = PS1 ;
 PINNODE = PS2 ;
 PINNODE = PS3 ;
+PINNODE = RPQ ;
 PINNODE = IRQPEND ;
 PINNODE = VBLQ ;
+PINNODE = IRQEN ;
 PINNODE = CPH ;
 PINNODE = CRLD ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * LDPDATH, LDIRQACK, RDINV, VBLRISE, IRQACK, CTICK
+ * LDPDATH, LDIRQACK, LDCTRL, RDINV, VBLRISE, IRQACK, CTICK
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -112,6 +115,7 @@ RA3 = A3 ;
 RA4 = A4 ;
 LDPDATH = IOSEL & A6 & A5 & WRCYC & A4 & !A3 & !A2 & !A1 & A0 ;
 LDIRQACK = IOSEL & A6 & A5 & WRCYC & !A4 & A3 & A2 & !A1 & A0 ;
+LDCTRL = IOSEL & A6 & A5 & WRCYC & !A4 & !A3 & !A2 & !A1 & !A0 ;
 PPEND.d = LDPDATH & !VBLANK
           # PPEND & !PS0 ;
 PS0.d = PPEND & HLOAD
@@ -142,6 +146,10 @@ RDVALID.d = RDCK
 RDINV = WSTB
         # RETIRE
         # RSTART ;
+WRCYC = !RW & E ;
+RPQ.d = VPORT & RW & E ;
+RSTART = RPQ & !E ;
+RDCK = GRD & !RDVALID ;
 RDOE = VPORT & RW ;
 RDREQ = !RDVALID ;
 WAITN = 'b'1 ;
@@ -151,6 +159,8 @@ IRQPEND.d = VBLRISE
 VBLQ.d = VBLANK ;
 VBLRISE = VBLANK & !VBLQ ;
 IRQACK = LDIRQACK ;
+IRQEN.d = LDCTRL & D6
+          # IRQEN & !LDCTRL ;
 IRQN = 'b'1 ;
 IRQN.oe = IRQPEND & IRQEN ;
 VSTATOE = IOSEL & A6 & A5 & !A4 & A3 & A2 & !A1 & A0 & RW & E ;
@@ -186,6 +196,6 @@ RFA4 = IOSEL & A6 & A5 & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & A4
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
-[PPEND,PS0,PS1,PS2,PS3,RDVALID,IRQPEND,VBLQ,CPH,CRLD,RP1,RP2].ck = CLK25 ;
-[RP3,RP4].ck = CLK25 ;
+[PPEND,PS0,PS1,PS2,PS3,RDVALID,RPQ,IRQPEND,VBLQ,IRQEN,CPH].ck = CLK25 ;
+[CRLD,RP1,RP2,RP3,RP4].ck = CLK25 ;
 

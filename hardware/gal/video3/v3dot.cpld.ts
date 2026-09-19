@@ -200,10 +200,28 @@ const dotPath: Cell[] = [
   comb("SPRLD", ["HBLANK & SPRROW & HC3 & !HC4"]),
   /* ⭐ the arbiter.  ONE place decides the spare access, and FBOE follows from
    * it - so the two parts on the address bus can never both drive. */
-  comb("GMAP", ["SPARE & RMAP"]),
-  comb("GRD", ["SPARE & !RMAP & RRD"]),
-  comb("GCPY", ["SPARE & !RMAP & !RRD & RCPY"]),
-  comb("GSPN", ["SPARE & !RMAP & !RRD & !RCPY & RSPN"]),
+  /* ⛔ RMAP AND RRD WERE INPUT PINS THAT NOTHING PRODUCED - the two requests
+   * of the four that had no requester (check:reach, 2026-09-18). Neither
+   * needed a block:
+   *
+   *   RMAP  ⭐ IS THIS PART'S OWN CELLTICK. The map word is fetched once a
+   *         cell and MAPLD is already `SPARE & CELLTICK`, so a separate
+   *         request signal would have been the same decode under a second
+   *         name - and importing it spent a pin on a signal this part makes.
+   *         ⚠ QUALIFIED BY MODE, which MAPLD is not: bitmap mode has no map,
+   *         and granting it an access there would spend the slot's only spare
+   *         on a fetch nothing reads.
+   *   RRD   is v3host's RDREQ - `!RDVALID`, "the prefetch wants a refill".
+   *         §11's request under its own name, and video/ spells it the same
+   *         way (video.parts.ts: "!RDVALID & SPAREWIN").
+   *
+   * ⚠ The priority order is unchanged; only the names of the top two
+   * requests are. */
+  comb("MAPREQ", ["CELLTICK & MODE0", "CELLTICK & MODE1"]),
+  comb("GMAP", ["SPARE & MAPREQ"]),
+  comb("GRD", ["SPARE & !MAPREQ & RDREQ"]),
+  comb("GCPY", ["SPARE & !MAPREQ & !RDREQ & RCPY"]),
+  comb("GSPN", ["SPARE & !MAPREQ & !RDREQ & !RCPY & RSPN"]),
   comb("FBOESCAN", ["!SPARE", "GMAP"]),
   comb("FBOEPTR", ["GRD", "GCPY", "GSPN"]),
   /* ⛔ these were declared as INPUTS in the draft the fitter refused.  Every one
@@ -262,7 +280,7 @@ export const v3dot: Merged = {
      * decoded on v3scan too - a shared register is free on the broadcast,
      * where a strobe made it a fan-out. */
     ...BROADCAST.map((n) => ({ name: n })),
-    { name: "RMAP" }, { name: "RRD" }, { name: "RCPY" }, { name: "RSPN" },
+    { name: "RDREQ" }, { name: "RCPY" }, { name: "RSPN" },
     { name: "PALTURN" },
   ],
   cells: [

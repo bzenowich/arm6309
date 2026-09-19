@@ -354,7 +354,7 @@ now this card's, pixel for pixel — and eight rows made the cursor an arrowhead
 fill reached the outline's outer edge. The price is 48 more bytes of register file, two
 more `'165`, and four macrocells on `v3dot`: the column and row window counters go from
 three bits to four and `SPRIDX` from four to six. ⭐ **`v3dot` refitted at 122/128 cells,
-52/64 I/O and 0 cascades** — cascades *fell* from four, so the timing argument got no
+51/64 I/O and 0 cascades** — cascades *fell* from four, so the timing argument got no
 worse. `video3/bench/run-v3sprite.sh` renders every X phase, both 4-byte phases, the
 edges, the line-doubling boundary and all four `VMODE`s against `v3model.py`, and all 36
 positions match pixel for pixel.
@@ -728,8 +728,8 @@ totals its own claim and that 24 cm is the shortest length that holds it.
    anywhere** — see item 4.
 4. ⚠ **The partition is drafted — [`partition.md`](partition.md) — at FOUR parts, which
    §13.5 says is the most that places, so **video3 is at its ceiling**. ⭐ **ALL FOUR
-   ARE FITTED.** `v3dot` is **122/128 cells and 52/64 I/O**; `v3ptr` is **124/128 and
-   54/64**; `v3host` is **43/128 and 62/64**. `v3scan` — the map word in silicon — is
+   ARE FITTED.** `v3dot` is **122/128 cells and 51/64 I/O**; `v3ptr` is **124/128 and
+   54/64**; `v3host` is **49/128 and 63/64**. `v3scan` — the map word in silicon — is
    **100/128 cells and 63/64 I/O**, and `v3scan_mq` — the same part with the map word in
    four `'574` — is **107/128 cells and 46/64 I/O**. **NO NUMBER FROM `video/`'s FIT APPLIES HERE.**
    `video/` is three `ATF1508AS` whose utilisation is recorded in
@@ -805,9 +805,9 @@ totals its own claim and that 24 cm is the shortest length that holds it.
 
     | | cells | I/O | cascades |
     |---|---|---|---|
-    | `v3dot` | 122/128 | 52/64 | 0 | ⭐ **unchanged — not one edit** |
+    | `v3dot` | 122/128 | 51/64 | 0 | ⭐ **unchanged — not one edit** |
     | `v3ptr` | **124/128** | 54/64 | **3** | the span sequencer, the two decodes, WMODE |
-    | `v3host` | **43/128** | 62/64 | **0** | the copy engine's phase machine |
+    | `v3host` | **49/128** | 63/64 | **0** | the copy engine's phase machine |
     | `v3scan` | 100/128 | 63/64 | 2 | untouched |
 
     ⚠ **`v3ptr`'s cascades are still 3** — the count it had before any of this —
@@ -838,7 +838,7 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     "~10 macrocells for the span and copy sequencers" is refuted by the fitter**,
     and §2.5's "a fifth part for the copy engine — it does not place" closes the
     other way out. ⭐ The move the numbers point at is **`v3host`, which is
-    43/128 and has 22 spare pins**: keep `CEOR`/`CHLAST` on `v3ptr` beside the
+    49/128 and has 22 spare pins**: keep `CEOR`/`CHLAST` on `v3ptr` beside the
     counters they decode and put the phase machine there, which is ~7 signals
     across rather than the 19 counter bits.
 
@@ -875,7 +875,25 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     | | cells | I/O | cascades |
     |---|---|---|---|
     | `v3ptr` | **124/128** | 54/64 | **3** — still flat |
-    | `v3host` | **43/128** | ⚠ **62/64** | 0 |
+    | `v3host` | **49/128** | ⚠ **63/64** | 1 |
+
+    ⭐ **AND THE LAST SIX UNBUILT BLOCKS FOLLOWED, 2026-09-19** — the census is
+    now **empty of `unbuilt`**. Not one of them needed a new block, and four
+    came straight out of `video/`:
+
+    | | |
+    |---|---|
+    | `RMAP` | ⭐ is `v3dot`'s own `CELLTICK`. The map word is fetched once a cell and `MAPLD` was already `SPARE & CELLTICK`, so a separate request was the same decode under a second name. ⚠ **Mode-qualified, which `MAPLD` is not**: bitmap mode has no map, and granting it the slot's only spare access would spend it on a fetch nothing reads |
+    | `RRD` | is `v3host`'s `RDREQ`, `!RDVALID` — §11's request under its own name, and `video/` spells it the same way |
+    | `WRCYC` | `!RW & E`. ⚠ A 6809E write is only valid in E's second half |
+    | `RDCK` | `GRD & !RDVALID`, **active low** so the `'574`'s *rising* edge is the END of the granted access — `vsup.parts.ts`'s, minus its `!LRUN` |
+    | `RSTART` | `RPQ & !E`, §11's **post-increment**. ⚠ Not "the copy has started": that was a guess from the name, and `vsup.parts.ts` says it is the dot after a VRAM read's E falls |
+    | `IRQEN` | `CTRL` b6. ⛔ Tried on `v3ptr`, which has the bus and the `CTRL` decode already, and the fitter refused it at 125/128; it is on `v3host`, which pays its **first data-bus pin** for it |
+
+    ⚠ **`v3dot`'s cascades went 0 → 5** for `MAPREQ` and its mode qualifier.
+    `CLAUDE.md`: a change in cascades is a timing change even when the cell
+    count is flat. Nothing on this card has been timed yet, so it is recorded
+    rather than assessed.
 
     ⛔ **`v3host` IS NOW TWO PINS FROM FULL, and that is the card's real
     ceiling showing.** `partition.md` §7.1 says the binding constraint is pins,

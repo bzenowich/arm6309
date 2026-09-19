@@ -321,12 +321,24 @@ const SOURCES: { re: RegExp; why: Src; note: string }[] = [
    * copy's phase machine, which lives on v3host because v3ptr does not fit
    * with both (plan §14 item 14). What is left of the four arbiter requests
    * is the two nobody has written yet. */
-  { re: /^(RMAP|RRD)$/, why: "unbuilt",
-    note: "signals.md §1.8: the map fetch's and the CPU prefetch's requests into v3dot's arbiter. ⚠ RCPY and RSPN are built now; these two are the map word (plan §2.5) and the read prefetch (§11), neither of which has a sequencer yet" },
-  { re: /^RSTART$/, why: "unbuilt",
-    note: "v3host's RDINV takes it beside WSTB and RETIRE - 'the copy has started', the third thing that invalidates the CPU's read prefetch. ⚠ CBUSY's rising edge is what it wants and nothing forms it" },
-  { re: /^(WRCYC|RDCK|IRQEN)$/, why: "unbuilt",
-    note: "v3host's own three: WRCYC qualifies every register write, RDCK clocks the vread '574, IRQEN gates /IRQ. All three are register-strobe or control timing that plan §10 names and no part computes" },
+  /* ⭐ AND THE LAST SIX LEFT THIS LIST ON 2026-09-19, which empties it. None
+   * of them needed a new block:
+   *
+   *   RMAP    is v3dot's own CELLTICK, mode-qualified - the map word is
+   *           fetched once a cell and MAPLD was already `SPARE & CELLTICK`
+   *   RRD     is v3host's RDREQ, `!RDVALID` - §11's request under its own
+   *           name, which video/ spells the same way
+   *   WRCYC   `!RW & E`: a 6809E write is only valid in E's second half
+   *   RDCK    `GRD & !RDVALID`, active low so the '574's rising edge is the
+   *           END of the granted access - vsup.parts.ts's, minus its !LRUN
+   *   RSTART  `RPQ & !E`, §11's post-increment. ⚠ An earlier note here
+   *           guessed it meant "the copy has started" from the name alone;
+   *           vsup.parts.ts says it is the dot after a VRAM read's E falls
+   *   IRQEN   CTRL b6, decoded on v3ptr beside WMODE - v3host gates /IRQ
+   *           with it and has neither the CTRL decode nor a data bus
+   *
+   * ⚠ What is left in this table is `bus`, `board` and the four `alias`
+   * entries, and an alias is a defect rather than a gap. */
 ]
 
 /* ---- the analysis ------------------------------------------------------- */
@@ -560,9 +572,11 @@ console.log("")
 console.log("      \u2b50 AND VIDEO3'S TWO SEQUENCERS WERE BUILT 2026-09-19, which is")
 console.log("      what emptied most of the second list. The span writer's is v3ptr's")
 console.log("      (117 -> 119/128, cascades flat at 3); the copy engine's phase machine")
-console.log("      is v3host's (34/128), because v3ptr does not fit with both. What is")
-console.log("      still unbuilt is RMAP and RRD - the map fetch's and the CPU")
-console.log("      prefetch's requests - RSTART, and v3host's own WRCYC/RDCK/IRQEN.")
+console.log("      is v3host's, because v3ptr does not fit with both. \u00a77.2's column")
+console.log("      reload and the register file's address followed, and on 2026-09-19")
+console.log("      the last six - RMAP, RRD, WRCYC, RDCK, RSTART and IRQEN.")
+console.log("      \u2b50 NOTHING IS UNBUILT. Every signal any video3 part reads is now")
+console.log("      produced by a part, by the board, or by the backplane.")
 console.log("      \u26a0 And the four `alias` entries are NOT progress: they are one net")
 console.log("      under two names, which is a defect the fitter cannot see.")
 
