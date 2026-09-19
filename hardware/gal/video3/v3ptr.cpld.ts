@@ -34,7 +34,13 @@ export const COPYDIR = process.env.V3_COPYDIR ?? "none"
  * reports no utilisation at all, so it cannot say by how much. The switch is
  * how the question gets bisected, exactly as V3_COPYDIR bisected the
  * direction bits: a variant is kept as a FIT, not as prose.
- *   both | span | copy | none (the state before 2026-09-18) */
+ *   both | span | copy | split | none (the state before 2026-09-18)
+ *
+ * ⭐ `split` IS THE PARTITION EXPERIMENT partition.md §2.3 owes: the two wide
+ * decodes - CEOR and CHLAST, which need ten and nine of THIS part's counter
+ * bits - stay here beside the counters, and the copy's phase machine moves to
+ * v3host, which is 27/128 with 22 spare pins. Seven signals cross instead of
+ * nineteen. v3host.cpld.ts reads the same switch. */
 /* ⭐ AND THE DEFAULT IS THE ONE THAT FITS, as COPYDIR's is. Measured
  * 2026-09-18, all three from gal/cpld/*.fit:
  *
@@ -61,9 +67,11 @@ export const COPYDIR = process.env.V3_COPYDIR ?? "none"
  * exactly as V3_COPYDIR's do. plan §14 item 14.
  *
  */
-const SEQ = process.env.V3_SEQ ?? "none"
-const SPANSEQ = SEQ === "both" || SEQ === "span"
+const SEQ = process.env.V3_SEQ ?? "split"
+const SPANSEQ = SEQ === "both" || SEQ === "span" || SEQ === "split"
 const COPYSEQ = SEQ === "both" || SEQ === "copy"
+/* split: the decodes stay, the phase machine goes to v3host */
+const COPYDEC = SEQ === "split"
 const DIRC = COPYDIR === "both" ? "CDIRC" : null
 const DIRR = COPYDIR === "none" ? null : "CDIRR"
 
@@ -237,6 +245,17 @@ const counters: Cell[] = [
  * handshake it has to take. Without it both columns keep climbing across
  * rows. The counters, the pointers and the termination below are complete;
  * the reload is the one piece this part cannot build alone. */
+/* \u2b50 the split: only what needs this part's counter bits, plus the busy flag
+ * whose GO term is a register decode this part already has. */
+const copyDec: Cell[] = [
+  { pin: 0, name: "CEOR", assertedLow: false, s0: 1, registered: false,
+    why: "the last byte of a row - ~N + N - 1, one product term",
+    terms: [`!${CWN[0]} & ${CWN.slice(1).join(" & ")}`] },
+  { pin: 0, name: "CHLAST", assertedLow: false, s0: 1, registered: false,
+    terms: [`!${CH[0]} & ${CH.slice(1).join(" & ")}`] },
+  { pin: 0, name: "CBUSY", assertedLow: false, s0: 1, registered: true,
+    terms: ["LDCCTRL & D0", "CBUSY & !CDONE"] },
+]
 const copyStub: Cell[] = [
   { pin: 0, name: "CBUSY", assertedLow: false, s0: 1, registered: true,
     terms: ["CGO", "CBUSY & !CDONE"] },
@@ -350,9 +369,21 @@ const spanWriter: Cell[] = [
  * window and a retire on each would move four bytes a slot instead of one.
  * SPARETICK is the window's last dot. */
 const spanSeq: Cell[] = [
+  /* ⛔ WMODE HAD NO PRODUCER ANYWHERE. plan §10 puts it at CTRL b5..4 and
+   * v3dot holds CTRL as CT0..CT7 - but it exports MODE and VMODE and not these
+   * two, and v3dot is 122/128 with Nodes+FB at 124%, so it cannot grow a cell
+   * or a pin to do it (measured: a SPARETICK cell and a DP0 export were both
+   * refused). partition.md §3's answer is that a part decodes the offsets it
+   * needs off the broadcast, which is what this does - the same duplication
+   * v3dot already makes of HSCROLL[1:0]. Three cells, and the span writer has
+   * its mode. */
+  ...[0, 1].map((b) => ({
+    pin: 0, name: `WM${b}`, assertedLow: false, s0: 1 as const, registered: true,
+    terms: [`LDCTRL & D${b + 4}`, `WM${b} & !LDCTRL`],
+  })),
   { pin: 0, name: "RETIRE", assertedLow: false, s0: 1, registered: false,
     why: "one byte goes to VRAM: also WPTR's column step, the serialiser's shift and SPANLEN's count",
-    terms: ["SPANBUSY & GSPN & SPARETICK"] },
+    terms: ["SPANBUSY & GSPN & MUXSEL0"] },
   { pin: 0, name: "SPANEND", assertedLow: false, s0: 1, registered: false,
     terms: [
       "RETIRE & !WM1 & !WM0",                                   /* direct: one byte */
@@ -396,6 +427,8 @@ const addressMux: Cell[] = [...Array(17).keys()].map((i) => {
 const MY_REGS: RegName[] = [
   "LDWP0", "LDWP1", "LDWP2", "LDWADV",
   "LDCP0", "LDCP1", "LDCP2", "LDCW", "LDCH", "LDCCTRL",
+  /* ⚠ CTRL, for WMODE alone - see WM0/WM1 in the span sequencer */
+  ...((SPANSEQ ? ["LDCTRL"] : []) as RegName[]),
 ]
 
 export const v3ptr: Merged = {
@@ -412,11 +445,26 @@ export const v3ptr: Merged = {
      * posted write's strobe, the two grants, the spare window's last dot, and
      * WMODE - which lives in CTRL on v3host. */
     { name: "WSTB" },
-    ...(SPANSEQ || COPYSEQ ? [{ name: "SPARETICK" }] : []),
-    ...(SPANSEQ ? [{ name: "GSPN" }, { name: "WM0" }, { name: "WM1" }]
+    /* ⭐ MUXSEL0 IS THE DOT PHASE'S LOW BIT, and taking it costs v3dot NOTHING.
+     * Both sequencers need the spare window's LAST dot: the arbiter is pure
+     * combinational grant logic with no phase term, so GSPN and GCPY are
+     * asserted for every dot of the window and a step on each would move four
+     * bytes a slot (design-review2.md V-4). ⛔ A `SPARETICK` cell on v3dot was
+     * the obvious way and the fitter refused it twice - that part is 122/128
+     * with Nodes+FB at 124% - and so was exporting DP0 itself, because forcing
+     * a buried counter bit onto a pin is not free there either. But SPARE is
+     * `!DP1`, the grants already contain it, and `comb("MUXSEL0", ["DP0"])` is
+     * ALREADY an external. So `GSPN & MUXSEL0` is the tick, for one literal on
+     * a term the receiver has anyway and not one macrocell anywhere. */
+    ...(SPANSEQ || COPYSEQ ? [{ name: "MUXSEL0" }] : []),
+    ...(SPANSEQ ? [{ name: "GSPN" }]
                 : [{ name: "RETIRE" }, { name: "SPANEND" }, { name: "WINC" },
                    { name: "WROWADV" }]),
     ...(COPYSEQ ? [{ name: "GCPY" }]
+                : COPYDEC
+                /* the phase machine is on v3host: its five outputs come back */
+                ? [{ name: "CDONE" }, { name: "CSTEP" }, { name: "CROWADV" },
+                   { name: "CWLOAD" }, { name: "CRDSEL" }]
                 : [{ name: "CGO" }, { name: "CDONE" }, { name: "CSTEP" },
                    { name: "CROWADV" }, { name: "CWLOAD" }, { name: "CRDSEL" }]),
     ...(DIRR ? [{ name: "CDIRR" }] : []),
@@ -428,7 +476,7 @@ export const v3ptr: Merged = {
   ],
   cells: [
     ...decodeCells(MY_REGS), ...wptr, ...cptr, ...counters,
-    ...(COPYSEQ ? copySeq : copyStub), ...spanWriter,
+    ...(COPYSEQ ? copySeq : COPYDEC ? copyDec : copyStub), ...spanWriter,
     ...(SPANSEQ ? spanSeq : []), ...addressMux],
   /* the address bus, and the three status bits v3host assembles into VSTAT */
   external: new Set([
@@ -439,6 +487,7 @@ export const v3ptr: Merged = {
     "SPANBUSY", "CBUSY",
     ...(SPANSEQ ? ["RSPN", "RETIRE", "WEN", "SPANEND"] : []),
     ...(COPYSEQ ? ["RCPY"] : []),
+    ...(COPYDEC ? ["CEOR", "CHLAST"] : []),
   ]),
 }
 

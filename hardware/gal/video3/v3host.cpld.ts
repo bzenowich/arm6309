@@ -48,6 +48,19 @@ const VRAMSEL = "!IOSEL & A19 & !A20"
  * strobe per REGISTER cannot load WPTR's three bytes separately, which is how
  * `LDWCOL & D0` came to drive both WC0 and WC8 on v3ptr. */
 const DECODE = (process.env.V3_DECODE ?? "broadcast") as "strobes" | "broadcast"
+
+/* ⭐ V3_SEQ=split PUTS THE COPY ENGINE'S PHASE MACHINE HERE, and v3ptr.cpld.ts
+ * is where the switch is documented. The short version: v3ptr does not fit
+ * with both sequencers in it (plan §14 item 14), and this part is 27/128 with
+ * 22 spare pins - "v3host is where the room is, by a wide margin".
+ *
+ * ⚠ THE SPLIT IS CHOSEN BY FAN-IN, NOT BY CONVENIENCE. CEOR and CHLAST
+ * decode ten and nine bits of v3ptr's own width and height counters, so they
+ * stay beside them; what crosses is the two decoded bits plus CBUSY - which
+ * this part ALREADY takes, for VSTAT - and the five outputs that drive the
+ * counters and the address mux back. Seven signals instead of nineteen. */
+const SEQ = process.env.V3_SEQ ?? "split"
+const COPYHOST = SEQ === "split"
 /* the decode, off the backplane.  ⭐ The offsets live in regmap.ts and nowhere
  * else: three other parts decode the same table, and a private copy here is
  * exactly the drift this card cannot afford - a decode that disagrees with the
@@ -111,6 +124,21 @@ const port: Cell[] = [
   comb("RDBKOE", [`${REGSEL} & RW & E & !VDSEL`]),
 ]
 
+/* the copy engine's sequence: two accesses a byte, one spare access a slot,
+ * so two SLOTS a byte - and the phase bit is all the state that needs. */
+const copyHost: Cell[] = [
+  comb("CTICK", ["GCPY & MUXSEL0"]),
+  reg("CPH", ["CBUSY & CTICK & !CPH", "CBUSY & !CTICK & CPH"]),
+  /* ⚠ qualified by CBUSY: this is the address mux's select, and an idle
+   * engine must leave WPTR on the bus for the span writer and the CPU port. */
+  comb("CRDSEL", ["CBUSY & !CPH"]),
+  comb("CSTEP", ["CTICK & CPH"]),
+  comb("CROWADV", ["CSTEP & CEOR"]),
+  comb("CWLOAD", ["CROWADV"]),
+  comb("CDONE", ["CROWADV & CHLAST"]),
+  comb("RCPY", ["CBUSY"]),
+]
+
 export const v3host: Merged = {
   name: DECODE === "strobes" ? "v3host_st" : "v3host",
   partNo: "ARM6309-V3H",
@@ -134,6 +162,8 @@ export const v3host: Merged = {
     { name: "VBLANK" }, { name: "HLOAD" },
     /* the read path's own signals */
     { name: "RDCK" }, { name: "RETIRE" }, { name: "RSTART" }, { name: "IRQEN" },
+    ...(COPYHOST ? [{ name: "CEOR" }, { name: "CHLAST" },
+                    { name: "GCPY" }, { name: "MUXSEL0" }] : []),
   ],
   cells: [
     ...(DECODE === "strobes"
@@ -147,6 +177,7 @@ export const v3host: Merged = {
     ...(DECODE === "strobes" ? [] : MINE.map((r) => comb(r, [WR(r)]))),
     ...palette,
     ...port,
+    ...(COPYHOST ? copyHost : []),
   ],
   external: new Set([
     ...(DECODE === "strobes"
@@ -155,6 +186,8 @@ export const v3host: Merged = {
     "PALTURN", "PBUSY", "LUTWE", "PIDXCE",
     "WSTBV", "WSTB", "RDOE", "RDREQ", "WAITN", "IRQN", "VSTATOE", "RDBKOE",
     "VDSEL", "VPORT", "RDVALID",
+    /* the copy engine's, when the phase machine lives here */
+    ...(COPYHOST ? ["CRDSEL", "CSTEP", "CROWADV", "CWLOAD", "CDONE", "RCPY"] : []),
   ]),
 }
 

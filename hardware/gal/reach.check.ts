@@ -274,10 +274,10 @@ const RESERVED_RE: { re: RegExp; why: Why; note: string }[] = [
   { re: /^(MUXSEL0|MUXSEL1|OMR|MK2|MS0|SI5|NSL7|CT[4-6])$/, why: "board",
     note: "plan §3: the dot path's muxes and the serialisers' state, to discrete parts" },
   { re: /^(SPRLD)$/, why: "board", note: "plan §7: loads the four '165 that hold the sprite row" },
+  { re: /^WEN$/, why: "board",
+    note: "plan §5: the framebuffer write strobe - RETIRE except a transparent pixel in sprite mode. ⚠ NOT the same signal as RETIRE, and a mode that gated the pointer instead would draw the sprite squashed" },
   { re: /^(WSTBV|WADV[01]|RDREQ|PBUSY|WAITN|IRQN)$/, why: "board",
     note: "signals.md §1.9: the posted write, /WAIT and /IRQ open-drain, and the status the host reads" },
-  { re: /^(CBUSY|CH8|CWN9)$/, why: "board",
-    note: "plan §6: CBUSY is VSTAT b4 through the '244; CH8 and CWN9 are the down-counters' top bits, which only the sequencer that does not exist would read (see UNPRODUCED)" },
 ]
 
 /* ======================================================================== *
@@ -312,12 +312,17 @@ const SOURCES: { re: RegExp; why: Src; note: string }[] = [
     note: "v3scan's address-mux select. v3dot exports MUXSEL0 and MUXSEL1 and nothing declares them the same net" },
   { re: /^FBOE$/, why: "alias",
     note: "⛔ WORSE THAN AN ALIAS: v3ptr AND v3scan each declare a plain FBOE, and v3dot exports TWO signals, FBOESCAN and FBOEPTR. v3scan's own comment says FBOE 'is what keeps exactly one of the two parts on the bus' - one name on both parts keeps them both on or both off, and they drive the same seventeen nets" },
-  { re: /^(RMAP|RRD|RCPY|RSPN)$/, why: "unbuilt",
-    note: "signals.md §1.8's four REQUESTS into v3dot's arbiter. The arbiter's grants (GMAP, GRD, GCPY, GSPN) are built and fitted; nothing asks it for anything" },
-  { re: /^(RETIRE|SPANEND|WINC|WROWADV|RSTART)$/, why: "unbuilt",
-    note: "signals.md §1.4's SPAN WRITER SEQUENCER. partition.md §2.3 puts it in v3ptr at ~10 macrocells with the copy's; v3ptr's term list takes all five as inputs 'from v3dot', and v3dot exports none of them" },
-  { re: /^(CGO|CDONE|CSTEP|CROWADV|CWLOAD|CRDSEL)$/, why: "unbuilt",
-    note: "signals.md §1.5's COPY SEQUENCER - plan §6's engine itself, which §1's deletion of the display list was what paid for. Same story: v3ptr counts on CSTEP and CROWADV, holds CBUSY on CGO and CDONE, and nothing produces any of them" },
+  /* ⭐ BOTH SEQUENCERS LEFT THIS LIST ON 2026-09-19 WITH THEIR EQUATIONS, and
+   * the list being checked in both directions is what forced it. RETIRE,
+   * SPANEND, WINC, WROWADV, RSPN are v3ptr's span sequencer; CGO folded into
+   * CBUSY's own term; CDONE, CSTEP, CROWADV, CWLOAD, CRDSEL and RCPY are the
+   * copy's phase machine, which lives on v3host because v3ptr does not fit
+   * with both (plan §14 item 14). What is left of the four arbiter requests
+   * is the two nobody has written yet. */
+  { re: /^(RMAP|RRD)$/, why: "unbuilt",
+    note: "signals.md §1.8: the map fetch's and the CPU prefetch's requests into v3dot's arbiter. ⚠ RCPY and RSPN are built now; these two are the map word (plan §2.5) and the read prefetch (§11), neither of which has a sequencer yet" },
+  { re: /^RSTART$/, why: "unbuilt",
+    note: "v3host's RDINV takes it beside WSTB and RETIRE - 'the copy has started', the third thing that invalidates the CPU's read prefetch. ⚠ CBUSY's rising edge is what it wants and nothing forms it" },
   { re: /^(WRCYC|RDCK|IRQEN)$/, why: "unbuilt",
     note: "v3host's own three: WRCYC qualifies every register write, RDCK clocks the vread '574, IRQEN gates /IRQ. All three are register-strobe or control timing that plan §10 names and no part computes" },
 ]
@@ -550,13 +555,13 @@ console.log("      and through +$15 VDATA.")
 console.log("      ⚠ What a census of this shape still cannot see is a feature with no")
 console.log("      register behind it at all - which is how §6.1's volume x4 hid.")
 console.log("")
-console.log("      ⛔ VIDEO3 IS A DIFFERENT MATTER, and the second list above is why.")
-console.log("      Its four parts are a DATAPATH AND AN ARBITER: pointers, counters, the")
-console.log("      address mux, the register decode, and grants. NEITHER SEQUENCER EXISTS")
-console.log("      - not the span writer's and not the copy engine's - so the arbiter is")
-console.log("      asked for nothing and the counters are stepped by nothing.")
-console.log("      ⚠ Which means `v3ptr` 110/128 and `v3dot` 122/128 are fits of the")
-console.log("      datapath. partition.md §2.3 budgets ~10 macrocells for the two")
-console.log("      sequencers inside v3ptr and they are NOT IN THAT FIT.")
+console.log("      \u2b50 AND VIDEO3'S TWO SEQUENCERS WERE BUILT 2026-09-19, which is")
+console.log("      what emptied most of the second list. The span writer's is v3ptr's")
+console.log("      (117 -> 119/128, cascades flat at 3); the copy engine's phase machine")
+console.log("      is v3host's (34/128), because v3ptr does not fit with both. What is")
+console.log("      still unbuilt is RMAP and RRD - the map fetch's and the CPU")
+console.log("      prefetch's requests - RSTART, and v3host's own WRCYC/RDCK/IRQEN.")
+console.log("      \u26a0 And the four `alias` entries are NOT progress: they are one net")
+console.log("      under two names, which is a defect the fitter cannot see.")
 
 process.exit(failures === 0 ? 0 : 1)

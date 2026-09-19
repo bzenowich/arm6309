@@ -23,10 +23,10 @@ own offsets from `regmap.ts`, which is the single table plan §10 specifies. **2
 | `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⭐ the map word in four `'574` |
 | **`v3dot`** | **122 / 128** | 52 / 64 | **0** | ⭐ the build — a 16×16 sprite, shifters in 4 × `'165` |
 | `v3dot_si` | — | — | — | ⛔ shifters in silicon: **`Design does not fit`** |
-| **`v3ptr`** | **110 / 128** | 44 / 64 | **3** | ⭐ the build — ascending copies only |
+| **`v3ptr`** | **119 / 128** | 47 / 64 | **3** | ⭐ the build — ascending copies only |
 | `v3ptr_rows` | — | — | — | ⛔ row direction: **`INTERNAL ERROR`** |
 | `v3ptr_both` | — | — | — | ⛔ both directions: **`INTERNAL ERROR`** |
-| **`v3host`** | **27 / 128** | **42 / 64** | **0** | ⭐ the build — the broadcast |
+| **`v3host`** | **34 / 128** | **53 / 64** | **0** | ⭐ the build — the broadcast |
 | `v3host_st` | 51 / 128 | ⛔ **64 / 64** | 0 | one load strobe per register — **replaced** |
 
 ⛔ **Keep a rejected variant's fit, do not overwrite it.** The three `v3ptr` rows are the
