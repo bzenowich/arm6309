@@ -271,7 +271,7 @@ const RESERVED_RE: { re: RegExp; why: Why; note: string }[] = [
   { re: /^(HSYNC|VSYNC)$/, why: "board", note: "signals.md §1.9: the connector AND the backplane - graphics.md §12.2's line compare" },
   { re: /^(FOE0|FOE1|FBOESCAN|FBOEPTR|PIXOE|ATOE|PIDXOE|PIDXCE|VSTATOE|RDOE|RDBKOE|LUTWE)$/,
     why: "board", note: "output enables and write strobes for discrete parts - '574, '244, '245 and the LUT" },
-  { re: /^(MUXSEL0|MUXSEL1|OMR|MK2|MS0|SI5|SL7|CT[4-6])$/, why: "board",
+  { re: /^(MUXSEL0|MUXSEL1|OMR|MK2|MS0|SI5|NSL7|CT[4-6])$/, why: "board",
     note: "plan §3: the dot path's muxes and the serialisers' state, to discrete parts" },
   { re: /^(SPRLD)$/, why: "board", note: "plan §7: loads the four '165 that hold the sprite row" },
   { re: /^(WSTBV|WADV[01]|RDREQ|PBUSY|WAITN|IRQN)$/, why: "board",

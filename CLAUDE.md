@@ -238,7 +238,7 @@ matrix, product-term cascading and placement are `fit1508.exe`'s business and
 phase *at all* is logic, not delay, and this model does see that — which is
 where two of `design-review2.md`'s findings came from.
 
-### Eight traps this repository has already paid for
+### Nine traps this repository has already paid for
 
 - **A failed CPLD fit leaves the previous `.fit` in place.** A stale
   utilisation report reads exactly like a passing one. Compare the file's hash
@@ -253,6 +253,18 @@ where two of `design-review2.md`'s findings came from.
   the design that really did fit. ⚠ **"Design fits successfully" appears only in
   the fitter's stdout, never in the `.fit`**, so nothing downstream can recover
   it. `fit1508.sh` now requires that sentence and refuses `INTERNAL ERROR`.
+- ⛔ **AND THE VERDICT CAN DEPEND ON THE FILE NAME** — found 2026-09-18.
+  `gal/video3/v3ptr.pld` and `v3ptr_span.pld`, generated from the same term list
+  and **byte-identical apart from CUPL's timestamp comment**, fit differently:
+  `v3ptr_span` answered *"Design fits successfully"* twice and `v3ptr` answered
+  `INTERNAL ERROR` four times in a row. The prefix was not poisoned — the
+  committed baseline still fitted under the name `v3ptr` in the middle of the
+  same session. ⚠ So on a design near the edge (that one is at **Nodes+FB
+  125%**), **"it does not fit" is not a result until it has been refused under a
+  second name**; and "it fits" is a property of the JEDEC you got rather than of
+  the design, so the build does not change on the strength of a variant that
+  cannot be fitted under its own name.
+
 - **Every `.pld` must be 7-bit ASCII.** Atmel's CUPL is an MS-DOS program and
   its lexer aborts on the `⚠`/`⭐`/`⛔` this repository's prose is made of —
   `illegal character: ASCII code 226`. `jedec.check.ts` asserts it.

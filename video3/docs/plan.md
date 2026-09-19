@@ -781,6 +781,49 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     is room for anything else** — a keyed copyrect, a descriptor walker, more
     sprite. Nothing should be priced against `v3ptr` until it is refitted with
     them.
+    ⭐ **AND THE EQUATIONS WERE WRITTEN AND FITTED, 2026-09-18** — `V3_SEQ` on
+    `v3ptr.cpld.ts`, the way `V3_COPYDIR` bisected the direction bits. The span
+    writer's is a port of `video/`'s `seqctl.jedec.ts`, which `vspan_tb` verifies,
+    minus the display list's `!LRUN` and with `TC` folded in because SPANLEN is on
+    this part; the copy engine's is new, and is only a phase bit, because two
+    accesses a byte with one spare access a slot means **two slots a byte** and the
+    phase is all the state the sequence needs.
+
+    | `v3ptr` | cells | I/O | cascades |
+    |---|---|---|---|
+    | `none` — the build | 110/128 | 44/64 | 3 |
+    | `span` | **115/128** | 48/64 | **3** — no timing change |
+    | `copy` | **117/128** | 41/64 | ⚠ **8** — +5 on its own |
+    | `both` | ⛔ **DOES NOT FIT**, refused under two different file names | | |
+
+    ⚠ **122 is what the two would cost if the cells added, and 122 is under
+    128** — so the refusal is not the cell count. It is LAB grouping:
+    Nodes+FB/MCells is already 125% with one sequencer, and `CEOR` and `CHLAST`
+    need ten and nine counter bits inside one block. **`partition.md` §2.3's
+    "~10 macrocells for the span and copy sequencers" is refuted by the fitter**,
+    and §2.5's "a fifth part for the copy engine — it does not place" closes the
+    other way out. ⭐ The move the numbers point at is **`v3host`, which is
+    27/128 and has 22 spare pins**: keep `CEOR`/`CHLAST` on `v3ptr` beside the
+    counters they decode and put the phase machine there, which is ~7 signals
+    across rather than the 19 counter bits.
+
+    ⛔ **What is still owed even in the `copy` variant**: the COLUMN RELOAD at
+    end of row. §6 and §7.2 keep both columns' shadows in the register file, so
+    the reload is `rfa` pointing the file at +$08/+$09 and +$12/+$13 and driving
+    the same load path a CPU store uses — the register-file address owner's
+    business, which is `v3host`. Without it both columns climb across rows.
+
+    ⚠ **And three counters were built the wrong way round**, which only mattered
+    because nothing clocked them: §5 and §6 specify SPANLEN, CWIDTH and CHEIGHT as
+    **down**-counters and `counter.ts` has only an up-counter, so all three loaded
+    the true value and counted up, past any terminal count. Fixed with
+    `vlen.jedec.ts`'s idiom — hold the complement, count up, and the terminal
+    decode is ONE product term. ⛔ The decode is `..11110` and not `..11111`,
+    because CWIDTH is the plain byte count N (the emulator, the model, both
+    drivers and the bench all agree, none of them biases it) and the counter is
+    sampled before the edge that steps it. Free: the fit is 110/128 and 3
+    cascades either way.
+
     ⚠ Two naming defects came out of the same run and are *not* the same thing:
     `v3scan` reads `SRC0`/`SRC1` where `v3dot` exports `MUXSEL0`/`MUXSEL1`, and
     **`v3ptr` and `v3scan` each declare a plain `FBOE` while `v3dot` exports two

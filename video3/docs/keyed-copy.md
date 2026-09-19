@@ -271,8 +271,21 @@ spare cells are already spoken for**, and nothing in §7 should be priced agains
 them until the part is refitted **with** both sequencers in it. That refit is
 the gate, not the compare.
 
-- [ ] ⛔ **The two sequencers exist**, and `v3ptr` is refitted with them — the
-      number that says whether there is room for anything at all.
+- [x] ⭐ **The two sequencers are written and fitted** (2026-09-18), and the
+      number is in: `plan.md` §14 item 14 has the table. **`v3ptr_span` is
+      115/128 with cascades flat at 3; `v3ptr_copy` is 117/128 but costs +5
+      cascades; ⛔ the two together DO NOT FIT.** 122 is
+      what they would cost if cells added, and 122 is under 128 — the refusal
+      is LAB grouping, not cell count.
+      ⛔ **So there is no room on `v3ptr` for a keyed compare, and there was
+      never going to be**: §7's "18 spare cells and 20 spare pins" describes a
+      part that does not yet contain §6's engine. Price the key against
+      whichever part the copy sequencer ends up on — `v3host` is where the
+      numbers point, at 27/128 with 22 spare pins — and only after that part
+      has been refitted with the sequencer in it.
+      ⭐ **The good half of the news stands**: the key is still a term on a
+      write strobe that is still being designed, which is the cheapest form it
+      can take. It is the PART that is not settled, not the compare.
 - [ ] `v3ptr` fits with the compare, **and its cascade count is read out of the
       new `.fit`** and compared with the old (`CLAUDE.md`'s trap).
 - [ ] The in-driver copy cost is measured, not assumed (§3.2's caveat).

@@ -32,10 +32,10 @@ PIN = D5 ;
 PIN = D6 ;
 PIN = D7 ;
 PIN = WSTB ;
-PIN = RETIRE ;
-PIN = SPANEND ;
-PIN = WINC ;
-PIN = WROWADV ;
+PIN = SPARETICK ;
+PIN = GSPN ;
+PIN = WM0 ;
+PIN = WM1 ;
 PIN = CGO ;
 PIN = CDONE ;
 PIN = CSTEP ;
@@ -53,6 +53,10 @@ PIN = FBOE ;
 /* --- outputs ------------------------------------------------------ */
 PIN = CBUSY ;
 PIN = SPANBUSY ;
+PIN = RSPN ;
+PIN = RETIRE ;
+PIN = SPANEND ;
+PIN = WEN ;
 PIN = FBA2 ;
 PIN = FBA3 ;
 PIN = FBA4 ;
@@ -163,7 +167,7 @@ PINNODE = WADV1 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * LDWP0, LDWP1, LDWP2, LDWADV, LDCP0, LDCP1, LDCP2, LDCW, LDCH
- * LDCCTRL
+ * LDCCTRL, WINC, WROWADV
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -703,6 +707,19 @@ WADV1.d = LDWADV & D1
           # WADV1 & !LDWADV ;
 SPANBUSY.d = WSTB
              # SPANBUSY & !SPANEND ;
+RSPN = SPANBUSY ;
+RETIRE = SPANBUSY & GSPN & SPARETICK ;
+SPANEND = RETIRE & !WM1 & !WM0
+          # RETIRE & WM0 & MK2 & MK1 & MK0
+          # RETIRE & WM1 & !WM0 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6 & NSL7 ;
+WEN = RETIRE & !WM1
+      # RETIRE & !WM0
+      # RETIRE & MS0 ;
+WINC = RETIRE
+       # CSTEP ;
+WROWADV = SPANEND & WADV0
+          # SPANEND & WADV1
+          # CROWADV ;
 FBA2 = !CRDSEL & WC2
        # CRDSEL & CC2 ;
 FBA2.oe = FBOE ;
