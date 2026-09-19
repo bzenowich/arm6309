@@ -1213,3 +1213,156 @@ has a palette** — `TxAnsiP` already puts `#282828` at index 0 and `PalRange`
 loads it again. So the field is simply the background colour: the same grey, no
 dither texture behind the colour tables, and **2,000 fewer cells to draw**
 (the stream went 8,299 → 6,127 bytes).
+
+---
+
+## 18. ⭐ Paint, rebuilt from the bare-metal show — 2026-09-18
+
+The brief was to make the NitrOS-9 Paint scene do what `software/demo`'s
+desktop show does between **17 s and 48 s** — the wider canvas, the shapes and
+fills, the type, the band of colour, the scrolling — without the wave, and
+with three things the old show did not have: a **vertical** scroll, a picture
+opened through a **Choose File dialog**, and that picture **dragged round a
+circle** and put back. Then a close box, and the desktop again.
+
+### 18.1 ⛔ Paint has a screen of its own, and that is what makes the close box work
+
+Everything else in this demo is a window on the desktop's screen. Paint is now
+a NitrOS-9 **screen** (`DWSet` style `$13`), and the reason is the last item on
+the list: a full-screen window over the desktop can only be *closed* by
+redrawing the desktop, which takes ten seconds. A screen's pixels live in a
+DRAM store when it is not displayed (`ca_scr.asm`), so `DWEnd` on Paint hands
+the display back and **the desktop is simply there again**.
+
+⛔ **And a new screen comes up in CoWin's own palette.** Every colour in
+`v3show.py` is an index into the *toolbox's* 256; `v3desk` loads them with the
+toolbox's `Pal` call for the desktop's screen, and Paint needs its own. Without
+that one line the entire window is drawn in somebody else's sixteen — which is
+exactly how the first run came out, and it looks like a corrupted palette
+rather than a missing call.
+
+### 18.2 The canvas is 320 × 320, and the arithmetic says why
+
+`canvas width + horizontal scroll = 384`, because **384 is the margin** —
+columns 640-1023 are the only off-screen store the copy engine can reach
+(`plan.md` §4), so the document cannot be wider. The old scene spent 256 on the
+canvas and 128 on the pan; this one spends **320 on the canvas and 64 on the
+pan**, and takes the reveal it lost horizontally back vertically: the document
+is 480 rows against a 320-row canvas, so the **vertical scroll is 160 rows** and
+brings in a whole band of picture.
+
+⭐ **So the page the viewer paints is the document's first page.** `v3scrl`'s
+first act is now one `SS.Copy` of the *canvas into the margin*, over a corner
+that `mktbox.py` deliberately leaves white. Scrolling away from it and back
+brings the same pixels home: measured over the whole scroll, **317 of 629
+recorded frames are byte-identical to the frame before it started**, and the
+last one is exact.
+
+⚠ **The ROM picture is therefore composed for an L, not a rectangle.** All that
+is ever seen of it is the 64 columns past the canvas and the 160 rows below it,
+so the sun sits in the right-hand strip and the range, the water and the caption
+are all below row 320.
+
+### 18.3 ⛔ `window()` CLEARS WHAT IT FRAMES
+
+`tbox.asm`'s `TWin` fills the frame with `C.Panel` before it draws the border
+(`Fill 1,1,-2,-2`). So "rename the window" is not a patch — a title changed after
+the fact takes the canvas, the notes and the palette strip with it. Both the
+original draw and the reopen therefore go through one `paint_chrome()`, and they
+differ only in the title and the words.
+
+⚠ **The close box is the same trap from the other side.** Pressing it must not
+call `window()` again, or the picture goes. It is the 12 × 12 bevel `TWin` puts
+at `(7, -15)` of the frame, so pressing it is one sunken bevel in that place —
+**14 bytes**.
+
+### 18.4 What the page is drawn with
+
+All of it is CoArm's own primitives, on the canvas, with the tool lit in the
+palette as each is used:
+
+| | |
+|---|---|
+| the filled rectangle | `Bar` and `Box` |
+| the hatched one | `PatDef` + **`PatBar`** — the brick pattern, orange on pale |
+| the triangle | **`Poly`**, two chains of two |
+| the star | **`PolyPat`**, three times (see below) — ⚠ with the ink the *sparse* colour, because pattern 4 sets one bit in eight, so black on gold is a gold star ruled with diagonals and the other way round is a black star with gold threads |
+| the type | the ROM toolbox's Noto Sans |
+| the band | six `Bar`s, left to right |
+
+⚠ **Both polygon chains run down, and must start and finish on the same row.**
+CoArm walks y from the left chain's first vertex to its last and wants an x from
+each chain on every row of it.
+
+⛔ **AND A POLY IS ONE SPAN A ROW, WHICH A FIVE-POINTED STAR IS NOT.** Below
+the star's bottom inner vertex every row is **two** runs, one down each leg, and
+a left-chain/right-chain polygon cannot say that. Handed the ten vertices as one
+pair of chains, CoArm paints between them: the notch between the legs fills
+solid and the star comes out with a webbed foot. Nothing is wrong with the model
+or the card - they implement the same rule - the shape being asked for was
+impossible.
+
+So `v3show.star()` cuts across that vertex and returns **three** chain pairs, the
+body and a leg each, drawn with one `PatDef`; the pattern tiles from the working
+area's origin rather than from the shape, so there is no seam where they meet.
+
+⚠ **The general rule: decompose at every vertex where the silhouette splits,
+and check it against `vgmodel.poly_spans` before running the machine.** That is
+CoArm's own span rule in twenty lines of Python, and it showed the webbed foot
+in a second - where seeing it on the card costs a twenty-five minute demo run.
+
+⚠ **Nothing clips to the canvas.** The window's working area is the whole
+screen, so every coordinate in `stream_draw` is asserted into the canvas in
+Python.
+
+### 18.5 The drag is the window drag with the hard half removed
+
+`v3grab` walks the picture round a 50-pixel circle. Paint's page is **a
+colour**, so there is no backing store to keep: a step is one `SS.Copy` out of
+the margin and at most **one white `Bar` per axis that moved**. The copy goes
+first — each strip is outside the new rectangle by construction, so painting
+them after cannot erase it, and the picture is never absent from the page,
+which is the defect §17 spent a day on.
+
+⭐ The circle comes from `video3/bench/mklegs.py circle 25 56 emit`, the same
+generator that emits `v3drag`'s figure-8: it eases out from the centre to the
+rim, goes round once and eases back, so **the last step lands exactly on the
+first** — and the generator asserts it.
+
+⛔ **One 6809 bug worth recording**: the run length cannot live in `B` while the
+two deltas are read, because `SExt` clobbers `B`. A count of 3 becomes whatever
+the last delta was. It goes on the stack.
+
+### 18.6 ⛔ `DWEnd` frees a screen; it does not show another
+
+The close box appeared to work and then showed a **flat blue screen** for a
+second. `ca_scr.asm`'s `ScrFree` clears `CG.Disp` and stops: with no screen
+selected the card simply keeps whatever pixels were last written to it, and the
+next thing to draw is what you see. ⭐ **It takes a `Select` on the desktop's
+window** — `display 1b 21 >/w3` — and then the desktop is back, icons, Tracker,
+Deskbar and all, out of its DRAM store.
+
+⚠ Worth stating as a rule, because the symptom is so misleading: *closing* a
+screen and *showing* another are two operations, and a demo that does only the
+first looks like a driver that lost the other screen's pixels.
+
+### 18.7 What it costs
+
+The scene runs from **257 s to 339 s** of machine time and the whole demo is
+now **369 s** against 289. Where it goes:
+
+| | s |
+|---|---|
+| the chrome, and the page into the margin | 12 |
+| the page painted, shape by shape | 17 |
+| the two scrolls, out and back | 8 |
+| the File menu and the Choose File dialog | 8 |
+| `parrot.img` opened: the repaint and the picture into the margin | 11 |
+| the circle, 76 steps | 17 |
+| the hold, the close box, and the desktop | 8 |
+
+⚠ **The two 11-12 s repaints are the toolbox's escape path, not the card.**
+§16.1 measured it: CoArm's `ESC` handling is ~1 ms a byte and a toolbox text
+call's floor is 11 ms before it draws a glyph. The palette strip alone is 38
+calls. Nothing here is the copy engine, which does the scroll's whole document
+and the drag's 76 pictures inside one of those seconds.

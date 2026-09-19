@@ -69,10 +69,22 @@ LINES = [
     ("v3drag >/w3", 1),
     # ---- the pointer, on the card's sprite
     ("echo now moving the PS/2 mouse", 17),
-    # ---- Paint, a window on the same screen; its canvas scrolls by copyrect
+    # ---- Paint, on a SCREEN OF ITS OWN: the page painted in front of you,
+    # scrolled by copyrect, then a picture opened and dragged round a circle
     ("iniz w4", 0), ("copy /dd/sys/v3paint /w4", 1),
-    ("v3scrl >/w4", 1),
-    ("copy /dd/sys/v3doodle /w4", 6),
+    ("copy /dd/sys/v3draw /w4", 2),
+    ("v3scrl >/w4", 2),
+    ("copy /dd/sys/v3menu /w4", 2),
+    ("copy /dd/sys/v3open /w4", 3),
+    ("copy /dd/sys/v3load /w4", 1),
+    ("v3grab >/w4", 3),
+    # ⭐ and the close box.  ⛔ DWEnd FREES A SCREEN, IT DOES NOT SHOW
+    # ANOTHER - ca_scr.asm's ScrFree clears CG.Disp and stops there, so the
+    # card keeps whatever pixels were last on it until something draws.  It
+    # takes a Select on /W3 to bring the desktop back, and the desktop's
+    # pixels have been waiting in its DRAM store all along.
+    ("copy /dd/sys/v3shut /w4", 1),
+    ("display 1b 24 >/w4", 0), ("display 1b 21 >/w3", 4),
     # ⛔ THE WORD PROCESSOR SCENE IS OUT (2026-09-18).  The wildbits faces
     # are fixed-width, and a word processor is where that shows worst - they
     # look right at the console, which is where changefont now puts them.
@@ -85,7 +97,7 @@ LINES = [
     # ---- the game
     # ⚠ DWEnd ($24), not Select ($21): overworld makes its own window, and
     # /W3 still has the desktop's.  A second DWSet on it is E$WADef.
-    ("display 1b 24 >/w4", 0), ("display 1b 24 >/w3", 0), ("overworld >/w3", 1),
+    ("display 1b 24 >/w3", 0), ("overworld >/w3", 1),
     ("display 1b 21 >/w1", 0), ("procs", 3),
     ("echo DONE-arm6309", 0),
 ]
@@ -119,9 +131,14 @@ CAPTIONS = [
     ("v3about /w3", "A window, drawn once. Its pixels are now the only copy that exists"),
     ("v3drag >", "v3drag: a FIGURE-8 by copy engine, over a desktop a BACKING STORE keeps"),
     ("PS/2 mouse", "The pointer is video3's 16x16 HARDWARE SPRITE - five registers, nothing saved"),
-    ("v3paint /w4", "Paint: its document goes into VRAM's off-screen margin, x 640-1023"),
+    ("v3paint /w4", "Paint, on a SCREEN OF ITS OWN - and its page into VRAM's margin, x 640-1023"),
+    ("v3draw /w4", "the page painted for you: bars, a pattern fill, two polygons, type, colour"),
     ("v3scrl >", "v3scrl: two copies a step - the view, and the strip - and a copy for each thumb"),
-    ("v3doodle /w4", "... and is painted on: CoWin's ellipses and lines, and toolbox text"),
+    ("v3menu /w4", "File: the menus are the ROM toolbox's too - bevels, a gradient, Noto Sans"),
+    ("v3open /w4", "the Choose File dialog, with the icons and the list a Tracker window uses"),
+    ("v3load /w4", "parrot.img opened: into the margin, where the copy engine can reach it"),
+    ("v3grab >", "v3grab: the picture dragged round a 50-pixel circle - one copy and two bars"),
+    ("v3shut /w4", "the close box - DWEnd, then Select /W3, and the desktop is back"),
     ("overworld >", "overworld: the game on an exclusive tile screen, hero and all"),
     ("DD:procs", "procs: both shells still running"),
 ]

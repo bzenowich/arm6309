@@ -1,7 +1,7 @@
 RKBoot Krn tb0....................................................................................................bKrnP2 KrnP3 Init IOMan RBF rbromdisk DD R0 SCF sc16550 Term NDrv Nil ArmIO KbdArm W1 W2 W3 W4 W5 PipeMan Piper Pipe Clock Clock2 SysGo i2xoCNitrOS-9/6809 Level 2-DEV
 arm6309
 (C) 2014 The NitrOS-9 Project
-Fri Sep 18 18:01:10 2026
+Fri Sep 18 22:11:35 2026
 http://www.nitros9.org
 
 
@@ -59,11 +59,23 @@ now moving the PS/2 mouse
 
 {Term|02}/DD:copy /dd/sys/v3paint /w4
 
+{Term|02}/DD:copy /dd/sys/v3draw /w4
+
 {Term|02}/DD:v3scrl >/w4
 
-{Term|02}/DD:copy /dd/sys/v3doodle /w4
+{Term|02}/DD:copy /dd/sys/v3menu /w4
+
+{Term|02}/DD:copy /dd/sys/v3open /w4
+
+{Term|02}/DD:copy /dd/sys/v3load /w4
+
+{Term|02}/DD:v3grab >/w4
+
+{Term|02}/DD:copy /dd/sys/v3shut /w4
 
 {Term|02}/DD:display 1b 24 >/w4
+
+{Term|02}/DD:display 1b 21 >/w3
 
 {Term|02}/DD:display 1b 24 >/w3
 
@@ -76,8 +88,8 @@ now moving the PS/2 mouse
          User                     Mem Stack
 Id  PId Number  Pty Age Sts Signl Siz  Ptr   Primary Module
 --- --- ------- --- --- --- ----- --- ----- ----------------
-  2   1     0   128 128 $80    0   31 $72E2 Shell 
-  3   2     0   128 128 $80    0   31 $6FE2 Shell 
+  2   1     0   128 131 $80    0   31 $72E2 Shell 
+  3   2     0   128 128 $A0    0   31 $6FE2 Shell 
   4   2     0   128 128 $80    0   31 $1EF3 Procs 
 
 {Term|02}/DD:echo DONE-arm6309

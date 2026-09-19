@@ -2,13 +2,17 @@ ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/font.*: 27 faces, 
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3desk: 631 bytes
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3cmds: 209 bytes
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3about: 187 bytes
-ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3paint: 1647 bytes
-ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3doodle: 290 bytes
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3paint: 1809 bytes
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3draw: 2950 bytes
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3fonts: 55593 bytes
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3pal: 36 bytes
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3art: 79043 bytes
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3write: 1942 bytes
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3spec: 1976 bytes
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3menu: 147 bytes
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3open: 308 bytes
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3load: 1780 bytes
+ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3shut: 14 bytes
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/v3bbs: 6127 bytes
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/sys/video3.txt: 5041 bytes
 ok    /home/bz/code/arm6309/software/nitros9/video/build3/arm6309_rom.bin and .hex, page 0 = software/boot/boot.bin

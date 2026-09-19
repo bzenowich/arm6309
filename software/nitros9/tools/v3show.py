@@ -19,9 +19,15 @@ Files:
               window (whose list v3trk fills from the real directory)
   v3cmds      the second Tracker window, on top of the first
   v3about     the window v3drag moves with the copy engine
-  v3paint     the Paint window, on the same screen; its document goes into
-              VRAM's scroll margin, where v3scrl scrolls it from
-  v3doodle    what is painted on the canvas once it has scrolled
+  v3paint     Paint, on a SCREEN OF ITS OWN, and its page into VRAM's
+              scroll margin, where v3scrl scrolls it from
+  v3draw      the page painted in front of the viewer: shapes, a pattern
+              fill, a polygon, type and a band of colour
+  v3menu      the File menu pulled down
+  v3open      the Choose File dialog, parrot.img picked
+  v3load      the dialog gone, the window renamed, the picture into the
+              margin for v3grab to drag round a circle
+  v3shut      the close box pressed - then DWEnd, and the desktop is back
   v3bbs       80 x 25 CP437 ANSI art - gruvbox, and 256-colour pairs
   v3art       a real .ans re-emitted, when video3/we-tortuga.ans is there
   v3pal       the DOS palette for it, which cannot travel with it (have_art)
@@ -158,12 +164,6 @@ ABOUT = (96, 392, 250, 80)          # v3drag.asm: StartX 96, StartY 373, 250 x 9
 assert GRAB == (ABOUT[0] + 60, ABOUT[1] - 19 + 9), "v3drag.asm's GrabX, GrabY"
 DESKBAR_X = 500
 
-# the Paint window: /W4 is cells (1, 1, 78, 58) of the screen, so its origin
-# is (8, 8) and everything below is in its coordinates
-PAINT_ORG = (8, 8)
-PAINT = (0, 19, 624, 444)
-VIEW = (72, 52, 256, 320)           # v3scrl.asm: the canvas, in /W4's pixels
-DOC = (T.DOC_W, T.DOC_H)            # held at VRAM x 640, y 0: the margin
 
 
 def tracker_chrome(t, active):
@@ -248,84 +248,331 @@ def stream_about():
     return bytes(s)
 
 
-def stream_paint():
-    """The Paint window, over the desktop on the same screen."""
-    vx, vy, vw, vh = VIEW
+# ---------------------------------------------------------------- Paint
+# ⭐ PAINT HAS ITS OWN SCREEN.  Everything else in this demo is a window on
+# the desktop's screen; Paint is a NitrOS-9 SCREEN of its own ($13), because
+# that is what makes the close box work: DWEnd hands the display back to the
+# desktop's screen, whose pixels have been waiting in its DRAM store
+# (ca_scr.asm), and the desktop is simply there again.  A full-screen window
+# over the desktop could only be closed by redrawing the desktop.
+PSCR = (640, 480)
+PWIN = (0, 19, 640, 461)            # ⚠ window() puts the TAB above y: 0..18
+PIN = (PWIN[0] + 5, PWIN[1] + 5, PWIN[2] - 10, PWIN[3] - 10)
+CANVAS = T.CANVAS                   # ⚠ mktbox.py, v3scrl.asm VW/VH, v3grab.asm
+CANX, CANY = 14, 82                 # ⚠ v3scrl.asm VX/VY, v3grab.asm CX/CY
+PARROT = T.PARROT                   # ⚠ v3grab.asm PW/PH
+PHOME = ((CANVAS[0] - PARROT[0]) // 2, (CANVAS[1] - PARROT[1]) // 2)
+GRABR = 25                          # the circle v3grab drags it round, in pixels
+assert PHOME[0] >= GRABR and PHOME[1] >= GRABR, "the circle runs off the page"
+RPX = 362                           # the notes panel, right of the canvas
+PMENU = "File   Edit   Goodies   Font   FontSize   Style"
+PATY = 420                          # the pattern and colour strip
+STATY = 452
+
+# the eight patterns of the strip, 8 x 8 rows of bits - MacPaint's, near
+# enough: solid, the three grey screens, two hatches, a brick and a weave
+PATS = [0xFF] * 8, \
+       [0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55], \
+       [0x88, 0x22, 0x88, 0x22, 0x88, 0x22, 0x88, 0x22], \
+       [0x80, 0x08, 0x80, 0x08, 0x80, 0x08, 0x80, 0x08], \
+       [0x11, 0x22, 0x44, 0x88, 0x11, 0x22, 0x44, 0x88], \
+       [0x88, 0x44, 0x22, 0x11, 0x88, 0x44, 0x22, 0x11], \
+       [0xFF, 0x80, 0x80, 0x80, 0xFF, 0x08, 0x08, 0x08], \
+       [0x33, 0xCC, 0x33, 0xCC, 0x33, 0xCC, 0x33, 0xCC]
+
+
+def fcol(c):
+    return esc(0x32, col(c))
+
+
+def bcol(c):
+    return esc(0x33, col(c))
+
+
+def bar(x, y, w, h):
+    return esc(0x40, *W(x, y)) + esc(0x4A, *W(x + w - 1, y + h - 1))
+
+
+def box(x, y, w, h):
+    return esc(0x40, *W(x, y)) + esc(0x48, *W(x + w - 1, y + h - 1))
+
+
+def patdef(n, rows):
+    return esc(0x62, n, *rows)
+
+
+def patbar(x, y, w, h):
+    return esc(0x63, *W(x, y, x + w - 1, y + h - 1))
+
+
+def poly(left, right, pat=False):
+    """⚠ BOTH CHAINS RUN DOWN, and they must start and finish on the same
+    row: CoArm walks y from the LEFT chain's first to its last and wants an x
+    from each chain on every row of it (ca_ext.asm, vgmodel.poly_spans)."""
+    pts = list(left) + list(right)
+    assert 2 <= len(left) and 2 <= len(right) and len(pts) <= 16, len(pts)
+    assert left[0][1] == right[0][1] and left[-1][1] == right[-1][1], "chains must meet"
+    return esc(0x66 if pat else 0x65, len(left), len(right)) + b"".join(W(x, y) for x, y in pts)
+
+
+def lines(pts, close=True):
+    p = list(pts) + ([pts[0]] if close else [])
+    return esc(0x40, *W(*p[0])) + b"".join(esc(0x46, *W(x, y)) for x, y in p[1:])
+
+
+def star(cx, cy, r, ri):
+    """A five-pointed star as THREE chain pairs, and the ring for its outline.
+
+    ⛔ A POLY IS ONE SPAN A ROW.  CoArm walks a left chain and a right chain
+    and paints between them (ca_ext.asm), so a shape whose row is two separate
+    runs cannot be one call - and below the star's bottom inner vertex every
+    row IS two runs, one down each leg.  Handed the ten vertices as a single
+    pair of chains it paints the notch between the legs solid, and the star
+    comes out with a filled-in foot.
+
+    So it is cut across that vertex: the body above it, and a leg each below.
+    The pattern is tiled from the working area's origin rather than from the
+    shape, so the three pieces have no seam.
+    """
+    import math
+
+    def at(k, rad, off):
+        a = math.radians(off + 72 * k)
+        return (cx + rad * math.cos(a), cy + rad * math.sin(a))
+
+    def rd(p):
+        return (int(round(p[0])), int(round(p[1])))
+
+    def cut(a, b, y):
+        """where segment a-b crosses row y"""
+        return (a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]), y)
+
+    o = [at(k, r, -90) for k in range(5)]        # 0 top, 1 right, 2 foot, 3 foot, 4 left
+    i = [at(k, ri, -54) for k in range(5)]       # 2 is the bottom inner vertex
+    yb = round(i[2][1])
+    L, R = cut(i[3], o[3], yb), cut(i[1], o[2], yb)
+    foot = max(round(o[2][1]), round(o[3][1]))   # the two feet share a row
+    o2, o3 = (o[2][0], foot), (o[3][0], foot)
+    parts = [([o[0], i[4], o[4], i[3], L], [o[0], i[0], o[1], i[1], R]),
+             ([L, o3], [i[2], o3]),              # the left leg
+             ([i[2], o2], [R, o2])]              # and the right
+    parts = [([rd(p) for p in a], [rd(p) for p in b]) for a, b in parts]
+    ring = [rd(p) for p in (o[0], i[0], o[1], i[1], o[2],
+                            i[2], o[3], i[3], o[4], i[4])]
+    return parts, ring
+
+
+def tool_row(chosen):
+    """The tools, ONE ROW along the top the way the model in
+    software/demo/build/video's show has them - which is what leaves the
+    canvas its width."""
     s = bytearray()
-    s += dwset(0xFF, 1, 1, 78, 58, PAL["black"], PAL["desk"])   # a window on the shown screen
-    s += SELECT + CURSOR_OFF
-    x, y, w, h = PAINT
-    s += window(x, y, w, h, "parrots.img - Paint", 1)
-    cx, cy, cw, ch = x + 5, y + 5, w - 10, h - 10
-    s += rect(cx, cy, cw, ch, "panel")
+    for i, t in enumerate(T.TOOLS):
+        bx, by = 9 + i * 28, 48
+        on = t == chosen
+        s += bevel(bx, by, 26, 26, "black" if on else "panel", 0 if on else 1)
+        s += icon("tool_" + t, bx + 5, by + 5, 1 if on else 0)
+    return bytes(s)
+
+
+def paint_title(name):
+    return window(*PWIN, "Paint - " + name, 1)
+
+
+NOTES_UNTITLED = ("untitled",
+                  ["%d x %d pixels, 8 bits" % (T.DOC_W, T.DOC_H),
+                   "shown %d x %d" % CANVAS, "",
+                   "held in VRAM's margin,", "columns 640-1023, where",
+                   "the display cannot see it"],
+                  ["two copies a step, by", "the card: the view,",
+                   "then the strip coming in", "- and the page is 64",
+                   "columns and 160 rows", "wider than the window"],
+                  "brush 3 px     100%     0 CPU pixels a scroll step", "brush")
+NOTES_PARROT = ("parrot.img",
+                ["%d x %d pixels, 8 bits" % PARROT, "shown 1:1", "",
+                 "in the margin as well,", "so the copy engine can",
+                 "drag it round a circle"],
+                ["one SS.Copy a step, and", "a white bar for each",
+                 "axis that moved - the", "page is a colour, so",
+                 "there is no backing", "store to keep"],
+                "grab     100%%     %d x %d pixels a step, none of them" % PARROT, "grab")
+
+
+def paint_chrome(title, notes):
+    """⛔ THE WHOLE WINDOW, because window() CLEARS IT.  tbox.asm's TWin
+    fills the frame with C.Panel before it draws the border (Fill 1,1,-2,-2),
+    so a title changed after the fact wipes the canvas, the notes and the
+    palette strip with it.  Everything a repaint needs is therefore here, and
+    the callers differ only in the title and the words."""
+    cx, cy, cw, ch = PIN
+    vx, vy, vw, vh = CANX, CANY, *CANVAS
+    head, note, scr, status, tool = notes
+    s = bytearray()
+    s += window(*PWIN, "Paint - " + title, 1)
     s += grad(cx, cy, cw, 20, T.GREYG, 8)
-    s += text(cx + 6, cy + 1, "File   Edit   Image   Tools   Window   Help", "menu")
+    s += text(cx + 6, cy + 1, PMENU, "menu")
     s += rect(cx, cy + 20, cw, 1, "frame")
-    # the tools, two columns, the brush chosen
-    tools = ["tool_" + t for t in T.TOOLS] + [None]
-    for i, t in enumerate(tools):
-        bx, by = cx + 4 + (i % 2) * 27, cy + 26 + (i // 2) * 27
-        chosen = t == "tool_brush"
-        s += bevel(bx, by, 26, 26, "black" if chosen else "panel", 0 if chosen else 1)
-        if t:
-            s += icon(t, bx + 5, by + 5, 1 if chosen else 0)
-    # a colour well from the cube, and the pen and paper
-    for i in range(48):
-        r, g = divmod(i, 6)
-        c = T.CUBE0 + (r * 5 + g * 7) % 200
-        s += rect(cx + 4 + g * 9, cy + 250 + r * 9, 8, 8, c)
-    s += rect(cx + 14, cy + 336, 22, 22, "white")
-    s += rect(cx + 6, cy + 328, 22, 22, "black")
+    s += tool_row(tool)
     # the canvas, sunken, and its scroll bars
     s += bevel(vx - 2, vy - 2, vw + 18, vh + 18, "frame", 0)
     s += rect(vx, vy, vw, vh, "white")
-    s += scroll(vx + vw, vy, vh, 1, 0, (vh - 26) * vh // DOC[1])
-    s += scroll(vx, vy + vh, vw, 0, 0, (vw - 26) * vw // DOC[0])
+    s += scroll(vx + vw, vy, vh, 1, 0, (vh - 26) * vh // T.DOC_H)
+    s += scroll(vx, vy + vh, vw, 0, 0, (vw - 26) * vw // T.DOC_W)
     s += rect(vx + vw, vy + vh, 14, 14, "panel")
-    # the information panel
-    px = vx + vw + 26
-    s += bevel(px, vy, cx + cw - 6 - px, 144)
-    s += text(px + 8, vy + 4, "parrots.img", "panel", bold=True)
-    for i, line in enumerate(["384 x 480 pixels, 8 bits", "shown 256 x 320", "",
-                              "held in VRAM's margin,", "columns 640-1023, where", "the display cannot see it"]):
-        s += text(px + 8, vy + 24 + 18 * i, line, "panel")
-    s += bevel(px, vy + 152, cx + cw - 6 - px, 90)
-    s += text(px + 8, vy + 156, "Scrolling", "panel", bold=True)
-    for i, line in enumerate(["two copies a step, by", "the card: the view, then", "the strip coming in"]):
-        s += text(px + 8, vy + 176 + 18 * i, line, "panel")
-    # a status bar
-    s += bevel(cx, cy + ch - 20, cw, 20)
-    s += text(cx + 8, cy + ch - 19, "brush 3 px     100%     0 CPU pixels a scroll step", "panel")
-    # the document, into the margin: raw VRAM pixels the screen does not show
-    s += image(0, 640, 0, raw=1)
+    # the notes, right of the canvas
+    s += bevel(RPX, vy, cx + cw - 6 - RPX, 150)
+    s += text(RPX + 8, vy + 4, head, "panel", bold=True)
+    for i, line in enumerate(note):
+        s += text(RPX + 8, vy + 24 + 18 * i, line, "panel")
+    s += bevel(RPX, vy + 158, cx + cw - 6 - RPX, 120)
+    s += text(RPX + 8, vy + 162, "Scrolling" if tool == "brush" else "Dragging",
+              "panel", bold=True)
+    for i, line in enumerate(scr):
+        s += text(RPX + 8, vy + 182 + 18 * i, line, "panel")
+    # ⭐ the patterns and the colours, in a strip along the bottom
+    s += bevel(cx, PATY, cw, 28)
+    for i, rows in enumerate(PATS):
+        s += bevel(cx + 4 + i * 24, PATY + 3, 22, 22, "panel", 0)
+        s += patdef(i, rows) + fcol("black") + bcol("white")
+        s += patbar(cx + 5 + i * 24, PATY + 4, 20, 20)
+    s += rect(cx + 206, PATY + 3, 1, 22, "frame")
+    for i in range(30):
+        c = ("black", "white", "red", "orange", "green", "desk", "tab", "pale")[i % 8] \
+            if i < 8 else T.CUBE0 + ((i - 8) * 9 + (i - 8) // 5 * 37) % 200
+        s += rect(cx + 212 + i * 14, PATY + 3, 13, 22, c)
+    s += bevel(cx, STATY, cw, 20)
+    s += text(cx + 8, STATY + 1, status, "panel")
     return bytes(s)
 
 
-def stream_doodle():
-    """Painting on the canvas, where v3scrl leaves the view (the document's
-    corner): a ring round the middle macaw's head (mktbox.DOC_HEAD) and a
-    speech balloon pointing at it."""
-    vx, vy, vw, vh = VIEW
-    hx, hy = vx + T.DOC_HEAD[0], vy + T.DOC_HEAD[1]
-    msg = "Polly wants a copyrect!"
-    tw = T.text_width(msg, bold=True)
-    rx, ry = tw // 2 + 14, 17
-    bx, by = vx + 8 + rx, hy + 110
+def stream_paint():
+    """Paint, on a screen of its own, drawn as you watch; then the page into
+    VRAM's margin, where the display cannot see it."""
     s = bytearray()
-    s += esc(0x32, PAL["red"])
-    for k in range(3):
-        s += esc(0x40, *W(hx + 2, hy - 2)) + esc(0x51, *W(40 + k, 38 + k))   # inside the canvas: nothing clips to it
-    s += esc(0x32, PAL["white"]) + esc(0x40, *W(bx, by)) + esc(0x54, *W(rx, ry))
-    s += esc(0x32, PAL["black"]) + esc(0x40, *W(bx, by)) + esc(0x51, *W(rx, ry))
-    # the tail: white between two black edges, so it reads over dark feathers
-    s += esc(0x32, PAL["white"])
-    for dx in range(21, 34):
-        s += esc(0x40, *W(bx + dx, by - ry + 2)) + esc(0x44, *W(hx - 10, hy + 40))
-    s += esc(0x32, PAL["black"])
-    for dx in (20, 34):
-        s += esc(0x40, *W(bx + dx, by - ry + 1)) + esc(0x44, *W(hx - 10, hy + 40))
-    s += textc(bx - rx, 2 * rx, by - 9, msg, "white", bold=True)
+    s += dwset(0x13, 0, 0, 80, 60, PAL["black"], 2, 2)
+    s += SELECT + CURSOR_OFF
+    # ⛔ A NEW SCREEN COMES UP IN CoWin's OWN PALETTE, and every colour
+    # below is an index into the toolbox's.  v3desk loads it for the desktop's
+    # screen; Paint has a screen of its own, so it has to load it too - and
+    # without this line the whole window is drawn in somebody else's sixteen.
+    s += palette()
+    s += paint_chrome("untitled", NOTES_UNTITLED)
+    # ⚠ LAST, and the only slow thing here: the page into the margin, as raw
+    # VRAM pixels the display does not fetch.  v3scrl copies the canvas over
+    # its corner before it scrolls, so what the viewer draws IS page one.
+    s += image(T.IMAGE["page"], 640, 0, raw=1)
     return bytes(s)
+
+
+def stream_draw():
+    """⭐ THE PAGE, PAINTED IN FRONT OF THE VIEWER - shapes, a pattern fill,
+    a polygon, type and a band of colour, each with its own tool lit in the
+    palette, all of it CoArm's own drawing primitives on the canvas.
+
+    ⚠ Nothing clips to the canvas: the window's working area is the whole
+    screen, so every coordinate here is checked into the canvas by hand."""
+    X, Y = CANX, CANY
+
+    def c(x, y):
+        assert 0 <= x < CANVAS[0] and 0 <= y < CANVAS[1], (x, y)
+        return X + x, Y + y
+
+    s = bytearray()
+    # 1 - a filled rectangle, and its frame
+    s += tool_row("frect") + fcol("red") + bar(*c(12, 12), 128, 74)
+    s += fcol("black") + box(*c(12, 12), 128, 74)
+    # 2 - an outlined one, then the bucket, in a pattern
+    s += tool_row("rect") + box(*c(160, 12), 148, 74)
+    s += tool_row("bucket") + patdef(6, PATS[6]) + fcol("orange") + bcol("pale")
+    s += patbar(*c(161, 13), 146, 72)
+    # 3 - a polygon: the triangle
+    s += tool_row("fpoly") + fcol("sel")
+    s += poly([c(24, 104), c(10, 196)], [c(24, 104), c(104, 196)])
+    s += fcol("black") + lines([c(24, 104), c(104, 196), c(10, 196)])
+    # 4 - and a star, filled with a pattern instead of a colour
+    # ⚠ the INK is the sparse one: pattern 4 sets one bit in eight, so
+    # black ink on a gold paper is a gold star ruled with fine diagonals -
+    # the other way round would be a black star with gold threads
+    parts, ring = star(190, 152, 50, 20)
+    s += patdef(4, PATS[4]) + fcol("black") + bcol("tab")
+    for left, right in parts:
+        s += poly([c(*p) for p in left], [c(*p) for p in right], pat=True)
+    s += fcol("black") + lines([c(*p) for p in ring])
+    # 5 - type, from the ROM toolbox
+    s += tool_row("text")
+    s += text(*c(12, 210), "Hello from a 6309 - the toolbox drew this", "white")
+    # 6 - ⭐ and the band of colour, a bar at a time, left to right
+    s += tool_row("line")
+    for i, name in enumerate(("red", "orange", "tab", "green", "desk", "sel")):
+        s += fcol(name) + bar(*c(12, 232 + i * 13), 292, 10)
+    s += tool_row("grab")
+    return bytes(s)
+
+
+def stream_menu():
+    """The File menu, pulled down."""
+    cx, cy = PIN[0], PIN[1]
+    s = bytearray()
+    s += rect(cx + 4, cy + 1, 34, 18, "sel")
+    s += text(cx + 6, cy + 1, "File", "sel")
+    s += bevel(cx + 2, cy + 20, 118, 118)
+    for i, (name, dim) in enumerate([("New", 0), ("Open...", 0), ("Close", 0),
+                                     ("Save", 1), ("Save As...", 1), ("Quit", 0)]):
+        if i == 3:
+            s += rect(cx + 8, cy + 26 + 18 * i, 106, 1, "frame")
+        s += text(cx + 12, cy + 24 + 18 * i + (i >= 3), name, "dim" if dim else "panel")
+    return bytes(s)
+
+
+DLG = (180, 150, 300, 214)
+FILES = [("image16", "parrot.img"), ("image16", "sunset.img"), ("image16", "tiles.img"),
+         ("doc16", "palette.txt"), ("doc16", "notes.txt")]
+
+
+def stream_open():
+    """The Choose File dialog, with parrot.img picked."""
+    x, y, w, h = DLG
+    cx, cy = x + 5, y + 5
+    s = bytearray()
+    s += window(x, y, w, h, "Open", 1)
+    s += rect(cx, cy, w - 10, h - 10, "panel")
+    s += text(cx + 6, cy + 4, "Look in:  /DD/SYS", "panel")
+    s += bevel(cx + 6, cy + 26, w - 22, 116, "frame", 0)
+    s += rect(cx + 8, cy + 28, w - 26, 112, "white")
+    for i, (ic, name) in enumerate(FILES):
+        ty = cy + 30 + 21 * i
+        on = i == 0
+        if on:
+            s += rect(cx + 9, ty, w - 28, 20, "sel")
+        s += icon(ic, cx + 12, ty + 2, 0)
+        s += text(cx + 34, ty + 2, name, "sel" if on else "white")
+    for i, (name, bx) in enumerate([("Cancel", 128), ("Open", 210)]):
+        s += bevel(cx + bx, cy + 152, 72, 26)
+        s += textc(cx + bx, 72, cy + 156, name, "panel", bold=i == 1)
+    return bytes(s)
+
+
+def stream_load():
+    """The dialog gone, the window renamed, and the picture into the margin
+    where v3grab can drag it about with the copy engine.
+
+    ⚠ The whole window is repainted, not patched: window() clears what it
+    frames (paint_chrome says so), and the dialog was over the canvas and the
+    notes anyway."""
+    s = bytearray()
+    s += paint_chrome("parrot.img", NOTES_PARROT)
+    s += image(T.IMAGE["parrot"], 640, 0, raw=1)
+    return bytes(s)
+
+
+def stream_shut():
+    """The close box, pushed in.
+
+    ⚠ NOT window() AGAIN: that would clear the frame and take the picture
+    with it.  The box is the 12 x 12 bevel tbox.asm's TWin puts at (7, -15)
+    of the frame, so pressing it is one sunken bevel in the same place."""
+    x, y, _, _ = PWIN
+    return bevel(x + 7, y - 15, 12, 12, "frame", 0)
 
 
 # ------------------------------------------------------------------- BBS
@@ -883,7 +1130,9 @@ def stream_text():
 def main(out):
     d = pathlib.Path(out); d.mkdir(parents=True, exist_ok=True)
     streams = [("v3desk", stream_desk), ("v3cmds", stream_cmds), ("v3about", stream_about),
-               ("v3paint", stream_paint), ("v3doodle", stream_doodle),
+               ("v3paint", stream_paint), ("v3draw", stream_draw),
+               ("v3menu", stream_menu), ("v3open", stream_open),
+               ("v3load", stream_load), ("v3shut", stream_shut),
                ("v3bbs", stream_bbs), ("video3.txt", stream_text)]
     if FACES:
         streams[5:5] = [("v3fonts", stream_wfonts), ("v3write", stream_write),

@@ -253,55 +253,161 @@ ICON = {}      # filled by build(): name -> number
 
 
 # ----------------------------------------------------------------- pictures
+# ⭐ TWO, AND THE MARGIN HOLDS ONE AT A TIME.  video3's off-screen store is
+# exactly the scroll margin - columns 640-1023 of every row, 384 x 480 - so a
+# picture the copy engine can reach has to fit in it (plan.md 4).
+#
+#   0 "page"    384 x 480, the paint document.  ⚠ Its top-left CANVAS_W x
+#               CANVAS_H is never seen: v3scrl copies the canvas over it
+#               before it scrolls, so the page the viewer watched being drawn
+#               IS the document's first page.  What this picture is for is
+#               the columns and rows beyond that - the art the scroll reveals.
+#   1 "parrot"  the photograph, sized to sit inside the canvas with a border,
+#               so `v3grab` can drag it in a circle without running off the
+#               page.  It replaces the page in the margin when it is opened.
 DOC_W, DOC_H = 384, 480      # the paint document: exactly the scroll margin
+CANVAS = (320, 320)          # ⚠ v3show.py CANVAS and v3scrl.asm VW, VH
+PARROT = (264, 240)          # ⚠ v3show.py PARROT and v3grab.asm PW, PH
 
 
-# The paint document is the photograph software/demo's desktop show was made
-# from (git 790de82: build/parrots-image.jpg, kept untracked), scaled to 480
-# rows and cropped round the middle macaw.  Without it, mkparrots.py's
-# stand-in illustration - and the doodle's anchor is then only approximate.
+# The photograph software/demo's desktop show was made from (git 790de82:
+# build/parrots-image.jpg, kept untracked); without it, mkparrots.py's
+# stand-in illustration.
 PHOTO = os.path.join(ROOT, "software", "demo", "build", "parrots-image.jpg")
-PHOTO_HEAD = (0.54, 0.21)           # the middle macaw's eye, as a fraction of the photo
 DOC_X0 = 255                        # the crop's left edge, in the 853-wide scaled photo
-DOC_HEAD = (int(PHOTO_HEAD[0] * 1920 * DOC_H / 1080) - DOC_X0, int(PHOTO_HEAD[1] * DOC_H))
 
 
-def build_doc():
-    """The paint program's document, 384 x 480, Floyd-Steinberg onto the
-    5 x 8 x 5 cube."""
+def photo():
     if os.path.exists(PHOTO):
-        img = Image.open(PHOTO).convert("RGB")
-    else:
-        print("note  no %s: the illustration stands in" % PHOTO)
-        sys.path.insert(0, DEMO)
-        import mkparrots
-        img = mkparrots.illustration()
-    sc = DOC_H / img.height
-    img = img.resize((int(round(img.width * sc)), DOC_H), Image.LANCZOS)
-    l = min(DOC_X0, img.width - DOC_W)
-    img = img.crop((l, 0, l + DOC_W, DOC_H))
+        return Image.open(PHOTO).convert("RGB")
+    print("note  no %s: the illustration stands in" % PHOTO)
+    sys.path.insert(0, DEMO)
+    import mkparrots
+    return mkparrots.illustration()
+
+
+def quantise(img):
+    """Floyd-Steinberg onto the 5 x 8 x 5 cube, as a W x H index array."""
+    w, h = img.size
     a = np.array(img, dtype=np.float64)
-    out = np.zeros((DOC_H, DOC_W), np.uint8)
+    out = np.zeros((h, w), np.uint8)
     rl, gl, bl = (np.array(v, float) for v in (R_LEV, G_LEV, B_LEV))
-    for y in range(DOC_H):
-        for x in range(DOC_W):
+    for y in range(h):
+        for x in range(w):
             r, g, b = np.clip(a[y, x], 0, 255)
             ri, gi, bi = int(np.argmin(abs(rl - r))), int(np.argmin(abs(gl - g))), int(np.argmin(abs(bl - b)))
             out[y, x] = CUBE0 + ri * 40 + gi * 5 + bi
             err = np.array((r - rl[ri], g - gl[gi], b - bl[bi]))
-            if x + 1 < DOC_W:
+            if x + 1 < w:
                 a[y, x + 1] += err * 7 / 16
-            if y + 1 < DOC_H:
+            if y + 1 < h:
                 if x:
                     a[y + 1, x - 1] += err * 3 / 16
                 a[y + 1, x] += err * 5 / 16
-                if x + 1 < DOC_W:
+                if x + 1 < w:
                     a[y + 1, x + 1] += err * 1 / 16
     assert (out != PAL["key"]).all()
     return out
 
 
-IMAGE = {"doc": 0}
+def build_parrot():
+    """The photograph, PARROT pixels, cropped round the middle macaw."""
+    pw, ph = PARROT
+    img = photo()
+    sc = ph / img.height
+    img = img.resize((int(round(img.width * sc)), ph), Image.LANCZOS)
+    l = min(int(DOC_X0 * ph / DOC_H) + 20, img.width - pw)
+    return quantise(img.crop((max(l, 0), 0, max(l, 0) + pw, ph)))
+
+
+# ------------------------------------------------- the page the scroll finds
+# ⭐ DRAWN HERE, NOT PHOTOGRAPHED.  A painting the demo can own: a sky with
+# a low sun, a range of hills, a lake with the range upside down in it, and a
+# line of type along the bottom.  It is composed for the two reveals - the
+# sun and the far peak sit in the columns past the canvas, and the lake is
+# entirely below it - so that scrolling is what shows them.
+PAGE_NOTE = "drawn off the page - the copy engine brings it in"
+
+
+def _vgrad(d, box, top, bot):
+    x0, y0, x1, y1 = box
+    for y in range(y0, y1):
+        d.line([(x0, y), (x1 - 1, y)], fill=lerp(top, bot, (y - y0) / max(1, y1 - y0 - 1)))
+
+
+def oncube(c):
+    """The nearest colour the 5 x 8 x 5 cube has EXACTLY.
+
+    ⚠ A flat area painted off the cube dithers, and at this cube's coarse
+    red and blue steps a dithered flat area reads as static, not as texture.
+    Gradients may dither - that is what dithering is for - but every large
+    flat fill in the page below is snapped here first.
+    """
+    return tuple(min(l, key=lambda v: abs(v - c[i]))
+                 for i, l in enumerate((R_LEV, G_LEV, B_LEV)))
+
+
+def build_page():
+    """The paint document, DOC_W x DOC_H.
+
+    ⛔ COMPOSED FOR THE L, not for the rectangle.  All the viewer ever sees
+    of this picture is the columns past the canvas (320-383) and the rows
+    below it (320-479) - an L - because v3scrl copies the drawn page over the
+    corner.  So the sun sits in the right-hand strip, and the range, the
+    water and the caption are all below row 320, where the vertical scroll
+    brings them in whole.
+    """
+    w, h = DOC_W, DOC_H
+    cw, ch = CANVAS
+    img = Image.new("RGB", (w, h), (255, 255, 255))
+    d = ImageDraw.Draw(img)
+    sky, haze, horizon = (73, 128, 191), (255, 219, 191), 400
+    _vgrad(d, (0, 0, w, horizon), sky, haze)
+    # the sun and its halo, in the strip the canvas does not reach
+    sx, sy = cw + 34, 84
+    for r in (76, 60, 46, 34):
+        d.ellipse([sx - r, sy - r, sx + r, sy + r],
+                  fill=lerp(lerp(sky, haze, sy / horizon), (255, 255, 182), 0.55 - r / 260))
+    d.ellipse([sx - 25, sy - 25, sx + 25, sy + 25], fill=(255, 255, 182))
+    # ⭐ the range, its feet on the horizon: rows ~240-400, so 80 rows of it
+    # are below the canvas and come in with the vertical scroll
+    for (lx, px, rx), py, base in (((296, cw + 56, 470), 246, (128, 146, 191)),
+                                   ((-70, 96, 214), 286, (64, 109, 64)),
+                                   ((136, 292, 448), 236, (64, 73, 64))):
+        base, lit = oncube(base), oncube(lerp(base, (255, 255, 255), 0.30))
+        d.polygon([(lx, horizon), (px, py), (rx, horizon)], fill=base)
+        d.polygon([(px, py), (rx, horizon), ((px + rx) // 2, horizon)], fill=lit)
+        k = (horizon - py) // 5
+        d.polygon([(px, py), (px + k, py + k + 6), (px + k // 3, py + k - 4),
+                   (px - k // 2, py + k + 8), (px - k, py + k)], fill=(255, 255, 255))
+    # ⭐ THE WATER, all of it below the canvas: the range again, upside down
+    # and blued, in bands of two rows so it reads as ripple rather than as a
+    # mirror somebody forgot to turn off.
+    ref = img.crop((0, horizon - (h - horizon), w, horizon)).transpose(Image.FLIP_TOP_BOTTOM)
+    ref = Image.blend(ref, Image.new("RGB", ref.size, oncube((64, 109, 191))), 0.62)
+    img.paste(ref, (0, horizon))
+    px_ = img.load()
+    for y in range(horizon, h):
+        k = 1.12 if (y - horizon) % 4 < 2 else 0.92
+        for x in range(w):
+            px_[x, y] = tuple(min(255, int(v * k)) for v in px_[x, y])
+    d.line([(0, horizon), (w - 1, horizon)], fill=(255, 255, 219))
+    try:
+        f = ImageFont.truetype(os.path.join(FONT_DIR, "NotoSans-Bold.ttf"), 14)
+    except OSError:
+        f = ImageFont.load_default()
+    tw = int(d.textlength(PAGE_NOTE, font=f))
+    d.rectangle([10, h - 31, 16 + tw, h - 9], fill=oncube((0, 36, 64)))
+    d.text((13, h - 28), PAGE_NOTE, font=f, fill=(255, 255, 255))
+    a = quantise(img)
+    # ⚠ the canvas-sized corner is overwritten by v3scrl before anything
+    # sees it; white is what the page the viewer draws on starts as, so the
+    # -page.png that comes out of this file shows the document as it will be
+    a[:ch, :cw] = PAL["white"]
+    return a
+
+
+IMAGE = {"page": 0, "parrot": 1}
 
 
 # -------------------------------------------------------------------- build
@@ -343,18 +449,22 @@ def build(out):
         P.b[0x11 + 3 * i:0x13 + 3 * i] = off.to_bytes(2, "big")
     ICON.clear()
     assert names == list(icon_names()), "TOOL_ORDER has moved in mkshow.py"
-    doc = build_doc()
-    P.b[0xD0] = 1
-    head = DOC_W.to_bytes(2, "big") + DOC_H.to_bytes(2, "big")
-    pg, off = P.put(head)
-    P.b += doc.tobytes()
-    P.b[0xD1] = pg
-    P.b[0xD2:0xD4] = off.to_bytes(2, "big")
+    pics = [("page", build_page()), ("parrot", build_parrot())]
+    assert [n for n, _ in pics] == sorted(IMAGE, key=IMAGE.get), "IMAGE has moved"
+    P.b[0xD0] = len(pics)
+    for i, (_, a) in enumerate(pics):
+        h, w = a.shape
+        pg, off = P.put(w.to_bytes(2, "big") + h.to_bytes(2, "big"))
+        P.b += a.tobytes()
+        P.b[0xD1 + 3 * i] = pg
+        P.b[0xD2 + 3 * i:0xD4 + 3 * i] = off.to_bytes(2, "big")
     assert len(P.b) <= 63 * PAGE, len(P.b)
     open(out, "wb").write(bytes(P.b))
-    Image.fromarray(RGB[doc].astype(np.uint8)).save(os.path.splitext(out)[0] + "-doc.png")
-    print("ok    %s: %d bytes, %d pages; %d fonts, %d icons, 1 picture %dx%d"
-          % (out, len(P.b), (len(P.b) + PAGE - 1) // PAGE, len(fonts), len(blobs), DOC_W, DOC_H))
+    for n, a in pics:
+        Image.fromarray(RGB[a].astype(np.uint8)).save("%s-%s.png" % (os.path.splitext(out)[0], n))
+    print("ok    %s: %d bytes, %d pages; %d fonts, %d icons, %s"
+          % (out, len(P.b), (len(P.b) + PAGE - 1) // PAGE, len(fonts), len(blobs),
+             ", ".join("%s %dx%d" % (n, a.shape[1], a.shape[0]) for n, a in pics)))
 
 
 def text_width(s, bold=False):
