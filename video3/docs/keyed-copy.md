@@ -242,8 +242,9 @@ along with two more estimates in §7.
 | `GRow`'s table (§4.2) | ⭐ **built**, same gate |
 | `SS.CopyN`, the software copy list | ⭐ **built**, 2.75×, and gated by `run-v3copyn.sh` — the same rectangles as one table and as N calls, 0 of 307,200 bytes differ |
 | a tighter `CpRun` — one `VcWait` a copy | ⭐ **built**: 779 → 695 µs |
+| ⭐ **the per-copy work itself** (§7.1) | ⭐ **built 2026-09-19**: the register poll the pin already does, the block copy into `VG.CpBlk`, the `VG.CpA` round trip and the walk's arithmetic — **698 → 344 µs a copy, size-independent**, and the engine's own time now overlaps the next rectangle's set-up |
 | a **string** cache in the margin (§3.2) | ⛔ not built, and the first thing that would pay |
-| the **hardware descriptor walker** (§7.1.1) | ⛔ not built — and §7.1.2 shows the CPU spends more building a VRAM descriptor (91.6 µs) than writing the registers it replaces (~33 µs), so it only pays for **persistent** lists or for the concurrency |
+| the **hardware descriptor walker** (§7.1.1) | ⛔ not built — and the CPU spends more building a VRAM descriptor (91.6 µs) than writing the registers it replaces (~33 µs), so it only pays for **persistent** lists or for the concurrency. ⚠ At 344 µs a copy the case for it is weaker again: ten sprites fit in half a frame without it |
 | the **colour key** itself | ⛔ not built, no fit, not in `plan.md`. §7.2 prices it at 1 pin + ~2 macrocells + a `74HC688`, and §7 has the real utilisation now |
 | more hardware sprites (§6.4) | ⛔ not built — the answer to genre C, which the key does not serve |
 
@@ -438,6 +439,34 @@ command*, and **~740 ms of that was the fork** — measured directly by running
 | `CpRun` alone (`CALLTIME`) | 543 µs |
 | `CpWait` — the engine itself | **54 µs** |
 
+⭐ **AND THE RESIDUAL WENT, 2026-09-19 — 698 → 344 µs A COPY.** The figures above
+are the state this section reasoned from; what was left after one-`VcWait`-a-copy
+turned out to be arithmetic and copying rather than waiting:
+
+| | before | after |
+|---|---|---|
+| `SS.CopyN`, 204 B | 698 µs | **344 µs** |
+| `SS.CopyN`, 256 B (a 16 × 16 sprite) | 708 µs | **349 µs** |
+| `SS.CopyN`, 20,000 B | 5,708 µs | 5,125 µs |
+| `CpRun` alone | 465 µs | **220 µs** |
+| the IRQ-masked stretch a copy | 276 µs | **130 µs** |
+| ⭐ ten sprites, 20 copies of 256 B | 14.17 ms | ⭐ **6.98 ms** of a 14.3 ms frame |
+
+**What went**: the `SPANBUSY` poll before each register group — `v3host`'s `WAITN`
+holds a register *write* under a span or a copy in its own bus cycle and the strobes
+are qualified by `!BUSY`, so the poll did in software what the pin does in silicon
+(a register *read* is not held, which is why the one remaining poll still works);
+the 12-byte block copy into `VG.CpBlk`; the `VG.CpA` round trip, because the
+column's low byte **is** the address's low byte, so it is an OR and not an add; and
+`CpOver` when the destination precedes the source. The engine's 0.247 µs a byte is
+unchanged hardware, but ~180 µs of it now overlaps the next rectangle's set-up, so
+**a copy under ~728 bytes retires for free**. ⚠ The IRQ mask stays: what the
+sequence guards against is the VBL service moving `WPTR` between the pointer write
+and `GO`, which is not something `/WAIT` can hold.
+
+⚠ **`SS.Copy` is $DF, not $E0**, and `v3cpyb`'s modes 0 and 1 are the same run —
+`cmpd #3 / lbne List` sends everything but 2 and 3 to the table path.
+
 ⛔ **And the observation I reasoned from was an artefact of my own bench.**
 §3.2 said "17 rows and 1 row cost the same to a microsecond, so the cost is
 entirely per call". **12 × 17 and 204 × 1 are both 204 bytes** — I varied the
@@ -458,9 +487,15 @@ cannot remove it, because it IS the software.**
 
 | | per 16 × 16 sprite | 10 sprites (20 copies) | 30-tile column refill |
 |---|---|---|---|
-| `SS.CopyN`, software | **788 µs** | ⛔ **15.8 ms** | ⛔ **23.7 ms** |
+| `SS.CopyN`, software, as this section was written | **788 µs** | ⛔ **15.8 ms** | ⛔ **23.7 ms** |
+| ⭐ `SS.CopyN` **as measured 2026-09-19** | **349 µs** | ⭐ **6.98 ms** | ⭐ **10.5 ms** |
 | a card that walks descriptors | ~78 µs | ⭐ **1.6 ms** | ⭐ **2.4 ms** |
 | **a frame** | | **14.3 ms** | **14.3 ms** |
+
+⛔ **SO THIS SECTION'S CONCLUSION IS WITHDRAWN.** "Ten sprites do not fit in a frame
+with a software list" was true of a 788 µs copy. They fit in half a frame at 349,
+and a 30-tile column refill fits too. The hardware walker is worth the concurrency
+and the persistent list, not the arithmetic — §4.1 has the current state.
 
 ⛔ **Ten sprites do not fit in a frame with a software list.** Not "cost 16% of
 a frame" — *do not fit*. The hardware list is ~10× on a sprite and it is the
@@ -508,14 +543,14 @@ the kind of change that moves cascades.
 
 1. ⭐ **`SS.CopyN`** — done, 2.75×, no silicon. It was worth building for the API
    alone, and it is what measured the residual.
-2. ⭐ **A tighter `CpRun`** — one `VcWait` a copy instead of eleven (§7.1.2).
-   Free, and it may be the whole answer: ~430 µs a copy puts ten sprites inside
-   a frame.
+2. ⭐ **DONE, and it was the whole answer.** One `VcWait` a copy, then the
+   arithmetic and the copying around it: **344 µs a copy**, ten sprites in 6.98 ms
+   of a 14.3 ms frame (§7.1).
 3. **Only then the hardware descriptor walker**, and only for the concurrency —
-   §7.1.2 shows the CPU spends more building a VRAM descriptor than writing the
-   registers it replaces.
-4. **Then the key**, which is worth a package once a copy is cheap — and worth
-   nothing while a copy costs 788 µs.
+   the CPU spends more building a VRAM descriptor than writing the registers it
+   replaces, and ten sprites now fit without it.
+4. **Then the key**, which is worth a package once a copy is cheap — and a copy
+   is cheap now, so this is the next thing on the list rather than the fourth.
 5. **More hardware sprites** last — the answer to genre C, which the key does
    not serve at all.
 

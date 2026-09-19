@@ -94,23 +94,35 @@ claim on it** — `v3card_tb` ran direct, mask and solid. It has three now, over
 background that is neither `WFG` nor `WBG`: the ink lands, the transparent pixels
 leave the background standing, and the pointer still advances over them.
 
-## 4. ⭐⭐ The copy's per-copy overhead — the biggest number in the queue
+## 4. ⭐ CLOSED 2026-09-19 — the copy's per-copy overhead, and it was the whole answer
 
-`keyed-copy.md` §7.1, measured: **a copy is ~725 µs of driver register sequencing plus
-0.247 µs a byte.** A 16 × 16 sprite is 788 µs, of which the engine is 50.
+Measured (host emulator, `v3cpyb` through `SS.CopyN`, per-copy from the slope of two
+call counts so the typing and the fork cancel):
 
-| | per sprite | ten sprites (20 copies) | a frame |
-|---|---|---|---|
-| `SS.CopyN` (built) | 788 µs | 15.8 ms | 14.3 ms |
-| a tighter `CpRun` | ~430 µs *(arithmetic)* | ~8.6 ms | |
-| a hardware descriptor walker | ~78 µs *(arithmetic)* | 1.6 ms | |
+| | before | after |
+|---|---|---|
+| a copy, 204 B | 698 µs | **344 µs** |
+| a copy, 256 B — a 16 × 16 sprite | 708 µs | **349 µs** |
+| a copy, 20,000 B | 5,708 µs | 5,125 µs |
+| ⭐ ten sprites, 20 copies | 14.17 ms | ⭐ **6.98 ms** of a 14.3 ms frame |
 
-1. **A tighter `CpRun` — free, and first.** One `VcWait` a copy instead of eleven.
-   Software only, and it may be the whole answer for ten sprites.
-2. **A hardware descriptor walker.** The card reads copy descriptors out of VRAM
-   itself. ⚠ `keyed-copy.md` §7.1.2 measures the CPU spending more building a VRAM
-   descriptor than writing the registers it would replace, so the win is concurrency,
-   not the write count. Cells on `v3host` (70 spare) and **no pins there** (64/64).
+The driver's cost is **size-independent** now, and ~180 µs of the engine's own time
+overlaps the next rectangle's set-up, so **a copy under ~728 bytes retires for free**.
+What went: the `SPANBUSY` poll before each register group (`/WAIT` holds a register
+write under a span or a copy by itself), the block copy into `VG.CpBlk`, the `VG.CpA`
+round trip — the column's low byte **is** the address's low byte, an OR and not an add
+— and `CpOver` where the destination precedes the source. `armio.dr` shrank 92 bytes.
+
+**What is left, and it is outside the driver**: `F$Move` for the caller's table
+(65 µs a rectangle) and the IOMan/`SetStt` floor (~42 µs).
+
+⚠ **A gate this left open**: the staged path (`CpOne`, overlapping copies) has no
+pixel-comparing check — `run-v3copyn.sh` never overlaps — and waits moved inside it.
+
+**A hardware descriptor walker** is what remains of this entry: cells on `v3host` (70
+spare) and **no pins there** (64/64). ⚠ Its case is weaker now — the win is
+concurrency and a persistent list, not the register writes, and ten sprites already
+fit in half a frame.
 
 ## 5. The colour key — fourth, and cheap when it arrives
 
@@ -118,8 +130,9 @@ leave the background standing, and the pointer still advances over them.
 is **one pin into `v3ptr` and one literal on `VWE`**, plus a package the board has to
 find. ⚠ §7.2's timing rule: the compare cannot sit in series inside the 72 ns write
 access — it runs during the read access and gates the write one access later, which
-makes it a pipelined change. ⛔ **It is worth nothing while a copy costs 788 µs**
-(entry 4), which is why it sits here and not above.
+makes it a pipelined change. ⛔ It was worth nothing while a copy cost 788 µs; at **344 µs** (entry 4) that
+objection is gone, and this is now the front of the hardware queue — ⚠ behind a fit
+of `v3ptr`, which is where it lands.
 
 ## 6. More hardware sprites
 
