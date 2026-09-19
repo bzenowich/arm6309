@@ -14,48 +14,48 @@ emu: ⭐ VIDEO3 - video3/docs/plan.md's card, not video/'s
         60.000 s  prog $00  frames 3106  ck 6168
         65.000 s  prog $00  frames 3406  ck 6168
         70.000 s  prog $00  frames 3707  ck 6168
-        75.000 s  prog $00  frames 4057  ck 6168
+        75.000 s  prog $00  frames 4058  ck 6168
         80.000 s  prog $00  frames 4408  ck 6168
         85.000 s  prog $00  frames 4758  ck 6168
         90.000 s  prog $00  frames 5109  ck 6168
         95.000 s  prog $00  frames 5459  ck 6168
-       100.000 s  prog $00  frames 5809  ck 6168
+       100.000 s  prog $00  frames 5810  ck 6168
        105.000 s  prog $00  frames 6160  ck 6168
-       110.000 s  prog $00  frames 6510  ck 6168
+       110.000 s  prog $00  frames 6511  ck 6168
        115.000 s  prog $00  frames 6861  ck 6168
-       120.000 s  prog $00  frames 7211  ck 6168
+       120.000 s  prog $00  frames 7212  ck 6168
        125.000 s  prog $00  frames 7562  ck 6168
        130.000 s  prog $00  frames 7912  ck 6168
-       135.000 s  prog $00  frames 8262  ck 6168
+       135.000 s  prog $00  frames 8263  ck 6168
        140.000 s  prog $00  frames 8613  ck 6168
-       145.000 s  prog $00  frames 8963  ck 6168
-       150.000 s  prog $00  frames 9314  ck 6168
-       155.000 s  prog $00  frames 9589  ck 6168
-       160.000 s  prog $00  frames 9888  ck 6168
-       165.000 s  prog $00  frames 10188  ck 6168
-       170.000 s  prog $00  frames 10488  ck 6168
-       175.000 s  prog $00  frames 10787  ck 6168
-       180.000 s  prog $00  frames 11087  ck 6168
-       185.000 s  prog $00  frames 11387  ck 6168
-       190.000 s  prog $00  frames 11687  ck 6168
-       195.000 s  prog $00  frames 11986  ck 6168
-       200.000 s  prog $00  frames 12286  ck 6168
-       205.000 s  prog $00  frames 12586  ck 6168
-       210.000 s  prog $00  frames 12885  ck 6168
-       215.000 s  prog $00  frames 13185  ck 6168
-       220.000 s  prog $00  frames 13485  ck 6168
-       225.000 s  prog $00  frames 13784  ck 6168
-       230.000 s  prog $00  frames 14084  ck 6168
-       235.000 s  prog $00  frames 14384  ck 6168
-       240.000 s  prog $00  frames 14684  ck 6168
-       245.000 s  prog $00  frames 14983  ck 6168
-       250.000 s  prog $00  frames 15283  ck 6168
-       255.000 s  prog $00  frames 15583  ck 6168
-       260.000 s  prog $00  frames 15882  ck 6168
-       265.000 s  prog $00  frames 16224  ck 6168
-       270.000 s  prog $00  frames 16574  ck 6168
-       275.000 s  prog $00  frames 16924  ck 6168
-       280.000 s  prog $00  frames 17275  ck 6168
-       285.000 s  prog $00  frames 17591  ck 6168
-       289.994 s  SERIAL_STOP seen
-emu: 17890 frames, progress $00, 290.0 s of machine, 0 register writes under a list, 0 under a span
+       145.000 s  prog $00  frames 8964  ck 6168
+       150.000 s  prog $00  frames 9271  ck 6168
+       155.000 s  prog $00  frames 9569  ck 6168
+       160.000 s  prog $00  frames 9869  ck 6168
+       165.000 s  prog $00  frames 10169  ck 6168
+       170.000 s  prog $00  frames 10468  ck 6168
+       175.000 s  prog $00  frames 10768  ck 6168
+       180.000 s  prog $00  frames 11068  ck 6168
+       185.000 s  prog $00  frames 11367  ck 6168
+       190.000 s  prog $00  frames 11667  ck 256
+       195.000 s  prog $00  frames 11967  ck 6168
+       200.000 s  prog $00  frames 12267  ck 6168
+       205.000 s  prog $00  frames 12566  ck 6168
+       210.000 s  prog $00  frames 12866  ck 6168
+       215.000 s  prog $00  frames 13166  ck 6168
+       220.000 s  prog $00  frames 13465  ck 6168
+       225.000 s  prog $00  frames 13765  ck 6168
+       230.000 s  prog $00  frames 14065  ck 6168
+       235.000 s  prog $00  frames 14364  ck 6168
+       240.000 s  prog $00  frames 14664  ck 6168
+       245.000 s  prog $00  frames 14964  ck 6168
+       250.000 s  prog $00  frames 15264  ck 6168
+       255.000 s  prog $00  frames 15563  ck 6168
+       260.000 s  prog $00  frames 15867  ck 6168
+       265.000 s  prog $00  frames 16217  ck 6168
+       270.000 s  prog $00  frames 16568  ck 6168
+       275.000 s  prog $00  frames 16918  ck 6168
+       280.000 s  prog $00  frames 17269  ck 6168
+       285.000 s  prog $00  frames 17572  ck 6168
+       288.682 s  SERIAL_STOP seen
+emu: 17792 frames, progress $00, 288.7 s of machine, 0 register writes under a list, 0 under a span

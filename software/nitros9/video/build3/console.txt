@@ -76,7 +76,7 @@ now moving the PS/2 mouse
          User                     Mem Stack
 Id  PId Number  Pty Age Sts Signl Siz  Ptr   Primary Module
 --- --- ------- --- --- --- ----- --- ----- ----------------
-  2   1     0   128 131 $80    0   31 $72E2 Shell 
+  2   1     0   128 128 $80    0   31 $72E2 Shell 
   3   2     0   128 128 $80    0   31 $6FE2 Shell 
   4   2     0   128 128 $80    0   31 $1EF3 Procs 
 

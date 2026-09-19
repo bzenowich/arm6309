@@ -1125,3 +1125,91 @@ and the reason a call's floor is 11 ms before it draws anything.
 because the text is transparent. **Opaque text — one run a row, 395 calls
 becoming 17 — is the single biggest software win**, not the modest one it looked
 like before the split. `video3/docs/keyed-copy.md` carries the rest.
+
+---
+
+## 17. ⛔ The window drag's leftover, and `Vacate` in closed form — 2026-09-18
+
+The backing-store drag (`v3drag.asm`) left two kinds of debris beside the
+window's title tab. Both were in `Vacate` — the routine that puts back the
+part of the desktop the window has just stopped covering — and both were the
+same mistake twice: **working the L-shape's difference out by hand, case by
+case, instead of writing it down.**
+
+### 17.1 ⛔ `MaxStep` was a hand-written 8 against a path whose longest step is 12
+
+`InB` re-bases the backing region *before* the window leaves it, because `NewB`
+takes the hole — the background under the window — out of the **old** store,
+and the old store only has it while the window is inside the old region. Its
+margin therefore has to be at least the longest step the path can take.
+
+It was `Step equ 8`, left behind from when the figure-8 was quantised to an
+8-pixel lattice. The smooth path that replaced it samples the curve 300 times
+and moves by whatever the difference is — **up to 12 pixels**. So the window
+could overshoot the region by 4, the hole came back from outside what had been
+saved, and the store filled with black: black lines beside the tab, flickering
+from **188 s** and stuck by **194 s**.
+
+⚠ **The fix is that the constant is no longer written by hand.**
+`video3/bench/mklegs.py` emits `MaxStep equ <the longest delta>` immediately
+above the leg table it generates, so the margin cannot drift from the path
+again. Changing the curve changes both in one run.
+
+### 17.2 ⛔ And the white staircase: the notch rectangle was one case short
+
+Under the black lines was a second artefact that survived them — a diagonal
+run of **white** pixels climbing up and to the right of the title, one small
+mark a step, permanent once drawn. White is the tab's right bevel.
+
+The hand-worked `Vacate` restored, for a step `(dx, dy)`:
+
+- one strip per axis that moved (correct), and
+- the tab's right edge over `TabH` rows, and
+- the "notch" beside the tab over `dy` rows **starting at `TabW`**.
+
+On a **down-left** step (`dx < 0, dy > 0`) that leaves `|dx| × dy` pixels at
+`(TabW + dx, TabH)` — inside the old body, covered by neither the new tab nor
+the new body — untouched. Up to 5 × 8 pixels, once a step, along the whole
+down-left arc of the figure-8.
+
+⭐ **It has a closed form.** Write `OB` for the old bounding box, `NB` for the
+new one and `N` for the notch beside the tab at the **new** position. The
+window is `NB \ N`, so
+
+```
+old-L \ new-L  =  (old-L \ NB) ∪ (old-L ∩ N)  ⊆  (OB \ NB) ∪ (OB ∩ N)
+```
+
+`OB \ NB` is one strip per axis that moved — the two the old code already had
+right — and `OB ∩ N` is **one** rectangle:
+
+```
+x = pwx + dx + TabW          w = WinW - TabW - max(0, dx)
+y = pwy + max(0, dy)         h = TabH + min(0, dy)
+```
+
+Three copies, never four, and no case analysis past the sign of each delta.
+
+⚠ **The superset costs nothing**, which is what makes it worth taking. A pixel
+in `OB \ NB` or `OB ∩ N` that the old window did **not** cover is desktop, and
+the store holds desktop there — restoring it writes what is already on the
+screen. Only the pixels that were window change. ⚠ And `Vacate` still runs
+**before** `DrawW`, because the notch rectangle is at the new position and can
+fall inside the old L; restoring it afterwards would erase what was just drawn.
+
+⭐ **The lesson is the one this repository keeps paying for in a different
+costume**: a difference of two shapes enumerated by hand has as many cases as
+the author remembered, and the one that is missing is invisible until it is on
+the screen. `w` and `h` above are positive for every step this path can take —
+`WinW - TabW - MaxStep` and `TabH - MaxStep` — which is a property of the
+formula, not of a case list.
+
+### 17.3 The BBS field is the palette entry, not 2,000 dithered cells
+
+Unrelated, same day: `v3bbs` drew its background by filling all 25 rows with
+CP437's light-shade block in blue, the way ANSI art has to fake a mid-tone when
+it only has sixteen colours. gruvbox's background is `#282828`, and **this card
+has a palette** — `TxAnsiP` already puts `#282828` at index 0 and `PalRange`
+loads it again. So the field is simply the background colour: the same grey, no
+dither texture behind the colour tables, and **2,000 fewer cells to draw**
+(the stream went 8,299 → 6,127 bytes).

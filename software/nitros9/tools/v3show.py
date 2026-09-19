@@ -347,6 +347,12 @@ def _bg(n):
 # gruvbox (dark): the sixteen ANSI colours, as RGB565 - the palette the
 # character screen starts with is already these (ca_v3txt.asm TxAnsiP), and
 # the stream loads them again with PalRange to show that it can
+# ⭐ INDEX 0 IS GRUVBOX'S OWN #282828, and the screen is simply left in it.
+# What was wrong with the earlier screen was never the grey: it was a backdrop
+# of 2,000 CP437 light-shade cells in blue, faking the mid-tone the way ANSI
+# art has to when it only has sixteen colours.  This card has a palette, so
+# the background colour IS a palette entry - PalRange loads it with the other
+# fifteen and every cell behind the tables stays blank.
 GRUVBOX = ["282828", "cc241d", "98971a", "d79921", "458588", "b16286", "689d6a", "a89984",
            "928374", "fb4934", "b8bb26", "fabd2f", "83a598", "d3869b", "8ec07c", "ebdbb2"]
 
@@ -558,10 +564,11 @@ def stream_bbs():
         out += b"\x1b[%d;%dH" % (y + h, x + 1) + bytes([0xC8]) + bytes([U] * (w - 2)) + bytes([0xBC])
         return bytes(out)
 
-    # a shaded backdrop, the way ANSI art is actually made
-    s += _sgr(0, 34)
-    for r in range(25):
-        s += b"\x1b[%d;1H" % (r + 1) + bytes([0xB0] * (80 if r < 24 else 79))
+    # ⛔ NO SHADED BACKDROP.  This used to fill all 25 rows with the light
+    # shade block in blue, the way ANSI art fakes a mid-tone - an emulation of
+    # gruvbox's #282828 out of CP437.  The palette already HAS #282828 at
+    # index 0 (GRUVBOX above), so the field is the background colour itself:
+    # the same grey, no dither, and 2,000 fewer cells to draw.
     s += dbox(4, 0, 72, 7, _sgr(1, 33))
     s += b"\x1b[2;8H" + _sgr(1, 37) + b"THE ARM6309 BBS" + _sgr(0, 33) + b"  -  node 1  -  2400 baud  -  CP437 + gruvbox"
     s += b"\x1b[4;8H" + _sgr(1, 31) + bytes([0xDB, 0xDB, 0xDC, 0xDF]) + _sgr(0, 32)

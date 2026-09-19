@@ -109,6 +109,15 @@ def main():
     print("* ⚠ y reaches %d, so the bottom reaches %d, clear of the staging rows"
           % (max(ys), max(ys) + WINH))
     print("* vidcpy3.asm uses from 480.")
+    print("*")
+    print("* \u26d4 MaxStep IS GENERATED, and InB's margin depends on it.  InB re-bases")
+    print("* the backing region while the window is still inside it, because NewB")
+    print("* takes the hole out of the OLD store - so its margin must be at least")
+    print("* the LONGEST step this path takes.  A hand-written 8 against a path")
+    print("* whose longest delta is 12 let the window overshoot the region by 4,")
+    print("* and the hole came back as garbage: black lines beside the tab, first")
+    print("* flickering and then stuck.")
+    print("MaxStep             equ       %d" % mx)
     print("Legs                equ       *")
     for (dx, dy), k in r:
         print("                    fcb       %d,%d,%d" % (k, dx & 255, dy & 255))
