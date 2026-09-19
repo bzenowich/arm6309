@@ -1092,12 +1092,13 @@ board.
 
 `v3card_tb` drives it one 6809E bus cycle at a time, **stretching E-high while `/WAIT` is
 asserted** with `clkdec`'s semantics, and a bound turns a hang into a failure. It runs in
-`npm run check:video` as `v3card` — **61 claims, 0 failed** (the suite: 373, 0 failed):
+`npm run check:video` as `v3card` — **66 claims, 0 failed** (the suite: 378, 0 failed):
 
 | | |
 |---|---|
 | the palette | four writes land at LUT entries 0..3, and `PIDX` walks |
 | direct `VDATA` | eight writes land at `WPTR`, `WPTR`+1, …, nothing either side moves, and eight reads return them in order, **post-incrementing** |
+| sprite `WMODE` | ⭐ **transparency**: a mask 1 writes `WFG` and a 0 retires **without writing**, over a background that is neither colour — and the pointer still moves, so the next eight land at `WPTR` + 8 |
 | the cell write | ⭐ **`WADV` b2**: two `VDATA` writes fill a cell's lanes 0 and 2 and the pointer lands on the next cell, and with the bit clear it steps by one again |
 | the span writer | a mask of `$86` is `F1 B2 B2 B2 B2 F1 F1 B2` — **bit 7 first** — four back-to-back `$FF` masks are 32 `WFG` pixels with the CPU held by `/WAIT` while each span runs; span-solid is **one `SPANLEN`, many spans**; `WADV` 01 chains four masks down four rows at the same column |
 | the copy | a 13 × 5 copy lands byte for byte in every lane and row, `CBUSY` sets and clears in `VSTAT`, nothing around it moves, and it takes **130 granted accesses for 65 bytes** — two a byte, §6.1's 4.05 MB/s (the claim allows 130–150) |

@@ -346,6 +346,36 @@ module v3card_tb;
     for (int i = 20; i < 40; i++) if (dut.peek(19'h00A00 + i) !== 8'hF1) bad++;
     ok(bad == 0, $sformatf("and a second span-solid with no SPANLEN write is 20 more (%0d wrong) - one SPANLEN, many spans", bad));
 
+    // ============================= WMODE 11: sprite mode, and transparency
+    // ⭐ plan §5's fourth WMODE, and the one nothing had ever run: a mask bit
+    // of 1 writes WFG and a 0 RETIRES WITHOUT WRITING, which is how software
+    // draws a transparent actor at eight pixels a write (keyed-copy.md §6's
+    // sprites over a static playfield). Onto a background of $C3, so a
+    // transparent pixel that DID write is a byte that does not match - the
+    // defect a span-mask test cannot see, because there both values are
+    // written.
+    for (int i = 0; i < 24; i++) dut.poke(19'h00C00 + i, 8'hC3);
+    wr(CTRL, 8'hB0);                                   // WMODE 11, sprite
+    set_ptr(WPTR0, 19'h00C04);
+    wr(VDATA, 8'b1011_0010);
+    wait_clear(7, "SPANBUSY after a sprite-mode write");
+    bad = 0;
+    for (int i = 0; i < 8; i++)
+      if (dut.peek(19'h00C04 + i) !== (((8'b1011_0010 >> (7 - i)) & 1) ? 8'hF1 : 8'hC3)) bad++;
+    ok(bad == 0, $sformatf("sprite WMODE: a 1 writes WFG and a 0 leaves the background standing (%0d of 8 wrong)", bad));
+    if (bad) begin
+      $write("      got:"); for (int i = 0; i < 8; i++) $write(" %02h", dut.peek(19'h00C04 + i)); $display("");
+    end
+    ok(dut.peek(19'h00C03) === 8'hC3 && dut.peek(19'h00C0C) === 8'hC3,
+       "and the byte either side of the eight is untouched");
+    // ⚠ AND IT STILL RETIRES: the pointer moves over a transparent pixel, so
+    // the next write lands eight pixels on and not where the ink stopped.
+    wr(VDATA, 8'b1111_1111);
+    wait_clear(7, "SPANBUSY after the second sprite-mode write");
+    bad = 0;
+    for (int i = 8; i < 16; i++) if (dut.peek(19'h00C04 + i) !== 8'hF1) bad++;
+    ok(bad == 0, $sformatf("a transparent pixel RETIRES: the next eight land at WPTR + 8 (%0d wrong)", bad));
+
     // ======================== §7.2: WADV 01, a glyph with no WPTR rewrite
     // WADV 01 is "next row, same column": at span end the row steps and the
     // column comes back from the file's +$08/+$09. That is the whole of the
