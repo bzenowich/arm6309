@@ -765,6 +765,37 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     CPU move is **10.0 ms a line** (§8.2), so if copyrect does not fit, character mode
     does not work at terminal speeds and the ring has to come back with its defect.
     They are not independent features.
+14. ⛔ **NEITHER SEQUENCER IS BUILT, AND THE FITS DO NOT CONTAIN THEM** — found
+    2026-09-18 by putting video3 into `npm run check:reach`. The four parts are a
+    **datapath and an arbiter**: pointers, counters, the address mux, the register
+    decode, and `GMAP`/`GRD`/`GCPY`/`GSPN`. What no part produces is **19 control
+    lines**: `RMAP`/`RRD`/`RCPY`/`RSPN` (the four *requests* into v3dot's own
+    arbiter), `RETIRE`/`SPANEND`/`WINC`/`WROWADV`/`RSTART` (§5's span writer), and
+    `CGO`/`CDONE`/`CSTEP`/`CROWADV`/`CWLOAD`/`CRDSEL` (§6's copy engine), plus
+    v3host's `WRCYC`/`RDCK`/`IRQEN`. `v3ptr` counts on `CSTEP`, holds `CBUSY` on
+    `CGO & !CDONE`, and nothing steps or starts it.
+    ⚠ **So `v3ptr` 110/128 and `v3dot` 122/128 are fits of the datapath.**
+    `partition.md` §2.3 budgets **~10 macrocells** for the two sequencers inside
+    `v3ptr` and they are not in that fit; 18 spare cells and 3 existing cascades is
+    what they have to come out of. **This is the number that decides whether there
+    is room for anything else** — a keyed copyrect, a descriptor walker, more
+    sprite. Nothing should be priced against `v3ptr` until it is refitted with
+    them.
+    ⚠ Two naming defects came out of the same run and are *not* the same thing:
+    `v3scan` reads `SRC0`/`SRC1` where `v3dot` exports `MUXSEL0`/`MUXSEL1`, and
+    **`v3ptr` and `v3scan` each declare a plain `FBOE` while `v3dot` exports two
+    signals, `FBOESCAN` and `FBOEPTR`** — one name on both parts keeps them both
+    on or both off the seventeen address nets `v3scan`'s own comment says `FBOE`
+    exists to arbitrate.
+
+15. ⭐ **CLOSED 2026-09-18 — three pin senses, by `npm run check:pins`.**
+    `v3host`'s `reg`/`comb` helpers hard-coded `assertedLow: false`, so nothing on
+    that part *could* be declared active-low: `/IOSEL` was an active-high input and
+    the open-drain `/WAIT` and `/IRQ` active-high outputs, while the terms used the
+    asserted sense throughout. Fixed, and the card is in the check, so the class
+    cannot come back. ⚠ Rule 3 (`CONSUMERS`) still does not reach video3 — it
+    needs a drawn board, which is §15 step 8.
+
 13. ⛔ **THERE IS NO POWER BUDGET, and §13 measures packages and never watts.**
     `graphics.md` §14.1 costs `video/` at **~0.6–0.95 A** from its datasheets; video3 has
     a fourth programmable part, an extra dot-rate `'574` and possibly six more discrete

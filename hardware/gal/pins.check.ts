@@ -45,6 +45,10 @@ import { mmuDesign } from "./mmu.jedec"
 import { clkdecDesign } from "./clkdec.jedec"
 import { u9Design } from "./u9.jedec"
 import { u10Design } from "./u10.jedec"
+import { v3dot } from "./video3/v3dot.cpld"
+import { v3scan } from "./video3/v3scan.cpld"
+import { v3ptr } from "./video3/v3ptr.cpld"
+import { v3host } from "./video3/v3host.cpld"
 
 let failures = 0, passes = 0
 const check = (ok: boolean, claim: string, detail = "") => {
@@ -85,6 +89,14 @@ const PARTS: Part[] = [
   gal("mainboard", u9Design), gal("mainboard", u10Design),
   cpld("video", vaddrCpld), cpld("video", vctrlCpld), cpld("video", vsupCpld),
   cpld("audio", audioCpld), cpld("audio", aseqCpld),
+  /* ⛔ VIDEO3, ADDED 2026-09-18, and rules 1 and 2 found three pins the
+   * moment it was: /IOSEL declared active-high and the open-drain /WAIT and
+   * /IRQ likewise, because v3host's own `reg`/`comb` helpers hard-coded
+   * `assertedLow: false` and nothing on the part COULD be declared low.
+   * ⚠ Rule 3 does not reach this card: CONSUMERS needs a drawn board and
+   * plan.md §15 step 8 owes one. */
+  cpld("video3", v3dot), cpld("video3", v3scan),
+  cpld("video3", v3ptr), cpld("video3", v3host),
 ]
 
 const find = (part: string, name: string): Pin => {
@@ -104,7 +116,12 @@ const ACTIVE_LOW_BP = [...new Set(SLOT_PINS.map((p) => p.signal).filter((s) => s
 /* _BP and _MB are this repository's two spellings of "the same signal, on the
  * backplane / on the motherboard only" - u9's IOPAGE_BP, the page term's
  * IOPAGE_MB net. Both carry the signal's sense. */
-const bpName = (n: string) => n.replace(/_(BP|MB)$/, "")
+/* ⚠ AND VIDEO3 SPELLS THEM WITH AN `N`. Where the other three cards name the
+ * pin for the signal - `WAIT`, `IRQ` - v3host writes `WAITN` and `IRQN`. The
+ * stems that can precede it are the eight active-low slot signals and nothing
+ * else, so stripping a trailing N cannot reach a pin that is not one of them;
+ * not stripping it leaves both pins UNCHECKED, which is how they were wrong. */
+const bpName = (n: string) => n.replace(/_(BP|MB)$/, "").replace(/^(RESET|HALT|WAIT|IOSEL|IOPAGE|IRQ|FIRQ|NMI)N$/, "$1")
 const bpHits: string[] = []
 for (const part of PARTS) {
   for (const pin of part.pins) {
@@ -116,14 +133,16 @@ for (const part of PARTS) {
 }
 /* Vacuity guard: the pins that exposed this class must be among those checked. */
 for (const must of ["clkdec.WAIT", "vsup.IOSEL", "vctrl.IOPAGE", "vctrl.WAIT", "vctrl.IRQ",
-  "audio.IOSEL", "audio.FIRQ", "u9.IOPAGE_BP", "aseq.RESET"]) {
+  "audio.IOSEL", "audio.FIRQ", "u9.IOPAGE_BP", "aseq.RESET",
+  /* ⭐ and video3's three, which is what adding the card was for */
+  "v3host.IOSEL", "v3host.WAITN", "v3host.IRQN"]) {
   check(bpHits.includes(must), `and ${must} is one of the ${bpHits.length} backplane pins checked`)
 }
 
 /* -- 2. crossings between parts of one card ------------------------------ */
 console.log("\n      2. a signal crossing between two parts has one sense at both ends\n")
 let crossings = 0
-for (const board of ["mainboard", "video", "audio"]) {
+for (const board of ["mainboard", "video", "audio", "video3"]) {
   const parts = PARTS.filter((p) => p.board === board)
   for (const src of parts) {
     for (const out of src.pins.filter((p) => p.dir === "out")) {

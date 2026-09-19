@@ -214,6 +214,15 @@ for (const file of mdFiles) {
 
       let col: string | undefined
       if (u.header) col = u.header[u.text.slice(0, at).split("|").length - 2]
+      /* \u26d4 AND A COLUMN HEADER NAMES THE RESOURCE. OTHER_RESOURCE is tested
+       * against the text AFTER the figure, and in a table cell that text is
+       * `|` - so the word never reaches it. `| cascades | foldback |`'s
+       * `37/128` read as 37 of 128 CELLS, and three fitted parts were reported
+       * stale against their own .fit. \u26a0 Found 2026-09-18, and it had been
+       * failing since the table was written: check:docs is the LAST script in
+       * npm run check's && chain, which is exactly where CLAUDE.md says a
+       * failure is least visible. */
+      if (col && OTHER_RESOURCE.test(col)) continue
       // A table with a "before" column records a CHANGE: its after column is
       // what the change produced on its date, not a claim about today.
       if (u.header && u.header.some((h) => PAST_COLUMN.test(h))) continue

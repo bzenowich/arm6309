@@ -255,13 +255,33 @@ the destinations and weak on source-address errors.
 
 ## 5. What would have to be true
 
+⛔ **AND ONE THING THAT HAS TO BE TRUE FIRST, found 2026-09-18.** video3 went
+into `npm run check:reach`, and its four parts turned out to be a **datapath and
+an arbiter with neither sequencer built** — 19 control lines nothing produces,
+including the four *requests* into v3dot's own arbiter and the whole of §6's
+copy micro-sequencer (`plan.md` §14 item 14). So `v3ptr`'s **110/128 is a fit of
+the datapath**, and `partition.md` §2.3's ~10 macrocells for the sequencers are
+not in it.
+
+⭐ **That is good news for the key and bad news for every estimate in §7.**
+Good, because a key is one more term on a write strobe still being designed
+rather than a change to a part that has already fitted — §7.3's last paragraph
+said this and is now measured rather than inferred. Bad, because **`v3ptr`'s 18
+spare cells are already spoken for**, and nothing in §7 should be priced against
+them until the part is refitted **with** both sequencers in it. That refit is
+the gate, not the compare.
+
+- [ ] ⛔ **The two sequencers exist**, and `v3ptr` is refitted with them — the
+      number that says whether there is room for anything at all.
 - [ ] `v3ptr` fits with the compare, **and its cascade count is read out of the
       new `.fit`** and compared with the old (`CLAUDE.md`'s trap).
 - [ ] The in-driver copy cost is measured, not assumed (§3.2's caveat).
 - [ ] A decision on the key value: a reserved palette index (like `TB.Buf`'s
       `$0F`) costs a colour; a `CCTRL`-selected register costs a register.
-- [ ] `check:reach` gets an entry either way — a `CCTRL` bit that nothing reads
-      is exactly the `ACTRL` b3 defect the check exists for.
+- [x] ⭐ **`check:reach` covers video3** (done 2026-09-18) — a `CCTRL` bit that
+      nothing reads is exactly the `ACTRL` b3 defect the check exists for, and
+      until that day the check was not watching this card at all. `check:pins`
+      covers it too, and found three wrong pin senses the day it did.
 
 ---
 

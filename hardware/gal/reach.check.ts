@@ -24,6 +24,16 @@
  * list cannot become a dumping ground: a feature that gets built has to be
  * taken off it, and the check is what notices.
  *
+ * ⛔ AND SINCE 2026-09-18 IT ASKS THE SAME QUESTION OF INPUTS, for a card
+ * with no board file. `design-review2.md`'s direction - a part reads what
+ * nothing produces - was closed for the cards that HAVE one: an input no part
+ * computes is the board's, and check:netlist answers for it. video3 has no
+ * board file, so nothing answered for any of its 84 unproduced inputs, and
+ * nineteen of them turned out to be control lines whose BLOCK HAS NOT BEEN
+ * DESIGNED - both sequencers, the span writer's and the copy engine's, and the
+ * four requests into v3dot's own arbiter. The datapath is fitted; the things
+ * that would drive it are not. See SOURCES.
+ *
  * ⚠ WHAT IT CANNOT SEE, stated because a check that overstates its reach is
  * worse than none. It reads the TERM LISTS and the hand-written board files. A
  * signal consumed by a discrete part the board model does not have — the
@@ -37,6 +47,10 @@ import { audioCpld } from "./audio.cpld"
 import { aseqCpld } from "./aseq.cpld"
 import { vctrlCpld, vaddrCpld } from "./video.cpld"
 import { vsupCpld } from "./vsup.cpld"
+import { v3dot } from "./video3/v3dot.cpld"
+import { v3scan } from "./video3/v3scan.cpld"
+import { v3ptr } from "./video3/v3ptr.cpld"
+import { v3host } from "./video3/v3host.cpld"
 import { mmuDesign } from "./mmu.jedec"
 import { clkdecDesign } from "./clkdec.jedec"
 import { u9Design } from "./u9.jedec"
@@ -56,7 +70,16 @@ const here = new URL(".", import.meta.url).pathname
 
 /* ---- what a card is: the parts on it, and the board they sit on --------- */
 interface Part { name: string; cells: Cell[]; external: Set<string>; inputs: string[] }
-interface Card { name: string; parts: Part[]; boards: string[] }
+interface Card {
+  name: string
+  parts: Part[]
+  boards: string[]
+  /* ⭐ opt in to the INPUT analysis below. Only video3 does, and saying so
+   * is the point: the other three cards have board files, so their unproduced
+   * inputs are answered by check:netlist. video3 has no board file at all. */
+  checkInputs?: boolean
+  noBoard?: string
+}
 
 const part = (name: string,
   d: { cells: Cell[]; external?: Set<string>; inputs: { name: string }[] }): Part =>
@@ -73,6 +96,20 @@ const CARDS: Card[] = [
     name: "video",
     parts: [part("vctrl", vctrlCpld), part("vaddr", vaddrCpld), part("vsup", vsupCpld)],
     boards: ["verilog/video_card.v", "verilog/machine.v"],
+  },
+  /* ⛔ VIDEO3 HAS NO BOARD FILE, and that is why it is in this check twice
+   * over. `plan.md` §15 step 8 owes `video3_card.v` and `check:netlist`; until
+   * they exist every pin that leaves a part reads as dangling here, so the
+   * RESERVED patterns below carry the whole card's I/O as `board`. ⚠ That is a
+   * hole, not a pass - the same hole `graphics.md` §19 item 34 records for the
+   * video card's partial board, one size larger. */
+  {
+    name: "video3",
+    parts: [part("v3dot", v3dot), part("v3scan", v3scan),
+      part("v3ptr", v3ptr), part("v3host", v3host)],
+    boards: [],
+    checkInputs: true,
+    noBoard: "plan.md §15 step 8: video3_card.v and check:netlist are owed",
   },
   {
     name: "motherboard",
@@ -216,6 +253,75 @@ const RESERVED: Record<string, { why: Why; note: string }> = {
    * cannot spare them. regfile.ts has the derivation. */
 }
 
+/* ======================================================================== *
+ * ⭐ RESERVED_RE - the same list, as PATTERNS, for a card whose I/O is wide
+ * and regular. `FBA2`..`FBA18` is one bus and seventeen entries would say
+ * seventeen times what one says once.
+ *
+ * ⚠ IT IS CHECKED IN BOTH DIRECTIONS TOO: a pattern that matches nothing
+ * fails, so a bus that gets a consumer has to come off the list exactly as a
+ * named signal does.
+ * ======================================================================== */
+const RESERVED_RE: { re: RegExp; why: Why; note: string }[] = [
+  /* video3, and every one of these is `board` for the SAME reason: there is
+   * no video3_card.v. When there is one, most of them leave this list. */
+  { re: /^FBA(\d+)$/, why: "board",
+    note: "plan §6: the framebuffer address, to the four AS6C8016 - v3scan and v3ptr each drive all seventeen and FBOE decides which" },
+  { re: /^ATO[0-7]$/, why: "board", note: "plan §2.2: the attribute byte, to the '574 that feeds the LUT's high half" },
+  { re: /^(HSYNC|VSYNC)$/, why: "board", note: "signals.md §1.9: the connector AND the backplane - graphics.md §12.2's line compare" },
+  { re: /^(FOE0|FOE1|FBOESCAN|FBOEPTR|PIXOE|ATOE|PIDXOE|PIDXCE|VSTATOE|RDOE|RDBKOE|LUTWE)$/,
+    why: "board", note: "output enables and write strobes for discrete parts - '574, '244, '245 and the LUT" },
+  { re: /^(MUXSEL0|MUXSEL1|OMR|MK2|MS0|SI5|SL7|CT[4-6])$/, why: "board",
+    note: "plan §3: the dot path's muxes and the serialisers' state, to discrete parts" },
+  { re: /^(SPRLD)$/, why: "board", note: "plan §7: loads the four '165 that hold the sprite row" },
+  { re: /^(WSTBV|WADV[01]|RDREQ|PBUSY|WAITN|IRQN)$/, why: "board",
+    note: "signals.md §1.9: the posted write, /WAIT and /IRQ open-drain, and the status the host reads" },
+  { re: /^(CBUSY|CH8|CWN9)$/, why: "board",
+    note: "plan §6: CBUSY is VSTAT b4 through the '244; CH8 and CWN9 are the down-counters' top bits, which only the sequencer that does not exist would read (see UNPRODUCED)" },
+]
+
+/* ======================================================================== *
+ * ⛔ SOURCES - THE OTHER DIRECTION, AND THE ONE THAT WAS MISSING.
+ *
+ * `design-review2.md` closed "a fitted part reads what nothing produces" for
+ * the cards that have a BOARD FILE: an input no part computes is the board's,
+ * and check:netlist answers for it. video3 has no board file, so nothing
+ * answers for any of its 84 unproduced inputs - and four of them are `RMAP`,
+ * `RRD`, `RCPY` and `RSPN`, the requests into its own arbiter.
+ *
+ * So every input a video3 part declares has to be explained here:
+ *
+ *   bus       the backplane or the host - CLK25, RESET, D, A, E, R/W
+ *   board     a discrete part on the card - the map SRAM's two halves
+ *   ⛔ alias  a SIBLING PRODUCES IT UNDER ANOTHER NAME, and the term lists do
+ *             not say so. A net that depends on two engineers choosing the
+ *             same word is not a net (census.ts says this about the other
+ *             card). These are findings.
+ *   ⛔ unbuilt  NOTHING produces it, because the block that would has not been
+ *             designed. These are the findings that matter.
+ * ======================================================================== */
+type Src = "bus" | "board" | "alias" | "unbuilt"
+const SOURCES: { re: RegExp; why: Src; note: string }[] = [
+  { re: /^(CLK25|RESET)$/, why: "bus", note: "the card's 25.175 MHz dot clock and its reset" },
+  { re: /^D[0-7]$/, why: "bus", note: "partition.md §3: the register broadcast - the host data bus, decoded in each part" },
+  { re: /^(A[0-6]|A19|A20|E|RW|IOSEL|IOPGH)$/, why: "bus", note: "plan §10: the host bus into v3host, which owns the register decode" },
+  { re: /^P[AB][0-7]$/, why: "board", note: "plan §2.5: the map WORD, two bytes from the map SRAM into v3scan" },
+
+  /* ⛔ findings from here down */
+  { re: /^(SRC0|SRC1)$/, why: "alias",
+    note: "v3scan's address-mux select. v3dot exports MUXSEL0 and MUXSEL1 and nothing declares them the same net" },
+  { re: /^FBOE$/, why: "alias",
+    note: "⛔ WORSE THAN AN ALIAS: v3ptr AND v3scan each declare a plain FBOE, and v3dot exports TWO signals, FBOESCAN and FBOEPTR. v3scan's own comment says FBOE 'is what keeps exactly one of the two parts on the bus' - one name on both parts keeps them both on or both off, and they drive the same seventeen nets" },
+  { re: /^(RMAP|RRD|RCPY|RSPN)$/, why: "unbuilt",
+    note: "signals.md §1.8's four REQUESTS into v3dot's arbiter. The arbiter's grants (GMAP, GRD, GCPY, GSPN) are built and fitted; nothing asks it for anything" },
+  { re: /^(RETIRE|SPANEND|WINC|WROWADV|RSTART)$/, why: "unbuilt",
+    note: "signals.md §1.4's SPAN WRITER SEQUENCER. partition.md §2.3 puts it in v3ptr at ~10 macrocells with the copy's; v3ptr's term list takes all five as inputs 'from v3dot', and v3dot exports none of them" },
+  { re: /^(CGO|CDONE|CSTEP|CROWADV|CWLOAD|CRDSEL)$/, why: "unbuilt",
+    note: "signals.md §1.5's COPY SEQUENCER - plan §6's engine itself, which §1's deletion of the display list was what paid for. Same story: v3ptr counts on CSTEP and CROWADV, holds CBUSY on CGO and CDONE, and nothing produces any of them" },
+  { re: /^(WRCYC|RDCK|IRQEN)$/, why: "unbuilt",
+    note: "v3host's own three: WRCYC qualifies every register write, RDCK clocks the vread '574, IRQEN gates /IRQ. All three are register-strobe or control timing that plan §10 names and no part computes" },
+]
+
 /* ---- the analysis ------------------------------------------------------- */
 let dangling: string[] = []
 for (const card of CARDS) {
@@ -233,10 +339,61 @@ for (const card of CARDS) {
   const bad = [...produced].filter((n) => !read.has(n) && !onBoard(n)).sort()
   dangling.push(...bad)
 
-  const unexplained = bad.filter((n) => !(n in RESERVED))
+  const unexplained = bad.filter((n) =>
+    !(n in RESERVED) && !RESERVED_RE.some((r) => r.re.test(n)))
   check(unexplained.length === 0,
     `${card.name}: every signal it produces is read by a term, by the board, or is on RESERVED`,
     unexplained.length ? `unexplained: ${unexplained.join(", ")}` : "")
+}
+
+/* ⚠ and the patterns in both directions too - a pattern that matches nothing
+ * is a bus that grew a consumer and was left on the list. */
+{
+  const idle = RESERVED_RE.filter((r) => !dangling.some((n) => r.re.test(n)))
+  check(idle.length === 0,
+    "and every RESERVED_RE pattern still matches something dangling",
+    idle.length ? idle.map((r) => String(r.re)).join(", ") : "")
+}
+
+/* ---- ⛔ THE INPUT ANALYSIS - every input has a producer, or a reason ---- */
+const FINDINGS: { card: string; part: string; name: string; why: Src; note: string }[] = []
+const SRC_SEEN = new Set<RegExp>()
+for (const card of CARDS) {
+  if (!card.checkInputs) continue
+  const madeBy = new Map<string, string[]>()
+  for (const p of card.parts) {
+    for (const c of p.cells) {
+      if (!madeBy.has(c.name)) madeBy.set(c.name, [])
+      madeBy.get(c.name)!.push(p.name)
+    }
+  }
+  const board = boardUses(card.boards)
+  const unexplained: string[] = []
+  const seen = new Set<string>()
+  for (const p of card.parts) {
+    for (const i of p.inputs) {
+      if (madeBy.has(i) || board.has(i.toUpperCase())) continue
+      const hit = SOURCES.find((r) => r.re.test(i))
+      if (!hit) { unexplained.push(`${p.name}.${i}`); continue }
+      SRC_SEEN.add(hit.re)
+      if (hit.why === "bus" || hit.why === "board") continue
+      const key = `${p.name}.${i}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        FINDINGS.push({ card: card.name, part: p.name, name: i, why: hit.why, note: hit.note })
+      }
+    }
+  }
+  check(unexplained.length === 0,
+    `${card.name}: every input a part declares has a producer, a board, or an entry in SOURCES`,
+    unexplained.length ? `unexplained: ${unexplained.join(", ")}` : "")
+}
+{
+  const idle = SOURCES.filter((r) => !SRC_SEEN.has(r.re))
+  check(idle.length === 0,
+    "and every SOURCES pattern still matches an input nothing produces - a signal that " +
+    "gains a producer has to leave the list",
+    idle.length ? idle.map((r) => String(r.re)).join(", ") : "")
 }
 
 /* ⚠ AND THE LIST MUST NOT BECOME A DUMPING GROUND. An entry that is no longer
@@ -357,19 +514,49 @@ console.log("")
 console.log(`      ${dangling.length} signals produced and read by nothing:`)
 const EXTRA: Record<string, number> = { stale: 3 }   // DAT, ATT and PAN
 for (const w of ["open", "stale", "dead", "board"] as Why[]) {
-  const n = byWhy(w).length + (EXTRA[w] ?? 0)
+  const pat = RESERVED_RE.filter((r) => r.why === w)
+  const n = byWhy(w).length + (EXTRA[w] ?? 0) +
+            dangling.filter((d) => pat.some((r) => r.re.test(d))).length
   console.log(`        ${w.padEnd(6)} ${n}${w === "open" ? "   <- register bits the host can write and the card cannot perform" : ""}`)
   for (const [name] of byWhy(w)) {
     console.log(`          ${name.padEnd(9)} ${(WHERE.get(name) ?? ["?"]).join(", ")}`)
+  }
+  for (const r of pat) {
+    const hits = dangling.filter((d) => r.re.test(d))
+    console.log(`          ${String(r.re).padEnd(9)} x${hits.length}  video3`)
+  }
+}
+
+/* ---- ⛔ and the other direction's findings, which are the new ones ------ */
+console.log("")
+console.log(`      ${FINDINGS.length} inputs a part reads that nothing on its card produces:`)
+for (const w of ["unbuilt", "alias"] as Src[]) {
+  const f = FINDINGS.filter((x) => x.why === w)
+  if (!f.length) continue
+  console.log(`        ${w}   ${f.length}${w === "unbuilt" ? "   <- control lines whose BLOCK HAS NOT BEEN DESIGNED" : "   <- one net, two names, and nothing says so"}`)
+  const seen = new Set<string>()
+  for (const x of f) {
+    console.log(`          ${`${x.part}.${x.name}`.padEnd(18)}`)
+    if (!seen.has(x.note)) { seen.add(x.note); console.log(`            ${x.note}`) }
   }
 }
 console.log("")
 console.log("      stale counts audio.md §9.3's DAT, ATT and PAN alongside the bits -")
 console.log("      state-file FIELDS with no signal of their own.")
 console.log("")
-console.log("      ⭐ NO PROMISED FEATURE IS MISSING, as of 2026-09-11: §11's readable")
-console.log("      VRAM is built at WPTR, through the window and through +$15 VDATA.")
+console.log("      ⭐ ON THE THREE BUILT CARDS no promised feature is missing, as of")
+console.log("      2026-09-11: §11's readable VRAM is built at WPTR, through the window")
+console.log("      and through +$15 VDATA.")
 console.log("      ⚠ What a census of this shape still cannot see is a feature with no")
 console.log("      register behind it at all - which is how §6.1's volume x4 hid.")
+console.log("")
+console.log("      ⛔ VIDEO3 IS A DIFFERENT MATTER, and the second list above is why.")
+console.log("      Its four parts are a DATAPATH AND AN ARBITER: pointers, counters, the")
+console.log("      address mux, the register decode, and grants. NEITHER SEQUENCER EXISTS")
+console.log("      - not the span writer's and not the copy engine's - so the arbiter is")
+console.log("      asked for nothing and the counters are stepped by nothing.")
+console.log("      ⚠ Which means `v3ptr` 110/128 and `v3dot` 122/128 are fits of the")
+console.log("      datapath. partition.md §2.3 budgets ~10 macrocells for the two")
+console.log("      sequencers inside v3ptr and they are NOT IN THAT FIT.")
 
 process.exit(failures === 0 ? 0 : 1)

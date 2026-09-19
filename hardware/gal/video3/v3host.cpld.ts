@@ -15,10 +15,16 @@ import { toCupl, type Merged } from "../jedec/cupl"
 import type { Cell } from "../jedec/assemble"
 import { REGS, hostTerm, type RegName } from "./regmap"
 
-const reg = (name: string, terms: string[]): Cell =>
-  ({ pin: 0, name, assertedLow: false, s0: 1 as const, registered: true, terms })
-const comb = (name: string, terms: string[], oe?: string): Cell =>
-  ({ pin: 0, name, assertedLow: false, s0: 1 as const, registered: false, terms, oe })
+/* ⛔ `assertedLow` IS A PIN DECLARATION, AND NO SIMULATION CAN SEE IT.
+ * verilog/emit.ts emits the asserted sense and ignores this flag entirely, so
+ * a wrong one is a JEDEC that fails on the board and a bench that passes -
+ * which is why `npm run check:pins` exists and why it found the two below.
+ * These helpers used to hard-code `false`, so nothing on this part COULD be
+ * declared active-low; `low` is the parameter that fixes that. */
+const reg = (name: string, terms: string[], low = false): Cell =>
+  ({ pin: 0, name, assertedLow: low, s0: 1 as const, registered: true, terms })
+const comb = (name: string, terms: string[], oe?: string, low = false): Cell =>
+  ({ pin: 0, name, assertedLow: low, s0: 1 as const, registered: false, terms, oe })
 
 /* -- the window, and the two decodes that are not register writes --------
  *
@@ -90,12 +96,15 @@ const port: Cell[] = [
   comb("RDINV", ["WSTB", "RETIRE", "RSTART"]),
   comb("RDOE", ["VPORT & RW"]),
   comb("RDREQ", ["!RDVALID"]),
-  comb("WAITN", [], "VPORT & !IOPGH & E & SPANBUSY # VPORT & !IOPGH & E & RW & !RDVALID"),
+  /* ⭐ open-drain, §1.9's idiom: the value is a constant 0 and the condition
+   * rides on the output enable. ACTIVE-LOW, like /WAIT on the slot - audio's
+   * FIRQ and vctrl's WAIT are declared the same way. */
+  comb("WAITN", [], "VPORT & !IOPGH & E & SPANBUSY # VPORT & !IOPGH & E & RW & !RDVALID", true),
   reg("IRQPEND", ["VBLRISE", "IRQPEND & !IRQACK"]),
   reg("VBLQ", ["VBLANK"]),
   comb("VBLRISE", ["VBLANK & !VBLQ"]),
   comb("IRQACK", ["LDIRQACK"]),
-  comb("IRQN", [], "IRQPEND & IRQEN"),
+  comb("IRQN", [], "IRQPEND & IRQEN", true),      /* open-drain /IRQ, likewise */
   /* VSTAT is read through a '244 (graphics.md §12.1): SPANBUSY, CBUSY and
    * PBUSY are live macrocells and the register file has no path to them. */
   comb("VSTATOE", [`${REGSEL} & !A4 & A3 & A2 & !A1 & A0 & RW & E`]),
@@ -110,7 +119,12 @@ export const v3host: Merged = {
   clock: "CLK25",
   inputs: [
     { name: "CLK25" }, { name: "RESET", activeLow: true },
-    { name: "IOSEL" }, { name: "IOPGH" },
+    /* ⛔ /IOSEL IS ACTIVE-LOW ON THE SLOT (signals.md §2.1), and the terms
+     * above already use its ASSERTED sense - REGSEL is `IOSEL & A6 & A5` and
+     * VRAMSEL is `!IOSEL & ...`, "not selected". Only the declaration was
+     * wrong, and a wrong one is the exact defect check:pins was written for:
+     * the video card's /IOSEL was one of the nine found on 2026-09-11. */
+    { name: "IOSEL", activeLow: true }, { name: "IOPGH" },
     ...[0, 1, 2, 3, 4, 5, 6].map((b) => ({ name: `A${b}` })),
     { name: "A19" }, { name: "A20" }, { name: "E" }, { name: "RW" },
     { name: "WRCYC" },
