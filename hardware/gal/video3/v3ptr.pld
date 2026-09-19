@@ -33,6 +33,10 @@ PIN = D6 ;
 PIN = D7 ;
 PIN = WSTB ;
 PIN = MUXSEL0 ;
+PIN = RP1 ;
+PIN = RP2 ;
+PIN = RP3 ;
+PIN = RP4 ;
 PIN = GSPN ;
 PIN = CDONE ;
 PIN = CSTEP ;
@@ -51,11 +55,14 @@ PIN = FBOE ;
 PIN = CEOR ;
 PIN = CHLAST ;
 PIN = CBUSY ;
+PIN = MS0 ;
 PIN = SPANBUSY ;
 PIN = RSPN ;
 PIN = RETIRE ;
 PIN = SPANEND ;
 PIN = WEN ;
+PIN = WROWADV ;
+PIN = RFA0 ;
 PIN = FBA2 ;
 PIN = FBA3 ;
 PIN = FBA4 ;
@@ -142,7 +149,6 @@ PINNODE = CH5 ;
 PINNODE = CH6 ;
 PINNODE = CH7 ;
 PINNODE = CH8 ;
-PINNODE = MS0 ;
 PINNODE = MS1 ;
 PINNODE = MS2 ;
 PINNODE = MS3 ;
@@ -168,7 +174,7 @@ PINNODE = WM1 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * LDWP0, LDWP1, LDWP2, LDWADV, LDCP0, LDCP1, LDCP2, LDCW, LDCH
- * LDCCTRL, LDCTRL, WINC, WROWADV
+ * LDCCTRL, LDCTRL, WINC, RIDLE
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -184,80 +190,90 @@ LDCH = REGWR & RA4 & !RA3 & RA2 & RA1 & !RA0 ;
 LDCCTRL = REGWR & RA4 & !RA3 & RA2 & RA1 & RA0 ;
 LDCTRL = REGWR & !RA4 & !RA3 & !RA2 & !RA1 & !RA0 ;
 WC0.d = LDWP0 & D0
-        # !LDWP0 & WINC & !WC0
-        # !LDWP0 & !WINC & WC0 ;
+        # RP1 & D0
+        # !LDWP0 & !RP1 & WINC & !WC0
+        # !LDWP0 & !RP1 & !WINC & WC0 ;
 WC1.d = LDWP0 & D1
-        # !LDWP0 & WINC & WC1 & !WC0
-        # !LDWP0 & WINC & !WC1 & WC0
-        # !LDWP0 & !WINC & WC1 ;
+        # RP1 & D1
+        # !LDWP0 & !RP1 & WINC & WC1 & !WC0
+        # !LDWP0 & !RP1 & WINC & !WC1 & WC0
+        # !LDWP0 & !RP1 & !WINC & WC1 ;
 WC2.d = LDWP0 & D2
-        # !LDWP0 & WINC & WC2 & !WC0
-        # !LDWP0 & WINC & WC2 & !WC1
-        # !LDWP0 & WINC & !WC2 & WC0 & WC1
-        # !LDWP0 & !WINC & WC2 ;
+        # RP1 & D2
+        # !LDWP0 & !RP1 & WINC & WC2 & !WC0
+        # !LDWP0 & !RP1 & WINC & WC2 & !WC1
+        # !LDWP0 & !RP1 & WINC & !WC2 & WC0 & WC1
+        # !LDWP0 & !RP1 & !WINC & WC2 ;
 WC3.d = LDWP0 & D3
-        # !LDWP0 & WINC & WC3 & !WC0
-        # !LDWP0 & WINC & WC3 & !WC1
-        # !LDWP0 & WINC & WC3 & !WC2
-        # !LDWP0 & WINC & !WC3 & WC0 & WC1 & WC2
-        # !LDWP0 & !WINC & WC3 ;
+        # RP1 & D3
+        # !LDWP0 & !RP1 & WINC & WC3 & !WC0
+        # !LDWP0 & !RP1 & WINC & WC3 & !WC1
+        # !LDWP0 & !RP1 & WINC & WC3 & !WC2
+        # !LDWP0 & !RP1 & WINC & !WC3 & WC0 & WC1 & WC2
+        # !LDWP0 & !RP1 & !WINC & WC3 ;
 WC4.d = LDWP0 & D4
-        # !LDWP0 & WINC & WC4 & !WC0
-        # !LDWP0 & WINC & WC4 & !WC1
-        # !LDWP0 & WINC & WC4 & !WC2
-        # !LDWP0 & WINC & WC4 & !WC3
-        # !LDWP0 & WINC & !WC4 & WC0 & WC1 & WC2 & WC3
-        # !LDWP0 & !WINC & WC4 ;
+        # RP1 & D4
+        # !LDWP0 & !RP1 & WINC & WC4 & !WC0
+        # !LDWP0 & !RP1 & WINC & WC4 & !WC1
+        # !LDWP0 & !RP1 & WINC & WC4 & !WC2
+        # !LDWP0 & !RP1 & WINC & WC4 & !WC3
+        # !LDWP0 & !RP1 & WINC & !WC4 & WC0 & WC1 & WC2 & WC3
+        # !LDWP0 & !RP1 & !WINC & WC4 ;
 WC5.d = LDWP0 & D5
-        # !LDWP0 & WINC & WC5 & !WC0
-        # !LDWP0 & WINC & WC5 & !WC1
-        # !LDWP0 & WINC & WC5 & !WC2
-        # !LDWP0 & WINC & WC5 & !WC3
-        # !LDWP0 & WINC & WC5 & !WC4
-        # !LDWP0 & WINC & !WC5 & WC0 & WC1 & WC2 & WC3 & WC4
-        # !LDWP0 & !WINC & WC5 ;
+        # RP1 & D5
+        # !LDWP0 & !RP1 & WINC & WC5 & !WC0
+        # !LDWP0 & !RP1 & WINC & WC5 & !WC1
+        # !LDWP0 & !RP1 & WINC & WC5 & !WC2
+        # !LDWP0 & !RP1 & WINC & WC5 & !WC3
+        # !LDWP0 & !RP1 & WINC & WC5 & !WC4
+        # !LDWP0 & !RP1 & WINC & !WC5 & WC0 & WC1 & WC2 & WC3 & WC4
+        # !LDWP0 & !RP1 & !WINC & WC5 ;
 WC6.d = LDWP0 & D6
-        # !LDWP0 & WINC & WC6 & !WC0
-        # !LDWP0 & WINC & WC6 & !WC1
-        # !LDWP0 & WINC & WC6 & !WC2
-        # !LDWP0 & WINC & WC6 & !WC3
-        # !LDWP0 & WINC & WC6 & !WC4
-        # !LDWP0 & WINC & WC6 & !WC5
-        # !LDWP0 & WINC & !WC6 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5
-        # !LDWP0 & !WINC & WC6 ;
+        # RP1 & D6
+        # !LDWP0 & !RP1 & WINC & WC6 & !WC0
+        # !LDWP0 & !RP1 & WINC & WC6 & !WC1
+        # !LDWP0 & !RP1 & WINC & WC6 & !WC2
+        # !LDWP0 & !RP1 & WINC & WC6 & !WC3
+        # !LDWP0 & !RP1 & WINC & WC6 & !WC4
+        # !LDWP0 & !RP1 & WINC & WC6 & !WC5
+        # !LDWP0 & !RP1 & WINC & !WC6 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5
+        # !LDWP0 & !RP1 & !WINC & WC6 ;
 WC7.d = LDWP0 & D7
-        # !LDWP0 & WINC & WC7 & !WC0
-        # !LDWP0 & WINC & WC7 & !WC1
-        # !LDWP0 & WINC & WC7 & !WC2
-        # !LDWP0 & WINC & WC7 & !WC3
-        # !LDWP0 & WINC & WC7 & !WC4
-        # !LDWP0 & WINC & WC7 & !WC5
-        # !LDWP0 & WINC & WC7 & !WC6
-        # !LDWP0 & WINC & !WC7 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6
-        # !LDWP0 & !WINC & WC7 ;
+        # RP1 & D7
+        # !LDWP0 & !RP1 & WINC & WC7 & !WC0
+        # !LDWP0 & !RP1 & WINC & WC7 & !WC1
+        # !LDWP0 & !RP1 & WINC & WC7 & !WC2
+        # !LDWP0 & !RP1 & WINC & WC7 & !WC3
+        # !LDWP0 & !RP1 & WINC & WC7 & !WC4
+        # !LDWP0 & !RP1 & WINC & WC7 & !WC5
+        # !LDWP0 & !RP1 & WINC & WC7 & !WC6
+        # !LDWP0 & !RP1 & WINC & !WC7 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6
+        # !LDWP0 & !RP1 & !WINC & WC7 ;
 WC8.d = LDWP1 & D0
-        # !LDWP1 & WINC & WC8 & !WC0
-        # !LDWP1 & WINC & WC8 & !WC1
-        # !LDWP1 & WINC & WC8 & !WC2
-        # !LDWP1 & WINC & WC8 & !WC3
-        # !LDWP1 & WINC & WC8 & !WC4
-        # !LDWP1 & WINC & WC8 & !WC5
-        # !LDWP1 & WINC & WC8 & !WC6
-        # !LDWP1 & WINC & WC8 & !WC7
-        # !LDWP1 & WINC & !WC8 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7
-        # !LDWP1 & !WINC & WC8 ;
+        # RP2 & D0
+        # !LDWP1 & !RP2 & WINC & WC8 & !WC0
+        # !LDWP1 & !RP2 & WINC & WC8 & !WC1
+        # !LDWP1 & !RP2 & WINC & WC8 & !WC2
+        # !LDWP1 & !RP2 & WINC & WC8 & !WC3
+        # !LDWP1 & !RP2 & WINC & WC8 & !WC4
+        # !LDWP1 & !RP2 & WINC & WC8 & !WC5
+        # !LDWP1 & !RP2 & WINC & WC8 & !WC6
+        # !LDWP1 & !RP2 & WINC & WC8 & !WC7
+        # !LDWP1 & !RP2 & WINC & !WC8 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7
+        # !LDWP1 & !RP2 & !WINC & WC8 ;
 WC9.d = LDWP1 & D1
-        # !LDWP1 & WINC & WC9 & !WC0
-        # !LDWP1 & WINC & WC9 & !WC1
-        # !LDWP1 & WINC & WC9 & !WC2
-        # !LDWP1 & WINC & WC9 & !WC3
-        # !LDWP1 & WINC & WC9 & !WC4
-        # !LDWP1 & WINC & WC9 & !WC5
-        # !LDWP1 & WINC & WC9 & !WC6
-        # !LDWP1 & WINC & WC9 & !WC7
-        # !LDWP1 & WINC & WC9 & !WC8
-        # !LDWP1 & WINC & !WC9 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC8
-        # !LDWP1 & !WINC & WC9 ;
+        # RP2 & D1
+        # !LDWP1 & !RP2 & WINC & WC9 & !WC0
+        # !LDWP1 & !RP2 & WINC & WC9 & !WC1
+        # !LDWP1 & !RP2 & WINC & WC9 & !WC2
+        # !LDWP1 & !RP2 & WINC & WC9 & !WC3
+        # !LDWP1 & !RP2 & WINC & WC9 & !WC4
+        # !LDWP1 & !RP2 & WINC & WC9 & !WC5
+        # !LDWP1 & !RP2 & WINC & WC9 & !WC6
+        # !LDWP1 & !RP2 & WINC & WC9 & !WC7
+        # !LDWP1 & !RP2 & WINC & WC9 & !WC8
+        # !LDWP1 & !RP2 & WINC & !WC9 & WC0 & WC1 & WC2 & WC3 & WC4 & WC5 & WC6 & WC7 & WC8
+        # !LDWP1 & !RP2 & !WINC & WC9 ;
 WR0.d = LDWP1 & D2
         # !LDWP1 & WROWADV & !WR0
         # !LDWP1 & !WROWADV & WR0 ;
@@ -322,80 +338,90 @@ WR8.d = LDWP2 & D2
         # !LDWP2 & WROWADV & !WR8 & WR0 & WR1 & WR2 & WR3 & WR4 & WR5 & WR6 & WR7
         # !LDWP2 & !WROWADV & WR8 ;
 CC0.d = LDCP0 & D0
-        # !LDCP0 & CSTEP & !CC0
-        # !LDCP0 & !CSTEP & CC0 ;
+        # RP3 & D0
+        # !LDCP0 & !RP3 & CSTEP & !CC0
+        # !LDCP0 & !RP3 & !CSTEP & CC0 ;
 CC1.d = LDCP0 & D1
-        # !LDCP0 & CSTEP & CC1 & !CC0
-        # !LDCP0 & CSTEP & !CC1 & CC0
-        # !LDCP0 & !CSTEP & CC1 ;
+        # RP3 & D1
+        # !LDCP0 & !RP3 & CSTEP & CC1 & !CC0
+        # !LDCP0 & !RP3 & CSTEP & !CC1 & CC0
+        # !LDCP0 & !RP3 & !CSTEP & CC1 ;
 CC2.d = LDCP0 & D2
-        # !LDCP0 & CSTEP & CC2 & !CC0
-        # !LDCP0 & CSTEP & CC2 & !CC1
-        # !LDCP0 & CSTEP & !CC2 & CC0 & CC1
-        # !LDCP0 & !CSTEP & CC2 ;
+        # RP3 & D2
+        # !LDCP0 & !RP3 & CSTEP & CC2 & !CC0
+        # !LDCP0 & !RP3 & CSTEP & CC2 & !CC1
+        # !LDCP0 & !RP3 & CSTEP & !CC2 & CC0 & CC1
+        # !LDCP0 & !RP3 & !CSTEP & CC2 ;
 CC3.d = LDCP0 & D3
-        # !LDCP0 & CSTEP & CC3 & !CC0
-        # !LDCP0 & CSTEP & CC3 & !CC1
-        # !LDCP0 & CSTEP & CC3 & !CC2
-        # !LDCP0 & CSTEP & !CC3 & CC0 & CC1 & CC2
-        # !LDCP0 & !CSTEP & CC3 ;
+        # RP3 & D3
+        # !LDCP0 & !RP3 & CSTEP & CC3 & !CC0
+        # !LDCP0 & !RP3 & CSTEP & CC3 & !CC1
+        # !LDCP0 & !RP3 & CSTEP & CC3 & !CC2
+        # !LDCP0 & !RP3 & CSTEP & !CC3 & CC0 & CC1 & CC2
+        # !LDCP0 & !RP3 & !CSTEP & CC3 ;
 CC4.d = LDCP0 & D4
-        # !LDCP0 & CSTEP & CC4 & !CC0
-        # !LDCP0 & CSTEP & CC4 & !CC1
-        # !LDCP0 & CSTEP & CC4 & !CC2
-        # !LDCP0 & CSTEP & CC4 & !CC3
-        # !LDCP0 & CSTEP & !CC4 & CC0 & CC1 & CC2 & CC3
-        # !LDCP0 & !CSTEP & CC4 ;
+        # RP3 & D4
+        # !LDCP0 & !RP3 & CSTEP & CC4 & !CC0
+        # !LDCP0 & !RP3 & CSTEP & CC4 & !CC1
+        # !LDCP0 & !RP3 & CSTEP & CC4 & !CC2
+        # !LDCP0 & !RP3 & CSTEP & CC4 & !CC3
+        # !LDCP0 & !RP3 & CSTEP & !CC4 & CC0 & CC1 & CC2 & CC3
+        # !LDCP0 & !RP3 & !CSTEP & CC4 ;
 CC5.d = LDCP0 & D5
-        # !LDCP0 & CSTEP & CC5 & !CC0
-        # !LDCP0 & CSTEP & CC5 & !CC1
-        # !LDCP0 & CSTEP & CC5 & !CC2
-        # !LDCP0 & CSTEP & CC5 & !CC3
-        # !LDCP0 & CSTEP & CC5 & !CC4
-        # !LDCP0 & CSTEP & !CC5 & CC0 & CC1 & CC2 & CC3 & CC4
-        # !LDCP0 & !CSTEP & CC5 ;
+        # RP3 & D5
+        # !LDCP0 & !RP3 & CSTEP & CC5 & !CC0
+        # !LDCP0 & !RP3 & CSTEP & CC5 & !CC1
+        # !LDCP0 & !RP3 & CSTEP & CC5 & !CC2
+        # !LDCP0 & !RP3 & CSTEP & CC5 & !CC3
+        # !LDCP0 & !RP3 & CSTEP & CC5 & !CC4
+        # !LDCP0 & !RP3 & CSTEP & !CC5 & CC0 & CC1 & CC2 & CC3 & CC4
+        # !LDCP0 & !RP3 & !CSTEP & CC5 ;
 CC6.d = LDCP0 & D6
-        # !LDCP0 & CSTEP & CC6 & !CC0
-        # !LDCP0 & CSTEP & CC6 & !CC1
-        # !LDCP0 & CSTEP & CC6 & !CC2
-        # !LDCP0 & CSTEP & CC6 & !CC3
-        # !LDCP0 & CSTEP & CC6 & !CC4
-        # !LDCP0 & CSTEP & CC6 & !CC5
-        # !LDCP0 & CSTEP & !CC6 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5
-        # !LDCP0 & !CSTEP & CC6 ;
+        # RP3 & D6
+        # !LDCP0 & !RP3 & CSTEP & CC6 & !CC0
+        # !LDCP0 & !RP3 & CSTEP & CC6 & !CC1
+        # !LDCP0 & !RP3 & CSTEP & CC6 & !CC2
+        # !LDCP0 & !RP3 & CSTEP & CC6 & !CC3
+        # !LDCP0 & !RP3 & CSTEP & CC6 & !CC4
+        # !LDCP0 & !RP3 & CSTEP & CC6 & !CC5
+        # !LDCP0 & !RP3 & CSTEP & !CC6 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5
+        # !LDCP0 & !RP3 & !CSTEP & CC6 ;
 CC7.d = LDCP0 & D7
-        # !LDCP0 & CSTEP & CC7 & !CC0
-        # !LDCP0 & CSTEP & CC7 & !CC1
-        # !LDCP0 & CSTEP & CC7 & !CC2
-        # !LDCP0 & CSTEP & CC7 & !CC3
-        # !LDCP0 & CSTEP & CC7 & !CC4
-        # !LDCP0 & CSTEP & CC7 & !CC5
-        # !LDCP0 & CSTEP & CC7 & !CC6
-        # !LDCP0 & CSTEP & !CC7 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6
-        # !LDCP0 & !CSTEP & CC7 ;
+        # RP3 & D7
+        # !LDCP0 & !RP3 & CSTEP & CC7 & !CC0
+        # !LDCP0 & !RP3 & CSTEP & CC7 & !CC1
+        # !LDCP0 & !RP3 & CSTEP & CC7 & !CC2
+        # !LDCP0 & !RP3 & CSTEP & CC7 & !CC3
+        # !LDCP0 & !RP3 & CSTEP & CC7 & !CC4
+        # !LDCP0 & !RP3 & CSTEP & CC7 & !CC5
+        # !LDCP0 & !RP3 & CSTEP & CC7 & !CC6
+        # !LDCP0 & !RP3 & CSTEP & !CC7 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6
+        # !LDCP0 & !RP3 & !CSTEP & CC7 ;
 CC8.d = LDCP1 & D0
-        # !LDCP1 & CSTEP & CC8 & !CC0
-        # !LDCP1 & CSTEP & CC8 & !CC1
-        # !LDCP1 & CSTEP & CC8 & !CC2
-        # !LDCP1 & CSTEP & CC8 & !CC3
-        # !LDCP1 & CSTEP & CC8 & !CC4
-        # !LDCP1 & CSTEP & CC8 & !CC5
-        # !LDCP1 & CSTEP & CC8 & !CC6
-        # !LDCP1 & CSTEP & CC8 & !CC7
-        # !LDCP1 & CSTEP & !CC8 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6 & CC7
-        # !LDCP1 & !CSTEP & CC8 ;
+        # RP4 & D0
+        # !LDCP1 & !RP4 & CSTEP & CC8 & !CC0
+        # !LDCP1 & !RP4 & CSTEP & CC8 & !CC1
+        # !LDCP1 & !RP4 & CSTEP & CC8 & !CC2
+        # !LDCP1 & !RP4 & CSTEP & CC8 & !CC3
+        # !LDCP1 & !RP4 & CSTEP & CC8 & !CC4
+        # !LDCP1 & !RP4 & CSTEP & CC8 & !CC5
+        # !LDCP1 & !RP4 & CSTEP & CC8 & !CC6
+        # !LDCP1 & !RP4 & CSTEP & CC8 & !CC7
+        # !LDCP1 & !RP4 & CSTEP & !CC8 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6 & CC7
+        # !LDCP1 & !RP4 & !CSTEP & CC8 ;
 CC9.d = LDCP1 & D1
-        # !LDCP1 & CSTEP & CC9 & !CC0
-        # !LDCP1 & CSTEP & CC9 & !CC1
-        # !LDCP1 & CSTEP & CC9 & !CC2
-        # !LDCP1 & CSTEP & CC9 & !CC3
-        # !LDCP1 & CSTEP & CC9 & !CC4
-        # !LDCP1 & CSTEP & CC9 & !CC5
-        # !LDCP1 & CSTEP & CC9 & !CC6
-        # !LDCP1 & CSTEP & CC9 & !CC7
-        # !LDCP1 & CSTEP & CC9 & !CC8
-        # !LDCP1 & CSTEP & !CC9 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6 & CC7 & CC8
-        # !LDCP1 & !CSTEP & CC9 ;
+        # RP4 & D1
+        # !LDCP1 & !RP4 & CSTEP & CC9 & !CC0
+        # !LDCP1 & !RP4 & CSTEP & CC9 & !CC1
+        # !LDCP1 & !RP4 & CSTEP & CC9 & !CC2
+        # !LDCP1 & !RP4 & CSTEP & CC9 & !CC3
+        # !LDCP1 & !RP4 & CSTEP & CC9 & !CC4
+        # !LDCP1 & !RP4 & CSTEP & CC9 & !CC5
+        # !LDCP1 & !RP4 & CSTEP & CC9 & !CC6
+        # !LDCP1 & !RP4 & CSTEP & CC9 & !CC7
+        # !LDCP1 & !RP4 & CSTEP & CC9 & !CC8
+        # !LDCP1 & !RP4 & CSTEP & !CC9 & CC0 & CC1 & CC2 & CC3 & CC4 & CC5 & CC6 & CC7 & CC8
+        # !LDCP1 & !RP4 & !CSTEP & CC9 ;
 CR0.d = LDCP1 & D2
         # !LDCP1 & CROWADV & !CR0
         # !LDCP1 & !CROWADV & CR0 ;
@@ -728,6 +754,12 @@ WINC = RETIRE
 WROWADV = SPANEND & WADV0
           # SPANEND & WADV1
           # CROWADV ;
+RFA0 = REGWR & !SPANBUSY & RIDLE & RA0
+       # SPANBUSY & RIDLE & !MS0
+       # !REGWR & !SPANBUSY & RIDLE
+       # RP2
+       # RP4 ;
+RIDLE = !RP1 & !RP2 & !RP3 & !RP4 ;
 FBA2 = !CRDSEL & WC2
        # CRDSEL & CC2 ;
 FBA2.oe = FBOE ;

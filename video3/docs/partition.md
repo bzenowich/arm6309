@@ -28,10 +28,10 @@ a number `check:docs` cannot tell from a live one:
 
 | | cells | I/O | cascades | what the swap did |
 |---|---|---|---|---|
-| `v3host` | **34 / 128** | ⭐ **53 / 64** | 0 | **22 pins back**, off a part that had none |
+| `v3host` | **43 / 128** | ⭐ **62 / 64** | 0 | **22 pins back**, off a part that had none |
 | `v3scan` | ⭐ **100 / 128** | 63 / 64 | ⭐ **2** | 14 cells and 14 cascades *cheaper* |
 | `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⛔ 25 cells and 25 cascades dearer |
-| `v3ptr` | **119 / 128** | **47 / 64** | 3 | free — and it gained the fix below |
+| `v3ptr` | **124 / 128** | **54 / 64** | 3 | free — and it gained the fix below |
 | `v3dot` | **122 / 128** | **52 / 64** | 0 | a cell for a pin, the raster fix, then the 16×16 sprite |
 
 ⚠ **The receivers mostly did not pay, and the fitter is why — which means none of these
@@ -109,8 +109,8 @@ should be read before anything is added to plan §0.
 |---|---|---|---|
 | **`v3dot`** | ⭐ **122 / 128, FITTED** | **52 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
 | **`v3scan`** | ⭐ **100 / 128, FITTED** | ⚠ **63 / 64, FITTED** | the scan and cell addresses, the map word |
-| **`v3ptr`** | ⭐ **119 / 128, FITTED** | **47 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
-| **`v3host`** | **34 / 128, FITTED** | **53 / 64, FITTED** | the backplane, the registers, the palette write path |
+| **`v3ptr`** | ⭐ **124 / 128, FITTED** | **54 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
+| **`v3host`** | **43 / 128, FITTED** | **62 / 64, FITTED** | the backplane, the registers, the palette write path |
 
 ⚠ **`v3host` is pin-bound, not cell-bound** — a fifth full of macrocells and two thirds
 full of pins, because it is the part the backplane lands on. **It is not cells that stop
@@ -410,8 +410,8 @@ assigns the job, and no `Cell` performs it:
 | `WPTR`'s end-of-row reload | §7.2: the column shadow reloads `WPTR`'s column at every row advance, which is what makes a span a *rectangle* and not a line | ⚠ `LDWP0`/`LDWP1` take **only the CPU write**; `WROWADV` does not reload them. Blocked on the row above — the reload *is* a register-file read |
 | ⭐ **the multi-byte loads** — `WPTR`, `CPTR`, `CWIDTH`, `CHEIGHT` | plan §10: 19 bits across three bytes, and `CCTRL` carries `CWIDTH[9:8]` and `CHEIGHT[8]` | ⭐ **FIXED 2026-09-16.** Every bit took one strobe, so `+$08`'s `D0` drove `WC0` *and* `WC8`. Now per-bit, off the broadcast, at no cost |
 
-⭐ **Neither of the two open ones is a fit risk** — `v3ptr` sits at 119 / 128 cells and
-47 / 64 I/O, and both additions are small. **Both are correctness gaps**, and the second
+⭐ **Neither of the two open ones is a fit risk** — `v3ptr` sits at 124 / 128 cells and
+54 / 64 I/O, and both additions are small. **Both are correctness gaps**, and the second
 bites silently: a span writer whose column never reloads paints the first row and then
 walks off down the framebuffer, which is a picture, just not the right one. ⚠ They are
 also **one gap, not two** — the reload is a register-file read, so it is blocked on `RFA`.

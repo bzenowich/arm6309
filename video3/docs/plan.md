@@ -292,7 +292,7 @@ The up/down counters are what the fitter charged for, and the price is not margi
 |---|---|---|
 | `v3ptr_both` — both directions | **128 / 128** | 19 |
 | `v3ptr_rows` — rows only | **128 / 128** | 21 |
-| ⭐ **`v3ptr` — neither, and this is the build** | **119 / 128** | **3** |
+| ⭐ **`v3ptr` — neither, and this is the build** | **124 / 128** | **3** |
 
 **18 macrocells and 16 cascades, and dropping one bit buys nothing** — it is
 all-or-nothing. ⚠ All three are kept as fits rather than as prose: the first draft of
@@ -728,8 +728,8 @@ totals its own claim and that 24 cm is the shortest length that holds it.
    anywhere** — see item 4.
 4. ⚠ **The partition is drafted — [`partition.md`](partition.md) — at FOUR parts, which
    §13.5 says is the most that places, so **video3 is at its ceiling**. ⭐ **ALL FOUR
-   ARE FITTED.** `v3dot` is **122/128 cells and 52/64 I/O**; `v3ptr` is **119/128 and
-   47/64**; `v3host` is **34/128 and 53/64**. `v3scan` — the map word in silicon — is
+   ARE FITTED.** `v3dot` is **122/128 cells and 52/64 I/O**; `v3ptr` is **124/128 and
+   54/64**; `v3host` is **43/128 and 62/64**. `v3scan` — the map word in silicon — is
    **100/128 cells and 63/64 I/O**, and `v3scan_mq` — the same part with the map word in
    four `'574` — is **107/128 cells and 46/64 I/O**. **NO NUMBER FROM `video/`'s FIT APPLIES HERE.**
    `video/` is three `ATF1508AS` whose utilisation is recorded in
@@ -774,7 +774,7 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     `CGO`/`CDONE`/`CSTEP`/`CROWADV`/`CWLOAD`/`CRDSEL` (§6's copy engine), plus
     v3host's `WRCYC`/`RDCK`/`IRQEN`. `v3ptr` counts on `CSTEP`, holds `CBUSY` on
     `CGO & !CDONE`, and nothing steps or starts it.
-    ⚠ **So `v3ptr` 119/128 and `v3dot` 122/128 are fits of the datapath.**
+    ⚠ **So `v3ptr` 124/128 and `v3dot` 122/128 are fits of the datapath.**
     `partition.md` §2.3 budgets **~10 macrocells** for the two sequencers inside
     `v3ptr` and they are not in that fit; 18 spare cells and 3 existing cascades is
     what they have to come out of. **This is the number that decides whether there
@@ -791,7 +791,7 @@ totals its own claim and that 24 cm is the shortest length that holds it.
 
     | `v3ptr` | cells | I/O | cascades |
     |---|---|---|---|
-    | `none` — the build | 119/128 | 47/64 | 3 |
+    | `none` — the build | 124/128 | 54/64 | 3 |
     | `span` | **115/128** | 48/64 | **3** — no timing change |
     | `copy` | **117/128** | 41/64 | ⚠ **8** — +5 on its own |
     | `both` | ⛔ **DOES NOT FIT**, refused under two different file names | | |
@@ -806,8 +806,8 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     | | cells | I/O | cascades |
     |---|---|---|---|
     | `v3dot` | 122/128 | 52/64 | 0 | ⭐ **unchanged — not one edit** |
-    | `v3ptr` | **119/128** | 47/64 | **3** | the span sequencer, the two decodes, WMODE |
-    | `v3host` | **34/128** | 53/64 | **0** | the copy engine's phase machine |
+    | `v3ptr` | **124/128** | 54/64 | **3** | the span sequencer, the two decodes, WMODE |
+    | `v3host` | **43/128** | 62/64 | **0** | the copy engine's phase machine |
     | `v3scan` | 100/128 | 63/64 | 2 | untouched |
 
     ⚠ **`v3ptr`'s cascades are still 3** — the count it had before any of this —
@@ -838,15 +838,51 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     "~10 macrocells for the span and copy sequencers" is refuted by the fitter**,
     and §2.5's "a fifth part for the copy engine — it does not place" closes the
     other way out. ⭐ The move the numbers point at is **`v3host`, which is
-    34/128 and has 22 spare pins**: keep `CEOR`/`CHLAST` on `v3ptr` beside the
+    43/128 and has 22 spare pins**: keep `CEOR`/`CHLAST` on `v3ptr` beside the
     counters they decode and put the phase machine there, which is ~7 signals
     across rather than the 19 counter bits.
 
-    ⛔ **What is still owed**: the COLUMN RELOAD at
-    end of row. §6 and §7.2 keep both columns' shadows in the register file, so
-    the reload is `rfa` pointing the file at +$08/+$09 and +$12/+$13 and driving
-    the same load path a CPU store uses — the register-file address owner's
-    business, which is `v3host`. Without it both columns climb across rows.
+    ⭐ **AND §7.2's END-OF-ROW COLUMN RELOAD IS BUILT, 2026-09-19** — the last
+    piece, and the one neither part could do alone. Without it neither engine
+    chains: a glyph steps eight pixels right on every row (`video/` shipped
+    exactly that, `design-review2.md` V-6) and a copy's two columns climb
+    across rows instead of restarting.
+
+    ⛔ **It could not be finished because nothing on this card produced `RFA`
+    at all.** The register file holds the readback bytes, `WFG`/`WBG`,
+    `SPANLEN`, the sprite shape *and* the two column shadows, and its address
+    had no generator. `video/`'s `rfa` is the same block, so this is a port,
+    with three differences: the CPU's offset is already on `v3host`, which IS
+    the decode; the walk is **four** states and not two, because the copy has
+    to restore `CPTR`'s column as well as `WPTR`'s; and **`RFA0` is on
+    `v3ptr`** — §5 makes the file's address bit 0 the **mask bit**, and the
+    serialiser is there.
+
+    ⭐ **One-hot, so the states are the strobes**: a four-dot walk that also
+    needs four load strobes is five cells that way and nine as a counter plus
+    decodes. `RP1` → +$08 → `WC7..WC0`, `RP2` → +$09 → `WC9..WC8`, `RP3` →
+    +$12 and `RP4` → +$13 for `CPTR`, the last two only when `CRLD` says the
+    trigger was a copy's.
+
+    ⚠ **Two strobes a pointer and not one, and the ROW is why**: +$09 carries
+    `WC9..WC8` in D1..D0 **and `WR5..WR0` in D7..D2**, so a reload that reused
+    the CPU's own `LDWP1` would undo the row advance the same span just made.
+    ⚠ **And the strobes must stay separate**: `LDA # RLDA` is the obvious
+    saving and `access.jedec.ts` records what it costs — CUPL substitutes the
+    intermediate, every *hold* term becomes two, and the fitter aborts with
+    INTERNAL ERROR.
+
+    | | cells | I/O | cascades |
+    |---|---|---|---|
+    | `v3ptr` | **124/128** | 54/64 | **3** — still flat |
+    | `v3host` | **43/128** | ⚠ **62/64** | 0 |
+
+    ⛔ **`v3host` IS NOW TWO PINS FROM FULL, and that is the card's real
+    ceiling showing.** `partition.md` §7.1 says the binding constraint is pins,
+    and this is what it looks like: `keyed-copy.md` §7.2's keyed compare wanted
+    **eight** pins for the source byte on whichever part gates the write
+    strobe, and there is no part left with eight. The `74HC688` version — one
+    pin — is now the only one that fits anywhere on this card.
 
     ⚠ **And three counters were built the wrong way round**, which only mattered
     because nothing clocked them: §5 and §6 specify SPANLEN, CWIDTH and CHEIGHT as
@@ -856,7 +892,7 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     decode is ONE product term. ⛔ The decode is `..11110` and not `..11111`,
     because CWIDTH is the plain byte count N (the emulator, the model, both
     drivers and the bench all agree, none of them biases it) and the counter is
-    sampled before the edge that steps it. Free: the fit is 119/128 and 3
+    sampled before the edge that steps it. Free: the fit is 124/128 and 3
     cascades either way.
 
     ⚠ Two naming defects came out of the same run and are *not* the same thing:

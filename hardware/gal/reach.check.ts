@@ -274,6 +274,8 @@ const RESERVED_RE: { re: RegExp; why: Why; note: string }[] = [
   { re: /^(MUXSEL0|MUXSEL1|OMR|MK2|MS0|SI5|NSL7|CT[4-6])$/, why: "board",
     note: "plan §3: the dot path's muxes and the serialisers' state, to discrete parts" },
   { re: /^(SPRLD)$/, why: "board", note: "plan §7: loads the four '165 that hold the sprite row" },
+  { re: /^RFA[0-4]$/, why: "board",
+    note: "plan §5: the 32K x 8 register file's address pins. ⛔ RFA0 is v3ptr's and RFA4..RFA1 are v3host's, because §5 makes bit 0 the span-mask bit and the serialiser is on v3ptr - the rest is an ordinary address and the four-dot reload walk that drives it did not fit beside the serialiser" },
   { re: /^WEN$/, why: "board",
     note: "plan §5: the framebuffer write strobe - RETIRE except a transparent pixel in sprite mode. ⚠ NOT the same signal as RETIRE, and a mode that gated the pointer instead would draw the sprite squashed" },
   { re: /^(WSTBV|WADV[01]|RDREQ|PBUSY|WAITN|IRQN)$/, why: "board",

@@ -49,6 +49,7 @@ PIN = CEOR ;
 PIN = CHLAST ;
 PIN = GCPY ;
 PIN = MUXSEL0 ;
+PIN = WROWADV ;
 
 /* --- outputs ------------------------------------------------------ */
 PIN = REGWR ;
@@ -78,6 +79,14 @@ PIN = CROWADV ;
 PIN = CWLOAD ;
 PIN = CDONE ;
 PIN = RCPY ;
+PIN = RP1 ;
+PIN = RP2 ;
+PIN = RP3 ;
+PIN = RP4 ;
+PIN = RFA1 ;
+PIN = RFA2 ;
+PIN = RFA3 ;
+PIN = RFA4 ;
 
 /* --- buried registers: state that used to cross a package boundary - */
 PINNODE = PPEND ;
@@ -88,6 +97,7 @@ PINNODE = PS3 ;
 PINNODE = IRQPEND ;
 PINNODE = VBLQ ;
 PINNODE = CPH ;
+PINNODE = CRLD ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * LDPDATH, LDIRQACK, RDINV, VBLRISE, IRQACK, CTICK
@@ -154,8 +164,28 @@ CROWADV = CSTEP & CEOR ;
 CWLOAD = CROWADV ;
 CDONE = CROWADV & CHLAST ;
 RCPY = CBUSY ;
+CRLD.d = CROWADV
+         # CRLD & !RP4 ;
+RP1.d = !RP1 & !RP2 & !RP3 & !RP4 & WROWADV ;
+RP2.d = RP1 ;
+RP3.d = RP2 & CRLD ;
+RP4.d = RP3 ;
+RFA1 = IOSEL & A6 & A5 & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & A1
+       # SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4
+       # RP3
+       # RP4 ;
+RFA2 = IOSEL & A6 & A5 & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & A2
+       # !IOSEL & A6 & A5 & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4
+       # SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 ;
+RFA3 = IOSEL & A6 & A5 & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & A3
+       # RP1
+       # RP2 ;
+RFA4 = IOSEL & A6 & A5 & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & A4
+       # RP3
+       # RP4 ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
-[PPEND,PS0,PS1,PS2,PS3,RDVALID,IRQPEND,VBLQ,CPH].ck = CLK25 ;
+[PPEND,PS0,PS1,PS2,PS3,RDVALID,IRQPEND,VBLQ,CPH,CRLD,RP1,RP2].ck = CLK25 ;
+[RP3,RP4].ck = CLK25 ;
 

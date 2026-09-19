@@ -259,7 +259,7 @@ the destinations and weak on source-address errors.
 into `npm run check:reach`, and its four parts turned out to be a **datapath and
 an arbiter with neither sequencer built** — 19 control lines nothing produces,
 including the four *requests* into v3dot's own arbiter and the whole of §6's
-copy micro-sequencer (`plan.md` §14 item 14). So `v3ptr`'s **119/128 is a fit of
+copy micro-sequencer (`plan.md` §14 item 14). So `v3ptr`'s **124/128 is a fit of
 the datapath**, and `partition.md` §2.3's ~10 macrocells for the sequencers are
 not in it.
 
@@ -280,17 +280,20 @@ the gate, not the compare.
       ⭐ **AND THE PARTITION MOVE WORKS** (2026-09-19): `CEOR`/`CHLAST` stay on
       `v3ptr` beside the counters they decode and the phase machine goes to
       `v3host`. Both sequencers are built, all four parts fit, and `v3dot` did
-      not change by a byte. **`v3ptr` 119/128 with cascades still at 3;
-      `v3host` 34/128 with 0.**
+      not change by a byte. **`v3ptr` 124/128 with cascades still at 3;
+      `v3host` 43/128 with 0.**
       ⛔ **Which re-prices the key, and not in its favour.** §7's "18 spare
       cells and 20 spare pins on `v3ptr`" described a part that did not yet
       contain §6's engine; it now has **9 cells and 17 pins spare**, and
       Nodes+FB at **131%**. The compare wants the source byte, which means
       eight pins into whichever part gates the write strobe. ⭐ **That part is
-      now `v3host` — 34/128 cells, 11 spare pins, 0 cascades** — and it is the
-      one place on this card with room. ⚠ Eight of its eleven spare pins is
-      most of them, which is exactly why §7.2's `74HC688` (ONE pin) stops being
-      the cheaper-by-a-package option and becomes the only one that fits.
+      now `v3host` — 43/128 cells, 11 spare pins, 0 cascades** — and it is the
+      one place on this card with room. ⛔ **And then §7.2's column reload was built
+      (2026-09-19) and `v3host` went to 62/64.** There is now **no part on this
+      card with eight spare pins**: `v3dot` has 12 and six cells, `v3scan` has
+      one, `v3ptr` has ten, `v3host` has two. ⭐ So §7.2's **`74HC688` — one
+      pin** — is no longer the cheaper-by-a-package option. It is the only
+      version of this feature that fits anywhere.
       ⭐ **The good half of the news stands**: the key is still a term on a
       write strobe that is still being designed, which is the cheapest form it
       can take. It is the PART that is not settled, not the compare.
@@ -428,8 +431,8 @@ estimates:
 | part | logic cells | I/O pins | cascades | foldback |
 |---|---|---|---|---|
 | `v3dot` | **122/128 (95%)** — 6 spare | 52/64 | 0 | 37/128 |
-| `v3host` | ⭐ **34/128 (21%)** — 101 spare | 53/64 — 22 spare | 0 | 0 |
-| `v3ptr` | **119/128 (85%)** — 18 spare | 47/64 — 20 spare | **3** | 45/128 |
+| `v3host` | ⭐ **43/128 (21%)** — 101 spare | 62/64 — 22 spare | 0 | 0 |
+| `v3ptr` | **124/128 (85%)** — 18 spare | 54/64 — 20 spare | **3** | 45/128 |
 | `v3scan` | 100/128 (78%) | ⛔ **63/64 (98%)** — **one** pin spare | 2 | 17/128 |
 
 ⭐ **`partition.md`'s estimate for `v3ptr` was right to the cell**: 18 spare and

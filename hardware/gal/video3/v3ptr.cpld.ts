@@ -72,6 +72,11 @@ const SPANSEQ = SEQ === "both" || SEQ === "span" || SEQ === "split"
 const COPYSEQ = SEQ === "both" || SEQ === "copy"
 /* split: the decodes stay, the phase machine goes to v3host */
 const COPYDEC = SEQ === "split"
+/* ⭐ V3_RELOAD builds §7.2's END-OF-ROW COLUMN RELOAD, which nothing did.
+ * Both engines need it: a chained glyph would step eight pixels right on every
+ * row (design-review2.md V-6 is that defect on the other card) and a copy's
+ * two columns would climb across rows instead of restarting. */
+const RELOAD = (process.env.V3_RELOAD ?? "on") === "on" && SEQ === "split"
 const DIRC = COPYDIR === "both" ? "CDIRC" : null
 const DIRR = COPYDIR === "none" ? null : "CDIRR"
 
@@ -89,6 +94,23 @@ const loadableM = (bits: string[], enable: string, load: string[],
   return bits.map((_, i) => [
     `${load[i]} & ${from[i]}`,
     ...counted[i].map((t) => `!${load[i]} & ${t}`),
+  ])
+}
+
+/* -- ⭐ A LOAD WITH TWO SOURCES - the CPU's store and the column reload ----
+ *
+ * ⛔ AND THE STROBES MUST STAY SEPARATE. `LDA # RLDA` is the obvious escape
+ * and access.jedec.ts records what it costs: CUPL substitutes combinational
+ * intermediates, so every HOLD term becomes `!(LDA # RLDA)` - two terms where
+ * there was one, across all ten macrocells - and the ATF1508 fitter aborts
+ * with INTERNAL ERROR. One term per source, and the hold names both. */
+const loadable2 = (bits: string[], enable: string, load: string[],
+                   from: string[], rld: string[], rfrom: string[]): string[][] => {
+  const counted = counterTerms({ bits, enable })
+  return bits.map((_, i) => [
+    `${load[i]} & ${from[i]}`,
+    `${rld[i]} & ${rfrom[i]}`,
+    ...counted[i].map((t) => `!${load[i]} & !${rld[i]} & ${t}`),
   ])
 }
 
@@ -154,8 +176,13 @@ const ptrLd = (pfx: string, f: (b: number) => number, n: number) =>
 const wptr: Cell[] = [
   ...WCOL.map((name, i) => ({
     pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
-    terms: loadableM(WCOL, "WINC", ptrLd("W", PTRCOL_LD, 10),
-      [...Array(10).keys()].map(PTRCOL_D))[i],
+    terms: (RELOAD
+      ? loadable2(WCOL, "WINC", ptrLd("W", PTRCOL_LD, 10),
+          [...Array(10).keys()].map(PTRCOL_D),
+          [...Array(10).keys()].map((b) => (b < 8 ? "RP1" : "RP2")),
+          [...Array(10).keys()].map(PTRCOL_D))
+      : loadableM(WCOL, "WINC", ptrLd("W", PTRCOL_LD, 10),
+          [...Array(10).keys()].map(PTRCOL_D)))[i],
   })),
   ...upDown(WROW, "WROWADV", DIRR, ptrLd("W", PTRROW_LD, 9),
     [...Array(9).keys()].map(PTRROW_D)),
@@ -165,8 +192,16 @@ const wptr: Cell[] = [
 const CCOL = [...Array(10).keys()].map((b) => `CC${b}`)
 const CROW = [...Array(9).keys()].map((b) => `CR${b}`)
 const cptr: Cell[] = [
-  ...upDown(CCOL, "CSTEP", DIRC, ptrLd("C", PTRCOL_LD, 10),
-    [...Array(10).keys()].map(PTRCOL_D)),
+  ...(RELOAD && DIRC === null
+    ? CCOL.map((name, i) => ({
+        pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
+        terms: loadable2(CCOL, "CSTEP", ptrLd("C", PTRCOL_LD, 10),
+          [...Array(10).keys()].map(PTRCOL_D),
+          [...Array(10).keys()].map((b) => (b < 8 ? "RP3" : "RP4")),
+          [...Array(10).keys()].map(PTRCOL_D))[i],
+      }))
+    : upDown(CCOL, "CSTEP", DIRC, ptrLd("C", PTRCOL_LD, 10),
+        [...Array(10).keys()].map(PTRCOL_D))),
   ...upDown(CROW, "CROWADV", DIRR, ptrLd("C", PTRROW_LD, 9),
     [...Array(9).keys()].map(PTRROW_D)),
 ]
@@ -408,6 +443,56 @@ const spanSeq: Cell[] = [
     terms: ["SPANEND & WADV0", "SPANEND & WADV1", "CROWADV"] },
 ]
 
+/* -- ⭐ §7.2's END-OF-ROW COLUMN RELOAD - this part's half --------------
+ *
+ * ⛔ IT DID NOT EXIST, AND WITHOUT IT NEITHER ENGINE CHAINS. §7.2 is the
+ * section that takes a character cell from 26 CPU writes to 13 - "set it once
+ * and a glyph becomes eight mask writes and nothing else" - and it does that
+ * by restoring WPTR's COLUMN at end of row while the row steps. With the
+ * column's only load path being the CPU's own three-byte store, a chained
+ * glyph steps eight pixels right on every row; `video/` shipped exactly that
+ * defect and design-review2.md V-6 is it. The copy engine has it twice over,
+ * because BOTH its columns have to come back.
+ *
+ * ⭐ THE SHADOWS ARE THE REGISTER FILE, and they are free: +$08/+$09 and
+ * +$12/+$13 already hold what the CPU last wrote, which IS the column the
+ * rectangle started at. ⚠ `video/` records that ten macrocells of shadow
+ * REGISTERS would be simpler - and that the fitter returned INTERNAL ERROR
+ * for them (graphics.md 19 item 31). Here it would be TWENTY, on a part with
+ * nine cells free.
+ *
+ * ⛔ AND THE FOUR-DOT WALK IS ON v3host, not here. Built on this part it was
+ * five more cells on top of these load terms and the fitter refused it under
+ * two names. What stays is what CANNOT leave: the load terms themselves, and
+ * RFA0 - because §5 makes the file's address bit 0 the MASK BIT, and the
+ * serialiser is here. partition.md §2.3's "RFA and the serialiser are on one
+ * part by construction" holds for the bit that is the construction; RFA4..RFA1
+ * are an ordinary address and they are on v3host with the walk.
+ *
+ *   RP1  +$08 -> WC7..WC0      RP3  +$12 -> CC7..CC0   (copy only)
+ *   RP2  +$09 -> WC9..WC8      RP4  +$13 -> CC9..CC8
+ *
+ * ⚠ TWO STROBES A POINTER AND NOT ONE, and the ROW is why: +$09 carries
+ * WC9..WC8 in D1..D0 AND WR5..WR0 in D7..D2, so a reload that reused the
+ * CPU's own LDWP1 would undo the row advance the same span just made. */
+const reload: Cell[] = [
+  /* ⚠ BIT 0 IS THE MASK BIT INVERTED. WFG is +$06 and WBG is +$07, so A0 = 0
+   * selects the FOREGROUND - and a glyph's 1 bits are its ink. ⛔ And the CPU
+   * does not get the file while a span runs: §5's colour path IS this address,
+   * so an access during a span retires whatever byte the CPU's own address
+   * named - three pixels a poll, and machine_tb drew every span with a hole
+   * in it (graphics.md 19 item 38). */
+  { pin: 0, name: "RFA0", assertedLow: false, s0: 1, registered: false,
+    why: "§5: the mask bit IS the register file's address bit 0, inverted",
+    terms: ["REGWR & !SPANBUSY & RIDLE & RA0",
+            "SPANBUSY & RIDLE & !MS0",
+            "!REGWR & !SPANBUSY & RIDLE",      /* idle: +$05, SPANLEN */
+            "RP2", "RP4"],                     /* +$09 and +$13 */
+  },
+  { pin: 0, name: "RIDLE", assertedLow: false, s0: 1, registered: false,
+    terms: ["!RP1 & !RP2 & !RP3 & !RP4"] },
+]
+
 /* -- the address bus: TWO sources, and an output enable ------------------ */
 const addressMux: Cell[] = [...Array(17).keys()].map((i) => {
   const bit = i + 2
@@ -457,6 +542,8 @@ export const v3ptr: Merged = {
      * ALREADY an external. So `GSPN & MUXSEL0` is the tick, for one literal on
      * a term the receiver has anyway and not one macrocell anywhere. */
     ...(SPANSEQ || COPYSEQ ? [{ name: "MUXSEL0" }] : []),
+    ...(RELOAD ? [{ name: "RP1" }, { name: "RP2" }, { name: "RP3" },
+                  { name: "RP4" }] : []),
     ...(SPANSEQ ? [{ name: "GSPN" }]
                 : [{ name: "RETIRE" }, { name: "SPANEND" }, { name: "WINC" },
                    { name: "WROWADV" }]),
@@ -477,7 +564,7 @@ export const v3ptr: Merged = {
   cells: [
     ...decodeCells(MY_REGS), ...wptr, ...cptr, ...counters,
     ...(COPYSEQ ? copySeq : COPYDEC ? copyDec : copyStub), ...spanWriter,
-    ...(SPANSEQ ? spanSeq : []), ...addressMux],
+    ...(SPANSEQ ? spanSeq : []), ...(RELOAD ? reload : []), ...addressMux],
   /* the address bus, and the three status bits v3host assembles into VSTAT */
   external: new Set([
     ...[...Array(17).keys()].map((i) => `FBA${i + 2}`),
@@ -485,9 +572,12 @@ export const v3ptr: Merged = {
      * arbiter answers, the write strobe the framebuffer takes, and RETIRE -
      * which also reaches v3host, where it invalidates the CPU's prefetch. */
     "SPANBUSY", "CBUSY",
-    ...(SPANSEQ ? ["RSPN", "RETIRE", "WEN", "SPANEND"] : []),
+    ...(SPANSEQ ? ["RSPN", "RETIRE", "WEN", "SPANEND", "WROWADV"] : []),
     ...(COPYSEQ ? ["RCPY"] : []),
     ...(COPYDEC ? ["CEOR", "CHLAST"] : []),
+    /* §7.2's walk, for v3host's register-file address - and MS0, the mask
+     * bit, which IS that address's bit 0 (§5) */
+    ...(RELOAD ? ["RFA0", "MS0"] : []),
   ]),
 }
 

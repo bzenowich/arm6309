@@ -61,6 +61,7 @@ const DECODE = (process.env.V3_DECODE ?? "broadcast") as "strobes" | "broadcast"
  * counters and the address mux back. Seven signals instead of nineteen. */
 const SEQ = process.env.V3_SEQ ?? "split"
 const COPYHOST = SEQ === "split"
+const RELOAD = (process.env.V3_RELOAD ?? "on") === "on" && COPYHOST
 /* the decode, off the backplane.  ⭐ The offsets live in regmap.ts and nowhere
  * else: three other parts decode the same table, and a private copy here is
  * exactly the drift this card cannot afford - a decode that disagrees with the
@@ -139,6 +140,66 @@ const copyHost: Cell[] = [
   comb("RCPY", ["CBUSY"]),
 ]
 
+/* -- ⭐ §7.2's COLUMN-RELOAD WALK, AND THE REGISTER FILE'S ADDRESS --------
+ *
+ * ⛔ NOTHING ON THIS CARD PRODUCED RFA, AND §7.2's RELOAD COULD NOT BE
+ * FINISHED WITHOUT IT. The file holds the readback bytes, WFG/WBG, SPANLEN,
+ * the sprite shape and the two column shadows, and its address had no
+ * generator at all. `video/`'s rfa is the same block and this is a port, with
+ * three differences:
+ *
+ *   - ⭐ THE CPU'S OFFSET IS ALREADY HERE. rfa recomputed REGSEL from IOSEL,
+ *     A6 and A5 "because importing it would cost a pin"; this part IS the
+ *     register decode, so REGSEL and A0-A4 are its own already.
+ *   - ⚠ FOUR RELOAD STATES, NOT TWO. video/ restores WPTR's column alone;
+ *     the copy engine has to restore CPTR's as well, so the walk is +$08,
+ *     +$09, +$12, +$13 and RFA4 stops being constant.
+ *   - ⛔ RFA0 IS NOT HERE. §5 makes the file's address bit 0 the MASK BIT and
+ *     the serialiser is on v3ptr, so that one bit is v3ptr's; RFA4..RFA1 are
+ *     an ordinary address. The walk is here because v3ptr does not fit with
+ *     it - refused under two names at 124/128.
+ *
+ * ⭐ ONE-HOT, SO THE STATES ARE THE STROBES. A four-dot walk that also needs
+ * four load strobes is five cells this way and nine as a counter plus decodes,
+ * and the counter has nothing else to say. v3ptr's column counters take RP1
+ * and RP2 (WPTR) and RP3 and RP4 (CPTR) as load sources directly.
+ *
+ * ⚠ AND THE ADDRESS LEADS THE LOAD BY A DOT: RFA changes on the edge that
+ * ENTERS a state and v3ptr loads on the edge that LEAVES it, so the 20 ns
+ * register file and this decode have a whole 39.7 ns dot to settle in. */
+const reloadWalk: Cell[] = [
+  /* ⚠ remembered, because CROWADV is one dot and the walk is four */
+  reg("CRLD", ["CROWADV", "CRLD & !RP4"]),
+  reg("RP1", ["!RP1 & !RP2 & !RP3 & !RP4 & WROWADV"]),
+  reg("RP2", ["RP1"]),
+  reg("RP3", ["RP2 & CRLD"]),
+  reg("RP4", ["RP3"]),
+]
+
+/* ⛔ THE CPU DOES NOT GET THE FILE WHILE A SPAN RUNS, and rfa records what
+ * that cost: §5's colour path IS the file's address, so an access during a
+ * span retired whatever byte the CPU's own address named - three pixels a
+ * poll, and machine_tb drew every span with a hole in it (graphics.md 19
+ * item 38). The span's claim wins, and `!SPANBUSY` is the whole fix.
+ *
+ *   idle    +$05  00101   SPANLEN, so span-solid's load needs no address
+ *   span    +$06  0011x   WFG / WBG, bit 0 the mask bit (on v3ptr)
+ *   RP1     +$08  01000   RP2  +$09  01001
+ *   RP3     +$12  10010   RP4  +$13  10011 */
+const rf: Cell[] = (() => {
+  const IDLE = "!RP1 & !RP2 & !RP3 & !RP4"
+  const CPU = `${REGSEL} & !SPANBUSY & ${IDLE}`
+  const SPAN = `SPANBUSY & ${IDLE}`
+  const extra: Record<number, string[]> = {
+    1: [SPAN, "RP3", "RP4"],
+    2: [`!${REGSEL} & !SPANBUSY & ${IDLE}`, SPAN],
+    3: ["RP1", "RP2"],
+    4: ["RP3", "RP4"],
+  }
+  return [1, 2, 3, 4].map((n) =>
+    comb(`RFA${n}`, [`${CPU} & A${n}`, ...extra[n]]))
+})()
+
 export const v3host: Merged = {
   name: DECODE === "strobes" ? "v3host_st" : "v3host",
   partNo: "ARM6309-V3H",
@@ -164,6 +225,7 @@ export const v3host: Merged = {
     { name: "RDCK" }, { name: "RETIRE" }, { name: "RSTART" }, { name: "IRQEN" },
     ...(COPYHOST ? [{ name: "CEOR" }, { name: "CHLAST" },
                     { name: "GCPY" }, { name: "MUXSEL0" }] : []),
+    ...(RELOAD ? [{ name: "WROWADV" }] : []),
   ],
   cells: [
     ...(DECODE === "strobes"
@@ -178,6 +240,7 @@ export const v3host: Merged = {
     ...palette,
     ...port,
     ...(COPYHOST ? copyHost : []),
+    ...(RELOAD ? [...reloadWalk, ...rf] : []),
   ],
   external: new Set([
     ...(DECODE === "strobes"
@@ -188,6 +251,7 @@ export const v3host: Merged = {
     "VDSEL", "VPORT", "RDVALID",
     /* the copy engine's, when the phase machine lives here */
     ...(COPYHOST ? ["CRDSEL", "CSTEP", "CROWADV", "CWLOAD", "CDONE", "RCPY"] : []),
+    ...(RELOAD ? ["RP1", "RP2", "RP3", "RP4", "RFA1", "RFA2", "RFA3", "RFA4"] : []),
   ]),
 }
 
