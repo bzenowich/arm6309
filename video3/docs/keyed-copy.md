@@ -19,10 +19,11 @@ From `demo-report.md` §10.5, which stands:
 - **`CCTRL` b1 and b2 are free** — reserved since the direction bits were dropped
   (`plan.md` §6.2).
 - **No adder, no latch, no direction logic.** The source byte is already latched
-  in `vread` on the read access and leaves through the posted-write `'574` on the
-  write, so a compare simply **gates the write access**.
-- ⛔ **No part has room for the 8-pin form.** `v3ptr` has **3 macrocells and 9
-  pins spare**, `v3host` **one pin** (§7's table), so the compare is one pin and a
+  in the posted-write `'574` on the read access (`PWCK`) and leaves from it on the
+  write (`PWOE`), crossing the internal bus both times, so a compare simply **gates
+  the write access** — `VWE`, which is `v3ptr`'s.
+- ⛔ **No part has room for the 8-pin form.** `v3ptr` has **6 macrocells and 7
+  pins spare**, `v3host` **none** (§7's table), so the compare is one pin and a
   `'688` comparator, plus a `CCTRL` bit and a term.
 - ⛔ **It needs a fit, and the part has form here.** `v3ptr_rows` and
   `v3ptr_both` went from 3 cascades to 19–21 and filled the part. `CLAUDE.md`:
@@ -265,9 +266,10 @@ machine on `v3host` (`plan.md` §14 item 14; `history.md` has the steps).
       `plan.md` §14 item 14 has the table. ⛔ **Which re-prices the key, and not
       in its favour.** The compare wants the source byte, which means eight
       pins into whichever part gates the write strobe, and **there is no part
-      on this card with eight spare pins**: `v3dot` has 14 pins and 8 cells,
-      `v3scan` none, `v3ptr` 9 pins and 3 cells, and `v3host` **one pin**. ⭐ So
-      §7.2's **`74HC688` — one pin** — is not the cheaper-by-a-package option.
+      on this card with eight spare pins**: `v3dot` has one pin and 7 cells,
+      `v3scan` one pin, `v3ptr` — which makes `VWE`, the write strobe — 7 pins and
+      6 cells, and `v3host` **none**. ⭐ So §7.2's **`74HC688` — one pin** — is not
+      the cheaper-by-a-package option.
       It is the only version of this feature that fits anywhere.
       ⭐ **The good half of the news stands**: the key is a term on a write
       strobe, which is the cheapest form it can take. It is the PART that is
@@ -405,18 +407,18 @@ estimates:
 
 | part | logic cells | I/O pins | cascades | foldback |
 |---|---|---|---|---|
-| `v3dot` | **120/128** — 8 spare | 50/64 — 14 spare | ⚠ 5 | 43/128 |
-| `v3host` | 55/128 — 73 spare | ⛔ **63/64** — **one** pin spare | 0 | 0 |
-| `v3ptr` | ⛔ **125/128** — 3 spare | 55/64 — 9 spare | **3** | 50/128 |
-| `v3scan` | 100/128 — 28 spare | ⛔ **64/64** — **no** pin spare | 2 | 20/128 |
+| `v3dot` | **121/128** — 7 spare | 63/64 — one spare | ⚠ 5 | 39/128 |
+| `v3host` | 58/128 — 70 spare | ⛔ **64/64** — **no** pin spare | 0 | 0 |
+| `v3ptr` | ⛔ **122/128** — 6 spare | 57/64 — 7 spare | **3** | 52/128 |
+| `v3scan` | 112/128 — 16 spare | 63/64 — one spare | 3 | 39/128 |
 
 ⚠ **`v3ptr`'s 3 cascades are the baseline a refit is compared against**, not
-zero, and its Nodes+FB is at 134 % with every LAB at 38 of 40 inputs — a part
-that refuses additions on grouping before it runs out of cells.
+zero, and its Nodes+FB is at 133 % with seven of eight LABs at 39 of 40 inputs — a
+part that refuses additions on grouping before it runs out of cells.
 
-⛔ **The room is cells on `v3host` and `v3scan`, and neither has pins.** Pins
-are the binding constraint (`partition.md` §7.1), and the only part with more
-than one spare is `v3dot`, which gates no write strobe.
+⛔ **The room is cells on `v3host`, and it has no pins.** Pins are the binding
+constraint (`partition.md` §7.1), and the only part with more than one spare is
+`v3ptr` — which does gate the write strobe (`VWE`), and has seven.
 
 ### 7.1 ⛔ MEASURED, AND IT REVERSES THIS SECTION'S RECOMMENDATION
 
@@ -478,9 +480,9 @@ list ~5× rather than ~10×, and **ten sprites would still not fit**.
 
 ### 7.2 The key, three ways
 
-The compare needs the **source byte**, which already exists on the board: `vread`
-latches it on the read access and it leaves through the posted-write `'574`
-(§1). What differs is where the comparing happens.
+The compare needs the **source byte**, which already exists on the board: the
+posted-write `'574` latches it on the read access and drives it back out on the
+write (§1). What differs is where the comparing happens.
 
 | | CPLD pins | macrocells | packages |
 |---|---|---|---|
@@ -517,17 +519,12 @@ the kind of change that moves cascades.
 5. **More hardware sprites** last — the answer to genre C, which the key does
    not serve at all.
 
-⭐ **AND THE KEY WOULD BE A DESIGN-IN, NOT A RETROFIT — which makes it cheaper
-than any of the above suggests.** `CDONE`, `CSTEP`, `CROWADV` and `RCPY` are
-declared as **inputs** on `v3ptr` (`v3ptr.cpld.ts` §228) and consumed by `v3dot`'s
-arbiter (§205), and **nothing in the repository generates them**: the copy
-micro-sequencer does not exist yet. Whoever builds it decides where the write
-strobe comes from, and a key is one more term on a strobe that is still being
-designed — rather than a change to a part that has already fitted at 85% with 3
-cascades.
+⭐ **The key is one more term on one strobe.** The copy's write is `v3ptr`'s
+`VWE` — `CSTEP`, beside the span writer's retire terms — so a `'688`'s result is
+one input pin into `v3ptr` and one literal on that term.
 
-⚠ **What is still missing before any of this is a design**: the copy sequencer
-itself; a **re**fit of whichever part gains the compare, read out of the new
-`.fit` and compared **against `v3ptr`'s existing 3 cascades and 110 cells**, not
-against zero; and the spare-access budget re-derived, which `plan.md` §14 item 8
-has owed since before any of this was asked.
+⚠ **What is still missing before any of this is a design**: a **re**fit of
+`v3ptr` with the compare, read out of the new `.fit` and compared **against its
+existing 3 cascades and 122 cells**, not against zero — on a part at 133 %
+Nodes+FB, where the fitter refuses on grouping first; and the spare-access
+budget, which `plan.md` §14 item 8 still owes.

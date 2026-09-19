@@ -25,6 +25,15 @@ VMODES = [(0, 400, 2, 0, "80x25, 449-line, doubled"),
           (3, 480, 1, 3, "80x60, 525-line, progressive"),
           (4, 400, 2, 0, "80x25 with the SPRITE ENABLED - it must not appear")]
 SPR_X, SPR_Y = 32, 8                # cell (1, 4), whose attribute is $2A
+# ⭐ plan §2.5: a cell is FOUR bytes - code, attribute, and two the card never
+# reads (the map fetcher has sixteen data pins: lanes 0 and 1 of one x16 part).
+# The ROM fills the two unused ones with a code and an attribute that are
+# neither the cell's, so a card that reads the wrong lanes or the wrong stride
+# paints the wrong glyph in the wrong colour.
+PAD2, PAD3 = 0xB0, 0x77
+# plan §7: the sprite shape is the top 64 bytes of MAPBASE's 64 KB region.
+# Character mode never shows it; the negative phase writes it there anyway.
+SHAPE_AT = MAPBASE * 65536 + 0xFFC0
 
 GLYPHS = {                          # code -> eight 1bpp rows, MSB leftmost
     0x20: [0x00] * 8,
@@ -90,7 +99,7 @@ src = f"""**********************************************************************
 *
 *   sh video3/bench/run-v3char.sh
 *
-* plan 2.2 and 3: the map is TWO bytes a cell and the attribute is the HIGH
+* plan 2.2 and 3: the map is FOUR bytes a cell (code, attr, two unused) and the attribute is the HIGH
 * eight bits of the LUT address, so a cell's colours are a sub-palette rather
 * than a bank.  A wrong ATTR path renders the right shapes in the wrong
 * colours - which a pixel-exact model catches and a register trace does not.
@@ -113,8 +122,6 @@ VSTAT   EQU     $FF6D
 SPRX    EQU     $FF7A
 SPRY    EQU     $FF7B
 SPRH    EQU     $FF7C
-SPRIDX  EQU     $FF7D
-SPRDAT  EQU     $FF7E
 MKV     EQU     $C20A           machine.c records this with every frame
 
 NGLYPH  EQU     {len(CODES)}
@@ -177,7 +184,8 @@ gl2     lda     ,x+
         decb
         bne     gl1
 
-* --- the map: two bytes a cell, one VRAM row a cell row (plan 2.5)
+* --- the map: four bytes a cell - code, attr, and two the card must not read
+*     (plan 2.5) - one VRAM row a cell row
         ldx     #maptab
         clra
         ldb     #NROWS
@@ -189,8 +197,14 @@ mr1     pshs    a,b
         lsla                    row * 4 -> WPTR1, a 1024-byte stride
         sta     <WPTR1
         clr     <WPTR0
-        ldy     #{COLS * 2}
+        ldy     #{COLS}
 mr2     lda     ,x+
+        sta     <VDATA          lane 0: the code
+        lda     ,x+
+        sta     <VDATA          lane 1: the attribute
+        lda     #${PAD2:02X}
+        sta     <VDATA          lanes 2 and 3: unused, and not the cell's
+        lda     #${PAD3:02X}
         sta     <VDATA
         leay    -1,y
         bne     mr2
@@ -241,13 +255,27 @@ mr2     lda     ,x+
 * --- ⭐ plan 7's negative half.  Arm the sprite, PROVE the register took the
 *     enable - otherwise the test asserts nothing - and require that character
 *     mode shows no trace of it.  bench/v3sprite is the positive control.
-        clr     <SPRIDX
+*     The shape is in VRAM at MAPBASE's top 64 bytes (plan 7), written with
+*     ordinary VDATA writes: eight rows of $FF,0,0,0 - columns 0-7 opaque in
+*     sub-palette 1, an 8 x 8 - and the other eight rows left zero.
+        lda     #${SHAPE_AT >> 16:02X}
+        sta     <WPTR2
+        lda     #${(SHAPE_AT >> 8) & 0xFF:02X}
+        sta     <WPTR1
+        lda     #${SHAPE_AT & 0xFF:02X}
+        sta     <WPTR0
         ldb     #8
-sp1     lda     #$FF            eight rows, every pixel opaque in sub-palette 1
-        sta     <SPRDAT
-        clr     <SPRDAT
+sp1     lda     #$FF
+        sta     <VDATA          low plane, columns 0-7
+        clr     <VDATA
+        clr     <VDATA
+        clr     <VDATA
         decb
         bne     sp1
+        ldb     #32
+sp0     clr     <VDATA          rows 8-15 transparent
+        decb
+        bne     sp0
         lda     #$20
         sta     <SPRX           x = 32
         lda     #$08

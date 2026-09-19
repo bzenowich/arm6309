@@ -40,14 +40,13 @@ PIN = SPANBUSY ;
 PIN = CBUSY ;
 PIN = VBLANK ;
 PIN = HLOAD ;
-PIN = BLANK ;
 PIN = RETIRE ;
 PIN = GRD ;
 PIN = D6 ;
 PIN = CEOR ;
 PIN = CHLAST ;
 PIN = GCPY ;
-PIN = MUXSEL0 ;
+PIN = DP0 ;
 PIN = WROWADV ;
 
 /* --- outputs ------------------------------------------------------ */
@@ -59,21 +58,23 @@ PIN = RA3 ;
 PIN = RA4 ;
 PIN = PALTURN ;
 PIN = PBUSY ;
-PIN = LUTWE ;
-PIN = OMR ;
+PIN = !LUTWE ;
 PIN = PIDXCE ;
 PIN = WSTBV ;
 PIN = WSTART ;
-PIN = WSTB ;
+PIN = !WSTB ;
 PIN = WSTEP ;
 PIN = !RDCK ;
-PIN = RDOE ;
+PIN = !PWCK ;
+PIN = !RDOE ;
 PIN = RDREQ ;
 PIN = !WAITN ;
+PIN = IRQPEND ;
 PIN = !IRQN ;
-PIN = VSTATOE ;
-PIN = RDBKOE ;
+PIN = !VSTATOE ;
+PIN = !RDBKOE ;
 PIN = CRDSEL ;
+PIN = DIR ;
 PIN = CSTEP ;
 PIN = CROWADV ;
 PIN = CWLOAD ;
@@ -96,12 +97,9 @@ PINNODE = PS0 ;
 PINNODE = PS1 ;
 PINNODE = PS2 ;
 PINNODE = PS3 ;
-PINNODE = BD1 ;
-PINNODE = BD2 ;
 PINNODE = WPQ ;
 PINNODE = RDVALID ;
 PINNODE = RPQ ;
-PINNODE = IRQPEND ;
 PINNODE = VBLQ ;
 PINNODE = IRQEN ;
 PINNODE = CPH ;
@@ -140,9 +138,6 @@ PBUSY = PPEND
         # PS2
         # PS3 ;
 LUTWE = PS1 ;
-BD1.d = BLANK ;
-BD2.d = BD1 ;
-OMR = !BD2 ;
 PIDXCE = PS3 ;
 VDSEL = IOSEL & A6 & A5 & !A4 & A3 & A2 & !A1 & !A0 ;
 VPORT = !IOSEL & !IOPGH & A19 & !A20
@@ -163,10 +158,12 @@ RPQ.d = VPORT & RW & E ;
 RSTART = RPQ & !E ;
 WSTEP = CSTEP
         # RSTART ;
-RDCK = RDCKP
+RDCK = RDCKP ;
+PWCK = WSTBV
        # CTICK & !CPH ;
 RDOE = VPORT & RW ;
-RDREQ = !RDVALID ;
+RDREQ = !RDVALID & !E & !WPQ & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4
+        # !RDVALID & E & RW & VPORT & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 ;
 CARDBUSY = SPANBUSY
            # CBUSY
            # RP1
@@ -188,17 +185,20 @@ VSTATOE = IOSEL & A6 & A5 & !A4 & A3 & A2 & !A1 & A0 & RW & E ;
 RDBKOE = IOSEL & A6 & A5 & RW & E & A4
          # IOSEL & A6 & A5 & RW & E & !A3
          # IOSEL & A6 & A5 & RW & E & !A2
-         # IOSEL & A6 & A5 & RW & E & A1 ;
-CTICK = GCPY & MUXSEL0 ;
+         # IOSEL & A6 & A5 & RW & E & A1
+         # WSTB
+         # WSTBV ;
+CTICK = GCPY & DP0 ;
 CPH.d = CBUSY & CTICK & !CPH
         # CBUSY & !CTICK & CPH ;
 CRDSEL = CBUSY & !CPH ;
+DIR = !GRD & !CRDSEL ;
 CSTEP = CTICK & CPH ;
 CROWADV = CSTEP & CEOR ;
 CWLOAD = CROWADV
          # !CBUSY ;
 CDONE = CROWADV & CHLAST ;
-RCPY = CBUSY ;
+RCPY = CBUSY & !RP1 & !RP2 & !RP3 & !RP4 ;
 CRLD.d = CROWADV
          # CRLD & !RP4 ;
 RP1.d = !RP1 & !RP2 & !RP3 & !RP4 & WROWADV ;
@@ -225,6 +225,6 @@ CPURF = IOSEL & A6 & A5 & E & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
-[PDQ,PPEND,PS0,PS1,PS2,PS3,BD1,BD2,WPQ,RDVALID,RPQ,IRQPEND].ck = CLK25 ;
-[VBLQ,IRQEN,CPH,CRLD,RP1,RP2,RP3,RP4].ck = CLK25 ;
+[PDQ,PPEND,PS0,PS1,PS2,PS3,WPQ,RDVALID,RPQ,IRQPEND,VBLQ].ck = CLK25 ;
+[IRQEN,CPH,CRLD,RP1,RP2,RP3,RP4].ck = CLK25 ;
 

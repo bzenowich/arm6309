@@ -1,4 +1,4 @@
-# `hardware/gal/video3/` — video3's CPLD designs
+# `hardware/gal/video3/` — video3's programmable parts
 
 ```sh
 cd hardware
@@ -14,19 +14,19 @@ appears only in the fitter's stdout, never in the `.fit`**: `fit1508.sh` require
 sentence, which is the only thing standing between a failed fit and a *convincing*
 `.fit` left over from the last one. `CLAUDE.md`'s trap list has both.
 
-⭐ **All four parts take the register broadcast** (`RA4..RA0` + `REGWR`) and decode their
-own offsets from `regmap.ts`, which is the single table plan §10 specifies. **2026-09-16.**
+⭐ **All four CPLDs take the register broadcast** (`RA4..RA0` + `REGWR`) and decode their
+own offsets from `regmap.ts`, which is the single table plan §10 specifies.
 
 | | cells | I/O | cascades | |
 |---|---|---|---|---|
-| `v3scan` | 100 / 128 | ⚠ **64 / 64** | 2 | the map word in silicon |
-| `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⭐ the map word in four `'574` |
-| **`v3dot`** | **120 / 128** | 50 / 64 | ⚠ **5** | ⭐ the build — a 16×16 sprite, shifters in 4 × `'165` |
+| **`v3scan`** | **112 / 128** | 63 / 64 | 3 | ⭐ the build — the map word in silicon, the attribute onto the LUT |
+| `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | the map word in four `'574` — ⚠ a fit of the 2026-09-16 term list, before the four-byte cell and the three-stage attribute |
+| **`v3dot`** | **121 / 128** | 63 / 64 | ⚠ **5** | ⭐ the build — a 16×16 sprite, shifters in 4 × `'165` |
 | `v3dot_si` | — | — | — | ⛔ shifters in silicon: **`Design does not fit`** |
-| **`v3ptr`** | **125 / 128** | 55 / 64 | **3** | ⭐ the build — ascending copies only |
+| **`v3ptr`** | **122 / 128** | 57 / 64 | **3** | ⭐ the build — ascending copies only |
 | `v3ptr_rows` | — | — | — | ⛔ row direction: **`INTERNAL ERROR`** |
 | `v3ptr_both` | — | — | — | ⛔ both directions: **`INTERNAL ERROR`** |
-| **`v3host`** | **55 / 128** | ⛔ **63 / 64** | **0** | ⭐ the build — the broadcast |
+| **`v3host`** | **58 / 128** | ⛔ **64 / 64** | **0** | ⭐ the build — the broadcast |
 | `v3host_st` | 51 / 128 | ⛔ **64 / 64** | 0 | one load strobe per register — **replaced** |
 
 ⛔ **Keep a rejected variant's fit, do not overwrite it.** The three `v3ptr` rows are the
@@ -56,8 +56,16 @@ nastiest trap, live. `fit1508.sh` requires the sentence *"Design fits successful
 which appears only in stdout, and refused to copy it out. **A rejected variant gets a
 fit only when it fits.**
 
-## Not written yet
+## `v3lane` — the one GAL
 
-`v3host`. `v3scan` was fitted first because `partition.md` §2.2 called
-it the tightest, and because it carries the address mux — `graphics.md` §10.1.2's "the
-one place merging costs silicon rather than saving it".
+`v3lane.jedec.ts` is a `GAL22V10`, 10 of 10 macrocells and 10 inputs: the four lane
+`'245`s' `/OE`, the four byte enables, `PWOE` and `RFOE` (`partition.md` §2.5). Like every
+GAL here it ships with a CUPL reference, `gal/jedec/reference/v3lane.cupl.jed`, and
+
+```sh
+bun run gal/video3/v3lane.check.ts     # part of npm run check
+```
+
+writes `v3lane.jed`, `.doc` and `.pld` and sweeps all 1,024 inputs — the fuse map
+against a model written from the board's rules, then against CUPL's compile of the
+`.pld`.

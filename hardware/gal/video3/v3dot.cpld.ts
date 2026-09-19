@@ -16,14 +16,11 @@ import { toCupl, type Merged } from "../jedec/cupl"
 import type { Cell } from "../jedec/assemble"
 import { BROADCAST, decodeCells, type RegName } from "./regmap"
 import { counterTerms, loadable } from "../jedec/counter"
+import { sop } from "../jedec/truth"
 
-/* ⭐ partition.md §8's costed escape: the sprite's shift registers as '165
- * rather than macrocells.  A switch, not a comment - both sides fitted, the
- * way ARM6309_LIST is in gal/video.cpld.ts.
- *
- * ⚠ FOUR OF THEM SINCE 2026-09-17, not two: the sprite is 16 x 16 (plan §7),
- * so a row is 32 bits and each plane is two cascaded '165. */
-export const SPRSHIFT_DISCRETE = (process.env.V3_SPRSHIFT ?? "discrete") === "discrete"
+/* ⭐ The sprite's shift registers are four '165, two cascaded a plane
+ * (partition.md §8's escape, which §5 risk 3 made a requirement): with them in
+ * silicon this part answers `Design does not fit`. */
 
 const reg = (name: string, terms: string[]): Cell =>
   ({ pin: 0, name, assertedLow: false, s0: 1 as const, registered: true, terms })
@@ -65,78 +62,87 @@ const vcount: Cell[] = [
  * the register bus, so one CPU store writes both copies: two macrocells and no
  * pins.  graphics.md §8.2 went the same way for a harder reason. */
 const ctrl: Cell[] = [
-  ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) =>
-    reg(`CT${b}`, [`LDCTRL & D${b}`, `CT${b} & !LDCTRL`])),
+  /* b5..4 are WMODE, and they leave as WM0/WM1 (below) for v3ptr's span
+   * writer and v3lane. ⛔ As the REGISTERS on two pins the part was refused;
+   * as two combinational copies of them it fits. */
+  /* ⛔ NOT b6: the VBL interrupt enable is v3host's (IRQEN, beside /IRQ), and
+   * a copy here was a macrocell nothing read - check:reach, once video3 had a
+   * board file to count the rest against. */
+  ...[0, 1, 2, 3, 4, 5, 7].map((b) => {
+    const n = `CT${b}`
+    return reg(n, [`LDCTRL & D${b}`, `${n} & !LDCTRL`])
+  }),
   ...[0, 1].map((b) => reg(`HS${b}`, [`LDHSL & D${b}`, `HS${b} & !LDHSL`])),
+  /* ⭐ AND HSCROLL[2], for tile mode's cell phase (graphics.md §6.4.9: the map
+   * access runs a slot earlier when the column counter's cells start half a
+   * cell into a slot pair). One more duplicate, for the same reason as the two
+   * above: it is consumed here, at slot rate, by the map request. */
+  reg("HS2", ["LDHSL & D2", "HS2 & !LDHSL"]),
 ]
 
 /* -- the sprite: plan §7, bitmap mode only -------------------------------
  *
- * ⛔ THE POSITION IS NOT COMPARED, IT IS COUNTED DOWN.  A ten-bit equality is
- * an XNOR per bit ANDed together, and in sum-of-products that is 2^10 product
+ * ⛔ THE POSITION IS NOT COMPARED, IT IS COUNTED.  A ten-bit equality is an
+ * XNOR per bit ANDed together, and in sum-of-products that is 2^10 product
  * terms - a CPLD substitutes a combinational intermediate where it is read, so
- * there is nowhere for the XNORs to hide.  A down-counter loaded with SPRX and
- * decremented per dot reaches zero at the same instant, and its terminal count
- * is ONE term of ten literals.  graphics.md §6.4.9 makes the same move for the
- * map's column: "one ahead costs a counter, not an adder".
- *
- * ⚠ And it removes the pixel-column counter this file had a moment ago: the
- * counter IS the comparison. */
+ * there is nowhere for the XNORs to hide.  A counter loaded with the
+ * COMPLEMENT of SPRX and counted up a dot at a time is all-ones on exactly the
+ * dot x = SPRX (~SPRX + SPRX = 1023), and all-ones is ONE term of ten
+ * literals - vlen.jedec.ts's idiom, and counter.ts's `loadable`, which the
+ * other counters on this card already prove. A register holds the hit for the
+ * rest of the line (SPRY's likewise for the rest of the frame); the counter
+ * runs on and cannot come round to all-ones again, because a line is 640 dots
+ * and a frame 480 rows, both short of the wrap.
+ * ⛔ IT WAS A HOLD-AT-ZERO DOWN-COUNTER THAT NEVER COUNTED: bit 0's
+ * decrement term was dropped by a filter meant for a different term, and its
+ * hold-at-zero term was `SVC0 & !SVC0`. No bench had run it; v3card_tb's first
+ * sprite frame showed no sprite at all. */
 const SHC = [...Array(10).keys()].map((b) => `SHC${b}`)
 const SVC = [...Array(9).keys()].map((b) => `SVC${b}`)
 const SPRXB = [...Array(10).keys()].map((b) => `SX${b}`)
 const SPRYB = [...Array(9).keys()].map((b) => `SY${b}`)
+const SR = [...Array(5).keys()].map((b) => `SR${b}`)
+const allOnes = (bits: string[]) => bits.join(" & ")
 
-/* down-counter: hold at zero, so the terminal count is stable for the line */
-const downTo0 = (bits: string[], en: string, load: string, from: string[]): Cell[] =>
-  bits.map((q, i) => {
-    const lower = bits.slice(0, i)
-    const zero = bits.map((b) => `!${b}`).join(" & ")
-    const borrow = lower.map((b) => `!${b}`)
-    return reg(q, [
-      `${load} & ${from[i]}`,
-      `!${load} & !${en} & ${q}`,
-      `!${load} & ${en} & ${q} & ${zero}`,
-      ...(lower.length
-        ? [`!${load} & ${en} & ${q} & !(${borrow.join(" & ")})`.replace(
-            /!\(([^)]*)\)/, (_m, g) => g.split(" & ").map((l: string) => l.replace("!", "")).join(" # "))]
-        : []),
-      `!${load} & ${en} & !${q} & ${borrow.concat([]).join(" & ") || "1"}`,
-    ].filter((t) => !t.includes("& 1")))
-  })
-
+/* ⭐ THE SHAPE IS IN VRAM, and the row counter is its address (plan §7).
+ * A sprite row is one spare access in horizontal blanking - four bytes, one
+ * fetch group - and the four '165 load straight off the four byte lanes of the
+ * framebuffer's data bus, so the shape never enters a CPLD and never crosses
+ * the register file. This part drives FBA5..FBA2 with the row, v3scan drives
+ * the rest with the base (MAPBASE's top 64 bytes, which bitmap mode has no
+ * other use for).
+ * ⛔ It was in the register file, above +$1F, and nothing could reach it: the
+ * file's address is RFA4..RFA0, and a shape read needs a sixth and seventh
+ * bit, an arbiter against the span writer's colour reads, and four '165 load
+ * strobes - about fifteen pins, on a card whose four parts had nine between
+ * them. partition.md §3.1 rejected VRAM as "v3dot on the arbiter and PB on it";
+ * the '165s on the lanes take neither. */
 const sprite: Cell[] = [
   ...SPRXB.map((n, i) => reg(n, [`LD${i < 8 ? "SPRX" : "SPRH"} & D${i < 8 ? i : i - 8}`,
                                  `${n} & !LD${i < 8 ? "SPRX" : "SPRH"}`])),
   ...SPRYB.map((n, i) => reg(n, [`LD${i < 8 ? "SPRY" : "SPRH"} & D${i < 8 ? i : 2}`,
                                  `${n} & !LD${i < 8 ? "SPRY" : "SPRH"}`])),
   reg("SPREN", ["LDSPRH & D7", "SPREN & !LDSPRH"]),
-  /* SPRIDX: 64 shape bytes (16 rows x 4), so six bits where 8 x 8 had four */
-  ...[0, 1, 2, 3, 4, 5].map((b) => reg(`SI${b}`,
-    [`LDSPRIX & D${b}`, ...counterTerms({ bits: [0,1,2,3,4,5].map((i) => `SI${i}`), enable: "LDSPRDA" })[b]
-      .map((t) => `!LDSPRIX & ${t}`)])),
-  ...downTo0(SHC, "ACTIVE", "HLOAD", SPRXB),
-  ...downTo0(SVC, "ROWADV", "VLOAD", SPRYB),
-  /* the window counters: sixteen columns and sixteen rows (plan §7), so four
-   * bits each where the 8 x 8 sprite had three */
-  ...[0, 1, 2, 3].map((b) => reg(`SW${b}`, counterTerms({
-    bits: [0, 1, 2, 3].map((i) => `SW${i}`), enable: "SPRSH", clear: "SPRHIT",
-  })[b])),
-  ...[0, 1, 2, 3].map((b) => reg(`SR${b}`, counterTerms({
-    bits: [0, 1, 2, 3].map((i) => `SR${i}`), enable: "ROWADV", clear: "SPRVHIT",
-  })[b])),
-  /* the row's two bytes, serialised a dot at a time into the ATTR path.
-   * ⭐ Affordable here and not for graphics.md §6.4.3's Variant B, and the
-   * difference is one register: this output is re-registered by the ATTR latch
-   * before the LUT, so it has a whole dot to settle.
-   * ⚠ V3_SPRSHIFT=discrete puts it in two '165 instead - partition.md §8's
-   * costed escape, and the board has already paid for it. */
-  ...(SPRSHIFT_DISCRETE ? [] :
-    [0, 1].map((h) => [...Array(16).keys()].map((b) => reg(`SH${h}${b}`,
-      b === 15
-        ? [`SPRLD & D7`, `!SPRLD & !SPRSH & SH${h}15`]
-        : [`SPRLD & D${b % 8}`, `!SPRLD & SPRSH & SH${h}${b + 1}`,
-           `!SPRLD & !SPRSH & SH${h}${b}`]))).flat()),
+  ...SHC.map((q, i) => reg(q, loadable(SHC, "ACTIVE", "HLOAD", SPRXB.map((b) => `!${b}`))[i])),
+  ...SVC.map((q, i) => reg(q, loadable(SVC, "ROWADV", "VLOAD", SPRYB.map((b) => `!${b}`))[i])),
+  /* the hits, held: from the dot (row) the counter is all-ones on, to the end
+   * of the line (frame) */
+  /* ⚠ INSIDE ACTIVE, both ways: held only while the picture runs, and the
+   * window only there. The row is loaded in slot 8, and a hit still held from
+   * the line before - or an all-ones counter straight after HLOAD, at SPRX 0 -
+   * shifted the whole row out in the blanking before it (v3card_tb). */
+  reg("SHQ", ["SHQ & ACTIVE", `${allOnes(SHC)} & ACTIVE`]),
+  reg("SVQ", ["SVQ & !VLOAD", `${allOnes(SVC)} & ROWADV`]),
+  /* the sprite row, 0..15 - and it IS the shape address. Counts picture rows
+   * from SPRY and stops at 16 (SR4), so nothing past the shape is fetched;
+   * cleared through vertical blanking. */
+  ...SR.map((q, i) => reg(q, loadable(SR, "ROWADV & SPRROW", "VLOAD", SR.map(() => "0"))[i]
+    .filter((t) => !t.endsWith("& 0")))),
+  /* ⭐ the two sprite bits onto LUT A9..A8, re-registered here (plan §3's
+   * "the register is the difference": the '165 output has a whole dot to
+   * settle). Zero outside the sprite, so bitmap and tile mode read
+   * sub-palette 0; stood off in character mode and during a palette turn. */
+  ...[0, 1].map((b) => ({ ...reg(`SPRA${b}`, [`SQ${b} & SPRACT`]), oe: "SPRAOE" })),
 ]
 
 /* -- the dot path, the cadence, the arbiter ------------------------------ */
@@ -169,6 +175,11 @@ const sprite: Cell[] = [
  * HLAST, and at 199 ACTIVE is already clear. */
 const ACTSET = "SLOTTICK & !HC7 & !HC6 & HC5 & !HC4 & !HC3 & !HC2 & HC1 & HC0"  // HC = 35
 const ACTCLR = ["SLOTTICK", "HC7", "HC6", "HC1", "HC0"]                         // HC = 195
+/* the fine scroll, as the rank select and the '153 phase see it: zero in
+ * character mode, which has no horizontal scroll (plan §2.5) */
+const FINE = ["DP1", "DP0", "HS1", "HS0", "MODE0"]
+const p = (v: Record<string, boolean>) => v.MODE0 ? 0 : (v.HS1 ? 2 : 0) + (v.HS0 ? 1 : 0)
+const dp = (v: Record<string, boolean>) => (v.DP1 ? 2 : 0) + (v.DP0 ? 1 : 0)
 const dotPath: Cell[] = [
   comb("SLOTTICK", ["DP1 & DP0"]),
   comb("HBLANK", ["!ACTIVE"]),
@@ -182,75 +193,114 @@ const dotPath: Cell[] = [
   comb("BLANK", ["HBLANK", "VBLANK", "!CT7"]),
   comb("FRAMEEND", ["SLOTTICK & HLAST & VTC"]),
   comb("LINETICK", ["SLOTTICK & HLAST"]),
-  /* the cadence v3scan and v3ptr are timed from (signals.md §1.1) */
-  /* ⛔ ONCE A SLOT, NOT ONCE A DOT. FETCH is v3scan's column counter's enable,
-   * and it was ACTIVE - a level for the whole visible line - so the bitmap scan
-   * address stepped four times a slot: v3card_tb's first frame showed each
-   * four-byte group 16 bytes on from the last, and ran off the 640 filled
-   * columns a quarter of the way across. The counter steps on the edge that
-   * ends the slot, which is the edge the fetch ranks capture the group on. */
-  /* ⛔ AND TWO SLOTS BEFORE THE PICTURE. A group reaches the '153 two slots
-   * after it is addressed (rank A, then rank B), so a counter that starts with
-   * the picture shows group 0 three times: v3card_tb's frame began `03 00 01 02
-   * 03 00 01 02 03 00 01 02 03 04 ..`, eight pixels late. video/ opened its
-   * fetch early for the same reason ("TFETCH opening one slot early").
-   * ⭐ SO THE COUNTER COUNTS EVERY SLOT, and HLOAD is what places it: the load
-   * wins over the count (counter.ts `loadable`), and HLOAD is HC 32-33, the two
-   * slots before the fetch that has to be group 0. What the counter does in the
-   * rest of the blank only fetches groups nobody sees. A windowed FETCH (HC >= 34
-   * and SLOTTICK) did the same thing and this part could not fit it: "Grouping
-   * fail" at 90%. */
-  comb("FETCH", ["SLOTTICK"]),
+  /* ⭐ THE SPARE WINDOW IS DOTS 0-1, THE DISPLAY ACCESS DOTS 2-3. SPARE is also
+   * the fetch ranks' CLOCK: it rises on the edge that ends the display access,
+   * which is when the group is on the lanes - a '574 needs an edge, and this
+   * is a register bit's own output rather than a decode. */
   comb("SPARE", ["!DP1"]),
-  comb("CELLTICK", ["SLOTTICK & !HC0"]),
-  /* HC 32-33: the counter's load, two slots before the picture (FETCH above).
-   * Always blank - ACTIVE starts at 36. */
-  comb("HLOAD", ["!HC7 & !HC6 & HC5 & !HC4 & !HC3 & !HC2 & !HC1"]),
+  /* ⭐ HC 30-33: every counter that starts a line loads here. The scan column
+   * counter counts every slot (v3scan steps on DP1 & DP0) and the load wins,
+   * so it holds HSCROLL through slot 33 and names group 0 in slot 34, two
+   * slots before the picture - rank A, then rank B. The map column loads on
+   * this window's FIRST dot (v3scan's HLQ), which is what lets the first map
+   * access be as early as slot 31. Always blank: ACTIVE starts at 36. */
+  comb("HLOAD", ["!HC7 & !HC6 & HC5 & !HC4 & !HC3 & !HC2 & !HC1",
+                 "!HC7 & !HC6 & !HC5 & HC4 & HC3 & HC2 & HC1"]),
   comb("VLOAD", ["VBLANK"]),
   comb("ROWADV", ["LINETICK & VACTIVE & !DBLHOLD"]),
-  comb("MCADV", ["CELLTICK"]),
-  comb("MAPLD", ["SPARE & CELLTICK"]),
-  reg("DBLHOLD", ["LINETICK & !DBLHOLD & !CT1", "DBLHOLD & !LINETICK"]),
+  /* ⛔ AND THE PAIR's PHASE IS SET EVERY FRAME. DBLHOLD toggled on every
+   * line, and both families have an ODD number of lines (449, 525), so which
+   * line of a doubled pair advanced the row flipped from one frame to the next
+   * - every other frame of a 200- or 240-row picture was a line out, and
+   * v3card_tb's second doubled frame showed row 1 on line 1. Held set through
+   * vertical blanking, so the first picture line is always a pair's first. */
+  reg("DBLHOLD", ["VBLANK & !CT1", "LINETICK & !DBLHOLD & !CT1", "DBLHOLD & !LINETICK"]),
+  /* ⭐ THE MAP CADENCE - graphics.md §6.4.9, rebuilt. ⛔ It never ran: MAPLD was
+   * `SPARE & CELLTICK` and the grant `SPARE & (CELLTICK & MODE)`, and CELLTICK
+   * is dot 3 while SPARE is dots 0-1, so neither could ever be true and
+   * character and tile mode fetched no map at all.
+   *
+   * MRQ is the request for the CURRENT slot, a register loaded on the tick
+   * that ends the slot before - so every grant, the address mux's select and
+   * the map latch read one literal where the decode was a sum that CUPL would
+   * have substituted into all of them. One access a cell, in the slot whose
+   * parity is HC0 == HSCROLL[2] (the cell phase, H0 xor HS2):
+   *
+   *   HS2 = 0   access 32, 34 .. 194   code handed over at the end of 33 .. 195
+   *   HS2 = 1   access 31, 33 .. 193   handed over at the end of 32 .. 194
+   *
+   * The code for cell k is fetched a cell ahead of its tile fetch (§6.4.9's
+   * lead), and at HS2 = 1 the line takes 81 codes. The trailing accesses past
+   * the picture fetch cells nobody sees; the one at 194 is what closes the last
+   * attribute into the ATTR latch (below). MWIN is the window, 30..193, as a
+   * register for the same reason ACTIVE is one.
+   *
+   * ⭐ AND IN BITMAP MODE THE SAME REQUEST IS THE SPRITE's ROW FETCH, once a
+   * line in slot 8 - horizontal sync, long after the last shift and long
+   * before the first. Bitmap mode has no map, so the grant, the load strobe
+   * and v3scan's address source are free. */
+  reg("MWIN", ["SLOTTICK & !HC7 & !HC6 & !HC5 & HC4 & HC3 & HC2 & !HC1 & HC0",   // set, end of 29
+               ...["DP1", "DP0", "HC7", "HC6", "HC0"].map((l) => `MWIN & !${l}`)]), // clear, end of 193
+  reg("MRQ", [
+    "SLOTTICK & MWIN & MODE0 & HC0",                       // character: HS2 is zero
+    "SLOTTICK & MWIN & MODE1 & HC0 & !HS2",                // tile, HS2 = 0: even slots
+    "SLOTTICK & MWIN & MODE1 & !HC0 & HS2",                // tile, HS2 = 1: odd slots
+    "SLOTTICK & SPREN & !MODE0 & !MODE1 & SPRROW & " +     // the sprite row, slot 8
+      "!HC7 & !HC6 & !HC5 & !HC4 & !HC3 & HC2 & HC1 & HC0",
+    "MRQ & !DP1", "MRQ & !DP0",
+  ]),
+  comb("MAPREQ", ["MRQ"]),
   /* the dot-path clocks and enables */
-  comb("MUXSEL0", ["DP0"]),
-  comb("MUXSEL1", ["DP1"]),
+  /* ⭐ THE '153 PHASE IS THE DOT PLUS HSCROLL[1:0] (graphics.md §8.2): at fine
+   * scroll p the leftmost pixel of a slot is byte p of the group. */
+  comb("MUXSEL0", sop(FINE, (v) => ((dp(v) + p(v)) & 1) === 1)),
+  comb("MUXSEL1", sop(FINE, (v) => ((dp(v) + p(v)) & 2) === 2)),
   comb("PIXOE", ["!PALTURN"]),
-  comb("ATOE", ["!PALTURN & MODE1 # !PALTURN & MODE0"]),
+  /* ⭐ v3scan's ATO drives LUT A15..A8 in character mode and nowhere else:
+   * the sprite drives A9..A8 itself (SPRA), and tile mode's ATTR is zero,
+   * which the pull-downs on A15..A8 give when nothing drives them. */
+  comb("ATOE", ["!PALTURN & MODE0"]),
   comb("PIDXOE", ["PALTURN"]),
-  /* ⛔ OMR IS v3host's NOW - see BD1/BD2 there. The '273's /MR has to see the
-   * blanking the PIXEL sees, two registers late, and this part has no cells. */
-  comb("FOE0", ["HS0 # HS1"]),
-  comb("FOE1", ["!HS0 & !HS1"]),
-  ...(SPRSHIFT_DISCRETE ? [] : [comb("SPRA0", ["SPRACT & SH00"]),
-                                comb("SPRA1", ["SPRACT & SH10"])]),
-  comb("SPRACT", ["SPREN & !MODE1 & !MODE0 & SPRROW & !SW3"]),
+  comb("SPRAOE", ["!PALTURN & !MODE0"]),
+  /* ⭐ THE '273 PAIR's /MR, AND IT HAS TO BE THE BLANKING THE PIXEL SEES.
+   * plan §3's chain puts two registers after the '153 - the index '574, then
+   * the '273 - so a dot reaches the connector two dots after BLANK says it
+   * may. /MR on the undelayed BLANK blanked the first two pixels of every line
+   * and showed two from past its end (v3card_tb). video/ delayed its blank for
+   * the same reason (BLANKD). OMR is the second stage, inverted: asserted =
+   * the pixel may show. */
+  reg("BD1", ["BLANK"]),
+  reg("OMR", ["!BD1"]),
+  /* ⭐ THE RANK SELECT IS PER CHIP (graphics.md §8.2): at fine scroll p, chip c
+   * shows the NEXT group exactly when c < p. Chip 3 is always rank B, so its
+   * pair is strapped on the board. ⛔ It was one pair for all four chips, and
+   * the '153 phase was the bare dot - so a scroll that was not a multiple of
+   * four showed the wrong rank on some chips and the wrong byte on all. Each
+   * pair is a complement in silicon: a '574 has one /OE and the board has no
+   * inverter. */
+  comb("OEA0", sop(["HS1", "HS0", "MODE0"], (v) => p(v) > 0)),
+  comb("OEB0", sop(["HS1", "HS0", "MODE0"], (v) => !(p(v) > 0))),
+  comb("OEA1", sop(["HS1", "HS0", "MODE0"], (v) => p(v) > 1)),
+  comb("OEB1", sop(["HS1", "HS0", "MODE0"], (v) => !(p(v) > 1))),
+  comb("OEA2", sop(["HS1", "HS0", "MODE0"], (v) => p(v) > 2)),
+  comb("OEB2", sop(["HS1", "HS0", "MODE0"], (v) => !(p(v) > 2))),
+  /* the sprite: from SPRX to the end of the line, because the '165 chains shift
+   * in zeros behind the shape - so the window needs no counter of its own */
+  comb("SPRACT", ["SPREN & !MODE1 & !MODE0 & SPRROW & SPRHIT & ACTIVE"]),
   comb("SPRSH", ["SPRACT"]),
-  comb("SPRLD", ["HBLANK & SPRROW & HC3 & !HC4"]),
-  /* ⭐ the arbiter.  ONE place decides the spare access, and FBOE follows from
-   * it - so the two parts on the address bus can never both drive. */
-  /* ⛔ RMAP AND RRD WERE INPUT PINS THAT NOTHING PRODUCED - the two requests
-   * of the four that had no requester (check:reach, 2026-09-18). Neither
-   * needed a block:
-   *
-   *   RMAP  ⭐ IS THIS PART'S OWN CELLTICK. The map word is fetched once a
-   *         cell and MAPLD is already `SPARE & CELLTICK`, so a separate
-   *         request signal would have been the same decode under a second
-   *         name - and importing it spent a pin on a signal this part makes.
-   *         ⚠ QUALIFIED BY MODE, which MAPLD is not: bitmap mode has no map,
-   *         and granting it an access there would spend the slot's only spare
-   *         on a fetch nothing reads.
-   *   RRD   is v3host's RDREQ - `!RDVALID`, "the prefetch wants a refill".
-   *         §11's request under its own name, and video/ spells it the same
-   *         way (video.parts.ts: "!RDVALID & SPAREWIN").
-   *
-   * ⚠ The priority order is unchanged; only the names of the top two
-   * requests are. */
-  comb("MAPREQ", ["CELLTICK & MODE0", "CELLTICK & MODE1"]),
+  /* the '165s' parallel load, while the row is on the lanes */
+  comb("SPRLD", ["MRQ & !DP1 & DP0 & !MODE0 & !MODE1"]),
+  /* the row, onto FBA5..FBA2 for the sprite's access; v3scan drives the rest */
+  ...[2, 3, 4, 5].map((b) => ({
+    ...comb(`FBA${b}`, [`SR${b - 2}`]), oe: "MRQ & !DP1 & !MODE0 & !MODE1" })),
+  /* ⭐ the arbiter.  ONE place decides the spare access, and every bus enable
+   * follows from it - so no two parts ever drive the address bus. The map
+   * (or the sprite row) outranks everything: refuse it and the picture is
+   * wrong, every frame. Then the CPU's prefetch, the copy, the span writer. */
   comb("GMAP", ["SPARE & MAPREQ"]),
   comb("GRD", ["SPARE & !MAPREQ & RDREQ"]),
   comb("GCPY", ["SPARE & !MAPREQ & !RDREQ & RCPY"]),
-  comb("GSPN", ["SPARE & !MAPREQ & !RDREQ & !RCPY & RSPN"]),
-  comb("FBOESCAN", ["!SPARE", "GMAP"]),
+  comb("GSPN", ["SPARE & !MAPREQ & !RDREQ & !RCPY & SPANBUSY"]),
   comb("FBOEPTR", ["GRD", "GCPY", "GSPN"]),
   /* ⛔ these were declared as INPUTS in the draft the fitter refused.  Every one
    * is a decode of this part's own counters: importing them spent five pins on
@@ -277,17 +327,29 @@ const dotPath: Cell[] = [
    * is 0b1000001100, where VC8 is clear and `VC9 & VC8 & ...` cannot either.
    * Each value is unique in its own range, so three literals name it. */
   comb("VTC", ["VC8 & VC7 & VC6 & !M0", "VC9 & VC3 & VC2 & M0"]),
-  comb("SPRVHIT", SVC.map((b) => `!${b}`).join(" & ").split("\u0000")),
-  comb("SPRHIT", SHC.map((b) => `!${b}`).join(" & ").split("\u0000")),
-  comb("SPRROW", ["SPRVHIT", "!SR3"]),
+  comb("SPRVHIT", [allOnes(SVC), "SVQ"]),
+  comb("SPRHIT", [allOnes(SHC), "SHQ"]),
+  comb("SPRROW", ["SPRVHIT & !SR4"]),
+  comb("VMODE0", ["CT0"]),
   comb("MODE0", ["CT2"]),
   comb("MODE1", ["CT3"]),
-  comb("VMODE0", ["CT0"]),
+  comb("WM0", ["CT4"]),
+  comb("WM1", ["CT5"]),
 ]
+
+const LOW = new Set(["OEA0", "OEA1", "OEA2", "OEB0", "OEB1", "OEB2", "PIXOE", "PIDXOE",
+  "SPRLD", "SPRSH", "LDPIDXL", "LDPIDXH"])
 
 /* the offsets this part answers to */
 const MY_REGS: RegName[] = [
-  "LDCTRL", "LDHSL", "LDSPRX", "LDSPRY", "LDSPRH", "LDSPRIX", "LDSPRDA",
+  "LDCTRL", "LDHSL", "LDSPRX", "LDSPRY", "LDSPRH",
+  /* ⭐ the palette's four load strobes, for the discrete latches (plan §13.1):
+   * PIDX low ('163 /LD), PIDX high ('574 clock), PDATL and PDATH ('573 LE).
+   * Nothing made them - v3host decodes PDATH for its own commit and nothing
+   * else - and a '138 cannot: +$0E/+$0F and +$10/+$11 differ in all of
+   * RA4..RA1, which is four enables' worth of condition on a part with three.
+   * Decoded here off the broadcast, a term each. */
+  "LDPIDXL", "LDPIDXH", "LDPDATL", "LDPDATH",
 ]
 
 export const v3dot: Merged = {
@@ -306,22 +368,32 @@ export const v3dot: Merged = {
      * decoded on v3scan too - a shared register is free on the broadcast,
      * where a strobe made it a fan-out. */
     ...BROADCAST.map((n) => ({ name: n })),
-    { name: "RDREQ" }, { name: "RCPY" }, { name: "RSPN" },
+    { name: "RDREQ" }, { name: "RCPY" }, { name: "SPANBUSY" },
     { name: "PALTURN" },
+    /* the two '165 chains' serial outputs, one per plane */
+    { name: "SQ0" }, { name: "SQ1" },
   ],
   cells: [
-    ...decodeCells(MY_REGS),...hcount, ...vcount, ...ctrl, ...sprite, ...dotPath],
+    ...decodeCells(MY_REGS),...hcount, ...vcount, ...ctrl, ...sprite, ...dotPath]
+    /* ⭐ the pins whose consumer is active-low (check:pins holds each to the
+     * discrete part it drives); the equations stay in asserted sense */
+    .map((c) => (LOW.has(c.name) ? { ...c, assertedLow: true } : c)),
   external: new Set([
-    "HSYNC", "VSYNC", "BLANK", "MUXSEL0", "MUXSEL1", "PIXOE", "ATOE",
-    "PIDXOE", "FOE0", "FOE1", ...(SPRSHIFT_DISCRETE ? ["SPRLD", "SPRSH"] : ["SPRA0", "SPRA1"]),
-    "SLOTTICK", "FETCH", "SPARE", "CELLTICK", "HLOAD", "VLOAD", "ROWADV",
-    "MCADV", "MAPLD", "GMAP", "GRD", "GCPY", "GSPN", "FBOESCAN", "FBOEPTR",
-    "MODE0", "MODE1", "M0", "HBLANK", "VBLANK",
-  ]),
+    "HSYNC", "VSYNC", "BLANK", "HBLANK", "VBLANK", "OMR",
+    /* the dot path */
+    "MUXSEL0", "MUXSEL1", "PIXOE", "ATOE", "PIDXOE",
+    "OEA0", "OEB0", "OEA1", "OEB1", "OEA2", "OEB2",
+    "SPRLD", "SPRSH", "SPRA0", "SPRA1", "FBA2", "FBA3", "FBA4", "FBA5",
+    /* the cadence: the dot phase itself, the request, and the line loads -
+     * v3scan, v3ptr and v3host make their own ticks from these */
+    "DP0", "DP1", "SPARE", "MRQ", "HLOAD", "ROWADV",
+    "GRD", "GCPY", "GSPN", "FBOEPTR",
+    "MODE0", "MODE1",
+    "LDPIDXL", "LDPIDXH", "LDPDATL", "LDPDATH", "WM0", "WM1",
+]),
 }
 
 if (import.meta.main) {
-  console.log(`v3dot (sprshift=${SPRSHIFT_DISCRETE ? "discrete" : "silicon"}): ` +
-              `${v3dot.cells.length} cells, ${v3dot.inputs.length} declared inputs`)
+  console.log(`v3dot: ${v3dot.cells.length} cells, ${v3dot.inputs.length} declared inputs`)
   console.log(toCupl(v3dot))
 }

@@ -4,7 +4,7 @@
 *
 *   sh video3/bench/run-v3char.sh
 *
-* plan 2.2 and 3: the map is TWO bytes a cell and the attribute is the HIGH
+* plan 2.2 and 3: the map is FOUR bytes a cell (code, attr, two unused) and the attribute is the HIGH
 * eight bits of the LUT address, so a cell's colours are a sub-palette rather
 * than a bank.  A wrong ATTR path renders the right shapes in the wrong
 * colours - which a pixel-exact model catches and a register trace does not.
@@ -27,8 +27,6 @@ VSTAT   EQU     $FF6D
 SPRX    EQU     $FF7A
 SPRY    EQU     $FF7B
 SPRH    EQU     $FF7C
-SPRIDX  EQU     $FF7D
-SPRDAT  EQU     $FF7E
 MKV     EQU     $C20A           machine.c records this with every frame
 
 NGLYPH  EQU     8
@@ -91,7 +89,8 @@ gl2     lda     ,x+
         decb
         bne     gl1
 
-* --- the map: two bytes a cell, one VRAM row a cell row (plan 2.5)
+* --- the map: four bytes a cell - code, attr, and two the card must not read
+*     (plan 2.5) - one VRAM row a cell row
         ldx     #maptab
         clra
         ldb     #NROWS
@@ -103,8 +102,14 @@ mr1     pshs    a,b
         lsla                    row * 4 -> WPTR1, a 1024-byte stride
         sta     <WPTR1
         clr     <WPTR0
-        ldy     #160
+        ldy     #80
 mr2     lda     ,x+
+        sta     <VDATA          lane 0: the code
+        lda     ,x+
+        sta     <VDATA          lane 1: the attribute
+        lda     #$B0
+        sta     <VDATA          lanes 2 and 3: unused, and not the cell's
+        lda     #$77
         sta     <VDATA
         leay    -1,y
         bne     mr2
@@ -155,13 +160,27 @@ mr2     lda     ,x+
 * --- ⭐ plan 7's negative half.  Arm the sprite, PROVE the register took the
 *     enable - otherwise the test asserts nothing - and require that character
 *     mode shows no trace of it.  bench/v3sprite is the positive control.
-        clr     <SPRIDX
+*     The shape is in VRAM at MAPBASE's top 64 bytes (plan 7), written with
+*     ordinary VDATA writes: eight rows of $FF,0,0,0 - columns 0-7 opaque in
+*     sub-palette 1, an 8 x 8 - and the other eight rows left zero.
+        lda     #$02
+        sta     <WPTR2
+        lda     #$FF
+        sta     <WPTR1
+        lda     #$C0
+        sta     <WPTR0
         ldb     #8
-sp1     lda     #$FF            eight rows, every pixel opaque in sub-palette 1
-        sta     <SPRDAT
-        clr     <SPRDAT
+sp1     lda     #$FF
+        sta     <VDATA          low plane, columns 0-7
+        clr     <VDATA
+        clr     <VDATA
+        clr     <VDATA
         decb
         bne     sp1
+        ldb     #32
+sp0     clr     <VDATA          rows 8-15 transparent
+        decb
+        bne     sp0
         lda     #$20
         sta     <SPRX           x = 32
         lda     #$08

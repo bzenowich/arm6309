@@ -369,10 +369,14 @@ const spanWriter: Cell[] = [
    * a term. */
   ...MASK.map((name, i) => ({
     pin: 0, name, assertedLow: false, s0: 1 as const, registered: true,
-    terms: i === 7
-      ? [`WSTBV & D0`, `!WSTBV & !RETIRE & ${name}`]
-      : [`WSTBV & D${7 - i}`, `!WSTBV & RETIRE & MS${i + 1}`, `!WSTBV & !RETIRE & ${name}`],
+    terms: [`WSTBV & D${7 - i}`, `!WSTBV & RETIRE & MS${i + 1}`, `!WSTBV & !RETIRE & ${name}`],
   })),
+  /* ⭐ AND A NINTH BIT, THE MARKER, which is the mask's retire count. It loads
+   * as 1 behind the eight and shifts down with them, so it reaches MS1 - with
+   * nothing but zeros above it - on exactly the eighth retire. It was a
+   * three-bit counter, MK; one cell for three, on a part at 125/128. */
+  { pin: 0, name: "MS8", assertedLow: false, s0: 1 as const, registered: true,
+    terms: ["WSTBV", "!WSTBV & !RETIRE & MS8"] },
   /* ⭐ SPANLEN HOLDS ITS COMPLEMENT AND COUNTS UP, which is vlen.jedec.ts's
    * idiom and the reason counter.ts never needed a down-counter generator:
    * "a down-counter's borrow chain and an up-counter's carry chain are the
@@ -387,23 +391,18 @@ const spanWriter: Cell[] = [
     terms: loadable([...Array(8).keys()].map((i) => `NSL${i}`), "RETIRE", "WSTART",
       [...Array(8).keys()].map((i) => `!D${i}`))[b],
   })),
-  ...[...Array(3).keys()].map((b) => ({
-    pin: 0, name: `MK${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: counterTerms({ bits: [...Array(3).keys()].map((i) => `MK${i}`),
-                          enable: "RETIRE", clear: "WSTART" })[b],
-  })),
   ...[0, 1].map((b) => ({
     pin: 0, name: `WADV${b}`, assertedLow: false, s0: 1 as const, registered: true,
     terms: [`LDWADV & D${b}`, `WADV${b} & !LDWADV`],
   })),
   { pin: 0, name: "SPANBUSY", assertedLow: false, s0: 1, registered: true,
     terms: ["WSTART", "SPANBUSY & !SPANEND"] },
-  /* ⭐ the request into v3dot's arbiter: a span in flight IS the request,
-   * which is what census.ts records as seqctl.SPANBUSY -> SPNREQ on the other
-   * card. A cell and not a spelling coincidence, because a net that depends on
-   * two engineers choosing the same word is not a net. */
-  ...(SPANSEQ ? [{ pin: 0, name: "RSPN", assertedLow: false, s0: 1 as const,
-    registered: false, terms: ["SPANBUSY"] }] : []),
+  /* ⭐ the request into v3dot's arbiter is SPANBUSY itself - a span in flight
+   * IS the request (census.ts: seqctl.SPANBUSY -> SPNREQ on the other card).
+   * It was a second cell, RSPN = SPANBUSY, so that the net would not depend on
+   * two files choosing one word; video3_card.v's nets are generated from the
+   * parts now (v3portmap.ts), which is the guarantee that cell was standing in
+   * for, and the cell is the lane mux's. */
 ]
 
 /* -- ⭐ THE SPAN WRITER'S SEQUENCER - seqctl.jedec.ts, ported -------------
@@ -429,25 +428,16 @@ const spanWriter: Cell[] = [
  * window and a retire on each would move four bytes a slot instead of one.
  * SPARETICK is the window's last dot. */
 const spanSeq: Cell[] = [
-  /* ⛔ WMODE HAD NO PRODUCER ANYWHERE. plan §10 puts it at CTRL b5..4 and
-   * v3dot holds CTRL as CT0..CT7 - but it exports MODE and VMODE and not these
-   * two, and v3dot is 122/128 with Nodes+FB at 124%, so it cannot grow a cell
-   * or a pin to do it (measured: a SPARETICK cell and a DP0 export were both
-   * refused). partition.md §3's answer is that a part decodes the offsets it
-   * needs off the broadcast, which is what this does - the same duplication
-   * v3dot already makes of HSCROLL[1:0]. Three cells, and the span writer has
-   * its mode. */
-  ...[0, 1].map((b) => ({
-    pin: 0, name: `WM${b}`, assertedLow: false, s0: 1 as const, registered: true,
-    terms: [`LDCTRL & D${b + 4}`, `WM${b} & !LDCTRL`],
-  })),
+  /* ⭐ WMODE (CTRL b5..4) IS v3dot's, on two pins: v3dot holds CTRL, and
+   * the two cells a copy here cost were what the lane mux needed. ⛔ With
+   * the copy kept here, this part was refused under two names. */
   { pin: 0, name: "RETIRE", assertedLow: false, s0: 1, registered: false,
     why: "one byte goes to VRAM: also WPTR's column step, the serialiser's shift and SPANLEN's count",
-    terms: ["SPANBUSY & GSPN & MUXSEL0"] },
+    terms: ["SPANBUSY & GSPN & DP0"] },
   { pin: 0, name: "SPANEND", assertedLow: false, s0: 1, registered: false,
     terms: [
       "RETIRE & !WM1 & !WM0",                                   /* direct: one byte */
-      "RETIRE & WM0 & MK2 & MK1 & MK0",                         /* mask and sprite: eight */
+      "RETIRE & WM0 & MS1 & !MS2 & !MS3 & !MS4 & !MS5 & !MS6 & !MS7 & !MS8", /* mask and sprite: eight */
       `RETIRE & WM1 & !WM0 & ${[...Array(8).keys()].map((i) => `NSL${i}`).join(" & ")}`,
     ] },
   /* ⭐ the whole of sprite mode, and it is one macrocell: every other mode
@@ -456,9 +446,13 @@ const spanSeq: Cell[] = [
    * why this is a second output and not a qualification of RETIRE.
    * ⚠ MS0 IS THE CURRENT BIT: the serialiser shifts DOWN (MS_i takes
    * MS_i+1 on RETIRE), so MS0 is what leaves. */
-  { pin: 0, name: "WEN", assertedLow: false, s0: 1, registered: false,
-    why: "RETIRE, except a transparent pixel in sprite mode",
-    terms: ["RETIRE & !WM1", "RETIRE & !WM0", "RETIRE & MS0"] },
+  /* ⭐ THE FRAMEBUFFER's WRITE STROBE, for both writers: a retire (except a
+   * transparent pixel in sprite mode) or the copy's write access. It was WEN,
+   * the span writer's alone, and the board took `WEN | CSTEP` from two parts
+   * with no gate to OR them (video3_card.v's GAP_2). */
+  { pin: 0, name: "VWE", assertedLow: true, s0: 1, registered: false,
+    why: "a retire, except a transparent pixel in sprite mode; or a copy write",
+    terms: ["RETIRE & !WM1", "RETIRE & !WM0", "RETIRE & MS0", "CSTEP"] },
   /* ⛔ WPTR IS THE COPY'S DESTINATION TOO (plan §6), so its advance is an OR
    * of every engine that moves it. Only one can be busy: the arbiter grants
    * one requester an access.
@@ -543,6 +537,13 @@ const addressMux: Cell[] = [...Array(17).keys()].map((i) => {
   }
 })
 
+/* ⭐ the lane: the mux's two low bits, which the x16 parts take as byte
+ * enables and not as address - so they go to v3lane, not onto FBA */
+const laneMux: Cell[] = [0, 1].map((bit) => ({
+  pin: 0, name: `LANE${bit}`, assertedLow: false, s0: 1 as const, registered: false,
+  terms: [`!CRDSEL & WC${bit}`, `CRDSEL & CC${bit}`],
+}))
+
 /* the offsets this part answers to.  ⭐ Ten, where the strobe wiring gave it
  * seven - and the three extra are the multi-byte loads that wiring could not
  * express at all, because a strobe per REGISTER cannot load a register wider
@@ -550,8 +551,6 @@ const addressMux: Cell[] = [...Array(17).keys()].map((i) => {
 const MY_REGS: RegName[] = [
   "LDWP0", "LDWP1", "LDWP2", "LDWADV",
   "LDCP0", "LDCP1", "LDCP2", "LDCW", "LDCH", "LDCCTRL",
-  /* ⚠ CTRL, for WMODE alone - see WM0/WM1 in the span sequencer */
-  ...((SPANSEQ ? ["LDCTRL"] : []) as RegName[]),
 ]
 
 export const v3ptr: Merged = {
@@ -574,18 +573,15 @@ export const v3ptr: Merged = {
      * input was WSTB, v3host's REGISTER strobe, and every register write
      * started a span. v3card_tb's first run. */
     { name: "WSTBV" }, { name: "WSTART" },
-    /* ⭐ MUXSEL0 IS THE DOT PHASE'S LOW BIT, and taking it costs v3dot NOTHING.
-     * Both sequencers need the spare window's LAST dot: the arbiter is pure
-     * combinational grant logic with no phase term, so GSPN and GCPY are
-     * asserted for every dot of the window and a step on each would move four
-     * bytes a slot (design-review2.md V-4). ⛔ A `SPARETICK` cell on v3dot was
-     * the obvious way and the fitter refused it twice - that part is 122/128
-     * with Nodes+FB at 124% - and so was exporting DP0 itself, because forcing
-     * a buried counter bit onto a pin is not free there either. But SPARE is
-     * `!DP1`, the grants already contain it, and `comb("MUXSEL0", ["DP0"])` is
-     * ALREADY an external. So `GSPN & MUXSEL0` is the tick, for one literal on
-     * a term the receiver has anyway and not one macrocell anywhere. */
-    ...(SPANSEQ || COPYSEQ ? [{ name: "MUXSEL0" }] : []),
+    ...(SPANSEQ ? [{ name: "WM0" }, { name: "WM1" }] : []),
+    /* ⭐ DP0, THE DOT PHASE'S LOW BIT. Both sequencers need the spare
+     * window's LAST dot: the arbiter is pure combinational grant logic with no
+     * phase term, so GSPN and GCPY are asserted for every dot of the window and
+     * a step on each would move four bytes a slot (design-review2.md V-4).
+     * SPARE is `!DP1` and the grants contain it, so `GSPN & DP0` is the tick.
+     * It was MUXSEL0 while that was the bare dot; the '153 phase now carries
+     * HSCROLL[1:0], and v3dot exports the counter bit itself. */
+    ...(SPANSEQ || COPYSEQ ? [{ name: "DP0" }] : []),
     ...(RELOAD ? [{ name: "RP1" }, { name: "RP2" }, { name: "RP3" },
                   { name: "RP4" }] : []),
     { name: "WSTEP" }, { name: "CPURF" },
@@ -609,7 +605,7 @@ export const v3ptr: Merged = {
   cells: [
     ...decodeCells(MY_REGS), ...wptr, ...cptr, ...counters,
     ...(COPYSEQ ? copySeq : COPYDEC ? copyDec : copyStub), ...spanWriter,
-    ...(SPANSEQ ? spanSeq : []), ...(RELOAD ? reload : []), ...addressMux],
+    ...(SPANSEQ ? spanSeq : []), ...(RELOAD ? reload : []), ...addressMux, ...laneMux],
   /* the address bus, and the three status bits v3host assembles into VSTAT */
   external: new Set([
     ...[...Array(17).keys()].map((i) => `FBA${i + 2}`),
@@ -619,7 +615,17 @@ export const v3ptr: Merged = {
     "SPANBUSY", "CBUSY",
     /* ⚠ SPANEND and MS0 used to leave the package too, and nothing on the
      * board reads either - two of a pin-bound part's pins, spent on nothing */
-    ...(SPANSEQ ? ["RSPN", "RETIRE", "WEN", "WROWADV"] : []),
+    ...(SPANSEQ ? ["RETIRE", "VWE", "WROWADV"] : []),
+    /* ⭐ the byte lane of a single-byte access, for v3lane (the GAL that
+     * decodes the lane transceivers and the byte enables). All four are
+     * registers already, so this is four pins and not one macrocell - where a
+     * lane mux here would have been two cells on a part with three. */
+    /* ⭐ the byte lane of this part's access, for v3lane (the GAL that
+     * decodes the lane transceivers and the byte enables): the address mux's
+     * own two low bits. ⛔ Exporting the four counter bits instead - four
+     * registers onto four pins, and the GAL doing the mux - was refused by the
+     * fitter; two mux cells, the same shape as FBA's, fit. */
+    "LANE0", "LANE1",
     ...(COPYSEQ ? ["RCPY"] : []),
     ...(COPYDEC ? ["CEOR", "CHLAST"] : []),
     /* §7.2's walk, for v3host's register-file address - and MS0, the mask

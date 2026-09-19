@@ -134,7 +134,11 @@ typedef struct {
     uint32_t cptr;               /* plan 6: copyrect source */
     uint16_t cwidth, cheight;
     uint8_t cctrl;
-    uint8_t sprx_lo, spry_lo, sprh, spridx, sprshape[64];   /* plan §7: 16 x 16, four bytes a row */
+    /* plan §7: 16 x 16, four bytes a row. ⭐ THE SHAPE IS IN VRAM (2026-09-19):
+     * the top 64 bytes of MAPBASE's 64 KB region, which bitmap mode - the only
+     * mode that shows the sprite - does not otherwise use. +$1D/+$1E (the old
+     * SPRIDX/SPRDAT) are spare register-file bytes, like FCNT at +$1F. */
+    uint8_t sprx_lo, spry_lo, sprh;
     long v3_violations;
 
     int irq_pending;
@@ -397,8 +401,8 @@ static void v3_video_write(uint8_t r, uint8_t v)
     case 0x1A: m->sprx_lo = v; break;
     case 0x1B: m->spry_lo = v; break;
     case 0x1C: m->sprh = v; break;
-    case 0x1D: m->spridx = v & 63; break;
-    case 0x1E: m->sprshape[m->spridx & 63] = v; m->spridx = (uint8_t)((m->spridx + 1) & 63); break;
+    /* 0x1D, 0x1E: spare since 2026-09-19 - the shape moved to VRAM. They
+     * read back from regfile and do nothing. */
     default: break;
     }
 }
@@ -1098,11 +1102,13 @@ static void v3_render_line(int y)
     int mode = V3_MODE(m);
 
     if (mode == 1) {
-        /* plan §2.5: two bytes a cell on a 1024-byte stride, six-bit cell row,
+        /* plan §2.5: FOUR bytes a cell (code, attr, two unused) on a 1024-byte
+         * stride, six-bit cell row - the map fetcher has sixteen data pins, so
+         * it reads lanes 0 and 1 of one x16 part and nothing else.
          * ⛔ NO ring and NO horizontal scroll - a line is 80 codes, not 81. */
         uint32_t crow = (py >> 3) & 63, grow = py & 7;
         for (int x = 0; x < 640; x++) {
-            uint32_t ma = (mb + (crow << 10) + (((uint32_t)x >> 3) << 1)) & 0x7FFFF;
+            uint32_t ma = (mb + (crow << 10) + (((uint32_t)x >> 3) << 2)) & 0x7FFFF;
             uint8_t code = m->vram[ma], attr = m->vram[(ma + 1) & 0x7FFFF];
             uint8_t px = m->vram[(tb + ((uint32_t)code << 6) + (grow << 3)
                                      + ((uint32_t)x & 7)) & 0x7FFFF];
@@ -1111,10 +1117,10 @@ static void v3_render_line(int y)
         return;
     }
     uint32_t ry = (m->vs_frame + py) & 511;
-    if (mode == 2) {                    /* tile: one map byte, ATTR is zero */
+    if (mode == 2) {                    /* tile: one map byte in lane 0 of a four-byte cell, ATTR is zero */
         for (int x = 0; x < 640; x++) {
             uint32_t cx = (hs + x) & 1023;
-            uint8_t code = m->vram[(mb + (((ry >> 3) & 63) << 10) + ((cx >> 3) & 127)) & 0x7FFFF];
+            uint8_t code = m->vram[(mb + (((ry >> 3) & 63) << 10) + (((cx >> 3) & 127) << 2)) & 0x7FFFF];
             row[x] = m->pal3[m->vram[(tb + ((uint32_t)code << 6) + ((ry & 7) << 3)
                                         + (cx & 7)) & 0x7FFFF]];
         }
@@ -1130,7 +1136,7 @@ static void v3_render_line(int y)
         if (on && py >= sy && py < sy + 16 && (uint32_t)x >= sx && (uint32_t)x < sx + 16) {
             /* a row is four bytes: the low plane's two, then the high plane's */
             uint32_t sr = py - sy, sc = (uint32_t)x - sx;
-            const uint8_t *sh = m->sprshape + sr * 4 + (sc >> 3);
+            const uint8_t *sh = m->vram + ((mb + 0xFFC0 + sr * 4 + (sc >> 3)) & 0x7FFFF);
             unsigned b = 7 - (sc & 7);
             attr = (uint16_t)(((sh[2] >> b) & 1) * 2 + ((sh[0] >> b) & 1));
         }

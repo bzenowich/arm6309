@@ -4,7 +4,7 @@
 *
 *   sh video3/bench/run-v3tile.sh
 *
-* plan 2.4 and 8.1.  A ONE-byte map, 8bpp tiles with no per-cell colour limit,
+* plan 2.4 and 8.1.  A ONE-byte map on a FOUR-byte cell stride, 8bpp tiles with no per-cell colour limit,
 * HSCROLL and VSCROLL one pixel at a time with their ring wraps, and a six-bit cell
 * row.  The palette is loaded so that ANY sub-palette but 0 is bright green -
 * so if the attribute path leaks into tile mode, the screen says so.
@@ -102,7 +102,9 @@ tl2     lda     row
         inc     tno
         bne     tl1
 
-* --- the map: one byte a cell, one VRAM row a cell row (plan 2.5)
+* --- the map: one code byte a cell in lane 0 of a FOUR-byte cell (plan 2.4),
+*     one VRAM row a cell row.  Lanes 1-3 are unused by the card, and get three
+*     values that are never the cell's code, so a wrong stride or lane shows.
         ldx     #maptab
         clra
         ldb     #64
@@ -116,6 +118,12 @@ mr1     pshs    a,b
         clr     <WPTR0
         ldy     #128
 mr2     lda     ,x+
+        sta     <VDATA          lane 0: the code
+        eora    #$A5
+        sta     <VDATA          lane 1: code xor $A5
+        eora    #$99            lane 2: code xor $3C
+        sta     <VDATA
+        eora    #$C3            lane 3: code xor $FF
         sta     <VDATA
         leay    -1,y
         bne     mr2

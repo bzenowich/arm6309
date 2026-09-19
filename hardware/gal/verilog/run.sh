@@ -30,11 +30,13 @@ for tb in $TBS; do
     # ⭐ video3 as a card: the four parts and the board around them. Every
     # buried cell is left unconnected on purpose - a cell is not a net until
     # it leaves its package - so PINMISSING is the design, not a slip.
-    v3card)    SRC="-Wno-PINMISSING video3_card.v v3dot.v v3scan.v v3ptr.v v3host.v" ;;
+    v3card)    SRC="-Wno-PINMISSING video3_card.v v3dot.v v3scan.v v3ptr.v v3host.v v3lane.v" ;;
     *)         SRC="$CARD" ;;
   esac
   $V --top-module "${tb}_tb" $SRC "${tb}_tb.sv" -o "${tb}_tb" > /dev/null
-  "./obj_dir/${tb}_tb" | tee -a "$out"
+  # TBARGS reaches the bench as plusargs: `TBARGS=+ONLY=sprite` runs v3card_tb's
+  # sprite scenarios alone, for a debug loop - never for a claim count.
+  "./obj_dir/${tb}_tb" ${TBARGS:-} | tee -a "$out"
 done
 
 ok=$(grep -c '^ok' "$out" || true)

@@ -8,16 +8,15 @@
 module v3scan (
     input  wire CLK25,
     input  wire RESET,
-    input  wire FETCH,
+    input  wire DP0,
+    input  wire DP1,
+    input  wire MRQ,
     input  wire HLOAD,
-    input  wire VLOAD,
+    input  wire VBLANK,
     input  wire ROWADV,
-    input  wire MCADV,
-    input  wire MAPLD,
-    input  wire GMAP,
     input  wire MODE0,
     input  wire MODE1,
-    input  wire FBOESCAN,
+    input  wire ATOE,
     input  wire D0,
     input  wire D1,
     input  wire D2,
@@ -54,6 +53,13 @@ module v3scan (
     output wire LDVSH,
     output wire LDTB,
     output wire LDMB,
+    output wire MRQ2,
+    output wire FETCH,
+    output wire GMAP,
+    output wire MAPLD,
+    output wire MCADV,
+    output wire HLQ,
+    output wire MCLD,
     output wire HS2,
     output wire HS3,
     output wire HS4,
@@ -103,6 +109,14 @@ module v3scan (
     output wire MAPQ5,
     output wire MAPQ6,
     output wire MAPQ7,
+    output wire ATQ0,
+    output wire ATQ1,
+    output wire ATQ2,
+    output wire ATQ3,
+    output wire ATQ4,
+    output wire ATQ5,
+    output wire ATQ6,
+    output wire ATQ7,
     output wire ATO0,
     output wire ATO1,
     output wire ATO2,
@@ -152,6 +166,14 @@ module v3scan (
     output wire FBA16,
     output wire FBA17,
     output wire FBA18,
+    output wire ATO0_OE,
+    output wire ATO1_OE,
+    output wire ATO2_OE,
+    output wire ATO3_OE,
+    output wire ATO4_OE,
+    output wire ATO5_OE,
+    output wire ATO6_OE,
+    output wire ATO7_OE,
     output wire FBA2_OE,
     output wire FBA3_OE,
     output wire FBA4_OE,
@@ -171,6 +193,8 @@ module v3scan (
     output wire FBA18_OE
 );
 
+  reg  r_MRQ2;
+  reg  r_HLQ;
   reg  r_HS2;
   reg  r_HS3;
   reg  r_HS4;
@@ -220,6 +244,14 @@ module v3scan (
   reg  r_MAPQ5;
   reg  r_MAPQ6;
   reg  r_MAPQ7;
+  reg  r_ATQ0;
+  reg  r_ATQ1;
+  reg  r_ATQ2;
+  reg  r_ATQ3;
+  reg  r_ATQ4;
+  reg  r_ATQ5;
+  reg  r_ATQ6;
+  reg  r_ATQ7;
   reg  r_ATO0;
   reg  r_ATO1;
   reg  r_ATO2;
@@ -253,6 +285,8 @@ module v3scan (
   reg  r_SA17;
   reg  r_SA18;
 
+  assign MRQ2 = r_MRQ2;
+  assign HLQ = r_HLQ;
   assign HS2 = r_HS2;
   assign HS3 = r_HS3;
   assign HS4 = r_HS4;
@@ -302,6 +336,14 @@ module v3scan (
   assign MAPQ5 = r_MAPQ5;
   assign MAPQ6 = r_MAPQ6;
   assign MAPQ7 = r_MAPQ7;
+  assign ATQ0 = r_ATQ0;
+  assign ATQ1 = r_ATQ1;
+  assign ATQ2 = r_ATQ2;
+  assign ATQ3 = r_ATQ3;
+  assign ATQ4 = r_ATQ4;
+  assign ATQ5 = r_ATQ5;
+  assign ATQ6 = r_ATQ6;
+  assign ATQ7 = r_ATQ7;
   assign ATO0 = r_ATO0;
   assign ATO1 = r_ATO1;
   assign ATO2 = r_ATO2;
@@ -353,177 +395,260 @@ module v3scan (
   // buried
   assign LDMB =
          (REGWR & RA4 & RA3 & ~RA2 & ~RA1 & RA0);
+  // buried
+  assign FETCH =
+         (DP1 & DP0);
+  // buried
+  assign GMAP =
+         (MRQ & ~DP1);
+  // buried
+  assign MAPLD =
+         (MRQ & ~DP1 & DP0);
+  // buried
+  assign MCADV =
+         (DP1 & DP0 & MRQ2);
+  // buried
+  assign MCLD =
+         (HLOAD & ~HLQ);
   // EXTERNAL
   assign FBA2 =
          (~GMAP & ~MODE0 & ~MODE1 & SA2)
          | (~GMAP & MODE0 & SA2)
          | (~GMAP & MODE1 & SA2)
-         | (GMAP & MC1);
+         | (GMAP & MODE0 & MC0)
+         | (GMAP & MODE1 & MC0);
   // EXTERNAL
   assign FBA3 =
          (~GMAP & ~MODE0 & ~MODE1 & SA3)
          | (~GMAP & MODE0 & SA10)
          | (~GMAP & MODE1 & SA10)
-         | (GMAP & MC2);
+         | (GMAP & MODE0 & MC1)
+         | (GMAP & MODE1 & MC1);
   // EXTERNAL
   assign FBA4 =
          (~GMAP & ~MODE0 & ~MODE1 & SA4)
          | (~GMAP & MODE0 & SA11)
          | (~GMAP & MODE1 & SA11)
-         | (GMAP & MC3);
+         | (GMAP & MODE0 & MC2)
+         | (GMAP & MODE1 & MC2);
   // EXTERNAL
   assign FBA5 =
          (~GMAP & ~MODE0 & ~MODE1 & SA5)
          | (~GMAP & MODE0 & SA12)
          | (~GMAP & MODE1 & SA12)
-         | (GMAP & MC4);
+         | (GMAP & MODE0 & MC3)
+         | (GMAP & MODE1 & MC3);
   // EXTERNAL
   assign FBA6 =
          (~GMAP & ~MODE0 & ~MODE1 & SA6)
          | (~GMAP & MODE0 & MAPQ0)
          | (~GMAP & MODE1 & MAPQ0)
-         | (GMAP & MC5);
+         | (GMAP & MODE0 & MC4)
+         | (GMAP & MODE1 & MC4)
+         | (GMAP & ~MODE0 & ~MODE1);
   // EXTERNAL
   assign FBA7 =
          (~GMAP & ~MODE0 & ~MODE1 & SA7)
          | (~GMAP & MODE0 & MAPQ1)
          | (~GMAP & MODE1 & MAPQ1)
-         | (GMAP & MC6);
+         | (GMAP & MODE0 & MC5)
+         | (GMAP & MODE1 & MC5)
+         | (GMAP & ~MODE0 & ~MODE1);
   // EXTERNAL
   assign FBA8 =
          (~GMAP & ~MODE0 & ~MODE1 & SA8)
          | (~GMAP & MODE0 & MAPQ2)
-         | (~GMAP & MODE1 & MAPQ2);
+         | (~GMAP & MODE1 & MAPQ2)
+         | (GMAP & MODE0 & MC6)
+         | (GMAP & MODE1 & MC6)
+         | (GMAP & ~MODE0 & ~MODE1);
   // EXTERNAL
   assign FBA9 =
          (~GMAP & ~MODE0 & ~MODE1 & SA9)
          | (~GMAP & MODE0 & MAPQ3)
-         | (~GMAP & MODE1 & MAPQ3);
+         | (~GMAP & MODE1 & MAPQ3)
+         | (GMAP & ~MODE0 & ~MODE1);
   // EXTERNAL
   assign FBA10 =
          (~GMAP & ~MODE0 & ~MODE1 & SA10)
          | (~GMAP & MODE0 & MAPQ4)
          | (~GMAP & MODE1 & MAPQ4)
-         | (GMAP & SA13);
+         | (GMAP & MODE0 & SA13)
+         | (GMAP & MODE1 & SA13)
+         | (GMAP & ~MODE0 & ~MODE1);
   // EXTERNAL
   assign FBA11 =
          (~GMAP & ~MODE0 & ~MODE1 & SA11)
          | (~GMAP & MODE0 & MAPQ5)
          | (~GMAP & MODE1 & MAPQ5)
-         | (GMAP & SA14);
+         | (GMAP & MODE0 & SA14)
+         | (GMAP & MODE1 & SA14)
+         | (GMAP & ~MODE0 & ~MODE1);
   // EXTERNAL
   assign FBA12 =
          (~GMAP & ~MODE0 & ~MODE1 & SA12)
          | (~GMAP & MODE0 & MAPQ6)
          | (~GMAP & MODE1 & MAPQ6)
-         | (GMAP & SA15);
+         | (GMAP & MODE0 & SA15)
+         | (GMAP & MODE1 & SA15)
+         | (GMAP & ~MODE0 & ~MODE1);
   // EXTERNAL
   assign FBA13 =
          (~GMAP & ~MODE0 & ~MODE1 & SA13)
          | (~GMAP & MODE0 & MAPQ7)
          | (~GMAP & MODE1 & MAPQ7)
-         | (GMAP & SA16);
+         | (GMAP & MODE0 & SA16)
+         | (GMAP & MODE1 & SA16)
+         | (GMAP & ~MODE0 & ~MODE1);
   // EXTERNAL
   assign FBA14 =
          (~GMAP & ~MODE0 & ~MODE1 & SA14)
          | (~GMAP & MODE0 & TB0)
          | (~GMAP & MODE1 & TB0)
-         | (GMAP & SA17);
+         | (GMAP & MODE0 & SA17)
+         | (GMAP & MODE1 & SA17)
+         | (GMAP & ~MODE0 & ~MODE1);
   // EXTERNAL
   assign FBA15 =
          (~GMAP & ~MODE0 & ~MODE1 & SA15)
          | (~GMAP & MODE0 & TB1)
          | (~GMAP & MODE1 & TB1)
-         | (GMAP & SA18);
+         | (GMAP & MODE0 & SA18)
+         | (GMAP & MODE1 & SA18)
+         | (GMAP & ~MODE0 & ~MODE1);
   // EXTERNAL
   assign FBA16 =
          (~GMAP & ~MODE0 & ~MODE1 & SA16)
          | (~GMAP & MODE0 & TB2)
          | (~GMAP & MODE1 & TB2)
-         | (GMAP & MB0);
+         | (GMAP & MODE0 & MB0)
+         | (GMAP & MODE1 & MB0)
+         | (GMAP & ~MODE0 & ~MODE1 & MB0);
   // EXTERNAL
   assign FBA17 =
          (~GMAP & ~MODE0 & ~MODE1 & SA17)
          | (~GMAP & MODE0 & TB3)
          | (~GMAP & MODE1 & TB3)
-         | (GMAP & MB1);
+         | (GMAP & MODE0 & MB1)
+         | (GMAP & MODE1 & MB1)
+         | (GMAP & ~MODE0 & ~MODE1 & MB1);
   // EXTERNAL
   assign FBA18 =
          (~GMAP & ~MODE0 & ~MODE1 & SA18)
          | (~GMAP & MODE0 & TB4)
          | (~GMAP & MODE1 & TB4)
-         | (GMAP & MB2);
+         | (GMAP & MODE0 & MB2)
+         | (GMAP & MODE1 & MB2)
+         | (GMAP & ~MODE0 & ~MODE1 & MB2);
 
+  // ATO0 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign ATO0_OE =
+         (ATOE);
+  // ATO1 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign ATO1_OE =
+         (ATOE);
+  // ATO2 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign ATO2_OE =
+         (ATOE);
+  // ATO3 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign ATO3_OE =
+         (ATOE);
+  // ATO4 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign ATO4_OE =
+         (ATOE);
+  // ATO5 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign ATO5_OE =
+         (ATOE);
+  // ATO6 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign ATO6_OE =
+         (ATOE);
+  // ATO7 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign ATO7_OE =
+         (ATOE);
   // FBA2 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA2_OE =
-         (FBOESCAN);
+         (DP1 | MRQ & MODE0 | MRQ & MODE1);
   // FBA3 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA3_OE =
-         (FBOESCAN);
+         (DP1 | MRQ & MODE0 | MRQ & MODE1);
   // FBA4 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA4_OE =
-         (FBOESCAN);
+         (DP1 | MRQ & MODE0 | MRQ & MODE1);
   // FBA5 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA5_OE =
-         (FBOESCAN);
+         (DP1 | MRQ & MODE0 | MRQ & MODE1);
   // FBA6 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA6_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA7 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA7_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA8 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA8_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA9 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA9_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA10 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA10_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA11 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA11_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA12 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA12_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA13 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA13_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA14 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA14_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA15 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA15_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA16 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA16_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA17 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA17_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
   // FBA18 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign FBA18_OE =
-         (FBOESCAN);
+         (DP1 | MRQ);
 
   always @(posedge CLK25) begin
+      r_MRQ2 <=
+         (DP1 & DP0 & MRQ)
+         | (MRQ2 & ~DP1)
+         | (MRQ2 & ~DP0);
+      r_HLQ <=
+         (HLOAD);
       r_HS2 <=
          (LDHSL & D2)
          | (HS2 & ~LDHSL);
@@ -671,103 +796,143 @@ module v3scan (
       r_MAPQ7 <=
          (MCADV & MAP7)
          | (MAPQ7 & ~MCADV);
+      r_ATQ0 <=
+         (GMAP & ~DP0 & MAPA0)
+         | (ATQ0 & ~GMAP)
+         | (ATQ0 & DP0);
+      r_ATQ1 <=
+         (GMAP & ~DP0 & MAPA1)
+         | (ATQ1 & ~GMAP)
+         | (ATQ1 & DP0);
+      r_ATQ2 <=
+         (GMAP & ~DP0 & MAPA2)
+         | (ATQ2 & ~GMAP)
+         | (ATQ2 & DP0);
+      r_ATQ3 <=
+         (GMAP & ~DP0 & MAPA3)
+         | (ATQ3 & ~GMAP)
+         | (ATQ3 & DP0);
+      r_ATQ4 <=
+         (GMAP & ~DP0 & MAPA4)
+         | (ATQ4 & ~GMAP)
+         | (ATQ4 & DP0);
+      r_ATQ5 <=
+         (GMAP & ~DP0 & MAPA5)
+         | (ATQ5 & ~GMAP)
+         | (ATQ5 & DP0);
+      r_ATQ6 <=
+         (GMAP & ~DP0 & MAPA6)
+         | (ATQ6 & ~GMAP)
+         | (ATQ6 & DP0);
+      r_ATQ7 <=
+         (GMAP & ~DP0 & MAPA7)
+         | (ATQ7 & ~GMAP)
+         | (ATQ7 & DP0);
       r_ATO0 <=
-         (MCADV & MAPA0)
-         | (ATO0 & ~MCADV);
+         (GMAP & ~DP0 & ATQ0)
+         | (ATO0 & ~GMAP)
+         | (ATO0 & DP0);
       r_ATO1 <=
-         (MCADV & MAPA1)
-         | (ATO1 & ~MCADV);
+         (GMAP & ~DP0 & ATQ1)
+         | (ATO1 & ~GMAP)
+         | (ATO1 & DP0);
       r_ATO2 <=
-         (MCADV & MAPA2)
-         | (ATO2 & ~MCADV);
+         (GMAP & ~DP0 & ATQ2)
+         | (ATO2 & ~GMAP)
+         | (ATO2 & DP0);
       r_ATO3 <=
-         (MCADV & MAPA3)
-         | (ATO3 & ~MCADV);
+         (GMAP & ~DP0 & ATQ3)
+         | (ATO3 & ~GMAP)
+         | (ATO3 & DP0);
       r_ATO4 <=
-         (MCADV & MAPA4)
-         | (ATO4 & ~MCADV);
+         (GMAP & ~DP0 & ATQ4)
+         | (ATO4 & ~GMAP)
+         | (ATO4 & DP0);
       r_ATO5 <=
-         (MCADV & MAPA5)
-         | (ATO5 & ~MCADV);
+         (GMAP & ~DP0 & ATQ5)
+         | (ATO5 & ~GMAP)
+         | (ATO5 & DP0);
       r_ATO6 <=
-         (MCADV & MAPA6)
-         | (ATO6 & ~MCADV);
+         (GMAP & ~DP0 & ATQ6)
+         | (ATO6 & ~GMAP)
+         | (ATO6 & DP0);
       r_ATO7 <=
-         (MCADV & MAPA7)
-         | (ATO7 & ~MCADV);
+         (GMAP & ~DP0 & ATQ7)
+         | (ATO7 & ~GMAP)
+         | (ATO7 & DP0);
       r_MC0 <=
-         (HLOAD & HS3)
-         | (~HLOAD & MCADV & ~MC0)
-         | (~HLOAD & ~MCADV & MC0);
+         (MCLD & HS3 & ~MODE0)
+         | (~MCLD & MAPLD & ~MC0)
+         | (~MCLD & ~MAPLD & MC0);
       r_MC1 <=
-         (HLOAD & HS4)
-         | (~HLOAD & MCADV & MC1 & ~MC0)
-         | (~HLOAD & MCADV & ~MC1 & MC0)
-         | (~HLOAD & ~MCADV & MC1);
+         (MCLD & HS4 & ~MODE0)
+         | (~MCLD & MAPLD & MC1 & ~MC0)
+         | (~MCLD & MAPLD & ~MC1 & MC0)
+         | (~MCLD & ~MAPLD & MC1);
       r_MC2 <=
-         (HLOAD & HS5)
-         | (~HLOAD & MCADV & MC2 & ~MC0)
-         | (~HLOAD & MCADV & MC2 & ~MC1)
-         | (~HLOAD & MCADV & ~MC2 & MC0 & MC1)
-         | (~HLOAD & ~MCADV & MC2);
+         (MCLD & HS5 & ~MODE0)
+         | (~MCLD & MAPLD & MC2 & ~MC0)
+         | (~MCLD & MAPLD & MC2 & ~MC1)
+         | (~MCLD & MAPLD & ~MC2 & MC0 & MC1)
+         | (~MCLD & ~MAPLD & MC2);
       r_MC3 <=
-         (HLOAD & HS6)
-         | (~HLOAD & MCADV & MC3 & ~MC0)
-         | (~HLOAD & MCADV & MC3 & ~MC1)
-         | (~HLOAD & MCADV & MC3 & ~MC2)
-         | (~HLOAD & MCADV & ~MC3 & MC0 & MC1 & MC2)
-         | (~HLOAD & ~MCADV & MC3);
+         (MCLD & HS6 & ~MODE0)
+         | (~MCLD & MAPLD & MC3 & ~MC0)
+         | (~MCLD & MAPLD & MC3 & ~MC1)
+         | (~MCLD & MAPLD & MC3 & ~MC2)
+         | (~MCLD & MAPLD & ~MC3 & MC0 & MC1 & MC2)
+         | (~MCLD & ~MAPLD & MC3);
       r_MC4 <=
-         (HLOAD & HS7)
-         | (~HLOAD & MCADV & MC4 & ~MC0)
-         | (~HLOAD & MCADV & MC4 & ~MC1)
-         | (~HLOAD & MCADV & MC4 & ~MC2)
-         | (~HLOAD & MCADV & MC4 & ~MC3)
-         | (~HLOAD & MCADV & ~MC4 & MC0 & MC1 & MC2 & MC3)
-         | (~HLOAD & ~MCADV & MC4);
+         (MCLD & HS7 & ~MODE0)
+         | (~MCLD & MAPLD & MC4 & ~MC0)
+         | (~MCLD & MAPLD & MC4 & ~MC1)
+         | (~MCLD & MAPLD & MC4 & ~MC2)
+         | (~MCLD & MAPLD & MC4 & ~MC3)
+         | (~MCLD & MAPLD & ~MC4 & MC0 & MC1 & MC2 & MC3)
+         | (~MCLD & ~MAPLD & MC4);
       r_MC5 <=
-         (HLOAD & HS8)
-         | (~HLOAD & MCADV & MC5 & ~MC0)
-         | (~HLOAD & MCADV & MC5 & ~MC1)
-         | (~HLOAD & MCADV & MC5 & ~MC2)
-         | (~HLOAD & MCADV & MC5 & ~MC3)
-         | (~HLOAD & MCADV & MC5 & ~MC4)
-         | (~HLOAD & MCADV & ~MC5 & MC0 & MC1 & MC2 & MC3 & MC4)
-         | (~HLOAD & ~MCADV & MC5);
+         (MCLD & HS8 & ~MODE0)
+         | (~MCLD & MAPLD & MC5 & ~MC0)
+         | (~MCLD & MAPLD & MC5 & ~MC1)
+         | (~MCLD & MAPLD & MC5 & ~MC2)
+         | (~MCLD & MAPLD & MC5 & ~MC3)
+         | (~MCLD & MAPLD & MC5 & ~MC4)
+         | (~MCLD & MAPLD & ~MC5 & MC0 & MC1 & MC2 & MC3 & MC4)
+         | (~MCLD & ~MAPLD & MC5);
       r_MC6 <=
-         (HLOAD & HS9)
-         | (~HLOAD & MCADV & MC6 & ~MC0)
-         | (~HLOAD & MCADV & MC6 & ~MC1)
-         | (~HLOAD & MCADV & MC6 & ~MC2)
-         | (~HLOAD & MCADV & MC6 & ~MC3)
-         | (~HLOAD & MCADV & MC6 & ~MC4)
-         | (~HLOAD & MCADV & MC6 & ~MC5)
-         | (~HLOAD & MCADV & ~MC6 & MC0 & MC1 & MC2 & MC3 & MC4 & MC5)
-         | (~HLOAD & ~MCADV & MC6);
+         (MCLD & HS9 & ~MODE0)
+         | (~MCLD & MAPLD & MC6 & ~MC0)
+         | (~MCLD & MAPLD & MC6 & ~MC1)
+         | (~MCLD & MAPLD & MC6 & ~MC2)
+         | (~MCLD & MAPLD & MC6 & ~MC3)
+         | (~MCLD & MAPLD & MC6 & ~MC4)
+         | (~MCLD & MAPLD & MC6 & ~MC5)
+         | (~MCLD & MAPLD & ~MC6 & MC0 & MC1 & MC2 & MC3 & MC4 & MC5)
+         | (~MCLD & ~MAPLD & MC6);
       r_SA2 <=
-         (HLOAD & HS2)
+         (HLOAD & HS2 & ~MODE0)
          | (~HLOAD & FETCH & ~SA2)
          | (~HLOAD & ~FETCH & SA2);
       r_SA3 <=
-         (HLOAD & HS3)
+         (HLOAD & HS3 & ~MODE0)
          | (~HLOAD & FETCH & SA3 & ~SA2)
          | (~HLOAD & FETCH & ~SA3 & SA2)
          | (~HLOAD & ~FETCH & SA3);
       r_SA4 <=
-         (HLOAD & HS4)
+         (HLOAD & HS4 & ~MODE0)
          | (~HLOAD & FETCH & SA4 & ~SA2)
          | (~HLOAD & FETCH & SA4 & ~SA3)
          | (~HLOAD & FETCH & ~SA4 & SA2 & SA3)
          | (~HLOAD & ~FETCH & SA4);
       r_SA5 <=
-         (HLOAD & HS5)
+         (HLOAD & HS5 & ~MODE0)
          | (~HLOAD & FETCH & SA5 & ~SA2)
          | (~HLOAD & FETCH & SA5 & ~SA3)
          | (~HLOAD & FETCH & SA5 & ~SA4)
          | (~HLOAD & FETCH & ~SA5 & SA2 & SA3 & SA4)
          | (~HLOAD & ~FETCH & SA5);
       r_SA6 <=
-         (HLOAD & HS6)
+         (HLOAD & HS6 & ~MODE0)
          | (~HLOAD & FETCH & SA6 & ~SA2)
          | (~HLOAD & FETCH & SA6 & ~SA3)
          | (~HLOAD & FETCH & SA6 & ~SA4)
@@ -775,7 +940,7 @@ module v3scan (
          | (~HLOAD & FETCH & ~SA6 & SA2 & SA3 & SA4 & SA5)
          | (~HLOAD & ~FETCH & SA6);
       r_SA7 <=
-         (HLOAD & HS7)
+         (HLOAD & HS7 & ~MODE0)
          | (~HLOAD & FETCH & SA7 & ~SA2)
          | (~HLOAD & FETCH & SA7 & ~SA3)
          | (~HLOAD & FETCH & SA7 & ~SA4)
@@ -784,7 +949,7 @@ module v3scan (
          | (~HLOAD & FETCH & ~SA7 & SA2 & SA3 & SA4 & SA5 & SA6)
          | (~HLOAD & ~FETCH & SA7);
       r_SA8 <=
-         (HLOAD & HS8)
+         (HLOAD & HS8 & ~MODE0)
          | (~HLOAD & FETCH & SA8 & ~SA2)
          | (~HLOAD & FETCH & SA8 & ~SA3)
          | (~HLOAD & FETCH & SA8 & ~SA4)
@@ -794,7 +959,7 @@ module v3scan (
          | (~HLOAD & FETCH & ~SA8 & SA2 & SA3 & SA4 & SA5 & SA6 & SA7)
          | (~HLOAD & ~FETCH & SA8);
       r_SA9 <=
-         (HLOAD & HS9)
+         (HLOAD & HS9 & ~MODE0)
          | (~HLOAD & FETCH & SA9 & ~SA2)
          | (~HLOAD & FETCH & SA9 & ~SA3)
          | (~HLOAD & FETCH & SA9 & ~SA4)
@@ -805,77 +970,77 @@ module v3scan (
          | (~HLOAD & FETCH & ~SA9 & SA2 & SA3 & SA4 & SA5 & SA6 & SA7 & SA8)
          | (~HLOAD & ~FETCH & SA9);
       r_SA10 <=
-         (VLOAD & VS0)
-         | (~VLOAD & ROWADV & ~SA10)
-         | (~VLOAD & ~ROWADV & SA10);
+         (VBLANK & VS0 & ~MODE0)
+         | (~VBLANK & ROWADV & ~SA10)
+         | (~VBLANK & ~ROWADV & SA10);
       r_SA11 <=
-         (VLOAD & VS1)
-         | (~VLOAD & ROWADV & SA11 & ~SA10)
-         | (~VLOAD & ROWADV & ~SA11 & SA10)
-         | (~VLOAD & ~ROWADV & SA11);
+         (VBLANK & VS1 & ~MODE0)
+         | (~VBLANK & ROWADV & SA11 & ~SA10)
+         | (~VBLANK & ROWADV & ~SA11 & SA10)
+         | (~VBLANK & ~ROWADV & SA11);
       r_SA12 <=
-         (VLOAD & VS2)
-         | (~VLOAD & ROWADV & SA12 & ~SA10)
-         | (~VLOAD & ROWADV & SA12 & ~SA11)
-         | (~VLOAD & ROWADV & ~SA12 & SA10 & SA11)
-         | (~VLOAD & ~ROWADV & SA12);
+         (VBLANK & VS2 & ~MODE0)
+         | (~VBLANK & ROWADV & SA12 & ~SA10)
+         | (~VBLANK & ROWADV & SA12 & ~SA11)
+         | (~VBLANK & ROWADV & ~SA12 & SA10 & SA11)
+         | (~VBLANK & ~ROWADV & SA12);
       r_SA13 <=
-         (VLOAD & VS3)
-         | (~VLOAD & ROWADV & SA13 & ~SA10)
-         | (~VLOAD & ROWADV & SA13 & ~SA11)
-         | (~VLOAD & ROWADV & SA13 & ~SA12)
-         | (~VLOAD & ROWADV & ~SA13 & SA10 & SA11 & SA12)
-         | (~VLOAD & ~ROWADV & SA13);
+         (VBLANK & VS3 & ~MODE0)
+         | (~VBLANK & ROWADV & SA13 & ~SA10)
+         | (~VBLANK & ROWADV & SA13 & ~SA11)
+         | (~VBLANK & ROWADV & SA13 & ~SA12)
+         | (~VBLANK & ROWADV & ~SA13 & SA10 & SA11 & SA12)
+         | (~VBLANK & ~ROWADV & SA13);
       r_SA14 <=
-         (VLOAD & VS4)
-         | (~VLOAD & ROWADV & SA14 & ~SA10)
-         | (~VLOAD & ROWADV & SA14 & ~SA11)
-         | (~VLOAD & ROWADV & SA14 & ~SA12)
-         | (~VLOAD & ROWADV & SA14 & ~SA13)
-         | (~VLOAD & ROWADV & ~SA14 & SA10 & SA11 & SA12 & SA13)
-         | (~VLOAD & ~ROWADV & SA14);
+         (VBLANK & VS4 & ~MODE0)
+         | (~VBLANK & ROWADV & SA14 & ~SA10)
+         | (~VBLANK & ROWADV & SA14 & ~SA11)
+         | (~VBLANK & ROWADV & SA14 & ~SA12)
+         | (~VBLANK & ROWADV & SA14 & ~SA13)
+         | (~VBLANK & ROWADV & ~SA14 & SA10 & SA11 & SA12 & SA13)
+         | (~VBLANK & ~ROWADV & SA14);
       r_SA15 <=
-         (VLOAD & VS5)
-         | (~VLOAD & ROWADV & SA15 & ~SA10)
-         | (~VLOAD & ROWADV & SA15 & ~SA11)
-         | (~VLOAD & ROWADV & SA15 & ~SA12)
-         | (~VLOAD & ROWADV & SA15 & ~SA13)
-         | (~VLOAD & ROWADV & SA15 & ~SA14)
-         | (~VLOAD & ROWADV & ~SA15 & SA10 & SA11 & SA12 & SA13 & SA14)
-         | (~VLOAD & ~ROWADV & SA15);
+         (VBLANK & VS5 & ~MODE0)
+         | (~VBLANK & ROWADV & SA15 & ~SA10)
+         | (~VBLANK & ROWADV & SA15 & ~SA11)
+         | (~VBLANK & ROWADV & SA15 & ~SA12)
+         | (~VBLANK & ROWADV & SA15 & ~SA13)
+         | (~VBLANK & ROWADV & SA15 & ~SA14)
+         | (~VBLANK & ROWADV & ~SA15 & SA10 & SA11 & SA12 & SA13 & SA14)
+         | (~VBLANK & ~ROWADV & SA15);
       r_SA16 <=
-         (VLOAD & VS6)
-         | (~VLOAD & ROWADV & SA16 & ~SA10)
-         | (~VLOAD & ROWADV & SA16 & ~SA11)
-         | (~VLOAD & ROWADV & SA16 & ~SA12)
-         | (~VLOAD & ROWADV & SA16 & ~SA13)
-         | (~VLOAD & ROWADV & SA16 & ~SA14)
-         | (~VLOAD & ROWADV & SA16 & ~SA15)
-         | (~VLOAD & ROWADV & ~SA16 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15)
-         | (~VLOAD & ~ROWADV & SA16);
+         (VBLANK & VS6 & ~MODE0)
+         | (~VBLANK & ROWADV & SA16 & ~SA10)
+         | (~VBLANK & ROWADV & SA16 & ~SA11)
+         | (~VBLANK & ROWADV & SA16 & ~SA12)
+         | (~VBLANK & ROWADV & SA16 & ~SA13)
+         | (~VBLANK & ROWADV & SA16 & ~SA14)
+         | (~VBLANK & ROWADV & SA16 & ~SA15)
+         | (~VBLANK & ROWADV & ~SA16 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15)
+         | (~VBLANK & ~ROWADV & SA16);
       r_SA17 <=
-         (VLOAD & VS7)
-         | (~VLOAD & ROWADV & SA17 & ~SA10)
-         | (~VLOAD & ROWADV & SA17 & ~SA11)
-         | (~VLOAD & ROWADV & SA17 & ~SA12)
-         | (~VLOAD & ROWADV & SA17 & ~SA13)
-         | (~VLOAD & ROWADV & SA17 & ~SA14)
-         | (~VLOAD & ROWADV & SA17 & ~SA15)
-         | (~VLOAD & ROWADV & SA17 & ~SA16)
-         | (~VLOAD & ROWADV & ~SA17 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15 & SA16)
-         | (~VLOAD & ~ROWADV & SA17);
+         (VBLANK & VS7 & ~MODE0)
+         | (~VBLANK & ROWADV & SA17 & ~SA10)
+         | (~VBLANK & ROWADV & SA17 & ~SA11)
+         | (~VBLANK & ROWADV & SA17 & ~SA12)
+         | (~VBLANK & ROWADV & SA17 & ~SA13)
+         | (~VBLANK & ROWADV & SA17 & ~SA14)
+         | (~VBLANK & ROWADV & SA17 & ~SA15)
+         | (~VBLANK & ROWADV & SA17 & ~SA16)
+         | (~VBLANK & ROWADV & ~SA17 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15 & SA16)
+         | (~VBLANK & ~ROWADV & SA17);
       r_SA18 <=
-         (VLOAD & VS8)
-         | (~VLOAD & ROWADV & SA18 & ~SA10)
-         | (~VLOAD & ROWADV & SA18 & ~SA11)
-         | (~VLOAD & ROWADV & SA18 & ~SA12)
-         | (~VLOAD & ROWADV & SA18 & ~SA13)
-         | (~VLOAD & ROWADV & SA18 & ~SA14)
-         | (~VLOAD & ROWADV & SA18 & ~SA15)
-         | (~VLOAD & ROWADV & SA18 & ~SA16)
-         | (~VLOAD & ROWADV & SA18 & ~SA17)
-         | (~VLOAD & ROWADV & ~SA18 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15 & SA16 & SA17)
-         | (~VLOAD & ~ROWADV & SA18);
+         (VBLANK & VS8 & ~MODE0)
+         | (~VBLANK & ROWADV & SA18 & ~SA10)
+         | (~VBLANK & ROWADV & SA18 & ~SA11)
+         | (~VBLANK & ROWADV & SA18 & ~SA12)
+         | (~VBLANK & ROWADV & SA18 & ~SA13)
+         | (~VBLANK & ROWADV & SA18 & ~SA14)
+         | (~VBLANK & ROWADV & SA18 & ~SA15)
+         | (~VBLANK & ROWADV & SA18 & ~SA16)
+         | (~VBLANK & ROWADV & SA18 & ~SA17)
+         | (~VBLANK & ROWADV & ~SA18 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15 & SA16 & SA17)
+         | (~VBLANK & ~ROWADV & SA18);
   end
 
 endmodule

@@ -49,6 +49,7 @@ import { v3dot } from "./video3/v3dot.cpld"
 import { v3scan } from "./video3/v3scan.cpld"
 import { v3ptr } from "./video3/v3ptr.cpld"
 import { v3host } from "./video3/v3host.cpld"
+import { v3laneDesign } from "./video3/v3lane.jedec"
 
 let failures = 0, passes = 0
 const check = (ok: boolean, claim: string, detail = "") => {
@@ -96,7 +97,7 @@ const PARTS: Part[] = [
    * ⚠ Rule 3 does not reach this card: CONSUMERS needs a drawn board and
    * plan.md §15 step 8 owes one. */
   cpld("video3", v3dot), cpld("video3", v3scan),
-  cpld("video3", v3ptr), cpld("video3", v3host),
+  cpld("video3", v3ptr), cpld("video3", v3host), gal("video3", v3laneDesign),
 ]
 
 const find = (part: string, name: string): Pin => {
@@ -187,6 +188,35 @@ const CONSUMERS: Consumer[] = [
   { part: "vsup", pin: "WSTB", drives: "register-file SRAM /WE", low: true, where: "vsup.cpld.ts, graphics.md 10.1.6.3" },
   ...["OEA0", "OEA1", "OEA2", "OEB0", "OEB1", "OEB2"].map((pin) => ({
     part: "vsup", pin, drives: "74AHCT574 /OE (fetch ranks)", low: true, where: "graphics.md 8.2" })),
+
+  /* ⭐ video3 - plan.md §13.1, as video3_card.v wires it. ⛔ Not one of these
+   * was declared active-low until 2026-09-19: the generated Verilog is in
+   * asserted sense and video3_card.v reads it that way, so the card bench
+   * passes whatever the pins say - exactly the class pxsel's ranks were. */
+  ...["OEA0", "OEA1", "OEA2", "OEB0", "OEB1", "OEB2"].map((pin) => ({
+    part: "v3dot", pin, drives: "74AHCT574 /OE (fetch ranks)", low: true, where: "plan.md 13.1, graphics.md 8.2" })),
+  { part: "v3dot", pin: "PIXOE", drives: "74AHCT574 /OE (index) and IS61C6416 /OE (LUT)", low: true, where: "plan.md 3" },
+  { part: "v3dot", pin: "PIDXOE", drives: "74AHCT244 /1G /2G (PIDX onto the LUT address)", low: true, where: "plan.md 13.1" },
+  { part: "v3dot", pin: "SPRLD", drives: "74HC165 /PL, all four", low: true, where: "plan.md 7" },
+  { part: "v3dot", pin: "SPRSH", drives: "74HC165 CLK INH, all four - the chain shifts while it is LOW", low: true, where: "plan.md 7" },
+  { part: "v3dot", pin: "LDPIDXL", drives: "74AHCT163A /LD (PIDX low, both)", low: true, where: "plan.md 13.1" },
+  { part: "v3dot", pin: "LDPIDXH", drives: "74AHCT574 CLK (PIDX high) - the rising edge ends the write", low: true, where: "plan.md 13.1" },
+  { part: "v3dot", pin: "LDPDATL", drives: "74HC573 LE (PDATL) - transparent while high", low: false, where: "plan.md 13.1" },
+  { part: "v3dot", pin: "LDPDATH", drives: "74HC573 LE (PDATH)", low: false, where: "plan.md 13.1" },
+  { part: "v3dot", pin: "OMR", drives: "74AHCT273 /MR (output pair) - asserted is 'the pixel shows', /MR high", low: false, where: "plan.md 9.2" },
+  { part: "v3ptr", pin: "VWE", drives: "AS6C8016 /WE (both parts)", low: true, where: "plan.md 4" },
+  { part: "v3host", pin: "WSTB", drives: "register-file SRAM /WE", low: true, where: "plan.md 5" },
+  { part: "v3host", pin: "RDBKOE", drives: "74HCT245 /OE (host - both directions)", low: true, where: "plan.md 13.1" },
+  { part: "v3host", pin: "VSTATOE", drives: "74HC244 /1G /2G (VSTAT)", low: true, where: "plan.md 10" },
+  { part: "v3host", pin: "RDOE", drives: "74HCT574 /OE (vread)", low: true, where: "plan.md 11" },
+  { part: "v3host", pin: "LUTWE", drives: "IS61C6416 /WE (LUT)", low: true, where: "plan.md 13.1" },
+  { part: "v3host", pin: "RDCK", drives: "74HCT574 CLK (vread) - the rising edge ends the access", low: true, where: "plan.md 11" },
+  { part: "v3host", pin: "PWCK", drives: "74HC574 CLK (posted write) - the rising edge ends the strobe", low: true, where: "plan.md 6" },
+  { part: "v3host", pin: "DIR", drives: "74AHCT245 DIR, all four lanes - A is IDB, so high is IDB to the lane", low: false, where: "plan.md 13.1" },
+  ...[0, 1, 2, 3].map((l) => ({ part: "v3lane", pin: `LOE${l}`, drives: `74AHCT245 /OE (lane ${l})`, low: true, where: "plan.md 13.1" })),
+  ...["LB0", "UB0", "LB1", "UB1"].map((pin) => ({ part: "v3lane", pin, drives: `AS6C8016 /${pin.slice(0, 2)} (part ${pin[2]})`, low: true, where: "plan.md 4" })),
+  { part: "v3lane", pin: "PWOE", drives: "74HC574 /OE (posted write)", low: true, where: "plan.md 13.1" },
+  { part: "v3lane", pin: "RFOE", drives: "register-file SRAM /OE", low: true, where: "plan.md 5" },
 
   /* audio card - audio.md 10.2.2; the parts are not drawn yet */
   { part: "aseq", pin: "BLATOE", drives: "74HC574 /OE (BLAT)", low: true, where: "audio.md 10.2.2" },

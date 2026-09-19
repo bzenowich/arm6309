@@ -9,7 +9,8 @@ plan §2.2 and §3 agreeing is evidence, one implementation agreeing with itself
 is not.
 
 plan §3:   row[x] = LUT[(attr << 8) | glyphpixel]
-plan §2.5: the map is two bytes a cell on a 1024-byte stride, six-bit cell row,
+plan §2.5: the map is four bytes a cell (code, attr, two unused) on a
+           1024-byte stride, six-bit cell row,
            no ring and no horizontal scroll - so cell column is x >> 3 and
            nothing wraps.
 """
@@ -113,7 +114,7 @@ def render_sprite(d, height, sx, sy, vram, dbl=2):
 
 
 def render_tile(d, height, hs, vs, dbl=2):
-    """plan §2.4: a ONE-byte map, 8bpp tiles, both scroll axes, a six-bit cell
+    """plan §2.4: a ONE-byte map (lane 0 of a four-byte cell), 8bpp tiles, both scroll axes, a six-bit cell
     row - and ATTR is ZERO, so every pixel comes from sub-palette 0.  The bank
     is the formula the ROM computes; the map is the table the ROM streams."""
     out = np.zeros((height, 640), dtype="<u2")
@@ -206,7 +207,7 @@ if __name__ == "__main__":
             print(f"FAIL  ⭐ {green} pixels came from a sub-palette other than 0 - "
                   "the attribute path leaked into tile mode")
         print(("FAIL  " if (bad or green) else "ok    ") +
-              "⭐ tile mode: one-byte map, 8bpp tiles, both scroll axes with their "
+              "⭐ tile mode: one-byte map on a four-byte stride, 8bpp tiles, both scroll axes with their "
               "ring wraps, six-bit cell row, all four VMODEs, ATTR zero "
               f"({bad} pixels differ)")
         sys.exit(1 if (bad or green) else 0)

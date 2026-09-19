@@ -18,7 +18,9 @@ module v3ptr (
     input  wire D7,
     input  wire WSTBV,
     input  wire WSTART,
-    input  wire MUXSEL0,
+    input  wire WM0,
+    input  wire WM1,
+    input  wire DP0,
     input  wire RP1,
     input  wire RP2,
     input  wire RP3,
@@ -48,7 +50,6 @@ module v3ptr (
     output wire LDCW,
     output wire LDCH,
     output wire LDCCTRL,
-    output wire LDCTRL,
     output wire WC0,
     output wire WC1,
     output wire WC2,
@@ -128,6 +129,7 @@ module v3ptr (
     output wire MS5,
     output wire MS6,
     output wire MS7,
+    output wire MS8,
     output wire NSL0,
     output wire NSL1,
     output wire NSL2,
@@ -136,18 +138,12 @@ module v3ptr (
     output wire NSL5,
     output wire NSL6,
     output wire NSL7,
-    output wire MK0,
-    output wire MK1,
-    output wire MK2,
     output wire WADV0,
     output wire WADV1,
     output wire SPANBUSY,
-    output wire RSPN,
-    output wire WM0,
-    output wire WM1,
     output wire RETIRE,
     output wire SPANEND,
-    output wire WEN,
+    output wire VWE,
     output wire WINC,
     output wire WROWADV,
     output wire RFA0,
@@ -169,6 +165,8 @@ module v3ptr (
     output wire FBA16,
     output wire FBA17,
     output wire FBA18,
+    output wire LANE0,
+    output wire LANE1,
     output wire FBA2_OE,
     output wire FBA3_OE,
     output wire FBA4_OE,
@@ -265,6 +263,7 @@ module v3ptr (
   reg  r_MS5;
   reg  r_MS6;
   reg  r_MS7;
+  reg  r_MS8;
   reg  r_NSL0;
   reg  r_NSL1;
   reg  r_NSL2;
@@ -273,14 +272,9 @@ module v3ptr (
   reg  r_NSL5;
   reg  r_NSL6;
   reg  r_NSL7;
-  reg  r_MK0;
-  reg  r_MK1;
-  reg  r_MK2;
   reg  r_WADV0;
   reg  r_WADV1;
   reg  r_SPANBUSY;
-  reg  r_WM0;
-  reg  r_WM1;
 
   assign WC0 = r_WC0;
   assign WC1 = r_WC1;
@@ -359,6 +353,7 @@ module v3ptr (
   assign MS5 = r_MS5;
   assign MS6 = r_MS6;
   assign MS7 = r_MS7;
+  assign MS8 = r_MS8;
   assign NSL0 = r_NSL0;
   assign NSL1 = r_NSL1;
   assign NSL2 = r_NSL2;
@@ -367,14 +362,9 @@ module v3ptr (
   assign NSL5 = r_NSL5;
   assign NSL6 = r_NSL6;
   assign NSL7 = r_NSL7;
-  assign MK0 = r_MK0;
-  assign MK1 = r_MK1;
-  assign MK2 = r_MK2;
   assign WADV0 = r_WADV0;
   assign WADV1 = r_WADV1;
   assign SPANBUSY = r_SPANBUSY;
-  assign WM0 = r_WM0;
-  assign WM1 = r_WM1;
 
   // buried
   assign LDWP0 =
@@ -406,31 +396,26 @@ module v3ptr (
   // buried
   assign LDCCTRL =
          (REGWR & RA4 & ~RA3 & RA2 & RA1 & RA0);
-  // buried
-  assign LDCTRL =
-         (REGWR & ~RA4 & ~RA3 & ~RA2 & ~RA1 & ~RA0);
   // EXTERNAL - the last byte of a row - ~N + N - 1, one product term
   assign CEOR =
          (~CWN0 & CWN1 & CWN2 & CWN3 & CWN4 & CWN5 & CWN6 & CWN7 & CWN8 & CWN9);
   // EXTERNAL
   assign CHLAST =
          (~CH0 & CH1 & CH2 & CH3 & CH4 & CH5 & CH6 & CH7 & CH8);
-  // EXTERNAL
-  assign RSPN =
-         (SPANBUSY);
   // EXTERNAL - one byte goes to VRAM: also WPTR's column step, the serialiser's shift and SPANLEN's count
   assign RETIRE =
-         (SPANBUSY & GSPN & MUXSEL0);
+         (SPANBUSY & GSPN & DP0);
   // buried
   assign SPANEND =
          (RETIRE & ~WM1 & ~WM0)
-         | (RETIRE & WM0 & MK2 & MK1 & MK0)
+         | (RETIRE & WM0 & MS1 & ~MS2 & ~MS3 & ~MS4 & ~MS5 & ~MS6 & ~MS7 & ~MS8)
          | (RETIRE & WM1 & ~WM0 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6 & NSL7);
-  // EXTERNAL - RETIRE, except a transparent pixel in sprite mode
-  assign WEN =
+  // EXTERNAL - a retire, except a transparent pixel in sprite mode; or a copy write
+  assign VWE =
          (RETIRE & ~WM1)
          | (RETIRE & ~WM0)
-         | (RETIRE & MS0);
+         | (RETIRE & MS0)
+         | (CSTEP);
   // buried
   assign WINC =
          (RETIRE)
@@ -518,6 +503,14 @@ module v3ptr (
   assign FBA18 =
          (~CRDSEL & WR8)
          | (CRDSEL & CR8);
+  // EXTERNAL
+  assign LANE0 =
+         (~CRDSEL & WC0)
+         | (CRDSEL & CC0);
+  // EXTERNAL
+  assign LANE1 =
+         (~CRDSEL & WC1)
+         | (CRDSEL & CC1);
 
   // FBA2 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
@@ -1145,7 +1138,11 @@ module v3ptr (
          | (~WSTBV & ~RETIRE & MS6);
       r_MS7 <=
          (WSTBV & D0)
+         | (~WSTBV & RETIRE & MS8)
          | (~WSTBV & ~RETIRE & MS7);
+      r_MS8 <=
+         (WSTBV)
+         | (~WSTBV & ~RETIRE & MS8);
       r_NSL0 <=
          (WSTART & ~D0)
          | (~WSTART & RETIRE & ~NSL0)
@@ -1206,18 +1203,6 @@ module v3ptr (
          | (~WSTART & RETIRE & NSL7 & ~NSL6)
          | (~WSTART & RETIRE & ~NSL7 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6)
          | (~WSTART & ~RETIRE & NSL7);
-      r_MK0 <=
-         (RETIRE & ~WSTART & ~MK0)
-         | (~RETIRE & MK0);
-      r_MK1 <=
-         (RETIRE & ~WSTART & MK1 & ~MK0)
-         | (RETIRE & ~WSTART & ~MK1 & MK0)
-         | (~RETIRE & MK1);
-      r_MK2 <=
-         (RETIRE & ~WSTART & MK2 & ~MK0)
-         | (RETIRE & ~WSTART & MK2 & ~MK1)
-         | (RETIRE & ~WSTART & ~MK2 & MK0 & MK1)
-         | (~RETIRE & MK2);
       r_WADV0 <=
          (LDWADV & D0)
          | (WADV0 & ~LDWADV);
@@ -1227,12 +1212,6 @@ module v3ptr (
       r_SPANBUSY <=
          (WSTART)
          | (SPANBUSY & ~SPANEND);
-      r_WM0 <=
-         (LDCTRL & D4)
-         | (WM0 & ~LDCTRL);
-      r_WM1 <=
-         (LDCTRL & D5)
-         | (WM1 & ~LDCTRL);
   end
 
 endmodule

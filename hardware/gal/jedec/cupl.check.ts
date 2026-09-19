@@ -41,6 +41,7 @@ import { vlenDesign } from "../vlen.jedec"
 import { seqphDesign } from "../seqph.jedec"
 import { seqctlDesign } from "../seqctl.jedec"
 import { aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign } from "../audio.jedec"
+import { v3laneDesign } from "../video3/v3lane.jedec"
 import { ALL } from "../designs"
 import { PHASES, mmu } from "../mmu.model"
 import { RESET_STATE, decode, step, type Counter } from "../clkdec.model"
@@ -382,6 +383,10 @@ const REGISTRY: Part[] = [
   { design: aseqDesign, reference: null }, { design: adecDesign, reference: null },
   { design: admatDesign, reference: null }, { design: aintenaDesign, reference: null },
   { design: apendDesign, reference: null },
+  /* ⭐ v3lane - video3's byte lanes, 2026-09-19: the lane transceivers' /OE,
+   * the four byte enables and the internal bus's two latch-side drivers.
+   * video3/v3lane.check.ts sweeps all 4,096 inputs against this reference. */
+  { design: v3laneDesign, reference: "reference/v3lane.cupl.jed" },
 ]
 
 console.log("\nEvery live GAL has a second implementation to check it against\n")

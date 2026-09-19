@@ -23,16 +23,15 @@ Device     f1508ispplcc84 ;
 /* --- inputs ------------------------------------------------------- */
 PIN = CLK25 ;
 PIN = !RESET ;
-PIN = FETCH ;
+PIN = DP0 ;
+PIN = DP1 ;
+PIN = MRQ ;
 PIN = HLOAD ;
-PIN = VLOAD ;
+PIN = VBLANK ;
 PIN = ROWADV ;
-PIN = MCADV ;
-PIN = MAPLD ;
-PIN = GMAP ;
 PIN = MODE0 ;
 PIN = MODE1 ;
-PIN = FBOESCAN ;
+PIN = ATOE ;
 PIN = D0 ;
 PIN = D1 ;
 PIN = D2 ;
@@ -92,6 +91,8 @@ PIN = FBA17 ;
 PIN = FBA18 ;
 
 /* --- buried registers: state that used to cross a package boundary - */
+PINNODE = MRQ2 ;
+PINNODE = HLQ ;
 PINNODE = HS2 ;
 PINNODE = HS3 ;
 PINNODE = HS4 ;
@@ -141,6 +142,14 @@ PINNODE = MAPQ4 ;
 PINNODE = MAPQ5 ;
 PINNODE = MAPQ6 ;
 PINNODE = MAPQ7 ;
+PINNODE = ATQ0 ;
+PINNODE = ATQ1 ;
+PINNODE = ATQ2 ;
+PINNODE = ATQ3 ;
+PINNODE = ATQ4 ;
+PINNODE = ATQ5 ;
+PINNODE = ATQ6 ;
+PINNODE = ATQ7 ;
 PINNODE = MC0 ;
 PINNODE = MC1 ;
 PINNODE = MC2 ;
@@ -167,7 +176,8 @@ PINNODE = SA17 ;
 PINNODE = SA18 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * LDHSL, LDHSH, LDVSL, LDVSH, LDTB, LDMB
+ * LDHSL, LDHSH, LDVSL, LDVSH, LDTB, LDMB, FETCH, GMAP, MAPLD, MCADV
+ * MCLD
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -177,6 +187,15 @@ LDVSL = REGWR & !RA4 & !RA3 & !RA2 & !RA1 & RA0 ;
 LDVSH = REGWR & !RA4 & !RA3 & !RA2 & RA1 & !RA0 ;
 LDTB = REGWR & RA4 & RA3 & !RA2 & !RA1 & !RA0 ;
 LDMB = REGWR & RA4 & RA3 & !RA2 & !RA1 & RA0 ;
+MRQ2.d = DP1 & DP0 & MRQ
+         # MRQ2 & !DP1
+         # MRQ2 & !DP0 ;
+FETCH = DP1 & DP0 ;
+GMAP = MRQ & !DP1 ;
+MAPLD = MRQ & !DP1 & DP0 ;
+MCADV = DP1 & DP0 & MRQ2 ;
+HLQ.d = HLOAD ;
+MCLD = HLOAD & !HLQ ;
 HS2.d = LDHSL & D2
         # HS2 & !LDHSL ;
 HS3.d = LDHSL & D3
@@ -275,90 +294,130 @@ MAPQ6.d = MCADV & MAP6
           # MAPQ6 & !MCADV ;
 MAPQ7.d = MCADV & MAP7
           # MAPQ7 & !MCADV ;
-ATO0.d = MCADV & MAPA0
-         # ATO0 & !MCADV ;
-ATO1.d = MCADV & MAPA1
-         # ATO1 & !MCADV ;
-ATO2.d = MCADV & MAPA2
-         # ATO2 & !MCADV ;
-ATO3.d = MCADV & MAPA3
-         # ATO3 & !MCADV ;
-ATO4.d = MCADV & MAPA4
-         # ATO4 & !MCADV ;
-ATO5.d = MCADV & MAPA5
-         # ATO5 & !MCADV ;
-ATO6.d = MCADV & MAPA6
-         # ATO6 & !MCADV ;
-ATO7.d = MCADV & MAPA7
-         # ATO7 & !MCADV ;
-MC0.d = HLOAD & HS3
-        # !HLOAD & MCADV & !MC0
-        # !HLOAD & !MCADV & MC0 ;
-MC1.d = HLOAD & HS4
-        # !HLOAD & MCADV & MC1 & !MC0
-        # !HLOAD & MCADV & !MC1 & MC0
-        # !HLOAD & !MCADV & MC1 ;
-MC2.d = HLOAD & HS5
-        # !HLOAD & MCADV & MC2 & !MC0
-        # !HLOAD & MCADV & MC2 & !MC1
-        # !HLOAD & MCADV & !MC2 & MC0 & MC1
-        # !HLOAD & !MCADV & MC2 ;
-MC3.d = HLOAD & HS6
-        # !HLOAD & MCADV & MC3 & !MC0
-        # !HLOAD & MCADV & MC3 & !MC1
-        # !HLOAD & MCADV & MC3 & !MC2
-        # !HLOAD & MCADV & !MC3 & MC0 & MC1 & MC2
-        # !HLOAD & !MCADV & MC3 ;
-MC4.d = HLOAD & HS7
-        # !HLOAD & MCADV & MC4 & !MC0
-        # !HLOAD & MCADV & MC4 & !MC1
-        # !HLOAD & MCADV & MC4 & !MC2
-        # !HLOAD & MCADV & MC4 & !MC3
-        # !HLOAD & MCADV & !MC4 & MC0 & MC1 & MC2 & MC3
-        # !HLOAD & !MCADV & MC4 ;
-MC5.d = HLOAD & HS8
-        # !HLOAD & MCADV & MC5 & !MC0
-        # !HLOAD & MCADV & MC5 & !MC1
-        # !HLOAD & MCADV & MC5 & !MC2
-        # !HLOAD & MCADV & MC5 & !MC3
-        # !HLOAD & MCADV & MC5 & !MC4
-        # !HLOAD & MCADV & !MC5 & MC0 & MC1 & MC2 & MC3 & MC4
-        # !HLOAD & !MCADV & MC5 ;
-MC6.d = HLOAD & HS9
-        # !HLOAD & MCADV & MC6 & !MC0
-        # !HLOAD & MCADV & MC6 & !MC1
-        # !HLOAD & MCADV & MC6 & !MC2
-        # !HLOAD & MCADV & MC6 & !MC3
-        # !HLOAD & MCADV & MC6 & !MC4
-        # !HLOAD & MCADV & MC6 & !MC5
-        # !HLOAD & MCADV & !MC6 & MC0 & MC1 & MC2 & MC3 & MC4 & MC5
-        # !HLOAD & !MCADV & MC6 ;
-SA2.d = HLOAD & HS2
+ATQ0.d = GMAP & !DP0 & MAPA0
+         # ATQ0 & !GMAP
+         # ATQ0 & DP0 ;
+ATQ1.d = GMAP & !DP0 & MAPA1
+         # ATQ1 & !GMAP
+         # ATQ1 & DP0 ;
+ATQ2.d = GMAP & !DP0 & MAPA2
+         # ATQ2 & !GMAP
+         # ATQ2 & DP0 ;
+ATQ3.d = GMAP & !DP0 & MAPA3
+         # ATQ3 & !GMAP
+         # ATQ3 & DP0 ;
+ATQ4.d = GMAP & !DP0 & MAPA4
+         # ATQ4 & !GMAP
+         # ATQ4 & DP0 ;
+ATQ5.d = GMAP & !DP0 & MAPA5
+         # ATQ5 & !GMAP
+         # ATQ5 & DP0 ;
+ATQ6.d = GMAP & !DP0 & MAPA6
+         # ATQ6 & !GMAP
+         # ATQ6 & DP0 ;
+ATQ7.d = GMAP & !DP0 & MAPA7
+         # ATQ7 & !GMAP
+         # ATQ7 & DP0 ;
+ATO0.d = GMAP & !DP0 & ATQ0
+         # ATO0 & !GMAP
+         # ATO0 & DP0 ;
+ATO0.oe = ATOE ;
+ATO1.d = GMAP & !DP0 & ATQ1
+         # ATO1 & !GMAP
+         # ATO1 & DP0 ;
+ATO1.oe = ATOE ;
+ATO2.d = GMAP & !DP0 & ATQ2
+         # ATO2 & !GMAP
+         # ATO2 & DP0 ;
+ATO2.oe = ATOE ;
+ATO3.d = GMAP & !DP0 & ATQ3
+         # ATO3 & !GMAP
+         # ATO3 & DP0 ;
+ATO3.oe = ATOE ;
+ATO4.d = GMAP & !DP0 & ATQ4
+         # ATO4 & !GMAP
+         # ATO4 & DP0 ;
+ATO4.oe = ATOE ;
+ATO5.d = GMAP & !DP0 & ATQ5
+         # ATO5 & !GMAP
+         # ATO5 & DP0 ;
+ATO5.oe = ATOE ;
+ATO6.d = GMAP & !DP0 & ATQ6
+         # ATO6 & !GMAP
+         # ATO6 & DP0 ;
+ATO6.oe = ATOE ;
+ATO7.d = GMAP & !DP0 & ATQ7
+         # ATO7 & !GMAP
+         # ATO7 & DP0 ;
+ATO7.oe = ATOE ;
+MC0.d = MCLD & HS3 & !MODE0
+        # !MCLD & MAPLD & !MC0
+        # !MCLD & !MAPLD & MC0 ;
+MC1.d = MCLD & HS4 & !MODE0
+        # !MCLD & MAPLD & MC1 & !MC0
+        # !MCLD & MAPLD & !MC1 & MC0
+        # !MCLD & !MAPLD & MC1 ;
+MC2.d = MCLD & HS5 & !MODE0
+        # !MCLD & MAPLD & MC2 & !MC0
+        # !MCLD & MAPLD & MC2 & !MC1
+        # !MCLD & MAPLD & !MC2 & MC0 & MC1
+        # !MCLD & !MAPLD & MC2 ;
+MC3.d = MCLD & HS6 & !MODE0
+        # !MCLD & MAPLD & MC3 & !MC0
+        # !MCLD & MAPLD & MC3 & !MC1
+        # !MCLD & MAPLD & MC3 & !MC2
+        # !MCLD & MAPLD & !MC3 & MC0 & MC1 & MC2
+        # !MCLD & !MAPLD & MC3 ;
+MC4.d = MCLD & HS7 & !MODE0
+        # !MCLD & MAPLD & MC4 & !MC0
+        # !MCLD & MAPLD & MC4 & !MC1
+        # !MCLD & MAPLD & MC4 & !MC2
+        # !MCLD & MAPLD & MC4 & !MC3
+        # !MCLD & MAPLD & !MC4 & MC0 & MC1 & MC2 & MC3
+        # !MCLD & !MAPLD & MC4 ;
+MC5.d = MCLD & HS8 & !MODE0
+        # !MCLD & MAPLD & MC5 & !MC0
+        # !MCLD & MAPLD & MC5 & !MC1
+        # !MCLD & MAPLD & MC5 & !MC2
+        # !MCLD & MAPLD & MC5 & !MC3
+        # !MCLD & MAPLD & MC5 & !MC4
+        # !MCLD & MAPLD & !MC5 & MC0 & MC1 & MC2 & MC3 & MC4
+        # !MCLD & !MAPLD & MC5 ;
+MC6.d = MCLD & HS9 & !MODE0
+        # !MCLD & MAPLD & MC6 & !MC0
+        # !MCLD & MAPLD & MC6 & !MC1
+        # !MCLD & MAPLD & MC6 & !MC2
+        # !MCLD & MAPLD & MC6 & !MC3
+        # !MCLD & MAPLD & MC6 & !MC4
+        # !MCLD & MAPLD & MC6 & !MC5
+        # !MCLD & MAPLD & !MC6 & MC0 & MC1 & MC2 & MC3 & MC4 & MC5
+        # !MCLD & !MAPLD & MC6 ;
+SA2.d = HLOAD & HS2 & !MODE0
         # !HLOAD & FETCH & !SA2
         # !HLOAD & !FETCH & SA2 ;
-SA3.d = HLOAD & HS3
+SA3.d = HLOAD & HS3 & !MODE0
         # !HLOAD & FETCH & SA3 & !SA2
         # !HLOAD & FETCH & !SA3 & SA2
         # !HLOAD & !FETCH & SA3 ;
-SA4.d = HLOAD & HS4
+SA4.d = HLOAD & HS4 & !MODE0
         # !HLOAD & FETCH & SA4 & !SA2
         # !HLOAD & FETCH & SA4 & !SA3
         # !HLOAD & FETCH & !SA4 & SA2 & SA3
         # !HLOAD & !FETCH & SA4 ;
-SA5.d = HLOAD & HS5
+SA5.d = HLOAD & HS5 & !MODE0
         # !HLOAD & FETCH & SA5 & !SA2
         # !HLOAD & FETCH & SA5 & !SA3
         # !HLOAD & FETCH & SA5 & !SA4
         # !HLOAD & FETCH & !SA5 & SA2 & SA3 & SA4
         # !HLOAD & !FETCH & SA5 ;
-SA6.d = HLOAD & HS6
+SA6.d = HLOAD & HS6 & !MODE0
         # !HLOAD & FETCH & SA6 & !SA2
         # !HLOAD & FETCH & SA6 & !SA3
         # !HLOAD & FETCH & SA6 & !SA4
         # !HLOAD & FETCH & SA6 & !SA5
         # !HLOAD & FETCH & !SA6 & SA2 & SA3 & SA4 & SA5
         # !HLOAD & !FETCH & SA6 ;
-SA7.d = HLOAD & HS7
+SA7.d = HLOAD & HS7 & !MODE0
         # !HLOAD & FETCH & SA7 & !SA2
         # !HLOAD & FETCH & SA7 & !SA3
         # !HLOAD & FETCH & SA7 & !SA4
@@ -366,7 +425,7 @@ SA7.d = HLOAD & HS7
         # !HLOAD & FETCH & SA7 & !SA6
         # !HLOAD & FETCH & !SA7 & SA2 & SA3 & SA4 & SA5 & SA6
         # !HLOAD & !FETCH & SA7 ;
-SA8.d = HLOAD & HS8
+SA8.d = HLOAD & HS8 & !MODE0
         # !HLOAD & FETCH & SA8 & !SA2
         # !HLOAD & FETCH & SA8 & !SA3
         # !HLOAD & FETCH & SA8 & !SA4
@@ -375,7 +434,7 @@ SA8.d = HLOAD & HS8
         # !HLOAD & FETCH & SA8 & !SA7
         # !HLOAD & FETCH & !SA8 & SA2 & SA3 & SA4 & SA5 & SA6 & SA7
         # !HLOAD & !FETCH & SA8 ;
-SA9.d = HLOAD & HS9
+SA9.d = HLOAD & HS9 & !MODE0
         # !HLOAD & FETCH & SA9 & !SA2
         # !HLOAD & FETCH & SA9 & !SA3
         # !HLOAD & FETCH & SA9 & !SA4
@@ -385,160 +444,191 @@ SA9.d = HLOAD & HS9
         # !HLOAD & FETCH & SA9 & !SA8
         # !HLOAD & FETCH & !SA9 & SA2 & SA3 & SA4 & SA5 & SA6 & SA7 & SA8
         # !HLOAD & !FETCH & SA9 ;
-SA10.d = VLOAD & VS0
-         # !VLOAD & ROWADV & !SA10
-         # !VLOAD & !ROWADV & SA10 ;
-SA11.d = VLOAD & VS1
-         # !VLOAD & ROWADV & SA11 & !SA10
-         # !VLOAD & ROWADV & !SA11 & SA10
-         # !VLOAD & !ROWADV & SA11 ;
-SA12.d = VLOAD & VS2
-         # !VLOAD & ROWADV & SA12 & !SA10
-         # !VLOAD & ROWADV & SA12 & !SA11
-         # !VLOAD & ROWADV & !SA12 & SA10 & SA11
-         # !VLOAD & !ROWADV & SA12 ;
-SA13.d = VLOAD & VS3
-         # !VLOAD & ROWADV & SA13 & !SA10
-         # !VLOAD & ROWADV & SA13 & !SA11
-         # !VLOAD & ROWADV & SA13 & !SA12
-         # !VLOAD & ROWADV & !SA13 & SA10 & SA11 & SA12
-         # !VLOAD & !ROWADV & SA13 ;
-SA14.d = VLOAD & VS4
-         # !VLOAD & ROWADV & SA14 & !SA10
-         # !VLOAD & ROWADV & SA14 & !SA11
-         # !VLOAD & ROWADV & SA14 & !SA12
-         # !VLOAD & ROWADV & SA14 & !SA13
-         # !VLOAD & ROWADV & !SA14 & SA10 & SA11 & SA12 & SA13
-         # !VLOAD & !ROWADV & SA14 ;
-SA15.d = VLOAD & VS5
-         # !VLOAD & ROWADV & SA15 & !SA10
-         # !VLOAD & ROWADV & SA15 & !SA11
-         # !VLOAD & ROWADV & SA15 & !SA12
-         # !VLOAD & ROWADV & SA15 & !SA13
-         # !VLOAD & ROWADV & SA15 & !SA14
-         # !VLOAD & ROWADV & !SA15 & SA10 & SA11 & SA12 & SA13 & SA14
-         # !VLOAD & !ROWADV & SA15 ;
-SA16.d = VLOAD & VS6
-         # !VLOAD & ROWADV & SA16 & !SA10
-         # !VLOAD & ROWADV & SA16 & !SA11
-         # !VLOAD & ROWADV & SA16 & !SA12
-         # !VLOAD & ROWADV & SA16 & !SA13
-         # !VLOAD & ROWADV & SA16 & !SA14
-         # !VLOAD & ROWADV & SA16 & !SA15
-         # !VLOAD & ROWADV & !SA16 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15
-         # !VLOAD & !ROWADV & SA16 ;
-SA17.d = VLOAD & VS7
-         # !VLOAD & ROWADV & SA17 & !SA10
-         # !VLOAD & ROWADV & SA17 & !SA11
-         # !VLOAD & ROWADV & SA17 & !SA12
-         # !VLOAD & ROWADV & SA17 & !SA13
-         # !VLOAD & ROWADV & SA17 & !SA14
-         # !VLOAD & ROWADV & SA17 & !SA15
-         # !VLOAD & ROWADV & SA17 & !SA16
-         # !VLOAD & ROWADV & !SA17 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15 & SA16
-         # !VLOAD & !ROWADV & SA17 ;
-SA18.d = VLOAD & VS8
-         # !VLOAD & ROWADV & SA18 & !SA10
-         # !VLOAD & ROWADV & SA18 & !SA11
-         # !VLOAD & ROWADV & SA18 & !SA12
-         # !VLOAD & ROWADV & SA18 & !SA13
-         # !VLOAD & ROWADV & SA18 & !SA14
-         # !VLOAD & ROWADV & SA18 & !SA15
-         # !VLOAD & ROWADV & SA18 & !SA16
-         # !VLOAD & ROWADV & SA18 & !SA17
-         # !VLOAD & ROWADV & !SA18 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15 & SA16 & SA17
-         # !VLOAD & !ROWADV & SA18 ;
+SA10.d = VBLANK & VS0 & !MODE0
+         # !VBLANK & ROWADV & !SA10
+         # !VBLANK & !ROWADV & SA10 ;
+SA11.d = VBLANK & VS1 & !MODE0
+         # !VBLANK & ROWADV & SA11 & !SA10
+         # !VBLANK & ROWADV & !SA11 & SA10
+         # !VBLANK & !ROWADV & SA11 ;
+SA12.d = VBLANK & VS2 & !MODE0
+         # !VBLANK & ROWADV & SA12 & !SA10
+         # !VBLANK & ROWADV & SA12 & !SA11
+         # !VBLANK & ROWADV & !SA12 & SA10 & SA11
+         # !VBLANK & !ROWADV & SA12 ;
+SA13.d = VBLANK & VS3 & !MODE0
+         # !VBLANK & ROWADV & SA13 & !SA10
+         # !VBLANK & ROWADV & SA13 & !SA11
+         # !VBLANK & ROWADV & SA13 & !SA12
+         # !VBLANK & ROWADV & !SA13 & SA10 & SA11 & SA12
+         # !VBLANK & !ROWADV & SA13 ;
+SA14.d = VBLANK & VS4 & !MODE0
+         # !VBLANK & ROWADV & SA14 & !SA10
+         # !VBLANK & ROWADV & SA14 & !SA11
+         # !VBLANK & ROWADV & SA14 & !SA12
+         # !VBLANK & ROWADV & SA14 & !SA13
+         # !VBLANK & ROWADV & !SA14 & SA10 & SA11 & SA12 & SA13
+         # !VBLANK & !ROWADV & SA14 ;
+SA15.d = VBLANK & VS5 & !MODE0
+         # !VBLANK & ROWADV & SA15 & !SA10
+         # !VBLANK & ROWADV & SA15 & !SA11
+         # !VBLANK & ROWADV & SA15 & !SA12
+         # !VBLANK & ROWADV & SA15 & !SA13
+         # !VBLANK & ROWADV & SA15 & !SA14
+         # !VBLANK & ROWADV & !SA15 & SA10 & SA11 & SA12 & SA13 & SA14
+         # !VBLANK & !ROWADV & SA15 ;
+SA16.d = VBLANK & VS6 & !MODE0
+         # !VBLANK & ROWADV & SA16 & !SA10
+         # !VBLANK & ROWADV & SA16 & !SA11
+         # !VBLANK & ROWADV & SA16 & !SA12
+         # !VBLANK & ROWADV & SA16 & !SA13
+         # !VBLANK & ROWADV & SA16 & !SA14
+         # !VBLANK & ROWADV & SA16 & !SA15
+         # !VBLANK & ROWADV & !SA16 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15
+         # !VBLANK & !ROWADV & SA16 ;
+SA17.d = VBLANK & VS7 & !MODE0
+         # !VBLANK & ROWADV & SA17 & !SA10
+         # !VBLANK & ROWADV & SA17 & !SA11
+         # !VBLANK & ROWADV & SA17 & !SA12
+         # !VBLANK & ROWADV & SA17 & !SA13
+         # !VBLANK & ROWADV & SA17 & !SA14
+         # !VBLANK & ROWADV & SA17 & !SA15
+         # !VBLANK & ROWADV & SA17 & !SA16
+         # !VBLANK & ROWADV & !SA17 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15 & SA16
+         # !VBLANK & !ROWADV & SA17 ;
+SA18.d = VBLANK & VS8 & !MODE0
+         # !VBLANK & ROWADV & SA18 & !SA10
+         # !VBLANK & ROWADV & SA18 & !SA11
+         # !VBLANK & ROWADV & SA18 & !SA12
+         # !VBLANK & ROWADV & SA18 & !SA13
+         # !VBLANK & ROWADV & SA18 & !SA14
+         # !VBLANK & ROWADV & SA18 & !SA15
+         # !VBLANK & ROWADV & SA18 & !SA16
+         # !VBLANK & ROWADV & SA18 & !SA17
+         # !VBLANK & ROWADV & !SA18 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15 & SA16 & SA17
+         # !VBLANK & !ROWADV & SA18 ;
 FBA2 = !GMAP & !MODE0 & !MODE1 & SA2
        # !GMAP & MODE0 & SA2
        # !GMAP & MODE1 & SA2
-       # GMAP & MC1 ;
-FBA2.oe = FBOESCAN ;
+       # GMAP & MODE0 & MC0
+       # GMAP & MODE1 & MC0 ;
+FBA2.oe = DP1 # MRQ & MODE0 # MRQ & MODE1 ;
 FBA3 = !GMAP & !MODE0 & !MODE1 & SA3
        # !GMAP & MODE0 & SA10
        # !GMAP & MODE1 & SA10
-       # GMAP & MC2 ;
-FBA3.oe = FBOESCAN ;
+       # GMAP & MODE0 & MC1
+       # GMAP & MODE1 & MC1 ;
+FBA3.oe = DP1 # MRQ & MODE0 # MRQ & MODE1 ;
 FBA4 = !GMAP & !MODE0 & !MODE1 & SA4
        # !GMAP & MODE0 & SA11
        # !GMAP & MODE1 & SA11
-       # GMAP & MC3 ;
-FBA4.oe = FBOESCAN ;
+       # GMAP & MODE0 & MC2
+       # GMAP & MODE1 & MC2 ;
+FBA4.oe = DP1 # MRQ & MODE0 # MRQ & MODE1 ;
 FBA5 = !GMAP & !MODE0 & !MODE1 & SA5
        # !GMAP & MODE0 & SA12
        # !GMAP & MODE1 & SA12
-       # GMAP & MC4 ;
-FBA5.oe = FBOESCAN ;
+       # GMAP & MODE0 & MC3
+       # GMAP & MODE1 & MC3 ;
+FBA5.oe = DP1 # MRQ & MODE0 # MRQ & MODE1 ;
 FBA6 = !GMAP & !MODE0 & !MODE1 & SA6
        # !GMAP & MODE0 & MAPQ0
        # !GMAP & MODE1 & MAPQ0
-       # GMAP & MC5 ;
-FBA6.oe = FBOESCAN ;
+       # GMAP & MODE0 & MC4
+       # GMAP & MODE1 & MC4
+       # GMAP & !MODE0 & !MODE1 ;
+FBA6.oe = DP1 # MRQ ;
 FBA7 = !GMAP & !MODE0 & !MODE1 & SA7
        # !GMAP & MODE0 & MAPQ1
        # !GMAP & MODE1 & MAPQ1
-       # GMAP & MC6 ;
-FBA7.oe = FBOESCAN ;
+       # GMAP & MODE0 & MC5
+       # GMAP & MODE1 & MC5
+       # GMAP & !MODE0 & !MODE1 ;
+FBA7.oe = DP1 # MRQ ;
 FBA8 = !GMAP & !MODE0 & !MODE1 & SA8
        # !GMAP & MODE0 & MAPQ2
-       # !GMAP & MODE1 & MAPQ2 ;
-FBA8.oe = FBOESCAN ;
+       # !GMAP & MODE1 & MAPQ2
+       # GMAP & MODE0 & MC6
+       # GMAP & MODE1 & MC6
+       # GMAP & !MODE0 & !MODE1 ;
+FBA8.oe = DP1 # MRQ ;
 FBA9 = !GMAP & !MODE0 & !MODE1 & SA9
        # !GMAP & MODE0 & MAPQ3
-       # !GMAP & MODE1 & MAPQ3 ;
-FBA9.oe = FBOESCAN ;
+       # !GMAP & MODE1 & MAPQ3
+       # GMAP & !MODE0 & !MODE1 ;
+FBA9.oe = DP1 # MRQ ;
 FBA10 = !GMAP & !MODE0 & !MODE1 & SA10
         # !GMAP & MODE0 & MAPQ4
         # !GMAP & MODE1 & MAPQ4
-        # GMAP & SA13 ;
-FBA10.oe = FBOESCAN ;
+        # GMAP & MODE0 & SA13
+        # GMAP & MODE1 & SA13
+        # GMAP & !MODE0 & !MODE1 ;
+FBA10.oe = DP1 # MRQ ;
 FBA11 = !GMAP & !MODE0 & !MODE1 & SA11
         # !GMAP & MODE0 & MAPQ5
         # !GMAP & MODE1 & MAPQ5
-        # GMAP & SA14 ;
-FBA11.oe = FBOESCAN ;
+        # GMAP & MODE0 & SA14
+        # GMAP & MODE1 & SA14
+        # GMAP & !MODE0 & !MODE1 ;
+FBA11.oe = DP1 # MRQ ;
 FBA12 = !GMAP & !MODE0 & !MODE1 & SA12
         # !GMAP & MODE0 & MAPQ6
         # !GMAP & MODE1 & MAPQ6
-        # GMAP & SA15 ;
-FBA12.oe = FBOESCAN ;
+        # GMAP & MODE0 & SA15
+        # GMAP & MODE1 & SA15
+        # GMAP & !MODE0 & !MODE1 ;
+FBA12.oe = DP1 # MRQ ;
 FBA13 = !GMAP & !MODE0 & !MODE1 & SA13
         # !GMAP & MODE0 & MAPQ7
         # !GMAP & MODE1 & MAPQ7
-        # GMAP & SA16 ;
-FBA13.oe = FBOESCAN ;
+        # GMAP & MODE0 & SA16
+        # GMAP & MODE1 & SA16
+        # GMAP & !MODE0 & !MODE1 ;
+FBA13.oe = DP1 # MRQ ;
 FBA14 = !GMAP & !MODE0 & !MODE1 & SA14
         # !GMAP & MODE0 & TB0
         # !GMAP & MODE1 & TB0
-        # GMAP & SA17 ;
-FBA14.oe = FBOESCAN ;
+        # GMAP & MODE0 & SA17
+        # GMAP & MODE1 & SA17
+        # GMAP & !MODE0 & !MODE1 ;
+FBA14.oe = DP1 # MRQ ;
 FBA15 = !GMAP & !MODE0 & !MODE1 & SA15
         # !GMAP & MODE0 & TB1
         # !GMAP & MODE1 & TB1
-        # GMAP & SA18 ;
-FBA15.oe = FBOESCAN ;
+        # GMAP & MODE0 & SA18
+        # GMAP & MODE1 & SA18
+        # GMAP & !MODE0 & !MODE1 ;
+FBA15.oe = DP1 # MRQ ;
 FBA16 = !GMAP & !MODE0 & !MODE1 & SA16
         # !GMAP & MODE0 & TB2
         # !GMAP & MODE1 & TB2
-        # GMAP & MB0 ;
-FBA16.oe = FBOESCAN ;
+        # GMAP & MODE0 & MB0
+        # GMAP & MODE1 & MB0
+        # GMAP & !MODE0 & !MODE1 & MB0 ;
+FBA16.oe = DP1 # MRQ ;
 FBA17 = !GMAP & !MODE0 & !MODE1 & SA17
         # !GMAP & MODE0 & TB3
         # !GMAP & MODE1 & TB3
-        # GMAP & MB1 ;
-FBA17.oe = FBOESCAN ;
+        # GMAP & MODE0 & MB1
+        # GMAP & MODE1 & MB1
+        # GMAP & !MODE0 & !MODE1 & MB1 ;
+FBA17.oe = DP1 # MRQ ;
 FBA18 = !GMAP & !MODE0 & !MODE1 & SA18
         # !GMAP & MODE0 & TB4
         # !GMAP & MODE1 & TB4
-        # GMAP & MB2 ;
-FBA18.oe = FBOESCAN ;
+        # GMAP & MODE0 & MB2
+        # GMAP & MODE1 & MB2
+        # GMAP & !MODE0 & !MODE1 & MB2 ;
+FBA18.oe = DP1 # MRQ ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
-[HS2,HS3,HS4,HS5,HS6,HS7,HS8,HS9,VS0,VS1,VS2,VS3,VS4,VS5,VS6].ck = CLK25 ;
-[VS7,VS8,TB0,TB1,TB2,TB3,TB4,MB0,MB1,MB2,MAP0,MAP1,MAP2,MAP3].ck = CLK25 ;
-[MAP4,MAP5,MAP6,MAP7,MAPA0,MAPA1,MAPA2,MAPA3,MAPA4,MAPA5].ck = CLK25 ;
-[MAPA6,MAPA7,MAPQ0,MAPQ1,MAPQ2,MAPQ3,MAPQ4,MAPQ5,MAPQ6,MAPQ7].ck = CLK25 ;
-[ATO0,ATO1,ATO2,ATO3,ATO4,ATO5,ATO6,ATO7,MC0,MC1,MC2,MC3,MC4].ck = CLK25 ;
-[MC5,MC6,SA2,SA3,SA4,SA5,SA6,SA7,SA8,SA9,SA10,SA11,SA12,SA13].ck = CLK25 ;
+[MRQ2,HLQ,HS2,HS3,HS4,HS5,HS6,HS7,HS8,HS9,VS0,VS1,VS2,VS3].ck = CLK25 ;
+[VS4,VS5,VS6,VS7,VS8,TB0,TB1,TB2,TB3,TB4,MB0,MB1,MB2,MAP0].ck = CLK25 ;
+[MAP1,MAP2,MAP3,MAP4,MAP5,MAP6,MAP7,MAPA0,MAPA1,MAPA2,MAPA3].ck = CLK25 ;
+[MAPA4,MAPA5,MAPA6,MAPA7,MAPQ0,MAPQ1,MAPQ2,MAPQ3,MAPQ4,MAPQ5].ck = CLK25 ;
+[MAPQ6,MAPQ7,ATQ0,ATQ1,ATQ2,ATQ3,ATQ4,ATQ5,ATQ6,ATQ7,ATO0].ck = CLK25 ;
+[ATO1,ATO2,ATO3,ATO4,ATO5,ATO6,ATO7,MC0,MC1,MC2,MC3,MC4,MC5].ck = CLK25 ;
+[MC6,SA2,SA3,SA4,SA5,SA6,SA7,SA8,SA9,SA10,SA11,SA12,SA13].ck = CLK25 ;
 [SA14,SA15,SA16,SA17,SA18].ck = CLK25 ;
 

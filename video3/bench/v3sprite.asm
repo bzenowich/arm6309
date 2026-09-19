@@ -4,7 +4,8 @@
 *
 *   sh video3/bench/run-v3sprite.sh
 *
-* plan 7.  The sprite's two bits per pixel are the LUT's ATTR in bitmap mode:
+* plan 7.  The shape is the top 64 bytes of MAPBASE's 64 KB of VRAM.
+* The sprite's two bits per pixel are the LUT's ATTR in bitmap mode:
 * 0 is transparent, 1 and 2 select sub-palettes 1 and 2.  The ROM steps through
 * every X phase and writes the position to $C208/$C20A, which machine.c records
 * with every frame - so one run covers all of them.
@@ -26,8 +27,7 @@ PDATH   EQU     $FF71
 SPRX    EQU     $FF7A
 SPRY    EQU     $FF7B
 SPRH    EQU     $FF7C
-SPRIDX  EQU     $FF7D
-SPRDAT  EQU     $FF7E
+MAPBAS  EQU     $FF79
 SIMPORT EQU     $FF2F
 
 MKX     EQU     $C208           machine.c records these with every frame
@@ -109,14 +109,35 @@ fc1     lda     seed
         cmpd    #200
         blo     fr1
 
-* --- the shape: 64 bytes through SPRIDX/SPRDAT, which auto-increments
-        clr     <SPRIDX
+* --- the shape: 64 bytes of VRAM at MAPBASE's top (plan 7), written with
+*     ordinary VDATA writes - and its complement at MAPBASE 0's top, the decoy
+        lda     #$00
+        sta     <WPTR2
+        lda     #$FF
+        sta     <WPTR1
+        lda     #$C0
+        sta     <WPTR0
+        ldx     #shape
+        ldb     #64
+sh0     lda     ,x+
+        coma
+        sta     <VDATA
+        decb
+        bne     sh0
+        lda     #$07
+        sta     <WPTR2
+        lda     #$FF
+        sta     <WPTR1
+        lda     #$C0
+        sta     <WPTR0
         ldx     #shape
         ldb     #64
 sh1     lda     ,x+
-        sta     <SPRDAT
+        sta     <VDATA
         decb
         bne     sh1
+        lda     #7
+        sta     <MAPBAS         selects the shape in bitmap mode
 
         lda     #$A0
         sta     SIMPORT

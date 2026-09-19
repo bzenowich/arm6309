@@ -24,15 +24,19 @@ module v3dot (
     input  wire RA4,
     input  wire RDREQ,
     input  wire RCPY,
-    input  wire RSPN,
+    input  wire SPANBUSY,
     input  wire PALTURN,
+    input  wire SQ0,
+    input  wire SQ1,
     output wire LDCTRL,
     output wire LDHSL,
     output wire LDSPRX,
     output wire LDSPRY,
     output wire LDSPRH,
-    output wire LDSPRIX,
-    output wire LDSPRDA,
+    output wire LDPIDXL,
+    output wire LDPIDXH,
+    output wire LDPDATL,
+    output wire LDPDATH,
     output wire DP0,
     output wire DP1,
     output wire HC0,
@@ -60,10 +64,10 @@ module v3dot (
     output wire CT3,
     output wire CT4,
     output wire CT5,
-    output wire CT6,
     output wire CT7,
     output wire HS0,
     output wire HS1,
+    output wire HS2,
     output wire SX0,
     output wire SX1,
     output wire SX2,
@@ -84,12 +88,6 @@ module v3dot (
     output wire SY7,
     output wire SY8,
     output wire SPREN,
-    output wire SI0,
-    output wire SI1,
-    output wire SI2,
-    output wire SI3,
-    output wire SI4,
-    output wire SI5,
     output wire SHC0,
     output wire SHC1,
     output wire SHC2,
@@ -109,14 +107,15 @@ module v3dot (
     output wire SVC6,
     output wire SVC7,
     output wire SVC8,
-    output wire SW0,
-    output wire SW1,
-    output wire SW2,
-    output wire SW3,
+    output wire SHQ,
+    output wire SVQ,
     output wire SR0,
     output wire SR1,
     output wire SR2,
     output wire SR3,
+    output wire SR4,
+    output wire SPRA0,
+    output wire SPRA1,
     output wire SLOTTICK,
     output wire HBLANK,
     output wire HSYNC,
@@ -125,31 +124,39 @@ module v3dot (
     output wire BLANK,
     output wire FRAMEEND,
     output wire LINETICK,
-    output wire FETCH,
     output wire SPARE,
-    output wire CELLTICK,
     output wire HLOAD,
     output wire VLOAD,
     output wire ROWADV,
-    output wire MCADV,
-    output wire MAPLD,
     output wire DBLHOLD,
+    output wire MWIN,
+    output wire MRQ,
+    output wire MAPREQ,
     output wire MUXSEL0,
     output wire MUXSEL1,
     output wire PIXOE,
     output wire ATOE,
     output wire PIDXOE,
-    output wire FOE0,
-    output wire FOE1,
+    output wire SPRAOE,
+    output wire BD1,
+    output wire OMR,
+    output wire OEA0,
+    output wire OEB0,
+    output wire OEA1,
+    output wire OEB1,
+    output wire OEA2,
+    output wire OEB2,
     output wire SPRACT,
     output wire SPRSH,
     output wire SPRLD,
-    output wire MAPREQ,
+    output wire FBA2,
+    output wire FBA3,
+    output wire FBA4,
+    output wire FBA5,
     output wire GMAP,
     output wire GRD,
     output wire GCPY,
     output wire GSPN,
-    output wire FBOESCAN,
     output wire FBOEPTR,
     output wire HLAST,
     output wire ACTIVE,
@@ -159,9 +166,17 @@ module v3dot (
     output wire SPRVHIT,
     output wire SPRHIT,
     output wire SPRROW,
+    output wire VMODE0,
     output wire MODE0,
     output wire MODE1,
-    output wire VMODE0
+    output wire WM0,
+    output wire WM1,
+    output wire SPRA0_OE,
+    output wire SPRA1_OE,
+    output wire FBA2_OE,
+    output wire FBA3_OE,
+    output wire FBA4_OE,
+    output wire FBA5_OE
 );
 
   reg  r_DP0;
@@ -191,10 +206,10 @@ module v3dot (
   reg  r_CT3;
   reg  r_CT4;
   reg  r_CT5;
-  reg  r_CT6;
   reg  r_CT7;
   reg  r_HS0;
   reg  r_HS1;
+  reg  r_HS2;
   reg  r_SX0;
   reg  r_SX1;
   reg  r_SX2;
@@ -215,12 +230,6 @@ module v3dot (
   reg  r_SY7;
   reg  r_SY8;
   reg  r_SPREN;
-  reg  r_SI0;
-  reg  r_SI1;
-  reg  r_SI2;
-  reg  r_SI3;
-  reg  r_SI4;
-  reg  r_SI5;
   reg  r_SHC0;
   reg  r_SHC1;
   reg  r_SHC2;
@@ -240,15 +249,20 @@ module v3dot (
   reg  r_SVC6;
   reg  r_SVC7;
   reg  r_SVC8;
-  reg  r_SW0;
-  reg  r_SW1;
-  reg  r_SW2;
-  reg  r_SW3;
+  reg  r_SHQ;
+  reg  r_SVQ;
   reg  r_SR0;
   reg  r_SR1;
   reg  r_SR2;
   reg  r_SR3;
+  reg  r_SR4;
+  reg  r_SPRA0;
+  reg  r_SPRA1;
   reg  r_DBLHOLD;
+  reg  r_MWIN;
+  reg  r_MRQ;
+  reg  r_BD1;
+  reg  r_OMR;
   reg  r_ACTIVE;
 
   assign DP0 = r_DP0;
@@ -278,10 +292,10 @@ module v3dot (
   assign CT3 = r_CT3;
   assign CT4 = r_CT4;
   assign CT5 = r_CT5;
-  assign CT6 = r_CT6;
   assign CT7 = r_CT7;
   assign HS0 = r_HS0;
   assign HS1 = r_HS1;
+  assign HS2 = r_HS2;
   assign SX0 = r_SX0;
   assign SX1 = r_SX1;
   assign SX2 = r_SX2;
@@ -302,12 +316,6 @@ module v3dot (
   assign SY7 = r_SY7;
   assign SY8 = r_SY8;
   assign SPREN = r_SPREN;
-  assign SI0 = r_SI0;
-  assign SI1 = r_SI1;
-  assign SI2 = r_SI2;
-  assign SI3 = r_SI3;
-  assign SI4 = r_SI4;
-  assign SI5 = r_SI5;
   assign SHC0 = r_SHC0;
   assign SHC1 = r_SHC1;
   assign SHC2 = r_SHC2;
@@ -327,15 +335,20 @@ module v3dot (
   assign SVC6 = r_SVC6;
   assign SVC7 = r_SVC7;
   assign SVC8 = r_SVC8;
-  assign SW0 = r_SW0;
-  assign SW1 = r_SW1;
-  assign SW2 = r_SW2;
-  assign SW3 = r_SW3;
+  assign SHQ = r_SHQ;
+  assign SVQ = r_SVQ;
   assign SR0 = r_SR0;
   assign SR1 = r_SR1;
   assign SR2 = r_SR2;
   assign SR3 = r_SR3;
+  assign SR4 = r_SR4;
+  assign SPRA0 = r_SPRA0;
+  assign SPRA1 = r_SPRA1;
   assign DBLHOLD = r_DBLHOLD;
+  assign MWIN = r_MWIN;
+  assign MRQ = r_MRQ;
+  assign BD1 = r_BD1;
+  assign OMR = r_OMR;
   assign ACTIVE = r_ACTIVE;
 
   // buried
@@ -353,13 +366,19 @@ module v3dot (
   // buried
   assign LDSPRH =
          (REGWR & RA4 & RA3 & RA2 & ~RA1 & ~RA0);
-  // buried
-  assign LDSPRIX =
-         (REGWR & RA4 & RA3 & RA2 & ~RA1 & RA0);
-  // buried
-  assign LDSPRDA =
-         (REGWR & RA4 & RA3 & RA2 & RA1 & ~RA0);
   // EXTERNAL
+  assign LDPIDXL =
+         (REGWR & ~RA4 & RA3 & RA2 & RA1 & ~RA0);
+  // EXTERNAL
+  assign LDPIDXH =
+         (REGWR & ~RA4 & RA3 & RA2 & RA1 & RA0);
+  // EXTERNAL
+  assign LDPDATL =
+         (REGWR & RA4 & ~RA3 & ~RA2 & ~RA1 & ~RA0);
+  // EXTERNAL
+  assign LDPDATH =
+         (REGWR & RA4 & ~RA3 & ~RA2 & ~RA1 & RA0);
+  // buried
   assign SLOTTICK =
          (DP1 & DP0);
   // EXTERNAL
@@ -387,64 +406,92 @@ module v3dot (
   assign LINETICK =
          (SLOTTICK & HLAST);
   // EXTERNAL
-  assign FETCH =
-         (SLOTTICK);
-  // EXTERNAL
   assign SPARE =
          (~DP1);
   // EXTERNAL
-  assign CELLTICK =
-         (SLOTTICK & ~HC0);
-  // EXTERNAL
   assign HLOAD =
-         (~HC7 & ~HC6 & HC5 & ~HC4 & ~HC3 & ~HC2 & ~HC1);
-  // EXTERNAL
+         (~HC7 & ~HC6 & HC5 & ~HC4 & ~HC3 & ~HC2 & ~HC1)
+         | (~HC7 & ~HC6 & ~HC5 & HC4 & HC3 & HC2 & HC1);
+  // buried
   assign VLOAD =
          (VBLANK);
   // EXTERNAL
   assign ROWADV =
          (LINETICK & VACTIVE & ~DBLHOLD);
-  // EXTERNAL
-  assign MCADV =
-         (CELLTICK);
-  // EXTERNAL
-  assign MAPLD =
-         (SPARE & CELLTICK);
+  // buried
+  assign MAPREQ =
+         (MRQ);
   // EXTERNAL
   assign MUXSEL0 =
-         (DP0);
+         (DP0 & ~HS0)
+         | (~DP0 & HS0 & ~MODE0)
+         | (DP0 & MODE0);
   // EXTERNAL
   assign MUXSEL1 =
-         (DP1);
+         (DP1 & ~HS1 & ~HS0)
+         | (~DP1 & HS1 & ~HS0 & ~MODE0)
+         | (DP1 & ~DP0 & ~HS1)
+         | (~DP1 & DP0 & ~HS1 & HS0 & ~MODE0)
+         | (~DP1 & ~DP0 & HS1 & ~MODE0)
+         | (DP1 & DP0 & HS1 & HS0)
+         | (DP1 & MODE0);
   // EXTERNAL
   assign PIXOE =
          (~PALTURN);
   // EXTERNAL
   assign ATOE =
-         (~PALTURN & MODE1 | ~PALTURN & MODE0);
+         (~PALTURN & MODE0);
   // EXTERNAL
   assign PIDXOE =
          (PALTURN);
+  // buried
+  assign SPRAOE =
+         (~PALTURN & ~MODE0);
   // EXTERNAL
-  assign FOE0 =
-         (HS0 | HS1);
+  assign OEA0 =
+         (HS1 & ~MODE0)
+         | (HS0 & ~MODE0);
   // EXTERNAL
-  assign FOE1 =
-         (~HS0 & ~HS1);
+  assign OEB0 =
+         (~HS1 & ~HS0)
+         | (MODE0);
+  // EXTERNAL
+  assign OEA1 =
+         (HS1 & ~MODE0);
+  // EXTERNAL
+  assign OEB1 =
+         (~HS1)
+         | (MODE0);
+  // EXTERNAL
+  assign OEA2 =
+         (HS1 & HS0 & ~MODE0);
+  // EXTERNAL
+  assign OEB2 =
+         (~HS0)
+         | (~HS1)
+         | (MODE0);
   // buried
   assign SPRACT =
-         (SPREN & ~MODE1 & ~MODE0 & SPRROW & ~SW3);
+         (SPREN & ~MODE1 & ~MODE0 & SPRROW & SPRHIT & ACTIVE);
   // EXTERNAL
   assign SPRSH =
          (SPRACT);
   // EXTERNAL
   assign SPRLD =
-         (HBLANK & SPRROW & HC3 & ~HC4);
-  // buried
-  assign MAPREQ =
-         (CELLTICK & MODE0)
-         | (CELLTICK & MODE1);
+         (MRQ & ~DP1 & DP0 & ~MODE0 & ~MODE1);
   // EXTERNAL
+  assign FBA2 =
+         (SR0);
+  // EXTERNAL
+  assign FBA3 =
+         (SR1);
+  // EXTERNAL
+  assign FBA4 =
+         (SR2);
+  // EXTERNAL
+  assign FBA5 =
+         (SR3);
+  // buried
   assign GMAP =
          (SPARE & MAPREQ);
   // EXTERNAL
@@ -455,11 +502,7 @@ module v3dot (
          (SPARE & ~MAPREQ & ~RDREQ & RCPY);
   // EXTERNAL
   assign GSPN =
-         (SPARE & ~MAPREQ & ~RDREQ & ~RCPY & RSPN);
-  // EXTERNAL
-  assign FBOESCAN =
-         (~SPARE)
-         | (GMAP);
+         (SPARE & ~MAPREQ & ~RDREQ & ~RCPY & SPANBUSY);
   // EXTERNAL
   assign FBOEPTR =
          (GRD)
@@ -483,24 +526,55 @@ module v3dot (
          | (VC9 & VC3 & VC2 & M0);
   // buried
   assign SPRVHIT =
-         (~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8);
+         (SVC0 & SVC1 & SVC2 & SVC3 & SVC4 & SVC5 & SVC6 & SVC7 & SVC8)
+         | (SVQ);
   // buried
   assign SPRHIT =
-         (~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9);
+         (SHC0 & SHC1 & SHC2 & SHC3 & SHC4 & SHC5 & SHC6 & SHC7 & SHC8 & SHC9)
+         | (SHQ);
   // buried
   assign SPRROW =
-         (SPRVHIT)
-         | (~SR3);
+         (SPRVHIT & ~SR4);
+  // buried
+  assign VMODE0 =
+         (CT0);
   // EXTERNAL
   assign MODE0 =
          (CT2);
   // EXTERNAL
   assign MODE1 =
          (CT3);
-  // buried
-  assign VMODE0 =
-         (CT0);
+  // EXTERNAL
+  assign WM0 =
+         (CT4);
+  // EXTERNAL
+  assign WM1 =
+         (CT5);
 
+  // SPRA0 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SPRA0_OE =
+         (SPRAOE);
+  // SPRA1 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign SPRA1_OE =
+         (SPRAOE);
+  // FBA2 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign FBA2_OE =
+         (MRQ & ~DP1 & ~MODE0 & ~MODE1);
+  // FBA3 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign FBA3_OE =
+         (MRQ & ~DP1 & ~MODE0 & ~MODE1);
+  // FBA4 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign FBA4_OE =
+         (MRQ & ~DP1 & ~MODE0 & ~MODE1);
+  // FBA5 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign FBA5_OE =
+         (MRQ & ~DP1 & ~MODE0 & ~MODE1);
 
   always @(posedge CLK25) begin
       r_DP0 <=
@@ -659,9 +733,6 @@ module v3dot (
       r_CT5 <=
          (LDCTRL & D5)
          | (CT5 & ~LDCTRL);
-      r_CT6 <=
-         (LDCTRL & D6)
-         | (CT6 & ~LDCTRL);
       r_CT7 <=
          (LDCTRL & D7)
          | (CT7 & ~LDCTRL);
@@ -671,6 +742,9 @@ module v3dot (
       r_HS1 <=
          (LDHSL & D1)
          | (HS1 & ~LDHSL);
+      r_HS2 <=
+         (LDHSL & D2)
+         | (HS2 & ~LDHSL);
       r_SX0 <=
          (LDSPRX & D0)
          | (SX0 & ~LDSPRX);
@@ -731,194 +805,225 @@ module v3dot (
       r_SPREN <=
          (LDSPRH & D7)
          | (SPREN & ~LDSPRH);
-      r_SI0 <=
-         (LDSPRIX & D0)
-         | (~LDSPRIX & LDSPRDA & ~SI0)
-         | (~LDSPRIX & ~LDSPRDA & SI0);
-      r_SI1 <=
-         (LDSPRIX & D1)
-         | (~LDSPRIX & LDSPRDA & SI1 & ~SI0)
-         | (~LDSPRIX & LDSPRDA & ~SI1 & SI0)
-         | (~LDSPRIX & ~LDSPRDA & SI1);
-      r_SI2 <=
-         (LDSPRIX & D2)
-         | (~LDSPRIX & LDSPRDA & SI2 & ~SI0)
-         | (~LDSPRIX & LDSPRDA & SI2 & ~SI1)
-         | (~LDSPRIX & LDSPRDA & ~SI2 & SI0 & SI1)
-         | (~LDSPRIX & ~LDSPRDA & SI2);
-      r_SI3 <=
-         (LDSPRIX & D3)
-         | (~LDSPRIX & LDSPRDA & SI3 & ~SI0)
-         | (~LDSPRIX & LDSPRDA & SI3 & ~SI1)
-         | (~LDSPRIX & LDSPRDA & SI3 & ~SI2)
-         | (~LDSPRIX & LDSPRDA & ~SI3 & SI0 & SI1 & SI2)
-         | (~LDSPRIX & ~LDSPRDA & SI3);
-      r_SI4 <=
-         (LDSPRIX & D4)
-         | (~LDSPRIX & LDSPRDA & SI4 & ~SI0)
-         | (~LDSPRIX & LDSPRDA & SI4 & ~SI1)
-         | (~LDSPRIX & LDSPRDA & SI4 & ~SI2)
-         | (~LDSPRIX & LDSPRDA & SI4 & ~SI3)
-         | (~LDSPRIX & LDSPRDA & ~SI4 & SI0 & SI1 & SI2 & SI3)
-         | (~LDSPRIX & ~LDSPRDA & SI4);
-      r_SI5 <=
-         (LDSPRIX & D5)
-         | (~LDSPRIX & LDSPRDA & SI5 & ~SI0)
-         | (~LDSPRIX & LDSPRDA & SI5 & ~SI1)
-         | (~LDSPRIX & LDSPRDA & SI5 & ~SI2)
-         | (~LDSPRIX & LDSPRDA & SI5 & ~SI3)
-         | (~LDSPRIX & LDSPRDA & SI5 & ~SI4)
-         | (~LDSPRIX & LDSPRDA & ~SI5 & SI0 & SI1 & SI2 & SI3 & SI4)
-         | (~LDSPRIX & ~LDSPRDA & SI5);
       r_SHC0 <=
-         (HLOAD & SX0)
-         | (~HLOAD & ~ACTIVE & SHC0)
-         | (~HLOAD & ACTIVE & SHC0 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9);
+         (HLOAD & ~SX0)
+         | (~HLOAD & ACTIVE & ~SHC0)
+         | (~HLOAD & ~ACTIVE & SHC0);
       r_SHC1 <=
-         (HLOAD & SX1)
-         | (~HLOAD & ~ACTIVE & SHC1)
-         | (~HLOAD & ACTIVE & SHC1 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9)
-         | (~HLOAD & ACTIVE & SHC1 & SHC0)
-         | (~HLOAD & ACTIVE & ~SHC1 & ~SHC0);
+         (HLOAD & ~SX1)
+         | (~HLOAD & ACTIVE & SHC1 & ~SHC0)
+         | (~HLOAD & ACTIVE & ~SHC1 & SHC0)
+         | (~HLOAD & ~ACTIVE & SHC1);
       r_SHC2 <=
-         (HLOAD & SX2)
-         | (~HLOAD & ~ACTIVE & SHC2)
-         | (~HLOAD & ACTIVE & SHC2 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9)
-         | (~HLOAD & ACTIVE & SHC2 & SHC0 | SHC1)
-         | (~HLOAD & ACTIVE & ~SHC2 & ~SHC0 & ~SHC1);
+         (HLOAD & ~SX2)
+         | (~HLOAD & ACTIVE & SHC2 & ~SHC0)
+         | (~HLOAD & ACTIVE & SHC2 & ~SHC1)
+         | (~HLOAD & ACTIVE & ~SHC2 & SHC0 & SHC1)
+         | (~HLOAD & ~ACTIVE & SHC2);
       r_SHC3 <=
-         (HLOAD & SX3)
-         | (~HLOAD & ~ACTIVE & SHC3)
-         | (~HLOAD & ACTIVE & SHC3 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9)
-         | (~HLOAD & ACTIVE & SHC3 & SHC0 | SHC1 | SHC2)
-         | (~HLOAD & ACTIVE & ~SHC3 & ~SHC0 & ~SHC1 & ~SHC2);
+         (HLOAD & ~SX3)
+         | (~HLOAD & ACTIVE & SHC3 & ~SHC0)
+         | (~HLOAD & ACTIVE & SHC3 & ~SHC1)
+         | (~HLOAD & ACTIVE & SHC3 & ~SHC2)
+         | (~HLOAD & ACTIVE & ~SHC3 & SHC0 & SHC1 & SHC2)
+         | (~HLOAD & ~ACTIVE & SHC3);
       r_SHC4 <=
-         (HLOAD & SX4)
-         | (~HLOAD & ~ACTIVE & SHC4)
-         | (~HLOAD & ACTIVE & SHC4 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9)
-         | (~HLOAD & ACTIVE & SHC4 & SHC0 | SHC1 | SHC2 | SHC3)
-         | (~HLOAD & ACTIVE & ~SHC4 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3);
+         (HLOAD & ~SX4)
+         | (~HLOAD & ACTIVE & SHC4 & ~SHC0)
+         | (~HLOAD & ACTIVE & SHC4 & ~SHC1)
+         | (~HLOAD & ACTIVE & SHC4 & ~SHC2)
+         | (~HLOAD & ACTIVE & SHC4 & ~SHC3)
+         | (~HLOAD & ACTIVE & ~SHC4 & SHC0 & SHC1 & SHC2 & SHC3)
+         | (~HLOAD & ~ACTIVE & SHC4);
       r_SHC5 <=
-         (HLOAD & SX5)
-         | (~HLOAD & ~ACTIVE & SHC5)
-         | (~HLOAD & ACTIVE & SHC5 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9)
-         | (~HLOAD & ACTIVE & SHC5 & SHC0 | SHC1 | SHC2 | SHC3 | SHC4)
-         | (~HLOAD & ACTIVE & ~SHC5 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4);
+         (HLOAD & ~SX5)
+         | (~HLOAD & ACTIVE & SHC5 & ~SHC0)
+         | (~HLOAD & ACTIVE & SHC5 & ~SHC1)
+         | (~HLOAD & ACTIVE & SHC5 & ~SHC2)
+         | (~HLOAD & ACTIVE & SHC5 & ~SHC3)
+         | (~HLOAD & ACTIVE & SHC5 & ~SHC4)
+         | (~HLOAD & ACTIVE & ~SHC5 & SHC0 & SHC1 & SHC2 & SHC3 & SHC4)
+         | (~HLOAD & ~ACTIVE & SHC5);
       r_SHC6 <=
-         (HLOAD & SX6)
-         | (~HLOAD & ~ACTIVE & SHC6)
-         | (~HLOAD & ACTIVE & SHC6 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9)
-         | (~HLOAD & ACTIVE & SHC6 & SHC0 | SHC1 | SHC2 | SHC3 | SHC4 | SHC5)
-         | (~HLOAD & ACTIVE & ~SHC6 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5);
+         (HLOAD & ~SX6)
+         | (~HLOAD & ACTIVE & SHC6 & ~SHC0)
+         | (~HLOAD & ACTIVE & SHC6 & ~SHC1)
+         | (~HLOAD & ACTIVE & SHC6 & ~SHC2)
+         | (~HLOAD & ACTIVE & SHC6 & ~SHC3)
+         | (~HLOAD & ACTIVE & SHC6 & ~SHC4)
+         | (~HLOAD & ACTIVE & SHC6 & ~SHC5)
+         | (~HLOAD & ACTIVE & ~SHC6 & SHC0 & SHC1 & SHC2 & SHC3 & SHC4 & SHC5)
+         | (~HLOAD & ~ACTIVE & SHC6);
       r_SHC7 <=
-         (HLOAD & SX7)
-         | (~HLOAD & ~ACTIVE & SHC7)
-         | (~HLOAD & ACTIVE & SHC7 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9)
-         | (~HLOAD & ACTIVE & SHC7 & SHC0 | SHC1 | SHC2 | SHC3 | SHC4 | SHC5 | SHC6)
-         | (~HLOAD & ACTIVE & ~SHC7 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6);
+         (HLOAD & ~SX7)
+         | (~HLOAD & ACTIVE & SHC7 & ~SHC0)
+         | (~HLOAD & ACTIVE & SHC7 & ~SHC1)
+         | (~HLOAD & ACTIVE & SHC7 & ~SHC2)
+         | (~HLOAD & ACTIVE & SHC7 & ~SHC3)
+         | (~HLOAD & ACTIVE & SHC7 & ~SHC4)
+         | (~HLOAD & ACTIVE & SHC7 & ~SHC5)
+         | (~HLOAD & ACTIVE & SHC7 & ~SHC6)
+         | (~HLOAD & ACTIVE & ~SHC7 & SHC0 & SHC1 & SHC2 & SHC3 & SHC4 & SHC5 & SHC6)
+         | (~HLOAD & ~ACTIVE & SHC7);
       r_SHC8 <=
-         (HLOAD & SX8)
-         | (~HLOAD & ~ACTIVE & SHC8)
-         | (~HLOAD & ACTIVE & SHC8 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9)
-         | (~HLOAD & ACTIVE & SHC8 & SHC0 | SHC1 | SHC2 | SHC3 | SHC4 | SHC5 | SHC6 | SHC7)
-         | (~HLOAD & ACTIVE & ~SHC8 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7);
+         (HLOAD & ~SX8)
+         | (~HLOAD & ACTIVE & SHC8 & ~SHC0)
+         | (~HLOAD & ACTIVE & SHC8 & ~SHC1)
+         | (~HLOAD & ACTIVE & SHC8 & ~SHC2)
+         | (~HLOAD & ACTIVE & SHC8 & ~SHC3)
+         | (~HLOAD & ACTIVE & SHC8 & ~SHC4)
+         | (~HLOAD & ACTIVE & SHC8 & ~SHC5)
+         | (~HLOAD & ACTIVE & SHC8 & ~SHC6)
+         | (~HLOAD & ACTIVE & SHC8 & ~SHC7)
+         | (~HLOAD & ACTIVE & ~SHC8 & SHC0 & SHC1 & SHC2 & SHC3 & SHC4 & SHC5 & SHC6 & SHC7)
+         | (~HLOAD & ~ACTIVE & SHC8);
       r_SHC9 <=
-         (HLOAD & SX9)
-         | (~HLOAD & ~ACTIVE & SHC9)
-         | (~HLOAD & ACTIVE & SHC9 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8 & ~SHC9)
-         | (~HLOAD & ACTIVE & SHC9 & SHC0 | SHC1 | SHC2 | SHC3 | SHC4 | SHC5 | SHC6 | SHC7 | SHC8)
-         | (~HLOAD & ACTIVE & ~SHC9 & ~SHC0 & ~SHC1 & ~SHC2 & ~SHC3 & ~SHC4 & ~SHC5 & ~SHC6 & ~SHC7 & ~SHC8);
+         (HLOAD & ~SX9)
+         | (~HLOAD & ACTIVE & SHC9 & ~SHC0)
+         | (~HLOAD & ACTIVE & SHC9 & ~SHC1)
+         | (~HLOAD & ACTIVE & SHC9 & ~SHC2)
+         | (~HLOAD & ACTIVE & SHC9 & ~SHC3)
+         | (~HLOAD & ACTIVE & SHC9 & ~SHC4)
+         | (~HLOAD & ACTIVE & SHC9 & ~SHC5)
+         | (~HLOAD & ACTIVE & SHC9 & ~SHC6)
+         | (~HLOAD & ACTIVE & SHC9 & ~SHC7)
+         | (~HLOAD & ACTIVE & SHC9 & ~SHC8)
+         | (~HLOAD & ACTIVE & ~SHC9 & SHC0 & SHC1 & SHC2 & SHC3 & SHC4 & SHC5 & SHC6 & SHC7 & SHC8)
+         | (~HLOAD & ~ACTIVE & SHC9);
       r_SVC0 <=
-         (VLOAD & SY0)
-         | (~VLOAD & ~ROWADV & SVC0)
-         | (~VLOAD & ROWADV & SVC0 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8);
+         (VLOAD & ~SY0)
+         | (~VLOAD & ROWADV & ~SVC0)
+         | (~VLOAD & ~ROWADV & SVC0);
       r_SVC1 <=
-         (VLOAD & SY1)
-         | (~VLOAD & ~ROWADV & SVC1)
-         | (~VLOAD & ROWADV & SVC1 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8)
-         | (~VLOAD & ROWADV & SVC1 & SVC0)
-         | (~VLOAD & ROWADV & ~SVC1 & ~SVC0);
+         (VLOAD & ~SY1)
+         | (~VLOAD & ROWADV & SVC1 & ~SVC0)
+         | (~VLOAD & ROWADV & ~SVC1 & SVC0)
+         | (~VLOAD & ~ROWADV & SVC1);
       r_SVC2 <=
-         (VLOAD & SY2)
-         | (~VLOAD & ~ROWADV & SVC2)
-         | (~VLOAD & ROWADV & SVC2 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8)
-         | (~VLOAD & ROWADV & SVC2 & SVC0 | SVC1)
-         | (~VLOAD & ROWADV & ~SVC2 & ~SVC0 & ~SVC1);
+         (VLOAD & ~SY2)
+         | (~VLOAD & ROWADV & SVC2 & ~SVC0)
+         | (~VLOAD & ROWADV & SVC2 & ~SVC1)
+         | (~VLOAD & ROWADV & ~SVC2 & SVC0 & SVC1)
+         | (~VLOAD & ~ROWADV & SVC2);
       r_SVC3 <=
-         (VLOAD & SY3)
-         | (~VLOAD & ~ROWADV & SVC3)
-         | (~VLOAD & ROWADV & SVC3 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8)
-         | (~VLOAD & ROWADV & SVC3 & SVC0 | SVC1 | SVC2)
-         | (~VLOAD & ROWADV & ~SVC3 & ~SVC0 & ~SVC1 & ~SVC2);
+         (VLOAD & ~SY3)
+         | (~VLOAD & ROWADV & SVC3 & ~SVC0)
+         | (~VLOAD & ROWADV & SVC3 & ~SVC1)
+         | (~VLOAD & ROWADV & SVC3 & ~SVC2)
+         | (~VLOAD & ROWADV & ~SVC3 & SVC0 & SVC1 & SVC2)
+         | (~VLOAD & ~ROWADV & SVC3);
       r_SVC4 <=
-         (VLOAD & SY4)
-         | (~VLOAD & ~ROWADV & SVC4)
-         | (~VLOAD & ROWADV & SVC4 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8)
-         | (~VLOAD & ROWADV & SVC4 & SVC0 | SVC1 | SVC2 | SVC3)
-         | (~VLOAD & ROWADV & ~SVC4 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3);
+         (VLOAD & ~SY4)
+         | (~VLOAD & ROWADV & SVC4 & ~SVC0)
+         | (~VLOAD & ROWADV & SVC4 & ~SVC1)
+         | (~VLOAD & ROWADV & SVC4 & ~SVC2)
+         | (~VLOAD & ROWADV & SVC4 & ~SVC3)
+         | (~VLOAD & ROWADV & ~SVC4 & SVC0 & SVC1 & SVC2 & SVC3)
+         | (~VLOAD & ~ROWADV & SVC4);
       r_SVC5 <=
-         (VLOAD & SY5)
-         | (~VLOAD & ~ROWADV & SVC5)
-         | (~VLOAD & ROWADV & SVC5 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8)
-         | (~VLOAD & ROWADV & SVC5 & SVC0 | SVC1 | SVC2 | SVC3 | SVC4)
-         | (~VLOAD & ROWADV & ~SVC5 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4);
+         (VLOAD & ~SY5)
+         | (~VLOAD & ROWADV & SVC5 & ~SVC0)
+         | (~VLOAD & ROWADV & SVC5 & ~SVC1)
+         | (~VLOAD & ROWADV & SVC5 & ~SVC2)
+         | (~VLOAD & ROWADV & SVC5 & ~SVC3)
+         | (~VLOAD & ROWADV & SVC5 & ~SVC4)
+         | (~VLOAD & ROWADV & ~SVC5 & SVC0 & SVC1 & SVC2 & SVC3 & SVC4)
+         | (~VLOAD & ~ROWADV & SVC5);
       r_SVC6 <=
-         (VLOAD & SY6)
-         | (~VLOAD & ~ROWADV & SVC6)
-         | (~VLOAD & ROWADV & SVC6 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8)
-         | (~VLOAD & ROWADV & SVC6 & SVC0 | SVC1 | SVC2 | SVC3 | SVC4 | SVC5)
-         | (~VLOAD & ROWADV & ~SVC6 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5);
+         (VLOAD & ~SY6)
+         | (~VLOAD & ROWADV & SVC6 & ~SVC0)
+         | (~VLOAD & ROWADV & SVC6 & ~SVC1)
+         | (~VLOAD & ROWADV & SVC6 & ~SVC2)
+         | (~VLOAD & ROWADV & SVC6 & ~SVC3)
+         | (~VLOAD & ROWADV & SVC6 & ~SVC4)
+         | (~VLOAD & ROWADV & SVC6 & ~SVC5)
+         | (~VLOAD & ROWADV & ~SVC6 & SVC0 & SVC1 & SVC2 & SVC3 & SVC4 & SVC5)
+         | (~VLOAD & ~ROWADV & SVC6);
       r_SVC7 <=
-         (VLOAD & SY7)
-         | (~VLOAD & ~ROWADV & SVC7)
-         | (~VLOAD & ROWADV & SVC7 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8)
-         | (~VLOAD & ROWADV & SVC7 & SVC0 | SVC1 | SVC2 | SVC3 | SVC4 | SVC5 | SVC6)
-         | (~VLOAD & ROWADV & ~SVC7 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6);
+         (VLOAD & ~SY7)
+         | (~VLOAD & ROWADV & SVC7 & ~SVC0)
+         | (~VLOAD & ROWADV & SVC7 & ~SVC1)
+         | (~VLOAD & ROWADV & SVC7 & ~SVC2)
+         | (~VLOAD & ROWADV & SVC7 & ~SVC3)
+         | (~VLOAD & ROWADV & SVC7 & ~SVC4)
+         | (~VLOAD & ROWADV & SVC7 & ~SVC5)
+         | (~VLOAD & ROWADV & SVC7 & ~SVC6)
+         | (~VLOAD & ROWADV & ~SVC7 & SVC0 & SVC1 & SVC2 & SVC3 & SVC4 & SVC5 & SVC6)
+         | (~VLOAD & ~ROWADV & SVC7);
       r_SVC8 <=
-         (VLOAD & SY8)
-         | (~VLOAD & ~ROWADV & SVC8)
-         | (~VLOAD & ROWADV & SVC8 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7 & ~SVC8)
-         | (~VLOAD & ROWADV & SVC8 & SVC0 | SVC1 | SVC2 | SVC3 | SVC4 | SVC5 | SVC6 | SVC7)
-         | (~VLOAD & ROWADV & ~SVC8 & ~SVC0 & ~SVC1 & ~SVC2 & ~SVC3 & ~SVC4 & ~SVC5 & ~SVC6 & ~SVC7);
-      r_SW0 <=
-         (SPRSH & ~SPRHIT & ~SW0)
-         | (~SPRSH & SW0);
-      r_SW1 <=
-         (SPRSH & ~SPRHIT & SW1 & ~SW0)
-         | (SPRSH & ~SPRHIT & ~SW1 & SW0)
-         | (~SPRSH & SW1);
-      r_SW2 <=
-         (SPRSH & ~SPRHIT & SW2 & ~SW0)
-         | (SPRSH & ~SPRHIT & SW2 & ~SW1)
-         | (SPRSH & ~SPRHIT & ~SW2 & SW0 & SW1)
-         | (~SPRSH & SW2);
-      r_SW3 <=
-         (SPRSH & ~SPRHIT & SW3 & ~SW0)
-         | (SPRSH & ~SPRHIT & SW3 & ~SW1)
-         | (SPRSH & ~SPRHIT & SW3 & ~SW2)
-         | (SPRSH & ~SPRHIT & ~SW3 & SW0 & SW1 & SW2)
-         | (~SPRSH & SW3);
+         (VLOAD & ~SY8)
+         | (~VLOAD & ROWADV & SVC8 & ~SVC0)
+         | (~VLOAD & ROWADV & SVC8 & ~SVC1)
+         | (~VLOAD & ROWADV & SVC8 & ~SVC2)
+         | (~VLOAD & ROWADV & SVC8 & ~SVC3)
+         | (~VLOAD & ROWADV & SVC8 & ~SVC4)
+         | (~VLOAD & ROWADV & SVC8 & ~SVC5)
+         | (~VLOAD & ROWADV & SVC8 & ~SVC6)
+         | (~VLOAD & ROWADV & SVC8 & ~SVC7)
+         | (~VLOAD & ROWADV & ~SVC8 & SVC0 & SVC1 & SVC2 & SVC3 & SVC4 & SVC5 & SVC6 & SVC7)
+         | (~VLOAD & ~ROWADV & SVC8);
+      r_SHQ <=
+         (SHQ & ACTIVE)
+         | (SHC0 & SHC1 & SHC2 & SHC3 & SHC4 & SHC5 & SHC6 & SHC7 & SHC8 & SHC9 & ACTIVE);
+      r_SVQ <=
+         (SVQ & ~VLOAD)
+         | (SVC0 & SVC1 & SVC2 & SVC3 & SVC4 & SVC5 & SVC6 & SVC7 & SVC8 & ROWADV);
       r_SR0 <=
-         (ROWADV & ~SPRVHIT & ~SR0)
-         | (~ROWADV & SR0);
+         (~VLOAD & ROWADV & SPRROW & ~SR0)
+         | (~VLOAD & ~ROWADV & SR0)
+         | (~VLOAD & ~SPRROW & SR0);
       r_SR1 <=
-         (ROWADV & ~SPRVHIT & SR1 & ~SR0)
-         | (ROWADV & ~SPRVHIT & ~SR1 & SR0)
-         | (~ROWADV & SR1);
+         (~VLOAD & ROWADV & SPRROW & SR1 & ~SR0)
+         | (~VLOAD & ROWADV & SPRROW & ~SR1 & SR0)
+         | (~VLOAD & ~ROWADV & SR1)
+         | (~VLOAD & ~SPRROW & SR1);
       r_SR2 <=
-         (ROWADV & ~SPRVHIT & SR2 & ~SR0)
-         | (ROWADV & ~SPRVHIT & SR2 & ~SR1)
-         | (ROWADV & ~SPRVHIT & ~SR2 & SR0 & SR1)
-         | (~ROWADV & SR2);
+         (~VLOAD & ROWADV & SPRROW & SR2 & ~SR0)
+         | (~VLOAD & ROWADV & SPRROW & SR2 & ~SR1)
+         | (~VLOAD & ROWADV & SPRROW & ~SR2 & SR0 & SR1)
+         | (~VLOAD & ~ROWADV & SR2)
+         | (~VLOAD & ~SPRROW & SR2);
       r_SR3 <=
-         (ROWADV & ~SPRVHIT & SR3 & ~SR0)
-         | (ROWADV & ~SPRVHIT & SR3 & ~SR1)
-         | (ROWADV & ~SPRVHIT & SR3 & ~SR2)
-         | (ROWADV & ~SPRVHIT & ~SR3 & SR0 & SR1 & SR2)
-         | (~ROWADV & SR3);
+         (~VLOAD & ROWADV & SPRROW & SR3 & ~SR0)
+         | (~VLOAD & ROWADV & SPRROW & SR3 & ~SR1)
+         | (~VLOAD & ROWADV & SPRROW & SR3 & ~SR2)
+         | (~VLOAD & ROWADV & SPRROW & ~SR3 & SR0 & SR1 & SR2)
+         | (~VLOAD & ~ROWADV & SR3)
+         | (~VLOAD & ~SPRROW & SR3);
+      r_SR4 <=
+         (~VLOAD & ROWADV & SPRROW & SR4 & ~SR0)
+         | (~VLOAD & ROWADV & SPRROW & SR4 & ~SR1)
+         | (~VLOAD & ROWADV & SPRROW & SR4 & ~SR2)
+         | (~VLOAD & ROWADV & SPRROW & SR4 & ~SR3)
+         | (~VLOAD & ROWADV & SPRROW & ~SR4 & SR0 & SR1 & SR2 & SR3)
+         | (~VLOAD & ~ROWADV & SR4)
+         | (~VLOAD & ~SPRROW & SR4);
+      r_SPRA0 <=
+         (SQ0 & SPRACT);
+      r_SPRA1 <=
+         (SQ1 & SPRACT);
       r_DBLHOLD <=
-         (LINETICK & ~DBLHOLD & ~CT1)
+         (VBLANK & ~CT1)
+         | (LINETICK & ~DBLHOLD & ~CT1)
          | (DBLHOLD & ~LINETICK);
+      r_MWIN <=
+         (SLOTTICK & ~HC7 & ~HC6 & ~HC5 & HC4 & HC3 & HC2 & ~HC1 & HC0)
+         | (MWIN & ~DP1)
+         | (MWIN & ~DP0)
+         | (MWIN & ~HC7)
+         | (MWIN & ~HC6)
+         | (MWIN & ~HC0);
+      r_MRQ <=
+         (SLOTTICK & MWIN & MODE0 & HC0)
+         | (SLOTTICK & MWIN & MODE1 & HC0 & ~HS2)
+         | (SLOTTICK & MWIN & MODE1 & ~HC0 & HS2)
+         | (SLOTTICK & SPREN & ~MODE0 & ~MODE1 & SPRROW & ~HC7 & ~HC6 & ~HC5 & ~HC4 & ~HC3 & HC2 & HC1 & HC0)
+         | (MRQ & ~DP1)
+         | (MRQ & ~DP0);
+      r_BD1 <=
+         (BLANK);
+      r_OMR <=
+         (~BD1);
       r_ACTIVE <=
          (SLOTTICK & ~HC7 & ~HC6 & HC5 & ~HC4 & ~HC3 & ~HC2 & HC1 & HC0)
          | (ACTIVE & ~SLOTTICK)

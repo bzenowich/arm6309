@@ -866,7 +866,7 @@ TEXT = """\
   This file is being listed by the NitrOS-9 `list` command, onto /W1: an
   80 x 60 character screen.  Every line you see arrive below the last row
   moves the other fifty-nine up with the card's COPY ENGINE - one rectangle,
-  160 bytes a row, 59 rows, about 2.3 ms of engine and six register writes.
+  320 bytes a row, 59 rows, about 4.7 ms of engine and six register writes.
 
 --------------------------------------------------------------------------------
  1. Modes
@@ -875,8 +875,8 @@ TEXT = """\
   CTRL b3-2 selects one of three:
 
     00  bitmap      640 x 200 / 240 / 400 / 480, eight bits a pixel
-    01  character   80 x 25 / 30 / 50 / 60, two bytes a cell
-    10  tile        8 x 8 tiles of eight-bit pixels, one byte a cell
+    01  character   80 x 25 / 30 / 50 / 60, four bytes a cell
+    10  tile        8 x 8 tiles of eight-bit pixels, a code in four bytes
 
   The timing is inherited from video/ unchanged: one 25.175 MHz dot clock,
   800 dots a line, and two vertical families of 449 and 525 lines.
@@ -885,7 +885,8 @@ TEXT = """\
  2. Character mode
 --------------------------------------------------------------------------------
 
-  A cell is two bytes - a CP437 code and an ATTR byte.
+  A cell is four bytes - a CP437 code, an ATTR byte and two the card
+  never reads: the map fetcher has sixteen data pins.
 
       map word     [15:8] attribute     [7:0] glyph code
       LUT address  [15:8] attribute     [7:0] the glyph's pixel byte
@@ -913,7 +914,7 @@ TEXT = """\
   Character mode scrolls by copying.  One scrolled line at 80 x 25:
 
       VSCROLL += 8        one register write     clear one row: 271 us
-      the copy engine     948 us of engine       six writes + the clear
+      the copy engine     1.9 ms of engine       six writes + the clear
       the CPU alone       -                      10.0 ms
 
   The clear dominates, both paths pay it, and copying buys a map that
@@ -940,9 +941,10 @@ TEXT = """\
 --------------------------------------------------------------------------------
 
   One 16 x 16 sprite, two bits a pixel, for the mouse pointer.  Its shape
-  lives in the register file, not VRAM - 64 bytes, four `165 shifting two
-  planes - and it is composed at scan time: nothing is saved behind it and
-  nothing has to be put back.  Moving it is three register writes.
+  is 64 bytes of VRAM - the top of MAPBASE's 64 K, which bitmap mode does
+  not otherwise use - and it is composed at scan time: nothing is saved
+  behind it and nothing has to be put back.  Moving it is three register
+  writes.
 
 --------------------------------------------------------------------------------
  6. Memory
@@ -954,6 +956,7 @@ TEXT = """\
 
       rows 0-479                the picture, 1024-byte stride
       rows 480-511              off-screen scratch for the copy engine
+      row 511, columns 960-1023 the sprite's shape, at MAPBASE 7
       columns 640-1023          the scroll margin HSCROLL moves into
 
 --------------------------------------------------------------------------------

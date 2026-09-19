@@ -27,7 +27,7 @@ const BOARD = new Set([
 
 /* the two address-bus owners get a net each; the board resolves FBA */
 const net = (part: string, n: string) =>
-  /^FBA\d+$/.test(n) ? `${part === "v3scan" ? "scan" : "ptr"}_${n}` : n
+  /^FBA\d+$/.test(n) ? `${({ v3scan: "scan", v3ptr: "ptr", v3dot: "dot" } as Record<string, string>)[part]}_${n}` : n
 
 const wrap = (head: string, items: string[], sep: string, end: string) => {
   const out: string[] = []
@@ -40,7 +40,8 @@ const wrap = (head: string, items: string[], sep: string, end: string) => {
   return [...out, cur + end].join("\n")
 }
 
-export const portmap = (parts: [string, string, Merged][]): string => {
+type Part = Pick<Merged, "inputs" | "cells" | "external">
+export const portmap = (parts: [string, string, Part][]): string => {
   const nets = new Set<string>()
   const insts = parts.map(([mod, inst, d]) => {
     const ports: string[] = []
@@ -65,15 +66,30 @@ export const portmap = (parts: [string, string, Merged][]): string => {
     BEGIN,
     wrap("  wire ", wires, ", ", ";"),
     "",
-    "  // ---- the four parts: generated port maps --------------------------------",
+    "  // ---- the five parts: generated port maps --------------------------------",
     ...insts,
   ].join("\n") + "\n"
 }
 
-export const rewrite = (file: string, parts: [string, string, Merged][]) => {
+export const rewrite = (file: string, parts: [string, string, Part][]) => {
   const src = readFileSync(file, "utf8")
   const a = src.indexOf(BEGIN), b = src.indexOf(END)
   if (a < 0 || b < 0 || b < a) throw new Error(`${file}: the port-map markers are missing`)
   const next = src.slice(0, a) + portmap(parts) + src.slice(b)
+  if (next !== src) writeFileSync(file, next)
+}
+
+/* ⭐ a unit bench's wire list: every cell of the part as a wire (and `_OE`
+ * for an enabled one), between two markers - for a bench that binds the part
+ * with `.*` and must declare all of it */
+const TB_BEGIN = "  // ---- generated: every port of "
+const TB_END = "  // ---- end of generated ports ----"
+export const rewriteTb = (file: string, name: string, d: Part) => {
+  const src = readFileSync(file, "utf8")
+  const begin = `${TB_BEGIN}${name} ----`
+  const a = src.indexOf(begin), b = src.indexOf(TB_END)
+  if (a < 0 || b < 0 || b < a) throw new Error(`${file}: the generated-ports markers are missing`)
+  const names = d.cells.flatMap((c) => (c.oe ? [c.name, `${c.name}_OE`] : [c.name]))
+  const next = src.slice(0, a) + begin + "\n" + wrap("  wire ", names, ", ", ";") + "\n" + src.slice(b)
   if (next !== src) writeFileSync(file, next)
 }

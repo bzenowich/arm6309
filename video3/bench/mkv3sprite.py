@@ -44,7 +44,15 @@ POS = ([(x, 40, 0) for x in range(16)] + [(320 + x, 80, 0) for x in (0, 1, 2, 3)
        + [(7, 300, 2), (300, 396, 2)]          # 640x400, progressive
        + [(9, 470, 3), (632, 476, 3)])         # 640x480, progressive
 
-json.dump({"shape": shape_bytes(), "pos": POS, "arrow": ARROW}, open(sys.argv[2], "w"))
+# ⭐ plan §7: the shape is in VRAM, the top 64 bytes of MAPBASE's 64 KB region
+# (bitmap mode does not otherwise use MAPBASE).  7 puts it at $7FFC0 - row 511,
+# columns 960-1023, off screen in every VMODE.  A DECOY - the shape inverted - is
+# written at MAPBASE 0's $0FFC0 (row 63, columns 960-1023, also off screen), so a
+# card that ignores MAPBASE draws the wrong arrow.
+MAPBASE, DECOY = 7, 0
+SHAPE_AT, DECOY_AT = MAPBASE * 65536 + 0xFFC0, DECOY * 65536 + 0xFFC0
+
+json.dump({"mapbase": MAPBASE, "shape": shape_bytes(), "pos": POS, "arrow": ARROW}, open(sys.argv[2], "w"))
 
 sb = shape_bytes()
 steps = "".join(f"""        ldd     #$FFFF
@@ -71,7 +79,8 @@ src = f"""**********************************************************************
 *
 *   sh video3/bench/run-v3sprite.sh
 *
-* plan 7.  The sprite's two bits per pixel are the LUT's ATTR in bitmap mode:
+* plan 7.  The shape is the top 64 bytes of MAPBASE's 64 KB of VRAM.
+* The sprite's two bits per pixel are the LUT's ATTR in bitmap mode:
 * 0 is transparent, 1 and 2 select sub-palettes 1 and 2.  The ROM steps through
 * every X phase and writes the position to $C208/$C20A, which machine.c records
 * with every frame - so one run covers all of them.
@@ -93,8 +102,7 @@ PDATH   EQU     $FF71
 SPRX    EQU     $FF7A
 SPRY    EQU     $FF7B
 SPRH    EQU     $FF7C
-SPRIDX  EQU     $FF7D
-SPRDAT  EQU     $FF7E
+MAPBAS  EQU     $FF79
 SIMPORT EQU     $FF2F
 
 MKX     EQU     $C208           machine.c records these with every frame
@@ -176,14 +184,35 @@ fc1     lda     seed
         cmpd    #200
         blo     fr1
 
-* --- the shape: 64 bytes through SPRIDX/SPRDAT, which auto-increments
-        clr     <SPRIDX
+* --- the shape: 64 bytes of VRAM at MAPBASE's top (plan 7), written with
+*     ordinary VDATA writes - and its complement at MAPBASE {DECOY}'s top, the decoy
+        lda     #${DECOY_AT >> 16:02X}
+        sta     <WPTR2
+        lda     #${(DECOY_AT >> 8) & 0xFF:02X}
+        sta     <WPTR1
+        lda     #${DECOY_AT & 0xFF:02X}
+        sta     <WPTR0
+        ldx     #shape
+        ldb     #64
+sh0     lda     ,x+
+        coma
+        sta     <VDATA
+        decb
+        bne     sh0
+        lda     #${SHAPE_AT >> 16:02X}
+        sta     <WPTR2
+        lda     #${(SHAPE_AT >> 8) & 0xFF:02X}
+        sta     <WPTR1
+        lda     #${SHAPE_AT & 0xFF:02X}
+        sta     <WPTR0
         ldx     #shape
         ldb     #64
 sh1     lda     ,x+
-        sta     <SPRDAT
+        sta     <VDATA
         decb
         bne     sh1
+        lda     #{MAPBASE}
+        sta     <MAPBAS         selects the shape in bitmap mode
 
         lda     #$A0
         sta     SIMPORT

@@ -257,17 +257,27 @@ export const CARDS: Record<string, CardSpec> = {
  * ---------------------------------------------------------------------- */
 export const ALTERNATES: Record<string, CardSpec> = {
   /* video3/docs/plan.md §13, derived part by part from §0-§9 rather than by
-   * diffing `video`. ⛔ THE PROGRAMMABLE-LOGIC COUNT IS A PLACEHOLDER: plan
-   * §14 item 4 says video3 has no partition, so `pld3` assumes three parts and
-   * `pld4` four. What check:place answers is whether the DISCRETE list plus
-   * that assumption still places - which is a design input, not bookkeeping. */
+   * diffing `video`. The programmable logic is the partition's, fitted:
+   * four ATF1508AS (partition.md) and the v3lane GAL22V10. What check:place
+   * answers is whether all of it places - and at 44 ICs it does, on 24 cm,
+   * the longest board there is: a plan §13.5 ceiling, not headroom. */
   video3: {
-    title: "Video3", length: 240, ics: 39, source: "video3/docs/plan.md 13.1",
-    note: "character + bitmap + tile, copyrect, one 16x16 sprite - AS DRAWN, 3 PLD assumed",
+    title: "Video3", length: 240, ics: 44, source: "video3/docs/plan.md 13.1",
+    note: "character + bitmap + tile, copyrect, one 16x16 sprite - four ATF1508AS and a GAL22V10, all fitted",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
     parts: [
-      pkg(33, 33, "ATF1508AS (assumed 3)", "pld", 3, "1508"),
+      /* the four CPLDs, all fitted (gal/cpld/v3*.fit) - partition.md */
+      pkg(33, 33, "ATF1508AS", "pld", 4, "1508"),
+      /* ⭐ v3lane and the four lane '245s, 2026-09-19: the framebuffer is 32
+       * bits and every other VRAM byte path on the card is 8, and nothing
+       * joined them - no byte enables, no lane decode, no transceiver
+       * (video3_card.v's old GAP_1, 2, 6, 7). A '245 a lane between it and the
+       * card's internal data bus, and a GAL for their enables, the byte
+       * enables and the bus's two latch-side drivers. They place because the
+       * ATTR '574 went: v3scan's ATO drives the LUT itself (plan §3). */
+      dip(24, 0.3, "GAL22V10 v3lane", "pld", 1),
+      dip(20, 0.3, "74AHCT245 lane", "bus", 4),
       pkg(18.4, 11.8, "AS6C8016 512Kx16", "mem", 2, "8016"),
       pkg(18.4, 11.8, "IS61C6416 64Kx16 LUT", "mem", 1, "6416"),
       dip(28, 0.6, "32Kx8 regfile", "mem"),
@@ -277,8 +287,6 @@ export const ALTERNATES: Record<string, CardSpec> = {
       dip(20, 0.3, "74AHCT574 fetch", "bus", 8),
       dip(16, 0.3, "74AHCT153 mux", "bus", 4),
       dip(20, 0.3, "74AHCT574 index", "bus"),
-      /* ⭐ NEW - plan 3: LUT A15..A8, the cell attribute or the sprite code. */
-      dip(20, 0.3, "74AHCT574 ATTR", "bus"),
       dip(20, 0.3, "74AHCT273 out", "bus", 2),
       /* ⭐ PIDX is 16 bits (plan 10) but its high byte NEVER COUNTS - software
        * sets a sub-palette and walks within it - so it is a latch, and that is

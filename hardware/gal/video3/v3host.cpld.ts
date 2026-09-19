@@ -124,16 +124,8 @@ const palette: Cell[] = [
   comb("PALTURN", ["PS0", "PS1", "PS2"]),
   comb("PBUSY", ["PPEND", "PS0", "PS1", "PS2", "PS3"]),
   comb("LUTWE", ["PS1"]),
-  /* ⭐ THE '273 PAIR's /MR, AND IT HAS TO BE THE BLANKING THE PIXEL SEES.
-   * plan §3's own chain puts two registers after the '153 - the index '574,
-   * then the '273 - so a dot reaches the connector two dots after v3dot's
-   * BLANK says it may. /MR on the undelayed BLANK blanked the first two pixels
-   * of every line and showed two from past its end. video/ delayed its blank
-   * for the same reason (BLANKD, five stages there). Two registers, on the
-   * part that has cells: v3dot has none. */
-  reg("BD1", ["BLANK"]),
-  reg("BD2", ["BD1"]),
-  comb("OMR", ["!BD2"]),
+  /* ⭐ OMR (the '273 pair's /MR, BLANK two registers late) is v3dot's: this
+   * part needed the two pins it cost for PWCK and IRQPEND. */
   comb("PIDXCE", ["PS3"]),
 ]
 
@@ -192,9 +184,27 @@ const port: Cell[] = [
   /* ⚠ ACTIVE LOW, so the '574's RISING edge is the END of the granted access,
    * when the framebuffer has answered. GRD is the arbiter's grant for the
    * prefetch; video/ had `& !LRUN` here and video3 has no list engine. */
-  comb("RDCK", ["RDCKP", "CTICK & !CPH"], undefined, true),
+  comb("RDCK", ["RDCKP"], undefined, true),
+  /* ⭐ THE POSTED-WRITE '574 IS THE COPY's LATCH TOO (plan §6, trade 1), and
+   * this is its clock: a CPU write to the VRAM port, or the copy's read access
+   * - the byte crosses IDB from its lane into the '574, and the copy's write
+   * access drives it back out to the destination lane. ⛔ The copy read into
+   * vread, and nothing moved it from vread to the framebuffer (GAP_6): vread
+   * drives the backplane, not IDB. ACTIVE LOW for the same reason as RDCK. */
+  comb("PWCK", ["WSTBV", "CTICK & !CPH"], undefined, true),
   comb("RDOE", ["VPORT & RW"]),
-  comb("RDREQ", ["!RDVALID"]),
+  /* ⭐ AND ONLY WHEN IDB IS FREE: a prefetch puts its lane on the card's
+   * internal bus, which the CPU owns through E-high of any card access other
+   * than the VDATA read that is waiting for it, the reload walk owns for its
+   * four dots, and a span owns from the dot it starts - WSTART loads SPANLEN
+   * off the file, and every retire takes WFG or WBG from it. ⛔ v3card_tb's
+   * span-solid wrote ONE byte: a VDATA write invalidates the prefetch, the
+   * prefetch runs in E-low, and E-low is where WSTART is - so a lane '245 had
+   * IDB when SPANLEN was loaded. (A prefetch during a span is wasted anyway:
+   * every retire moves WPTR.) E-low is six dots, so a free spare window
+   * always comes. */
+  comb("RDREQ", ["!RDVALID & !E & !WPQ & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4",
+                 "!RDVALID & E & RW & VPORT & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4"]),
   /* ⭐ open-drain, §1.9's idiom: the value is a constant 0 and the condition
    * rides on the output enable. ACTIVE-LOW, like /WAIT on the slot - audio's
    * FIRQ and vctrl's WAIT are declared the same way. */
@@ -220,17 +230,27 @@ const port: Cell[] = [
    * poll put the read-back '245 and the VSTAT '244 on D7..D0 together - 30
    * dots of fight in v3card_tb's first run. +$0C and +$0D are 0110x, so the
    * exclusion is one term per literal of A4..A1 and no intermediate. */
-  comb("RDBKOE", ["A4", "!A3", "!A2", "A1"].map((l) => `${REGSEL} & RW & E & ${l}`)),
+  /* ⭐ AND INBOUND: the same '245 carries a card write onto IDB (DIR is R/W),
+   * so its enable is the qualified write strobes as well - a write /WAIT is
+   * holding does not reach IDB, where a span's colour may be. */
+  comb("RDBKOE", [...["A4", "!A3", "!A2", "A1"].map((l) => `${REGSEL} & RW & E & ${l}`),
+                  "WSTB", "WSTBV"]),
 ]
 
 /* the copy engine's sequence: two accesses a byte, one spare access a slot,
  * so two SLOTS a byte - and the phase bit is all the state that needs. */
 const copyHost: Cell[] = [
-  comb("CTICK", ["GCPY & MUXSEL0"]),
+  comb("CTICK", ["GCPY & DP0"]),
   reg("CPH", ["CBUSY & CTICK & !CPH", "CBUSY & !CTICK & CPH"]),
   /* ⚠ qualified by CBUSY: this is the address mux's select, and an idle
    * engine must leave WPTR on the bus for the span writer and the CPU port. */
   comb("CRDSEL", ["CBUSY & !CPH"]),
+  /* ⭐ THE LANE '245s' DIRECTION: IDB -> lane for a write access, lane -> IDB
+   * for the two reads (the prefetch and the copy's read). Held for the whole
+   * access, not the write tick: the '245 has to have turned before /WE, and a
+   * read-direction dot inside a write would put the SRAM's own output on IDB
+   * against whatever is driving it. */
+  comb("DIR", ["!GRD & !CRDSEL"]),
   comb("CSTEP", ["CTICK & CPH"]),
   comb("CROWADV", ["CSTEP & CEOR"]),
   /* ⭐ AND WHILE IDLE: the width counter is loaded at the end of every row
@@ -238,7 +258,12 @@ const copyHost: Cell[] = [
    * The load wins over the count, and CBUSY is what lets the count go. */
   comb("CWLOAD", ["CROWADV", "!CBUSY"]),
   comb("CDONE", ["CROWADV & CHLAST"]),
-  comb("RCPY", ["CBUSY"]),
+  /* ⭐ THE COPY's REQUEST, AND IT WAITS FOR THE RELOAD WALK. A row's last
+   * write starts the walk (CROWADV), and the walk's last two dots are the next
+   * slot's spare window - where the copy's next read would put a lane on IDB
+   * while v3ptr loads CPTR's column from the register file across the same
+   * bus. One slot a row. */
+  comb("RCPY", ["CBUSY & !RP1 & !RP2 & !RP3 & !RP4"]),
 ]
 
 /* -- ⭐ §7.2's COLUMN-RELOAD WALK, AND THE REGISTER FILE'S ADDRESS --------
@@ -331,14 +356,16 @@ export const v3host: Merged = {
     /* status, for VSTAT and /WAIT */
     { name: "SPANBUSY" }, { name: "CBUSY" },
     /* the raster, from v3dot */
-    { name: "VBLANK" }, { name: "HLOAD" }, { name: "BLANK" },
+    { name: "VBLANK" }, { name: "HLOAD" },
     /* the read path's own signals */
     { name: "RETIRE" }, { name: "GRD" }, { name: "D6" },
     ...(COPYHOST ? [{ name: "CEOR" }, { name: "CHLAST" },
-                    { name: "GCPY" }, { name: "MUXSEL0" }] : []),
+                    { name: "GCPY" }, { name: "DP0" }] : []),
     ...(RELOAD ? [{ name: "WROWADV" }] : []),
   ],
-  cells: [
+  /* ⭐ the pins whose consumer is active-low (check:pins); the equations stay
+   * in asserted sense */
+  cells: ([
     ...(DECODE === "strobes"
       ? ALL_REGS.map((r) => comb(r, [WR(r)]))
       : /* ⭐ the broadcast: the offset and one qualifier, decoded at each
@@ -352,7 +379,8 @@ export const v3host: Merged = {
     ...port,
     ...(COPYHOST ? copyHost : []),
     ...(RELOAD ? [...reloadWalk, ...rf, cpurf] : []),
-  ],
+  ] as Cell[]).map((c) => (["WSTB", "RDBKOE", "VSTATOE", "RDOE", "LUTWE"].includes(c.name)
+    ? { ...c, assertedLow: true } : c)),
   external: new Set([
     ...(DECODE === "strobes"
       ? ALL_REGS
@@ -362,10 +390,12 @@ export const v3host: Merged = {
     /* ⚠ VDSEL, VPORT, RDVALID and WRCYC used to leave here too, and the pin
      * map showed nothing on the board read any of them - four pins on the
      * card's pin wall, which is what WSTART and CPURF are paid for with. */
-    "WSTEP", "RDCK", "WSTART", "OMR",
+    "WSTEP", "RDCK", "WSTART",
+    /* ⭐ the posted-write '574's clock (v3lane's GAP_6), and VSTAT b0 */
+    "PWCK", "IRQPEND",
     ...(RELOAD ? ["CPURF"] : []),
     /* the copy engine's, when the phase machine lives here */
-    ...(COPYHOST ? ["CRDSEL", "CSTEP", "CROWADV", "CWLOAD", "CDONE", "RCPY"] : []),
+    ...(COPYHOST ? ["CRDSEL", "CSTEP", "CROWADV", "CWLOAD", "CDONE", "RCPY", "DIR"] : []),
     ...(RELOAD ? ["RP1", "RP2", "RP3", "RP4", "RFA1", "RFA2", "RFA3", "RFA4"] : []),
   ]),
 }

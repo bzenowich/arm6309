@@ -35,6 +35,7 @@ module v3card_tb;
   wire  DOE, WAIT_OE, IRQ_OE;
   wire  [15:0] RGB;
   wire  HSYNC, VSYNC, BLANK, FBA_FIGHT, DBUS_FIGHT, LUTA_FIGHT;
+  wire  IDB_FIGHT, IDB_FLOAT, LANE_FLOAT, RANK_FIGHT;
 
   video3_card dut (.*);
 
@@ -47,20 +48,25 @@ module v3card_tb;
 
   // ---- fights: counted every dot, from reset to the end -------------------
   int fba_fights = 0, dbus_fights = 0, luta_fights = 0;
+  int idb_fights = 0, idb_floats = 0, lane_floats = 0, rank_fights = 0;
   always @(posedge CLK25) if (!RESET) begin
     if (FBA_FIGHT)  fba_fights  <= fba_fights + 1;
     if (DBUS_FIGHT) dbus_fights <= dbus_fights + 1;
     if (LUTA_FIGHT) luta_fights <= luta_fights + 1;
+    if (IDB_FIGHT)  idb_fights  <= idb_fights + 1;
+    if (IDB_FLOAT)  idb_floats  <= idb_floats + 1;
+    if (LANE_FLOAT) lane_floats <= lane_floats + 1;
+    if (RANK_FIGHT) rank_fights <= rank_fights + 1;
   end
 
   // ---- what the copy engine's time goes on --------------------------------
   int cp_dots = 0, cp_ticks = 0, cp_rd = 0, cp_map = 0, cp_spn = 0, cp_none = 0;
   always @(posedge CLK25) if (dut.CBUSY) begin
     cp_dots <= cp_dots + 1;
-    if (dut.MUXSEL0 & dut.SPARE) begin                  // the spare access's last dot
+    if (dut.DP0 & dut.SPARE) begin                      // the spare access's last dot
       if (dut.GCPY)      cp_ticks <= cp_ticks + 1;
       else if (dut.GRD)  cp_rd    <= cp_rd + 1;
-      else if (dut.GMAP) cp_map   <= cp_map + 1;
+      else if (dut.MRQ)  cp_map   <= cp_map + 1;
       else if (dut.GSPN) cp_spn   <= cp_spn + 1;
       else               cp_none  <= cp_none + 1;
     end
@@ -68,12 +74,36 @@ module v3card_tb;
 
   // a VRAM write trace, switched on around a scenario that needs looking at
   bit trace = 0;
-  always @(posedge CLK25) if (trace && dut.vwe)
-    $display("      vram[%05h] <= %02h   (WEN %0d CSTEP %0d lane %0d)",
-             dut.byte_a, dut.wdata, dut.WEN, dut.CSTEP, dut.lane);
+  always @(posedge CLK25) if (trace && dut.VWE)
+    $display("      write fba %05h  IDB %02h  BE %04b LOE %04b DIR %0d  (CSTEP %0d)",
+             dut.fba, dut.IDB, dut.be, dut.loe, dut.DIR, dut.CSTEP);
   always @(posedge CLK25) if (trace && (dut.RP1 | dut.RP2 | dut.WSTART | dut.WSTB))
     $display("      t%0t  RP1 %0d RP2 %0d WSTART %0d WSTB %0d  RFA %02h IDB %02h  E %0d WAIT %0d",
              $time, dut.RP1, dut.RP2, dut.WSTART, dut.WSTB, dut.rfa, dut.IDB, E, WAIT_OE);
+
+  bit strace = 0;
+  always @(posedge CLK25) if (strace && dut.u_dot.LINETICK)
+    $display("      line: SPREN %0d SVC %0d SR %0d SPRVHIT %0d ROWADV %0d VBLANK %0d MODE %0d%0d",
+             dut.u_dot.SPREN, {dut.u_dot.SVC8, dut.u_dot.SVC7, dut.u_dot.SVC6, dut.u_dot.SVC5, dut.u_dot.SVC4,
+              dut.u_dot.SVC3, dut.u_dot.SVC2, dut.u_dot.SVC1, dut.u_dot.SVC0},
+             {dut.u_dot.SR4, dut.u_dot.SR3, dut.u_dot.SR2, dut.u_dot.SR1, dut.u_dot.SR0},
+             dut.u_dot.SPRVHIT, dut.ROWADV, dut.VBLANK, dut.MODE1, dut.MODE0);
+  int sprdots = 0;
+  always @(posedge CLK25) if (strace && dut.u_dot.SPRROW && dut.u_dot.ACTIVE && sprdots < 24
+                              && (dut.u_dot.SPRACT || dut.u_dot.SPRHIT || dut.SPRA0 || dut.SPRA1)) begin
+    sprdots <= sprdots + 1;
+    $display("      h: SHC %0d SPRHIT %0d SPRACT %0d SQ %0d%0d SPRA %0d%0d OE %0d%0d SPRSH %0d",
+             {dut.u_dot.SHC9, dut.u_dot.SHC8, dut.u_dot.SHC7, dut.u_dot.SHC6, dut.u_dot.SHC5,
+              dut.u_dot.SHC4, dut.u_dot.SHC3, dut.u_dot.SHC2, dut.u_dot.SHC1, dut.u_dot.SHC0},
+             dut.u_dot.SPRHIT, dut.u_dot.SPRACT, dut.SQ1, dut.SQ0, dut.SPRA1, dut.SPRA0,
+             dut.SPRA1_OE, dut.SPRA0_OE, dut.SPRSH);
+  end
+  always @(posedge CLK25) if (strace && (dut.SPRLD || (dut.MRQ && !dut.MODE0 && !dut.MODE1)))
+    $display("      sprite: MRQ %0d SPRLD %0d fba %05h lanes %02h %02h %02h %02h  SR %0d SPRROW %0d SVC %0d",
+             dut.MRQ, dut.SPRLD, dut.fba, dut.lane_rd[0], dut.lane_rd[1], dut.lane_rd[2], dut.lane_rd[3],
+             {dut.u_dot.SR4, dut.u_dot.SR3, dut.u_dot.SR2, dut.u_dot.SR1, dut.u_dot.SR0}, dut.u_dot.SPRROW,
+             {dut.u_dot.SVC8, dut.u_dot.SVC7, dut.u_dot.SVC6, dut.u_dot.SVC5, dut.u_dot.SVC4,
+              dut.u_dot.SVC3, dut.u_dot.SVC2, dut.u_dot.SVC1, dut.u_dot.SVC0});
 
   task automatic dots(input int n);
     repeat (n) @(posedge CLK25);
@@ -126,7 +156,8 @@ module v3card_tb;
     WPTR0 = 5'h08, WPTR1 = 5'h09, WPTR2 = 5'h0A, WADV = 5'h0B, VDATA = 5'h0C,
     VSTAT = 5'h0D, PIDXL = 5'h0E, PIDXH = 5'h0F, PDATL = 5'h10, PDATH = 5'h11,
     CPTR0 = 5'h12, CPTR1 = 5'h13, CPTR2 = 5'h14, CWIDTH = 5'h15, CHEIGHT = 5'h16,
-    CCTRL = 5'h17;
+    CCTRL = 5'h17, VSL = 5'h01, VSH = 5'h02, HSL = 5'h03, HSH = 5'h04,
+    TILEB = 5'h18, MAPB = 5'h19, SPRX = 5'h1A, SPRY = 5'h1B, SPRH = 5'h1C;
   // verilator lint_on UNUSEDPARAM
 
   // WPTR / CPTR pack a 19-bit address little-endian over three bytes
@@ -147,17 +178,70 @@ module v3card_tb;
   // ---- the scenarios -------------------------------------------------------
   logic [7:0] q;
   int bad;
-  logic [15:0] frame [0:800 * 526 - 1];
-  bit fblank [0:800 * 526 - 1];
-  logic [7:0] fhc [0:800 * 526 - 1];
-  logic [9:0] fvc [0:800 * 526 - 1];
-  bit fhb [0:800 * 526 - 1], fvb [0:800 * 526 - 1];
+
+  // ---- a frame, as the connector sees it ------------------------------------
+  // OMR is the '273s' /MR - "this pixel may show" - so a line is the run of
+  // dots it is asserted for, and a pixel whose LUT entry is zero still counts.
+  // ⚠ Not "RGB is non-zero", which is what the first frame check here used:
+  // every LUT below is the IDENTITY, LUT[a] = a, so each dot of RGB is the
+  // whole sixteen-bit LUT address the card formed - the attribute or sprite
+  // byte and the pixel - and entry 0 is black.
+  logic [15:0] pic [0:479][0:639];
+  int pic_lines, pic_badlen;
+  task automatic capture();
+    int x; bit in_line;
+    pic_lines = 0; pic_badlen = 0; x = 0; in_line = 0;
+    // a capture that ended at VSYNC's start takes the very next frame
+    if (!VSYNC) @(posedge VSYNC);
+    @(negedge VSYNC);
+    for (int d = 0; d < 800 * 526; d++) begin
+      @(posedge CLK25);
+      if (VSYNC) break;                               // the frame is over
+      if (dut.OMR) begin
+        if (!in_line) begin in_line = 1; x = 0; end
+        if (x < 640 && pic_lines < 480) pic[pic_lines][x] = RGB;
+        x++;
+      end else if (in_line) begin
+        in_line = 0;
+        if (x != 640) pic_badlen++;
+        pic_lines++;
+      end
+    end
+  endtask
+  // the settings take at the next frame (VSCROLL, the family, HLOAD's copies):
+  // let one go by, then capture the one after
+  task automatic next_frame();
+    @(posedge VSYNC); @(negedge VSYNC);
+  endtask
+  // the first wrong pixel, and a few around it
+  task automatic show_bad(input int y, input int x, input logic [15:0] want);
+    $display("      first wrong: line %0d x %0d  got %04h want %04h", y, x, pic[y][x], want);
+    $write("      line %0d from x %0d:", y, x < 4 ? 0 : x - 4);
+    for (int k = (x < 4 ? 0 : x - 4); k < (x < 4 ? 0 : x - 4) + 12 && k < 640; k++) $write(" %04h", pic[y][k]);
+    $display("");
+  endtask
+  function automatic int lines_of(input int vmode);
+    lines_of = vmode[1] ? (vmode[0] ? 480 : 400) : (vmode[0] ? 480 : 400);
+  endfunction
+
+  // `+ONLY=a,b` runs the named scenario groups alone - a debug loop, never a
+  // claim count (run.sh's TBARGS). Groups: palette direct span copy bitmap
+  // sprite char tile.
+  string only = "";
+  function automatic bit run_group(input string g);
+    if (only == "") return 1;
+    for (int i = 0; i + g.len() <= only.len(); i++)
+      if (only.substr(i, i + g.len() - 1) == g) return 1;
+    return 0;
+  endfunction
 
   initial begin
+    void'($value$plusargs("ONLY=%s", only));
     dots(20);
     RESET = 0;
     dots(20);
 
+    if (run_group("palette")) begin
     // ================================================================ palette
     // plan §10: PIDX is sixteen bits (+$0E low, +$0F high) and auto-increments
     // after PDATH; a CPU commit posts to the next HLOAD and PBUSY covers it.
@@ -173,6 +257,8 @@ module v3card_tb;
     ok(bad == 0, $sformatf("four palette writes land at LUT 0..3 and PIDX walks (%0d wrong)", bad));
     if (bad) for (int i = 0; i < 6; i++) $display("      LUT[%0d] = %04h", i, dut.peek_lut(i));
 
+    end
+    if (run_group("direct")) begin
     // ============================================== bitmap, direct writes
     // CTRL: VMODE 00, MODE 00 bitmap, WMODE 00 direct, display on.
     wr(CTRL, 8'h80);
@@ -204,6 +290,8 @@ module v3card_tb;
     end
     ok(bad == 0, $sformatf("eight VDATA reads return them in order, post-incrementing (%0d wrong)", bad));
 
+    end
+    if (run_group("span")) begin
     // ================================================ span-mask, bit order
     // WMODE 01 is CTRL b5..4 (plan §10). A mask 1 is ink - WFG, the EVEN
     // register, because §5 makes the mask bit the file's address bit 0. And
@@ -242,13 +330,16 @@ module v3card_tb;
     // from the file's +$05 on the span's first edge.
     wr(SPANLEN, 8'd19);
     wr(CTRL, 8'hA0);
+    trace = 1;
     set_ptr(WPTR0, 19'h00A00);
     wr(VDATA, 8'h00);
     wait_clear(7, "SPANBUSY after a span-solid");
+    trace = 0;
     bad = 0;
     for (int i = 0; i < 20; i++) if (dut.peek(19'h00A00 + i) !== 8'hF1) bad++;
     ok(bad == 0 && dut.peek(19'h00A14) === 8'h00,
        $sformatf("span-solid with SPANLEN 19 is exactly 20 WFG bytes (%0d wrong, next %02h)", bad, dut.peek(19'h00A14)));
+    if (bad) begin $write("      got:"); for (int i = 0; i < 22; i++) $write(" %02h", dut.peek(19'h00A00 + i)); $display(""); end
     wr(VDATA, 8'h00);
     wait_clear(7, "SPANBUSY after a second span-solid");
     bad = 0;
@@ -274,6 +365,8 @@ module v3card_tb;
     end
     wr(WADV, 8'h00);
 
+    end
+    if (run_group("copy")) begin
     // =========================================================== the copy
     // plan §6: CPTR the source, WPTR the destination, CWIDTH / CHEIGHT the
     // plain byte and row counts (the emulator, the model and both drivers
@@ -328,78 +421,239 @@ module v3card_tb;
     $display("      copy: %0d dots busy; spare accesses: copy %0d, prefetch %0d, map %0d, span %0d, none %0d",
              cp_dots, cp_ticks, cp_rd, cp_map, cp_spn, cp_none);
 
+    end
     // ========================================================== the picture
-    // Bitmap, VMODE 11: 640 x 480 on the 525-line family, one VRAM row a line.
-    // Every byte's VALUE is its own position - vram[row*1024 + x] = row + x -
-    // and every LUT entry is a distinct non-zero colour, {$C0, index}, so each
-    // dot of RGB says which byte of VRAM the card put there. The palette's bus
-    // path is proven above; this fills it through the back door.
-    for (int i = 0; i < 256; i++) dut.poke_lut(i, {8'hC0, i[7:0]});
-    for (int r = 0; r < 480; r++)
-      for (int x = 0; x < 640; x++) dut.poke(r * 1024 + x, (r + x) & 8'hFF);
+    // Every LUT entry is its own address from here on (see capture above), so
+    // a pixel IS the LUT address the card formed.
+    for (int i = 0; i < 65536; i++) dut.poke_lut(i, i[15:0]);
+    // VRAM rows 0..511 x 1024: every byte's value is a function of its place,
+    // so a wrong row or a wrong column is a wrong pixel
+    for (int r = 0; r < 512; r++)
+      for (int x = 0; x < 1024; x++) dut.poke(r * 1024 + x, (r * 3 + x) & 8'hFF);
+
+    if (run_group("bitmap")) begin
+    // ---------------------------------------------- bitmap, at every scroll
+    // Bitmap, VMODE 11: 640 x 480, one VRAM row a line. pixel(y, x) is the
+    // byte at ((VSCROLL + y) mod 512, (HSCROLL + x) mod 1024), through
+    // sub-palette 0. HSCROLL 0 first; then fine scrolls 1, 2 and 3 - the '153
+    // phase and the per-chip rank select (graphics.md §8.2), which nothing on
+    // this card had ever displayed - and a wrap of both axes.
     wr(CTRL, 8'h83);
-    // the family is latched at frame end (M0): let one frame go by, then take
-    // the next from its first line
-    @(posedge VSYNC); @(negedge VSYNC);
-    @(posedge VSYNC); @(negedge VSYNC);
     begin
-      int line, x, lines_seen, bad_px, bad_len, first_row, prev_row, bad_row;
-      logic [7:0] row0;
-      bit in_line;
-      lines_seen = 0; bad_px = 0; bad_len = 0; bad_row = 0; prev_row = -1; first_row = -1;
-      in_line = 0; x = 0;
-      // one frame: 800 x 525 dots, with a margin - recorded, so a wrong frame
-      // can be looked at afterwards
-      for (int d = 0; d < 800 * 526; d++) begin
-        @(posedge CLK25);
-        frame[d] = RGB; fblank[d] = BLANK;
-        fhc[d] = {dut.u_dot.HC7, dut.u_dot.HC6, dut.u_dot.HC5, dut.u_dot.HC4,
-                  dut.u_dot.HC3, dut.u_dot.HC2, dut.u_dot.HC1, dut.u_dot.HC0};
-        fvc[d] = {dut.u_dot.VC9, dut.u_dot.VC8, dut.u_dot.VC7, dut.u_dot.VC6, dut.u_dot.VC5,
-                  dut.u_dot.VC4, dut.u_dot.VC3, dut.u_dot.VC2, dut.u_dot.VC1, dut.u_dot.VC0};
-        fhb[d] = dut.HBLANK; fvb[d] = dut.VBLANK;
-        if (RGB != 16'h0000) begin
-          if (!in_line) begin in_line = 1; x = 0; row0 = RGB[7:0]; end
-          if (RGB[15:8] !== 8'hC0 || RGB[7:0] !== ((row0 + x) & 8'hFF)) bad_px++;
-          x++;
-        end else if (in_line) begin
-          in_line = 0;
-          if (x != 640) bad_len++;
-          if (first_row < 0) first_row = row0;
-          else if (row0 !== ((prev_row + 1) & 8'hFF)) bad_row++;
-          prev_row = row0;
-          lines_seen++;
-        end
+      int hs_list [5] = '{0, 5, 2, 7, 1021};
+      int vs_list [5] = '{0, 0, 3, 0, 509};
+      for (int k = 0; k < 5; k++) begin
+        int hs, vs, badpx, by, bx; logic [15:0] want, bw;
+        hs = hs_list[k]; vs = vs_list[k];
+        wr(HSL, hs[7:0]); wr(HSH, {6'd0, hs[9:8]});
+        wr(VSL, vs[7:0]); wr(VSH, {7'd0, vs[8]});
+        next_frame(); capture();
+        badpx = 0; by = -1;
+        for (int y = 0; y < 480; y++)
+          for (int x = 0; x < 640; x++) begin
+            want = {8'h00, 8'((((vs + y) & 511) * 3 + ((hs + x) & 1023)) & 8'hFF)};
+            if (pic[y][x] !== want) begin
+              if (by < 0) begin by = y; bx = x; bw = want; end
+              badpx++;
+            end
+          end
+        ok(pic_lines == 480 && pic_badlen == 0,
+           $sformatf("bitmap HSCROLL %0d VSCROLL %0d: 480 lines of 640 (%0d lines, %0d wrong length)",
+                     hs, vs, pic_lines, pic_badlen));
+        ok(badpx == 0, $sformatf("bitmap HSCROLL %0d VSCROLL %0d: every pixel is the byte at its scrolled address (%0d wrong)",
+                                 hs, vs, badpx));
+        if (by >= 0) show_bad(by, bx, bw);
       end
-      ok(lines_seen == 480, $sformatf("a frame shows 480 lines (%0d)", lines_seen));
-      ok(bad_len == 0, $sformatf("every line is 640 pixels (%0d are not)", bad_len));
-      ok(first_row == 0, $sformatf("the first line is VRAM row 0, from its first byte (starts at %0d)", first_row));
-      ok(bad_row == 0, $sformatf("each line is the next VRAM row (%0d out of order)", bad_row));
-      ok(bad_px == 0, $sformatf("and every pixel is the byte at its own address, through the LUT (%0d wrong)", bad_px));
-      if (lines_seen != 480 || bad_px != 0) begin
-        // the first line with anything on it, forty dots before to the end
-        int d0; string ln;
-        d0 = 0;
-        while (d0 < 800 * 526 && frame[d0] == 16'h0000) d0++;
-        $display("      first non-black dot at %0d (line %0d, dot %0d)", d0, d0 / 800, d0 % 800);
-        for (int k = d0 - 4; k < d0 + 40; k += 2)
-          $display("      d%0d  HC %0d VC %0d  HBLANK %0d VBLANK %0d BLANK %0d  RGB %04h",
-                   k, fhc[k], fvc[k], fhb[k], fvb[k], fblank[k], frame[k]);
-        d0 = d0 - 40;
-        for (int k = 0; k < 800; k += 32) begin
-          ln = "";
-          for (int j = 0; j < 32; j++)
-            ln = {ln, frame[d0 + k + j] == 16'h0000 ? (fblank[d0 + k + j] ? " bb" : " ..")
-                                                    : $sformatf(" %02h", frame[d0 + k + j][7:0])};
-          $display("      %3d:%s", k, ln);
-        end
+      wr(HSL, 8'd0); wr(HSH, 8'd0); wr(VSL, 8'd0); wr(VSH, 8'd0);
+    end
+
+    end
+    if (run_group("sprite")) begin
+    // ------------------------------------------------------ the sprite
+    // plan §7: the shape is the top 64 bytes of MAPBASE's 64 KB, a row four
+    // bytes - plane 0 columns 0-7 and 8-15, then plane 1's - bit 7 leftmost,
+    // the pixel's code (plane1, plane0) the LUT's A9..A8. Every row of this
+    // shape is different, and every column of it, so a row or column slip is
+    // a wrong pixel: code(r, c) = (r + c) mod 4, transparent where it is 0.
+    wr(MAPB, 8'd7);
+    for (int r = 0; r < 16; r++) begin
+      logic [15:0] p0, p1;
+      p0 = 0; p1 = 0;
+      for (int c = 0; c < 16; c++) begin
+        p0[15 - c] = ((r + c) % 4) & 1;
+        p1[15 - c] = (((r + c) % 4) >> 1) & 1;
+      end
+      dut.poke(19'h7FFC0 + r * 4 + 0, p0[15:8]);
+      dut.poke(19'h7FFC0 + r * 4 + 1, p0[7:0]);
+      dut.poke(19'h7FFC0 + r * 4 + 2, p1[15:8]);
+      dut.poke(19'h7FFC0 + r * 4 + 3, p1[7:0]);
+    end
+    begin
+      int sx_list [3] = '{101, 3, 618};
+      int sy_list [3] = '{37, 0, 190};
+      int vm_list [3] = '{3, 3, 0};
+      for (int k = 0; k < 3; k++) begin
+        int sx, sy, vm, badpx, in_spr, by, bx, dbl; logic [15:0] want, bw;
+        sx = sx_list[k]; sy = sy_list[k]; vm = vm_list[k];
+        dbl = vm[1] ? 1 : 2;
+        wr(CTRL, 8'h80 | vm[1:0]);
+        wr(SPRX, sx[7:0]); wr(SPRY, sy[7:0]);
+        wr(SPRH, {1'b1, 4'd0, sy[8], sx[9:8]});
+        next_frame();
+        if (k == 0) begin strace = 1; dots(800 * 100); strace = 0; end
+        capture();
+        badpx = 0; in_spr = 0; by = -1;
+        for (int y = 0; y < lines_of(vm); y++)
+          for (int x = 0; x < 640; x++) begin
+            int row, code;
+            row = y / dbl;
+            code = 0;
+            if (row >= sy && row < sy + 16 && x >= sx && x < sx + 16)
+              code = ((row - sy) + (x - sx)) % 4;
+            if (code) in_spr++;
+            want = {6'd0, 2'(code), 8'((row * 3 + x) & 8'hFF)};
+            if (pic[y][x] !== want) begin
+              if (by < 0) begin by = y; bx = x; bw = want; end
+              badpx++;
+            end
+          end
+        ok(badpx == 0 && in_spr > 0,
+           $sformatf("the sprite at (%0d, %0d), VMODE %02b: every pixel, %0d of them its own (%0d wrong)",
+                     sx, sy, vm[1:0], in_spr, badpx));
+        if (by >= 0) show_bad(by, bx, bw);
+      end
+      wr(SPRH, 8'h00);
+    end
+
+    end
+    if (run_group("char")) begin
+    // ------------------------------------------------ character mode
+    // plan §2.2 and §2.5: MODE 01, VMODE 11 - 80 x 60. The map on the
+    // four-byte cell stride, code in lane 0 and attribute in lane 1; glyphs a
+    // byte a pixel at TILEBASE; the LUT address {attribute, glyph pixel}.
+    // ⭐ HSCROLL, VSCROLL and the sprite are all set, and character mode must
+    // show none of them (plan §2.5, §7).
+    wr(TILEB, 8'd2);                                  // glyphs at $08000
+    wr(MAPB, 8'd5);                                   // map at $50000
+    for (int g = 0; g < 256; g++)
+      for (int r = 0; r < 8; r++)
+        for (int c = 0; c < 8; c++) dut.poke(19'h08000 + g * 64 + r * 8 + c, (g * 7 + r * 8 + c + 1) & 8'hFF);
+    for (int row = 0; row < 64; row++)
+      for (int col = 0; col < 128; col++) begin
+        dut.poke(19'h50000 + row * 1024 + col * 4 + 0, (row * 3 + col) & 8'hFF);   // code
+        dut.poke(19'h50000 + row * 1024 + col * 4 + 1, (row + col * 5) & 8'hFF);   // attribute
+        dut.poke(19'h50000 + row * 1024 + col * 4 + 2, 8'hDE);                     // unused
+        dut.poke(19'h50000 + row * 1024 + col * 4 + 3, 8'hAD);
+      end
+    wr(HSL, 8'd13); wr(VSL, 8'd11);
+    wr(SPRX, 8'd40); wr(SPRY, 8'd40); wr(SPRH, 8'h80);
+    begin
+      // ⚠ VMODE 00 TWICE, CONSECUTIVELY: a doubled picture's pair phase once
+      // alternated from frame to frame (the families' line counts are odd),
+      // and one frame in two was right
+      int vmc [3] = '{3, 0, 0};
+      for (int k = 0; k < 3; k++) begin
+        int vm, badpx, by, bx, dbl; logic [15:0] want, bw;
+        vm = vmc[k]; dbl = vm[1] ? 1 : 2;
+        if (k < 2) begin wr(CTRL, 8'h84 | vm[1:0]); next_frame(); end
+        capture();
+        badpx = 0; by = -1;
+        for (int y = 0; y < lines_of(vm); y++)
+          for (int x = 0; x < 640; x++) begin
+            int row, crow, grow, col, code, attr;
+            row = y / dbl; crow = row >> 3; grow = row & 7; col = x >> 3;
+            code = (crow * 3 + col) & 255; attr = (crow + col * 5) & 255;
+            want = {8'(attr), 8'((code * 7 + grow * 8 + (x & 7) + 1) & 255)};
+            if (pic[y][x] !== want) begin
+              if (by < 0) begin by = y; bx = x; bw = want; end
+              badpx++;
+            end
+          end
+        ok(pic_lines == lines_of(vm) && pic_badlen == 0,
+           $sformatf("character mode VMODE %02b: %0d lines of 640 (%0d, %0d wrong length)",
+                     vm[1:0], lines_of(vm), pic_lines, pic_badlen));
+        ok(badpx == 0, $sformatf("character mode VMODE %02b (80 x %0d)%s: every pixel is {attribute, glyph pixel} of its own cell, with the scrolls and the sprite ignored (%0d wrong)",
+                                 vm[1:0], lines_of(vm) / dbl / 8, k == 2 ? ", the very next frame" : "", badpx));
+        if (by >= 0) show_bad(by, bx, bw);
       end
     end
 
+    // ----------------------------- a copy while character mode displays
+    // §8.2: the console scrolls by copying, so the copy has to share the spare
+    // access with the map - which takes every other one. 13 x 5, from and to
+    // places the picture does not read.
+    begin
+      int bad2, t0;
+      for (int r = 0; r < 5; r++)
+        for (int c = 0; c < 13; c++) dut.poke(19'h60000 + r * 1024 + 3 + c, 8'h80 + r * 16 + c);
+      set_ptr(CPTR0, 19'h60003);
+      set_ptr(WPTR0, 19'h62009);
+      wr(CWIDTH, 8'd13); wr(CHEIGHT, 8'd5);
+      t0 = cp_ticks;
+      wr(CCTRL, 8'h01);
+      wait_clear(4, "CBUSY after a copy under character mode");
+      bad2 = 0;
+      for (int r = 0; r < 5; r++)
+        for (int c = 0; c < 13; c++)
+          if (dut.peek(19'h62009 + r * 1024 + c) !== 8'h80 + r * 16 + c) bad2++;
+      if (bad2) for (int r = 0; r < 5; r++) begin
+        $write("      dst row %0d:", r);
+        for (int c = -1; c < 14; c++) $write(" %02h", dut.peek(19'h62009 + r * 1024 + c));
+        $display("");
+      end
+      ok(bad2 == 0 && cp_ticks - t0 == 130,
+         $sformatf("a 13 x 5 copy under character mode lands byte for byte, still two accesses a byte (%0d wrong, %0d accesses)",
+                   bad2, cp_ticks - t0));
+    end
+
+    end
+    if (run_group("tile")) begin
+    // ------------------------------------------------------- tile mode
+    // plan §2.4: MODE 10, a one-byte code a cell on the same four-byte
+    // stride (lane 0), 8bpp tiles at TILEBASE, both scroll axes, ATTR zero.
+    // HSCROLL[2] is the cell phase the map's access has to follow (graphics.md
+    // §6.4.9): 13 has it set with fine scroll 1, 6 has it set with fine 2, and
+    // 16 has it clear. Each with a VSCROLL, 500 wrapping the ring.
+    begin
+      int ths [3] = '{13, 6, 16};
+      int tvs [3] = '{11, 0, 500};
+      wr(SPRH, 8'h00);
+      for (int k = 0; k < 3; k++) begin
+        int hs, vs, badpx, by, bx; logic [15:0] want, bw;
+        hs = ths[k]; vs = tvs[k];
+        wr(CTRL, 8'h88 | 2'b11);
+        wr(HSL, hs[7:0]); wr(HSH, {6'd0, hs[9:8]});
+        wr(VSL, vs[7:0]); wr(VSH, {7'd0, vs[8]});
+        next_frame(); capture();
+        badpx = 0; by = -1;
+        for (int y = 0; y < 480; y++)
+          for (int x = 0; x < 640; x++) begin
+            int ry, cx, crow, ccol, code;
+            ry = (vs + y) & 511; cx = (hs + x) & 1023;
+            crow = (ry >> 3) & 63; ccol = (cx >> 3) & 127;
+            code = (crow * 3 + ccol) & 255;           // lane 0 of the character map above
+            want = {8'h00, 8'((code * 7 + (ry & 7) * 8 + (cx & 7) + 1) & 255)};
+            if (pic[y][x] !== want) begin
+              if (by < 0) begin by = y; bx = x; bw = want; end
+              badpx++;
+            end
+          end
+        ok(badpx == 0 && pic_lines == 480,
+           $sformatf("tile mode HSCROLL %0d (HSCROLL[2] %0d) VSCROLL %0d: every pixel is its scrolled cell's tile, ATTR zero (%0d wrong, %0d lines)",
+                     hs, (hs >> 2) & 1, vs, badpx, pic_lines));
+        if (by >= 0) show_bad(by, bx, bw);
+      end
+    end
+
+    end
     // ================================================================= end
     ok(fba_fights == 0, $sformatf("v3scan and v3ptr never both drive the address bus (%0d dots)", fba_fights));
     ok(dbus_fights == 0, $sformatf("never two drivers on D7..D0 (%0d dots)", dbus_fights));
     ok(luta_fights == 0, $sformatf("never two masters on the LUT address bus (%0d dots)", luta_fights));
+    ok(idb_fights == 0, $sformatf("never two drivers on the internal data bus (%0d dots)", idb_fights));
+    ok(idb_floats == 0, $sformatf("and nothing ever samples it undriven (%0d dots)", idb_floats));
+    ok(lane_floats == 0, $sformatf("no byte is written from a lane nothing drives (%0d dots)", lane_floats));
+    ok(rank_fights == 0, $sformatf("each chip's two fetch ranks: exactly one on, always (%0d dots)", rank_fights));
     ok(max_wait < 4000, $sformatf("/WAIT always released (longest %0d dots)", max_wait));
     $display("\n%0d claims, %0d failed", passes + fails, fails);
     $finish;
@@ -407,7 +661,7 @@ module v3card_tb;
 
   // a hang is worse than a failure: bound the whole run
   initial begin
-    #40000000;
+    #200000000;
     $display("FAIL  the bench did not finish");
     $finish;
   end

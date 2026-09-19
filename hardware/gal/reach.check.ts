@@ -51,6 +51,7 @@ import { v3dot } from "./video3/v3dot.cpld"
 import { v3scan } from "./video3/v3scan.cpld"
 import { v3ptr } from "./video3/v3ptr.cpld"
 import { v3host } from "./video3/v3host.cpld"
+import { v3laneDesign } from "./video3/v3lane.jedec"
 import { mmuDesign } from "./mmu.jedec"
 import { clkdecDesign } from "./clkdec.jedec"
 import { u9Design } from "./u9.jedec"
@@ -97,19 +98,17 @@ const CARDS: Card[] = [
     parts: [part("vctrl", vctrlCpld), part("vaddr", vaddrCpld), part("vsup", vsupCpld)],
     boards: ["verilog/video_card.v", "verilog/machine.v"],
   },
-  /* ⛔ VIDEO3 HAS NO BOARD FILE, and that is why it is in this check twice
-   * over. `plan.md` §15 step 8 owes `video3_card.v` and `check:netlist`; until
-   * they exist every pin that leaves a part reads as dangling here, so the
-   * RESERVED patterns below carry the whole card's I/O as `board`. ⚠ That is a
-   * hole, not a pass - the same hole `graphics.md` §19 item 34 records for the
-   * video card's partial board, one size larger. */
+  /* ⭐ VIDEO3's BOARD IS video3_card.v since 2026-09-19 - the five parts and
+   * every discrete package plan §13.1 lists, wired from the term lists by
+   * v3portmap.ts, with no reach into any part. It is a MODEL of a board and
+   * not a drawn one: `check:netlist` still has nothing to read (plan §15 step
+   * 8), so the INPUT analysis below stays on. */
   {
     name: "video3",
     parts: [part("v3dot", v3dot), part("v3scan", v3scan),
-      part("v3ptr", v3ptr), part("v3host", v3host)],
-    boards: [],
+      part("v3ptr", v3ptr), part("v3host", v3host), part("v3lane", v3laneDesign)],
+    boards: ["verilog/video3_card.v"],
     checkInputs: true,
-    noBoard: "plan.md §15 step 8: video3_card.v and check:netlist are owed",
   },
   {
     name: "motherboard",
@@ -263,25 +262,10 @@ const RESERVED: Record<string, { why: Why; note: string }> = {
  * named signal does.
  * ======================================================================== */
 const RESERVED_RE: { re: RegExp; why: Why; note: string }[] = [
-  /* video3, and every one of these is `board` for the SAME reason: there is
-   * no video3_card.v. When there is one, most of them leave this list. */
-  { re: /^FBA(\d+)$/, why: "board",
-    note: "plan §6: the framebuffer address, to the four AS6C8016 - v3scan and v3ptr each drive all seventeen and FBOE decides which" },
-  { re: /^ATO[0-7]$/, why: "board", note: "plan §2.2: the attribute byte, to the '574 that feeds the LUT's high half" },
-  { re: /^(HSYNC|VSYNC)$/, why: "board", note: "signals.md §1.9: the connector AND the backplane - graphics.md §12.2's line compare" },
-  { re: /^(FOE0|FOE1|FBOESCAN|FBOEPTR|PIXOE|ATOE|PIDXOE|PIDXCE|VSTATOE|RDOE|RDBKOE|LUTWE)$/,
-    why: "board", note: "output enables and write strobes for discrete parts - '574, '244, '245 and the LUT" },
-  { re: /^(MUXSEL0|MUXSEL1|OMR|MK2|MS0|SI5|NSL7|CT[4-6])$/, why: "board",
-    note: "plan §3: the dot path's muxes and the serialisers' state, to discrete parts" },
-  { re: /^(SPRLD)$/, why: "board", note: "plan §7: loads the four '165 that hold the sprite row" },
-  { re: /^RFA[0-4]$/, why: "board",
-    note: "plan §5: the 32K x 8 register file's address pins. ⛔ RFA0 is v3ptr's and RFA4..RFA1 are v3host's, because §5 makes bit 0 the span-mask bit and the serialiser is on v3ptr - the rest is an ordinary address and the four-dot reload walk that drives it did not fit beside the serialiser" },
-  { re: /^RDCK$/, why: "board",
-    note: "plan §11/§6: the vread '574's clock - the CPU prefetch's (RDCKP) OR the copy's read access. ⚠ Split from RDCKP so a copy byte never marks the prefetch valid" },
-  { re: /^WEN$/, why: "board",
-    note: "plan §5: the framebuffer write strobe - RETIRE except a transparent pixel in sprite mode. ⚠ NOT the same signal as RETIRE, and a mode that gated the pointer instead would draw the sprite squashed" },
-  { re: /^(WSTBV|WADV[01]|RDREQ|PBUSY|WAITN|IRQN)$/, why: "board",
-    note: "signals.md §1.9: the posted write, /WAIT and /IRQ open-drain, and the status the host reads" },
+  /* video3. ⭐ There is a video3_card.v now, and it took most of this list
+   * with it: every pin a discrete part reads is read by the board file. */
+  { re: /^(WAITN|IRQN)$/, why: "board",
+    note: "signals.md §1.9: open-drain /WAIT and /IRQ - the value is a constant 0 and the condition rides on the output enable, which is what the board reads (WAITN_OE, IRQN_OE)" },
 ]
 
 /* ======================================================================== *
@@ -306,10 +290,6 @@ const RESERVED_RE: { re: RegExp; why: Why; note: string }[] = [
  * ======================================================================== */
 type Src = "bus" | "board" | "alias" | "unbuilt"
 const SOURCES: { re: RegExp; why: Src; note: string }[] = [
-  { re: /^(CLK25|RESET)$/, why: "bus", note: "the card's 25.175 MHz dot clock and its reset" },
-  { re: /^D[0-7]$/, why: "bus", note: "partition.md §3: the register broadcast - the host data bus, decoded in each part" },
-  { re: /^(A[0-6]|A19|A20|E|RW|IOSEL|IOPGH)$/, why: "bus", note: "plan §10: the host bus into v3host, which owns the register decode" },
-  { re: /^P[AB][0-7]$/, why: "board", note: "plan §2.5: the map WORD, two bytes from the map SRAM into v3scan" },
 
   /* ⛔ findings from here down */
   /* ⭐ THE FOUR ALIASES LEFT 2026-09-19, and one of them was not an alias.

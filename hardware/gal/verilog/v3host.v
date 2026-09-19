@@ -25,14 +25,13 @@ module v3host (
     input  wire CBUSY,
     input  wire VBLANK,
     input  wire HLOAD,
-    input  wire BLANK,
     input  wire RETIRE,
     input  wire GRD,
     input  wire D6,
     input  wire CEOR,
     input  wire CHLAST,
     input  wire GCPY,
-    input  wire MUXSEL0,
+    input  wire DP0,
     input  wire WROWADV,
     output wire REGWR,
     output wire RA0,
@@ -53,9 +52,6 @@ module v3host (
     output wire PALTURN,
     output wire PBUSY,
     output wire LUTWE,
-    output wire BD1,
-    output wire BD2,
-    output wire OMR,
     output wire PIDXCE,
     output wire VDSEL,
     output wire VPORT,
@@ -71,6 +67,7 @@ module v3host (
     output wire RSTART,
     output wire WSTEP,
     output wire RDCK,
+    output wire PWCK,
     output wire RDOE,
     output wire RDREQ,
     output wire CARDBUSY,
@@ -86,6 +83,7 @@ module v3host (
     output wire CTICK,
     output wire CPH,
     output wire CRDSEL,
+    output wire DIR,
     output wire CSTEP,
     output wire CROWADV,
     output wire CWLOAD,
@@ -111,8 +109,6 @@ module v3host (
   reg  r_PS1;
   reg  r_PS2;
   reg  r_PS3;
-  reg  r_BD1;
-  reg  r_BD2;
   reg  r_WPQ;
   reg  r_RDVALID;
   reg  r_RPQ;
@@ -132,8 +128,6 @@ module v3host (
   assign PS1 = r_PS1;
   assign PS2 = r_PS2;
   assign PS3 = r_PS3;
-  assign BD1 = r_BD1;
-  assign BD2 = r_BD2;
   assign WPQ = r_WPQ;
   assign RDVALID = r_RDVALID;
   assign RPQ = r_RPQ;
@@ -193,9 +187,6 @@ module v3host (
   assign LUTWE =
          (PS1);
   // EXTERNAL
-  assign OMR =
-         (~BD2);
-  // EXTERNAL
   assign PIDXCE =
          (PS3);
   // buried
@@ -235,14 +226,18 @@ module v3host (
          | (RSTART);
   // EXTERNAL
   assign RDCK =
-         (RDCKP)
+         (RDCKP);
+  // EXTERNAL
+  assign PWCK =
+         (WSTBV)
          | (CTICK & ~CPH);
   // EXTERNAL
   assign RDOE =
          (VPORT & RW);
   // EXTERNAL
   assign RDREQ =
-         (~RDVALID);
+         (~RDVALID & ~E & ~WPQ & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4)
+         | (~RDVALID & E & RW & VPORT & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
   // buried
   assign CARDBUSY =
          (SPANBUSY)
@@ -271,13 +266,18 @@ module v3host (
          (IOSEL & A6 & A5 & RW & E & A4)
          | (IOSEL & A6 & A5 & RW & E & ~A3)
          | (IOSEL & A6 & A5 & RW & E & ~A2)
-         | (IOSEL & A6 & A5 & RW & E & A1);
+         | (IOSEL & A6 & A5 & RW & E & A1)
+         | (WSTB)
+         | (WSTBV);
   // buried
   assign CTICK =
-         (GCPY & MUXSEL0);
+         (GCPY & DP0);
   // EXTERNAL
   assign CRDSEL =
          (CBUSY & ~CPH);
+  // EXTERNAL
+  assign DIR =
+         (~GRD & ~CRDSEL);
   // EXTERNAL
   assign CSTEP =
          (CTICK & CPH);
@@ -293,7 +293,7 @@ module v3host (
          (CROWADV & CHLAST);
   // EXTERNAL
   assign RCPY =
-         (CBUSY);
+         (CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
   // EXTERNAL
   assign RFA1 =
          (IOSEL & A6 & A5 & E & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & A1)
@@ -346,10 +346,6 @@ module v3host (
          (PS1);
       r_PS3 <=
          (PS2);
-      r_BD1 <=
-         (BLANK);
-      r_BD2 <=
-         (BD1);
       r_WPQ <=
          (WSTBV);
       r_RDVALID <=

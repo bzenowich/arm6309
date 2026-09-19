@@ -17,8 +17,9 @@ import { v3dot } from "../video3/v3dot.cpld"
 import { v3scan } from "../video3/v3scan.cpld"
 import { v3ptr } from "../video3/v3ptr.cpld"
 import { v3host } from "../video3/v3host.cpld"
+import { v3laneDesign } from "../video3/v3lane.jedec"
 import { fromDesign, fromMerged, toVerilog } from "./emit"
-import { rewrite } from "./v3portmap"
+import { rewrite, rewriteTb } from "./v3portmap"
 
 const here = dirname(fileURLToPath(import.meta.url))
 mkdirSync(here, { recursive: true })
@@ -46,8 +47,11 @@ write("v3dot", toVerilog(fromMerged(v3dot)))
 write("v3scan", toVerilog(fromMerged(v3scan)))
 write("v3ptr", toVerilog(fromMerged(v3ptr)))
 write("v3host", toVerilog(fromMerged(v3host)))
+write("v3lane", toVerilog(fromDesign(v3laneDesign)))
 /* ⭐ and the board's wiring between them, from the same four definitions */
 rewrite(join(here, "video3_card.v"), [
   ["v3dot", "u_dot", v3dot], ["v3scan", "u_scan", v3scan],
   ["v3ptr", "u_ptr", v3ptr], ["v3host", "u_host", v3host],
+  ["v3lane", "u_lane", { ...v3laneDesign, external: new Set(v3laneDesign.cells.map((c) => c.name)) }],
 ])
+rewriteTb(join(here, "v3dot_tb.sv"), "v3dot", v3dot)

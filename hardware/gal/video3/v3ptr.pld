@@ -33,7 +33,9 @@ PIN = D6 ;
 PIN = D7 ;
 PIN = WSTBV ;
 PIN = WSTART ;
-PIN = MUXSEL0 ;
+PIN = WM0 ;
+PIN = WM1 ;
+PIN = DP0 ;
 PIN = RP1 ;
 PIN = RP2 ;
 PIN = RP3 ;
@@ -59,9 +61,8 @@ PIN = CEOR ;
 PIN = CHLAST ;
 PIN = CBUSY ;
 PIN = SPANBUSY ;
-PIN = RSPN ;
 PIN = RETIRE ;
-PIN = WEN ;
+PIN = !VWE ;
 PIN = WROWADV ;
 PIN = RFA0 ;
 PIN = FBA2 ;
@@ -81,6 +82,8 @@ PIN = FBA15 ;
 PIN = FBA16 ;
 PIN = FBA17 ;
 PIN = FBA18 ;
+PIN = LANE0 ;
+PIN = LANE1 ;
 
 /* --- buried registers: state that used to cross a package boundary - */
 PINNODE = WC0 ;
@@ -159,6 +162,7 @@ PINNODE = MS4 ;
 PINNODE = MS5 ;
 PINNODE = MS6 ;
 PINNODE = MS7 ;
+PINNODE = MS8 ;
 PINNODE = NSL0 ;
 PINNODE = NSL1 ;
 PINNODE = NSL2 ;
@@ -167,17 +171,12 @@ PINNODE = NSL4 ;
 PINNODE = NSL5 ;
 PINNODE = NSL6 ;
 PINNODE = NSL7 ;
-PINNODE = MK0 ;
-PINNODE = MK1 ;
-PINNODE = MK2 ;
 PINNODE = WADV0 ;
 PINNODE = WADV1 ;
-PINNODE = WM0 ;
-PINNODE = WM1 ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
  * LDWP0, LDWP1, LDWP2, LDWADV, LDCP0, LDCP1, LDCP2, LDCW, LDCH
- * LDCCTRL, LDCTRL, SPANEND, WINC, RIDLE
+ * LDCCTRL, SPANEND, WINC, RIDLE
  */
 
 /* --- equations ---------------------------------------------------- */
@@ -191,7 +190,6 @@ LDCP2 = REGWR & RA4 & !RA3 & RA2 & !RA1 & !RA0 ;
 LDCW = REGWR & RA4 & !RA3 & RA2 & !RA1 & RA0 ;
 LDCH = REGWR & RA4 & !RA3 & RA2 & RA1 & !RA0 ;
 LDCCTRL = REGWR & RA4 & !RA3 & RA2 & RA1 & RA0 ;
-LDCTRL = REGWR & !RA4 & !RA3 & !RA2 & !RA1 & !RA0 ;
 WC0.d = LDWP0 & D0
         # RP1 & D0
         # !LDWP0 & !RP1 & WINC & !WC0
@@ -673,7 +671,10 @@ MS6.d = WSTBV & D1
         # !WSTBV & RETIRE & MS7
         # !WSTBV & !RETIRE & MS6 ;
 MS7.d = WSTBV & D0
+        # !WSTBV & RETIRE & MS8
         # !WSTBV & !RETIRE & MS7 ;
+MS8.d = WSTBV
+        # !WSTBV & !RETIRE & MS8 ;
 NSL0.d = WSTART & !D0
          # !WSTART & RETIRE & !NSL0
          # !WSTART & !RETIRE & NSL0 ;
@@ -726,33 +727,20 @@ NSL7.d = WSTART & !D7
          # !WSTART & RETIRE & NSL7 & !NSL6
          # !WSTART & RETIRE & !NSL7 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6
          # !WSTART & !RETIRE & NSL7 ;
-MK0.d = RETIRE & !WSTART & !MK0
-        # !RETIRE & MK0 ;
-MK1.d = RETIRE & !WSTART & MK1 & !MK0
-        # RETIRE & !WSTART & !MK1 & MK0
-        # !RETIRE & MK1 ;
-MK2.d = RETIRE & !WSTART & MK2 & !MK0
-        # RETIRE & !WSTART & MK2 & !MK1
-        # RETIRE & !WSTART & !MK2 & MK0 & MK1
-        # !RETIRE & MK2 ;
 WADV0.d = LDWADV & D0
           # WADV0 & !LDWADV ;
 WADV1.d = LDWADV & D1
           # WADV1 & !LDWADV ;
 SPANBUSY.d = WSTART
              # SPANBUSY & !SPANEND ;
-RSPN = SPANBUSY ;
-WM0.d = LDCTRL & D4
-        # WM0 & !LDCTRL ;
-WM1.d = LDCTRL & D5
-        # WM1 & !LDCTRL ;
-RETIRE = SPANBUSY & GSPN & MUXSEL0 ;
+RETIRE = SPANBUSY & GSPN & DP0 ;
 SPANEND = RETIRE & !WM1 & !WM0
-          # RETIRE & WM0 & MK2 & MK1 & MK0
+          # RETIRE & WM0 & MS1 & !MS2 & !MS3 & !MS4 & !MS5 & !MS6 & !MS7 & !MS8
           # RETIRE & WM1 & !WM0 & NSL0 & NSL1 & NSL2 & NSL3 & NSL4 & NSL5 & NSL6 & NSL7 ;
-WEN = RETIRE & !WM1
+VWE = RETIRE & !WM1
       # RETIRE & !WM0
-      # RETIRE & MS0 ;
+      # RETIRE & MS0
+      # CSTEP ;
 WINC = RETIRE
        # WSTEP ;
 WROWADV = SPANEND & WADV0
@@ -815,6 +803,10 @@ FBA17.oe = FBOEPTR ;
 FBA18 = !CRDSEL & WR8
         # CRDSEL & CR8 ;
 FBA18.oe = FBOEPTR ;
+LANE0 = !CRDSEL & WC0
+        # CRDSEL & CC0 ;
+LANE1 = !CRDSEL & WC1
+        # CRDSEL & CC1 ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
@@ -823,6 +815,6 @@ FBA18.oe = FBOEPTR ;
 [CR1,CR2,CR3,CR4,CR5,CR6,CR7,CR8,CW0,CW1,CW2,CW3,CW4,CW5,CW6].ck = CLK25 ;
 [CW7,CW8,CW9,CWN0,CWN1,CWN2,CWN3,CWN4,CWN5,CWN6,CWN7,CWN8].ck = CLK25 ;
 [CWN9,CH0,CH1,CH2,CH3,CH4,CH5,CH6,CH7,CH8,GOQ,CBUSY,MS0,MS1].ck = CLK25 ;
-[MS2,MS3,MS4,MS5,MS6,MS7,NSL0,NSL1,NSL2,NSL3,NSL4,NSL5,NSL6].ck = CLK25 ;
-[NSL7,MK0,MK1,MK2,WADV0,WADV1,SPANBUSY,WM0,WM1].ck = CLK25 ;
+[MS2,MS3,MS4,MS5,MS6,MS7,MS8,NSL0,NSL1,NSL2,NSL3,NSL4,NSL5].ck = CLK25 ;
+[NSL6,NSL7,WADV0,WADV1,SPANBUSY].ck = CLK25 ;
 

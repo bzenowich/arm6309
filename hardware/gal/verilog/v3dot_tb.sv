@@ -23,28 +23,34 @@ module v3dot_tb;
   // this part's own MAPREQ now and the prefetch's is v3host's RDREQ. This
   // bench declared the old two and failed to compile from 4a7d398 until the
   // card bench was written - check:video was not run after that change.
-  logic RDREQ=0, RCPY=0, RSPN=0, PALTURN=0;
+  logic RDREQ=0, RCPY=0, SPANBUSY=0, PALTURN=0, SQ0=0, SQ1=0;
 
   // Every cell of the part is a port, buried ones included, so the counters
-  // are watchable.  ⚠ `.*` needs all 136 of them declared here by name -
-  // generated from v3dot.v's own header, not typed.
-  wire LDCTRL, LDHSL, LDSPRX, LDSPRY, LDSPRH, LDSPRIX, LDSPRDA, DP0, DP1, HC0, HC1, HC2, HC3, HC4,
-      HC5, HC6, HC7, VC0, VC1, VC2, VC3, VC4, VC5, VC6, VC7, VC8, VC9, M0, CT0, CT1, CT2, CT3, CT4,
-      CT5, CT6, CT7, HS0, HS1, SX0, SX1, SX2, SX3, SX4, SX5, SX6, SX7, SX8, SX9, SY0, SY1, SY2,
-      SY3, SY4, SY5, SY6, SY7, SY8, SPREN, SI0, SI1, SI2, SI3, SI4, SI5, SHC0, SHC1, SHC2, SHC3,
-      SHC4, SHC5, SHC6, SHC7, SHC8, SHC9, SVC0, SVC1, SVC2, SVC3, SVC4, SVC5, SVC6, SVC7, SVC8,
-      SW0, SW1, SW2, SW3, SR0, SR1, SR2, SR3, SLOTTICK, HBLANK, HSYNC, VSYNC, VBLANK, BLANK,
-      FRAMEEND, LINETICK, FETCH, SPARE, CELLTICK, HLOAD, VLOAD, ROWADV, MCADV, MAPLD, DBLHOLD,
-      MUXSEL0, MUXSEL1, PIXOE, ATOE, PIDXOE, OMR, FOE0, FOE1, SPRACT, SPRSH, SPRLD, MAPREQ, GMAP,
-      GRD, GCPY, GSPN, FBOESCAN, FBOEPTR, HLAST, ACTIVE, VACTIVE, VBLANKRAW, VTC,
-      SPRVHIT, SPRHIT, SPRROW, MODE0, MODE1, VMODE0;
+  // are watchable, and `.*` needs every one of them declared here by name.
+  // ⭐ GENERATED between the two markers by v3portmap.ts (gen.ts) from
+  // v3dot.cpld.ts - this list was typed, and every change to the part broke
+  // the bench until someone retyped it (4a7d398 went unnoticed for a day).
+  // ---- generated: every port of v3dot ----
+  wire LDCTRL, LDHSL, LDSPRX, LDSPRY, LDSPRH, LDPIDXL, LDPIDXH, LDPDATL, LDPDATH, DP0, DP1,
+       HC0, HC1, HC2, HC3, HC4, HC5, HC6, HC7, VC0, VC1, VC2, VC3, VC4, VC5, VC6, VC7, VC8,
+       VC9, M0, CT0, CT1, CT2, CT3, CT4, CT5, CT7, HS0, HS1, HS2, SX0, SX1, SX2, SX3, SX4,
+       SX5, SX6, SX7, SX8, SX9, SY0, SY1, SY2, SY3, SY4, SY5, SY6, SY7, SY8, SPREN, SHC0,
+       SHC1, SHC2, SHC3, SHC4, SHC5, SHC6, SHC7, SHC8, SHC9, SVC0, SVC1, SVC2, SVC3, SVC4,
+       SVC5, SVC6, SVC7, SVC8, SHQ, SVQ, SR0, SR1, SR2, SR3, SR4, SPRA0, SPRA0_OE, SPRA1,
+       SPRA1_OE, SLOTTICK, HBLANK, HSYNC, VSYNC, VBLANK, BLANK, FRAMEEND, LINETICK, SPARE,
+       HLOAD, VLOAD, ROWADV, DBLHOLD, MWIN, MRQ, MAPREQ, MUXSEL0, MUXSEL1, PIXOE, ATOE,
+       PIDXOE, SPRAOE, BD1, OMR, OEA0, OEB0, OEA1, OEB1, OEA2, OEB2, SPRACT, SPRSH, SPRLD,
+       FBA2, FBA2_OE, FBA3, FBA3_OE, FBA4, FBA4_OE, FBA5, FBA5_OE, GMAP, GRD, GCPY, GSPN,
+       FBOEPTR, HLAST, ACTIVE, VACTIVE, VBLANKRAW, VTC, SPRVHIT, SPRHIT, SPRROW, VMODE0,
+       MODE0, MODE1, WM0, WM1;
+  // ---- end of generated ports ----
 
   v3dot dut (.*);
 
   wire [7:0] H = {HC7,HC6,HC5,HC4,HC3,HC2,HC1,HC0};
   wire [9:0] V = {VC9,VC8,VC7,VC6,VC5,VC4,VC3,VC2,VC1,VC0};
   wire [1:0] DP = {DP1, DP0};
-  wire [7:0] CTRL = {CT7,CT6,CT5,CT4,CT3,CT2,CT1,CT0};
+  wire [7:0] CTRL = {CT7,1'b0,CT5,CT4,CT3,CT2,CT1,CT0};   // b6 is v3host's (IRQEN)
 
   int fails = 0;
   task automatic ok(input bit c, input string what);
