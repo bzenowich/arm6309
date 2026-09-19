@@ -19,7 +19,7 @@ own offsets from `regmap.ts`, which is the single table plan §10 specifies. **2
 
 | | cells | I/O | cascades | |
 |---|---|---|---|---|
-| `v3scan` | 100 / 128 | ⚠ **63 / 64** | 2 | the map word in silicon |
+| `v3scan` | 100 / 128 | ⚠ **64 / 64** | 2 | the map word in silicon |
 | `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⭐ the map word in four `'574` |
 | **`v3dot`** | **122 / 128** | 51 / 64 | **0** | ⭐ the build — a 16×16 sprite, shifters in 4 × `'165` |
 | `v3dot_si` | — | — | — | ⛔ shifters in silicon: **`Design does not fit`** |

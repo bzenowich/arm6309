@@ -310,10 +310,16 @@ const SOURCES: { re: RegExp; why: Src; note: string }[] = [
   { re: /^P[AB][0-7]$/, why: "board", note: "plan §2.5: the map WORD, two bytes from the map SRAM into v3scan" },
 
   /* ⛔ findings from here down */
-  { re: /^(SRC0|SRC1)$/, why: "alias",
-    note: "v3scan's address-mux select. v3dot exports MUXSEL0 and MUXSEL1 and nothing declares them the same net" },
-  { re: /^FBOE$/, why: "alias",
-    note: "⛔ WORSE THAN AN ALIAS: v3ptr AND v3scan each declare a plain FBOE, and v3dot exports TWO signals, FBOESCAN and FBOEPTR. v3scan's own comment says FBOE 'is what keeps exactly one of the two parts on the bus' - one name on both parts keeps them both on or both off, and they drive the same seventeen nets" },
+  /* ⭐ THE FOUR ALIASES LEFT 2026-09-19, and one of them was not an alias.
+   *   FBOE (x2)  a true alias: v3ptr now reads FBOEPTR and v3scan FBOESCAN,
+   *              the two grants v3dot already exported. ⛔ One name on both
+   *              enables had kept them both on or both off the same nets.
+   *   SRC0/SRC1  ⛔ FILED HERE AS AN ALIAS OF MUXSEL0/1, AND WRONG: MUXSEL is
+   *              the dot phase driving the pixel '153 and SRC is v3scan's
+   *              ADDRESS source. SRC1 is GMAP and SRC0 is the mode,
+   *              both decoded on v3scan from signals v3dot already exports. A guess in this table about
+   *              what a signal IS was wrong twice in two days - RSTART was the
+   *              other - and both times the prior art in video/ was right. */
   /* ⭐ BOTH SEQUENCERS LEFT THIS LIST ON 2026-09-19 WITH THEIR EQUATIONS, and
    * the list being checked in both directions is what forced it. RETIRE,
    * SPANEND, WINC, WROWADV, RSPN are v3ptr's span sequencer; CGO folded into

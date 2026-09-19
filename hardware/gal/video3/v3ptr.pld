@@ -49,7 +49,7 @@ PIN = RA1 ;
 PIN = RA2 ;
 PIN = RA3 ;
 PIN = RA4 ;
-PIN = FBOE ;
+PIN = FBOEPTR ;
 
 /* --- outputs ------------------------------------------------------ */
 PIN = CEOR ;
@@ -762,55 +762,55 @@ RFA0 = REGWR & !SPANBUSY & RIDLE & RA0
 RIDLE = !RP1 & !RP2 & !RP3 & !RP4 ;
 FBA2 = !CRDSEL & WC2
        # CRDSEL & CC2 ;
-FBA2.oe = FBOE ;
+FBA2.oe = FBOEPTR ;
 FBA3 = !CRDSEL & WC3
        # CRDSEL & CC3 ;
-FBA3.oe = FBOE ;
+FBA3.oe = FBOEPTR ;
 FBA4 = !CRDSEL & WC4
        # CRDSEL & CC4 ;
-FBA4.oe = FBOE ;
+FBA4.oe = FBOEPTR ;
 FBA5 = !CRDSEL & WC5
        # CRDSEL & CC5 ;
-FBA5.oe = FBOE ;
+FBA5.oe = FBOEPTR ;
 FBA6 = !CRDSEL & WC6
        # CRDSEL & CC6 ;
-FBA6.oe = FBOE ;
+FBA6.oe = FBOEPTR ;
 FBA7 = !CRDSEL & WC7
        # CRDSEL & CC7 ;
-FBA7.oe = FBOE ;
+FBA7.oe = FBOEPTR ;
 FBA8 = !CRDSEL & WC8
        # CRDSEL & CC8 ;
-FBA8.oe = FBOE ;
+FBA8.oe = FBOEPTR ;
 FBA9 = !CRDSEL & WC9
        # CRDSEL & CC9 ;
-FBA9.oe = FBOE ;
+FBA9.oe = FBOEPTR ;
 FBA10 = !CRDSEL & WR0
         # CRDSEL & CR0 ;
-FBA10.oe = FBOE ;
+FBA10.oe = FBOEPTR ;
 FBA11 = !CRDSEL & WR1
         # CRDSEL & CR1 ;
-FBA11.oe = FBOE ;
+FBA11.oe = FBOEPTR ;
 FBA12 = !CRDSEL & WR2
         # CRDSEL & CR2 ;
-FBA12.oe = FBOE ;
+FBA12.oe = FBOEPTR ;
 FBA13 = !CRDSEL & WR3
         # CRDSEL & CR3 ;
-FBA13.oe = FBOE ;
+FBA13.oe = FBOEPTR ;
 FBA14 = !CRDSEL & WR4
         # CRDSEL & CR4 ;
-FBA14.oe = FBOE ;
+FBA14.oe = FBOEPTR ;
 FBA15 = !CRDSEL & WR5
         # CRDSEL & CR5 ;
-FBA15.oe = FBOE ;
+FBA15.oe = FBOEPTR ;
 FBA16 = !CRDSEL & WR6
         # CRDSEL & CR6 ;
-FBA16.oe = FBOE ;
+FBA16.oe = FBOEPTR ;
 FBA17 = !CRDSEL & WR7
         # CRDSEL & CR7 ;
-FBA17.oe = FBOE ;
+FBA17.oe = FBOEPTR ;
 FBA18 = !CRDSEL & WR8
         # CRDSEL & CR8 ;
-FBA18.oe = FBOE ;
+FBA18.oe = FBOEPTR ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */

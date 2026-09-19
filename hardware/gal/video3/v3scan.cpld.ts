@@ -105,12 +105,26 @@ const mapColumn: Cell[] = MC.map((name, i) => ({
 
 /* -- ⭐ THE ADDRESS BUS: three sources, and an output enable ----------------
  *
- *   00  the bitmap scan address          SA18..SA2
- *   01  the cell/tile concatenation      TILEBASE | code | row | col
- *   10  the map fetch                    MAPBASE | cell row | cell column
+ *   GMAP MODE
+ *    0    00  the bitmap scan address          SA18..SA2
+ *    0  01/10 the cell/tile concatenation      TILEBASE | code | row | col
+ *    1    --  the map fetch                    MAPBASE | cell row | cell column
+ *
+ * ⛔ SRC0 AND SRC1 WERE INPUTS NOTHING PRODUCED, and check:reach first filed
+ * them as an ALIAS of v3dot's MUXSEL0/MUXSEL1. They are not: MUXSEL is the dot
+ * phase driving the pixel '153, and this is the ADDRESS source. So:
+ *   - SRC1 IS THE MAP GRANT. v3scan drives the bus in the display half of the
+ *     slot and for a granted map fetch (FBOESCAN = !SPARE # GMAP), so "is this
+ *     the map" is exactly GMAP, which v3dot already exports.
+ *   - SRC0 IS THE MODE, decoded here. The map grant takes priority, so the
+ *     other two sources only have to tell bitmap from cell modes - and MODE0
+ *     and MODE1 are already v3dot externals. ⚠ A SRC0 cell on v3dot was the
+ *     first try: it fitted as `v3dot_src` and refused as `v3dot`, CLAUDE.md's
+ *     file-name trap, so the build did not change on it. Here it costs one
+ *     more pin (v3scan 64/64) and one more term a bit, and v3dot not a byte.
  *
  * partition.md §1: v3ptr drives the same seventeen nets for WPTR and CPTR, and
- * FBOE is what keeps exactly one of the two parts on the bus.  ⛔ The grant that
+ * FBOESCAN (here) and FBOEPTR (there) keep exactly one on the bus.  ⛔ The grant that
  * decides it is ONE signal from ONE place - v3dot's arbiter - and never an
  * agreement between two parts. */
 const tileSrc = (bit: number) =>
@@ -126,11 +140,12 @@ const addressMux: Cell[] = [...Array(17).keys()].map((i) => {
   return {
     pin: 0, name: `FBA${bit}`, assertedLow: false, s0: 1 as const, registered: false,
     terms: [
-      `!SRC1 & !SRC0 & SA${bit}`,
-      `!SRC1 &  SRC0 & ${tileSrc(bit)}`,
-      ` SRC1 & !SRC0 & ${mapSrc(bit)}`,
+      `!GMAP & !MODE0 & !MODE1 & SA${bit}`,
+      `!GMAP & MODE0 & ${tileSrc(bit)}`,
+      `!GMAP & MODE1 & ${tileSrc(bit)}`,
+      `GMAP & ${mapSrc(bit)}`,
     ].filter((t) => !t.includes("GND")),
-    oe: "FBOE",
+    oe: "FBOESCAN",
   }
 })
 
@@ -156,8 +171,9 @@ export const v3scan: Merged = {
     { name: "CLK25" }, { name: "RESET", activeLow: true },
     /* the cadence, from v3dot (signals.md §3) */
     { name: "FETCH" }, { name: "HLOAD" }, { name: "VLOAD" }, { name: "ROWADV" },
-    { name: "MCADV" }, { name: "MAPLD" }, { name: "SRC0" }, { name: "SRC1" },
-    { name: "FBOE" },
+    { name: "MCADV" }, { name: "MAPLD" }, { name: "GMAP" },
+    { name: "MODE0" }, { name: "MODE1" },
+    { name: "FBOESCAN" },
     /* the card's internal data bus, for register writes */
     ...[0, 1, 2, 3, 4, 5, 6, 7].map((b) => ({ name: `D${b}` })),
     /* the pixel bus - a ×16 spare access delivers both map bytes at once.

@@ -29,7 +29,7 @@ a number `check:docs` cannot tell from a live one:
 | | cells | I/O | cascades | what the swap did |
 |---|---|---|---|---|
 | `v3host` | **49 / 128** | ⭐ **63 / 64** | 0 | **22 pins back**, off a part that had none |
-| `v3scan` | ⭐ **100 / 128** | 63 / 64 | ⭐ **2** | 14 cells and 14 cascades *cheaper* |
+| `v3scan` | ⭐ **100 / 128** | 64 / 64 | ⭐ **2** | 14 cells and 14 cascades *cheaper* |
 | `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⛔ 25 cells and 25 cascades dearer |
 | `v3ptr` | **124 / 128** | **54 / 64** | 3 | free — and it gained the fix below |
 | `v3dot` | **122 / 128** | **51 / 64** | 0 | a cell for a pin, the raster fix, then the 16×16 sprite |
@@ -78,7 +78,7 @@ enters this part: the code arrives already staged, and the attribute goes straig
 
 | | cells | I/O | cascades |
 |---|---|---|---|
-| `v3scan`, map word in silicon | 100 / 128 (78 %) | **63 / 64 (98 %)** | 2 |
+| `v3scan`, map word in silicon | 100 / 128 (78 %) | **64 / 64 (100 %)** | 2 |
 | `v3scan_mq`, map word discrete | **107 / 128 (83 %)** | **46 / 64 (71 %)** | ⚠ **41** |
 
 ⚠ **Both figures moved when the broadcast went in, and they moved in opposite
@@ -108,7 +108,7 @@ should be read before anything is added to plan §0.
 | | Cells, est. | I/O, est. | What it is |
 |---|---|---|---|
 | **`v3dot`** | ⭐ **122 / 128, FITTED** | **51 / 64, FITTED** | the raster, the dot path, the sprite, the arbiter |
-| **`v3scan`** | ⭐ **100 / 128, FITTED** | ⚠ **63 / 64, FITTED** | the scan and cell addresses, the map word |
+| **`v3scan`** | ⭐ **100 / 128, FITTED** | ⚠ **64 / 64, FITTED** | the scan and cell addresses, the map word |
 | **`v3ptr`** | ⭐ **124 / 128, FITTED** | **54 / 64, FITTED** | `WPTR`, `CPTR`, the span writer, the copy engine |
 | **`v3host`** | **49 / 128, FITTED** | **63 / 64, FITTED** | the backplane, the registers, the palette write path |
 

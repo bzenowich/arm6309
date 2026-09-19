@@ -434,7 +434,7 @@ estimates:
 | `v3dot` | **122/128 (95%)** — 6 spare | 51/64 | 0 | 37/128 |
 | `v3host` | ⭐ **49/128 (21%)** — 101 spare | 63/64 — 22 spare | 0 | 0 |
 | `v3ptr` | **124/128 (85%)** — 18 spare | 54/64 — 20 spare | **3** | 45/128 |
-| `v3scan` | 100/128 (78%) | ⛔ **63/64 (98%)** — **one** pin spare | 2 | 17/128 |
+| `v3scan` | 100/128 (78%) | ⛔ **64/64 (100%)** — **no** pin spare | 2 | 17/128 |
 
 ⭐ **`partition.md`'s estimate for `v3ptr` was right to the cell**: 18 spare and
 20 pins, which is what §10.5 quoted. ⚠ **And `v3ptr` already carries 3

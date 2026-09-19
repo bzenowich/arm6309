@@ -730,7 +730,7 @@ totals its own claim and that 24 cm is the shortest length that holds it.
    §13.5 says is the most that places, so **video3 is at its ceiling**. ⭐ **ALL FOUR
    ARE FITTED.** `v3dot` is **122/128 cells and 51/64 I/O**; `v3ptr` is **124/128 and
    54/64**; `v3host` is **49/128 and 63/64**. `v3scan` — the map word in silicon — is
-   **100/128 cells and 63/64 I/O**, and `v3scan_mq` — the same part with the map word in
+   **100/128 cells and 64/64 I/O**, and `v3scan_mq` — the same part with the map word in
    four `'574` — is **107/128 cells and 46/64 I/O**. **NO NUMBER FROM `video/`'s FIT APPLIES HERE.**
    `video/` is three `ATF1508AS` whose utilisation is recorded in
    `hardware/gal/cpld/*.fit`; **those figures describe a different design** — one with
@@ -808,7 +808,7 @@ totals its own claim and that 24 cm is the shortest length that holds it.
     | `v3dot` | 122/128 | 51/64 | 0 | ⭐ **unchanged — not one edit** |
     | `v3ptr` | **124/128** | 54/64 | **3** | the span sequencer, the two decodes, WMODE |
     | `v3host` | **49/128** | 63/64 | **0** | the copy engine's phase machine |
-    | `v3scan` | 100/128 | 63/64 | 2 | untouched |
+    | `v3scan` | 100/128 | 64/64 | 2 | ⚠ **full** — it now decodes its own address source |
 
     ⚠ **`v3ptr`'s cascades are still 3** — the count it had before any of this —
     so the span writer goes in with no timing change at all.

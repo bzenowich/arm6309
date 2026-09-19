@@ -1,4 +1,4 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Sat Sep 19 08:50:52 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Sat Sep 19 09:45:03 2026
 
 
 fit1508 v3ptr.tt2 -device P1508C84 -preassign ignore -JTAG off
@@ -65,14 +65,14 @@ Performing global pin assignments ...
 Final global control pins assignment (if applicable)...
 -------------------------------------------------------
 CLK25 assigned to pin  83
-FBOE assigned to pin  84
+FBOEPTR assigned to pin  84
 
 
 
 Performing input pin pre-assignments ...
 ------------------------------------
 CLK25 assigned to pin  83
-FBOE assigned to pin  84
+FBOEPTR assigned to pin  84
 
 Attempt to place floating signals ...
 ------------------------------------
@@ -273,11 +273,13 @@ XXL_564 is placed at foldback expander node 428 (MC 128)
                                                                                     
                                                                                     
                                                                                     
-                                    R        C                                      
-                                    E      F L   F F F   F F F                      
-                       R  R R G R R G V    B K G B B B V B B B                      
-                     D A  A A N A A W C    O 2 N A A A C A A A                      
-                     5 0  1 2 D 3 4 R C    E 5 D 9 8 7 C 5 6 4                      
+                                           F                                        
+                                           B                                        
+                                    R      O C                                      
+                                    E      E L   F F F   F F F                      
+                       R  R R G R R G V    P K G B B B V B B B                      
+                     D A  A A N A A W C    T 2 N A A A C A A A                      
+                     5 0  1 2 D 3 4 R C    R 5 D 9 8 7 C 5 6 4                      
                     -------------------------------------------                     
                    / 11   9   7   5   3   1  83  81  79  77  75 \                  
                   /    10   8   6   4   2  84  82  80  78  76    \                 
@@ -1382,39 +1384,39 @@ CWN8.C = CLK25;
 
 CWN9.C = CLK25;
 
-FBA3.OE = FBOE;
+FBA3.OE = FBOEPTR;
 
-FBA2.OE = FBOE;
+FBA2.OE = FBOEPTR;
 
-FBA4.OE = FBOE;
+FBA4.OE = FBOEPTR;
 
-FBA5.OE = FBOE;
+FBA5.OE = FBOEPTR;
 
-FBA7.OE = FBOE;
+FBA7.OE = FBOEPTR;
 
-FBA6.OE = FBOE;
+FBA6.OE = FBOEPTR;
 
-FBA8.OE = FBOE;
+FBA8.OE = FBOEPTR;
 
-FBA9.OE = FBOE;
+FBA9.OE = FBOEPTR;
 
-FBA11.OE = FBOE;
+FBA11.OE = FBOEPTR;
 
-FBA10.OE = FBOE;
+FBA10.OE = FBOEPTR;
 
-FBA12.OE = FBOE;
+FBA12.OE = FBOEPTR;
 
-FBA13.OE = FBOE;
+FBA13.OE = FBOEPTR;
 
-FBA14.OE = FBOE;
+FBA14.OE = FBOEPTR;
 
-FBA16.OE = FBOE;
+FBA16.OE = FBOEPTR;
 
-FBA15.OE = FBOE;
+FBA15.OE = FBOEPTR;
 
-FBA17.OE = FBOE;
+FBA17.OE = FBOEPTR;
 
-FBA18.OE = FBOE;
+FBA18.OE = FBOEPTR;
 
 WADV0.C = CLK25;
 
@@ -1560,7 +1562,7 @@ Pin 79 = FBA7; /* MC 125 */
 Pin 80 = FBA8; /* MC 126 */ 
 Pin 81 = FBA9; /* MC 128 */ 
 Pin 83 = CLK25;
-Pin 84 = FBOE;
+Pin 84 = FBOEPTR;
 PINNODE 303 = XXL_637; /* MC 3 Foldback */
 PINNODE 304 = XXL_635; /* MC 4 Foldback */
 PINNODE 305 = XXL_630; /* MC 5 Foldback */
@@ -1848,7 +1850,7 @@ MC127 0         --               NSL7     Dg---  NA        --             5     
 MC128 81   OE0  FBA9      C----  --              XXL_564   --             3     slow
 MC0   2         --               --              --        --             0     slow
 MC0   1         --               --              --        --             0     slow
-MC0   84        FBOE      INPUT  --              --        --             0     slow
+MC0   84        FBOEPTR   INPUT  --              --        --             0     slow
 MC0   83        CLK25     INPUT  --              --        --             0     slow
 
 Logic Array Block	Logic Cells	I/O Pins	Foldbacks	TotalPT		FanIN	Cascades

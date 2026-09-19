@@ -29,9 +29,10 @@ PIN = VLOAD ;
 PIN = ROWADV ;
 PIN = MCADV ;
 PIN = MAPLD ;
-PIN = SRC0 ;
-PIN = SRC1 ;
-PIN = FBOE ;
+PIN = GMAP ;
+PIN = MODE0 ;
+PIN = MODE1 ;
+PIN = FBOESCAN ;
 PIN = D0 ;
 PIN = D1 ;
 PIN = D2 ;
@@ -447,72 +448,89 @@ SA18.d = VLOAD & VS8
          # !VLOAD & ROWADV & SA18 & !SA17
          # !VLOAD & ROWADV & !SA18 & SA10 & SA11 & SA12 & SA13 & SA14 & SA15 & SA16 & SA17
          # !VLOAD & !ROWADV & SA18 ;
-FBA2 = !SRC1 & !SRC0 & SA2
-       # !SRC1 &  SRC0 & SA2
-       #  SRC1 & !SRC0 & MC1 ;
-FBA2.oe = FBOE ;
-FBA3 = !SRC1 & !SRC0 & SA3
-       # !SRC1 &  SRC0 & SA10
-       #  SRC1 & !SRC0 & MC2 ;
-FBA3.oe = FBOE ;
-FBA4 = !SRC1 & !SRC0 & SA4
-       # !SRC1 &  SRC0 & SA11
-       #  SRC1 & !SRC0 & MC3 ;
-FBA4.oe = FBOE ;
-FBA5 = !SRC1 & !SRC0 & SA5
-       # !SRC1 &  SRC0 & SA12
-       #  SRC1 & !SRC0 & MC4 ;
-FBA5.oe = FBOE ;
-FBA6 = !SRC1 & !SRC0 & SA6
-       # !SRC1 &  SRC0 & MAPQ0
-       #  SRC1 & !SRC0 & MC5 ;
-FBA6.oe = FBOE ;
-FBA7 = !SRC1 & !SRC0 & SA7
-       # !SRC1 &  SRC0 & MAPQ1
-       #  SRC1 & !SRC0 & MC6 ;
-FBA7.oe = FBOE ;
-FBA8 = !SRC1 & !SRC0 & SA8
-       # !SRC1 &  SRC0 & MAPQ2 ;
-FBA8.oe = FBOE ;
-FBA9 = !SRC1 & !SRC0 & SA9
-       # !SRC1 &  SRC0 & MAPQ3 ;
-FBA9.oe = FBOE ;
-FBA10 = !SRC1 & !SRC0 & SA10
-        # !SRC1 &  SRC0 & MAPQ4
-        #  SRC1 & !SRC0 & SA13 ;
-FBA10.oe = FBOE ;
-FBA11 = !SRC1 & !SRC0 & SA11
-        # !SRC1 &  SRC0 & MAPQ5
-        #  SRC1 & !SRC0 & SA14 ;
-FBA11.oe = FBOE ;
-FBA12 = !SRC1 & !SRC0 & SA12
-        # !SRC1 &  SRC0 & MAPQ6
-        #  SRC1 & !SRC0 & SA15 ;
-FBA12.oe = FBOE ;
-FBA13 = !SRC1 & !SRC0 & SA13
-        # !SRC1 &  SRC0 & MAPQ7
-        #  SRC1 & !SRC0 & SA16 ;
-FBA13.oe = FBOE ;
-FBA14 = !SRC1 & !SRC0 & SA14
-        # !SRC1 &  SRC0 & TB0
-        #  SRC1 & !SRC0 & SA17 ;
-FBA14.oe = FBOE ;
-FBA15 = !SRC1 & !SRC0 & SA15
-        # !SRC1 &  SRC0 & TB1
-        #  SRC1 & !SRC0 & SA18 ;
-FBA15.oe = FBOE ;
-FBA16 = !SRC1 & !SRC0 & SA16
-        # !SRC1 &  SRC0 & TB2
-        #  SRC1 & !SRC0 & MB0 ;
-FBA16.oe = FBOE ;
-FBA17 = !SRC1 & !SRC0 & SA17
-        # !SRC1 &  SRC0 & TB3
-        #  SRC1 & !SRC0 & MB1 ;
-FBA17.oe = FBOE ;
-FBA18 = !SRC1 & !SRC0 & SA18
-        # !SRC1 &  SRC0 & TB4
-        #  SRC1 & !SRC0 & MB2 ;
-FBA18.oe = FBOE ;
+FBA2 = !GMAP & !MODE0 & !MODE1 & SA2
+       # !GMAP & MODE0 & SA2
+       # !GMAP & MODE1 & SA2
+       # GMAP & MC1 ;
+FBA2.oe = FBOESCAN ;
+FBA3 = !GMAP & !MODE0 & !MODE1 & SA3
+       # !GMAP & MODE0 & SA10
+       # !GMAP & MODE1 & SA10
+       # GMAP & MC2 ;
+FBA3.oe = FBOESCAN ;
+FBA4 = !GMAP & !MODE0 & !MODE1 & SA4
+       # !GMAP & MODE0 & SA11
+       # !GMAP & MODE1 & SA11
+       # GMAP & MC3 ;
+FBA4.oe = FBOESCAN ;
+FBA5 = !GMAP & !MODE0 & !MODE1 & SA5
+       # !GMAP & MODE0 & SA12
+       # !GMAP & MODE1 & SA12
+       # GMAP & MC4 ;
+FBA5.oe = FBOESCAN ;
+FBA6 = !GMAP & !MODE0 & !MODE1 & SA6
+       # !GMAP & MODE0 & MAPQ0
+       # !GMAP & MODE1 & MAPQ0
+       # GMAP & MC5 ;
+FBA6.oe = FBOESCAN ;
+FBA7 = !GMAP & !MODE0 & !MODE1 & SA7
+       # !GMAP & MODE0 & MAPQ1
+       # !GMAP & MODE1 & MAPQ1
+       # GMAP & MC6 ;
+FBA7.oe = FBOESCAN ;
+FBA8 = !GMAP & !MODE0 & !MODE1 & SA8
+       # !GMAP & MODE0 & MAPQ2
+       # !GMAP & MODE1 & MAPQ2 ;
+FBA8.oe = FBOESCAN ;
+FBA9 = !GMAP & !MODE0 & !MODE1 & SA9
+       # !GMAP & MODE0 & MAPQ3
+       # !GMAP & MODE1 & MAPQ3 ;
+FBA9.oe = FBOESCAN ;
+FBA10 = !GMAP & !MODE0 & !MODE1 & SA10
+        # !GMAP & MODE0 & MAPQ4
+        # !GMAP & MODE1 & MAPQ4
+        # GMAP & SA13 ;
+FBA10.oe = FBOESCAN ;
+FBA11 = !GMAP & !MODE0 & !MODE1 & SA11
+        # !GMAP & MODE0 & MAPQ5
+        # !GMAP & MODE1 & MAPQ5
+        # GMAP & SA14 ;
+FBA11.oe = FBOESCAN ;
+FBA12 = !GMAP & !MODE0 & !MODE1 & SA12
+        # !GMAP & MODE0 & MAPQ6
+        # !GMAP & MODE1 & MAPQ6
+        # GMAP & SA15 ;
+FBA12.oe = FBOESCAN ;
+FBA13 = !GMAP & !MODE0 & !MODE1 & SA13
+        # !GMAP & MODE0 & MAPQ7
+        # !GMAP & MODE1 & MAPQ7
+        # GMAP & SA16 ;
+FBA13.oe = FBOESCAN ;
+FBA14 = !GMAP & !MODE0 & !MODE1 & SA14
+        # !GMAP & MODE0 & TB0
+        # !GMAP & MODE1 & TB0
+        # GMAP & SA17 ;
+FBA14.oe = FBOESCAN ;
+FBA15 = !GMAP & !MODE0 & !MODE1 & SA15
+        # !GMAP & MODE0 & TB1
+        # !GMAP & MODE1 & TB1
+        # GMAP & SA18 ;
+FBA15.oe = FBOESCAN ;
+FBA16 = !GMAP & !MODE0 & !MODE1 & SA16
+        # !GMAP & MODE0 & TB2
+        # !GMAP & MODE1 & TB2
+        # GMAP & MB0 ;
+FBA16.oe = FBOESCAN ;
+FBA17 = !GMAP & !MODE0 & !MODE1 & SA17
+        # !GMAP & MODE0 & TB3
+        # !GMAP & MODE1 & TB3
+        # GMAP & MB1 ;
+FBA17.oe = FBOESCAN ;
+FBA18 = !GMAP & !MODE0 & !MODE1 & SA18
+        # !GMAP & MODE0 & TB4
+        # !GMAP & MODE1 & TB4
+        # GMAP & MB2 ;
+FBA18.oe = FBOESCAN ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */

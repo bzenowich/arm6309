@@ -501,7 +501,7 @@ const addressMux: Cell[] = [...Array(17).keys()].map((i) => {
   return {
     pin: 0, name: `FBA${bit}`, assertedLow: false, s0: 1 as const, registered: false,
     terms: [`!CRDSEL & ${w}`, `CRDSEL & ${c}`],
-    oe: "FBOE",
+    oe: "FBOEPTR",
   }
 })
 
@@ -559,7 +559,7 @@ export const v3ptr: Merged = {
     /* ⭐ the register broadcast, decoded HERE (partition.md §3) */
     ...BROADCAST.map((n) => ({ name: n })),
     /* the bus grant - one signal, from one place */
-    { name: "FBOE" },
+    { name: "FBOEPTR" },
   ],
   cells: [
     ...decodeCells(MY_REGS), ...wptr, ...cptr, ...counters,
