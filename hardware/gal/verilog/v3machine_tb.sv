@@ -85,6 +85,18 @@ module v3machine_tb;
   wire bus_conflict, pa_conflict;
   wire FBA_FIGHT, DBUS_FIGHT, LUTA_FIGHT, IDB_FIGHT, IDB_FLOAT, LANE_FLOAT, RANK_FIGHT;
 
+  /* ⚠ THE OTHER TWO SLOTS, DECLARED AND LEFT EMPTY. machine3.v grew machine.v's
+   * audio card and TL16C550C on 2026-09-20, when machine_tb moved onto it with
+   * the retargeted boot ROM; both are off by default and this bench leaves them
+   * off, so it is the machine it was - one card, and the only interrupt is
+   * video3's VBL. The ports are named here because `.*` binds by name and an
+   * unnamed one is an error rather than a warning. */
+  logic       SLOTCLK = 0;          // the audio card's crystal - unused at AUDIO 0
+  wire [7:0]  DACSAMP0, DACSAMP1, DACSAMP2, DACSAMP3;
+  wire [7:0]  DACVOL0,  DACVOL1,  DACVOL2,  DACVOL3;
+  wire [15:0] ACOUNT;
+  wire        firq_asserted;
+
   machine3 #(.SIMMS(4)) m (.*);
 
   int fails = 0, claims = 0;

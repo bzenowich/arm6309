@@ -984,6 +984,33 @@ and it is the reason this list exists as a file rather than as a table in this d
     a wrap of both axes, and asserts every chip has exactly one rank on, every dot
     (§15.4, defect 19).
 
+20. ⛔ **THE SYNC POLARITY XOR IS NOT BUILT** — found 2026-09-20 by `machine_tb`, the
+    day the boot ROM was retargeted. §2.1 says `graphics.md` §6.2.1 transfers
+    **verbatim**, including "`VSYNC` polarity a function of `VMODE[0]`", and §11 lists
+    it as **required** — *"it is how the monitor identifies the format"*. Nothing
+    produces it: `v3dot.cpld.ts`'s `VSYNC` term carries the comment *"what differs
+    between them is the POLARITY, and that is not this term's business"*, and no other
+    cell and no line of `video3_card.v` applies the XOR, so both syncs leave the card
+    asserted-high in both vertical families. `machine_tb` captured all four `VMODE`s
+    that way and all four came out right, which is the proof. ⚠ This is a
+    `check:reach`-class gap in the other direction — a *specified* signal with no cell
+    behind it — and `check:pins` cannot see it, because the pin exists and its sense is
+    consistent everywhere it is wired. One macrocell: `VSYNC ^ M0`, and `HSYNC ^ !M0`.
+
+21. ⛔ **`/WAIT`'s RELEASE IS NOT SLOT-ALIGNED, and `graphics.md` §19 item 6's second
+    half is open again** — found 2026-09-20 by `machine_tb`. On `video/`, `/WAIT` was
+    `SPANBUSY` alone, which `RETIRE` gates on `SPNTICK`, so a stretch was always a whole
+    number of four-dot slots and `E` came back on the same sub-slot; §19 item 6's read
+    budget is computed from that fixed alignment. `v3host`'s `WAITN` has a term `vsup`
+    did not — `VPORT & E & RW & !RDVALID`, a `VDATA`/window **read** held until the
+    prefetch lands — and `RDVALID` rises when `RDCK` clocks the vread `'574` in whatever
+    spare window the arbiter gave it. In the POST's 1,440,943 `E` cycles the phase
+    slipped **three dots for five cycles** and a later stretch put it back; the claim
+    that names it is in `machine_tb` §6c. ⚠ **It is an alignment claim, not a
+    correctness one** — every byte read under that `/WAIT` was right — but §11's read
+    margin is arithmetic about a fixed phase, so either the margin is recomputed for
+    four phases or `RDVALID` is registered on `SLOTTICK`.
+
 ## 15. What would have to be built to believe it
 
 Each step gates the next, and the first two are **done**.
@@ -1036,10 +1063,21 @@ whole design, so the path it covers wants a bench before the rest exists.
 
 ### 15.2 The machine bench, and why the audio card is in it
 
-`machine_tb` already instantiates `mc6809e`, `mainboard.v`, `video_card.v`, `audio_card.v`
-and a `tl16c550.v` bus model, and `SCENARIOS=nitros9` boots NitrOS-9 Level 2 to a shell.
-**video3's bench should be that one with `video_card.v` replaced**, not a new harness —
-so that what changes between a passing run and a failing one is the card.
+⭐ **Done, 2026-09-20.** `machine_tb` instantiates `machine3.v` — `mc6809e`,
+`mainboard.v`, `video3_card.v`, `audio_card.v` and a `tl16c550.v` bus model — and runs
+`software/boot/boot.asm`, whose video POST was retargeted to this card's register map
+the same day. It is the old bench with the card replaced and not a new harness, which is
+what this section asked for: every motherboard claim (the SIMM walk, the descriptor, the
+sixteen map entries, `TASK` 1, stage 2 read out of the DRAM array, the store-rate
+subtraction) and all six population and fault scenarios are unchanged, so **what changes
+between a passing run and a failing one is the card**. `v3machine_tb` (§15.1) stays: it
+runs the small `v3boot` fixture and asks the interrupt and `/WAIT` questions in one
+place, where `machine_tb` asks them inside a POST.
+
+⛔ **And its first run found two things in this section's own claims** (§14 items 15 and
+16): the `VSYNC`/`HSYNC` polarity XOR §2.1 and §11 call inherited and required is **not
+built**, and `/WAIT`'s release is **not slot-aligned**, which `graphics.md` §19 item 6
+relied on and `vsup` had closed.
 
 Three things only the machine bench can answer, and each is a seam rather than a part:
 

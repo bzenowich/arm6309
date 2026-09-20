@@ -4,12 +4,20 @@
 #
 #   sh software/nitros9/mksddisk.sh /tmp/x/demos.img              every demo
 #   sh software/nitros9/mksddisk.sh /tmp/x/demos.img mvania       just one
-#   MODS=dir  NAME="..."  SLACK=sectors  DATA=dir  ...
+#   DATA=/tmp/x/data sh software/nitros9/mksddisk.sh ...          ⭐ with its data
+#   MODS=dir  NAME="..."  SLACK=sectors  ...
 #
-# Since 2026-09-20 the demo programs are NOT in the boot ROM's ROM disk
-# (nitros9 recipes/arm6309/arm6309.mak): the ROM is the kernel, the shell,
-# the shared modules and a rescue command set, and the applications live
-# here.  The recipe builds them into .mods and this puts them on a card.
+# ⭐ CMDS AND DATA, and both halves moved.  CMDS is the demo PROGRAMS; DATA is
+# what they open - the Haiku desktop and Paint's streams, the BBS, the
+# overworld's world, the console faces.  software/nitros9/mkrom.sh writes the
+# whole data set to $OUT/data and DATA= points here at it; the ROM disk's
+# /DD/SYS keeps errmsg and nothing else.
+#
+# Since 2026-09-20 neither the demo programs nor their data are in the boot
+# ROM's ROM disk (nitros9 recipes/arm6309/arm6309.mak): the ROM is the kernel,
+# the shell, the shared modules, errmsg and a rescue command set, and the
+# applications live here.  /DD/SYS alone used to be 1,140 of the image's
+# 1,952 sectors.
 #
 # ⭐ THE IMAGE IS WRITTEN BY THE TOOLCHAIN AND READ BY THE MACHINE, which is
 # the point, and the same discipline run-sd.sh keeps: two independent

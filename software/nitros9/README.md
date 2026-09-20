@@ -6,7 +6,7 @@ phase P0: the port skeleton that the video and audio drivers will be built on.
 
 ```sh
 sh software/tools/fetch-nitros9-tools.sh       # LWTOOLS and ToolShed into .tools/ (once)
-sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 25 claims, ~30 s
+sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 26 claims, ~30 s
 sh software/nitros9/run-sd.sh                  # ... with an SD card in the socket: 17 claims, ~2 min
 sh software/nitros9/mksddisk.sh out/demos.img  # ⭐ an SD image of the demo programs
 ```
@@ -112,15 +112,50 @@ back (`CMDS_EXTRA` / `CMDS_DROP`). The machine has storage now
   that can bring a blank card up from nothing: `format`, `dcheck`, `free`,
   `makdir`, `copy`, `merge`, `dir`, `del`, `deldir`, `rename`, `iniz`, `load`,
   `link`, `devs`. That leaves **~65 K free** in the image;
-- **the card carries** the applications. `recipes/arm6309/arm6309.mak`'s
-  `$(DEMOS)` builds them into `.mods` (they are part of `all`, so one that
-  stops assembling is still noticed) and **`mksddisk.sh`** formats an image,
-  makes `CMDS` and `DATA` on it, and copies them in:
+- **the card carries** the applications **and their data**.
+  `recipes/arm6309/arm6309.mak`'s `$(DEMOS)` builds the programs into `.mods`
+  (they are part of `all`, so one that stops assembling is still noticed),
+  `mkrom.sh` writes the data set to `$OUT/data`, and **`mksddisk.sh`** formats
+  an image, makes `CMDS` and `DATA` on it, and copies both in:
 
 ```sh
 sh software/nitros9/mksddisk.sh /tmp/demos.img              # every demo the build made
 sh software/nitros9/mksddisk.sh /tmp/demos.img mvania       # or the subset a bench wants
+DATA=/tmp/out/data sh software/nitros9/mksddisk.sh /tmp/demos.img   # ... with its data
 ```
+
+### ⭐ `/DD/SYS` was 1,140 of the image's 1,952 sectors
+
+The second half, done 2026-09-20. Everything `mkrom.sh` generated — the Haiku
+desktop and Paint's streams, the BBS and its ANSI art, the overworld's world
+and tiles, the 28 console faces, the `vt*`/`vg*` scripted sessions — was
+copied into `/DD/SYS`. That is **291,840 bytes, 58% of the ROM disk**, and
+none of it is needed to boot or to bring up a console: nothing in the bootfile
+opens a path under `/DD/SYS`, and the only thing `armio.asm` opens by name is
+`/DD/CMDS/CoArm`. What stays is **`errmsg`** — the shell reads it to print
+`Error #216 - Path Name Not Found` at all, so a rescue system without it
+cannot tell you what went wrong.
+
+| | |
+|---|---|
+| `SYSROM=all` | ⚠ puts the whole data set back in `/DD/SYS`, in one word. The sessions that boot with an **empty socket** and type `copy /dd/sys/...` pass it: `run-vid.sh`, `video/run-video.sh`, `video/run-video3.sh`. `SYSROM="a b c"` names individual files |
+| `$OUT/sys` | the caller's own streams, dropped there before calling `mkrom.sh` (`run-v3text.sh`, `run-v3copyn.sh` do this). ⛔ Every name `mkrom.sh` generates is **removed** from it first, so yesterday's `SYSROM=all` cannot leave the data in the ROM and make a card bench pass on nothing |
+
+**How a program finds its data.** The streams are opened by whoever types the
+command (`copy /sd0/data/v3desk /w3`), so the path is already the caller's. The
+four programs that opened a file *for themselves* — `overworld`, `rastbar`,
+`wave`, `changefont` — now name it **without a directory** and share a `DOpen`
+routine that tries, in order:
+
+1. the path the caller gave, if it has a `/` in it (`changefont` only, which
+   already had that rule);
+2. **`/SD0/DATA/<name>`** — the card, the copy that can be updated;
+3. **`/DD/SYS/<name>`** — the ROM, so a rescue boot still works when the build
+   kept a copy.
+
+⚠ Both are **absolute** on purpose. A bare relative name would resolve against
+the caller's data directory, and a demo must not stop working because somebody
+typed `chd`.
 
 ⚠ **The image is a whole number of 512-byte SD blocks** and is sized to what it
 is given — a directory costs a whole eight-sector allocation unit however few
@@ -130,8 +165,10 @@ file is read back off the image and compared with the source**, because
 round trip a short image announces itself as a good one and the machine loads
 a module with a bad CRC.
 
-`video3/bench/run-v3sd.sh` is the check: both cards, a demo loaded off `/SD0`,
-and a negative control with an empty socket.
+`video3/bench/run-v3sd.sh` is the check: both cards, the Haiku desktop and
+Paint drawn from the card, `changefont` reading a face through `DOpen`, a demo
+program loaded off `/SD0` — and a negative control with an empty socket in
+which every one of them fails to find what it needs and says so.
 
 ## `/FIRQ`
 

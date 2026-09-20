@@ -25,7 +25,11 @@ if [ -z "$NOBUILD" ]; then
   # ⚠ CMDS_EXTRA: the demos live on an SD card now (software/nitros9/mksddisk.sh);
   # session3.py types these five at /DD with an empty socket, so they are asked
   # for by name.  Nothing has to be dropped to make room any more.
-  V3=1 CMDS_EXTRA="v3trk v3drag v3scrl v3grab changefont" sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { cat "$OUT/mkrom.log"; exit 1; }
+  # ⚠ SYSROM=all: this session boots with an EMPTY SOCKET and types
+  # `copy /dd/sys/...` at the shell, so the demo data has to be in the ROM
+  # disk.  Since 2026-09-20 it is on an SD card by default and /DD/SYS holds
+  # only errmsg (software/nitros9/mkrom.sh, mksddisk.sh).
+  V3=1 CMDS_EXTRA="v3trk v3drag v3scrl v3grab changefont" SYSROM=all sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { cat "$OUT/mkrom.log"; exit 1; }
 fi
 cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c audio/refplayer/card.c
 python3 $V/session3.py "$OUT"

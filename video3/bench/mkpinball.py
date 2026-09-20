@@ -26,7 +26,8 @@ all the ring has.
 ═══ WHY THE TABLE IS BUILT OUT OF BLOCKS, AND WHY THE ART IS FLAT ═══════════
 
 327,680 bytes of picture cannot live in a NitrOS-9 module (64 K of address
-space, and the ROM disk had 6,656 bytes free before this scene took some
+space, and the ROM disk had 6,656 bytes free (⚠ HISTORICAL: the demos and their data moved to the SD
+card on 2026-09-20 and the ROM disk now has 358,400 free) before this scene took some
 back).  So the table is 40 x 32 cells of 16 x 16 interned BY CONTENT, exactly
 as `monster` does it - the difference being that a pinball table is built
 ONCE at start-up and never refilled, so the blocks are copied straight into

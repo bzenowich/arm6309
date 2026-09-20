@@ -42,11 +42,13 @@ came out of, and it is a historical record now too — its header says so.
 still `hardware/cards/video.circuit.tsx`. That is deliberate and it is a compromise:
 
 - `hardware/gal/verilog/gen.ts` emits `vaddr.v`, `vctrl.v`, `vsup.v`, `rfa.v`, `vlen.v`
-  and `pxsel.v` from those term lists, and **`machine_tb` and `demo_tb` still
-  instantiate the card** — `npm run check:machine` is the machine running
-  `software/boot/boot.asm`, and that ROM still drives `video`. Retargeting it to
-  `video3` is a separate job; moving the sources now would break the one check that
-  executes an instruction.
+  and `pxsel.v` from those term lists, and **`demo_tb` still instantiates the card**,
+  through `machine.v`. ⭐ **`machine_tb` no longer does**: `software/boot/boot.asm` was
+  retargeted to `video3` later the same day, and `npm run check:machine` runs
+  `machine3.v` — the same motherboard with `video3_card.v` in the slot. What is left
+  holding these files here is `software/demo/`, whose raster bars and per-scanline
+  palette writes have **no `video3` equivalent** (`plan.md` §0 deletes the display
+  list), so retargeting the demo is a redesign rather than a port.
 - `hardware/gal/fold.check.ts` uses the video arbiter as the **fixture** for
   `jedec/cupl.ts`'s constant fold — a build-tool transformation the live cards depend
   on, and the only exhaustive test of it there is. It stays for the tool, not for the
@@ -59,9 +61,13 @@ still `hardware/cards/video.circuit.tsx`. That is deliberate and it is a comprom
 longer checked.** They left `gal/designs.ts`, `jedec/cupl.check.ts`'s registry,
 `pins.check.ts`'s parts and consumers, `reach.check.ts`'s cards, ten scripts in
 `npm run check`'s chain and five testbenches in `gal/verilog/run.sh`'s default `TBS`.
-The benches still run when named — `TBS="vsync vaddr vtile vspan vpal" sh run.sh` — and
-`check:machine` still exercises the card as a whole. When the boot ROM is retargeted,
-the sources and the drawing can follow their documents here.
+⛔ **And since the boot ROM was retargeted on 2026-09-20 they left `check:machine`
+too** — the last aggregate that exercised the card as a whole. The five benches still
+run when named (`TBS="vsync vaddr vtile vspan vpal" sh run.sh`) and `demo_tb` still
+runs the card end to end, but `run-demo.sh` is ~4.5 h and is in no aggregate either.
+**So the only thing standing between these files and deletion is a demo that depends on
+a display list this machine does not have.** When `software/demo/` is redesigned for
+`video3`, the sources and the drawing follow their documents here.
 
 ## The convention
 

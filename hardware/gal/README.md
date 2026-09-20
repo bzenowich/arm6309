@@ -14,8 +14,11 @@ motherboard.
 > [`../../docs/history.md`](../../docs/history.md)); `video/`'s twelve GAL designs
 > (`sync`, `scan`, `access`, `seqph`, `seqctl`, `vlen`, `regfile`) and its three CPLDs
 > (`video.cpld.ts`, `vsup.cpld.ts`) were not moved, because `verilog/gen.ts` emits the
-> card's Verilog from them and `machine_tb` still runs `software/boot/boot.asm` against
-> the card. ⚠ **They left every registry that checks them** — `designs.ts`,
+> card's Verilog from them and `demo_tb` still runs `software/demo/`'s show against the
+> card. ⭐ **`machine_tb` no longer does**: `software/boot/boot.asm` was retargeted to
+> `video3` later the same day and the bench moved to `machine3.v`, so **no aggregate
+> runs these designs any more** (`docs/history.md` §7.2).
+> ⚠ **They left every registry that checks them** — `designs.ts`,
 > `jedec/cupl.check.ts`, `pins.check.ts`, `reach.check.ts`, ten scripts in
 > `npm run check` and five testbenches in `verilog/run.sh`'s default `TBS`. Everything
 > this file says about them below is a record of a fit that happened, not a claim about

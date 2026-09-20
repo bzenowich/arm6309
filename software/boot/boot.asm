@@ -2,28 +2,45 @@
 * boot.asm -- the machine's first instructions, and a video bring-up.
 *
 * docs/machine.md 7.2 is the boot sequence; hardware/ram.md 6.4 is why it has
-* no JSR in it.  archive/video/docs/graphics.md 13 is the register map, 7.4
-* the span writer and 8 the 1024-byte stride.  ⚠ THAT CARD IS ARCHIVED
-* (2026-09-20): the video section here still drives it, and retargeting it
-* to video3 is owed -- software/v3boot/v3boot.asm is the working model.
+* no JSR in it.  video3/docs/plan.md 10 is the video register map, 5 the span
+* writer, 6 the copy engine, 7 the sprite and 2.5 the four-byte cell and the
+* 1024-byte stride.
+*
+* ⭐ RETARGETED TO video3, 2026-09-20.  Until then the video section drove
+* archive/video/docs/graphics.md 13's card, which was archived that day
+* (archive/README.md).  software/v3boot/v3boot.asm is the fixture this section
+* was ported from, and it is still the smaller model to read first.
 *
 * This is assembled by A09 (software/tools/fetch-a09.sh) and executed by
-* hardware/gal/verilog/machine_tb.sv on the REAL DESIGN: Greg Miller's cycle-accurate 6809E core in
-* the socket, mainboard.v under it (U3, U6, U9, U10 generated from the same
-* term lists the CPLD fitter compiles) and video_card.v in a slot.  Nothing
-* here runs against a behavioural model of the machine; there isn't one.
+* hardware/gal/verilog/machine_tb.sv on the REAL DESIGN: Greg Miller's
+* cycle-accurate 6809E core in the socket, mainboard.v under it (U3, U6, U9,
+* U10 generated from the same term lists the CPLD fitter compiles) and
+* video3_card.v in a slot -- v3dot, v3scan, v3ptr, v3host and the v3lane GAL.
+* Nothing here runs against a behavioural model of the machine; there isn't one.
 *
 * WHAT IT DOES, in order:
 *   1. leaves boot mode with a map it wrote itself, and sizes the SIMM bank
 *   2. proves the chosen SIMM answers, and that TASK selects half the map
+*   2c. ⭐ ASKS WHETHER THERE IS A video3 CARD AT ALL, and skips 3-10 if not
 *   3. loads 256 palette entries
 *   4. paints an 8-bit test pattern with the card's span writer
-*   5. draws a vertical stripe with 7.2's WADV chaining
-*   6. enables the display and stops
+*   5. draws a vertical stripe with plan 10's WADV chaining
+*   6. shows it in all four VMODEs
+*   7. runs the copy engine, and then the hardware sprite
+*   8. tile mode - a tilemap on the four-byte cell stride
+*  10. reads VRAM back, through the window and through VDATA
+*  11. hands the machine to a program in ROM page 1, if there is one
 *
 * The picture is the point: machine_tb samples RGB at the connector for a whole
 * frame and writes it out, so the pattern below is what a screenshot has to
 * show, pixel for pixel, and every stage of the address path is in it.
+*
+* ⛔ EVERY POLL IN THE VIDEO SECTION IS BOUNDED, and that is a change from
+* v3boot.asm, which leaves them unbounded and lets its bench bound them.  This
+* is the machine's boot ROM: it runs on hardware that may be broken, and
+* CLAUDE.md's rule -- a hang is worse than a failure -- applies to the ROM
+* itself.  vwait0/vwait1 count their reads and take the error path ($E5) rather
+* than spin.
 *******************************************************************************
 
 *------------------------------------------------------------------ the map --
@@ -34,39 +51,51 @@ TASKR   EQU     $FFB0           TASK, and $FFB0 is EVEN so it stays in boot mode
 RUNSTB  EQU     $FFB1           the strobe that leaves it -- one way per reset
 
 *--------------------------------------------------------------- the video ---
-VBASE   EQU     $FF60           graphics.md 13
-VCTRL   EQU     VBASE+$00       b7 dispen, b6 irqen, b5 cell, b4-3 wmode, b1-0 vmode
+* video3/docs/plan.md 10 -- 32 bytes at $FF60.  nitros9 defs/armvid.d's IFNE V3
+* block is the same map, and the two have to agree.
+VBASE   EQU     $FF60
+VCTRL   EQU     VBASE+$00       b1-0 VMODE, b3-2 MODE, b5-4 WMODE, b6 IRQEN, b7 DISPEN
 VSCROLL EQU     VBASE+$01
 VSCRLH  EQU     VBASE+$02
 HSCROLL EQU     VBASE+$03
 HSCRLH  EQU     VBASE+$04
 SPANLEN EQU     VBASE+$05       span length - 1
-WFG     EQU     VBASE+$06
+WFG     EQU     VBASE+$06       ⚠ even, and WBG the odd above it - plan 5
 WBG     EQU     VBASE+$07
 WPTR0   EQU     VBASE+$08       A7..A0
 WPTR1   EQU     VBASE+$09       A15..A8
 WPTR2   EQU     VBASE+$0A       A18..A16
-PIDX    EQU     VBASE+$10       palette index, auto-increments after PDATH
-PDATL   EQU     VBASE+$11       GGGBBBBB
-PDATH   EQU     VBASE+$12       RRRRRGGG -- the write commits the entry
-VSTAT   EQU     VBASE+$13       b7 SPANBUSY, b6 VBLANK, b5 HBLANK, b4 LRUN, b1 PBUSY, b0 IRQ
-VDATA   EQU     VBASE+$15       graphics.md 11 - the VRAM port at WPTR, in the I/O page
-WADV    EQU     VBASE+$14       00 continue, 01 next row same column
-TILEBAS EQU     VBASE+$17       6.4.1's TB4..TB0 -- the tile set's A18..A14
-MAPBAS  EQU     VBASE+$19       6.4.1's MB6..MB0 -- the map's A18..A12
-BCTRL   EQU     VBASE+$0E       b0 GO -- starts the display list from WPTR
-BSTAT   EQU     VBASE+$0F       reserved - LRUN reads back as VSTAT b4
+WADV    EQU     VBASE+$0B       00 continue, 01 next row same column, b2 step by two
+VDATA   EQU     VBASE+$0C       the VRAM byte at WPTR, either way, post-increment
+VSTAT   EQU     VBASE+$0D       b7 SPANBUSY b6 VBLANK b5 HBLANK b4 CBUSY b1 PBUSY b0 IRQ
+PIDXL   EQU     VBASE+$0E       palette index, 16 bits - the whole LUT
+PIDXH   EQU     VBASE+$0F
+PDATL   EQU     VBASE+$10       GGGBBBBB
+PDATH   EQU     VBASE+$11       RRRRRGGG -- the write posts the commit
+CPTR0   EQU     VBASE+$12       copyrect source, 19 bits
+CPTR1   EQU     VBASE+$13       ... and 2c's card probe - see there
+CPTR2   EQU     VBASE+$14
+CWIDTH  EQU     VBASE+$15       bytes a row
+CHEIGHT EQU     VBASE+$16       rows -- ⚠ counts ONCE a copy, reload it each time
+CCTRL   EQU     VBASE+$17       b0 GO; b1,b2 reserved - no direction bits (plan 6.2)
+TBASE   EQU     VBASE+$18       the tile/glyph bank's A18..A14
+MAPBAS  EQU     VBASE+$19       the map's A18..A16 -- three bits (plan 2.5)
+SPRX    EQU     VBASE+$1A       plan 7's sprite: X7..X0
+SPRY    EQU     VBASE+$1B       Y7..Y0
+SPRH    EQU     VBASE+$1C       b1-0 X9..X8, b2 Y8, b7 enable
 
-* CTRL bit patterns
-CT_OFF  EQU     $00             display off, WMODE 00 direct, VMODE 00
-CT_SOL  EQU     $10             display off, WMODE 10 span-solid
-CT_MSK  EQU     $08             display off, WMODE 01 span-mask
+* CTRL bit patterns.  ⚠ WMODE MOVED FROM b4-3 TO b5-4 and b3-2 became MODE, so
+* every one of these is a different byte from the card this ROM used to drive.
+CT_OFF  EQU     $00             display off, WMODE 00 direct, MODE 00 bitmap
+CT_MSK  EQU     $10             ... WMODE 01 span-mask
+CT_SOL  EQU     $20             ... WMODE 10 span-solid
+CT_TILE EQU     $08             MODE 10 - tile (plan 2.4)
 CT_ON   EQU     $80             display ON, WMODE 00, VMODE 00 = 640x200 @ 70 Hz
 
 *-------------------------------------------------------------- the machine --
 VRAMWIN EQU     $2000           logical block 1 -- 8 KB of VRAM at a time
 RAMWIN  EQU     $C000           logical block 6 -- the first SIMM
-STORET  EQU     RAMWIN+$100     19 item 1's 96-byte store target, clear of the
+STORET  EQU     RAMWIN+$100     2a's 96-byte store target, clear of the
 *                               variables at +$10..$1B and of the stack, which
 *                               descends from $E000
 STACK   EQU     $E000           grows down through block 6
@@ -92,27 +121,34 @@ P_RAM   EQU     $02             the SIMM stores and reads back
 P_PAL   EQU     $03             256 palette entries loaded
 P_FILL  EQU     $04             the pattern is painted
 P_STRP  EQU     $05             the stripe is drawn
+P_NOVID EQU     $06             ⭐ 2c found no video3 card - 3..10 were SKIPPED
 P_DONE  EQU     $FF             VMODE 00 shown -- sample the picture now
 P_M10   EQU     $10             ... and VMODE 10, 640x400 progressive
 P_M01   EQU     $11             ... 01, 640x240 doubled
 P_M11   EQU     $12             ... 11, 640x480 progressive
-P_LSTA  EQU     $20             display list A running - a palette raster bar
-P_LSTB  EQU     $21             ... and B - one HSCROLL MOVE per line
-P_TILE  EQU     $30             6.4's cell mode - a tilemap, drawn by the CPU
-P_VREAD EQU     $40             graphics.md 11 - VRAM read back, every byte right
+* ⛔ $20 AND $21 USED TO BE P_LSTA AND P_LSTB, the two display lists.  video3
+* has no display-list engine at all - plan 0 deletes it, and with it BCTRL,
+* BSTAT, LRUN, per-scanline HSCROLL and the raster bar.  The two codes are
+* reused for what the card has INSTEAD and what nothing else in this ROM
+* reached: the copy engine (plan 6) and the hardware sprite (plan 7).
+P_COPY  EQU     $20             plan 6's copyrect ran and read back right
+P_SPR   EQU     $21             plan 7's 16x16 sprite is on the screen
+P_TILE  EQU     $30             plan 2.4's tile mode - a tilemap, drawn by the CPU
+P_VREAD EQU     $40             plan 10 - VRAM read back, every byte right
 P_BADV  EQU     $E2             ... a byte read back wrong; vidx says which
 P_BADR  EQU     $E1             no SIMM socket passed the walk, or block 6 failed
 P_TASK  EQU     $07             TASK 1's map is live and distinct from TASK 0's
 P_BADT  EQU     $E3             ... it is not
-P_ST0   EQU     $50             19 item 1 - the store-rate blocks: A begins
+P_BADC  EQU     $E4             7's copyrect did not land; vidx/vgot say where
+P_STUK  EQU     $E5             ⛔ a VSTAT poll ran out of patience - vwait0
+P_ST0   EQU     $50             2a - the store-rate blocks: A begins
 P_ST1   EQU     $51             ... A done (32 stores), B begins
 P_ST2   EQU     $52             ... B done (64 stores)
 
 *------------------------------------------------------------- geometry ------
-* VMODE 00 is 640x200.  The ring is 1024 bytes per row (graphics.md 8, and
-* vspan_tb measures it), so a row is 1024 apart and 8 rows are exactly one
-* 8 KB logical block -- which is why the window below is re-pointed every
-* eighth row and not more often.
+* VMODE 00 is 640x200.  A VRAM row is 1024 bytes (plan 2.5), so a row is 1024
+* apart and 8 rows are exactly one 8 KB logical block -- which is why the window
+* below is re-pointed every eighth row and not more often.
 ROWS    EQU     200
 SPANW   EQU     128             bytes per span
 SPANC   EQU     5               spans per row: 5 x 128 = 640
@@ -312,8 +348,8 @@ rambad  lda     #P_BADR
 *     inside either block, so no taken-branch cost is being folded in either.
 *
 *     ⚠ THE TARGET IS SIMM, NOT VRAM.  A VRAM store is posted and can meet
-*     7.4's /WAIT, which would measure the card rather than the CPU -- and the
-*     card's own retire rate is already measured elsewhere.
+*     plan 5's /WAIT, which would measure the card rather than the CPU -- and
+*     the card's own retire rate is already measured elsewhere.
 *
 *     ⚠ IT IS THE 6809 NUMBER.  vendor/mc6809 is cycle-accurate and it is a
 *     6809, so this is emulation mode -- the baseline 7.3's native-mode claim
@@ -422,27 +458,93 @@ strate  ldx     #STORET
         sta     ,x+
         lda     #P_ST2
         sta     SIMPORT
-        bra     palette
 
 *==============================================================================
-* 3. The palette.  graphics.md 13.1: writes during active display snow, so this
-*    runs with the display off -- CTRL is 0 out of reset and stays that way
-*    until step 6.  Entry i is $i i, which makes every index distinguishable in
-*    a screenshot without a lookup table.
+* 2c. ⭐ IS THERE A video3 CARD IN THE SLOT?  AND THIS IS NOT OPTIONAL.
+*
+*     boot.bin is ROM page 0 of EVERY build of this machine, including builds
+*     whose NitrOS-9 drives archive/video/'s card, and software/demo/emu models
+*     both (machine.c's m->v3).  Sections 3..10 below poll VSTAT; on the other
+*     card $FF6D is not VSTAT at all but a plain register-file byte, so a poll
+*     of it reads back whatever was last written there and CAN SPIN FOR EVER.
+*     CLAUDE.md: a hang is worse than a failure.  So the card is identified
+*     first, and if it is not this one the whole video section is skipped and
+*     $06 says so.
+*
+*     THE PROBE IS +$13, AND HERE IS WHY IT CANNOT ANSWER WRONG EITHER WAY:
+*       video3            +$13 is CPTR1, the copy source's middle byte.  It is
+*                         an ordinary register-file location: v3host's RDBKOE
+*                         covers it (A4 is set), so a read gives back the byte
+*                         that was written.
+*       archive/video     +$13 is VSTAT, and graphics.md 13 says it is read
+*                         "through the '244 of 12.1, not the register file".
+*                         That '244 carries SPANBUSY, VBLANK, HBLANK, LRUN,
+*                         PBUSY and IRQ -- and b2 and b3 are hardwired zero.
+*                         $A5 has b2 set and $5A has b3 set, so NEITHER of the
+*                         two patterns below can ever be read back from it, in
+*                         any state of the card, at any point in the frame.
+*       an empty slot     nothing drives D0-D7 (it has no pull-ups), so the
+*                         bus holds whatever it last carried.  The ROM byte
+*                         read between the store and the load is what makes
+*                         that visible -- ram.md 6.4.1's rule, used here for
+*                         the same reason it is used on the SIMM.
+*
+*     Two patterns rather than one, so that a bus stuck at either level fails
+*     one of them.  A write to +$13 costs nothing on either card: on video3 it
+*     is CPTR1, reloaded before every copy; on the other it clears an interrupt
+*     flag that cannot be pending, because no interrupt is enabled yet.
+*==============================================================================
+vprobe  lda     #$A5
+        sta     CPTR1
+        lda     rombyte         drive the bus with something else
+        lda     CPTR1
+        cmpa    #$A5
+        bne     novid
+        lda     #$5A
+        sta     CPTR1
+        lda     rombyte
+        lda     CPTR1
+        cmpa    #$5A
+        bne     novid
+        clra
+        sta     CPTR1           and leave it where 7's copy expects it
+        lbra    palette
+
+novid   lda     #P_NOVID
+        sta     SIMPORT
+        jmp     prog
+
+*==============================================================================
+* 3. The palette.  plan 10: a PDATH write POSTS the commit to the next HLOAD,
+*    and writes during active display cost a fetch slot, so this runs with the
+*    display off -- CTRL is 0 out of reset and stays that way until step 6.
+*    Entry i is $i i, which makes every index distinguishable in a screenshot
+*    without a lookup table.
+*
+* ⛔ AND THE INDEX IS WRITTEN FOR EVERY ENTRY rather than left to step itself,
+*    which is v3boot.asm's rule and the reason for it is a live defect:
+*    OUTSIDE VBLANK THE POSTED COMMIT FIRES ON EVERY DOT OF HLOAD.  v3host
+*    holds PPEND with `PPEND & ~PS0`, so PS0 is set again on HLOAD's second
+*    dot, the LUT is written twice one dot apart and PIDXCE steps the index
+*    TWICE.  A 256-entry load that leans on the auto-increment therefore writes
+*    479 entries at every other address, wraps, and comes back over the ones it
+*    got right.  v3boot.asm section 2a asks that question once, deliberately
+*    and in one place; this ROM writes four registers an entry so that the
+*    picture below does not depend on the answer.
 *==============================================================================
 palette lda     #CT_OFF
         sta     VCTRL
         clra
-        sta     PIDX            index 0; PIDX auto-increments after each PDATH
-        clrb
-pall    stb     PDATL           GGGBBBBB
-        stb     PDATH           RRRRRGGG -- and this commits, and bumps PIDX
-* graphics.md 13.1: outside vertical blanking the card posts the commit to the
-* next line's HLOAD and holds VSTAT b1 until PIDX has stepped - at most a line
-palw    lda     VSTAT
-        bita    #$02
-        bne     palw
-        incb
+        sta     WADV            00: continue, and no step-by-two (plan 10)
+        sta     PIDXH           sub-palette 0 -- what bitmap and tile mode use
+* A is the index and B the poll mask: vwait0 preserves both, so the loop needs
+* no RAM and the index is never in the register the mask is passed in.
+pall    sta     PIDXL           ⛔ the index, every time - see above
+        sta     PDATL           GGGBBBBB
+        sta     PDATH           RRRRRGGG -- and this posts the commit
+        ldb     #$02
+        lbsr    vwait0          VSTAT b1 PBUSY covers the posted commit
+        inca
         bne     pall
 
         lda     #P_PAL
@@ -465,7 +567,7 @@ palw    lda     VSTAT
 
         clr     yrow
 rowlp
-* --- every eighth row, re-point block 1 at the next 8 KB of the ring.
+* --- every eighth row, re-point block 1 at the next 8 KB of VRAM.
 *     The window and the pointer move together, so the address the CPU writes
 *     is always the address WPTR names.
         lda     yrow
@@ -474,7 +576,7 @@ rowlp
         lda     yrow
         lsra
         lsra
-        lsra                    y >> 3 = which 8 KB page of the ring
+        lsra                    y >> 3 = which 8 KB page of the framebuffer
         adda    #$40            physical A20:A19 = 01 -- VRAM (ram.md 5.2)
         sta     MAPLO+1
         clra
@@ -509,10 +611,10 @@ norem
         clr     ccol
 spanlp
 * --- wait for the previous span before touching WFG: the span writer reads
-*     the colour out of the register file per retire (graphics.md 7.4), so a
-*     write to WFG mid-span would change the colour half way along it.
-wbusy1  lda     VSTAT
-        bmi     wbusy1          b7 = SPANBUSY
+*     the colour out of the register file per retire (plan 5), so a write to
+*     WFG mid-span would change the colour half way along it.
+        ldb     #$80
+        lbsr    vwait0          b7 = SPANBUSY
 
         lda     yrow
         anda    #$F8
@@ -536,17 +638,17 @@ wbusy1  lda     VSTAT
         cmpa    #ROWS
         bne     rowlp
 
-wbusy2  lda     VSTAT
-        bmi     wbusy2
+        ldb     #$80
+        lbsr    vwait0
         lda     #P_FILL
         sta     SIMPORT
 
 *==============================================================================
-* 5. The stripe.  graphics.md 7.2's WADV = 01 -- "next row, same column" -- is
-*    the whole text engine: the pointer advances a row and the COLUMN RELOADS,
-*    so one register setup and 200 triggers draw an 8-pixel-wide vertical bar.
-*    Written here because it is the one path that reloads WPTR from the
-*    register file rather than from the CPU, and nothing had ever run it.
+* 5. The stripe.  plan 10's WADV = 01 -- "next row, same column" -- is the whole
+*    text engine: at span end the pointer advances a row and the COLUMN RELOADS
+*    from the register-file shadow, so one register setup and 200 triggers draw
+*    an 8-pixel-wide vertical bar.  Written here because it is the one path
+*    that reloads WPTR from the register file rather than from the CPU.
 *==============================================================================
         lda     #CT_MSK
         sta     VCTRL
@@ -588,8 +690,8 @@ nrem2
         lda     #STRIPEX&$FF
         sta     taddr+1
 
-wbusy3  lda     VSTAT
-        bmi     wbusy3
+        ldb     #$80
+        lbsr    vwait0
         ldx     taddr
         lda     #$FF            the mask: eight set bits, eight WFG pixels
         sta     ,x
@@ -599,23 +701,23 @@ wbusy3  lda     VSTAT
         cmpa    #ROWS
         bne     strplp
 
-wbusy4  lda     VSTAT
-        bmi     wbusy4
+        ldb     #$80
+        lbsr    vwait0
         clra
         sta     WADV            back to 00 -- continue
         lda     #P_STRP
         sta     SIMPORT
 
 *==============================================================================
-* 6. Show it, in every mode the card has.  graphics.md 13's VMODE is two bits
-*    and 6.2 calls all four native, and until now only 00 had ever been reached
-*    by software - vsync_tb drives the register from a task.  The pattern stays
-*    where it is: the ring is 1024 x 512 and the modes differ only in how much
-*    of it they scan and whether they double, so one framebuffer answers all
-*    four and the SHAPE of what comes out is the claim.
+* 6. Show it, in every mode the card has.  plan 2.1 inherits graphics.md 6.2
+*    verbatim: VMODE is two bits and all four are native, and until now only 00
+*    had ever been reached by software.  The pattern stays where it is: the
+*    framebuffer is 1024 x 512 and the modes differ only in how much of it they
+*    scan and whether they double, so one framebuffer answers all four and the
+*    SHAPE of what comes out is the claim.
 *
 *    machine_tb captures a frame per scene.  The handshake is the card's own
-*    VBLANK - poll VSTAT b6 - which is 12.1's tear-free instant and the thing a
+*    VBLANK - poll VSTAT b6 - which is the tear-free instant and the thing a
 *    real driver waits on anyway.
 *==============================================================================
         clra
@@ -648,163 +750,229 @@ wbusy4  lda     VSTAT
         sta     SIMPORT
         lbsr    settle
 
-        lda     #CT_ON          back to 00 for the list scenes
+        lda     #CT_ON          back to 00 for the last two scenes
         sta     VCTRL
 
 *==============================================================================
-* 7. The display list.  graphics.md 10.3, and it has never been started by
-*    software: vspan_tb pokes descriptors straight into the framebuffer array
-*    and writes BCTRL from a task.
+* 7. ⭐ WHAT video3 HAS INSTEAD OF A DISPLAY LIST.
 *
-*    Two lists, because §10.3 sells two different effects and they fail
-*    differently:
+*    ⛔ SECTION 7 USED TO BE THE DISPLAY LIST - two lists, a raster bar and a
+*    per-scanline HSCROLL sweep, and P_LSTA / P_LSTB.  video3 deletes the
+*    engine outright (plan 0 and 1): no BCTRL, no BSTAT, no LRUN, no descriptor
+*    decode, no per-scanline palette and no per-scanline scroll.  Deleting the
+*    code and stopping there would have cost this ROM two capabilities' worth
+*    of coverage, so the two progress codes now carry the two things this card
+*    has that the other did not and that nothing else in this ROM reaches:
 *
-*      A  ninety WAITs and then a palette repaint - a RASTER BAR.  The stripe
-*         at x = 256 is index $FF on every row, so changing that one entry part
-*         way down the screen makes the stripe change colour at a line, and
-*         machine_tb looks for exactly that.
-*      B  one MOVE to HSCROLL per line, stepping - PER-SCANLINE SCROLL.  The
-*         stripe moves left a little further on each line, so the frame carries
-*         as many distinct stripe positions as the list had entries.
-*
-*    ⚠ A DESCRIPTOR IS WRITTEN THROUGH THE SPAN WRITER.  A CPU VRAM write is
-*    posted and retires at WPTR (§3.1.1, §7.4) - the address on the bus selects
-*    VRAM and nothing else - so building a list means pointing WPTR at it and
-*    letting the auto-increment walk.  That is also why every byte polls VSTAT
-*    b7 first: §7.4's rule, and the only alternative is 40.7 us of /WAIT.
+*      7a  THE COPY ENGINE (plan 6).  Eight rows of sixteen bytes built with
+*          the span writer, copied somewhere else with CPTR/WPTR/CWIDTH/
+*          CHEIGHT/CCTRL, and read back through VDATA byte for byte.  It is
+*          off-screen on purpose - VRAM rows 404 and 420, past the 200 the
+*          picture uses - so it cannot disturb section 8's frame, and it reads
+*          back through VDATA; machine_tb reads the same 128 bytes out of the
+*          array, without the ROM's opinion of them.
+*      7b  THE SPRITE (plan 7).  A 16 x 16 two-bit shape in the top 64 bytes of
+*          MAPBASE's 64 KB, composed at scan time over the pattern - so what
+*          comes out of the connector is the claim, exactly as the raster bar's
+*          was.
 *==============================================================================
-* ⛔ A SPAN-WRITTEN BYTE STREAM CANNOT LEAVE ITS 1024-BYTE ROW.  WPTR is not
-* one counter: WA9..WA0 is a column that WRAPS at 1024 and WA18..WA10 is a row
-* that only WROWADV clocks, so with WADV = 00 the 1025th byte lands back on the
-* first.  The first version of this code put two lists 256 bytes apart and made
-* list B 1261 bytes long; it wrapped at byte 1024 and rewrote itself over list
-* A, and what the engine then walked was picture data executed as descriptors.
-* Hence: ONE ROW PER LIST, and no list longer than 1024 bytes.
-LISTPG  EQU     50              ring page 50 = VRAM 409,600, well past the image
-LPAGE   EQU     $06             ... which is $64000, so WPTR[18:16] = 6
-LISTA   EQU     $4000           list A  - VRAM 409,600, ring row 400
-LISTB   EQU     $4400           list B  - VRAM 410,624, ring row 401
-WAITOP  EQU     $80             graphics.md 10.3.2: WAIT
-ENDOP   EQU     $FF             ... and the terminator
-BARIDX  EQU     $FF             the stripe's palette index
+* --- 7a.  The source, the copy, and the read-back --------------------------
+CPPAGE  EQU     $06             WPTR/CPTR A18..A16 for both rectangles
+CPSLOW  EQU     $5000           VRAM 413,696 -- row 404, well past the picture
+CPDLOW  EQU     $9000           ... 430,080 -- row 420
+* ⚠ SIXTEEN ROWS APART, NOT EIGHT.  plan 6.2: the engine counts UP only, so a
+* copy whose destination overlaps its source AHEAD of the read reads back its
+* own output - eight rows apart, the fourth row copied would be the second row
+* written.  An overlapping copy stages through scratch in two passes; this one
+* simply does not overlap.
+CPW     EQU     16              bytes a row
+CPH     EQU     8               rows
 
-* ⚠ The map matters only for the CPU's half of the transaction.  In WMODE 00
-* the address a store carries selects the VRAM window and nothing else - WPTR
-* is what says where the byte lands - so X below stays at the window's base and
-* the descriptors go wherever setwptr last pointed.
-        lda     #$40+LISTPG     block 1 -> the descriptor page
-        sta     MAPLO+1
-        clra
-        sta     MAPHI+1
-        lda     #LPAGE
+        lda     #CPPAGE
         sta     wpage
-
-* ---- list A: a RASTER BAR - white, then magenta, then white again -------
-* ⭐ BOTH EFFECTS ARE PERSISTENT, so a list that changes the palette once shows
-* a bar only in the frame it runs in and a solid colour ever after. A bar that
-* can be photographed has to change and change back, and the list has to be
-* restarted every frame - which is what a driver does anyway, out of 12.1's VBL
-* handler.
-        ldd     #LISTA
-        lbsr    setwptr
-        ldx     #VRAMWIN
-        ldb     #90
-la1     lda     #WAITOP
-        lbsr    putb
-        decb
-        bne     la1
-        ldy     #barmag         entry $FF := $F81F
-        lbsr    putpal
-        ldb     #90
-la2     lda     #WAITOP
-        lbsr    putb
-        decb
-        bne     la2
-        ldy     #barwht         ... and back to $FFFF
-        lbsr    putpal
-        lda     #ENDOP
-        lbsr    putb
-
-* ---- list B: one MOVE HSCROLL per line, for a whole frame ---------------
-* ⚠ The operand's bits 7..2 are HSCROLL[9..2] (vspan_tb measures it), so an
-* operand of 4n scrolls by 4n pixels - byte-granular, which is what 8.2 bought.
-* The step wraps every 64 lines so the stripe sweeps the screen repeatedly and
-* the frame carries many distinct positions rather than one.
-        ldd     #LISTB
-        lbsr    setwptr
-        ldx     #VRAMWIN
-        clr     lstep
-        clr     lstep+1
-lb1     lda     #$03            MOVE HSCROLL, (pair & 63) * 4
-        lbsr    putb
-        lda     lstep+1
-        anda    #63
+        clr     cprow
+cpfill  lda     cprow
         lsla
         lsla
+        adda    #CPSLOW/256     the row's high byte: $50 + row * 4
+        clrb
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        clr     cpcol
+cpf1    lda     cprow
+        lsla
+        lsla
+        lsla
+        lsla                    row * 16
+        adda    cpcol
+        adda    #$80            $80 + row * 16 + col: distinct and never zero
         lbsr    putb
-        lda     #WAITOP         ... and hold it for two lines, so 400 lines of
-        lbsr    putb
-        lda     #WAITOP         descriptor cost 800 bytes and stay inside the
-        lbsr    putb            row that the paragraph above is about
-        ldd     lstep
-        addd    #1
-        std     lstep
-        cmpd    #200            200 pairs = the whole visible frame
-        bne     lb1
-        lda     #ENDOP
-        lbsr    putb
+        inc     cpcol
+        lda     cpcol
+        cmpa    #CPW
+        bne     cpf1
+        inc     cprow
+        lda     cprow
+        cmpa    #CPH
+        bne     cpfill
 
-* ---- run list A, restarted every vertical blank -------------------------
-        lda     #P_LSTA
+* ⚠ WADV IS ALREADY 00 AND MUST BE.  b2 is the WRITE POINTER's step, and the
+* copy's destination is WPTR: a GO with b2 set would walk the destination two
+* bytes a byte.  plan 10 says so and software/demo/emu reports it as a fault.
+        lbsr    idlespn
+        ldd     #CPSLOW
+        lbsr    setcptr         the source
+        ldd     #CPDLOW
+        lbsr    setwptr         ... and the destination
+        lda     #CPW
+        sta     CWIDTH
+        lda     #CPH
+        sta     CHEIGHT         ⚠ counts once a copy - reloaded above each time
+        lda     #$01
+        sta     CCTRL           GO.  b1 and b2 are reserved (plan 6.2)
+        ldb     #$10
+        lbsr    vwait0          VSTAT b4 CBUSY
+
+* The read-back, through VDATA's post-increment - one row at a time, because
+* the pointer's column wraps at 1024 and the rows are 1024 apart.
+        clr     cprow
+cpchk   lbsr    idlespn
+        lda     cprow
+        lsla
+        lsla
+        adda    #CPDLOW/256
+        clrb
+        lbsr    setwptr
+        clr     cpcol
+cpc1    lda     cprow
+        lsla
+        lsla
+        lsla
+        lsla
+        adda    cpcol
+        adda    #$80            what cpfill put at that byte of the source
+        sta     cpexp
+        lda     VDATA
+        sta     vgot
+        lda     cprow
+        lsla
+        lsla
+        lsla
+        lsla
+        adda    cpcol
+        sta     vidx            which byte, if this one is wrong
+        lda     vgot
+        cmpa    cpexp
+        lbne    copybad
+        inc     cpcol
+        lda     cpcol
+        cmpa    #CPW
+        bne     cpc1
+        inc     cprow
+        lda     cprow
+        cmpa    #CPH
+        bne     cpchk
+        clr     wpage
+        lda     #P_COPY
         sta     SIMPORT
-        ldd     #LISTA
-        lbsr    runlist
 
-* ---- and list B ---------------------------------------------------------
-        lda     #P_LSTB
+* --- 7b.  The sprite -------------------------------------------------------
+* plan 7: the shape is the top 64 bytes of MAPBASE's 64 KB region -- MAPBASE 7
+* puts it at $7FFC0, VRAM row 511 columns 960..1023, which no map address and
+* no part of this ROM's picture reaches.  A row is four bytes: plane 0 columns
+* 0-7 and 8-15, then plane 1's, bit 7 leftmost, and the pixel's code is
+* (plane 1, plane 0).  The shape below is code(r, c) = (r + c) mod 3, so every
+* row of it differs from its neighbours and so does every column; code 0 is
+* transparent and codes 1 and 2 are the two cursor colours.  Code 3 is never
+* used -- plan 7 reserves it.
+*
+* ⭐ THE COLOURS ARE FOUR PALETTE ENTRIES, NOT 512.  plan 7 loads all 256
+* entries of sub-palettes 1 and 2 because a general cursor sits over a general
+* picture; this one sits at x 32..47 of picture rows 48..63, and section 4's
+* index(x, y) is constant across each 8-row by 128-pixel cell -- so the sprite
+* covers exactly two background indexes, $30 and $38, and four LUT entries say
+* everything 512 would.
+SPRSHL  EQU     $FFC0           the shape's A15..A0 with MAPBASE 7
+SPRPG   EQU     $07
+SPRPX   EQU     32              the hotspot: the shape's top-left corner
+SPRPY   EQU     48
+SPRC1   EQU     $5A             sub-palette 1: entry $5A5A
+SPRC2   EQU     $A5             sub-palette 2: entry $A5A5
+
+        lda     #SPRPG
+        sta     MAPBAS          ⚠ three bits on this card, not seven
+        sta     wpage
+        ldd     #SPRSHL
+        lbsr    setwptr
+        ldx     #VRAMWIN
+        ldu     #sprsh
+        ldb     #64
+sprlp   lda     ,u+
+        lbsr    putb
+        decb
+        bne     sprlp
+        clr     wpage
+
+* the two cursor colours, in the two sub-palettes the codes address
+        lda     #$01
+        ldb     #$30
+        lbsr    sprpal
+        lda     #$01
+        ldb     #$38
+        lbsr    sprpal
+        lda     #$02
+        ldb     #$30
+        lbsr    sprpal
+        lda     #$02
+        ldb     #$38
+        lbsr    sprpal
+
+        lda     #SPRPX
+        sta     SPRX
+        lda     #SPRPY
+        sta     SPRY
+        lda     #$80
+        sta     SPRH            enable; X9..X8 and Y8 are all zero here
+        lda     #P_SPR
         sta     SIMPORT
-        ldd     #LISTB
-        lbsr    runlist
-
-        clra                    leave the scroll where a reader expects it
-        sta     HSCROLL
-        sta     HSCRLH
+        lbsr    settle
+        clra
+        sta     SPRH            ... and off again: 8 below is not bitmap mode
 
 *==============================================================================
-* 8. Cell mode.  graphics.md 6.4, and until now only vtile_tb had reached it -
-*    which drives the fetch and reads back the ADDRESS the card asks for.  This
+* 8. Tile mode.  plan 2.4, and until now only v3card_tb had reached it.  This
 *    puts a tilemap in VRAM with the span writer, points the two base registers
-*    at it, sets CTRL b5, and lets the card paint 2,000 cells out of 256 bytes
-*    of tile data.  What comes out of the connector is the claim.
+*    at it, sets MODE = 10, and lets the card paint 2,000 cells out of 256
+*    bytes of tile data.  What comes out of the connector is the claim.
 *
 * ⭐ THE TILE SET IS THE BYTES 0..255 IN ORDER, and that is not laziness.
-*    6.4.1's address is a CONCATENATION - TILEBASE | code<<6 | row<<3 | col -
+*    The tile address is a CONCATENATION - TILEBASE | code<<6 | row<<3 | col -
 *    so the byte holding tile n's pixel (r, c) sits at n*64 + r*8 + c, which
 *    for four tiles is exactly the offset itself.  Writing i at offset i makes
-*    every pixel's INDEX equal to (n<<6)|(r<<3)|c, and 9's palette is the
+*    every pixel's INDEX equal to (n<<6)|(r<<3)|c, and 3's palette is the
 *    identity map, so every pixel that reaches the connector names the three
-*    fields that addressed it.  A row field off by one, a column field on the
-*    wrong address bit, a map byte fetched for the neighbouring cell - each
-*    moves a different part of that number, and machine_tb states the whole
-*    expression independently.
+*    fields that addressed it.  Tile mode drives the LUT's high half with ZERO
+*    (plan 2.4), so the lookup is sub-palette 0 and the identity holds.
 *
-* ⚠ VMODE 00, BECAUSE THE CELL ROW IS FIVE BITS.  6.4.1: cell mode addresses
-*    32 rows, which covers 640x200's 25 and 640x240's 30 and does not reach
-*    640x400's 50 or 640x480's 60.  vtile_tb runs VMODE 10 because it is
-*    checking addresses and not a picture; a picture has to stay inside the
-*    field.
+* ⭐ AND THE MAP IS A FOUR-BYTE CELL ON A 1024-BYTE STRIDE (plan 2.5), which is
+*    the biggest single difference from the card this ROM used to drive: there
+*    the cell was one byte on a 128-byte stride.  The code is lane 0 and the
+*    attribute lane 2 -- tile mode ignores the attribute -- and WADV b2 makes
+*    WPTR step by TWO, so a cell is two stores and not four.  The map's address
+*    is {MAPBASE[2:0], cellrow[5:0], 0, cellcol[6:0], lane[1:0]}; the cell row
+*    is SIX bits here, so plan 2.5's 64 rows cover every VMODE and
+*    graphics.md 6.4.1's "cell mode does not reach 640x400" is not inherited.
+*    VMODE 00 anyway, so that the picture is the same 640 x 200 as section 4's.
 *==============================================================================
 TILEB   EQU     8               tile set at 8 * 16,384  = VRAM 131,072
-MAPB    EQU     40              map      at 40 * 4,096  = VRAM 163,840
+MAPB    EQU     3               map      at 3 * 65,536  = VRAM 196,608
 TBPAGE  EQU     $02             ... which is $20000, so WPTR[18:16] = 2
 TBLOW   EQU     $0000
-MBPAGE  EQU     $02             ... and $28000
-MBLOW   EQU     $8000
+MBPAGE  EQU     $03             ... and $30000
 CELLS   EQU     80              cells across, 640 / 8
 CROWS   EQU     25              cell rows, 200 / 8
-MSTRIDE EQU     128             6.4.1's map row stride - a power of two, so the
-*                               map fetch is a concatenation and not a multiply
 
+        lbsr    idlespn
         lda     #TBPAGE
         sta     wpage
         ldd     #TBLOW
@@ -816,21 +984,32 @@ tset    lbsr    putb
         bne     tset
 
 * The map: code = (cellRow + cellCol) & 3, so the tile changes both across and
-* down and a row/column swap in 6.4.1's concatenation cannot look right.
+* down and a row/column swap in the concatenation cannot look right.
+*
+* ⚠ X AND WPTR NO LONGER MOVE TOGETHER, and that is the point of b2.  X is a
+* logical address and all it does is select VRAM; WPTR is what says where the
+* byte lands, and with b2 set it steps by two -- so the code goes to lane 0 and
+* the filler to lane 2 and the third store is the next cell's.
+        lbsr    idlespn
         lda     #MBPAGE
         sta     wpage
+        lda     #$04
+        sta     WADV            ⭐ plan 2.5: WPTR steps by TWO
         clr     yrow
-mrow    lda     yrow
-        ldb     #MSTRIDE
-        mul                     D = cellRow * 128, and no carry: 24*128 < 64 K
-        addd    #MBLOW
+mrow    lbsr    idlespn
+        lda     yrow
+        lsla
+        lsla                    cellRow * 1024, high byte (rows 0..24)
+        clrb
         lbsr    setwptr
         ldx     #VRAMWIN
         clr     ccol
 mcol    lda     yrow
         adda    ccol
         anda    #3
-        lbsr    putb
+        lbsr    putb            the code -- lane 0
+        clra
+        lbsr    putb            the attribute -- lane 2, ignored in tile mode
         inc     ccol
         lda     ccol
         cmpa    #CELLS
@@ -839,30 +1018,33 @@ mcol    lda     yrow
         lda     yrow
         cmpa    #CROWS
         bne     mrow
+        lbsr    idlespn
+        clra
+        sta     WADV            back to one byte a step
         clr     wpage
 
         lda     #TILEB
-        sta     TILEBAS
+        sta     TBASE
         lda     #MAPB
         sta     MAPBAS
-        clra                    cell mode scrolls through the same two
-        sta     VSCROLL         registers as bitmap mode - 6.4.1's note about
-        sta     VSCRLH          vadr - so start them at the top left
+        clra                    tile mode scrolls through the same two
+        sta     VSCROLL         registers as bitmap mode, so start them at the
+        sta     VSCRLH          top left
         sta     HSCROLL
         sta     HSCRLH
-        lda     #CT_ON+$20      display ON, CELL, VMODE 00
+        lda     #CT_ON+CT_TILE  display ON, MODE 10 tile, VMODE 00
         sta     VCTRL
         lda     #P_TILE
         sta     SIMPORT
         lbsr    settle
 
 *==============================================================================
-* 10. graphics.md 11: VRAM reads back.
+* 10. plan 10: VRAM reads back.
 *
 * A read is a write run backwards.  The address a load carries selects the VRAM
 * window and nothing else; WPTR says which byte, and it post-increments - so X+
 * walks a read exactly as putb walks a write.  Three passes:
-*   (a) the tile set just drawn, 256 bytes of 0..255, read back while cell mode
+*   (a) the tile set just drawn, 256 bytes of 0..255, read back while tile mode
 *       is on and the map fetch takes every other spare access;
 *   (b) a store and a load back to back with NO VSTAT poll between them, 32
 *       times - so the load has to wait on /WAIT for the store's span to retire
@@ -870,21 +1052,21 @@ mcol    lda     yrow
 *   (c) the whole of (b)'s area read back, so both halves of (b) are checked;
 *   (d) a load issued while a 256-byte span-solid is still retiring.  The
 *       prefetch is normally done long before the CPU's next cycle, so (b)
-*       never waits; this does - for the whole span, ~40 us on /WAIT - and
-*       then gets the byte the span stopped in front of;
+*       never waits; this does - for the whole span - and then gets the byte
+*       the span stopped in front of;
 *   (e) and the span's 256 bytes read back.
-* And the same port at its other address, +$15 VDATA (graphics.md 19 item 47),
-* which needs no MMU block at all:
+* And the same port at its other address, +$0C VDATA, which needs no MMU block
+* at all:
 *   (f) 64 stores through VDATA with no poll, read back through the window;
 *   (g) the same 64 read back through VDATA, the first waiting on the prefetch;
 *   (h) two span-solids started back to back through VDATA and a VDATA load
 *       straight after - the second store waits for the first span with E high,
-*       which is when a register-file write at +$15 would repaint the span;
+*       which is when a register-file write at +$0C would repaint the span;
 *   (i) and the two spans' 512 bytes read back through VDATA.
 * Every setwptr is preceded by idlespn: WPTR may not be loaded under a span.
 *==============================================================================
-SCRPAGE EQU     LPAGE           ring row 402 - beside the lists, off the screen
-SCRLOW  EQU     $4800
+SCRPAGE EQU     $06             VRAM row 402 - beside 7a's rectangles, off the
+SCRLOW  EQU     $4800           screen
 SCRN    EQU     64
 
 * (a) the tile set
@@ -974,7 +1156,7 @@ SFG     EQU     $C7             the span's colour
         sta     WFG
         lda     #255
         sta     SPANLEN
-        lda     #CT_ON+$20+CT_SOL display on, CELL, WMODE 10 span-solid
+        lda     #CT_ON+CT_TILE+CT_SOL display on, tile, WMODE 10 span-solid
         sta     VCTRL
         sta     ,x              starts the span - 256 retires, one per fetch slot
         lda     ,x              and this waits for all of them, and the prefetch
@@ -983,7 +1165,7 @@ SFG     EQU     $C7             the span's colour
         cmpa    #SPAT
         lbne    vbad
         lbsr    idlespn
-        lda     #CT_ON+$20      back to direct writes
+        lda     #CT_ON+CT_TILE  back to direct writes
         sta     VCTRL
 * (e) the span itself
         ldd     #SCRLOW
@@ -1056,7 +1238,7 @@ SFG2    EQU     $E4
         sta     WFG
         lda     #255
         sta     SPANLEN
-        lda     #CT_ON+$20+CT_SOL display on, CELL, WMODE 10 span-solid
+        lda     #CT_ON+CT_TILE+CT_SOL display on, tile, WMODE 10 span-solid
         sta     VCTRL
         lda     #VMARK
         sta     VDATA           span 1: 256 x WFG
@@ -1069,7 +1251,7 @@ SFG2    EQU     $E4
         cmpa    #SPAT
         lbne    vbad
         lbsr    idlespn
-        lda     #CT_ON+$20      back to direct writes
+        lda     #CT_ON+CT_TILE  back to direct writes
         sta     VCTRL
 * (i) both spans, 512 bytes, through VDATA
         ldd     #SCRLOW
@@ -1086,6 +1268,15 @@ vri     lda     VDATA
         bne     vri
 
         clr     wpage
+* Leave the card somewhere a program handed page 1 can recognise: the display
+* on, bitmap, direct writes, WADV 00, no sprite and no interrupt - which is
+* reset's CTRL with the display bit set, and shows section 4's pattern.
+        lbsr    idlespn
+        clra
+        sta     WADV
+        sta     SPRH
+        lda     #CT_ON
+        sta     VCTRL
         lda     #P_VREAD
         sta     SIMPORT
 
@@ -1096,8 +1287,14 @@ vri     lda     VDATA
 *     "6309", jump to $8004 with the stack, the RAM vectors and every test above
 *     behind it. Otherwise the two blocks go back to the SIMM and the ROM stops,
 *     exactly as it did before this section existed.
+*
+* ⚠ The card is left in bitmap mode with the display on, direct writes, WADV
+* 00, no sprite and no interrupt - so a program that finds it does not inherit
+* tile mode, a sprite or a scroll.  A machine with no video3 card (2c) reaches
+* this label without ever having written $FF60-$FF7F except for the probe's
+* two bytes.
 *==============================================================================
-        lda     #$01            ROM page 1 at $8000, page 2 at $A000
+prog    lda     #$01            ROM page 1 at $8000, page 2 at $A000
         sta     MAPLO+4
         sta     MAPHI+4
         lda     #$02
@@ -1128,83 +1325,88 @@ vbad    lda     #P_BADV         vidx holds the index, vgot the byte
         sta     SIMPORT
         bra     halt
 
+copybad lda     #P_BADC         7a's copy: vidx the byte, vgot what came back
+        sta     SIMPORT
+        bra     halt
+
+* ⛔ A POLL THAT RAN OUT OF PATIENCE.  vwait0/vwait1 come here rather than
+* spinning, so a card that never clears a status bit is a REPORTED fault and
+* not a machine that stopped.
+vstuck  lda     #P_STUK
+        sta     SIMPORT
+        bra     halt
+
 *==============================================================================
-* idlespn - wait for SPANBUSY (VSTAT b7) to clear.  §13 / 7.4: WPTR may not be
-* loaded while a span is retiring through it.
+* vwait0 / vwait1 - poll VSTAT until the bits in B are clear (vwait0) or set
+* (vwait1), BOUNDED.
+*
+* ⭐ THE BOUND IS THE WHOLE POINT, and it is the one place this ROM differs in
+* kind from software/v3boot/v3boot.asm, whose header says its polls are
+* unbounded on purpose because its bench bounds them.  Nothing bounds a boot
+* ROM on a real machine.  65,536 reads is about 0.3 s at this machine's E rate
+* - longer than any span (a 256-byte span-solid is ~1,000 dots), any copy
+* (128 bytes here) and any frame (359,200 dots), and short enough that a dead
+* card reports $E5 instead of hanging the POST.
+*
+* A, B and X survive; the mask is reached at 3,S, under the pushed A and X.
 *==============================================================================
-idlespn pshs    b
-is1     ldb     VSTAT
-        bmi     is1
+vwait1  pshs    b
+        pshs    a,x
+        ldx     #0
+vw11    lda     VSTAT
+        bita    3,s
+        bne     vwok
+        leax    -1,x
+        bne     vw11
+        bra     vwbad
+
+vwait0  pshs    b
+        pshs    a,x
+        ldx     #0
+vw01    lda     VSTAT
+        bita    3,s
+        beq     vwok
+        leax    -1,x
+        bne     vw01
+vwbad   puls    a,x
+        puls    b
+        jmp     vstuck
+vwok    puls    a,x
         puls    b,pc
 
 *==============================================================================
-* putpal - append "MOVE PIDX,$FF / MOVE PDATL,lo / MOVE PDATH,hi" to the list.
-* Y points at a three-byte table: PIDX operand, PDATL, PDATH.  13's second write
-* port on +$10..+$12 is what makes a palette reachable from a descriptor at all,
-* and PDATH is the write that commits.
+* idlespn - wait for SPANBUSY (VSTAT b7) to clear.  plan 5 / 10: WPTR may not
+* be loaded, and no register may be written, while a span is retiring.
 *==============================================================================
-putpal  pshs    a
-        lda     #$10
-        lbsr    putb
-        lda     ,y+
-        lbsr    putb
-        lda     #$11
-        lbsr    putb
-        lda     ,y+
-        lbsr    putb
-        lda     #$12
-        lbsr    putb
-        lda     ,y+
-        lbsr    putb
-        puls    a,pc
-
-barmag  FCB     BARIDX,$1F,$F8  entry $FF := $F81F, magenta
-barwht  FCB     BARIDX,$FF,$FF  ... and back to white
+idlespn pshs    b
+        ldb     #$80
+        lbsr    vwait0
+        puls    b,pc
 
 *==============================================================================
-* runlist - start the list at D at every vertical blank, for eight frames.
-*
-* ⭐ THIS IS THE DRIVER SHAPE, not a testbench convenience. 10.3.1: the engine
-* shares WPTR, so a list is started by loading WPTR and writing BCTRL - and it
-* clobbers WPTR on the way through, so every frame has to load it again. 12.1's
-* VBL handler is where that belongs.
+* sprpal - A = the sub-palette (PIDXH), B = the entry (PIDXL); write the cursor
+* colour that sub-palette carries.  plan 7: a sprite pixel's code is the LUT's
+* A9..A8, so code 1 reads sub-palette 1 and code 2 sub-palette 2 at the
+* background byte's own index.
 *==============================================================================
-runlist pshs    a,b
-        std     lstart
-        lda     #8
-        sta     lframe
-rl1     ldb     #1
-        lbsr    vblonly         the tear-free instant: load WPTR here
-        ldd     lstart
-        lbsr    setwptr
-* ⚠ ... BUT GO AT BLANK'S END, NOT AT ITS START.  10.3.2's WAIT resumes at the
-* next SCANLINE and HLOAD has no vertical term, so blanked lines count: a list
-* GO'd at the top of vertical blank spends its first ~49 WAITs there and the
-* effect lands 49 lines higher than the descriptor count says.  Waiting out the
-* blank costs one poll and makes WAIT number n mean line n.
-rl2     lda     VSTAT
-        bita    #$40
-        bne     rl2
-        lda     #$01            BCTRL.GO
-        sta     BCTRL
-        dec     lframe
-        bne     rl1
-* ⛔ AND WAIT FOR THE LAST ONE TO STOP.  10.3.1: while LRUN is set the engine
-* OWNS WPTR - it is walking it - so the next thing that loads WPTR is writing a
-* register another master is using, and every byte it retires lands wherever
-* the engine has got to.  Without this poll the tilemap below was written into
-* a moving target: its 256 bytes came out interleaved with the descriptors the
-* engine was still fetching, at addresses that skipped.  machine_tb saw
-* LRUN = 1 through the whole of it.  The wait is bounded by the list's own
-* terminator, which is what ENDOP is for.
-rl3     lda     VSTAT           b4 LRUN - and 13 says why it is HERE and not
-        bita    #$10            at +$0F, which is a register file location and
-        bne     rl3             cannot carry a macrocell's live state
+sprpal  pshs    a,b
+        sta     PIDXH
+        stb     PIDXL
+        cmpa    #$01
+        bne     sp2
+        lda     #SPRC1
+        bra     sp3
+sp2     lda     #SPRC2
+sp3     sta     PDATL
+        sta     PDATH           the write posts the commit
+        ldb     #$02
+        lbsr    vwait0          PBUSY
         puls    a,b,pc
 
 *==============================================================================
-* setwptr - D = the 16-bit VRAM offset; WPTR := D (the top three bits are zero
-* for everything this ROM addresses).  §13's +$08..+$0A, little-endian.
+* setwptr - D = the 16-bit VRAM offset; WPTR := {wpage, D}.  plan 10's
+* +$08..+$0A, little-endian.
+* setcptr - the same for CPTR at +$12..+$14.
 *==============================================================================
 setwptr stb     WPTR0
         sta     WPTR1
@@ -1213,33 +1415,25 @@ setwptr stb     WPTR0
         sta     WPTR2
         puls    a,pc
 
+setcptr stb     CPTR0
+        sta     CPTR1
+        pshs    a
+        lda     wpage
+        sta     CPTR2
+        puls    a,pc
+
 *==============================================================================
 * putb - retire A into VRAM at WPTR, one byte, WMODE 00.
 *
-* X names the same byte in logical space and post-increments with WPTR: the
-* address is what selects VRAM and WPTR is what says where the byte lands, and
-* keeping them in step is what makes this readable rather than merely working.
+* X names a byte in logical space and post-increments; the address is what
+* selects VRAM and WPTR is what says where the byte lands.  ⚠ With WADV b2 set
+* the two no longer step together - section 8 says why that is deliberate.
 *==============================================================================
 putb    pshs    b
-pb1     ldb     VSTAT           §7.4: poll b7, SPANBUSY
-        bmi     pb1
+        ldb     #$80
+        lbsr    vwait0          plan 5: poll SPANBUSY, bounded
         sta     ,x+
         puls    b,pc
-
-*==============================================================================
-* vblonly - wait B vertical blanks and return immediately after the edge, so a
-* caller gets the whole of the next frame rather than the tail of this one.
-*==============================================================================
-vblonly pshs    a
-vo1     lda     VSTAT
-        bita    #$40
-        bne     vo1
-vo2     lda     VSTAT
-        bita    #$40
-        beq     vo2
-        decb
-        bne     vo1
-        puls    a,pc
 
 *==============================================================================
 * settle - give the capture a whole frame to find, by waiting four vertical
@@ -1247,28 +1441,27 @@ vo2     lda     VSTAT
 * takes the frame after it, so a scene has to stand still for longer than the
 * two frames that costs.
 *
-* ⭐ AND IT IS THE HANDSHAKE A DRIVER WOULD USE.  13.1's palette rule and
-* 12.1's VBL handler both say "do it in vertical blank", and this is the poll
+* ⭐ AND IT IS THE HANDSHAKE A DRIVER WOULD USE.  plan 10's palette rule and
+* plan 9's VBL interrupt both say "do it in vertical blank", and this is the poll
 * that finds it - so the wait is the machine exercising a documented path
 * rather than a testbench convenience.
 *==============================================================================
 settle  pshs    a,b
-        ldb     #4
-vblnot  lda     VSTAT           wait until NOT in vertical blank
-        bita    #$40
-        bne     vblnot
-vblin   lda     VSTAT           ... then for the edge into it
-        bita    #$40
-        beq     vblin
-        decb
-        bne     vblnot
+        lda     #4
+        sta     nfrm
+setl1   ldb     #$40
+        lbsr    vwait0          wait until NOT in vertical blank
+        ldb     #$40
+        lbsr    vwait1          ... then for the edge into it
+        dec     nfrm
+        bne     setl1
         puls    a,b,pc
 
 *==============================================================================
 * The map table: sixteen entries of (low, high), index {TASK, block}.
 *
 *   block 0,3,4,5,6   SIMM 0, physical 4 MB + n * 8 KB   (A24..A21 = 0010)
-*   block 1,2         the video ring, physical 0.5 MB    (A20:A19 = 01)
+*   block 1,2         the video card's VRAM, physical 0.5 MB  (A20:A19 = 01)
 *   block 7           the boot ROM's own page 0, 2 MB    (A21 = 1)
 *
 * Task 1's eight entries are the same except block 5, which 2b uses to prove
@@ -1278,8 +1471,8 @@ vblin   lda     VSTAT           ... then for the edge into it
 *==============================================================================
 maptab
         FCB     $00,$02         block 0  $0000  SIMM0 + 0
-        FCB     $40,$00         block 1  $2000  ring page 0   <- moved, above
-        FCB     $41,$00         block 2  $4000  ring page 1
+        FCB     $40,$00         block 1  $2000  VRAM page 0   <- moved, above
+        FCB     $41,$00         block 2  $4000  VRAM page 1
         FCB     $03,$02         block 3  $6000  SIMM0 + 3
         FCB     $04,$02         block 4  $8000  SIMM0 + 4
         FCB     $05,$02         block 5  $A000  SIMM0 + 5
@@ -1303,17 +1496,41 @@ lowhi   FCB     $00,$02,$04,$02,$06,$02,$04,$02 bitmap -> lowest socket's high b
 blks256 FCB     0,2,2,4,2,4,4,6 bitmap -> sockets x 2, which is blocks / 256
         FCB     2,4,4,6,4,6,6,8
 
+* 7b's sprite shape, 16 rows of four bytes: plane 0 columns 0-7 and 8-15, then
+* plane 1's, bit 7 leftmost.  code(r, c) = (r + c) mod 3, which has period
+* three down the rows - so the sixteen rows are A B C A B C ... and a row slip
+* by one or two is a wrong pixel.  machine_tb states the rule rather than the
+* bytes, which is what makes the table a claim and not a copy.
+sprsh
+        FCB     $49,$24,$24,$92         row  0   (r mod 3 = 0)
+        FCB     $92,$49,$49,$24         row  1   (1)
+        FCB     $24,$92,$92,$49         row  2   (2)
+        FCB     $49,$24,$24,$92         row  3
+        FCB     $92,$49,$49,$24         row  4
+        FCB     $24,$92,$92,$49         row  5
+        FCB     $49,$24,$24,$92         row  6
+        FCB     $92,$49,$49,$24         row  7
+        FCB     $24,$92,$92,$49         row  8
+        FCB     $49,$24,$24,$92         row  9
+        FCB     $92,$49,$49,$24         row 10
+        FCB     $24,$92,$92,$49         row 11
+        FCB     $49,$24,$24,$92         row 12
+        FCB     $92,$49,$49,$24         row 13
+        FCB     $24,$92,$92,$49         row 14
+        FCB     $49,$24,$24,$92         row 15
+
 *==============================================================================
 * Variables.  Block 6, which is the SIMM -- so nothing here is touched before
 * step 2 has proved the SIMM answers.
 *==============================================================================
 yrow    EQU     RAMWIN+$10      current row, 0..199
-ccol    EQU     RAMWIN+$11      current span within the row, 0..4
+ccol    EQU     RAMWIN+$11      current span or cell within the row
 taddr   EQU     RAMWIN+$12      the logical address the trigger writes (2 bytes)
-lstep   EQU     RAMWIN+$14      list B's line counter while it is built (2 bytes)
-lframe  EQU     RAMWIN+$16      runlist's frame counter
-wpage   EQU     RAMWIN+$17      WPTR[18:16] for the next setwptr -- see 13
-lstart  EQU     RAMWIN+$18      runlist's list address, reloaded every frame
+cprow   EQU     RAMWIN+$14      7a's rectangle row
+cpcol   EQU     RAMWIN+$15      ... and column
+nfrm    EQU     RAMWIN+$16      settle's frame counter
+wpage   EQU     RAMWIN+$17      WPTR[18:16] for the next setwptr/setcptr
+cpexp   EQU     RAMWIN+$18      7a's expected byte
 vidx    EQU     RAMWIN+$1A      section 10's byte index - which byte, on a failure
 vgot    EQU     RAMWIN+$1B      ... and the byte that was read
 

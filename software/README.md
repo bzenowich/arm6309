@@ -7,7 +7,7 @@ different toolchain, different lifecycle.
 
 | | |
 |---|---|
-| ⭐ [`boot/`](boot/) | **`boot.asm` — the machine's own first instructions**, and the only code in this repository that has ever executed. `machine.md` §7.2's boot sequence plus a video bring-up |
+| ⭐ [`boot/`](boot/) | **`boot.asm` — the machine's own first instructions**, and the only code in this repository that has ever executed. `machine.md` §7.2's boot sequence plus a `video3` bring-up — ⭐ retargeted from the archived `video` card on 2026-09-20, and it probes for the card before it drives it |
 | ⭐ [`tools/`](tools/) | `fetch-a09.sh` — the assembler, fetched and built on demand — and `mkrom.sh`, which turns `boot.asm` into the ROM image the simulation loads |
 | [`6809/`](6809/) | third-party 6809 code, imported as-is: a monitor and a FORTH. **Neither has been assembled yet** |
 

@@ -86,6 +86,74 @@ caused:
 
 ---
 
+## §7.2 — the boot ROM's video POST is retargeted to `video3`, and it probes for the card first (2026-09-20)
+
+Later on the day `video/` was archived. `software/boot/boot.asm` is ROM page 0 of every
+build of this machine and its video half still drove the archived card's register map;
+[`archive/README.md`](../archive/README.md) recorded that as the reason `video/`'s
+design sources could not move. This entry is that job.
+
+**What changed and what did not.** Sections 1, 1a, 2, 2a, 2b and 11 — the map, the SIMM
+walk, the descriptor, `TASK`, the store-rate blocks and the ROM-page handoff — are
+untouched, and so is every `machine_tb` claim about them, including all six population
+and fault scenarios. The video half moved to `video3/docs/plan.md` §10's map: `WADV`
+`$14`→`$0B`, `VDATA` `$15`→`$0C`, `VSTAT` `$13`→`$0D` (b4 is `CBUSY`, not `LRUN`),
+`PIDX` `$10` → `PIDXL`/`PIDXH` at `$0E`/`$0F`, `PDATL`/`PDATH` `$11`/`$12`→`$10`/`$11`,
+`TILEBAS` `$17` → `TBASE` `$18`, `MAPBAS` `$19` unchanged but three bits wide,
+`WMODE` from `CTRL` b4–3 to b5–4 with b3–2 becoming `MODE` — so `CT_SOL` `$10`→`$20` and
+`CT_MSK` `$08`→`$10`.
+
+**Section 7, the display list, is deleted and replaced rather than dropped.** `video3`
+has no display-list engine (`plan.md` §0 and §1): no `BCTRL`, no `BSTAT`, no `LRUN`, no
+descriptor decode, no per-scanline palette and no per-scanline scroll. The section used
+to build two lists through the span writer and run each for eight frames — list A a
+raster bar, list B a per-scanline `HSCROLL` sweep — and report `P_LSTA` `$20` and
+`P_LSTB` `$21`. Both codes are retired. `$20` is now the **copy engine** (`plan.md` §6):
+sixteen bytes by eight rows built at VRAM row 404, copied to row 420, read back through
+`VDATA`, `$E4` on a mismatch. `$21` is the **16×16 sprite** (`plan.md` §7), composed at
+scan time over the test pattern, which keeps a connector-level claim where the raster
+bar's was.
+
+**Section 8 ported.** `video3`'s cell is four bytes on a 1024-byte stride (`plan.md`
+§2.5) where the old card's was one byte on a 128-byte stride, so the map is written two
+stores a cell with `WADV` b2 — the pointer's step-by-two — and the tile-address
+concatenation, the tile set and the picture expression are all unchanged. The cell row
+is six bits rather than five, so the old `⚠ VMODE 00, because the cell row is five bits`
+constraint does not carry.
+
+**Section 2c is new, and it is the part that is not optional.** `boot.bin` is page 0 of
+builds whose NitrOS-9 drives the archived card, and `software/demo/emu/machine.c` still
+models both (`m->v3`). A `VSTAT` poll at `$FF6D` against the other card reads a plain
+register-file byte and can spin for ever, which `CLAUDE.md` calls worse than a failure.
+The POST therefore writes `$A5` and then `$5A` to `+$13` and reads each back with a ROM
+read in between: on `video3` that is `CPTR1`, an ordinary register-file location; on
+`archive/video` it is `VSTAT`, read through §12.1's `'244`, whose b2 and b3 are
+hardwired zero — so neither pattern can come back. With no card the bus holds the ROM
+byte. On a miss the ROM writes `$06` and jumps straight to section 11.
+
+**And every poll in the video section is bounded now**, which reverses
+`software/boot/README.md`'s own section on the subject. It used to argue that a bound
+is twelve numbers and a failed bound has nowhere to report; §2c gave it somewhere to
+report, and `vwait0`/`vwait1` make it one number — 65,536 reads, about 0.3 s, and `$E5`
+on exhaustion.
+
+**`machine_tb` moved from `machine.v` to `machine3.v`** the same day, and `machine3.v`
+grew `machine.v`'s two other slots — the audio card at `$FF40` and the TL16C550C at
+`$FF38` — so that the `nitros9` and `reboot` scenarios moved with it. `run-machine.sh`
+compiles `video3_card.v` and the card's five parts instead of `video_card.v` and its
+three. ⛔ **`machine.v`, `video_card.v` and the generated `vaddr.v`/`vctrl.v`/`vsup.v`
+stay**, because `demo_tb` still instantiates them: `software/demo/`'s raster bars and
+per-scanline palette writes have no `video3` equivalent, and retargeting the demo is a
+redesign rather than a port. So the archived card left the last aggregate that executed
+it, and what holds its sources in the tree is now the demo alone.
+
+**Two findings on the first run**, both recorded as `plan.md` §14 items 20 and 21: the
+`VSYNC`/`HSYNC` polarity XOR that §2.1 and §11 call inherited and required is **not
+built** on `video3`, and `/WAIT`'s release is **not slot-aligned**, which
+`graphics.md` §19 item 6 had closed for `video/`.
+
+---
+
 ## §7.2 — the vectors point at `$FEEE`, and the constant page is the entry that remains (2026-09-14)
 
 `software/nitros9/` booted NitrOS-9 Level 2 to a shell on the host emulator, and in doing so

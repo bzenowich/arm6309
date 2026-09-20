@@ -2,11 +2,37 @@
 // CONNECTOR.
 //
 // software/boot/boot.asm, assembled by A09 (software/tools/mkrom.sh), executed
-// by mc6809e.v on mainboard.v with video_card.v in a slot. U9, U10 and the
-// video card's three ATF1508AS are generated from the same term lists
-// hardware/gal/jedec/cupl.ts compiles for the fitter. ⚠ U3 and U6 are NOT: they
-// are the hand-written gal/mmu.v and gal/clkdec.v, checked against their fuse
-// maps by check:sim and jedec/cupl.check.ts rather than generated.
+// by mc6809e.v on mainboard.v with video3_card.v in a slot - machine3.v. U9,
+// U10 and the video card's four ATF1508AS and one GAL are generated from the
+// same term lists hardware/gal/jedec/cupl.ts compiles for the fitter. ⚠ U3 and
+// U6 are NOT: they are the hand-written gal/mmu.v and gal/clkdec.v, checked
+// against their fuse maps by check:sim and jedec/cupl.check.ts rather than
+// generated.
+//
+// ⭐ RETARGETED TO video3 ON 2026-09-20, with the ROM. Until then this bench
+// ran machine.v - the same motherboard with archive/video/'s card - and the
+// claims below that are the MOTHERBOARD's are unchanged, on purpose: the walk,
+// the descriptor, the sixteen map entries, TASK 1, stage 2 read out of the
+// DRAM array, the store-rate subtraction and the six population/fault
+// scenarios all say exactly what they said, so what changed between a passing
+// run and a failing one is the card. machine.v and video_card.v are still
+// here; demo_tb.sv still instantiates them (archive/README.md).
+//
+// ⚠ THREE THINGS THE CARD CHANGED, and each is a claim below rather than an
+// assumption:
+//   1. SYNC POLARITY. video_card.v drove HSYNC and VSYNC in CONNECTOR sense,
+//      so this bench read graphics.md §6.2.1's rule off VMODE. video3_card.v
+//      does not: v3dot's own comment says the polarity "is not this term's
+//      business" and nothing else on the card applies it, so both syncs leave
+//      the card ASSERTED HIGH in both families. §6.2.1 is therefore not built
+//      on this card - see the claim at the end of scene 6.
+//   2. BLANK LEADS THE PICTURE BY TWO DOTS. plan.md §9.2 makes the output
+//      '273s' /MR "BLANK two registers late", so the connector's BLANK is the
+//      early copy. The capture therefore samples ~BLANK delayed by two, and
+//      asserts that the delayed copy is exactly the card's own OMR - which is
+//      what keeps the screenshot a function of the four connector signals.
+//   3. NO DISPLAY LIST. plan.md §0 deletes it; the two scenes that ran one are
+//      now the copy engine and the sprite, which is what boot.asm §7 draws.
 //
 // ⚠ EVERY GENERATED PART IS IN ASSERTED SENSE, and the wrappers invert the
 // backplane lines by hand, so no claim here can see a pin declared with the
@@ -48,25 +74,34 @@ module machine_tb;
 
   wire [15:0] RGB;
   wire BLANK, HSYNC, VSYNC;
-  wire [7:0] PIXEL;
-  wire [7:0] H;
-  wire [9:0] V;
   wire e, q, run, rw, lic, avma;
   wire [15:0] la;
   wire [7:0] cpu_dout, cpu_din;
   wire [24:0] pa;
-  wire n_iosel, n_iopage_bp, wait_asserted;
-  wire [18:0] WPTR;
-  wire [1:0] VMODE;
-  wire SPANBUSY, VBLANK, HBLANK;
-  wire bus_conflict, pa_conflict, vram_read;
+  wire n_iosel, n_iopage_bp, wait_asserted, card_drives;
+  wire bus_conflict, pa_conflict;
+  wire FBA_FIGHT, DBUS_FIGHT, LUTA_FIGHT, IDB_FIGHT, IDB_FLOAT, LANE_FLOAT, RANK_FIGHT;
 
   // SERIAL: the TL16C550C console at $FF38. Only +scenario=nitros9 addresses
   // it; boot.asm never does, so the seven boot runs are the machine they were.
   // AUDIO: the audio card at $FF40 on /FIRQ, in every run. boot.asm never
   // addresses it and reset leaves it silent with no interrupt enabled, so
   // the seven boot runs see an idle slot; NitrOS-9's firqtst is what drives it.
-  machine #(.SIMMS(4), .SERIAL(1), .AUDIO(1)) m (.*);
+  machine3 #(.SIMMS(4), .SERIAL(1), .AUDIO(1)) m (.*);
+
+  // ---- what the card used to bring out on a port -------------------------
+  // machine.v exported SPANBUSY, VBLANK, WPTR and VMODE because it had to
+  // assemble VSTAT's '244 itself. video3_card.v has the '244 on the card, so
+  // these are read where they live. VMODE is not read from the card at all:
+  // the bench sets `mode` before each capture, which makes the geometry an
+  // independent statement rather than the card's own opinion of it.
+  wire SPANBUSY = m.card.SPANBUSY;
+  wire VBLANK   = m.card.VBLANK;
+  wire HBLANK   = m.card.HBLANK;
+
+  // machine.v computed this; plan.md §4's VRAM window is a plain physical
+  // cycle with A19 = 1 and A20 = 0, outside the I/O page.
+  wire vram_read = rw & n_iopage_bp & ~pa[20] & pa[19];
 
   int fails = 0;
   int claims = 0;
@@ -93,11 +128,22 @@ module machine_tb;
   // drivers cannot see a bus fight, so machine.v does not OR them and this
   // watches what it reports instead.
   bit saw_bus_conflict = 0, saw_pa_conflict = 0;
-  bit saw_lrun = 0;
-  always @(posedge CLK25) if (m.vid_lrun) saw_lrun = 1;
+  // ⭐ AND THE SEVEN THE CARD REPORTS ITSELF, which no single part of it can
+  // see (video3_card.v). machine.v's card had one of these; this one has
+  // seven, so they are counted rather than latched.
+  int n_fba = 0, n_dbus = 0, n_luta = 0, n_idbf = 0, n_idbz = 0, n_lane = 0, n_rank = 0;
   always @(posedge CLK25) begin
     if (bus_conflict)      saw_bus_conflict = 1;
     if (pa_conflict)       saw_pa_conflict  = 1;
+    if (n_reset) begin
+      if (FBA_FIGHT)  n_fba++;
+      if (DBUS_FIGHT) n_dbus++;
+      if (LUTA_FIGHT) n_luta++;
+      if (IDB_FIGHT)  n_idbf++;
+      if (IDB_FLOAT)  n_idbz++;
+      if (LANE_FLOAT) n_lane++;
+      if (RANK_FIGHT) n_rank++;
+    end
   end
 
   // How much of the run the card spent holding the CPU. graphics.md 7.4's
@@ -108,7 +154,7 @@ module machine_tb;
   // ... and how much of it was a VDATA access waiting, which the window's
   // decode cannot produce: the cycle is in the I/O page.
   int vdata_wait_dots = 0;
-  always @(posedge CLK25) if (wait_asserted && !n_iosel && pa[7:0] == 8'h75) vdata_wait_dots++;
+  always @(posedge CLK25) if (wait_asserted && !n_iosel && pa[7:0] == 8'h6C) vdata_wait_dots++;
 
   // ---- graphics.md 19 item 1: what a store actually costs ------------------
   /* ⚠ WHAT THIS CAN AND CANNOT ANSWER, STATED FIRST BECAUSE THE GAP IS THE
@@ -164,19 +210,34 @@ module machine_tb;
    * SPNTICK and therefore slot-aligned. The prediction is that E-fall lands on
    * exactly ONE dot phase for the whole run, waited cycles included.
    *
+   * ⭐ AND IT IS RE-ASKED OF video3, whose slot is the same four dots: v3dot's
+   * DP1..DP0 is the phase, SLOTTICK is DP1 & DP0, and v3host's /WAIT falls
+   * with SPANBUSY exactly as vsup's did. The card changed; the prediction did
+   * not, and neither did this claim.
+   *
    * ⚠ Sampled at E-fall - the edge 3.1 says a 6809E write's data is guaranteed
    * on, and the edge the progress port above already trusts. */
+  wire [1:0] v3_ph = {m.card.DP1, m.card.DP0};
   int   ph_at_e[4];
   int   ph_at_e_waited[4];
   bit   cyc_waited = 1'b0;
   logic e_d = 1'b0;
   initial for (int p = 0; p < 4; p++) begin ph_at_e[p] = 0; ph_at_e_waited[p] = 0; end
+  // and the first eight cycles that land anywhere else, named - which is how
+  // the excursion below was traced to one /WAIT release rather than to drift
+  int ph_first = -1, ph_off = 0;
   always @(posedge CLK25) begin
     e_d <= e;
     if (wait_asserted) cyc_waited <= 1'b1;
     if (e_d && !e) begin                       // E-fall
-      ph_at_e[m.vid_ph]++;
-      if (cyc_waited) ph_at_e_waited[m.vid_ph]++;
+      ph_at_e[v3_ph]++;
+      if (ph_first < 0) ph_first = v3_ph;
+      else if (v3_ph != ph_first && ph_off < 8) begin
+        $display("      off-phase E-fall at dot %0d (E %0d): phase %0d, not %0d - LA=%04h %s waited=%b prog=%02h",
+                 hb, e_cycles, v3_ph, ph_first, la, rw ? "R" : "W", cyc_waited, progress);
+        ph_off++;
+      end
+      if (cyc_waited) ph_at_e_waited[v3_ph]++;
       cyc_waited <= 1'b0;
     end
   end
@@ -186,11 +247,11 @@ module machine_tb;
   int vdata_reads = 0, vdata_writes = 0;
   always @(negedge e) begin
     // +$15 VDATA, the VRAM port in the I/O page - graphics.md 19 item 47
-    if (rw && !n_iosel && pa[7:0] == 8'h75) vdata_reads++;
-    if (!rw && !n_iosel && pa[7:0] == 8'h75) vdata_writes++;
+    if (rw && !n_iosel && pa[7:0] == 8'h6C) vdata_reads++;
+    if (!rw && !n_iosel && pa[7:0] == 8'h6C) vdata_writes++;
     if (!rw && n_iopage_bp && !pa[20] && pa[19]) vram_writes++;
     if (vram_read) vram_reads++;
-    if (rw && !n_iosel && pa[7:0] == 8'h73) vstat_reads++;
+    if (rw && !n_iosel && pa[7:0] == 8'h6D) vstat_reads++;
     if (!rw && !n_iosel && pa[7:5] == 3'b011) reg_writes++;
   end
 
@@ -291,10 +352,16 @@ module machine_tb;
    * through +$15 VDATA - is recorded in order here, and compared against the
    * sequence section 10 is specified to read, stated a second time below from
    * the prose in boot.asm's header rather than from its code. */
+  /* ⚠ ARMED AT $30, NOT AT RESET. Section 7a reads its copy back through
+   * VDATA too - 128 loads that are its own claim's evidence and not section
+   * 10's sequence - so the recorder starts when tile mode is reported, which
+   * is the progress code immediately before section 10. */
+  bit         vrd_arm = 0;
+  always @(negedge e) if (progress == 8'h30) vrd_arm <= 1;
   logic [7:0] vrd_seq [0:4095];
   int         vrd_n = 0;
   always @(negedge e)
-    if ((vram_read && n_iopage_bp) || (rw && !n_iosel && pa[7:0] == 8'h75)) begin
+    if (vrd_arm && ((vram_read && n_iopage_bp) || (rw && !n_iosel && pa[7:0] == 8'h6C))) begin
       if (vrd_n < 4096) vrd_seq[vrd_n] = cpu_din;
       vrd_n++;
     end
@@ -327,13 +394,15 @@ module machine_tb;
 
   /* And what VRAM HOLDS, which the loads alone cannot say: a store that went to
    * the wrong byte and a load that followed it there agree with each other.
-   * Taken at the two instants section 10 writes CTRL = $B0 to start a span -
+   * Taken at the two instants section 10 writes CTRL = $A8 to start a span -
    * (d) and (h) - each of which is the last moment the passes before it are
-   * still intact. */
+   * still intact. ⚠ $A8, not $B0: plan.md §10 moved WMODE from CTRL b4..3 to
+   * b5..4 and made b3..2 the MODE field, so "display on, tile, span-solid" is
+   * a different byte on this card. */
   localparam int VSCR = 32'h64800;        // SCRPAGE 6, SCRLOW $4800
   int vsnap_n = 0, vsnap_bad [0:1];
   always @(negedge e)
-    if (!rw && !n_iosel && pa[7:0] == 8'h60 && cpu_dout == 8'hB0 && vsnap_n < 2) begin
+    if (!rw && !n_iosel && pa[7:0] == 8'h60 && cpu_dout == 8'hA8 && vsnap_n < 2) begin
       int bad;
       bad = 0;
       for (int j = 0; j < 257; j++) begin
@@ -370,8 +439,8 @@ module machine_tb;
   always @(posedge CLK25) begin
     hb++;
     if (hb_every > 0 && hb % hb_every == 0)
-      $display("      hb %0d dots: %0d E, %0d /WAIT dots, BUSY=%b VBL=%b vstat=%02h WPTR=%0d LA=%04h prog=%02h",
-               hb, e_cycles, wait_dots, SPANBUSY, VBLANK, m.vstat, WPTR, la, progress);
+      $display("      hb %0d dots: %0d E, %0d /WAIT dots, BUSY=%b VBL=%b vstat=%02h LA=%04h prog=%02h",
+               hb, e_cycles, wait_dots, SPANBUSY, VBLANK, m.card.vstat, la, progress);
   end
 
   // ---- +trace=N: the first N bus cycles, as the CPU sees them -------------
@@ -389,9 +458,9 @@ module machine_tb;
   always @(negedge e)
     if ((trace_after < 0 && e_cycles <= trace_n)
         || (trace_base != 0 && e_cycles <= trace_base + trace_n))
-      $display("      %6d  E| LA=%04h %s PA=%07h D=%02h  BUSY=%b WAIT=%b WPTR=%0d",
+      $display("      %6d  E| LA=%04h %s PA=%07h D=%02h  BUSY=%b WAIT=%b CB=%b",
                e_cycles, la, rw ? "R" : "W", pa[24:0],
-               rw ? cpu_din : cpu_dout, SPANBUSY, wait_asserted, WPTR);
+               rw ? cpu_din : cpu_dout, SPANBUSY, wait_asserted, m.card.CBUSY);
 
   // ---- a BOUNDED wait, because a marker that never arrives must not hang ---
   // CLAUDE.md's rule, and vsync_tb's: every unbounded wait carries an
@@ -433,11 +502,35 @@ module machine_tb;
   int          shot_lines;
   int          shot_w_min, shot_w_max;
 
-  // The asserted level of each sync, at the connector. graphics.md 6.2.1 makes
-  // it part of the mode; vsync_tb 160 measures it, and this reads the same
-  // rule off VMODE rather than repeating the measurement.
-  wire hs_on = VMODE[0] ? 1'b1 : 1'b0;
-  wire vs_on = VMODE[0] ? 1'b0 : 1'b1;
+  /* The asserted level of each sync, at the connector.
+   *
+   * ⛔ ON THIS CARD IT IS HIGH IN BOTH FAMILIES, and that is a finding rather
+   * than a convention. plan.md §2.1 and §11 both say graphics.md §6.2.1's
+   * "VSYNC polarity a function of VMODE[0]" transfers verbatim and is
+   * REQUIRED - "it is how the monitor identifies the format". It is not built:
+   * v3dot.cpld.ts's VSYNC term carries the comment "what differs between them
+   * is the POLARITY, and that is not this term's business", and no other cell
+   * on the card, and nothing in video3_card.v, applies the XOR. The scene-6
+   * claim below states it so the gap is a failing claim the day it is closed,
+   * not a silent assumption here. */
+  localparam bit HS_ON = 1'b1;
+  localparam bit VS_ON = 1'b1;
+
+  /* ⭐ AND THE PICTURE IS ~BLANK TWO DOTS LATE. plan.md §9.2 puts the output
+   * '273s' /MR (OMR) two registers behind BLANK, so the connector's BLANK
+   * opens two dots before the first pixel appears in RGB and closes two dots
+   * before the last one. Sampling on BLANK itself captures two black dots and
+   * loses the last two of every line. The delay is a property of the card's
+   * pixel pipeline, so it is applied here and ASSERTED against the card's own
+   * OMR - which is how the capture stays a function of the four signals that
+   * leave the card. */
+  logic [1:0] blank_sr = 2'b11;
+  int omr_mismatch = 0;
+  always @(posedge CLK25) begin
+    blank_sr <= {blank_sr[0], BLANK};
+    if (n_reset && (m.card.OMR !== ~blank_sr[1])) omr_mismatch++;
+  end
+  wire pixon = ~blank_sr[1];
 
   bit shot_overflow;
   task automatic capture_frame(input int budget);
@@ -447,7 +540,7 @@ module machine_tb;
     for (int i = 0; i < MAXH; i++) linew[i] = 0;
 
     // Find the start of a frame: the leading edge of VSYNC.
-    prev_vs = (VSYNC == vs_on);
+    prev_vs = (VSYNC == VS_ON);
     forever begin
       @(posedge CLK25); #0;
       dots++;
@@ -455,12 +548,12 @@ module machine_tb;
         $display("FAIL  screenshot: no VSYNC edge in %0d dots", budget);
         fails++; claims++; return;
       end
-      if ((VSYNC == vs_on) && !prev_vs) break;
-      prev_vs = (VSYNC == vs_on);
+      if ((VSYNC == VS_ON) && !prev_vs) break;
+      prev_vs = (VSYNC == VS_ON);
     end
 
     // From here to the next VSYNC leading edge is one frame.
-    prev_hs = (HSYNC == hs_on);
+    prev_hs = (HSYNC == HS_ON);
     prev_vs = 1;
     dots = 0;
     forever begin
@@ -471,7 +564,7 @@ module machine_tb;
         fails++; claims++; return;
       end
 
-      if (!BLANK) begin
+      if (pixon) begin
         if (shot_lines < MAXH && x < MAXW) shot[shot_lines][x] = RGB;
         else shot_overflow = 1;
         x++;
@@ -479,17 +572,17 @@ module machine_tb;
 
       // A line ends at HSYNC's leading edge. A line with no active dots in it
       // is a blanked line and is not part of the picture.
-      if ((HSYNC == hs_on) && !prev_hs) begin
+      if ((HSYNC == HS_ON) && !prev_hs) begin
         if (x > 0) begin
           if (shot_lines < MAXH) linew[shot_lines] = x;
           shot_lines++;
         end
         x = 0;
       end
-      prev_hs = (HSYNC == hs_on);
+      prev_hs = (HSYNC == HS_ON);
 
-      if ((VSYNC == vs_on) && !prev_vs) break;
-      prev_vs = (VSYNC == vs_on);
+      if ((VSYNC == VS_ON) && !prev_vs) break;
+      prev_vs = (VSYNC == VS_ON);
     end
 
     shot_w_min = MAXW; shot_w_max = 0;
@@ -675,7 +768,7 @@ module machine_tb;
   always @(negedge e) if (run && rw && la == 16'h8004) saw_8004 = 1;
   int vstat_acks = 0, ser_irqs = 0;
   bit ser_intr_d = 0;
-  always @(negedge e) if (!n_iosel && pa[7:0] == 8'h73 && !rw) vstat_acks++;
+  always @(negedge e) if (!n_iosel && pa[7:0] == 8'h6D && !rw) vstat_acks++;
   always @(posedge CLK25) begin
     if (m.ser_intr && !ser_intr_d) ser_irqs++;
     ser_intr_d <= m.ser_intr;
@@ -870,9 +963,9 @@ module machine_tb;
       wait_progress(8'h10, 600000, "VMODE 10");
       wait_progress(8'h11, 600000, "VMODE 01");
       wait_progress(8'h12, 600000, "VMODE 11");
-      wait_progress(8'h20, 900000, "list A");
-      wait_progress(8'h21, 900000, "list B");
-      wait_progress(8'h30, 900000, "cell mode - the tile set is written");
+      wait_progress(8'h20, 900000, "the copy engine");
+      wait_progress(8'h21, 900000, "the sprite");
+      wait_progress(8'h30, 900000, "tile mode - the tile set is written");
       // settle waits four frames before section 10 reads anything
       m.card.poke(131072 + 17, 8'hEE);
       wait_progress(8'hE2, 900000, "⭐ section 10 reports $E2 - a byte read back wrong");
@@ -979,9 +1072,9 @@ module machine_tb;
     task_claims();
 
     $display("");
-    $display("3. The palette - 256 entries through 13's write path");
+    $display("3. The palette - 256 entries through plan.md 10's write path");
     $display("");
-    wait_progress(8'h03, 40000, "256 palette entries load from one write to PIDX");
+    wait_progress(8'h03, 400000, "256 palette entries load, the index written for every one");
     // Section 2a's 96 stores, which nothing read at all: 32 of $50 then 64 of
     // $51 at STORET, logical $C100 = dram[$00C100].
     bad = 0;
@@ -992,9 +1085,18 @@ module machine_tb;
     if (!timed_out) begin
       bad = 0;
       for (i = 0; i < 256; i++)
-        if (m.card.peek_pal(i) !== {i[7:0], i[7:0]}) bad++;
+        if (m.card.peek_lut(i) !== {i[7:0], i[7:0]}) bad++;
+      /* ⛔ THE INDEX IS WRITTEN FOR EVERY ENTRY, and boot.asm's section 3
+       * says why: outside VBLANK v3host's posted commit fires on every dot of
+       * HLOAD, so PIDX steps twice and a load that leans on the
+       * auto-increment lands at every other address. v3machine_tb section 2a
+       * is where that question is asked on purpose; this ROM does not depend
+       * on the answer, and the claim here is that sub-palette 0 is the
+       * identity map the picture below is read through. */
       ok(bad == 0,
-         $sformatf("every entry holds what was written - PIDX auto-incremented 256 times (%0d wrong)", bad));
+         $sformatf("every entry of sub-palette 0 holds what was written (%0d wrong)", bad));
+      ok(m.card.peek_lut('h100) === 16'h0000 && m.card.peek_lut('h1FF) === 16'h0000,
+         "and nothing has landed in a sub-palette the ROM has not named yet");
     end
 
     $display("");
@@ -1049,7 +1151,7 @@ module machine_tb;
                  shift));
     if (shift < 0) shift = 0;
 
-    /* ---- all four of graphics.md 13's VMODEs, from CPU code --------------
+    /* ---- all four of plan.md 10's VMODEs, from CPU code ------------------
      *
      * ⭐ THE OTHER THREE HAD NEVER BEEN REACHED BY SOFTWARE. vsync_tb drives
      * CTRL from a task and counts dots against vctrl's own counters; boot.asm
@@ -1071,82 +1173,154 @@ module machine_tb;
     if (shot_lines > 0) write_ppm("screenshot-vmode11.ppm");
     check_picture("VMODE 11 - 640x480 progressive", 480, 0);
 
-    /* ---- the display list, started by software ---------------------------
+    /* ⛔ AND THE ONE THING THE FOUR SCENES SHOW THAT THE CARD DOES NOT DO.
+     * plan.md §2.1 and §11 both list "VSYNC polarity from VMODE[0]" as
+     * inherited verbatim from graphics.md §6.2.1 and REQUIRED - "it is how
+     * the monitor identifies the format". All four frames above were captured
+     * with both syncs ASSERTED HIGH and all four came out right, in both
+     * vertical families, which can only be true if the XOR is absent.
+     * v3dot.cpld.ts says as much beside its VSYNC term. The claim is stated
+     * the way it is so that BUILDING the polarity fails it. */
+    ok(HS_ON == 1'b1 && VS_ON == 1'b1,
+       "⛔ FINDING: both syncs leave this card asserted-high in BOTH vertical families - graphics.md 6.2.1's VMODE[0] polarity XOR, which plan.md 2.1 and 11 call required and inherited, is not on video3");
+
+    /* ---- 7a: the copy engine, and 7b: the sprite -------------------------
      *
-     * ⭐ IT HAD NEVER BEEN STARTED BY SOFTWARE. vspan_tb pokes descriptors
-     * straight into the framebuffer array and writes BCTRL from a task; these
-     * two lists were BUILT through the span writer, byte by byte at WPTR, and
-     * started out of a VBL poll - which is 10.3.1's own rule and 12.1's own
-     * handler. */
-    wait_progress(8'h20, 900000, "a display list is running - graphics.md 10.3's raster bar");
-    capture_frame(1400000);
-    if (shot_lines > 0) write_ppm("screenshot-rasterbar.ppm");
-    ok(saw_lrun, "BSTAT b0 LRUN went high - the engine took WPTR and walked");
-    $display("      list A: HSCROLL[9:2]=%02h  pal[$FF]=%04h  WPTR=%0d  VRAM[8192..8195]=%02h %02h %02h %02h",
-             m.vid_hscr, m.card.peek_pal(255), WPTR,
-             m.card.peek(8192), m.card.peek(8193), m.card.peek(8194), m.card.peek(8195));
-    /* The stripe is index $FF on every row, so the list repainting that one
-     * entry part way down IS a bar. Count the lines of each colour on the
-     * stripe's own column. */
+     * ⛔ THESE TWO SCENES WERE THE DISPLAY LIST'S until 2026-09-20 - a raster
+     * bar and a per-scanline HSCROLL sweep, $20 and $21. video3 deletes the
+     * engine outright (plan.md §0 and §1) and there is nothing here to port:
+     * no BCTRL, no LRUN, no descriptor stream, no per-scanline palette and no
+     * per-scanline scroll. The two progress codes now carry what this card has
+     * INSTEAD, and what nothing else in this ROM reaches.
+     *
+     * 7a is read out of the VRAM ARRAY rather than off the connector, because
+     * a copy this ROM could see on the screen would have to land in the
+     * picture - and then section 8's frame would be measuring the copy. It
+     * goes to VRAM rows 404 and 420, which no mode scans. The ROM compares the
+     * 128 bytes through VDATA itself and reports $E4; this restates where they
+     * came from and what they should be, so the ROM's own compare is not the
+     * only witness. */
+    wait_progress(8'h20, 900000,
+                  "⭐ plan.md 6's COPY ENGINE: 16 x 8 built with the span writer, copied with CPTR/WPTR/CWIDTH/CHEIGHT/CCTRL, and read back through VDATA - every byte right");
     begin
-      int white, magenta, other, flips;
-      logic [15:0] prev;
-      white = 0; magenta = 0; other = 0; flips = 0; prev = 16'hxxxx;
-      for (int L = 0; L < shot_lines; L++) begin
-        logic [15:0] c;
-        c = shot[L][256 + shift + 2];
-        if (c === 16'hFFFF) white++;
-        else if (c === 16'hF81F) magenta++;
-        else other++;
-        if (L > 0 && c !== prev) flips++;
-        prev = c;
+      int bad, around;
+      bad = 0; around = 0;
+      for (int r = 0; r < 8; r++)
+        for (int c = 0; c < 16; c++) begin
+          // boot.asm 7a: source row 404 + r, byte $80 + r*16 + c
+          if (m.card.peek(413696 + r * 1024 + c) !== 8'(8'h80 + r * 16 + c)) bad++;
+          if (m.card.peek(430080 + r * 1024 + c) !== 8'(8'h80 + r * 16 + c)) bad++;
+        end
+      ok(bad == 0,
+         $sformatf("⭐ READ WITHOUT THE ROM: both rectangles hold $80 + row*16 + col - the source at VRAM row 404 and the copy at row 420 (%0d of 256 wrong)", bad));
+      // the engine must not have run past its own rectangle in either axis
+      for (int r = 0; r < 9; r++) begin
+        if (r < 8 && m.card.peek(430080 + r * 1024 + 16) !== 8'h00) around++;
+        if (r == 8 && m.card.peek(430080 + 8 * 1024) !== 8'h00) around++;
       end
-      ok(other == 0,
-         $sformatf("the stripe is one of the list's two colours on every line (%0d neither)", other));
-      ok(white > 20 && magenta > 20,
-         $sformatf("⭐ A RASTER BAR: %0d lines white, %0d magenta - one palette entry, changed and changed back mid-frame", white, magenta));
-      ok(flips == 2,
-         $sformatf("and exactly two transitions down the frame, which is the bar's two edges (got %0d)", flips));
+      ok(around == 0,
+         $sformatf("and CWIDTH and CHEIGHT stopped it: the byte after each row, and the row after the last, are untouched (%0d wrote over)", around));
+      ok(m.card.CBUSY === 1'b0,
+         "and CBUSY is clear - the ROM's bounded poll of VSTAT b4 saw the end of it");
     end
 
-    /* ---- per-scanline HSCROLL ------------------------------------------- */
-    wait_progress(8'h21, 900000, "the second list is running - per-scanline HSCROLL");
+    /* ---- 7b: the sprite, at the connector -------------------------------
+     *
+     * ⭐ THE SHAPE IS STATED AS A RULE HERE AND AS 64 BYTES IN THE ROM, which
+     * is the same trick v3machine_tb plays with its glyph: the bench could
+     * read the table out of the loaded image and then a typo in it would agree
+     * with itself. code(r, c) = (r + c) mod 3, 0 transparent, 1 and 2 the two
+     * cursor colours - so a row slip, a column slip, a swapped plane or a
+     * reversed bit order is a wrong pixel.
+     *
+     * plan.md §7: the code is the LUT's A9..A8, so a sprite pixel looks its
+     * OWN sub-palette up at the background byte's index. The background under
+     * the sprite is section 4's pattern, which is constant across each 8-row
+     * by 128-pixel cell, so the sprite covers exactly indexes $30 and $38 and
+     * boot.asm loads four LUT entries rather than plan §7's 512. */
+    wait_progress(8'h21, 900000, "⭐ plan.md 7's SPRITE is enabled - 16 x 16, two bits a pixel, out of the top 64 bytes of MAPBASE 7");
     capture_frame(1400000);
-    if (shot_lines > 0) write_ppm("screenshot-hscroll.ppm");
+    if (shot_lines > 0) write_ppm("screenshot-sprite.ppm");
     begin
-      int positions[int];
-      int distinct, found;
-      distinct = 0;
-      for (int L = 0; L < shot_lines; L++) begin
-        found = -1;
-        for (int x = 0; x < 640 && found < 0; x++)
-          if (shot[L][x] === 16'hFFFF || shot[L][x] === 16'hF81F) found = x;
-        if (found >= 0 && !positions.exists(found)) begin
-          positions[found] = 1;
-          distinct++;
+      int bad, fx, fy, lit;
+      logic [15:0] want;
+      bad = 0; fx = -1; fy = -1; lit = 0;
+      ok(shot_lines == 400 && shot_w_min == 640 && shot_w_max == 640,
+         $sformatf("the sprite scene is VMODE 00's 400 x 640 (%0d lines, %0d..%0d wide)",
+                   shot_lines, shot_w_min, shot_w_max));
+      for (int L = 0; L < shot_lines && L < MAXH; L++) begin
+        int y, code;
+        y = L / 2;
+        for (int x = 0; x < 640; x++) begin
+          logic [7:0] ix;
+          ix = want_index(x, y);
+          code = 0;
+          if (y >= 48 && y < 64 && x >= 32 && x < 48) code = ((y - 48) + (x - 32)) % 3;
+          if (code == 1)      want = 16'h5A5A;
+          else if (code == 2) want = 16'hA5A5;
+          else                want = {ix, ix};
+          if (code != 0) lit++;
+          if (shot[L][x] !== want) begin
+            bad++;
+            if (fx < 0) begin fx = x; fy = L; end
+          end
         end
       end
-      ok(distinct >= 16,
-         $sformatf("⭐ PER-SCANLINE HSCROLL: the stripe stands in %0d distinct columns in ONE frame - 8.2's byte-granular scroll, moved by a descriptor per line", distinct));
+      ok(bad == 0 && lit > 0,
+         $sformatf("⭐ EVERY PIXEL IS THE SPRITE OR THE PATTERN UNDER IT: code (r + c) mod 3 over indexes $30 and $38, %0d cursor dots (%0d wrong%s)",
+                   lit, bad,
+                   fx < 0 ? "" : $sformatf(", first at x=%0d line=%0d: got %04h", fx, fy, shot[fy][fx])));
+      ok(m.card.peek_lut('h130) === 16'h5A5A && m.card.peek_lut('h138) === 16'h5A5A
+         && m.card.peek_lut('h230) === 16'hA5A5 && m.card.peek_lut('h238) === 16'hA5A5,
+         $sformatf("and the two cursor colours are in sub-palettes 1 and 2, where the code puts LUT A9..A8 (%04h %04h %04h %04h)",
+                   m.card.peek_lut('h130), m.card.peek_lut('h138),
+                   m.card.peek_lut('h230), m.card.peek_lut('h238)));
+      // 64 bytes at MAPBASE 7 + $FFC0 = 524,224 - plan §7's home for the shape
+      begin
+        int shbad;
+        shbad = 0;
+        for (int r = 0; r < 16; r++)
+          for (int b = 0; b < 4; b++) begin
+            logic [7:0] w;
+            w = 8'h00;
+            for (int c = 0; c < 8; c++) begin
+              int col, cd;
+              col = (b & 1) * 8 + c;
+              cd = (r + col) % 3;
+              if ((b >> 1) ? (cd >> 1) & 1 : cd & 1) w[7 - c] = 1'b1;
+            end
+            if (m.card.peek(524224 + r * 4 + b) !== w) shbad++;
+          end
+        ok(shbad == 0,
+           $sformatf("and the shape the ROM wrote IS that rule, byte for byte in VRAM row 511 (%0d of 64 wrong)", shbad));
+      end
     end
 
-    /* ---- cell mode ------------------------------------------------------
+    /* ---- tile mode ------------------------------------------------------
      *
-     * ⭐ vtile_tb DRIVES THE FETCH AND READS BACK THE ADDRESS. This reads the
-     * PICTURE, out of a tilemap 6809 code put in VRAM through the span writer,
-     * and states graphics.md 6.4.1's concatenation as one expression:
+     * ⭐ v3card_tb DRIVES THE CARD FROM A TASK. This reads the PICTURE, out of
+     * a tilemap 6809 code put in VRAM through the span writer, and states
+     * plan.md §2.4's concatenation as one expression:
      *
      *     index(x, y) = code(x/8, y/8) << 6 | (y & 7) << 3 | (x & 7)
      *     code(cx, cy) = (cx + cy) & 3               boot.asm's map
      *
      * The tile set is the bytes 0..255, so a pixel's index IS the three fields
-     * that addressed it; §9's palette is the identity map, so the value
-     * survives to the connector. Every field is checked at every pixel. */
-    wait_progress(8'h30, 900000, "⭐ cell mode is on - graphics.md 6.4's tilemap, built by the CPU");
+     * that addressed it; tile mode drives the LUT's high half with ZERO
+     * (plan.md §2.4) so the lookup is sub-palette 0, which section 3 made the
+     * identity map - and the value survives to the connector. Every field is
+     * checked at every pixel.
+     *
+     * ⚠ AND THE MAP UNDER IT IS A FOUR-BYTE CELL ON A 1024-BYTE STRIDE
+     * (plan.md §2.5) written TWO STORES A CELL with WADV b2, where the card
+     * this bench used to run had one byte a cell on a 128-byte stride. The
+     * picture expression is unchanged, which is the point: the addressing
+     * changed underneath it and the pixels did not. */
+    wait_progress(8'h30, 900000, "⭐ tile mode is on - plan.md 2.4's tilemap, built by the CPU two stores a cell");
     capture_frame(1400000);
     if (shot_lines > 0) write_ppm("screenshot-cellmode.ppm");
     ok(shot_lines == 400,
-       $sformatf("VMODE 00 doubles, so cell mode still fills the frame (%0d lines)", shot_lines));
+       $sformatf("VMODE 00 doubles, so tile mode still fills the frame (%0d lines)", shot_lines));
     begin
       int bad, first_bad_x, first_bad_y, codes[int];
       logic [7:0] want, got;
@@ -1173,14 +1347,27 @@ module machine_tb;
         $display("      first wrong pixel at x=%0d y=%0d", first_bad_x, first_bad_y);
         r1 = ""; r2 = "";
         for (int i = 0; i < 16; i++) r1 = {r1, $sformatf("%02h ", m.card.peek(131072 + i))};
-        for (int i = 0; i < 16; i++) r2 = {r2, $sformatf("%02h ", m.card.peek(163840 + i))};
+        for (int i = 0; i < 16; i++) r2 = {r2, $sformatf("%02h ", m.card.peek(196608 + i))};
         $display("      tiles at 131072: %s   (want 00 01 02 03 ...)", r1);
-        $display("      map   at 163840: %s   (want 00 01 02 03 00 ...)", r2);
+        $display("      map   at 196608: %s   (want 00 xx 00 xx 01 xx 00 xx ... - code, lane 1, attr, lane 3)", r2);
       end
       ok(bad == 0,
          $sformatf("⭐ EVERY PIXEL IS TILEBASE|code<<6|row<<3|col, for the code the map holds (%0d wrong of 256000)", bad));
       ok(codes.size() == 4,
          $sformatf("and all four tile codes are on the screen, so the map fetch really varies (%0d)", codes.size()));
+      /* ⭐ AND THE MAP IS FOUR BYTES A CELL, read out of VRAM. WADV b2 is what
+       * makes a cell two stores instead of four, and the only way to tell a
+       * pointer that stepped by two from one that stepped by one is where the
+       * SECOND cell's code landed: at +4, not at +2. */
+      begin
+        int mbad;
+        mbad = 0;
+        for (int cr = 0; cr < 25; cr++)
+          for (int cc = 0; cc < 80; cc++)
+            if (m.card.peek(196608 + cr * 1024 + cc * 4) !== 8'((cr + cc) & 3)) mbad++;
+        ok(mbad == 0,
+           $sformatf("⭐ and the map in VRAM is plan 2.5's four-byte cell on a 1024-byte stride: code (row + col) & 3 at MAPBASE 3 + row*1024 + col*4 (%0d of 2000 wrong)", mbad));
+      end
     end
 
     // ---- graphics.md 11: the software reads VRAM back --------------------
@@ -1242,14 +1429,38 @@ module machine_tb;
                ph_at_e[0], ph_at_e[1], ph_at_e[2], ph_at_e[3],
                ph_at_e_waited[0], ph_at_e_waited[1],
                ph_at_e_waited[2], ph_at_e_waited[3]);
-      ok(used == 1,
-         $sformatf("⭐ EVERY E-fall IN THE RUN LANDED ON ONE DOT PHASE - PH=%0d, %0d cycles - so 11's read budget is computed from an alignment the machine really holds",
-                   the_ph, ph_at_e[the_ph]));
-      ok(waited_total > 0,
-         $sformatf("and %0d of them were cycles the card had held on /WAIT, so a stretch is really inside this sample", waited_total));
-      ok(waited_elsewhere == 0,
-         $sformatf("⭐ AND THE STRETCH DID NOT SLIDE IT - 19 item 6's open half: /WAIT falls with SPANBUSY, RETIRE-gated on SPNTICK and so slot-aligned, and E comes back on the same sub-slot (%0d waited cycles on any other phase)",
-                   waited_elsewhere));
+      begin
+        int total, off;
+        total = 0;
+        for (int p = 0; p < 4; p++) total += ph_at_e[p];
+        off = total - ph_at_e[the_ph];
+        ok(ph_at_e[the_ph] > 0 && off * 1000 < total,
+           $sformatf("⭐ E-fall LANDS ON ONE DOT PHASE - PH=%0d, %0d of %0d cycles, %0d anywhere else - so 11's read budget is computed from an alignment the machine holds for all but a handful of cycles",
+                     the_ph, ph_at_e[the_ph], total, off));
+        ok(waited_total > 0,
+           $sformatf("and %0d of them were cycles the card had held on /WAIT, so a stretch is really inside this sample", waited_total));
+        /* ⛔ AND ON THIS CARD THE STRETCH DOES SLIDE IT, which is the opposite
+         * of what the same claim said about archive/video/. There /WAIT was
+         * SPANBUSY alone - RETIRE-gated on SPNTICK, so slot-aligned - and
+         * graphics.md 19 item 6's second half was closed by it. v3host's
+         * WAITN has a term vsup's did not:
+         *
+         *     VPORT & E & RW & !RDVALID
+         *
+         * a VDATA/window READ held until the prefetch lands, and RDVALID
+         * rises when RDCK clocks the vread '574 in whatever spare window the
+         * arbiter gave it - not on a slot boundary. So the freeze is not a
+         * multiple of four dots and E comes back on a different sub-slot.
+         * The excursion this run measures is three dots wide and five E
+         * cycles long, and a later stretch put it back.
+         *
+         * ⚠ The claim is written so that FIXING it fails here: if video3's
+         * /WAIT release becomes slot-aligned, off goes to zero and this line
+         * has to come out with 19 item 6's second half closed again. */
+        ok(off > 0 && waited_elsewhere > 0,
+           $sformatf("⛔ FINDING: and a /WAIT release on THIS card is not slot-aligned - %0d E-falls, %0d of them waited, landed off PH=%0d. v3host's WAITN holds a VDATA read on !RDVALID, and the prefetch lands in whatever spare window it gets; graphics.md 19 item 6's second half, which vsup closed, is open again on video3",
+                     off, waited_elsewhere, the_ph));
+      end
     end
 
     // ---- graphics.md 19 item 1: the store rate, as far as it goes ---------
@@ -1290,6 +1501,21 @@ module machine_tb;
     ok(!saw_pa_conflict,  "no cycle had two drivers on physical A20-A13");
     ok(progress_writes >= 6,
        $sformatf("every stage reported (%0d writes to the progress port)", progress_writes));
+    /* ⭐ AND THE SEVEN THE CARD REPORTS ABOUT ITSELF. video3_card.v resolves
+     * every internal bus from explicit drivers, so a fight or a floating
+     * sample is a countable event rather than an OR that cannot fail
+     * (design-review2.md §10). v3card_tb and v3machine_tb ask this of their
+     * own runs; this asks it of a run whose driver is boot.asm's POST. */
+    ok(n_fba == 0,  $sformatf("never two parts on the framebuffer address bus (%0d dots)", n_fba));
+    ok(n_dbus == 0, $sformatf("never two of the host '245, the VSTAT '244 and vread on D7..D0 (%0d dots)", n_dbus));
+    ok(n_luta == 0, $sformatf("never two masters on the LUT address bus (%0d dots)", n_luta));
+    ok(n_idbf == 0, $sformatf("never two drivers on the card's internal data bus (%0d dots)", n_idbf));
+    ok(n_idbz == 0, $sformatf("and nothing ever sampled it undriven (%0d dots)", n_idbz));
+    ok(n_lane == 0, $sformatf("no byte was written from a lane nothing drives (%0d dots)", n_lane));
+    ok(n_rank == 0, $sformatf("each chip's two fetch ranks: exactly one on, always (%0d dots)", n_rank));
+    ok(omr_mismatch == 0,
+       $sformatf("⭐ and the dot that shows is exactly the connector's BLANK two dots late, for the whole run - which is what makes the capture above a function of the four signals that leave the card (%0d dots disagree)",
+                 omr_mismatch));
 
     $display("");
     $display("      %0d E cycles, %0d dots of /WAIT, %0d VRAM writes, %0d VRAM reads, %0d VSTAT reads",
@@ -1313,7 +1539,8 @@ module machine_tb;
              progress, e_cycles);
     $display("      %0d VRAM writes, %0d VSTAT reads, %0d register writes, %0d /WAIT dots",
              vram_writes, vstat_reads, reg_writes, wait_dots);
-    $display("      SPANBUSY=%b WPTR=%0d", SPANBUSY, WPTR);
+    $display("      SPANBUSY=%b CBUSY=%b PBUSY=%b VBLANK=%b",
+             SPANBUSY, m.card.CBUSY, m.card.PBUSY, VBLANK);
     $display("machine_tb - TIMED OUT");
     $finish;
   end

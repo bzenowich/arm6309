@@ -4,6 +4,13 @@
 sequence that leaves boot mode, and a video bring-up that puts a picture on the
 connector. It is the first code this project has ever executed.
 
+⭐ **The video half drives [`video3`](../../video3/docs/plan.md) since 2026-09-20.** It
+drove [`archive/video/`](../../archive/video/docs/graphics.md) until that day, and the
+two cards' register maps differ in almost every offset (`plan.md` §10). The motherboard
+half — §1, §1a, §2, §2a, §2b and §11 — did not change, and neither did any of
+`machine_tb`'s claims about it. [`../v3boot/v3boot.asm`](../v3boot/v3boot.asm) is the
+smaller fixture the video half was ported from and is still the thing to read first.
+
 ```sh
 npm run rom            # from hardware/ -- assemble, and write boot.hex
 npm run check:machine  # ... and run it on the real design
@@ -57,62 +64,100 @@ as a rule about the ROM's source; this is that source.
    palette entry i = $i i                      so the index is readable off RGB
 ```
 
+⛔ **The palette writes the index for EVERY entry**, which is two register writes an
+entry more than the auto-increment needs, and the reason is a live defect
+(`video3/docs/history.md`, 2026-09-19): **outside `VBLANK` the posted commit fires on
+every dot of `HLOAD`**, so `PIDX` steps twice and a 256-entry load that leans on the
+auto-increment writes 479 entries at every other address and then wraps over the ones it
+got right. `v3boot.asm` §2a asks that question on purpose and in one place; this ROM
+does not depend on the answer.
+
 Every 8-row by 128-pixel cell has a colour that **identifies where it is**, and the
 palette is the identity map, so `machine_tb` can recover the framebuffer index from the
 connector and compare it against the same expression stated independently. A stride
 error moves a boundary, an interleave error scrambles a cell, a geometry error changes
 how many fit, and a scan-address error moves the stripe.
 
-⚠ **The program polls `VSTAT` b7 between spans** — `graphics.md` §7.4's own rule —
-rather than relying on `/WAIT`. Both work since 2026-09-10; before that day neither
-did, and `machine_tb` is what found out.
+⚠ **The program polls `VSTAT` b7 between spans** — `plan.md` §5's own rule — rather
+than relying on `/WAIT`. Both work; `machine_tb` is what found out, on the card before
+this one.
 
-## The display list, and the two things it taught
+## §2c — is there a `video3` card at all?
 
-`boot.asm` builds two lists **through the span writer** — byte by byte at `WPTR`, the
-way a driver would — and starts each one out of a `VSTAT` poll, eight frames running:
+⛔ **This is the one part of the retarget that is not optional.** `boot.bin` is page 0
+of **every** build of this machine, including builds whose NitrOS-9 drives the archived
+card, and [`software/demo/emu/machine.c`](../demo/emu/machine.c) models both (`m->v3`,
+selected by `VIDEO3=1`). Sections 3–10 poll `VSTAT` at `$FF6D`; on the other card that
+offset is not `VSTAT` at all but a plain register-file byte, so a poll of it reads back
+whatever was written there and **can spin for ever**. `CLAUDE.md`: a hang is worse than
+a failure.
 
-| list A | 90 `WAIT`s, `MOVE PIDX/PDATL/PDATH` to make entry `$FF` magenta, 90 more, back to white | a **raster bar**: the stripe at x=256 is index `$FF`, so repainting that one entry part way down the frame is a bar with exactly two edges |
-| list B | `MOVE HSCROLL,(n&63)*4` and two `WAIT`s, 200 times | **per-scanline scroll**: `machine_tb` counts the stripe standing in 64 distinct columns in ONE frame |
+So the card is identified before the video POST runs, and the whole of it is skipped
+with progress `$06` if the answer is no. **The probe is `+$13`, and it cannot answer
+wrong in either direction:**
 
-⛔ **A span-written byte stream cannot leave its 1024-byte row.** `WPTR` is not one
-counter: `WA9`–`WA0` is a column that **wraps** at 1024 and `WA18`–`WA10` is a row that
-only `WROWADV` clocks, so with `WADV = 00` the 1025th byte lands back on the first. The
-first version of this code put the two lists 256 bytes apart and made list B 1261 bytes
-long; it wrapped at byte 1024 and **rewrote itself over list A**, and what the engine
-then walked was picture data executed as descriptors. Hence one row per list, and the
-lists live at VRAM 409,600 and 410,624 — ring rows 400 and 401, past the image.
+| | `+$13` is | a write of `$A5`, then `$5A`, reads back as |
+|---|---|---|
+| **`video3`** | `CPTR1`, the copy source's middle byte — an ordinary register-file location (`v3host`'s `RDBKOE` covers it, `A4` set) | the byte that was written. **Probe passes** |
+| **`archive/video`** | `VSTAT`, read "through the `'244` of §12.1, **not** the register file" (`graphics.md` §13) | `SPANBUSY`, `VBLANK`, `HBLANK`, `LRUN`, `PBUSY`, `IRQ` — and **b2 and b3 are hardwired zero**. `$A5` has b2 set and `$5A` has b3 set, so neither pattern can come back in any state of the card at any point in the frame. **Probe fails** |
+| **an empty slot** | nothing | whatever the bus last carried — and a known ROM byte is read between the store and the load, `ram.md` §6.4.1's rule, so that is `$C3`. **Probe fails** |
 
-⚠ **`WAIT` counts scanlines, blanked ones included** (`graphics.md` §10.3.2). `runlist`
-loads `WPTR` at vertical blank's *start* — the tear-free instant — and issues `GO` at
-its *end*, so `WAIT` number *n* means line *n*. Starting at blank's start instead spends
-the first ~49 `WAIT`s in the blanking. ⛔ And until 2026-09-10 it was worse than that:
-`WAIT` cleared on a **level**, so a run of them collapsed to one per fetch slot and this
-program's raster bar finished inside three lines of blanking — `graphics.md` §19 item 42.
+Two patterns rather than one, so a bus stuck at either level fails one of them. The
+write costs nothing on either card: `CPTR1` is reloaded before every copy, and `VSTAT`'s
+write side clears an interrupt flag that cannot be pending because nothing is enabled
+yet.
 
-## Cell mode — 2,000 cells out of 256 bytes
+## §7 — the copy engine and the sprite, which replaced the display list
 
-The last scene puts a tilemap in VRAM with the span writer, points `TILEBASE` (`+$17`)
-and the map base (`+$19`) at it, sets `CTRL` b5, and lets the card paint.
+⛔ **`video3` has no display-list engine** (`plan.md` §0 and §1): no `BCTRL`, no `BSTAT`,
+no `LRUN`, no descriptor decode, no per-scanline palette and no per-scanline scroll. The
+two scenes that ran one — `P_LSTA` and `P_LSTB` — are retired, and `$20` and `$21` now
+carry the two capabilities this card has that the other did not and that nothing else in
+this ROM reaches.
 
-⭐ **The tile set is the bytes 0..255 in order, and that is not laziness.** §6.4.1's
-tile address is a *concatenation* — `TILEBASE | code<<6 | row<<3 | col` — so tile *n*'s
+| code | what it reports |
+|---|---|
+| `$20` | **the copy engine** (`plan.md` §6). Eight rows of sixteen bytes built with the span writer at VRAM row 404, copied to row 420 with `CPTR`/`WPTR`/`CWIDTH`/`CHEIGHT`/`CCTRL`, and read back through `VDATA`. `$E4` if a byte disagrees |
+| `$21` | **the 16×16 sprite** (`plan.md` §7), composed at scan time over the pattern — so what comes out of the connector is the claim, exactly as the raster bar's was |
+
+⚠ **Sixteen rows apart, not eight.** `plan.md` §6.2: the engine counts **up only**, so a
+destination that overlaps the source ahead of the read reads back its own output. Both
+rectangles are off-screen, which is also why the copy cannot disturb §8's frame.
+
+⚠ **The sprite's colours are four LUT entries, not 512.** `plan.md` §7 loads all 256
+entries of sub-palettes 1 and 2 because a general cursor sits over a general picture.
+This one sits at x 32–47 of picture rows 48–63, and `index(x, y)` is constant across each
+8-row by 128-pixel cell, so the sprite covers exactly indexes `$30` and `$38`. The shape
+is `code(r, c) = (r + c) mod 3` — `machine_tb` states that rule and the ROM states the
+64 bytes, which is what makes the table a claim and not a copy.
+
+## Tile mode — 2,000 cells out of 256 bytes
+
+The last scene puts a tilemap in VRAM with the span writer, points `TBASE` (`+$18`) and
+`MAPBASE` (`+$19`) at it, sets `CTRL` `MODE = 10`, and lets the card paint.
+
+⭐ **The tile set is the bytes 0..255 in order, and that is not laziness.** The tile
+address is a *concatenation* — `TILEBASE | code<<6 | row<<3 | col` — so tile *n*'s
 pixel (*r*, *c*) sits at `n*64 + r*8 + c`, which for four tiles is the offset itself.
-Writing `i` at offset `i` makes every pixel's index equal to `(n<<6)|(r<<3)|c`, and §9's
-palette is the identity map, so **every pixel that reaches the connector names the three
-fields that addressed it**. `machine_tb` states the whole expression independently and
-checks all 256,000 of them.
+Writing `i` at offset `i` makes every pixel's index equal to `(n<<6)|(r<<3)|c`; tile mode
+drives the LUT's high half with **zero** (`plan.md` §2.4) so the lookup is sub-palette 0,
+which §3 made the identity map — and **every pixel that reaches the connector names the
+three fields that addressed it**. `machine_tb` states the whole expression independently
+and checks all 256,000 of them.
 
 The map is `code = (cellRow + cellCol) & 3`, so the tile changes across *and* down and a
-row/column swap in the concatenation cannot look right. ⚠ **VMODE 00, because the cell
-row is five bits** — §6.4.1: cell mode addresses 32 rows, which covers 640×200's 25 and
-640×240's 30 and does not reach 640×400's 50 or 640×480's 60.
+row/column swap in the concatenation cannot look right.
 
-⛔ **And it is what found `graphics.md` §19 item 43.** `runlist` must wait for the
-engine to stop before anything else loads `WPTR` — §10.3.1's own rule — and the bit
-that says so, `LRUN`, had **no path to the data bus**: `+$0F` `BSTAT` is a register-file
-address and `LRUN` is a live macrocell, so a read returned a zero that meant nothing.
-The tilemap went into a pointer the engine was still walking. `LRUN` is `VSTAT` b4 now.
+⭐ **And the map is where this card differs most.** `plan.md` §2.5 makes a cell **four
+bytes on a 1024-byte stride** — code in lane 0, attribute in lane 2, the two the fetcher
+reads — where the other card had one byte on a 128-byte stride. `WADV` b2 steps `WPTR` by
+**two**, so a cell is two stores rather than four, and `machine_tb` reads the map back
+out of VRAM to prove the second cell's code landed at `+4` and not at `+2`. ⚠ With b2 set
+`X` and `WPTR` no longer move together in `putb`, which is deliberate and said there.
+
+⚠ The cell row is **six** bits on this card, so `plan.md` §2.5's 64 rows cover every
+`VMODE` and `graphics.md` §6.4.1's "cell mode does not reach 640×400" is not inherited.
+The scene is `VMODE 00` anyway, so that the frame is the same 640×200 as §4's.
 
 ## Sizing memory, and the descriptor it leaves
 
@@ -140,23 +185,38 @@ mandatory. If none passes, the ROM reports `$E1` and halts.
 different SIMM pages, so `$A000` is two physical bytes. The ROM stores `$C3` under
 TASK 0 and `$3C` under TASK 1, reads both back, and reports `$07`, or `$E3` on a mismatch.
 
-## Every wait in this ROM is unbounded, deliberately
+## Every wait in this ROM is BOUNDED, since 2026-09-20
 
-The ROM polls `VSTAT` in twelve loops and none of them has a timeout, so **a video card
-that never clears `SPANBUSY`, or never enters vertical blank, hangs the machine.** That
-is the design for a boot ROM with no output device:
+⛔ **This reverses what this section used to say.** Until the retarget the ROM polled
+`VSTAT` in twelve loops with no timeout, on the argument that a bound is a timing claim
+about the card and that a failed bound has nowhere to report. Two things changed:
 
-- **A timeout would have nowhere to report.** The progress port at `$FF2F` decodes
-  nowhere on real hardware, so a bounded loop that fails lands in `halt`. On the bench,
-  halting and hanging look the same.
-- **A bound is a timing claim about the card**, and `graphics.md` §7.4's spans take up
-  to 40.7 µs of `/WAIT` legitimately. Bounding twelve loops means choosing and
-  maintaining twelve numbers that buy no diagnosis.
+- **§2c gave it somewhere to go.** A ROM that already has an error path and a progress
+  code for "no card" has one for "the card stopped answering": `$E5`.
+- **The reason a bound was expensive was twelve numbers; there is one.** Every poll goes
+  through `vwait0`/`vwait1`, which count **65,536 reads** — about 0.3 s at this machine's
+  E rate, longer than any span (a 256-byte span-solid is ~1,000 dots), any copy and any
+  frame (359,200 dots), and short enough that a dead card reports rather than hangs.
 
-⚠ **The simulation cannot show this failure mode.** `machine_tb` bounds every stage in E
-cycles and has a global backstop, so a stuck card fails the bench in seconds, while real
-hardware would sit there indefinitely. **Revisit this when the ROM has a console:** then
-a timeout can say which wait expired, and it should.
+⚠ [`../v3boot/v3boot.asm`](../v3boot/v3boot.asm) still leaves its polls unbounded and
+says so: it is a **fixture**, and `v3machine_tb` bounds every stage of it. A boot ROM on
+real hardware has no bench underneath it, which is the whole difference.
+
+## ⛔ Only one check in this repository executes this ROM from reset
+
+`npm run check:machine` is it. The host emulator
+([`software/demo/emu/machine.c`](../demo/emu/machine.c)) **starts the CPU at `$8004`**
+with the map, the stack and the SIMM descriptor pre-set the way §1–§1a would have left
+them — `m->cpu.pc = 0x8004` — so `software/nitros9/run-emu.sh`, `run-sd.sh` and
+`video3/bench/run-v3sd.sh` boot NitrOS-9 **without running a single instruction of this
+file**. The one path that does run it there is `reboot`: `F$Debug` re-enters the reset
+vector with the map live, and `run-emu.sh`'s two reboot claims are the only emulator
+claims this ROM can fail.
+
+⚠ **So a change here is verified by `check:machine` or it is not verified.** That is
+also why §2c matters more than it looks: the emulator will happily boot NitrOS-9 against
+either card whatever page 0 says, and the day a real machine has the other card in the
+slot, the probe is the only thing standing between the POST and a spin.
 
 ## What `machine_tb` checks without asking the ROM
 
@@ -170,6 +230,9 @@ cell, passes that compare. So `machine_tb` also checks these stages from outside
 | 2 | each store to `$C000` is in the chosen socket's cell one E cycle later, and each load is a byte the board *drove*, not the bus holding its last value |
 | 2b | `$C3` in SIMM page 5 and `$3C` in page 7 of that socket |
 | 2a | the 96 stores at `STORET`: 32 × `$50`, then 64 × `$51` |
+| 7a | both rectangles in VRAM, and that `CWIDTH`/`CHEIGHT` stopped the engine at their edges |
+| 7b | every pixel of the sprite frame, and the 64 shape bytes against the rule rather than the table |
+| 8 | the map in VRAM: `code` at `MAPBASE`·64K + row·1024 + col·4, which is the four-byte cell `WADV` b2 writes two stores at a time |
 | 10 | all 1,250 bytes the CPU loads from VRAM, window and `VDATA`, against the read sequence restated in the testbench. VRAM itself is peeked at both span starts and at the end |
 
 **And the error paths run.** `npm run check:machine` is four runs of the bench
@@ -182,6 +245,10 @@ cell, passes that compare. So `machine_tb` also checks these stages from outside
 | `s1`, `s2`, `s3` | one, two, three sockets | the descriptor's bitmap and size, all sixteen map entries, stage 2 and the two tasks, in socket 0 |
 | `alias` | four sockets, a 1M × 8 in socket 0 (`ram.md` §11 item 7) | the walk rejects socket 0: bitmap `$0E`, 1,536 blocks, and everything lands in socket 1 |
 | `e2` | tile byte 17 corrupted after it is written | section 10 reports `$E2` with `vidx` = 17, after exactly 18 loads |
+
+⚠ **And there is an eighth answer this ROM can give that no scenario asserts yet**: `$06`,
+§2c's "no `video3` card". It is what the host emulator prints with `VIDEO3` unset, which
+is how `software/nitros9/run-emu.sh` and `run-sd.sh` boot today.
 
 ## The RAM vectors, and a program in ROM
 
@@ -211,7 +278,15 @@ the SIMM and halts as before. `machine_tb` loads page 0 only, so it takes the se
 
 - **Boot itself takes no interrupt.** FIRQ and IRQ stay masked through every test here,
   and the image contains no `SWI`. `software/demo/` is what takes both: the video card's
-  VBL `/IRQ` and the audio card's `/FIRQ`, through the RAM vectors above.
+  VBL `/IRQ` and the audio card's `/FIRQ`, through the RAM vectors above. ⚠ So the
+  VBL interrupt `plan.md` §9 makes NitrOS-9's system tick is **not** in this POST;
+  `v3boot.asm` §8 and `v3machine_tb` are where it is exercised.
+
+- **Character mode is not in the POST.** §8 runs `MODE = 10`, tile mode, because its
+  picture is an arithmetic function of the byte the CPU wrote. Character mode
+  (`plan.md` §2.2) puts an **attribute** on the LUT's high half and needs 512 palette
+  entries and a glyph bank to say anything; `v3card_tb`'s char group is where it is
+  checked. An open item, not a deliberate omission.
 
 - **No console, no monitor, no DriveWire loader.** `machine.md` §7.2 says what page 0
   is eventually for. `software/6809/README.md` has what retargeting ASSIST09 costs.

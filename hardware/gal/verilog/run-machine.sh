@@ -1,6 +1,6 @@
 #!/bin/sh
-# The whole machine: a 6809E, the motherboard and the video card, running the
-# boot ROM's own instructions.
+# The whole machine: a 6809E, the motherboard, video3 and the audio card,
+# running the boot ROM's own instructions.
 #
 #   npm run check:machine            (from hardware/)
 #   TRACE=40 npm run check:machine   ... with the first 40 bus cycles printed
@@ -37,8 +37,15 @@ WAIVE="$WAIVE -Wno-UNSIGNED -Wno-CMPCONST"
 V="verilator --binary --timing -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL"
 V="$V -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC $WAIVE --timescale 1ns/1ps"
 
-SRC="machine.v mainboard.v ../clkdec.v ../mmu.v u9.v u10.v"
-SRC="$SRC video_card.v vctrl.v vaddr.v vsup.v"
+# ⭐ machine3.v SINCE 2026-09-20, not machine.v: software/boot/boot.asm drives
+# video3 now and the archived `video` card's four files left this line with it
+# (archive/README.md). machine.v, video_card.v, vctrl.v, vaddr.v and vsup.v are
+# all still here and demo_tb.sv still compiles them.
+# ⚠ -Wno-PINMISSING is on the WAIVE line above because video3_card.v leaves
+# every buried macrocell unconnected on purpose - a cell is not a net until it
+# leaves its package - which is the same reason run.sh waives it for v3card.
+SRC="machine3.v mainboard.v ../clkdec.v ../mmu.v u9.v u10.v"
+SRC="$SRC video3_card.v v3dot.v v3scan.v v3ptr.v v3host.v v3lane.v"
 SRC="$SRC audio_card.v audio.v aseq.v"       # elaborated only when AUDIO = 1
 SRC="$SRC tl16c550.v"                         # the console; answers only when SERIAL = 1
 SRC="$SRC ../../vendor/mc6809/mc6809e.v ../../vendor/mc6809/mc6809i.v"

@@ -8,11 +8,17 @@
 * behavioural model of the machine; there isn't one.
 *
 * ⭐ WHY IT IS NOT software/boot/boot.asm.  That ROM is the machine's boot
-* monitor and it drives the OTHER video card: its register map is
-* archive/video/docs/graphics.md 13, which video3 does not have -- no display list, no
-* BCTRL, PIDX at a different offset, VDATA at +$0C rather than +$15.  This is a
-* fixture for one bench, so it does the smallest boot that reaches RAM and then
-* spends its time on the card.
+* monitor, and since 2026-09-20 it drives THIS card too -- video3/docs/plan.md
+* 10, the same map as below (docs/history.md 7.2).  They stay two programs
+* because they answer different questions.  boot.asm is a POST: it sizes the
+* SIMM bank, probes for the card, bounds every poll and has an error code for
+* each stage, because it runs on hardware that may be broken.  This is a
+* FIXTURE for one bench: it does the smallest boot that reaches RAM and then
+* spends all of its time on the card, at points in the frame chosen on purpose
+* (2a), with its polls deliberately unbounded because v3machine_tb.sv is what
+* bounds them.  What is here and not in boot.asm is the VBL interrupt (8) and
+* the auto-increment experiment (2a); what is in boot.asm and not here is the
+* card probe, tile mode and the four VMODEs.
 *
 * WHAT IT DOES, in order:
 *   1.  writes a map, leaves boot mode, and then USES that map -- the stack and

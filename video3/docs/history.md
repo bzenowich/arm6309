@@ -7,12 +7,46 @@ Superseded claims from [`plan.md`](plan.md), [`signals.md`](signals.md),
 `CLAUDE.md`'s rule: **specs describe only the present design**, and a superseded
 utilisation figure is a number `check:docs` cannot distinguish from a live one.
 
+## `changefont.asm` §, `overworld.asm`, `rastbar.asm`, `wave.asm` — "/DD/SYS is FLAT" (2026-09-20)
+
+The demo DATA followed the demo programs onto the SD card the same day. `/DD/SYS`
+was **1,140 of the ROM disk's 1,952 sectors — 291,840 bytes, 58% of the image** —
+and all of it pictures: the Haiku desktop and Paint's streams, the BBS and its
+ANSI art, the overworld's world and tiles, 28 console faces, the `vt*`/`vg*`
+scripted sessions. Nothing in the bootfile opens a path under `/DD/SYS`, and the
+only name `armio.asm` opens is `/DD/CMDS/CoArm`, so none of it was needed to boot.
+
+`changefont.asm` said:
+
+> ⚠ **`/DD/SYS` is FLAT** - arm6309.mak's SYSFILES rule copies every file to
+> `SYS/<basename>` and makes no subdirectory - so a face is `SYS/FONT.<name>`.
+>
+> ```
+> Dir                 fcc       "/DD/SYS/FONT."
+> ```
+
+and `rastbar`, `wave` and `overworld` each held their file names as absolute
+`/DD/SYS/...` strings (`fcs "/DD/SYS/vgrast"`, `"/DD/SYS/tiles.bin"`, …).
+
+**What replaced it.** The names lost their directory and the four programs share
+a `DOpen` routine that tries `/SD0/DATA/<name>` and then `/DD/SYS/<name>`;
+`changefont` keeps its older rule that an argument containing a `/` is a path and
+is taken as it stands. `mkrom.sh` writes the generated data to `$OUT/data` for
+`mksddisk.sh`, and `SYSROM=all` puts it back in `/DD/SYS` for the sessions that
+boot with an empty socket and `copy /dd/sys/...` at the shell. ⚠ Both fallback
+prefixes are **absolute**: a bare relative name would resolve against the caller's
+data directory, and a demo must not stop working because somebody typed `chd`.
+
+Measured: **260 free sectors (66,560 bytes) before, 1,400 (358,400) after** — the
+ROM disk went from 87% full to 28%.
+
 ## `video3/bench/README.md` — "the ROM disk is full" (2026-09-20)
 
 The bench README carried the constraint every scene bench was built around, and the
 recipe carried the mechanism. Superseded when the demo programs moved off the boot
 ROM's ROM disk and onto an SD card (`software/nitros9/mksddisk.sh`,
-`video3/bench/run-v3sd.sh`); the ROM disk is now a rescue system with ~65 K free.
+`video3/bench/run-v3sd.sh`); the ROM disk became a rescue system with ~65 K free,
+and 350 K once its data followed (the entry above).
 
 > ⚠ **The ROM disk is full** — 488 K, 6,656 bytes free — and `pinball` is 36 K.
 > The recipe therefore takes `CMDS_EXTRA` and `CMDS_DROP`

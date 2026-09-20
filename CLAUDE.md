@@ -27,9 +27,13 @@ is marked, not deleted" convention — see the root `README.md` Conventions sect
   exempts `history.md`.
   ⛔ **`video/`'s DESIGN SOURCES DID NOT MOVE.** They are still in
   `hardware/gal/`, still compiled by `gen.ts`, still instantiated by
-  `machine_tb` and `demo_tb` — because `software/boot/boot.asm` still drives
-  that card — and **checked by nothing**. `archive/README.md` §"What did NOT
-  move" is the record of that trade.
+  `machine.v` and so by **`demo_tb`** — and **checked by nothing**.
+  `archive/README.md` §"What did NOT move" is the record of that trade.
+  ⭐ **`machine_tb` left them on 2026-09-20**, when `software/boot/boot.asm`'s
+  video POST was retargeted to `video3` and the bench moved to `machine3.v`
+  (`docs/history.md` §7.2). So the only thing now holding those sources in the
+  tree is `software/demo/`, whose raster bars and per-scanline palette writes
+  have no `video3` equivalent.
 
 ### Reading rules
 
@@ -81,7 +85,7 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 | `npm run check:sim` | the two *hand-written* Verilog models, `gal/mmu.v` and `gal/clkdec.v`, with their own testbenches. Older and separate from `check:video` |
 | `npm run check:netlist` | the motherboard's connectivity, against `dist/mainboard/mainboard/circuit.json`, and the video card's against `dist/cards/video/circuit.json` — what is drawn, and the nets with no producer on the board as a list checked both ways (`graphics.md` §19 item 34). **Build artefacts**, so run `npm run build` first if a `.circuit.tsx` changed. ⚠ `tsci build` prints "Build completed with errors" and exits 0 when it cannot reach the supplier API; connectivity is unaffected |
 | `npm run gen:pld` | writes `gal/{vaddr,vctrl,vsup,audio,aseq}.pld` from the term lists |
-| ⭐ **`npm run check:machine`** | **the whole machine**: a 6809E core, the motherboard, the video card and the audio card, running `software/boot/boot.asm` out of the boot ROM, and a screenshot taken off `RGB`/`BLANK`/`HSYNC`/`VSYNC`. Seven runs: the boot on four SIMMs, the SIMM sizing walk against one, two and three sockets and an aliasing module, and two faults (no SIMM, a corrupted VRAM byte) in which the ROM's error path is the asserted answer. **133 claims, ~4 min** (it was ~2 until the audio card went in on 2026-09-14: the card's own crystal is clocked in every run); `SCENARIOS=main` for the boot alone. ⭐ **Two more runs, asked for by name**, and both need `../nitros9` on its `arm6309` branch (`software/nitros9/README.md`): **`SCENARIOS=nitros9`**, NitrOS-9 Level 2 from reset to a shell on the TL16C550C with `dir`, `mfree` and `firqtst q` on the audio card's `/FIRQ` (**19 claims, ~13 min**); and **`SCENARIOS=reboot`**, boot, `reboot` back through `boot.asm`'s POST, and a second shell (**11 claims, ~14 min**) |
+| ⭐ **`npm run check:machine`** | **the whole machine**: a 6809E core, the motherboard, **the `video3` card** and the audio card (`machine3.v`), running `software/boot/boot.asm` out of the boot ROM, and a screenshot taken off `RGB`/`BLANK`/`HSYNC`/`VSYNC`. Seven runs: the boot on four SIMMs, the SIMM sizing walk against one, two and three sockets and an aliasing module, and two faults (no SIMM, a corrupted VRAM byte) in which the ROM's error path is the asserted answer. ⭐ **It ran the ARCHIVED `video` card until 2026-09-20**, when the ROM was retargeted; every motherboard claim and all six fault/population scenarios are unchanged, so what moved is the card. **146 claims, ~7.5 min** (133 and ~4 min on the archived card: video3 is a bigger model, and the POST does more); `SCENARIOS=main` for the boot alone. ⭐ **Two more runs, asked for by name**, and both need `../nitros9` on its `arm6309` branch (`software/nitros9/README.md`): **`SCENARIOS=nitros9`**, NitrOS-9 Level 2 from reset to a shell on the TL16C550C with `dir`, `mfree` and `firqtst q` on the audio card's `/FIRQ` (**19 claims, ~13 min**); and **`SCENARIOS=reboot`**, boot, `reboot` back through `boot.asm`'s POST, and a second shell (**11 claims, ~14 min**) |
 | `npm run rom` | assembles `software/boot/boot.asm` with A09 → `boot.bin`, `boot.hex`, `boot.lst` |
 | `sh gal/verilog/run-demo.sh 118` | **the whole machine with BOTH cards**, running `software/demo/`'s show from ROM — a desktop, an audio player, a paint program, a BBS, raster bars, the overworld — then: the card's register stream against refplayer, the card's sound A/B'd against libopenmpt, every checkpoint frame against `show.Model`'s picture and every game frame against the game model, and an H.264 file for the web. ⚠ **~4.5 h on a quiet host**, and not in any aggregate. ⭐ `sh ../software/demo/emu/run-emu.sh 120` runs the same ROM on the host emulator in seconds, and `checkdemo.py` reads either recording. `software/demo/bench/run-replay.sh` is the replayer alone on the CPU, in two minutes |
 | ⭐ **`npm run check:reach`** | **every signal the machine produces must reach something.** `design-review2.md` closed the direction "a fitted part reads what nothing produces"; this is the other one — a signal that is *produced* and that nothing reads, which for a register bit means **a feature the host can write and the card cannot perform**. ⭐ **And since 2026-09-18 the same question of INPUTS** for video3: its four parts turned out to be a datapath and an arbiter with **neither sequencer built** — 19 control lines nothing produces. ⭐ Since 2026-09-19 video3's board is `video3_card.v` (a model, not a drawing), and counting against it found a macrocell nothing read. Part of `npm run check` |
@@ -197,9 +201,9 @@ change to the video card, the mainboard, or `emit.ts` itself:
 | `audio.jedec.ts`, `aseq.*`, `audio_card.v`, `audio_tb.sv` | `npm run check:sim:audio` (~25 s), then ⭐ **`npm run check:audio:all`** before committing |
 | the mainboard, `u9`/`u10` | `npm run check:sim:board` |
 | `verilog/emit.ts`, or anything every card shares | `npm run check:video` (everything) |
-| the **archived** `video` card (`video.cpld.ts`, `vsup.cpld.ts`, `sync`/`scan`/`access`/`seqph`/`seqctl`/`regfile`/`vlen`/`pxsel`) | ⚠ nothing runs by default. Its five benches are asked for by name — `bun run gal/verilog/gen.ts`, then from `gal/verilog/` `TBS="vsync vaddr vtile vspan vpal" sh run.sh` — and `npm run check:machine` still executes the card, because `boot.asm` still drives it |
+| the **archived** `video` card (`video.cpld.ts`, `vsup.cpld.ts`, `sync`/`scan`/`access`/`seqph`/`seqctl`/`regfile`/`vlen`/`pxsel`) | ⚠ nothing runs by default, **and since 2026-09-20 no aggregate runs it at all**: `check:machine` moved to `video3` with the boot ROM. Its five benches are asked for by name — `bun run gal/verilog/gen.ts`, then from `gal/verilog/` `TBS="vsync vaddr vtile vspan vpal" sh run.sh` — and `sh gal/verilog/run-demo.sh` (~4.5 h) is the only thing left that executes the card as a card |
 | the video3 card (`gal/video3/*.cpld.ts`, `v3lane.jedec.ts`, `video3_card.v`) | `bun run gal/verilog/gen.ts`, then from `gal/verilog/` `TBS="v3dot v3card v3machine" sh run.sh` (~4 min), refit every CPLD you touched, and for `v3lane` its check and `cupl-reference.sh` |
-| anything the CPU touches — the map, the boot path, `boot.asm`, `machine.v` | ⭐ **`npm run check:machine`** |
+| anything the CPU touches — the map, the boot path, `boot.asm`, `machine3.v` | ⭐ **`npm run check:machine`** |
 | the NitrOS-9 port, `tl16c550.v`, or anything NitrOS-9 boots through (the vectors, the map, the tick, the UART) | `sh software/nitros9/run-emu.sh` (~30 s) first, then ⭐ **`SCENARIOS=nitros9 npm run check:machine`** |
 | the audio card's *behaviour* | ⭐ **`npm run check:oracle`** as well — this card against an independent Paula (`gal/verilog/oracle/`). It is what found `audio.md` §16 items 36 and 39, and `audio_tb` could not |
 
@@ -220,7 +224,7 @@ first. After editing a `.jedec.ts`, run `bun run gal/verilog/gen.ts` or a
 | `vspan_tb` ⚠ | " | all four `WMODE`s, the retire rate, `/WAIT`'s read/write rule, `WADV` chaining, the display list, the VBL interrupt |
 | `audio_tb` | both audio CPLDs + the state file, the sample RAM, the adder and the converters | the slot walk, the ÷5 CIA clock, Paula's set/clear, open-drain `/FIRQ`, §9.4.5's merge, the six micro-op sequences — **and how many samples a buffer yields**, which is the claim two audible defects survived 43 green ones by not having (`audio.md` §16 item 36) |
 | `mainboard_tb` | U3, U6, U9, U10 + the map SRAMs, `'157`, `'574`, boot `'244`, flash and SIMMs | the boot sequence, the 32 MB map, the four SIMM windows, `/IOPAGE`, and that exactly one thing drives physical `A20`–`A13` |
-| ⭐ `machine_tb` | **`mc6809e` + the whole motherboard + the whole video card + the whole audio card**, and a TL16C550C bus model | that the machine executes its own boot ROM: leaves boot mode with a map it wrote, finds its SIMM, loads 256 palette entries, paints 640 × 200 with the span writer, chains 200 spans with `WADV`, and produces a frame whose every pixel is the index the software drew. It reads DRAM and VRAM independently of the ROM's own compares, and runs `$E1`/`$E2` on purpose — **and it is what found `graphics.md` §19 items 36, 37 and 38, which twelve testbenches and 543 model claims could not** |
+| ⭐ `machine_tb` | **`mc6809e` + the whole motherboard + the whole `video3` card + the whole audio card** (`machine3.v`), and a TL16C550C bus model | that the machine executes its own boot ROM: leaves boot mode with a map it wrote, finds its SIMM, **probes for the video card**, loads 256 palette entries, paints 640 × 200 with the span writer, chains 200 spans with `WADV`, shows all four `VMODE`s, runs the copy engine and the sprite, paints 2,000 tile cells two stores at a time, and reads VRAM back — every frame pixel for pixel. It reads DRAM and VRAM independently of the ROM's own compares, and runs `$E1`/`$E2` on purpose — **it found `graphics.md` §19 items 36, 37 and 38 on the card it used to run, and `video3/docs/plan.md` §14 items 20 and 21 on the day it was moved to this one** |
 | ⭐ `modplay_tb` | **the whole audio card** | that a real module plays: samples uploaded through `SPTR`/`SDATA`, the register stream delivered on the card's own §8.2 tick interrupt, and the four `AD7528` pairs' codes recorded for `audio/tools/dacwav` |
 | ⭐ `v3card_tb` | **the whole video3 card**: `v3dot`, `v3scan`, `v3ptr`, `v3host` and the `v3lane` GAL + `video3_card.v`'s framebuffer and lane `'245`s, register file, fetch ranks, `'153`, sprite `'165`s, LUT, latches and host `'245`, and a 6809E bus model that honours `/WAIT` the way `clkdec` does | the palette, direct `VDATA` writes and post-incrementing reads, the span writer in every mode, `WADV` chaining, a copy **at two accesses a byte** in bitmap and under character mode, and **whole frames pixel for pixel through an identity LUT**: bitmap at fine scrolls 1-3 and a two-axis wrap, the sprite at three positions in two families, character mode at 80×60 and 80×25 (two consecutive frames), tile mode at both cell phases. ⭐ **Every bus is resolved from explicit drivers** - FBA, the internal data bus, each lane, the LUT address - so a fight or a floating sample is a failed claim. The port maps are **generated** (`v3portmap.ts`, from `gen.ts`); `TBARGS=+ONLY=sprite,char` runs named groups for a debug loop. **It found fourteen defects `v3dot_tb` and 770 model claims could not, and then sixteen more** (`video3/docs/history.md`, 2026-09-19) |
 | ⭐ `v3machine_tb` | **`mc6809e` + the motherboard + the whole video3 card** (`machine3.v`), running `software/v3boot/v3boot.asm` out of the boot ROM | that the machine executes a program against the card: the map it writes, the palette both ways, direct writes and post-incrementing reads, a span, a `WADV`-chained glyph, a copy, and a 400-line frame whose every pixel is the card's own LUT entry for the byte the ROM drew. ⭐ **And the three things only a CPU can ask**: a real instruction's bus cycle stretched to 987 dots by `/WAIT`, the VBL interrupt fetched and serviced, and an engine surviving the polls of its own `VSTAT`. **It found the palette commit firing twice outside vertical blanking on its first run** — 48 claims, ~40 s, 34 of them compiling the core |
@@ -257,7 +261,7 @@ matrix, product-term cascading and placement are `fit1508.exe`'s business and
 phase *at all* is logic, not delay, and this model does see that — which is
 where two of `design-review2.md`'s findings came from.
 
-### Ten traps this repository has already paid for
+### Eleven traps this repository has already paid for
 
 - **A failed CPLD fit leaves the previous `.fit` in place.** A stale
   utilisation report reads exactly like a passing one. Compare the file's hash
@@ -354,6 +358,23 @@ where two of `design-review2.md`'s findings came from.
   retry. ⚠ The prefix is also **one shared resource**: concurrent fits write the
   same `cpld/<name>.fit`, so two of them do not race to a winner, they grind
   indefinitely and produce nothing. One fit at a time, always.
+- ⛔ **A SHELL FUNCTION IS INVISIBLE TO `sh -c`, AND `! <not found>` IS TRUE**
+  — found 2026-09-20, and it is the `grep '^FAIL'` trap wearing different
+  clothes. A bench defined a helper as a shell function and then asserted the
+  negative case with `claim "..." sh -c "! indir /dd/sys v3desk"`. The
+  subshell has no such function, printed `indir: not found`, exited 127 — and
+  the negation turned that into **true**. Three claims passed vacuously,
+  including the one asserting the ROM disk no longer carried the desktop.
+  ⚠ **A negated claim that can only be satisfied by the thing under test
+  EXISTING must prove the tool ran**; call the helper directly rather than
+  through `sh -c`, or have it echo a token the claim greps for. Two more from
+  the same session, both of which silently produced the right-looking answer:
+  **`grep -c` exits 1 when the count is zero**, so `n=$(grep -c ...)` kills a
+  `set -e` script with no message at exactly the moment the count becomes
+  correct; and **`sed -n "/Directory of /dd/sys/,…"`** is a syntax error,
+  because the path's slashes close the regex — it prints nothing and every
+  listing claim fails while the machine is perfectly right.
+
 - ⛔ **A `//` COMMENT CONTAINING `/*` SWALLOWS THE FILE, and the tool that
   reads it says nothing** — found 2026-09-20. `gal/reach.check.ts` stripped
   comments in two passes, block first and line second. `storage_card.v`'s

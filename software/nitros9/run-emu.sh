@@ -123,7 +123,17 @@ printf 'reboot\r' > "$OUT/typedr.txt"
 mkdir -p "$OUT/reboot"
 (cd "$OUT/reboot" && SERIAL_IN=../typedr.txt SERIAL_AT=4 ../emu "$ROM" . 14 > /dev/null 2> emu.log) || true
 tr -d '\000' < "$OUT/reboot/serial.out" | tr -d '\r' > "$OUT/reboot/console.txt"
-claim "reboot: boot.asm's POST ran again, every stage to \$40, with no error" sh -c "grep -q 'progress \$40' '$OUT/reboot/emu.log' && ! grep -q 'FAIL' '$OUT/reboot/emu.log'"
+claim "reboot: boot.asm's POST ran again - the map, the SIMM walk, TASK 1 and the store-rate blocks, with no error" \
+  sh -c "grep -q 'progress \$01' '$OUT/reboot/emu.log' && grep -q 'progress \$07' '$OUT/reboot/emu.log' && grep -q 'progress \$52' '$OUT/reboot/emu.log' && ! grep -q 'FAIL' '$OUT/reboot/emu.log'"
+# ⭐ AND IT STOPS AT $06, NOT $40, SINCE 2026-09-20 - which is the answer this
+# configuration must give. boot.asm §2c probes for a video3 card before its
+# video POST and skips §3-§10 when there is none; this emulator models
+# archive/video/'s card unless VIDEO3=1 (machine.c's m->v3), and a VSTAT poll
+# at $FF6D against THAT card reads a register-file byte and can spin for ever.
+# $40 is what VIDEO3=1 reports - software/nitros9/video/run-video3.sh - and
+# what npm run check:machine asserts against the real design.
+claim "⭐ and §2c reported \$06: no video3 card in this emulator, so the video POST was SKIPPED rather than polling a VSTAT that is not there" \
+  grep -q 'progress \$06' "$OUT/reboot/emu.log"
 claim "and NitrOS-9 booted a second time, to the shell" test "$(grep -c '{Term|02}/DD:' "$OUT/reboot/console.txt")" -ge 2
 
 echo "$n claims, $fail failed        (console in $OUT/console.txt)"

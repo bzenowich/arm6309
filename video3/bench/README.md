@@ -9,7 +9,7 @@ sh video3/bench/run-v3.sh            # all four, ~1 min. Its exit code is the an
 sh video3/bench/run-v3mv.sh          # ⭐ the metroidvania scene, ~20 min
 sh video3/bench/run-v3mon.sh         # ⭐ the block-streamed platform world, ~6 min
 sh video3/bench/run-v3pin.sh         # ⭐ the pinball table, and the palette as a feature, ~20 min
-sh video3/bench/run-v3sd.sh          # ⭐ a demo loaded OFF THE SD CARD, ~1 min
+sh video3/bench/run-v3sd.sh          # ⭐ the desktop, Paint and a demo OFF THE SD CARD, ~3 min
 ```
 
 | Exerciser | plan | What only it can catch |
@@ -274,11 +274,13 @@ same RGB565**, and the lamp gate spent a run reading a ball as a lamp.
 `mkpinball.py` asserts the whole reserved set against the art palette, the
 three sprite banks and the key.
 
-⭐ **The demos are not in the ROM any more** (2026-09-20; the ROM disk was full,
-see [`../docs/history.md`](../docs/history.md)). `recipes/arm6309/arm6309.mak`'s
-`$(DEMOS)` builds them and `software/nitros9/mksddisk.sh` puts them on an SD
-image; the ROM disk is the kernel, the shell, the shared modules and a rescue
-command set, with ~65 K free. `run-v3pin.sh` and the other older scene benches
+⭐ **Neither the demos nor their data are in the ROM any more** (2026-09-20;
+the ROM disk was full, see [`../docs/history.md`](../docs/history.md)).
+`recipes/arm6309/arm6309.mak`'s `$(DEMOS)` builds the programs,
+`software/nitros9/mkrom.sh` writes the data set to `$OUT/data`, and
+`software/nitros9/mksddisk.sh` puts both on an SD image. The ROM disk is the
+kernel, the shell, the shared modules, `errmsg` and a rescue command set,
+with **350 K of its 488 K free**. `run-v3pin.sh` and the other older scene benches
 boot with an **empty socket** and type their command at `/DD`, so they still
 pass `CMDS_EXTRA=<name>` — but nothing has to be **given back** any more, and
 the recipe's disk rule now depends on the command list itself (`.cmdlist`), so
@@ -319,34 +321,68 @@ test position, so frames recorded while the screen was still being built could h
 been judged as if the sprite were live. The ROM now writes `$FFFF` there until the
 screen is up, so those frames are skipped **explicitly**.
 
-### ⭐ `run-v3sd.sh` — a demo that is **not in the ROM**, run off the SD card
+### ⭐ `run-v3sd.sh` — the desktop, Paint and a demo, all **off the SD card**
 
 ```sh
-sh video3/bench/run-v3sd.sh           # two runs, 20 claims, ~1 min. Its exit code is the answer
+sh video3/bench/run-v3sd.sh           # two runs, 29 claims, ~3 min. Its exit code is the answer
 ```
 
-Every other bench here types a command that is *inside the boot ROM*. This one
-boots the machine with **both** cards — video3 and the storage card at `$FF58`
-(`storage/docs/sdcard.md` §9.4) — `chd`/`chx` to `/SD0/CMDS`, and runs `mvania`
-from a card that `software/nitros9/mksddisk.sh` wrote with the host's `os9`
-tools. It is about **where the program came from**, so it runs 28 frames of
-scene and no more; `run-v3mv.sh` is what measures the scene.
+Every other bench here types a command that is *inside the boot ROM*, and
+reads data that is inside it too. This one boots the machine with **both**
+cards — video3 and the storage card at `$FF58` (`storage/docs/sdcard.md`
+§9.4) — and runs the Haiku desktop, Paint, `changefont` and `mvania` from a
+card that `software/nitros9/mksddisk.sh` wrote with the host's `os9` tools. It
+is about **where the program and its data came from**, so the scene is 28
+frames and no more; `run-v3mv.sh` is what measures a scene.
+
+⭐ **Two halves, and they are found two different ways.** The desktop and
+Paint are *streams*, `copy`d to a window — so the path is the caller's
+already, and `copy /sd0/data/v3desk /w3` is the whole change.
+`changefont` is a program that opens a file **for itself**, and it now names
+the face without a directory and lets `DOpen` (card, then `/DD/SYS`) decide;
+`overworld`, `rastbar` and `wave` do the same.
+
+⛔ **Everything `copy` and `display` do comes before `chx /sd0/cmds`**, and
+that is not tidiness: after the execution directory moves to the card, the
+only things the shell can fork are the card's own commands and shell+'s
+merged built-ins. `copy` lives in `/DD/CMDS` and becomes unfindable.
 
 ⭐ **The claim is that a picture was PAINTED, not that a command was typed.**
-`checkv3sd.py` reduces the recording to `frames`, `painted` (frames showing
-more than a dozen distinct colours) and `changed`, and the bench asks for 20
-painted and 20 changed frames. ⚠ **The first cut asked for 64 colours and
-failed a run whose picture was perfect** — `mvania`'s room is a stylised
-side-view with nineteen colours, not a dithered photograph. The threshold to
-pick is the one the *control* cannot reach.
+`checkv3sd.py` reduces the recording to `frames`, `painted`, `changed` and two
+*shapes*:
 
-⛔ **And the control is the same ROM, the same keystrokes and an empty socket.**
-`/SD0` must refuse at §9.0 with `E$NotRdy`, the demo must be `E$PNNF` rather
-than a hang, and **no frame may be recorded at all** — with nothing to claim
-the screen the card never displays, which is a sharper negative than "no
-colours". Two more claims say the ROM disk does *not* carry the demo, one asked
-of the machine (`dir /dd/cmds`) and one of `romdisk.dsk` on the host, because
-without them the run above would prove nothing.
+| | |
+|---|---|
+| `desk` | one colour over ≥ 45% of the frame **and** ≥ 40 colours — a big flat background with icons, a Deskbar and window chrome on it |
+| `paint` | ≥ 20% of the frame **pure white** and ≥ 40 colours — Paint's page under Haiku chrome |
+
+⚠ Measured and not guessed: the finished desktop is 50.8% one colour with 54
+colours; Paint is 35.5% its top colour, 27–34% white, 50 colours; the no-card
+control is **one colour over the whole frame**. The scene's own colour values
+are deliberately not in the test, so repainting the desktop cannot fail a
+claim about loading a file. ⚠ An earlier cut asked for **64 colours** and
+failed a run whose picture was perfect — `mvania`'s room is a stylised
+side-view, not a dithered photograph. The number to pick is the one the
+*control* cannot reach.
+
+⛔ **And the control is the same ROM, the same keystrokes and an empty
+socket.** `/SD0` refuses at §9.0 with `E$NotRdy`; every `copy` says so;
+`changefont`'s bare name misses **both** legs of `DOpen` and reports the ROM's
+`E$PNNF`; and the demo is `E$PNNF` rather than a hang. ⛔ **A blank screen is
+not a pass**: `iniz w3` and `display 1b 21` need no card, so the control still
+records eleven hundred frames — of nothing. `desk` and `paint` must both be
+zero.
+
+⭐ **One error is expected in the card run and it is deliberate.**
+`changefont /sd0/data/nosuchface` gives an explicit path to a face that is not
+there, and an override the caller asks for is not second-guessed. The bench
+requires **exactly one** `Error #` — two would mean the *first* `changefont`,
+a bare name that goes through `DOpen`, had not found its face on the card. So
+the count is the positive claim about `DOpen` as well.
+
+Five more claims say the ROM disk carries none of it — `mvania` not in
+`/DD/CMDS`, the desktop, Paint and the faces not in `/DD/SYS`, `errmsg` still
+there — asked both of the machine and of `romdisk.dsk` on the host.
 
 ## ⚠ What this model does and does not answer
 
