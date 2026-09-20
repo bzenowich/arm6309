@@ -62,8 +62,16 @@
  *     reads 0 and every command answers $FF - which is what every bench
  *     that does not ask for a card sees;
  *   - the PS/2 card and a keyboard and mouse at the line level - ps2_* below,
- *     which says what it models. PS2_KBD, PS2_MOUSE and PS2_AT script them,
- *     and PS2_DEBUG traces the devices' state.
+ *     which says what it models. PS2_KBD, PS2_MOUSE and PS2_AT script them as
+ *     lists of hex bytes, and PS2_DEBUG traces the devices' state.
+ *     ⭐ PS2_SCRIPT=file is the SEMANTIC one - "at 2.5 move to 320 240",
+ *     "click left", "type \"dir\"" - translated into correctly encoded set-2
+ *     scan codes and 9-bit-split mouse packets and handed to the same
+ *     line-level devices. emu/ps2script.h is the format and the encoding;
+ *     it writes OUTDIR/ps2.txt, one line an event, timestamped in ps like
+ *     marks.txt - and a `G` line rebuilt from the bytes the GUEST READ off
+ *     MDATA, so a bench asserts the machine's pointer equals the script's
+ *     rather than assuming it. emu/test/run-ps2script.sh is the bench.
  *
  * For a session scripted like a person at the terminal (software/nitros9/
  * video/): SERIAL_GATE=str holds each line of SERIAL_IN until str has been
@@ -103,7 +111,7 @@ static void gate_feed(gate_t *g, uint8_t v)
     if ((char)v == g->s[g->match]) { if (++g->match == g->n) { g->open = 1; g->match = 0; } }
     else g->match = ((char)v == g->s[0]) ? 1 : 0;
 }
-static gate_t ser_gate, kbd_gate, mouse_gate;
+static gate_t ser_gate, kbd_gate, mouse_gate, scr_gate;
 #include "cpu6809.h"
 #include "card.h"                   /* audio/refplayer: the audio card, register level */
 
@@ -1048,6 +1056,7 @@ static void uart_write(uint8_t r, uint8_t v)
         {
             int was = ser_gate.open;
             gate_feed(&ser_gate, v); gate_feed(&kbd_gate, v); gate_feed(&mouse_gate, v);
+            gate_feed(&scr_gate, v);
             if (!was && ser_gate.open && m->ser_at < m->cpu.cycles + m->ser_think) m->ser_at = m->cpu.cycles + m->ser_think;
         }
         fputc(v, stdout);
@@ -1148,6 +1157,13 @@ static int ps2_dat_low(int p) { return ((m->ioctrl >> (p * 2 + 1)) & 1) || ps2[p
 
 static void ps2_send(ps2dev *d, uint8_t b) { if (d->out_n < 64) d->out[d->out_n++] = b; }
 
+/* ⭐ PS2_SCRIPT: a timed, semantic input script - "move to 320 240", "click
+ * left", "type ...".  It encodes into the traffic a real keyboard and mouse
+ * would have produced and hands it to the device model above; it does not
+ * reach past it.  ps2script.h is the format, the scan code table and the
+ * 9-bit delta splitting. */
+#include "ps2script.h"
+
 static void ps2_command(ps2dev *d, uint8_t c)
 {
     if (d->want_arg) {                  /* ED, F3, E8: the argument byte */
@@ -1163,7 +1179,9 @@ static void ps2_command(ps2dev *d, uint8_t c)
         break;
     case 0xFE: ps2_send(d, d->last_sent); break;
     case 0xF2: ps2_send(d, 0xFA); if (d->mouse) ps2_send(d, 0x00); else { ps2_send(d, 0xAB); ps2_send(d, 0x83); } break;
-    case 0xF4: d->enabled = 1; d->f4_seen = 1; ps2_send(d, 0xFA); break;
+    case 0xF4: d->enabled = 1; d->f4_seen = 1; ps2_send(d, 0xFA);
+        if (d->mouse) ps2s_guest_arm();     /* from here, what the guest reads is packets */
+        break;
     case 0xF5: d->enabled = 0; ps2_send(d, 0xFA); break;
     case 0xEE: if (!d->mouse) { ps2_send(d, 0xEE); break; } /* fall through */
     case 0xED: case 0xF3: case 0xE8:
@@ -1205,6 +1223,9 @@ static void ps2_step(int p)
         else d->script = NULL;
         d->script_next = now + 20979;
     }
+    /* ...and the semantic one, which shares the same gates and the same
+     * refusal to speak before the host has enabled the device */
+    ps2s_feed(p, d, now);
 
     switch (d->st) {
     case D_IDLE:
@@ -1290,7 +1311,7 @@ static uint8_t ps2_read(uint8_t r)
 {
     switch (r) {
     case 0: m->kdr[0] = 0; return m->kdata[0];
-    case 1: m->kdr[1] = 0; return m->kdata[1];
+    case 1: m->kdr[1] = 0; ps2s_guest_byte(m->kdata[1]); return m->kdata[1];
     case 2: return (uint8_t)(m->kdr[0] | (m->kdr[1] << 1) | (ps2_clk_low(0) << 2) | (ps2_dat_low(0) << 3)
                              | (ps2_clk_low(1) << 4) | (ps2_dat_low(1) << 5));
     default: return 0x00;               /* IOCTRL is write-only */
@@ -1653,6 +1674,12 @@ static void raster(void)
 
 int main(int argc, char **argv)
 {
+    /* ⭐ PS2_SCRIPT_DUMP=file: parse the script, write the traffic it WOULD
+     * produce with its nominal timestamps, and stop. No ROM is read and no
+     * machine runs - it is how emu/test/ps2check.py compares this encoder
+     * with an independent one over the whole key table in a few
+     * milliseconds. */
+    if (getenv("PS2_SCRIPT") && getenv("PS2_SCRIPT_DUMP")) return ps2s_dump();
     if (argc < 4) { fprintf(stderr, "usage: emu ROM.bin OUTDIR SECONDS\n"); return 2; }
     static M mm;
     m = &mm;
@@ -1703,6 +1730,8 @@ int main(int argc, char **argv)
     gate_init(&ser_gate, "SERIAL_GATE");
     gate_init(&kbd_gate, "PS2_KBD_GATE");
     gate_init(&mouse_gate, "PS2_MOUSE_GATE");
+    gate_init(&scr_gate, "PS2_SCRIPT_GATE");
+    ps2s_init(argv[2]);
     m->ser_type = (uint64_t)(atof(getenv("SERIAL_TYPE") ? getenv("SERIAL_TYPE") : "0") * 2097.917);
     m->ser_think = (uint64_t)(atof(getenv("SERIAL_THINK") ? getenv("SERIAL_THINK") : "0") * 2097.917);
     if (getenv("SERIAL_TIMES") && !(m->ser_times = fopen(getenv("SERIAL_TIMES"), "w"))) {
@@ -1877,6 +1906,7 @@ int main(int argc, char **argv)
     fclose(m->times);
     fclose(m->ser_out);
     if (m->ser_times) fclose(m->ser_times);
+    ps2s_finish();
     snprintf(path, sizeof path, "%s/sync.txt", argv[2]);
     f = fopen(path, "w");
     fprintf(f, "cc0_ps 0\nend_ps %llu\n", (unsigned long long)(m->dots * DOT_PS));

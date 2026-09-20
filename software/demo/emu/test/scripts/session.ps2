@@ -1,0 +1,48 @@
+# session.ps2 - what software/demo/emu/test/run-ps2script.sh drives into
+# `ps2tst 24` on a booted NitrOS-9.
+#
+# ⚠ 24 BYTES ON EACH PORT, and they have to stay 24: `ps2tst N` reads a
+# fixed count from each device, so the bench asks ps2check.py for both
+# counts, fails if they disagree, and passes the number on as N.  Keep the
+# arithmetic in view - a break is one byte longer than its make, and an
+# extended key one longer again:
+#
+#   keyboard  type "hi"         33 / F0 33 / 43 / F0 43         6
+#             key tap up        E0 75 / E0 F0 75                5   (11)
+#             key tap ctrl+c    14 21 / F0 21 F0 14             6   (17)
+#             key tap f1        05 / F0 05                      3   (20)
+#             key tap a         1C / F0 1C                      3   (23)
+#             key press lshift  12                              1   (24)
+#   mouse     move to 320 240   2 packets (255 then 65 across)  6
+#             click left        2 packets                       6   (12)
+#             move by -700 0    3 packets (-255 -255 -190)      9   (21)
+#             move by 0 -100    1 packet  (100 UP, so +100)     3   (24)
+#
+# ⭐ The last keyboard event is a MAKE WITH NO BREAK - a held modifier, which
+# is the shape a chord's first byte has and the one an encoder that pairs
+# every make with a break would get wrong.
+#
+# ⚠ The times are from PS2_SCRIPT_GATE - the shell's echo of the command -
+# and every one of them is a LOWER bound: the keyboard says nothing before
+# ps2tst's F4 and the mouse nothing before its own, so an overdue event is
+# held and the log records when it really went.  What they must not do is
+# exceed `ps2tst`'s per-byte timeout, which is about 0.8 s of machine time.
+rate 8
+hold 8
+gap 8
+
+at 0.000    type "hi"
++0.010      key tap up
++0.010      key tap ctrl+c
++0.010      key tap f1
++0.010      key tap a
++0.010      key press lshift
+
+# ⭐ and the mouse, which ps2tst only reaches after the keyboard's 24 bytes.
+# -700 in X takes the pointer to -380: three packets, and a NEGATIVE
+# coordinate, which is where a sign-extension bug shows up.  The last move
+# is upward, so its Y delta is positive on the wire and negative on screen.
+at 0.200    move to 320 240
++0.020      click left
++0.020      move by -700 0
++0.020      move by 0 -100

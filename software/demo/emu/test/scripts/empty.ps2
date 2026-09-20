@@ -1,0 +1,6 @@
+# empty.ps2 - ⛔ THE EMPTIER CONTROL: comments and blank lines, and nothing
+# else.  A machine run with this as its PS2_SCRIPT must produce no PS/2
+# traffic at all, and `ps2tst` must sit there and time out.
+
+;  a semicolon comment too
+

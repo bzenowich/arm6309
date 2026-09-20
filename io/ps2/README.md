@@ -88,6 +88,16 @@ overrun**. `docs/ps2.md` §7.1 tabulates the options; the choice is the owner's.
 **Specified, nothing built.** No code and no `CMakeLists.txt`; the card is discrete logic
 and the deliverable is the document.
 
+⭐ **But it can be driven.** `software/demo/emu/machine.c` models both ports and both
+devices at the line level, and since 2026-09-20 takes a **timed, semantic input script** —
+`move to 320 240`, `click left`, `type "..."`, each at a machine time — encoded into set-2
+scan codes and 9-bit-split mouse packets and handed to that model rather than past it
+(`docs/ps2.md` §11.5, `software/demo/emu/ps2script.h`).
+`software/demo/emu/test/run-ps2script.sh` is its bench: **27 claims**, the round trip
+asserted against a second, independent encoder in Python, with `ps2tst` on a booted
+NitrOS-9 as the thing being driven. So a keyboard and mouse driver — §13 step 5 — has
+something to be written against before the card exists.
+
 `docs/ps2.md` §13 gives the build order. **Step 1 measures the protocol on a scope** —
 §2.2's timings are recalled, not read from a document, and it now has to measure one
 specific number: **the inter-byte gap inside a 3-byte mouse packet**, which is what the

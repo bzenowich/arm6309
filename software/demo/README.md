@@ -39,6 +39,8 @@ that with other simulations running. The emulator runs the same ROM in about fou
 | `tools/tracewav.c` | the audio control: `card.c` driven by a run's timed register writes |
 | `emu/` | the host emulator: `cpu6809.c`, and `machine.c`, the map and both cards as the documents describe them |
 | `emu/test/run.sh` | the emulator's CPU core against `mc6809e.v`, instruction by instruction |
+| `emu/ps2script.h` | ⭐ **`PS2_SCRIPT`**: a timed, semantic keyboard and mouse script — `move to X Y`, `click left`, `type "..."` — encoded into set-2 scan codes and 9-bit-split mouse packets and fed to `machine.c`'s line-level PS/2 devices. `io/ps2/docs/ps2.md` §11.5 |
+| `emu/test/run-ps2script.sh` | its bench, **27 claims**: the same scripts encoded a second time by `emu/test/ps2check.py`, and `ps2tst` on a booted NitrOS-9 echoing the bytes back off the card |
 | `bench/replay_tb.sv` | the replayer on the CPU alone, for iterating in seconds rather than hours |
 | `bench/calib.asm` | the card behaviour the model and the emulator assume, measured on the machine |
 

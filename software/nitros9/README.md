@@ -246,9 +246,15 @@ the code and is left as `main` has it.
   stops at 1,024 blocks. RAM must start at socket 0: a machine whose socket 0 is empty (or
   holds an aliasing module) halts in the loader. `pmap` prints only a block's low byte.
 - **No input device but the UART.** The PS/2 drivers are phase P1. `ps2tst` initialises
-  both ports by `ps2.md` §7 and §11.2 and echoes what they send. The emulator models the
+  both ports by `ps2.md` §7 and §11.2 and echoes what they send — three bytes a device, or
+  `ps2tst N` for N of them, up to 24. The emulator models the
   card's receive counter literally, so a transmit that skips §7 step 1 (holding `KRST`)
   receives garbage there, as it would on the card.
+  ⭐ **What there IS, since 2026-09-20, is a way to script the input**: `PS2_SCRIPT=file`
+  (`software/demo/emu/ps2script.h`, `ps2.md` §11.5) takes `move to 320 240`, `click left`
+  and `type "..."` at machine times and encodes them properly, so a GUI can be tested
+  before the drivers or the card exist. `software/demo/emu/test/run-ps2script.sh` drives
+  `ps2tst 24` with one and checks the bytes that come back — 27 claims, ~2 min.
 - **The emulator's audio card is `audio/refplayer/card.c`**, register level, stepped per
   colour clock. Its host port is never busy (`ASTAT` b6), so a driver's wait on that bit
   runs only on the RTL.

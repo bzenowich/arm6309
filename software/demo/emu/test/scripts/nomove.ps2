@@ -1,0 +1,10 @@
+# nomove.ps2 - ⛔ THE NEGATIVE CONTROL.  The pointer travels a long way, in
+# both directions, through splits and a wrap past zero, and NOT ONE BUTTON
+# is ever touched.  ps2check.py `nobuttons` requires every packet's b0-b2 to
+# be clear: an encoder that leaked a button bit into a move - or that let a
+# previous click's state persist - fails here and nowhere else.
+origin 100 100
+at 0.100    move to 640 400
++0.050      move by -900 -120
++0.050      move to 0 0
++0.050      move by 300 300

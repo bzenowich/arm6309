@@ -1,0 +1,144 @@
+# keys.ps2 - EVERY NAME THE TABLE KNOWS, tapped once.
+#
+# The point is not the keystrokes, it is the table: ps2script.h's C
+# table and ps2check.py's Python one are separate transcriptions of
+# ps2.md 11.1's set 2, and `ps2check.py match` compares them code for
+# code over this file.  A name one side knows and the other does not
+# is a parse error; a code that differs is a failed claim.
+#
+# ⚠ Order matters to nothing here, but `pause` does: it is eight bytes
+# of make and has NO break sequence at all (ps2.md 11.1), so a `tap`
+# of it is one event rather than two.
+hold 4
++0.010      key tap a
++0.010      key tap b
++0.010      key tap c
++0.010      key tap d
++0.010      key tap e
++0.010      key tap f
++0.010      key tap g
++0.010      key tap h
++0.010      key tap i
++0.010      key tap j
++0.010      key tap k
++0.010      key tap l
++0.010      key tap m
++0.010      key tap n
++0.010      key tap o
++0.010      key tap p
++0.010      key tap q
++0.010      key tap r
++0.010      key tap s
++0.010      key tap t
++0.010      key tap u
++0.010      key tap v
++0.010      key tap w
++0.010      key tap x
++0.010      key tap y
++0.010      key tap z
++0.010      key tap 0
++0.010      key tap 1
++0.010      key tap 2
++0.010      key tap 3
++0.010      key tap 4
++0.010      key tap 5
++0.010      key tap 6
++0.010      key tap 7
++0.010      key tap 8
++0.010      key tap 9
++0.010      key tap `
++0.010      key tap grave
++0.010      key tap -
++0.010      key tap minus
++0.010      key tap =
++0.010      key tap equal
++0.010      key tap \
++0.010      key tap backslash
++0.010      key tap [
++0.010      key tap lbracket
++0.010      key tap ]
++0.010      key tap rbracket
+# (the `;` key is written `semicolon`: a bare one starts a comment)
++0.010      key tap semicolon
++0.010      key tap '
++0.010      key tap quote
++0.010      key tap ,
++0.010      key tap comma
++0.010      key tap .
++0.010      key tap period
++0.010      key tap /
++0.010      key tap slash
++0.010      key tap space
++0.010      key tap tab
++0.010      key tap backspace
++0.010      key tap bksp
++0.010      key tap enter
++0.010      key tap return
++0.010      key tap esc
++0.010      key tap escape
++0.010      key tap capslock
++0.010      key tap numlock
++0.010      key tap scrolllock
++0.010      key tap shift
++0.010      key tap lshift
++0.010      key tap rshift
++0.010      key tap ctrl
++0.010      key tap lctrl
++0.010      key tap rctrl
++0.010      key tap alt
++0.010      key tap lalt
++0.010      key tap ralt
++0.010      key tap lgui
++0.010      key tap rgui
++0.010      key tap apps
++0.010      key tap menu
++0.010      key tap f1
++0.010      key tap f2
++0.010      key tap f3
++0.010      key tap f4
++0.010      key tap f5
++0.010      key tap f6
++0.010      key tap f7
++0.010      key tap f8
++0.010      key tap f9
++0.010      key tap f10
++0.010      key tap f11
++0.010      key tap f12
++0.010      key tap insert
++0.010      key tap home
++0.010      key tap pageup
++0.010      key tap pgup
++0.010      key tap delete
++0.010      key tap del
++0.010      key tap end
++0.010      key tap pagedown
++0.010      key tap pgdn
++0.010      key tap up
++0.010      key tap left
++0.010      key tap down
++0.010      key tap right
++0.010      key tap kp0
++0.010      key tap kp1
++0.010      key tap kp2
++0.010      key tap kp3
++0.010      key tap kp4
++0.010      key tap kp5
++0.010      key tap kp6
++0.010      key tap kp7
++0.010      key tap kp8
++0.010      key tap kp9
++0.010      key tap kp.
++0.010      key tap kp+
++0.010      key tap kp-
++0.010      key tap kp*
++0.010      key tap kp/
++0.010      key tap kpenter
++0.010      key tap pause
++0.010      key tap printscreen
++0.010      key tap prtsc
++0.050      key tap ctrl+alt+delete
++0.050      key press shift+ctrl
++0.050      key release shift+ctrl
++0.050      type "The quick brown fox: 0123456789!"
++0.050      type "~!@#$%^&*()_+{}|:\"<>?`-=[]\\;',./"
++0.050      type "a\tb\nc"

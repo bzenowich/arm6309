@@ -1134,6 +1134,47 @@ trade: sixteen bytes of 6309 RAM instead of four `CD40105B`. What §5.1 keeps in
 hardware is not the queue — it is the one byte the driver has already been told about, and
 two `'574`s is the price of that byte being the byte it was told about.
 
+### 11.5 Driving it before there is a driver — `PS2_SCRIPT`
+
+There is no keyboard or mouse driver yet (§13 step 5) and no GUI to test one against, and
+a card that can only be exercised by hand is a card whose software arrives on the same day
+as its hardware. The host emulator therefore takes a **timed, semantic input script**:
+`PS2_SCRIPT=file` in `software/demo/emu/machine.c`, with the format, the scan code table
+and the encoding in [`software/demo/emu/ps2script.h`](../../../software/demo/emu/ps2script.h).
+
+```
+at 0.500    move to 320 240      # screen coordinates, Y DOWN
++0.100      click left
++0.200      move by 700 -5
++0.300      key tap ctrl+c
++0.100      type "Hi there!"
+```
+
+Three things about it matter to this document rather than to that one:
+
+- **It is fed to the line-level device model, not past it.** The emulator already models
+  both devices at 80 µs a bit, with the host inhibit, the request-to-send and §11.2's
+  command set; the script only supplies the bytes a real keyboard or mouse would have
+  sent. So an event stays queued until the host has sent `F4`, exactly as §11.2 step 4
+  requires, and the timing on the wire is the model's rather than the script's.
+- **`move to` is split.** §11.3's packet carries a 9-bit signed delta an axis, so a move
+  of more than 255 pixels is several packets — the encoder emits
+  `ceil(max(|dx|,|dy|)/255)` of them, each at most ±255 on each axis, and the deltas of
+  the burst sum to the requested move exactly. Byte 0's overflow bits are therefore never
+  set. ⚠ An encoder that truncated instead would produce a pointer that drifts from where
+  the script said and **would say nothing about it**.
+- **The guest's pointer is reconstructed and compared, not assumed.** §5's one-byte latch
+  means a late driver loses a byte, and a 3-byte packet stream that loses one byte loses
+  *alignment*, not a packet. So the run's `ps2.txt` log carries a `G` line rebuilt from the
+  bytes the guest actually read off `MDATA`, beside the `M` line saying where the script
+  thinks the pointer is, and the bench asserts the two agree.
+
+`software/demo/emu/test/run-ps2script.sh` is the bench: it encodes each script a second
+time, independently, in `emu/test/ps2check.py`, drives `ps2tst` on a booted NitrOS-9 and
+compares the bytes the 6809 echoed back off the card against that second encoding — with a
+moves-and-no-clicks control, an empty-script control, and a corrupted-expectation run of
+each comparison that is required to fail.
+
 ---
 
 ## 12. Period audit
