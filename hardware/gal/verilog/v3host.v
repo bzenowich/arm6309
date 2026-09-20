@@ -336,7 +336,7 @@ module v3host (
          (LDPDATH);
       r_PPEND <=
          (PDGO & ~VBLANK)
-         | (PPEND & ~PS0);
+         | (PPEND & ~HLOAD);
       r_PS0 <=
          (PPEND & HLOAD)
          | (PDGO & VBLANK);

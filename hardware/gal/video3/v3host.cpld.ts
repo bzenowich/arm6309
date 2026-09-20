@@ -111,7 +111,18 @@ const palette: Cell[] = [
    * item 37 is the same defect on the other card's span writer. */
   reg("PDQ", ["LDPDATH"]),
   comb("PDGO", ["LDPDATH & !PDQ"]),
-  reg("PPEND", ["PDGO & !VBLANK", "PPEND & !PS0"]),
+  /* ⛔ IT CLEARED ON PS0, WHICH IS ONE DOT TOO LATE. HLOAD is a LEVEL - four
+   * slots, sixteen dots - and PS0 is `PPEND & HLOAD`, so the walk started
+   * again on the next dot: PPEND only cleared on the edge AFTER PS0 set.
+   * Every palette write outside vertical blanking landed TWICE and stepped
+   * PIDX twice, so a 256-entry load through the auto-increment took 479
+   * writes, wrapped, and overwrote the entries it had got right. ⭐ Clearing
+   * on HLOAD itself makes the pulse one dot whatever the level's length.
+   * ⚠ v3card_tb could not see it: its palette runs just after reset, where
+   * VBLANK takes the other path - `PDGO & VBLANK`, already a one-dot pulse.
+   * v3machine_tb, a 6809E executing a ROM with the display on, found it on
+   * its first run. */
+  reg("PPEND", ["PDGO & !VBLANK", "PPEND & !HLOAD"]),
   /* ⛔ A SHIFT REGISTER, ONE DOT A STAGE - as vsup.parts.ts has it. The port
    * to this part gave each stage a hold (`PS1 & !PS2` and so on), which
    * stretched every stage to two dots: PIDXCE (PS3) fired twice a commit and

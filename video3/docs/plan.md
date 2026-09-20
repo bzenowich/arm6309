@@ -1149,8 +1149,17 @@ static checks, once the card had a board for them to read:
 | 30 | **`check:pins`**: none of video3's pins driving an active-low discrete input was declared active-low | declared, and `check:pins` holds each to its consumer — `OEA`/`OEB`, `PIXOE`, `PIDXOE`, `SPRLD`, `SPRSH` (the `'165`s' `CLK INH`), `LDPIDXL` (`'163` `/LD`), `LDPIDXH` (`'574` clock), `VWE`, `WSTB`, `RDBKOE`, `VSTATOE`, `RDOE`, `LUTWE`, `RDCK`, `PWCK` and the GAL's ten — 249 claims |
 | 31 | `v3dot_tb`'s hand-kept wire list had fallen out of step with the part again | generated between two markers by `v3portmap.ts`'s `rewriteTb` |
 
-⚠ **What it does not reach**: a CPU — the bus is a task honouring `/WAIT`, not
-`mc6809e` running a driver (§15.2's `v3machine_tb`); the cadence's *time*, as against
+### ⭐ 2026-09-19, and the first thing a CPU asked
+
+`v3machine_tb` (§15.1) is `mc6809e` + the motherboard + this card in `machine3.v`,
+running `software/v3boot/v3boot.asm`. **48 claims, and the first run found one:**
+
+| | found | the design now |
+|---|---|---|
+| 32 | ⛔ **every palette write outside vertical blanking landed TWICE, and `PIDX` stepped twice** — a 256-entry load through the auto-increment took 479 writes, wrapped, and overwrote the entries it had got right | `PPEND` clears on `HLOAD`, not on `PS0`. `HLOAD` is a sixteen-dot **level** and `PS0` is `PPEND & HLOAD`, so clearing a dot after `PS0` set let the walk start again. ⚠ `v3card_tb` could not see it: its palette ran just after reset, where `VBLANK` takes the other path — `PDGO & VBLANK`, a one-dot pulse already. It has a claim with the picture running now, and that claim fails against the old equation |
+
+⚠ **What `v3card_tb` does not reach**: a CPU — the bus is a task honouring `/WAIT`, not
+`mc6809e` running a driver (§15.1's `v3machine_tb`, which now exists); the cadence's *time*, as against
 its access counts (§14 item 8); 80 × 30 and 80 × 50, every sprite X phase, and an
 overlapping copy (§15.1's table); and the timing. It is a model of the logic, as every
 wrapper in `hardware/gal/verilog/` is.

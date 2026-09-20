@@ -62,7 +62,7 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 | | |
 |---|---|
 | `npm run check` | every GAL design against its own model, and the live ones against Atmel's CUPL. **770 claims, ~60 s** |
-| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs nine testbenches. **373 claims, ~6 min** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
+| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs ten testbenches. **435 claims, ~7 min** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
 | `npm run check:sim` | the two *hand-written* Verilog models, `gal/mmu.v` and `gal/clkdec.v`, with their own testbenches. Older and separate from `check:video` |
 | `npm run check:netlist` | the motherboard's connectivity, against `dist/mainboard/mainboard/circuit.json`, and the video card's against `dist/cards/video/circuit.json` — what is drawn, and the nets with no producer on the board as a list checked both ways (`graphics.md` §19 item 34). **Build artefacts**, so run `npm run build` first if a `.circuit.tsx` changed. ⚠ `tsci build` prints "Build completed with errors" and exits 0 when it cannot reach the supplier API; connectivity is unaffected |
 | `npm run gen:pld` | writes `gal/{vaddr,vctrl,vsup,audio,aseq}.pld` from the term lists |
@@ -167,7 +167,7 @@ directory, and two concurrent fits write the same `cpld/<name>.fit`.
 ### The Verilator tests
 
 `npm run check:video` is the one that runs the *design* rather than its
-equations. It ends with a line like `373 claims, 0 failed`, and **its exit code
+equations. It ends with a line like `435 claims, 0 failed`, and **its exit code
 is the answer** — a testbench prints a failed claim and then calls `$finish`,
 which exits 0, so the count is what decides the status. Read the `FAIL` lines;
 each names the claim and the observed value.
@@ -182,7 +182,7 @@ change to the video card, the mainboard, or `emit.ts` itself:
 | `audio.jedec.ts`, `aseq.*`, `audio_card.v`, `audio_tb.sv` | `npm run check:sim:audio` (~25 s), then ⭐ **`npm run check:audio:all`** before committing |
 | the mainboard, `u9`/`u10` | `npm run check:sim:board` |
 | the video card, or `verilog/emit.ts` | `npm run check:video` (everything) |
-| the video3 card (`gal/video3/*.cpld.ts`, `v3lane.jedec.ts`, `video3_card.v`) | `bun run gal/verilog/gen.ts`, then from `gal/verilog/` `TBS="v3dot v3card" sh run.sh` (~3 min), refit every CPLD you touched, and for `v3lane` its check and `cupl-reference.sh` |
+| the video3 card (`gal/video3/*.cpld.ts`, `v3lane.jedec.ts`, `video3_card.v`) | `bun run gal/verilog/gen.ts`, then from `gal/verilog/` `TBS="v3dot v3card v3machine" sh run.sh` (~4 min), refit every CPLD you touched, and for `v3lane` its check and `cupl-reference.sh` |
 | anything the CPU touches — the map, the boot path, `boot.asm`, `machine.v` | ⭐ **`npm run check:machine`** |
 | the NitrOS-9 port, `tl16c550.v`, or anything NitrOS-9 boots through (the vectors, the map, the tick, the UART) | `sh software/nitros9/run-emu.sh` (~30 s) first, then ⭐ **`SCENARIOS=nitros9 npm run check:machine`** |
 | the audio card's *behaviour* | ⭐ **`npm run check:oracle`** as well — this card against an independent Paula (`gal/verilog/oracle/`). It is what found `audio.md` §16 items 36 and 39, and `audio_tb` could not |
@@ -207,6 +207,7 @@ first. After editing a `.jedec.ts`, run `bun run gal/verilog/gen.ts` or a
 | ⭐ `machine_tb` | **`mc6809e` + the whole motherboard + the whole video card + the whole audio card**, and a TL16C550C bus model | that the machine executes its own boot ROM: leaves boot mode with a map it wrote, finds its SIMM, loads 256 palette entries, paints 640 × 200 with the span writer, chains 200 spans with `WADV`, and produces a frame whose every pixel is the index the software drew. It reads DRAM and VRAM independently of the ROM's own compares, and runs `$E1`/`$E2` on purpose — **and it is what found `graphics.md` §19 items 36, 37 and 38, which twelve testbenches and 543 model claims could not** |
 | ⭐ `modplay_tb` | **the whole audio card** | that a real module plays: samples uploaded through `SPTR`/`SDATA`, the register stream delivered on the card's own §8.2 tick interrupt, and the four `AD7528` pairs' codes recorded for `audio/tools/dacwav` |
 | ⭐ `v3card_tb` | **the whole video3 card**: `v3dot`, `v3scan`, `v3ptr`, `v3host` and the `v3lane` GAL + `video3_card.v`'s framebuffer and lane `'245`s, register file, fetch ranks, `'153`, sprite `'165`s, LUT, latches and host `'245`, and a 6809E bus model that honours `/WAIT` the way `clkdec` does | the palette, direct `VDATA` writes and post-incrementing reads, the span writer in every mode, `WADV` chaining, a copy **at two accesses a byte** in bitmap and under character mode, and **whole frames pixel for pixel through an identity LUT**: bitmap at fine scrolls 1-3 and a two-axis wrap, the sprite at three positions in two families, character mode at 80×60 and 80×25 (two consecutive frames), tile mode at both cell phases. ⭐ **Every bus is resolved from explicit drivers** - FBA, the internal data bus, each lane, the LUT address - so a fight or a floating sample is a failed claim. The port maps are **generated** (`v3portmap.ts`, from `gen.ts`); `TBARGS=+ONLY=sprite,char` runs named groups for a debug loop. **It found fourteen defects `v3dot_tb` and 770 model claims could not, and then sixteen more** (`video3/docs/history.md`, 2026-09-19) |
+| ⭐ `v3machine_tb` | **`mc6809e` + the motherboard + the whole video3 card** (`machine3.v`), running `software/v3boot/v3boot.asm` out of the boot ROM | that the machine executes a program against the card: the map it writes, the palette both ways, direct writes and post-incrementing reads, a span, a `WADV`-chained glyph, a copy, and a 400-line frame whose every pixel is the card's own LUT entry for the byte the ROM drew. ⭐ **And the three things only a CPU can ask**: a real instruction's bus cycle stretched to 987 dots by `/WAIT`, the VBL interrupt fetched and serviced, and an engine surviving the polls of its own `VSTAT`. **It found the palette commit firing twice outside vertical blanking on its first run** — 48 claims, ~40 s, 34 of them compiling the core |
 
 **What is generated and what is written.** `verilog/emit.ts` turns a `Merged`
 or a `Design` into Verilog from **the same `Cell` term lists `jedec/cupl.ts`

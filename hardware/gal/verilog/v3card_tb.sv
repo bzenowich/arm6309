@@ -257,8 +257,30 @@ module v3card_tb;
     ok(bad == 0, $sformatf("four palette writes land at LUT 0..3 and PIDX walks (%0d wrong)", bad));
     if (bad) for (int i = 0; i < 6; i++) $display("      LUT[%0d] = %04h", i, dut.peek_lut(i));
 
+    // ⭐ AND ONE WITH THE PICTURE RUNNING, which is where the commit is a
+    // different path: in vertical blanking PDGO commits at once, outside it
+    // the write is POSTED to the next HLOAD. ⛔ HLOAD is a sixteen-dot level
+    // and PPEND cleared a dot after PS0 set, so an active-display write
+    // landed twice and PIDX stepped twice - 479 writes for a 256-entry load.
+    // v3machine_tb found it; this is the claim that keeps it fixed.
+    wr(CTRL, 8'h83);                                   // display on, VMODE 11
+    @(negedge dut.VBLANK);                             // out of the blank
+    wr(PIDXL, 8'h40); wr(PIDXH, 8'h00);
+    wr(PDATL, 8'h5C); wr(PDATH, 8'hE7);
+    wait_clear(1, "PBUSY after a palette write with the picture running");
+    ok(dut.peek_lut(16'h0040) === 16'hE75C && dut.peek_lut(16'h0041) === 16'h0000,
+       $sformatf("a palette write outside the blank lands in ONE entry (%04h, and %04h after it)",
+                 dut.peek_lut(16'h0040), dut.peek_lut(16'h0041)));
+    /* and PIDX stepped exactly once: the next write lands at +1, not +2 */
+    wr(PDATL, 8'h11); wr(PDATH, 8'h22);
+    wait_clear(1, "PBUSY after the second");
+    ok(dut.peek_lut(16'h0041) === 16'h2211 && dut.peek_lut(16'h0042) === 16'h0000,
+       $sformatf("and PIDX stepped ONCE, so the next lands at +1 (%04h at +1, %04h at +2)",
+                 dut.peek_lut(16'h0041), dut.peek_lut(16'h0042)));
+    wr(CTRL, 8'h00);
     end
     if (run_group("direct")) begin
+
     // ============================================== bitmap, direct writes
     // CTRL: VMODE 00, MODE 00 bitmap, WMODE 00 direct, display on.
     wr(CTRL, 8'h80);

@@ -45,7 +45,7 @@ Ordered by measured value against measured cost, not by how interesting it is.
 | 3 | **The demo's art: 256 colours, Floyd–Steinberg, a cast of different sprites** | it is what the card is *for*, and the scene currently shows a stress sweep in flat fills |
 | 4 | **The copy-side step** (§1) | halves a character-mode scroll, 10.70 → ~8.9 ms a line. ⚠ `v3ptr` may refuse |
 | 5 | **Retire-only `WADV` b2** (§2) | ~5 µs a character and the mode stops being a hazard. ⚠ `v3ptr` may refuse |
-| 6 | **`v3machine_tb`** (§9) | video3 has no whole-machine bench, and on the other card that bench found three defects twelve others missed. Validation debt, and it grows |
+| 6 | ⭐ **`v3machine_tb`** — **BUILT 2026-09-19** | `machine3.v` puts a real 6809E, the motherboard and the card together and runs a ROM. **It found a card defect on its first run** (the palette commit firing twice outside vertical blanking), which is the same return the other card's machine bench gave. 48 claims, ~40 s, now in `check:video` |
 | 7 | **A pixel gate for the staged copy path** (§4) | `CpOne` (overlapping copies) has no check that compares pixels, and waits moved inside it |
 | 8 | more hardware sprites (§6), a programmable key (§5) | ⛔ both blocked by pins and board space, and §7.1 removed the reason to want the first |
 
@@ -316,7 +316,7 @@ system map — so it is a measurement mode until a game needs no tags.
 | `TFM` for cell runs | The 6309's block move would stream a run to `VDATA` at 3 cycles a byte. ⛔ `software/demo/emu/cpu6809.c` has no 6309 opcodes, so it cannot even be tried on the emulator yet |
 | `SS.Batch`'s tile puts | `BT.Put`'s raw byte runs go out with `WADV` forced to 00, so `overworld`'s tile writes still cost four bytes a cell where `SS.MapWr` costs two. The record has nowhere to ask for the step |
 | `v3scan_mq` | The variant with the map latches discrete is fitted against a design two changes old. Either refit it or retire it |
-| `v3machine_tb` | video3 has no whole-machine bench. `plan.md` §15's ladder puts it last, and it is what `SCENARIOS=nitros9` is for the other card |
+| `v3machine_tb` **with the other cards** | ⭐ the bench exists (`machine3.v`), but with **no audio card and no UART**: plan §15.2's "two cards, one backplane" and NitrOS-9's tick on the VBL are still unasked |
 | the span writer's "25.1 MB/s broadcast" | `plan.md` §5 inherits the figure from `video/`, where a write reached four lanes at once. On this card `v3lane` enables one lane a write. The figure needs re-deriving |
 
 ---

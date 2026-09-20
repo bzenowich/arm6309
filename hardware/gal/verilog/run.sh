@@ -11,7 +11,7 @@ set -e
 cd "$(dirname "$0")"
 V="verilator --binary --timing -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC"
 CARD="video_card.v vctrl.v vaddr.v vsup.v"
-TBS=${TBS:-"vsync vaddr vtile vspan vpal audio mainboard v3dot v3card"}
+TBS=${TBS:-"vsync vaddr vtile vspan vpal audio mainboard v3dot v3card v3machine"}
 out=$(mktemp)
 trap 'rm -f "$out"' EXIT
 
@@ -31,6 +31,28 @@ for tb in $TBS; do
     # buried cell is left unconnected on purpose - a cell is not a net until
     # it leaves its package - so PINMISSING is the design, not a slip.
     v3card)    SRC="-Wno-PINMISSING video3_card.v v3dot.v v3scan.v v3ptr.v v3host.v v3lane.v" ;;
+    # ⭐ video3 as a MACHINE: a 6809E in the socket, the motherboard under it
+    # and the card in the slot, running software/v3boot's fixture ROM. Asked
+    # for by name - it is not in the default TBS. ⚠ About 40 s: 5 s of
+    # simulation (59 ms of machine time) and the rest Verilator compiling a
+    # 6809E core it compiles for nothing else.
+    v3machine)
+      ROM=../../../software/v3boot/v3boot.hex
+      if [ ! -f "$ROM" ] || [ ../../../software/v3boot/v3boot.asm -nt "$ROM" ]; then
+        sh ../../../software/v3boot/mkv3rom.sh
+      fi
+      # ⚠ THE VENDOR CORE'S WARNINGS ARE WAIVED ON THIS LINE AND NOWHERE ELSE,
+      # exactly as run-machine.sh waives them: hardware/vendor/mc6809/README.md
+      # keeps the four .v files byte-identical to upstream, so the waivers
+      # travel with the compile rather than with the source. ⭐ And not
+      # -Wno-lint: a warning in machine3.v or v3machine_tb.sv is still an error.
+      W="-Wno-SIDEEFFECT -Wno-UNOPTFLAT -Wno-CASEX -Wno-GENUNNAMED -Wno-PINMISSING"
+      W="$W -Wno-UNUSEDPARAM -Wno-VARHIDDEN -Wno-TIMESCALEMOD -Wno-CASEINCOMPLETE"
+      W="$W -Wno-BLKSEQ -Wno-SYNCASYNCNET -Wno-MULTIDRIVEN -Wno-LATCH"
+      W="$W -Wno-UNSIGNED -Wno-CMPCONST --timescale 1ns/1ps"
+      SRC="$W machine3.v mainboard.v ../clkdec.v ../mmu.v u9.v u10.v"
+      SRC="$SRC video3_card.v v3dot.v v3scan.v v3ptr.v v3host.v v3lane.v"
+      SRC="$SRC ../../vendor/mc6809/mc6809e.v ../../vendor/mc6809/mc6809i.v" ;;
     *)         SRC="$CARD" ;;
   esac
   $V --top-module "${tb}_tb" $SRC "${tb}_tb.sv" -o "${tb}_tb" > /dev/null

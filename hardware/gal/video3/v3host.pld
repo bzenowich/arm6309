@@ -123,7 +123,7 @@ LDCTRL = IOSEL & A6 & A5 & WRCYC & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP
 PDQ.d = LDPDATH ;
 PDGO = LDPDATH & !PDQ ;
 PPEND.d = PDGO & !VBLANK
-          # PPEND & !PS0 ;
+          # PPEND & !HLOAD ;
 PS0.d = PPEND & HLOAD
         # PDGO & VBLANK ;
 PS1.d = PS0 ;
