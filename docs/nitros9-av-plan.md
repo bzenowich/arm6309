@@ -396,7 +396,7 @@ This avoids Wildbits' `$C0`–`$C4` and the third-party `$C7`–`$CB` in `defs/o
 | `$D2` | `SS.VRead` | Get | rectangle of 8bpp pixels to the caller's buffer |
 | `$D3` | `SS.VWrite` | Set | rectangle of 8bpp pixels from the caller's buffer (bulk image) |
 | `$D4` | `SS.Excl` | Set | claim or release exclusive screen; returns base and geometry |
-| `$D5` | `SS.Scroll` | Set | `HSCROLL`, `VSCROLL` at the next VBL |
+| `$D5` | `SS.Scroll` | Set | `HSCROLL` (X), `VSCROLL` (Y), the recording tag (U) at the next VBL. ⭐ **`SS.Batch`'s fast path** — built 2026-09-19, when the measurement said 0.77 ms of `SS.Batch`'s 1.90 was moving and validating twenty bits of scroll |
 | `$D6` | `SS.Flip` | Set | `VSCROLL` page flip at the next VBL |
 | `$D7` | `SS.Batch` | Set | queue register and `WPTR`+bytes patches for the next VBL (bounded) |
 | `$D8` | `SS.FrmSig` | Set | signal on each or every *n*th frame |

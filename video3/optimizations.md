@@ -34,6 +34,50 @@ the longest board there is. A new package has to displace one.
 
 ---
 
+## ⭐ The priority list, 2026-09-19
+
+Ordered by measured value against measured cost, not by how interesting it is.
+
+| | | what it is worth |
+|---|---|---|
+| 1 | **A game that owns the screen should not call the OS per frame** (§8) | 1.05 ms of every frame back, **19 → 21 actors**. Software, demonstrated, needs a supported pattern in `libvid` rather than a bench mode |
+| 2 | **The block-streaming playfield** (§7.1) | the whole "long level" class of game, in bitmap mode with the sprite and the keyed blits. ~1 ms a frame at a 4 px scroll. Software |
+| 3 | **The demo's art: 256 colours, Floyd–Steinberg, a cast of different sprites** | it is what the card is *for*, and the scene currently shows a stress sweep in flat fills |
+| 4 | **The copy-side step** (§1) | halves a character-mode scroll, 10.70 → ~8.9 ms a line. ⚠ `v3ptr` may refuse |
+| 5 | **Retire-only `WADV` b2** (§2) | ~5 µs a character and the mode stops being a hazard. ⚠ `v3ptr` may refuse |
+| 6 | **`v3machine_tb`** (§9) | video3 has no whole-machine bench, and on the other card that bench found three defects twelve others missed. Validation debt, and it grows |
+| 7 | **A pixel gate for the staged copy path** (§4) | `CpOne` (overlapping copies) has no check that compares pixels, and waits moved inside it |
+| 8 | more hardware sprites (§6), a programmable key (§5) | ⛔ both blocked by pins and board space, and §7.1 removed the reason to want the first |
+
+---
+
+## 0. ⛔ Tile mode costs ONE macrocell — measured, so it is not where the room is
+
+**Asked 2026-09-19: would dropping tile mode free resources?** It would free **one
+cell**. Both parts were rebuilt with tile mode's terms removed and refitted:
+
+| part | as built | rebuilt without tile mode | what the mode costs |
+|---|---|---|---|
+| `v3dot` | 121/128 cells, 63/64 I/O, 5 cascades | one cell fewer, same pins, same cascades | ⭐ **one macrocell** — `HSCROLL[2]`, the cell phase |
+| `v3scan` | 112/128 cells, 63/64 I/O, 3 cascades | **identical in all three** | ⭐ **nothing** |
+
+⚠ Both counterfactuals fitted ("Design fits successfully"), under their own names, so
+the comparison is the fitter's and not an estimate. The experiment was reverted.
+
+⭐ **It is a thin layer on character mode, and the layer is the cheap part.** The
+expensive machinery — the map fetch and its request cadence, the two-stage code
+pipeline, the map column counter, `MAPBASE`/`TILEBASE`, the address concatenation — is
+**shared with character mode**, which stays either way. What tile mode adds on top is
+`HSCROLL[2]`'s phase (character mode has no scroll) and a few product terms in the
+address mux that the fitter absorbs. Retiring the mode would also free the `MODE1` pin
+on two parts, and break `overworld` and `ca_tile`.
+
+⛔ **And it frees the wrong part.** The queue's two hardware entries (§1, §2) are on
+**`v3ptr`, which has no tile logic at all**, and a second hardware sprite is ~46 cells
+and four pins on `v3dot`, which has seven and one. One macrocell buys none of that.
+
+---
+
 ## 1. ⭐ The copy-side step — halve a character-mode scroll
 
 **What it buys.** A console scroll copies map rows, and a four-byte cell makes a row
