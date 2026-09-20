@@ -43,11 +43,12 @@ Ordered by measured value against measured cost, not by how interesting it is.
 | 1 | ⭐ **A game that owns the screen should not call the OS per frame** (§8) — **BUILT 2026-09-20** | `monster` does it as its normal path, not as a mode: **0.042 ms against `SS.Scroll`'s 1.14**, 19 → 21 actors, measured again on a second scene. ⚠ What is left is a supported pattern in `libvid`, and §8's *recording tag* objection is answered — see there |
 | 2 | ⭐ **The block-streaming playfield** (§7.1) — **BUILT 2026-09-20** | `monster` streams a **10,240-pixel** level through the ring for **0.35 ms a frame** at a 4 px scroll, in bitmap mode with the sprite and the keyed blits, and **18 actors** still fit. §7.1's numbers held; two of them moved, and one of them by 2× |
 | 3 | ⭐ **The demo's art: 256 colours, Floyd–Steinberg, a cast of different sprites** — **BUILT 2026-09-20** | `video3/bench/mkmonster.py`: a palette median-cut out of the art, **snapped to the LUT's 5/6/5 grid before the dither**, Floyd–Steinberg against it, and eight different creatures as full-colour keyed blits. The contact sheets are what it is reviewed from |
-| 4 | **The copy-side step** (§1) | halves a character-mode scroll, 10.70 → ~8.9 ms a line. ⚠ `v3ptr` may refuse |
-| 5 | **Retire-only `WADV` b2** (§2) | ~5 µs a character and the mode stops being a hazard. ⚠ `v3ptr` may refuse |
-| 6 | ⭐ **`v3machine_tb`** — **BUILT 2026-09-19** | `machine3.v` puts a real 6809E, the motherboard and the card together and runs a ROM. **It found a card defect on its first run** (the palette commit firing twice outside vertical blanking), which is the same return the other card's machine bench gave. 48 claims, ~40 s, now in `check:video` |
-| 7 | **A pixel gate for the staged copy path** (§4) | `CpOne` (overlapping copies) has no check that compares pixels, and waits moved inside it |
-| 8 | more hardware sprites (§6), a programmable key (§5) | ⛔ both blocked by pins and board space, and §7.1 removed the reason to want the first |
+| 4 | ⭐ **Epic Pinball, and the LUT as a feature** (§10) — **BUILT 2026-09-20** | `pinball`: a 640 × 512 table, `VSCROLL` following the ball for **0.032 ms** a frame, the ball on the hardware sprite, and ⭐ **the lamps and a six-digit scoreboard as PALETTE writes** — 0.16 ms a frame of register traffic and no copy-engine time at all. §10's plan held; what it got wrong is in §10.1 |
+| 5 | **The copy-side step** (§1) | halves a character-mode scroll, 10.70 → ~8.9 ms a line. ⚠ `v3ptr` may refuse |
+| 6 | **Retire-only `WADV` b2** (§2) | ~5 µs a character and the mode stops being a hazard. ⚠ `v3ptr` may refuse |
+| 7 | ⭐ **`v3machine_tb`** — **BUILT 2026-09-19** | `machine3.v` puts a real 6809E, the motherboard and the card together and runs a ROM. **It found a card defect on its first run** (the palette commit firing twice outside vertical blanking), which is the same return the other card's machine bench gave. 48 claims, ~40 s, now in `check:video` |
+| 8 | **A pixel gate for the staged copy path** (§4) | `CpOne` (overlapping copies) has no check that compares pixels, and waits moved inside it |
+| 9 | more hardware sprites (§6), a programmable key (§5) | ⛔ both blocked by pins and board space, and §7.1 removed the reason to want the first |
 
 ---
 
@@ -424,3 +425,45 @@ blitted opaquely only when the animation frame changes.
 lamps nothing — **~12 ms left for physics and table logic**, which is where the real
 question is: sub-stepped collision on a 6309 in native mode, with its 16 × 16 multiply
 and divide.
+
+### 10.1 ⭐ BUILT 2026-09-20 — `pinball`, and the four things §10 got wrong
+
+`video3/bench/run-v3pin.sh` runs it and `bench/README.md` has the whole
+account. A 640 × 512 table, `VSCROLL` following a scripted ball, the ball on
+the hardware sprite, extra balls as keyed blits with save-behind, flippers
+pre-composed over their own background, and ⭐ **eight lamps and a six-digit
+seven-segment score as palette entries**. Fifteen seconds at 70 Hz, three
+balls, and the table scores 65,440.
+
+**§10's shape is right and its headline is confirmed**: the scroll is one
+register pair in the blank at **0.032 ms**, the fixed score panel really is
+impossible and the scoreboard really does belong in the playfield, and the
+lamps really do cost the copy engine nothing. Four of its numbers moved:
+
+| | §10 said | measured |
+|---|---|---|
+| a frame, at the scene's own cast | scroll 0.04 + ball 0.74 + flippers ~1.1 | 0.032 + **1.97 for two blit balls** + **0.62** for both flippers |
+| ⭐ **lamps and flashers** | "nothing" | ⭐ **0.16 ms a frame** of LUT writes, and **0.70** with the bookkeeping that decides what changed. Still free of the copy engine, which is the claim that mattered |
+| ⭐ **the physics** | "~12 ms left … sub-stepped collision on a 6309 in native mode, with its 16 × 16 multiply and divide" | ⛔ **there is no 6309 to use**: `software/demo/emu/cpu6809.c` has no 6309 opcodes (§9), so the scene is plain 6809. It does not need them — **1.63 ms a frame** for three balls on a 16-pixel collision grid whose cell index is the coordinate's HIGH BYTE. 9.7 ms is left, not 12 |
+| ⭐ **save-behind** | "a 327 KB table leaves no room for a clean page, so actors are save-behind" | right, and for a second reason §10 did not have: a *scrolling* clean band — `monster`'s actual shape — would cost **1.35 ms a frame** here, because the camera is driven by the ball and moves up to eight rows a frame. And save-behind costs the **interleave** as well as the third copy: restores, saves and draws have to be three separate phases |
+| the cast | "a ball, two flippers, bumpers: eight actors against the 19 measured" | ⭐ **9 balls** — 1.674 ms of frame + **1.459 ms a blit ball**, and the sprite ball is free. Fewer than eight *actors* only because a pinball ball costs three copies and 0.5 ms of physics where a `monster` creature costs two copies and no logic |
+
+⭐ **And one thing §10 could not have known: the table cannot be a picture.**
+327,680 bytes do not fit a NitrOS-9 module, so the table is 40 × 32 cells of
+16 × 16 **interned by content** — `monster`'s technique, without the strips,
+because a table is built once and never refilled. That bounded the art before
+it bounded anything else: the playfield is three *flat* zones so an overlay
+costs one block wherever it sits, where `monster`'s 208-row gradient cost it
+one block a row. **61 blocks** for a 1,280-cell table.
+
+⛔ **THE DEFECT THIS SCENE EXISTS TO HAVE FOUND IS NOT A CARD DEFECT.** The
+collision switch read its cell kind out of A, and the line that set the axis
+flag was `lda #1`. Every *vertical* collision in the table therefore arrived
+as `KSOLID`: every bumper, every rollover, the drain, the plunger and the
+lane's own kicker were plain walls. The ball bounced up and down the plunger
+lane for the whole scene — and the VRAM gate passed, the frame budget was
+measured, the tearing gate passed, the contact sheets looked like a pinball
+table, and the score read **000000** for four runs. ⭐ What caught it was the
+**lamp gate**, which is the only claim in any of the three scenes that asks
+whether the scene *did* anything rather than whether the card drew what it
+was told. `bench/README.md` has that and the two smaller ones beside it.
