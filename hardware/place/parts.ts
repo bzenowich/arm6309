@@ -196,22 +196,26 @@ export const CARDS: Record<string, CardSpec> = {
     ],
   },
   storage: {
-    title: "Storage", length: 120, ics: 14, source: "storage/docs/sdcard.md 8",
-    note: "SD over SPI, 681 KiB/s",
+    /* ⭐ EIGHT ICs since 2026-09-20, from fourteen. The block buffer and its
+     * six packages of address and data plumbing are gone with it: the card
+     * is NormalLuser's BE6502 interface (sdcard.md §3.1) and nothing more,
+     * and §4.4's chunk-and-mask discipline - which §9.2's write path already
+     * used - is what makes a TFM loop safe against a read-triggered port.
+     * 681 KiB/s -> 537. gal/storage/census.ts is the derivation, and it also
+     * says why the buffered card was never the 14 this table claimed: its
+     * logic is four GAL22V10s, not two. */
+    title: "Storage", length: 120, ics: 8, source: "storage/docs/sdcard.md 8",
+    note: "SD over SPI, 537 KiB/s",
     rear: [{ w: 33, h: 26, label: "SD socket", kind: "conn" },
            { w: 27, h: 13, label: "3V3 LDO", kind: "analog" }],
     parts: [
       dip(24, 0.3, "GAL22V10", "pld", 2),
-      dip(24, 0.6, "6116 block buffer", "mem"),
       dip(16, 0.3, "74HCT595 MISO", "bus"),
       dip(16, 0.3, "74HC165 MOSI", "bus"),
       dip(20, 0.3, "74HC574 hold", "bus"),
       dip(16, 0.3, "74HC163 burst", "glue"),
       dip(14, 0.3, "74HC393 divider", "clk"),
       dip(14, 0.3, "74LVC125 3V3", "bus"),
-      dip(16, 0.3, "74HC4040 blkaddr", "glue"),
-      dip(16, 0.3, "74HC157 addr mux", "bus", 3),
-      dip(20, 0.3, "74HCT245 data", "bus"),
     ],
   },
   io: {

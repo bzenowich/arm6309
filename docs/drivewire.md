@@ -25,7 +25,7 @@ already exists on paper (`io/serial/`), the software does not, and §7 is the or
 | **What it is** | NitrOS-9's virtual-disk protocol: the machine asks a host PC for 256-byte sectors over a serial link, and the host serves them out of `.dsk` images |
 | **Hardware cost** | **zero ICs.** It is the I/O card's serial half (`io/serial/docs/serial.md`), a null-modem cable, and nothing else |
 | **⭐ Which part decides everything** | **`serial.md` §4.5's `16C550`, and it was taken on 2026-09-09.** At 19,200 baud a 256-byte sector takes 145 ms and DriveWire is a curiosity; at 115,200 it takes 24 ms and it is a working disk. **This document was the strongest single argument for that decision**, and `serial.md` §9.1 then found the tier cost no packages at all |
-| **Throughput** | **~11.0 KiB/s** at 115,200 baud, ~22 KiB/s at 230,400 — against `sdcard.md`'s **681 KiB/s**, so **62× slower** and it is not a storage answer |
+| **Throughput** | **~11.0 KiB/s** at 115,200 baud, ~22 KiB/s at 230,400 — against `sdcard.md`'s **537 KiB/s**, so **49× slower** and it is not a storage answer |
 | ⭐ **What only it can do** | **give the machine a wall clock.** There is no RTC anywhere in this design — not on the motherboard, not on a card, not in the CPU module. `OP_TIME` returns the host's date and time for **zero parts**, and NitrOS-9 already asks for it |
 | **⚠ What changed** | **it is no longer the boot path.** §1's 1 MB boot ROM holds NitrOS-9, so the machine boots standalone. DriveWire becomes the **development** link — the thing that gets a *new* system onto the machine — which is what it is actually best at |
 | **Software cost** | a NitrOS-9 `dwio`-class low-level driver plus the `RBF` descriptors, and a boot-ROM loader for the bare-metal case. **Nobody has looked at whether the CoCo drivers port** — §8 item 1, and ⚠ the part change makes `serial.md`'s `sc6551` question the *same* question |
@@ -51,7 +51,7 @@ system**, and that is a better job for it:
 | | boot ROM | **DriveWire** | SD card |
 |---|---|---|---|
 | Boots a bare machine | **yes** | needs a client already running | needs a driver already running |
-| Read speed | bus speed | 11 KiB/s | **681 KiB/s** |
+| Read speed | bus speed | 11 KiB/s | **537 KiB/s** |
 | **Writable** | no — it is ROM | **yes, and the media is a file on your desk** | yes |
 | **Changes without a programmer** | no | **yes** | yes, if you have a card reader |
 | Gives the machine the time of day | no | **yes** | no |
@@ -125,7 +125,7 @@ along.
 A `OP_READEX` sector is **261 bytes on the wire in one direction and 6 in the other**,
 plus one host turnaround. At 8N1 a byte is 10 bit times.
 
-| Baud | Byte time | 256-byte sector | **Sustained** | vs `sdcard.md`'s 681 KiB/s |
+| Baud | Byte time | 256-byte sector | **Sustained** | vs `sdcard.md`'s 537 KiB/s |
 |---|---|---|---|---|
 | 19,200 — the 6551 this card no longer has | 521 µs | **145 ms** | **1.8 KiB/s** | 388× slower |
 | 38,400 | 260 µs | 72 ms | 3.5 KiB/s | 194× |

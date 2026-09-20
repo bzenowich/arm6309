@@ -1,29 +1,37 @@
 # Mass Storage for an arm6309 Machine
-## An SD Card at 681 KiB/s, and the `TFM` Hazard It Stopped Having
+## An SD Card at 537 KiB/s, and the `TFM` Hazard It Mitigates
 
 **Question this answers:** the `$FF` map has reserved eight bytes for "a disk controller"
 since [`graphics.md`](../../video/docs/graphics.md) §17, and nobody has ever said what that
 controller is. [`machine.md`](../../docs/machine.md) §3 allocates every other byte in
 the window. What goes in those eight, and how fast can a 6309 pull data through it?
 
-**Short answer: a shift register, a self-resetting burst counter, and a block buffer the
-host reads as memory.** The SPI engine is NormalLuser's BE6502 SD interface — **the read
-strobe itself triggers the next 8-clock SPI burst** — so there is no software SPI anywhere
-on the card; on a 6502 that alone gives 130 KiB/s through an unrolled `LDA`/`STA` loop.
-Here the engine also fills a 2 KB SRAM by itself — 512 bursts per block, 326 µs, into one
-of four buffers in the card's 64 KB region at `A20 = 1` (§3.5) — and the 6309 copies the
-block out with **`TFM X+,Y+`** at three cycles a byte: **681 KiB/s sustained**, with the
-SD card never waited on (§5.2). What a `CMD17` per block sees is far lower, because a
-block does not begin until the card has found it — §5 and §9.1.1.
+**Short answer: a shift register, a self-resetting burst counter, and thirty-two bytes of
+masked `TFM`.** The SPI engine is NormalLuser's BE6502 SD interface — **the read strobe
+itself triggers the next 8-clock SPI burst** — so there is no software SPI anywhere on the
+card; on a 6502 that alone gives 130 KiB/s through an unrolled `LDA`/`STA` loop. Here the
+6309 pulls the block through the same port with **`TFM X,Y+`** in 32-byte chunks with
+interrupts masked (§4.4): **537 KiB/s**, four times the BE6502 and on eight ICs. What a
+`CMD17` per block sees is far lower, because a block does not begin until the card has
+found it — §5 and §9.1.1.
 
-**⚠ The `TFM` hazard is retired, not mitigated — and that is a property of the design,
-not a fix bolted onto it.** `TFM` is the 6309's only interruptible instruction, and on
-resume it **re-reads the source address**. Against RAM that is idempotent. Against a port
-whose read pops a byte, it silently loses one and shifts the rest of the block. This
-card's block path never runs `TFM` against a port: the buffer is memory, and a re-read of
-memory returns the same byte (§4). What still faces the port is §9.0's byte-at-a-time
-initialisation and §9.2's write path — §4 states the hazard in full, because the write
-path's mirror image of it is still open (§13 item 6).
+**⚠ The `TFM` hazard is mitigated, not retired, and §4.4's chunk-and-mask is the
+discipline on both directions.** `TFM` is the 6309's only interruptible instruction, and
+on resume it **re-reads the source address**. Against RAM that is idempotent. Against a
+port whose read pops a byte, it silently loses one and shifts the rest of the block.
+Masking `/IRQ` and `/FIRQ` across each 32-byte chunk makes the instruction atomic and the
+hazard unreachable, for 21 % of the unchunked rate and 49 µs of added interrupt latency.
+The read path and §9.2's write path now run the same loop — which is what closed the
+inconsistency §13 item 6 booked. §4 states the hazard in full; §11.6 is how the 21 %
+comes back.
+
+**The logic is built and checked.** `hardware/gal/storage/sdbus.jedec.ts` and
+`sdeng.jedec.ts` are the two `GAL22V10` term lists, `storage.check.ts` is **24 claims**
+against them — the decode swept over all 8,192 input combinations, the burst engine driven
+with the `'163` and `'393` modelled as the board wires them, and both parts compared
+against Atmel's CUPL — and `gal/verilog/storage_card.v` is these eight packages as a
+Verilog board. What is *not* built is the physical board, the NitrOS-9 driver, and every
+number in §5 measured rather than derived: §12 is the order.
 
 **Constraints taken as given (yours):**
 - **Parts available before 1990.** Programmable logic is in — GALs, and CPLDs where a GAL will not carry the design (root `README.md`).
@@ -31,9 +39,11 @@ path's mirror image of it is still open (§13 item 6).
   register map, and an honest IC count.
 
 **Units.** Every rate in this document is **KiB/s = 1024 bytes/s**, and is written `KiB/s`.
-The headline figure in decimal is 681 KiB/s = **697 kB/s**. `modplayer.md` §4.4's
-"~700 k writes/s" is decimal and is the *same* 3-cycle rate — 699,306 B/s = **683 KiB/s** —
-so the two documents agree.
+The headline figure in decimal is 537 KiB/s = **551 kB/s**. `modplayer.md` §4.4's
+"~700 k writes/s" is decimal and is the *unchunked* 3-cycle rate — 699,306 B/s =
+**683 KiB/s**, which §4.4's last table row quotes as 680 from a rounded 3.01 cycles/byte.
+That is what §11.6 would give this card back; the chunking is the difference between it
+and 537.
 
 > ⚠ **One rule is broken here and cannot be argued back.** An SD card is **1999**. §10
 > makes the case that the *circuit* is period-legal and only the *media* is not — the same
@@ -50,38 +60,34 @@ so the two documents agree.
 | Question | Answer | § |
 |---|---|---|
 | **How is SPI generated?** | **A shift register and a self-resetting 8-clock burst counter.** No bit-banging, no SPI peripheral. | §3.1 |
-| **Where do the bytes land?** | **In a 2 KB SRAM the host addresses as memory** — four 512-byte block buffers in the card's 64 KB region at `A20 = 1`. | §3.5, §6.5 |
-| **What drives a block transfer?** | **A 9-bit address counter and a "fill" bit.** The host writes a command; the engine runs 512 bursts by itself and raises a status bit. | §3.5 |
-| **What about `TFM`'s interrupt re-read?** | **Retired, not mitigated.** The host copies RAM → RAM, and a re-read of RAM is idempotent (§4.2). **No chunking, no masking.** | §4 |
-| **Is `TFM` settled, then?** | **Not for the machine** — `SDDATA` is still a side-effecting port and §9.0's initialisation still uses it. But **no bulk transfer in this machine runs over a port**, so the silicon capture decides a single-byte question. | §4.5 |
-| **Read rate, intra-block** | **681 KiB/s** — the unchunked `TFM`, which is the only kind. | §5.1 |
-| **Read rate, sustained** | **681 KiB/s** with `CMD18` multi-block and double buffering: the SPI engine fills a buffer in 326 µs while the host copies the previous one in 735 µs, so **the host is the bottleneck and the card never waits on the SD card at all.** | §5.2 |
-| **Write rate** | 681 KiB/s of *transfer*, but the card's program time bounds the sustained rate to **126–408 KiB/s**, and to **~63 KiB/s** for a 256-byte `RBF` sector that needs read-modify-write. | §5.3, §9.2, §9.4.1 |
+| **Where do the bytes land?** | **Straight onto `D0`–`D7`**, out of the `'595`'s storage register, one byte per bus read. There is no buffer and no card-side memory. | §3.1, §8 |
+| **What drives a block transfer?** | **The bus read strobe itself.** A `TFM` loop reads the port 512 times; each read returns byte N and arms the burst that fetches byte N+1. | §3.1, §9.1 |
+| **What about `TFM`'s interrupt re-read?** | **Mitigated: 32-byte chunks with `/IRQ` and `/FIRQ` masked**, which makes each chunk atomic. 49 µs of added interrupt latency, 21 % of the unchunked rate. | §4.4 |
+| **Is `TFM` settled, then?** | **No, and it is worth 21 % again.** §12 step 1's capture decides whether the masking can come out of either path; §11.6 is the other way to the same place. | §4.4, §11.6 |
+| **Read rate, intra-block** | **537 KiB/s** — the 32-byte chunked `TFM`, at 3.81 cycles a byte. | §5.1 |
+| **Read rate, sustained** | **537 KiB/s** with `CMD18` multi-block: the card's read-ahead collapses the inter-block gap to a few byte times, so the `TFM` loop is the whole story and the ceiling *is* the sustained rate. | §5.2 |
+| **Write rate** | 537 KiB/s of *transfer*, but the card's program time bounds the sustained rate to **126–408 KiB/s**, and to **~63 KiB/s** for a 256-byte `RBF` sector that needs read-modify-write. | §5.3, §9.2, §9.4.1 |
 | **Which cards?** | **SDHC/SDXC only.** Block addressing, fixed 512-byte blocks, no SDSC byte-address branch to get silently wrong. | §9.0 |
 | **What happens on an error?** | R1 checked, error tokens decoded, three timeouts specified, card-change polled on the VBL tick. | §9.3 |
-| **Address cost** | **Four bytes at `$FF58`–`$FF5B`, plus one 64 KB physical region at `A20 = 1`** of which 2 KB is used. | §6.1 |
-| **IC count** | **14**, plus a 3.3 V regulator and the socket. | §8 |
+| **Address cost** | **Four bytes at `$FF58`–`$FF5B`, and no physical address space at all.** | §6.1 |
+| **IC count** | **8**, plus a 3.3 V regulator and the socket. | §8 |
 
-**Net: 14 ICs**, against video's 27, audio's 31, net's 12, PS/2's 11 and serial's 3.
+**Net: 8 ICs**, against video's 33, audio's 35, I/O's 14 and net's 12 — the machine's
+smallest card.
 
-> ⚠ **Half of this card is the buffer's plumbing, and each of those packages buys exactly
-> one thing.** A `6116` for the buffer, a `74HC4040` for the block address, a `74HCT245`
-> for the data path, and three `74HC157`s to mux the address between the engine's counter
-> and the backplane — the price of the buffer being memory rather than a port, and the
-> same price [`../../net/`](../../net/) pays for the same reason.
->
-> The one-package alternative is an `ATF1508AS` absorbing the counter, the mux and both
-> `GAL22V10`s — an **8-IC card against 14**. The no-CPLD house rule that once blocked it
-> is retired (root `README.md`), so nothing rules it out; **it is not taken**, because
-> this card's logic fits two GALs comfortably, so a CPLD here buys packages rather than
-> capability. §8.1 weighs it; §13 item 12 carries it.
+> ⚠ **Two `GAL22V10`s, and it is PINS that says two rather than macrocells.**
+> `hardware/gal/storage/census.ts` counts the pins every net needs and searches every
+> partition of the card's logic. This card fits two parts — `dec+stat` at 22 pins with
+> none spare, `ctrl+eng` at 18 with four — and those two are `sdbus` and `sdeng`, which
+> exist. **The same search says the memory-mapped variant needs four**, because its region
+> decode alone is sixteen pins, which would have made that card 16 ICs rather than the 14
+> it claimed. §8.1.
 
-**Compatibility with fast-E (`machine.md` §1's ÷8 rate): passes, and easily.** The SPI
-burst races nothing on the CPU side, because the engine fills the buffer autonomously and
-the host reads SRAM. What constrains the card is `machine.md` §5 item 7's bus schedule,
-which is a ÷12 schedule (§3.5); the tightest software margin, the six-byte command send,
-is 3× at ÷12 and 2× at fast-E (§6.5). Every rate in this document is quoted at the
-specified ÷12 `E` = 2.0979 MHz.
+**Compatibility with fast-E (`machine.md` §1's ÷8 rate): passes.** The card delivers a
+byte faster than the 6309 can take one — a 636 ns burst against a 1430 ns `TFM` read
+interval at ÷12 `E`, **2.25× margin**, and **1.5×** at the ÷8 fast-E rate (§3.3). The
+tightest software margin is the six-byte command send, 3× at ÷12 and 2× at fast-E (§6.5).
+Every rate in this document is quoted at the specified ÷12 `E` = 2.0979 MHz.
 
 ---
 
@@ -91,7 +97,7 @@ specified ÷12 `E` = 2.0979 MHz.
 |---|---|---|
 | The read-triggers-next-burst topology; the self-resetting 8-clock generator; ~130 KB/s at 5 MHz (the source's own decimal figure; 127 KiB/s) | **NormalLuser, *BE6502 Fast SD Card Interface*** — <https://github.com/NormalLuser/BE6502-Fast-SD-Card-Interface> | **read directly**; a working, measured design |
 | `TFM` has four forms including `TFM r0,r1+` (fixed source, incrementing destination); `W` holds the count; 3 cycles/byte | HD63B09EP Technical Reference Guide; this repo's own `plan.md` §4.3 and `modplayer.md` §4.4 | **corroborated**, and already load-bearing elsewhere in this project |
-| **`TFM` is interruptible, uses a one-byte internal cache, and re-reads the source address on resume** | HD63B09EP Technical Reference; *A Memo on the Secret Features of 6309* | ⚠ **community documentation, not silicon. §13 item 1; §4's statement of the hazard and §9.2's write-path caveat rest on it.** |
+| **`TFM` is interruptible, uses a one-byte internal cache, and re-reads the source address on resume** | HD63B09EP Technical Reference; *A Memo on the Secret Features of 6309* | ⚠ **community documentation, not silicon. §13 item 1; §4's statement of the hazard, §9.1's read path and §9.2's write-path caveat all rest on it.** |
 | SD SPI mode: ≤400 kHz until initialised, then up to 25 MHz; ≥74 clocks with `CS` high at power-up; `FE` data token; 2 CRC bytes per block | SD Simplified Specification, recalled | ⚠ **no SD specification in `reference/` — §13 item 2** |
 | Initialisation dialog: `CMD0` with `CS` low and CRC `$95`; `CMD8` with CRC `$87` and check-pattern echo; `ACMD41` with `HCS`; `CMD58`/`CCS`; `CMD16` for SDSC only | SD Simplified Specification, recalled | ⚠ §13 item 2 — **§9.0 is entirely recalled and must be re-derived from the spec** |
 | Write protocol: `$FE` start token, 2 CRC bytes, data-response token `xxx00101`, then `DO` held low for the program time | SD Simplified Specification, recalled | ⚠ §13 item 2 |
@@ -102,8 +108,9 @@ specified ÷12 `E` = 2.0979 MHz.
 | NitrOS-9 interrupt dispatch cost | ⚠ guessed, as in `ps2.md` §3.1 and `serial.md` §5 | **unverified — the same measurement again** |
 
 **`plan.md` §7's risk table already lists "`TFM` interruptibility subtleties" as needing
-"dedicated vectors from silicon capture."** This card's write path is a second thing
-depending on the answer, and moves it up the queue. §13 item 1.
+"dedicated vectors from silicon capture."** Both of this card's bulk paths depend on the
+answer — it is what decides whether §4.4's masking can come out, which is 21 % of the read
+rate — and that moves it up the queue. §13 item 1.
 
 ---
 
@@ -112,13 +119,13 @@ depending on the answer, and moves it up the queue. §13 item 1.
 | Need | Rate | Notes |
 |---|---|---|
 | Boot NitrOS-9 Level 2 | — | the machine's success criterion, inherited from `plan.md` |
-| Load a program | as fast as possible | 30 KB in 44 ms at §5's rate |
-| **Upload 128 KiB of mod samples** | the interesting one | `modplayer.md` §4.4 already streams these to the audio card with `TFM X+,Y` at 3 cycles a byte = **683 KiB/s**. Storage sustains **681 KiB/s** multi-block — the disk keeps pace with the audio card and is not the bottleneck. With a `CMD17` per block it is **253 KiB/s** and the disk is firmly the bottleneck again. §5.2, §9.1.1. |
+| Load a program | as fast as possible | 30 KB in 56 ms at §5's rate |
+| **Upload 128 KiB of mod samples** | the interesting one | `modplayer.md` §4.4 already streams these to the audio card with `TFM X+,Y` at 3 cycles a byte = **683 KiB/s**. Storage sustains **537 KiB/s** multi-block — 79 % of that, so the disk is the slower half by a small margin. With a `CMD17` per block it is **253 KiB/s** and the disk is firmly the bottleneck. §5.2, §9.1.1. |
 | Stream audio or video off the media | sustained | possible, with the §9.1.1 caveat |
 | Removable media a modern host can also write | — | which is the whole reason this is not a floppy controller |
 
 That third row is the one that shaped this design. A floppy at 30.5 KiB/s (§11.2) turns a
-128 KiB sample upload into a **4.2-second** wait; this turns it into **193 ms** — but only
+128 KiB sample upload into a **4.2-second** wait; this turns it into **238 ms** — but only
 with `CMD18`. The same upload issued as 256 separate `CMD17`s takes **505 ms**, more than
 twice as long, for reasons that are nothing to do with the SPI clock. §5.2, §9.1.1.
 
@@ -166,17 +173,19 @@ Two details from that design are worth taking verbatim:
 **Drop the VIA.** NormalLuser reaches the shift register through a 6522's Port A because a
 6522 was already on the Ben Eater board — the design is visibly shaped by what was free
 ("unused gates repurposed from the VGA interface"). We put the `'595`'s three-state output
-straight onto the buffer's local data bus (§3.5), and save the VIA's sixteen addresses,
-which §6.1 shows we do not have.
+straight onto the backplane's `D0`–`D7`, enabled by the `SDDATA` read decode (`OE595`, and
+⚠ **not** the same term as the burst trigger — a *write* to `SDDATA` also triggers a burst
+and the `'595` must not drive the bus the CPU is driving), and save the VIA's sixteen
+addresses, which §6.1 shows we do not have.
 
 **And then the instruction changes everything.** The 6502 needs an unrolled `LDA`/`STA`
 loop, 10–12 cycles a byte. The 6309 has **`TFM`** — a block move at 3 cycles a byte, one
 instruction for "move this block". `modplayer.md` §4.4 streams samples *to* the audio card
 with the fixed-destination form `TFM X+,Y` at exactly that rate — **683 KiB/s**, which
-`modplayer.md` quotes decimally as "~700 k writes/s". This card's block copy is
-`TFM X+,Y+` out of §3.5's buffer (§4.5, §5.1). §4 is about why the obvious alternative —
-`TFM X,Y+`, with the data port itself as the fixed source — is the one form this machine
-must never use for bulk data.
+`modplayer.md` quotes decimally as "~700 k writes/s". This card's block read is the mirror
+image, `TFM X,Y+` with the port as the fixed source — **and that is the one form whose
+safety does not come for free.** §4 is why, and §4.4 is the discipline that makes it safe
+for 21 % of the rate.
 
 ### 3.3 The clock budget
 
@@ -187,24 +196,39 @@ card phase-lock to video"), so the card needs no oscillator of its own.
 |---|---|
 | Transfer clock | 25.175 / 2 = **12.588 MHz** — inside SD's 25 MHz ceiling with margin |
 | One 8-clock burst | **636 ns** |
-| Engine fill, 512 bursts | **326 µs** per block (§3.5) |
-| Host copy, `TFM X+,Y+` at ÷12 `E` | 3 `E` cycles/byte = 1430 ns → **735 µs** per block |
+| `TFM` read interval, ÷12 `E` (**specified**) | 3 `E` cycles = **1430 ns** |
+| **Margin, ÷12** | **2.25×** |
+| `TFM` read interval, ÷8 fast-E (**experimental**) | 3 `E` cycles = **953 ns** |
+| **Margin, fast-E** | **1.5× — still passes** |
 | Init clock | 25.175 / 64 = **393 kHz** — inside SD's 400 kHz init ceiling |
 | One burst at init speed | 20.4 µs = 43 `E` cycles — **must be polled**, §6.3 |
 
-**The engine fills a buffer 2.25× faster than the host empties one**, which is what makes
-§5.2's double buffering work. The tightest software margin at speed is not a block
-transfer at all but the six-byte command send — a 3× margin, §6.5. There is no `/WAIT`
-path, no FIFO, and no busy-polling in the fast path. The `÷2`/`÷64` selection is one
-control bit and one divider package.
+**The card delivers a byte faster than the 6309 can take one.** So there is no `/WAIT`
+path, no FIFO, and no busy-polling in the fast loop — which is what makes a bare `TFM`
+possible at all. The chunking of §4.4 only lengthens the interval, so 3 cycles is the
+tightest case and the margins above are the worst ones. The tightest *software* margin is
+not a transfer at all but the six-byte command send — 3×, §6.5. The `÷2`/`÷64` selection
+is one control bit and one divider package.
 
 **The `'393` is a ripple counter**, and its `÷2` and `÷64` taps are therefore in no fixed
-phase relationship with one another. Switching the speed-select bit muxes between two
-asynchronous clocks and can emit a **runt `SCK` pulse** — a clock edge the card sees but
-does not resolve, after which the host and the card disagree about the bit position for the
-rest of the session, silently. **Rule: change the `SCK` rate only with `/CS` high and `BUSY` low**,
+phase relationship with one another. A combinational mux between two asynchronous clocks
+can emit a **runt `SCK` pulse** — a clock edge the card sees but does not resolve, after
+which the host and the card disagree about the bit position for the rest of the session,
+silently.
+
+⭐ **The design deletes that hazard, and it falls out of a constraint rather than a fix.**
+**Everything on `sdeng` is clocked by `CLK25` and the SPI clock is an enable**, because a
+`GAL22V10` has one clock pin and a part holding both `SDCTRL` (written at `E` rate) and
+the burst counter (running at SPI rate) cannot clock both — and clocking `SDCTRL` off a
+393 kHz tap would miss a 238 ns write strobe outright. Both taps come off the `'393`,
+which counts `CLK25`, so both are `CLK25`-domain signals and edge-detecting them costs one
+macrocell. `BUSY` then only ever changes on the SPI clock's **falling** edge, so `SCK`'s
+high phases are whole ones whatever the mux is doing.
+
+**The rule is kept anyway: change the `SCK` rate only with `/CS` high and `BUSY` low**,
 and follow the change with eight dummy clocks (one `SDDATA` read) before asserting `/CS`.
-§9.0 step 8 is the only place in the machine that does this.
+A card in the middle of a command does not care whose fault an extra edge was. §9.0 step 8
+is the only place in the machine that does this.
 
 ### 3.4 Two bus-level checks that pass
 
@@ -228,45 +252,25 @@ paragraph to say it was checked and is absent.
 
 **Burst versus read strobe.** The burst is triggered by the read strobe and the `'595`'s
 storage register is what gets read, so the byte presented is stable for the whole cycle
-regardless of what the shift register is doing behind it. The `RCLK` that latches the
-next byte fires at the *end* of the burst, 636 ns later, long after the strobe has gone
+regardless of what the shift register is doing behind it. `RCLK` is held low for the whole
+burst and *released* at its end, so the rising edge that moves the shift register into the
+storage register is `BUSY` falling — 636 ns after the strobe, and long after it has gone
 away. There is no window in which a read returns a half-shifted byte.
+`storage.check.ts` asserts it: one `SDDATA` access is exactly eight `SCK` edges, and the
+storage register is clocked once, at the end.
 
-### 3.5 The block buffer, and the engine that fills it
-
-| | |
-|---|---|
-| **The buffer** | a `6116`, 2K×8, 55 ns — **four 512-byte block buffers** |
-| **Where** | the card's 64 KB region at `A20 = 1`, offsets `$0000`–`$07FF`. `machine.md` §5 item 7: sixteen regions of 64 KB, selected by physical `A19`–`A16` against a four-position jumper, **qualified by `/IOPAGE` high** |
-| **What fills it** | a **`74HC4040` 9-bit address counter** and a `FILL` bit in `SDCTRL`. Setting `FILL` makes the burst engine self-trigger: byte, `/WE`, increment, repeat, 512 times, then clear `FILL` and set `DONE` |
-| **The address mux** | three `74HC157`s. With `FILL` low they select backplane `A8`–`A0` always; with `FILL` high the select follows `machine.md` §5 item 7's phase schedule — the engine's counter in its ticks 0–1 slot, the backplane in the host's window — **so the host reads the buffer as memory even while a fill runs** |
-| **The data path** | one `74HCT245` between the backplane `D0`–`D7` and the buffer's data bus. The `'595`'s outputs are on that local bus, not the slot bus |
-
-**The engine is 326 µs per block and the host is 735 µs**, so with two of the four buffers
-in flight the SD card is never the bottleneck (§5.2): the engine's fill rate and the
-host's copy rate never compete for the same bus.
-
-**Bus arbitration is `machine.md` §5 item 7's fixed schedule and it costs this card
-nothing.** The host owns the buffer in ticks 7–11 of each bus cycle; the engine takes
-ticks 0–1. The engine needs a byte per 636 ns and gets one per 476.7 ns, and its byte
-survives the deferral in the `'595`'s storage register — **which already exists for
-§3.4's reason** and earns its keep twice.
-
-> ⚠ **The `'595` is doing two jobs and neither faces the slot bus.** In the BE6502
-> original — and in any single-glance reading of §3.1's diagram — its three-state output
-> drives the host data bus; here it drives the buffer's local bus, and its `/OE` is the
-> engine's write window rather than a bus-read decode. **This is the single most likely
-> place to get the build wrong**, because the part is unchanged and its wiring is not.
+### 3.5 The block buffer, and the engine that fills it (removed 2026-09-20; see [history.md](history.md))
 
 ---
 
-## 4. The `TFM` hazard, and how this card stopped having one
+## 4. The `TFM` hazard, and the discipline that contains it
 
-> ⚠ **Retired, not mitigated.** The hazard below is real; this card's block path simply
-> does not face it, because the block copy is RAM to RAM (§4.5). §§4.1–4.3 state the
-> problem in full: `net/docs/net.md` §3.2 cites them, §9.2's write path still faces the
-> hazard's mirror image, and `machine.md` §6 keeps the silicon capture as a `cpu`-owned
-> item.
+> ⚠ **Mitigated, not retired, and §4 is the whole document.** Every bulk transfer on
+> this card runs `TFM` against a side-effecting port, in both directions, so the hazard
+> below is one this card faces and answers rather than avoids. §§4.1–4.3 state the problem
+> in full — `net/docs/net.md` §3.2 cites them — and **§4.4 is the answer, on the read path
+> and the write path alike**. `machine.md` §6 keeps the silicon capture as a `cpu`-owned
+> item, and on this card it is now worth 21 % rather than nothing.
 
 ### 4.1 What `TFM` does when interrupted
 
@@ -289,17 +293,18 @@ I/O port":
 | What re-reading the source does | returns the same RAM byte | **pops a byte and arms the next burst** |
 | Result of an interrupt mid-instruction | nothing | **byte lost; the rest of the block shifts by one** |
 
-The audio card's upload path is safe *because* it is the fixed-destination form. Invert the
-direction and the safety inverts with it — which is why this card's block path reads a
-buffer (§4.5) and not the port.
+The audio card's upload path is safe *because* it is the fixed-destination form. Invert
+the direction and the safety inverts with it — and the right-hand column is exactly this
+card's read path, which is why §4.4's masking is not optional on it.
 
 **And the failure is silent.** There is no error bit; the block simply contains the wrong
 bytes from the interruption point onward, and the two CRC bytes at the end are read at the
 wrong offset so they do not catch it either.
 
-**How often?** A 512-byte `TFM` runs for 735 µs. Against the machine's interrupt load —
-video VBL at 70 Hz, the replayer's `/FIRQ` at 50–102 Hz, plus PS/2 and serial, call it
-~200/s — that is **0.15 expected hits per block. Roughly one block in seven.**
+**How often?** An unchunked 512-byte `TFM` runs for 735 µs. Against the machine's
+interrupt load — video VBL at 70 Hz, the replayer's `/FIRQ` at 50–102 Hz, plus PS/2 and
+serial, call it ~200/s — that is **0.15 expected hits per block. Roughly one block in
+seven.** That is the number §4.4's masking exists to make zero.
 
 ### 4.3 Hardware cannot fix this
 
@@ -311,32 +316,41 @@ Worth stating plainly, because the instinct is to design around it:
 - **Not triggering on read** kills `TFM` outright and drops the card to an `LDA`/`STA`
   rate.
 - **A memory-mapped block buffer fixes it completely** — reads become non-side-effecting
-  and `TFM X+,Y+` walks it with no hazard at all. It is the clean answer, **and it is the
-  one taken**: §3.5 is the circuit, §11.1 records the decision.
+  and `TFM X+,Y+` walks it with no hazard at all. It is the clean answer and **it is not
+  taken**: it doubles the card, from 8 packages to 16, because its region decode needs two
+  more `GAL22V10`s on top of six discretes (`gal/storage/census.ts`, §8.1). §11.1 records
+  the decision and its reversal.
+
+**So the answer is software**, and §4.4 is it: masking makes each chunk atomic, and an
+instruction that cannot be interrupted cannot be resumed.
 
 The list above treats the 6309 as a fixed part, and **it is not one**: the CPU is C11
 firmware on an STM32G431 (`machine.md` §0, `plan.md`), so the hazard can also be specified
 *out of the CPU* — resume without re-reading the source. §11.6 prices that option; it is
 the owner's call and this document does not make it.
 
-### 4.4 Chunk-and-mask — retired from the read path, still the write path's discipline
+### 4.4 Chunk-and-mask — the discipline on both paths
 
-Masking interrupts makes a `TFM` atomic; chunking keeps the masked window short. The
-block *read* does not need this — its source is memory (§4.5). **§9.2 step 6's write
-does**, pending §12 step 1's answer on doubled writes, and it is the only place in the
-machine the technique survives:
+Masking interrupts makes a `TFM` atomic; chunking keeps the masked window short. **Both of
+this card's bulk paths run it**: §9.1 step 6's read, where the port is the fixed source
+and a re-read pops a byte, and §9.2 step 6's write, where the port is the fixed
+destination and a doubled write duplicates one. The read direction is
 
 ```
-        ldx   #buffer
-        ldy   #SDDATA
+        ldx   #SDDATA              ; source: the port, not advanced
+        ldy   #buffer              ; destination: advanced every byte
         ldb   #16                  ; 16 chunks of 32
 Chunk   orcc  #$50                 ; mask IRQ and FIRQ
         ldw   #32
-        tfm   x+,y
+        tfm   x,y+
         andcc #$AF                 ; unmask -- pending interrupts fire here
         decb
         bne   Chunk
 ```
+
+and the write direction is the same loop with `ldx #buffer`, `ldy #SDDATA` and
+`tfm x+,y`. **The two paths being the same loop is the point** — it is what closed the
+asymmetry §13 item 6 booked.
 
 **A masked `/FIRQ` is delayed, not lost**, so the replayer tick survives: 49 µs of latency
 against `modplayer.md`'s 20 ms tick period is 0.25 %, and the tick's own work is ~2,200
@@ -349,103 +363,72 @@ cycles of a 41,960-cycle budget. The choice of chunk size is a straight trade:
 | 64 B | 3.41 | 601 | 94 µs |
 | 512 B (unchunked) | 3.01 | 680 | **735 µs — and, against a port, one block in seven corrupt** |
 
-**Specify 32.** 49 µs is below anything else in the machine that cares, and `machine.md`
-§4's interrupt-latency table carries it. These are *intra-block* figures — what a `TFM`
-loop achieves once the transfer is under way; the unchunked 3.01-cycle row is the read
-path's rate (§5.1), reached without masking because the source is memory.
+**Specify 32.** 537 KiB/s is still four times the BE6502, and 49 µs is below anything else
+in the machine that cares — `machine.md` §4's interrupt-latency table carries it. These
+are *intra-block* figures: what a `TFM` loop achieves once the transfer is under way. The
+32-byte row is this card's rate on both paths (§5.1); the unchunked 680 KiB/s row is what
+§11.6 would give back.
 
-> **With the masking in place the write path is safe whatever §12 step 1's capture says;
+> **With the masking in place both paths are safe whatever §12 step 1's capture says;
 > what the capture decides is whether the masking can come out.** And its answer is an
 > input to an implementation choice (§11.6), not a constraint handed down by silicon.
-> Three outcomes, not two: silicon re-reads and we match it (the write path stays
-> chunked); silicon does not re-read (the masking goes, for free); silicon re-reads and we
-> deliberately diverge (the masking goes, and a divergence goes in the ledger `machine.md`
-> §5 item 6 keeps). **Measure before writing the driver, not after** — §12 step 1.
+> Three outcomes, not two: silicon re-reads and we match it (the loops stay chunked);
+> silicon does not re-read (the masking goes, for free, and the card is 680 KiB/s);
+> silicon re-reads and we deliberately diverge (the masking goes, and a divergence goes in
+> the ledger `machine.md` §5 item 6 keeps). **Measure before writing the driver, not
+> after** — §12 step 1.
 
-### 4.5 The block path: RAM to RAM
-
-The hazard was never about `TFM`. It was about **a port whose read has a side effect**,
-and §4.2 already contains the answer: against RAM, a re-read is idempotent. §3.5's buffer
-is RAM. The block read is
-
-```
-        ldx   #buffer_in_card    ; the card's block buffer, mapped through the MMU
-        ldy   #dest
-        ldw   #512
-        tfm   x+,y+              ; no masking, no chunking, no 21 %
-```
-
-and an interrupt landing anywhere inside it re-reads a memory location and gets the same
-byte back. **The unchunked copy is 21 % faster than the chunked one** — 681 KiB/s against
-537 (§4.4's table, §5.1).
-
-**Three things this does not do:**
-
-1. **It does not settle `TFM` for the machine.** `SDDATA` (§6.2) is still a read-triggered
-   port and §9.0's initialisation drives the card through it a byte at a time.
-   Single-byte reads are not `TFM` loops, so the exposure is gone in practice — but
-   `machine.md` §6's capture is still owed, and §11.6's option to specify the hazard out
-   of the CPU is still on the table for its own reasons.
-2. **It does not remove the phantom-read requirement.** §3.4's rule — the core drives
-   `$FFFF` on every dead cycle — still protects `SDDATA`. The buffer does not need it.
-3. **It does not help the write path.** §9.2 still pushes 512 bytes out through the port…
-   ⚠ **and it should not have to.** The buffer is bidirectional and the engine can drain
-   it as easily as fill it; `SDCTRL` would need a direction bit and the write path becomes
-   symmetric. **This document specifies the read path against the buffer and leaves the
-   write path on the port**, which is an inconsistency, not a design — §13 item 6.
+### 4.5 The block path: RAM to RAM (dropped 2026-09-20; see [history.md](history.md))
 
 ---
 
 ## 5. Transfer rates
 
 Three different numbers get called "the rate" — and two of them are the same number,
-which is the clearest sign the buffer is the right shape.
+because the card's read-ahead makes the gap between blocks vanish and leaves the `TFM`
+loop as the whole story.
 
 ### 5.1 The intra-block ceiling
 
-**681 KiB/s.** A `TFM X+,Y+` of 512 bytes from the card's buffer into system RAM, at
-3.01 cycles/byte against `E` = 2.0979 MHz: 735 µs a block.
+**537 KiB/s.** A `TFM X,Y+` of 512 bytes out of `SDDATA` into system RAM, in 32-byte
+masked chunks at 3.81 cycles/byte against `E` = 2.0979 MHz: **931 µs a block**.
 
-**Nothing about the SPI side sets this number.** The engine fills the buffer on its own
-clock and the host reads memory; the two rates never compete, which is what §5.2 is about.
+**Nothing about the SPI side sets this number.** A burst is 636 ns and the `TFM` asks for
+a byte every 1430 ns at worst (§3.3), so the card is always ready first; what sets the
+rate is the instruction, and §4.4's chunking is 21 % of it.
 
-### 5.2 Sustained read: the host, and nothing else
+### 5.2 Sustained read: the `TFM` loop, and the command in front of it
 
 | | per 512-byte block | |
 |---|---|---|
-| SPI engine fills a buffer | **326 µs** | 512 × 636 ns |
-| host copies a buffer | **735 µs** | 512 × 1435 ns |
-| **sustained, `CMD18` + double buffering** | **735 µs → 681 KiB/s** | **the host is the bottleneck** |
+| `TFM` loop, 32-byte chunks | **931 µs** | 512 × 1816 ns |
+| the `$FE` token, block *n+1* of a `CMD18` run | a few byte times | the card's read-ahead already has it |
+| **sustained, `CMD18`** | **931 µs → 537 KiB/s** | **the intra-block ceiling *is* the sustained rate** |
 
-**With four buffers (§3.5) and `CMD18` READ_MULTIPLE_BLOCK, the SD card is never waited
-on.** It streams into buffer *n+1* while the host copies buffer *n*, and it finishes
-2.25× before the host does.
+**`CMD18` is what makes that true.** A `CMD17` per block pays the card's ~1 ms
+read-access latency 256 times per 128 KiB instead of once, and nothing on the card hides
+a command that has not been sent: **253 KiB/s** — §9.1.1. The distance between 537 and
+253 is entirely which command the driver issues.
 
-**`CMD18` is still what makes the number real.** A `CMD17` per block pays the card's
-~1 ms read-access latency 256 times per 128 KiB instead of once, and no amount of
-buffering hides a command that has not been sent: **253 KiB/s** — §9.1.1.
-
-**128 KiB of mod samples** arrive in **193 ms**, against the 187 ms the audio card needs
-to swallow them (`modplayer.md`) — a 6 ms gap.
+**128 KiB of mod samples** arrive in **238 ms**, against the 187 ms the audio card needs
+to swallow them (`modplayer.md`) — a 51 ms gap, and the disk is the slower half.
 
 ### 5.3 Sustained write: the program time, not the clock, is the story
 
 The bound is not the transfer: the card holds `DO` low while it programs, and §9.2's busy
-phase is what sets **126–408 KiB/s**. The transfer half is 681 KiB/s, which is not the
-story.
-
-⚠ **The write path is still on the port** (§4.5 item 3), so it still pays §4.4's masking
-tax in the form the buffer exists to delete — §13 item 6.
+phase is what sets **126–408 KiB/s**. The transfer half is 537 KiB/s, which is not the
+story — and it is why §4.4's 21 % costs the write path almost nothing in practice.
 
 ---
 
 ## 6. Register map
 
-### 6.1 Placement — four bytes, and one region
+### 6.1 Placement — four bytes, and nothing else
 
 **`$FF58`–`$FF5B`, four bytes**, from the eight `graphics.md` §17 reserved for a disk
-controller — **plus one 64 KB physical region at `A20 = 1`** (`machine.md` §5 item 7), of
-which this card uses 2 KB.
+controller — **and no physical address space at all**. The card's whole footprint in the
+machine is those four bytes: no region at `A20 = 1`, no jumper, no `/IOPAGE`
+qualification, and nothing on `machine.md` §5 item 7's bus schedule.
 
 | Window | Size | Owner |
 |---|---|---|
@@ -461,15 +444,15 @@ An SPI port needs four registers where the WD1773 the reservation was sized for 
 plus a latch, so half the eight-byte reservation went spare; `net/docs/net.md` §5.1 holds
 it. The geographic decode is `$FF00`–`$FF7F`.
 
-> ⚠ **Two consequences for this card, and the first one is a bug if it is missed.**
+> ⚠ **One consequence, and it is a bug if it is missed. The decode is `A0`–`A6`, seven
+> bits.** `/IOSEL` is `/IOPAGE & /A7`, so `A7` comes free and `A6`–`A2` are ours:
+> `$58` = `0101_1000`. A card matching only `A0`–`A5` answers at `$FF58` **and** at
+> `$FF18`, which is inside the machine's free space and would be found by the next card to
+> take it, not by us.
 >
-> - **The decode is `A0`–`A6`, seven bits.** `A6` is not in the window strobe, so a card
->   matching only `A0`–`A5` answers at `$FF58` **and** at `$FF18`.
-> - **The region base is a second jumper**, four positions against physical `A19`–`A16`,
->   and the region decode is qualified by **`/IOPAGE` high** — a buffer is a
->   physical-memory decode and `machine.md` §2's rule is not optional for it. ⭐ `/IOPAGE`
->   also silences the card above 2 MB, for nothing: the map is 32 MB and `A21`–`A24`
->   never leave the motherboard — `machine.md` §2.
+> ⭐ **This is now a checked claim, not a warning.** `sdbus` carries the `A6` literal in
+> every term and `storage.check.ts` sweeps the decode over all 8,192 input combinations,
+> asserting among other things that the card is **silent at `$FF18`–`$FF1B`**.
 
 ### 6.2 The registers
 
@@ -478,29 +461,32 @@ it. The geographic decode is `$FF00`–`$FF7F`.
 | `+$0` | `SDDATA` | R | the byte from the **previous** burst; **the read triggers the next** |
 | `+$0` | `SDDATA` | W | load the MOSI hold register **and** trigger a burst |
 | `+$1` | `SDSTAT` | R | §6.3 |
-| `+$2` | `SDCTRL` | W | b0 `/CS`, b1 clock rate, **b2 `FILL`**, **b3 `BUF[1:0]` low**, **b4 `BUF[1:0]` high**, b7 soft reset. **`$00` is the safe state and is what `/RESET` forces** — §6.4 |
+| `+$2` | `SDCTRL` | W | b0 `/CS`, b1 clock rate, b7 soft reset; b2–b6 are not implemented. **`$00` is the safe state and is what `/RESET` forces** — §6.4 |
 | `+$3` | `SDMOSI` | W | load the MOSI hold register *without* triggering a burst |
 
-**`SDDATA` is the slow path**, used by §9.0's initialisation and §9.1's command phase —
-the six command bytes, the R1 response, the data token poll. It is never used for a
-512-byte transfer, which is why §4's hazard does not reach it.
+**`SDDATA` is every byte the card moves**, in both directions: §9.0's initialisation,
+§9.1's command phase — the six command bytes, the R1 response, the data token poll — and
+the 512-byte transfer itself. That last one is why §4.4's chunk-and-mask exists.
 
-**`FILL` is the whole engine.** Writing it with `BUF` selecting one of the four 512-byte
-buffers (§3.5) starts the block: the burst engine self-triggers, the `'4040` counts, and
-512 bytes land in the buffer. `FILL` self-clears at terminal count and `SDSTAT` bit 3
-goes high.
+**b7 is a soft reset.** It clears `BUSY`, and the `'163` with it (§6.4), which is the
+recovery rung §9.3's ladder starts from when a card has been swapped mid-burst. It cannot
+clear `SDCTRL` itself — the GAL's one asynchronous-reset product term is spent on
+`/RESET` — and it does not need to, because writing `$00` is the same instruction.
 
-> ⚠ **`FILL` must not be set with `/CS` high or the clock at 393 kHz.** At init speed a
-> block is 20.4 ms of engine occupancy, and `DONE` does not arrive until it ends. The GAL
-> qualifies `FILL` on the fast-clock bit; **that is one product term and it is not
-> optional**, because the failure is a card that appears to hang.
+**The MOSI hold register persists.** The `'165`'s `SH//LD` is wired to `BUSY`, so while no
+burst is running the shifter tracks the `'574` continuously: software writes `$FF` once
+before a block read and every burst clocks `$FF` out, which is what SD requires of a host
+that is receiving. Writing `SDDATA` again changes it — that is how commands are sent.
 
-**The MOSI hold register persists.** Every burst parallel-loads the `'165` from it, so
-software writes `$FF` once before a block read and every burst clocks `$FF` out, which is
-what SD requires of a host that is receiving. Writing `SDDATA` again changes it — that is
-how commands are sent. **The `'574`'s clock edge must lead the `'165`'s parallel load**, so
-the load is taken from the burst's own first clock rather than from the write strobe;
-otherwise a write to `SDDATA` shifts out the *previous* hold value.
+> ⚠ **`MOSICK` is active low, and the edge is the point.** The `'574` latches on a
+> **rising** edge, so the pin is held low through `E`-high of the write and released at
+> `E`-fall — the same instant `DATSTB` releases. `sdeng` is registered on `CLK25` and
+> takes `DATSTB`'s *falling* edge, so the burst cannot start before the next `CLK25`
+> edge: **the hold register is always loaded before the burst it triggered**, by
+> construction rather than by a race. Get this backwards and a write to `SDDATA` shifts
+> out the *previous* hold value. `storage.check.ts` asserts both halves — that a write to
+> `SDDATA` triggers a burst and loads MOSI while the `'595` stays off the bus, and that
+> `SDMOSI` loads the hold register without a burst.
 
 **`SDMOSI` at `+$3` is the clean primitive** — a way to set MOSI without consuming a byte
 time. Two places need it:
@@ -520,23 +506,22 @@ time. Two places need it:
 | 0 | `BUSY` | a burst is in progress. **Only meaningful at init speed** — §3.3 |
 | 1 | `CD` | card detect, from the socket's mechanical switch |
 | 2 | `WP` | write protect, likewise |
-| **3** | **`DONE`** | **a `FILL` block finished; the buffer `BUF` named is complete** (latched, cleared by the next `FILL`) |
-| 4–7 | — | read 0 |
+| 3–7 | — | ⚠ **not driven.** `sdbus` three-states `D0`–`D2` onto the bus for an `SDSTAT` read and nothing else, so b3–b7 are whatever the bus floats to. **The driver masks.** |
 
 `BUSY` exists for the 393 kHz init path, where a burst is 20.4 µs — 43 bus cycles — and
-must be polled. **In the command path it is never read at speed**, because a 636 ns burst
-finishes long before the next bus cycle can ask for another byte.
+must be polled.
 
-**`DONE` is what the block path polls**, and a 512-byte fill is 326 µs — 684 bus cycles —
-so it is polled, not raced. ⚠ **A driver that polls `DONE` in a tight loop wastes the
-326 µs the buffer exists to overlap**: the point of four buffers is to start the next
-`FILL` and copy the previous one, and only then look at `DONE`. §5.2.
-
-> **`DONE` is deliberately not an interrupt.** `machine.md` §4's `/IRQ` already carries
-> five sources and §4.1's polling order is already correctness-constrained; a sixth
-> source for an event the driver is about to poll anyway would cost a backplane wire, a
-> GAL macrocell this card has not got (§8), and a line in that order. **The card polls;
-> the hardware does not shout** — the same call this section already makes for `CD`.
+> ⛔ **A 636 ns burst is LONGER than a bus cycle, not shorter** — 1.33 of the machine's
+> 476.7 ns. This section said the reverse until 2026-09-20, when `storage_tb` did the
+> arithmetic. Nothing is broken by it, because **the margin that matters is the
+> instruction's and not the bus cycle's**: §6.5's is a native-mode `STA >SDDATA` at 4–5
+> cycles, 1.9–2.4 µs against 0.636 — a 3× margin, and the smallest on the card. ⚠ But the
+> sentence as written licensed a driver to take a byte per bus cycle, which would hit
+> §6.5's lockout on every one. **In the command path `BUSY` is not read at speed because
+> one instruction cannot follow another fast enough**, which is a claim about the 6309 and
+> not about the backplane. `storage.check.ts`
+asserts both ends of that: at the init rate a burst is still running after 200 `CLK25`
+ticks, and at the transfer rate `BUSY` has fallen 40 ticks later.
 
 `CD` and `WP` are mechanical switch inputs and are **not** interrupt sources. There is no
 card-change interrupt and this document does not propose one: it would cost a GAL macrocell
@@ -551,8 +536,8 @@ The card has state that survives nothing and state that survives everything.
 
 | Element | Power-up | On backplane `/RESET` | Consequence |
 |---|---|---|---|
-| `SDCTRL` (GAL macrocells) | `$00` — a `GAL22V10`'s registers power up reset | **forced to `$00`** | `/CS` **high**, **init clock** selected. Both are the safe state, which is why b0 and b1 are defined active-high in §6.2 |
-| Burst counter (`'163`), `BUSY` | cleared by the same `/RESET` term | cleared | no burst can be in flight across a reset |
+| `SDCTRL` (`sdeng` macrocells) | `$00` — a `GAL22V10`'s registers power up reset | **forced to `$00`** by `sdeng`'s one asynchronous-reset product term | `/CS` **high**, **init clock** selected. Both are the safe state, which is why b0 and b1 are defined active-high in §6.2 |
+| `BUSY`, and the `'163` behind it | cleared by the same `/RESET` term | cleared | no burst can be in flight across a reset. The `'163`'s `/CLR` is **wired to `BUSY`**, so clearing one clears the other with no term of its own |
 | **MOSI hold register (`'574`)** | ⚠ **garbage — the `'574` has no clear input** | ⚠ **still garbage** | `DI` is undefined until software writes it. **This is why §9.0 step 1 is a write, not a read.** |
 | `'595` receive storage | garbage | garbage | harmless; the first byte read after any command is discarded by the protocol anyway |
 
@@ -562,6 +547,13 @@ pattern as the start of a command and fail to enter SPI mode. Ten bare `SDDATA` 
 would clock 80 bits of whatever the `'574` powered up holding onto `DI` — which is why
 §9.0 writes `SDMOSI` ← `$FF` first, then reads.
 
+⭐ **And because the `'165`'s `SH//LD` is wired to `BUSY`, that one write is the whole
+rule.** The shifter tracks the `'574` whenever no burst is running, so `MOSI` already
+carries bit 7 of the hold register when the first clock edge arrives — `DI` is high from
+the instant `SDMOSI` is written, before any clock exists, rather than from the first
+burst. `storage_card.v` powers the `'574` up holding `$00` **on purpose**, so a driver
+that forgets §9.0 step 1 fails in simulation instead of on the bench.
+
 Adding a clear to the `'574` was considered and rejected: the `'574` is a clocked octal
 register with no `MR` pin, so it would have to become a `'273`, which has no three-state
 output — irrelevant here, since the hold register never drives the bus — but the swap buys
@@ -569,10 +561,14 @@ nothing that one instruction does not.
 
 ### 6.5 Re-triggering during a burst
 
-**Specified: the trigger is locked out while `BUSY` is high.** `BUSY` is a registered GAL
-macrocell, set by the trigger term and cleared by the `'163`'s terminal count; the trigger
-term is qualified with `/BUSY`. **Cost: one input on an existing product term, zero
-macrocells.**
+**Built, and the lockout is structural.** `BUSY` is a registered macrocell on `sdeng`,
+set by the trigger and cleared by the `'163`'s eighth clock, and the trigger term is
+qualified with `/BUSY` — **but the part that makes it safe is a wire**: the `'163`'s
+`/CLR` is tied to `BUSY`, so the counter is held clear while idle and **a counter whose
+clear is deasserted cannot be reloaded mid-burst.** Cost: one input on an existing product
+term, zero macrocells, and one board trace doing a job no equation has to.
+`storage.check.ts` asserts it directly — an access *during* a burst neither truncates it
+nor adds clocks.
 
 What lockout does and does not buy:
 
@@ -594,39 +590,44 @@ So the software rule stands and is stronger than §6.3's:
   a 3× margin, the smallest on the card, and the reason §9.0 never sends commands with
   `TFM`.
 
-> **Recorded alternative: defer the trigger instead of dropping it.** A pending-trigger
-> flip-flop would make a mid-burst access queue a second burst rather than lose one, which
-> is strictly better behaviour. **It costs one macrocell**; it arrives with §8.1's 8-IC
-> version, if that version happens.
+> **Recorded alternative: defer the trigger instead of dropping it.** A mid-burst trigger
+> is *dropped* rather than queued — `TRIGP` is cleared by `BUSY` rising — and a
+> pending-trigger flip-flop would queue a second burst instead, which is strictly better
+> behaviour. **It costs one macrocell, and this card has not got one where it is needed**:
+> `TRIGP` and `BUSY` live on `sdeng`, which is full at **10 of 10**, and `sdbus`'s two
+> spare cells are across a part boundary that would cost a pin at each end (§8.1). The
+> software rule above is what stands in its place.
 
-### 6.6 The MOSI hold-time race on the shared `SCK` edge
+### 6.6 The MOSI hold-time race, and the inverted `SCK` that removes it
 
-**Recorded as a risk, not designed out.** In SPI mode 0 the card **samples `DI` on `SCK`'s
-rising edge**. If the `'165`'s `SRCLK` is that same rising edge, `DI` changes and is sampled
-at the same instant, and correctness rests on the `'165`'s **minimum** propagation delay
-exceeding the card's input hold time `t_IH`.
+**Designed out, 2026-09-20.** The `'165`'s `CLK` is **`SCKN`** — the inverted gated burst
+clock, a macrocell of its own on `sdeng` — so `DI` changes on `SCK`'s **falling** edge and
+is stable for a full half-period, **39.7 ns at 12.588 MHz**, before the card samples it on
+the rising one. That is what a mode-0 master does.
 
-**HC datasheets specify maximum propagation delays only.** A minimum is not guaranteed, and
-"it is obviously several nanoseconds" is an argument from physics, not from a datasheet.
-`t_IH` for an SD card is a few nanoseconds, and this is the arrangement NormalLuser's board
-runs at 130 KiB/s without trouble (§1), so the risk is real but small.
+**What it replaces rested on a number no datasheet states.** With the `'165` clocked by
+`SCK` itself, `DI` changes and is sampled at the same instant, and correctness needs the
+`'165`'s **minimum** propagation delay to exceed the card's input hold time `t_IH` — and
+**HC datasheets specify maxima only.** "It is obviously several nanoseconds" is an argument
+from physics, not from a part. NormalLuser's board runs that way at 130 KiB/s without
+trouble (§1), so the risk was real but small; this card runs at 12.588 MHz and does not
+take it.
 
-**The robust alternative is to clock the `'165` on the *inverted* `SCK`**, so `DI` changes
-on the falling edge and is stable for a full half-period — 39.7 ns at 12.588 MHz — before
-the card samples it. That is what a mode-0 master does, and it turns an unspecified margin
-into a specified one.
+**It cost one macrocell and no package**, which is why it is taken rather than deferred.
+The `'574` is eight bits fully used, the `'393`'s outputs are counter taps rather than
+spare inverters, and the `'125`'s fourth gate is non-inverting — so the inverter had to be
+a macrocell, and `sdeng` was at ten of ten. ⭐ **`FALL` paid for it**: it was a cell whose
+only consumer was `BUSY`, and inlining it there costs `BUSY` four product terms — `!FALL`
+is `SPICLK # !SPQ`, two alternatives — taking that equation to **8 of its macrocell's 16**
+and freeing the tenth cell. `sdeng` is still 10 of 10 macrocells and 9 inputs.
 
-**It costs one gate the card does not have.** The `'574` is eight bits fully used; the
-`'393`'s outputs are counter taps, not spare inverters; the `'125`'s fourth gate is a
-non-inverting buffer; and the GALs are full (§8). The candidates are therefore:
+> ⚠ **No simulation can see the difference, and that is the point.** `storage_tb` passes
+> identically with either arrangement, because a zero-delay logic model has no hold time
+> to violate — `check:video`'s own caveat, that it models the logic and not the timing.
+> The argument for this change is a datasheet argument, and §12 step 3's scope on `DI`
+> now confirms a margin rather than deciding a question.
 
-| Source of the inverter | Cost |
-|---|---|
-| A GAL macrocell, emitting both polarities of the gated burst clock | **1 macrocell** — available only if §8's overflow moves `SDCTRL` to a `'574` and frees four. **This is the first claim on those four.** |
-| A 15th package (`74HC04`) | **1 IC** |
-| Leave it | zero, and §12 step 3 measures whether it matters |
-
-§13 item 9. §12 step 3 is where it gets decided, on the bench, with a scope on `DI`.
+§13 item 9.
 
 ---
 
@@ -660,61 +661,61 @@ will read a valid 3.3 V high as indeterminate.
 
 | # | Part | Function |
 |---|---|---|
-| 1 | **74HCT595** | MISO shift + storage; three-state onto **the buffer's local data bus** — §3.5, not the slot bus |
-| 2 | 74HC165 | MOSI shift, parallel-loaded from the hold register at each burst |
-| 3 | 74HC574 | MOSI hold register — §6.2's persistence |
-| 4 | 74HC163 | burst counter: eight clocks, terminal count drives `RCLK` and clears `BUSY` |
-| 5 | 74HC393 | clock divider, `÷2` and `÷64` taps off the 25.175 MHz master |
-| 6 | 74LVC125 | 3.3 V level shift for `SCK`, `MOSI`, `/CS` |
-| 7 | **6116** 2K×8, 55 ns | **the block buffer — four 512-byte buffers.** §3.5 |
-| 8 | **74HC4040** | **the fill engine's 9-bit block address counter** |
-| 9–11 | **74HC157** ×3 | **address mux: the counter during the engine's slot, backplane `A8`–`A0` otherwise** |
-| 12 | **74HCT245** | **backplane `D7`–`D0` ↔ the buffer's local data bus** |
-| 13 | **GAL22V10** ×2 | decode from `/IOSEL` **and** the `A20 = 1` region; `SDCTRL` including `FILL`/`BUF`; `SDSTAT`; the burst trigger; the `machine.md` §5 item 7 bus phase |
+| 1 | **GAL22V10** "`sdbus`" | the `$FF58` decode (`A0`–`A6`), the four register strobes `DATSTB`/`RDST`/`CTRLW`/`OE595`/`MOSICK`, and `SDSTAT`'s three bits driven onto `D0`–`D2`. Purely combinational, so pin 1 is an ordinary input. **8 macrocells of 10, 13 inputs** |
+| 2 | **GAL22V10** "`sdeng`" | `SDCTRL` (b0 `/CS`, b1 rate, b7 soft reset) and the eight-clock burst engine, everything clocked by `CLK25` with the SPI clock as an enable (§3.3). **10 macrocells of 10, 9 inputs**; `/RESET` on the asynchronous-reset term |
+| 3 | 74HCT595 | MISO shift + storage; three-state onto the backplane's `D0`–`D7`, enabled by `OE595` |
+| 4 | 74HC165 | MOSI shift; `SH//LD` wired to `BUSY`, so it tracks the hold register while idle (§6.4) |
+| 5 | 74HC574 | MOSI hold register — §6.2's persistence. ⚠ No clear input (§6.4) |
+| 6 | 74HC163 | burst counter: `/CLR` wired to `BUSY`, `Q3` is the eighth clock — and §6.5's lockout |
+| 7 | 74HC393 | clock divider, `÷2` and `÷64` taps off the 25.175 MHz master |
+| 8 | 74LVC125 | 3.3 V level shift for `SCK`, `MOSI`, `/CS` |
 
-**Total: 14.** Plus a 3.3 V LDO, an SD socket, and passives. (The rows number 1–13
-because two of them carry more than one package — count footprints, not rows;
-`hardware/place/parts.ts` asserts the 14.)
+**Total: 8.** Plus a 3.3 V LDO, an SD socket, and passives.
+`hardware/place/parts.ts` asserts the 8, and `gal/verilog/storage_card.v` is these eight
+as a board.
 
-> ⚠ **Seven of the fourteen packages are the buffer, and it is worth being blunt about
-> what they buy**: §3.5 — 29 % more sustained throughput than a chunked port path, and
-> the deletion of §4's hazard from the read path — for seven packages, **six of which are
-> address and data plumbing**. The card is the machine's third largest. Whether that is a
-> good trade is a judgement, and this document's is that a card whose correctness rested
-> on an undocumented CPU behaviour was not a card to keep for the sake of six packages.
+> ⭐ **Three of the eight do a second job for a wire rather than a macrocell**, and that
+> is what keeps the logic inside two GALs: the `'163`'s `/CLR` and the `'165`'s `SH//LD`
+> are both tied to `BUSY` (§6.4, §6.5) and the `'165`'s `CLK` is tied to `SCK` (§6.6).
+> None of the three is computed. The `'165` one is the accepted hold-time risk; the other
+> two each delete a term the GAL would otherwise have to carry.
 
-### 8.1 Two GALs, and the one-package alternative that is not taken
+### 8.1 Two GALs, counted in pins
 
-The card's logic does not fit one `GAL22V10`. The decode from `/IOSEL`, the burst trigger,
-`SDCTRL` and `SDSTAT` were already roughly ten macrocells of a `GAL22V10`'s ten; add the
-region compare (`A19`–`A16` against a jumper, plus `A20`, `A15`, `/IOPAGE`), the
-`FILL`/`BUF` control bits, the `'157` select, the `'4040` clock and clear, the `'245`
-enable and direction, and `machine.md` §5 item 7's two-tick engine window. **That is not a
-fit; it is a second part**, and §8 row 13 is budgeted as two.
+**Two `GAL22V10`s, and the number comes from a search rather than an estimate.**
+`hardware/gal/storage/census.ts` lists every net the card's logic needs, records which
+unit drives it and which units must see it, and then tries **every partition** of the
+logic into parts, rejecting any part that needs more than a `GAL22V10`'s 22 usable pins.
 
-> **One `ATF1508AS` absorbs both GALs, the `'4040` and the three `'157`s** — the counter
-> is 9 macrocells, the mux is 9 more, and the part has 128 with 60 I/O. The card would be
-> **8 ICs**: `'595`, `'165`, `'574`, `'163`, `'393`, `'LVC125`, `6116`, CPLD. Cheaper
-> than 14, fewer things to get wrong, and in-circuit reprogrammable.
+| Part | Units | Pins | Spare |
+|---|---|---|---|
+| **`sdbus`** | `dec` + `stat` — the decode, the strobes, the `SDSTAT` drive | **22** | **0** |
+| **`sdeng`** | `ctrl` + `eng` — `SDCTRL` and the burst engine | **18** | **4** |
+
+> ⚠ **A `GAL22V10`'s binding constraint here is PINS, not equations — 22 usable of 24.**
+> A macrocell estimate answers the wrong question, and until `census.ts` existed nobody
+> had counted the pins at all. Whether the equations then fit is a separate question and
+> `assemble()`'s answer; a part that is over on pins never reaches it.
 >
-> **The no-CPLD house rule that once refused this is retired** (root
-> [`README.md`](../../README.md)), so nothing blocks it — and **it is not taken**. What
-> weighs:
->
-> | For | Against |
-> |---|---|
-> | **8 ICs against 14** — six packages, all of them address and data plumbing | **~160 mA against two GALs' ~140–180 mA** — roughly a wash, not the saving CPLDs give on bigger cards |
-> | one part to fit instead of two, and in-circuit reprogrammable over JTAG | ⚠ **fuse-level verification is lost.** `hardware/gal/jedec/` reads a `GAL22V10`'s fuse map back and executes it; prjbureau rates the ATF1508AS database *"Partial"* and its programming path *"Untested"* (`graphics.md` §10.1.6) |
-> | the same decision video, audio and net all reached | this card is the only one whose logic **fits two GALs comfortably**. The others took CPLDs because a GAL could not carry them |
->
-> **That last row is the real argument against**, and it is not a rule — it is that a
-> CPLD here buys packages rather than capability, which is the weakest case for one in
-> the machine. §13 item 12 carries the question.
+> ⭐ **And where the boundary goes changes the answer.** Splitting the card the way it
+> reads — `dec` / `ctrl+stat` / `eng` — needs **three** parts, because a signal crossing
+> a boundary costs a pin at each end. Moving the `SDSTAT` drive next to the engine that
+> produces `BUSY`, rather than next to the `SDCTRL` register it shares a data bus with,
+> deletes four crossings and takes the card to two. `sdbus` and `sdeng` are that
+> partition, and it is the search rather than intuition that found it.
 
-**What the second GAL costs elsewhere**: nothing on the backplane, ~50 mA, and one more
-part to program. **What it does not cost is the `74HC574` escape hatch** — §12 step 3's
-"if `SDCTRL` does not fit, move it to a `'574`" would make the card 15, and with two
-parts it should not be needed.
+**What the same search says about the memory-mapped variant: four GALs, not two.** Its
+region decode alone is **16 pins** — `A20`, `A19`–`A16`, two jumper bits, `/IOPAGE`, `E`,
+`Q`, `CLK25`, `FILL` and the four enables it drives — and the best partition over all 203
+of them is `ctrl+stat`, `eng`, `buf`, `dec+fill`. **That card is 16 ICs, not the 14 §8
+claimed for it**: six discretes of address and data plumbing plus four GALs. The
+arithmetic that made it look affordable was never done in pins.
+
+**The `ATF1508AS` alternative buys nothing here.** One CPLD absorbing both GALs, a
+`'4040` and three `'157`s is **the only thing that makes the memory-mapped variant
+affordable in packages** — 8 ICs against 16. This card is already 8, with two parts whose
+fuse maps `hardware/gal/jedec/` reads back and executes, so the CPLD's whole case —
+packages — is spent before it starts. §13 item 12 closes on that basis.
 
 ---
 
@@ -752,8 +753,9 @@ in an undefined state.
  7. CMD16 is NOT sent.     SDHC block length is fixed at 512 and cannot be changed.
  8. SDMOSI <- $FF; /CS high; one SDDATA read (8 idle clocks); SDCTRL b1 <- 1 (fast
     clock); one more SDDATA read.  Only then /CS low for the first real command.
-                           -- 3.3: the '393 is a ripple counter and the speed bit may
-                              only change with /CS high, or a runt SCK results.
+                           -- 3.3: the '393 is a ripple counter. sdeng's CLK25 domain
+                              means a rate change cannot runt SCK, but a card mid-
+                              command does not care whose fault an extra edge was.
 ```
 
 **The two CRCs are hard-coded constants.** There is no CRC7 generator on this card and none
@@ -813,12 +815,10 @@ it must be added with a card of each class on the bench, not by inspection.
                               $00-$1F      = an ERROR TOKEN. Decode and abort, 9.3.
                               anything else = protocol error. Abort.
                               Timeout: 100 ms.  -- 9.3
- 6. SDCTRL: FILL, with BUF naming a free buffer.  The engine runs 512 bursts and lands
-    the block in the buffer -- 326 us.  Poll SDSTAT DONE.               -- 3.5, 6.3
- 7. TFM X+,Y+ the 512 bytes out of the buffer (4.5) -- or leave them where they are
-    until they are wanted; the buffer is memory.
- 8. Two SDDATA reads: the two CRC16 bytes.
- 9. /CS high, then one SDDATA read: eight idle clocks, which SD wants after deselect
+ 6. 512 data bytes:  16 x { orcc #$50 ; ldw #32 ; tfm x,y+ ; andcc #$AF }
+                              X = SDDATA, Y = the destination.  931 us.       -- 4.4
+ 7. Two SDDATA reads: the two CRC16 bytes.
+ 8. /CS high, then one SDDATA read: eight idle clocks, which SD wants after deselect
     and which the card needs in order to release DO.
 ```
 
@@ -832,22 +832,24 @@ burst replays the sixth command byte onto `DI`, and a replayed byte with b7 = 0 
 b6 = 1 has the bit pattern of a command's first byte, which a card is entitled to start
 parsing as one.
 
-**The pipeline off-by-one is at step 6, and it is the card's most delicate ordering.**
-Every `SDDATA` read returns the byte its predecessor's burst fetched, so the step-5 read
-that *returns* `$FE` has already triggered the burst that fetches data byte 0 into the
-`'595`'s storage register. The engine must therefore write the `'595`'s current contents
-into the buffer *before* triggering its own first burst — store, then fetch, 512 times —
-or every block lands shifted by one. Symmetrically, the engine's final trigger leaves the
-first CRC byte in the `'595`, step 8's two reads collect both CRC bytes, and step 9's
-read consumes the trailing idle byte: the pipeline closes exactly — on paper. Getting
-this off by one is the same failure mode as §4 and equally silent — **check it against a
-block of known content at §12 step 4**, not by inspection.
+**The pipeline closes on the boundary between steps 5 and 6, and it is the card's most
+delicate ordering.** Every `SDDATA` read returns the byte its predecessor's burst fetched,
+so the step-5 read that *returns* `$FE` has already triggered the burst that fetches data
+byte 0 into the `'595`'s storage register. **Nothing between step 5 and step 6 touches
+`SDDATA`**, so the first `TFM` read returns byte 0 — and anything inserted in that gap
+that triggers a burst destroys it and shifts the whole block by one. Symmetrically, the
+last `TFM` read triggers one more burst whose byte is the first CRC byte, step 7's two
+reads collect both CRC bytes, and step 8's read consumes the trailing idle byte: the
+pipeline closes exactly — on paper. Getting this off by one is the same failure mode as
+§4 and equally silent — **check it against a block of known content at §12 step 4**, not
+by inspection.
 
 **The CRC16 is read and not checked, and that is a considered decision.** A table-driven
 CRC16 on a 6309 costs roughly 25 cycles a byte: 512 × 25 = 12,800 cycles = **6.1 ms per
-block, more than eight times the 735 µs copy it protects** (§5.1). It would take the
-sustained read rate from 681 KiB/s to 512 bytes per ~6.8 ms = **73 KiB/s** — nine-tenths
-of the card's throughput spent re-checking a CRC the card has already checked internally.
+block, more than six times the 931 µs transfer it protects** (§5.1). It would take the
+sustained read rate from 537 KiB/s to 512 bytes per ~7.05 ms = **71 KiB/s** —
+seven-eighths of the card's throughput spent re-checking a CRC the card has already
+checked internally.
 And it would not even catch an off-by-one, because a block shifted by one shifts its CRC
 bytes with it. The two bytes are read because the protocol requires the clocks, not
 because anything looks at them. **The block-level integrity check is §12 step 4's 10⁵
@@ -857,11 +859,11 @@ known-content blocks, run once, not a check run forever.**
 
 `CMD17` pays the card's read access latency `N_AC` **once per block**, and at a typical
 1 ms that latency swallows most of the budget: **253 KiB/s of throughput against a
-681 KiB/s ceiling**. `CMD18` READ_MULTIPLE_BLOCK pays it once per *run*: the `$FE` token
+537 KiB/s ceiling**. `CMD18` READ_MULTIPLE_BLOCK pays it once per *run*: the `$FE` token
 still precedes every block, but the card's internal read-ahead has the next block
 waiting, so the inter-block gap collapses to a few byte times. **It costs zero hardware
 and no new register**, and it is how CoCoSDC-class devices reach their quoted sustained
-rates. §5.2: 681 KiB/s, host-bound.
+rates. §5.2: 537 KiB/s, and the ceiling is the sustained rate.
 
 ```
  1. /CS low.
@@ -870,15 +872,14 @@ rates. §5.2: 681 KiB/s, host-bound.
  4. For each block n:
       a. Read SDDATA until $FE.   Error token / timeout handling exactly as 9.1 step 5.
                                   For blocks after the first this is typically one read.
-      b. SDCTRL: FILL, BUF = n mod 4.  While the engine fills buffer n, TFM buffer n-1
-         out to its destination; only then poll DONE.               -- 5.2, 6.3
+      b. 512 data bytes: 16 x { mask ; TFM X,Y+ W=32 ; unmask }, X = SDDATA. -- 4.4
       c. Two SDDATA reads: the CRC16.
  5. CMD12 STOP_TRANSMISSION: six SDDATA writes.
       a. Discard ONE stuff byte -- CMD12 alone sends a stuffing byte before its R1.
       b. Read R1 (expect $00).
       c. CMD12's response is R1b: an R1 FOLLOWED BY A BUSY PHASE. Read SDDATA until
          it returns $FF.  Timeout 250 ms.  -- 9.3
- 6. /CS high, one idle SDDATA read.  TFM the last buffer out.
+ 6. /CS high, one idle SDDATA read.
 ```
 
 **`CMD12` is not optional and is not only for the normal exit.** A card left in multi-block
@@ -891,7 +892,7 @@ that has physically gone away, where `/CS` high and a full §9.0 re-init is the 
 `RBF`'s 256-byte sector (§9.4.1) and the `CMD18` amortisation, the natural unit of transfer is
 "as many consecutive blocks as the caller asked for", and the driver should push the
 multi-block decision up to the point where it knows that. A one-sector-at-a-time driver gets
-§9.1.1's 253 KiB/s and none of §5.2's 681.
+§9.1.1's 253 KiB/s and none of §5.2's 537.
 
 ### 9.2 Writing a block
 
@@ -930,11 +931,12 @@ silent corruption as §4, on the outbound path.**
 > `TFM X+,Y` is safe against a *re-read* of the source, which is what §4.2's table
 > compares; it is not automatically safe against a *re-write* of the destination, and
 > nothing has established that the destination cannot be written twice. Step 6 is
-> therefore chunked and masked, exactly as §4.4, and the masking comes *out* if and only
-> if §12 step 1 says it can. The cost of being wrong here is silent data loss on the
-> write path; the cost of being conservative is §5.3's already-program-bound rate falling
-> by a further 21 % of a term that is not the bottleneck. **The conservative choice is
-> nearly free and is taken.**
+> therefore chunked and masked, exactly as §9.1 step 6 is, and the masking comes *out* of
+> both if and only if §12 step 1 says it can. The cost of being wrong here is silent data
+> loss on the write path; the cost of being conservative is §5.3's already-program-bound
+> rate falling by a further 21 % of a term that is not the bottleneck. **On this side the
+> conservative choice is nearly free; on the read side it costs the 21 % §11.6 exists to
+> recover.**
 >
 > **The same exposure applies to `modplayer.md` §4.4's sample upload.** That `TFM X+,Y`
 > targets `ADATA`/`SDATA`, whose write auto-increments the card-side address
@@ -1033,7 +1035,7 @@ a card misbehaves, either hang the machine or corrupt a filesystem.
 driver by having the same register map, this card's map is new and a NitrOS-9 `RBF` driver
 has to be written. CoCoSDC and DriveWire are prior art for SD-backed storage under
 NitrOS-9 but neither speaks to this map. **That is the real cost of this card** and it is
-larger than the fourteen ICs. §13 item 4.
+larger than the eight ICs. §13 item 4.
 
 #### 9.4.1 Deblocking: `RBF`'s sector is 256 bytes and the card's block is 512
 
@@ -1044,7 +1046,7 @@ therefore crosses a 2:1 boundary.
 | `RBF` operation | What the driver must actually do | Cost (§5.2, §5.3) |
 |---|---|---|
 | Read logical sector `N` | Read physical block `N >> 1`, hand back half of it | ~1.8 ms, but a one-block cache makes the *other* half free |
-| Read `N` sectors, sequential | `CMD18` over `⌈N/2⌉` blocks | **the good case** — 681 KiB/s, and half as many commands as sectors |
+| Read `N` sectors, sequential | `CMD18` over `⌈N/2⌉` blocks | **the good case** — 537 KiB/s, and half as many commands as sectors |
 | **Write one logical sector** | **Read-modify-write:** read block `N >> 1`, patch 256 bytes, write it back | **~3.95 ms for 256 bytes = 63 KiB/s** |
 | Write both halves of a block | one write, if a write-back cache holds the block until both are dirty | ~126 KiB/s |
 
@@ -1072,8 +1074,7 @@ rather than a driver change. Recorded as unexamined.)
 
 | Part | First available | Verdict |
 |---|---|---|
-| 74HC/HCT595, '165, '574, '163, '393, '4040, '157, '245 | 1980s HC family | in period |
-| 6116 | early 1980s | in period |
+| 74HC/HCT595, '165, '574, '163, '393 | 1980s HC family | in period |
 | GAL22V10 | 1986 | in period; the machine already uses eleven |
 | **SD card** | **1999** | ⚠ **out of period. No argument available.** |
 | **74LVC125, 3.3 V LDO** | **1990s** | ⚠ out of period — but they exist *only* to serve the SD card |
@@ -1100,27 +1101,12 @@ should be built instead — at 30.5 KiB/s, over twenty times slower.
 
 ## 11. The alternatives
 
-### 11.1 A 512-byte memory-mapped block buffer — taken (2026-09-08)
-
-**This is the design.** Expose the card's block buffer as address space: reads become
-non-side-effecting, `TFM X+,Y+` walks it at 3 cycles/byte, and §4's hazard disappears from
-the read path entirely — no chunking, no masking, 681 KiB/s, and a simpler driver. §3.5 is
-the circuit, §4.5 is the hazard going away, §5 is the rate.
-
-The address space it needs is `machine.md` §5 item 1 option D's second megabyte —
-physical `A20`, one backplane pin, no parts — divided by §5 item 7 into sixteen 64 KB
-regions with a fixed-phase bus schedule in place of `/WAIT`. This card takes one region
-and uses 2 KB of it. **What it costs is six ICs** (§8), five of them address and data
-plumbing, and a second `GAL22V10`.
-
-The adoption narrative — this was long "the clean answer we cannot afford", and the
-argument for affording it is what helped close `machine.md` §5 item 1 — is archived in
-[history.md](history.md).
+### 11.1 A 512-byte memory-mapped block buffer (taken 2026-09-08, reversed 2026-09-20; see [history.md](history.md))
 
 ### 11.2 A WD1773 floppy controller — the period answer
 
 ~5 ICs, entirely in period, and NitrOS-9 already drives it because it is what a CoCo uses.
-**250 kbit/s ⇒ 31,250 B/s = 30.5 KiB/s**, over twenty times slower than §5.2's sustained
+**250 kbit/s ⇒ 31,250 B/s = 30.5 KiB/s**, seventeen times slower than §5.2's sustained
 rate, on media that is no longer manufactured and that a modern host cannot easily write.
 
 **Not rejected — kept.** This is the same posture `audio.md` §6.3 takes toward the
@@ -1135,7 +1121,7 @@ exists. Zero ICs.
 **Rejected as the primary path, kept as the development link.** A CoCo runs DriveWire at
 230,400 baud through its bit-banger; `serial.md` §3.1's 6551 tops out at **19,200
 baud = 1,920 B/s = 1.9 KiB/s**, and §5 there shows the interrupt load is what bounds it,
-not the baud generator. That is 360× slower than this card, and **62× slower even with
+not the baud generator. That is 283× slower than this card, and **49× slower even with
 §4.5's `16C550` at 115,200**, which is the tier
 [`drivewire.md`](../../docs/drivewire.md) §3 plans against.
 
@@ -1182,11 +1168,28 @@ never live across an interrupt, so there is nothing to recover and nothing to re
 and, by the same construction, nothing to write twice. It is a boundary condition in the
 `TFM` state machine, not extra work: **zero firmware cycles.**
 
-**What it buys — and the constituency is the write side, not the read side.** The block
-read already runs unchunked (§4.5), so the fix buys reads nothing. What it deletes is
-§9.2 step 6's chunk-and-mask on this card's write path, and the identical conservative
-masking `modplayer.md` §4.4's sample upload should carry (§13 item 10) — every remaining
-`TFM` against a side-effecting port in the machine, made unconditionally safe at once.
+**What it buys is 21 % of this card's read rate, and the write path with it.** The block
+read runs `TFM` against the port, so §4.4's masking is what makes it safe and the masking
+is what costs the 21 %:
+
+| | chunked, as specified | with the firmware fix |
+|---|---|---|
+| Intra-block read (§5.1) | 537 KiB/s | **680 KiB/s** (+27 %) |
+| Sustained read, `CMD18` (§5.2) | 537 KiB/s | **680 KiB/s** |
+| 128 KiB of samples (§5.2) | 238 ms | **188 ms** — against the audio card's 187 ms intake, i.e. exactly matched |
+| Sustained write (§5.3) | 126–408 KiB/s | unchanged — program-bound, not transfer-bound |
+| Masked interrupt window | 49 µs, 16 times a block, on **both** paths | **none** |
+| Read-block driver | a 16-iteration chunk loop with `ORCC`/`ANDCC` | **one `TFM`** |
+| §12 step 4's 10⁵-block test | required | **still required** |
+
+It also deletes the identical conservative masking `modplayer.md` §4.4's sample upload
+should carry (§13 item 10) — every remaining `TFM` against a side-effecting port in the
+machine, made unconditionally safe at once.
+
+⭐ **This is the cheapest route to §11.1's throughput.** The buffer buys the same 21 %
+for eight packages and a physical address region (§8.1); this buys it for a boundary
+condition in a state machine, because the hazard is a property of *our own CPU firmware*
+rather than of handed-down silicon.
 
 **What it costs is fidelity.** The machine's 6309 becomes observably different from an
 HD63C09E: a program that arranges an interrupt during a `TFM` whose source or destination
@@ -1206,8 +1209,9 @@ real HD63C09E in" property is kept, a driver that assumes the fix would corrupt 
 real silicon. The masked loop stays as the compatible path and the mode bit selects between
 them — about ten bytes of driver.
 
-> **Priced, not decided.** An unmasked write path and a machine with no `TFM` caveat
-> anywhere, against one entry in the divergence ledger and one mode bit. **The fidelity
+> **Priced, not decided.** +27 % on reads, an unmasked write path and a machine with no
+> `TFM` caveat anywhere, against one entry in the divergence ledger and one mode bit.
+> **The fidelity
 > call is the owner's**, and this document does not make it. It should be settled when
 > §12 step 1's capture is read, because that is when the information is on the table.
 > §13 item 11.
@@ -1221,29 +1225,30 @@ them — about ten bytes of driver.
 | 0 | **Have a NitrOS-9 to develop the driver under** — boot it from `machine.md` §7.2's ROM disk, and bring up [`drivewire.md`](../../docs/drivewire.md) for a *writable* volume. Neither needs this card | NitrOS-9 boots, and a `.dsk` on the host mounts as `/x0` |
 | 1 | **⚠ Settle `TFM`'s interrupt/resume behaviour from silicon** — `plan.md` §7 already wants this | a capture from a real HD63C09E answering **three** questions: **(a)** is the *source* re-read on resume, and at what point — the recorded behaviour §4 rests on; **(b)** **can the *destination* be written twice** — gates §9.2's masking, and `modplayer.md` §4.4's upload with it; **(c)** do dummy bus cycles drive `$FFFF` — gates §3.4, and is a requirement on the core whatever silicon says. **Then §11.6's choice, which is the owner's.** |
 | 2 | **Full §9.0 initialisation on the bus exerciser** (`graphics.md` §16.1), init clock only, no 6309 core | `CMD0` → `CMD8` check-pattern echo → `ACMD41` → `CMD58` with `CCS` = 1; the card's `CID` reads back correctly; **an SDSC card is refused cleanly rather than mis-addressed** (§9.0.1) |
-| 3 | **Fit the GALs**; switch to the fast clock | burst measured at ≤636 ns; §8's macrocell arithmetic confirmed, or the card becomes 15 ICs (§8.1); **§6.6's `DI` hold margin scoped at the card's own pin**, and the inverted-`SCK` decision taken |
-| 4 | **Block read through the buffer** (§9.1: `FILL`, `DONE`, `TFM X+,Y+`) against a block of known content | **10⁵ blocks, byte-exact, with video, audio, PS/2 and serial interrupts all running.** This is the step that catches §9.1's pipeline off-by-one; nothing else will. |
+| 3 | **Program the two GALs** and switch to the fast clock. ⭐ The logic itself is done: `gal/storage/storage.check.ts` is 24 claims against both term lists, including Atmel's CUPL as an independent compiler | burst measured at ≤636 ns on real silicon; the utilisation confirmed on the programmer (**`sdbus` 8 of 10 macrocells, `sdeng` 10 of 10**); **§6.6's `DI` hold margin scoped at the card's own pin**, and the inverted-`SCK` decision taken |
+| 4 | **Block read with the chunked `TFM`** (§9.1 step 6, §4.4) against a block of known content | **10⁵ blocks, byte-exact, with video, audio, PS/2 and serial interrupts all running.** This is the step that catches §9.1's pipeline off-by-one **and §4's hazard** — the interrupts have to be running or it proves neither. |
 | 5 | **Write path** (§9.2), and regulator behaviour under write current | data-response `$05` on every block; **the busy phase observed and its duration logged**; `CMD13` clean; no brown-out, no read corruption during write bursts; **the sustained write rate measured and recorded against §5.3's range** — this is the step that decides where in 126–408 KiB/s the truth is |
 | 6 | **NitrOS-9 `RBF` driver**, with §9.4.1's deblocking and block cache, and §9.3's recovery ladder | a mounted filesystem, `dir` and `copy` working; **and the error paths exercised**: an out-of-range `CMD17` returns R1 b5 and does not hang; an unreadable block yields an error token and is reported, not skipped; a card pulled mid-transfer leaves the drive not-ready with no corruption; a card reinserted re-initialises and remounts |
-| 7 | **Sustained throughput under a running replayer** | **the multi-block (`CMD18`) sustained rate measured over a file — §5.2 predicts 681 KiB/s, host-bound** — not computed from the intra-block arithmetic. Exit at ≥650 KiB/s sustained, with **no lost replayer ticks** and no corrupted blocks. If the measured rate lands nearer 253 KiB/s, the driver is not issuing `CMD18` (§9.1.1). |
+| 7 | **Sustained throughput under a running replayer** | **the multi-block (`CMD18`) sustained rate measured over a file — §5.2 predicts 537 KiB/s** — not computed from the intra-block arithmetic. Exit at ≥510 KiB/s sustained, with **no lost replayer ticks** and no corrupted blocks. If the measured rate lands nearer 253 KiB/s, the driver is not issuing `CMD18` (§9.1.1). |
 
-**Step 1 gates the write path and the §11.6 decision**, and step 4 is the only step that
-can prove the read pipeline closes. **Step 7 is the only step that measures a rate anyone
+**Step 1 gates both bulk paths and the §11.6 decision — and it is worth 21 % now, not
+nothing**; step 4 is the only step that can prove the read pipeline closes and that §4.4's
+masking actually holds. **Step 7 is the only step that measures a rate anyone
 will experience**; every other number in this document is a component of it.
 
 ---
 
 ## 13. Open items
 
-1. **`TFM`'s interrupt/resume behaviour — two of §12 step 1's three questions still
-   decide something.** §4's statement of the hazard rests entirely on community
-   documentation, and the block path no longer depends on the answer (§4.5: RAM to RAM,
-   and a re-read of RAM is idempotent). What is still owed: whether dummy cycles drive
-   `$FFFF` (§3.4 — a *requirement on the CPU firmware*, not an observation), and
-   **whether the destination can be written twice** (§9.2, and `modplayer.md` §4.4's
-   upload). The source-re-read question no longer decides anything on this card, and
-   `net/docs/net.md` §3.2 no longer depends on it either. **`machine.md` §6 should be
-   re-scoped rather than closed.**
+1. **⚠ `TFM`'s interrupt/resume behaviour — all three of §12 step 1's questions decide
+   something again, and the first one is worth 21 %.** §4's statement of the hazard rests
+   entirely on community documentation, and since 2026-09-20 **both** bulk paths run
+   `TFM` against the port, so all three are live: whether the *source* is re-read on
+   resume (§9.1's read path — §4.4's masking is safe either way, but the answer decides
+   whether it can come out, which is 537 → 680 KiB/s); **whether the destination can be
+   written twice** (§9.2, and `modplayer.md` §4.4's upload); and whether dummy cycles
+   drive `$FFFF` (§3.4 — a *requirement on the CPU firmware*, not an observation).
+   **`machine.md` §6's capture is owed in full.**
 
 2. **No SD specification is in `reference/`.** Everything protocol-shaped in this document
    is recalled: the 400 kHz init ceiling, the 74-clock power-up, the `$FE` token, the CRC
@@ -1270,14 +1275,11 @@ will experience**; every other number in this document is a component of it.
    programming. The failure mode is a card that reads perfectly and corrupts writes. §5.3
    gives the *duration* of that phase as well as §7's current; §12 step 5 measures both.
 
-6. **⚠ The write path is still on the port, and that is an inconsistency.** §4.5
-   item 3: the buffer is bidirectional and the fill engine could drain it as easily as
-   fill it, for one direction bit in `SDCTRL` and a `/OE` term. **The read path is
-   specified against the buffer while §9.2 pushes 512 bytes out through `SDDATA`** —
-   so the write path still pays §4.4's chunk-and-mask tax and still carries the
-   doubled-write exposure that item 1 keeps open. **Do this before §12 step 5**; it is a
-   small change to a card that is all on paper, and leaving it is the sort of asymmetry
-   that turns into a bug report.
+6. **Closed** — the read/write inconsistency, **CLOSED 2026-09-20 by the read path
+   joining the write path rather than the other way round.** Both directions are now
+   `TFM` against `SDDATA` in 32-byte masked chunks (§4.4), both pay the same 21 %, and
+   both are gated by the same question in item 1. The residue is that question, not an
+   asymmetry.
 
 7. **Whether to use resistor dividers instead of the `'LVC125`** (§10), so that the *only*
    anachronism in the machine is the card itself rather than the card plus its support
@@ -1287,12 +1289,14 @@ will experience**; every other number in this document is a component of it.
    [history.md](history.md)). The live residue is §6.1's ⚠: the decode is seven bits,
    because six answer at `$FF58` and `$FF18` both.
 
-9. **The `'165`'s clock edge is the same edge the card samples `DI` on** (§6.6), so the
-   `DI` hold margin is whatever an `HC` part's *unspecified minimum* propagation delay
-   happens to be. It works on NormalLuser's board; it is not designed. The robust fix —
-   clocking the `'165` on inverted `SCK` — costs one gate the card does not have, and is
-   first in the queue for the four macrocells that free up if §8's overflow moves
-   `SDCTRL` to a `'574`. **Decide at §12 step 3, with a scope on the card's `DI` pin.**
+9. **The `'165`'s clock edge is the same edge the card samples `DI` on** (§6.6), and the
+   board wires it that way, so the `DI` hold margin is whatever an `HC` part's
+   *unspecified minimum* propagation delay happens to be. It works on NormalLuser's
+   board; it is not designed. The robust fix — clocking the `'165` on inverted `SCK` —
+   costs one gate. ⚠ `sdeng` leaves two dedicated input pins free but is at **10 of 10
+   macrocells**, so **which cell an inverted copy would displace has not been worked
+   out**; the alternative is a ninth package. **Decide at §12 step 3, with a scope on the
+   card's `DI` pin.**
 
 10. **The write-side `TFM` exposure is not confined to this card.** §9.2's caveat — a
    doubled write against a port whose write has a side effect — applies equally to
@@ -1303,16 +1307,28 @@ will experience**; every other number in this document is a component of it.
 11. **⚠ Whether to specify the `TFM` hazard out of the CPU firmware** (§11.6). This is the
     one open item that is not a measurement, a purchase or a piece of research: it is a
     **decision the owner has to make**, between a machine with no `TFM` caveat anywhere
-    and an entry in the NitrOS-9 divergence ledger. It is priced in §11.6 and deliberately
+    — and **537 → 680 KiB/s on this card**, which is the whole of what §11.1's buffer
+    bought for eight packages — and an entry in the NitrOS-9 divergence ledger. It is priced in §11.6 and deliberately
     left undecided here. It should be settled at the same time as §12 step 1's capture is
     read, because that is when the information is on the table.
 
-12. **⚠ Whether to take the `ATF1508AS`** (§8.1). No longer blocked — the no-CPLD house
-    rule is retired (root `README.md`) — and not taken: **8 ICs against 14**, weighed
-    against losing `hardware/gal/jedec/`'s fuse-level verification and against the fact
-    that this card's logic fits two GALs comfortably, so a CPLD buys packages rather than
-    capability. Taking it is a card re-specification; re-open the question if the card is
-    ever opened up for another reason (§13 item 6 is a candidate).
+12. **Closed** — whether to take the `ATF1508AS` (§8.1), **CLOSED 2026-09-20 by the card
+    shrinking instead.** The CPLD's whole case was packages, and it was the only thing
+    that made the *buffered* card affordable at 8 — `gal/storage/census.ts` counts pins
+    rather than macrocells and finds that card was four `GAL22V10`s and so **16 ICs, not
+    14**. The port card is two GALs and 8 ICs and keeps the fuse-level verification
+    `hardware/gal/jedec/` gives a `GAL22V10`. Re-open only if the buffer does.
+
+13. **⭐ The logic is built; the card is not.** What exists and is checked:
+    `gal/storage/sdbus.jedec.ts` and `sdeng.jedec.ts`, `gal/storage/storage.check.ts`
+    (**24 claims** — the decode swept over all 8,192 input combinations against a model
+    written from §6's register map, the engine driven with the `'393` and the `'163`
+    modelled as §8 wires them, and both parts compared against Atmel's CUPL),
+    `gal/storage/census.ts` (the partition search §8.1 rests on, part of
+    `npm run check`), the generated `gal/verilog/sdbus.v` and `sdeng.v`, and the
+    hand-written board model `gal/verilog/storage_card.v`. ⚠ **What that does not
+    establish**: nothing has been placed, programmed, or put in front of a real SD card,
+    and every rate in §5 is still derived rather than measured — §12 steps 2–7.
 
 ---
 
@@ -1323,8 +1339,9 @@ will experience**; every other number in this document is a component of it.
 | **NormalLuser, *BE6502 Fast SD Card Interface*** | <https://github.com/NormalLuser/BE6502-Fast-SD-Card-Interface> — the origin of §3.1. Read-triggers-next-burst, and the self-resetting 8-clock generator |
 | [`plan.md`](../../cpu/docs/plan.md) | §4.3 `TFM` as "the hard one"; §7's risk table, which §13 item 1 keeps live |
 | [`modplayer.md`](../../audio/docs/modplayer.md) | §4.4 the fixed-destination `TFM X+,Y`, why it is safe against a re-read (§4.2), and the doubled-write caveat it should carry (§13 item 10) |
-| [`machine.md`](../../docs/machine.md) | §2 the 25.175 MHz master this card divides; §3 the `$FF` map; §5 items 1 and 7, the `A20 = 1` space and bus schedule §3.5 is built on; §5 item 6 the divergence ledger §11.6 would write into; §6 the capture ownership |
+| [`machine.md`](../../docs/machine.md) | §2 the 25.175 MHz master this card divides; §3 the `$FF` map, of which this card's four bytes are now its whole footprint; §4 the interrupt-latency table §4.4's 49 µs goes in; §5 item 6 the divergence ledger §11.6 would write into; §6 the capture ownership |
 | [`net/docs/net.md`](../../net/docs/net.md) | §3.2 cites §4's hazard statement and §4.2's idempotence argument; §5.1 holds `$FF5C`–`$FF5F` |
+| **`hardware/gal/storage/`** | ⭐ **the design outputs, which beat this prose where they disagree**: `sdbus.jedec.ts` and `sdeng.jedec.ts` (§8), `storage.check.ts` (24 claims), and `census.ts` (§8.1's partition search). `hardware/gal/verilog/storage_card.v` is the board, and `hardware/place/parts.ts` asserts §8's eight |
 | [`graphics.md`](../../video/docs/graphics.md) | §16.1 the bus exerciser; §16 the "drop a real HD63C09E in" property §11.6 weighs; §17 the disk-controller reservation this card claims half of |
 | [`ps2.md`](../../io/ps2/docs/ps2.md) | §4.1 the `'595` storage-register pattern; §4.2 the `HC`-versus-`HCT` lesson §7 repeats |
 | [`serial.md`](../../io/serial/docs/serial.md) | §3.1 the 6551 that bounds §11.3's DriveWire link and §4.5 the `16C550` that unbounds it; §4.4 the bit-banging argument §11.5 distinguishes itself from |

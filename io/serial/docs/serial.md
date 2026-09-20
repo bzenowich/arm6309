@@ -522,7 +522,7 @@ that decides the console ceiling — but the shape of the answer does not depend
 precision. **Past ~115,200 the machine cannot draw the text, let alone a human read it.**
 
 **File transfer.** No rendering, so the bound is the copy: 3.01 cycles a byte is
-**697 kB/s ≈ 7 Mbaud**, and the storage card sinks 681 KiB/s (`sdcard.md` §5.2). **A
+**697 kB/s ≈ 7 Mbaud**, and the storage card sinks 537 KiB/s (`sdcard.md` §5.2). **A
 921,600-baud ZMODEM download is 40 % of the CPU and nothing else is in the way.**
 
 | | Bound by | Ceiling |
@@ -542,7 +542,7 @@ what the CPU could take if §8 were re-specified.
 ### 5.7 The comparison nobody asked for, made anyway
 
 For telnet BBSes reached through a WiFi bridge, [`../../../net/`](../../../net/) moves
-**681 KiB/s against this card's 11.5 KiB/s at 115,200** — sixty times faster.
+**537 KiB/s against this card's 11.5 KiB/s at 115,200** — forty-seven times faster.
 
 **It is still not the answer, and the reason is software.** `net.md` §14.2 records that
 **no NitrOS-9 TCP/IP stack has been found**, and that porting one is "a port, not a

@@ -144,17 +144,13 @@ export const ROLE: Record<string, string> = {
   "net:74HC4020 NLP": "Generates the normal link pulse — the ~16 ms heartbeat 10BASE-T uses to say the link is alive when no frames are flowing.",
 
   /* ---------------- storage ---------------- */
-  "storage:GAL22V10": "The card's sequencer and decode: the SPI state machine, block addressing and the host handshake. sdcard.md §8.",
-  "storage:6116 block buffer": "A 512-byte block buffer, so a card read lands in memory the CPU can address ordinarily rather than being popped a byte at a time from a port.",
+  "storage:GAL22V10": "Two of them. sdbus is the $FF58 decode, the four register strobes and SDSTAT's three bits; sdeng is SDCTRL and the engine that turns one bus access into exactly eight SPI clocks. sdcard.md §8, and gal/storage/census.ts for why the split falls where it does.",
   "storage:74HCT595 MISO": "Shifts the card's serial reply into a parallel byte.",
   "storage:74HC165 MOSI": "Shifts a parallel byte out to the card, most significant bit first.",
-  "storage:74HC574 hold": "Holds the assembled byte while the next one shifts.",
+  "storage:74HC574 hold": "Holds the byte going OUT, so every burst clocks the same MOSI value without software touching it again. \u26a0 It has no clear input, so it powers up holding garbage and SD's 74-clock power-up sequence needs DI high - which is why the driver writes SDMOSI before it reads anything.",
   "storage:74HC163 burst": "Counts the eight clocks of a byte, so the sequencer needs no state for the bit position.",
   "storage:74HC393 divider": "Divides the bus clock down to the SPI rate — slow for initialisation, fast once the card is in SPI mode.",
   "storage:74LVC125 3V3": "Level translation: an SD card is a 3.3 V part on a 5 V bus, and this buffer is 5 V-tolerant on its inputs.",
-  "storage:74HC4040 blkaddr": "Walks the block buffer's address as bytes arrive, so a whole 512-byte transfer costs the CPU nothing.",
-  "storage:74HC157 addr mux": "Chooses between the sequencer's address and the host's for the block buffer — the two never drive it at once.",
-  "storage:74HCT245 data": "Bridges the block buffer to the backplane data bus.",
 
   /* ---------------- io ---------------- */
   "io:GAL22V10 ps2": "The PS/2 side: both ports' clock and data state machines, parity, and the start/stop framing. ps2.md §9.",

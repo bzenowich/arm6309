@@ -41,6 +41,8 @@ import { vlenDesign } from "../vlen.jedec"
 import { seqphDesign } from "../seqph.jedec"
 import { seqctlDesign } from "../seqctl.jedec"
 import { aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign } from "../audio.jedec"
+import { sdbusDesign } from "../storage/sdbus.jedec"
+import { sdengDesign } from "../storage/sdeng.jedec"
 import { v3laneDesign } from "../video3/v3lane.jedec"
 import { ALL } from "../designs"
 import { PHASES, mmu } from "../mmu.model"
@@ -387,6 +389,13 @@ const REGISTRY: Part[] = [
    * the four byte enables and the internal bus's two latch-side drivers.
    * video3/v3lane.check.ts sweeps all 4,096 inputs against this reference. */
   { design: v3laneDesign, reference: "reference/v3lane.cupl.jed" },
+  /* ⭐ storage's two, 2026-09-20: the $FF58 decode with SDSTAT's drive, and
+   * SDCTRL with the eight-clock burst engine. `storage/storage.check.ts`
+   * sweeps sdbus's 8,192 inputs and drives sdeng for 20,000 clocked steps
+   * against these references - a registered part cannot be compared a vector
+   * at a time, which is a trap that file records. */
+  { design: sdbusDesign, reference: "reference/sdbus.cupl.jed" },
+  { design: sdengDesign, reference: "reference/sdeng.cupl.jed" },
 ]
 
 console.log("\nEvery live GAL has a second implementation to check it against\n")

@@ -46,9 +46,9 @@ undecided, or that this document has had to decide itself.
 | **Video** | 640×200 × 256 colours, VGA out, **8×8 tile mode, a display list, one-pixel scroll and a hardware palette path** — **33 ICs on a 240 mm board**, the programmable logic being **3 × `ATF1508AS` PLCC-84** ([`video/`](../video/), `graphics.md` §14.1). ⚠ 28 ICs on 180 mm until 2026-09-09; **nine of the eleven packages added that day are features that were specified and had no hardware behind them** (§8's sub-pixel scroll, §9's palette, §10.3's `MOVE`) — `docs/design-review2.md`'s defect class, counted in packages |
 | **Audio** | 4-channel 8-bit PCM, Paula-exact, ⚠ **fixed LRRL panning** (programmable panning was withdrawn 2026-09-09: it cost **one converter half per channel**, six `AD7528` where four do, and classic MOD does not use it) — **35 ICs on an 18 cm board**, ⛔ **two** `ATF1508AS` PLCC-84 and the second one is **scoped and not fitted** ([`audio/`](../audio/), `audio.md` §10.1). A **headphone-driven 3.5 mm stereo jack** on the card's own rear edge, and a line-level pair on the backplane. ⚠ **32 ICs on 18 cm until 2026-09-09**: §10's budget was six packages short of the datapath `audio.md` itself specifies, and `npm run check:place` refused 18 cm at 39 |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** — a **`TL16C550C` at 115,200 baud with 16-byte FIFOs** ([`io/serial/`](../io/serial/)). One 14-IC card at `$FF30`–`$FF3F`. Both on `/IRQ`, both **specified** |
-| **Storage** | SD card over SPI, **14 ICs**, **681 KiB/s** sustained — **specified** ([`storage/`](../storage/)). Its block buffer lives in `A20 = 1` (§5 item 7), which is what retired the `TFM` re-read hazard. ⚠ The first of the machine's two period exceptions |
+| **Storage** | SD card over SPI, **8 ICs**, **537 KiB/s** sustained — **two GAL22V10s built and checked**, the rest of the card specified ([`storage/`](../storage/)). ⚠ The first of the machine's two period exceptions. ⭐ **8 and not 14 since 2026-09-20**: the memory-mapped block buffer is gone and the card is NormalLuser's BE6502 interface (`sdcard.md` §3.1), with §4.4's chunk-and-mask carrying the read path as it already carried the write path. It costs 21 % and returns six packages, a physical-address region and §5 item 7's bus schedule |
 | **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs**, two of them `ATF1508AS` — **specified** ([`net/`](../net/)). The second period exception. ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | **127 ICs** — **108 on cards** (video 33, audio 35, I/O 14, storage 14, net 12, from `hardware/place/parts.ts`), **19** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8. ⚠ **The motherboard is 19 and not 18** because the high map byte had no data path to `D0`–`D7` at all, and two common-I/O SRAMs cannot share one isolation `'245` — `ram.md` §3.1 and §11 item 11 |
+| **Total silicon** | **121 ICs** — **102 on cards** (video 33, audio 35, I/O 14, storage 8, net 12, from `hardware/place/parts.ts`), **19** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8. ⚠ **The motherboard is 19 and not 18** because the high map byte had no data path to `D0`–`D7` at all, and two common-I/O SRAMs cannot share one isolation `'245` — `ram.md` §3.1 and §11 item 11 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -134,7 +134,7 @@ From `graphics.md` §17, which retargets colormin's slot model:
 | 25.175 MHz master | so any card can phase-lock to video |
 | `HSYNC`, `VSYNC` | `graphics.md` §12.2's raster-compare timer counts HSYNC, and counting HSYNC gives a line number with no origin unless VSYNC (or an equivalent frame reset) comes with it |
 | Audio `L`, `R` + 2 grounds | carried per `graphics.md` §17 |
-| `A0–A18`, `A19`, `A20` | **physical**, not logical A0–A15 — storage's block buffer and net's ring are addressed as memory (§5 item 7), and the video card's VRAM select is physical `A19` and `A20`. `A20` rides slot position A34, the position that was the backplane's one spare (§5 item 1 D) |
+| `A0–A18`, `A19`, `A20` | **physical**, not logical A0–A15 — net's ring is addressed as memory (§5 item 7; ⚠ storage's block buffer was the other user and left on 2026-09-20), and the video card's VRAM select is physical `A19` and `A20`. `A20` rides slot position A34, the position that was the backplane's one spare (§5 item 1 D) |
 | `D0–D7` | |
 
 **`A24..A19` selects a 512 KB quadrant of a 32 MB map** —
@@ -964,8 +964,8 @@ a cross-card dependency.
 | io | Confirm whether NitrOS-9's `sc6551` exists; it is the card's entire software cost | `serial.md` §13 item 2 |
 | **io** | **⚠ Fit `net`'s U2 before laying out its board** — 118 of 128 macrocells and 56 of 60 pins, with a five-step cut order behind it | `net.md` §7.3, §16 item 1 |
 | **io** | **Find out whether a NitrOS-9 network stack exists.** It is the net card's largest cost and nobody has looked — the same shape of unknown as `serial`'s `sc6551` | `net.md` §14.2, §16 item 12 |
-| **storage** | **⚠ The SD *write* path is still on the port** — the block buffer (§5 item 7) took reads off it; writes still pay the port | `sdcard.md` §13 item 6, §5 item 1 D |
-| **storage** | **Re-examine the `ATF1508AS` consolidation** — `sdcard.md` §8.1's single-CPLD design was refused on the no-CPLD house rule alone, and the rule is retired (root `README.md`): 8 ICs against 14 | `sdcard.md` §13 item 12 |
+| **storage** | **CLOSED 2026-09-20.** The read path is on the port too now, so both pay §4.4's 32-byte chunk-and-mask and the inconsistency the item booked is gone. ⭐ What replaces it: `cpu`'s `TFM` capture below is now worth **21 %** on this card rather than nothing | `sdcard.md` §13 item 6 |
+| **storage** | **CLOSED 2026-09-20 by the card shrinking instead.** `hardware/gal/storage/census.ts` counts pins rather than macrocells and finds the *buffered* card was four GAL22V10s and so 16 ICs, not 14 — which is what made a CPLD look necessary. The port card is two GALs and 8 ICs, and keeps the fuse-level verification a CPLD gives up | `sdcard.md` §8.1, §13 item 12 |
 | storage | A NitrOS-9 `RBF` driver — larger than the card. Evaluate matching CoCoSDC's map to inherit one | `sdcard.md` §13 item 4 |
 | **project** | **Choose a licence.** The repository has none for its own work | `design-review.md` §Sys-M6 |
 
@@ -1160,16 +1160,16 @@ motherboard and system RAM owe measured figures at bring-up
 | 5 V | **audio card** | **35** on an 18 cm board — `audio.md` §10.1 | **~340–500 mA** — `audio.md` §10. ⚠ **That estimate was made at 32 packages**, before §10's six-package datapath shortfall and the second CPLD; it is now a floor rather than a range |
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
 | 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The second largest single-card draw after video**, and the only figure on that card that cannot be derived from a datasheet with confidence |
-| 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + **14** | not yet estimated |
+| 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + **8** | not yet estimated |
 | 5 V | **motherboard**: MMU (5, +1 map SRAM, **+1 isolation `'245`**), divider GAL, oscillator, reset supervisor, U9/U10 GALs, 3 × `'157`, **the `'4040` refresh timebase**, and 2 × `SST39SF040` boot ROM with its `'244` — `hardware/ram.md` §6.5 | **19** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load. The ROM adds ~30 mA per part while it is selected and ~10 µA when it is not, which is most of the time |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly **1.8–3.0 A** at 5 V across **127 ICs**, plus a 3.3 V
+**The machine is plausibly **1.8–3.0 A** at 5 V across **121 ICs**, plus a 3.3 V
 rail.** The sum, from `hardware/place/parts.ts`, which is what places on the boards:
 
 | video | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
 |---|---|---|---|---|---|---|---|---|
-| **33** | **35** | 11 | 3 | **14** | **12** | **108** | **19** | **127** |
+| **33** | **35** | 11 | 3 | **8** | **12** | **102** | **19** | **121** |
 
 ⚠ **The table follows the parts list, and the cards' own sections are the number of
 record** — `graphics.md` §14.1, `audio.md` §10.1. Video came to 33 on 2026-09-11, when

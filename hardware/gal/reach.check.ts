@@ -52,6 +52,8 @@ import { v3scan } from "./video3/v3scan.cpld"
 import { v3ptr } from "./video3/v3ptr.cpld"
 import { v3host } from "./video3/v3host.cpld"
 import { v3laneDesign } from "./video3/v3lane.jedec"
+import { sdbusDesign } from "./storage/sdbus.jedec"
+import { sdengDesign } from "./storage/sdeng.jedec"
 import { mmuDesign } from "./mmu.jedec"
 import { clkdecDesign } from "./clkdec.jedec"
 import { u9Design } from "./u9.jedec"
@@ -110,6 +112,18 @@ const CARDS: Card[] = [
     boards: ["verilog/video3_card.v"],
     checkInputs: true,
   },
+  /* ⭐ STORAGE, 2026-09-20. Eight ICs and two GALs, and storage_card.v is
+   * the board - hand-written, unlike video3's, because six discrete packages
+   * is a thing one writes rather than generates. `checkInputs` is on for the
+   * same reason it is on for video3: `check:netlist` says outright that
+   * there are no netlist claims for this card yet, so this is the only thing
+   * asking whether a control line has a producer. */
+  {
+    name: "storage",
+    parts: [part("sdbus", sdbusDesign), part("sdeng", sdengDesign)],
+    boards: ["verilog/storage_card.v"],
+    checkInputs: true,
+  },
   {
     name: "motherboard",
     parts: [part("mmu", mmuDesign), part("clkdec", clkdecDesign),
@@ -153,7 +167,19 @@ const boardUses = (paths: string[]): Set<string> => {
   const used = new Set<string>()
   for (const p of paths) {
     let t = readFileSync(join(here, p), "utf8")
-    t = t.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ")
+    /* ⛔ ONE PASS, ALTERNATED, and stripping the two kinds in sequence is a
+     * BUG THIS CHECK SHIPPED WITH - found 2026-09-20 by storage_card.v. Its
+     * line 3 is an ordinary `//` comment that happens to contain the path
+     * `../storage/*.jedec.ts`, and `storage/` + `*` IS the digraph `/*`. With
+     * block comments taken out first, that opened a comment which closed at
+     * the next `*​/` 139 lines later, and 80 % of the file - every `always`
+     * block, every use of MOSICK, DATSTB, CTRLW and RDST - vanished before
+     * the scan began. ⚠ It reported those four as produced-and-unread, which
+     * is this check's FINDING output: the failure mode was a false ALARM, but
+     * the same swallowed region would have hidden a true one just as well.
+     * Alternation gets it right because whichever delimiter comes first wins,
+     * which is also what a Verilog lexer does. */
+    t = t.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, " ")
     /* Follow every `.PIN(net)` to its net, then take the port maps out. */
     /* ⚠ CASE-INSENSITIVELY. mainboard.v spells every motherboard port in lower
      * case - `.muxsel(muxsel)` for the cell named MUXSEL - so a case-sensitive
@@ -290,6 +316,13 @@ const RESERVED_RE: { re: RegExp; why: Why; note: string }[] = [
  * ======================================================================== */
 type Src = "bus" | "board" | "alias" | "unbuilt"
 const SOURCES: { re: RegExp; why: Src; note: string }[] = [
+
+  /* ⭐ STORAGE needs no entry here, and finding that out is what fixed
+   * `boardUses` above. Every input its two GALs declare is produced by the
+   * backplane, by a discrete package or by the other GAL, and storage_card.v
+   * wires all of them - so the board explains the lot and the both-directions
+   * guard rejects any entry added anyway. That guard is what caught five
+   * redundant ones here on 2026-09-20. */
 
   /* ⛔ findings from here down */
   /* ⭐ THE FOUR ALIASES LEFT 2026-09-19, and one of them was not an alias.

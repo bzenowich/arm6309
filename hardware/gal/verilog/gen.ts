@@ -18,6 +18,8 @@ import { v3scan } from "../video3/v3scan.cpld"
 import { v3ptr } from "../video3/v3ptr.cpld"
 import { v3host } from "../video3/v3host.cpld"
 import { v3laneDesign } from "../video3/v3lane.jedec"
+import { sdbusDesign } from "../storage/sdbus.jedec"
+import { sdengDesign } from "../storage/sdeng.jedec"
 import { fromDesign, fromMerged, toVerilog } from "./emit"
 import { rewrite, rewriteTb } from "./v3portmap"
 
@@ -48,6 +50,12 @@ write("v3scan", toVerilog(fromMerged(v3scan)))
 write("v3ptr", toVerilog(fromMerged(v3ptr)))
 write("v3host", toVerilog(fromMerged(v3host)))
 write("v3lane", toVerilog(fromDesign(v3laneDesign)))
+
+/* ⭐ storage's two GAL22V10s (sdcard.md §8, and gal/storage/census.ts for why
+ * it is two and which two). storage_card.v is hand-written: it is the six
+ * discrete packages around them. */
+write("sdbus", toVerilog(fromDesign(sdbusDesign)))
+write("sdeng", toVerilog(fromDesign(sdengDesign)))
 /* ⭐ and the board's wiring between them, from the same four definitions */
 rewrite(join(here, "video3_card.v"), [
   ["v3dot", "u_dot", v3dot], ["v3scan", "u_scan", v3scan],

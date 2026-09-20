@@ -16,6 +16,8 @@ import { vlenDesign } from "./vlen.jedec"
 import { rfaDesign } from "./regfile.jedec"
 import { aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign } from "./audio.jedec"
 import { v3laneDesign } from "./video3/v3lane.jedec"
+import { sdbusDesign } from "./storage/sdbus.jedec"
+import { sdengDesign } from "./storage/sdeng.jedec"
 
 export const ALL: Design[] = [
   mmuDesign, clkdecDesign, u9Design, u10Design,
@@ -25,5 +27,6 @@ export const ALL: Design[] = [
   seqphDesign, seqctlDesign, vlenDesign, rfaDesign,
   aseqDesign, adecDesign, admatDesign, aintenaDesign, apendDesign,
   v3laneDesign,
+  sdbusDesign, sdengDesign,
 ]
 

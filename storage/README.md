@@ -1,17 +1,22 @@
 # `storage/` — mass storage
 
-An SD card interface: **14 ICs, 681 KiB/s sustained, four bytes of I/O space and a 64 KB
-buffer region.**
+An SD card interface: **8 ICs, 537 KiB/s sustained, four bytes of I/O space and nothing
+else.**
 
 Paths below are relative to this directory.
 
 | | |
 |---|---|
-| [`docs/sdcard.md`](docs/sdcard.md) | the card — the SPI engine, the block buffer, the `TFM` hazard, the SD protocol sequences, the register map, the IC budget |
-| [`docs/history.md`](docs/history.md) | archived history — superseded rates, the port-era design, dropped listings |
+| [`docs/sdcard.md`](docs/sdcard.md) | the card — the SPI engine, the `TFM` hazard, the SD protocol sequences, the register map, the IC budget |
+| [`docs/history.md`](docs/history.md) | archived history — the buffer era, superseded rates, dropped listings |
 
-**Units:** every rate here and in `docs/sdcard.md` is **KiB/s = 1024 bytes/s** — 681 KiB/s
-is 697 kB/s decimal, and the same figure everywhere it appears in the repo.
+The design outputs live in `../hardware/gal/storage/`: `sdbus.jedec.ts` and
+`sdeng.jedec.ts` are the two `GAL22V10`s, `storage.check.ts` is 24 claims against them,
+and `census.ts` is the pin count that decided how many parts there are. Where they and
+the prose disagree, they win.
+
+**Units:** every rate here and in `docs/sdcard.md` is **KiB/s = 1024 bytes/s** — 537 KiB/s
+is 551 kB/s decimal, and the same figure everywhere it appears in the repo.
 
 ## The idea, in one line
 
@@ -21,11 +26,11 @@ no busy-polling in the fast path. Taken from NormalLuser's
 [BE6502 Fast SD Card Interface](https://github.com/NormalLuser/BE6502-Fast-SD-Card-Interface),
 which measures 130 KB/s on a 5 MHz 6502.
 
-It goes faster here for two reasons: a **fill engine** runs 512 bursts by itself and lands
-each block in a 2 KB SRAM the host addresses as memory (`sdcard.md` §3.5), and the 6309
-has **`TFM X+,Y+`** — a block move at three cycles a byte, one instruction per block.
+It goes four times faster here for one reason: the 6309 has **`TFM`**, a block move at
+three cycles a byte, one instruction per chunk. The card delivers a byte every 636 ns and
+the instruction asks for one every 1430 ns, so nothing ever waits.
 
-## The `TFM` hazard — retired, not mitigated
+## The `TFM` hazard — mitigated, in both directions
 
 **`TFM` is the 6309's only interruptible instruction, and on resume it re-reads the source
 address.** Against RAM that is idempotent, which is why
@@ -35,39 +40,44 @@ the wrong one, the block shifts by one from that point, and **nothing detects it
 even the block's own CRC, which ends up read at the wrong offset. Roughly one block in
 seven, at this machine's interrupt load.
 
-**⚠ This card does not face that hazard, and not by mitigating it.** The hazard was never
-about `TFM`; it was about a port whose read has a side effect, and the block lands in a
-2 KB SRAM the host addresses as memory, so the copy is RAM → RAM:
+**The fix is software, and it is the same loop on the read path and the write path:**
 
 ```
-        ldx   #buffer_in_card
+        ldx   #SDDATA              ; the port: fixed source
         ldy   #dest
-        ldw   #512
-        tfm   x+,y+              ; no masking, no chunking, no 21 %
+        ldb   #16                  ; 16 chunks of 32
+Chunk   orcc  #$50                 ; mask IRQ and FIRQ -- the chunk is now atomic
+        ldw   #32
+        tfm   x,y+
+        andcc #$AF                 ; pending interrupts fire here
+        decb
+        bne   Chunk
 ```
 
-The 21 % that chunk-and-mask would cost is the difference between 537 and 681 KiB/s.
-`sdcard.md` §4.5, §11.1.
+An instruction that cannot be interrupted cannot be resumed, so there is nothing to
+re-read. It costs **21 %** — 680 KiB/s unchunked against 537 — and 49 µs of added
+interrupt latency, which is below anything else in the machine that cares.
+`sdcard.md` §4.4.
 
-**What is still owed**: `SDDATA` is still a read-triggered port for the command path, and
-the **write path is still on the port** — chunked and masked until the silicon capture
-says otherwise. `sdcard.md` §12 step 1, §13 items 1 and 6.
+**What is still owed**: whether the masking can come out at all. That is
+[`sdcard.md`](docs/sdcard.md) §12 step 1's silicon capture, and on this card it is now
+worth 21 % rather than nothing. §13 item 1.
 
 ## Three rates, not one
 
 | | Rate | Bound by |
 |---|---|---|
-| Read, intra-block | **681 KiB/s** | the unchunked `TFM` copy |
-| **Read, sustained, `CMD18` multi-block** | **681 KiB/s** | the host. The SPI engine fills a buffer in 326 µs while the host copies the last one in 735 µs, so **the SD card is never waited on** |
-| Read, sustained, one `CMD17` per block | **253 KiB/s** | the card's ~1 ms read access latency, paid 256 times instead of once. **No buffer hides a command you did not send** |
-| Write, transfer | 681 KiB/s | the `TFM` loop |
+| Read, intra-block | **537 KiB/s** | the 32-byte chunked `TFM`, 3.81 cycles a byte |
+| **Read, sustained, `CMD18` multi-block** | **537 KiB/s** | the same `TFM` loop. The card's read-ahead collapses the inter-block gap to a few byte times, so **the ceiling is the sustained rate** |
+| Read, sustained, one `CMD17` per block | **253 KiB/s** | the card's ~1 ms read access latency, paid 256 times instead of once |
+| Write, transfer | 537 KiB/s | the `TFM` loop |
 | **Write, sustained** | **126–408 KiB/s** | **the card's program time**, not the SPI clock |
 | Write, one 256-byte `RBF` sector | 63 KiB/s | read-modify-write against a 512-byte SD block |
 
 **`CMD18` READ_MULTIPLE_BLOCK costs zero hardware and is the difference between the disk
-being the bottleneck and not being it.** 128 KiB of mod samples arrive in **193 ms** with
-it and 505 ms without, against the 187 ms the audio card needs to swallow them — a 6 ms
-gap. `sdcard.md` §5.2, §9.1.1.
+being the bottleneck and not being it.** 128 KiB of mod samples arrive in **238 ms** with
+it and 505 ms without, against the 187 ms the audio card needs to swallow them.
+`sdcard.md` §5.2, §9.1.1.
 
 ## Software is most of this card
 
@@ -80,7 +90,8 @@ gap. `sdcard.md` §5.2, §9.1.1.
   be wrong when it finally runs. §9.0.1.
 - **§9.1 — reading.** `$FF` goes onto `DI` immediately after the sixth command byte, before
   any polling — the ordering both of the receive pipeline's off-by-one traps hang on. The
-  block itself lands via the fill engine and is copied out of the buffer.
+  block itself is the chunked `TFM`, and nothing may touch `SDDATA` between the token poll
+  and the first read of it.
 - **§9.2 — writing.** A real sequence: start token, data, CRC, data-response token, and the
   **busy phase** — the card holds `DO` low while it programs, which is what actually bounds
   the write rate.
@@ -92,9 +103,11 @@ gap. `sdcard.md` §5.2, §9.1.1.
 
 ## Two other things worth knowing
 
-**Address cost.** Four bytes at `$FF58`–`$FF5B` — the map is `$FF00`–`$FF7F` and **this
-card decodes `A0`–`A6`**, seven bits, because six would answer at `$FF18` too — plus one
-64 KB physical region at `A20 = 1`, of which 2 KB is used. `sdcard.md` §6.1.
+**Address cost.** Four bytes at `$FF58`–`$FF5B` and no physical address space at all — the
+map is `$FF00`–`$FF7F` and **this card decodes `A0`–`A6`**, seven bits, because six would
+answer at `$FF18` too. That is a checked claim: `storage.check.ts` sweeps the decode over
+all 8,192 input combinations and asserts the card is silent at `$FF18`–`$FF1B`.
+`sdcard.md` §6.1.
 
 ⚠ **An SD card is 1999**, and there is no arguing it into a pre-1990 machine. §10 makes the
 case that the *circuit* is period-legal TTL and only the *media* is not — the same status
@@ -106,40 +119,57 @@ it is refused.
 
 **The CPU is this project's own C11 firmware, not a part on a reel.** So the `TFM` hazard
 can be specified *out of the CPU* — resume without re-reading, and with nothing to write
-twice — at the cost of a fidelity divergence from a real HD63C09E. The block path no
-longer runs over a port, so this buys the read path nothing; **what it buys is this
-card's write path and `modplayer.md` §4.4's upload** — every remaining `TFM` against a
-side-effecting port. **§11.6 prices it and deliberately does not decide it: that call is
-the owner's**, to be made when §12 step 1's capture is read.
+twice — at the cost of a fidelity divergence from a real HD63C09E. What it buys is
+**537 → 680 KiB/s on the read path**, an unmasked write path, and
+`modplayer.md` §4.4's upload with them: every remaining `TFM` against a side-effecting
+port in the machine, made unconditionally safe at once. **§11.6 prices it and deliberately
+does not decide it: that call is the owner's**, to be made when §12 step 1's capture is
+read.
 
-## ⚠ Fourteen ICs, and an alternative that would cost six of them
+## Eight ICs, and how the number was arrived at
 
-The buffer is not free: **seven of the card's 14 ICs are the buffer**, and six of those
-are address and data plumbing — a `74HC4040` block-address counter, three `74HC157`s
-muxing it against the backplane, a `74HCT245` on the data path, and the `6116` itself.
-**The card is the machine's third largest.**
+Two `GAL22V10`s and six discretes: `74HCT595`, `74HC165`, `74HC574`, `74HC163`,
+`74HC393`, `74LVC125`, plus a 3.3 V LDO and the socket.
 
-**One `ATF1508AS` would absorb both GALs, the counter and the mux — an 8-IC card.** The
-no-CPLD house rule that once blocked it is retired (root `README.md`), and **it is not
-taken**: unlike video, audio and net, this card's logic fits two GALs comfortably, so a
-CPLD here buys packages rather than capability, and it costs the fuse-level verification
-`hardware/gal/jedec/` gives a `GAL22V10`. §8.1 weighs it; §13 item 12 carries it.
+**Two GALs because of PINS, not macrocells.** `../hardware/gal/storage/census.ts` counts
+the pins every net needs and searches every partition of the card's logic: `sdbus` is the
+decode, the strobes and the `SDSTAT` drive at 22 pins with none spare, and `sdeng` is
+`SDCTRL` and the burst engine at 18 with four. ⛔ **The same search says the
+memory-mapped block-buffer variant needs four GALs** — its region decode alone is
+16 pins — which made that card 16 ICs rather than the 14 it claimed, and which is why the
+buffer came out on 2026-09-20 and this card is the machine's smallest. `sdcard.md` §8.1,
+`docs/history.md`.
+
+**Three packages do a second job for a wire rather than a macrocell**, and that is what
+keeps the logic inside two parts: the `'163`'s `/CLR` and the `'165`'s `SH//LD` are both
+tied to `BUSY`, and the `'165`'s `CLK` is tied to `SCK`. The first makes the re-trigger
+lockout structural; the second means `MOSI` already carries bit 7 when the first clock
+edge arrives; the third is the accepted hold-time risk of §6.6.
 
 ## Status
 
-**Specified, nothing built.** The deliverable is the document.
+**The logic is built and checked; the card is not.** `../hardware/gal/storage/` holds both
+`GAL22V10` term lists, `storage.check.ts` (**24 claims** — the decode swept over all 8,192
+input combinations, the burst engine driven with the `'393` and `'163` modelled as the
+board wires them, and both parts compared against Atmel's CUPL), and `census.ts`, which
+runs as part of `npm run check`. `../hardware/gal/verilog/storage_card.v` is the board
+model and `../hardware/place/parts.ts` asserts the eight packages.
+
+**What is not built: the board, the NitrOS-9 `RBF` driver, and every rate above.** Nothing
+has been placed, programmed, or put in front of a real SD card, and every figure in §5 is
+derived rather than measured.
 
 `docs/sdcard.md` §12 gives the build order. Step 0 got a filesystem onto the machine over
 DriveWire before any of this existed; since 2026-09-08 the machine boots NitrOS-9 out of
 its own 1 MB ROM (`machine.md` §7.2) and DriveWire is the *development* link rather than
 the bootstrap — [`docs/drivewire.md`](../docs/drivewire.md). **Step 1 is the silicon
-capture that decides what the write path may drop — and what the core should do about
-`TFM`.** Step 4 — 10⁵ blocks
-byte-exact with every other card's interrupts running — is the only step that can prove
-the read pipeline closes, and step 7 is the only one that measures a rate anyone will
-experience.
+capture that decides whether either path may drop its masking — and what the core should
+do about `TFM`.** Step 4 — 10⁵ blocks byte-exact with every other card's interrupts
+running — is the only step that can prove both the read pipeline and the masking, and
+step 7 is the only one that measures a rate anyone will experience.
 
-**Fast-E (`machine.md` §1's ÷8 rate): passes** — the engine fills the buffer autonomously
-and the host reads SRAM, so nothing on this card races the CPU; the tightest margin left
-is the command send's 3× (÷12), 2× at fast-E, and there is still no `/WAIT` path. Every
-rate above is quoted at the specified ÷12 `E` = 2.0979 MHz.
+**Fast-E (`machine.md` §1's ÷8 rate): passes.** The card delivers a byte every 636 ns
+against a `TFM` read every 1430 ns at ÷12 — a **2.25×** margin, **1.5×** at fast-E — and
+there is still no `/WAIT` path. The tightest software margin is the six-byte command
+send's 3× (÷12), 2× at fast-E. Every rate above is quoted at the specified ÷12
+`E` = 2.0979 MHz.

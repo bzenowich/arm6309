@@ -6,10 +6,17 @@ split into present design and archived history. Entries are organized by the spe
 they were removed from. The spec describes the card as it is; this file records how it
 got there.
 
-The one date that organizes most of this file: **2026-09-08**, the day `machine.md` §5
-item 1 option D and §5 item 7 gave the machine a second physical megabyte, the block
-buffer became memory, the `TFM` hazard was retired from the read path, and the card went
-from 7 ICs at 537 KiB/s to 14 ICs at 681 KiB/s.
+Two dates organize this file. **2026-09-08**, the day `machine.md` §5 item 1 option D and
+§5 item 7 gave the machine a second physical megabyte, the block buffer became memory, the
+`TFM` hazard was retired from the read path, and the card went from 7 ICs at 537 KiB/s to
+14 ICs at 681 KiB/s. And **2026-09-20**, the day that reversed: `gal/storage/census.ts`
+counted the card's logic in **pins** rather than macrocells, found the buffered card was
+four `GAL22V10`s and so **16 ICs rather than 14**, and the buffer came out — back to
+8 ICs at 537 KiB/s, with §4.4's chunk-and-mask carrying both paths.
+
+Entries are keyed by the spec section they were removed from; the 2026-09-08 ones come
+first and the 2026-09-20 ones are collected under their own heading at the end, so a
+section that moved twice appears twice.
 
 ---
 
@@ -545,3 +552,460 @@ machine's smallest and is now its third largest"; "the rule was retired on 2026-
 this is no longer blocked"; and §11.6's re-scoping note "**§11.1 was taken the same day,
 which changes what the question is for.**" The README's units note also equated
 537 KiB/s = 551 kB/s, per the preamble entry above.
+
+---
+
+# 2026-09-20 — the buffer removed, and the card back to eight ICs
+
+**The reversal of everything 2026-09-08 decided.** The storage card is NormalLuser's
+BE6502 SD interface (`sdcard.md` §3.1) and nothing more: the memory-mapped block buffer
+and its engine are gone, the card uses no physical address space at all, and §4.4's
+chunk-and-mask — which §9.2's write path already ran — is now the discipline on the read
+path too. **14 ICs at 681 KiB/s became 8 ICs at 537.**
+
+**What settled it was a count nobody had made.** `hardware/gal/storage/census.ts` lists
+every net the card's logic needs and searches *every* partition of it, rejecting any part
+over a `GAL22V10`'s 22 usable pins. §8.1 had derived "two GALs" from a **macrocell**
+estimate; pins are the binding constraint, and in pins the **buffered** card is **four**
+`GAL22V10`s — so it was a **16-IC card, not the 14 §8 claimed**. What breaks it is the
+region decode: 16 pins for that unit alone. The port card fits two, `dec+stat` at 22 pins
+with none spare and `ctrl+eng` at 18 with four, and those two are `sdbus` and `sdeng`,
+which are now built and checked (24 claims, `gal/storage/storage.check.ts`).
+
+**The 21 % is recoverable and the route is §11.6**, not the buffer: if the 6309 firmware
+resumes `TFM` without re-reading the source, the masking comes out and the port path is
+680 KiB/s. §12 step 1's silicon capture still decides it.
+
+## §0 Summary — the buffer-era table (2026-09-20)
+
+The rows that moved, and what they said:
+
+| Question | The 2026-09-08 answer |
+|---|---|
+| **Where do the bytes land?** | **In a 2 KB SRAM the host addresses as memory** — four 512-byte block buffers in the card's 64 KB region at `A20 = 1`. (§3.5, §6.5) |
+| **What drives a block transfer?** | **A 9-bit address counter and a "fill" bit.** The host writes a command; the engine runs 512 bursts by itself and raises a status bit. (§3.5) |
+| **What about `TFM`'s interrupt re-read?** | **Retired, not mitigated.** The host copies RAM → RAM, and a re-read of RAM is idempotent (§4.2). **No chunking, no masking.** (§4) |
+| **Is `TFM` settled, then?** | **Not for the machine** — `SDDATA` is still a side-effecting port and §9.0's initialisation still uses it. But **no bulk transfer in this machine runs over a port**, so the silicon capture decides a single-byte question. (§4.5) |
+| **Read rate, intra-block** | **681 KiB/s** — the unchunked `TFM`, which is the only kind. |
+| **Read rate, sustained** | **681 KiB/s** with `CMD18` multi-block and double buffering: the SPI engine fills a buffer in 326 µs while the host copies the previous one in 735 µs, so **the host is the bottleneck and the card never waits on the SD card at all.** |
+| **Address cost** | **Four bytes at `$FF58`–`$FF5B`, plus one 64 KB physical region at `A20 = 1`** of which 2 KB is used. |
+| **IC count** | **14**, plus a 3.3 V regulator and the socket. |
+
+and the plumbing/CPLD note under it:
+
+> ⚠ **Half of this card is the buffer's plumbing, and each of those packages buys exactly
+> one thing.** A `6116` for the buffer, a `74HC4040` for the block address, a `74HCT245`
+> for the data path, and three `74HC157`s to mux the address between the engine's counter
+> and the backplane — the price of the buffer being memory rather than a port, and the
+> same price [`../../net/`](../../net/) pays for the same reason.
+>
+> The one-package alternative is an `ATF1508AS` absorbing the counter, the mux and both
+> `GAL22V10`s — an **8-IC card against 14**. The no-CPLD house rule that once blocked it
+> is retired (root `README.md`), so nothing rules it out; **it is not taken**, because
+> this card's logic fits two GALs comfortably, so a CPLD here buys packages rather than
+> capability. §8.1 weighs it; §13 item 12 carries it.
+
+The fast-E paragraph went with it — "The SPI burst races nothing on the CPU side, because
+the engine fills the buffer autonomously and the host reads SRAM. What constrains the card
+is `machine.md` §5 item 7's bus schedule, which is a ÷12 schedule (§3.5)" — and the
+burst-versus-`TFM` race it had replaced came back (§3.3 below).
+
+**The chains:** IC count **7 → 13 → 14 → 8**; intra-block read **537 → 681 → 537 KiB/s**;
+sustained read **528 → 681 → 537**; the card was the machine's smallest, then its third
+largest, and is its smallest again.
+
+## §3.3 — the engine-versus-host budget, and the runt-pulse rule (2026-09-20)
+
+The buffer-era clock table's two middle rows were
+
+| | |
+|---|---|
+| Engine fill, 512 bursts | **326 µs** per block (§3.5) |
+| Host copy, `TFM X+,Y+` at ÷12 `E` | 3 `E` cycles/byte = 1430 ns → **735 µs** per block |
+
+with "**The engine fills a buffer 2.25× faster than the host empties one**, which is what
+makes §5.2's double buffering work." Replaced by the *return* of the port-era
+burst-versus-`TFM` race — 636 ns against 1430 ns, **2.25× at ÷12 and 1.5× at fast-E** —
+which is the form `machine.md` §1's fast-E table had gone on citing throughout.
+
+**And the runt-pulse hazard was deleted by the way the engine had to be built.** The rule
+read:
+
+> Switching the speed-select bit muxes between two asynchronous clocks and can emit a
+> **runt `SCK` pulse** … **Rule: change the `SCK` rate only with `/CS` high and `BUSY`
+> low**, and follow the change with eight dummy clocks (one `SDDATA` read) before
+> asserting `/CS`.
+
+A `GAL22V10` has one clock pin, and a part holding both `SDCTRL` (written at `E` rate) and
+the burst counter (running at SPI rate) cannot clock both — clocking `SDCTRL` off a
+393 kHz tap would miss a 238 ns write strobe outright. So everything on `sdeng` is clocked
+by `CLK25` and the SPI clock is an enable; `BUSY` then only ever changes on the SPI clock's
+falling edge, and `SCK`'s high phases are whole ones whatever the mux is doing. **The rule
+is kept anyway** (spec §3.3, §9.0 step 8), because a card mid-command does not care whose
+fault an extra edge was.
+
+## §3.5 — the block buffer and its engine (removed 2026-09-20)
+
+The whole section, verbatim:
+
+> | | |
+> |---|---|
+> | **The buffer** | a `6116`, 2K×8, 55 ns — **four 512-byte block buffers** |
+> | **Where** | the card's 64 KB region at `A20 = 1`, offsets `$0000`–`$07FF`. `machine.md` §5 item 7: sixteen regions of 64 KB, selected by physical `A19`–`A16` against a four-position jumper, **qualified by `/IOPAGE` high** |
+> | **What fills it** | a **`74HC4040` 9-bit address counter** and a `FILL` bit in `SDCTRL`. Setting `FILL` makes the burst engine self-trigger: byte, `/WE`, increment, repeat, 512 times, then clear `FILL` and set `DONE` |
+> | **The address mux** | three `74HC157`s. With `FILL` low they select backplane `A8`–`A0` always; with `FILL` high the select follows `machine.md` §5 item 7's phase schedule — the engine's counter in its ticks 0–1 slot, the backplane in the host's window — **so the host reads the buffer as memory even while a fill runs** |
+> | **The data path** | one `74HCT245` between the backplane `D0`–`D7` and the buffer's data bus. The `'595`'s outputs are on that local bus, not the slot bus |
+>
+> **The engine is 326 µs per block and the host is 735 µs**, so with two of the four buffers
+> in flight the SD card is never the bottleneck (§5.2): the engine's fill rate and the
+> host's copy rate never compete for the same bus.
+>
+> **Bus arbitration is `machine.md` §5 item 7's fixed schedule and it costs this card
+> nothing.** The host owns the buffer in ticks 7–11 of each bus cycle; the engine takes
+> ticks 0–1. The engine needs a byte per 636 ns and gets one per 476.7 ns, and its byte
+> survives the deferral in the `'595`'s storage register — **which already exists for
+> §3.4's reason** and earns its keep twice.
+>
+> > ⚠ **The `'595` is doing two jobs and neither faces the slot bus.** In the BE6502
+> > original — and in any single-glance reading of §3.1's diagram — its three-state output
+> > drives the host data bus; here it drives the buffer's local bus, and its `/OE` is the
+> > engine's write window rather than a bus-read decode. **This is the single most likely
+> > place to get the build wrong**, because the part is unchanged and its wiring is not.
+
+Replaced by: nothing — there is no buffer. The `'595` drives the backplane's `D0`–`D7`
+directly again (spec §3.2, §8), so the section's closing warning — that the part is
+unchanged and its wiring is not — stopped applying with it.
+
+## §4 — "Retired, not mitigated" (2026-09-20)
+
+The section was headed "The `TFM` hazard, and how this card stopped having one" and opened
+
+> ⚠ **Retired, not mitigated.** The hazard below is real; this card's block path simply
+> does not face it, because the block copy is RAM to RAM (§4.5). §§4.1–4.3 state the
+> problem in full: `net/docs/net.md` §3.2 cites them, §9.2's write path still faces the
+> hazard's mirror image, and `machine.md` §6 keeps the silicon capture as a `cpu`-owned
+> item.
+
+Replaced by: "Mitigated, not retired" — every bulk transfer on the card runs `TFM`
+against the port, in both directions, and §4.4 is the answer on both.
+
+§4.3's last bullet read "**A memory-mapped block buffer fixes it completely** … It is the
+clean answer, **and it is the one taken**: §3.5 is the circuit, §11.1 records the
+decision." It is still the clean answer; it is not taken, because it doubles the card from
+8 packages to 16 (§8.1).
+
+§4.4 was titled "**Chunk-and-mask — retired from the read path, still the write path's
+discipline**" and carried the write-direction listing alone, with "The block *read* does
+not need this — its source is memory (§4.5). **§9.2 step 6's write does** … and it is the
+only place in the machine the technique survives". Replaced by: both directions, the same
+loop, in the spec's §4.4.
+
+## §4.5 — the block path, RAM to RAM (dropped 2026-09-20)
+
+The whole section, verbatim:
+
+> The hazard was never about `TFM`. It was about **a port whose read has a side effect**,
+> and §4.2 already contains the answer: against RAM, a re-read is idempotent. §3.5's buffer
+> is RAM. The block read is
+>
+> ```
+>         ldx   #buffer_in_card    ; the card's block buffer, mapped through the MMU
+>         ldy   #dest
+>         ldw   #512
+>         tfm   x+,y+              ; no masking, no chunking, no 21 %
+> ```
+>
+> and an interrupt landing anywhere inside it re-reads a memory location and gets the same
+> byte back. **The unchunked copy is 21 % faster than the chunked one** — 681 KiB/s against
+> 537 (§4.4's table, §5.1).
+>
+> **Three things this does not do:**
+>
+> 1. **It does not settle `TFM` for the machine.** `SDDATA` (§6.2) is still a read-triggered
+>    port and §9.0's initialisation drives the card through it a byte at a time.
+>    Single-byte reads are not `TFM` loops, so the exposure is gone in practice — but
+>    `machine.md` §6's capture is still owed, and §11.6's option to specify the hazard out
+>    of the CPU is still on the table for its own reasons.
+> 2. **It does not remove the phantom-read requirement.** §3.4's rule — the core drives
+>    `$FFFF` on every dead cycle — still protects `SDDATA`. The buffer does not need it.
+> 3. **It does not help the write path.** §9.2 still pushes 512 bytes out through the port…
+>    ⚠ **and it should not have to.** The buffer is bidirectional and the engine can drain
+>    it as easily as fill it; `SDCTRL` would need a direction bit and the write path becomes
+>    symmetric. **This document specifies the read path against the buffer and leaves the
+>    write path on the port**, which is an inconsistency, not a design — §13 item 6.
+
+Replaced by: §4.4, which is what the read path does now. Item 3's ⚠ — that the write path
+"should not have to" stay on the port — is what §13 item 6 booked, and it closed by the
+read path joining the write path rather than the other way round.
+
+## §5.1 / §5.2 — the buffer's rates (2026-09-20)
+
+§5 opened "Three different numbers get called 'the rate' — and two of them are the same
+number, which is the clearest sign the buffer is the right shape." Two of them are still
+the same number, for a different reason: the card's read-ahead collapses the inter-block
+gap, so the intra-block ceiling *is* the sustained rate.
+
+§5.1 read: "**681 KiB/s.** A `TFM X+,Y+` of 512 bytes from the card's buffer into system
+RAM, at 3.01 cycles/byte against `E` = 2.0979 MHz: 735 µs a block. **Nothing about the SPI
+side sets this number.** The engine fills the buffer on its own clock and the host reads
+memory; the two rates never compete, which is what §5.2 is about."
+
+§5.2, "Sustained read: the host, and nothing else", verbatim:
+
+> | | per 512-byte block | |
+> |---|---|---|
+> | SPI engine fills a buffer | **326 µs** | 512 × 636 ns |
+> | host copies a buffer | **735 µs** | 512 × 1435 ns |
+> | **sustained, `CMD18` + double buffering** | **735 µs → 681 KiB/s** | **the host is the bottleneck** |
+>
+> **With four buffers (§3.5) and `CMD18` READ_MULTIPLE_BLOCK, the SD card is never waited
+> on.** It streams into buffer *n+1* while the host copies buffer *n*, and it finishes
+> 2.25× before the host does.
+>
+> **`CMD18` is still what makes the number real.** A `CMD17` per block pays the card's
+> ~1 ms read-access latency 256 times per 128 KiB instead of once, and no amount of
+> buffering hides a command that has not been sent: **253 KiB/s** — §9.1.1.
+>
+> **128 KiB of mod samples** arrive in **193 ms**, against the 187 ms the audio card needs
+> to swallow them (`modplayer.md`) — a 6 ms gap.
+
+Replaced by: 537 KiB/s from the 931 µs chunked `TFM`, with `CMD18` still mandatory and
+§9.1.1's 253 KiB/s single-block figure unchanged. The elapsed figures moved with it:
+the 128 KiB sample upload **193 ms → 238 ms** against the audio card's 187 ms intake
+(the gap **6 ms → 51 ms**), and "load a program, 30 KB" **44 ms → 56 ms**.
+
+§5.3 kept its 126–408 KiB/s — the bound was never the transfer — and lost its closing ⚠,
+"**The write path is still on the port** (§4.5 item 3), so it still pays §4.4's masking
+tax in the form the buffer exists to delete — §13 item 6", which is no longer an
+asymmetry.
+
+## §6.1 — the 64 KB region (2026-09-20)
+
+The placement section was "four bytes, and one region": "**`$FF58`–`$FF5B`, four bytes** …
+**plus one 64 KB physical region at `A20 = 1`** (`machine.md` §5 item 7), of which this
+card uses 2 KB." Its second ⚠ bullet:
+
+> - **The region base is a second jumper**, four positions against physical `A19`–`A16`,
+>   and the region decode is qualified by **`/IOPAGE` high** — a buffer is a
+>   physical-memory decode and `machine.md` §2's rule is not optional for it. ⭐ `/IOPAGE`
+>   also silences the card above 2 MB, for nothing: the map is 32 MB and `A21`–`A24`
+>   never leave the motherboard — `machine.md` §2.
+
+Replaced by: no physical address space at all. The first bullet — the seven-bit `A0`–`A6`
+decode — stays, and is now a checked claim rather than a warning (`storage.check.ts`
+sweeps all 8,192 input combinations and asserts silence at `$FF18`–`$FF1B`).
+
+## §6.2 / §6.3 — the register bits the buffer needed (2026-09-20)
+
+`SDCTRL` was
+
+| Off | Name | R/W | Function |
+|---|---|---|---|
+| `+$2` | `SDCTRL` | W | b0 `/CS`, b1 clock rate, **b2 `FILL`**, **b3 `BUF[1:0]` low**, **b4 `BUF[1:0]` high**, b7 soft reset. **`$00` is the safe state and is what `/RESET` forces** — §6.4 |
+
+with:
+
+> **`FILL` is the whole engine.** Writing it with `BUF` selecting one of the four 512-byte
+> buffers (§3.5) starts the block: the burst engine self-triggers, the `'4040` counts, and
+> 512 bytes land in the buffer. `FILL` self-clears at terminal count and `SDSTAT` bit 3
+> goes high.
+>
+> ⚠ **`FILL` must not be set with `/CS` high or the clock at 393 kHz.** At init speed a
+> block is 20.4 ms of engine occupancy, and `DONE` does not arrive until it ends. The GAL
+> qualifies `FILL` on the fast-clock bit; **that is one product term and it is not
+> optional**, because the failure is a card that appears to hang.
+
+and `SDSTAT` was
+
+| Bit | Name | Meaning |
+|---|---|---|
+| **3** | **`DONE`** | **a `FILL` block finished; the buffer `BUF` named is complete** (latched, cleared by the next `FILL`) |
+| 4–7 | — | read 0 |
+
+with "**`DONE` is what the block path polls**, and a 512-byte fill is 326 µs — 684 bus
+cycles — so it is polled, not raced. ⚠ **A driver that polls `DONE` in a tight loop wastes
+the 326 µs the buffer exists to overlap**", and the note that `DONE` was deliberately not
+an interrupt for the same reasons `CD` is not.
+
+Replaced by: `SDCTRL` b0/b1/b7 only, b2–b6 unimplemented; `SDSTAT` b0 `BUSY`, b1 `CD`,
+b2 `WP`. ⚠ **And "4–7 read 0" was wrong even then** — `sdbus` three-states `D0`–`D2` for
+an `SDSTAT` read and drives nothing else, so b3–b7 are whatever the bus floats to and the
+driver masks. The design output is what says so.
+
+§6.2 also carried "**The `'574`'s clock edge must lead the `'165`'s parallel load**, so the
+load is taken from the burst's own first clock rather than from the write strobe" —
+replaced by the built answer: `MOSICK` is **active low**, so its latching edge is `E`-fall,
+and `sdeng` takes `DATSTB`'s falling edge and is registered on `CLK25`, so the hold
+register is loaded before the burst it triggered can start, by construction.
+
+§6.5's recorded alternative ended "**It costs one macrocell**; it arrives with §8.1's 8-IC
+version, if that version happens." The 8-IC version happened without it: `sdeng` is full at
+10 of 10, so the pending-trigger flop is no longer free. §6.5's lockout also stopped being
+a product term and became a wire — the `'163`'s `/CLR` is tied to `BUSY`.
+
+§6.6's inverter table offered "**1 macrocell** — available only if §8's overflow moves
+`SDCTRL` to a `'574` and frees four. **This is the first claim on those four.**", and a
+"15th package". The four never freed; the package would be a ninth.
+
+## §8 — the fourteen-IC table (2026-09-20)
+
+Verbatim:
+
+> | # | Part | Function |
+> |---|---|---|
+> | 1 | **74HCT595** | MISO shift + storage; three-state onto **the buffer's local data bus** — §3.5, not the slot bus |
+> | 2 | 74HC165 | MOSI shift, parallel-loaded from the hold register at each burst |
+> | 3 | 74HC574 | MOSI hold register — §6.2's persistence |
+> | 4 | 74HC163 | burst counter: eight clocks, terminal count drives `RCLK` and clears `BUSY` |
+> | 5 | 74HC393 | clock divider, `÷2` and `÷64` taps off the 25.175 MHz master |
+> | 6 | 74LVC125 | 3.3 V level shift for `SCK`, `MOSI`, `/CS` |
+> | 7 | **6116** 2K×8, 55 ns | **the block buffer — four 512-byte buffers.** §3.5 |
+> | 8 | **74HC4040** | **the fill engine's 9-bit block address counter** |
+> | 9–11 | **74HC157** ×3 | **address mux: the counter during the engine's slot, backplane `A8`–`A0` otherwise** |
+> | 12 | **74HCT245** | **backplane `D7`–`D0` ↔ the buffer's local data bus** |
+> | 13 | **GAL22V10** ×2 | decode from `/IOSEL` **and** the `A20 = 1` region; `SDCTRL` including `FILL`/`BUF`; `SDSTAT`; the burst trigger; the `machine.md` §5 item 7 bus phase |
+>
+> **Total: 14.** Plus a 3.3 V LDO, an SD socket, and passives. (The rows number 1–13
+> because two of them carry more than one package — count footprints, not rows;
+> `hardware/place/parts.ts` asserts the 14.)
+>
+> > ⚠ **Seven of the fourteen packages are the buffer, and it is worth being blunt about
+> > what they buy**: §3.5 — 29 % more sustained throughput than a chunked port path, and
+> > the deletion of §4's hazard from the read path — for seven packages, **six of which are
+> > address and data plumbing**. The card is the machine's third largest. Whether that is a
+> > good trade is a judgement, and this document's is that a card whose correctness rested
+> > on an undocumented CPU behaviour was not a card to keep for the sake of six packages.
+
+and the ⚠ under it:
+
+> ⚠ **Seven of the fourteen packages are the buffer, and it is worth being blunt about
+> what they buy**: §3.5 — 29 % more sustained throughput than a chunked port path, and
+> the deletion of §4's hazard from the read path — for seven packages, **six of which are
+> address and data plumbing**. The card is the machine's third largest. Whether that is a
+> good trade is a judgement, and this document's is that a card whose correctness rested
+> on an undocumented CPU behaviour was not a card to keep for the sake of six packages.
+
+⛔ **And the 14 was itself wrong.** `gal/storage/census.ts` counts pins rather than
+macrocells: row 13's "GAL22V10 ×2" is four parts, not two, because the region decode alone
+needs 16 pins. The buffered card was **16 ICs**. Replaced by: spec §8's eight-package
+table — two GALs and six discretes.
+
+## §8.1 — "Two GALs, and the one-package alternative that is not taken" (2026-09-20)
+
+Verbatim:
+
+> The card's logic does not fit one `GAL22V10`. The decode from `/IOSEL`, the burst trigger,
+> `SDCTRL` and `SDSTAT` were already roughly ten macrocells of a `GAL22V10`'s ten; add the
+> region compare (`A19`–`A16` against a jumper, plus `A20`, `A15`, `/IOPAGE`), the
+> `FILL`/`BUF` control bits, the `'157` select, the `'4040` clock and clear, the `'245`
+> enable and direction, and `machine.md` §5 item 7's two-tick engine window. **That is not a
+> fit; it is a second part**, and §8 row 13 is budgeted as two.
+>
+> > **One `ATF1508AS` absorbs both GALs, the `'4040` and the three `'157`s** — the counter
+> > is 9 macrocells, the mux is 9 more, and the part has 128 with 60 I/O. The card would be
+> > **8 ICs**: `'595`, `'165`, `'574`, `'163`, `'393`, `'LVC125`, `6116`, CPLD. Cheaper
+> > than 14, fewer things to get wrong, and in-circuit reprogrammable.
+> >
+> > **The no-CPLD house rule that once refused this is retired** (root
+> > [`README.md`](../../README.md)), so nothing blocks it — and **it is not taken**. What
+> > weighs:
+> >
+> > | For | Against |
+> > |---|---|
+> > | **8 ICs against 14** — six packages, all of them address and data plumbing | **~160 mA against two GALs' ~140–180 mA** — roughly a wash, not the saving CPLDs give on bigger cards |
+> > | one part to fit instead of two, and in-circuit reprogrammable over JTAG | ⚠ **fuse-level verification is lost.** `hardware/gal/jedec/` reads a `GAL22V10`'s fuse map back and executes it; prjbureau rates the ATF1508AS database *"Partial"* and its programming path *"Untested"* (`graphics.md` §10.1.6) |
+> > | the same decision video, audio and net all reached | this card is the only one whose logic **fits two GALs comfortably**. The others took CPLDs because a GAL could not carry them |
+> >
+> > **That last row is the real argument against**, and it is not a rule — it is that a
+> > CPLD here buys packages rather than capability, which is the weakest case for one in
+> > the machine. §13 item 12 carries the question.
+>
+> **What the second GAL costs elsewhere**: nothing on the backplane, ~50 mA, and one more
+> part to program. **What it does not cost is the `74HC574` escape hatch** — §12 step 3's
+> "if `SDCTRL` does not fit, move it to a `'574`" would make the card 15, and with two
+> parts it should not be needed.
+
+⚠ **The macrocell estimate in the first paragraph is the thing to notice**: it is about
+equations, and a `GAL22V10`'s binding constraint here is **pins**, 22 usable of 24.
+Nothing had counted them until `census.ts`. Replaced by: spec §8.1's partition search —
+`dec+stat` 22 pins / 0 spare, `ctrl+eng` 18 / 4, and the finding that the buffered card is
+four parts. The `ATF1508AS` case was packages and nothing else, and it was **the only
+thing that made the buffered card affordable in packages** (8 against 16); with the card
+already at 8 it has nothing left to buy.
+
+Also dropped: "**What the second GAL costs elsewhere**: nothing on the backplane, ~50 mA,
+and one more part to program. **What it does not cost is the `74HC574` escape hatch** —
+§12 step 3's 'if `SDCTRL` does not fit, move it to a `'574`' would make the card 15, and
+with two parts it should not be needed." `SDCTRL` fits: `sdeng` is 10 macrocells of 10.
+
+## §9 — the `FILL` steps (2026-09-20)
+
+§9.1's read listing had the transfer as two steps against the buffer:
+
+```
+ 6. SDCTRL: FILL, with BUF naming a free buffer.  The engine runs 512 bursts and lands
+    the block in the buffer -- 326 us.  Poll SDSTAT DONE.               -- 3.5, 6.3
+ 7. TFM X+,Y+ the 512 bytes out of the buffer (4.5) -- or leave them where they are
+    until they are wanted; the buffer is memory.
+```
+
+and its pipeline paragraph put the off-by-one inside the engine: "The engine must
+therefore write the `'595`'s current contents into the buffer *before* triggering its own
+first burst — store, then fetch, 512 times — or every block lands shifted by one."
+Replaced by: the chunked `TFM` at step 6, and the port-era statement of where the pipeline
+closes — nothing between step 5 and step 6 touches `SDDATA`, so the first `TFM` read
+returns byte 0.
+
+§9.1.1 step 4b read "`SDCTRL: FILL, BUF = n mod 4.  While the engine fills buffer n, TFM
+buffer n-1 out to its destination; only then poll DONE.`", and its step 6 ended "`TFM the
+last buffer out.`" The CRC arithmetic moved with the copy time: **681 → 537 KiB/s**, the
+735 µs copy back to **931 µs**, and the cost of checking CRC16 in software from
+"512 bytes per ~6.8 ms = **73 KiB/s**" back to "~7.05 ms = **71 KiB/s**".
+
+## §11.1 — the buffer, taken 2026-09-08 and reversed 2026-09-20
+
+The section, verbatim:
+
+> **This is the design.** Expose the card's block buffer as address space: reads become
+> non-side-effecting, `TFM X+,Y+` walks it at 3 cycles/byte, and §4's hazard disappears from
+> the read path entirely — no chunking, no masking, 681 KiB/s, and a simpler driver. §3.5 is
+> the circuit, §4.5 is the hazard going away, §5 is the rate.
+>
+> The address space it needs is `machine.md` §5 item 1 option D's second megabyte —
+> physical `A20`, one backplane pin, no parts — divided by §5 item 7 into sixteen 64 KB
+> regions with a fixed-phase bus schedule in place of `/WAIT`. This card takes one region
+> and uses 2 KB of it. **What it costs is six ICs** (§8), five of them address and data
+> plumbing, and a second `GAL22V10`.
+>
+> The adoption narrative — this was long "the clean answer we cannot afford", and the
+> argument for affording it is what helped close `machine.md` §5 item 1 — is archived in
+> [history.md](history.md).
+
+**Reversed 2026-09-20.** What it bought was real and is not disputed: 21 % of the read
+rate and §4's hazard off the read path. What it cost was mispriced. This section said "six
+ICs (§8), five of them address and data plumbing, and a second `GAL22V10`"; the count in
+pins is **eight** packages — six discretes and **two more GALs**, because the region decode
+is 16 pins on its own — so the card was 16 ICs rather than 14, twice the port card.
+`gal/storage/census.ts` is the derivation. The 21 % is recoverable for nothing through
+§11.6, which is a boundary condition in the CPU's own `TFM` state machine rather than
+eight packages and a megabyte of physical address space.
+
+§11.6's own pricing table went back to the form archived under §11.6 above: the firmware
+option buys the **read** path again — 537 → 680 KiB/s — and not only the write path.
+
+## §12 / §13 — build order and open items (2026-09-20)
+
+- Step 3's exit was "§8's macrocell arithmetic confirmed, or the card becomes 15 ICs
+  (§8.1)". The arithmetic is confirmed and the unit is macrocells per part: `sdbus` 8 of
+  10, `sdeng` 10 of 10.
+- Step 4 was "**Block read through the buffer** (§9.1: `FILL`, `DONE`, `TFM X+,Y+`)"; it
+  is the chunked `TFM` again, and it catches §4's hazard again as well as the pipeline.
+- Step 7 predicted "**681 KiB/s, host-bound**" with a ≥650 KiB/s exit bar; 537 KiB/s and
+  ≥510.
+- **Item 1** had been downgraded on 2026-09-08 to "two of §12 step 1's three questions
+  still decide something … The source-re-read question no longer decides anything on this
+  card." It decides 21 % again.
+- **Item 6** — "⚠ The write path is still on the port, and that is an inconsistency" —
+  **closed** by the read path joining it.
+- **Item 12** — "⚠ Whether to take the `ATF1508AS`" — **closed** by the card shrinking
+  instead.

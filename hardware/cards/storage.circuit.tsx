@@ -1,36 +1,37 @@
-/* SD card storage - 14 ICs, storage/docs/sdcard.md 8. 681 KiB/s sustained.
+/* SD card storage - 8 ICs, storage/docs/sdcard.md 8. 537 KiB/s sustained.
  *
  * The machine's one period exception, and it is honest about it: an SPI burst
- * started by the bus read strobe (sdcard.md 3.1).
+ * started by the bus read strobe (sdcard.md 3.1, NormalLuser's BE6502
+ * interface).
  *
- * REVISED 2026-09-08. sdcard.md 11.1 wanted a memory-mapped block buffer from
- * the beginning and called it "the clean answer we cannot afford" - the $FF
- * window was 64 bytes and the 1 MB physical map was fully spent. machine.md 5
- * item 1 option D and item 7 made it affordable, so the SPI engine now fills a
- * 2 KB SRAM the host reads as memory. That RETIRED the TFM hazard rather than
- * mitigating it (a re-read of RAM is idempotent - sdcard.md 4.2's own
- * argument), and took sustained reads from 528 to 681 KiB/s.
+ * REVISED 2026-09-20, and the revision is a RETREAT to that interface. From
+ * 2026-09-08 this card carried a 2 KB SRAM the SPI engine filled and the host
+ * read as memory, which retired sdcard.md 4's TFM hazard rather than
+ * mitigating it and took sustained reads from 537 to 681 KiB/s. It cost seven
+ * ICs, six of them address and data plumbing - and gal/storage/census.ts,
+ * counting PINS rather than macrocells, then found its logic was four
+ * GAL22V10s and not the two 8 budgeted. A 16-IC card for 21 %.
  *
- * It cost seven ICs, six of them address and data plumbing. One ATF1508AS would
- * absorb both GALs, the counter and the mux for an 8-IC card.
- *
- * That was refused on the no-CPLD house rule, which was retired on 2026-09-08
- * (root README.md), so it is no longer blocked - and it has not been taken.
- * Unlike video, audio and net, this card's logic fits two GALs comfortably, so a
- * CPLD here buys packages rather than capability and gives up the fuse-level
- * verification hardware/gal/jedec/ provides. sdcard.md 8.1, 13 item 12.
+ * So the buffer is gone and 4.4's chunk-and-mask discipline carries the read
+ * path, which is what 9.2's WRITE path already did - the inconsistency 13
+ * item 6 booked closes itself. The card is two GALs and six discrete
+ * packages, the logic is fuse-verifiable (hardware/gal/storage/), and the
+ * 21 % comes back for nothing if 11.6's option is taken: the hazard is a
+ * property of this machine's own CPU firmware, not of handed-down silicon.
  */
 import { Card } from "../lib/Card"
 
 export default () => (
-  <Card name="arm6309-storage" ioBase={0xff58} ioSize={4} length={120} icBudget={14}>
-    {/* U1 - decode and the burst sequencer, from geographic /IOSEL.
+  <Card name="arm6309-storage" ioBase={0xff58} ioSize={4} length={120} icBudget={8}>
+    {/* U1 - sdbus: the $FF58 decode, the four register strobes and SDSTAT's
+      * three bits. hardware/gal/storage/sdbus.jedec.ts is the term list and
+      * storage.check.ts sweeps all 8,192 inputs against Atmel's CUPL.
       *
-      * The decode is A0-A6 now, seven bits: /IOSEL widened to $FF00-$FF7F on
+      * The decode is A0-A6, seven bits: /IOSEL widened to $FF00-$FF7F on
       * 2026-09-08 and A6 left the strobe, so six bits would answer at $FF58
-      * AND $FF18 (sdcard.md 6.1). This part also gained FILL/BUF (sdcard.md
-      * 6.2) and the A20 = 1 region compare, which is why sdcard.md 8 budgets
-      * the GAL as two packages. */}
+      * AND $FF18 (sdcard.md 6.1) - which the check asserts as its own claim.
+      *
+      * ⚠ It is purely combinational, so pin 1 is an ordinary input. */}
     <chip
       name="U1"
       footprint="dip24_w0.3in"
@@ -49,34 +50,33 @@ export default () => (
       noConnect={[]}
     />
 
-    {/* U7 - the block buffer. 6116, 2K x 8, four 512-byte buffers, at offset 0
-      * of the card's 64 KB region at A20 = 1 (machine.md 5 item 7). The host
-      * reads it through the MMU as ordinary memory, which is the whole of
-      * sdcard.md 4.5: there is nothing here for an interrupted TFM to break.
+    {/* U2 - sdeng: SDCTRL, and the engine that turns one bus access into
+      * exactly eight SPI clocks. sdeng.jedec.ts.
       *
-      * Filled by a 74HC4040 9-bit counter and the FILL bit; three 74HC157s mux
-      * that counter against backplane A8-A0. Those four packages plus this one
-      * and the '245 are the six ICs the revision cost. */}
+      * ⭐ Everything on it is clocked by CLK25 and the SPI clock is an
+      * ENABLE, which is the one departure from sdcard.md 3.3's circuit: a
+      * GAL22V10 has one clock pin, and a part holding both SDCTRL (written at
+      * E rate) and the burst counter (running at SPI rate) cannot clock both.
+      * It also deletes 3.3's runt-pulse hazard, because BUSY then only ever
+      * moves on the SPI clock's falling edge.
+      *
+      * ⚠ Two of its pins are wired, not computed: the '163's /CLR and the
+      * '165's SH//LD are both BUSY. The first is 6.5's re-trigger lockout
+      * made structural - a counter whose clear is deasserted cannot be
+      * reloaded mid-burst. */}
     <chip
-      name="U7"
-      manufacturerPartNumber="6116"
-      footprint="dip24_w0.6in"
-      pinLabels={{
-        pin1: "A7", pin2: "A6", pin3: "A5", pin4: "A4", pin5: "A3",
-        pin6: "A2", pin7: "A1", pin8: "A0", pin9: "DQ0", pin10: "DQ1",
-        pin11: "DQ2", pin12: "GND", pin13: "DQ3", pin14: "DQ4", pin15: "DQ5",
-        pin16: "DQ6", pin17: "DQ7", pin18: "nCE", pin19: "A10", pin20: "nOE",
-        pin21: "nWE", pin22: "A9", pin23: "A8", pin24: "VCC",
-      }}
-      connections={{ VCC: "net.V5", GND: "net.GND" }}
+      name="U2"
+      manufacturerPartNumber="GAL22V10D"
+      footprint="dip24_w0.3in"
+      connections={{ pin24: "net.V5", pin12: "net.GND" }}
     />
 
-    {/* U2 - the receive shift register, and it is 74HCT595 and not 74HC595 for
+    {/* U3 - the receive shift register, and it is 74HCT595 and not 74HC595 for
       * one specific reason: the SD card's V_OH of ~2.48 V clears an HCT input's
       * 2.0 V V_IH, so MISO needs no level shifter at all. An HC part would read
       * a valid 3.3 V high as indeterminate (sdcard.md 7). */}
     <chip
-      name="U2"
+      name="U3"
       manufacturerPartNumber="74HCT595"
       footprint="dip16_w0.3in"
       pinLabels={{
@@ -85,20 +85,19 @@ export default () => (
         pin12: "RCLK", pin13: "nOE", pin14: "SER", pin15: "QA", pin16: "VCC",
       }}
       connections={{
-        /* nOE is no longer tied low onto the slot bus: the '595 now three-states
-         * onto the buffer's LOCAL data bus, and its enable is the fill engine's
-         * write window rather than a bus-read decode. sdcard.md 3.5 flags this
-         * as the most likely place to get the revision wrong, because the part
-         * is unchanged and its wiring is not. */
+        /* nOE is sdbus's OE595 and nothing else: an SDDATA READ. ⚠ Not the
+         * same term as the burst trigger - a WRITE to SDDATA also starts a
+         * burst, and the '595 must not drive a bus the CPU is driving. The
+         * storage_tb counts D's drivers every tick to hold the board to it. */
         VCC: "net.V5", GND: "net.GND", nSRCLR: "net.V5",
         SER: "net.MISO", SRCLK: "net.SCK_5V",
       }}
     />
 
-    {/* U6 - 5 V to 3.3 V for SCK, MOSI and /CS. Three gates of four; LVC inputs
+    {/* U8 - 5 V to 3.3 V for SCK, MOSI and /CS. Three gates of four; LVC inputs
       * are 5 V tolerant, which is what makes one part do it. */}
     <chip
-      name="U6"
+      name="U8"
       manufacturerPartNumber="74LVC125"
       footprint="dip14_w0.3in"
       pinLabels={{
@@ -121,7 +120,7 @@ export default () => (
       * SD card draws far more while programming than while reading, and in
       * bursts - an undersized LDO browns out the card mid-write. */}
     <chip
-      name="U7"
+      name="VR1"
       footprint="sot223"
       pinLabels={{ pin1: "GND", pin2: "VOUT", pin3: "VIN", pin4: "TAB" }}
       connections={{ VIN: "net.V5", VOUT: "net.V3_3", GND: "net.GND", TAB: "net.V3_3" }}

@@ -805,7 +805,8 @@ first on §7.3's cut list. **Keep the jumper footprint on the board regardless.*
 | — | | TX filter network, 100 Ω RX termination, LEDs, decoupling, JTAG header, two jumper blocks (`$FF` base, region base) |
 
 **12 ICs.** For scale ([`hardware/place/parts.ts`](../../hardware/place/parts.ts)):
-video 27, audio 29, storage 14, I/O (PS/2 + serial) 14.
+video 33, audio 35, storage 8, I/O (PS/2 + serial) 14. ⚠ Those first two were 27
+and 29 when this line was written; the comparison is kept current from the parts list.
 
 **`74HCT` only where a part's input is driven from the slot** — here that is the `'245`
 and the two `'244`s. Both CPLDs accept TTL levels natively (`V_IH(min)` = 2.0 V) and

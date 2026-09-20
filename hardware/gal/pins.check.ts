@@ -50,6 +50,8 @@ import { v3scan } from "./video3/v3scan.cpld"
 import { v3ptr } from "./video3/v3ptr.cpld"
 import { v3host } from "./video3/v3host.cpld"
 import { v3laneDesign } from "./video3/v3lane.jedec"
+import { sdbusDesign } from "./storage/sdbus.jedec"
+import { sdengDesign } from "./storage/sdeng.jedec"
 
 let failures = 0, passes = 0
 const check = (ok: boolean, claim: string, detail = "") => {
@@ -98,6 +100,10 @@ const PARTS: Part[] = [
    * plan.md §15 step 8 owes one. */
   cpld("video3", v3dot), cpld("video3", v3scan),
   cpld("video3", v3ptr), cpld("video3", v3host), gal("video3", v3laneDesign),
+  /* ⭐ STORAGE, 2026-09-20. Eight ICs, two of them these; every pin below
+   * that leaves the package drives a discrete part this card really has, so
+   * unlike video3 rule 3 DOES reach it. */
+  gal("storage", sdbusDesign), gal("storage", sdengDesign),
 ]
 
 const find = (part: string, name: string): Pin => {
@@ -217,6 +223,29 @@ const CONSUMERS: Consumer[] = [
   ...["LB0", "UB0", "LB1", "UB1"].map((pin) => ({ part: "v3lane", pin, drives: `AS6C8016 /${pin.slice(0, 2)} (part ${pin[2]})`, low: true, where: "plan.md 4" })),
   { part: "v3lane", pin: "PWOE", drives: "74HC574 /OE (posted write)", low: true, where: "plan.md 13.1" },
   { part: "v3lane", pin: "RFOE", drives: "register-file SRAM /OE", low: true, where: "plan.md 5" },
+
+  /* storage - gal/verilog/storage_card.v is the board, and sdcard.md 8 the
+   * table. ⭐ Three of these are pins doing a job a macrocell would
+   * otherwise do, which is what keeps the card inside two GALs: BUSY is the
+   * '163's /CLR AND the '165's SH//LD, and SCK is the '165's clock. */
+  { part: "sdbus", pin: "OE595", drives: "74HCT595 /OE (U3)", low: true, where: "sdcard.md 6.2" },
+  { part: "sdbus", pin: "MOSICK", drives: "74HC574 CLK (U5) - the RISING edge is E-fall", low: true, where: "sdcard.md 6.2" },
+  { part: "sdeng", pin: "SCK", drives: "74HCT595 SRCLK (U3), and the card's own SCK", low: false, where: "sdcard.md 3.1" },
+  /* ⭐ the inverted copy, 2026-09-20: the '165 alone takes it, so MOSI moves
+   * on SCK's falling edge and is stable a half period before the card
+   * samples it. sdcard.md 6.6 - and FALL being inlined into BUSY is what
+   * freed the macrocell. */
+  { part: "sdeng", pin: "SCKN", drives: "74HC165 CLK (U4) - the INVERTED gated clock", low: true, where: "sdcard.md 6.6" },
+  { part: "sdeng", pin: "RCLK", drives: "74HCT595 RCLK (U3) - released at the burst's end", low: true, where: "sdcard.md 3.4" },
+  /* ⚠ BUSY is declared active-HIGH although both parts it drives have an
+   * active-low input, and that is the design rather than a slip: the wire
+   * carries BUSY, and "/CLR asserted" is exactly "not BUSY". The counter is
+   * held clear while idle and the shifter parallel-loads while idle, so the
+   * inversion IS the function. Getting this backwards gives a counter that
+   * only counts when nothing is happening. */
+  { part: "sdeng", pin: "BUSY", drives: "74HC163 /CLR (U6) and 74HC165 SH//LD (U4) - both asserted by !BUSY, deliberately", low: false, where: "sdcard.md 6.5" },
+  { part: "sdeng", pin: "SPICLK", drives: "74HC163 CLK (U6)", low: false, where: "sdcard.md 3.3" },
+  { part: "sdeng", pin: "CS", drives: "74LVC125 1A (U8) -> the card's /CS", low: false, where: "sdcard.md 6.2" },
 
   /* audio card - audio.md 10.2.2; the parts are not drawn yet */
   { part: "aseq", pin: "BLATOE", drives: "74HC574 /OE (BLAT)", low: true, where: "audio.md 10.2.2" },

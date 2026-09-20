@@ -241,7 +241,7 @@ matrix, product-term cascading and placement are `fit1508.exe`'s business and
 phase *at all* is logic, not delay, and this model does see that — which is
 where two of `design-review2.md`'s findings came from.
 
-### Nine traps this repository has already paid for
+### Ten traps this repository has already paid for
 
 - **A failed CPLD fit leaves the previous `.fit` in place.** A stale
   utilisation report reads exactly like a passing one. Compare the file's hash
@@ -338,6 +338,21 @@ where two of `design-review2.md`'s findings came from.
   retry. ⚠ The prefix is also **one shared resource**: concurrent fits write the
   same `cpld/<name>.fit`, so two of them do not race to a winner, they grind
   indefinitely and produce nothing. One fit at a time, always.
+- ⛔ **A `//` COMMENT CONTAINING `/*` SWALLOWS THE FILE, and the tool that
+  reads it says nothing** — found 2026-09-20. `gal/reach.check.ts` stripped
+  comments in two passes, block first and line second. `storage_card.v`'s
+  header says *"generated from the term lists in `../storage/*.jedec.ts`"* —
+  and `storage/` followed by `*` **is** the digraph `/*`, so the first pass
+  opened a comment there and closed it at the next `*/` 139 lines later.
+  **72 % of the file was gone before the scan began**, and the check reported
+  four signals as produced-and-unread, which is exactly its FINDING output.
+  ⚠ Here it was a false alarm; the same swallowed region hides a true finding
+  just as well, and `video_card.v` — a live card — had **9 %** of its body
+  invisible the same way. **Strip both kinds of comment in ONE alternated
+  pass** (`/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g`), which is what a lexer does:
+  whichever delimiter comes first wins. Any tool in this repository that
+  reads Verilog or C as text has the same obligation.
+
 - **A hang is worse than a failure.** `vsync_tb` waited on
   `SLOTTICK == 0 && PH == 0`; `SLOTTICK` later moved phase, the conjunction
   became unsatisfiable, and the `forever` spun for half an hour. **`run.sh`'s
