@@ -143,9 +143,11 @@ Mario-like) wants sprites rather than copies; each further sprite is its own pos
 registers, window counters and shape fetch on `v3dot` — **121/128 cells and one spare
 pin**, so it is a partition change and not an addition.
 
-## 7. ⭐ "Mayhem in Monsterland" — what is there, and the two things that are not
+## 7. ⭐ "Mayhem in Monsterland" — and §7.1, which is the way in
 
-**Asked 2026-09-19: are the features there to recreate it?** Partly. The genre study
+**Asked 2026-09-19: are the features there to recreate it?** Partly, as written here —
+and then ⭐ **§7.1 removed the blocker**: a bitmap playfield built out of blitted
+blocks is as long as DRAM allows, so read that section with this one. The genre study
 (`keyed-copy.md` §6.3, written before the copy came down to 344 µs and before the key
 existed) called this genre C and said the key does not serve it. That is still true,
 but for a different reason than it gave.
@@ -186,10 +188,49 @@ but for a different reason than it gave.
 | tile-mode actors on the 8-pixel grid | free, and it is what `overworld` already does — but it is not Monsterland's look |
 | parallax | ⛔ there is no display list (plan §0), so per-band `HSCROLL` is CPU chased against `VSTAT` |
 
-**So the honest answer**: a Monsterland-*style* game in bitmap mode, room by room, is
-reachable today — that is what `mvania` is. Monsterland itself, long levels with a
-cast of smooth sprites, wants the sprite working in tile mode and then more than one
-of them, and the second is a partition change on the part that refuses.
+### 7.1 ⭐⭐ AND THE BLOCKER DISSOLVES: build the world out of BLOCKS, in bitmap mode
+
+**Asked 2026-09-19: can the world be built from ~32 different 16 × 16 sprites blitted
+onto a bitmap playfield? Yes — and it is the answer to (1).** Tile mode's advantage
+was never the tiles, it was that a *map* is small where a *bitmap* is large. Blitting
+blocks buys the same thing without leaving bitmap mode, so the hardware sprite, the
+keyed blits and 256 colours all stay:
+
+| | |
+|---|---|
+| the bank | 32 blocks × 256 bytes = **8 KB** of VRAM |
+| the level | one byte a block: 13 rows × 512 columns = **6.5 KB in DRAM** — 8,192 pixels, thirteen screens, and nothing says stop there |
+| ⭐ the refill | the ring is 1024 wide and the view is 640, so an incoming column is written **384 pixels ahead of the view**, off-screen, and `HSCROLL` streams the level through it |
+
+**What the refill costs a frame** (183 µs a copy through the card's registers, plus
+0.247 µs a byte, both measured):
+
+| scroll | a column every | 13 blocks of 16 × 16 | one 16 × 208 strip |
+|---|---|---|---|
+| 2 px a frame | 8 frames | 0.40 ms | 0.13 ms |
+| 4 px | 4 frames | 0.80 ms | 0.25 ms |
+| 8 px | 2 frames | 1.60 ms | 0.50 ms |
+| 16 px | every frame | 3.20 ms | 1.01 ms |
+
+⚠ **Prefer TALLER blocks than 16 × 16.** A copy is 183 µs of fixed cost against 63 µs
+of data for a 256-byte block — **three quarters of the work is per-rectangle** — so a
+column costs 3.20 ms as thirteen blocks, 1.74 ms as four 16 × 64 strips and 1.01 ms
+as one full-height strip. 16 × 16 is the unit the *art* is drawn in; the unit the
+*engine* wants is a vertical run of them, composed in the bank. A mixed bank — full
+columns for the common ground and sky, blocks for detail — is the cheap shape.
+
+⚠ **No clean page** (the ring holds the streamed world), so actors are save-behind:
+three copies each rather than two, ~0.74 ms for a 16 × 16.
+
+**So the verdict changes.** With software blocks the level is as long as DRAM allows,
+the player is the hardware sprite, the cast is keyed blits at 18–19 a frame, and none
+of it needs tile mode — which means **neither the sprite-in-tile-mode work nor more
+hardware sprites is on the path any more**. What is left is art and a frame budget:
+~1 ms of refill at a 4 px scroll, ~7 ms of actors, the rest for the game.
+
+**So the honest answer**: a Monsterland-style game is reachable in bitmap mode today.
+The tile-mode route above stays costed because it is cheaper per frame if a game wants
+8-pixel-grid actors and no per-pixel cast — but it is no longer the way in.
 
 ## 8. ⛔ The per-frame OS call — 1.05 ms of every frame, and it is not the card's
 
@@ -233,3 +274,39 @@ system map — so it is a measurement mode until a game needs no tags.
 | `v3scan_mq` | The variant with the map latches discrete is fitted against a design two changes old. Either refit it or retire it |
 | `v3machine_tb` | video3 has no whole-machine bench. `plan.md` §15's ladder puts it last, and it is what `SCENARIOS=nitros9` is for the other card |
 | the span writer's "25.1 MB/s broadcast" | `plan.md` §5 inherits the figure from `video/`, where a write reached four lanes at once. On this card `v3lane` enables one lane a write. The figure needs re-deriving |
+
+---
+
+## 10. ⭐ Epic Pinball — the best fit of the genres costed so far
+
+**Asked 2026-09-19.** Better than Monsterland, because what a pinball table needs is
+exactly what this card gives away free.
+
+| | |
+|---|---|
+| the table | 640 × 512 is **327 KB of 512 KB** — 2.5 screens tall, which is an Epic Pinball table |
+| ⭐ the scroll | `VSCROLL` is 9 bits and the ring is 512 rows, so following the ball is **one register write a frame**, no refill, and 0.04 ms in the blank the frame already waits for |
+| the cast | a ball, two flippers, bumpers: **eight actors** against the 19 measured |
+| ⭐ lamps and flashers | **palette writes, not blits** — one LUT entry changes every pixel of that colour at once. A flashing table costs registers, not bandwidth |
+| the music | the audio card plays ProTracker modules, which is half of what anyone remembers about it |
+
+⛔ **THE ONE THING THAT DOES NOT WORK: a fixed score panel under a scrolling
+playfield.** `VSCROLL` is latched **in vertical blanking** (plan §8.1 — `v3scan` loads
+the row counter from it only while `VBLANK`), so it cannot change mid-frame and there
+is no vertical split. `HSCROLL` *can* change per line, and the machine has a
+raster-compare timer — but it is in the CPU module, clocked from `HSYNC`
+(`graphics.md` §12.2), and no interrupt can move a register the card samples once a
+frame. The choices are: put the score inside the playfield and let it scroll, scroll
+in discrete steps, or copy a panel strip each frame — 640 × 32 is 20 KB, **~5 ms of a
+14.3 ms frame**, which is not affordable.
+
+⚠ **Two smaller shapes.** There is no 320-wide mode, so art is authored at 640 or
+drawn double-wide (a ball becomes 32 × 16 — the budget absorbs it). And a 327 KB table
+leaves no room for a clean page, so actors are **save-behind**, three copies each;
+flippers sit still, so they should be **pre-composed over their background** and
+blitted opaquely only when the animation frame changes.
+
+**A frame, at 70 Hz:** scroll 0.04 ms, the ball 0.74, two animating flippers ~1.1,
+lamps nothing — **~12 ms left for physics and table logic**, which is where the real
+question is: sub-stepped collision on a 6309 in native mode, with its 16 × 16 multiply
+and divide.
