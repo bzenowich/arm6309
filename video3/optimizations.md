@@ -40,9 +40,9 @@ Ordered by measured value against measured cost, not by how interesting it is.
 
 | | | what it is worth |
 |---|---|---|
-| 1 | **A game that owns the screen should not call the OS per frame** (§8) | 1.05 ms of every frame back, **19 → 21 actors**. Software, demonstrated, needs a supported pattern in `libvid` rather than a bench mode |
-| 2 | **The block-streaming playfield** (§7.1) | the whole "long level" class of game, in bitmap mode with the sprite and the keyed blits. ~1 ms a frame at a 4 px scroll. Software |
-| 3 | **The demo's art: 256 colours, Floyd–Steinberg, a cast of different sprites** | it is what the card is *for*, and the scene currently shows a stress sweep in flat fills |
+| 1 | ⭐ **A game that owns the screen should not call the OS per frame** (§8) — **BUILT 2026-09-20** | `monster` does it as its normal path, not as a mode: **0.042 ms against `SS.Scroll`'s 1.14**, 19 → 21 actors, measured again on a second scene. ⚠ What is left is a supported pattern in `libvid`, and §8's *recording tag* objection is answered — see there |
+| 2 | ⭐ **The block-streaming playfield** (§7.1) — **BUILT 2026-09-20** | `monster` streams a **10,240-pixel** level through the ring for **0.35 ms a frame** at a 4 px scroll, in bitmap mode with the sprite and the keyed blits, and **18 actors** still fit. §7.1's numbers held; two of them moved, and one of them by 2× |
+| 3 | ⭐ **The demo's art: 256 colours, Floyd–Steinberg, a cast of different sprites** — **BUILT 2026-09-20** | `video3/bench/mkmonster.py`: a palette median-cut out of the art, **snapped to the LUT's 5/6/5 grid before the dither**, Floyd–Steinberg against it, and eight different creatures as full-colour keyed blits. The contact sheets are what it is reviewed from |
 | 4 | **The copy-side step** (§1) | halves a character-mode scroll, 10.70 → ~8.9 ms a line. ⚠ `v3ptr` may refuse |
 | 5 | **Retire-only `WADV` b2** (§2) | ~5 µs a character and the mode stops being a hazard. ⚠ `v3ptr` may refuse |
 | 6 | ⭐ **`v3machine_tb`** — **BUILT 2026-09-19** | `machine3.v` puts a real 6809E, the motherboard and the card together and runs a ROM. **It found a card defect on its first run** (the palette commit firing twice outside vertical blanking), which is the same return the other card's machine bench gave. 48 claims, ~40 s, now in `check:video` |
@@ -246,8 +246,9 @@ keyed blits and 256 colours all stay:
 | the level | one byte a block: 13 rows × 512 columns = **6.5 KB in DRAM** — 8,192 pixels, thirteen screens, and nothing says stop there |
 | ⭐ the refill | the ring is 1024 wide and the view is 640, so an incoming column is written **384 pixels ahead of the view**, off-screen, and `HSCROLL` streams the level through it |
 
-**What the refill costs a frame** (183 µs a copy through the card's registers, plus
-0.247 µs a byte, both measured):
+**What the refill costs a frame** *(arithmetic, 2026-09-19: 183 µs a copy through
+the card's registers plus 0.247 µs a byte. ⚠ The per-copy figure came down to ~87 µs
+when it was measured on this path — see "BUILT", below)*:
 
 | scroll | a column every | 13 blocks of 16 × 16 | one 16 × 208 strip |
 |---|---|---|---|
@@ -275,6 +276,38 @@ hardware sprites is on the path any more**. What is left is art and a frame budg
 **So the honest answer**: a Monsterland-style game is reachable in bitmap mode today.
 The tile-mode route above stays costed because it is cheaper per frame if a game wants
 8-pixel-grid actors and no per-pixel cast — but it is no longer the way in.
+
+### 7.1.1 ⭐ BUILT 2026-09-20 — `monster`, and the three numbers above that moved
+
+`video3/bench/run-v3mon.sh` runs it; `bench/README.md` has the whole account. A
+10,240-pixel level, a 640 × 200 view, a hero on the hardware sprite and eight
+different creatures as keyed blits, for fifteen seconds at 70 Hz. **Everything §7.1
+predicted worked.** Three of its numbers are now measured rather than argued, and two
+of them moved:
+
+| | §7.1 said | measured |
+|---|---|---|
+| the refill, 2 px a frame | 0.13 ms *(one 16 × 208 strip)* | **0.18 ms** *(three rectangles, 4,608 B: two bands live and one clean)* |
+| … 4 px | 0.25 | **0.35** |
+| … 8 px | 0.50 | **0.65** |
+| ⭐ a copy's fixed cost, from the card's own registers | **183 µs** | ⭐ **~87 µs** — a column is three rectangles and 4,608 bytes and costs **~1.4 ms**, where 3 × 183 + 4,608 × 0.247 is 1.69 |
+| ⭐ actors with no clean page | "save-behind: three copies each, ~0.74 ms" | ⛔ **do not do that.** Refilling the BOT band **twice** — once live, once into a clean copy — costs *one more rectangle a column*, which at 4 px is a copy every four frames, and buys every actor back its second copy. **0.53 ms an actor**, and 18 of them fit |
+
+⚠ **And the clean copy is what makes the correctness gate possible at all**, which is
+worth more than the 0.2 ms: every byte of the playfield is then decided by the level
+map, and `checkv3mon.py` rebuilds all 512 ring rows from the same JSON the ROM's
+tables were generated from.
+
+⛔ **THE GEOMETRY IS THE BINDING CONSTRAINT, not the frame budget.** All 512 ring rows
+are spoken for — 208 live playfield, 208 strip bank, 96 clean copy — and the clean
+copy has to cover every row an actor can occupy. So the cast flies in the bottom 80
+pixels and the top 104 hold scenery only. A second hardware sprite would buy exactly
+what that costs; §6's entry is not as dead as §7.1 left it.
+
+⚠ **The 16 × 16 block is still the right ART unit and the wrong ENGINE unit**, exactly
+as §7.1 says. `monster` keeps both: 88 blocks of 16 × 16 in the module, **composed
+into tall strips in VRAM by the copy engine at start-up** (483 copies, about 0.2 s,
+once), and the refill then moves two strips and not thirteen blocks.
 
 ## 8. ⛔ The per-frame OS call — 1.05 ms of every frame, and it is not the card's
 
@@ -308,6 +341,43 @@ does it and misses the blank **0 times in 495 frames** at any actor count that
 fits the budget (and declines the write, rather than tearing, when it does not).
 ⚠ It cannot carry the recording tags — `VG.MkCam` and `VG.MkHero` are in the
 system map — so it is a measurement mode until a game needs no tags.
+
+### 8.1 ⭐ CLOSED 2026-09-20 — the tag objection, and what the blank really leaves
+
+**The recording tags are not a reason to keep the OS call.** `monster`
+(§7.1.1) sends the camera and the actor count **as `$FF2E` marks** and
+`video3/bench/checkv3mon.py` joins `marks.txt` to `frames.bin` on the
+**timestamp** — both files carry picoseconds off the same clock. A tag costs
+twelve E cycles instead of a system call, and the scene makes **no OS call at
+all** between its first frame and its last. The in-blank write is measured
+again on it at **0.042 ms** against `SS.Scroll`'s **1.14** (0.018 + 1.121), so
+the 1.09 ms is this table's figure confirmed on a second scene.
+
+⛔ **AND ONE NUMBER IN THIS SECTION WAS WRONG.** *"The frame poll returns
+twelve lines into a forty-nine-line blank, so an exclusive owner has ~1.1 ms of
+blank it has already paid for"* is a derivation from where the **interrupt**
+arrives. `VR.FCnt` is written much later in the VBL service, and the CPU
+therefore sees it later still:
+
+| | |
+|---|---|
+| the blank | 1,558 µs (49 lines) |
+| ⭐ where the frame poll really returns | **1,186 µs into it** (1,083–1,206 over 1,050 frames) |
+| ⭐ what is left | **353 µs**, not 1,100 |
+
+That is 70× what the four scroll stores need, so the conclusion is unchanged —
+but it is **not** room for arbitrary blank-time work. `monster`'s 64-byte
+sprite-shape upload is ~0.3 ms and would not reliably fit; it runs there anyway
+and is deliberately *outside* the tearing gate, because the raster does not
+read the shape until the sprite's own rows, about 240 scanlines in.
+
+⚠ **The guard is check-then-write and it has a window.** `VSTAT` b6 says "still
+blanked", not "there are N µs left", so a blank that ends inside the four
+stores is written into the picture. In 2,100 frames of a sweep that runs the
+scene past its budget on purpose it happened **once, 22.9 µs late**; at every
+actor count the frame can afford it never happens, and a frame that finds the
+blank already gone **declines** — 721 declines in that sweep, every one of them
+after a frame that had already overrun.
 
 ## 9. Smaller things
 
