@@ -143,7 +143,55 @@ Mario-like) wants sprites rather than copies; each further sprite is its own pos
 registers, window counters and shape fetch on `v3dot` — **121/128 cells and one spare
 pin**, so it is a partition change and not an addition.
 
-## 7. Smaller things
+## 7. ⭐ "Mayhem in Monsterland" — what is there, and the two things that are not
+
+**Asked 2026-09-19: are the features there to recreate it?** Partly. The genre study
+(`keyed-copy.md` §6.3, written before the copy came down to 344 µs and before the key
+existed) called this genre C and said the key does not serve it. That is still true,
+but for a different reason than it gave.
+
+**What the card has now**, measured rather than argued:
+
+| | |
+|---|---|
+| 256 simultaneous colours, a byte a pixel | plan §3 — the thing the other card cannot do at all |
+| a playfield that scrolls for one register write, both axes, with ring wrap | plan §8.1, pixel-exact in `v3card_tb` at every fine phase |
+| ⭐ **18 full-colour actors a frame** in bitmap mode | `run-v3mv.sh`, keyed blits interleaved with their restores, 0.480 ms an actor of a 14.3 ms frame |
+| tile mode for long levels: a map cell is a byte, and an **animated tile is one write that changes every instance** | plan §2.4 |
+| a copy at 4.05 MB/s, 183 µs a rectangle through the card's registers | `optimizations.md` 4 |
+
+⛔ **THE TWO THINGS MISSING, and they are the same thing twice.**
+
+1. **The playfield and the actors want different modes.** Monsterland's levels are
+   long, which is tile mode's case: the map is small, tiles repeat, and the scroll is
+   free. Its *look* is big smooth multi-colour sprites, which is bitmap mode's case:
+   the keyed blit and the one hardware sprite are **bitmap only**. In tile mode there
+   is no per-pixel actor path at all — an actor would have to be composed into the map
+   on an 8-pixel grid, or into the tile bank, where it changes every instance of that
+   tile.
+   ⚠ **And a bitmap level cannot be long.** The art has to live in VRAM (512 KB, and
+   the ring is 1024 × 512): about four 640 × 200 screens. Refilling a 16-pixel column
+   from VRAM is one copy, ~1 ms a frame — affordable — but refilling it from DRAM is
+   7.63 µs a byte, **24 ms a column**. So bitmap means rooms, which is why the
+   Metroidvania fits and this does not.
+2. **One sprite, and it is bitmap's.** §6.3's own conclusion — *"what a Mario-like
+   needs is not a keyed copy but MORE HARDWARE SPRITES"* — stands.
+
+⭐ **The cheapest route, in order:**
+
+| | what it costs |
+|---|---|
+| **the sprite in TILE mode** | three gates, not a redesign: `v3dot`'s `SPRACT` and `SPRLD` each carry `!MODE1 & !MODE0`, and `v3scan`'s address mux picks the shape source on the same pair. ⚠ The real work is that in tile mode a map access and a sprite access are both `GMAP`, so `v3scan` needs to tell them apart — a discriminator pin on two parts that are 63/64 and 63/64. `SPRAOE` already allows tile mode |
+| **more sprites** | each is its own position registers, window counters and shape fetch on `v3dot` — **121/128 cells, one spare pin**. A partition change |
+| tile-mode actors on the 8-pixel grid | free, and it is what `overworld` already does — but it is not Monsterland's look |
+| parallax | ⛔ there is no display list (plan §0), so per-band `HSCROLL` is CPU chased against `VSTAT` |
+
+**So the honest answer**: a Monsterland-*style* game in bitmap mode, room by room, is
+reachable today — that is what `mvania` is. Monsterland itself, long levels with a
+cast of smooth sprites, wants the sprite working in tile mode and then more than one
+of them, and the second is a partition change on the part that refuses.
+
+## 8. Smaller things
 
 | | |
 |---|---|
