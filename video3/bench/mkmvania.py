@@ -206,6 +206,54 @@ for r in rows:
         return sum((1 << (7 - i)) for i in range(8) if bits[off + i])
     h += [by(p0, 0), by(p0, 8), by(p1, 0), by(p1, 8)]
 assert len(h) == 64
+# ---------------------------------------------------------------- the keyed art
+# ⭐ FULL-COLOUR ACTOR ART FOR THE KEYED COPY (keyed-copy.md).  The same four
+# silhouettes, but as bytes rather than as a mask: INDEX 0 IS THE HOLE - the
+# card's key is fixed there - and every visible pixel is one of three shades,
+# which is the whole point.  A sprite-WMODE draw costs one pass A COLOUR; a
+# keyed copy costs one copy whatever the colour count is.
+#
+# The strip is sixteen rows of 96 bytes, laid out across VRAM columns 0-95 of
+# rows 480-495: shapes 0-3 at columns 0, 16, 32, 48 and the 32-wide lift at 64.
+SHADE = {                    # shape -> (outline, body, highlight)
+    0: (29, 22, 28),         # bat: shadow, magenta, white
+    1: (9, 23, 28),          # crawler
+    2: (14, 24, 16),         # orb: lava shades
+    3: (19, 25, 20),         # drone: crystal shades
+}
+ARTW, ARTROWS = 96, 16
+
+
+def keyed_art():
+    grid = [[0] * ARTW for _ in range(ARTROWS)]
+    for k, nm in enumerate(("bat", "crawler", "orb", "drone")):
+        rows = SHAPES[nm].strip("\n").split("\n")
+        out, body, hi = SHADE[k]
+        for r in range(16):
+            for c in range(16):
+                if rows[r][c] != "X":
+                    continue
+                edge = any(not (0 <= r + dr < 16 and 0 <= c + dc < 16
+                                and rows[r + dr][c + dc] == "X")
+                           for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)))
+                grid[r][k * 16 + c] = out if edge else (hi if r + c < 14 else body)
+    # the lift: a 32 x 16 slab with a lit cap and a shadowed foot, no holes
+    for r in range(16):
+        for c in range(32):
+            v = 30 if r < 2 else 29 if r >= 14 else 31
+            if c == 0 or c == 31:
+                v = 29
+            grid[r][64 + c] = v
+    return grid
+
+
+ART = keyed_art()
+assert all(0 <= v <= 31 for row in ART for v in row)
+DAT.append(emit_bytes("ArtDat", [v for row in ART for v in row], 8,
+    "the keyed art: sixteen rows of 96 bytes - shapes 0-3 at columns 0, 16,"))
+DAT.append("*      32, 48 and the 32-wide lift at 64.  INDEX 0 IS THE HOLE and"
+           "\n*      no visible pixel may be 0, which is what the key means")
+
 DAT.append(emit_bytes("HeroArt", h, 8,
     "plan 7: 16 rows x 4 - plane0 cols 0-7 and 8-15, then plane1's two"))
 

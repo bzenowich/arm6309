@@ -85,6 +85,31 @@ fc1     lda     seed
         cmpd    #200
         blo     fr1
 
+* --- the keyed shape into off-screen rows: its holes are index 0
+        ldx     #shape
+        ldd     #260
+        std     row
+shr1    ldd     row
+        lslb
+        rola
+        lslb
+        rola
+        anda    #7
+        sta     <WPTR2
+        stb     <WPTR1
+        lda     #$00
+        sta     <WPTR0
+        ldb     #16
+shc1    lda     ,x+
+        sta     <VDATA
+        decb
+        bne     shc1
+        ldd     row
+        addd    #1
+        std     row
+        cmpd    #276
+        blo     shr1
+
 * --- the copies
 * vertical only, non-overlapping
         lda     #$00
@@ -296,6 +321,99 @@ cw08    lda     <VSTAT
         sta     <CCTRL          GO
 cw09    lda     <VSTAT
         bmi     cw09
+        lda     #$30            WMODE 11 arms the key
+        sta     <VCTRL
+* KEYED: the shape over the pattern
+        lda     #$04
+        sta     <CPTR2
+        lda     #$10
+        sta     <CPTR1
+        lda     #$00
+        sta     <CPTR0
+        lda     #$02
+        sta     <WPTR2
+        lda     #$30
+        sta     <WPTR1
+        lda     #$C8
+        sta     <WPTR0
+        lda     #$10
+        sta     <CWIDTH
+        lda     #$10
+        sta     <CHEIGHT
+        lda     #$01
+        sta     <CCTRL          GO
+cw10    lda     <VSTAT
+        bmi     cw10
+        clr     <VCTRL          and the key is off again
+* the SAME shape, NOT keyed
+        lda     #$04
+        sta     <CPTR2
+        lda     #$10
+        sta     <CPTR1
+        lda     #$00
+        sta     <CPTR0
+        lda     #$02
+        sta     <WPTR2
+        lda     #$30
+        sta     <WPTR1
+        lda     #$F0
+        sta     <WPTR0
+        lda     #$10
+        sta     <CWIDTH
+        lda     #$10
+        sta     <CHEIGHT
+        lda     #$01
+        sta     <CCTRL          GO
+cw11    lda     <VSTAT
+        bmi     cw11
+        lda     #$30            WMODE 11 arms the key
+        sta     <VCTRL
+* KEYED at column 401, 1 mod 4
+        lda     #$04
+        sta     <CPTR2
+        lda     #$10
+        sta     <CPTR1
+        lda     #$00
+        sta     <CPTR0
+        lda     #$02
+        sta     <WPTR2
+        lda     #$C9
+        sta     <WPTR1
+        lda     #$91
+        sta     <WPTR0
+        lda     #$10
+        sta     <CWIDTH
+        lda     #$10
+        sta     <CHEIGHT
+        lda     #$01
+        sta     <CCTRL          GO
+cw12    lda     <VSTAT
+        bmi     cw12
+        clr     <VCTRL          and the key is off again
+        lda     #$30            WMODE 11 arms the key
+        sta     <VCTRL
+* KEYED from the pattern: one hole
+        lda     #$00
+        sta     <CPTR2
+        lda     #$00
+        sta     <CPTR1
+        lda     #$00
+        sta     <CPTR0
+        lda     #$02
+        sta     <WPTR2
+        lda     #$A9
+        sta     <WPTR1
+        lda     #$2C
+        sta     <WPTR0
+        lda     #$10
+        sta     <CWIDTH
+        lda     #$10
+        sta     <CHEIGHT
+        lda     #$01
+        sta     <CCTRL          GO
+cw13    lda     <VSTAT
+        bmi     cw13
+        clr     <VCTRL          and the key is off again
 
 * --- bitmap mode, 640x200, display on
         lda     #$80            b7 display, MODE 00 bitmap, VMODE 00
@@ -303,4 +421,23 @@ cw09    lda     <VSTAT
         lda     #$A0
         sta     SIMPORT
 done    bra     done
+
+* the shape, row by row: 0 is the key and the ink never is
+shape
+        FCB     $00,$02,$03,$04,$05,$06,$07,$08,$09,$0A,$0B,$0C,$0D,$0E,$0F,$00
+        FCB     $11,$00,$13,$14,$15,$16,$17,$18,$19,$1A,$1B,$1C,$1D,$1E,$00,$20
+        FCB     $21,$22,$00,$24,$25,$26,$27,$28,$29,$2A,$2B,$2C,$2D,$00,$2F,$30
+        FCB     $31,$32,$33,$00,$35,$36,$37,$38,$39,$3A,$3B,$3C,$00,$3E,$3F,$40
+        FCB     $41,$42,$43,$44,$00,$00,$00,$00,$00,$00,$00,$00,$4D,$4E,$4F,$50
+        FCB     $51,$52,$53,$54,$00,$00,$00,$00,$00,$00,$00,$00,$5D,$5E,$5F,$60
+        FCB     $61,$62,$63,$64,$00,$00,$00,$00,$00,$00,$00,$00,$6D,$6E,$6F,$70
+        FCB     $71,$72,$73,$74,$00,$00,$00,$00,$00,$00,$00,$00,$7D,$7E,$7F,$80
+        FCB     $81,$82,$83,$84,$00,$00,$00,$00,$00,$00,$00,$00,$8D,$8E,$8F,$90
+        FCB     $91,$92,$93,$94,$00,$00,$00,$00,$00,$00,$00,$00,$9D,$9E,$9F,$A0
+        FCB     $A1,$A2,$A3,$A4,$00,$00,$00,$00,$00,$00,$00,$00,$AD,$AE,$AF,$B0
+        FCB     $B1,$B2,$B3,$B4,$00,$00,$00,$00,$00,$00,$00,$00,$BD,$BE,$BF,$C0
+        FCB     $C1,$C2,$C3,$00,$C5,$C6,$C7,$C8,$C9,$CA,$CB,$CC,$00,$CE,$CF,$D0
+        FCB     $D1,$D2,$00,$D4,$D5,$D6,$D7,$D8,$D9,$DA,$DB,$DC,$DD,$00,$DF,$E0
+        FCB     $E1,$00,$E3,$E4,$E5,$E6,$E7,$E8,$E9,$EA,$EB,$EC,$ED,$EE,$00,$F0
+        FCB     $00,$F2,$F3,$F4,$F5,$F6,$F7,$F8,$F9,$FA,$FB,$FC,$FD,$FE,$FF,$00
         END

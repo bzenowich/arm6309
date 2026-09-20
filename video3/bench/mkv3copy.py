@@ -10,36 +10,86 @@ import json, sys
 
 W, H = 640, 200                     # the visible window at VMODE 00
 
-# (label, src_row, src_col, dst_row, dst_col, w, h, rowdir, coldir)
+# ⭐ THE KEYED SHAPE (keyed-copy.md): 16 x 16 in off-screen rows, whose
+# HOLES are index 0 and whose ink never is.  A copy made in WMODE 11 does not
+# write a source byte of zero, so the ink lands and the background stands.
+SHR, SHC, SHW, SHH = 260, 0, 16, 16
+
+
+def shape_rows():
+    """The ink is 1 + ((r * 16 + c) mod 255), so it is never the key by
+    accident; the holes are a block and two diagonals, so a card that
+    dropped the wrong byte of a group shows as a shifted hole."""
+    out = []
+    for r in range(SHH):
+        row = []
+        for c in range(SHW):
+            hole = (4 <= r <= 11 and 4 <= c <= 11) or r == c or r + c == SHW - 1
+            row.append(0 if hole else 1 + ((r * 16 + c) % 255))
+        out.append(row)
+    return out
+
+
+SHAPE = shape_rows()
+
+
+def shape_fcb():
+    return "".join("\n        FCB     " + ",".join("$%02X" % v for v in r)
+                   for r in SHAPE)
+
+
+# (label, src_row, src_col, dst_row, dst_col, w, h, rowdir, coldir, key)
 #   ⛔ rowdir/coldir are ALWAYS 0.  v3ptr's fit priced the up/down counters at
 #   18 macrocells and 16 cascades - the difference between 128/128 and 110/128 -
 #   so the engine counts UP only and an overlapping copy stages through scratch
 #   in two passes, which plan 6.2 always offered as the fallback.  The tuple
 #   keeps its two fields so the model can ASSERT they are zero.
 COPIES = [
-    ("vertical only, non-overlapping",        0,   0, 100,   0,  64, 16, 0, 0),
-    ("horizontal, columns congruent mod 4",  20,   0,  28,  64,  32,  8, 0, 0),
-    ("horizontal, NOT congruent mod 4",      40,   1,  48,  66,  33,  8, 0, 0),
-    ("overlapping scroll UP, rows ascend",   60,   0,  52,   0, 128, 32, 0, 0),
+    ("vertical only, non-overlapping",        0,   0, 100,   0,  64, 16, 0, 0, 0),
+    ("horizontal, columns congruent mod 4",  20,   0,  28,  64,  32,  8, 0, 0, 0),
+    ("horizontal, NOT congruent mod 4",      40,   1,  48,  66,  33,  8, 0, 0, 0),
+    ("overlapping scroll UP, rows ascend",   60,   0,  52,   0, 128, 32, 0, 0, 0),
     # ⭐ the card has NO direction bits (plan 6.2, settled by v3ptr's fit), so an
     # overlapping DOWNWARD scroll is two ascending passes through scratch - and
     # the result must equal what a descending copy would have produced.
-    ("scroll DOWN, pass 1: to scratch",      120,  0, 300,   0, 128, 32, 0, 0),
-    ("scroll DOWN, pass 2: back, 8 lower",   300,  0, 128,   0, 128, 32, 0, 0),
-    ("shift RIGHT, pass 1: to scratch",      160,  0, 320,   0,  64,  8, 0, 0),
-    ("shift RIGHT, pass 2: back, 8 right",   320,  0, 160,   8,  64,  8, 0, 0),
-    ("overlapping LEFT, columns ascend",    180,   8, 180,   0,  64,  8, 0, 0),
-    ("one row, one byte",                    99, 639,  98, 320,   1,  1, 0, 0),
+    ("scroll DOWN, pass 1: to scratch",      120,  0, 300,   0, 128, 32, 0, 0, 0),
+    ("scroll DOWN, pass 2: back, 8 lower",   300,  0, 128,   0, 128, 32, 0, 0, 0),
+    ("shift RIGHT, pass 1: to scratch",      160,  0, 320,   0,  64,  8, 0, 0, 0),
+    ("shift RIGHT, pass 2: back, 8 right",   320,  0, 160,   8,  64,  8, 0, 0, 0),
+    ("overlapping LEFT, columns ascend",    180,   8, 180,   0,  64,  8, 0, 0, 0),
+    ("one row, one byte",                    99, 639,  98, 320,   1,  1, 0, 0, 0),
+    # ⭐ THE COLOUR KEY.  Four cases, and each fails a different way of
+    # getting it wrong.  The destinations are inside the pattern, so the
+    # background under the holes is NOT zero and a card that wrote the key
+    # bytes anyway paints them black.
+    ("KEYED: the shape over the pattern",   SHR, SHC, 140, 200, SHW, SHH, 0, 0, 1),
+    ("the SAME shape, NOT keyed",           SHR, SHC, 140, 240, SHW, SHH, 0, 0, 0),
+    # ⚠ column 401 is 1 mod 4: the key drops ONE lane's byte enable, so a
+    # keyed write on the wrong lane shows here and not at column 0.
+    ("KEYED at column 401, 1 mod 4",        SHR, SHC, 178, 401, SHW, SHH, 0, 0, 1),
+    # ⭐ a source that is the PATTERN, where (r * 7 + c * 3) is zero at
+    # exactly one pixel of the sixteen square: the key must take that one
+    # and nothing else.
+    ("KEYED from the pattern: one hole",      0,   0, 170, 300, SHW, SHH, 0, 0, 1),
 ]
+assert all(len(c) == 10 for c in COPIES)
 
-json.dump({"w": W, "h": H, "copies": COPIES}, open(sys.argv[2], "w"))
+json.dump({"w": W, "h": H, "copies": COPIES,
+           "shape": {"row": SHR, "col": SHC, "rows": SHAPE}},
+          open(sys.argv[2], "w"))
 
 def emit(i, c):
-    _, sr, sc, dr, dc, w, h, rd, cd = c
+    _, sr, sc, dr, dc, w, h, rd, cd, key = c
     src = (sr << 10) | sc
     dst = (dr << 10) | dc
     ctrl = 1 | (rd << 1) | (cd << 2) | ((w >> 8 & 3) << 3) | ((h >> 8 & 1) << 5)
-    return f"""* {c[0]}
+    # ⭐ WMODE 11 ARMS THE KEY, and nothing else does: in any other WMODE
+    # the same copy moves index 0 like any other byte.  CTRL goes back to 00
+    # afterwards, so a card that latched the mode fails the next plain copy.
+    arm = ("        lda     #$30            WMODE 11 arms the key\n"
+           "        sta     <VCTRL\n") if key else ""
+    dis = "        clr     <VCTRL          and the key is off again\n" if key else ""
+    return arm + f"""* {c[0]}
         lda     #${src >> 16 & 7:02X}
         sta     <CPTR2
         lda     #${src >> 8 & 0xFF:02X}
@@ -60,7 +110,7 @@ def emit(i, c):
         sta     <CCTRL          GO
 cw{i:02d}    lda     <VSTAT
         bmi     cw{i:02d}
-"""
+""" + dis
 
 src = f"""*******************************************************************************
 * v3copy.asm -- video3's copy engine on the host emulator.  GENERATED by
@@ -149,6 +199,31 @@ fc1     lda     seed
         cmpd    #{H}
         blo     fr1
 
+* --- the keyed shape into off-screen rows: its holes are index 0
+        ldx     #shape
+        ldd     #{SHR}
+        std     row
+shr1    ldd     row
+        lslb
+        rola
+        lslb
+        rola
+        anda    #7
+        sta     <WPTR2
+        stb     <WPTR1
+        lda     #${SHC & 0xFF:02X}
+        sta     <WPTR0
+        ldb     #{SHW}
+shc1    lda     ,x+
+        sta     <VDATA
+        decb
+        bne     shc1
+        ldd     row
+        addd    #1
+        std     row
+        cmpd    #{SHR + SHH}
+        blo     shr1
+
 * --- the copies
 {"".join(emit(i, c) for i, c in enumerate(COPIES))}
 * --- bitmap mode, 640x200, display on
@@ -157,6 +232,9 @@ fc1     lda     seed
         lda     #$A0
         sta     SIMPORT
 done    bra     done
+
+* the shape, row by row: 0 is the key and the ink never is
+shape{shape_fcb()}
         END
 """
 open(sys.argv[1], "w").write(src)

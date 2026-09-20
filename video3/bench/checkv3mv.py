@@ -6,7 +6,7 @@ frames.bin and marks.txt.  This reads the marks - the picosecond timestamps
 the emulator writes for every store to $FF2E - and turns them into the frame
 budget:
 
-    actors  frames  work ms  frame ms | merge restore logic draw scroll | idle  drops
+    actors  frames  work ms  frame ms | list restore logic draw scroll | idle  drops
 
 and it writes the contact sheets the scene is REVIEWED from, at
 OUT/sheet-N.png, one tile every SHEET_EVERY seconds of machine time.
@@ -33,14 +33,18 @@ BUDGET_MS = 14.3                    # VMODE 00, keyed-copy.md 6.1
 SHEET_EVERY = float(os.environ.get("SHEET_EVERY", "0.5"))
 COLS, ROWS = 5, 6
 
-MODES = {0: "merged restores, card registers, SS.Batch scroll",
-         1: "one rectangle an actor, card registers, SS.Batch scroll",
-         2: "merged restores, SS.CopyN, SS.Batch scroll",
-         3: "one rectangle an actor, SS.CopyN, SS.Batch scroll",
-         4: "no restores at all - the control",
-         8: "merged restores, card registers, scroll by register",
-         9: "one rectangle an actor, card registers, scroll by register",
-         12: "no restores, scroll by register - the floor"}
+def mode_name(v):
+    """mvania.asm's mode bits, spelled out."""
+    if v is None:
+        return "?"
+    return ", ".join([
+        "KEYED COPY blits" if v & 16 else "sprite-WMODE draws",
+        "interleaved" if (v & 64) and not (v & 2) else "two phases",
+        "no restores" if v & 4 else
+        ("one rectangle an actor" if v & 1 else "merged restores"),
+        "SS.CopyN" if v & 2 else "card registers",
+        "scroll by register" if v & 8 else "SS.Batch scroll",
+    ])
 
 
 def read_marks(path):
@@ -142,12 +146,19 @@ def sheets(out, marks_by_t):
     font = ImageFont.truetype(
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf", 16)
     TW, TH, LABEL = 640, 400, 26
-    tiles, nxt = [], 0.0
+    tiles, nxt, prev = [], 0.0, None
     for m, px in fr.read(os.path.join(out, "frames.bin")):
         t = m["t"]
         if t < nxt or m["camk"] == 0 and m["herok"] == 0:
             continue                      # the scene tags every frame it owns
         nxt = t + SHEET_EVERY
+        # ⚠ the scene's tags outlive the scene: the frame words keep their
+        # last value after the command exits, so the tail of a recording is
+        # the same picture over and over.  A tile that is identical to the
+        # one before it is that tail.
+        if prev is not None and np.array_equal(px, prev):
+            continue
+        prev = px.copy()
         im = Image.fromarray(fr.rgb565_to_rgb8(px))
         if im.size != (TW, TH):
             im = im.resize((TW, TH), Image.NEAREST)
@@ -195,9 +206,8 @@ def main():
             continue
         marks = list(read_marks(mp))
         rows = budget(marks)
-        hard = table("%s - %s" % (name, MODES.get(int(name.split("m")[-1])
-                                                  if name.split("m")[-1].isdigit()
-                                                  else -1, name)), rows)
+        mv = int(name[1:]) if name[1:].isdigit() else None
+        hard = table("%s - %s" % (name, mode_name(mv)), rows)
         summary[name] = (rows, hard)
         claim("%s: the sweep reached every step of StepTab" % name, len(rows) >= 14)
         claim("%s: no frame lost its phase marks" % name,
@@ -207,7 +217,7 @@ def main():
         # so the live page has to be the clean page again.  A run with the
         # restores switched off (mode 4) is the control and is skipped.
         vp = os.path.join(out, "vram.bin")
-        if os.path.exists(vp) and not name.endswith(("4", "12")):
+        if os.path.exists(vp) and mv is not None and not (mv & 0x24):
             v = np.fromfile(vp, dtype=np.uint8)
             live = v[0:240 * 1024].reshape(240, 1024)
             clean = v[240 * 1024:480 * 1024].reshape(240, 1024)
@@ -225,14 +235,14 @@ def main():
     # what the merge was worth: the same actor count, merged against not
     if len(summary) >= 2:
         keys = sorted(summary)
-        print("\nthe merge, both ways (the list plus the copies, ms a frame)")
+        print("\nrestores + draws, ms a frame (an interleaved run charges both to draw)")
         print("  actors " + "".join("%22s" % k for k in keys))
         base = summary[keys[0]][0]
         for act in sorted(base):
             line = "  %6d" % act
             for k in keys:
                 r = summary[k][0].get(act)
-                line += "%22s" % ("%.3f" % ((r["rest"] + r["merge"])
+                line += "%22s" % ("%.3f" % ((r["rest"] + r["merge"] + r["draw"])
                                             / r["frames"] * 1000)
                                   if r else "-")
             print(line)

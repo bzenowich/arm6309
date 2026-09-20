@@ -11,7 +11,7 @@ sh video3/bench/run-v3.sh            # all three, ~1 min. Its exit code is the a
 | Exerciser | plan | What only it can catch |
 |---|---|---|
 | `run-v3char.sh` | §2.2, §2.5, §3, §2.1 | ⭐ **all four geometries — 80×25, 80×30, 80×50 and 80×60** — with the active-line count and the `CTRL` read-back asserted per frame. The last two are what `video` cannot reach in cell mode at all (`graphics.md` §6.4.1's five-bit cell row), so they are the reason this card exists. And the attribute reaching the LUT's **high** eight address lines: Row 0 walks the *attribute* under one glyph, row 1 walks the *glyph* under one attribute, the rest mixes both — so ignoring the attribute, swapping the two halves of the address, or reading the map on the wrong stride each fail on a different row. A cell is **four** bytes — the code at **+0**, the attribute at **+2** and the odd two never read — and the ROM fills those two with a code and an attribute that are not the cell's, so reading the wrong lanes fails too. ⭐ **And the map goes in with `WADV` b2 set** (§2.5's step-by-two), in two passes: the first from an *odd* address fills the decoy lanes, the second from the even one writes the cell in **two** stores. A pointer that steps by one lays the cell down on top of the decoys and every row is wrong |
-| `run-v3copy.sh` | §6 | **eight copies** — aligned and unaligned columns, both directions in both axes, and **four overlapping**, which is where a direction bit that walks the wrong way destroys its own source. Bitmap mode makes VRAM observable: a byte *is* a palette index *is* a pixel |
+| `run-v3copy.sh` | §6, keyed-copy.md | **fourteen copies** — aligned and unaligned columns, both directions in both axes, and **four overlapping**, which is where a direction bit that walks the wrong way destroys its own source. Bitmap mode makes VRAM observable: a byte *is* a palette index *is* a pixel. ⭐ **And four of them are the COLOUR KEY**: a 16 × 16 shape whose holes are index 0 and whose ink never is, copied over a background that is not zero — once keyed (the ink lands, the background stands), once **not** keyed with everything else the same (the holes land as black), once keyed at **column 401, 1 mod 4**, because the key drops one lane's byte enable and a keyed write on the wrong lane shows there and not at column 0, and once keyed from a source whose only zero is a **single pixel**. ⛔ `WMODE` 11 arms it and nothing else does, so the run writes `CTRL` back to 00 after each keyed copy and a card that latched the mode fails the next plain one |
 | `run-v3tile.sh` | §2.4, §8.1 | the **one-byte** code in lane 0 of a **four-byte** cell (the ROM fills lanes 1–3 with values that are never the cell's code, so a wrong stride or lane shows), 8bpp tiles with no per-cell colour limit, **both scroll axes one pixel at a time, including both ring wraps**, the six-bit cell row at row 63 rolling to 0, **and all four VMODEs** — a vertical ring wrap is a different test in a progressive family, which shows twice the picture rows. ⭐ **And that `ATTR` is zero in tile mode**: every one of the LUT's 65,536 entries is loaded bright green *except* sub-palette 0, so a leak from the attribute path paints the screen |
 | `run-v3sprite.sh` | §7 | ⭐ **the shape read from VRAM** — the top 64 bytes of `MAPBASE`'s region, `$7FFC0` at `MAPBASE` 7 — with a decoy (the shape inverted) at `MAPBASE` 0's `$0FFC0`, so a card that ignores `MAPBASE` draws the wrong arrow. **Thirty-six positions in one run** — every X phase mod 8, both 4-byte phases, both screen edges, the line-doubling boundary **and all four VMODEs**, because the sprite covers eight *picture* rows either way: sixteen scanlines in the doubled families and eight in the progressive ones. The ROM writes each position to `$C208`/`$C20A`, the two words `machine.c` records with **every** frame (`overworld`'s camera mechanism), so each frame is judged against its own position |
 
@@ -26,28 +26,40 @@ transcribed twice either.
 
 ### ⭐ `run-v3mv.sh` — the metroidvania scene, and the frame budget measured on it
 
-`bench/mvania.asm`'s four exercisers above ask *does the card do what the plan
-says*. This one asks the other question: **with the card doing exactly that,
-what can a game put on the screen?** `keyed-copy.md` §6.3 names a metroidvania
-as this card's natural genre and says the binding constraint was the per-copy
-cost; `optimizations.md` entry 4 took that from 698 µs to 344. The scene is
-where that gets spent.
+`bench/v3char`, `v3copy`, `v3tile` and `v3sprite` ask *does the card do what the
+plan says*. This one asks the other question: **with the card doing exactly
+that, what can a game put on the screen?** `keyed-copy.md` §6.3 names a
+metroidvania as this card's natural genre; `optimizations.md` entries 4 and 5
+took the per-copy cost to 344 µs and built the colour key. The scene is where
+that gets spent.
 
 ```sh
-sh video3/bench/run-v3mv.sh            # six runs, ~8 min. Its exit code is the answer
+sh video3/bench/run-v3mv.sh            # nine runs, ~13 min. Its exit code is the answer
 ```
 
 | | |
 |---|---|
-| The scene | `mvania`, a NitrOS-9 command in the port's tree (`level2/arm6309/cmds/mvania.asm`). A 1024 × 240 room at ring rows 0-239 with a **clean copy at 240-479**, the 640 × 200 view scrolled over it by `HSCROLL`/`VSCROLL` with **no refill**, the hero on the card's one hardware sprite, and every other actor drawn with the span writer's **sprite `WMODE`** and undrawn with a copy from the clean page |
+| The scene | `mvania`, a NitrOS-9 command in the port's tree (`level2/arm6309/cmds/mvania.asm`). A 1024 × 240 room at ring rows 0-239 with a **clean copy at 240-479**, the 640 × 200 view scrolled over it by `HSCROLL`/`VSCROLL` with **no refill**, the hero on the card's one hardware sprite, and every other actor drawn either by the span writer's **sprite `WMODE`** or by a **⭐ keyed copy** — and undrawn with a plain copy from the clean page |
 | The instrument | a store to **`$FF2E`**, which decodes nowhere on the board (`demo.asm`'s `MARK`) and which the emulator timestamps into `marks.txt` in picoseconds. One byte a phase boundary, so the cost split is read off the recording rather than estimated. ⚠ Seven stores a frame, ~17 µs of 14,300, and they are inside every number |
 | The sweep | 2, 4, 6 … 28 actors, 45 frames a step — about fifteen seconds |
-| The modes | the restores merged or one a rectangle; issued from **the card's own registers** or through **`SS.CopyN`**; the scroll committed by `SS.Batch` or written straight at the card; and one run with **no restores at all**, which prices them |
+| The modes | `mvania`'s mode argument is a bit field, and each bit is one leg of the experiment: keyed copy against sprite `WMODE`, the card's own registers against `SS.CopyN`, merged restores against one a rectangle, interleaved against two phases, `SS.Batch` against a register write, and one run with **no restores at all** |
+| ⛔ The gate | **not the timings.** The scene ends by restoring every actor, and nothing but the actors ever writes ring rows 0-239 — so **the live page must then equal the clean page byte for byte**, which `checkv3mv.py` asserts against a `VRAMDUMP`. One pixel left behind by the merge, a dropped rectangle or a wrong source row fails it, where a timing run would call the same frame a good measurement |
 | The output | `checkv3mv.py` prints the budget per actor count and writes the **contact sheets** the scene is reviewed from |
 
 ⭐ **`mvaniapal.asm` and `mvaniadat.asm` are generated** by `bench/mkmvania.py`
-and checked in beside the source that includes them; the room's geometry and
-the palette exist in that script and nowhere else.
+and checked in beside the source that includes them; the room's geometry, the
+palette, the masks and the **keyed art** exist in that script and nowhere else.
+
+⚠ **Index 0 is the key and therefore not a colour.** The card's key is fixed at
+index 0 (`keyed-copy.md`), so the actor art's transparent pixels are 0 and no
+visible pixel in the scene may be — the generator asserts it.
+
+⛔ **One buffer, and the work runs during the visible picture.** With the
+restores and the draws in two phases, every actor is missing from the rows the
+raster scans between the two — three of twelve actors reach the recording.
+Interleaving the pair per actor (mode bit 6) costs exactly the same copies and
+fixes it, which is why the scene's own mode is the interleaved one and the
+two-phase modes are there to be measured.
 
 ### ⭐ They were mutation-tested, because a green check proves nothing on its own
 
@@ -64,6 +76,8 @@ check it should**:
 | a five-bit cell row instead of six | `v3tile` |
 | read the map on the wrong stride (in `machine.c`: one or two bytes a tile cell, two a character cell) | `v3tile`, `v3char` |
 | read the attribute from lane 1 instead of lane 2 (in `machine.c`) | `v3char` |
+| ⭐ **ignore the colour key** (in `v3model.py`) | `v3copy` — 322 pixels |
+| ⭐ **key in EVERY `WMODE`, not only 11** (in `machine.c`, the *card*) | `v3copy` — 234 pixels |
 | ⭐ ignore `WADV` b2 — `wstep()` always by one (in `machine.c`) | `v3char` |
 | read the sprite's shape at `MAPBASE` 0 whatever `MAPBASE` says (in `machine.c`) | `v3sprite` |
 | line-double in every VMODE | `v3char` |

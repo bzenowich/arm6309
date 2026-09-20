@@ -60,7 +60,13 @@ def copy_result(d):
     vram = np.zeros((512, 1024), dtype=np.uint8)
     r = np.arange(H)[:, None]; c = np.arange(W)[None, :]
     vram[:H, :W] = ((r * 7 + c * 3) & 0xFF).astype(np.uint8)
-    for _, sr, sc, dr, dc, w, h, rd, cd in d["copies"]:
+    sh = d.get("shape")
+    if sh:                              # the keyed shape, in off-screen rows
+        for i, row in enumerate(sh["rows"]):
+            vram[sh["row"] + i, sh["col"]:sh["col"] + len(row)] = row
+    for cp in d["copies"]:
+        _, sr, sc, dr, dc, w, h, rd, cd = cp[:9]
+        key = cp[9] if len(cp) > 9 else 0
         assert rd == 0 and cd == 0, (
             "the card has no direction bits - v3ptr's fit priced them at 18 "
             "macrocells, so an overlapping copy stages through scratch")
@@ -68,7 +74,16 @@ def copy_result(d):
             sy, dy = (sr + y if rd == 0 else sr - y), (dr + y if rd == 0 else dr - y)
             for x in range(w):
                 sx, dx = (sc + x if cd == 0 else sc - x), (dc + x if cd == 0 else dc - x)
-                vram[dy & 511, dx & 1023] = vram[sy & 511, sx & 1023]
+                v = vram[sy & 511, sx & 1023]
+                # ⭐ THE COLOUR KEY (keyed-copy.md), armed by WMODE 11 and by
+                # nothing else: a SOURCE byte of zero is not written, so the
+                # destination keeps its background.  The key is fixed at index
+                # 0 - the comparator a key register needs is a DIP-20 and the
+                # board has room for a DIP-14 - so index 0 is the hole and
+                # never a colour.
+                if key and v == 0:
+                    continue
+                vram[dy & 511, dx & 1023] = v
     return vram
 
 
@@ -255,7 +270,9 @@ if __name__ == "__main__":
         y, x = int(ys[0]), int(xs[0])
         print(f"      first difference at ({x},{y}) - cell ({x >> 3},{y // 2 >> 3}): "
               f"want ${int(want[y][x]):04X}, got ${int(last[y][x]):04X}")
+    nkey = sum(1 for c in d["copies"] if len(c) > 9 and c[9])
     what = (f"⭐ the copy engine: {len(d['copies'])} copies - aligned and unaligned, "
+            f"{nkey} of them COLOUR-KEYED, "
             "and two overlapping ones STAGED THROUGH SCRATCH in two ascending "
             "passes, which is the only way the card can do them - every pixel is "
             "the plan's" if "copies" in d else
