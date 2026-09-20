@@ -58,7 +58,9 @@ claim() {  # claim "what" command...
 has() { grep -q -- "$1" "$OUT/console.txt"; }
 
 claim "the loader ran and entered krn (R, K)"                has '^RK'
-claim "krn found Boot and loaded OS9Boot from the ROM disk"  has 'bKrnP2 KrnP3 Init IOMan RBF rbromdisk DD R0 SCF sc16550 Term'
+# ⭐ rbsd and SD0 joined the bootfile on 2026-09-20 - the SD card's driver
+# and descriptor (storage/docs/sdcard.md 9.4).  /DD is still the ROM disk.
+claim "krn found Boot and loaded OS9Boot from the ROM disk"  has 'bKrnP2 KrnP3 Init IOMan RBF rbromdisk DD R0 rbsd SD0 SCF sc16550 Term'
 claim "SysGo printed the banner, naming this machine"        has '^arm6309$'
 claim "the shell prompted on /Term"                          has '{Term|02}/DD:'
 claim "dir lists the ROM disk's root"                        has 'OS9Boot *CMDS *MODULES *SYS *startup'

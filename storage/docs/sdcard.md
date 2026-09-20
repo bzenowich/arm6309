@@ -907,7 +907,13 @@ multi-block decision up to the point where it knows that. A one-sector-at-a-time
  6. 512 data bytes:  16 x { mask ; TFM X+,Y W=32 ; unmask }     <- see the caveat below
  7. SDDATA <- $FF twice: the two CRC16 bytes. Ignored by the card (9.0), but the
     clocks are mandatory.
- 8. SDMOSI <- $FF; one SDDATA read: the DATA-RESPONSE TOKEN.  Mask with $1F:
+ 8. SDMOSI <- $FF; then READ UNTIL A DATA-RESPONSE TOKEN APPEARS - a byte
+    whose b4 and b0 are 0 and 1.  ⛔ NOT "one read": with 6.2's pipeline the
+    first read returns the byte fetched during the SECOND CRC write's burst,
+    which is $FF, and only triggers the burst that fetches the token.  Taking
+    the first read masks $FF to $1F and fails every write that SUCCEEDED.
+    Polling for the token's shape is right whatever the pipeline depth is.
+    Mask the byte it finds with $1F:
         $05  (xxx0 0101)  accepted
         $0B  (xxx0 1011)  rejected, CRC error       -> the block was NOT written
         $0D  (xxx0 1101)  rejected, write error     -> the block was NOT written
@@ -1031,11 +1037,35 @@ a card misbehaves, either hang the machine or corrupt a filesystem.
 
 ### 9.4 The driver
 
-**There is no drop-in.** Unlike `serial.md` §3.2's 6551, which inherits NitrOS-9's CoCo
-driver by having the same register map, this card's map is new and a NitrOS-9 `RBF` driver
-has to be written. CoCoSDC and DriveWire are prior art for SD-backed storage under
-NitrOS-9 but neither speaks to this map. **That is the real cost of this card** and it is
-larger than the eight ICs. §13 item 4.
+**There is no drop-in, so one was written.** Unlike `serial.md` §3.2's 6551, which
+inherits NitrOS-9's CoCo driver by having the same register map, this card's map is new.
+CoCoSDC and DriveWire are prior art for SD-backed storage under NitrOS-9 but neither
+speaks to this map, and **that was always the real cost of this card** — larger than the
+eight ICs.
+
+⭐ **`rbsd` — built 2026-09-20**, in the port's tree at
+`level2/arm6309/modules/rbsd.asm`, with `sddesc.asm` giving it `/SD0`. 983 bytes. It is
+§9.0's initialisation, §9.1's read, §9.2's write and §9.4.1's deblocking against a
+512-byte cache, and both are in the bootfile.
+
+| | |
+|---|---|
+| ⭐ **What runs it** | `sh software/nitros9/run-sd.sh` — NitrOS-9 boots, mounts `/SD0`, lists a directory the **host's own `os9` tools** wrote, reads a file, writes one back and deletes it. **17 claims.** The media is made by one implementation of RBF and read by another, which is the same discipline the video benches keep |
+| ⛔ **And the gate that is not the console** | after the run, the host tools read the image back and must see the deletion the machine made. A driver that writes to its cache and never to the card passes every console claim and fails that one |
+| ⭐ **With a negative control** | the same ROM and the same typed commands with **no card in the socket**: `/SD0` must answer `E$NotRdy` and serve nothing. ⚠ It earned its place immediately — the first version of the positive claims matched `HELLO.TXT` in the *echoed command line* and passed with an empty socket |
+| **Writes are write-through** | §9.4.1 wants write-back and prices it at 126 against 63 KiB/s. `rbsd` does not take it: a deferred write that is never flushed is a corrupted filesystem and RBF offers no flush call the driver can rely on. The cache still makes the other half of every sequential read free |
+| ⛔ **What it actually achieves, and it is not 537 KiB/s** | **~130 KiB/s sequential.** Two independent reasons, both software: it issues **`CMD17` per block**, so it pays the card's ~1 ms access latency every time (§9.1.1's 253 KiB/s ceiling), and the port builds **`CPU=6809`**, so the transfer is `LDA`/`STA` at ~11 cycles a byte rather than `TFM` at 3.81. Neither needs hardware to fix |
+| ⭐ **And one thing the 6809 build gets for free** | §4's hazard is a property of an *interruptible block move*. A 6809 has none, so the 6809 path needs no masking at all; §4.4's chunk-and-mask is compiled in only under `-DH6309=1` |
+
+> ⛔ **Two defects worth recording, because neither was visible by reading.**
+> **The data-response token** (§9.2 step 8, corrected above) — the driver read `$FF`,
+> masked it to `$1F` and failed every write that had in fact succeeded. Found by the
+> emulator's card model, not by the driver's author.
+> **`SDGet` and `SDPut` clear `B` on success**, because `B` is the error-code register
+> every NitrOS-9 driver entry point reports through — so a loop counting in `B` is reset
+> to zero on every iteration and never ends. The ten power-up reads of §9.0 step 2 hung
+> the machine on the first boot. Every counter in `rbsd` is in `X` or `Y` for that
+> reason, and the file says so where it would otherwise look arbitrary.
 
 #### 9.4.1 Deblocking: `RBF`'s sector is 256 bytes and the card's block is 512
 

@@ -53,6 +53,14 @@
  *     received from SERIAL_AT seconds on, and SERIAL_STOP a string that ends
  *     the run when it has been transmitted. That is how software/nitros9/
  *     boots NitrOS-9 here;
+ *   - the storage card at $FF58-$FF5B (storage/docs/sdcard.md 6.2) and an
+ *     SDHC card in SPI mode behind it, backed by the file SDIMG names: the
+ *     one-byte receive pipeline, the eight-clock burst at both '393 taps,
+ *     6.5's re-trigger lockout and SD's 74-clock power-up gate. A port of
+ *     hardware/gal/verilog/storage_card.v and sd_model.v, driven by
+ *     emu/test/run-sdtest.sh. ⚠ WITHOUT SDIMG THE SOCKET IS EMPTY - CD
+ *     reads 0 and every command answers $FF - which is what every bench
+ *     that does not ask for a card sees;
  *   - the PS/2 card and a keyboard and mouse at the line level - ps2_* below,
  *     which says what it models. PS2_KBD, PS2_MOUSE and PS2_AT script them,
  *     and PS2_DEBUG traces the devices' state.
@@ -575,6 +583,401 @@ static void audio_write(uint8_t r, uint8_t v)
     card_write(&m->card, r, v);
 }
 
+/* ----------------------------------------------------------------- storage
+ * The storage card at $FF58-$FF5B (storage/docs/sdcard.md §6.2) and an SDHC
+ * card in SPI mode behind it, backed by a file.
+ *
+ * ⚠ THIS IS A PORT, NOT A DESIGN. Every behaviour below is
+ * hardware/gal/verilog/storage_card.v's or sd_model.v's, which storage_tb.sv
+ * verifies; where those and §9's prose disagree the RTL wins (CLAUDE.md's
+ * trust precedence) and the divergence is recorded at the point it bites.
+ * emu/test/run-sdtest.sh drives §9.0, §9.1, §9.1.1 and §9.2 against it.
+ *
+ *  - ⭐ THE ONE-BYTE PIPELINE IS THE WHOLE DESIGN. A read of SDDATA returns
+ *    the byte the PREVIOUS burst shifted in - the '595's storage register,
+ *    loaded when RCLK is released at the end of that burst - and triggers
+ *    the burst that fetches the next one. A write loads the '574 and
+ *    triggers a burst that shifts THAT byte out; the '574 latches at E-fall,
+ *    before sdeng can start the burst, so the order is guaranteed and not
+ *    raced (§6.2). An off-by-one here is §9.1's silent, data-destroying
+ *    failure, which is why the exerciser reads a block byte for byte.
+ *  - BURST TIME, because §9.0 polls SDSTAT b0 through it. sdeng takes
+ *    DATSTB's FALLING edge and raises BUSY at the SPI clock's next falling
+ *    edge, then counts eight SPICLK periods ('163 Q3). So a burst occupies
+ *    8 periods starting at the next multiple of the period: the '393's taps
+ *    are CLK25/2 = 12.588 MHz (16 dots) and CLK25/64 = 393 kHz (512 dots,
+ *    §6.3's 20.4 us). SDSTAT b0 is "a burst is owed OR running" - sdbus's
+ *    SD0 is `BUSY # TRIGP` - so the up-to-64-dot wait for that edge is
+ *    inside the busy window, which is the start-up hole §6.3 says a driver
+ *    polling BUSY alone would walk straight through.
+ *  - §6.5's LOCKOUT. A trigger arriving during a burst is DROPPED (the
+ *    '163's /CLR is wired to BUSY, so a running counter cannot be reloaded)
+ *    and the read still returns the '595's current byte: the stream gains a
+ *    duplicate rather than losing a byte.
+ *  - ⭐ THE 74-CLOCK POWER-UP GATE, sd_model.v's, and the $00 power-up of
+ *    the '574 that makes it bite. The '574 has no MR pin (§6.4), so this
+ *    model powers the hold register up holding $00 ON PURPOSE: a driver that
+ *    skips §9.0 step 1's `SDMOSI <- $FF` clocks 80 zero bits at a card that
+ *    wants DI high for 74, and the card then answers $FF to CMD0 for ever.
+ *
+ * ⚠ NOT modelled, deliberately, and sd_model.v does not either: CRC7 beyond
+ * CMD0/CMD8's two hard-coded constants, CMD25, card removal mid-session, and
+ * any timing inside a byte - a burst is a whole byte or nothing here, so a
+ * soft reset mid-burst abandons the byte instead of desynchronising the card
+ * the way the real one would.
+ *
+ * SDIMG names the image. Unset, the socket is EMPTY: SDSTAT's CD reads 0,
+ * DO floats to the host pull-up and every command answers $FF - and every
+ * bench that does not set it sees exactly what it saw before this card
+ * existed. SDBLOCKS (default 65536 = 32 MB) sizes an image that has to be
+ * created.
+ */
+
+/* sd_model.v's parameters, by their names there */
+#define SD_NCR          2    /* byte times from the last command byte to R1 */
+#define SD_ACMD41_IDLE  2    /* $01s before the card leaves idle: a driver must LOOP */
+#define SD_READ_LAT     4    /* R1 to the $FE token, CMD17/first CMD18 */
+#define SD_MULTI_LAT    1    /* and between blocks of a CMD18 stream */
+#define SD_PROG_BYTES   8    /* CMD24's program time, DO held low */
+
+enum { SD_D_NONE, SD_D_LAT, SD_D_DATA, SD_D_CRC };   /* the outbound stream */
+enum { SD_R_CMD, SD_R_TOK, SD_R_DAT, SD_R_CRC };     /* the inbound block */
+
+static struct {
+    int      inited;
+    /* ---- the socket ---------------------------------------------------- */
+    int      present;            /* SDSTAT b1 CD: SDIMG named an image we have */
+    int      wp;                 /* SDSTAT b2 WP: no write-protect switch here */
+    FILE    *img;
+    long     nblocks;
+
+    /* ---- the board: storage_card.v's packages -------------------------- */
+    int      cs, fast;           /* SDCTRL b0, b1 - sdeng's CS and FAST */
+    uint8_t  hold;               /* U5 '574; $00 at power-up ON PURPOSE (§6.4) */
+    uint8_t  rx;                 /* U3 '595's storage register */
+    uint64_t burst_until;        /* dots: SDSTAT b0 is set until here */
+    int      pending;            /* a burst is owed or running */
+    uint8_t  pend_mosi;          /* latched from the '574 at the trigger */
+    int      pend_cs;
+    long     bursts, dropped;
+
+    /* ---- the part in the socket: sd_model.v ---------------------------- */
+    int      initclk;            /* CONSECUTIVE clocks with CS high and DI high */
+    int      power_ok, bad_powerup, card_up, idle_st;
+    int      crc0_bad, crc8_bad;
+    uint8_t  cmd_buf[6];
+    int      cmd_i, app_pending, a41_n;
+    uint8_t  resp[8];
+    int      resp_n, resp_i, ncr_cnt, busy_n;
+    int      dstate, dlat, di, ci, multi;
+    long     dblk;
+    uint16_t dcrc;
+    uint8_t  dbuf[512];
+    int      rxst, wi, wci;
+    long     wblk;
+    uint8_t  wbuf[512];
+    uint8_t  tx;                 /* what the NEXT byte time carries */
+    long     cmds_seen, bytes_seen;
+    uint8_t  last_cmd;
+} sd;
+
+static void sd_block_read(long b, uint8_t *dst)
+{
+    memset(dst, 0, 512);
+    if (!sd.img) return;
+    if (fseek(sd.img, b * 512L, SEEK_SET) != 0) return;
+    if (fread(dst, 1, 512, sd.img) < 512) clearerr(sd.img);   /* short at EOF: the hole reads as zero */
+}
+
+static void sd_block_write(long b, const uint8_t *src)
+{
+    if (!sd.img) return;
+    if (fseek(sd.img, b * 512L, SEEK_SET) != 0) return;
+    if (fwrite(src, 1, 512, sd.img) < 512) fprintf(stderr, "FAIL  storage: short write of block %ld\n", b);
+    fflush(sd.img);                         /* a later read in this run must see it */
+}
+
+static uint16_t sd_crc16b(uint16_t c, uint8_t d)
+{
+    for (int k = 0; k < 8; k++)
+        c = (uint16_t)((c << 1) ^ (((c >> 15) ^ (d >> (7 - k))) & 1 ? 0x1021 : 0));
+    return c;
+}
+
+static uint8_t sd_r1(void) { return sd.idle_st ? 0x01 : 0x00; }
+static void    sd_newresp(void) { sd.resp_n = 0; sd.resp_i = 0; }
+static void    sd_push(uint8_t v) { if (sd.resp_n < (int)sizeof sd.resp) sd.resp[sd.resp_n++] = v; }
+
+/* A COMMAND HAS ARRIVED. Everything R1-shaped is queued and paid out a byte
+ * time at a time by sd_pick_tx; nothing here touches the wire. */
+static void sd_do_command(void)
+{
+    int      c   = sd.cmd_buf[0] & 0x3F;
+    uint32_t arg = ((uint32_t)sd.cmd_buf[1] << 24) | ((uint32_t)sd.cmd_buf[2] << 16)
+                 | ((uint32_t)sd.cmd_buf[3] << 8)  | sd.cmd_buf[4];
+    uint8_t  crc = sd.cmd_buf[5];
+    int      app = sd.app_pending;
+
+    sd.app_pending = 0;
+    sd.last_cmd = (uint8_t)c;
+    sd.cmds_seen++;
+    sd_newresp();
+    sd.ncr_cnt = SD_NCR;
+
+    if (c == 0) {
+        /* §9.0 step 3. The CRC is checked because the card does not yet know
+         * it is in SPI mode; $95 is the only correct value for arg 0. */
+        if (crc != 0x95) sd.crc0_bad = 1;
+        if (!sd.power_ok) {
+            /* ⚠ THE GATE. Not an error response - a card that never entered
+             * SPI mode has nothing to answer with. */
+            sd.bad_powerup = 1;
+            sd.ncr_cnt = 0;
+        } else {
+            sd.card_up = 1; sd.idle_st = 1;
+            sd.dstate = SD_D_NONE; sd.multi = 0; sd.rxst = SD_R_CMD;
+            sd_push(0x01);
+        }
+    } else if (!sd.card_up) {
+        sd.ncr_cnt = 0;                                  /* not in SPI mode: silence */
+    } else switch (c) {
+    case 8:                                              /* SEND_IF_COND -> R7 */
+        if (crc != 0x87) sd.crc8_bad = 1;
+        if ((arg & 0xFFF) != 0x1AA) sd_push(0x05);
+        else { sd_push(sd_r1()); sd_push(0x00); sd_push(0x00); sd_push(0x01); sd_push(0xAA); }
+        break;
+    case 55: sd_push(sd_r1()); sd.app_pending = 1; break;
+    case 41:                                             /* ACMD41, and only after CMD55 */
+        if (!app)                        sd_push(0x04);
+        else if (!(arg & 0x40000000u))   sd_push(0x05);  /* HCS clear: §9.0.1 */
+        else if (sd.a41_n < SD_ACMD41_IDLE) { sd.a41_n++; sd_push(0x01); }
+        else { sd.idle_st = 0; sd_push(0x00); }
+        break;
+    case 58:                                             /* READ_OCR: b31 done, b30 CCS */
+        sd_push(sd_r1());
+        sd_push(0xC0); sd_push(0xFF); sd_push(0x80); sd_push(0x00);
+        break;
+    case 13:
+        /* ⛔ CMD13 SEND_STATUS IS §9.2 STEP 11's AND sd_model.v HAS NOT GOT
+         * IT: there it falls through to `default: push($04)`, illegal
+         * command, and a driver that follows §9.2 to the letter would read
+         * that as a fault. Two R2 bytes, both $00 on success, is what §9.2
+         * asks for and what is built here. Reported, not silently picked. */
+        sd_push(sd_r1()); sd_push(0x00);
+        break;
+    case 17:
+        sd_push(sd_r1());
+        sd.dblk = (long)(arg % (uint32_t)sd.nblocks); sd.multi = 0;
+        sd.dstate = SD_D_LAT; sd.dlat = SD_READ_LAT;
+        break;
+    case 18:
+        sd_push(sd_r1());
+        sd.dblk = (long)(arg % (uint32_t)sd.nblocks); sd.multi = 1;
+        sd.dstate = SD_D_LAT; sd.dlat = SD_READ_LAT;
+        break;
+    case 12:                                             /* STOP_TRANSMISSION: stuff, R1, busy */
+        sd.dstate = SD_D_NONE; sd.multi = 0;
+        sd_push(0xFF); sd_push(sd_r1());
+        sd.busy_n = 2;
+        break;
+    case 24:
+        sd_push(sd_r1());
+        sd.wblk = (long)(arg % (uint32_t)sd.nblocks);
+        sd.rxst = SD_R_TOK; sd.wi = 0; sd.wci = 0;
+        break;
+    default: sd_push(0x04); break;                       /* illegal command */
+    }
+}
+
+/* A BYTE HAS BEEN RECEIVED. */
+static void sd_on_byte(uint8_t b)
+{
+    switch (sd.rxst) {
+    case SD_R_CMD:
+        if (sd.cmd_i == 0) { if ((b & 0xC0) == 0x40) { sd.cmd_buf[0] = b; sd.cmd_i = 1; } }
+        else {
+            sd.cmd_buf[sd.cmd_i++] = b;
+            if (sd.cmd_i == 6) { sd.cmd_i = 0; sd_do_command(); }
+        }
+        break;
+    case SD_R_TOK: if (b == 0xFE) { sd.rxst = SD_R_DAT; sd.wi = 0; } break;
+    case SD_R_DAT:
+        sd.wbuf[sd.wi++] = b;
+        if (sd.wi == 512) { sd.rxst = SD_R_CRC; sd.wci = 0; }
+        break;
+    case SD_R_CRC:
+        if (++sd.wci == 2) {
+            /* accepted: commit, answer $05, then hold DO low while it programs */
+            sd_block_write(sd.wblk, sd.wbuf);
+            sd_newresp(); sd.ncr_cnt = 0;
+            sd_push(0x05);
+            sd.busy_n = SD_PROG_BYTES;
+            sd.rxst = SD_R_CMD;
+        }
+        break;
+    default: break;
+    }
+}
+
+/* WHAT GOES OUT IN THE NEXT BYTE TIME. The order is the protocol's: the N_CR
+ * gap, then whatever R1-shaped thing is queued, then the program busy, and
+ * only then the data stream. */
+static void sd_pick_tx(void)
+{
+    if (sd.ncr_cnt > 0)            { sd.ncr_cnt--; sd.tx = 0xFF; }
+    else if (sd.resp_i < sd.resp_n) sd.tx = sd.resp[sd.resp_i++];
+    else if (sd.busy_n > 0)        { sd.busy_n--; sd.tx = 0x00; }
+    else switch (sd.dstate) {
+    case SD_D_LAT:
+        if (sd.dlat > 0) { sd.dlat--; sd.tx = 0xFF; }
+        else {
+            sd.tx = 0xFE; sd.dstate = SD_D_DATA; sd.di = 0; sd.dcrc = 0;
+            sd_block_read(sd.dblk, sd.dbuf);
+        }
+        break;
+    case SD_D_DATA:
+        sd.tx = sd.dbuf[sd.di];
+        sd.dcrc = sd_crc16b(sd.dcrc, sd.tx);
+        if (++sd.di == 512) { sd.dstate = SD_D_CRC; sd.ci = 0; }
+        break;
+    case SD_D_CRC:
+        sd.tx = (uint8_t)(sd.ci == 0 ? sd.dcrc >> 8 : sd.dcrc & 0xFF);
+        if (++sd.ci == 2) {
+            if (sd.multi) { sd.dblk = (sd.dblk + 1) % sd.nblocks; sd.dstate = SD_D_LAT; sd.dlat = SD_MULTI_LAT; }
+            else sd.dstate = SD_D_NONE;
+        }
+        break;
+    default: sd.tx = 0xFF; break;
+    }
+}
+
+/* ONE BURST: eight SCK edges, which with /CS low is exactly one byte each
+ * way. The card drives what it chose at the end of the previous byte, and
+ * chooses the next one having seen this. */
+static uint8_t sd_exchange(uint8_t mosi)
+{
+    uint8_t miso;
+    if (!sd.present) return 0xFF;      /* an empty socket: DO is the host pull-up */
+    miso = sd.tx;
+    sd.bytes_seen++;
+    sd_on_byte(mosi);
+    sd_pick_tx();
+    return miso;
+}
+
+static void sd_reset(void)
+{
+    const char *path = getenv("SDIMG"), *nb = getenv("SDBLOCKS");
+    long want = nb ? strtol(nb, NULL, 0) : 65536;        /* 32 MB */
+
+    if (sd.img) { fclose(sd.img); sd.img = NULL; }
+    memset(&sd, 0, sizeof sd);
+    sd.inited = 1;
+    sd.tx = 0xFF; sd.idle_st = 1; sd.rxst = SD_R_CMD; sd.dstate = SD_D_NONE;
+    sd.nblocks = 1;
+    sd.hold = 0x00;    /* ⚠ ON PURPOSE - §6.4: the '574 has no clear input */
+    sd.rx   = 0x00;    /* the '595 likewise; storage_card.v powers it up at $00 */
+
+    if (!path || !*path) return;                         /* no card in the socket */
+    if (want < 1) want = 1;
+    sd.img = fopen(path, "r+b");
+    if (!sd.img) {
+        /* create it sparse: SDBLOCKS blocks of zeroes that cost no disc */
+        sd.img = fopen(path, "w+b");
+        if (sd.img && fseek(sd.img, want * 512L - 1, SEEK_SET) == 0) { fputc(0, sd.img); fflush(sd.img); }
+    }
+    if (!sd.img) {
+        fprintf(stderr, "FAIL  storage: cannot open SDIMG %s\n", path);
+        return;
+    }
+    fseek(sd.img, 0, SEEK_END);
+    sd.nblocks = ftell(sd.img) / 512L;
+    if (sd.nblocks < 1) sd.nblocks = 1;
+    sd.present = 1;
+    fprintf(stderr, "emu: ⭐ storage card at $FF58, SDHC image %s, %ld blocks (%ld KB)\n",
+            path, sd.nblocks, sd.nblocks / 2);
+}
+
+/* The '595 takes the shift register when RCLK is released at the end of the
+ * burst; nothing can observe the new byte before then, so the exchange is
+ * done here rather than at the trigger - which is also what lets SDCTRL b7
+ * abandon a burst that has not finished. */
+static void sd_settle(void)
+{
+    if (!sd.inited) sd_reset();
+    if (sd.pending && m->dots >= sd.burst_until) {
+        sd.pending = 0;
+        if (sd.pend_cs) sd.rx = sd_exchange(sd.pend_mosi);
+        else {
+            /* /CS high: the clocks still go to the card and are the only ones
+             * SD counts toward its 74 (§6.4). DI is the hold register, MSB
+             * first; a low bit RESTARTS the count. */
+            for (int i = 7; i >= 0; i--) {
+                if ((sd.pend_mosi >> i) & 1) { if (++sd.initclk >= 74) sd.power_ok = 1; }
+                else sd.initclk = 0;
+            }
+            sd.rx = 0xFF;                        /* MISO is high while deselected */
+        }
+    }
+}
+
+static void sd_trigger(void)
+{
+    uint64_t p, start;
+    if (m->dots < sd.burst_until || sd.pending) { sd.dropped++; return; }   /* §6.5 */
+    p = sd.fast ? 2 : 64;                        /* the '393 tap's period, in dots */
+    start = (m->dots + p - 1) / p * p;           /* BUSY rises on its next fall */
+    sd.burst_until = start + 8 * p;
+    sd.pending = 1;
+    sd.pend_mosi = sd.hold;                      /* the '574 latched at E-fall */
+    sd.pend_cs = sd.cs;
+    sd.bursts++;
+}
+
+static uint8_t sd_read(uint8_t r)
+{
+    sd_settle();
+    switch (r) {
+    case 0: {                                    /* SDDATA: the PREVIOUS burst's byte */
+        uint8_t v = sd.rx;
+        sd_trigger();
+        return v;
+    }
+    case 1:                                      /* SDSTAT (§6.3) */
+        return (uint8_t)((m->dots < sd.burst_until ? 1 : 0)
+                       | (sd.present ? 2 : 0)
+                       | (sd.wp ? 4 : 0));
+    default:
+        /* ⚠ §6.2: only SDDATA and SDSTAT have a read. sdbus enables nothing
+         * for $FF5A/$FF5B, so the bus floats - 0 here, as everywhere else in
+         * this emulator's I/O page. */
+        return 0x00;
+    }
+}
+
+static void sd_write(uint8_t r, uint8_t v)
+{
+    sd_settle();
+    switch (r) {
+    case 0: sd.hold = v; sd_trigger(); break;    /* SDDATA: load AND trigger */
+    case 1: break;                               /* SDSTAT is read-only */
+    case 2:                                      /* SDCTRL */
+        if (sd.cs && !(v & 1)) {                 /* a deselect abandons the framing */
+            sd.cmd_i = 0;
+            sd.tx = 0xFF;                        /* the card's out_sr goes high */
+        }
+        sd.cs   = v & 1;
+        sd.fast = (v >> 1) & 1;
+        if (v & 0x80) {                          /* b7 soft reset: BUSY and the '163 */
+            sd.pending = 0;
+            sd.burst_until = m->dots;
+        }
+        break;
+    case 3: sd.hold = v; break;                  /* SDMOSI: load, no burst */
+    default: break;
+    }
+}
+
 /* ------------------------------------------------------------------ serial */
 static uint64_t uart_bit_cycles(void)
 {
@@ -1008,6 +1411,7 @@ static uint8_t rd(void *ctx, uint16_t a)
         if (a >= 0xFF38 && a <= 0xFF3F) return uart_read((uint8_t)(a - 0xFF38));
         if (a >= 0xFF30 && a <= 0xFF33) return ps2_read((uint8_t)(a - 0xFF30));
         if (a >= 0xFF40 && a <= 0xFF4F) return audio_read((uint8_t)(a & 15));
+        if (a >= 0xFF58 && a <= 0xFF5B) return sd_read((uint8_t)(a - 0xFF58));
         if (a >= 0xFF90 && a <= 0xFF9F) return m->maphi[a & 15];
         if (a >= 0xFFA0 && a <= 0xFFAF) return m->maplo[a & 15];
         return 0x00;                      /* ASTAT never busy */
@@ -1061,6 +1465,7 @@ static void wr(void *ctx, uint16_t a, uint8_t v)
         else if (a >= 0xFF90 && a <= 0xFF9F) m->maphi[a & 15] = v;
         else if (a >= 0xFFA0 && a <= 0xFFAF) m->maplo[a & 15] = v;
         else if (a >= 0xFF40 && a <= 0xFF4F) audio_write((uint8_t)(a & 15), v);
+        else if (a >= 0xFF58 && a <= 0xFF5B) sd_write((uint8_t)(a - 0xFF58), v);
         else if (a >= 0xFF38 && a <= 0xFF3F) uart_write((uint8_t)(a - 0xFF38), v);
         else if (a == 0xFF33) m->ioctrl = v;
         else if (a >= 0xFFB0 && a <= 0xFFBF) m->task = v & 1;

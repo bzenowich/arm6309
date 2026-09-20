@@ -15,6 +15,20 @@ The design outputs live in `../hardware/gal/storage/`: `sdbus.jedec.ts` and
 and `census.ts` is the pin count that decided how many parts there are. Where they and
 the prose disagree, they win.
 
+⭐ **And since 2026-09-20 the software exists too**, which `sdcard.md` §9.4 called the
+real cost of this card:
+
+| | |
+|---|---|
+| `../hardware/gal/verilog/storage_tb.sv` | the card in Verilog against an SD card model — **55 claims** |
+| `../software/demo/emu/test/run-sdtest.sh` | the same card in C, in the host emulator — **55 claims** |
+| ⭐ `../software/nitros9/run-sd.sh` | **NitrOS-9 boots and uses it**: `/SD0` mounted, a host-written filesystem listed and read, a file written and deleted, and the host tools checking afterwards that the write reached the card. **17 claims, with a no-card negative control** |
+| the driver | `rbsd.asm` and `sddesc.asm` in the NitrOS-9 port's `level2/arm6309/modules/` |
+
+⚠ **It runs at ~130 KiB/s, not 537.** `rbsd` issues one `CMD17` per block and the port
+builds `CPU=6809`, so it gets neither §9.1.1's multi-block amortisation nor `TFM`.
+Both are software and both are open.
+
 **Units:** every rate here and in `docs/sdcard.md` is **KiB/s = 1024 bytes/s** — 537 KiB/s
 is 551 kB/s decimal, and the same figure everywhere it appears in the repo.
 
