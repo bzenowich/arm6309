@@ -1,5 +1,15 @@
 # Hardware changes that would make NitrOS-9 run better — a running list, 2026-09-14
 
+> ⚠ **The video items on this list are about `video/`, archived 2026-09-20**
+> ([`../archive/README.md`](../archive/README.md), [`history.md`](history.md)). The
+> machine's video card is [`video3/`](../video3/), which already answers several of
+> them — per-cell colour, a copy engine, a sprite — and which has **no display list**,
+> so the items that spend one do not carry over. ⭐ **The measurements still stand and
+> are the reason video3 looks the way it does**: the costs here were taken off a real
+> NitrOS-9 driver, and `video3/docs/plan.md` §11 records what it borrowed. ⚠ Every
+> utilisation figure and the "33 ICs" below are `video/`'s, as of that date. Audio's
+> items are unaffected.
+
 **This is a list, not a specification.** It collects card and machine changes found while
 writing the NitrOS-9 video and audio drivers (`docs/nitros9-av-plan.md`). Each item says
 what the driver does today, what it costs, and what change would remove the cost. None of
@@ -41,7 +51,7 @@ fan-in each run out separately.
 | `vsup` | 94 / 128 | 63 / 64 | — | **1 spare pin**, 2 cascades, placed on pass 2: pins are its limit |
 | `vaddr` | 113 / 128 | 59 / 64 | **40 / 40 in every block** | one-literal changes have been refused here (`graphics.md` §10.3.3). Anything that touches the scan address or `WPTR` is a re-partition until a fit says otherwise |
 
-The card is **33 ICs** today (`graphics.md` §14.1), the PS/2 card **11** (`ps2.md` §9).
+The `video` card was **33 ICs** (`graphics.md` §14.1) and the PS/2 card is **11** (`ps2.md` §9).
 
 ### Tier 3 — large wins, large cost
 

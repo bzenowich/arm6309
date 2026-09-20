@@ -22,7 +22,10 @@ OUT=$ROOT/$V/build3
 mkdir -p "$OUT"
 
 if [ -z "$NOBUILD" ]; then
-  V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { cat "$OUT/mkrom.log"; exit 1; }
+  # ⚠ CMDS_EXTRA: the demos live on an SD card now (software/nitros9/mksddisk.sh);
+  # session3.py types these five at /DD with an empty socket, so they are asked
+  # for by name.  Nothing has to be dropped to make room any more.
+  V3=1 CMDS_EXTRA="v3trk v3drag v3scrl v3grab changefont" sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { cat "$OUT/mkrom.log"; exit 1; }
 fi
 cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c audio/refplayer/card.c
 python3 $V/session3.py "$OUT"

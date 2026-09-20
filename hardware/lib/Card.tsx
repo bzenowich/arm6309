@@ -5,7 +5,7 @@
  * connectors on the back.
  *
  * ⚠ THIS WAS A 100 x 160 mm EUROCARD until 2026-09-08, "because that is what
- * video/docs/graphics.md 14 and audio/docs/audio.md 12 both already assume".
+ * archive/video/docs/graphics.md 14 and audio/docs/audio.md 12 both already assume".
  * Drawing the boards is what settled it: place/place.check.ts shows the video
  * card at 134.4 cm2 of courtyard against a Eurocard's 133.4 cm2 of placeable
  * area - over budget before a single routing channel. Three of the five cards

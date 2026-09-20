@@ -29,7 +29,7 @@ else out. **Every entry below that touches it needs a fit before it is a plan**,
 CLAUDE.md's ninth trap applies — a refusal is not a result until a second file name
 refuses it too.
 
-⛔ **And the board is full**: 44 ICs, placing on 24 cm, which `plan.md` §13.5 says is
+⛔ **And the board is full**: 45 ICs, placing on 24 cm, which `plan.md` §13.5 says is
 the longest board there is. A new package has to displace one.
 
 ---

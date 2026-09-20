@@ -12,7 +12,7 @@ neither has been assembled or run against `arm6309` yet.
 
 A monitor is what you want on a bus the first time a synthesised CPU drives it: small,
 self-contained, and it exercises the interesting paths — interrupts, the stack, and
-character I/O — without needing a disk. `video/docs/graphics.md` §18 step 6's exit
+character I/O — without needing a disk. `archive/video/docs/graphics.md` §18 step 6's exit
 criterion is literally "a monitor ROM prints to the 80×25 screen".
 
 ## What retargeting actually costs

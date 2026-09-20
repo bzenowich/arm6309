@@ -2,15 +2,30 @@
 
 ## What each does, what each costs, and which one to build
 
-**Question this answers:** the project now has three video designs —
-[`video/`](../video/) as specified and fitted, [`video2/`](../video2/) as planned, and a
+> ⛔ **HISTORICAL — frozen 2026-09-20. This document does not describe the machine.**
+>
+> It compares three candidate video cards, and **the machine built none of them.** On
+> 2026-09-20 the owner took [`video3/`](../video3/) as the machine's video card and
+> archived `video/` and `video2/` ([`../archive/README.md`](../archive/README.md),
+> [`history.md`](history.md)); the VIC-II derivative was never written down anywhere
+> but here. ⚠ Every feature table, package count and area below is measured against
+> the three cards *this* document is about, so **none of it is a `video3` figure** —
+> `video3/docs/plan.md` §13 is, and `video3`'s own §11 records what it borrowed from
+> `video/` component by component.
+>
+> It is kept, and not updated, because it is the record of a decision: it is where the
+> costs of hardware text, a display list and a copy engine were first put side by side,
+> and `video3` is the answer that came out of asking the question this way.
+
+**Question this answered:** the project then had three video designs —
+[`video/`](../archive/video/) as specified and fitted, [`video2/`](../archive/video2/) as planned, and a
 sprite-less RGB332 derivative of the VIC-II extended to 80 columns. They are not three
 versions of one card; they are three different answers, and the differences are
 mostly *not* the ones the names suggest. This document compares them on features first
 and cost second.
 
-> This is a **comparison**, not a specification. `video/docs/graphics.md` and
-> `video2/plan.md` are the owning documents for their cards; the VIC-II derivative has
+> This is a **comparison**, not a specification. `archive/video/docs/graphics.md` and
+> `archive/video2/plan.md` are the owning documents for their cards; the VIC-II derivative has
 > no document of its own and this is currently it.
 >
 > ⚠ **Two numbers here supersede figures quoted in conversation.** Every package count
@@ -24,7 +39,7 @@ and cost second.
 
 ## 0. The three cards
 
-| | [`video/`](../video/) | [`video2/`](../video2/) | **VIC-II, extended** |
+| | [`video/`](../archive/video/) | [`video2/`](../archive/video2/) | **VIC-II, extended** |
 |---|---|---|---|
 | **Shape** | 8bpp chunky framebuffer with a drawing engine | microcoded, fixed-palette, hardware text | character/bitmap card, 1bpp + per-cell colour |
 | **Programmable logic** | 3 × `ATF1508AS` | none, or 2 × `GAL22V10` | none, or 2 × `GAL22V10` |
@@ -345,10 +360,10 @@ accepting the VIC-II derivative's cell colour.
 
 | | |
 |---|---|
-| [`video/docs/graphics.md`](../video/docs/graphics.md) | the first card: §2.1 bandwidth, §6.1–6.4 geometry and modes, §7 text and the span writer, §9 the palette argument, §10.3 the display list, §11 readable VRAM, §14 the budget, §15 the period audit |
-| [`video/docs/features.md`](../video/docs/features.md) | the same card by capability — §2 text, §3 the span writer, §8 sprites, §10 what it cannot do |
-| [`video2/plan.md`](../video2/plan.md) | the second card, and §11 its budget |
-| [`video2/bitmap-datapath.pdf`](../video2/bitmap-datapath.pdf) | its bitmap datapath drawn subsection by subsection, with the recount that moved 62 to 67 |
+| [`archive/video/docs/graphics.md`](../archive/video/docs/graphics.md) | the first card: §2.1 bandwidth, §6.1–6.4 geometry and modes, §7 text and the span writer, §9 the palette argument, §10.3 the display list, §11 readable VRAM, §14 the budget, §15 the period audit |
+| [`archive/video/docs/features.md`](../archive/video/docs/features.md) | the same card by capability — §2 text, §3 the span writer, §8 sprites, §10 what it cannot do |
+| [`archive/video2/plan.md`](../archive/video2/plan.md) | the second card, and §11 its budget |
+| [`archive/video2/bitmap-datapath.pdf`](../archive/video2/bitmap-datapath.pdf) | its bitmap datapath drawn subsection by subsection, with the recount that moved 62 to 67 |
 | [`reference/articles/VIC-Article.txt`](../reference/articles/VIC-Article.txt) | Christian Bauer on the VIC-II — §3.1 the block diagram, §3.4 geometry, §3.5 Bad Lines, §3.6 access types, §3.7.2 VC and RC, §3.8 sprites |
 | [`docs/video-comparison.md`](video-comparison.md) | ⚠ **a different comparison** — `video/` against the GIME and the real VIC-II, rather than these three against each other |
 | `hardware/place/pack.ts` | every package count and area in §3.1 |

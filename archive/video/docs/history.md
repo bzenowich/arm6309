@@ -5,7 +5,7 @@ Superseded material removed from [`graphics.md`](graphics.md) and
 and archived history on 2026-09-08. The present design is in those documents; this
 one records what they used to say and why each claim changed. Section numbers refer
 to `graphics.md` unless marked otherwise. "Vid-*" identifiers are findings of the
-2026-09-04 review, [`docs/design-review.md`](../../docs/design-review.md).
+2026-09-04 review, [`docs/design-review.md`](../../../docs/design-review.md).
 
 ---
 
@@ -578,7 +578,7 @@ and is reserved. The superseded text follows, verbatim.
 > `SRCSEL[n]` **is** `GRANT_CPU[n]` — the same signal, not a second macrocell — so the
 > arbiter is **eight macrocells**, with six inputs. It lives inside `vctrl`
 > (§10.1.6.3); its standalone `GAL22V10` design is kept in
-> [`hardware/gal/access.jedec.ts`](../../hardware/gal/access.jedec.ts), because a
+> [`hardware/gal/access.jedec.ts`](../../../hardware/gal/access.jedec.ts), because a
 > GAL22V10 fuse map is the form `access.check.ts` and the CUPL cross-check can
 > execute — the standalone design is the verification vehicle, not a leftover.
 >
@@ -1825,10 +1825,10 @@ Each item below is its text as it stood in the spec on 2026-09-09.
 ### Item 8 — closed 2026-09-06
 
 8. **Logic fit — closed.** The sync section was fitted 2026-09-06
-   ([`hardware/gal/sync.jedec.ts`](../../hardware/gal/sync.jedec.ts), fuse-level
+   ([`hardware/gal/sync.jedec.ts`](../../../hardware/gal/sync.jedec.ts), fuse-level
    checked over whole frames in both families by `npm run check:sync`) and the
    scan-address pair the same day
-   ([`hardware/gal/scan.jedec.ts`](../../hardware/gal/scan.jedec.ts), 17 of 20 with
+   ([`hardware/gal/scan.jedec.ts`](../../../hardware/gal/scan.jedec.ts), 17 of 20 with
    three spare, `npm run check:scan`); both now live inside the CPLDs of §10.1.6.
    (The GAL-partition fit tables and the escape analysis this item used to carry are
    archived in [history.md](history.md).) Three rules from that work stand:
@@ -1856,7 +1856,7 @@ Each item below is its text as it stood in the spec on 2026-09-09.
 
     **The fit.** `WPTR` is nineteen bits with the same `{row, column}` structure as
     the scan address, because the stride is the same 1024. The column part
-    ([`hardware/gal/access.jedec.ts`](../../hardware/gal/access.jedec.ts) `wcol`) is
+    ([`hardware/gal/access.jedec.ts`](../../../hardware/gal/access.jedec.ts) `wcol`) is
     ten bits in **10 of 10 macrocells and 11 of 11 input pins** — full in both
     dimensions. Advancing into the next row needs a carry *out* of that part, and
     there is no eleventh macrocell to emit one from and no pin to carry it on.
@@ -1879,7 +1879,7 @@ Each item below is its text as it stood in the spec on 2026-09-09.
 15. **Tile-mode fit — closed by the CPLD build.** §6.4.2's Variant A is v1 hardware
     (§10.1.5) and its logic exists: the map-byte latch, `TILEBASE`/`MAPBASE`
     registers and `MAPSEL` cadence are written in
-    [`video.parts.ts`](../../hardware/gal/video.parts.ts), the
+    [`video.parts.ts`](../../../hardware/gal/video.parts.ts), the
     aligned-tile "OR = ADD" address identity is asserted over all 524,288 field
     combinations by `tile.check.ts`, and both CPLDs fit with it in (§10.1.6, §14).
     What remains on the fit is bench verification with everything else.
@@ -1893,7 +1893,7 @@ Each item below is its text as it stood in the spec on 2026-09-09.
     data and three cells in four had no code. It had never been run.
 
     §6.4.9 is the sequence that replaced it, and
-    [`cadence.check.ts`](../../hardware/gal/cadence.check.ts) runs a whole line
+    [`cadence.check.ts`](../../../hardware/gal/cadence.check.ts) runs a whole line
     against the fitted terms. What it cost: seven macrocells for the map's own
     column counter (`vaddr`, §6.4.9's one-cell lead), a `SPNREQ` gate and four
     `GMAP`/`GCPU` pairs on `vctrl`, and two more signals on `/WAIT`. `arbDesign`
@@ -1925,7 +1925,7 @@ Each item below is its text as it stood in the spec on 2026-09-09.
     What it does need is a **cadence** guarantee, not an address one: the map byte
     for a cell must be held before that cell's first pixel is emitted, so when a line
     starts mid-cell the map fetch leads by one cell rather than one slot. That is
-    `MAPSEL` in [`video.parts.ts`](../../hardware/gal/video.parts.ts).
+    `MAPSEL` in [`video.parts.ts`](../../../hardware/gal/video.parts.ts).
 
 ### Item 17 — closed 2026-09-08
 
@@ -1937,7 +1937,7 @@ Each item below is its text as it stood in the spec on 2026-09-09.
 ### Item 20 — closed 2026-09-06
 
 20. **§5.2.1's arbiter — closed 2026-09-06.** Fitted in
-    [`hardware/gal/access.jedec.ts`](../../hardware/gal/access.jedec.ts) and checked
+    [`hardware/gal/access.jedec.ts`](../../../hardware/gal/access.jedec.ts) and checked
     over all 128 input combinations (now inside `vctrl` — §10.1.6.3):
 
     - **CPU and span on the same chip** — the span writer yields. ✓
@@ -1980,7 +1980,7 @@ Each item below is its text as it stood in the spec on 2026-09-09.
     strobe replace nine strobe pins — the same trade §10.1.6.1 made for `CTRL`.
 
     Three things the item asked to be *stated*, now stated in
-    [`hardware/gal/regfile.ts`](../../hardware/gal/regfile.ts):
+    [`hardware/gal/regfile.ts`](../../../hardware/gal/regfile.ts):
 
     - **`REGSEL` is one address bit.** §13's window is `$FF60`–`$FF7F` and the
       motherboard's `/IOSEL` is `$FF40`–`$FF7F`, so the card's own decode is `A5`.
@@ -2038,7 +2038,7 @@ Each item below is its text as it stood in the spec on 2026-09-09.
     the mask serialiser, the `SPANLEN` counter, `CTRL`'s and `VSTAT`'s write strobes,
     `HSCROLL[1:0]`, `WADV`, `SPNREQ`, `BCTRL`'s `GO`, the register file's read-back
     selects and the list engine's grant. All are designs now, and
-    [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.2 is the census
+    [`../../../docs/design-review2.md`](../../../docs/design-review2.md) §1.2 is the census
     that found them.
 
     **What it cost is one package and one encoding.** The `'161` pair could not be

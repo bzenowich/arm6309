@@ -8,7 +8,7 @@ or costed.** Four `ATF1508AS` and a `GAL22V10` hold it (`partition.md`, §14 ite
 `npm run check:place` places the 44-IC list on 24 cm (§13.5). ⚠ **There is no timing
 analysis (§14 item 1), no board file and no power budget (§14 item 13)**, so it is still
 a specification to be attacked rather than a build. Every number is either inherited from
-[`video/docs/graphics.md`](../../video/docs/graphics.md) with its section cited, a fit or
+[`archive/video/docs/graphics.md`](../../archive/video/docs/graphics.md) with its section cited, a fit or
 bench result with its file named, or derived here and marked. §14 lists what would refute
 each load-bearing claim, and §15 is the verification this card would need before a board.
 
@@ -625,8 +625,9 @@ costed in current** (§14 item 13). The programmable logic is `partition.md`'s �
 | ⭐ `74HC165` sprite shift registers | **4** | §7. Two cascaded a plane, loaded off the four lanes; their serial outputs go to `v3dot` (`SQ0`, `SQ1`) |
 | `74HC244` `VSTAT` | **1** | §10. `SPANBUSY`, `CBUSY` and `PBUSY` are live macrocells with no register-file path |
 | `74HC244` fan-out | **1** | §9 and `graphics.md` §12.2 — `HSYNC`/`VSYNC` to a backplane pin at TTL, plus clock fan-out |
+| ⭐ `74HC4078` colour key | **1** | [`keyed-copy.md`](keyed-copy.md) §0, built 2026-09-19. An 8-input NOR on the card's internal data bus: the byte the copy is about to write is on IDB for the whole write access, so the compare needs no pipeline register, and `v3lane` drops that write's byte enable. ⚠ The key is **fixed at index 0** — a `'688` against a key register is a 20-pin part and pushes a sprite `'165` off the board |
 
-**Discrete total: 39**, against `video/`'s 30, **plus five programmable parts — 44 ICs**
+**Discrete total: 40**, against `video/`'s 30, **plus five programmable parts — 45 ICs**
 (§13.5). The one new datapath is the four lane `'245`s; §13.3 trade 1 made the copy
 engine byte-granular, so it needs no latch of its own.
 
@@ -693,7 +694,7 @@ broadcast. A `'138` cannot decode them: +$0E/+$0F and +$10/+$11 differ in all of
 
    ⭐ **It is kept anyway, and the reason is asymmetry rather than need.** §13.3 trade 1
    returned the four packages this trade used to be the payer for, so the board places at
-   **44 ICs, 78 %** with everything (§13.5) — the cost is affordable *now*, and the
+   **45 ICs, 78 %** with everything (§13.5) — the cost is affordable *now*, and the
    capability is **unrecoverable later**. Nothing on this card can substitute: there is
    one 16 × 16 sprite and it is bitmap-only, and copyrect is 31.6 ms a screen, twice a
    frame. ⭐ And the rank select is per chip, as `graphics.md` §8.2 has it — `v3dot`'s
@@ -737,10 +738,10 @@ broadcast. A `'138` cannot decode them: +$0E/+$0F and +$10/+$11 differ in all of
 ### 13.5 ⭐ What the board says — measured, not estimated
 
 `hardware/place/parts.ts` carries video3 as an **alternate** (a design that is not in
-the machine — it replaces `video`, so it cannot own `$FF60` and cannot be a `CARDS`
-entry), and `npm run check:place` places it through the same skyline packer that
-measures every other card. **The card is 44 ICs**: four `ATF1508AS` in PLCC-84, the
-`v3lane` `GAL22V10` in DIP-24, and §13.1's 39 discrete packages.
+the machine's slot population since 2026-09-20, when `video` was archived and video3
+took `$FF60`), and `npm run check:place` places it through the same skyline packer that
+measures every other card. **The card is 45 ICs**: four `ATF1508AS` in PLCC-84, the
+`v3lane` `GAL22V10` in DIP-24, and §13.1's 40 discrete packages.
 
 | | ICs | courtyard | 240 mm |
 |---|---|---|---|
@@ -774,7 +775,7 @@ and it is the reason this list exists as a file rather than as a table in this d
    packages, and they pay for the sprite's four `'165` — `partition.md` §5 risk 3's
    escape, which `v3dot` requires. Risk 2's escape, `MAP`/`MAPQ` in four `'574`, was not
    needed: `v3scan` holds the map word in silicon (§13.4). `npm run check:place` places
-   the card as built, **44 ICs** (§13.5), so the package budget does not gate the
+   the card as built, **45 ICs** (§13.5), so the package budget does not gate the
    macrocell budget.
 1. ⛔ **§3's timing claim has not been analysed.** *"Sixteen address lines settling
    together cost what eight do"* is the card's load-bearing assumption, and everything

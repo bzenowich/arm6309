@@ -7,6 +7,42 @@ Superseded claims from [`plan.md`](plan.md), [`signals.md`](signals.md),
 `CLAUDE.md`'s rule: **specs describe only the present design**, and a superseded
 utilisation figure is a number `check:docs` cannot distinguish from a live one.
 
+## `video3/bench/README.md` — "the ROM disk is full" (2026-09-20)
+
+The bench README carried the constraint every scene bench was built around, and the
+recipe carried the mechanism. Superseded when the demo programs moved off the boot
+ROM's ROM disk and onto an SD card (`software/nitros9/mksddisk.sh`,
+`video3/bench/run-v3sd.sh`); the ROM disk is now a rescue system with ~65 K free.
+
+> ⚠ **The ROM disk is full** — 488 K, 6,656 bytes free — and `pinball` is 36 K.
+> The recipe therefore takes `CMDS_EXTRA` and `CMDS_DROP`
+> (`recipes/arm6309/arm6309.mak`), and `run-v3pin.sh` asks for its command and
+> gives back `monster`, `mvania`, `ded`, `dcheck` and `debug`. It deletes
+> `romdisk.dsk` on the way in **and on the way out**, because the recipe's disk
+> rule depends on the module files and not on the list of them.
+
+and, in the recipe itself:
+
+> ⭐ **THE ROM DISK IS FULL, so a scene has to ASK for its command and GIVE BACK
+> the room.** 61 ROM pages is 488 K and there were 6,656 bytes free before
+> `pinball` was written; its table is 35 K. `video3/bench/run-v3pin.sh` passes
+> `CMDS_EXTRA=pinball CMDS_DROP="monster mvania ded dcheck debug"` and nothing
+> else in the tree changes.
+
+**What replaced it.** `$(DEMOS)` in `recipes/arm6309/arm6309.mak` builds the demo
+programs but does not put them in the disk image; `$(CMDS)` is the kernel, the shell,
+`CoArm`, `libvid`, the self-tests and a rescue command set (`format` was added for it).
+Measured on the `-DV3=1` build: **22 free sectors (5,632 bytes) before, 260 (66,560)
+after** — 238 sectors net, and 256 before `format`'s 18 are counted back. `CMDS_EXTRA`
+survives and still means "put this one in the ROM disk", for the older scene benches
+that boot with an empty socket; `CMDS_DROP` survives and is used by nothing.
+
+⭐ **And the stale-disk hazard the old text described is closed rather than worked
+around.** The `$(ROMDSK)` rule depended on the module *files* and not on the list of
+them, so a shorter `$(CMDS)` alone left yesterday's disk in place — which is why the
+bench had to delete `romdisk.dsk` at both ends. `.cmdlist` now holds the list as a file,
+is rewritten only when it differs, and is a prerequisite of the disk.
+
 ## `keyed-copy.md` §3.1 — "the batch's cost, which has not been measured either" (2026-09-19)
 
 §3.1's table ended on an unmeasured number and the section said so:
@@ -458,7 +494,7 @@ The header read:
 
 > **DRAFT, 2026-09-16.** ⚠ **Nothing in this document is fitted, placed, simulated or
 > costed.** It is a specification to be attacked, not a build. Every number is either
-> inherited from [`video/docs/graphics.md`](../../video/docs/graphics.md) with its
+> inherited from [`archive/video/docs/graphics.md`](../../archive/video/docs/graphics.md) with its
 > section cited, or derived here and marked. §14 lists what would refute each load-
 > bearing claim, and §15 is the verification this card would need before a board.
 

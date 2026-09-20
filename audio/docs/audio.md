@@ -3,7 +3,7 @@
 
 **Question this answers:** the machine now has a CPU
 ([`plan.md`](../../cpu/docs/plan.md)) and a 256-colour card with tilemaps and a span writer
-([`graphics.md`](../../video/docs/graphics.md)). What does the sound card look like, given that
+([`graphics.md`](../../archive/video/docs/graphics.md)). What does the sound card look like, given that
 the target workload is **playing existing Amiga OCS tracker modules correctly**?
 
 **Short answer: build a Paula, not a Paula-alike.** The mod format is not a
@@ -24,13 +24,13 @@ not a bandwidth problem. It is a state-machine problem, and a small one.
   not because the rule was wrong: §9.5's interrupt block does not fit a `GAL22V10`
   whole (13 equations, 10 macrocells) or split (17 inputs, 14 pins), so the GAL count
   was six and rising. It took a **second** CPLD on 2026-09-09 (§10.2), and that one is
-  about pins rather than macrocells. `video/docs/graphics.md` §10.1.2 establishes that the rule was
+  about pins rather than macrocells. `archive/video/docs/graphics.md` §10.1.2 establishes that the rule was
   never a period one - Altera's first CPLD is 1988. GALs are in (the video card used 8
   before it too went to CPLDs).
 - Same house rules as the video card: period-honest silicon, one card, a
   documented register map, and an honest IC count.
 
-> **This supersedes [`graphics.md`](../../video/docs/graphics.md) §17's sound-card paragraph**, which
+> **This supersedes [`graphics.md`](../../archive/video/docs/graphics.md) §17's sound-card paragraph**, which
 > assumed an **Ensoniq 5503 DOC** implemented as an MCU card. §12.3 below explains
 > why the DOC is the wrong part for *this* workload even though it is the better
 > part in the abstract, and §12.5 keeps the MCU card — with this document's register
@@ -149,7 +149,7 @@ other sections cite these rows by it.
 ## 2. The budget — why this card is small
 
 The video card's design is dominated by one number: 39.72 ns per pixel. Every
-architectural decision in [`graphics.md`](../../video/docs/graphics.md) — the 4-way interleave, the
+architectural decision in [`graphics.md`](../../archive/video/docs/graphics.md) — the 4-way interleave, the
 `'153` mux, the 15 ns LUT, the pipeline discipline — exists to survive it.
 
 The sound card's equivalent number is **31.9 µs per sample** (period 113, the
@@ -350,7 +350,7 @@ for the price of one crystal.
 (+1 part, +1 mux term) for the minority of NTSC-timed material and for anyone
 comparing against an NTSC Amiga. `ACTRL` gates it to a quiet moment — a mid-song
 clock swap is a glitch, exactly as the video card gates its ÷12↔÷8 switch to
-vertical blank ([`graphics.md`](../../video/docs/graphics.md) §5.2).
+vertical blank ([`graphics.md`](../../archive/video/docs/graphics.md) §5.2).
 
 ### 4.2 Compare, do not count down
 
@@ -415,7 +415,7 @@ below 113 either.
 **Do not emulate the floor**, but document it: a module that plays correctly here
 at `PER` = 60 will not play on an Amiga, and software written against this card's
 extended range does not port back. This is the same posture
-[`graphics.md`](../../video/docs/graphics.md) §6.4.2 takes for the 8bpp tilemap — a deliberate,
+[`graphics.md`](../../archive/video/docs/graphics.md) §6.4.2 takes for the 8bpp tilemap — a deliberate,
 stated superset rather than a silent divergence.
 
 ---
@@ -428,7 +428,7 @@ Paula DMAs from chip RAM. The three options here:
 |---|---|---|
 | **Card-local SRAM** | **zero** — the card is bus-passive except for register writes | **This.** |
 | System RAM over the backplane | 4 × 28.6 kHz × 1 B = 114 KB/s = **5.4 % of a 2.098 MHz bus** | Cheap in *bandwidth*, and **there is no mechanism** — §5.1 |
-| The video card's 512 KB VRAM | shares a scheduled resource | **Ruled out** — [`graphics.md`](../../video/docs/graphics.md) §17 already rejects this for the DOC card, and every word of that reasoning transfers. |
+| The video card's 512 KB VRAM | shares a scheduled resource | **Ruled out** — [`graphics.md`](../../archive/video/docs/graphics.md) §17 already rejects this for the DOC card, and every word of that reasoning transfers. |
 
 ### ⭐ One `AS6C4008`, and the three spare footprints go away
 
@@ -465,7 +465,7 @@ This card inherits the line item, so the machine's parts list does not grow — 
 
 The host writes samples through an auto-incrementing `SPTR`/`SDATA` pair (§9), retired
 in slot 5 — a posted write, exactly the discipline of
-[`graphics.md`](../../video/docs/graphics.md) §3.1, and with far more slack. `SPTR` was
+[`graphics.md`](../../archive/video/docs/graphics.md) §3.1, and with far more slack. `SPTR` was
 already 19 bits (§9.5) because the footprints implied 512 KB; **nothing in the address
 path changes.** Upload cost is in §13.2.
 
@@ -979,7 +979,7 @@ header, so the netlist is right and the outline is not. Same caveat as the slot 
 
 ### 8.1 `/FIRQ`, and why
 
-[`graphics.md`](../../video/docs/graphics.md) §17 puts both `/IRQ` and `/FIRQ` on the backplane
+[`graphics.md`](../../archive/video/docs/graphics.md) §17 puts both `/IRQ` and `/FIRQ` on the backplane
 open-drain, and notes "the DOC wants one of its own". Take `/FIRQ`:
 
 - The video card's VBL owns `/IRQ` and is NitrOS-9's system tick.
@@ -1001,7 +1001,7 @@ in `AINTREQ`:
 | 5 | **sample-RAM posted-write overrun** — a write to `SDATA` arrived while the previous one had not retired, and the byte was lost. Sticky; write-1-to-clear like the rest of `AINTREQ` |
 
 **`/FIRQ` needs an open-collector driver.** The backplane's `/FIRQ` is a wire-OR
-([`graphics.md`](../../video/docs/graphics.md) §17): every source pulls low and a
+([`graphics.md`](../../archive/video/docs/graphics.md) §17): every source pulls low and a
 single pull-up defines the high level, and a totem-pole output driving that line is a
 bus fight with whatever else is asserting it, not a wire-OR. The six sources above
 are OR-ed inside the CPLD — `FIRQANY`, §10.1.1 — and the pin uses the `ATF1508AS`'s
@@ -1116,7 +1116,7 @@ transfer unchanged either way because the reload value is the same number.
 
 ### 9.1 Placement
 
-[`graphics.md`](../../video/docs/graphics.md) §13 takes **`$FF60–$FF7F`** (32 bytes) for video, on
+[`graphics.md`](../../archive/video/docs/graphics.md) §13 takes **`$FF60–$FF7F`** (32 bytes) for video, on
 the argument that it is spare on a real CoCo 3. The next spare region under the
 same argument is **`$FF40–$FF5F`** (cartridge/disk on a CoCo 3, and this machine
 has neither at that address).
@@ -1223,7 +1223,7 @@ and getting a uniform read-back path. Take the window.
 
 **Reads never stall.** Writing `AIDX` triggers a state-file read into a latch in
 slot 5; `ADATA` reads the latch; the post-increment triggers the next prefetch.
-This is exactly [`graphics.md`](../../video/docs/graphics.md) §11's `VDATA` prefetch argument, and
+This is exactly [`graphics.md`](../../archive/video/docs/graphics.md) §11's `VDATA` prefetch argument, and
 it means the card needs **no `/WAIT` path at all** — the only card in the machine
 that does not.
 
@@ -1703,7 +1703,7 @@ Three of the merge's wins are visible only once the parts are one part:
 > datapath, which had never been enumerated at all — §10.2's table — and it is 69 pins.
 
 Video card, for comparison: **28**
-([`graphics.md`](../../video/docs/graphics.md) §14.1). The path from this document's
+([`graphics.md`](../../archive/video/docs/graphics.md) §14.1). The path from this document's
 first tally of 35 through 57, 54, 45, 36, 29 and 32 to today's **39** is archived,
 itemised, in [history.md](history.md).
 
@@ -2446,7 +2446,7 @@ can buy forever. Availability decides it.
 
 ### 12.3 Ensoniq 5503 DOC — the right chip for the wrong job
 
-[`graphics.md`](../../video/docs/graphics.md) §17 assumed this part, and that assumption should be
+[`graphics.md`](../../archive/video/docs/graphics.md) §17 assumed this part, and that assumption should be
 retired. The DOC is *better silicon* than Paula: 32 oscillators, 8-bit PCM,
 16-bit phase accumulators, one-shot/loop/sync/swap modes, halt interrupts, its
 own 64–128 KB wave RAM. The Apple IIgs played mods with it.
@@ -2478,7 +2478,7 @@ mix four channels there?
 **Because [`plan.md`](../../cpu/docs/plan.md) §4.1 forbids it.** The bus loop is hard real time:
 every action is keyed off an observed edge, the budget is 54–81 core cycles per
 bus cycle, and **a hardware ISR is forbidden — it would blow `t_AD`**
-([`graphics.md`](../../video/docs/graphics.md) §12.2 restates this for the raster-compare
+([`graphics.md`](../../archive/video/docs/graphics.md) §12.2 restates this for the raster-compare
 interrupt, and reaches the same conclusion). A mixer needs either an ISR or a
 polling slot inside the loop, and there is no room for either. The CPU emulator
 is the one piece of this machine with no spare time in it.
@@ -2490,7 +2490,7 @@ does everything in this document in ~500 lines of C and **6–8 ICs**. It is not
 period-honest, and the whole point of the exercise is that the card should be.
 
 But it is worth building **first**, and for the same reason
-[`graphics.md`](../../video/docs/graphics.md) §16 gives for the bus exerciser: it decouples the
+[`graphics.md`](../../archive/video/docs/graphics.md) §16 gives for the bus exerciser: it decouples the
 software from the hardware. With the MCU card on the bench you can write the
 loader, the replayer and the `.mod` converter, run the acceptance test, and find
 out which of §1's nine requirements you got wrong — **before a CPLD has been
@@ -2522,7 +2522,7 @@ per-channel effects (arpeggio, portamento, vibrato, tremolo, volume slide) and
 writes `PER` and/or `VOL`.
 
 Estimated against a **2.098 MHz 6309 in native mode**, at the same assumed
-~5 core cycles per store that [`graphics.md`](../../video/docs/graphics.md) §7.3 uses — and with
+~5 core cycles per store that [`graphics.md`](../../archive/video/docs/graphics.md) §7.3 uses — and with
 the same warning, that **every figure here scales on that assumption** (§16 item 1):
 
 | Work | Cycles | Rate | Cycles/s |
@@ -2538,7 +2538,7 @@ hardware this replaces, software audio playback consumes essentially the entire
 processor.
 
 Compare against the machine's other loads: an 80×25 text scroll is ~2.5 ms of CPU
-([`graphics.md`](../../video/docs/graphics.md) §7.3). Music plays underneath the console with
+([`graphics.md`](../../archive/video/docs/graphics.md) §7.3). Music plays underneath the console with
 room to spare.
 
 ### 13.2 Loading a module
@@ -2600,7 +2600,7 @@ right relationship between a proof and an assertion: the arithmetic says it cann
 happen, and the hardware says so too if it ever does.
 
 This is the second concrete payoff for `TFM` in the machine, after
-[`graphics.md`](../../video/docs/graphics.md) §10.2's bulk RAM movement, and both of them exist
+[`graphics.md`](../../archive/video/docs/graphics.md) §10.2's bulk RAM movement, and both of them exist
 because the CPU is a 6309 and not a 6809.
 
 ### 13.3 The `.mod` converter, and what it has to do
@@ -2676,7 +2676,7 @@ Paula in any way that matters to the acceptance test, and that is deliberate.
 | 2 | **Write the loader, replayer and converter** against the MCU card | acceptance test: 20 varied modules, A/B against a real Amiga or a reference emulator, by ear and by capture |
 | 3 | **Bench the §3.2 stage-A path** at 35 ns on a breadboard — sequencer address out → `IS61C6416AL-12` state file → compare-input setup, 27 ns budgeted | closes with margin |
 | 4 | **Fit the card's logic** with all eight slots, the shadow reload, the deferred queue, the host-counter increments and the interrupt block | ⭐ **done.** U1 is fitted at 107 of 128 logic cells (§10.1.1), and U2 — the shadow reload, the deferred queue and the host-counter increments — at 120 of 128 (§10.2.6). §16 item 7's 8-channel slot allocation is not needed: §11.2 was dropped |
-| 5 | **Discrete card rev A**, driven by the STM32 bus exerciser ([`graphics.md`](../../video/docs/graphics.md) §16.1) — no 6309 core needed | state file reads back; a single channel plays a sine from card RAM at a known `PER` |
+| 5 | **Discrete card rev A**, driven by the STM32 bus exerciser ([`graphics.md`](../../archive/video/docs/graphics.md) §16.1) — no 6309 core needed | state file reads back; a single channel plays a sine from card RAM at a known `PER` |
 | 6 | **All four channels + the shadow reload** | the step-2 module set plays **identically** to the MCU card, sample-for-sample where captured |
 | 7 | **Analogue bring-up**: four sample I/V stages, the cascade into the volume halves, the two summing amplifiers, both filters, bypass, grounding | THD and noise floor measured; **converter glitch measured** (§16 item 9); **channel-to-channel gain matched** (§16 item 23); no digital hash from the SRAMs in the output |
 | 8 | **Tempo timer + `/FIRQ`** under NitrOS-9 | music plays under a running console with no tick loss |
@@ -2736,7 +2736,7 @@ specification that has not been tested.
 
 1. **Confirm the CPU store rate.** §13.1's ~3 % and §13.2's 187 ms both scale on
    "~5 core cycles per store, native mode" — the same assumption
-   [`graphics.md`](../../video/docs/graphics.md) §19 item 1 already flags. Measure it once and both
+   [`graphics.md`](../../archive/video/docs/graphics.md) §19 item 1 already flags. Measure it once and both
    documents get their numbers.
 2. **Retired — the stage-B LUT bench.** The LUT left the card (§3.2, §6.1). The
    fastest path on the card is the state-file read — 10 + **12** + 5 = **27 ns** against
@@ -2761,7 +2761,7 @@ specification that has not been tested.
    allocation is not — **fit it before promising the mode**. The four-DAC sum does
    not move this: four `WR` lines and four latch clocks is eight control signals,
    exactly what the digital sum needed (§6.2). Same posture as
-   [`graphics.md`](../../video/docs/graphics.md) §19 item 15.
+   [`graphics.md`](../../archive/video/docs/graphics.md) §19 item 15.
 
    ⚠ **§10.3 gives it four spare microword bits and does NOT give it slots.** The
    control store removes the reason "there is nothing left on U2"; the 8-slot walk is
@@ -2812,7 +2812,7 @@ specification that has not been tested.
     §9.4.1 describes rather than testing it — the same failure mode
     [`modplayer.md`](modplayer.md) §8 already records for a model that runs the replayer
     in zero card time. Same requirement as
-    [`graphics.md`](../../video/docs/graphics.md) §19 item 13, and the MCU card of §12.5 is a
+    [`graphics.md`](../../archive/video/docs/graphics.md) §19 item 13, and the MCU card of §12.5 is a
     better reference than any model.
 15. **Retired — the missing `AD7545A` datasheet.** §6.3 no longer specifies that
     part, or any 12-bit converter. **`AD7528.pdf` is in the repo**, and every figure
@@ -3925,7 +3925,7 @@ specification that has not been tested.
 | `TL072` / `NE5532` | 1978 / 1979 | period |
 | `74HC` logic | 1982 | period |
 | `74HC688` 8-bit comparator | 1984 | period |
-| `ATF1508AS` CPLD (§10.1) | CPLDs as an architecture are **1988** (MAX 5000 — [`graphics.md`](../../video/docs/graphics.md) §10.1.2); the `ATF1508AS` itself is a later part in that class | admitted by the machine's programmable-logic rule (root `README.md`) — the period argument is the architecture's date, not the part number's |
+| `ATF1508AS` CPLD (§10.1) | CPLDs as an architecture are **1988** (MAX 5000 — [`graphics.md`](../../archive/video/docs/graphics.md) §10.1.2); the `ATF1508AS` itself is a later part in that class | admitted by the machine's programmable-logic rule (root `README.md`) — the period argument is the architecture's date, not the part number's |
 | ~~`CY7C128A` 2K×8, 15 ns~~ → **`IS61C6416` 64K×16, 12 ns** | 1985 → **~1996** | ⚠ **the state file's part moved forward a decade** (§5.3). The 2 KB × 15 ns part is period and out of production; the ×16 part is neither. Same posture as the framebuffer's `AS6C8016` on the video card, and it is a *width* substitution rather than a capability the era did not have — 24-bit-wide state files were built out of three byte-wide parts, which is exactly what this replaces |
 | AS6C4008 (512K×8 SRAM) | 4 Mbit SRAMs ~1992–93 | ⚠ **the largest period stretch in the memory** — a 512 KB static RAM in one DIP-32 is early-1990s. The 128K×8 it replaces was already flagged as the newest silicon on the card (§5); this is two years later again, for three fewer packages |
 | ProTracker / the `.mod` format | 1987–1990 | the workload |
@@ -3941,14 +3941,14 @@ costs nothing but packages, so **if a 1988 date matters to you, this is the card
 that can have it.**
 
 **The one part that is not period at all is the CPU**, unchanged from
-[`graphics.md`](../../video/docs/graphics.md) §15 — and, if §12.5's bring-up card ends up shipping,
+[`graphics.md`](../../archive/video/docs/graphics.md) §15 — and, if §12.5's bring-up card ends up shipping,
 the sound card too. That is a decision to make deliberately, not to inherit.
 
 ---
 
 ## 18. Sources and cross-references
 
-- [`graphics.md`](../../video/docs/graphics.md) — §3.1 (posted writes), §5 (one clock, static
+- [`graphics.md`](../../archive/video/docs/graphics.md) — §3.1 (posted writes), §5 (one clock, static
   arbitration), §11 (the `VDATA` prefetch this card's `ADATA` copies), §12 (interrupt
   placement), §13 (register-map conventions), §14 (chip-budget format), §15
   (period audit), §16 (the bus exerciser), **§17 (the DOC assumption this
@@ -3956,7 +3956,7 @@ the sound card too. That is a decision to make deliberately, not to inherit.
 - [`plan.md`](../../cpu/docs/plan.md) — §2.1 (edge-driven bus loop), §4.1 (no hardware ISR — the
   reason for §12.4), §4.3 (`TFM`), §6.2 (the A/B validation lever §12.5 reuses).
 - `~/code/colormin/docs/backplane.md` — slot model, open-drain interrupt lines,
-  the mono `AUDIO` node that [`graphics.md`](../../video/docs/graphics.md) §17 already argues should
+  the mono `AUDIO` node that [`graphics.md`](../../archive/video/docs/graphics.md) §17 already argues should
   be stereo.
 - [`paula.md`](paula.md) — **the functional overview of the MOS 8364 this card
   reproduces**, added 2026-09-10, kept verbatim with a provenance header. It is a

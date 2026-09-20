@@ -2,7 +2,7 @@
 ## An SD Card at 537 KiB/s, and the `TFM` Hazard It Mitigates
 
 **Question this answers:** the `$FF` map has reserved eight bytes for "a disk controller"
-since [`graphics.md`](../../video/docs/graphics.md) §17, and nobody has ever said what that
+since [`graphics.md`](../../archive/video/docs/graphics.md) §17, and nobody has ever said what that
 controller is. [`machine.md`](../../docs/machine.md) §3 allocates every other byte in
 the window. What goes in those eight, and how fast can a 6309 pull data through it?
 
@@ -1056,6 +1056,7 @@ eight ICs.
 | **Writes are write-through** | §9.4.1 wants write-back and prices it at 126 against 63 KiB/s. `rbsd` does not take it: a deferred write that is never flushed is a corrupted filesystem and RBF offers no flush call the driver can rely on. The cache still makes the other half of every sequential read free |
 | ⛔ **What it actually achieves, and it is not 537 KiB/s** | **~130 KiB/s sequential.** Two independent reasons, both software: it issues **`CMD17` per block**, so it pays the card's ~1 ms access latency every time (§9.1.1's 253 KiB/s ceiling), and the port builds **`CPU=6809`**, so the transfer is `LDA`/`STA` at ~11 cycles a byte rather than `TFM` at 3.81. Neither needs hardware to fix |
 | ⭐ **And one thing the 6809 build gets for free** | §4's hazard is a property of an *interruptible block move*. A 6809 has none, so the 6809 path needs no masking at all; §4.4's chunk-and-mask is compiled in only under `-DH6309=1` |
+| ⭐ **What it is FOR, since 2026-09-20** | the demo programs. The boot ROM's 488 K RBF image was full; the applications moved onto a card and the ROM disk became a rescue system (`software/nitros9/README.md`). `software/nitros9/mksddisk.sh` writes the image, `video3/bench/run-v3sd.sh` boots both cards and runs a demo off `/SD0` — **20 claims**, with an empty-socket control in which the demo is `E$PNNF` and the card never displays a frame |
 
 > ⛔ **Two defects worth recording, because neither was visible by reading.**
 > **The data-response token** (§9.2 step 8, corrected above) — the driver read `$FF`,
@@ -1372,7 +1373,7 @@ will experience**; every other number in this document is a component of it.
 | [`machine.md`](../../docs/machine.md) | §2 the 25.175 MHz master this card divides; §3 the `$FF` map, of which this card's four bytes are now its whole footprint; §4 the interrupt-latency table §4.4's 49 µs goes in; §5 item 6 the divergence ledger §11.6 would write into; §6 the capture ownership |
 | [`net/docs/net.md`](../../net/docs/net.md) | §3.2 cites §4's hazard statement and §4.2's idempotence argument; §5.1 holds `$FF5C`–`$FF5F` |
 | **`hardware/gal/storage/`** | ⭐ **the design outputs, which beat this prose where they disagree**: `sdbus.jedec.ts` and `sdeng.jedec.ts` (§8), `storage.check.ts` (24 claims), and `census.ts` (§8.1's partition search). `hardware/gal/verilog/storage_card.v` is the board, and `hardware/place/parts.ts` asserts §8's eight |
-| [`graphics.md`](../../video/docs/graphics.md) | §16.1 the bus exerciser; §16 the "drop a real HD63C09E in" property §11.6 weighs; §17 the disk-controller reservation this card claims half of |
+| [`graphics.md`](../../archive/video/docs/graphics.md) | §16.1 the bus exerciser; §16 the "drop a real HD63C09E in" property §11.6 weighs; §17 the disk-controller reservation this card claims half of |
 | [`ps2.md`](../../io/ps2/docs/ps2.md) | §4.1 the `'595` storage-register pattern; §4.2 the `HC`-versus-`HCT` lesson §7 repeats |
 | [`serial.md`](../../io/serial/docs/serial.md) | §3.1 the 6551 that bounds §11.3's DriveWire link and §4.5 the `16C550` that unbounds it; §4.4 the bit-banging argument §11.5 distinguishes itself from |
 | [`drivewire.md`](../../docs/drivewire.md) | the owning document for §11.3 — throughput, the client, the wall clock, and why the boot ROM changed its job |

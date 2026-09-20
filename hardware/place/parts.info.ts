@@ -40,6 +40,7 @@ export const FAMILY: Record<string, string> = {
   "74HC244": "Octal 3-state buffer in two independent nibbles — a one-way gate onto a shared bus.",
   "74HCT244": "Octal 3-state buffer in two independent nibbles, TTL-level inputs.",
   "74AHCT244": "Octal 3-state buffer in two independent nibbles.",
+  "74AHCT245": "Octal bus transceiver: 3-state, bidirectional, with a direction pin — AHCT speed at TTL input levels.",
   "74HC245": "Octal bus transceiver: 3-state, bidirectional, with a direction pin.",
   "74HCT245": "Octal bus transceiver, TTL-level inputs.",
   "74LVC125": "Quad 3-state buffer, 5 V-tolerant inputs on a 3.3 V rail — a level translator that needs no separate part.",
@@ -69,6 +70,7 @@ export const FAMILY: Record<string, string> = {
   /* --- gates and timing --- */
   "74HC00": "Quad 2-input NAND.",
   "74HC86": "Quad 2-input XOR.",
+  "74HC4078": "8-input NOR/OR in one 14-pin package — one gate that says \"all eight of these lines are zero\".",
   "74HCT132": "Quad 2-input NAND with Schmitt-trigger inputs — hysteresis, for a slow or noisy edge.",
   "7407": "Hex buffer with open-collector outputs — drives a wired-AND line, and tolerates a higher pull-up rail than its own.",
   "74HC221": "Dual monostable multivibrator with Schmitt-trigger inputs.",
@@ -91,6 +93,30 @@ export const FAMILY: Record<string, string> = {
 /** What the part does in THIS circuit, by `card:label`. */
 export const ROLE: Record<string, string> = {
   /* ---------------- video ---------------- */
+  /* ⭐ video3 — the machine's video card since 2026-09-20 (docs/history.md).
+   * plan.md §13.1 is the table these are transcribed from. */
+  "video3:ATF1508AS": "The card's four CPLDs, partition.md: `v3dot` is the dot engine — raster, fetch cadence, the sprite and the palette write strobes; `v3scan` is the address generator and the LUT's attribute bits; `v3ptr` is the span writer's sequencer and the VRAM write strobe; `v3host` is the host interface, the copy engine's phase machine and the register-file write path. plan.md §13.1.",
+  "video3:GAL22V10 v3lane": "⭐ The byte lanes' glue, 2026-09-19: the four lane `'245` output enables, the two `AS6C8016`s' four byte enables, and the internal bus's two latch-side drivers (`PWOE`, `RFOE`). The framebuffer is 32 bits wide and every other VRAM byte path on the card is 8; this is what joins them. plan.md §4, §13.1.",
+  "video3:74AHCT245 lane": "⭐ One transceiver per framebuffer byte lane, A on the card's internal data bus. `DIR` comes from `v3host` and is held for the whole access, so the bus has turned before `/WE`; `/OE` comes from `v3lane` and picks the one lane a prefetch, a copy access or a span retire touches. plan.md §4, §6.",
+  "video3:74HC4078 key=0": "⭐ The copy's colour key: an 8-input NOR on the internal data bus, asserting when the byte the copy is about to write is index 0. `v3lane` drops that write's byte enable, which is how a keyed copy costs one DIP-14. ⚠ The key is FIXED at 0 — a `'688` against a key register is a 20-pin part and would push a sprite `'165` off the board (keyed-copy.md §7.2).",
+  "video3:AS6C8016 512Kx16": "The 512 KB framebuffer as two ×16 parts, four bytes an access and seventeen address bits. A 72 ns access does not fit twice into a 158.9 ns slot, so the interleave is a cliff and not a slope. plan.md §2.3.",
+  "video3:IS61C6416 64Kx16 LUT": "The palette, read every dot — and video3 is the first design here that needs the whole part: `video/` bought 64K words for width and wrote 256 of them, while here A15..A8 carry the attribute. plan.md §3.",
+  "video3:32Kx8 regfile": "plan.md §5's register file. ⛔ It cannot be macrocells: the span-mask bit *is* this SRAM's address bit 0, which is what makes per-pixel colour selection free. It also holds `SPANLEN` and `WPTR`'s and `CPTR`'s column shadows.",
+  "video3:74AHCT574 fetch": "⭐ TWO RANKS OF FOUR, in series. Four hold one access's 32 bits; the second four are `graphics.md` §8.2's — one-pixel `HSCROLL` needs two fetch groups live at once, because a four-byte fetch group is four pixels. plan.md §2.3, §8.1; §13.3 trade 2 is what deleting the second rank would cost.",
+  "video3:74AHCT153 mux": "The pixel mux: 4-to-1, one of the four latched bytes per dot. plan.md §2.3.",
+  "video3:74AHCT574 index": "Latches the muxed pixel byte at the LUT's A7..A0 — one lookup per dot. plan.md §3.",
+  "video3:74AHCT273 out": "The post-LUT output register, sixteen bits into the RGB565 ladders. Its asynchronous `/MR` is what blank-to-black drives, which is how blanking costs no extra part. plan.md §3, §9.2.",
+  "video3:74AHCT163A PIDXlo": "The palette index's low byte — two loadable counters, because a sub-palette load walks entries. plan.md §10.",
+  "video3:74AHCT574 PIDXhi": "⭐ The palette index's high byte, a LATCH and not a counter: software sets a sub-palette and walks within it, so the high byte never counts. That is one package rather than two more `'163`. plan.md §10.",
+  "video3:74AHCT244 pidx-oe": "Puts `PIDX` onto the LUT's address bus for a palette commit and releases it — sixteen bits now, so two packages. The pixel path owns that bus every other dot. plan.md §10.",
+  "video3:74HC573 PDAT": "`PDATL` and `PDATH`: the LUT word is sixteen bits and the backplane bus is eight, so something has to assemble it. The write to `PDATH` commits both halves. plan.md §10.",
+  "video3:74HC574 pw-data": "The posted-write data latch — the CPU's byte for a direct write, **and the copy's byte in flight**. `PWCK` is the CPU's VRAM write or the copy's read; `v3lane`'s `PWOE` puts it on the internal bus for the write access. plan.md §5, §6.",
+  "video3:74HCT245 rdbk": "Register-file read-back onto `D0`–`D7` — `WFG`, `WPTR` and the rest — and, the other way, a host write onto the card's internal bus. plan.md §10.",
+  "video3:74HCT574 vread": "The `VDATA` read latch: the prefetched VRAM byte, clocked by `RDCK`, which is the prefetch's alone. plan.md §11.",
+  "video3:74HC244 VSTAT": "Drives `VSTAT` onto the data bus on a read. `SPANBUSY`, `CBUSY` and `PBUSY` are live macrocells with no register-file path, so they need their own buffer. plan.md §10.",
+  "video3:74HC244 fanout": "Clock and load fan-out, and `HSYNC`/`VSYNC` out to a backplane pin at TTL level for `graphics.md` §12.2's raster-compare timer. plan.md §9.",
+  "video3:74HC165 sprite": "⭐ The sprite's shift registers — partition.md §8's escape, and §5 risk 3 says it is a REQUIREMENT rather than an option: with the serialiser in silicon `v3dot` answers `Design does not fit`. A 16×16 sprite row is 32 bits, so two cascaded per plane, loaded off the four lanes; their serial outputs are `v3dot`'s `SQ0`/`SQ1`. plan.md §7.",
+
   "video:ATF1508AS vaddr/vctrl/vsup": "The card's three CPLDs. `vaddr` is the address datapath (scan counters, WPTR, the tile/list sources); `vctrl` is sync, the sequencer, span control and the spare-access arbiter; `vsup` holds the register-file address, the span length counter, the fetch-rank select and the palette write path. graphics.md §10.1.6.",
   "video:AS6C8016 512Kx16": "The 512 KB framebuffer, four-way interleaved so one fetch reads four adjacent pixels at once. Byte b lives at chip b[1:0], address b[18:2]. §2.1.",
   "video:IS61C6416 64Kx16 LUT": "The 256-entry palette. Read every 39.7 ns dot, which is why it has to be a 10–15 ns part. §6.1.",

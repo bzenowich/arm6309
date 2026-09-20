@@ -2,8 +2,10 @@
 * boot.asm -- the machine's first instructions, and a video bring-up.
 *
 * docs/machine.md 7.2 is the boot sequence; hardware/ram.md 6.4 is why it has
-* no JSR in it.  video/docs/graphics.md 13 is the register map, 7.4 the span
-* writer and 8 the 1024-byte stride.
+* no JSR in it.  archive/video/docs/graphics.md 13 is the register map, 7.4
+* the span writer and 8 the 1024-byte stride.  ⚠ THAT CARD IS ARCHIVED
+* (2026-09-20): the video section here still drives it, and retargeting it
+* to video3 is owed -- software/v3boot/v3boot.asm is the working model.
 *
 * This is assembled by A09 (software/tools/fetch-a09.sh) and executed by
 * hardware/gal/verilog/machine_tb.sv on the REAL DESIGN: Greg Miller's cycle-accurate 6809E core in

@@ -5,7 +5,8 @@ project(arm6309 C ASM)
 #
 #   cpu/    the HD6309E module -- STM32G431 firmware, plus its host checks
 #   audio/  the Paula-class PCM card -- host reference model only
-#   video/  spec only, nothing to build yet
+#   video3/ spec only, nothing to build yet (archive/video/ and archive/video2/
+#           are retired designs - archive/README.md)
 #   io/     spec only, nothing to build yet
 #
 # Two configurations, and they build disjoint sets of targets:

@@ -1,5 +1,5 @@
 // Testbench for the MMU GAL - mmu.v against the claims that
-// video/docs/graphics.md 6.3.1 and docs/machine.md 2 make about it.
+// archive/video/docs/graphics.md 6.3.1 and docs/machine.md 2 make about it.
 //
 // Run it with `npm run check:sim` from hardware/. A comment line here must
 // never begin with the simulator's own name: it would be read as a directive.

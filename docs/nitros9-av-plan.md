@@ -6,7 +6,7 @@ to build it. It is dated and meant to be thrown away. When an item lands, its su
 into a spec (a new `software/nitros9/docs/` or the card documents) and the item is deleted
 from this file.
 
-It is based on a read of `video/docs/graphics.md` and `features.md`, `audio/docs/audio.md`
+It is based on a read of `archive/video/docs/graphics.md` and `features.md`, `audio/docs/audio.md`
 and `modplayer.md`, `docs/machine.md`, `io/ps2/docs/ps2.md`, the demo sources (`demo.asm`,
 `gui.asm`, `replay.asm`, `tools/show.py`, `emu/machine.c`) and `~/code/nitros9` (the CoCo 3
 VTIO/CoWin/GrfDrv stack, the kernel, clock, and the `wildbits`, `coco3fpga`, `mc09l2` and

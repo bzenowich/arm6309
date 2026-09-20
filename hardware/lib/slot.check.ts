@@ -1,7 +1,7 @@
 /* Arithmetic on the slot pinout. Run with `npm run check`.
  *
  * Nothing here is a style rule: each assertion is a claim docs/machine.md or
- * video/docs/graphics.md 17 makes about the backplane, restated so that an edit
+ * archive/video/docs/graphics.md 17 makes about the backplane, restated so that an edit
  * to slot.ts that breaks one of them fails loudly instead of reaching a board.
  */
 import { SLOT_PINS, SLOT_PIN_COUNT, CONTACT_PINS, OPEN_DRAIN } from "./slot"

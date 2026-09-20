@@ -1,12 +1,28 @@
 # `hardware/gal/` — the programmable logic, and how it is checked
 
-**`video/docs/graphics.md` §18 step 2 is "fit the GALs", and §18 says
+**`archive/video/docs/graphics.md` §18 step 2 is "fit the GALs", and §18 says
 "do steps 1 and 2 before laying out anything."** This directory is the fitting, taken in
 the order the machine needs it: the MMU first, because it is the one that gates the
 motherboard.
 
 > Superseded material is archived in [../history.md](../history.md); this document
 > describes only the present design.
+
+> ⛔ **`video` IS AN ARCHIVED CARD SINCE 2026-09-20, AND ITS SOURCES ARE STILL HERE.**
+> `video3` is the machine's video card
+> ([`../../archive/README.md`](../../archive/README.md),
+> [`../../docs/history.md`](../../docs/history.md)); `video/`'s twelve GAL designs
+> (`sync`, `scan`, `access`, `seqph`, `seqctl`, `vlen`, `regfile`) and its three CPLDs
+> (`video.cpld.ts`, `vsup.cpld.ts`) were not moved, because `verilog/gen.ts` emits the
+> card's Verilog from them and `machine_tb` still runs `software/boot/boot.asm` against
+> the card. ⚠ **They left every registry that checks them** — `designs.ts`,
+> `jedec/cupl.check.ts`, `pins.check.ts`, `reach.check.ts`, ten scripts in
+> `npm run check` and five testbenches in `verilog/run.sh`'s default `TBS`. Everything
+> this file says about them below is a record of a fit that happened, not a claim about
+> the machine. ⚠ One exception: [`fold.check.ts`](fold.check.ts) still uses the video
+> arbiter as the fixture for `jedec/cupl.ts`'s constant fold, because that
+> transformation runs on **every** merged part including `audio` and `video3`, and this
+> is the only exhaustive test of it.
 
 ## What here is a deliverable, and what is derivation
 
@@ -420,7 +436,7 @@ be reset — and `lib/netlist.check.ts` asserts that U6 takes the signal at all,
 the thing that stops the producer-with-no-consumer defect (archived in
 [../history.md](../history.md)) from recurring.
 
-### The video card's fitted logic, for reference
+### The archived `video` card's fitted logic, for reference
 
 The video card's programmable logic is **three ATF1508AS PLCC-84s and no GALs**
 (`video.cpld.ts`, `vsup.cpld.ts`). All three are fitted:

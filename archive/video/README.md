@@ -15,7 +15,7 @@ register port. The third CPLD `vsup` went the other way: it absorbed all three
 `GAL22V10`s, so **a third PLCC-84 reduced the package count by two.**
 
 The logic is written, fitted and checked at the fuse level —
-[`hardware/gal/video.cpld.ts`](../hardware/gal/video.cpld.ts) and
+[`hardware/gal/video.cpld.ts`](../../hardware/gal/video.cpld.ts) and
 `hardware/gal/cpld/`, with every design also checked against Atmel's own compiler by
 `npm run check:cupl`. `graphics.md` §14.1 has the line-by-line count; the path the
 count took to get there (~33 → 41 → 30 → 27 → 28, with power falling from ~1.2–1.8 A)
@@ -32,9 +32,9 @@ root.
 Two companion documents live at machine level rather than here, because they are
 comparisons rather than specification:
 
-- [`../docs/video-comparison.md`](../docs/video-comparison.md) — this card against the
+- [`../../docs/video-comparison.md`](../../docs/video-comparison.md) — this card against the
   GIME and the VIC-II
-- [`../docs/coco3_c64.md`](../docs/coco3_c64.md) — GIME vs VIC-II, from a
+- [`../../docs/coco3_c64.md`](../../docs/coco3_c64.md) — GIME vs VIC-II, from a
   CPU-replacement's point of view
 
 ## Status
@@ -98,4 +98,4 @@ one-oscillator clock tree (§5 — the oscillator is on the **motherboard**, not
 card), the MMU (§6.3, and §6.3.1 for where it landed and why it is **5 ICs**, not 3),
 the `/IOPAGE` backplane signal without which a flat VRAM map is electrically unsafe
 (§6.3.2), and the backplane signal list (§17). Those have been lifted into
-[`../docs/machine.md`](../docs/machine.md).
+[`../../docs/machine.md`](../../docs/machine.md).

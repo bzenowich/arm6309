@@ -69,6 +69,14 @@ for (const [name, f] of fits) {
 const EXEMPT = (p: string) =>
   /(^|\/)history\.md$/.test(p) ||
   /(^|\/)design-review\d*\.md$/.test(p) ||
+  /* ⭐ archive/ - 2026-09-20. An archived card's documents are a FROZEN RECORD
+   * of a design that is no longer in the machine, exactly as history.md and
+   * the design reviews are, and CLAUDE.md forbids rewriting a record to keep
+   * a checker quiet. `archive/video/docs/graphics.md` states vaddr, vctrl and
+   * vsup's utilisation as it stood when the card was retired; those .fit files
+   * are still in gal/cpld and still agree, and the day they stop being
+   * regenerated the prose must not start failing. See archive/README.md. */
+  /^archive\//.test(p) ||
   /(^|\/)node_modules\//.test(p) ||
   /(^|\/)\.agents\//.test(p) ||
   /(^|\/)reference\//.test(p) ||
@@ -298,8 +306,13 @@ check(wrong.length === 0,
  * ** AND ONLY TOTALS, NOT DELTAS. `+4 ICs`, `-1 IC` and `~3 ICs` are costs of
  * a change, not a card's count, so a sign or a tilde disqualifies. */
 {
+  /* ⭐ `video3/` SINCE 2026-09-20, and `video/` left the same day - the card
+   * was archived and its documents are EXEMPT above. video3 is the machine's
+   * video card and its 45 ICs are now the most-quoted number on it, which is
+   * exactly the class this block exists for: the plan said 44 in five places
+   * for a day after keyed-copy.md added the '4078. */
   const OWNER: Record<string, string> = {
-    "video/": "video", "audio/": "audio",
+    "video3/": "video3", "audio/": "audio",
     "net/": "net", "storage/": "storage", "io/": "io",
   }
   interface IcClaim { file: string; line: number; text: string; card: string; value: number }
@@ -322,12 +335,12 @@ check(wrong.length === 0,
        * regex. */
       const totals = [
         ...text.matchAll(/\bthe card is (?:now )?\*?\*?(\d+)\*?\*? ICs\b/gi),
-        ...text.matchAll(/\*\*(?:Video|Audio|Net|Storage|I\/O)\*\*[^|]*?\*\*(\d+) ICs\b/gi),
+        ...text.matchAll(/\*\*(?:Video3|Video|Audio|Net|Storage|I\/O)\*\*[^|]*?\*\*(\d+) ICs\b/gi),
       ]
       for (const m of totals) {
         let card = owner
         if (!card) {
-          const near = text.slice(0, m.index!).match(/\*\*(Video|Audio|Net|Storage|I\/O)\*\*/gi)
+          const near = text.slice(0, m.index!).match(/\*\*(Video3|Video|Audio|Net|Storage|I\/O)\*\*/gi)
           if (!near) continue
           card = near[near.length - 1].replace(/\*/g, "").toLowerCase().replace("i/o", "io")
         }

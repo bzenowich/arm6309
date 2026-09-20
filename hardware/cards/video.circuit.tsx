@@ -1,6 +1,13 @@
-/* Video card - 640x200 x 256 colours, VGA out. 33 ICs - 3 ATF1508AS PLCC-84
+/* ⛔ ARCHIVED CARD, 2026-09-20. `video3` is the machine's video card
+ * (archive/README.md, docs/history.md) and `video` is an ALTERNATE in
+ * place/parts.ts: placed, counted and owning no $FF window. This drawing is
+ * KEPT because check:netlist reads dist/cards/video/circuit.json and because
+ * machine_tb still runs software/boot/boot.asm against the card. Nothing
+ * below describes the present machine.
+ *
+ * Video card - 640x200 x 256 colours, VGA out. 33 ICs - 3 ATF1508AS PLCC-84
  * (vaddr, vctrl, vsup), no GALs, 4 SRAMs and 26 packages of 74-series -
- * video/docs/graphics.md 14.
+ * archive/video/docs/graphics.md 14.
  *
  * Bus interface AND the analogue back end. graphics.md 18 steps 1-2 require
  * benching the dot path before layout; the CPLDs are fitted (gal/cpld/) and

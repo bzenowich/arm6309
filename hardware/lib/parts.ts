@@ -42,7 +42,7 @@ export const CPU_SOCKET: PartDef = {
   },
 }
 
-/* -- the five MMU packages, video/docs/graphics.md 6.3.1 ------------------ */
+/* -- the five MMU packages, archive/video/docs/graphics.md 6.3.1 ------------------ */
 
 /** 2K x 8 SRAM, 15 ns - the block map. Sixteen of 2048 locations are used.
  *

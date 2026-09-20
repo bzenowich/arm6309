@@ -2,7 +2,7 @@
 ## Eleven ICs, After the Minimal 64x4 Showed It Could Be Three
 
 **Question this answers:** the machine has a CPU ([`plan.md`](../../../cpu/docs/plan.md)),
-a 256-colour video card ([`graphics.md`](../../../video/docs/graphics.md)) and a
+a 256-colour video card ([`graphics.md`](../../../archive/video/docs/graphics.md)) and a
 Paula-class sound card ([`audio.md`](../../../audio/docs/audio.md)). It has no way for a
 human to touch it. What does a PS/2 keyboard and mouse card look like, given that
 [`machine.md`](../../../docs/machine.md) §5 says there is **no free `$FF` window** and
@@ -29,7 +29,7 @@ driver bit-bangs it through two control bits and the whole transmit engine disap
 
 > **PS/2 is in period, but only just.** The interface is IBM's, introduced with the
 > Personal System/2 in **April 1987** — two years before this machine's 1989–90 window,
-> and contemporary with the VGA connector [`graphics.md`](../../../video/docs/graphics.md)
+> and contemporary with the VGA connector [`graphics.md`](../../../archive/video/docs/graphics.md)
 > §15 already justifies on the same grounds. §12 audits the rest of the BOM.
 
 > Superseded material — earlier revisions' claims, dropped numbers, and the 2026-09-04
@@ -1243,7 +1243,7 @@ to the owner.**
 | **Minimal 64x4 Rev 1.4 Redux, sheet 3/9 "PS/2 Receiver"** | Carsten Herting (slu4), CC BY-NC-SA 4.0. The origin of §4.1, §4.2 and §6.1. Local copy: `~/code/colormin/minimal/Minimal-64x4-Home-Computer/` |
 | **Andy Hertzfeld, *Apple II Mouse Card*, folklore.org, June 1981** | Burrell Smith's two-chip design. §4.4 takes the interrupt argument and the derive-it-from-the-bus habit, and rejects the interrupt-per-notch mouse on §4.4(c)'s arithmetic. `reference/articles/folklore-apple2-mouse-card.pdf` |
 | [`machine.md`](../../../docs/machine.md) | §5 items 1 and 2 — the two blockers §3 answers |
-| [`graphics.md`](../../../video/docs/graphics.md) | §12 the `/IRQ` sources this card joins; §16.1 the bus exerciser; §17 the backplane and the `$FF` map; §18 the build-order form |
+| [`graphics.md`](../../../archive/video/docs/graphics.md) | §12 the `/IRQ` sources this card joins; §16.1 the bus exerciser; §17 the backplane and the `$FF` map; §18 the build-order form |
 | [`audio.md`](../../../audio/docs/audio.md) | §8.1 why `/FIRQ` is exclusive and `/IRQ` is not; §9 the register-map conventions; §10 the chip-budget form |
 | [`plan.md`](../../../cpu/docs/plan.md) | §3.3 the bus timing this card's read path sits inside |
 | [`serial.md`](../../serial/docs/serial.md) | §5 the flow-control mechanism §7.1's masked window defeats, and the other half of that interaction; §7.3 why serial is polled last on the shared `/IRQ`; §6 the one-pin `/RESET` wiring whose property §8.4 constructs |

@@ -31,12 +31,16 @@
 # never restores blit ball 1; both are required to FAIL the VRAM compare.  A
 # gate nobody has seen fail is a gate nobody has tested (CLAUDE.md).
 #
-# ⚠ THE ROM DISK IS FULL.  488 K of it, 6,656 bytes free, and `pinball` is
-# 35 K - so this script asks the recipe for its command and gives back the
-# room (CMDS_EXTRA / CMDS_DROP, recipes/arm6309/arm6309.mak).  It deletes
-# romdisk.dsk on the way in AND on the way out, because the recipe's disk rule
-# depends on the module files and not on the list of them: without that, the
-# next ordinary build would keep this one's shortened disk.
+# ⚠ WHY IT ASKS FOR ITS COMMAND.  Since 2026-09-20 the demos are NOT in the
+# ROM disk: they are built and put on an SD card (software/nitros9/mksddisk.sh,
+# video3/bench/run-v3sd.sh), and the 488 K ROM image is the rescue system.
+# This bench boots with an EMPTY socket and types `pinball` at /DD, so it asks
+# the recipe for that one command (CMDS_EXTRA, recipes/arm6309/arm6309.mak).
+# ⭐ AND IT GIVES NOTHING BACK.  It used to have to - the disk had 6,656 bytes
+# free and the table is 36 K, so CMDS_DROP took `monster mvania ded dcheck
+# debug` out to make room.  There are ~65 K free now, and the recipe's disk
+# rule depends on the command list itself (.cmdlist), so nothing has to delete
+# romdisk.dsk to be sure of what it built either.
 #
 # ⛔ Its exit code is the answer, and `Error #` on the console fails it.
 # ⭐ CONTACT SHEETS AND NO VIDEO: a pass is reviewed from the sheets first.
@@ -49,21 +53,13 @@ FRAMES=${FRAMES:-1050}
 BALLS=${BALLS:-3}
 MODES=${MODES:-"0 16 1 2 128"}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-75}
-NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
-REC="$NITROS9DIR/recipes/arm6309/l2"
 mkdir -p "$OUT"
-
-# ⚠ BOTH ENDS.  On the way out the disk goes too, so the next `run-v3.sh` or
-# `run-v3mon.sh` rebuilds a full one.
-cleanup() { rm -f "$REC/romdisk.dsk" "$REC/arm6309_rom.bin"; }
-trap cleanup EXIT
 
 if [ -z "$NOBUILD" ]; then
   python3 video3/bench/mkpinball.py ../nitros9/level2/arm6309/cmds > "$OUT/mkart.log" 2>&1 || {
     cat "$OUT/mkart.log"; echo "FAIL  the art did not generate"; exit 1; }
   tail -4 "$OUT/mkart.log"
-  rm -f "$REC/romdisk.dsk" "$REC/arm6309_rom.bin"
-  V3=1 CMDS_EXTRA=pinball CMDS_DROP="monster mvania ded dcheck debug" \
+  V3=1 CMDS_EXTRA=pinball \
     sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
     tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi

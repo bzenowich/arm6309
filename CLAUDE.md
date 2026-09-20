@@ -6,7 +6,7 @@ Since 2026-09-08 the docs are split in two (this replaced the old "superseded te
 is marked, not deleted" convention — see the root `README.md` Conventions section):
 
 - **Specs describe only the present design.** One spec document per card
-  (`video/docs/graphics.md`, `audio/docs/audio.md`, `cpu/docs/plan.md`,
+  (`video3/docs/plan.md`, `audio/docs/audio.md`, `cpu/docs/plan.md`,
   `net/docs/net.md`, `storage/docs/sdcard.md`, `io/ps2/docs/ps2.md`,
   `io/serial/docs/serial.md`, `hardware/ram.md`, machine-level `docs/machine.md`).
 - **Each component has a `history.md` beside its spec** archiving superseded
@@ -15,6 +15,21 @@ is marked, not deleted" convention — see the root `README.md` Conventions sect
 - **`docs/design-review.md` and `docs/design-review2.md` are frozen dated records**
   (the 2026-09-04 review, and the 2026-09-09 simulation review). Never update their
   findings; the specs and history files carry what changed since.
+- ⭐ **`archive/` holds retired designs, and its documents are frozen too.**
+  `archive/video/` (the machine's video card until 2026-09-20) and
+  `archive/video2/` (a plan, never built) moved there when `video3` became the
+  machine's video card — `archive/README.md` and `docs/history.md`. ⚠ **An
+  archived document is still citable as provenance**: this machine's backplane,
+  slot model, arbitration rule and clock tree were designed in
+  `archive/video/docs/graphics.md`, and the card being retired does not make
+  those derivations wrong. What it is not is a statement about the present
+  machine. `lib/docs.check.ts` exempts `archive/` for the same reason it
+  exempts `history.md`.
+  ⛔ **`video/`'s DESIGN SOURCES DID NOT MOVE.** They are still in
+  `hardware/gal/`, still compiled by `gen.ts`, still instantiated by
+  `machine_tb` and `demo_tb` — because `software/boot/boot.asm` still drives
+  that card — and **checked by nothing**. `archive/README.md` §"What did NOT
+  move" is the record of that trade.
 
 ### Reading rules
 
@@ -61,8 +76,8 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 
 | | |
 |---|---|
-| `npm run check` | every GAL design against its own model, and the live ones against Atmel's CUPL. **770 claims, ~60 s** |
-| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs ten testbenches. **435 claims, ~7 min** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung |
+| `npm run check` | every GAL design against its own model, and the live ones against Atmel's CUPL. **641 claims, ~60 s** — ⚠ **895 until 2026-09-20**, when the archived `video` card's ten scripts left the chain and three surviving checks shrank (`docs/history.md`) |
+| **`npm run check:video`** | ⭐ **the Verilator tests.** Regenerates the Verilog from the term lists, then compiles and runs six testbenches — `audio`, `mainboard`, `storage`, `v3dot`, `v3card`, `v3machine`. **320 claims, ~4 min** — most of it whole frames at 25.175 MHz, so budget for it rather than assuming it hung. ⚠ **435 over ten benches until 2026-09-20**: the archived `video` card's `vsync`, `vaddr`, `vtile`, `vspan` and `vpal` (115 claims) left the default `TBS` and are asked for by name |
 | `npm run check:sim` | the two *hand-written* Verilog models, `gal/mmu.v` and `gal/clkdec.v`, with their own testbenches. Older and separate from `check:video` |
 | `npm run check:netlist` | the motherboard's connectivity, against `dist/mainboard/mainboard/circuit.json`, and the video card's against `dist/cards/video/circuit.json` — what is drawn, and the nets with no producer on the board as a list checked both ways (`graphics.md` §19 item 34). **Build artefacts**, so run `npm run build` first if a `.circuit.tsx` changed. ⚠ `tsci build` prints "Build completed with errors" and exits 0 when it cannot reach the supplier API; connectivity is unaffected |
 | `npm run gen:pld` | writes `gal/{vaddr,vctrl,vsup,audio,aseq}.pld` from the term lists |
@@ -181,7 +196,8 @@ change to the video card, the mainboard, or `emit.ts` itself:
 |---|---|
 | `audio.jedec.ts`, `aseq.*`, `audio_card.v`, `audio_tb.sv` | `npm run check:sim:audio` (~25 s), then ⭐ **`npm run check:audio:all`** before committing |
 | the mainboard, `u9`/`u10` | `npm run check:sim:board` |
-| the video card, or `verilog/emit.ts` | `npm run check:video` (everything) |
+| `verilog/emit.ts`, or anything every card shares | `npm run check:video` (everything) |
+| the **archived** `video` card (`video.cpld.ts`, `vsup.cpld.ts`, `sync`/`scan`/`access`/`seqph`/`seqctl`/`regfile`/`vlen`/`pxsel`) | ⚠ nothing runs by default. Its five benches are asked for by name — `bun run gal/verilog/gen.ts`, then from `gal/verilog/` `TBS="vsync vaddr vtile vspan vpal" sh run.sh` — and `npm run check:machine` still executes the card, because `boot.asm` still drives it |
 | the video3 card (`gal/video3/*.cpld.ts`, `v3lane.jedec.ts`, `video3_card.v`) | `bun run gal/verilog/gen.ts`, then from `gal/verilog/` `TBS="v3dot v3card v3machine" sh run.sh` (~4 min), refit every CPLD you touched, and for `v3lane` its check and `cupl-reference.sh` |
 | anything the CPU touches — the map, the boot path, `boot.asm`, `machine.v` | ⭐ **`npm run check:machine`** |
 | the NitrOS-9 port, `tl16c550.v`, or anything NitrOS-9 boots through (the vectors, the map, the tick, the UART) | `sh software/nitros9/run-emu.sh` (~30 s) first, then ⭐ **`SCENARIOS=nitros9 npm run check:machine`** |
@@ -198,10 +214,10 @@ first. After editing a `.jedec.ts`, run `bun run gal/verilog/gen.ts` or a
 
 | Testbench | Parts instantiated | What it asserts |
 |---|---|---|
-| `vsync_tb` | the whole video card | raster geometry in all four `VMODE` codes, sync widths and **polarity**, blanking |
-| `vaddr_tb` | " | the bitmap scan address over whole lines, both scroll axes, both ring wraps, line doubling, who owns the internal address bus |
-| `vtile_tb` | " | the cell fetch cadence, both address concatenations, cell-mode scroll in both axes, the 32-row ring |
-| `vspan_tb` | " | all four `WMODE`s, the retire rate, `/WAIT`'s read/write rule, `WADV` chaining, the display list, the VBL interrupt |
+| `vsync_tb` ⚠ | the whole **archived** `video` card (`archive/`) — by name only since 2026-09-20 | raster geometry in all four `VMODE` codes, sync widths and **polarity**, blanking |
+| `vaddr_tb` ⚠ | " | the bitmap scan address over whole lines, both scroll axes, both ring wraps, line doubling, who owns the internal address bus |
+| `vtile_tb` ⚠ | " | the cell fetch cadence, both address concatenations, cell-mode scroll in both axes, the 32-row ring |
+| `vspan_tb` ⚠ | " | all four `WMODE`s, the retire rate, `/WAIT`'s read/write rule, `WADV` chaining, the display list, the VBL interrupt |
 | `audio_tb` | both audio CPLDs + the state file, the sample RAM, the adder and the converters | the slot walk, the ÷5 CIA clock, Paula's set/clear, open-drain `/FIRQ`, §9.4.5's merge, the six micro-op sequences — **and how many samples a buffer yields**, which is the claim two audible defects survived 43 green ones by not having (`audio.md` §16 item 36) |
 | `mainboard_tb` | U3, U6, U9, U10 + the map SRAMs, `'157`, `'574`, boot `'244`, flash and SIMMs | the boot sequence, the 32 MB map, the four SIMM windows, `/IOPAGE`, and that exactly one thing drives physical `A20`–`A13` |
 | ⭐ `machine_tb` | **`mc6809e` + the whole motherboard + the whole video card + the whole audio card**, and a TL16C550C bus model | that the machine executes its own boot ROM: leaves boot mode with a map it wrote, finds its SIMM, loads 256 palette entries, paints 640 × 200 with the span writer, chains 200 spans with `WADV`, and produces a frame whose every pixel is the index the software drew. It reads DRAM and VRAM independently of the ROM's own compares, and runs `$E1`/`$E2` on purpose — **and it is what found `graphics.md` §19 items 36, 37 and 38, which twelve testbenches and 543 model claims could not** |

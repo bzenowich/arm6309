@@ -5,6 +5,7 @@
  * card proposes a window.
  */
 import { WINDOWS, MMU_WINDOWS, GEOGRAPHIC_WINDOW } from "../cards/windows"
+import { ALTERNATES } from "../place/parts"
 import { readdirSync } from "node:fs"
 
 let failures = 0
@@ -29,7 +30,7 @@ check(
 
 const sorted = [...WINDOWS].sort((a, b) => a.base - b.base)
 
-/* -- no overlaps. Every window but video's is still a proposal, and proposals
+/* -- no overlaps. Every window but video3's is still a proposal, and proposals
  *    are exactly what overlap silently. */
 for (let i = 1; i < sorted.length; i++) {
   const prev = sorted[i - 1]
@@ -85,6 +86,19 @@ for (const f of cardFiles) {
 const windowCards = new Set(WINDOWS.filter((w) => w.status !== "free").map((w) => w.card))
 for (const f of cardFiles) {
   const name = f.replace(".circuit.tsx", "")
+  /* ⭐ AN ARCHIVED CARD IS STILL DRAWN, AND OWNS NO WINDOW - 2026-09-20.
+   * `video` moved to place/parts.ts's ALTERNATES the day it was archived and
+   * `video3` took $FF60 (cards/windows.ts, docs/history.md). The drawing
+   * stays, because `check:netlist` and `machine_tb` still read it and
+   * because a drawing is the record of a design; only a card in the
+   * machine's slot population owns an address. ⚠ The claim is turned round
+   * rather than skipped - an alternate that quietly KEPT a window would be
+   * two cards on one base, which is the thing this file exists to stop. */
+  if (name in ALTERNATES) {
+    check(!windowCards.has(name),
+      `${name} is an alternate (place/parts.ts) and owns no window in the $FF map`)
+    continue
+  }
   check(windowCards.has(name), `${name} has a window in the $FF map`)
 }
 

@@ -121,7 +121,7 @@ typedef struct {
      *
      * 5 core cycles per store at 2.0979 MHz, against a 3.546895 MHz colour
      * clock, is 8.45 colour clocks -- the same ~5-cycle assumption
-     * video/docs/graphics.md §19 item 1 owes a measurement for. */
+     * archive/video/docs/graphics.md §19 item 1 owes a measurement for. */
     unsigned store_cc;
     void   (*advance)(void *ctx, unsigned cc);
     void    *ctx;

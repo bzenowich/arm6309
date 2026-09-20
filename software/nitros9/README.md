@@ -6,7 +6,9 @@ phase P0: the port skeleton that the video and audio drivers will be built on.
 
 ```sh
 sh software/tools/fetch-nitros9-tools.sh       # LWTOOLS and ToolShed into .tools/ (once)
-sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 23 claims, ~30 s
+sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 25 claims, ~30 s
+sh software/nitros9/run-sd.sh                  # ... with an SD card in the socket: 17 claims, ~2 min
+sh software/nitros9/mksddisk.sh out/demos.img  # ⭐ an SD image of the demo programs
 ```
 
 ```sh
@@ -95,6 +97,41 @@ at the handoff rather than at reset.
 
 The console shows every stage: `R` (loader), `K` (kernel), the module names, `t` `b` `0`,
 a dot per bootfile sector, then the module directory and the banner.
+
+## ⭐ The ROM disk is a rescue system; the applications are on the card
+
+The 488 K RBF image in ROM pages 3–63 was, until 2026-09-20, where every demo
+program lived, and **it was full** — 6,656 bytes free, with `pinball` at 36 K
+and a scene therefore having to ask the recipe for its command and give one
+back (`CMDS_EXTRA` / `CMDS_DROP`). The machine has storage now
+(`storage/docs/sdcard.md` §9.4), so:
+
+- **the ROM keeps** the kernel, the shell, the two modules a video program
+  loads *by name* (`CoArm`, which `armio.asm` opens as the literal
+  `/DD/CMDS/CoArm`, and `libvid`), the machine's self-tests, and a command set
+  that can bring a blank card up from nothing: `format`, `dcheck`, `free`,
+  `makdir`, `copy`, `merge`, `dir`, `del`, `deldir`, `rename`, `iniz`, `load`,
+  `link`, `devs`. That leaves **~65 K free** in the image;
+- **the card carries** the applications. `recipes/arm6309/arm6309.mak`'s
+  `$(DEMOS)` builds them into `.mods` (they are part of `all`, so one that
+  stops assembling is still noticed) and **`mksddisk.sh`** formats an image,
+  makes `CMDS` and `DATA` on it, and copies them in:
+
+```sh
+sh software/nitros9/mksddisk.sh /tmp/demos.img              # every demo the build made
+sh software/nitros9/mksddisk.sh /tmp/demos.img mvania       # or the subset a bench wants
+```
+
+⚠ **The image is a whole number of 512-byte SD blocks** and is sized to what it
+is given — a directory costs a whole eight-sector allocation unit however few
+entries it has, which a first cut got wrong by twenty sectors. ⛔ **And every
+file is read back off the image and compared with the source**, because
+`os9 copy` prints *"disk is filled to capacity"* **and exits 0**: without the
+round trip a short image announces itself as a good one and the machine loads
+a module with a bad CRC.
+
+`video3/bench/run-v3sd.sh` is the check: both cards, a demo loaded off `/SD0`,
+and a negative control with an empty socket.
 
 ## `/FIRQ`
 

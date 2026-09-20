@@ -78,7 +78,12 @@ for (const [key, c] of [...Object.entries(CARDS), ...Object.entries(ALTERNATES)]
   check(icCount(c) === c.ics, `${key}: the parts list totals its own claim`,
     `${icCount(c)} vs ${c.ics}`)
 }
-for (const [key, c] of Object.entries(CARDS)) {
+/* ⚠ CARDS **AND** ALTERNATES SINCE 2026-09-20. `video` moved to ALTERNATES
+ * that day and `cards/video.circuit.tsx` is still drawn, so iterating CARDS
+ * alone would have dropped the tie silently - which is the very shape of the
+ * defect the block above records. A card with no board file is skipped, which
+ * today is `video3`: plan §15 step 8 owes one. */
+for (const [key, c] of [...Object.entries(CARDS), ...Object.entries(ALTERNATES)]) {
   const b = budgets.get(key)
   if (b === undefined) continue
   check(icCount(c) === b, `${key}: and agrees with cards/${key}.circuit.tsx`,

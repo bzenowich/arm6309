@@ -1,6 +1,6 @@
 /* The $FF I/O map, docs/machine.md 3, as data.
  *
- * Every window here is still *proposed* by its own card document except video's,
+ * Every window here is still *proposed* by its own card document except video3's,
  * which is taken. The check in lib/cards.check.ts is what stops two proposals
  * from quietly overlapping.
  *
@@ -46,7 +46,11 @@ export const WINDOWS: Window[] = [
   { card: "(free)",  base: 0xff50, size: 8,  status: "free",     source: "vacated by the I/O card 2026-09-09" },
   { card: "storage", base: 0xff58, size: 4,  status: "proposed", source: "storage/docs/sdcard.md 6.1" },
   { card: "net",     base: 0xff5c, size: 4,  status: "proposed", source: "net/docs/net.md 5.1" },
-  { card: "video",   base: 0xff60, size: 32, status: "taken",    source: "video/docs/graphics.md 13" },
+  /* ⭐ video3 SINCE 2026-09-20, when `video` was archived and video3 became
+   * the machine's video card (docs/history.md). The window does not move:
+   * plan.md §10's register map is at the same base and the same 32 bytes,
+   * which is what made the swap a one-line change here. */
+  { card: "video3",  base: 0xff60, size: 32, status: "taken",    source: "video3/docs/plan.md 10" },
 ]
 
 /* -- the MMU's own registers, which are NOT in the geographic window -------

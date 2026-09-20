@@ -22,7 +22,10 @@ OUT=${OUT:-/tmp/arm6309-vid}
 mkdir -p "$OUT"
 
 if [ -z "$NOBUILD" ]; then
-  sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-nitros9.log" 2>&1 || { cat "$OUT/mkrom-nitros9.log"; exit 1; }
+  # ⚠ CMDS_EXTRA: since 2026-09-20 the demos are NOT in the ROM disk (they go
+  # on an SD card - software/nitros9/mksddisk.sh).  This session boots with an
+  # empty socket and types these three at /DD, so it asks for them by name.
+  CMDS_EXTRA="rastbar wave overworld" sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-nitros9.log" 2>&1 || { cat "$OUT/mkrom-nitros9.log"; exit 1; }
 fi
 ROM="$OUT/arm6309_rom.bin"
 [ -f "$ROM" ] || { echo "FAIL  no $ROM"; exit 1; }

@@ -3,7 +3,7 @@
 
 **Question this answers:** the machine has a CPU
 ([`plan.md`](../../../cpu/docs/plan.md)), video
-([`graphics.md`](../../../video/docs/graphics.md)), audio
+([`graphics.md`](../../../archive/video/docs/graphics.md)), audio
 ([`audio.md`](../../../audio/docs/audio.md)) and input
 ([`ps2.md`](../../ps2/docs/ps2.md)). It has no way to talk to anything outside itself. What
 does a serial port look like on a machine built from period-appropriate silicon?
@@ -1135,7 +1135,7 @@ see `hardware/README.md`.
 | [`ps2.md`](../../ps2/docs/ps2.md) | §3.1 the `/IRQ` decision this card follows; §5.3 the FIFO fallback; §14 item 3 the shared measurement; **§7.1 the `/IRQ`-masked transmit window that defeats §5.1's flow control**; §8.1 the side-effect-free status read that lets PS/2 sit ahead of this card in the chain |
 | [`docs/design-review.md`](../../../docs/design-review.md) | §6, 2026-09-04 — the review whose findings (IO-S1…S7) shaped this design; what each one changed is archived in [history.md](history.md) |
 | [`audio.md`](../../../audio/docs/audio.md) | §8.1 why `/FIRQ` outranks `/IRQ`, which is what kills §4.4 |
-| [`graphics.md`](../../../video/docs/graphics.md) | §16.1 the bus exerciser; §17 the backplane and the widen-the-window warning |
+| [`graphics.md`](../../../archive/video/docs/graphics.md) | §16.1 the bus exerciser; §17 the backplane and the widen-the-window warning |
 | [`drivewire.md`](../../../docs/drivewire.md) | **the strongest single argument for §4.5's tier** — §3 there prices DriveWire at 1.8 KiB/s and 37 % of the CPU on the 6551 against 11.0 KiB/s and 16 % on a `16C550`; §2.1 is the PS/2 collision from this card's item 11, one part further along |
 | **CoCopedia, *Deluxe RS-232 Program Pak*; Tandy *Deluxe RS-232 Operation Manual*** | §3.2's precedent — a 6551 on a 6809 bus, shipped |
 | Wikipedia, *MOS Technology 6551* and *WDC 65C51*; Jeff Tranter, *The 6551 ACIA*; 6502.org forum | §3.1 and §3.3 |

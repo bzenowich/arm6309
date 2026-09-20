@@ -11,7 +11,14 @@ set -e
 cd "$(dirname "$0")"
 V="verilator --binary --timing -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC"
 CARD="video_card.v vctrl.v vaddr.v vsup.v"
-TBS=${TBS:-"vsync vaddr vtile vspan vpal audio mainboard storage v3dot v3card v3machine"}
+# ⭐ THE `video` CARD'S FIVE LEFT THE DEFAULT ON 2026-09-20 - vsync, vaddr,
+# vtile, vspan and vpal. The card was archived that day and `video3` is the
+# machine's video card (archive/README.md). The benches, video_card.v and the
+# generated vctrl.v/vaddr.v/vsup.v are all still here and still run when asked
+# for by name - `TBS="vsync vaddr vtile vspan vpal" sh run.sh` - because
+# machine_tb and demo_tb still instantiate the card. They are simply not what
+# this repository checks by default any more.
+TBS=${TBS:-"audio mainboard storage v3dot v3card v3machine"}
 out=$(mktemp)
 trap 'rm -f "$out"' EXIT
 

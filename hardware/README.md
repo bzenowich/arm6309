@@ -142,7 +142,7 @@ The backplane carries **5 V only** — the storage card makes its own 3.3 V behi
 | [`lib/Card.tsx`](lib/Card.tsx) | the card scaffold — 100 mm high, length per card | + [`place/`](place/) |
 | [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
 | [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
-| [`cards/`](cards/) | audio, video, **io** (PS/2 + serial, merged 2026-09-08), storage, net — bus interface each | |
+| [`cards/`](cards/) | audio, video, **io** (PS/2 + serial, merged 2026-09-08), storage, net — bus interface each. ⚠ `video.circuit.tsx` is the **archived** card ([`../archive/README.md`](../archive/README.md)); `video3`, which replaced it on 2026-09-20, has no board file yet (`plan.md` §15 step 8) | |
 | [`ram.md`](ram.md) | **the memory system — decided 2026-09-08**: 16-bit map entries, a 32 MB physical map, four 30-pin SIMM sockets of DRAM, **a 1 MB boot ROM** and no SRAM outside the map. The address path costs one SRAM because the MMU was built with 128× the map storage it uses; §§2.1, 4 and 9 are still options | |
 | [`place/`](place/) | **the placement study** — every board drawn 1 : 1 from its parts list, and the check that found the video card did not fit a Eurocard | + [`place/place.check.ts`](place/place.check.ts) |
 | [`gal/`](gal/) | **the programmable logic** — U3 and U6's equations in CUPL and Verilog, and [`gal/jedec/`](gal/jedec/), which assembles them into the fuse maps a programmer burns | + [`gal/mmu.check.ts`](gal/mmu.check.ts), [`gal/mmu_tb.sv`](gal/mmu_tb.sv), [`gal/jedec.check.ts`](gal/jedec.check.ts) |
@@ -153,20 +153,22 @@ npm install            # bun comes with it; the tsci CLI needs it
 npm run build          # all six boards -> dist/
 npm run render:boards  # the drawings -> dist/boards.html
 
-npm run check          # 480 claims: every GAL and CPLD design against its own
+npm run check          # 641 claims: every GAL and CPLD design against its own
                        #   model, the live ones against Atmel's own CUPL, the
                        #   slot pinout, the $FF map, each card's decode, and
-                       #   the documentation's own numbers.  ~40 s
-npm run check:video    # 207 claims: the DESIGNS, run under Verilator rather
-                       #   than their equations - five video testbenches, the
-                       #   audio card and the motherboard.  ~3 min
+                       #   the documentation's own numbers.  ~60 s
+npm run check:video    # 320 claims: the DESIGNS, run under Verilator rather
+                       #   than their equations - the audio card, the
+                       #   motherboard, storage and video3, as a card and as a
+                       #   machine.  ~4 min
 npm run check:sim      # 56 claims: gal/mmu.v and gal/clkdec.v, hand-written
-npm run check:netlist  # 123 claims: the motherboard's connectivity (build first)
+npm run check:netlist  # 155 claims: the motherboard's connectivity, and the
+                       #   archived video card's (build first)
 npm run check:place    # every card places on the length it declares
 npm run build:all      # all of the above, in order
 ```
 
-**866 claims, and every one of them fails loudly.** The three that guard the
+**1,172 claims, and every one of them fails loudly.** The three that guard the
 *documentation* rather than the design are the newest and were added on
 2026-09-09 because stale headline numbers are this repository's oldest recurring
 defect: `check:docs` holds every utilisation figure and IC total in the prose

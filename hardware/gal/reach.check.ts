@@ -45,8 +45,6 @@
 
 import { audioCpld } from "./audio.cpld"
 import { aseqCpld } from "./aseq.cpld"
-import { vctrlCpld, vaddrCpld } from "./video.cpld"
-import { vsupCpld } from "./vsup.cpld"
 import { v3dot } from "./video3/v3dot.cpld"
 import { v3scan } from "./video3/v3scan.cpld"
 import { v3ptr } from "./video3/v3ptr.cpld"
@@ -95,11 +93,14 @@ const CARDS: Card[] = [
     parts: [part("audio", audioCpld), part("aseq", aseqCpld)],
     boards: ["verilog/audio_card.v"],
   },
-  {
-    name: "video",
-    parts: [part("vctrl", vctrlCpld), part("vaddr", vaddrCpld), part("vsup", vsupCpld)],
-    boards: ["verilog/video_card.v", "verilog/machine.v"],
-  },
+  /* ⭐ `video` LEFT THIS LIST ON 2026-09-20. It was vctrl, vaddr and vsup
+   * against `verilog/video_card.v` and `verilog/machine.v`; the card was
+   * archived that day and `video3` is the machine's video card
+   * (`archive/README.md`, `docs/history.md`). Its five RESERVED entries -
+   * CPUIDLE, GSPN0..3 - and the open-drain WAIT went with it, and
+   * `archive/video/docs/history.md` is where they are recorded. ⚠ The board
+   * files are still in `verilog/` because `machine_tb` still instantiates
+   * the card; nothing takes its census any more. */
   /* ⭐ VIDEO3's BOARD IS video3_card.v since 2026-09-19 - the five parts and
    * every discrete package plan §13.1 lists, wired from the term lists by
    * v3portmap.ts, with no reach into any part. It is a MODEL of a board and
@@ -242,40 +243,18 @@ const RESERVED: Record<string, { why: Why; note: string }> = {
    * §3.3's idiom - the pin drives low or floats, and the condition rides on
    * the output enable. The board takes the _OE and the value is a constant. */
   FIRQ: { why: "board", note: "§8.1's open-drain /FIRQ; audio_card.v takes FIRQ_OE" },
-  WAIT: { why: "board", note: "§7.4's open-drain /WAIT; machine.v takes WAIT_OE" },
+  /* ⚠ `WAIT` was here too - the `video` card's §7.4 open-drain /WAIT, whose
+   * condition rode on machine.v's WAIT_OE. It left with the card on
+   * 2026-09-20; video3 spells the same idiom `WAITN`, in RESERVED_RE below. */
 
-  /* ================= video: the eight per-chip grants =================== *
-   * ⚠ §5.2.1's grants go to the four framebuffer SRAMs' /WE and the four
-   * '153 source selects. video_card.v models the write with WEN and WPTR
-   * instead, so nothing in the model wires them - which is graphics.md §19
-   * item 34's partial board, not a design hole. check:netlist is what should
-   * close this and cannot yet. */
-  /* ⛔ GCPU0-3 WERE HERE, "board": §5.2.1's CPU grant, for a flat CPU read
-   * that reserved its chip. Deleted 2026-09-11 - every CPU VRAM access is at
-   * WPTR (graphics.md 11). What is left is arbDesign's own four outputs, kept
-   * because that GAL22V10 is what access.check.ts and cupl.check.ts execute. */
-  /* ⭐ ACPU0-3 LEFT THIS LIST 2026-09-12 WITH THEIR EQUATIONS. They were
-   * arbDesign's CPU grants renamed on merge, and every one read
-   * `VPORT & !CPUIDLE & CPUIDLE & ...` - false by inspection, because ARB_MAP
-   * maps four different inputs onto CPUIDLE, which is `terms: []`. The .pld
-   * carried them to the fitter, which minimised them away in silence. merge()
-   * folds constants now (jedec/cupl.ts), so a term containing a constant-0
-   * literal dies and a cell whose every term dies is dropped. */
-  CPUIDLE: { why: "dead", note: "⛔ graphics.md 11: the CPU reserves no framebuffer chip, so arbDesign's two address bits, its R/W and its /IOPAGE are all renamed onto this constant 0 (video.cpld.ts ARB_MAP). Nothing reads it since the fold - it is kept as a CELL because merge() would otherwise synthesise it as an input PIN, and deleted only when ARB_MAP stops naming it" },
-  GSPN0: { why: "board", note: "§5.2.1's span-writer grant, chip 0" },
-  GSPN1: { why: "board", note: "§5.2.1's span-writer grant, chip 1" },
-  GSPN2: { why: "board", note: "§5.2.1's span-writer grant, chip 2" },
-  GSPN3: { why: "board", note: "§5.2.1's span-writer grant, chip 3" },
-
-  /* ================= video: graphics.md 13 ============================== *
-   * ⚠ CHAR IS DELIBERATELY ABSENT. video.cpld.ts builds no cell for CTRL b2 -
-   * the macrocell went to the mask serialiser when §6.4.3's Variant B was
-   * dropped - so there is no signal to dangle. The design is right and §13's
-   * prose is what is stale: it still describes b2 as "with CELL: 0 tile, 1
-   * character". A doc fix, not a silicon one. */
-  /* ⭐ LDFB WAS HERE AND IS DELETED - 2026-09-10. FONTBASE's load strobe, for
-   * §6.4.3's dropped Variant B: one cell on vaddr, which is the video part that
-   * cannot spare them. regfile.ts has the derivation. */
+  /* ================= `video`'s OWN ENTRIES LEFT ON 2026-09-20 ==========
+   *
+   * CPUIDLE (`dead`) and GSPN0..3 (`board`, §5.2.1's four per-chip
+   * span-writer grants) were the archived card's, and so were the notes on
+   * GCPU0-3, ACPU0-3, CHAR and LDFB that recorded what had already left. The
+   * whole block is in `archive/video/docs/history.md` under this date; the
+   * card is no longer one this check knows about, and an entry naming a part
+   * it does not know is a failure here rather than a skip. */
 }
 
 /* ======================================================================== *
@@ -479,22 +458,12 @@ check(stale.length === 0,
     live.length ? `now read: ${live.join(", ")}` : "")
 }
 
-/* ---- and one the analysis above cannot see ------------------------------ *
- * graphics.md 13's +$15 VDATA - "read or write VRAM byte at WPTR,
- * post-increment". It was retired on 2026-09-11 as a second address for the
- * window's port and BUILT the same day (19 item 47), for tasks and handlers
- * with no MMU block to spare. The claim is turned round again: the map names
- * it, so something must decode it, and the decode must leave its part. */
-{
-  const regs = readFileSync(join(here, "regfile.ts"), "utf8")
-  const decoded = /\bVDATA\s*:/.test(regs)
-  const vsupSrc = readFileSync(join(here, "vsup.cpld.ts"), "utf8")
-  const exported = /"VDSEL"/.test(vsupSrc)
-  check(decoded && exported,
-    "graphics.md §13's +$15 VDATA is decoded and its select leaves vsup for vctrl's " +
-    "posted write and /WAIT - the map names it, so a part must build it",
-    !decoded ? "VDATA is not in regfile.ts's map" : !exported ? "VDSEL is not exported" : "")
-}
+/* ---- the `video` card's one hand-written claim left on 2026-09-20 --------
+ * It read `graphics.md` §13's +$15 VDATA out of `regfile.ts` and asserted
+ * that `vsup.cpld.ts` exported VDSEL, because the analysis above cannot see
+ * a decode that crosses parts. `video3` is the machine's video card and
+ * `v3card_tb` exercises its own VDATA port directly, so the claim went with
+ * the card it was about. `archive/video/docs/history.md` has it. */
 
 /* ---- which part each one is on, computed ---------------------------------- *
  * ⚠ BECAUSE PROSE GETS THIS WRONG. This card has two CPLDs and the video card
@@ -584,9 +553,10 @@ console.log("")
 console.log("      stale counts audio.md §9.3's DAT, ATT and PAN alongside the bits -")
 console.log("      state-file FIELDS with no signal of their own.")
 console.log("")
-console.log("      ⭐ ON THE THREE BUILT CARDS no promised feature is missing, as of")
-console.log("      2026-09-11: §11's readable VRAM is built at WPTR, through the window")
-console.log("      and through +$15 VDATA.")
+console.log("      ⭐ ON THE FOUR CARDS THIS CENSUS COVERS - audio, video3, storage and")
+console.log("      the motherboard - no promised feature is missing. ⚠ `video` left the")
+console.log("      census on 2026-09-20 when it was archived; `machine_tb` still builds")
+console.log("      the card and nothing counts it (archive/README.md).")
 console.log("      ⚠ What a census of this shape still cannot see is a feature with no")
 console.log("      register behind it at all - which is how §6.1's volume x4 hid.")
 console.log("")

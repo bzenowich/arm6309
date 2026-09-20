@@ -1,10 +1,17 @@
 # Simulating the machine
 
-`npm run check:video` from `hardware/`. It regenerates the Verilog and runs six
-testbenches; it reports **122 ok and 16 FAIL**, and the failures are
-[`docs/design-review2.md`](../../../docs/design-review2.md)'s findings. **They are
-left failing on purpose** — a testbench edited to pass is a finding that has been
-deleted. `run.sh` exits 0 either way; read the output.
+`npm run check:video` from `hardware/`. It regenerates the Verilog and runs the six
+testbenches in `run.sh`'s default `TBS` — `audio`, `mainboard`, `storage`, `v3dot`,
+`v3card`, `v3machine` — and reports **320 claims, 0 failed**. ⚠ `run.sh` exits 0
+whether a claim failed or not, so **the count is what decides the status**; read the
+`FAIL` lines.
+
+⭐ **Five more are asked for by name**: `vsync`, `vaddr`, `vtile`, `vspan` and `vpal`,
+the **archived** `video` card's, 115 claims — `TBS="vsync vaddr vtile vspan vpal" sh
+run.sh`. They left the default on 2026-09-20 when `video3` became the machine's video
+card ([`../../../archive/README.md`](../../../archive/README.md)); `video_card.v` and
+the generated `vaddr.v`/`vctrl.v`/`vsup.v` are still here because `machine_tb` and
+`demo_tb` still instantiate the card.
 
 ## Why this exists
 
@@ -22,12 +29,13 @@ A simulator sees seams, because it has to wire them.
 | | |
 |---|---|
 | `emit.ts` | `Merged`/`Design` → Verilog. **The same `Cell` term lists `jedec/cupl.ts` compiles for `fit1508.exe`** — one origin, three devices, which is the rule `cupl.ts` states and the reason two errors got into the 22V10 fuse map on 2026-09-07 |
-| `gen.ts` | writes `vaddr.v`, `vctrl.v`, `rfa.v`, `audio.v`, `u9.v`, `u10.v`. ⚠ **Do not edit those six** |
-| `video_card.v` | hand-written: the card wired up — three parts, four interleaved framebuffer chips, the fetch latches and the `'153` mux. Board-level, transcribed from `hardware/cards/` and `video.cpld.ts` |
+| `gen.ts` | writes `vaddr.v`, `vctrl.v`, `vsup.v`, `rfa.v`, `vlen.v`, `pxsel.v`, `audio.v`, `aseq.v`, `u9.v`, `u10.v`, `v3dot.v`, `v3scan.v`, `v3ptr.v`, `v3host.v`, `v3lane.v`, `sdbus.v`, `sdeng.v`. ⚠ **Do not edit any of them** — change the `.jedec.ts`/`.cpld.ts` and re-run |
+| `video_card.v` | hand-written: the **archived** `video` card wired up — three parts, four interleaved framebuffer chips, the fetch latches and the `'153` mux. Board-level, transcribed from `hardware/cards/` and `video.cpld.ts`. ⚠ Kept because `machine.v` instantiates it and `boot.asm` drives it |
+| `video3_card.v` | ⭐ the machine's video card since 2026-09-20 — generated port maps (`v3portmap.ts`) around the five parts and every discrete package `plan.md` §13.1 lists. A model of a board rather than a drawn one |
 | `vshim.v` | hand-written, and ⚠ **it is a finding rather than a component**: every signal in it is an input to a fitted part that nothing on the card produces. Its size is the size of `design-review2.md` §1.2 |
 | `mainboard.v` | hand-written: U3, U6, U9, U10, both map SRAMs, the `'157`, the `TASK` `'574`, the boot `'244`, both flash devices and the SIMM bank. Transcribed from `hardware/mainboard/mainboard.circuit.tsx`, which is the netlist of record |
 | `tl16c550.v` | hand-written, and ⚠ **a bus model of a bought part, not a design output**: the serial card's TL16C550C (`io/serial/docs/serial.md` §7), for `machine.v`'s `SERIAL = 1`. It is the console that `machine_tb +scenario=nitros9` types at, and it must behave as `software/demo/emu/machine.c`'s UART does |
-| `*_tb.sv` | hand-written. `vsync`, `vaddr`, `vtile`, `vspan`, `audio`, `mainboard` |
+| `*_tb.sv` | hand-written. In the default run: `audio`, `mainboard`, `storage`, `v3dot`, `v3card`, `v3machine`. By name: `vsync`, `vaddr`, `vtile`, `vspan`, `vpal` (archived `video`), `machine`, `modplay`, `demo` |
 
 `../clkdec.v` and `../mmu.v` are older, hand-written models of the same two GALs
 and are run by `npm run check:sim`; `mainboard.v` instantiates them rather than

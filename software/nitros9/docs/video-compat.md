@@ -2,7 +2,8 @@
 
 **What this document is.** A gap analysis between NitrOS-9's two graphics interfaces — the
 Level 2 **console window interface** (`vtio.dr` + `cowin.io`) and the **GrfDrv** renderer
-behind it — and the arm6309 video card (`video/docs/graphics.md`). It says where the
+behind it — and the arm6309 video card (`../../archive/video/docs/graphics.md`,
+archived 2026-09-20). It says where the
 hardware falls short, where the *interface* has to grow to reach features the CoCo 3 never
 had, and what of the Wildbits port can be lifted rather than rewritten.
 

@@ -10,9 +10,9 @@ read it full size.</p>
 <div class="finding">
   <div>
     <p class="lbl">Three of five cards are the short one</p>
-    <p style="margin:.35rem 0 0">Only video needs 24&nbsp;cm and only audio needs 18. <strong>Net,
+    <p style="margin:.35rem 0 0">Only video3 needs 24&nbsp;cm and only audio needs 18. <strong>Net,
     storage and the combined I/O card all fit 12</strong> &mdash; and net is as dense at 12&nbsp;cm
-    (64&nbsp;%) as video is at 24. Five cards come to <strong>780&nbsp;cm&sup2; of board</strong>
+    (64&nbsp;%) as video3 is at 24. Five cards come to <strong>780&nbsp;cm&sup2; of board</strong>
     against 1,250 if every card were cut to the longest.</p>
   </div>
   <div style="text-align:right">
@@ -60,7 +60,7 @@ CPLDs partly on <em>&ldquo;six slots, five of them already claimed &mdash; there
 conclusion has not; the CPLD case now rests on the CRC arithmetic alone.</p>
 {{MB}}
 <p style="margin-top:14px">The dashed outlines are the card envelopes at their real lengths. A
-socket is 91.4&nbsp;mm and the longest card is 240, so <strong>video overhangs its socket by
+socket is 91.4&nbsp;mm and the longest card is 240, so <strong>video3 overhangs its socket by
 149&nbsp;mm</strong> while the three 12&nbsp;cm cards barely overhang at all. The board is sized by the
 longest card; the motherboard&rsquo;s own logic sits in a strip outside every envelope.</p>
 
@@ -114,7 +114,7 @@ maximal span is 2.6 refresh intervals of free DRAM time.</p>
 <p style="margin-top:14px;color:var(--muted)">Placeable area is the board less the 91.4&nbsp;&times;&nbsp;11&nbsp;mm
 finger zone and the reserved rear connectors, so it differs per card. A 12&nbsp;cm card gives up
 proportionally more to the fingers than a 24&nbsp;cm one &mdash; which is why net reads 64&nbsp;% on a
-board only a third the size of video&rsquo;s.</p>
+board only a third the size of video3&rsquo;s.</p>
 
 <hr class="rule">
 <h2>What this drawing is, and is not</h2>
@@ -126,7 +126,7 @@ corners are reserved on the rear edge first.</p>
 <p><strong>It is not</strong> a layout. No traces, no vias, no decoupling capacitors &mdash; about thirty
 per card, another 6&nbsp;cm&sup2; the percentages do not carry. Real placement groups by signal, not by
 what fits lowest. <strong>The area figure is the finding; the arrangement illustrates it.</strong></p>
-<p style="color:var(--muted)">Parts from <code>video/docs/graphics.md</code> &sect;14.1,
+<p style="color:var(--muted)">Parts from <code>video3/docs/plan.md</code> &sect;13.1,
 <code>audio/docs/audio.md</code> &sect;10, <code>net/docs/net.md</code> &sect;9,
 <code>storage/docs/sdcard.md</code> &sect;8, <code>io/ps2/docs/ps2.md</code> &sect;9 and
 <code>io/serial/docs/serial.md</code> &sect;9; the 72-pin edge from

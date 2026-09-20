@@ -5,7 +5,7 @@ A cycle-accurate **HD6309E** implemented on an **STM32G431CBU6 (UFQFPN48)**, pac
 6309 native mode. In the machine of [`docs/machine.md`](../docs/machine.md) this is the
 CPU — and **it does not carry the MMU**: that sits on the motherboard, which is what lets
 one 48-pin part serve both machines. See `docs/machine.md` §5 item 6 and
-[`video/docs/graphics.md`](../video/docs/graphics.md) §6.3.1, and `docs/plan.md` §3.2 for
+[`archive/video/docs/graphics.md`](../archive/video/docs/graphics.md) §6.3.1, and `docs/plan.md` §3.2 for
 the pin budget that decided it.
 
 > ⚠ **The package must be the UFQFPN48 (`CBU6`), not the LQFP48 (`CBT6`).** DS12589

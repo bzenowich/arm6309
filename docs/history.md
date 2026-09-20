@@ -12,6 +12,80 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## §0 and §8 — `video/` and `video2/` are archived, `video3` is the machine's video card (2026-09-20)
+
+The owner took the decision on 2026-09-20. [`video3/`](../video3/) is the machine's video
+card; [`video/`](../archive/video/) and [`video2/`](../archive/video2/) moved to
+[`archive/`](../archive/), which is a new directory and has its own
+[`README.md`](../archive/README.md) stating what it is for — including that **an archived
+document is still citable as provenance**. `graphics.md` is where this machine's
+backplane, slot model, arbitration rule and clock tree were designed, and the card it was
+written for being retired does not make those derivations wrong.
+
+**What replaced what.** `video/` was specified, fitted and simulated — 33 ICs, three
+`ATF1508AS`, a display list, a span writer, byte-granular scroll — and it cannot do
+character mode with per-cell colour, which is what NitrOS-9 and ANSI art need
+(`software/nitros9/docs/video-compat.md`). `video3` does, at 45 ICs, four `ATF1508AS`
+and a `GAL22V10`, all five fitted, with a keyed copy engine and one 16×16 sprite and
+**no display list**. `video2` was a microcoded ANSI card, paper only, never built;
+`video3` took the question it was asked to answer.
+
+**The numbers that moved.** `place/parts.ts`'s `CARDS` is the machine's slot population
+and `video3` came out of `ALTERNATES` into it, with `video` going the other way (placed,
+counted and window-less). `cards/windows.ts` hands `$FF60` to `video3`, which is a
+one-line change because `plan.md` §10's register map is at the same base and the same 32
+bytes.
+
+**machine.md §0 — the Total silicon row — said:**
+
+> | **Total silicon** | **121 ICs** — **102 on cards** (video 33, audio 35, I/O 14, storage 8, net 12, from `hardware/place/parts.ts`), **19** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8.
+
+**machine.md §8 — the power sum — said:**
+
+> **The machine is plausibly **1.8–3.0 A** at 5 V across **121 ICs**, plus a 3.3 V rail.**
+>
+> | video | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
+> |---|---|---|---|---|---|---|---|---|
+> | **33** | **35** | 11 | 3 | **8** | **12** | **102** | **19** | **121** |
+
+**machine.md §8 — the video card's power row — said:**
+
+> | 5 V | **video card** | **33** — 3 CPLDs, 4 SRAMs | **~0.5–0.85 A, 0.65 A nominal**, design to 1 A — `graphics.md` §14.2 |
+
+⛔ **The machine's current is no longer a stated range.** `video3` owes a power budget
+(`plan.md` §14 item 13) and is twelve packages and one CPLD larger than the card whose
+0.65 A nominal the 1.8–3.0 A was built on. The old range is now a floor, and §8 says so.
+
+**What stopped being checked.** `npm run check` went from **895 claims to 641**. Ten
+scripts left the chain — `sync`, `scan`, `access`, `regfile`, `seqph`, `seqctl`, `tile`,
+`cadence`, `vlen`, `pxsel` (192 claims) — and three surviving checks shrank: the CUPL
+registry lost `arb` and `rfa`'s exhaustive sweeps (−2), `pins.check.ts` lost `vaddr`,
+`vctrl` and `vsup` (−58), `reach.check.ts` lost the `video` card and its `+$15 VDATA`
+claim (−2). `gal/verilog/run.sh`'s default `TBS` lost `vsync`, `vaddr`, `vtile`, `vspan`
+and `vpal`.
+
+⚠ **The design sources did not move**, and `archive/README.md` records why: `gen.ts`
+emits the card's Verilog from them and `machine_tb`/`demo_tb` still instantiate it,
+because `software/boot/boot.asm` still drives `video`. Retargeting the boot ROM is a
+separate job. Until it is done, `video`'s term lists are compiled by `check:machine`
+and checked by nothing.
+
+**Two checks were repaired on the way**, both defects the move exposed rather than
+caused:
+
+- `lib/decode.check.ts` split term strings on `&` alone. `v3host`'s `WAITN` output
+  enable is a sum, so the split yielded the token `CARDBUSY # IOSEL`, which ends in
+  `SEL` and is not a literal any part reads — the card was reported as importing a
+  pre-decoded select the moment the check was pointed at it. It splits on `&` and `#`
+  now.
+- `video3`'s own IC total said **44** in `plan.md` §13.1, §13.3, §13.5 and §14 and in
+  `partition.md` §9 and `optimizations.md`, against `place/parts.ts`'s 45. The 45th is
+  the keyed copy's `74HC4078` (`keyed-copy.md` §0, built 2026-09-19), which
+  `keyed-copy.md` counted and the plan never did. `lib/docs.check.ts`'s `OWNER` now
+  names `video3/`, so the next one is caught.
+
+---
+
 ## §7.2 — the vectors point at `$FEEE`, and the constant page is the entry that remains (2026-09-14)
 
 `software/nitros9/` booted NitrOS-9 Level 2 to a shell on the host emulator, and in doing so
@@ -729,7 +803,7 @@ bound, what it settles, and the free-run-on-`CLK25` rule stay in the item.
   parts, and removing them returned three pins on each. `vaddr` 61/64 and `vctrl`
   59/64 both fit with `TMS`/`TDI`/`TDO`/`TCK` reserved, so the machine's video CPLDs
   are programmed in circuit and `machine.md` §6's JTAG row is struck.
-  (`video/docs/history.md` has the correction.)
+  (`archive/video/docs/history.md` has the correction.)
 - **"Bound `SPANBUSY`"** — done 2026-09-08: **40.7 µs** worst case, **10.2 µs** once
   `graphics.md` §14.2's broadcast write lands; `/WAIT` also qualified on `R/W`, so
   reads never wait (`graphics.md` §7.4). Now §5 item 10.

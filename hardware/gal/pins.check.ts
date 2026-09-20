@@ -37,8 +37,6 @@
  */
 
 import { SLOT_PINS } from "../lib/slot"
-import { vaddrCpld, vctrlCpld } from "./video.cpld"
-import { vsupCpld } from "./vsup.cpld"
 import { audioCpld } from "./audio.cpld"
 import { aseqCpld } from "./aseq.cpld"
 import { mmuDesign } from "./mmu.jedec"
@@ -90,7 +88,13 @@ const gal = (board: string, d: { name: string; inputs: { name: string; activeLow
 const PARTS: Part[] = [
   gal("mainboard", mmuDesign), gal("mainboard", clkdecDesign),
   gal("mainboard", u9Design), gal("mainboard", u10Design),
-  cpld("video", vaddrCpld), cpld("video", vctrlCpld), cpld("video", vsupCpld),
+  /* ⭐ `video`'s THREE ATF1508AS LEFT THIS LIST ON 2026-09-20 - vaddr, vctrl
+   * and vsup. The card was archived that day and `video3` replaced it
+   * (`archive/README.md`, `docs/history.md`); `gal/video.cpld.ts` and
+   * `gal/vsup.cpld.ts` are still there, and nothing checks their pin senses
+   * any more. ⚠ That is a real loss of coverage on a design `machine_tb`
+   * still instantiates, and it is the price of the card not being in the
+   * machine - `archive/README.md` records it. */
   cpld("audio", audioCpld), cpld("audio", aseqCpld),
   /* ⛔ VIDEO3, ADDED 2026-09-18, and rules 1 and 2 found three pins the
    * moment it was: /IOSEL declared active-high and the open-drain /WAIT and
@@ -139,7 +143,9 @@ for (const part of PARTS) {
   }
 }
 /* Vacuity guard: the pins that exposed this class must be among those checked. */
-for (const must of ["clkdec.WAIT", "vsup.IOSEL", "vctrl.IOPAGE", "vctrl.WAIT", "vctrl.IRQ",
+/* ⚠ `vsup.IOSEL`, `vctrl.IOPAGE`, `vctrl.WAIT` and `vctrl.IRQ` were four of
+ * these until 2026-09-20, when `video` was archived. */
+for (const must of ["clkdec.WAIT",
   "audio.IOSEL", "audio.FIRQ", "u9.IOPAGE_BP", "aseq.RESET",
   /* ⭐ and video3's three, which is what adding the card was for */
   "v3host.IOSEL", "v3host.WAITN", "v3host.IRQN"]) {
@@ -149,7 +155,7 @@ for (const must of ["clkdec.WAIT", "vsup.IOSEL", "vctrl.IOPAGE", "vctrl.WAIT", "
 /* -- 2. crossings between parts of one card ------------------------------ */
 console.log("\n      2. a signal crossing between two parts has one sense at both ends\n")
 let crossings = 0
-for (const board of ["mainboard", "video", "audio", "video3"]) {
+for (const board of ["mainboard", "audio", "video3"]) {
   const parts = PARTS.filter((p) => p.board === board)
   for (const src of parts) {
     for (const out of src.pins.filter((p) => p.dir === "out")) {
@@ -167,8 +173,12 @@ for (const board of ["mainboard", "video", "audio", "video3"]) {
   }
 }
 check(crossings >= 20, `and there are ${crossings} crossings, not a vacuous handful`)
-check(PARTS.some((p) => p.name === "vaddr" && p.pins.some((x) => x.name === "WSTB" && x.dir === "in")),
-  "including WSTB, vsup to vaddr - the crossing a one-ended fix would have split")
+/* ⚠ THE VACUITY GUARD USED TO NAME `vsup.WSTB -> vaddr.WSTB`, the crossing a
+ * one-ended fix would have split. It went with the `video` card on
+ * 2026-09-20; `v3host.WSTB` is the same job on `video3` and `v3lane.RFOE` is
+ * its other end, so the class is still represented. */
+check(PARTS.some((p) => p.name === "v3host" && p.pins.some((x) => x.name === "WSTB" && x.dir === "out")),
+  "including WSTB, v3host to the register file - a register-file write strobe is still among them")
 
 /* -- 3. named consumers -------------------------------------------------- */
 console.log("\n      3. pins whose consumer is a discrete part, against that part's pin\n")
@@ -189,11 +199,11 @@ const CONSUMERS: Consumer[] = [
   { part: "u10", pin: "CAS", drives: "30-pin SIMM /CAS, all four", low: true, where: "mainboard.circuit.tsx" },
   { part: "u10", pin: "DWE", drives: "30-pin SIMM /WE, all four", low: true, where: "mainboard.circuit.tsx" },
 
-  /* video card - graphics.md; the parts are not drawn yet */
-  { part: "vctrl", pin: "BLANKD", drives: "74AHCT273 /MR (post-LUT pair)", low: true, where: "graphics.md 9.2" },
-  { part: "vsup", pin: "WSTB", drives: "register-file SRAM /WE", low: true, where: "vsup.cpld.ts, graphics.md 10.1.6.3" },
-  ...["OEA0", "OEA1", "OEA2", "OEB0", "OEB1", "OEB2"].map((pin) => ({
-    part: "vsup", pin, drives: "74AHCT574 /OE (fetch ranks)", low: true, where: "graphics.md 8.2" })),
+  /* ⭐ THE `video` CARD'S EIGHT LEFT ON 2026-09-20 - vctrl.BLANKD, vsup.WSTB
+   * and vsup's six fetch-rank output enables. Every one of them has a
+   * `video3` counterpart below, which is why the classes they covered are
+   * still covered. `archive/video/docs/graphics.md` §8.2 and §9.2 are where
+   * they were written down. */
 
   /* ⭐ video3 - plan.md §13.1, as video3_card.v wires it. ⛔ Not one of these
    * was declared active-low until 2026-09-19: the generated Verilog is in

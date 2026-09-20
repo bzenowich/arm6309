@@ -2,7 +2,7 @@
 
 A demo ROM for the end-to-end simulation: a 6809E, the motherboard, the video card **and**
 the audio card, running from the boot ROM. It is a tour of the video card's capability list,
-[`video/docs/features.md`](../../video/docs/features.md) §0, as a user would see it: a
+[`archive/video/docs/features.md`](../../archive/video/docs/features.md) §0, as a user would see it: a
 Haiku-flavoured desktop, a MacPaint mock-up, an ANSI BBS with a few turns of TradeWars 2002,
 a raster-bar window, and the scrolling tile-map game. A ProTracker module plays under all of
 it from the audio card's `/FIRQ`.

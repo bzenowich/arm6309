@@ -64,7 +64,20 @@ claim "krn found Boot and loaded OS9Boot from the ROM disk"  has 'bKrnP2 KrnP3 I
 claim "SysGo printed the banner, naming this machine"        has '^arm6309$'
 claim "the shell prompted on /Term"                          has '{Term|02}/DD:'
 claim "dir lists the ROM disk's root"                        has 'OS9Boot *CMDS *MODULES *SYS *startup'
-claim "dir /dd/cmds lists commands on the ROM disk"          has 'mfree *mmap *more'
+# ⭐ 2026-09-20: `format` joined the command set and the demo programs left it
+# (software/nitros9/README.md - they are on an SD card now), which moved every
+# name in dir's five-column layout by one.  The old pattern was
+# 'mfree *mmap *more' and `more` is now the first name on the NEXT line; this
+# one is a pair on one line, so it still says the column layout is intact.
+claim "dir /dd/cmds lists commands on the ROM disk"          has 'mfree *mmap *$'
+# ⭐ AND WHAT THE ROM DISK IS FOR, asserted rather than assumed: it is a rescue
+# system, so it must be able to make a filesystem on a blank card and fill it
+claim "⭐ and the rescue set is there: format, dcheck, copy, makdir" \
+  sh -c "for c in format dcheck copy makdir; do grep -qw \$c '$OUT/console.txt' || exit 1; done"
+# ⛔ ...and the applications are NOT.  Without this the claim above is satisfied
+# by a ROM disk that still carries everything, and the card would be pointless
+claim "⛔ and the demos are NOT: mvania, monster, overworld, rastbar, wave" \
+  sh -c "! sed -n '/Directory of .dd.cmds/,/^\$/p' '$OUT/console.txt' | grep -qwE 'mvania|monster|overworld|rastbar|wave'"
 # (free blocks: the bootfile, system memory and the shell, loaded from /DD/CMDS, have the rest)
 claim "mfree reports 8 MB of RAM mapped: four SIMM sockets, capped at F\$GBlkMp's 1024 blocks" has 'Total: *3F5 *8104k'
 claim "procs shows the shell running procs"                  has 'Procs *$'

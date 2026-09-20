@@ -14,7 +14,7 @@ The video card's read-back was built prefetched at `WPTR` (`graphics.md` §11), 
 The text it replaced:
 
 > **experimental and not guaranteed**, and three independent subsystems break there — video
-> VRAM read-back does not close (`video/docs/graphics.md` §11), a 2 MHz 6551 is 57 % over
+> VRAM read-back does not close (`archive/video/docs/graphics.md` §11), a 2 MHz 6551 is 57 % over
 > rating (`io/docs/serial.md` §3.3), and the `t_cyc` violation above.
 >
 
@@ -74,7 +74,7 @@ gave the physical map somewhere to put it.
 >   low on the homebrew motherboard), which keeps one firmware image serving all three
 >   machines.
 >
-> > ⚠ **Consequence for the drop-in claim.** `video/docs/graphics.md` §16.8's "you can
+> > ⚠ **Consequence for the drop-in claim.** `archive/video/docs/graphics.md` §16.8's "you can
 > > drop a real HD63C09E into the homebrew machine" property **does not hold** with the
 > > shadow ROM in the CPU: a real 6309 has no flash and the machine has no boot ROM
 > > without it.

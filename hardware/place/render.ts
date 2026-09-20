@@ -17,7 +17,7 @@ import { cardSvg, mbSvg } from "./svg"
 const here = new URL(".", import.meta.url).pathname
 const read = (f: string) => readFileSync(join(here, f), "utf8")
 
-const ORDER = ["video", "audio", "net", "storage", "io"] as const
+const ORDER = ["video3", "audio", "net", "storage", "io"] as const
 const WINDOW: Record<string, string> = {
   video: "$FF60&ndash;$FF7F", audio: "$FF40&ndash;$FF4F", net: "$FF5C&ndash;$FF5F",
   storage: "$FF58&ndash;$FF5B", io: "$FF50&ndash;$FF57",

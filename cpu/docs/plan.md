@@ -433,7 +433,7 @@ settled the *other* target's architecture, so record the arithmetic here where i
 > on one-SKU grounds (below), so the question is retired rather than merely settled.
 
 An in-CPU MMU costs the debug UART on a board that has never been brought up. Moving it
-to 3 ICs on the motherboard ([`graphics.md`](../../video/docs/graphics.md) §6.3.1) returns
+to 3 ICs on the motherboard ([`graphics.md`](../../archive/video/docs/graphics.md) §6.3.1) returns
 A16–A19, and **one STM32G431CBU6 then serves the CoCo 3, the Dragon 64 (§2.6.1) and the
 homebrew machine** — one pinout, one board-support file, one firmware. That, plus the
 48-pin part being cheaper and better stocked, is why the machine took the external MMU
@@ -748,7 +748,7 @@ as everything else below.
 default and the only rate the machine is specified at.** fast-E (3.1469 MHz) is
 **experimental and not guaranteed**, and two independent subsystems break there — a 2 MHz
 6551 is 57 % over rating (`io/docs/serial.md` §3.3), and the `t_cyc` violation above. (The
-video card's VRAM read-back no longer does: it is prefetched, `video/docs/graphics.md` §11.) The CPU module's
+video card's VRAM read-back no longer does: it is prefetched, `archive/video/docs/graphics.md` §11.) The CPU module's
 position: fast-E is a probe, it needs the §3.6 latch, it has ~6 cycles of `TFM` margin,
 and it has no silicon reference. **Per naming decision D6 this rate is "fast-E mode";
 it is never called "stretch mode", and "/WAIT" is reserved for a wait state or E-hold.**
@@ -1356,7 +1356,7 @@ now bought back.
 | **Flash** | ~8 KB back of 128 KB, and the 16-byte vector image with it |
 | **Pins** | ⭐ **`PF1` is spare again.** §3.2's last free pin was spent on the machine strap that selected shadow-ROM off for the CoCo 3 and Dragon 64; there is no mode to select |
 | **One image, three machines** | **unconditionally**, rather than by a strap read at reset. The drop-in SKU and the homebrew SKU now differ in *no* firmware behaviour at all |
-| ⭐ **The drop-in claim** | `video/docs/graphics.md` §16 item 8's *"you can drop a real HD63C09E into the homebrew machine"* **holds again** — the machine's boot ROM is on the bus, so a part with no flash boots from it |
+| ⭐ **The drop-in claim** | `archive/video/docs/graphics.md` §16 item 8's *"you can drop a real HD63C09E into the homebrew machine"* **holds again** — the machine's boot ROM is on the bus, so a part with no flash boots from it |
 
 ⚠ **What this module still owes boot is nothing, and that is worth stating**, because
 three other documents were written against the old arrangement and one of them —

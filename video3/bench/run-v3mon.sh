@@ -46,7 +46,12 @@ mkdir -p "$OUT"
 if [ -z "$NOBUILD" ]; then
   python3 video3/bench/mkmonster.py ../nitros9/level2/arm6309/cmds > "$OUT/mkart.log" 2>&1 || {
     cat "$OUT/mkart.log"; echo "FAIL  the art did not generate"; exit 1; }
-  V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
+  # ⚠ CMDS_EXTRA: since 2026-09-20 the demos are NOT in the ROM disk (they go
+  # on an SD card - software/nitros9/mksddisk.sh, video3/bench/run-v3sd.sh).
+  # This bench boots with an empty socket and types `monster` at /DD, so it
+  # asks the recipe for that one command.  Nothing has to be given back any
+  # more: the ROM disk has ~65 K free.
+  V3=1 CMDS_EXTRA=monster sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
     tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 [ -f "$OUT/arm6309_rom.bin" ] || { echo "FAIL  no ROM in $OUT"; exit 1; }

@@ -121,7 +121,7 @@ lists PLCC-44 and TQFP-48. `net.md` §13.6's lesson holds either way.
 
 ## §3.3 — fast-E's reasons, three to two (2026-09-11)
 
-The video card's VRAM read-back was built prefetched (`video/docs/graphics.md` §11) and stopped being a reason ÷8 is unsupported.
+The video card's VRAM read-back was built prefetched (`archive/video/docs/graphics.md` §11) and stopped being a reason ÷8 is unsupported.
 
 The text it replaced:
 

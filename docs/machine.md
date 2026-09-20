@@ -4,7 +4,7 @@
 
 **Question this answers:** the project has a CPU module plan
 ([`cpu/docs/plan.md`](../cpu/docs/plan.md)) and six card specifications
-([`video/docs/graphics.md`](../video/docs/graphics.md),
+([`archive/video/docs/graphics.md`](../archive/video/docs/graphics.md),
 [`audio/docs/audio.md`](../audio/docs/audio.md),
 [`io/ps2/docs/ps2.md`](../io/ps2/docs/ps2.md),
 [`io/serial/docs/serial.md`](../io/serial/docs/serial.md),
@@ -43,12 +43,12 @@ undecided, or that this document has had to decide itself.
 | **System master clock** | one 25.175 MHz oscillator, **on the motherboard** — §1 |
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
-| **Video** | 640×200 × 256 colours, VGA out, **8×8 tile mode, a display list, one-pixel scroll and a hardware palette path** — **33 ICs on a 240 mm board**, the programmable logic being **3 × `ATF1508AS` PLCC-84** ([`video/`](../video/), `graphics.md` §14.1). ⚠ 28 ICs on 180 mm until 2026-09-09; **nine of the eleven packages added that day are features that were specified and had no hardware behind them** (§8's sub-pixel scroll, §9's palette, §10.3's `MOVE`) — `docs/design-review2.md`'s defect class, counted in packages |
+| **Video3** | 80×25 / 80×60 character mode with attributes, 640×200/240/400/480 chunky 8bpp bitmap, 8×8 tile mode, a span writer, a keyed copy engine and one 16×16 sprite; VGA out. **45 ICs on a 240 mm board**, the programmable logic being **4 × `ATF1508AS` PLCC-84 and a `GAL22V10`, all five fitted** ([`video3/`](../video3/), `plan.md` §13.1). ⭐ **The machine's video card since 2026-09-20**, the date `video/` — 33 ICs, three CPLDs, specified and simulated — moved to [`archive/`](../archive/) along with the paper `video2/` (`history.md`). ⚠ `video3` has **no board file and no power budget** (`plan.md` §14 items 1 and 13), so `check:netlist` has nothing to read for it; what it does have is `v3card_tb` and `v3machine_tb`, which run whole frames and a 6809E against the card |
 | **Audio** | 4-channel 8-bit PCM, Paula-exact, ⚠ **fixed LRRL panning** (programmable panning was withdrawn 2026-09-09: it cost **one converter half per channel**, six `AD7528` where four do, and classic MOD does not use it) — **35 ICs on an 18 cm board**, ⛔ **two** `ATF1508AS` PLCC-84 and the second one is **scoped and not fitted** ([`audio/`](../audio/), `audio.md` §10.1). A **headphone-driven 3.5 mm stereo jack** on the card's own rear edge, and a line-level pair on the backplane. ⚠ **32 ICs on 18 cm until 2026-09-09**: §10's budget was six packages short of the datapath `audio.md` itself specifies, and `npm run check:place` refused 18 cm at 39 |
 | **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** — a **`TL16C550C` at 115,200 baud with 16-byte FIFOs** ([`io/serial/`](../io/serial/)). One 14-IC card at `$FF30`–`$FF3F`. Both on `/IRQ`, both **specified** |
 | **Storage** | SD card over SPI, **8 ICs**, **537 KiB/s** sustained — **two GAL22V10s built and checked**, the rest of the card specified ([`storage/`](../storage/)). ⚠ The first of the machine's two period exceptions. ⭐ **8 and not 14 since 2026-09-20**: the memory-mapped block buffer is gone and the card is NormalLuser's BE6502 interface (`sdcard.md` §3.1), with §4.4's chunk-and-mask carrying the read path as it already carried the write path. It costs 21 % and returns six packages, a physical-address region and §5 item 7's bus schedule |
 | **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs**, two of them `ATF1508AS` — **specified** ([`net/`](../net/)). The second period exception. ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | **121 ICs** — **102 on cards** (video 33, audio 35, I/O 14, storage 8, net 12, from `hardware/place/parts.ts`), **19** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8. ⚠ **The motherboard is 19 and not 18** because the high map byte had no data path to `D0`–`D7` at all, and two common-I/O SRAMs cannot share one isolation `'245` — `ram.md` §3.1 and §11 item 11 |
+| **Total silicon** | **133 ICs** — **114 on cards** (video3 45, audio 35, I/O 14, storage 8, net 12, from `hardware/place/parts.ts`), **19** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8. ⭐ **121 until 2026-09-20**, when `video3` (45) replaced the archived `video` (33) in the slot population. ⚠ **The motherboard is 19 and not 18** because the high map byte had no data path to `D0`–`D7` at all, and two common-I/O SRAMs cannot share one isolation `'245` — `ram.md` §3.1 and §11 item 11 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -1156,24 +1156,27 @@ motherboard and system RAM owe measured figures at bring-up
 
 | Rail | Consumer | ICs | Estimate |
 |---|---|---|---|
-| 5 V | **video card** | **33** — 3 CPLDs, 4 SRAMs | **~0.5–0.85 A, 0.65 A nominal**, design to 1 A — `graphics.md` §14.2 |
+| 5 V | **video card** (`video3`) | **45** — 4 CPLDs, a GAL, 3 SRAMs | ⛔ **not yet estimated** — `video3/docs/plan.md` §14 item 13 owes one. ⚠ The archived `video` card's figure was ~0.5–0.85 A, 0.65 A nominal at 33 packages (`archive/video/docs/graphics.md` §14.2); `video3` is twelve packages larger with a fourth CPLD, so that number is a **floor** and not a substitute |
 | 5 V | **audio card** | **35** on an 18 cm board — `audio.md` §10.1 | **~340–500 mA** — `audio.md` §10. ⚠ **That estimate was made at 32 packages**, before §10's six-package datapath shortfall and the second CPLD; it is now a floor rather than a range |
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
-| 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The second largest single-card draw after video**, and the only figure on that card that cannot be derived from a datasheet with confidence |
+| 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The largest single-card draw with an estimate behind it** — ⚠ the video card's is unestimated (see the video row), and at 45 packages and four CPLDs it will not be smaller — and the only figure on that card that cannot be derived from a datasheet with confidence |
 | 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + **8** | not yet estimated |
 | 5 V | **motherboard**: MMU (5, +1 map SRAM, **+1 isolation `'245`**), divider GAL, oscillator, reset supervisor, U9/U10 GALs, 3 × `'157`, **the `'4040` refresh timebase**, and 2 × `SST39SF040` boot ROM with its `'244` — `hardware/ram.md` §6.5 | **19** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load. The ROM adds ~30 mA per part while it is selected and ~10 µA when it is not, which is most of the time |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
-**The machine is plausibly **1.8–3.0 A** at 5 V across **121 ICs**, plus a 3.3 V
-rail.** The sum, from `hardware/place/parts.ts`, which is what places on the boards:
+⛔ **The machine's total current is no longer a stated range.** It was **1.8–3.0 A**
+at 5 V across 121 ICs, and the video row was the largest term in it; `video3` replaced
+`video` on 2026-09-20 with twelve more packages and no estimate at all, so the sum has
+nothing to add there. **1.8–3.0 A is a floor**, not the figure, until `plan.md` §14
+item 13 is answered. The package count, from `hardware/place/parts.ts`, which is what
+places on the boards:
 
-| video | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
+| video3 | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
 |---|---|---|---|---|---|---|---|---|
-| **33** | **35** | 11 | 3 | **8** | **12** | **102** | **19** | **121** |
+| **45** | **35** | 11 | 3 | **8** | **12** | **114** | **19** | **133** |
 
 ⚠ **The table follows the parts list, and the cards' own sections are the number of
-record** — `graphics.md` §14.1, `audio.md` §10.1. Video came to 33 on 2026-09-11, when
-three address latches no design clocked came off.
+record** — `video3/docs/plan.md` §13.1, `audio.md` §10.1.
 
 The backplane-distribution question this used to leave open — **how many power and
 ground pins per slot** — was answered with the connector (§5 item 5): **5 × +5 V and

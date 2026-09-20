@@ -22,13 +22,13 @@ own [`graphics.md`](../video/docs/graphics.md) §10.1 says costs packages.**
 - **80×25 ANSI text with a programmable character set.**
 - **No tile mode, no palette LUT, no display list.**
 - **Period-appropriate silicon, pre-1990** — and **no CPLDs or GALs on this card**,
-  which is a stricter rule than the machine's (the root [`README.md`](../README.md)
+  which is a stricter rule than the machine's (the root [`README.md`](../../README.md)
   retired the no-CPLD rule for the machine on 2026-09-08; this card re-adopts it as a
   card rule).
 - **It plugs into the existing motherboard**, unchanged.
 
 > This is a **plan**, not the card's specification. When it becomes one it splits per
-> [`CLAUDE.md`](../CLAUDE.md): a spec in the present tense plus a `history.md` beside
+> [`CLAUDE.md`](../../CLAUDE.md): a spec in the present tense plus a `history.md` beside
 > it. Nothing here is built, and every number below is derived rather than measured —
 > the ones that cannot be derived are marked ⚠.
 
@@ -39,7 +39,7 @@ own [`graphics.md`](../video/docs/graphics.md) §10.1 says costs packages.**
 | | Decision | Why |
 |---|---|---|
 | **Control plane** | **Two flash ROM tables**: a 512-word **horizontal control store** indexed by the slot counter, and a 4,096-word **vertical table** indexed by the line counter | The slot counter *is* the microprogram counter, so there is no branch logic, no next-address field and no sequencer state at all — §4 |
-| **Control store part** | **`SST39SF040`** (512K×8, 70 ns, PDIP-32, 5 V) — the part the motherboard's boot ROM already uses | One verified pinout ([`hardware/lib/parts.ts`](../hardware/lib/parts.ts) `FLASH_512K`), one programmer, one supply line for the whole machine. ⚠ 0.4 % of it is used — §4.4 |
+| **Control store part** | **`SST39SF040`** (512K×8, 70 ns, PDIP-32, 5 V) — the part the motherboard's boot ROM already uses | One verified pinout ([`hardware/lib/parts.ts`](../../hardware/lib/parts.ts) `FLASH_512K`), one programmer, one supply line for the whole machine. ⚠ 0.4 % of it is used — §4.4 |
 | **Text** | **hardware character generator, 4-byte cell** `{char, fg, bg, flags}`, programmable font in VRAM | 4 CPU writes per cell against `graphics.md` §7.3's 13, **per-cell 8-bit fg and bg with no lookup anywhere**, and the cell's own fetch latches are the colour path — §6 |
 | **Colour** | **fixed RGB332, 3/3/2 R-2R ladders**, `graphics.md` §9.1's drive stage unchanged | This is `graphics.md` §19 item 3's own documented retreat, taken deliberately. It deletes the LUT, its write path, and **the tightest timing path on the card** — §10 |
 | **VRAM addressing** | ⭐ **flat-mapped. There is no `WPTR`** | The CPU's physical `A0`–`A18` are on the backplane and the card has room to buffer them. It deletes the pointer, the posted-write latch, `VDATA`, the read prefetch and three of `graphics.md`'s 2026-09-10 defects — §9.1 |
@@ -101,7 +101,7 @@ CPLDs, and buys hardware text and a simpler machine interface with the change.*
 
 **No motherboard change, no backplane change, no new signal.** The card drops into a
 slot the machine already has, and every rule it must keep is one
-[`docs/machine.md`](../docs/machine.md) already states:
+[`docs/machine.md`](../../docs/machine.md) already states:
 
 | | |
 |---|---|
@@ -749,7 +749,7 @@ at all is the CPU, which is the project.
 ## 13. How it gets checked — and the checks come first
 
 ⛔ **This repository's oldest defect class is a design output that is absent while the
-prose does not notice** ([`CLAUDE.md`](../CLAUDE.md); `docs/design-review2.md` found
+prose does not notice** ([`CLAUDE.md`](../../CLAUDE.md); `docs/design-review2.md` found
 eleven blocks described as fitted with nothing behind them). **A control store in flash
 is the same hazard wearing different clothes**: a ROM image is easy to describe and easy
 not to generate.
@@ -863,10 +863,10 @@ back: whether it fits a board, and whether the flat read closes.
   character generator**, kept there *"because it is the design a rebuild would start
   from"*. This is that rebuild, with an 8-bit attribute pair instead of a LUT page.
   Also §10.1, the GAL-build tables §11.1 cross-checks against.
-- [`docs/machine.md`](../docs/machine.md) — §1 the clock tree, §2 the backplane and
+- [`docs/machine.md`](../../docs/machine.md) — §1 the clock tree, §2 the backplane and
   `/IOPAGE`, §3 the `$FF` map, §4 interrupt ownership, §5 items 1, 8 and 10.
-- [`hardware/README.md`](../hardware/README.md) — the 72-pin slot, the card format and
-  the checks. [`hardware/lib/parts.ts`](../hardware/lib/parts.ts) — `FLASH_512K`, the
+- [`hardware/README.md`](../../hardware/README.md) — the 72-pin slot, the card format and
+  the checks. [`hardware/lib/parts.ts`](../../hardware/lib/parts.ts) — `FLASH_512K`, the
   `SST39SF040` pinout this card's control store uses, confirmed against the datasheet.
-- [`CLAUDE.md`](../CLAUDE.md) — the documentation and verification rules §13 is written
+- [`CLAUDE.md`](../../CLAUDE.md) — the documentation and verification rules §13 is written
   to satisfy.

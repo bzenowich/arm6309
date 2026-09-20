@@ -10,7 +10,7 @@ kept verbatim or lightly trimmed, because the archive is the record.
 
 ## `vctrl` 53 → 56 of 64 I/O — the list writes `HSCROLL[1:0]` on both parts (2026-09-13)
 
-`video/docs/graphics.md` §19 item 49: a display-list `MOVE` to `HSCROLL` wrote `vsup`'s copy
+`archive/video/docs/graphics.md` §19 item 49: a display-list `MOVE` to `HSCROLL` wrote `vsup`'s copy
 of the fine pair and not `vctrl`'s, which `seqph`'s `MUXSEL` reads, so a listed
 `HSCROLL[1:0]` ≠ 0 rotated every four-pixel group. `vctrl`'s pair gained the list's write
 port: `LWHSL` from `vsup` and the operand's two bits (`DB0`, `DB1`) from the card's internal
@@ -658,7 +658,7 @@ below). The arbiter merged back and the register-file address split out to `rfa`
 
 Then **59 of 64**, and then **64 of 64**, both later the same day: `graphics.md` §6.4.1's cell address was taking
 its vertical fields from the sync line counter, which meant `vctrl` exported `V0..V2`
-to `vaddr` for a field that should never have crossed parts (`video/docs/history.md`
+to `vaddr` for a field that should never have crossed parts (`archive/video/docs/history.md`
 has the correction). Three pins came back on each part — and `graphics.md` §6.4.9's
 fetch cadence spent them again hours later, landing the part at **64 of 64 I/O and
 120 of 128 cells**. Both parts still fit with JTAG reserved. The spec carries 64 of

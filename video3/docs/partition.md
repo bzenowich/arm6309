@@ -353,7 +353,7 @@ Two moves take logic out of silicon without adding a pin:
 | **the sprite's shift registers → `'165`** | **−32 cells and −2 pins** on `v3dot`. The serial outputs come back to `v3dot` as `SQ0`/`SQ1` and are re-registered onto LUT `A9..A8` | **4 packages** — two cascaded a plane, because a 16×16 row is 32 bits | ⭐ **taken, and mandatory**: without them `v3dot` does not fit |
 
 ⛔ **The board is full, and `npm run check:place`'s packer says so.** plan §13.5 has the
-measurements: the card as built is **44 ICs — four `ATF1508AS`, `v3lane` and 39 discrete
+measurements: the card as built is **45 ICs — four `ATF1508AS`, `v3lane` and 40 discrete
 — and places on 24 cm at 78 %**; a fifth PLCC-84 does not place, even in `v3lane`'s
 stead. Relief in silicon has to be paid for in packages, and only plan §13.3's trades had
 any to give:

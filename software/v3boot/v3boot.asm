@@ -9,7 +9,7 @@
 *
 * ⭐ WHY IT IS NOT software/boot/boot.asm.  That ROM is the machine's boot
 * monitor and it drives the OTHER video card: its register map is
-* video/docs/graphics.md 13, which video3 does not have -- no display list, no
+* archive/video/docs/graphics.md 13, which video3 does not have -- no display list, no
 * BCTRL, PIDX at a different offset, VDATA at +$0C rather than +$15.  This is a
 * fixture for one bench, so it does the smallest boot that reaches RAM and then
 * spends its time on the card.

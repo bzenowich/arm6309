@@ -11,7 +11,7 @@ Device     g22v10 ;
 /* ------------------------------------------------------------------------
  * The MMU sequencer, hardware/mainboard/mainboard.circuit.tsx U3.
  *
- * Runs the map-write cycle that video/docs/graphics.md 6.3.1 draws as a phase
+ * Runs the map-write cycle that archive/video/docs/graphics.md 6.3.1 draws as a phase
  * table, and generates the machine's /IOPAGE term (docs/machine.md 2).
  *
  * Purely combinational. Every phase edge comes from E and Q, which are in

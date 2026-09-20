@@ -54,7 +54,11 @@ SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-300}
 mkdir -p "$OUT"
 
 if [ -z "$NOBUILD" ]; then
-  V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
+  # ⚠ CMDS_EXTRA: since 2026-09-20 the demos are NOT in the ROM disk (they go
+  # on an SD card - software/nitros9/mksddisk.sh, video3/bench/run-v3sd.sh).
+  # This bench boots with an empty socket and types `mvania` at /DD, so it
+  # asks the recipe for that one command.
+  V3=1 CMDS_EXTRA=mvania sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
     tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 [ -f "$OUT/arm6309_rom.bin" ] || { echo "FAIL  no ROM in $OUT"; exit 1; }

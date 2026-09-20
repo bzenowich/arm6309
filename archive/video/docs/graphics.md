@@ -2,9 +2,9 @@
 ## What Carries Over From `colormin`, What Has To Change
 
 **Question this answers:** the 256-colour card designed for the Minimal 64x4
-([`~/code/colormin/docs/minimal256.md`](../../../colormin/docs/minimal256.md), plus
-[`blitter.md`](../../../colormin/docs/blitter.md) and
-[`backplane.md`](../../../colormin/docs/backplane.md)) is a good card for *that*
+([`~/code/colormin/docs/minimal256.md`](../../../../colormin/docs/minimal256.md), plus
+[`blitter.md`](../../../../colormin/docs/blitter.md) and
+[`backplane.md`](../../../../colormin/docs/backplane.md)) is a good card for *that*
 machine. How much of it is right for a **6309 machine built around `arm6309`**,
 running **NitrOS-9 Level 2**, with **256 colours, 80×25 text, a scrolling
 bitmap, and a blitter**?
@@ -173,7 +173,7 @@ The 6809E/6309E bus gives you the same thing under different names:
 | `/MWR` trailing edge | **E falling edge, `R/W` low** | Write data is valid before E rises and held `t_DHW` ≥ 30 ns past E-fall |
 | `/MRD` asserted | **E high, `R/W` high** | Card must drive D0–D7 by `t_DSR` before E falls |
 | `16M` / `8M` | **E and Q** | Q leads E by 90° |
-| `/IOSEL` per slot | mainboard `'138` on the I/O page | colormin's windows are slot-sized and this machine's are function-sized, so `/IOSEL` is a **window strobe common to every slot**, not a geographic decode — [`machine.md`](../../docs/machine.md) §2 |
+| `/IOSEL` per slot | mainboard `'138` on the I/O page | colormin's windows are slot-sized and this machine's are function-sized, so `/IOSEL` is a **window strobe common to every slot**, not a geographic decode — [`machine.md`](../../../docs/machine.md) §2 |
 | `/WAIT` (clock gating) | **`/WAIT`: E held low for whole E periods** | §3.3 |
 | `/INH` | not needed | the MMU decides what answers |
 
@@ -408,7 +408,7 @@ reduces to the card's own requesters sharing the spare access:
 ```
 
 The standalone `GAL22V10` in
-[`hardware/gal/access.jedec.ts`](../../hardware/gal/access.jedec.ts) is **unchanged**,
+[`hardware/gal/access.jedec.ts`](../../../hardware/gal/access.jedec.ts) is **unchanged**,
 because it is what `access.check.ts` and the CUPL cross-check execute. On the merge into
 `vctrl` its CPU address bits and its `R/W` are renamed `CPUIDLE`, a constant 0, which makes
 every CPU exclusion true and every `GCPU` false. That is how `vctrl` lost `A0`, `A1`,
@@ -442,7 +442,7 @@ the display fetch the back half.**
 > a granted span took the bus for the whole slot and the display fetch got nothing.
 > Both now carry `PH1`, the back half, and the span writer's request carries `!PH1`.
 > One literal each. `check:video`'s `vaddr_tb` measures the assertion width directly.
-> [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.5.
+> [`../../../docs/design-review2.md`](../../../docs/design-review2.md) §1.5.
 >
 > ⚠ **§19 item 23(a)'s two-live-groups problem is NOT fixed by it** and is item 28.
 
@@ -568,7 +568,7 @@ product terms and nothing else:
 | 640×480, progressive | 525 / 480 | **59.94 Hz** | 80×60 | 307,200 |
 
 > ⚠ **59.94 Hz, not 60.0** —
-> [`hardware/gal/sync.timing.ts`](../../hardware/gal/sync.timing.ts)'s arithmetic
+> [`hardware/gal/sync.timing.ts`](../../../hardware/gal/sync.timing.ts)'s arithmetic
 > check: 25.175 MHz ÷ 800 ÷ 525 = 59.940 Hz, the standard VGA 640×480 rate. It
 > matters in exactly one place — §12.1 makes vertical blank the NitrOS-9 system
 > tick, so a tick divisor calibrated for one family runs 0.1 % wrong in the other,
@@ -614,7 +614,7 @@ connector.**
 > were emitted as **+H/−V**, which is not a standard VGA combination at 31.5 kHz.
 > `HPOL` is a constant 1, exactly as `hardware/gal/sync.jedec.ts` always said, and
 > `check:video`'s `vsync_tb` samples the level inside the pulse in all four codes.
-> [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.8. Get it wrong and the monitor picks the other format's vertical size and
+> [`../../../docs/design-review2.md`](../../../docs/design-review2.md) §1.8. Get it wrong and the monitor picks the other format's vertical size and
 centring: a 449-line picture displayed against a 480-line template is short, high, and
 letterboxed, and no amount of correct pixel timing fixes it, because the fault is in
 the identification and not in the raster.
@@ -641,7 +641,7 @@ the `/A·B` half is the **complement** of that compare — one product term per 
 in it. A nine-literal window compare becomes nine terms, not one.
 
 **What makes it come out at 10 rather than far worse is where the counters start**,
-which [`hardware/gal/sync.timing.ts`](../../hardware/gal/sync.timing.ts) fixes: both
+which [`hardware/gal/sync.timing.ts`](../../../hardware/gal/sync.timing.ts) fixes: both
 counters are zeroed at the **leading edge of their own sync pulse** rather than at the
 start of active video. Then `VSYNC_raw` is `v ≤ 1` — one product term, and *the same
 term in both families*, because both timings open with a two-line pulse. A mid-raster
@@ -719,7 +719,7 @@ addressing is not built.
 free in parts, and it really is the easier route to GIME register compatibility — but
 the machine took the other option, for a reason that is about the project rather than
 the address path, and it then decided it did not want the compatibility either. Recorded
-in [`machine.md`](../../docs/machine.md) §5 item 6.
+in [`machine.md`](../../../docs/machine.md) §5 item 6.
 
 > **The deciding argument is one SKU, not one board.** `cpu/docs/plan.md` is written
 > against a CoCo 3 drop-in that must be an LQFP48 in a 40-pin DIP footprint (§2.7).
@@ -835,7 +835,7 @@ read "LQFP48" as "48-pin part" throughout.
 
 Nothing else in the machine asks the CPU module for a pin. Audio, PS/2, serial and
 storage are all bus cards behind geographic `/IOSEL`, and their interrupts wire-OR onto
-`/IRQ` and `/FIRQ`, which are in the count already ([`machine.md`](../../docs/machine.md)
+`/IRQ` and `/FIRQ`, which are in the count already ([`machine.md`](../../../docs/machine.md)
 §2, §4). §12.2's sync inputs are the only pins a card asks of the CPU module, and
 they are in both columns.
 
@@ -847,20 +847,20 @@ version is a small win in absolute time and a real one on the CPU's most
 deadline-critical instruction, not a cost at all.
 
 **Two details that only exist in this version.** Both are carried in
-[`machine.md`](../../docs/machine.md) §2 and §3; they are stated here because they are
+[`machine.md`](../../../docs/machine.md) §2 and §3; they are stated here because they are
 consequences of *this* choice, not of the backplane:
 
 1. **The I/O-page decode must be taken from *logical* A13–A15.** `$FF00`–`$FFFF` has to
    override translation, exactly as it does on a CoCo 3. With the MMU outside, logical
    A13–A15 are on the motherboard — they are the map SRAM's address inputs — but they
    are deliberately **not** on the backplane, which carries physical A0–A18 + A19
-   ([`machine.md`](../../docs/machine.md) §2). A0–A12 are untranslated, so the decode is
+   ([`machine.md`](../../../docs/machine.md) §2). A0–A12 are untranslated, so the decode is
    `(logical A15..A13 = 111) AND (A12..A8 = 11111)`, and it is the same term that
    already generates `/IOSEL`. Free, but it has to be *drawn* that way.
 2. **The enable and task-select bits need a home, and the `$FF` map does not allocate
    one.** A GIME keeps MMU enable in `$FF90` bit 6 and task select in `$FF91` bit 0,
    neither of which is inside the `$FF40`–`$FF7F` geographic window, and
-   [`machine.md`](../../docs/machine.md) §3 lists only `$FFA0`–`$FFAF` against the MMU.
+   [`machine.md`](../../../docs/machine.md) §3 lists only `$FFA0`–`$FFAF` against the MMU.
    In-CPU those are emulator state and cost nothing; outside they are the `'574`'s two
    bits and need a decode term. **See below — they do not have to be at the GIME's
    addresses**, and putting them in the MMU's own window costs one term instead of two.
@@ -882,11 +882,11 @@ Three things follow, and they are simplifications rather than costs:
 
 - **Detail 2 collapses.** Enable and task select go in the MMU's own window next to the
   block registers. One contiguous decode, no `$FF90`/`$FF91`, and none of it touches the
-  machine's four remaining geographic bytes ([`machine.md`](../../docs/machine.md) §5
+  machine's four remaining geographic bytes ([`machine.md`](../../../docs/machine.md) §5
   item 1) — the MMU is on the motherboard and decodes directly.
 - **The third detail stops being an extension.** Define the block registers as 7 bits
   and be done; there is no 6-bit register to stay bug-compatible with.
-- **[`machine.md`](../../docs/machine.md) §5 item 3 changes character.** "The MMU
+- **[`machine.md`](../../../docs/machine.md) §5 item 3 changes character.** "The MMU
   register set is not written down" was blocked on how faithfully to copy the GIME. It
   is an ordinary design task with a free hand — and it is the deliverable that
   gates the motherboard's write-decode GAL.
@@ -1005,7 +1005,7 @@ minimal256.md §3 establishes for the scan path and §7.2 protects for `WADV`:
 
 ⚠ **The vertical fields are `vadr`'s row counter, not the sync line counter.**
 Both count lines and only one of them is zero at the top of the display:
-[`sync.timing.ts`](../../hardware/gal/sync.timing.ts) puts both counters' origin
+[`sync.timing.ts`](../../../hardware/gal/sync.timing.ts) puts both counters' origin
 at the leading edge of their own sync pulse, so active video begins at line 37 in
 the 449-line family and line 35 in the 525-line one. `vadr` has neither problem —
 `VLOAD` loads it from `VSCROLL` through vertical blanking and `ROWADV` steps it
@@ -1021,7 +1021,7 @@ pointer (which the list engine shares — §10.3.1), and `MAPSEL` for the map fe
 **Four sources, and one spare** against the five an ATF15xx macrocell holds before
 cascading — and a fifth or sixth source per bit is exactly what §10.1.6.2's fits ran
 out of, which is why the engine shares `WPTR` and Variant B is not built. Checked in
-[`hardware/gal/tile.check.ts`](../../hardware/gal/tile.check.ts), which asserts the
+[`hardware/gal/tile.check.ts`](../../../hardware/gal/tile.check.ts), which asserts the
 no-adder property by showing OR equals ADD over all 524,288 field combinations in
 each variant.
 
@@ -1268,7 +1268,7 @@ half a cell at each end (§19 item 48).
 > `CELLTICK` at the cell boundary — which is where "pipelined one cell ahead" was always
 > pointing. **Eight macrocells on `vaddr`**, and `check:video`'s `vtile_tb` walks a line
 > and asserts every cell renders its own code.
-> [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.6.
+> [`../../../docs/design-review2.md`](../../../docs/design-review2.md) §1.6.
 >
 > ⚠ `cadence.check.ts` still does not see this: it asserts the fetch lead and not the
 > latch's lifetime, which is why the defect survived it.
@@ -1308,7 +1308,7 @@ each *chip's* address source:
 
 ##### What it is checked against
 
-[`cadence.check.ts`](../../hardware/gal/cadence.check.ts) evaluates the fitted terms
+[`cadence.check.ts`](../../../hardware/gal/cadence.check.ts) evaluates the fitted terms
 over **a whole 800-dot line** and asserts the sequence rather than the equations: 80
 map accesses for 80 cells, in order; `MAPLD` one dot per cell on the spare/fetch
 boundary; the lead measured in dots; §6.4.2's 9-per-8-dots and 2.25-per-chip; never
@@ -1562,7 +1562,7 @@ gates the write on it, which the address line cannot do, so `MASKBIT` is an inpu
 > for this one, so **writing any card register started a span and a posted VRAM write
 > started none**: both directions, from one name meaning two things. `vctrl` forms
 > `WSTBV = VRAMSEL & /RW & E` locally, one macrocell on a part that already has all
-> three literals. [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.3.
+> three literals. [`../../../docs/design-review2.md`](../../../docs/design-review2.md) §1.3.
 
 ```
   WSTB      a posted write has been latched (§3.1.1's '574s hold the address, the
@@ -1617,7 +1617,7 @@ reloads the column from the register-file shadow. Set it once and a glyph become
 > share the card's internal data bus through §3.2's `'245`. **No latch, no mux, and no
 > shadow registers**: ten of those on `vaddr` is what the fitter refuses, which is
 > recorded in `hardware/gal/access.jedec.ts` because it is the interesting half of the
-> answer. [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.7.
+> answer. [`../../../docs/design-review2.md`](../../../docs/design-review2.md) §1.7.
 
 A span running off column 1023 wraps to column 0 of the same row (§19 item 12), which
 is what the scanner does, so a glyph straddling the torus seam renders where the
@@ -1840,7 +1840,7 @@ line, so the test is the parity of `V` minus the first active line — 37 in the
 covers both. The same accident that gives `vdec` its "`v <= 1` in both families" sync
 window (§6.2.1).
 
-[`cadence.check.ts`](../../hardware/gal/cadence.check.ts) runs a **whole frame in each
+[`cadence.check.ts`](../../../hardware/gal/cadence.check.ts) runs a **whole frame in each
 of §12's four `VMODE` codes** at five scroll positions including the 512-row wrap, and
 asserts which row each displayed line shows, that each mode visits exactly 200/240/400/480
 rows, that a doubled mode shows each row on exactly two consecutive lines starting at
@@ -1868,7 +1868,7 @@ write to `VSCROLL`. 112 rows (114,688 B) plus the column margin left over.
 > repository.** This card is chunky 8bpp (§2.1), so a byte *is* a pixel and byte
 > granularity is the **finest** step there is. On the GIME it is the **coarsest**: a
 > byte there is two or four pixels, which is why
-> [`../../docs/coco3_c64.md`](../../docs/coco3_c64.md) §5 lists "byte granular at best"
+> [`../../../docs/coco3_c64.md`](../../../docs/coco3_c64.md) §5 lists "byte granular at best"
 > as a *limitation* against the VIC-II's per-pixel scroll. Same words, opposite
 > connotation, and a reader who knows both cards can read this heading backwards.
 > `video3/docs/` says **"one pixel"** throughout for that reason.
@@ -1991,7 +1991,7 @@ index, nothing drove the LUT's address during a write, and nothing asserted its 
 On a card whose only colour path is the LUT, that is not a missing feature — it is the
 whole picture: §9's boot identity palette was unreachable, and §13.1's carefully
 argued snow rule was describing the behaviour of a path that did not exist. Same defect
-class as [`design-review2.md`](../../docs/design-review2.md) §1.2's eleven.
+class as [`design-review2.md`](../../../docs/design-review2.md) §1.2's eleven.
 
 It is built now, on `vsup` (§10.1.7), and it costs **eight of that part's pins**:
 
@@ -2495,7 +2495,7 @@ seven bits), `/A20` on `VRAMSEL` (§5 item 1 D made the physical map 2 MB), and
 and all, is bought by one GAL:
 
 **U-V9 `rfa`, the register-file address**
-([`gal/regfile.jedec.ts`](../../hardware/gal/regfile.jedec.ts)). It carries
+([`gal/regfile.jedec.ts`](../../../hardware/gal/regfile.jedec.ts)). It carries
 `RA0`–`RA4` and `WSTB`, and it **re-derives rather than imports**: `REGSEL` is
 `IOSEL & A6 & A5` — three signals it already needs — so it is recomputed locally,
 and `RDLEN`/`RDFG`/`RDBG` come from `!SPANBUSY & FP1:FP0`. The trade is six pins
@@ -2583,7 +2583,7 @@ grants instead of 8 (§19 item 25).
 #### 10.1.7 ⭐ The third `ATF1508AS` — and it *reduces* the package count
 
 **Built 2026-09-09.** `vsup`
-([`gal/vsup.cpld.ts`](../../hardware/gal/vsup.cpld.ts)) is the video card's third
+([`gal/vsup.cpld.ts`](../../../hardware/gal/vsup.cpld.ts)) is the video card's third
 PLCC-84, and the first thing to say about it is that **it is a package reduction, not
 an addition.**
 
@@ -3354,7 +3354,7 @@ pins, not macrocells, are what the CPLDs are short of (§10.1.6.3).
 > `WADV0`/`WADV1`, `BCTRLGO`, `FP0`/`FP1` and `LGRANT` were inputs to fitted parts that
 > nothing on the card produced — eleven signals, and with them the span writer's length,
 > its colour, its mode register and the list engine's start.
-> [`../../docs/design-review2.md`](../../docs/design-review2.md) §1.2 has the census.
+> [`../../../docs/design-review2.md`](../../../docs/design-review2.md) §1.2 has the census.
 >
 > ⭐ **`CTRL`'s `'273` and the `'165` serialiser really are absorbed**, and they are on
 > `vctrl` now — with the mask counter `seqctl` had all along, because a sentinel bit
@@ -3401,7 +3401,7 @@ three packages that no design had a use for:
 > ⛔ **NINE OF THE ELEVEN ADDED PACKAGES ARE UNBUILT FEATURES, NOT NEW ONES.** §8's
 > "sub-pixel horizontal smoothness costs zero parts", §9's palette and §10.3's list
 > `MOVE` were all in v1 and none of them had hardware. That is
-> [`design-review2.md`](../../docs/design-review2.md)'s defect class — *a design
+> [`design-review2.md`](../../../docs/design-review2.md)'s defect class — *a design
 > output can be absent, and prose does not notice* — counted in packages.
 
 > **The `VSTAT` `'244` (§12.1) survives the CPLD**, which is not obvious — an
@@ -3556,8 +3556,8 @@ unnecessary.
 #### 14.2.6 ⚠ NEW 2026-09-10 — two things the datasheets say that §14.2 was written without
 
 Both consolidated parts' datasheets are in `reference/datasheets/` since 2026-09-10
-([`AS6C8016.pdf`](../../reference/datasheets/AS6C8016.pdf),
-[`IS61C6416.pdf`](../../reference/datasheets/IS61C6416.pdf)). §14.2's headline numbers all
+([`AS6C8016.pdf`](../../../reference/datasheets/AS6C8016.pdf),
+[`IS61C6416.pdf`](../../../reference/datasheets/IS61C6416.pdf)). §14.2's headline numbers all
 hold — 55 ns, 12 ns, TSOP-44 II, `/LB`/`/UB`, 2.7–5.5 V. Two things it did not have:
 
 **1. ⚠ Both parts drive TTL levels, not CMOS ones, and that is why the dot path must
@@ -3569,7 +3569,7 @@ stay `74AHCT`.**
 | `V_IH` min | 2.2 V | 2.2 V |
 
 A `74AHC` input wants **3.85 V at `V_CC` = 5.5 V**
-([`SN74AHC574.pdf`](../../reference/datasheets/SN74AHC574.pdf), recommended operating
+([`SN74AHC574.pdf`](../../../reference/datasheets/SN74AHC574.pdf), recommended operating
 conditions), and a `74HC` one wants 0.7 × `V_CC`. **2.4 V reaches neither, and is not
 close.** A `74AHCT` input takes the TTL threshold of 2.0 V, which 2.4 V clears with the
 ordinary TTL margin — ⚠ **that last figure is the family's standard one and there is no
@@ -3762,17 +3762,17 @@ any other 6809 homebrew.
 Brief, because it is not the video question — but the backplane spec has to be
 frozen before the video card is laid out, and the sound card is the other consumer.
 
-> **The sound card has its own document: [`audio.md`](../../audio/docs/audio.md)** — a
+> **The sound card has its own document: [`audio.md`](../../../audio/docs/audio.md)** — a
 > 4-channel PCM card modelled on the Amiga's Paula, **32 ICs**, whose acceptance test
 > is playing existing OCS tracker modules unmodified, with the loader and
-> replayer that do that in [`modplayer.md`](../../audio/docs/modplayer.md). **It supersedes this
+> replayer that do that in [`modplayer.md`](../../../audio/docs/modplayer.md). **It supersedes this
 > section's original Ensoniq 5503 DOC assumption**; the bullets below are what
 > that design actually asks of the backplane.
 
 - **Adopt backplane.md's slot model**, retargeted: **`/IOSEL` as a window strobe
   common to every slot** — not colormin's geographic per-slot decode, because this
   machine's windows are function-sized and all different, which no position decode
-  can produce ([`machine.md`](../../docs/machine.md) §2 is the owning document).
+  can produce ([`machine.md`](../../../docs/machine.md) §2 is the owning document).
   `/WAIT` open-drain (a **wait state** — E held low for whole E periods, §3.3),
   `/IRQ` **and** `/FIRQ` open-drain (backplane.md reserves only `/IRQ`; NitrOS-9 uses
   both, and audio wants one of its own), `/NMI`, `/RESET`.
@@ -3788,7 +3788,7 @@ frozen before the video card is laid out, and the sound card is the other consum
   | `$FF60`–`$FF7F` | 32 B | video — §13 |
 
   `docs/machine.md` §3 is the owning table; this one is a copy and defers to it.
-- **`/FIRQ` belongs to audio, and to audio alone.** [`audio.md`](../../audio/docs/audio.md) §8.1
+- **`/FIRQ` belongs to audio, and to audio alone.** [`audio.md`](../../../audio/docs/audio.md) §8.1
   takes it as the sole source, so there is no polling chain: video's VBL and
   raster compare stay on `/IRQ` (§12), and a replayer tick gets the cheap
   6809 interrupt it should have. Record the ownership in the backplane spec
@@ -3825,16 +3825,16 @@ frozen before the video card is laid out, and the sound card is the other consum
 - **Audio: make it stereo, and the reason is now load-bearing rather than
   aesthetic.** backplane.md has one mono `AUDIO` summing node. Paula's channels
   are **hard-panned — 0 and 3 left, 1 and 2 right — and modules are mixed for it**
-  ([`audio.md`](../../audio/docs/audio.md) §1, requirement 5). Summing them to mono does not make a
+  ([`audio.md`](../../../audio/docs/audio.md) §1, requirement 5). Summing them to mono does not make a
   mod quieter, it makes it *wrong*. Two pins and two grounds.
 - **§5's one-master-clock rule has exactly one exception, and it is this card.**
   Video arbitration needs phase-locking; audio shares memory with nothing, so it
   carries its own **28.37516 MHz** can — the Amiga PAL master, from which the
   period reference every module is tuned against divides exactly.
-  25.175 MHz has no integral relationship to it ([`audio.md`](../../audio/docs/audio.md) §4.1), and
+  25.175 MHz has no integral relationship to it ([`audio.md`](../../../audio/docs/audio.md) §4.1), and
   no amount of wanting one will produce it.
 - **The sound card needs no `/WAIT`.** Its reads are prefetched on the index write
-  ([`audio.md`](../../audio/docs/audio.md) §9.3, copying §11's `VDATA` trick), and its posted-write
+  ([`audio.md`](../../../audio/docs/audio.md) §9.3, copying §11's `VDATA` trick), and its posted-write
   path retires at 3.55 M/s against a `TFM`-paced 700 k/s. It is the only card in
   the machine that never stalls the CPU.
 **The signal list, consolidated** (`docs/machine.md` §2 is the owning table):
@@ -3845,7 +3845,7 @@ frozen before the video card is laid out, and the sound card is the other consum
 | `D0`–`D7` | bidirectional | 5 V TTL |
 | `E`, `Q`, `R/W` | motherboard → cards | Q leads E by 90°, which is 3 dots at ÷12 and **2 at ÷8** (§5.1) |
 | 25.175 MHz master | motherboard → cards | lets any card phase-lock to video |
-| `/IOSEL` | motherboard → **all** slots | **the `$FF00`–`$FF7F` window strobe, common to every slot**; the card decodes **`A0`–`A6`** against a jumpered base — [`machine.md`](../../docs/machine.md) §2, §5 item 1 A. `hardware/gal/vctrl.pld`'s `REGSEL` is `IOSEL & A6 & A5` |
+| `/IOSEL` | motherboard → **all** slots | **the `$FF00`–`$FF7F` window strobe, common to every slot**; the card decodes **`A0`–`A6`** against a jumpered base — [`machine.md`](../../../docs/machine.md) §2, §5 item 1 A. `hardware/gal/vctrl.pld`'s `REGSEL` is `IOSEL & A6 & A5` |
 | `A20` | motherboard → **all** slots | **new 2026-09-08** — physical `A20`, `machine.md` §5 item 1 D. **This card's `VRAMSEL` gained `/A20`**: the ring is `A20 = 0, A19 = 1`, the second quarter of a 2 MB map rather than the top half of a 1 MB one |
 | **`/IOPAGE`** | motherboard → cards | **new** — §6.3.2, mandatory |
 | `/WAIT` | cards → motherboard | open-drain; whole E periods only (§3.3) |
@@ -3858,13 +3858,13 @@ frozen before the video card is laid out, and the sound card is the other consum
 - **Do not put sample data in the video card's VRAM.** It is tempting (512 KB is a
   lot of memory) and it would couple two subsystems that have no reason to be
   coupled, on the one bus resource that is already scheduled. This bullet survives
-  the change of sound chip unchanged, and [`audio.md`](../../audio/docs/audio.md) §5 cites it.
+  the change of sound chip unchanged, and [`audio.md`](../../../audio/docs/audio.md) §5 cites it.
 - **The MCU sound card is not dead, it is demoted to a bring-up vehicle.** An
-  STM32G431 carrying [`audio.md`](../../audio/docs/audio.md) §9's register map does the whole job in
+  STM32G431 carrying [`audio.md`](../../../audio/docs/audio.md) §9's register map does the whole job in
   ~6–8 ICs, and building it *first* lets the loader, replayer and converter be
   written and the acceptance test run before a single GAL is fitted — the same A/B
   lever §16.1 gives for the video card. It is the reference the discrete card must
-  match, not the product ([`audio.md`](../../audio/docs/audio.md) §12.5).
+  match, not the product ([`audio.md`](../../../audio/docs/audio.md) §12.5).
 
 ---
 
@@ -3907,7 +3907,7 @@ left is measurement. They are grouped by what would settle them.
 
 2. **Bench the pixel-bus turnaround at 39.7 ns.** ⚠ **The decision this item was
    filed to make is taken**: four `74AHCT153`s are in the BOM
-   ([`hardware/place/parts.ts`](../../hardware/place/parts.ts)) and `MUXSEL1:0`
+   ([`hardware/place/parts.ts`](../../../hardware/place/parts.ts)) and `MUXSEL1:0`
    drives them from `vctrl`. What is open is the measurement — the `'153` path has
    to close in a 39.72 ns dot, and it is the one number that would send the BOM
    back. **carried, retimed, narrowed to a measurement.**
@@ -4124,7 +4124,7 @@ left is measurement. They are grouped by what would settle them.
     `hardware/place/parts.ts`.
 
     ⚠ **`video_card.v` is consequently more capable than the board**, which is exactly
-    the shape of [`../../docs/design-review2.md`](../../docs/design-review2.md) M-1 on
+    the shape of [`../../../docs/design-review2.md`](../../../docs/design-review2.md) M-1 on
     the motherboard: `mainboard.v` modelled a write through a wire the board did not
     have, so the testbench could not fail. Every claim `vpal_tb` makes about the palette
     — the `'163` pair loading from the internal data bus, the `'244` onto the LUT's
@@ -4377,7 +4377,7 @@ left is measurement. They are grouped by what would settle them.
     is 56 of 64 I/O and still 95 of 128 cells on the first pass. `MUXSEL` needs the offset
     — the mux must start each slot on chip `p` — so the copy cannot simply go, and reading
     the other part's copy across two pins placed only on the fitter's second pass
-    ([`hardware/history.md`](../../hardware/history.md) has the figures). `vaddr_tb` now sweeps a listed
+    ([`hardware/history.md`](../../../hardware/history.md) has the figures). `vaddr_tb` now sweeps a listed
     `HSCROLL` from 1 to 7 over all 640 pixels; on the old equations it fails six of the
     seven. `software/demo/`'s paint program scrolls its canvas a pixel at a time and warps
     it with a per-line list.

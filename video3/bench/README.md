@@ -9,6 +9,7 @@ sh video3/bench/run-v3.sh            # all four, ~1 min. Its exit code is the an
 sh video3/bench/run-v3mv.sh          # ⭐ the metroidvania scene, ~20 min
 sh video3/bench/run-v3mon.sh         # ⭐ the block-streamed platform world, ~6 min
 sh video3/bench/run-v3pin.sh         # ⭐ the pinball table, and the palette as a feature, ~20 min
+sh video3/bench/run-v3sd.sh          # ⭐ a demo loaded OFF THE SD CARD, ~1 min
 ```
 
 | Exerciser | plan | What only it can catch |
@@ -273,12 +274,15 @@ same RGB565**, and the lamp gate spent a run reading a ball as a lamp.
 `mkpinball.py` asserts the whole reserved set against the art palette, the
 three sprite banks and the key.
 
-⚠ **The ROM disk is full** — 488 K, 6,656 bytes free — and `pinball` is 36 K.
-The recipe therefore takes `CMDS_EXTRA` and `CMDS_DROP`
-(`recipes/arm6309/arm6309.mak`), and `run-v3pin.sh` asks for its command and
-gives back `monster`, `mvania`, `ded`, `dcheck` and `debug`. It deletes
-`romdisk.dsk` on the way in **and on the way out**, because the recipe's disk
-rule depends on the module files and not on the list of them.
+⭐ **The demos are not in the ROM any more** (2026-09-20; the ROM disk was full,
+see [`../docs/history.md`](../docs/history.md)). `recipes/arm6309/arm6309.mak`'s
+`$(DEMOS)` builds them and `software/nitros9/mksddisk.sh` puts them on an SD
+image; the ROM disk is the kernel, the shell, the shared modules and a rescue
+command set, with ~65 K free. `run-v3pin.sh` and the other older scene benches
+boot with an **empty socket** and type their command at `/DD`, so they still
+pass `CMDS_EXTRA=<name>` — but nothing has to be **given back** any more, and
+the recipe's disk rule now depends on the command list itself (`.cmdlist`), so
+nothing has to delete `romdisk.dsk` either.
 
 ### ⭐ They were mutation-tested, because a green check proves nothing on its own
 
@@ -314,6 +318,35 @@ records its sprite position in `$C208`/`$C20A`, which start at zero — and `(0,
 test position, so frames recorded while the screen was still being built could have
 been judged as if the sprite were live. The ROM now writes `$FFFF` there until the
 screen is up, so those frames are skipped **explicitly**.
+
+### ⭐ `run-v3sd.sh` — a demo that is **not in the ROM**, run off the SD card
+
+```sh
+sh video3/bench/run-v3sd.sh           # two runs, 20 claims, ~1 min. Its exit code is the answer
+```
+
+Every other bench here types a command that is *inside the boot ROM*. This one
+boots the machine with **both** cards — video3 and the storage card at `$FF58`
+(`storage/docs/sdcard.md` §9.4) — `chd`/`chx` to `/SD0/CMDS`, and runs `mvania`
+from a card that `software/nitros9/mksddisk.sh` wrote with the host's `os9`
+tools. It is about **where the program came from**, so it runs 28 frames of
+scene and no more; `run-v3mv.sh` is what measures the scene.
+
+⭐ **The claim is that a picture was PAINTED, not that a command was typed.**
+`checkv3sd.py` reduces the recording to `frames`, `painted` (frames showing
+more than a dozen distinct colours) and `changed`, and the bench asks for 20
+painted and 20 changed frames. ⚠ **The first cut asked for 64 colours and
+failed a run whose picture was perfect** — `mvania`'s room is a stylised
+side-view with nineteen colours, not a dithered photograph. The threshold to
+pick is the one the *control* cannot reach.
+
+⛔ **And the control is the same ROM, the same keystrokes and an empty socket.**
+`/SD0` must refuse at §9.0 with `E$NotRdy`, the demo must be `E$PNNF` rather
+than a hang, and **no frame may be recorded at all** — with nothing to claim
+the screen the card never displays, which is a sharper negative than "no
+colours". Two more claims say the ROM disk does *not* carry the demo, one asked
+of the machine (`dir /dd/cmds`) and one of `romdisk.dsk` on the host, because
+without them the run above would prove nothing.
 
 ## ⚠ What this model does and does not answer
 

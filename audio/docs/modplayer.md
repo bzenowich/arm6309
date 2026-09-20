@@ -406,7 +406,7 @@ If `Σ sample bytes` exceeds card RAM, the honest options in order:
 
 There is no fourth option: sample data cannot live in system RAM, because the card has
 no bus-master path to it and the backplane has no DMA pins ([`audio.md`](audio.md) §5.1),
-and it cannot live in VRAM ([`graphics.md`](../../video/docs/graphics.md) §17).
+and it cannot live in VRAM ([`graphics.md`](../../archive/video/docs/graphics.md) §17).
 
 **The rejection rule is still normative, and the bound is still `populated` RAM.**
 ⚠ **What changed is that populated and fitted are now the same number** — the board has
@@ -754,7 +754,7 @@ Three specific traps:
 ## 6. `FIRQ` discipline
 
 The card is the **sole** `/FIRQ` source in the machine
-([`audio.md`](audio.md) §8.1, [`graphics.md`](../../video/docs/graphics.md) §17), which buys three
+([`audio.md`](audio.md) §8.1, [`graphics.md`](../../archive/video/docs/graphics.md) §17), which buys three
 things worth spending deliberately:
 
 1. **No polling chain.** The handler does not have to ask "was it me?" — it was.
@@ -764,7 +764,7 @@ things worth spending deliberately:
    get away with pushing `D`, `X` and `Y` — ~12 cycles of entry overhead against
    `IRQ`'s ~21.
 3. **It is independent of video.** The video card's VBL is 70.09 Hz
-   ([`graphics.md`](../../video/docs/graphics.md) §6.2) and a mod tick is 50–102 Hz. Deriving one
+   ([`graphics.md`](../../archive/video/docs/graphics.md) §6.2) and a mod tick is 50–102 Hz. Deriving one
    from the other is not possible cleanly, and now nobody has to try.
 
 **Under NitrOS-9:** own `/FIRQ` outright rather than going through the kernel's
@@ -782,7 +782,7 @@ correct as long as nothing else is put on `/FIRQ` later.
 ## 7. Cycle budget
 
 Against a **2.098 MHz 6309 in native mode**, at the same assumed ~5 core cycles
-per store that [`graphics.md`](../../video/docs/graphics.md) §7.3 and [`audio.md`](audio.md) §13.1
+per store that [`graphics.md`](../../archive/video/docs/graphics.md) §7.3 and [`audio.md`](audio.md) §13.1
 use — and with the same warning, that **every figure here scales on that
 assumption** (§11 item 1).
 
@@ -836,7 +836,7 @@ There is no tempo, speed or pattern that can make this replayer lose a tick.
 
 For context: on the CoCo 3 hardware this machine replaces, sampled-music playback
 consumes essentially the entire processor. Here it is a rounding error against an
-80×25 text scroll ([`graphics.md`](../../video/docs/graphics.md) §7.3, ~2.5 ms).
+80×25 text scroll ([`graphics.md`](../../archive/video/docs/graphics.md) §7.3, ~2.5 ms).
 
 ---
 
@@ -989,7 +989,7 @@ and "fixing" any of them makes real songs sound wrong.
    [`audio.md`](audio.md) §13's, scale on "~5 core cycles per store, native mode".
    Measure it once against real `STA extended` / `AIDX`+`ADATA` sequences and both
    documents get their numbers. Same item as
-   [`graphics.md`](../../video/docs/graphics.md) §19 item 1.
+   [`graphics.md`](../../archive/video/docs/graphics.md) §19 item 1.
 2. **Settle the `DMACON`-latch bound** ([`audio.md`](audio.md) §16 item 13). §5.3
    drops ProTracker's delay loop on the strength of a ≤4-colour-clock guarantee
    that is currently proposed rather than specified. If it is not specified, the
@@ -1051,7 +1051,7 @@ and "fixing" any of them makes real songs sound wrong.
   §13 (`TFM` upload), §16 item 13 (the latch bound §5.3 depends on), §16 items 18/20/22
   (the `E0x` probe, the CIA `+1`, and the tuning instrument this document's §8 depends
   on).
-- [`graphics.md`](../../video/docs/graphics.md) — §7.3 (the store-rate assumption §7 shares),
+- [`graphics.md`](../../archive/video/docs/graphics.md) — §7.3 (the store-rate assumption §7 shares),
   §17 (`/FIRQ` ownership, and why sample data is not in VRAM).
 - [`plan.md`](../../cpu/docs/plan.md) — §4.3 (`TFM`, including the fixed-destination mode §4.4
   relies on).

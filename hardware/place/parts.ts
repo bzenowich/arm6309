@@ -64,53 +64,84 @@ export const FINGER_W = 91.4
 export const FINGER_H = 11
 
 export const CARDS: Record<string, CardSpec> = {
-  video: {
-    title: "Video", length: 240, ics: 33, source: "video/docs/graphics.md 14.1",
-    note: "640x200 x 256 colours, VGA out",
+  /* ⭐ THE MACHINE'S VIDEO CARD SINCE 2026-09-20 (docs/history.md). It came
+   * out of ALTERNATES the day `video` was archived, and it owns $FF60 in
+   * cards/windows.ts because two cards cannot.
+   *
+   * video3/docs/plan.md §13, derived part by part from §0-§9 rather than by
+   * diffing `video`. The programmable logic is the partition's, fitted:
+   * four ATF1508AS (partition.md) and the v3lane GAL22V10. What check:place
+   * answers is whether all of it places - and at 45 ICs it does, on 24 cm,
+   * the longest board there is: a plan §13.5 ceiling, not headroom.
+   *
+   * ⚠ NO BOARD FILE YET. There is no cards/video3.circuit.tsx, so the
+   * icBudget tie below skips it and check:netlist has nothing to read
+   * (plan §15 step 8). gal/reach.check.ts's `checkInputs` is on for exactly
+   * that reason. */
+  video3: {
+    title: "Video3", length: 240, ics: 45, source: "video3/docs/plan.md 13.1",
+    note: "character + bitmap + tile, copyrect, one 16x16 sprite - four ATF1508AS and a GAL22V10, all fitted, with a keyed copy",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
     parts: [
-      /* ⭐ THREE ATF1508AS SINCE 2026-09-09 - graphics.md 10.1.7. vsup absorbs
-       * the three GAL22V10s (rfa, vlen, pxsel) and carries 9's palette write
-       * path and 10.3.3's list register port, neither of which had anywhere to
-       * live on a card of two CPLDs. Three GALs out, one CPLD in: -2. */
-      pkg(33, 33, "ATF1508AS vaddr/vctrl/vsup", "pld", 3, "1508"),
-      /* 14.2: two x16 parts feed the dot clock where four x8 did, and one
-       * holds the whole 16-bit palette. TSOP-44 II is a 10.16 x 18.42 mm body
-       * with the leads on the short ends; 11.8 includes them, which is the
-       * same convention dip() uses when it takes the row spacing. */
+      /* the four CPLDs, all fitted (gal/cpld/v3*.fit) - partition.md */
+      pkg(33, 33, "ATF1508AS", "pld", 4, "1508"),
+      /* ⭐ v3lane and the four lane '245s, 2026-09-19: the framebuffer is 32
+       * bits and every other VRAM byte path on the card is 8, and nothing
+       * joined them - no byte enables, no lane decode, no transceiver
+       * (video3_card.v's old GAP_1, 2, 6, 7). A '245 a lane between it and the
+       * card's internal data bus, and a GAL for their enables, the byte
+       * enables and the bus's two latch-side drivers. They place because the
+       * ATTR '574 went: v3scan's ATO drives the LUT itself (plan §3). */
+      dip(24, 0.3, "GAL22V10 v3lane", "pld", 1),
+      dip(20, 0.3, "74AHCT245 lane", "bus", 4),
+      /* ⭐ the copy's colour key (keyed-copy.md): an 8-input NOR on the card's
+       * internal bus says "the byte the copy is about to write is zero", and
+       * v3lane's byte enables drop for that write. ⛔ A DIP-14 and not a
+       * '688 against a key register: the 20-pin part pushes a sprite '165 off
+       * the board, so the key is FIXED at index 0 - measured here, not
+       * assumed, because keyed-copy.md §7.2 priced the '688 at "+1 package"
+       * without asking the packer. */
+      dip(14, 0.3, "74HC4078 key=0", "bus"),
       pkg(18.4, 11.8, "AS6C8016 512Kx16", "mem", 2, "8016"),
       pkg(18.4, 11.8, "IS61C6416 64Kx16 LUT", "mem", 1, "6416"),
       dip(28, 0.6, "32Kx8 regfile", "mem"),
-      /* ⭐ EIGHT, IN TWO RANKS - graphics.md 8.2, 19 item 28. Byte-granular
-       * horizontal scroll needs two fetch groups live at once and one rank of
-       * latches provably cannot hold them; the rank select is an output enable
-       * because `c < HSCROLL[1:0]` is constant for a whole line. */
+      /* plan 13.1: four hold one access's 32 bits, four more are graphics.md
+       * 8.2's second rank - byte-granular HSCROLL needs two fetch groups live
+       * at once. Trade 2 of plan 13.3 deletes the second rank. */
       dip(20, 0.3, "74AHCT574 fetch", "bus", 8),
       dip(16, 0.3, "74AHCT153 mux", "bus", 4),
       dip(20, 0.3, "74AHCT574 index", "bus"),
       dip(20, 0.3, "74AHCT273 out", "bus", 2),
-      /* ⭐ 9's PALETTE WRITE PATH, and none of it existed before 2026-09-09 -
-       * design-review2.md's defect class, found again. 19 item 9 closed at the
-       * same time: the 74HC593 the parts list carried is DISCONTINUED, so PIDX
-       * is two loadable '163s with ordinary outputs plus a '244 onto 13.1's
-       * LUT address bus, and the two '573s are 13's +$11/+$12 - the 16-bit
-       * entry a card with an 8-bit bus has to assemble somewhere. */
-      dip(16, 0.3, "74AHCT163A PIDX", "bus", 2),
-      dip(20, 0.3, "74AHCT244 pidx-oe", "bus"),
+      /* ⭐ PIDX is 16 bits (plan 10) but its high byte NEVER COUNTS - software
+       * sets a sub-palette and walks within it - so it is a latch, and that is
+       * one package rather than two more '163. */
+      dip(16, 0.3, "74AHCT163A PIDXlo", "bus", 2),
+      dip(20, 0.3, "74AHCT574 PIDXhi", "bus"),
+      dip(20, 0.3, "74AHCT244 pidx-oe", "bus", 2),
       dip(20, 0.3, "74HC573 PDAT", "bus", 2),
-      /* 10.3.3: the display list's descriptor byte, from the pixel bus onto
-       * the card's internal data bus, for the dot a granted engine slot lasts.
-       * It is what makes a list MOVE reach a register at all. */
-      dip(20, 0.3, "74HCT244 lbyte", "bus"),
       dip(20, 0.3, "74HC574 pw-data", "bus"),
-      /* ⚠ NO ADDRESS LATCH - graphics.md 3.1.1, 19 item 44, 2026-09-11. Three
-       * '574s for the posted write's physical address were listed here and no
-       * design clocked them: every CPU VRAM access is at WPTR. */
+      /* ⛔ NO COPY-READ LATCH - plan 13.3 trade 1, SETTLED 2026-09-16. Four
+       * '574 were listed here for a four-byte copy, and the "borrow the fetch
+       * rank" alternative is not electrically possible: a '574 has ONE output
+       * enable and the rank's output is committed to the pixel bus. But the
+       * latch is not needed at all - a BYTE-GRANULAR copy reuses vread and the
+       * posted-write '574, at 4.05 MB/s, and those four packages are what pays
+       * for the cell-budget escape (partition.md 8). */
       dip(20, 0.3, "74HCT245 rdbk", "bus"),
       dip(20, 0.3, "74HCT574 vread", "bus"),
       dip(20, 0.3, "74HC244 VSTAT", "bus"),
       dip(20, 0.3, "74HC244 fanout", "bus"),
+      /* ⭐ the sprite's shift registers, partition.md §8's escape - and §5
+       * risk 3 says it is a REQUIREMENT, not an option: with them in silicon
+       * v3dot answers `Design does not fit`. FOUR since 2026-09-17, when the
+       * sprite became 16 x 16 (plan §7): a row is 32 bits, so two cascaded
+       * '165 a plane, and their serial outputs go straight to LUT A9..A8. */
+      dip(16, 0.3, "74HC165 sprite", "bus", 4),
+      /* ⚠ NO list-descriptor '244 (graphics.md 10.3.3) - no display list.
+       * ⚠ NO posted-write ADDRESS latches - graphics.md 19 item 44: `video`
+       * listed three and no design ever clocked them. Recorded so a fresh
+       * card does not re-add them. */
     ],
   },
   audio: {
@@ -250,85 +281,70 @@ export const CARDS: Record<string, CardSpec> = {
  *
  * ⚠ CARDS is the machine's slot population: place.check.ts asserts every key
  * there owns a window in cards/windows.ts, and two cards cannot own $FF60.
- * video2, the VIC-II derivative and video3 are ALTERNATIVES TO `video`, not
- * additions to it, so they cannot live there - which is exactly why
- * docs/video-options.md §7 item 4 records that none of its package counts is
- * asserted by anything.
+ * An alternate is placed and length-checked like a card and totalled against
+ * its own claim; it is not window-checked, and its board file is checked only
+ * if it has one.
  *
- * This record closes that. An alternate is placed and length-checked like a
- * card and totalled against its own claim; it is not window-checked and needs
- * no board file until someone draws one.
+ * ⭐ `video` IS HERE SINCE 2026-09-20, and `video3` left for CARDS the same
+ * day (docs/history.md, archive/README.md). It is the machine's specified
+ * video card no longer: 33 ICs, three fitted ATF1508AS and a drawn board in
+ * cards/video.circuit.tsx, kept placed and counted because it is a complete
+ * design and because `machine_tb` still builds it. Its documents are in
+ * archive/video/.
+ *
+ * ⚠ `video2` (the microcoded ANSI card, archive/video2/plan.md) and the
+ * VIC-II derivative were never in this record at all, which is what
+ * docs/video-options.md §7 item 4 says: none of their package counts is
+ * asserted by anything.
  * ---------------------------------------------------------------------- */
 export const ALTERNATES: Record<string, CardSpec> = {
-  /* video3/docs/plan.md §13, derived part by part from §0-§9 rather than by
-   * diffing `video`. The programmable logic is the partition's, fitted:
-   * four ATF1508AS (partition.md) and the v3lane GAL22V10. What check:place
-   * answers is whether all of it places - and at 44 ICs it does, on 24 cm,
-   * the longest board there is: a plan §13.5 ceiling, not headroom. */
-  video3: {
-    title: "Video3", length: 240, ics: 45, source: "video3/docs/plan.md 13.1",
-    note: "character + bitmap + tile, copyrect, one 16x16 sprite - four ATF1508AS and a GAL22V10, all fitted, with a keyed copy",
+  video: {
+    title: "Video", length: 240, ics: 33, source: "archive/video/docs/graphics.md 14.1",
+    note: "640x200 x 256 colours, VGA out",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
     parts: [
-      /* the four CPLDs, all fitted (gal/cpld/v3*.fit) - partition.md */
-      pkg(33, 33, "ATF1508AS", "pld", 4, "1508"),
-      /* ⭐ v3lane and the four lane '245s, 2026-09-19: the framebuffer is 32
-       * bits and every other VRAM byte path on the card is 8, and nothing
-       * joined them - no byte enables, no lane decode, no transceiver
-       * (video3_card.v's old GAP_1, 2, 6, 7). A '245 a lane between it and the
-       * card's internal data bus, and a GAL for their enables, the byte
-       * enables and the bus's two latch-side drivers. They place because the
-       * ATTR '574 went: v3scan's ATO drives the LUT itself (plan §3). */
-      dip(24, 0.3, "GAL22V10 v3lane", "pld", 1),
-      dip(20, 0.3, "74AHCT245 lane", "bus", 4),
-      /* ⭐ the copy's colour key (keyed-copy.md): an 8-input NOR on the card's
-       * internal bus says "the byte the copy is about to write is zero", and
-       * v3lane's byte enables drop for that write. ⛔ A DIP-14 and not a
-       * '688 against a key register: the 20-pin part pushes a sprite '165 off
-       * the board, so the key is FIXED at index 0 - measured here, not
-       * assumed, because keyed-copy.md §7.2 priced the '688 at "+1 package"
-       * without asking the packer. */
-      dip(14, 0.3, "74HC4078 key=0", "bus"),
+      /* ⭐ THREE ATF1508AS SINCE 2026-09-09 - graphics.md 10.1.7. vsup absorbs
+       * the three GAL22V10s (rfa, vlen, pxsel) and carries 9's palette write
+       * path and 10.3.3's list register port, neither of which had anywhere to
+       * live on a card of two CPLDs. Three GALs out, one CPLD in: -2. */
+      pkg(33, 33, "ATF1508AS vaddr/vctrl/vsup", "pld", 3, "1508"),
+      /* 14.2: two x16 parts feed the dot clock where four x8 did, and one
+       * holds the whole 16-bit palette. TSOP-44 II is a 10.16 x 18.42 mm body
+       * with the leads on the short ends; 11.8 includes them, which is the
+       * same convention dip() uses when it takes the row spacing. */
       pkg(18.4, 11.8, "AS6C8016 512Kx16", "mem", 2, "8016"),
       pkg(18.4, 11.8, "IS61C6416 64Kx16 LUT", "mem", 1, "6416"),
       dip(28, 0.6, "32Kx8 regfile", "mem"),
-      /* plan 13.1: four hold one access's 32 bits, four more are graphics.md
-       * 8.2's second rank - byte-granular HSCROLL needs two fetch groups live
-       * at once. Trade 2 of plan 13.3 deletes the second rank. */
+      /* ⭐ EIGHT, IN TWO RANKS - graphics.md 8.2, 19 item 28. Byte-granular
+       * horizontal scroll needs two fetch groups live at once and one rank of
+       * latches provably cannot hold them; the rank select is an output enable
+       * because `c < HSCROLL[1:0]` is constant for a whole line. */
       dip(20, 0.3, "74AHCT574 fetch", "bus", 8),
       dip(16, 0.3, "74AHCT153 mux", "bus", 4),
       dip(20, 0.3, "74AHCT574 index", "bus"),
       dip(20, 0.3, "74AHCT273 out", "bus", 2),
-      /* ⭐ PIDX is 16 bits (plan 10) but its high byte NEVER COUNTS - software
-       * sets a sub-palette and walks within it - so it is a latch, and that is
-       * one package rather than two more '163. */
-      dip(16, 0.3, "74AHCT163A PIDXlo", "bus", 2),
-      dip(20, 0.3, "74AHCT574 PIDXhi", "bus"),
-      dip(20, 0.3, "74AHCT244 pidx-oe", "bus", 2),
+      /* ⭐ 9's PALETTE WRITE PATH, and none of it existed before 2026-09-09 -
+       * design-review2.md's defect class, found again. 19 item 9 closed at the
+       * same time: the 74HC593 the parts list carried is DISCONTINUED, so PIDX
+       * is two loadable '163s with ordinary outputs plus a '244 onto 13.1's
+       * LUT address bus, and the two '573s are 13's +$11/+$12 - the 16-bit
+       * entry a card with an 8-bit bus has to assemble somewhere. */
+      dip(16, 0.3, "74AHCT163A PIDX", "bus", 2),
+      dip(20, 0.3, "74AHCT244 pidx-oe", "bus"),
       dip(20, 0.3, "74HC573 PDAT", "bus", 2),
+      /* 10.3.3: the display list's descriptor byte, from the pixel bus onto
+       * the card's internal data bus, for the dot a granted engine slot lasts.
+       * It is what makes a list MOVE reach a register at all. */
+      dip(20, 0.3, "74HCT244 lbyte", "bus"),
       dip(20, 0.3, "74HC574 pw-data", "bus"),
-      /* ⛔ NO COPY-READ LATCH - plan 13.3 trade 1, SETTLED 2026-09-16. Four
-       * '574 were listed here for a four-byte copy, and the "borrow the fetch
-       * rank" alternative is not electrically possible: a '574 has ONE output
-       * enable and the rank's output is committed to the pixel bus. But the
-       * latch is not needed at all - a BYTE-GRANULAR copy reuses vread and the
-       * posted-write '574, at 4.05 MB/s, and those four packages are what pays
-       * for the cell-budget escape (partition.md 8). */
+      /* ⚠ NO ADDRESS LATCH - graphics.md 3.1.1, 19 item 44, 2026-09-11. Three
+       * '574s for the posted write's physical address were listed here and no
+       * design clocked them: every CPU VRAM access is at WPTR. */
       dip(20, 0.3, "74HCT245 rdbk", "bus"),
       dip(20, 0.3, "74HCT574 vread", "bus"),
       dip(20, 0.3, "74HC244 VSTAT", "bus"),
       dip(20, 0.3, "74HC244 fanout", "bus"),
-      /* ⭐ the sprite's shift registers, partition.md §8's escape - and §5
-       * risk 3 says it is a REQUIREMENT, not an option: with them in silicon
-       * v3dot answers `Design does not fit`. FOUR since 2026-09-17, when the
-       * sprite became 16 x 16 (plan §7): a row is 32 bits, so two cascaded
-       * '165 a plane, and their serial outputs go straight to LUT A9..A8. */
-      dip(16, 0.3, "74HC165 sprite", "bus", 4),
-      /* ⚠ NO list-descriptor '244 (graphics.md 10.3.3) - no display list.
-       * ⚠ NO posted-write ADDRESS latches - graphics.md 19 item 44: `video`
-       * listed three and no design ever clocked them. Recorded so a fresh
-       * card does not re-add them. */
     ],
   },
 }

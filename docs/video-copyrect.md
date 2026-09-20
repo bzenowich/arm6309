@@ -5,7 +5,7 @@ between them: *could a blitter-first card carry character, bitmap and tile modes
 and align better with NitrOS-9's graphics primitives; do we instead need
 memory-mapped VRAM; and is there anything in QuickDraw worth taking?*
 
-> This is a **design note**, not a specification. `video/docs/graphics.md` owns
+> This is a **design note**, not a specification. `archive/video/docs/graphics.md` owns
 > the card; `docs/video-options.md` compares the three card shapes;
 > `docs/nitros9-hardware-improvements.md` is the ranked change list this feeds.
 > ⚠ **Nothing here is fitted, placed or costed by `pack.ts`.** Package counts are

@@ -5,7 +5,7 @@
  * two ends cannot disagree.
  *
  * Signal list: docs/machine.md 2, which is itself collated from
- * video/docs/graphics.md 17. Nothing is invented here; the only decisions this
+ * archive/video/docs/graphics.md 17. Nothing is invented here; the only decisions this
  * file takes are *where* each signal sits, and those are argued in
  * hardware/README.md.
  *

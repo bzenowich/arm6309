@@ -14,7 +14,7 @@ GAL will not carry the design. A documented register map before a board, an hone
 count, and a measurement in place of an estimate wherever one can be taken.
 
 > **The rule used to read "no CPLDs, no FPGAs", and it was retired on 2026-09-08.** It
-> was never a period rule — `video/docs/graphics.md` §10.1.2: Altera's first EPLD is
+> was never a period rule — `archive/video/docs/graphics.md` §10.1.2: Altera's first EPLD is
 > 1984 and the first CPLD 1988, both older than parts this machine already uses. It was
 > a style rule that bought one function per package and everything visible on a scope,
 > and **three of six cards had already spent it**: video to compete with a GIME on even
@@ -87,7 +87,7 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > ⭐ **All three are repaired, `vctrl` and `vsup` re-fit, and the machine draws a
 > 640 × 200 picture whose every pixel is the index the software wrote** — 226
 > Verilator claims, 543 model claims and 22 machine claims, **none failing**.
-> `graphics.md` §19 items 36–38, and `video/docs/history.md` has the derivations.
+> `graphics.md` §19 items 36–38, and `archive/video/docs/history.md` has the derivations.
 >
 > ⭐ **A fourth followed from the picture itself and is repaired too** (§19 item 35):
 > it sat **five dots right of the active window**, so the last five columns of every
@@ -167,7 +167,8 @@ count, and a measurement in place of an estimate wherever one can be taken.
 | | What | Status | Start here |
 |---|---|---|---|
 | [`cpu/`](cpu/) | HD6309E on an **STM32G431CBU6**, 40-pin drop-in. One UFQFPN48 SKU for the CoCo 3 and this machine, running **byte-identical firmware on both** — the MMU is on the motherboard and so, since 2026-09-08, is the boot ROM. | **Phase 1 — timing spike written, not yet measured on silicon** | [`cpu/README.md`](cpu/README.md), [`cpu/docs/plan.md`](cpu/docs/plan.md) |
-| [`video/`](video/) | 640×200 × 256 colours, 80×25 text, byte-granular scroll, span writer, a display list that writes the palette per scanline. **33 ICs** on a 24 cm board — 3 `ATF1508AS` and no GALs, all three fitted (JTAG off: socketed, programmed out of circuit). | **Specified; simulated 2026-09-09 and repaired — 33 ICs since 2026-09-11, when three address latches no design clocked came off** | [`video/README.md`](video/README.md), [`video/docs/graphics.md`](video/docs/graphics.md), [`video/docs/features.md`](video/docs/features.md) |
+| [`video3/`](video3/) | ⭐ **The machine's video card since 2026-09-20.** 80×25 / 80×60 character mode with **per-cell colour**, 640×200/240/400/480 chunky 8bpp bitmap with a span writer and **full copyrect**, 8×8 tile mode and one 16×16 sprite. **45 ICs** on a 24 cm board — 4 `ATF1508AS` and a `GAL22V10`, all five fitted. ⛔ **No display list**, so nothing per-scanline. | ⭐ **Fitted, and simulated end to end**: `v3card_tb` runs whole frames pixel for pixel in every mode and `v3machine_tb` runs a 6809E against the card out of the boot ROM. ⚠ Nothing is timed, drawn or costed in current (`plan.md` §14) | [`video3/README.md`](video3/README.md), [`video3/docs/plan.md`](video3/docs/plan.md), [`video3/docs/partition.md`](video3/docs/partition.md) |
+| [`archive/`](archive/) | ⭐ **Retired designs, kept whole and kept citable.** [`archive/video/`](archive/video/) is the machine's *previous* video card — 640×200 × 256 colours, a display list, 33 ICs, three fitted `ATF1508AS`, simulated and repaired — and it is where this machine's **backplane, slot model, arbitration rule and clock tree were designed**, so the rest of the repository still cites `graphics.md` for those. [`archive/video2/`](archive/video2/) is a microcoded ANSI card that was planned and never built. | **Archived 2026-09-20 — superseded, not wrong** | [`archive/README.md`](archive/README.md) |
 | [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula, **with programmable panning**, 512 KB of samples in one package and a headphone-driven jack. ⭐ **35 ICs on an 18 cm card** — **two** `ATF1508AS`, both fitted. It reached 45 when the sequencer was built and came back the same day: programmable panning given up for classic MOD's fixed LRRL, and the counter, comparator and read-back latch absorbed into U1. Whether the analogue section fits the same card is open. Host reference model **builds and passes**. | ⭐ **Both CPLDs fitted, and the sequencer exactly fills its part; the card is simulated end to end — a sample byte reaches an `AD7528` and a buffer reloads from its shadow.** The analogue half is still unmeasured | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
 | [`io/`](io/) | PS/2 keyboard and mouse — **11 ICs** of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does, and since 2026-09-09 it is a **`TL16C550C` at 115,200 baud with 16-byte FIFOs**. One 14-IC card. | **Both specified** | [`io/README.md`](io/README.md), [`io/ps2/docs/ps2.md`](io/ps2/docs/ps2.md), [`io/serial/docs/serial.md`](io/serial/docs/serial.md) |
 | [`storage/`](storage/) | SD card interface — **8 ICs**, **537 KiB/s sustained**, an SPI burst started by the bus read strobe. ⭐ **8 and not 14 since 2026-09-20**: the block buffer that once made this card 16 packages is gone, and §4.4's 32-byte chunk-and-mask carries the read path as it already carried the write path. ⚠ The `TFM` hazard is mitigated, not retired — and §11.6 gives the 21 % back if the CPU's resume is specified. | ⭐ **Both GAL22V10s built, fitted and checked against Atmel's CUPL — 24 claims. The rest specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |
@@ -255,7 +256,7 @@ cmake --build build-arm
 Produces `build-arm/spike.elf`, `.bin`, `.hex` and a link map.
 
 Each subsystem owns its own `CMakeLists.txt`; the top-level file only decides which
-subdirectories a given configuration visits. `video/` and `io/` are specification-only
+subdirectories a given configuration visits. `video3/` and `io/` are specification-only
 and build nothing.
 
 ---
@@ -273,7 +274,7 @@ and build nothing.
   overturned estimate inline; at ~500 markers they stopped being readable. Each
   component now splits in two: the **specification describes only the present
   design**, and a `history.md` beside it archives what was superseded, with dates and
-  the reason each number moved (`video/docs/history.md`, `audio/docs/history.md`,
+  the reason each number moved (`archive/video/docs/history.md`, `audio/docs/history.md`,
   `cpu/docs/history.md`, `net/docs/history.md`, `storage/docs/history.md`,
   `io/ps2/docs/history.md`, `io/serial/docs/history.md`, `hardware/history.md`,
   `docs/history.md`). The wrong predictions are still visible on purpose — one

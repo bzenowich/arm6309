@@ -2,7 +2,7 @@
 
 ## The `arm6309` Card vs. the GIME vs. the VIC-II
 
-**Question this answers:** the card specified in [`graphics.md`](../video/docs/graphics.md) is an
+**Question this answers:** the card specified in [`graphics.md`](../archive/video/docs/graphics.md) is an
 adaptation of colormin's 256-colour design to a 6309 machine. How does it actually compare
 to the two chips it stands in the tradition of — the **GIME** (Tandy CoCo 3, 1986) and the
 **VIC-II** (Commodore 64, 1982)?
@@ -21,7 +21,7 @@ from 1986 and 1982. That gap is the whole story: three to seven years of silicon
 
 | Claim class | Source | Confidence |
 |---|---|---|
-| `arm6309` card geometry, bandwidth, register map, chip count | [`graphics.md`](../video/docs/graphics.md) §§2, 6, 7, 9, 11, 12, 14 | **specified, not built** — timing closes on paper **at ÷12 only**, and §11's read budget closes only under §5.2.2's spare-first sub-slot ordering |
+| `arm6309` card geometry, bandwidth, register map, chip count | [`graphics.md`](../archive/video/docs/graphics.md) §§2, 6, 7, 9, 11, 12, 14 | **specified, not built** — timing closes on paper **at ÷12 only**, and §11's read budget closes only under §5.2.2's spare-first sub-slot ordering |
 | CPU-side timings for the card | `graphics.md` §7.3 | ⚠ scales on an assumed **one write per 5 core cycles** — flagged there for verification |
 | GIME registers, MMU, palette, modes, arbitration | *Color Computer 3 Service Manual* (Cat. 26-3334), pp. 10–20, §5.2–5.3 — [`coco3_ServiceManual.pdf`](../reference/manuals/coco3_ServiceManual.pdf) | **verified against the PDF** |
 | VIC-II cycle behaviour, registers, timing | Bauer, *The MOS 6567/6569 video controller* (1996); *C64 Programmer's Reference Guide* | recalled, widely corroborated — **not** verified against a document in this repo |

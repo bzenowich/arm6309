@@ -1,7 +1,8 @@
 # The NitrOS-9 video console
 
 The window devices `/W1`… are NitrOS-9 Level 2 text and graphics windows on the video card
-(`video/docs/graphics.md`), typed at on the PS/2 keyboard (`io/ps2/docs/ps2.md`). Programs
+(`../../archive/video/docs/graphics.md`, archived 2026-09-20), typed at on the PS/2
+keyboard (`../../io/ps2/docs/ps2.md`). Programs
 speak CoCo 3 CoWin's byte protocol to them. `docs/nitros9-av-plan.md` is the plan this
 came from; this document is what is built.
 
@@ -87,7 +88,7 @@ blocks included:
    continues from the same stack. `VG.CBusy` keeps other windows' calls out meanwhile.
    ⛔ **CoArm's entry does not touch `S` until it knows the call.** A resumed call's stack is
    under `Co.Stack` and `/IRQ` is open, so an entry that loaded `Co.Stack` first let an IRQ
-   stack over it, and `Resume` returned into the clock (`video/README.md`).
+   stack over it, and `Resume` returned into the clock (`../../archive/video/README.md`).
 
 **What both maps see is block 0.** `VG`, the video globals, is at `$1100`, in the page a
 CoCo 3 gives GrfDrv's globals. CoArm's stack is under `$1F00`, and the flip's frame is above

@@ -770,10 +770,10 @@ component's `history.md` and the spec is rewritten in the present tense.
 
 | # | Document | Was | Is |
 |---|---|---|---|
-| D-1 | `video/docs/features.md` §3.2 | "≈32.4 M spare accesses/s… **77×** more memory bandwidth" | `graphics.md` §14.2.3 replaced the four ×8 framebuffer parts with two ×16: **8.1 M/s and 15×** |
-| D-2 | `video/docs/features.md` §3.1 | a three-row `WMODE` table, and the mask serialiser and length counter as a `74HC165` and a `'161` pair | four modes since §8.4's sprite mode; both parts were booked into the CPLDs by `graphics.md` §10.1.6 (**and see V-1**) |
-| D-3 | `video/docs/graphics.md` §6.4.6, `features.md` §1.4 | cell row is "`VSCROLL[8:3]`" | `SA17..SA13` is five bits — **`VSCROLL[7:3]`**. The 32-row ring the same tables state is the giveaway |
-| D-4 | `video/docs/graphics.md` §14 | the motherboard census is "**17 ICs**" | 18 since `ram.md` §6.3.1's refresh timebase |
+| D-1 | `archive/video/docs/features.md` §3.2 | "≈32.4 M spare accesses/s… **77×** more memory bandwidth" | `graphics.md` §14.2.3 replaced the four ×8 framebuffer parts with two ×16: **8.1 M/s and 15×** |
+| D-2 | `archive/video/docs/features.md` §3.1 | a three-row `WMODE` table, and the mask serialiser and length counter as a `74HC165` and a `'161` pair | four modes since §8.4's sprite mode; both parts were booked into the CPLDs by `graphics.md` §10.1.6 (**and see V-1**) |
+| D-3 | `archive/video/docs/graphics.md` §6.4.6, `features.md` §1.4 | cell row is "`VSCROLL[8:3]`" | `SA17..SA13` is five bits — **`VSCROLL[7:3]`**. The 32-row ring the same tables state is the giveaway |
+| D-4 | `archive/video/docs/graphics.md` §14 | the motherboard census is "**17 ICs**" | 18 since `ram.md` §6.3.1's refresh timebase |
 | D-5 | `io/ps2/docs/ps2.md` §0 | "Moved from `$FF30` on 2026-09-09" | the card moved **to** `$FF30`, from `$FF50` |
 | D-6 | `io/serial/docs/serial.md` §0 | "The card as specified is 3 ICs and 19,200 baud… The 6551 design is the specified one and the tiers are proposals" | §9.1 took the `TL16C550C` on 2026-09-09; the same table's own rows say so |
 | D-7 | `io/serial/docs/serial.md` §2 | "This machine boots NitrOS-9 from floppy" | `machine.md` §7.2 — a 1 MB boot ROM with a ROM disk; there is no floppy controller in the machine |

@@ -46,11 +46,17 @@ const check = (ok: boolean, claim: string, detail = "") => {
 const hex = (n: number) => `$${n.toString(16).toUpperCase()}`
 
 /* -- every literal a design reads, and every name it produces ------------- */
+/* ⚠ `&` AND `#`. A term string may carry a whole sum - v3host's `WAITN` output
+ * enable is `VPORT & E & CARDBUSY # REGSEL & !RW & E & CARDBUSY # ...` - and
+ * splitting on `&` alone yields the token `CARDBUSY # IOSEL`, which is not a
+ * literal any part reads. It ends in `SEL`, so the imported-select rule below
+ * reported video3 as importing a pre-decoded select on the day the card was
+ * pointed at (2026-09-20). A separator is a separator; both are split. */
 const literalsOf = (cells: Cell[]) => {
   const read = new Set<string>()
   for (const c of cells) {
     for (const t of [...c.terms, ...(c.oe ? [c.oe] : [])]) {
-      for (const l of t.split("&")) {
+      for (const l of t.split(/[&#]/)) {
         const s = l.trim().replace(/^!/, "")
         if (s && s !== "1" && s !== "0") read.add(s)
       }
@@ -74,11 +80,15 @@ const load = async () => {
     cards.push({ window: "audio", cells: (audioCpld as Merged).cells, note: "gal/audio.cpld.ts" })
   } catch (e) { check(false, "audio card design loads", String(e).slice(0, 120)) }
   try {
-    /* The video card's own decode is rfa's REGSEL - graphics.md 10.1.6.3 moved
-     * it off vctrl, so this is where the card's base is matched. */
-    const { rfaDesign } = await import("../gal/regfile.jedec")
-    cards.push({ window: "video", cells: (rfaDesign as Design).cells, note: "gal/regfile.jedec.ts (rfa)" })
-  } catch (e) { check(false, "video card design loads", String(e).slice(0, 120)) }
+    /* ⭐ THE VIDEO CARD HERE IS `video3` SINCE 2026-09-20 (docs/history.md).
+     * It was `video`'s rfa, whose REGSEL graphics.md §10.1.6.3 had moved off
+     * vctrl; `video` is archived and v3host IS the register decode, so
+     * `REGSEL = IOSEL & A6 & A5` is its own rather than recomputed
+     * (v3host.cpld.ts's note on the CPU's offset). Same window, same two
+     * bits above the five the offsets use. */
+    const { v3host } = await import("../gal/video3/v3host.cpld")
+    cards.push({ window: "video3", cells: (v3host as Merged).cells, note: "gal/video3/v3host.cpld.ts" })
+  } catch (e) { check(false, "video3 card design loads", String(e).slice(0, 120)) }
 }
 
 await load()
