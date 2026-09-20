@@ -353,6 +353,7 @@ static void v3_copy(void)
     if (m->wadv & 4) fprintf(stderr, "FAIL  %.3f s: a copy with WADV b2 set - "
                              "the destination would step by two (PC $%04X)\n",
                              (double)m->dots * DOT_PS / 1e12, m->cpu.pc);
+    int keyed = V3_WMODE(m) == 3;
     uint32_t sc = m->cptr & 1023, sr = (m->cptr >> 10) & 511;
     uint32_t dc = m->wptr & 1023, dr = (m->wptr >> 10) & 511;
     for (uint32_t y = 0; y < h; y++) {
@@ -365,7 +366,15 @@ static void v3_copy(void)
         for (uint32_t x = 0; x < w; x++) {
             uint32_t sx = (coldir > 0 ? sc + x : sc - x) & 1023;
             uint32_t dx = (coldir > 0 ? dc + x : dc - x) & 1023;
-            m->vram[((dyr << 10) | dx) & 0x7FFFF] = m->vram[((syr << 10) | sx) & 0x7FFFF];
+            uint8_t byte = m->vram[((syr << 10) | sx) & 0x7FFFF];
+            /* ⭐ THE COLOUR KEY (keyed-copy.md): in sprite WMODE a source
+             * byte of ZERO is transparent - v3lane drops the byte enables for
+             * that write, so the destination keeps its background. A
+             * full-colour blit at the engine's rate. The key is fixed at
+             * index 0: an 8-input NOR on the card's internal bus, because a
+             * '688 against a key register does not place. */
+            if (keyed && byte == 0) continue;
+            m->vram[((dyr << 10) | dx) & 0x7FFFF] = byte;
         }
     }
     /* plan §6.1: ⛔ THE FOUR-BYTE GROUP IS WITHDRAWN (§13.3 trade 1, settled

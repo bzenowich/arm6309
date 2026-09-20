@@ -74,25 +74,26 @@ module video3_card (
   wire ATO0, ATO0_OE, ATO1, ATO1_OE, ATO2, ATO2_OE, ATO3, ATO3_OE, ATO4, ATO4_OE, ATO5,
        ATO5_OE, ATO6, ATO6_OE, ATO7, ATO7_OE, ATOE, CBUSY, CDONE, CEOR, CHLAST, CPURF,
        CRDSEL, CROWADV, CSTEP, CWLOAD, DIR, DP0, DP1, FBOEPTR, GCPY, GRD, GSPN, HBLANK,
-       HLOAD, IRQN, IRQN_OE, IRQPEND, LANE0, LANE1, LB0, LB1, LDPDATH, LDPDATL, LDPIDXH,
-       LDPIDXL, LOE0, LOE1, LOE2, LOE3, LUTWE, MODE0, MODE1, MRQ, MUXSEL0, MUXSEL1, OEA0,
-       OEA1, OEA2, OEB0, OEB1, OEB2, OMR, PALTURN, PBUSY, PIDXCE, PIDXOE, PIXOE, PWCK,
-       PWOE, RA0, RA1, RA2, RA3, RA4, RCPY, RDBKOE, RDCK, RDOE, RDREQ, REGWR, RETIRE, RFA0,
-       RFA1, RFA2, RFA3, RFA4, RFOE, ROWADV, RP1, RP2, RP3, RP4, SPANBUSY, SPARE, SPRA0,
-       SPRA0_OE, SPRA1, SPRA1_OE, SPRLD, SPRSH, SQ0, SQ1, UB0, UB1, VBLANK, VSTATOE, VWE,
-       WAITN, WAITN_OE, WM0, WM1, WROWADV, WSTART, WSTB, WSTBV, WSTEP, dot_FBA2,
-       dot_FBA2_OE, dot_FBA3, dot_FBA3_OE, dot_FBA4, dot_FBA4_OE, dot_FBA5, dot_FBA5_OE,
-       ptr_FBA10, ptr_FBA10_OE, ptr_FBA11, ptr_FBA11_OE, ptr_FBA12, ptr_FBA12_OE,
-       ptr_FBA13, ptr_FBA13_OE, ptr_FBA14, ptr_FBA14_OE, ptr_FBA15, ptr_FBA15_OE,
-       ptr_FBA16, ptr_FBA16_OE, ptr_FBA17, ptr_FBA17_OE, ptr_FBA18, ptr_FBA18_OE, ptr_FBA2,
-       ptr_FBA2_OE, ptr_FBA3, ptr_FBA3_OE, ptr_FBA4, ptr_FBA4_OE, ptr_FBA5, ptr_FBA5_OE,
-       ptr_FBA6, ptr_FBA6_OE, ptr_FBA7, ptr_FBA7_OE, ptr_FBA8, ptr_FBA8_OE, ptr_FBA9,
-       ptr_FBA9_OE, scan_FBA10, scan_FBA10_OE, scan_FBA11, scan_FBA11_OE, scan_FBA12,
-       scan_FBA12_OE, scan_FBA13, scan_FBA13_OE, scan_FBA14, scan_FBA14_OE, scan_FBA15,
-       scan_FBA15_OE, scan_FBA16, scan_FBA16_OE, scan_FBA17, scan_FBA17_OE, scan_FBA18,
-       scan_FBA18_OE, scan_FBA2, scan_FBA2_OE, scan_FBA3, scan_FBA3_OE, scan_FBA4,
-       scan_FBA4_OE, scan_FBA5, scan_FBA5_OE, scan_FBA6, scan_FBA6_OE, scan_FBA7,
-       scan_FBA7_OE, scan_FBA8, scan_FBA8_OE, scan_FBA9, scan_FBA9_OE;
+       HLOAD, IRQN, IRQN_OE, IRQPEND, KEY, LANE0, LANE1, LB0, LB1, LDPDATH, LDPDATL,
+       LDPIDXH, LDPIDXL, LOE0, LOE1, LOE2, LOE3, LUTWE, MODE0, MODE1, MRQ, MUXSEL0,
+       MUXSEL1, OEA0, OEA1, OEA2, OEB0, OEB1, OEB2, OMR, PALTURN, PBUSY, PIDXCE, PIDXOE,
+       PIXOE, PWCK, PWOE, RA0, RA1, RA2, RA3, RA4, RCPY, RDBKOE, RDCK, RDOE, RDREQ, REGWR,
+       RETIRE, RFA0, RFA1, RFA2, RFA3, RFA4, RFOE, ROWADV, RP1, RP2, RP3, RP4, SPANBUSY,
+       SPARE, SPRA0, SPRA0_OE, SPRA1, SPRA1_OE, SPRLD, SPRSH, SQ0, SQ1, UB0, UB1, VBLANK,
+       VSTATOE, VWE, WAITN, WAITN_OE, WM0, WM1, WROWADV, WSTART, WSTB, WSTBV, WSTEP,
+       dot_FBA2, dot_FBA2_OE, dot_FBA3, dot_FBA3_OE, dot_FBA4, dot_FBA4_OE, dot_FBA5,
+       dot_FBA5_OE, ptr_FBA10, ptr_FBA10_OE, ptr_FBA11, ptr_FBA11_OE, ptr_FBA12,
+       ptr_FBA12_OE, ptr_FBA13, ptr_FBA13_OE, ptr_FBA14, ptr_FBA14_OE, ptr_FBA15,
+       ptr_FBA15_OE, ptr_FBA16, ptr_FBA16_OE, ptr_FBA17, ptr_FBA17_OE, ptr_FBA18,
+       ptr_FBA18_OE, ptr_FBA2, ptr_FBA2_OE, ptr_FBA3, ptr_FBA3_OE, ptr_FBA4, ptr_FBA4_OE,
+       ptr_FBA5, ptr_FBA5_OE, ptr_FBA6, ptr_FBA6_OE, ptr_FBA7, ptr_FBA7_OE, ptr_FBA8,
+       ptr_FBA8_OE, ptr_FBA9, ptr_FBA9_OE, scan_FBA10, scan_FBA10_OE, scan_FBA11,
+       scan_FBA11_OE, scan_FBA12, scan_FBA12_OE, scan_FBA13, scan_FBA13_OE, scan_FBA14,
+       scan_FBA14_OE, scan_FBA15, scan_FBA15_OE, scan_FBA16, scan_FBA16_OE, scan_FBA17,
+       scan_FBA17_OE, scan_FBA18, scan_FBA18_OE, scan_FBA2, scan_FBA2_OE, scan_FBA3,
+       scan_FBA3_OE, scan_FBA4, scan_FBA4_OE, scan_FBA5, scan_FBA5_OE, scan_FBA6,
+       scan_FBA6_OE, scan_FBA7, scan_FBA7_OE, scan_FBA8, scan_FBA8_OE, scan_FBA9,
+       scan_FBA9_OE;
 
   // ---- the five parts: generated port maps --------------------------------
   v3dot u_dot (
@@ -169,8 +170,9 @@ module video3_card (
 
   v3lane u_lane (
     .LANE0(LANE0), .LANE1(LANE1), .CRDSEL(CRDSEL), .GRD(GRD), .GCPY(GCPY), .GSPN(GSPN),
-    .WM0(WM0), .WM1(WM1), .VWE(VWE), .WSTBV(WSTBV), .LOE0(LOE0), .LOE1(LOE1), .LOE2(LOE2),
-    .LOE3(LOE3), .LB0(LB0), .UB0(UB0), .LB1(LB1), .UB1(UB1), .PWOE(PWOE), .RFOE(RFOE)
+    .WM0(WM0), .WM1(WM1), .VWE(VWE), .WSTBV(WSTBV), .KEY(KEY), .LOE0(LOE0), .LOE1(LOE1),
+    .LOE2(LOE2), .LOE3(LOE3), .LB0(LB0), .UB0(UB0), .LB1(LB1), .UB1(UB1), .PWOE(PWOE),
+    .RFOE(RFOE)
   );
 
   // ======================================================================
@@ -236,6 +238,16 @@ module video3_card (
   wire idb_sampled = WSTB | PWCK | RDCK | LDPIDXL | LDPIDXH | LDPDATL | LDPDATH
                    | RP1 | RP2 | RP3 | RP4 | (VWE & DIR);
   assign IDB_FLOAT = idb_sampled & (n_idb == 3'd0);
+
+  // ---- the copy's colour key: one 8-input NOR (keyed-copy.md) -------------
+  // ⭐ THE BYTE ABOUT TO BE WRITTEN IS ALREADY ON IDB. A copy's write access
+  // drives the posted-write '574 onto the bus for both its dots (PWOE), so the
+  // compare has the whole access to settle and gates VWE at the tick - no
+  // pipeline register, where comparing during the READ access would have
+  // needed one and left about 5 ns of margin. The key is ZERO: a 74HC4078
+  // against a '688's key register is a DIP-14 against a DIP-20, and the board
+  // has room for exactly one of them (check:place).
+  assign KEY = ~|IDB;
 
   // ---- the register file: 32 bytes of the 32K x 8 (plan §5) --------------
   // /WE is WSTB; the address is RFA - bit 0 is v3ptr's, because §5 makes it

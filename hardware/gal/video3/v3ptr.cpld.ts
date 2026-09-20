@@ -483,6 +483,17 @@ const spanSeq: Cell[] = [
    * transparent pixel in sprite mode) or the copy's write access. It was WEN,
    * the span writer's alone, and the board took `WEN | CSTEP` from two parts
    * with no gate to OR them (video3_card.v's GAP_2). */
+  /* ⭐ THE COPY'S KEY IS NOT HERE, and that is the whole reason it exists at
+   * all: this part refused it twice - an enable bit of its own, then WMODE
+   * arming it with no new cell, both "Design does not fit" at 124/128 with
+   * every LAB at 39 of 40 inputs. The compare is a package on the board and
+   * the skip is v3lane's byte enables: a write with no byte enabled writes
+   * nothing, and v3lane already has WMODE and the lane (keyed-copy.md).
+   * ⛔ WHAT WAS TRIED AND REFUSED (keyed-copy.md):
+   *   `CSTEP & !KEY` beside `CSTEP & !KEYEN`, the enable a CCTRL bit - one
+   *   cell and one pin, refused; then `CSTEP & !KEY`, `CSTEP & !WM1`,
+   *   `CSTEP & !WM0` with WMODE 11 arming it - NO new cell, one pin and two
+   *   terms on this cell, refused as well. */
   { pin: 0, name: "VWE", assertedLow: true, s0: 1, registered: false,
     why: "a retire, except a transparent pixel in sprite mode; or a copy write",
     terms: ["RETIRE & !WM1", "RETIRE & !WM0", "RETIRE & MS0", "CSTEP"] },

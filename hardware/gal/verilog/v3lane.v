@@ -16,6 +16,7 @@ module v3lane (
     input  wire WM1,
     input  wire VWE,
     input  wire WSTBV,
+    input  wire KEY,
     output wire LOE0,
     output wire LOE1,
     output wire LOE2,
@@ -52,20 +53,44 @@ module v3lane (
          | (GSPN & LANE1 & LANE0);
   // EXTERNAL
   assign LB0 =
-         (~VWE)
-         | (~LANE1 & ~LANE0);
+         (~VWE & ~KEY)
+         | (~VWE & ~WM1)
+         | (~VWE & ~WM0)
+         | (~VWE & ~GCPY)
+         | (~LANE1 & ~LANE0 & ~KEY)
+         | (~LANE1 & ~LANE0 & ~WM1)
+         | (~LANE1 & ~LANE0 & ~WM0)
+         | (~LANE1 & ~LANE0 & ~GCPY);
   // EXTERNAL
   assign UB0 =
-         (~VWE)
-         | (~LANE1 & LANE0);
+         (~VWE & ~KEY)
+         | (~VWE & ~WM1)
+         | (~VWE & ~WM0)
+         | (~VWE & ~GCPY)
+         | (~LANE1 & LANE0 & ~KEY)
+         | (~LANE1 & LANE0 & ~WM1)
+         | (~LANE1 & LANE0 & ~WM0)
+         | (~LANE1 & LANE0 & ~GCPY);
   // EXTERNAL
   assign LB1 =
-         (~VWE)
-         | (LANE1 & ~LANE0);
+         (~VWE & ~KEY)
+         | (~VWE & ~WM1)
+         | (~VWE & ~WM0)
+         | (~VWE & ~GCPY)
+         | (LANE1 & ~LANE0 & ~KEY)
+         | (LANE1 & ~LANE0 & ~WM1)
+         | (LANE1 & ~LANE0 & ~WM0)
+         | (LANE1 & ~LANE0 & ~GCPY);
   // EXTERNAL
   assign UB1 =
-         (~VWE)
-         | (LANE1 & LANE0);
+         (~VWE & ~KEY)
+         | (~VWE & ~WM1)
+         | (~VWE & ~WM0)
+         | (~VWE & ~GCPY)
+         | (LANE1 & LANE0 & ~KEY)
+         | (LANE1 & LANE0 & ~WM1)
+         | (LANE1 & LANE0 & ~WM0)
+         | (LANE1 & LANE0 & ~GCPY);
   // EXTERNAL
   assign PWOE =
          (GSPN & ~WM1 & ~WM0)

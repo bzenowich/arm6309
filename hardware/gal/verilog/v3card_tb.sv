@@ -485,6 +485,71 @@ module v3card_tb;
              cp_dots, cp_ticks, cp_rd, cp_map, cp_spn, cp_none);
 
     end
+    // ================================= keyed-copy.md: the copy's colour key
+    // ⭐ CCTRL b7. The source is a 12 x 6 "sprite" whose background bytes are
+    // ZERO - the key - and whose ink is not; the destination is a field of
+    // $77. A keyed copy must land every ink byte and leave every $77 where a
+    // key byte would have gone. Then the SAME copy with b7 clear must land the
+    // zeros, because an ordinary copy moves index 0 like any other byte.
+    for (int r = 0; r < 8; r++)
+      for (int c = 0; c < 16; c++) begin
+        /* ⚠ sixteen rows apart, not four: a destination that overlaps the
+         * source's last rows copies its own output (twice now) */
+        dut.poke(19'h30000 + r * 1024 + c, 8'h00);             // the source field
+        dut.poke(19'h34000 + r * 1024 + c, 8'h77);             // the destination's background
+        dut.poke(19'h38000 + r * 1024 + c, 8'h77);
+      end
+    for (int r = 0; r < 6; r++)
+      for (int c = 0; c < 12; c++)
+        /* a hollow box: ink on the border, key inside - so a key byte that
+         * wrote would sit in the middle of the shape, where a check of the
+         * edges alone would miss it */
+        if (r == 0 || r == 5 || c == 0 || c == 11)
+          dut.poke(19'h30000 + r * 1024 + c, 8'hA0 + r * 16 + c);
+    // ⭐ WMODE 11 ARMS THE KEY, for the copy as it does for the span writer:
+    // sprite mode means transparent to both. A plain copy (WMODE anything
+    // else) moves index 0 like any other byte.
+    wr(CTRL, 8'hB0);                                   // WMODE 11, sprite
+    wr(CWIDTH, 8'd12); wr(CHEIGHT, 8'd6);
+    set_ptr(CPTR0, 19'h30000);
+    set_ptr(WPTR0, 19'h34000);
+    wr(CCTRL, 8'h01);                                  // GO
+    wait_clear(4, "CBUSY after a keyed copy");
+    bad = 0;
+    for (int r = 0; r < 6; r++)
+      for (int c = 0; c < 12; c++) begin
+        logic [7:0] src, want;
+        src = dut.peek(19'h30000 + r * 1024 + c);
+        want = (src === 8'h00) ? 8'h77 : src;          // the key leaves the background
+        if (dut.peek(19'h34000 + r * 1024 + c) !== want) bad++;
+      end
+    ok(bad == 0, $sformatf("a keyed copy lands the ink and leaves the background where the source is the key (%0d of 72 wrong)", bad));
+    if (bad) for (int r = 0; r < 6; r++) begin
+      $write("      dst row %0d:", r);
+      for (int c = 0; c < 12; c++) $write(" %02h", dut.peek(19'h34000 + r * 1024 + c));
+      $display("");
+    end
+    /* the interior is what the claim is really about: 4 x 10 key bytes */
+    bad = 0;
+    for (int r = 1; r < 5; r++)
+      for (int c = 1; c < 11; c++) if (dut.peek(19'h34000 + r * 1024 + c) !== 8'h77) bad++;
+    ok(bad == 0, $sformatf("and the shape's interior - forty key bytes - never wrote (%0d wrong)", bad));
+    /* ⚠ and with the bit clear the same copy moves the zeros */
+    set_ptr(CPTR0, 19'h30000);
+    set_ptr(WPTR0, 19'h38000);
+    /* ⚠ CHEIGHT AGAIN: the height counts once a copy and software reloads it
+     * (plan §6) - where CWIDTH reloads itself every row. Without this the
+     * second copy ran 512 rows and passed its own pixel check on the way. */
+    wr(CHEIGHT, 8'd6);
+    wr(CTRL, 8'h80);                                   // WMODE 00: no key
+    wr(CCTRL, 8'h01);                                  // GO
+    wait_clear(4, "CBUSY after the same copy unkeyed");
+    bad = 0;
+    for (int r = 0; r < 6; r++)
+      for (int c = 0; c < 12; c++)
+        if (dut.peek(19'h38000 + r * 1024 + c) !== dut.peek(19'h30000 + r * 1024 + c)) bad++;
+    ok(bad == 0, $sformatf("and outside sprite WMODE the same copy lands the key bytes too (%0d of 72 wrong)", bad));
+
     // ========================================================== the picture
     // Every LUT entry is its own address from here on (see capture above), so
     // a pixel IS the LUT address the card formed.

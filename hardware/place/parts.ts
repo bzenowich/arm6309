@@ -262,8 +262,8 @@ export const ALTERNATES: Record<string, CardSpec> = {
    * answers is whether all of it places - and at 44 ICs it does, on 24 cm,
    * the longest board there is: a plan §13.5 ceiling, not headroom. */
   video3: {
-    title: "Video3", length: 240, ics: 44, source: "video3/docs/plan.md 13.1",
-    note: "character + bitmap + tile, copyrect, one 16x16 sprite - four ATF1508AS and a GAL22V10, all fitted",
+    title: "Video3", length: 240, ics: 45, source: "video3/docs/plan.md 13.1",
+    note: "character + bitmap + tile, copyrect, one 16x16 sprite - four ATF1508AS and a GAL22V10, all fitted, with a keyed copy",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
     parts: [
@@ -278,6 +278,14 @@ export const ALTERNATES: Record<string, CardSpec> = {
        * ATTR '574 went: v3scan's ATO drives the LUT itself (plan §3). */
       dip(24, 0.3, "GAL22V10 v3lane", "pld", 1),
       dip(20, 0.3, "74AHCT245 lane", "bus", 4),
+      /* ⭐ the copy's colour key (keyed-copy.md): an 8-input NOR on the card's
+       * internal bus says "the byte the copy is about to write is zero", and
+       * v3lane's byte enables drop for that write. ⛔ A DIP-14 and not a
+       * '688 against a key register: the 20-pin part pushes a sprite '165 off
+       * the board, so the key is FIXED at index 0 - measured here, not
+       * assumed, because keyed-copy.md §7.2 priced the '688 at "+1 package"
+       * without asking the packer. */
+      dip(14, 0.3, "74HC4078 key=0", "bus"),
       pkg(18.4, 11.8, "AS6C8016 512Kx16", "mem", 2, "8016"),
       pkg(18.4, 11.8, "IS61C6416 64Kx16 LUT", "mem", 1, "6416"),
       dip(28, 0.6, "32Kx8 regfile", "mem"),

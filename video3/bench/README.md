@@ -24,6 +24,31 @@ itself is not. That is the discipline `software/nitros9/tools/vtmodel.py` keeps,
 `v3model.py` reuses `software/demo/tools/frames.py` so the recording's format is not
 transcribed twice either.
 
+### ⭐ `run-v3mv.sh` — the metroidvania scene, and the frame budget measured on it
+
+`bench/mvania.asm`'s four exercisers above ask *does the card do what the plan
+says*. This one asks the other question: **with the card doing exactly that,
+what can a game put on the screen?** `keyed-copy.md` §6.3 names a metroidvania
+as this card's natural genre and says the binding constraint was the per-copy
+cost; `optimizations.md` entry 4 took that from 698 µs to 344. The scene is
+where that gets spent.
+
+```sh
+sh video3/bench/run-v3mv.sh            # six runs, ~8 min. Its exit code is the answer
+```
+
+| | |
+|---|---|
+| The scene | `mvania`, a NitrOS-9 command in the port's tree (`level2/arm6309/cmds/mvania.asm`). A 1024 × 240 room at ring rows 0-239 with a **clean copy at 240-479**, the 640 × 200 view scrolled over it by `HSCROLL`/`VSCROLL` with **no refill**, the hero on the card's one hardware sprite, and every other actor drawn with the span writer's **sprite `WMODE`** and undrawn with a copy from the clean page |
+| The instrument | a store to **`$FF2E`**, which decodes nowhere on the board (`demo.asm`'s `MARK`) and which the emulator timestamps into `marks.txt` in picoseconds. One byte a phase boundary, so the cost split is read off the recording rather than estimated. ⚠ Seven stores a frame, ~17 µs of 14,300, and they are inside every number |
+| The sweep | 2, 4, 6 … 28 actors, 45 frames a step — about fifteen seconds |
+| The modes | the restores merged or one a rectangle; issued from **the card's own registers** or through **`SS.CopyN`**; the scroll committed by `SS.Batch` or written straight at the card; and one run with **no restores at all**, which prices them |
+| The output | `checkv3mv.py` prints the budget per actor count and writes the **contact sheets** the scene is reviewed from |
+
+⭐ **`mvaniapal.asm` and `mvaniadat.asm` are generated** by `bench/mkmvania.py`
+and checked in beside the source that includes them; the room's geometry and
+the palette exist in that script and nowhere else.
+
 ### ⭐ They were mutation-tested, because a green check proves nothing on its own
 
 Three deliberate breaks in `v3model.py`, one per exerciser, and **each fails the

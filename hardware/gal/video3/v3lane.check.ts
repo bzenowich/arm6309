@@ -1,7 +1,7 @@
 /* v3lane - video3's byte lanes and the internal bus's drivers, a GAL22V10.
  *   bun run gal/video3/v3lane.check.ts        (part of `npm run check`)
  *
- * Ten inputs, so the sweep is exhaustive: all 1,024 of them, the fuse map
+ * Eleven inputs, so the sweep is exhaustive: all 2,048 of them, the fuse map
  * against a model written here from the board's rules rather than from the
  * term lists, and then the same sweep against Atmel's CUPL compiling the
  * .pld this writes (jedec/reference/v3lane.cupl.jed) - CLAUDE.md: a GAL does
@@ -58,9 +58,11 @@ const model = (v: In) => {
      * ⭐ A copy's write access keeps it off for both dots, not only the tick */
     RFOE: laneRead || pw || v.GCPY || v.WSTBV ? 0 : 1,
   }
+  /* ⭐ a keyed copy write enables no byte at all, so nothing is written */
+  const keySkip = v.KEY && v.WM1 && v.WM0 && v.GCPY
   for (let l = 0; l < 4; l++) {
     m[`LOE${l}`] = byteAcc && lane === l ? 1 : 0
-    m[["LB0", "UB0", "LB1", "UB1"][l]] = !v.VWE || lane === l ? 1 : 0
+    m[["LB0", "UB0", "LB1", "UB1"][l]] = (!v.VWE || lane === l) && !keySkip ? 1 : 0
   }
   return m
 }
@@ -72,7 +74,7 @@ for (let bits = 0; bits < 1 << NAMES.length && !bad; bits++) {
     bad = `${k} at ${JSON.stringify(v)}: fuse map ${g[k]}, model ${m[k]}`; break
   }
 }
-check(bad === null, "the fuse map is the model over all 1,024 inputs - lane, byte enables, IDB's drivers", bad ?? "")
+check(bad === null, "the fuse map is the model over all 2,048 inputs - lane, byte enables, IDB's drivers", bad ?? "")
 
 /* ---- the claims the board rests on, over the inputs the arbiter can give -- *
  * v3dot's grants are one-hot or none (one spare access, one requester), and
@@ -100,7 +102,8 @@ for (let bits = 0; bits < 1 << NAMES.length; bits++) {
   /* a WRITE access must have a source: the file or the '574 */
   if ((v.GSPN || (v.GCPY && !v.CRDSEL)) && !v.WSTBV && g.RFOE + g.PWOE !== 1) float++
   const bes = ["LB0", "UB0", "LB1", "UB1"].filter((n) => g[n]).length
-  if (v.VWE && bes !== 1) writeTwo++
+  const keyed = v.KEY && v.WM1 && v.WM0 && v.GCPY
+  if (v.VWE && bes !== (keyed ? 0 : 1)) writeTwo++
 }
 check(twoLanes === 0 && noLane === 0,
   "exactly one lane transceiver is on for each byte access, and none otherwise",
@@ -109,7 +112,7 @@ check(fight === 0, "never two drivers on IDB - the file, the '574, a reading lan
   `${fight} input combinations`)
 check(float === 0, "and every write access has exactly one source for its byte - the file or the '574",
   `${float} input combinations`)
-check(writeTwo === 0, "a write enables exactly one byte of the four", `${writeTwo} input combinations`)
+check(writeTwo === 0, "a write enables exactly one byte of the four - and a keyed copy's write none", `${writeTwo} input combinations`)
 
 /* ---- the second implementation ------------------------------------------ */
 const ref = join(here, "..", "jedec", "reference", "v3lane.cupl.jed")
@@ -121,11 +124,11 @@ if (!existsSync(ref)) {
   for (let bits = 0; bits < 1 << NAMES.length && !diff; bits++) {
     const v = inputsOf(bits), ours = gal.evaluate(pinsOf(v)), theirs = cupl.evaluate(pinsOf(v))
     for (const c of D.cells) if (ours[c.pin] !== theirs[c.pin]) {
-      diff = `${c.name} at ${bits.toString(2).padStart(10, "0")}: ours ${ours[c.pin]}, CUPL ${theirs[c.pin]}`
+      diff = `${c.name} at ${bits.toString(2).padStart(11, "0")}: ours ${ours[c.pin]}, CUPL ${theirs[c.pin]}`
       break
     }
   }
-  check(diff === null, "CUPL v3lane.jed: matches our fuse map over all 1,024 inputs", diff ?? "")
+  check(diff === null, "CUPL v3lane.jed: matches our fuse map over all 2,048 inputs", diff ?? "")
 }
 
 console.log(`      ${D.partNo} ${D.name}  ${a.usage.filter((u) => u.pin >= 14).length} macrocells of 10, ` +

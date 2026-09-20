@@ -12,6 +12,40 @@ there.
 
 ---
 
+## 0. ⭐⭐ BUILT, 2026-09-19 — and not where this document expected
+
+**The key is in the card.** A copy whose source byte is **zero** does not write that
+byte, so the destination keeps its background: a full-colour transparent blit at the
+engine's rate (~349 µs for a 16 × 16 sprite) where software costs **a pass a colour**
+(plan §5's sprite `WMODE`, ~244 µs each).
+
+| | as built |
+|---|---|
+| the compare | **one 74HC4078**, an 8-input NOR on the card's internal data bus. The byte about to be written is on IDB for the whole write access — the posted-write `'574` drives it — so the compare has the access to settle in and needs **no pipeline register** |
+| the skip | **`v3lane`'s byte enables**: a keyed write enables no byte, so the SRAM writes nothing |
+| what arms it | ⭐ **`WMODE` 11.** Sprite mode already means "transparent" to the span writer, so it means the same to the copy engine; any other `WMODE` copies index 0 like any other byte |
+| the key's value | ⛔ **fixed at index 0**, not a register |
+| the cost | **+1 DIP-14** (45 ICs, still places on 24 cm), one input pin on `v3lane`, and four of its byte-enable terms. ⭐ **`v3ptr` is untouched** |
+
+⛔ **THREE OF THIS DOCUMENT'S CONCLUSIONS WERE WRONG, and the fitter and the packer
+said so:**
+
+1. §7.2 priced a **`74HC688`** at "+1 package" and called it the right shape. It is a
+   DIP-20, and `check:place` refuses it — it pushes a sprite `'165` off the board. A
+   DIP-14 fits, which is what makes the key **fixed** rather than programmable. ⚠ The
+   package count was never asked of the packer.
+2. §7.2 and §7.3 put the compare's result on **`v3ptr`**, "one pin into `v3ptr` and one
+   literal on that term". `v3ptr` refused it **twice** — with a `CCTRL` enable bit
+   (one cell, one pin) and then with `WMODE` arming it (no new cell at all, one pin and
+   two terms): *"Design does not fit"* at 124/128 with every LAB at 39 of 40 inputs.
+   The byte enables were the way in, and they are `v3lane`'s.
+3. §7.2's timing rule — compare during the *read* access and gate the write an access
+   later — is real but does not apply: comparing what the `'574` is **already driving**
+   through the write access has ~20 ns of slack and no register.
+
+⭐ **What this document got right** is the order. The key was worth nothing while a
+copy cost 788 µs, and it went in the week the copy came down to 344 (§7.1).
+
 ## 1. What it costs in silicon
 
 From `demo-report.md` §10.5, which stands:
@@ -245,7 +279,7 @@ along with two more estimates in §7.
 | ⭐ **the per-copy work itself** (§7.1) | ⭐ **built 2026-09-19**: the register poll the pin already does, the block copy into `VG.CpBlk`, the `VG.CpA` round trip and the walk's arithmetic — **698 → 344 µs a copy, size-independent**, and the engine's own time now overlaps the next rectangle's set-up |
 | a **string** cache in the margin (§3.2) | ⛔ not built, and the first thing that would pay |
 | the **hardware descriptor walker** (§7.1.1) | ⛔ not built — and the CPU spends more building a VRAM descriptor (91.6 µs) than writing the registers it replaces (~33 µs), so it only pays for **persistent** lists or for the concurrency. ⚠ At 344 µs a copy the case for it is weaker again: ten sprites fit in half a frame without it |
-| the **colour key** itself | ⛔ not built, no fit, not in `plan.md`. §7.2 prices it at 1 pin + ~2 macrocells + a `74HC688`, and §7 has the real utilisation now |
+| the **colour key** itself | ⭐ **built 2026-09-19** — §0. A `74HC4078`, `v3lane`'s byte enables, armed by `WMODE` 11, keyed on index 0 |
 | more hardware sprites (§6.4) | ⛔ not built — the answer to genre C, which the key does not serve |
 
 ⚠ **Two gaps in the gates, not in the code**: the V3 IRQ-masked stretch that

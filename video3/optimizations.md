@@ -124,15 +124,17 @@ spare) and **no pins there** (64/64). ⚠ Its case is weaker now — the win is
 concurrency and a persistent list, not the register writes, and ten sprites already
 fit in half a frame.
 
-## 5. The colour key — fourth, and cheap when it arrives
+## 5. ⭐ CLOSED 2026-09-19 — the colour key
 
-[`keyed-copy.md`](docs/keyed-copy.md) §7.2 prices it three ways; the `74HC688` version
-is **one pin into `v3ptr` and one literal on `VWE`**, plus a package the board has to
-find. ⚠ §7.2's timing rule: the compare cannot sit in series inside the 72 ns write
-access — it runs during the read access and gates the write one access later, which
-makes it a pipelined change. ⛔ It was worth nothing while a copy cost 788 µs; at **344 µs** (entry 4) that
-objection is gone, and this is now the front of the hardware queue — ⚠ behind a fit
-of `v3ptr`, which is where it lands.
+Built: an 8-input NOR (`74HC4078`, +1 IC — 45, and it still places on 24 cm) on the
+card's internal bus, `v3lane`'s byte enables dropping for a keyed write, armed by
+`WMODE` 11, keyed on index 0. A full-colour transparent blit at ~349 µs a 16 × 16
+sprite, where software costs a pass a colour.
+
+⛔ **Not where this queue said it would land.** `v3ptr` refused it twice — with a
+`CCTRL` enable bit, and then with `WMODE` arming it and no new cell at all — and the
+packer refused the `74HC688` that a *programmable* key needs, which is why the key is
+fixed. [`keyed-copy.md`](docs/keyed-copy.md) §0 has the three corrections.
 
 ## 6. More hardware sprites
 
