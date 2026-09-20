@@ -156,7 +156,7 @@ but for a different reason than it gave.
 |---|---|
 | 256 simultaneous colours, a byte a pixel | plan §3 — the thing the other card cannot do at all |
 | a playfield that scrolls for one register write, both axes, with ring wrap | plan §8.1, pixel-exact in `v3card_tb` at every fine phase |
-| ⭐ **18 full-colour actors a frame** in bitmap mode | `run-v3mv.sh`, keyed blits interleaved with their restores, 0.480 ms an actor of a 14.3 ms frame |
+| ⭐ **19 full-colour actors a frame** in bitmap mode | `run-v3mv.sh`, keyed blits interleaved with their restores, 0.467 ms an actor of a 14.3 ms frame. It was 18 until `SS.Scroll` took 0.77 ms of the frame back (entry 9); **21** if the game commits its own scroll in the blank |
 | tile mode for long levels: a map cell is a byte, and an **animated tile is one write that changes every instance** | plan §2.4 |
 | a copy at 4.05 MB/s, 183 µs a rectangle through the card's registers | `optimizations.md` 4 |
 
@@ -191,7 +191,40 @@ reachable today — that is what `mvania` is. Monsterland itself, long levels wi
 cast of smooth sprites, wants the sprite working in tile mode and then more than one
 of them, and the second is a partition change on the part that refuses.
 
-## 8. Smaller things
+## 8. ⛔ The per-frame OS call — 1.05 ms of every frame, and it is not the card's
+
+**CLOSED IN PART 2026-09-19, and what is left is NitrOS-9's.** `mvania`'s scroll
+went through `SS.Batch` at **1.90 ms a frame** — 13% of a 14.3 ms frame for four
+register writes and two tags, bigger than every actor restore put together. The
+marks said where, and only 0.93 ms of it was anything a driver does:
+`FromCallerX`'s `F$Move` 486 µs, validating the records 160 µs, building them
+106 µs, the `VG.BtOn` handshake 73 µs, the `F$Sleep` on a pending batch **0**.
+`SS.Scroll` ($D5), specified in `defs/arm6309.d` since P1 and implemented
+nowhere, takes all of that out: **1.13 ms**.
+
+**What is left is 1.05 ms of IOMan, SCF and the kernel** — 654 µs in, 392 µs out
+— for a call that hands the driver twenty bits. That is 7.3% of a frame, it is
+paid by *every* per-frame driver call on this machine, and no card change
+touches it.
+
+| the same commit, four ways | ms a frame | most actors that fit | tears? |
+|---|---|---|---|
+| `SS.Batch`, four `BT.Reg` + `BT.Tags` | 1.90 | 18 | no |
+| ⭐ `SS.Scroll`, the registers | **1.13** | **19** | no |
+| the exclusive owner writing the card in the blank it already waited for | **0.04** | **21** | no — `VSTAT` b6 is read back first |
+| the exclusive owner writing the card wherever the raster is | 0.043 | — | ⛔ **yes**, 616 writes of 630 in the picture |
+
+**What it would take to go further.** Either an IOMan/SCF fast path for a
+status call that passes only registers — a kernel change, and the wrong tree —
+or the third row, which is a *game engine* technique and not a driver one:
+the frame poll returns twelve lines into a forty-nine-line blank, so an
+exclusive owner has ~1.1 ms of blank it has already paid for. `mvania` mode b8
+does it and misses the blank **0 times in 495 frames** at any actor count that
+fits the budget (and declines the write, rather than tearing, when it does not).
+⚠ It cannot carry the recording tags — `VG.MkCam` and `VG.MkHero` are in the
+system map — so it is a measurement mode until a game needs no tags.
+
+## 9. Smaller things
 
 | | |
 |---|---|

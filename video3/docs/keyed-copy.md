@@ -132,12 +132,36 @@ statement is:
 |---|---|
 | engine time for the two copies | **0.25 ms** |
 | ⛔ as two separate `SS.Copy` calls | **11.6 ms — worse than compositing it** |
-| batched, one commit | the batch's cost, **which has not been measured either** |
+| batched, one commit | **1.90 ms**, measured 2026-09-19 |
 
-⚠ **So §3.1 is not proven.** It is plausible and it is the right shape, and it
-now rests on a second unmeasured number rather than the one §3.2 retired. The
-bench that would settle it is `v3cpyb` again, issuing its copies through
-`SS.Batch` instead.
+⛔ **AND THE 1.90 ms IS NOT THE BATCH — IT IS THE CALL.** `mvania`'s scroll
+batch is four `BT.Reg` records and a `BT.Tags`, twenty bits of scroll and two
+tag words, and the marks split it (`bench/README.md`, `run-v3mv.sh`'s
+`--blank` ROM):
+
+| where `SS.Batch`'s 1.94 ms went (instrumented; 1.90 without the marks) | µs | |
+|---|---|---|
+| IOMan, SCF and the SetStat dispatch, inbound | 654 | ⛔ not ours |
+| the same path, outbound | 392 | ⛔ not ours |
+| `FromCallerX` — one `F$Move` of 17 bytes out of the caller's map | 486 | |
+| walking the records to validate them | 160 | |
+| building them in the caller | 106 | |
+| `XBusy`, the `VG.BtOn` handshake, `XFree` | 73 | |
+| the `F$Sleep` on a batch still pending | **0** | never taken: the scene's own frame poll has already let the last one commit |
+
+⭐ **So the answer was `SS.Scroll` ($D5), which was specified in
+`defs/arm6309.d` and implemented nowhere** — the OS tree's own version of
+`check:reach`'s *open*. It carries the same twenty bits in `X`, `Y` and `U`,
+so there is nothing to move and nothing to walk, and it commits through the
+same door: `VG.BFlag`'s `BF.HScr`/`BF.VScr` pair, which `vidsvc.asm` writes in
+the blank. **1.90 ms → 1.13 ms**, and the rest of it is IOMan.
+
+⚠ **Which makes the per-frame OS call the floor, not the batch.** An exclusive
+owner that writes the two registers itself — inside the blank its own frame
+poll has already waited for, with `VSTAT` b6 read back to prove it is still
+there — pays **0.04 ms** (`mvania` mode b8, measured, 0 misses in 495 frames
+that fit the budget). On this machine a driver call costs about a
+fourteenth of a frame whatever it carries.
 
 ### 3.2 ⭐⭐ Text compositing in a GUI — the strongest case, and it is measured
 

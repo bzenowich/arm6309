@@ -264,6 +264,7 @@ The owner has:
 | `SS.MapWr` | a rectangle of map codes, `WPTR` reloaded where the ring's 128 columns wrap |
 | `SS.TBank` | `TILEBASE` in the next blank |
 | `SS.Batch` | records the next VBL commits, in order, first thing in the service: register writes (the scroll pairs, the bases), puts, pokes (a byte each at many addresses, one `WPTR2` load), and two tags for `VG.MkCam` and `VG.MkHero`. A batch waiting for its blank makes the next one wait (`VG.MkMiss` counts it) |
+| ⭐ `SS.Scroll` | **`SS.Batch`'s fast path, and what a scrolling game calls every frame**: `X` = `HSCROLL`, `Y` = `VSCROLL`, `U` = the tag for `VG.MkHero` (`VG.MkCam` := `X`). It commits through `VG.BFlag`'s `BF.HScr`/`BF.VScr` pair — the same one CoArm's own scroll uses and the same blank — and the pair is set under the IRQ mask so a service cannot take `H` from one call and `V` from the next. No `F$Move`, no records to walk and **no wait**: a shadow is last-write-wins, where a batch is a buffer the next one has to queue behind. **1.90 ms → 1.13 ms** a frame on `mvania` (`video3/bench/run-v3mv.sh`, modes 209 and 81) |
 | `SS.FrmWait`, `SS.FrmSig` | sleep until a VBL is served (X := the count), or a signal every *n* frames. ⚠ `SS.FrmSig` is built and no run exercises it. ⭐ **On video3 the service also writes the count's low byte into the card's spare register** (`plan.md` §10's `+$1F`), so a process holding the screen reads a frame end instead of calling: the call costs ~1.4 ms, which is a tenth of a frame |
 
 ⭐ **SCF hands the driver a whole RUN of printable characters on video3**
@@ -329,7 +330,7 @@ picture; `BT.Poke`, and committing the batch before the palette, fixed that.
 | | |
 |---|---|
 | GetStat | `SS.Ready`, `SS.EOF`, `SS.Mouse` (ArmIO); `SS.ScSiz`, `SS.ScTyp`, `SS.FBRgs`, `SS.Cursr` (CoArm) |
-| SetStat | `SS.SSig`, `SS.Relea`, `SS.FrmWait`, `SS.FrmSig`, `SS.Batch`, `SS.TileLd`, `SS.MapWr`, `SS.TBank`, `SS.CFont` (ArmIO); `SS.Raster`, `SS.RastOff`, `SS.Excl` (CoArm). The codes are `defs/arm6309.d`'s |
+| SetStat | `SS.Scroll`, `SS.SSig`, `SS.Relea`, `SS.FrmWait`, `SS.FrmSig`, `SS.Batch`, `SS.TileLd`, `SS.MapWr`, `SS.TBank`, `SS.CFont` (ArmIO); `SS.Raster`, `SS.RastOff`, `SS.Excl` (CoArm). The codes are `defs/arm6309.d`'s. ⚠ `SS.Scroll` is tested **first** in ArmIO's dispatch: it is the one a game makes every frame, and every `cmpa` in front of it is charged to the frame budget |
 
 ## ⭐ The console's font, changed under the text (`SS.CFont`)
 

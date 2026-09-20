@@ -15,6 +15,7 @@ OUT/sheet-N.png, one tile every SHEET_EVERY seconds of machine time.
 accounted for, the sweep's steps all reached, and - for the merged run -
 fewer rectangles than actors.
 """
+import bisect
 import os
 import sys
 
@@ -29,6 +30,12 @@ import frames as fr  # noqa: E402
 M_FRAME, M_REST, M_LOGIC, M_DRAW, M_SCROLL = 0x10, 0x11, 0x12, 0x13, 0x14
 M_LIST = 0x15                       # the restore list is decided; the copies start
 M_STEP0, M_POLL0, M_ACT0 = 0x20, 0x40, 0x80
+M_NOBLK = 0x2E                      # b8: the blank had passed, nothing written
+# ⭐ THE BLANK GATE's marks, and they exist only in a -DBTMARK=1 ROM
+# (defs/armvid.d).  $3E is vidsvc.asm's VcSvc committing the frame batch's
+# scroll pair, $38 is VcBatch committing SS.Batch's records, $3A is mvania
+# writing HSCROLL and VSCROLL itself in mode b8.
+M_VCSVC, M_VCBATCH, M_SCENEW = 0x3E, 0x38, 0x3A
 BUDGET_MS = 14.3                    # VMODE 00, keyed-copy.md 6.1
 SHEET_EVERY = float(os.environ.get("SHEET_EVERY", "0.5"))
 COLS, ROWS = 5, 6
@@ -43,7 +50,9 @@ def mode_name(v):
         "no restores" if v & 4 else
         ("one rectangle an actor" if v & 1 else "merged restores"),
         "SS.CopyN" if v & 2 else "card registers",
-        "scroll by register" if v & 8 else "SS.Batch scroll",
+        "scroll by register (it tears)" if v & 8 else
+        ("scroll in the blank, no call" if v & 0x100 else
+         ("SS.Batch scroll" if v & 0x80 else "SS.Scroll")),
     ])
 
 
@@ -83,6 +92,98 @@ def read_marks(path):
             cur["waited"] = v - M_POLL0
     if cur and "scroll" in cur:
         yield cur
+
+
+def blanks(path):
+    """marks.txt as three lists: VBLANK's rises, the first active lines, and
+    the (t, code) marks.  The emulator writes V when the raster reaches the
+    first blanked line and A at the first active line of the next frame, so
+    [V, A) IS the blank."""
+    V, A, M = [], [], []
+    for line in open(path):
+        a, tag = line.split()
+        t = int(a)
+        if tag == "V":
+            V.append(t)
+        elif tag == "A":
+            A.append(t)
+        elif tag[0] == "M":
+            M.append((t, int(tag[1:])))
+    return V, A, M
+
+
+def in_blank(V, A, t):
+    """Is t inside a blank?  None if the recording cannot say (before the
+    first V, or after the last A)."""
+    i = bisect.bisect_right(V, t) - 1
+    if i < 0:
+        return None
+    j = bisect.bisect_right(A, V[i])
+    if j >= len(A):
+        return None
+    return t < A[j]
+
+
+def blank_gate(outs, claim):
+    """⛔ THE TEARING GATE.  A scroll register written while the raster is
+    in the picture tears, which is the whole reason SS.Batch exists and the
+    whole risk of making it cheaper - so every commit's timestamp is read
+    against marks.txt's own V and A.
+
+    ⭐ AND IT HAS A NEGATIVE CONTROL.  mvania mode b3 writes the same two
+    registers wherever the raster happens to be; if THAT run's writes also
+    came out 'in the blank', the check would be measuring nothing.  A blank
+    is 49 lines of 449, so a check that cannot fail would still read ~11%.
+    """
+    for out in outs:
+        name = os.path.basename(out.rstrip("/"))
+        mp = os.path.join(out, "marks.txt")
+        if not os.path.exists(mp):
+            claim("%s: marks.txt exists" % name, False)
+            continue
+        V, A, M = blanks(mp)
+        mv = int(name[1:]) if name[1:].isdigit() else None
+        neg = mv is not None and (mv & 8)          # b3: the tearing control
+        # ⛔ A RUN WITH NO COMMIT MARKS MAKES NO CLAIM, and no claim reads
+        # exactly like a passing one (CLAUDE.md's seventh trap).  The ROM has
+        # to have been built with -DBTMARK=1 or this whole gate is vacuous.
+        seen = sum(1 for _, v in M if v in (M_VCSVC, M_VCBATCH, M_SCENEW))
+        claim("%s: the recording HAS commit marks - the ROM is the "
+              "instrumented one (%d)" % (name, seen), seen > 0)
+        for code, what in ((M_VCSVC, "VcSvc commits the scroll pair"),
+                           (M_VCBATCH, "VcBatch commits SS.Batch's records"),
+                           (M_SCENEW, "mvania writes HSCROLL/VSCROLL itself")):
+            ts = [t for t, v in M if v == code]
+            ins = [t for t in ts if in_blank(V, A, t)]
+            if not ts:
+                continue
+            if code == M_SCENEW and neg:
+                claim("%s: the b3 control DOES write in the picture - the "
+                      "gate is not vacuous (%d of %d writes were not in a "
+                      "blank)" % (name, len(ts) - len(ins), len(ts)),
+                      len(ins) * 4 < len(ts))
+                continue
+            claim("%s: %s IN THE BLANK, every time (%d of %d)"
+                  % (name, what, len(ins), len(ts)), len(ins) == len(ts))
+        if mv is not None and (mv & 0x100):
+            # ⚠ b8 declines the write when the blank has gone.  That is
+            # correct and it is also a cost: the frame keeps the last scroll.
+            # It may not happen while the frame still fits its budget.
+            nact, miss, work, t0 = None, {}, {}, None
+            for t, v in M:
+                if M_ACT0 <= v < M_ACT0 + 64:
+                    nact = v - M_ACT0
+                elif v == M_FRAME:
+                    t0 = t
+                elif v == M_SCROLL and nact is not None and t0 is not None:
+                    work.setdefault(nact, []).append(t - t0)
+                elif v == M_NOBLK and nact is not None:
+                    miss[nact] = miss.get(nact, 0) + 1
+            fits = [n for n in work
+                    if sum(work[n]) / len(work[n]) / 1e9 < BUDGET_MS]
+            bad = sorted(n for n in fits if miss.get(n))
+            claim("%s: b8 never missed the blank at an actor count that fits "
+                  "the frame (%s)" % (name, bad or "none did"), not bad)
 
 
 def budget(marks):
@@ -185,8 +286,11 @@ def sheets(out, marks_by_t):
 
 def main():
     outs = sys.argv[1:]
+    gate = outs and outs[0] == "--blank"
+    if gate:
+        outs = outs[1:]
     if not outs:
-        print("usage: checkv3mv.py OUT [OUT2 ...]")
+        print("usage: checkv3mv.py [--blank] OUT [OUT2 ...]")
         return 2
     fail, n = 0, 0
 
@@ -196,6 +300,11 @@ def main():
         print("%s  %s" % ("ok   " if ok else "FAIL ", what))
         if not ok:
             fail += 1
+
+    if gate:
+        blank_gate(outs, claim)
+        print("\n%d claims, %d failed" % (n, fail))
+        return 1 if fail else 0
 
     summary = {}
     for out in outs:

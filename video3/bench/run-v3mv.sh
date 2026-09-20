@@ -1,7 +1,7 @@
 #!/bin/sh
 # ⭐ THE METROIDVANIA SCENE, AND WHAT IT COSTS.
 #
-#   sh video3/bench/run-v3mv.sh            ~13 min.  OUT=dir, FPS=n, MODES=...
+#   sh video3/bench/run-v3mv.sh            ~20 min.  OUT=dir, FPS=n, MODES=...
 #
 # video3/docs/keyed-copy.md §6.3 says a metroidvania is this card's natural
 # genre and that the binding constraint was the per-copy cost, which
@@ -28,8 +28,14 @@
 #   m19  keyed blits through SS.CopyN, the public path
 #   m16  keyed blits with the restores MERGED: what the merge is worth
 #   m0   sprite-WMODE draws with the restores merged
-#   m9   sprite-WMODE, scroll written straight at the card: what SS.Batch costs
+#   m9   sprite-WMODE, scroll written straight at the card: the floor
 #   m4   no restores at all - the control that prices the restores
+#   m209 ⭐ the scene again with the scroll through SS.BATCH's records:
+#        what the SS.Scroll fast path (mode b7 clear, the default since
+#        2026-09-19) is worth, which is 0.77 ms of a 14.3 ms frame
+#   m337 ⭐ the scene again with the scroll committed BY THE COMMAND, in
+#        the blank its own frame poll already waited for: the OS call out
+#        of the frame altogether, which is the other 1.05 ms
 #
 # ⛔ Its exit code is the answer, and `Error #` on the console fails it.
 # ⭐ AND THE CORRECTNESS GATE IS THE VRAM DUMP, not the timings: the scene
@@ -43,7 +49,7 @@ cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
 OUT=${OUT:-/tmp/arm6309-v3mv}
 FPS=${FPS:-45}
-MODES=${MODES:-"81 65 17 1 19 16 0 9 4"}
+MODES=${MODES:-"81 65 17 1 19 16 0 9 4 209 337"}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-300}
 mkdir -p "$OUT"
 
@@ -109,6 +115,38 @@ if cmp -s "$OUT/k49/vram.bin" "$OUT/k51/vram.bin"; then
 else
   echo "FAIL  the keyed scene differs between vidcpy3's SS.CopyN and the card's registers"
   fail=1
+fi
+
+# ⛔ AND THE TEARING GATE, which is the risk this whole path carries: a
+# scroll register written while the raster is in the picture TEARS, and
+# that is the only reason the commit is the VBL service's at all.  It is
+# measurable rather than a matter of opinion - the emulator writes VBLANK's
+# rise (V) and each frame's first active line (A) into marks.txt beside the
+# marks - so a ROM built with -DBTMARK=1 (defs/armvid.d) marks every commit
+# and checkv3mv.py --blank reads each one against the blank it claims to be
+# in.  ⭐ WITH A NEGATIVE CONTROL: mode 9 writes the registers wherever the
+# raster is, and if ITS writes came out in the blank too the gate would be
+# measuring nothing.
+# ⚠ The instrument costs ~50 us a frame, so these runs are NOT the
+# timings; they are short (FPS=6) and they exist for the claim.
+if [ -z "$NOTEAR" ]; then
+  BT="$OUT/btmark"
+  mkdir -p "$BT"
+  V3=1 AFLAGS_MORE=-DBTMARK=1 sh software/nitros9/mkrom.sh "$BT" > "$BT/mkrom.log" 2>&1 || {
+    tail -20 "$BT/mkrom.log"; echo "FAIL  the instrumented ROM did not build"; fail=1; }
+  TDIRS=""
+  for m in 81 209 337 9; do
+    D="$OUT/t$m"
+    rm -rf "$D"; mkdir -p "$D"
+    printf 'iniz w5\rmvania %d 6 %d >/w5\recho DONE-arm6309\r' "$m" "${FIX:-1393}" > "$D/typed.txt"
+    (cd "$D" && SERIAL_IN=typed.txt SERIAL_GATE="DD:" SERIAL_TYPE=60 SERIAL_THINK=700 \
+       SERIAL_STOP="$STOP" WILD=1 VIDEO3=1 MARKS=1104 \
+       "$OUT/emu" "$BT/arm6309_rom.bin" . 120 > /dev/null 2> emu.log) || true
+    rm -f "$D/frames.bin"
+    grep -q "SERIAL_STOP seen" "$D/emu.log" || { echo "FAIL  tear gate $m did not finish"; fail=1; }
+    TDIRS="$TDIRS $D"
+  done
+  python3 video3/bench/checkv3mv.py --blank $TDIRS || fail=1
 fi
 
 # ⭐ One call, with the modes in order: checkv3mv.py makes the contact sheets

@@ -46,15 +46,18 @@ python3 software/nitros9/tools/mktbox.py "$OUT/tbox.bin" > "$OUT/tbox.log" || { 
 # built against the OTHER card's register offsets, which assembles, boots,
 # and writes VDATA to VSTAT. The flavour is stamped and a change forces the
 # clean.  (CLAUDE.md's stale-artefact trap, in a makefile.)
+# ⚠ AFLAGS_MORE is folded into the stamp for the same reason: it is assembler
+# flags (-DBTMARK=1, the SS.Batch instrument) that change the code without
+# changing a file, so a toggle has to force the clean too.
 REC="$NITROS9DIR/recipes/arm6309/l2"
-FLAV=${V3:+v3}; FLAV=${FLAV:-v1}
+FLAV=${V3:+v3}; FLAV=${FLAV:-v1}; FLAV="$FLAV${AFLAGS_MORE:+ $AFLAGS_MORE}"
 if [ "$(cat "$REC/.flavour" 2>/dev/null)" != "$FLAV" ]; then
   make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" clean >/dev/null 2>&1 || true
   rm -rf "$REC/.mods" "$REC/.lib"
   echo "$FLAV" > "$REC/.flavour"
 fi
 make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" SYSFILES="$SYSFILES" TBOXDATA="$OUT/tbox.bin" \
-  AFLAGS_EXTRA="${V3:+-DV3=1}" \
+  AFLAGS_EXTRA="${V3:+-DV3=1} $AFLAGS_MORE" \
   > "$OUT/build.log" 2>&1 || { grep -v '^lwasm\|^lwlink' "$OUT/build.log" | tail -20; echo "FAIL  the ROM did not build"; exit 1; }
 
 cp "$NITROS9DIR/recipes/arm6309/l2/arm6309_rom.bin" "$OUT/arm6309_rom.bin"

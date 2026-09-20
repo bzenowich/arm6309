@@ -7,6 +7,22 @@ Superseded claims from [`plan.md`](plan.md), [`signals.md`](signals.md),
 `CLAUDE.md`'s rule: **specs describe only the present design**, and a superseded
 utilisation figure is a number `check:docs` cannot distinguish from a live one.
 
+## `keyed-copy.md` §3.1 — "the batch's cost, which has not been measured either" (2026-09-19)
+
+§3.1's table ended on an unmeasured number and the section said so:
+
+> | batched, one commit | the batch's cost, **which has not been measured either** |
+>
+> ⚠ **So §3.1 is not proven.** It is plausible and it is the right shape, and it
+> now rests on a second unmeasured number rather than the one §3.2 retired. The
+> bench that would settle it is `v3cpyb` again, issuing its copies through
+> `SS.Batch` instead.
+
+**What settled it.** Not `v3cpyb` but `mvania`, whose scroll batch is the
+smallest `SS.Batch` there is: **1.90 ms a frame**, measured off `marks.txt`
+with `-DBTMARK=1`. The split is in §3.1 as it now stands, and it moved the
+question — 1.05 ms of the 1.90 is IOMan and SCF and belongs to no card.
+
 ## `plan.md` §2.2 and §10 — the attribute's lane, and the pointer's step (2026-09-19)
 
 The four-byte cell landed earlier the same day with **the code in lane 0 and the
