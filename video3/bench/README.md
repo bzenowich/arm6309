@@ -46,6 +46,23 @@ sh video3/bench/run-v3mv.sh            # nine runs, ~13 min. Its exit code is th
 | ⛔ The gate | **not the timings.** The scene ends by restoring every actor, and nothing but the actors ever writes ring rows 0-239 — so **the live page must then equal the clean page byte for byte**, which `checkv3mv.py` asserts against a `VRAMDUMP`. One pixel left behind by the merge, a dropped rectangle or a wrong source row fails it, where a timing run would call the same frame a good measurement |
 | The output | `checkv3mv.py` prints the budget per actor count and writes the **contact sheets** the scene is reviewed from |
 
+### ⭐ What the scene is for, and what it must show
+
+⛔ **THE SCENE IS THE CARD'S SHOP WINDOW, and the thing to show off is COLOUR.**
+video3's whole argument is a 64K × 16 LUT the picture addresses with a byte a pixel
+(plan §3) — 256 simultaneous colours out of 65,536 in bitmap mode, where the machine's
+other card has a 16-entry palette. The scene should look like it:
+
+| | |
+|---|---|
+| the room | a **256-colour** background, dithered with **Floyd–Steinberg** so the gradients and the texture read as photographic rather than as flat fills. `mkmvania.py` is where the art is made, so the dither belongs there |
+| the actors | **several DIFFERENT colourful sprites**, not one shape recoloured — the keyed copy blits full colour at the engine's rate (`keyed-copy.md` §0), and a three-colour blit is cheaper than a single software pass, so there is no reason for the cast to be monochrome |
+| ⚠ the one rule the art must keep | **index 0 is the key** and cannot be a visible colour anywhere in the room or the art. `mkmvania.py` asserts it |
+
+⚠ **The sweep is not the demo.** What is built ramps the actor count to find where the
+frame breaks, which is what the measurements needed; the fifteen seconds a viewer
+should see is a room traversed, not a stress test.
+
 ⭐ **`mvaniapal.asm` and `mvaniadat.asm` are generated** by `bench/mkmvania.py`
 and checked in beside the source that includes them; the room's geometry, the
 palette, the masks and the **keyed art** exist in that script and nowhere else.
