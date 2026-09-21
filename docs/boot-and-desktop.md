@@ -460,6 +460,36 @@ Everything in §3 is an application and belongs on the card.
    before building — `monster`'s bench already has the instrument (a store to `$FF2E`,
    timestamped in picoseconds).
 
-   **Order, if it is taken:** time the repaint; decide the palette question (renumber, or
-   give the engine its own blobs with 0 as the key); do the list rows and the icons; leave
-   the text alone.
+   ⭐⭐ **AND THE FIRST STEP IS NOT THE COPY ENGINE AT ALL — found 2026-09-21.**
+   `desk.asm` never sets **`F.Opaq`**. Its `ad` field is `1` (bold) at every call site, so
+   every list row and every title takes `tbox`'s **transparent** path: the `KEY` fill, the
+   run scan, and one `RowPut` per run. That *is* the ~395-calls-per-40-character-line
+   figure, and `run-v3text.sh` measured it at **41 % of the bill**.
+
+   `F.Opaq` is the toolbox's own answer and it has been there all along: the glyph writes
+   the ramp's own paper, so **a row becomes ONE run**. That is "pre-render the text
+   against the background it will sit on", done in software — with no glyph bank, no VRAM
+   upload, no palette renumbering and no engine. It applies exactly where the file manager
+   draws: the white list body (`R_WHITE`), the grey panel and the yellow tab. ⚠ It does
+   **not** apply over the desktop wallpaper or over an icon, because opaque text paints
+   its own background and would square off whatever is behind it.
+
+   ⛔ **And the arithmetic says a per-glyph blit would be SLOWER than that.** A copy costs
+   ~87 µs of setup whatever its size (`monster`'s measurement), so a 40-character title as
+   40 glyph copies is ~3.5 ms — against twelve `RowPut`s for an opaque line. **The engine
+   wins on big rectangles and loses on small ones**; a 12 px glyph is the wrong shape for
+   it. Where it would still win is the **32 × 32 icons**, which are irregular and
+   run-scanned today, and whole-row or whole-window fills. Not the type.
+
+   ⚠ **Two sizing notes** for whoever does build a bank: an OS-9 listing is **mixed case**
+   — `OS9Boot` sits beside `CMDS` and `DATA` — so a body alphabet is ~70 glyphs and not
+   64; and the bank must live in **VRAM**, because the copy engine is VRAM-to-VRAM, which
+   is a start-up upload the software path does not need.
+
+   **Order, if it is taken:**
+   1. ⭐ Set `F.Opaq` where the background is uniform and known, and **measure the repaint
+      before and after** with `monster`'s instrument (a store to `$FF2E`). This is one
+      flag and may close open item 7 on its own.
+   2. Only then ask whether the icons are worth a keyed blit — and if they are, decide the
+      palette question (renumber to key on 0, or give the engine its own blobs).
+   3. Leave the text to `F.Opaq`. It is already the cheaper mechanism.
