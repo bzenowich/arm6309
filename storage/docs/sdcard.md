@@ -1099,6 +1099,90 @@ driver" makes it sound. **Evaluate that before §12 step 6, not after.**
 on-disk structures and the CoCo-side tooling both assume 256, so it is a filesystem change
 rather than a driver change. Recorded as unexamined.)
 
+### 9.5 Booting from the card — where `OS9Boot` lives, and who decides
+
+⭐ **Built 2026-09-21.** Until then the card was a *second* drive: the OS came out of the
+ROM disk and `rbsd` mounted `/SD0` afterwards, so nothing on the card could be read before
+there was an OS to read it with. Booting **from** the card needs a reader that runs before
+that, and then a second one inside the kernel — `docs/boot-and-desktop.md` §2.
+
+#### Where `OS9Boot` lives: a contiguous run named by `DD.BT`/`DD.BSZ` in LSN 0
+
+**Decided: `os9 gen`'s own arrangement, and no new on-disk structure at all.**
+
+`RBF`'s volume header is LSN 0, which is the first 256 bytes of **SD block 0**. Two of its
+fields are exactly the "fixed block range recorded in a header in block 0" that
+`boot-and-desktop.md` §2 offered as the cheap option:
+
+| LSN 0 | Field | What it says |
+|---|---|---|
+| `+$15` | `DD.BT` | the first `RBF` sector of `OS9Boot`, 24 bits |
+| `+$18` | `DD.BSZ` | its length in bytes; zero means the *fragmented* form, where `DD.BT` points at a file descriptor instead |
+| **`+$F0`** | **the arm6309 boot signature** | **`"6309"` and a version byte** |
+
+**Why not the RBF path.** The alternative was a filesystem path — `/SD0/OS9BOOT` — walked
+from the root. It costs the ROM a directory walk and a file-descriptor parse, which is
+~300 bytes in an 8 KB page, and it costs the *kernel's* boot module the same code a second
+time. `DD.BT`/`DD.BSZ` cost neither: **NitrOS-9's own `boot_common.asm` already reads them**
+(it has done since 2005, and it handles both the contiguous and the fragmented form), and
+the ROM's probe needs only to see that `DD.BT` is not zero. **There is exactly one place the
+range is written down, and the thing that writes it is `os9 gen`** — the same tool the ROM
+disk is built with.
+
+**Why a signature as well, and why there.** `DD.BT` alone is a weak test: any four bytes
+can be non-zero. The signature is what says *this volume was blessed for this machine*.
+It sits at LSN 0 `+$F0` because `RBF` defines nothing above `DD.OPT`'s 32 bytes at `+$3F`,
+so it displaces no field and `os9 format` leaves it zero — which is what makes **a card
+that was formatted and never blessed read as not bootable** rather than as garbage. The
+four bytes are `"6309"`, the same four `software/boot/boot.asm` §11 looks for at `$8000`
+when it hands the machine to ROM page 1: one machine, one signature.
+
+⚠ **`format` on the machine itself un-blesses the card**, because `format.asm` writes the
+device descriptor's options into LSN 0's `DD.OPT` area and rewrites the header. That is the
+right behaviour — a reformatted card has no `OS9Boot` either — but it means a card is
+blessed by the *host* tools (`software/nitros9/mksddisk.sh`, `BOOT=<bootfile>`) and not by
+the machine. The rescue path is the ROM disk, which is why it stays bootable.
+
+#### The precedence: the card first, the ROM disk always
+
+**The rule, applied in two places and stated once:**
+
+> A card is booted from **iff** the socket says a card is present, §9.0's initialisation
+> completes with `CMD58` reporting `CCS` (SDHC/SDXC — §9.0.1), block 0 reads, its `DD.BT`
+> is non-zero and its signature is `"6309"` version 1. **Otherwise the ROM disk**, and
+> "otherwise" includes an empty socket, a card that will not initialise, an SDSC card, an
+> unformatted or unblessed volume, and a read that failed.
+
+| | |
+|---|---|
+| **`software/boot/boot.asm` §10b** | the boot ROM's reader: §9.0's init and §9.1's `CMD17` of block 0, ~640 bytes, no filesystem, no write path, **no block buffer at all** — the eight bytes the verdict needs are picked out of the stream and the other 504 are read and dropped. It drives §10a's dialog and **nothing else**; progress `$64` is a bootable card and `$65` a card that is not |
+| **`boot_sd.asm`** | the NitrOS-9 `F$Boot` module (`level2/arm6309/modules/`, 881 bytes of the loader's 896), providing `HWInit`/`HWTerm`/`HWRead` to `boot_common.asm`. It is `boot_romdisk`'s ROM-page reader with the card in front of it, and it applies the rule again from scratch |
+| ⛔ **and the ROM's answer is NOT handed on** | the two probes agree because the rule is the same, not because one told the other. The ROM's ran in a different map, on a different stack, before `krn` existed; a flag left in memory by one and read by the other would be two places to get the precedence wrong, and the ROM's picture has no authority over what the kernel loads |
+| ⭐ **and `boot_sd` says which it used** | one character through `D.BtBug`, between `krn`'s `tb` and `boot_common`'s `0`: **`s`** for the card, **`r`** for the ROM disk. ⛔ Without it "a shell appeared" is not evidence of anything — *the fallback works*, so a machine that silently ignored the card reaches the same prompt |
+| **How a bench asks for the ROM disk** | it puts no bootable card in the socket, which is what every bench written before this already did. `BOOTMOD=boot_romdisk` builds the ROM that cannot read a card at all, and is there so that "the card was used" can be tested against a build in which it cannot have been |
+
+⚠ **`/DD` does not move.** Only `OS9Boot` comes off the card; the system disk is still the
+ROM disk, and `/SD0` is still mounted beside it by `rbsd`. Making the card `/DD` is a
+separate decision about `init`'s default device and is **not taken here**.
+
+**`boot_sd` has no cache**, and the reason is not laziness: `RBF`'s sector is 256 bytes and
+the block is 512 (§9.4.1), so every sector read transfers a whole block and drops half of
+it. The bootfile is ~24 KB, so that is ~96 `CMD17`s and ~48 KB moved instead of 24 — about
+0.6 s on real hardware, once, at a moment when the alternative is 512 bytes of the system
+stack claimed at boot before anything has measured it. `rbsd` is the driver with the cache.
+
+| | |
+|---|---|
+| ⭐ **What runs it** | `sh software/nitros9/run-sdboot.sh` — **45 claims**, three card states × (a boot to a shell + a `reboot` through the ROM's own POST). It is the only bench in this repository that executes §10b |
+| ⛔ **The negative control** | the middle state: **a card that is present and readable and not bootable**. The machine must fall back, say `r`, and draw the question mark — and the run that proves the ROM's test *changed* is `$65` where the old card-detect test would have said `$61` |
+| ⭐ **And "it came off the card" is asserted, not assumed** | the bench puts a **different `OS9Boot`** on the card — the ROM's bootfile with the FIRQ stub's two modules appended — so `mdir` on the running machine names `FIRQDrv` and `FT0` with nothing having loaded them. The ROM disk's own bootfile is checked on the host for the same bytes, so the claim cannot pass on a ROM that happened to carry them |
+
+⚠ **The host emulator does not cold-start the boot ROM** — `software/demo/emu/machine.c`
+enters at `$8004` with boot.asm's handoff already applied — so §10b runs there only after a
+`reboot`, which is how that bench reaches it. In Verilog, `machine_tb`'s `disk` scenario is
+a cold start with the whole card (`machine3.v` `STORAGE = 1`) and a blessed image in the
+socket.
+
 ---
 
 ## 10. Period audit — and the exception
@@ -1294,7 +1378,14 @@ will experience**; every other number in this document is a component of it.
    **the known-good part should nonetheless be an SDHC in the 4–32 GB range**, which is
    where SPI-mode support is safest.
 
-4. **No NitrOS-9 driver exists** (§9.4), and writing one is a larger job than building the
+4. **CLOSED 2026-09-20 — the driver is `rbsd`** (§9.4), 983 bytes, and NitrOS-9 mounts
+   `/SD0` on it. ⭐ **And since 2026-09-21 the machine BOOTS off the card**: the ROM has
+   its own reader (§10b in `software/boot/boot.asm`) and `boot_sd` carries the kernel's
+   half. What this item said is kept below because its *reasoning* was sound and the
+   estimate was not — it read as a larger job than building the card, and the card was
+   eight ICs. What actually cost the time was neither: it was the two defects a machine
+   found and reading could not (§9.4's note).
+   ~~No NitrOS-9 driver exists, and writing one is a larger job than building the
    card — deblocking, a 512-byte write-back block cache, and flush-on-close and
    flush-on-media-change paths (§9.4.1). Unlike `serial.md`'s 6551 there is no compatible
    map to inherit. **Matching the CoCoSDC's register map would inherit its deblocking and
@@ -1360,6 +1451,23 @@ will experience**; every other number in this document is a component of it.
     hand-written board model `gal/verilog/storage_card.v`. ⚠ **What that does not
     establish**: nothing has been placed, programmed, or put in front of a real SD card,
     and every rate in §5 is still derived rather than measured — §12 steps 2–7.
+
+14. **⚠ A card can only be BLESSED by the host tools** (§9.5). `os9 gen` writes `DD.BT`
+    and `DD.BSZ` and `software/nitros9/mksddisk.sh` stamps the signature; the machine's
+    own `format` **un**-blesses a card, and there is no `os9gen` in the ROM disk's rescue
+    command set. So a machine on its own can make a *filesystem* on a blank card and fill
+    it, and cannot make it bootable. Whether that matters depends on whether this machine
+    is ever expected to be its own development host — which is a `machine.md` question,
+    not a storage one — but it is the reason the ROM disk's bootability is load-bearing
+    rather than a courtesy.
+
+15. **Whether `/DD` should follow `OS9Boot` onto the card** (§9.5). Today it does not:
+    the card boots the kernel and the ROM disk is still the system disk, so `startup`,
+    `/DD/CMDS` and the shell all come out of ROM even on a machine that booted from the
+    card. Making the card `/DD` is a change to `init`'s default device and to what a
+    blessed card has to carry, and it has not been designed. ⚠ It is also what would
+    make the fallback *visible* to a user rather than silent, because today the only
+    difference between the two boots is one character on the console.
 
 ---
 

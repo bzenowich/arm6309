@@ -63,6 +63,12 @@ for tb in $TBS; do
       W="$W -Wno-UNSIGNED -Wno-CMPCONST --timescale 1ns/1ps"
       SRC="$W machine3.v mainboard.v ../clkdec.v ../mmu.v u9.v u10.v"
       SRC="$SRC video3_card.v v3dot.v v3scan.v v3ptr.v v3host.v v3lane.v"
+      # ⚠ NAMED THOUGH v3machine LEAVES THE SLOT EMPTY (machine3.v STORAGE = 0,
+      # so the card is in a dead generate branch): Verilator resolves an
+      # instantiated module by searching the current directory, and a file it
+      # found rather than was given is the 2026-09-11 trap this case list
+      # exists to close.
+      SRC="$SRC storage_card.v sdbus.v sdeng.v sd_model.v"
       SRC="$SRC ../../vendor/mc6809/mc6809e.v ../../vendor/mc6809/mc6809i.v" ;;
     *)         SRC="$CARD" ;;
   esac

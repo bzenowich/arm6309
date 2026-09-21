@@ -30,6 +30,8 @@
 *   8. tile mode - a tilemap on the four-byte cell stride
 *  10. reads VRAM back, through the window and through VDATA
 *  10a. ⭐ PUTS UP THE BOOT DIALOG -- docs/boot-and-desktop.md 1
+*  10b. ⭐ READS THE SD CARD -- storage/docs/sdcard.md 9.0, 9.1 and 9.5 -- to
+*       decide which of 10a's three pictures is the true one
 *  11. hands the machine to a program in ROM page 1, if there is one
 *
 * The picture is the point: machine_tb samples RGB at the connector for a whole
@@ -94,13 +96,22 @@ CT_TILE EQU     $08             MODE 10 - tile (plan 2.4)
 CT_ON   EQU     $80             display ON, WMODE 00, VMODE 00 = 640x200 @ 70 Hz
 
 *--------------------------------------------------------------- the card ---
-* storage/docs/sdcard.md 6.2 -- four bytes at $FF58.  10a reads ONE of them,
-* and only the one with no side effect: SDSTAT is read-only and reading it
-* starts nothing (6.3).  ⛔ SDDATA is not touched here at all -- a read of it
-* returns the previous burst's byte AND starts another, which is exactly the
-* speculative access 6.2 forbids.
-SDSTAT  EQU     $FF59
+* storage/docs/sdcard.md 6.2 -- four bytes at $FF58.  10a reads the one with
+* no side effect (SDSTAT is read-only and reading it starts nothing, 6.3) and
+* 10b drives the other three.
+*
+* ⛔ SDDATA IS NEVER TOUCHED SPECULATIVELY.  A read of it returns the previous
+* burst's byte AND STARTS ANOTHER, so every access below is one 10b's
+* sequences meant to make; there is no "have a look at the port" anywhere in
+* this ROM, and there must not be one added.
+SDDATA  EQU     $FF58           R: the previous burst's byte; W: MOSI + a burst
+SDSTAT  EQU     $FF59           R only
+SDCTRL  EQU     $FF5A           W only
+SDMOSI  EQU     $FF5B           W only, and it triggers nothing
+SD_BUSY EQU     $01             SDSTAT b0: a burst is OWED or running (6.3)
 SD_CD   EQU     $02             b1: 1 = a card is in the socket
+SD_CS   EQU     $01             SDCTRL b0: 1 asserts the card's /CS
+SD_FAST EQU     $02             b1: 1 = 12.588 MHz, 0 = the 393 kHz init clock
 
 *-------------------------------------------------------------- the machine --
 VRAMWIN EQU     $2000           logical block 1 -- 8 KB of VRAM at a time
@@ -162,6 +173,12 @@ P_DLGF  EQU     $61             ... "found": SDSTAT says a card is in the socket
 P_DLGQ  EQU     $62             ... the Mac's blinking question mark: no disk
 P_NOTB  EQU     $63             ⭐ no toolbox in the ROM - the dialog is SKIPPED
 P_BADTB EQU     $E6             ... the toolbox returned an error; B said which
+* 10b's verdict, and it is written BEFORE the picture it chooses.  ⭐ $62 is
+* reached two ways now and a bench has to be able to tell them apart: a socket
+* with nothing in it, and a card that is there and is not bootable.  The
+* second is the Mac's actual question mark and is the state 10b added.
+P_SDOK  EQU     $64             ⭐ CMD58 said CCS and block 0 carries "6309"
+P_SDBAD EQU     $65             ⛔ a card is in the socket and it is not bootable
 
 *------------------------------------------------------------- geometry ------
 * VMODE 00 is 640x200.  A VRAM row is 1024 bytes (plan 2.5), so a row is 1024
@@ -1347,10 +1364,11 @@ vri     lda     VDATA
 * below reads them again, and they are SIMM bytes that the remap only HIDES, so
 * they are all still there when block 6 comes back.
 *
-* ⭐ AND THE MACHINE HAS NO SD READER YET.  docs/boot-and-desktop.md 2
-* specifies one and it is a separate job, so "found" is driven by the one thing
-* the machine already knows: SDSTAT's card-detect bit.  `bootchk` below is the
-* hook where "...and it is bootable" goes.
+* ⭐ AND SINCE 2026-09-21 THE MACHINE HAS AN SD READER: 10b, below.  "Found"
+* is no longer SDSTAT's card-detect bit -- it is a card that answered CMD58
+* with CCS and whose block 0 carries the boot signature sdcard.md 9.5 defines.
+* `bootchk` is where the two meet, and the question mark now means what it
+* means on a Macintosh: there IS a disk and it is not a system disk.
 *
 * ⛔ AND A COMMENT ON A pshs/puls LINE MUST NOT START WITH A COMMA.  A09 has no
 * comment delimiter and keeps parsing a REGISTER LIST across the whitespace, so
@@ -1421,10 +1439,20 @@ F_OPAQ  EQU     4               the glyph draws its own paper: one run a row
 
 * Where the dialog is.  Screen pixels: the origin below is (0, 0), so a
 * parameter IS a screen coordinate and machine_tb can state these numbers.
-WINX    EQU     176
-WINY    EQU     56
+* ⭐ THE DIALOG IS 640x480, THE SAME MODE THE DESKTOP USES.  VMODE 11 is
+* 640x480 progressive; VMODE 00, which the rest of the POST paints in, is
+* 640x200 shown as 400 doubled lines.  Drawing the dialog in 00 made it a
+* 400-line picture that a 480-line screen letterboxes - it read as stretched
+* beside the desktop, which is the only other thing a person sees.  Ending
+* the POST in the desktop's mode also means NO MODE CHANGE at the handover to
+* NitrOS-9: what CoArm finds is what the ROM left.
+CT_ON48 EQU     $83             display on, WMODE 00 direct, VMODE 11
+DLGSCRH EQU     480             and the screen the dialog centres itself in
+
 WINW    EQU     288
 WINH    EQU     96
+WINX    EQU     (640-WINW)/2
+WINY    EQU     (DLGSCRH-WINH)/2
 CONX    EQU     WINX+5          TWin's content area: X+5 Y+5 W-10 H-10
 CONY    EQU     WINY+5
 CONW    EQU     WINW-10
@@ -1503,7 +1531,11 @@ dlgrun  sts     dstksv          ⛔ the stack leaves block 6 - see the header
         std     COG+CG_TTOP     the ring row of screen row 0: VSCROLL is 0
         ldd     #639
         std     COG+CG_CX1
-        ldd     #199
+        ldd     #DLGSCRH-1      ⚠ 479, not 199: the clip is INCLUSIVE and in
+*                               SCREEN rows, so in VMODE 00's 200 it stopped
+*                               the window dead - BlitRow drops a row outside
+*                               it and FillC clamps to it, so the dialog drew
+*                               its frame and nothing else
         std     COG+CG_CY1
         ldd     #$FFFF          ⛔ MapB is a COMPARE against CG.WinB: a stale
         std     COG+CG_WINB     value that happens to match leaves the wrong
@@ -1533,7 +1565,7 @@ dlgrun  sts     dstksv          ⛔ the stack leaves block 6 - see the header
         ldx     #ptlook
         lbsr    tbcall
 
-        lda     #CT_ON          the display on, and a frame to be seen in
+        lda     #CT_ON48        the display on, in the DESKTOP's mode
         sta     tbctl
         sta     VCTRL
         lda     #P_DLGL
@@ -1543,22 +1575,41 @@ dlgrun  sts     dstksv          ⛔ the stack leaves block 6 - see the header
 
 * --- which state? ----------------------------------------------------------
 * ⭐ SDSTAT b1, CARD DETECT (storage/docs/sdcard.md 6.3).  A read of SDSTAT has
-* no side effect; nothing else in the four-byte window is touched.
+* no side effect; nothing else in the four-byte window is touched.  It is the
+* CHEAP half of the question and it is asked first: a socket with nothing in
+* it needs no SPI at all, and 10b's reader would spend its whole bounded
+* patience finding that out.
 * ⚠ ON A MACHINE WITH NO STORAGE CARD nothing drives $FF59 and the answer is
-* whatever the bus was holding, so "found" is possible with no socket at all.
-* That is harmless - the ROM disk is still the boot device either way - and it
-* is the honest reading of a machine that cannot tell.
+* whatever the bus was holding, so this test alone can say "a card".  10b is
+* what makes that harmless: a socket that answers CD and then does not answer
+* CMD0 is not bootable, and the question mark is the honest picture of it.
         lda     SDSTAT
         bita    #SD_CD
         beq     dlgnone
 
-* ⭐⭐ THE HOOK.  docs/boot-and-desktop.md 2: "found" is to mean a card the ROM
-* has READ A BOOT SIGNATURE OFF - 9.0's power-up, 9.1's CMD17, CMD58's CCS and
-* block 0's header - and this ROM has no SD reader.  When it gets one, it goes
-* here: leave `dlgnone` as the answer when the signature is not there, and fall
-* through to `dlgfnd` when it is.  The two pictures either side of it are
-* already drawn, so the reader is the only thing that has to be written.
-bootchk equ     *
+* ⭐⭐ THE HOOK, AND IT IS WIRED (2026-09-21).  docs/boot-and-desktop.md 2:
+* "found" means a card the ROM has READ A BOOT SIGNATURE OFF - 9.0's power-up,
+* 9.1's CMD17, CMD58's CCS and block 0's header - and not merely a socket
+* switch that is closed.  10b is that reader; it answers carry clear for a
+* card this machine can boot from and carry set for everything else, and the
+* question-mark picture is now the Mac's actual third state: A DISK IS IN THE
+* DRIVE AND IT IS NOT A SYSTEM DISK.
+*
+* ⚠ THE VERDICT IS NOT HANDED TO ANYBODY.  It drives the picture and nothing
+* else.  Which OS9Boot the machine actually loads is decided again, from
+* scratch, by the NitrOS-9 `boot_sd` module (nitros9 level2/arm6309/modules/
+* boot_sd.asm) - because that code runs in a different map with a different
+* stack and cannot trust a byte this one left behind, and because a ROM that
+* published a flag would have two places to get the precedence wrong.  Both
+* apply the same rule (sdcard.md 9.5) and the ROM disk is the fallback in
+* both, which is what makes this state recoverable rather than terminal.
+bootchk lbsr    sdprobe
+        bcc     bootok
+        lda     #P_SDBAD        a card, and not one this machine can boot
+        sta     SIMPORT
+        bra     dlgnone
+bootok  lda     #P_SDOK
+        sta     SIMPORT
         lbsr    dlgcont
         lbsr    dlgicon
         ldb     #TF_TEXTC
@@ -1652,6 +1703,415 @@ dlgw1   ldb     #$40
         dec     nblnkf
         bne     dlgw1
         puls    a,b,pc
+
+*==============================================================================
+* 10b. THE BOOT ROM'S SD READER -- storage/docs/sdcard.md 9.0 and 9.1.
+*
+* Enough of the card to answer ONE question: is the thing in the socket a
+* volume this machine can boot from?  9.0's initialisation and 9.1's CMD17
+* read of block 0, and nothing else -- no filesystem, no directory walk, no
+* write path, no 512-byte cache.  `rbsd` (nitros9 level2/arm6309/modules/
+* rbsd.asm) is the full driver and is the working model for every sequence
+* here; this is about 400 of its 983 bytes.
+*
+* ⛔ WHAT IT DOES NOT DO IS LOAD ANYTHING.  The OS still comes out of a
+* NitrOS-9 `Boot` module, and reading OS9Boot is that module's job
+* (boot_sd.asm).  This reader exists so that 10a's "found" is a STATEMENT
+* ABOUT THE MEDIA and not about a switch: the socket's card-detect contact is
+* closed by a lump of plastic, and the picture beside it says "Disk found".
+*
+* ** THE SEQUENCE, and the two places it is easy to get silently wrong:
+*
+*   9.0 step 1, `SDMOSI <- $FF` BEFORE the 74 power-up clocks.  The '574 that
+*   holds MOSI has no clear input (6.4), so at power-up it holds garbage; SD
+*   requires >= 74 clocks with /CS AND DI high before CMD0, and a card that
+*   is clocked with DI low through them may never enter SPI mode at all.  It
+*   is one instruction and it is the difference between a card and a brick.
+*   sd_model.v and the host emulator both REFUSE a CMD0 that arrives without
+*   them, which is why that hazard is tested rather than described.
+*
+*   9.1 step 5, the data-token poll, and the one-byte pipeline behind it
+*   (6.2).  A read of SDDATA returns the byte the PREVIOUS burst fetched and
+*   starts the next, so the poll read that RETURNS $FE has already started
+*   the burst that fetches data byte 0.  ⛔ NOTHING may touch SDDATA between
+*   that read and the first data read -- anything that does destroys byte 0
+*   and shifts the whole block by one, from beginning to end, in silence.
+*   The skip/take loops below read SDSTAT between bytes and SDDATA only when
+*   they mean to, which is what keeps that true.
+*
+* ** BOUNDED, LIKE EVERY OTHER WAIT IN THIS ROM.  Nothing bounds a boot ROM
+* on a real machine, so every poll here counts down and reports rather than
+* spinning: a card that never answers is the question-mark picture and not a
+* machine that stopped.
+*
+* ** THE BLOCK IS NOT BUFFERED.  There is nowhere to put 512 bytes: 10a runs
+* with logical block 6 pointed at a ROM page (the toolbox's data), so the
+* variables at $C000 and the stack at $E000 do not exist while this runs.
+* The eight bytes the verdict needs are picked out of the stream as it goes
+* by and the other 504 are read and dropped, which costs three loops and no
+* memory at all.
+*==============================================================================
+
+* --- the byte level -------------------------------------------------------
+* sdwait - poll SDSTAT until the burst engine is idle.  BOUNDED: a burst is
+* 20.4 us at the init rate, 43 bus cycles, so 4096 tries is a hundred times
+* the worst case.  ⚠ 6.3: SDSTAT b0 is "a burst is OWED or running" and not
+* BUSY alone -- sdeng does not raise BUSY until the SPI clock's next falling
+* edge, and a poll that could not see that window would walk through it into
+* a mid-burst access.  Carry set = the engine never went idle.
+sdwait  pshs    a,x
+        ldx     #4096
+sdw1    lda     SDSTAT
+        bita    #SD_BUSY
+        beq     sdw2
+        leax    -1,x
+        bne     sdw1
+        puls    a,x
+        orcc    #$01
+        rts
+sdw2    puls    a,x
+        andcc   #$FE
+        rts
+
+* sdget - one byte in.  A = the byte.  The caller must have put $FF on DI.
+sdget   bsr     sdwait
+        bcs     sdg9
+        lda     SDDATA
+sdg9    rts
+
+* sdput - send A.  A survives.
+sdput   pshs    a
+        bsr     sdwait
+        bcs     sdp9
+        lda     ,s
+        sta     SDDATA
+sdp9    puls    a,pc
+
+* sdidle - DI high without consuming a burst: 6.2's SDMOSI.  This is 9.0
+* step 1 and 9.1 step 3, and in both places its POSITION is the point.
+sdidle  pshs    a
+        lda     #$FF
+        sta     SDMOSI
+        puls    a,pc
+
+* sdsel / sddes - assert and release /CS.  SDCTRL is write-only, so the last
+* value written is shadowed in `sdctl`.  A release is followed by eight idle
+* clocks, which SD wants after a deselect and which the card needs in order
+* to let go of DO (9.1 step 8).
+sdsel   pshs    a
+        lda     sdctl
+        ora     #SD_CS
+        sta     sdctl
+        sta     SDCTRL
+        puls    a,pc
+
+sddes   pshs    a
+        lda     sdctl
+        anda    #$FE
+        sta     sdctl
+        sta     SDCTRL
+        bsr     sdidle
+        bsr     sdget
+        puls    a,pc
+
+* sdarg0 - the frame's 32-bit argument, zeroed.
+sdarg0  clr     sdfrm+1
+        clr     sdfrm+2
+        clr     sdfrm+3
+        clr     sdfrm+4
+        rts
+
+* sdfrmb - A = the command byte, B = the CRC byte.
+* ⚠ THE TWO CRCs ARE HARD-CODED CONSTANTS and there is no generator on this
+* card (9.0).  SPI mode ignores the command CRC except for CMD0, which is
+* issued before the card knows it is in SPI mode, and CMD8, whose CRC the
+* specification makes mandatory.  $95 and $87 are correct for those two
+* ARGUMENT VALUES and for no others; everything else ships $01.
+sdfrmb  sta     sdfrm
+        stb     sdfrm+5
+        rts
+
+* sdsend - the six bytes at sdfrm, then 9.1 step 4s poll for R1 into A.
+* The poll is up to 16 reads for a byte that is not $FF: N_CR is at most 8
+* byte times and the pipeline adds one.  ⛔ THE COUNTER IS IN B AND NOTHING
+* CALLED FROM HERE TOUCHES B -- sdput and sdget report through the carry, not
+* through B, which is the trap rbsd.asm records paying for.
+sdsend  pshs    b,x
+        ldx     #sdfrm
+        ldb     #6
+sdsn1   lda     ,x+
+        bsr     sdput
+        bcs     sdsn9
+        decb
+        bne     sdsn1
+        bsr     sdidle
+        ldb     #16
+sdsn2   bsr     sdget
+        bcs     sdsn9
+        cmpa    #$FF
+        bne     sdsn8
+        decb
+        bne     sdsn2
+        orcc    #$01
+        bra     sdsn9
+sdsn8   andcc   #$FE
+sdsn9   puls    b,x,pc
+
+* sdskip - read X bytes and drop them.  X > 0.
+sdskip  pshs    x
+sdsk1   lbsr    sdget
+        bcs     sdsk9
+        leax    -1,x
+        bne     sdsk1
+        andcc   #$FE
+sdsk9   puls    x,pc
+
+* sdtake - read B bytes into ,Y+.  B = 1..255.
+sdtake  lbsr    sdget
+        bcs     sdtk9
+        sta     ,y+
+        decb
+        bne     sdtake
+        andcc   #$FE
+sdtk9   rts
+
+*------------------------------------------------------------------------------
+* sdinit - 9.0, step for step.  Carry clear = an SDHC/SDXC card is up and the
+* card is on the fast clock.  Carry set = there is nothing here to boot from.
+*------------------------------------------------------------------------------
+sdinit  clr     sdctl
+        clr     SDCTRL          0. /CS high, init clock, no burst in flight
+        lda     SDSTAT
+        bita    #SD_CD
+        lbeq    sdibad          nothing in the socket
+        lbsr    sdidle          1. DI HIGH BEFORE ANY CLOCK EXISTS
+        ldb     #10
+sdin1   lbsr    sdget           step 2 -- eighty clocks, /CS high, DI high
+        lbcs    sdibad
+        decb
+        bne     sdin1
+
+* 3. CMD0 GO_IDLE_STATE, /CS LOW, argument 0, CRC $95.  Expect R1 = $01.
+        ldb     #10
+sdin2   pshs    b
+        lbsr    sdsel
+        lbsr    sdarg0
+        lda     #$40
+        ldb     #$95
+        lbsr    sdfrmb
+        lbsr    sdsend
+        bcs     sdin3
+        cmpa    #$01
+        beq     sdin4
+sdin3   lbsr    sddes
+        puls    b
+        decb
+        bne     sdin2
+        lbra    sdibad
+sdin4   puls    b
+
+* 4. CMD8 SEND_IF_COND, argument $000001AA, CRC $87.  R1 = $05 is "illegal
+*    command", which means a v1.x card or an MMC -- 9.0.1 REFUSES those
+*    rather than supporting them, and so does this.
+        lbsr    sdarg0
+        lda     #$01
+        sta     sdfrm+3
+        lda     #$AA
+        sta     sdfrm+4
+        lda     #$48
+        ldb     #$87
+        lbsr    sdfrmb
+        lbsr    sdsend
+        lbcs    sdifail
+        cmpa    #$01
+        lbne    sdifail
+        lbsr    sdget           R7 bits 31 to 24, the command echo
+        lbcs    sdifail
+        lbsr    sdget           bits 23 to 16, reserved
+        lbcs    sdifail
+        lbsr    sdget           bits 15 to 8, the voltage nibble
+        lbcs    sdifail
+        sta     sdtmp
+        lbsr    sdget           bits 7 to 0, the check pattern
+        lbcs    sdifail
+        tfr     a,b
+        lda     sdtmp
+        cmpd    #$01AA
+        lbne    sdifail
+
+* 5. CMD55 then ACMD41 with HCS set, until R1 = $00.  Bounded by attempts
+*    rather than by a clock this ROM does not have running yet.
+        ldx     #2000
+sdin5   pshs    x
+        lbsr    sdarg0
+        lda     #$77            CMD55
+        ldb     #$01
+        lbsr    sdfrmb
+        lbsr    sdsend
+        bcs     sdin6
+        lbsr    sdarg0
+        lda     #$40            HCS -- this host takes SDHC
+        sta     sdfrm+1
+        lda     #$69            ACMD41
+        ldb     #$01
+        lbsr    sdfrmb
+        lbsr    sdsend
+        bcs     sdin6
+        tsta
+        beq     sdin7           out of idle
+sdin6   puls    x
+        leax    -1,x
+        bne     sdin5
+        lbra    sdifail
+sdin7   puls    x
+
+* 6. CMD58 READ_OCR, and CCS is bit 30 of the four OCR bytes.  CCS = 0 is an
+*    SDSC card and is REFUSED (9.0.1): its commands take a byte address where
+*    these take a block number, and a driver that gets that wrong does not
+*    fail, it reads the wrong sector.
+        lbsr    sdarg0
+        lda     #$7A            CMD58
+        ldb     #$01
+        lbsr    sdfrmb
+        lbsr    sdsend
+        lbcs    sdifail
+        tsta
+        lbne    sdifail
+        lbsr    sdget           OCR bits 31 to 24
+        lbcs    sdifail
+        bita    #$40            CCS
+        lbeq    sdifail
+        ldb     #3
+sdin8   lbsr    sdget
+        lbcs    sdifail
+        decb
+        bne     sdin8
+
+* 7. CMD16 is NOT sent: an SDHC block is 512 and cannot be changed.
+* 8. To the fast clock, with /CS high, no burst running and idle clocks
+*    either side -- 3.3s rule, and a card in the middle of a command does not
+*    care whose fault an extra edge was.
+        lbsr    sddes
+        lbsr    sdidle
+        lbsr    sdget
+        lda     sdctl
+        ora     #SD_FAST
+        sta     sdctl
+        sta     SDCTRL
+        lbsr    sdget
+        andcc   #$FE
+        rts
+
+sdifail lbsr    sddes
+sdibad  clr     sdctl
+        clr     SDCTRL          back to the safe state
+        orcc    #$01
+        rts
+
+*------------------------------------------------------------------------------
+* sdblk0 - 9.1: CMD17 READ_SINGLE_BLOCK of block 0, keeping the eight bytes
+* the verdict is made of and dropping the other 504.  Carry set on any error.
+*
+* The block is RBFs LSN 0 and LSN 1 (sdcard.md 9.5): LSN 0 is the volume
+* header, whose DD.BT at +$15 names OS9Boots first sector, and LSN 1 is the
+* allocation bitmap, which this reader has no use for.
+*------------------------------------------------------------------------------
+sdblk0  lbsr    sdsel
+        lbsr    sdarg0
+        lda     #$51            CMD17, argument = block 0
+        ldb     #$01
+        lbsr    sdfrmb
+        lbsr    sdsend          steps 2-4; step 3s SDMOSI is inside sdsend
+        bcs     sdb9
+        tsta
+        bne     sdb8            any R1 bit set is an error -- 9.3
+
+* 5. poll for $FE.  $00-$1F is an ERROR TOKEN and not filler; anything that
+*    is neither $FE nor $FF is a protocol error.  Either way this is not a
+*    card to boot from, so both land on the same answer.
+        ldx     #10000
+sdb1    lbsr    sdget
+        bcs     sdb9
+        cmpa    #$FE
+        beq     sdb2
+        cmpa    #$FF
+        bne     sdb8
+        leax    -1,x
+        bne     sdb1
+        bra     sdb8
+
+* 6. the 512 data bytes.  ⛔ NOTHING TOUCHED SDDATA BETWEEN THE READ ABOVE
+*    THAT RETURNED $FE AND THE FIRST ONE HERE, which is what makes the first
+*    byte taken below LSN 0 byte 0 and not byte 1.
+sdb2    ldx     #21             LSN 0 bytes $00 to $14
+        lbsr    sdskip
+        bcs     sdb9
+        ldy     #sdbt
+        ldb     #3              DD.BT at LSN 0 byte $15
+        lbsr    sdtake
+        bcs     sdb9
+        ldx     #216            LSN 0 bytes $18 to $EF
+        lbsr    sdskip
+        bcs     sdb9
+        ldy     #sdsig
+        ldb     #5              the signature at LSN 0 byte $F0
+        lbsr    sdtake
+        bcs     sdb9
+        ldx     #267            what is left of LSN 0, and all of LSN 1
+        lbsr    sdskip
+        bcs     sdb9
+
+* 7. the two CRC16 bytes: read for the clocks, not for the value (9.1).
+* 8. /CS high and eight idle clocks, which sddes does.
+        lbsr    sdget
+        lbsr    sdget
+        lbsr    sddes
+        andcc   #$FE
+        rts
+sdb8    orcc    #$01
+sdb9    pshs    cc
+        lbsr    sddes
+        puls    cc
+        rts
+
+*------------------------------------------------------------------------------
+* sdprobe - the whole question, in one call.  Carry CLEAR means: an SDHC or
+* SDXC card came up (CMD58 said CCS), block 0 read, and LSN 0 carries this
+* machines boot signature over a non-zero DD.BT.  Carry set means everything
+* else, and the card is left in the safe state either way.
+*
+* ⭐ sdcard.md 9.5 is where the signature is defined and software/nitros9/
+* mksddisk.sh is what writes it.  The four bytes are "6309" -- the SAME four
+* this ROM looks for at $8000 when it hands the machine to ROM page 1
+* (section 11), because one machine should have one signature and not two.
+*------------------------------------------------------------------------------
+sdprobe lbsr    sdinit
+        bcs     sdpbad
+        lbsr    sdblk0
+        bcs     sdpbad
+        ldd     sdsig
+        cmpd    #$3633          "63"
+        bne     sdpbad
+        ldd     sdsig+2
+        cmpd    #$3039          "09"
+        bne     sdpbad
+        lda     sdsig+4
+        cmpa    #$01            the version of the convention, 9.5
+        bne     sdpbad
+* DD.BT = 0 is a volume that was formatted and never blessed: there is a
+* filesystem on the card and no OS9Boot in it.  That is the question mark.
+        lda     sdbt
+        ora     sdbt+1
+        ora     sdbt+2
+        beq     sdpbad
+        clr     sdctl
+        clr     SDCTRL
+        andcc   #$FE
+        rts
+sdpbad  clr     sdctl
+        clr     SDCTRL
+        orcc    #$01
+        rts
 
 *==============================================================================
 * tbcall - B = a toolbox function, X = a parameter block: a COUNT byte and then
@@ -1866,7 +2326,7 @@ pclear  FCB     9               5 Rect X Y W H COLOUR: the whole screen
         FDB     0
         FDB     0
         FDB     640
-        FDB     200
+        FDB     DLGSCRH
         FCB     C_DESK
 
 pwin    FCB     16              4 Window X Y W H FLAGS title (9 + 7)
@@ -2218,6 +2678,14 @@ simmhi  EQU     $0016           the SIMM's map high byte, before MapB ate it
 * offset a real one would have it.
 tbdev   EQU     $0020
 tbpcnt  EQU     tbdev+WT_PCNT
+* ⭐ 10b's, and they are here for the same reason 10a's are: while the dialog
+* is up, logical block 6 is a ROM page and $C000-$DFFF is not memory.  The
+* reader keeps no block buffer at all (see 10b), so this is all of it.
+sdctl   EQU     $0050           the last SDCTRL written -- it is write-only
+sdfrm   EQU     $0051           the six-byte command frame
+sdtmp   EQU     $0057           one byte: CMD8 R7 half, across a call
+sdbt    EQU     $0058           LSN 0 +$15 -- DD.BT, OS9Boot first sector
+sdsig   EQU     $005B           LSN 0 +$F0 -- "6309" and a version byte
 
 *==============================================================================
 * The vector page.  machine.md 7.2: $FFC0-$FFFF is served by the ROM

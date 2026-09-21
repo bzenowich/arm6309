@@ -48,6 +48,11 @@ SRC="machine3.v mainboard.v ../clkdec.v ../mmu.v u9.v u10.v"
 SRC="$SRC video3_card.v v3dot.v v3scan.v v3ptr.v v3host.v v3lane.v"
 SRC="$SRC audio_card.v audio.v aseq.v"       # elaborated only when AUDIO = 1
 SRC="$SRC tl16c550.v"                         # the console; answers only when SERIAL = 1
+# ⭐ AND THE STORAGE CARD SINCE 2026-09-21, with a behavioural SDHC card in
+# its socket: boot.asm 10b reads block 0 over SPI to decide whether the boot
+# dialog says "Disk found", and a stub that cannot answer CMD0 can only ever
+# make it say no (machine3.v's header).
+SRC="$SRC storage_card.v sdbus.v sdeng.v sd_model.v"
 SRC="$SRC ../../vendor/mc6809/mc6809e.v ../../vendor/mc6809/mc6809i.v"
 
 $V --top-module machine_tb $SRC machine_tb.sv -o machine_tb > /dev/null
@@ -94,10 +99,43 @@ esac
 case " $SCENARIOS " in *" disk "*|*" nodisk "*)
   V3=1 sh ../../../software/nitros9/mkrom.sh /tmp/arm6309-dialog || exit 1 ;;
 esac
+# ⭐ AND `disk` NEEDS A CARD THE ROM WILL ACTUALLY BOOT FROM, because since
+# 2026-09-21 "Disk found" means sdcard.md 9.5's signature over a non-zero
+# DD.BT and not a closed socket switch. software/nitros9/mksddisk.sh writes
+# one, BOOT= and all, and sd_model.v reads its first SDBLOCKS*512 bytes
+# through $readmemh.
+#
+# ⚠ THE HEX IS PADDED AND TRUNCATED TO EXACTLY THAT, and both halves matter:
+# $readmemh warns and stops early on a short file and errors on a long one,
+# and either way the card in the socket would not be the card on disk.
+SDB=128                                   # sd_model.v's NBLOCKS for this machine
+case " $SCENARIOS " in *" disk "*)
+  D=/tmp/arm6309-dialog
+  N9=${NITROS9DIR:-$(cd ../../../../nitros9 2>/dev/null && pwd)}
+  [ -f "$N9/recipes/arm6309/l2/bootfile" ] || {
+    echo "FAIL  no $N9/recipes/arm6309/l2/bootfile - the ROM build did not run"; exit 1; }
+  BOOT="$N9/recipes/arm6309/l2/bootfile" NAME="arm6309 boot" \
+    sh ../../../software/nitros9/mksddisk.sh "$D/sdboot.img" overworld > "$D/mksddisk.log" 2>&1 || {
+      cat "$D/mksddisk.log"; echo "FAIL  the bootable card image did not build"; exit 1; }
+  head -c $((SDB * 512)) "$D/sdboot.img" > "$D/sdcard.bin"
+  pad=$((SDB * 512 - $(wc -c < "$D/sdcard.bin")))
+  [ "$pad" -gt 0 ] && dd if=/dev/zero bs=1 count=$pad >> "$D/sdcard.bin" 2>/dev/null
+  od -An -v -tx1 -w16 "$D/sdcard.bin" | tr -s ' ' '\n' | grep -v '^$' > "$D/sdcard.hex"
+  [ "$(wc -l < "$D/sdcard.hex")" -eq $((SDB * 512)) ] || {
+    echo "FAIL  $D/sdcard.hex is not $((SDB * 512)) records"; exit 1; }
+  # ⛔ AND THE SIGNATURE IS CHECKED HERE TOO, because a card image that lost
+  # it would make `disk` draw the question mark and read as a ROM defect.
+  sig=$(sed -n '241,248p' "$D/sdcard.hex" | tr -d '\n')
+  [ "$sig" = "3633303901000000" ] || {
+    echo "FAIL  the card image carries $sig at LSN 0 +\$F0, not the boot signature"; exit 1; }
+  ;;
+esac
 ok=0; bad=0; missing=0
 for sc in $SCENARIOS; do
   log="$OUT/$sc.log"
-  ./obj_dir/machine_tb $ARGS +scenario=$sc | tee "$log"
+  SDARG=""
+  [ "$sc" = "disk" ] && SDARG="+sdimage=/tmp/arm6309-dialog/sdcard.hex"
+  ./obj_dir/machine_tb $ARGS $SDARG +scenario=$sc | tee "$log"
   ok=$((ok + $(grep -c '^ok' "$log" || true)))
   bad=$((bad + $(grep -c '^FAIL' "$log" || true)))
   # A run that crashed or hit the backstop prints no OK summary. It counts.

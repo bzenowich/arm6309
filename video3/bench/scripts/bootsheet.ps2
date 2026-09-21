@@ -1,0 +1,38 @@
+# bootsheet.ps2 - the clicks the contact sheet is made of.
+#
+# ⭐ Time zero is PS2_SCRIPT_GATE: the moment `desk` prints DESK-READY, after
+# its first full paint.  Everything before that on the sheet - the POST, the
+# dialog, NitrOS-9 loading off the card - happens with NO INPUT AT ALL, which
+# is the point: the machine gets itself to a desktop on its own.
+#
+# ⚠ Coordinates, origin and parking are files.ps2's, and for its reasons:
+#
+#   108 50    the "arm6309" disk icon on the desktop (desk.asm IcTab[0])
+#   580 300   ⛔ THE PARK, and it is not decoration.  video3 draws the pointer
+#             as a 16 x 16 SPRITE, so a pointer left on the window is sixteen
+#             columns of whatever the sheet is about to show.
+#
+# ⭐ EVERY OPEN IS TWO CLICKS TEN SECONDS APART.  desk.asm has no double-click
+# timer - a click selects and a click on the selection opens - deliberately,
+# because the loop cannot measure time honestly.  So the sheet gets a tile of
+# the icon SELECTED and a tile of the manager OPEN, which is a better picture
+# of the interaction than a double-click would have been.
+#
+# ⛔ AND NOTHING IS CLICKED WHILE THE MANAGER IS REDRAWING.  boot-and-desktop.md
+# §3.6: desk samples the button's level once a pass, and a pass that repaints
+# twelve rows is seconds long, so a click inside one is not slow - it is gone.
+
+origin 320 240
+gap 120
+
+# --- the card's icon: select it, then open it ------------------------------
+at 2.000    move to 108 50
++0.700      click left      # selects the disk - and must not open it
++0.500      move to 580 300
+
+at 12.000   move to 108 50
++0.700      click left      # ⭐ the file manager comes up on /SD0
++0.500      move to 580 300
+
+# --- let the listing settle, then leave the picture alone ------------------
+at 24.000   move to 580 300

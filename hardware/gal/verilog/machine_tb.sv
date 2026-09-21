@@ -72,13 +72,20 @@ module machine_tb;
 
   logic n_reset = 0, fast_e = 0;
 
-  /* ⭐ THE STORAGE CARD'S CARD DETECT, and it is the only bit of that card
-   * this bench has: machine3.v's header says why it is a stub and not
-   * storage_card.v. boot.asm §10a reads SDSTAT b1 to choose which of the boot
-   * dialog's three pictures it draws, and +scenario=disk / =nodisk are the two
-   * answers. Every other run leaves it 0, and never reads it: §10a only gets
-   * as far as the SDSTAT read when there is a TOOLBOX on ROM page 64, which
-   * only the whole-ROM scenarios have. */
+  /* ⭐ THE STORAGE CARD'S SOCKET SWITCH. Since 2026-09-21 this bench has the
+   * WHOLE card (machine3.v STORAGE = 1) with sd_model.v in the socket, and
+   * `sd_cd` is only the mechanical contact: what the card ANSWERS comes off
+   * the image run-machine.sh passes in `+sdimage=`.
+   *
+   * ⛔ THAT CHANGED WHAT `disk` MEANS, and it had to. boot.asm §10b reads
+   * block 0 and requires CMD58's CCS and sdcard.md §9.5's signature before
+   * §10a will draw "Disk found", so a closed switch over a stub that cannot
+   * answer CMD0 is no longer the found state - it is the THIRD state, the
+   * Macintosh's question mark, "there is a disk and it is not a system
+   * disk". `disk` therefore carries a real, blessed card image and `nodisk`
+   * an open socket. Every other run leaves sd_cd 0 and never reads any of
+   * it: §10a only gets as far as the card at all when there is a TOOLBOX on
+   * ROM page 64, which only the whole-ROM scenarios have. */
   logic sd_cd = 0;
 
   wire [15:0] RGB;
@@ -96,7 +103,7 @@ module machine_tb;
   // AUDIO: the audio card at $FF40 on /FIRQ, in every run. boot.asm never
   // addresses it and reset leaves it silent with no interrupt enabled, so
   // the seven boot runs see an idle slot; NitrOS-9's firqtst is what drives it.
-  machine3 #(.SIMMS(4), .SERIAL(1), .AUDIO(1)) m (.*);
+  machine3 #(.SIMMS(4), .SERIAL(1), .AUDIO(1), .STORAGE(1)) m (.*);
 
   // ---- what the card used to bring out on a port -------------------------
   // machine.v exported SPANBUSY, VBLANK, WPTR and VMODE because it had to
@@ -991,30 +998,38 @@ module machine_tb;
 
   // boot.asm §10a's own equates. A claim that restated them loosely would be
   // a claim about nothing; these are the numbers the ROM was assembled with.
-  localparam int DWINX = 176, DWINY = 56, DWINW = 288, DWINH = 96;
+  // ⭐ 640 x 480, VMODE 11 - the DESKTOP's mode, not the POST's 640 x 200.
+  // boot.asm's §10a centres the dialog in DLGSCRH, so these follow from the
+  // window's own size rather than being two more numbers to keep in step.
+  localparam int DLGSCRH = 480;
+  localparam int DWINW = 288, DWINH = 96;
+  localparam int DWINX = (640 - DWINW) / 2, DWINY = (DLGSCRH - DWINH) / 2;
   localparam int DCONX = DWINX + 5,  DCONY = DWINY + 5;
   localparam int DCONW = DWINW - 10, DCONH = DWINH - 10;
   localparam int DICONX = DWINX + 20, DICONY = DWINY + 28, DICONS = 32;
 
-  // VMODE 00 scans every picture row twice, so picture row y is capture line
-  // 2y - the same doubling check_picture() states.
+  // ⭐ VMODE 11 IS PROGRESSIVE: picture row y IS capture line y.  The rest of
+  // the POST paints in VMODE 00, where every picture row is scanned twice and
+  // row y is line 2y (check_picture() states that doubling) - the dialog is
+  // the one §10a section that is not in that mode, because it has to match
+  // the desktop NitrOS-9 brings up seconds later.
   function automatic logic [15:0] px(input int x, input int y);
-    px = (y * 2 < shot_lines && x < MAXW) ? shot[y*2][x] : 16'hDEAD;
+    px = (y < shot_lines && x < MAXW) ? shot[y][x] : 16'hDEAD;
   endfunction
 
   task automatic dialog_picture(input string state);
     int nface, nwhite, nink, dirty;
     capture_frame(1200000);
     ok(!shot_overflow, "the capture fits");
-    ok(shot_w_min == 640 && shot_w_max == 640 && shot_lines == 400,
-       $sformatf("VMODE 00, 640 x 200 doubled to 400 lines (%0d..%0d x %0d)",
-                 shot_w_min, shot_w_max, shot_lines));
+    ok(shot_w_min == 640 && shot_w_max == 640 && shot_lines == DLGSCRH,
+       $sformatf("⭐ VMODE 11, 640 x %0d progressive - the DESKTOP's mode (%0d..%0d x %0d)",
+                 DLGSCRH, shot_w_min, shot_w_max, shot_lines));
     if (shot_lines == 0) return;
     if (state == "nodisk") write_ppm("screenshot-dialog-nodisk.ppm");
     else                   write_ppm("screenshot-dialog.ppm");
 
     // ---- the screen was cleared to the desktop's blue --------------------
-    // Four corners of the 640 x 200 picture, well outside the window: if the
+    // Four corners of the 640 x 480 picture, well outside the window: if the
     // toolbox's Rect had painted the window's coordinates and not the
     // screen's, §4's test pattern would still be here.
     dirty = 0;

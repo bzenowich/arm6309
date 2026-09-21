@@ -52,7 +52,15 @@ module storage_card (
     // ⭐ observation only - a testbench watches the burst without reaching
     // inside a module.  Nothing on the board is wired to these.
     output wire       OBS_BUSY,
-    output wire       OBS_RCLK
+    output wire       OBS_RCLK,
+    // ⭐ and WHETHER THE CARD IS DRIVING D7..D0 at all, added 2026-09-21 when
+    // machine3.v took the real card in place of its $FF59 stub.  A machine
+    // that resolves its bus from explicit drivers (design-review2.md §10 -
+    // "a model that ORs its drivers cannot see a bus fight") needs the card
+    // to SAY when it is on the bus rather than restating the card's decode
+    // in the board above it, which is the divergence video3 pays this same
+    // price to avoid.
+    output wire       OBS_DOE
 );
 
   // ---- U7, the 74HC393 divider ------------------------------------------
@@ -174,6 +182,7 @@ module storage_card (
   assign SD_CSn  = ~CS;                   // SDCTRL b0 asserts it; $00 releases
   assign OBS_BUSY = BUSY;
   assign OBS_RCLK = RCLK;
+  assign OBS_DOE  = OE595 | SD0_OE | SD1_OE | SD2_OE;
 
 endmodule
 

@@ -12,6 +12,129 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## boot-and-desktop.md §2 and §0 — the machine had no SD reader, and *found* meant a switch (2026-09-21)
+
+[`boot-and-desktop.md`](boot-and-desktop.md) §2 is the design and is written in present
+tense; [`../storage/docs/sdcard.md`](../storage/docs/sdcard.md) §9.5 carries the rule.
+This records what §2, §0 and §1 said while the reader was specified and not built, and
+what changed when it was.
+
+**§2 was a plan, and said:**
+
+> Today the OS comes out of the ROM disk (`boot_romdisk.asm`, `rbromdisk.asm`). The card is
+> mounted *afterwards*, by a driver the OS loaded. To boot **from** the card the ROM needs to
+> read it before there is an OS, which means a second, minimal SD reader:
+>
+> - **In the boot ROM**: §9.0's initialisation and §9.1's `CMD17` read, no filesystem — enough
+>   to pull `OS9Boot` off a known place on the card. `rbsd`'s init is ~400 bytes of the 983 it
+>   takes altogether, and the boot copy needs neither the write path nor the 512-byte cache.
+>   ⚠ It also needs `sdcard.md` §9.0's 74-clock power-up rule and the `SDMOSI` write that
+>   precedes it, or the card never enters SPI mode.
+> - **A NitrOS-9 `boot_sd` module** beside `boot_romdisk`, so the loaded kernel's own `Boot`
+>   reads from the same place.
+> - **Where `OS9Boot` lives on the card.** Simplest is an RBF filesystem and a fixed path, which
+>   costs the ROM a directory walk. Cheaper and more period-correct: a **fixed block range**
+>   recorded in a small header in block 0, which is what a Mac's boot blocks are.
+>
+> ⭐ **And §1's `bootchk` is the hook.** It is a label in `boot.asm` between the
+> card-detect test and the *found* picture, with both pictures already drawn either side
+> of it: §9.0's power-up, §9.1's `CMD17`, `CMD58`'s `CCS` and block 0's signature go
+> there, and the branch each answer takes is already written. Until then *found* means
+> only "`SDSTAT` b1 says a card is in the socket" and the ROM disk is still the boot
+> device either way.
+
+**Both options were open; the fixed block range was taken**, and it turned out to need no
+new structure at all — `RBF`'s own `DD.BT`/`DD.BSZ` in LSN 0, written by `os9 gen` and read
+by NitrOS-9's `boot_common.asm` since 2005. The signature went at LSN 0 `+$F0`, above every
+field `RBF` defines.
+
+**§1's *found* row said** `` | **found** | `SDSTAT` b1 says a card is in the socket | `$61` | ``
+and **§0's row for "loads the OS from the disk"** said
+
+> | loads the OS from the disk | `rbsd` reads the card **under NitrOS-9**; the ROM has no SD reader of its own, and the OS still boots from the ROM disk | ⛔ §2 |
+
+**§5's open items 2 and 3 said:**
+
+> 2. **Where `OS9Boot` lives on the card** — filesystem path or fixed blocks (§2).
+> 3. **Whether the ROM disk stays bootable** once the card is. It should, and the question-mark
+>    state is why.
+
+**`boot.asm`'s §10a header said**, where §10b now is:
+
+> ⭐ AND THE MACHINE HAS NO SD READER YET.  docs/boot-and-desktop.md 2
+> specifies one and it is a separate job, so "found" is driven by the one thing
+> the machine already knows: SDSTAT's card-detect bit.  `bootchk` below is the
+> hook where "...and it is bootable" goes.
+
+and, beside the `SDSTAT` read:
+
+> ⚠ ON A MACHINE WITH NO STORAGE CARD nothing drives $FF59 and the answer is
+> whatever the bus was holding, so "found" is possible with no socket at all.
+> That is harmless - the ROM disk is still the boot device either way - and it
+> is the honest reading of a machine that cannot tell.
+
+That last is no longer true in the direction it worried about: a socket that answers card
+detect and then cannot answer `CMD0` is now the question mark.
+
+### machine3.v — the storage stub, and why it went
+
+`machine3.v` answered `$FF59` and nothing else, and argued for it:
+
+> ⭐ AND ONE BIT OF A THIRD, added 2026-09-20 with software/boot/boot.asm's
+> §10a: `sd_cd`, the storage card's CARD DETECT, answered at $FF59 and
+> nowhere else. It is a STUB and not storage_card.v, and the comment beside
+> it says exactly what it does not model and why that matters.
+
+> ⚠ A STUB, AND IT IS SAID HERE RATHER THAN IMPLIED. storage_card.v IS the
+> card and storage_tb.sv is what runs it, sd_model.v in the socket. What
+> software/boot/boot.asm's §10a needs from THIS machine is one bit -
+> SDSTAT b1, "a card is in the socket" (sdcard.md §6.3) - to choose which of
+> the boot dialog's three pictures it draws, and instantiating the whole
+> card to answer it would put a second clock domain in every one of this
+> bench's runs.
+
+**§10b took the argument away.** *Found* now requires real commands and real bytes, so a
+stub could only ever answer "not bootable" and `machine_tb`'s `disk` scenario would have
+become a second copy of `nodisk`. The whole card and `sd_model.v` went in behind a
+`STORAGE` parameter (`machine_tb` sets it; `v3machine_tb` leaves the slot empty and keeps
+the stub), the card gained an `OBS_DOE` observation pin so the machine need not restate its
+decode, and `sd_model.v` gained `+sdimage=` so `run-machine.sh` can put a card the ROM will
+actually boot from in the socket.
+
+---
+
+## boot-and-desktop.md §3.5 and §5 item 6 — the file manager was unbuilt and the desktop icons were dead (2026-09-21)
+
+[`boot-and-desktop.md`](boot-and-desktop.md) §3.6 is the design and is written in present
+tense; this records what §3.5 and §5 item 6 said before milestone 3 was built.
+
+**§3.5's "What is left" said:**
+
+> 3. **The file manager**: `v3trk`'s directory list in a real window, with open, and a second
+>    window. Rename/copy/delete after.
+> 4. **Windows that move and close** — `v3drag` already moves one with the copy engine — and
+>    the desktop icons, which are drawn and not yet hit-tested.
+
+**§5 item 6 said:**
+
+> 6. **The desktop icons are drawn and are not hit-tested**, so double-clicking `Paint` on
+>    the desktop does nothing while the menu item does — milestone 4.
+
+**§0's table said, of the file manager row:** "`v3trk` fills a Tracker window's list **from
+a real directory**", state "⚠ §3 milestone 3"; and of the desktop row, "⚠ The icons are
+drawn and are not yet clickable: that is milestone 4".
+
+**§3's table said, of `v3trk`:** "**still unused by the shell** — it is milestone 3's list
+view".
+
+What replaced them: a Tracker window in `desk.asm` whose model is a 48-entry table, the
+directory read moved out of `v3trk.asm` into `modules/v3dir.inc` so there is one reader,
+and `IcTab` given an action and an argument per icon. `video3/bench/run-v3files.sh` is the
+bench; it reads the listing off the pixels, rebuilding each candidate name from the ROM's
+own font blob, and compares it with the host's `os9 dir`.
+
+---
+
 ## boot-and-desktop.md §3 and §5 item 4 — the desktop was a recording, and the exclusive screen was unexamined (2026-09-20)
 
 [`boot-and-desktop.md`](boot-and-desktop.md) §3 is the design and is written in present

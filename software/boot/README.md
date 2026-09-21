@@ -174,8 +174,10 @@ whole map, so it reproduces that layout and calls in exactly as `ca_tbox.asm` do
 | code | state |
 |---|---|
 | `$60` | *looking for a disk* — the Haiku window, the toolbox's own `disk` icon, and the line |
-| `$61` | *found* — `SDSTAT` b1 says a card is in the socket |
-| `$62` | *no disk* — the Macintosh's blinking question mark, on the icon |
+| `$64` | ⭐ §10b's verdict: the card came up, `CMD58` said `CCS`, and block 0 carries the boot signature |
+| `$65` | ⭐ ...or it did not, and there **is** a card in the socket |
+| `$61` | *found* — drawn after `$64` |
+| `$62` | *no disk* — the Macintosh's blinking question mark, on the icon. Reached after `$65` (a card that is not bootable) or straight from the card-detect test (an empty socket) |
 | `$63` | ⚠ **no toolbox**: ROM page 64 did not answer `"TB"`, and the dialog was skipped |
 | `$E6` | the toolbox returned an error; the map and the stack are put back first |
 
@@ -203,11 +205,6 @@ call, so by the end of the dialog that byte is the ROM's. `simmhi` holds it.
 include lwasm source. [`checkcg.py`](../nitros9/tools/checkcg.py) re-derives all 22 with
 lwasm and `software/nitros9/mkrom.sh` refuses a ROM whose two halves disagree.
 
-⭐ **`bootchk` is the hook for the SD reader.** `boot-and-desktop.md` §2 wants *found*
-to mean a card the ROM has read a boot signature off, and this ROM has no SD reader.
-`bootchk` is a label between the card-detect test and the *found* picture, with both
-pictures already drawn either side of it.
-
 ### ⛔ A09 has no comment delimiter, and a comma in a comment is a register
 
 The trap that cost this section a day, written down because it will be paid
@@ -228,6 +225,36 @@ Two rules follow, and §10a keeps both: **a `pshs`/`puls` comment never starts
 with a comma**, and every register list is written out in full — `pshs
 cc,a,b,x,u`, never `cc,d,x,u`. The encodings are in `boot.lst` and are worth a
 look after any edit to them: `$06` is `A,B` and `$46` is `A,B,U`.
+
+## §10b — the SD reader, and what *found* now means
+
+⭐ **New 2026-09-21.** [`storage/docs/sdcard.md`](../../storage/docs/sdcard.md) §9.0,
+§9.1 and §9.5 are the design. §10b is ~640 bytes: the card's initialisation and one
+`CMD17` read of block 0, and **nothing else** — no filesystem, no directory walk, no
+write path, and **no block buffer at all**. Its whole output is which of §10a's three
+pictures is true; `boot_sd.asm` in the NitrOS-9 tree is what actually loads `OS9Boot`,
+and it runs the same test again from scratch rather than being told the answer.
+
+*Found* was `SDSTAT` b1 — a mechanical switch closed by a lump of plastic. It is now a
+card that answered `CMD58` with `CCS` and whose block 0 carries `"6309"` and a version
+byte at LSN 0 `+$F0`, over a non-zero `DD.BT`. ⭐ **That gives the question mark its
+real Macintosh meaning**: there is a disk in the drive and it is not a system disk.
+
+| | |
+|---|---|
+| ⛔ **§9.0 step 1 comes before the 74 clocks** | `SDMOSI <- $FF` with no burst, *then* ten `SDDATA` reads. The `'574` that holds MOSI has no clear input (§6.4), so at power-up it holds garbage, and a card clocked with `DI` low through its power-up sequence may never enter SPI mode. One instruction. `sd_model.v` and the host emulator both **refuse** a `CMD0` that arrives without it, so the hazard is tested rather than described |
+| ⛔ **Nothing touches `SDDATA` between the `$FE` token and the first data byte** | the read that *returns* `$FE` has already started the burst that fetches data byte 0 (§6.2's one-byte pipeline). Anything inserted there destroys byte 0 and shifts the whole block by one, silently, from beginning to end |
+| **There is nowhere to put 512 bytes** | §10a runs with block 6 pointed at a ROM page, so `$C000`'s variables and the `$E000` stack do not exist while this runs. The eight bytes the verdict needs — `DD.BT` at `+$15` and the signature at `+$F0` — are picked out of the stream by three skip loops and two take loops, and the other 504 are read and dropped |
+| **The card is left safe either way** | `SDCTRL <- $00`: `/CS` high, the init clock, no burst in flight. `rbsd`'s own `Init` then starts from where §9.0 expects to |
+| **Every poll is bounded** | `sdwait` counts 4,096, the R1 poll 16, the token poll 10,000, `CMD0` retries ten times and `ACMD41` 2,000. A card that never answers is a picture, not a hang |
+
+⛔ **Two things that made it silently wrong on the way, both worth knowing.** A comment
+that begins with `+` is parsed as part of the operand by A09 — `ldx #21   +$00..+$14`
+assembles as `LDX #21+$00..`, which is the same trap as the comma below wearing a plus
+sign. And in `boot_sd.asm`, the deblocking routine takes "keep this half" in `B` and the
+even case called it with `B = 0`, so the half the caller asked for was the half that was
+dropped: `DD.BT` read as zero, the card read as unblessed, and the machine booted from
+the ROM disk and said nothing. **The bench's `s`/`r` character is what found it.**
 
 ## Sizing memory, and the descriptor it leaves
 
@@ -364,3 +391,9 @@ the SIMM and halts as before. `machine_tb` loads page 0 only, so it takes the se
 
 - **No console, no monitor, no DriveWire loader.** `machine.md` §7.2 says what page 0
   is eventually for. `software/6809/README.md` has what retargeting ASSIST09 costs.
+
+- ⚠ **§10b reads block 0 and never reads block 1.** It is a *probe*, not a loader: the
+  ROM does not load `OS9Boot` itself and has no reason to — the handoff at §11 is to
+  ROM page 1, and it is the NitrOS-9 loader there, and `boot_sd` after it, that read the
+  card for real. A ROM that could load a program off a card would be a different
+  machine's ROM, and `sdcard.md` §13 item 14 is where that trade is recorded.

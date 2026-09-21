@@ -7,7 +7,7 @@ Paths below are relative to this directory.
 
 | | |
 |---|---|
-| [`docs/sdcard.md`](docs/sdcard.md) | the card — the SPI engine, the `TFM` hazard, the SD protocol sequences, the register map, the IC budget |
+| [`docs/sdcard.md`](docs/sdcard.md) | the card — the SPI engine, the `TFM` hazard, the SD protocol sequences, the register map, the IC budget, and §9.5's **boot** arrangement: where `OS9Boot` lives and which of the two disks wins |
 | [`docs/history.md`](docs/history.md) | archived history — the buffer era, superseded rates, dropped listings |
 
 The design outputs live in `../hardware/gal/storage/`: `sdbus.jedec.ts` and
@@ -23,7 +23,8 @@ real cost of this card:
 | `../hardware/gal/verilog/storage_tb.sv` | the card in Verilog against an SD card model — **55 claims** |
 | `../software/demo/emu/test/run-sdtest.sh` | the same card in C, in the host emulator — **55 claims** |
 | ⭐ `../software/nitros9/run-sd.sh` | **NitrOS-9 boots and uses it**: `/SD0` mounted, a host-written filesystem listed and read, a file written and deleted, and the host tools checking afterwards that the write reached the card. **17 claims, with a no-card negative control** |
-| the driver | `rbsd.asm` and `sddesc.asm` in the NitrOS-9 port's `level2/arm6309/modules/` |
+| ⭐ `../software/nitros9/run-sdboot.sh` | ⭐ **AND SINCE 2026-09-21 NitrOS-9 BOOTS OFF IT** — `OS9Boot` read by the machine's own boot ROM and by the kernel's `boot_sd` module, with the ROM disk as the fallback (§9.5). **45 claims**, three card states, and the negative control is the middle one: a card that is present, readable and **not bootable** |
+| the driver | `rbsd.asm` and `sddesc.asm` in the NitrOS-9 port's `level2/arm6309/modules/`, and `boot_sd.asm` beside them |
 
 ⚠ **It runs at ~130 KiB/s, not 537.** `rbsd` issues one `CMD17` per block and the port
 builds `CPU=6809`, so it gets neither §9.1.1's multi-block amortisation nor `TFM`.

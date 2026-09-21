@@ -8,7 +8,9 @@ phase P0: the port skeleton that the video and audio drivers will be built on.
 sh software/tools/fetch-nitros9-tools.sh       # LWTOOLS and ToolShed into .tools/ (once)
 sh software/nitros9/run-emu.sh                 # build the ROM, boot it, type, check: 26 claims, ~30 s
 sh software/nitros9/run-sd.sh                  # ... with an SD card in the socket: 17 claims, ~2 min
+sh software/nitros9/run-sdboot.sh              # ⭐ BOOT THE OS OFF THE CARD: 45 claims, ~4 min
 sh software/nitros9/mksddisk.sh out/demos.img  # ⭐ an SD image of the demo programs
+BOOT=.../bootfile sh software/nitros9/mksddisk.sh out/boot.img   # ... a BOOTABLE one
 ```
 
 ```sh
@@ -41,7 +43,8 @@ holds what the port depends on: the boot ROM's vector page, the emulator, and th
 |---|---|
 | `defs/arm6309.d` | the machine: the map, the I/O page, the tick, the ROM layout |
 | `level2/arm6309/modules/rel_arm6309.asm` | ROM pages 1–2. The loader that `boot.asm` hands off to, followed by `OS9Kernel` |
-| `level2/arm6309/modules/boot_romdisk.asm` | the `Boot` module. `boot_common` reads `OS9Boot` from the ROM disk |
+| `level2/arm6309/modules/boot_sd.asm` | ⭐ the `Boot` module since 2026-09-21, and the recipe's default (`BOOTMOD`). `boot_common` reads `OS9Boot` **off the SD card** when block 0 carries `sdcard.md` §9.5's signature, and off the ROM disk when it does not — 881 bytes of the loader's 896 |
+| `level2/arm6309/modules/boot_romdisk.asm` | the older `Boot` module, ROM disk only. `BOOTMOD=boot_romdisk` builds a ROM that cannot read a card at all, which is what "the card was used" is tested against |
 | `level2/arm6309/modules/rbromdisk.asm`, `romdiskdesc.asm` | the read-only RBF driver, serving `/DD` and `/R0` |
 | `level2/arm6309/modules/term_16550.asm` | `/Term` on the TL16C550C, using Wildbits' `sc16550` driver |
 | `level2/modules/kernel/krn.asm` (`IFNE arm6309`) | ends at `$FF00`, so the vector stubs sit at `$FEEE`; forces slot 7 to `KrnBlk` |
@@ -140,6 +143,34 @@ menu bar that pulls down and highlights, and a launcher that forks the other dem
 it, because a menu item can fork a program and cannot fork the byte stream `v3show.py`
 writes under that name. `video3/bench/run-v3desk.sh` runs both off a card and clicks at
 them with a `PS2_SCRIPT`.
+
+## ⭐ Booting off the card
+
+Since 2026-09-21 `OS9Boot` comes off the SD card when there is a bootable one in the
+socket. `storage/docs/sdcard.md` §9.5 is the design and `docs/boot-and-desktop.md` §2 is
+the Macintosh story it belongs to; the short version:
+
+| | |
+|---|---|
+| **What makes a card bootable** | `BOOT=<bootfile>` on `mksddisk.sh`. It runs `os9 gen` **first**, before any other file, so `OS9Boot` gets a contiguous run at a low LSN, and stamps the four bytes `"6309"` and a version at LSN 0 `+$F0`. Both are read back and checked before the script says `ok` |
+| **Where it is** | `DD.BT` and `DD.BSZ` in `RBF`'s own volume header — LSN 0 `+$15` and `+$18`, the first half of SD block 0. No new structure, and `boot_common.asm` has read that pair since 2005 |
+| **Who decides** | `boot.asm` §10b for the boot dialog's picture, `boot_sd.asm` for what is actually loaded. Neither trusts the other; both apply §9.5's rule |
+| **Precedence** | **card first, ROM disk always.** The fallback is inside `boot_sd`, so there is no configuration in which the machine will not start |
+| ⭐ **How you can tell** | one character on the console between `krn`'s `tb` and `boot_common`'s `0`: `tb`**`s`**`0` is the card, `tb`**`r`**`0` is the ROM disk |
+| **How a bench asks for the ROM disk** | it puts no bootable card in the socket — which is what `run-emu.sh`, `run-sd.sh`, `run-v3sd.sh` and `run-v3desk.sh` all already do. Their cards are made without `BOOT=`, so they carry no signature and boot nothing |
+
+⛔ **`run-sdboot.sh` is the bench, and it does not trust "a shell appeared".** The
+fallback works, so a machine that silently ignored the card reaches the same prompt. It
+puts a **different** `OS9Boot` on the card — the ROM's bootfile with the FIRQ stub's two
+modules appended — and asks `mdir` for them. Three card states: blessed, **present and
+not bootable**, and empty; each booted from reset, and each `reboot`ed back through
+`boot.asm`'s POST so that §10b's own verdict codes (`$64` bootable, `$65` not) can be
+read off the progress port.
+
+⚠ **The host emulator enters at `$8004`**, with `boot.asm`'s handoff already applied, so
+the POST and the boot dialog do not run on a cold start there — `reboot` is the only way
+to reach §10b under `software/demo/emu/`. In Verilog, `machine_tb`'s `disk` scenario is a
+cold start with the whole storage card and a blessed image in its socket.
 
 ### ⭐ `/DD/SYS` was 1,140 of the image's 1,952 sectors
 

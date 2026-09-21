@@ -1,0 +1,34 @@
+# filesidle.ps2 - ⛔ THE NEGATIVE CONTROL for the file manager.
+#
+# The same ROM, the same card, the same `desk` - started with a directory
+# on its command line, so the window is ALREADY UP on /SD0/DATA and there
+# is something to leave alone - and a mouse that walks over the list, over
+# both scroll arrows, over the menu bar and over the disk icon, and NEVER
+# PRESSES A BUTTON.
+#
+# ⛔ Without this, every claim in run-v3files.sh is satisfied by a program
+# that enters a directory on a timer, scrolls by itself, or treats a hover
+# as a click.  What it has to show: the list held exactly ONE picture, no
+# DESK-SEL, no DESK-OPEN, no DESK-DIR after the first, nothing launched -
+# and the list it held is still /SD0/DATA's real contents, so a blank
+# screen is not what passed it.
+#
+# ⚠ THE POINTER IS IN THE PICTURE, and unlike deskidle.ps2 this control
+# cannot dodge it by walking somewhere else: hovering the list IS the
+# gesture under test.  checkfiles.py counts the list's pictures only on
+# frames where the sprite's 16 x 16 is clear of the list rectangle and the
+# pointer has been still for SETTLE seconds, so the walk is asserted at the
+# rests outside the window and the sprite's own pixels are never counted.
+origin 320 240
+
+at 2.000    move to 580 300
++1.200      move to 200 191     # row 0 of the list
++1.200      move to 200 209     # row 1
++1.200      move to 200 300     # further down it
++1.200      move to 580 300     # off, and still
++1.200      move to 504 190     # the scroll bar's UP arrow
++1.200      move to 504 390     # ... and its DOWN arrow
++1.200      move to 580 300
++1.200      move to 200 8       # the Go title in the menu bar
++1.200      move to 108 50      # the disk icon
++1.200      move to 580 300

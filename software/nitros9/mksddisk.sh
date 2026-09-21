@@ -5,7 +5,25 @@
 #   sh software/nitros9/mksddisk.sh /tmp/x/demos.img              every demo
 #   sh software/nitros9/mksddisk.sh /tmp/x/demos.img mvania       just one
 #   DATA=/tmp/x/data sh software/nitros9/mksddisk.sh ...          ⭐ with its data
+#   BOOT=/tmp/x/bootfile sh software/nitros9/mksddisk.sh ...      ⭐ BOOTABLE
 #   MODS=dir  NAME="..."  SLACK=sectors  ...
+#
+# ⭐ BOOT= IS WHAT MAKES A CARD THE MACHINE CAN BOOT FROM, and it is opt-in:
+# without it the image is an ordinary data card and the ROM disk is still the
+# only boot device (storage/docs/sdcard.md §9.5, docs/boot-and-desktop.md §2).
+# Two things go on a blessed card and neither is a file the machine opens:
+#
+#   OS9Boot, written CONTIGUOUSLY by `os9 gen` and named by DD.BT (LSN 0
+#   byte $15, a 3-byte LSN) and DD.BSZ (byte $18, its length).  That pair IS
+#   the "fixed block range recorded in a header in block 0" - the header is
+#   RBF's own volume header, so there is exactly one place the range is
+#   written down and NitrOS-9's boot_common.asm already reads it.
+#
+#   the arm6309 boot signature at LSN 0 byte $F0: the four bytes "6309" and
+#   a version byte.  RBF uses nothing above DD.OPT's 32 bytes at $3F, so it
+#   costs no field; `os9 format` zeroes it, which is what makes a formatted
+#   but never-blessed card read as NOT bootable.  ⚠ Stamped LAST, after
+#   every copy, because a copy can rewrite LSN 0.
 #
 # ⭐ CMDS AND DATA, and both halves moved.  CMDS is the demo PROGRAMS; DATA is
 # what they open - the Haiku desktop and Paint's streams, the BBS, the
@@ -48,6 +66,13 @@ NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 MODS=${MODS:-$NITROS9DIR/recipes/arm6309/l2/.mods}
 NAME=${NAME:-arm6309 demos}
 SLACK=${SLACK:-32}
+BOOT=${BOOT:-}
+# ⭐ THE SIGNATURE, and it is the SAME four bytes software/boot/boot.asm §11
+# looks for at $8000 when it hands the machine to ROM page 1: one machine,
+# one signature.  SIGVER is §9.5's version of the convention and boot.asm's
+# `sdprobe` and nitros9's boot_sd.asm both require exactly this value.
+SIGOFF=240                              # LSN 0 byte $F0
+SIGBYTES='6309\001\000\000\000'
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH
 
@@ -55,6 +80,7 @@ command -v os9 >/dev/null || {
   echo "FAIL  no os9 tool: run sh software/tools/fetch-nitros9-tools.sh"; exit 1; }
 [ -d "$MODS" ] || {
   echo "FAIL  no module directory $MODS (build the ROM first: software/nitros9/mkrom.sh)"; exit 1; }
+[ -z "$BOOT" ] || [ -f "$BOOT" ] || { echo "FAIL  BOOT names $BOOT, which is not a file"; exit 1; }
 
 # ⭐ THE DEMO SET, and it is the recipe's $(DEMOS) list.  ⚠ If a name is added
 # there it has to be added here: the two are not derived from one another, and
@@ -99,6 +125,12 @@ DATAFILES=""
 ND=$(echo $DATAFILES | wc -w)
 
 payload=0
+# ⭐ OS9Boot costs its own file descriptor and its data, exactly like any
+# other file: `os9 gen` writes it as a file AND links it through DD.BT.
+if [ -n "$BOOT" ]; then
+  bb=$(wc -c < "$BOOT")
+  payload=$((payload + 1 + (bb + 255) / 256))
+fi
 for f in $FILES; do
   b=$(wc -c < "$MODS/$f")
   payload=$((payload + 1 + (b + 255) / 256))
@@ -132,6 +164,15 @@ done
 
 rm -f "$IMG"
 os9 format -e -q -l$N "$IMG" -n"$NAME" || { echo "FAIL  os9 format -l$N"; exit 1; }
+# ⛔ FIRST, BEFORE ANY OTHER FILE.  `os9 gen` needs a CONTIGUOUS run for
+# OS9Boot - that is the whole point of a fixed block range - and the only
+# moment a freshly formatted volume is guaranteed to have one at a low LSN is
+# before anything else has been allocated.
+if [ -n "$BOOT" ]; then
+  os9 gen "$IMG" -b="$BOOT" > "$IMG.gen.log" 2>&1 || {
+    cat "$IMG.gen.log"; echo "FAIL  os9 gen -b=$BOOT"; exit 1; }
+  cat "$IMG.gen.log"
+fi
 os9 makdir "$IMG,CMDS" || { echo "FAIL  makdir CMDS"; exit 1; }
 os9 makdir "$IMG,DATA" || { echo "FAIL  makdir DATA"; exit 1; }
 for f in $FILES; do
@@ -168,12 +209,36 @@ for f in $DATAFILES; do
 done
 [ "$bad" -eq 0 ] || exit 1
 
+# ---------------------------------------------------------------------------
+# ⭐ THE SIGNATURE, STAMPED LAST AND THEN READ BACK.  The ROM's own reader
+# (software/boot/boot.asm §10b) pulls exactly these bytes out of block 0 and
+# refuses the card without them, so a stamp that silently did not take is a
+# card that boots nowhere and says nothing.
+if [ -n "$BOOT" ]; then
+  printf "$SIGBYTES" | dd of="$IMG" bs=1 seek=$SIGOFF conv=notrunc status=none \
+    || { echo "FAIL  the boot signature did not write"; exit 1; }
+  got=$(od -An -v -tx1 -j$SIGOFF -N8 "$IMG" | tr -d ' \n')
+  [ "$got" = "3633303901000000" ] || {
+    echo "FAIL  the boot signature reads back as $got, not 3633303901000000"; exit 1; }
+  # ...and DD.BT/DD.BSZ, which is where OS9Boot actually is.  A zero DD.BT is
+  # a volume `os9 gen` did not bless, and the ROM reads it as "not bootable".
+  bt=$(od -An -v -tx1 -j21 -N3 "$IMG" | tr -d ' \n')
+  bsz=$(od -An -v -tx1 -j24 -N2 "$IMG" | tr -d ' \n')
+  [ "$bt" != "000000" ] || { echo "FAIL  DD.BT is zero - os9 gen did not link OS9Boot"; exit 1; }
+  [ "$bsz" != "0000" ] || { echo "FAIL  DD.BSZ is zero - OS9Boot is not contiguous"; exit 1; }
+  # and it round-trips, like every other file on the card
+  os9 copy -o=0 "$IMG,OS9Boot" "$VER/OS9Boot" >/dev/null 2>&1 \
+    && cmp -s "$BOOT" "$VER/OS9Boot" \
+    || { echo "FAIL  OS9Boot on the image differs from $BOOT"; exit 1; }
+fi
+
 bytes=$(wc -c < "$IMG")
 [ $((bytes % 512)) -eq 0 ] || { echo "FAIL  $IMG is $bytes bytes, not a whole number of 512-byte SD blocks"; exit 1; }
 [ "$bytes" -eq $((N * 256)) ] || { echo "FAIL  $IMG is $bytes bytes, not the $N sectors asked for"; exit 1; }
 
 free=$(os9 free "$IMG" | sed -n 's/^\([0-9]*\) Free sectors.*/\1/p')
 echo "ok    $IMG: $N sectors ($((bytes / 1024)) KB, $((bytes / 512)) SD blocks), ${free:-?} free"
+[ -n "$BOOT" ] && echo "      ⭐ BOOTABLE: OS9Boot at LSN 0x$bt, $((0x$bsz)) bytes, signature at LSN 0 +\$F0"
 echo "      CMDS: $FILES"
 [ -n "$DATAFILES" ] && echo "      DATA: $(echo $DATAFILES)"
 exit 0

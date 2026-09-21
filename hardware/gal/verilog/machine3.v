@@ -36,10 +36,25 @@
 //               undecoded, so a read of it answers from the motherboard like
 //               any other free byte.
 //
-// ⭐ AND ONE BIT OF A THIRD, added 2026-09-20 with software/boot/boot.asm's
-// §10a: `sd_cd`, the storage card's CARD DETECT, answered at $FF59 and
-// nowhere else. It is a STUB and not storage_card.v, and the comment beside
-// it says exactly what it does not model and why that matters.
+// ⭐ AND A THIRD SLOT, which was one bit of a stub until 2026-09-21:
+//
+//   STORAGE = 1 storage_card.v at $FF58 - the eight ICs and two GALs of
+//               storage/docs/sdcard.md §3.1 - with sd_model.v, a behavioural
+//               SDHC card, in its socket. `sd_cd` is that socket's mechanical
+//               card-detect switch and `+sdimage=<hex>` is what is on the
+//               card. 0 leaves the four bytes undecoded, which is an empty
+//               slot and not a silent one.
+//
+// ⛔ IT USED TO BE A STUB THAT ANSWERED $FF59 AND NOTHING ELSE, and the
+// argument for that was that boot.asm §10a only needed one bit - "a card is
+// in the socket" - to choose a picture, and the whole card would put a
+// second clock domain in every run. §10b took that argument away on
+// 2026-09-21: "found" now means a card that answered CMD58 with CCS and
+// whose block 0 carries a boot signature, so the ROM issues real commands
+// and reads real bytes, and a stub could only ever answer "not bootable".
+// ⚠ The stub is KEPT for STORAGE = 0 rather than deleted, because
+// v3machine_tb wants a machine with an empty storage slot and $FF59 still
+// has to read as an open socket there.
 //
 // ⚠ AND WHAT THE CARD ALREADY DOES FOR ITSELF, which is why this file is short.
 // video3_card.v resolves its own buses from explicit drivers and exports seven
@@ -53,7 +68,9 @@
 module machine3 #(
     parameter int SIMMS = 4,         // how many of the four sockets are populated
     parameter bit AUDIO = 0,         // audio_card.v at $FF40 - see the header
-    parameter bit SERIAL = 0         // a TL16C550C at $FF38 - see the header
+    parameter bit SERIAL = 0,        // a TL16C550C at $FF38 - see the header
+    parameter bit STORAGE = 0,       // ⭐ storage_card.v at $FF58 - see the header
+    parameter int SDBLOCKS = 128     // ...and how big the card in its socket is
 ) (
     input  wire        CLK25,        // 25.175 MHz - the dot clock AND the divider's input
     input  wire        SLOTCLK,      // 28.37516 MHz - the audio card's crystal, used only if AUDIO
@@ -207,25 +224,61 @@ module machine3 #(
   end endgenerate
   wire aud_drives = (AUDIO != 0) & aud_sel & cpu_rnw;
 
-  // ---- the storage card's CARD DETECT, and nothing else --------------------
-  // ⚠ A STUB, AND IT IS SAID HERE RATHER THAN IMPLIED. storage_card.v IS the
-  // card and storage_tb.sv is what runs it, sd_model.v in the socket. What
-  // software/boot/boot.asm's §10a needs from THIS machine is one bit -
-  // SDSTAT b1, "a card is in the socket" (sdcard.md §6.3) - to choose which of
-  // the boot dialog's three pictures it draws, and instantiating the whole
-  // card to answer it would put a second clock domain in every one of this
-  // bench's runs. So exactly one address answers: a READ of $FF59, with
-  // {WP = 0, CD = sd_cd, BUSY = 0}.
+  // ---- the storage card ----------------------------------------------------
+  // ⭐ THE REAL CARD SINCE 2026-09-21 (the header says why), with sd_model.v
+  // in its socket. storage_card.v exports OBS_DOE so that this file does not
+  // have to restate the card's decode: the card says when it is on the bus,
+  // exactly as video3_card.v does, and `bus_conflict` below is then a real
+  // question rather than a re-derivation.
   //
-  // ⛔ SDDATA IS NOT MODELLED, deliberately. A read of $FF58 returns the
-  // previous burst's byte AND STARTS ANOTHER (sdcard.md §6.2); a stub that
-  // answered 0 for it would be a machine that is *less* dangerous than the
-  // real one, and boot.asm §10a would then be checked against a card that
-  // cannot punish a speculative read. The address is left to the motherboard,
-  // which is what an empty socket does.
-  wire sd_sel    = iosel & (pa[6:0] == 7'h59);
-  wire sd_drives = sd_sel & cpu_rnw;
-  wire [7:0] sd_rd = {6'b0, sd_cd, 1'b0};
+  // ⚠ D7..D0 IS A TRI-STATE NET HERE and nowhere else in this file. The card
+  // has an `inout D` because a '595 with an output enable is what it is; the
+  // harness drives it during a write and lets go during a read, which is the
+  // pattern storage_tb.sv uses. Everything else in this machine resolves from
+  // explicit drivers.
+  wire [7:0] sd_rd;
+  wire       sd_drives;
+  generate if (STORAGE) begin : g_storage
+    wire [7:0] sd_bus;
+    wire       sd_sck, sd_mosi, sd_miso, sd_csn, sd_doe;
+    wire       sd_obs_busy, sd_obs_rclk;   // storage_tb's, not this machine's
+    /* ⛔ AND THE WRITE DATA HAS TO STILL BE THERE AT E-FALL, which is the
+     * 2026-09-10 trap in its second costume. sdbus's MOSICK is
+     * `... & ~RW & E` and storage_card.v clocks the '574 on its FALLING
+     * edge - so the byte a write sends is latched at the instant E falls,
+     * and in a zero-delay model the core has already moved on in that
+     * delta. A real 6809E holds write data past E-fall (t_DHW) and
+     * storage_tb.sv's own cycle task says so in as many words: "release the
+     * bus a dot later, never at the edge itself". This is that dot. */
+    reg  [7:0] sd_wd_q;
+    reg        sd_wr_q;
+    always @(posedge CLK25) begin sd_wd_q <= cpu_d_out; sd_wr_q <= ~cpu_rnw; end
+    assign sd_bus = ~cpu_rnw ? cpu_d_out : sd_wr_q ? sd_wd_q : 8'hzz;
+    storage_card u_store (
+        .CLK25(CLK25), .IOSELn(n_iosel), .A(pa[6:0]), .RW(cpu_rnw), .E(e),
+        .RESETn(n_reset), .D(sd_bus),
+        .SD_SCK(sd_sck), .SD_MOSI(sd_mosi), .SD_MISO(sd_miso), .SD_CSn(sd_csn),
+        .CDn(~sd_cd),        // the switch is closed to ground when a card is in
+        .WPn(1'b1),          // and its write-protect tab is not set
+        .OBS_BUSY(sd_obs_busy), .OBS_RCLK(sd_obs_rclk), .OBS_DOE(sd_doe));
+    sd_model #(.NBLOCKS(SDBLOCKS)) u_card (
+        .PORn(n_reset), .SCK(sd_sck), .MOSI(sd_mosi), .CSn(sd_csn), .MISO(sd_miso));
+    assign sd_rd     = sd_bus;
+    assign sd_drives = sd_doe;
+    // verilator lint_off UNUSEDSIGNAL
+    wire _unused_sd = &{1'b0, sd_obs_busy, sd_obs_rclk, 1'b0};
+    // verilator lint_on UNUSEDSIGNAL
+  end else begin : g_nostorage
+    // ⚠ THE STUB, AND IT IS SAID HERE RATHER THAN IMPLIED. Exactly one
+    // address answers: a READ of $FF59, with {WP = 0, CD = sd_cd, BUSY = 0}.
+    // ⛔ SDDATA IS NOT MODELLED, deliberately. A read of $FF58 returns the
+    // previous burst's byte AND STARTS ANOTHER (sdcard.md §6.2); a stub that
+    // answered 0 for it would be a machine that is *less* dangerous than the
+    // real one. The address is left to the motherboard, which is what an
+    // empty socket does.
+    assign sd_drives = iosel & (pa[6:0] == 7'h59) & cpu_rnw;
+    assign sd_rd     = {6'b0, sd_cd, 1'b0};
+  end endgenerate
 
   // ---- the open-drain control lines ---------------------------------------
   // §2.1: /IRQ, /FIRQ and /WAIT are open-drain with pull-ups on the
@@ -249,8 +302,14 @@ module machine3 #(
   // window; the VRAM window (A19 = 1, A20 = 0, outside the I/O page) decodes to
   // no motherboard device at all, so din_valid is already low there and the
   // exclusion below is only the $FF60-$FF7F window's.
+  // ⚠ AND THE STORAGE CARD'S FOUR BYTES COME OUT OF THE MOTHERBOARD'S SHARE
+  // WHOLESALE, not just the one the card happens to be driving this cycle:
+  // $FF58-$FF5B is the card's window (sdcard.md §6.1) whether or not the
+  // read lands on a register that answers, and a motherboard byte on the bus
+  // under a card read is a fight either way.
+  wire sd_win = iosel & (pa[6:2] == 5'b10110);   // $FF58-$FF5B
   wire mb_drives = mb_din_valid & cpu_rnw & ~(iosel & pa[6] & pa[5])
-                 & ~aud_drives & ~ser_drives & ~sd_drives;
+                 & ~aud_drives & ~ser_drives & ~(STORAGE ? sd_win & cpu_rnw : sd_drives);
   assign card_drives = card_doe;
 
   /* ⛔ AND THE BYTE HAS TO STILL BE THERE AT E-FALL, WHICH IS THE ONE INSTANT
@@ -295,8 +354,29 @@ module machine3 #(
                       | (card_doe  & (aud_drives | ser_drives | sd_drives))
                       | (aud_drives & (ser_drives | sd_drives))
                       | (ser_drives & sd_drives);
+  /* ⛔ AND THE STORAGE CARD'S BYTE IS HELD ACROSS E-FALL FOR THE SAME REASON
+   * video3's is, found 2026-09-21 by the `disk` scenario reading the question
+   * mark off a card that was perfectly good. sdbus's OE595 and RDST are both
+   * `... & RW & E` - which is right for the hardware, where the '595's
+   * outputs settle long before E falls - but in a zero-delay model `e` is
+   * already 0 in the delta where the core samples, so the enable has gone
+   * away and the CPU reads the motherboard's stale byte instead. ⚠ It does
+   * NOT present as "reads return zero": mainboard.v holds the last byte
+   * anything drove, so §9.0's R1 poll reads a plausible ROM byte, decides the
+   * card answered something that is not $FF, and the whole initialisation
+   * fails for a reason that looks like the card. `bus_conflict` below still
+   * uses the REAL enable, because a fight happens while both parts drive. */
+  reg [7:0] hold_sd_d;
+  reg       hold_sd_oe;
+  always @(posedge CLK25) if (e) begin
+    hold_sd_oe <= sd_drives;
+    hold_sd_d  <= sd_rd;
+  end
+  wire       sd_read   = e ? sd_drives : hold_sd_oe;
+  wire [7:0] sd_read_d = e ? sd_rd     : hold_sd_d;
+
   assign cpu_d_in = card_rd ? card_rd_d : aud_drives ? aud_hd
-                  : ser_drives ? ser_rd : sd_drives ? sd_rd : mb_din;
+                  : ser_drives ? ser_rd : sd_read ? sd_read_d : mb_din;
 
   // verilator lint_off UNUSEDSIGNAL
   wire _unused = &{1'b0, cpu_ba, cpu_bs, cpu_busy, pa_valid, pa_hi_valid,

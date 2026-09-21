@@ -184,7 +184,12 @@ def main():
     sym, menus = source(asm)
     G = lambda k: sym["GEO." + k]                                # noqa: E731
 
-    mi = len(menus) - 1                     # the Applications menu: the last
+    # ⚠ THE APPLICATIONS MENU BY NAME, not by position.  It was "the last
+    # one" until 2026-09-21, when desk.asm grew a third menu (Go) and every
+    # highlight claim below silently moved to it - a bench that follows the
+    # source has to follow the menu it means, not the end of the table.
+    mi = next((i for i, x in enumerate(menus) if x["title"] == "Applications"),
+              len(menus) - 1)
     m = menus[mi]
     dx, dw = m["mx"], m["mw"]
     dy = G("DROPY")
@@ -249,7 +254,7 @@ def main():
                 and (px[G("RULEY") + 7, 250:600] == desk).all()):
             barok += 1
             bar_t.append(t)
-        ink = px[2:G("BARH") - 2, 4:menus[-1]["tx"] + menus[-1]["tw"]]
+        ink = px[2:G("BARH") - 2, 4:max(x["tx"] + x["tw"] for x in menus)]
         if int(((ink != itab) & (ink != sel)).sum()) >= 30:
             barink += 1
         rect = px[dy:dy + dh, dx:dx + dw]

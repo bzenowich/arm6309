@@ -11,6 +11,7 @@ sh video3/bench/run-v3mon.sh         # ⭐ the block-streamed platform world, ~6
 sh video3/bench/run-v3pin.sh         # ⭐ the pinball table, and the palette as a feature, ~20 min
 sh video3/bench/run-v3sd.sh          # ⭐ the desktop, Paint and a demo OFF THE SD CARD, ~3 min
 sh video3/bench/run-v3desk.sh        # ⭐ THE DESKTOP SHELL, CLICKED AT, ~3 min
+sh video3/bench/run-v3files.sh       # ⭐ ITS FILE MANAGER, AND THE LISTING READ, ~11 min
 ```
 
 ⭐ **`run-v3desk.sh` is the one that drives a program with a MOUSE.** Everything else
@@ -24,6 +25,21 @@ control that walks the bar and never clicks, in which the pull-down's rectangle 
 hold exactly **one** picture for the whole run - a desktop that drew a menu on a timer
 would pass every other claim. ⭐ Its geometry and its menu table are **parsed out of
 `desk.asm`**, so an item renamed or un-greyed moves the claims with it. **47 claims.**
+
+⭐ **`run-v3files.sh` is the one that READS THE SCREEN BACK AS TEXT.** `desk`'s file
+manager (`docs/boot-and-desktop.md` §3.6) lists a real directory, so the question is
+not "did something get drawn" but "is what was drawn what is on the card". It
+rebuilds every candidate name out of **the ROM's own font blob** — the two-bits-a-pixel
+glyphs `software/nitros9/tools/mktbox.py` wrote into ROM pages 65 on — and matches
+them against the pixels of each row; the names it prints are then compared with what
+the host's **`os9 dir`** says is on the image. Two independent readers of one
+directory, and the card's output in between. ⛔ With a control whose window is already
+up (`desk /w3 N /SD0/DATA`) and whose mouse walks the list, both scroll arrows, the
+menu bar and a desktop icon **without ever pressing** — the list must hold exactly one
+picture, and **it must still be the real listing**, so a blank window is not what
+passes it. ⭐ And a third run driving **`v3trk`** into the same rectangle from the
+shell, because since 2026-09-21 the two programs share one directory reader
+(`modules/v3dir.inc`). **65 claims.**
 
 | Exerciser | plan | What only it can catch |
 |---|---|---|

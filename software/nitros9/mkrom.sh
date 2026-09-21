@@ -106,12 +106,18 @@ python3 software/nitros9/tools/mktbox.py "$OUT/tbox.bin" > "$OUT/tbox.log" || { 
 # changing a file, so a toggle has to force the clean too.
 REC="$NITROS9DIR/recipes/arm6309/l2"
 FLAV=${V3:+v3}; FLAV=${FLAV:-v1}; FLAV="$FLAV${AFLAGS_MORE:+ $AFLAGS_MORE}"
+# ⭐ AND BOOTMOD IS IN THE STAMP TOO, for a weaker version of the same reason:
+# it selects which F$Boot module goes into OS9Kernel (boot_sd, the default, or
+# boot_romdisk) and `os9kernel`'s prerequisite list changing is not by itself
+# enough to make the ROM out of date if the other module is older.
+FLAV="$FLAV${BOOTMOD:+ $BOOTMOD}"
 if [ "$(cat "$REC/.flavour" 2>/dev/null)" != "$FLAV" ]; then
   make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" clean >/dev/null 2>&1 || true
   rm -rf "$REC/.mods" "$REC/.lib"
   echo "$FLAV" > "$REC/.flavour"
 fi
 make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" SYSFILES="$SYSFILES" TBOXDATA="$OUT/tbox.bin" \
+  ${BOOTMOD:+BOOTMOD=$BOOTMOD} \
   AFLAGS_EXTRA="${V3:+-DV3=1} $AFLAGS_MORE" \
   > "$OUT/build.log" 2>&1 || { grep -v '^lwasm\|^lwlink' "$OUT/build.log" | tail -20; echo "FAIL  the ROM did not build"; exit 1; }
 

@@ -61,9 +61,28 @@ module sd_model #(
   // A pattern the testbench can predict without being handed it.
   reg [7:0] mem [0:NBYTES-1];
   integer   mi, mv;
-  initial for (mi = 0; mi < NBYTES; mi = mi + 1) begin
-    mv = (mi / 512) * 7 + (mi % 512) * 13;
-    mem[mi] = mv[7:0];
+  // ⭐ +sdimage=<file> REPLACES THE PATTERN WITH A REAL CARD'S BYTES, added
+  // 2026-09-21 so machine3.v can put a card the boot ROM will actually boot
+  // from in the socket.  Without the plusarg nothing changes and storage_tb
+  // still predicts every byte without being handed it - which is the reason
+  // the pattern is there.  ⚠ The file is $readmemh, one byte a line, and it
+  // must not be LONGER than NBLOCKS*512 records; run-machine.sh pads and
+  // truncates the card image to exactly that.
+  string    sdimg;
+  initial begin
+    for (mi = 0; mi < NBYTES; mi = mi + 1) begin
+      mv = (mi / 512) * 7 + (mi % 512) * 13;
+      mem[mi] = mv[7:0];
+    end
+    if ($value$plusargs("sdimage=%s", sdimg)) begin
+      $readmemh(sdimg, mem);
+      // ⛔ AND IT SAYS WHAT IT LOADED. A $readmemh that silently did not
+      // happen leaves the synthetic pattern in place, which is a card with
+      // no filesystem on it - and every claim downstream then fails for a
+      // reason that has nothing to do with the design.
+      $display("      sd_model: %s, %0d blocks, LSN 0 +$F0 = %02x %02x %02x %02x %02x",
+               sdimg, NBLOCKS, mem[240], mem[241], mem[242], mem[243], mem[244]);
+    end
   end
 
   function [7:0] peek(input integer b, input integer i);

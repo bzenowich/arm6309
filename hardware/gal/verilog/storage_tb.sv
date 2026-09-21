@@ -48,7 +48,7 @@ module storage_tb;
   wire  [7:0] D;
   assign D = tb_oe ? tb_d : 8'hzz;
 
-  wire SD_SCK, SD_MOSI, SD_MISO, SD_CSn, OBS_BUSY, OBS_RCLK;
+  wire SD_SCK, SD_MOSI, SD_MISO, SD_CSn, OBS_BUSY, OBS_RCLK, OBS_DOE;
 
   storage_card dut (
       .CLK25 (CLK25), .IOSELn (IOSELn), .A (A), .RW (RW), .E (E),
@@ -57,7 +57,7 @@ module storage_tb;
       .SD_CSn (SD_CSn),
       .CDn (1'b0),          // a card is in the socket
       .WPn (1'b1),          // and its tab is not set
-      .OBS_BUSY (OBS_BUSY), .OBS_RCLK (OBS_RCLK)
+      .OBS_BUSY (OBS_BUSY), .OBS_RCLK (OBS_RCLK), .OBS_DOE (OBS_DOE)
   );
 
   sd_model card (
