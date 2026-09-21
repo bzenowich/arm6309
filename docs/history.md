@@ -12,6 +12,58 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## §7.2 — the boot ROM puts up a Macintosh-style boot dialog, and the toolbox needed nothing added to it (2026-09-20)
+
+[`boot-and-desktop.md`](boot-and-desktop.md) §1 is the design and is written in present
+tense; this records what it said before the section was built, because the thing it
+proposed is the thing that turned out not to be needed.
+
+**It said, on the day it was written:**
+
+> **What is in the way is the calling convention, not the drawing.** `tbox`'s entry wants
+> `U` = a CoWin window descriptor and `Y` = `VG`, the video globals — CoArm's context. At
+> boot there is no CoArm and no `VG`.
+>
+> **Two ways, and the second is better:**
+>
+> | | |
+> |---|---|
+> | fabricate a window and a `VG` in ROM RAM | no change to `tbox`, but it couples the POST to CoArm's structures, and those are the driver's to change |
+> | ⭐ **a bare entry on `tbox`** taking an explicit target, clip and origin, with no `VG` | a few dozen bytes on a page that has room. CoArm's entry becomes a thin wrapper that fills those three from the window it was given |
+>
+> **Cost: one ROM page mapped for the length of the dialog, and no RAM at all.**
+
+**The first way was taken and the second was not written.** `tbox.asm` is byte for byte
+what it was. The reason the coupling objection does not bite is that the POST does not
+fabricate *a window* at all — it reproduces **CoArm's map**, because `CoG` = `$6000`,
+`Co.WinA` = `$A000` and `Co.WinB` = `$C000` are logical addresses and the POST owns the
+whole map. What is left of the coupling is eleven `CG.*` offsets and `WT.Parms+1`, and
+`software/nitros9/tools/checkcg.py` re-derives all 22 borrowed symbols with lwasm off the
+real `armvid.d` on every ROM build, so the copy cannot drift silently.
+
+**Two costs the estimate did not have**, both found while building it:
+
+- **two ROM pages, not one** — the toolbox's data is read through `Co.WinB` and that is
+  block 6, which is where `lds #STACK` was descending from. The dialog's stack and its
+  variables move to block 0 for its duration. ⛔ And that is why §10a does not call
+  `settle`: `settle` counts frames in `nfrm` at `RAMWIN+$16`, which for the length of
+  the dialog is a ROM page — the store goes nowhere, the `dec` reads a byte of a font,
+  and the loop ends when that byte happens to be 1.
+- **the SIMM's map high byte has to be taken before the first toolbox call**, because
+  `MapB` writes `MAPHI+6` and §11 recovers the socket by reading that byte back.
+
+**And it is drawn LAST, not first.** The Mac's order is probe, clear, dialog; sections
+3–10 paint whole frames that `machine_tb` compares pixel for pixel, so a dialog drawn
+before them would have been painted over by every one of them and would have broken
+every frame claim on the way past.
+
+**The document's §0 table said `⚠ §1` for both dialog rows** — "the ROM toolbox draws
+Haiku windows, bevels, anti-aliased text and icons — and **it already has a `disk`
+icon**" — and its status line said *"specified, nothing built. The deliverable is this
+document."*
+
+---
+
 ## §0 and §8 — `video/` and `video2/` are archived, `video3` is the machine's video card (2026-09-20)
 
 The owner took the decision on 2026-09-20. [`video3/`](../video3/) is the machine's video

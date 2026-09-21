@@ -1119,8 +1119,9 @@ timer free-runs off `CLK25` from reset, which §5 item 10's rule requires of it 
 
 | | |
 |---|---|
-| **ROM page 0 — 8 KB** | the boot monitor: the sequence above, a `16C550` DriveWire loader ([`drivewire.md`](drivewire.md) §6.1), and the `$FFC0`–`$FFFF` vector table |
-| **the remaining ~1016 KB** | ⭐ **a read-only ROM disk**, mounted by an `RBF` descriptor. The whole NitrOS-9 Level 2 distribution is about **645 KB** of `.dsk` images, so it fits with a third to spare |
+| **ROM page 0 — 8 KB** | the boot monitor: the sequence above, a `16C550` DriveWire loader ([`drivewire.md`](drivewire.md) §6.1), the video POST, ⭐ **§10a's boot dialog** ([`boot-and-desktop.md`](boot-and-desktop.md) §1) and the `$FFC0`–`$FFFF` vector table |
+| **pages 1–63 — ~504 KB** | ⭐ **a read-only ROM disk**, mounted by an `RBF` descriptor: a rescue NitrOS-9 that boots with no card, no serial cable and no host |
+| **pages 64–127 — 512 KB** | ⭐ **the ROM toolbox** — `tbox.asm` on page 64 and its fonts, icons, palette and pictures on the pages after it. CoArm draws Haiku windows out of it in place, the way a Macintosh drew with QuickDraw, **and so does page 0's own boot dialog** |
 
 **That is why the ROM is 1 MB and not 8 KB.** A machine that boots to a NitrOS-9 shell
 with no SD card, no serial cable and no host is a different machine to bring up than one

@@ -67,7 +67,7 @@ ARGS=""
 # must reject. In `e1` (no SIMM) and `e2` (a corrupted VRAM byte) boot.asm's
 # error path is the right answer and is asserted as such. SCENARIOS narrows it:
 # SCENARIOS=main for the boot alone.
-SCENARIOS=${SCENARIOS:-"main e1 s1 s2 s3 alias e2"}
+SCENARIOS=${SCENARIOS:-"main e1 s1 s2 s3 alias e2 disk nodisk"}
 # ⭐ AND AN EIGHTH THAT IS NOT IN THAT LIST: `nitros9` boots NitrOS-9 Level 2
 # from reset through boot.asm to a shell on the UART and types `dir` - about
 # 2.5 s of machine, which is minutes here, so it is asked for by name:
@@ -78,6 +78,21 @@ SCENARIOS=${SCENARIOS:-"main e1 s1 s2 s3 alias e2"}
 # It needs the port's ROM, built from $NITROS9DIR (software/nitros9/README.md).
 case " $SCENARIOS " in *" nitros9 "*|*" reboot "*)
   sh ../../../software/nitros9/mkrom.sh /tmp/arm6309-nitros9 || exit 1 ;;
+esac
+# ⭐ AND TWO MORE, `disk` and `nodisk`: boot.asm 10a's boot dialog
+# (docs/boot-and-desktop.md 1). They differ in one bit - machine3.v's sd_cd,
+# which is SDSTAT b1, "a card is in the socket":
+#   SCENARIOS="disk nodisk" npm run check:machine
+#
+# ⛔ AND THEIR ROM IS A V3=1 ROM, IN A DIRECTORY OF ITS OWN. The toolbox is
+# ROM page 64 and recipes/arm6309/arm6309.mak only builds it under -DV3=1
+# (`TBOX = tbox` is inside that ifneq) - without the flag page 64 is 8 KB of
+# zeros, boot.asm 10a finds no "TB" there, reports $63 and skips the dialog,
+# and every claim about the picture would be waiting for a progress code that
+# never comes. The `nitros9` and `reboot` runs above build the OTHER flavour,
+# so the two cannot share an output directory.
+case " $SCENARIOS " in *" disk "*|*" nodisk "*)
+  V3=1 sh ../../../software/nitros9/mkrom.sh /tmp/arm6309-dialog || exit 1 ;;
 esac
 ok=0; bad=0; missing=0
 for sc in $SCENARIOS; do

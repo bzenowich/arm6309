@@ -14,7 +14,9 @@ of CoArm escape sequences, played with `copy /sd0/data/v3desk /w3`, that paint a
 of a desktop. Everything needed to make them real exists in pieces; what does not exist is
 the shell that ties the pieces together and an event loop.
 
-> **Status: specified, nothing built.** The deliverable is this document.
+> **Status: §1 is BUILT (2026-09-20) — `software/boot/boot.asm` §10a, and
+> `machine_tb`'s `disk` and `nodisk` scenarios read the picture off the
+> connector. §2 and §3 are specified and nothing of them is built.**
 
 ---
 
@@ -24,8 +26,8 @@ the shell that ties the pieces together and an event loop.
 |---|---|---|
 | ROM finds the video hardware | `boot.asm`'s `vprobe` — writes `$A5`/`$5A` to `+$13` and reads back; video3 returns it, the archived card cannot (b2/b3 hardwired zero), an empty slot floats | ⭐ **built 2026-09-20** |
 | clears the screen | the POST already paints all of 640 × 200 with the span writer | ⭐ built |
-| a dialog, with an icon: *looking for a disk* | the ROM toolbox draws Haiku windows, bevels, anti-aliased text and icons — and **it already has a `disk` icon** | ⚠ §1 |
-| the icon changes when a disk is found | same drawing path, a second icon | ⚠ §1 |
+| a dialog, with an icon: *looking for a disk* | `boot.asm` §10a, drawn with the ROM toolbox | ⭐ **built 2026-09-20** — §1 |
+| the icon changes when a disk is found | the same drawing path, and the Mac's blinking question mark when there is none | ⭐ **built 2026-09-20** — §1. ⚠ *found* means `SDSTAT` says a card is in the socket, not that it is bootable: §2 |
 | loads the OS from the disk | `rbsd` reads the card **under NitrOS-9**; the ROM has no SD reader of its own, and the OS still boots from the ROM disk | ⛔ §2 |
 | a desktop | `v3desk` is a **recording** | ⛔ §3 |
 | a file manager | `v3trk` fills a Tracker window's list **from a real directory** | ⚠ §3 |
@@ -33,45 +35,91 @@ the shell that ties the pieces together and an event loop.
 
 ---
 
-## 1. The boot dialog — the small one, and it is next
+## 1. The boot dialog — built
 
-The ROM toolbox (`tbox.asm`, ROM page `TB.Pg` = 64) draws exactly what the dialog needs:
-`Window` (the Haiku tab and frame), `Icon`, `TextC`, `Bevel`, `Rect`. Its icon set already
-contains `disk`, and also `paint`, `game`, `files`, `trash`, `home` — which §3's app menu
-will want.
+`boot.asm` §10a draws it, with the ROM toolbox (`tbox.asm`, ROM page `TB.Pg` = 64):
+`Window` for the Haiku tab and frame, `Rect` for the desktop and the content panel,
+`Icon` for the toolbox's own `disk`, `TextC` for the line beside it, `Pal` for the
+256-entry Haiku palette. Three states, each with a progress code so a testbench can
+say which was drawn:
 
-**What is in the way is the calling convention, not the drawing.** `tbox`'s entry wants
-`U` = a CoWin window descriptor and `Y` = `VG`, the video globals — CoArm's context. At
-boot there is no CoArm and no `VG`.
+| | | code |
+|---|---|---|
+| **looking for a disk** | drawn as soon as the palette is loaded and the screen is cleared | `$60` |
+| **found** | `SDSTAT` b1 says a card is in the socket | `$61` |
+| **no disk** | the Macintosh's blinking question mark, on the icon | `$62` |
+| *no toolbox* | ⚠ page 64 is 8 KB of zeros in a build without `-DV3=1`, and in a bare `npm run rom`. The dialog is **skipped**, not half drawn | `$63` |
 
-⭐ **AND THE ANSWER IS THAT `tbox` NEEDS NO CHANGE AT ALL** — found 2026-09-20,
-after first proposing a "bare entry" that would have taken explicit parameters.
-`CoG` is `Co.Data` = **`$6000`**, and `Co.WinA`/`Co.WinB` are `$A000`/`$C000`
-(`defs/armvid.d`): they are **logical addresses in CoArm's own map**, not a
-structure the caller passes. At boot the ROM owns the whole map, so it can
-simply **reproduce that layout** — SIMM pages at `$6000`–`$9FFF` for the `CoG`
-scratch (`TB.Buf` lives inside it), ROM page `TB.Pg` at `$A000`, the toolbox's
-data pages at `$C000` — and then call it exactly as `ca_tbox.asm` does:
-`ldd #$FF00+TB.Pg`, map, `jsr >Co.WinA+3`, with `Y` pointing at a fabricated
-`VG` whose only live field is `VG.Base`.
+⛔ **It is the LAST thing the POST draws, not the first.** The Mac's order is probe,
+clear, dialog; sections 3–10 of this ROM paint whole frames that `machine_tb` compares
+pixel for pixel, so a dialog drawn before them would be painted over by every one of
+them on the way past. So it comes after §10's VRAM read-back — which leaves it as the
+picture the machine is holding when NitrOS-9 takes over, which is the Mac's behaviour
+where it is visible.
 
-⚠ **The work is in populating `CoG`, not in entering the toolbox.** The row
-layer (`ca_row.asm`) keeps real state there — `CG.TStr` (0 means the card),
-`CG.TTop`, `CG.RY`/`RX`/`RN`, `CG.Off`, `CG.DBlk`, `CG.WinA`/`CG.WinB` — and
-the drawing layer keeps the clip `CG.CX0`–`CG.CY1` and origin `CG.OX`/`CG.OY`
-in inclusive screen pixels. A caller must set the minimum those paths read,
-and be able to say why everything it left alone is provably unread rather
-than unread by luck.
+### ⭐ It needed nothing added to `tbox`
 
-⚠ **And `boot.asm` must map the toolbox page itself.** It already maps ROM pages — the ROM
-disk driver does it with `ROM.Hi`, and the POST maps ROM for its own reads — so this is a
-map write and a `jsr`, not new machinery. It is the same mechanism
-[`ca_tbox.asm`](../../nitros9/level2/arm6309/modules/ca_tbox.asm) uses (`ldd #$FF00+TB.Pg`,
-`MapA`, `jsr >Co.WinA+3`), with the POST in CoArm's place.
+The obstacle looked like the calling convention: `tbox`'s routines read `>CoG+…` and
+want `Y` = `VG`, and at boot there is no CoArm and no `VG`. **A bare entry was not
+needed.** `CoG` is `Co.Data` = **`$6000`, a logical address in CoArm's own map**, and
+`Co.WinA` = `$A000`, `Co.WinB` = `$C000` ([`armvid.d`](../../nitros9/defs/armvid.d)).
+The POST owns the whole map, so it reproduces that layout:
 
-**Cost: one ROM page mapped for the length of the dialog, and no RAM at all.**
+| logical | what the POST puts there |
+|---|---|
+| `$6000`–`$9FFF` (blocks 3–4) | SIMM, already — the `CoG` scratch. `TB` = `CoG + CG.LBuf` = `$8A4C` and `CG.TbV` = `$8F6F` are both in block 4 |
+| `$A000` (block 5) | ROM page `TB.Pg` — the toolbox's code, where it expects to be running from |
+| `$C000` (block 6) | the toolbox's **data** pages, as `tbox` switches them through `TV.MapB` |
 
----
+and then calls it the way [`ca_tbox.asm`](../../nitros9/level2/arm6309/modules/ca_tbox.asm)
+does: `ldd #$FF00+TB.Pg`, map it, `jsr >Co.WinA+3`, with `B` = the function, `X` = its
+parameter block and `Y` = a **fabricated `VG`** — sixteen bytes of padding and `VG.Base`,
+in ROM, because `VG.Base` is the only field anything on these paths reads.
+
+**The `CoG` fields the POST sets, and why each one.** Everything else is unread on
+these paths and is left alone:
+
+| | |
+|---|---|
+| `CG.TbV` | the vector table `TVCALL` jumps through. Unset, the first rectangle jumps into whatever the SIMM holds |
+| `CG.Dev` | `PN` answers `WT.Parms+1` off it — a call's parameter **byte count**, which is how `TStr` finds a string and its length. The POST's "window" is that one byte |
+| `CG.OX`, `CG.OY` | `0, 0`, so a parameter **is** a screen coordinate |
+| `CG.CX0`–`CG.CY1` | the clip, screen pixels, inclusive. `FillC` clamps to it and `BlitRow` drops a row outside it |
+| `CG.WinB` | `$FFFF`. ⛔ `MapB` is a **compare**: a stale value that happens to match leaves the wrong ROM page in the window and says nothing |
+| `CG.TTop` | `0` — the card's ring row of screen row 0, which `VSCROLL = 0` makes true |
+| `CG.TStr` | `0`, "the card". The POST's row layer is card-only |
+
+Left unset, and each provably unread: `CG.WinA` (only `MapA`, which `tbox` cannot call —
+`Co.WinA` is its own code); `CG.Off` / `CG.DBlk` (`DSeek`/`DNext`, the DRAM-store back
+end, which `CG.TStr = 0` never reaches); `CG.MFg` / `MBg` / `MTr` (`RowMask` and `Glyph`,
+which have **no `TbVec` entry at all**, so no toolbox call can reach them); `CG.CurS`
+(CoArm's palette entries want a screen record; the POST's do not); `CG.RX`/`RY`/`RN`/`FH`
+(written by `tbox` itself before every call out).
+
+### What the POST had to write instead
+
+`TbVec` — CoArm's row layer, for a machine with no CoArm in it. Seven entries, of which
+`tbox` reaches five: `TV.Rect` (span-solid, in chunks of 256 with a bounded `SPANBUSY`
+poll before each), `TV.Put` (`WMODE` 00 direct through `VDATA`, no poll between bytes —
+`/WAIT` is what holds the CPU off), `TV.MapB`, `TV.PalSet` (`PIDXL`/`PIDXH` written for
+**every** entry, which is §3's rule and the reason for it), and `TV.PalShw`, which has
+nothing left to do because `TV.PalSet` wrote the card's LUT directly.
+
+⛔ **And the stack moves.** `Co.WinB` is `$C000` and `lds #STACK` put `S` at `$E000`,
+descending into block 6 — so for the length of the dialog the stack, and §10a's own
+variables, live in block 0. The POST's other variables at `$C010`–`$C01B` go under the
+data page too; they are SIMM bytes that the remap only *hides*. ⚠ This is also why
+§10a does not call `settle`: `settle` counts frames in `nfrm`, which is in block 6, so
+it would store a count into a ROM page and loop until a byte of a font happened to be 1.
+
+⚠ **`boot.asm` has a second copy of `armvid.d`'s offsets and cannot have anything else**
+— A09 cannot include lwasm source. [`checkcg.py`](../software/nitros9/tools/checkcg.py)
+re-derives all 22 with lwasm off the real `armvid.d` and `software/nitros9/mkrom.sh`
+refuses to build a ROM whose two halves disagree.
+
+**Cost: two ROM pages mapped for the length of the dialog, ~790 bytes of ROM, eight
+bytes of variables and a stack in block 0 — plus `CoG`'s scratch and `tbox`'s own
+`TB`, which are SIMM the POST was not using.**
 
 ## 2. Booting NitrOS-9 off the card
 
@@ -89,6 +137,13 @@ read it before there is an OS, which means a second, minimal SD reader:
 - **Where `OS9Boot` lives on the card.** Simplest is an RBF filesystem and a fixed path, which
   costs the ROM a directory walk. Cheaper and more period-correct: a **fixed block range**
   recorded in a small header in block 0, which is what a Mac's boot blocks are.
+
+⭐ **And §1's `bootchk` is the hook.** It is a label in `boot.asm` between the
+card-detect test and the *found* picture, with both pictures already drawn either side
+of it: §9.0's power-up, §9.1's `CMD17`, `CMD58`'s `CCS` and block 0's signature go
+there, and the branch each answer takes is already written. Until then *found* means
+only "`SDSTAT` b1 says a card is in the socket" and the ROM disk is still the boot
+device either way.
 
 ⭐ **And the icon change in §1 is the honest signal of this step**: *looking* while the init
 sequence runs, *found* once `CMD58` says `CCS` and block 0 carries the signature, and a third
@@ -148,9 +203,9 @@ This document does not change that. What it adds to the ROM is small and all of 
 
 | | |
 |---|---|
-| the boot dialog | §1 — a few hundred bytes of POST, calling `tbox`, which is already there |
+| the boot dialog | §1 — **built**: ~790 bytes of POST, of which about half is the row layer `tbox` draws through, calling a toolbox that was already there |
 | a minimal SD reader | §2 — ~400 bytes, and it is the only way the card can become the boot device |
-| ⭐ `tbox`'s bare entry | §1 — and it is what would let **any** program call the toolbox, which is its own open question (see §5) |
+| ⛔ ~~`tbox`'s bare entry~~ | §1 — **not needed and not written.** The POST reproduces CoArm's map instead, and the toolbox is byte for byte what it was |
 
 Everything in §3 is an application and belongs on the card.
 

@@ -96,6 +96,11 @@ module v3machine_tb;
   wire [7:0]  DACVOL0,  DACVOL1,  DACVOL2,  DACVOL3;
   wire [15:0] ACOUNT;
   wire        firq_asserted;
+  /* ⚠ AND THE STORAGE CARD'S CARD DETECT, likewise: machine3.v answers a read
+   * of $FF59 with it (its header says why that is a stub and not the card).
+   * software/v3boot/v3boot.asm never reads $FF59, so 0 here is a socket this
+   * bench's program does not look in. */
+  logic       sd_cd = 0;
 
   machine3 #(.SIMMS(4)) m (.*);
 

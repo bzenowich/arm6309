@@ -14,7 +14,16 @@ sh software/nitros9/mksddisk.sh out/demos.img  # ⭐ an SD image of the demo pro
 ```sh
 SCENARIOS=nitros9 npm run check:machine        # the same ROM on the RTL machine: 19 claims, ~13 min (from hardware/)
 SCENARIOS=reboot npm run check:machine         # ... and reboot through the boot ROM: 11 claims, ~14 min
+SCENARIOS="disk nodisk" npm run check:machine  # ⭐ boot.asm 10a's boot dialog, both card-detect states: 52 claims, ~20 min
 ```
+
+⛔ **The dialog pair needs a `V3=1` ROM and builds its own**, into
+`/tmp/arm6309-dialog`. The toolbox it draws with is ROM page 64 and
+`recipes/arm6309/arm6309.mak` only assembles it under `-DV3=1`; without the flag page
+64 is 8 KB of zeros, `boot.asm` §10a finds no `"TB"` there and reports `$63`. The
+`nitros9` and `reboot` runs above build the other flavour into `/tmp/arm6309-nitros9`,
+and the recipe has one object directory — so alternating the two forces a clean rebuild,
+which `mkrom.sh`'s `.flavour` stamp does on purpose.
 
 `run-emu.sh` rebuilds `software/boot/boot.bin` and the NitrOS-9 ROM (`mkrom.sh`, which also
 writes the `.hex` the RTL loads). It then boots on

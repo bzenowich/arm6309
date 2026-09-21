@@ -72,6 +72,15 @@ module machine_tb;
 
   logic n_reset = 0, fast_e = 0;
 
+  /* ⭐ THE STORAGE CARD'S CARD DETECT, and it is the only bit of that card
+   * this bench has: machine3.v's header says why it is a stub and not
+   * storage_card.v. boot.asm §10a reads SDSTAT b1 to choose which of the boot
+   * dialog's three pictures it draws, and +scenario=disk / =nodisk are the two
+   * answers. Every other run leaves it 0, and never reads it: §10a only gets
+   * as far as the SDSTAT read when there is a TOOLBOX on ROM page 64, which
+   * only the whole-ROM scenarios have. */
+  logic sd_cd = 0;
+
   wire [15:0] RGB;
   wire BLANK, HSYNC, VSYNC;
   wire e, q, run, rw, lic, avma;
@@ -836,7 +845,14 @@ module machine_tb;
     wait_text("RK", 0, 2 * SEC, "boot.asm handed page 1 the machine, and the loader entered krn (R, K)", at);
     ok(saw_8004, "the CPU fetched $8004 - boot.asm's handoff, not a crash that printed");
     if (at < 0) return;
-    wait_text("rbromdisk DD R0 SCF sc16550 Term", at, 2 * SEC,
+    /* ⛔ `rbsd SD0` JOINED THIS LIST ON 2026-09-20 and this line did not, so
+     * the claim could not match: the storage card's driver and descriptor went
+     * into the bootfile that day (sdcard.md §9.4), and krn prints them between
+     * `R0` and `SCF`. software/nitros9/run-emu.sh's own module-list claim was
+     * updated with them; this one was missed, which is what a scenario nobody
+     * ran that week looks like. ⚠ The pattern is the WHOLE order, deliberately
+     * - a module that moves or vanishes has to fail here. */
+    wait_text("rbromdisk DD R0 rbsd SD0 SCF sc16550 Term", at, 2 * SEC,
               "krn's Boot read OS9Boot from the ROM disk, through the map's ROM pages", at);
     if (at < 0) return;
     wait_text("\narm6309\n", at, 2 * SEC, "SysGo printed the banner, naming this machine", at);
@@ -897,16 +913,32 @@ module machine_tb;
     localparam int SEC = 2097917;
     $display("REBOOT. software/nitros9/: boot, `reboot`, the POST again, and NitrOS-9 again");
     $display("");
-    wait_text("{Term|02}/DD:", 0, 4 * SEC, "NitrOS-9 booted to the shell", at);
+    /* ⚠ SIX SECONDS, NOT FOUR, SINCE 2026-09-20. This is the only wait in
+     * either NitrOS-9 scenario that spans the POST *and* the whole boot from
+     * one origin, so it is the one the bootfile's growth eats first: `rbsd`
+     * and `SD0` went in that day, and the banner was printing at 4 s with the
+     * prompt still to come. run_nitros9 allows 2 + 3 for the same journey;
+     * this now allows 6 for the POST plus it. */
+    wait_text("{Term|02}/DD:", 0, 6 * SEC, "NitrOS-9 booted to the shell", at);
     if (at < 0) return;
-    ok(progress == 8'h40 && !saw_progress_error,
-       $sformatf("boot.asm ran every stage the first time (last progress $%02h)", progress));
+    /* ⭐ $62 OR $63, NOT $40, SINCE 2026-09-20. boot.asm's last stage is
+     * §10a's boot dialog, so the code it leaves behind is the dialog's.
+     * ⚠ WHICH of the two is a property of the ROM this scenario was handed,
+     * and the bench cannot see it: the toolbox is ROM page 64 and
+     * recipes/arm6309.mak only assembles it under -DV3=1, which
+     * run-machine.sh does NOT pass for `nitros9`/`reboot`. So $63 - "no
+     * toolbox, dialog skipped" - is what a default build gives, and $62 -
+     * "no disk", because sd_cd is 0 here - is what a V3=1 one does. Both say
+     * the POST reached §10a; neither is $40 any more, and an error code still
+     * fails. */
+    ok((progress == 8'h62 || progress == 8'h63) && !saw_progress_error,
+       $sformatf("boot.asm ran every stage the first time, ending in §10a's dialog (last progress $%02h)", progress));
     writes0 = progress_writes;
     type_text("reboot\r");
     wait_text("RK", at, 4 * SEC,
               "reboot: the kernel quieted the cards and re-entered the boot ROM, and its handoff reached the loader again", at);
     if (at < 0) return;
-    ok(progress_writes - writes0 >= 17 && progress == 8'h40,
+    ok(progress_writes - writes0 >= 17 && (progress == 8'h62 || progress == 8'h63),
        $sformatf("boot.asm's POST ran again from its reset vector: %0d more progress writes, ending at $%02h - with the map already live, which it rewrites first",
                  progress_writes - writes0, progress));
     ok(!saw_progress_error, "and it reported no error ($E0-$EF) - SIMM walk, TASK 1, palette, spans, lists, tiles and VRAM read-back all passed again");
@@ -918,6 +950,204 @@ module machine_tb;
     wait_text("OS9Boot         CMDS            MODULES         SYS             startup", at, 3 * SEC,
               "dir runs on the rebooted system", at);
     ok(!saw_bus_conflict, "no cycle had two drivers on D0-D7");
+    ok(!saw_pa_conflict,  "no cycle had two drivers on physical A20-A13");
+  endtask
+
+  /* --------------------------------------------------------------------- *
+   * +scenario=disk / =nodisk: ⭐ THE BOOT DIALOG IS ON THE SCREEN.
+   *
+   * docs/boot-and-desktop.md §1. boot.asm §10a draws a Haiku window with the
+   * toolbox's `disk` icon in it, in one of three states, and writes $60, $61
+   * or $62 to say which. ⛔ A PROGRESS CODE IS NOT EVIDENCE THAT ANYTHING WAS
+   * DRAWN - it is evidence that a STA ran - so what is asserted here is the
+   * picture: the tab, the frame, the content panel, the desktop around it and
+   * the icon's own pixels, read off RGB at the connector like every other
+   * frame this bench checks.
+   *
+   * ⚠ THESE TWO NEED THE WHOLE 1 MB ROM, because the toolbox is ROM page 64
+   * and `npm run rom` builds page 0. They are asked for by name for the same
+   * reason `nitros9` is - run-machine.sh builds it from $NITROS9DIR - and
+   * they are not in the default SCENARIOS list.
+   *
+   * The two differ in ONE bit: machine3.v's sd_cd, which is SDSTAT b1.
+   * --------------------------------------------------------------------- */
+  // The Haiku palette, as RGB565 at the connector. software/nitros9/tools/
+  // mktbox.py's UI list and its 5 x 8 x 5 colour cube are where these come
+  // from; that file is also what wrote them into the ROM the machine loaded,
+  // so naming them here is the second, independent statement of the pair.
+  localparam logic [15:0] H_BLACK  = 16'h0000;   // 0  and every ramp's ink
+  localparam logic [15:0] H_WHITE  = 16'hFFFF;   // 1  the question mark's paper
+  localparam logic [15:0] H_PANEL  = 16'hDEDB;   // 2
+  localparam logic [15:0] H_FRAME  = 16'h9CD3;   // 3
+  localparam logic [15:0] H_SHADOW = 16'h738E;   // 4
+  localparam logic [15:0] H_DESK   = 16'h3333;   // 6
+  localparam logic [15:0] H_PALE   = 16'hFF30;   // 14
+  // and four of the icon's own, from the cube: its face, its shaded right
+  // edge, its outline and the label band across it
+  localparam logic [15:0] I_FACE   = 16'hBDB7;   // 204
+  localparam logic [15:0] I_EDGE   = 16'h8370;   // 153
+  localparam logic [15:0] I_LINE   = 16'h4128;   // 102
+  localparam logic [15:0] I_BAND   = 16'h4248;   // 107
+
+  // boot.asm §10a's own equates. A claim that restated them loosely would be
+  // a claim about nothing; these are the numbers the ROM was assembled with.
+  localparam int DWINX = 176, DWINY = 56, DWINW = 288, DWINH = 96;
+  localparam int DCONX = DWINX + 5,  DCONY = DWINY + 5;
+  localparam int DCONW = DWINW - 10, DCONH = DWINH - 10;
+  localparam int DICONX = DWINX + 20, DICONY = DWINY + 28, DICONS = 32;
+
+  // VMODE 00 scans every picture row twice, so picture row y is capture line
+  // 2y - the same doubling check_picture() states.
+  function automatic logic [15:0] px(input int x, input int y);
+    px = (y * 2 < shot_lines && x < MAXW) ? shot[y*2][x] : 16'hDEAD;
+  endfunction
+
+  task automatic dialog_picture(input string state);
+    int nface, nwhite, nink, dirty;
+    capture_frame(1200000);
+    ok(!shot_overflow, "the capture fits");
+    ok(shot_w_min == 640 && shot_w_max == 640 && shot_lines == 400,
+       $sformatf("VMODE 00, 640 x 200 doubled to 400 lines (%0d..%0d x %0d)",
+                 shot_w_min, shot_w_max, shot_lines));
+    if (shot_lines == 0) return;
+    if (state == "nodisk") write_ppm("screenshot-dialog-nodisk.ppm");
+    else                   write_ppm("screenshot-dialog.ppm");
+
+    // ---- the screen was cleared to the desktop's blue --------------------
+    // Four corners of the 640 x 200 picture, well outside the window: if the
+    // toolbox's Rect had painted the window's coordinates and not the
+    // screen's, §4's test pattern would still be here.
+    dirty = 0;
+    for (int x = 0; x < 640; x = x + 7)
+      for (int y = 0; y < 200; y = y + 5)
+        if ((x < DWINX - 4 || x > DWINX + DWINW + 3 ||
+             y < DWINY - 24 || y > DWINY + DWINH + 3) && px(x, y) !== H_DESK)
+          dirty++;
+    ok(dirty == 0,
+       $sformatf("⭐ the screen is cleared to Haiku's desktop blue everywhere outside the dialog (%0d sampled pixels are not)", dirty));
+
+    // ---- the window: tbox.asm's TWin, layer by layer ---------------------
+    // Its own drawing order is shadow, panel, light, frame - so these four
+    // pixels are four different Fill calls, and one of them landing in the
+    // wrong place moves exactly one of them.
+    ok(px(DWINX, DWINY) === H_SHADOW,
+       "the frame's outer rectangle is C.Shadow at its top-left corner");
+    ok(px(DWINX + 2, DWINY + 2) === H_PANEL,
+       "one pixel in, the frame is C.Panel");
+    ok(px(DWINX + 4, DWINY + 4) === H_FRAME,
+       "and four in, the content well's C.Frame border");
+    ok(px(DCONX, DCONY) === H_PANEL &&
+       px(DCONX + DCONW - 1, DCONY + DCONH - 1) === H_PANEL,
+       "the content area (X+5, Y+5, W-10, H-10) is the panel the dialog filled");
+    ok(px(DWINX - 1, DWINY) === H_DESK && px(DWINX + DWINW, DWINY) === H_DESK,
+       "and the frame stops where it should: the desktop is still there either side of it");
+
+    // ---- the tab, which sits ABOVE the frame -----------------------------
+    // 19 pixels of it, as wide as its title needs. TWin fills the whole tab
+    // C.Shadow, insets it, runs the eight-step gradient down it and then puts
+    // C.Pale on its first row.
+    ok(px(DWINX, DWINY - 19) === H_SHADOW,
+       "the Haiku tab is 19 pixels above the frame and starts with its shadow");
+    ok(px(DWINX + 1, DWINY - 18) === H_PALE,
+       "and the row under that is C.Pale - the tab's highlight");
+    ok(px(DWINX + 1, DWINY - 20) === H_DESK,
+       "and nothing is drawn above the tab");
+
+    // ---- the `disk` icon -------------------------------------------------
+    // ⭐ EXACT PIXELS, not "something is there". These six are the icon's own
+    // colours at six places in its 32 x 32 blob - the face, the shaded right
+    // edge, the outline, the label band - and two KEY pixels at corners the
+    // shape does not reach, which have to show the panel through. The blob is
+    // software/demo/tools/show.py's Icon.blob() as mktbox.py quantised it;
+    // this bench renders none of that, it states where the colours land.
+    ok(px(DICONX +  4, DICONY + 16) === I_FACE,
+       "⭐ the `disk` icon is drawn: its face at (4, 16) of the blob");
+    ok(px(DICONX + 28, DICONY + 16) === I_EDGE,
+       "   ... its shaded right edge at (28, 16)");
+    ok(px(DICONX + 12, DICONY +  5) === I_LINE,
+       "   ... its outline at (12, 5)");
+    ok(px(DICONX +  8, DICONY + 17) === I_BAND,
+       "   ... and the label band across it at (8, 17)");
+    ok(px(DICONX, DICONY) === H_PANEL && px(DICONX + 16, DICONY + 30) === H_PANEL,
+       "   ... and its KEY pixels are transparent: the panel shows through at two corners the shape does not reach");
+    // and it is where it was PLACED: nothing of it outside the 32 x 32 box
+    dirty = 0;
+    for (int x = DICONX - 3; x < DICONX + DICONS + 3; x++)
+      for (int y = DICONY - 3; y < DICONY + DICONS + 3; y++)
+        if ((x < DICONX || x >= DICONX + DICONS ||
+             y < DICONY || y >= DICONY + DICONS) && px(x, y) !== H_PANEL)
+          dirty++;
+    ok(dirty == 0,
+       $sformatf("   ... and the band around the icon's box is untouched panel (%0d pixels are not)", dirty));
+
+    // ---- the line of text beside it --------------------------------------
+    // The panel ramp's ink is index 34, which mktbox.py makes black. A row of
+    // anti-aliased text has to put some of it down.
+    nink = 0;
+    for (int x = DWINX + 56; x < DWINX + DWINW - 16; x++)
+      for (int y = DWINY + 36; y < DWINY + 53; y++)
+        if (px(x, y) === H_BLACK) nink++;
+    ok(nink > 40,
+       $sformatf("⭐ the state's line of text is drawn beside the icon: %0d pixels of the panel ramp's ink", nink));
+
+    // ---- and what tells the two states apart -----------------------------
+    // The question mark is TextC in the WHITE ramp with F.Opaq, so it brings
+    // its own paper: a small white box with black ink in it, centred on the
+    // icon. In the `found` state there is no such thing anywhere on the disk.
+    nwhite = 0; nink = 0;
+    for (int x = DICONX; x < DICONX + DICONS; x++)
+      for (int y = DICONY + 8; y < DICONY + 25; y++) begin
+        if (px(x, y) === H_WHITE) nwhite++;
+        if (px(x, y) === H_BLACK) nink++;
+      end
+    if (state == "nodisk") begin
+      ok(nwhite > 30 && nink > 8,
+         $sformatf("⭐ NO DISK: the Macintosh's question mark is on the icon - %0d pixels of its opaque white paper and %0d of ink", nwhite, nink));
+    end else begin
+      nface = 0;
+      for (int x = DICONX + 11; x < DICONX + 20; x++)
+        for (int y = DICONY + 8; y < DICONY + 25; y++)
+          if (px(x, y) === I_FACE) nface++;
+      ok(nwhite == 0 && nface > 80,
+         $sformatf("⭐ FOUND: no question mark - the middle of the disk is its own face (%0d white pixels, %0d face)", nwhite, nface));
+    end
+  endtask
+
+  task automatic run_dialog(input bit present);
+    localparam int SEC = 2097917;
+    $display("");
+    $display("%s. boot-and-desktop.md 1 - the boot dialog, with SDSTAT b1 = %0d",
+             present ? "DISK" : "NODISK", present);
+    $display("");
+    // The whole POST first: the dialog is the LAST thing §10a draws, after
+    // the VRAM read-back, so everything before it has to have passed.
+    /* ⚠ THE BUDGETS ARE SECONDS OF MACHINE AND MINUTES OF SIMULATION - about
+     * five of the second per one of the first - so they are set from what the
+     * POST costs (~0.5 s: four VMODEs, the sprite and tile mode each stand
+     * still for four frames) and not from "generously". A budget that is
+     * merely large turns a defect into an hour of waiting, which is the
+     * failure mode CLAUDE.md calls worse than a failure. */
+    wait_progress(8'h40, 2 * SEC, "the POST ran to the VRAM read-back");
+    if (timed_out) return;
+    ok(!saw_progress_error, "and reported no error on the way");
+    // ⛔ AND THE TOOLBOX HAS TO BE THERE. $63 is boot.asm's "no toolbox on
+    // page 64, dialog skipped", which is what six of this bench's seven boot
+    // scenarios get - and it would make every claim below vacuous.
+    wait_progress(8'h60, SEC,
+                  "⭐ the dialog is up, state `looking for a disk` - so ROM page 64 answered \"TB\"");
+    if (timed_out) return;
+    if (present) begin
+      wait_progress(8'h61, SEC / 2,
+                    "⭐ SDSTAT says a card is in the socket, and the dialog says `Disk found`");
+      if (timed_out) return;
+      dialog_picture("disk");
+    end else begin
+      wait_progress(8'h62, SEC / 2,
+                    "⭐ SDSTAT says the socket is empty, and the dialog goes to the question mark");
+      if (timed_out) return;
+      dialog_picture("nodisk");
+    end
+    ok(!saw_bus_conflict, "no cycle had two drivers on D0-D7, the card-detect read included");
     ok(!saw_pa_conflict,  "no cycle had two drivers on physical A20-A13");
   endtask
 
@@ -978,6 +1208,10 @@ module machine_tb;
       run_nitros9();
     end else if (scenario == "reboot") begin
       run_reboot();
+    end else if (scenario == "disk") begin
+      run_dialog(1'b1);
+    end else if (scenario == "nodisk") begin
+      run_dialog(1'b0);
     end else
       ok(1'b0, $sformatf("+scenario=%s is not a scenario this bench has", scenario));
   endtask
@@ -993,6 +1227,13 @@ module machine_tb;
     // +scenario=nitros9 loads the whole 1 MB ROM, whose page 0 is boot.hex
     if (scenario == "nitros9" || scenario == "reboot") begin
       rom_path = "/tmp/arm6309-nitros9/arm6309_rom.hex";
+      void'($value$plusargs("rom=%s", rom_path));
+    end
+    // ⭐ and so do `disk` and `nodisk` - but a V3=1 one, built beside it:
+    // boot.asm §10a's toolbox is ROM page 64, which recipes/arm6309.mak only
+    // assembles under that flag (run-machine.sh says the rest)
+    if (scenario == "disk" || scenario == "nodisk") begin
+      rom_path = "/tmp/arm6309-dialog/arm6309_rom.hex";
       void'($value$plusargs("rom=%s", rom_path));
     end
     m.mb.load_rom_file(rom_path);
@@ -1034,6 +1275,9 @@ module machine_tb;
     if (scenario == "s2")    m.mb.set_simms(2);
     if (scenario == "s3")    m.mb.set_simms(3);
     if (scenario == "alias") m.mb.set_small(4'b0001);
+    // ⭐ the storage card's CARD DETECT, which is the whole difference between
+    // the two dialog runs (machine3.v's stub, and boot.asm §10a reads it)
+    sd_cd = (scenario == "disk");
     DRAM_C000 = pop_base() + 32'h00C000;
 
     repeat (240) @(posedge CLK25);
@@ -1532,7 +1776,11 @@ module machine_tb;
   // than a failure, and run.sh's exit code cannot see one.
   initial begin
     #1;
-    // ~7.9 s of machine (one dot is two timesteps), and ~20 s for NitrOS-9
+    // ~7.9 s of machine (one dot is two timesteps), and ~20 s for NitrOS-9.
+    // ⚠ `disk` and `nodisk` take the SHORT one: they are the POST plus §10a,
+    // which is ~0.9 s of machine, and a backstop is only a backstop if it
+    // fires in less time than a person will wait - 20 s of machine is well
+    // over an hour here.
     if (scenario == "nitros9" || scenario == "reboot") #999999999;
     else #399999999;
     $display("FAIL  machine_tb: global timeout - progress $%02h at %0d E cycles",

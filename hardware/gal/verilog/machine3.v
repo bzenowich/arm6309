@@ -36,6 +36,11 @@
 //               undecoded, so a read of it answers from the motherboard like
 //               any other free byte.
 //
+// ⭐ AND ONE BIT OF A THIRD, added 2026-09-20 with software/boot/boot.asm's
+// §10a: `sd_cd`, the storage card's CARD DETECT, answered at $FF59 and
+// nowhere else. It is a STUB and not storage_card.v, and the comment beside
+// it says exactly what it does not model and why that matters.
+//
 // ⚠ AND WHAT THE CARD ALREADY DOES FOR ITSELF, which is why this file is short.
 // video3_card.v resolves its own buses from explicit drivers and exports seven
 // fight/float lines; they are brought straight out to the top here so the bench
@@ -54,6 +59,7 @@ module machine3 #(
     input  wire        SLOTCLK,      // 28.37516 MHz - the audio card's crystal, used only if AUDIO
     input  wire        n_reset,
     input  wire        fast_e,
+    input  wire        sd_cd,        // the storage card's CARD DETECT - see below
 
     // ---- the picture, as the connector sees it --------------------------
     output wire [15:0] RGB,
@@ -201,6 +207,26 @@ module machine3 #(
   end endgenerate
   wire aud_drives = (AUDIO != 0) & aud_sel & cpu_rnw;
 
+  // ---- the storage card's CARD DETECT, and nothing else --------------------
+  // ⚠ A STUB, AND IT IS SAID HERE RATHER THAN IMPLIED. storage_card.v IS the
+  // card and storage_tb.sv is what runs it, sd_model.v in the socket. What
+  // software/boot/boot.asm's §10a needs from THIS machine is one bit -
+  // SDSTAT b1, "a card is in the socket" (sdcard.md §6.3) - to choose which of
+  // the boot dialog's three pictures it draws, and instantiating the whole
+  // card to answer it would put a second clock domain in every one of this
+  // bench's runs. So exactly one address answers: a READ of $FF59, with
+  // {WP = 0, CD = sd_cd, BUSY = 0}.
+  //
+  // ⛔ SDDATA IS NOT MODELLED, deliberately. A read of $FF58 returns the
+  // previous burst's byte AND STARTS ANOTHER (sdcard.md §6.2); a stub that
+  // answered 0 for it would be a machine that is *less* dangerous than the
+  // real one, and boot.asm §10a would then be checked against a card that
+  // cannot punish a speculative read. The address is left to the motherboard,
+  // which is what an empty socket does.
+  wire sd_sel    = iosel & (pa[6:0] == 7'h59);
+  wire sd_drives = sd_sel & cpu_rnw;
+  wire [7:0] sd_rd = {6'b0, sd_cd, 1'b0};
+
   // ---- the open-drain control lines ---------------------------------------
   // §2.1: /IRQ, /FIRQ and /WAIT are open-drain with pull-ups on the
   // motherboard, so a card that is not pulling contributes nothing. Written as
@@ -224,7 +250,7 @@ module machine3 #(
   // no motherboard device at all, so din_valid is already low there and the
   // exclusion below is only the $FF60-$FF7F window's.
   wire mb_drives = mb_din_valid & cpu_rnw & ~(iosel & pa[6] & pa[5])
-                 & ~aud_drives & ~ser_drives;
+                 & ~aud_drives & ~ser_drives & ~sd_drives;
   assign card_drives = card_doe;
 
   /* ⛔ AND THE BYTE HAS TO STILL BE THERE AT E-FALL, WHICH IS THE ONE INSTANT
@@ -265,11 +291,12 @@ module machine3 #(
   // ⛔ TWO DRIVERS IS THE FAILURE /IOPAGE EXISTS TO PREVENT (machine.md §2), so
   // this reports it rather than ORing it. design-review2.md §10: "a model that
   // ORs its drivers cannot see a bus fight".
-  assign bus_conflict = (mb_drives & (card_doe | aud_drives | ser_drives))
-                      | (card_doe  & (aud_drives | ser_drives))
-                      | (aud_drives & ser_drives);
+  assign bus_conflict = (mb_drives & (card_doe | aud_drives | ser_drives | sd_drives))
+                      | (card_doe  & (aud_drives | ser_drives | sd_drives))
+                      | (aud_drives & (ser_drives | sd_drives))
+                      | (ser_drives & sd_drives);
   assign cpu_d_in = card_rd ? card_rd_d : aud_drives ? aud_hd
-                  : ser_drives ? ser_rd : mb_din;
+                  : ser_drives ? ser_rd : sd_drives ? sd_rd : mb_din;
 
   // verilator lint_off UNUSEDSIGNAL
   wire _unused = &{1'b0, cpu_ba, cpu_bs, cpu_busy, pa_valid, pa_hi_valid,

@@ -121,4 +121,10 @@ od -An -v -tx1 -w16 "$OUT/arm6309_rom.bin" | tr -s ' ' '\n' | grep -v '^$' > "$O
 [ "$(wc -l < "$OUT/arm6309_rom.hex")" -eq 1048576 ] || { echo "FAIL  the hex is not 1 MB of records"; exit 1; }
 # page 0 must be this repository's boot ROM, byte for byte
 cmp -s -n 8192 "$OUT/arm6309_rom.bin" software/boot/boot.bin || { echo "FAIL  ROM page 0 is not software/boot/boot.bin"; exit 1; }
+# ⛔ AND PAGE 0 HAS A COPY OF THIS TREE'S OFFSETS IN IT.  boot.asm 10a draws the
+# boot dialog with the ROM toolbox and therefore reads CoArm's globals, and A09
+# cannot include defs/armvid.d.  checkcg.py re-derives all 22 with lwasm and
+# says so; without it a field that moved here would move the dialog's clip and
+# nothing would notice (software/nitros9/tools/checkcg.py says the rest).
+python3 software/nitros9/tools/checkcg.py "$NITROS9DIR" || exit 1
 echo "ok    $OUT/arm6309_rom.bin and .hex, page 0 = software/boot/boot.bin"

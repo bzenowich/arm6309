@@ -159,6 +159,76 @@ out of VRAM to prove the second cell's code landed at `+4` and not at `+2`. ⚠ 
 `VMODE` and `graphics.md` §6.4.1's "cell mode does not reach 640×400" is not inherited.
 The scene is `VMODE 00` anyway, so that the frame is the same 640×200 as §4's.
 
+## §10a — the boot dialog, and how it calls a toolbox that is not there yet
+
+⭐ **New 2026-09-20.** [`docs/boot-and-desktop.md`](../../docs/boot-and-desktop.md) §1
+is the design and says the most of it; this is what the ROM does.
+
+A Macintosh 128K finds its video hardware, clears the screen and puts up a dialog with
+an icon that says it is looking for a disk. §10a is that, drawn with the **ROM toolbox**
+— `tbox.asm` on ROM page 64, the same code CoArm calls to draw Haiku windows — and it
+needed **nothing added to the toolbox**: `CoG` is `$6000`, `Co.WinA` is `$A000` and
+`Co.WinB` is `$C000`, all three logical addresses in CoArm's map, and the POST owns the
+whole map, so it reproduces that layout and calls in exactly as `ca_tbox.asm` does.
+
+| code | state |
+|---|---|
+| `$60` | *looking for a disk* — the Haiku window, the toolbox's own `disk` icon, and the line |
+| `$61` | *found* — `SDSTAT` b1 says a card is in the socket |
+| `$62` | *no disk* — the Macintosh's blinking question mark, on the icon |
+| `$63` | ⚠ **no toolbox**: ROM page 64 did not answer `"TB"`, and the dialog was skipped |
+| `$E6` | the toolbox returned an error; the map and the stack are put back first |
+
+⛔ **`$63` is the usual answer, and that is not a defect.** `boot.bin` is page 0 of every
+build, and page 64 only exists in a NitrOS-9 ROM built with `-DV3=1`
+(`recipes/arm6309/arm6309.mak`: `TBOX = tbox` is inside that `ifneq`). A bare
+`npm run rom` produces 8 KB and no more, and six of `check:machine`'s seven default
+scenarios load exactly that. The signature test is `ca_tbox.asm`'s own — the two bytes
+`"TB"` at `Co.WinA` — and it costs one map write and a compare.
+
+⛔ **THE STACK MOVES, and this is the part to know before editing.** `Co.WinB` is
+`$C000`, which is where `lds #STACK` was descending from `$E000`; for the length of the
+dialog block 6 is a **ROM page**. So §10a's stack is `DSTK` in block 0 and its variables
+are at `$0010`–`$004B`, also block 0. ⚠ **It therefore cannot call `settle`**: `settle`
+counts its frames in `nfrm` at `RAMWIN+$16`, which is block 6 — the store would go to a
+ROM page, the `dec` would read back a byte of a font, and the loop would end when that
+byte happened to be 1. `dlgwait` is the same wait with its counter in block 0, and it
+takes the number of blanks in `A`.
+
+⚠ **And the SIMM's map high byte is read before the toolbox runs, not after.** §11
+recovers it with `lda MAPHI+6`; the toolbox's own `MapB` writes `MAPHI+6` on its first
+call, so by the end of the dialog that byte is the ROM's. `simmhi` holds it.
+
+⚠ **`boot.asm` carries a second copy of `defs/armvid.d`'s offsets**, because A09 cannot
+include lwasm source. [`checkcg.py`](../nitros9/tools/checkcg.py) re-derives all 22 with
+lwasm and `software/nitros9/mkrom.sh` refuses a ROM whose two halves disagree.
+
+⭐ **`bootchk` is the hook for the SD reader.** `boot-and-desktop.md` §2 wants *found*
+to mean a card the ROM has read a boot signature off, and this ROM has no SD reader.
+`bootchk` is a label between the card-detect test and the *found* picture, with both
+pictures already drawn either side of it.
+
+### ⛔ A09 has no comment delimiter, and a comma in a comment is a register
+
+The trap that cost this section a day, written down because it will be paid
+again otherwise. A09 takes everything after the operand as a comment — except
+that it keeps parsing a **register list** across the whitespace, so
+
+```
+        pshs    d               ,s = pixels left; 3,s = the colour
+```
+
+assembled as `PSHS A,B,U` (postbyte `$46`): **four bytes where two were meant.**
+Every stack offset in the routine was then off by two, the row layer took the
+toolbox's transparent-key byte for its colour, and the `puls` at the end
+returned into VRAM. ⚠ In isolation `pshs d` assembles correctly, which is why a
+one-line test of it proves nothing; it is the comment that does it.
+
+Two rules follow, and §10a keeps both: **a `pshs`/`puls` comment never starts
+with a comma**, and every register list is written out in full — `pshs
+cc,a,b,x,u`, never `cc,d,x,u`. The encodings are in `boot.lst` and are worth a
+look after any edit to them: `$06` is `A,B` and `$46` is `A,B,U`.
+
 ## Sizing memory, and the descriptor it leaves
 
 §1a is `hardware/ram.md` §6.4.1's walk. It runs after `RUN` and before `LDS`, so it is
@@ -204,7 +274,11 @@ real hardware has no bench underneath it, which is the whole difference.
 
 ## ⛔ Only one check in this repository executes this ROM from reset
 
-`npm run check:machine` is it. The host emulator
+`npm run check:machine` is it — and since 2026-09-20 two of its runs are asked for by
+name, `SCENARIOS="disk nodisk"`, which are the only things anywhere that execute §10a:
+they load a **`V3=1`** 1 MB ROM (the one with a toolbox on page 64) and read the dialog
+off `RGB` at the connector, pixel by pixel, with `machine3.v`'s `sd_cd` as the only
+difference between them. The host emulator
 ([`software/demo/emu/machine.c`](../demo/emu/machine.c)) **starts the CPU at `$8004`**
 with the map, the stack and the SIMM descriptor pre-set the way §1–§1a would have left
 them — `m->cpu.pc = 0x8004` — so `software/nitros9/run-emu.sh`, `run-sd.sh` and

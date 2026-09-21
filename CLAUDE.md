@@ -85,7 +85,7 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 | `npm run check:sim` | the two *hand-written* Verilog models, `gal/mmu.v` and `gal/clkdec.v`, with their own testbenches. Older and separate from `check:video` |
 | `npm run check:netlist` | the motherboard's connectivity, against `dist/mainboard/mainboard/circuit.json`, and the video card's against `dist/cards/video/circuit.json` — what is drawn, and the nets with no producer on the board as a list checked both ways (`graphics.md` §19 item 34). **Build artefacts**, so run `npm run build` first if a `.circuit.tsx` changed. ⚠ `tsci build` prints "Build completed with errors" and exits 0 when it cannot reach the supplier API; connectivity is unaffected |
 | `npm run gen:pld` | writes `gal/{vaddr,vctrl,vsup,audio,aseq}.pld` from the term lists |
-| ⭐ **`npm run check:machine`** | **the whole machine**: a 6809E core, the motherboard, **the `video3` card** and the audio card (`machine3.v`), running `software/boot/boot.asm` out of the boot ROM, and a screenshot taken off `RGB`/`BLANK`/`HSYNC`/`VSYNC`. Seven runs: the boot on four SIMMs, the SIMM sizing walk against one, two and three sockets and an aliasing module, and two faults (no SIMM, a corrupted VRAM byte) in which the ROM's error path is the asserted answer. ⭐ **It ran the ARCHIVED `video` card until 2026-09-20**, when the ROM was retargeted; every motherboard claim and all six fault/population scenarios are unchanged, so what moved is the card. **146 claims, ~7.5 min** (133 and ~4 min on the archived card: video3 is a bigger model, and the POST does more); `SCENARIOS=main` for the boot alone. ⭐ **Two more runs, asked for by name**, and both need `../nitros9` on its `arm6309` branch (`software/nitros9/README.md`): **`SCENARIOS=nitros9`**, NitrOS-9 Level 2 from reset to a shell on the TL16C550C with `dir`, `mfree` and `firqtst q` on the audio card's `/FIRQ` (**19 claims, ~13 min**); and **`SCENARIOS=reboot`**, boot, `reboot` back through `boot.asm`'s POST, and a second shell (**11 claims, ~14 min**) |
+| ⭐ **`npm run check:machine`** | **the whole machine**: a 6809E core, the motherboard, **the `video3` card** and the audio card (`machine3.v`), running `software/boot/boot.asm` out of the boot ROM, and a screenshot taken off `RGB`/`BLANK`/`HSYNC`/`VSYNC`. Seven runs: the boot on four SIMMs, the SIMM sizing walk against one, two and three sockets and an aliasing module, and two faults (no SIMM, a corrupted VRAM byte) in which the ROM's error path is the asserted answer. ⭐ **It ran the ARCHIVED `video` card until 2026-09-20**, when the ROM was retargeted; every motherboard claim and all six fault/population scenarios are unchanged, so what moved is the card. **146 claims, ~7.5 min** (133 and ~4 min on the archived card: video3 is a bigger model, and the POST does more); `SCENARIOS=main` for the boot alone. ⭐ **Four more runs, asked for by name**, and all of them need `../nitros9` on its `arm6309` branch (`software/nitros9/README.md`): **`SCENARIOS=nitros9`**, NitrOS-9 Level 2 from reset to a shell on the TL16C550C with `dir`, `mfree` and `firqtst q` on the audio card's `/FIRQ` (**19 claims, ~13 min**); **`SCENARIOS=reboot`**, boot, `reboot` back through `boot.asm`'s POST, and a second shell (**11 claims, ~14 min**); and ⭐ **`SCENARIOS="disk nodisk"`**, `boot.asm` §10a's **boot dialog** read off the connector pixel by pixel in both card-detect states (**52 claims, ~20 min** — `docs/boot-and-desktop.md` §1). ⛔ The last pair loads a **`V3=1`** ROM into `/tmp/arm6309-dialog`, because the toolbox is ROM page 64 and `recipes/arm6309/arm6309.mak` only builds it under that flag; the other two load the non-V3 one into `/tmp/arm6309-nitros9`, so they cannot share a directory |
 | `npm run rom` | assembles `software/boot/boot.asm` with A09 → `boot.bin`, `boot.hex`, `boot.lst` |
 | `sh gal/verilog/run-demo.sh 118` | **the whole machine with BOTH cards**, running `software/demo/`'s show from ROM — a desktop, an audio player, a paint program, a BBS, raster bars, the overworld — then: the card's register stream against refplayer, the card's sound A/B'd against libopenmpt, every checkpoint frame against `show.Model`'s picture and every game frame against the game model, and an H.264 file for the web. ⚠ **~4.5 h on a quiet host**, and not in any aggregate. ⭐ `sh ../software/demo/emu/run-emu.sh 120` runs the same ROM on the host emulator in seconds, and `checkdemo.py` reads either recording. `software/demo/bench/run-replay.sh` is the replayer alone on the CPU, in two minutes |
 | ⭐ **`sh software/demo/emu/test/run-ps2script.sh`** | **the PS/2 input script**: `PS2_SCRIPT=file` gives the host emulator a timed, semantic keyboard and mouse script (`move to 320 240`, `click left`, `type "..."`), encoded into set-2 scan codes and 9-bit-split mouse packets and fed to `machine.c`'s **line-level** devices rather than past them (`io/ps2/docs/ps2.md` §11.5, `software/demo/emu/ps2script.h`). The bench encodes every script a SECOND time in Python (`emu/test/ps2check.py`), drives `ps2tst 24` on a booted NitrOS-9 and compares the bytes the 6809 echoed back off the card — plus a moves-and-no-clicks control, an empty-script control, and a corrupted-expectation run of each comparison that is **required to fail**. **27 claims, ~2 min**; needs `../nitros9` on its `arm6309` branch, so it is in no aggregate |
@@ -262,7 +262,7 @@ matrix, product-term cascading and placement are `fit1508.exe`'s business and
 phase *at all* is logic, not delay, and this model does see that — which is
 where two of `design-review2.md`'s findings came from.
 
-### Eleven traps this repository has already paid for
+### Twelve traps this repository has already paid for
 
 - **A failed CPLD fit leaves the previous `.fit` in place.** A stale
   utilisation report reads exactly like a passing one. Compare the file's hash
@@ -390,6 +390,25 @@ where two of `design-review2.md`'s findings came from.
   pass** (`/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g`), which is what a lexer does:
   whichever delimiter comes first wins. Any tool in this repository that
   reads Verilog or C as text has the same obligation.
+
+- ⛔ **A09 HAS NO COMMENT DELIMITER, AND A COMMA IN A COMMENT IS A REGISTER** —
+  found 2026-09-20, and it is the `//`-containing-`/*` trap in an assembler.
+  `software/boot/boot.asm` wrote
+
+  ```
+          pshs    d               ,s = pixels left; 3,s = the colour
+  ```
+
+  and A09 kept parsing the **register list** across the whitespace: postbyte
+  `$46`, `PSHS A,B,U`, **four bytes where two were meant**. Every stack offset
+  in the routine was off by two, the boot dialog's row layer took the toolbox's
+  transparent-key byte for its fill colour, and the `puls` at the end returned
+  into VRAM — which presented as a machine that stopped, five minutes into a
+  seven-minute simulation, with no output. ⚠ **`pshs d` on its own assembles
+  correctly**, so a one-line test of the mnemonic proves nothing; it is the
+  comment that does it. **A `pshs`/`puls` comment never starts with a comma,
+  and the register list is always written out in full** (`cc,a,b,x,u`, never
+  `cc,d,x,u`). `boot.lst` has the postbytes: `$06` is `A,B`, `$46` is `A,B,U`.
 
 - **A hang is worse than a failure.** `vsync_tb` waited on
   `SLOTTICK == 0 && PH == 0`; `SLOTTICK` later moved phase, the conjunction

@@ -29,6 +29,7 @@
 *   7. runs the copy engine, and then the hardware sprite
 *   8. tile mode - a tilemap on the four-byte cell stride
 *  10. reads VRAM back, through the window and through VDATA
+*  10a. ⭐ PUTS UP THE BOOT DIALOG -- docs/boot-and-desktop.md 1
 *  11. hands the machine to a program in ROM page 1, if there is one
 *
 * The picture is the point: machine_tb samples RGB at the connector for a whole
@@ -92,6 +93,15 @@ CT_SOL  EQU     $20             ... WMODE 10 span-solid
 CT_TILE EQU     $08             MODE 10 - tile (plan 2.4)
 CT_ON   EQU     $80             display ON, WMODE 00, VMODE 00 = 640x200 @ 70 Hz
 
+*--------------------------------------------------------------- the card ---
+* storage/docs/sdcard.md 6.2 -- four bytes at $FF58.  10a reads ONE of them,
+* and only the one with no side effect: SDSTAT is read-only and reading it
+* starts nothing (6.3).  ⛔ SDDATA is not touched here at all -- a read of it
+* returns the previous burst's byte AND starts another, which is exactly the
+* speculative access 6.2 forbids.
+SDSTAT  EQU     $FF59
+SD_CD   EQU     $02             b1: 1 = a card is in the socket
+
 *-------------------------------------------------------------- the machine --
 VRAMWIN EQU     $2000           logical block 1 -- 8 KB of VRAM at a time
 RAMWIN  EQU     $C000           logical block 6 -- the first SIMM
@@ -144,6 +154,14 @@ P_STUK  EQU     $E5             ⛔ a VSTAT poll ran out of patience - vwait0
 P_ST0   EQU     $50             2a - the store-rate blocks: A begins
 P_ST1   EQU     $51             ... A done (32 stores), B begins
 P_ST2   EQU     $52             ... B done (64 stores)
+* 10a's boot dialog -- docs/boot-and-desktop.md 1.  Each state is a picture,
+* so each gets a code: a testbench that only saw "the dialog ran" would not
+* know WHICH of the three was drawn, and the three are the whole point.
+P_DLGL  EQU     $60             the dialog is up, state "looking for a disk"
+P_DLGF  EQU     $61             ... "found": SDSTAT says a card is in the socket
+P_DLGQ  EQU     $62             ... the Mac's blinking question mark: no disk
+P_NOTB  EQU     $63             ⭐ no toolbox in the ROM - the dialog is SKIPPED
+P_BADTB EQU     $E6             ... the toolbox returned an error; B said which
 
 *------------------------------------------------------------- geometry ------
 * VMODE 00 is 640x200.  A VRAM row is 1024 bytes (plan 2.5), so a row is 1024
@@ -1280,6 +1298,646 @@ vri     lda     VDATA
         lda     #P_VREAD
         sta     SIMPORT
 
+        lbsr    dialog          ⭐ 10a - the boot dialog, below
+        lbra    prog            ... and then 11, past the code it is made of
+
+*==============================================================================
+* 10a. ⭐ THE BOOT DIALOG -- docs/boot-and-desktop.md 1.
+*
+* A Macintosh 128K finds its video hardware, clears the screen, and puts up a
+* dialog with an icon that says it is looking for a disk; the icon changes when
+* it finds one, and blinks a question mark when it does not.  This is that,
+* drawn with the ROM TOOLBOX (nitros9 level2/arm6309/modules/tbox.asm, ROM page
+* TB.Pg = 64), which already draws Haiku windows, bevels, anti-aliased text and
+* icons -- and whose icon set already has `disk`.
+*
+* ⚠ IT IS LAST, NOT FIRST, and that is deliberate.  The Mac's order is probe,
+* clear, dialog; this ROM's sections 3-10 paint whole frames that machine_tb
+* compares pixel for pixel, so a dialog drawn before them would be painted over
+* by every one of them and would break every frame claim on the way past.  It
+* is therefore the LAST picture the POST leaves on the screen, which is also
+* the one the machine is holding when NitrOS-9 takes over -- so what a person
+* sees is still "the POST ran, and then the machine went looking for a disk".
+*
+* ⚠ AND IT IS INSIDE 2c's SKIP: a machine with no video3 card reaches `prog`
+* from `novid` without coming through here at all.
+*
+* ⛔ HOW THE TOOLBOX IS CALLED, AND WHY IT NEEDED NOTHING ADDED TO IT.  tbox's
+* routines read `>CoG+...` and want Y = VG -- CoArm's context -- and at boot
+* there is no CoArm.  But CoG is Co.Data = $6000, a LOGICAL address in CoArm's
+* own map, and Co.WinA = $A000, Co.WinB = $C000 (nitros9 defs/armvid.d).  The
+* POST owns the whole map, so it simply reproduces that layout:
+*
+*   blocks 3 and 4  ($6000-$9FFF)  SIMM, already -- the CoG scratch.  tbox's
+*                                  own RAM (TB = CoG + CG.LBuf = $8A4C) is in
+*                                  block 4, and so is CG.TbV
+*   block 5         ($A000)        ROM page TB.Pg -- the toolbox's code, where
+*                                  it expects to be running from
+*   block 6         ($C000)        the toolbox's DATA pages, as tbox switches
+*                                  them through TV.MapB
+*
+* and then calls it the way ca_tbox.asm's TbGo does: `ldd #$FF00+TB.Pg`, map
+* it, `jsr >Co.WinA+3`, with B = the function, X = its parameter block (big-
+* endian words) and Y = a VG.
+*
+* ⛔ BLOCK 6 IS THE STACK, WHICH IS WHY THE STACK MOVES.  `lds #STACK` put S at
+* $E000, descending into block 6 -- the block the toolbox's data has to occupy.
+* So the dialog runs on a stack of its own in block 0 (DSTK) and puts S back
+* afterwards.  The variables at $C010-$C01B go under the data page too; nothing
+* below reads them again, and they are SIMM bytes that the remap only HIDES, so
+* they are all still there when block 6 comes back.
+*
+* ⭐ AND THE MACHINE HAS NO SD READER YET.  docs/boot-and-desktop.md 2
+* specifies one and it is a separate job, so "found" is driven by the one thing
+* the machine already knows: SDSTAT's card-detect bit.  `bootchk` below is the
+* hook where "...and it is bootable" goes.
+*
+* ⛔ AND A COMMENT ON A pshs/puls LINE MUST NOT START WITH A COMMA.  A09 has no
+* comment delimiter and keeps parsing a REGISTER LIST across the whitespace, so
+* `pshs d    ,s = pixels left` assembles as PSHS A,B,U -- four bytes where two
+* were meant.  Every register list below is written out in full for the same
+* reason; software/boot/README.md records what it cost.
+*==============================================================================
+TB_PG   EQU     64              nitros9 defs/arm6309.d TB.Pg
+ROM_HI  EQU     $01             ... ROM.Hi: the map high byte of the boot ROM
+TBENT   EQU     $A003           Co.WinA + 3 -- tbox.asm's Entry
+COG     EQU     $6000           Co.Data, and every CG.* below is off it
+
+* ⛔ THESE OFFSETS ARE nitros9 defs/armvid.d's, COPIED.  There is no way to
+* include that file here -- it is lwasm source and this is A09 -- so
+* software/nitros9/mkrom.sh re-derives all 22 of them with lwasm and
+* refuses to build a ROM whose two halves disagree.  Without that check a
+* field that moved in the driver tree would put the dialog's clip, or its
+* vector table, somewhere else and nothing would say so.
+CG_DEV  EQU     $0002           the "device": PN reads WT.Parms+1 off it
+CG_TMP  EQU     $0015           TPal leaves an RGB565 entry here
+CG_WINB EQU     $0099           the block at Co.WinB, or $FFFF -- MapB's cache
+CG_TSTR EQU     $009B           the target: 0 is the card
+CG_TTOP EQU     $009D           the card's ring row of screen row 0
+CG_RY   EQU     $009F           a row op: where ...
+CG_RX   EQU     $00A1
+CG_RN   EQU     $00A3           ... and how many pixels
+CG_FH   EQU     $000B           FillRect: how many rows
+CG_CX0  EQU     $00AD           the clip, SCREEN pixels, inclusive
+CG_CY0  EQU     $00AF
+CG_CX1  EQU     $00B1
+CG_CY1  EQU     $00B3
+CG_OX   EQU     $00B5           the working area's origin
+CG_OY   EQU     $00B7
+CG_TBV  EQU     $2F6F           TbVec: what the toolbox calls back through
+WT_PCNT EQU     43              WT.Parms+1 -- the parameter BYTE COUNT
+
+* The card's registers as offsets from U, which the row layer below loads from
+* the VG it is handed.  The absolute names above are the same bytes.
+R_CTRL  EQU     $00
+R_SPLEN EQU     $05
+R_WFG   EQU     $06
+R_WPTR0 EQU     $08
+R_WPTR1 EQU     $09
+R_WPTR2 EQU     $0A
+R_WADV  EQU     $0B
+R_VDATA EQU     $0C
+R_PIDXL EQU     $0E
+R_PIDXH EQU     $0F
+R_PDATL EQU     $10
+R_PDATH EQU     $11
+VGBASE  EQU     $10             VG.Base's offset in the VG handed to tbox
+
+* tbox's function numbers (tbox.asm TbTab)
+TF_TEXTC EQU    1
+TF_ICON EQU     2
+TF_WIN  EQU     4
+TF_RECT EQU     5
+TF_PAL  EQU     7
+
+* the toolbox palette (mktbox.py's UI list, and tbox.asm's own equates)
+C_PANEL EQU     2
+C_DESK  EQU     6
+R_PANEL EQU     32              the text ramp on a panel: 32-34, ink last
+R_WHITE EQU     35              ... and on white, which is the question mark's
+F_REG   EQU     0
+F_BOLD  EQU     1
+F_OPAQ  EQU     4               the glyph draws its own paper: one run a row
+
+* Where the dialog is.  Screen pixels: the origin below is (0, 0), so a
+* parameter IS a screen coordinate and machine_tb can state these numbers.
+WINX    EQU     176
+WINY    EQU     56
+WINW    EQU     288
+WINH    EQU     96
+CONX    EQU     WINX+5          TWin's content area: X+5 Y+5 W-10 H-10
+CONY    EQU     WINY+5
+CONW    EQU     WINW-10
+CONH    EQU     WINH-10
+ICONX   EQU     WINX+20         the 32 x 32 `disk` icon
+ICONY   EQU     WINY+28
+ICONS   EQU     32
+TXTX    EQU     WINX+60         the line beside it, centred in TXTW
+TXTW    EQU     WINW-80
+TXTY    EQU     WINY+36
+DLGBLK  EQU     2               ⛔ how many times the question mark blinks -
+*                               BOUNDED, like every other wait in this ROM
+DLGBLF  EQU     3               ... and how many blanks a phase lasts
+DLGSET  EQU     4               ⚠ and how long a STATE stands still: four, for
+*                               settle's reason - machine_tb hunts a VSYNC edge
+*                               and takes the frame after it, which costs two
+
+dialog
+* --- is there a toolbox in this ROM at all? -------------------------------
+* ⛔ boot.bin IS ROM PAGE 0 OF EVERY BUILD, and most of them have nothing on
+* page 64: machine_tb loads boot.hex alone for six of its seven scenarios, and
+* a bare `npm run rom` produces an 8 KB image and no more.  So the toolbox is
+* identified exactly as ca_tbox.asm identifies it - the two bytes "TB" at
+* Co.WinA - and if it is not there the dialog is skipped and $63 says so.
+* Nothing is on the stack yet and block 6 has not moved, so this costs a map
+* write and a compare.
+        lda     #TB_PG
+        sta     MAPLO+5
+        lda     #ROM_HI
+        sta     MAPHI+5
+        ldx     TBENT-3         Co.WinA
+        cmpx    #$5442          "TB"
+        beq     dlgrun
+        lda     #$05            block 5 back to the SIMM page it had
+        sta     MAPLO+5
+        lda     MAPHI+6         ... in the socket 1a chose
+        sta     MAPHI+5
+        lda     #P_NOTB
+        sta     SIMPORT
+        rts
+
+dlgrun  sts     dstksv          ⛔ the stack leaves block 6 - see the header
+        lds     #DSTK
+* ⛔ AND THE SIMM'S MAP HIGH BYTE IS TAKEN NOW, NOT AT THE END.  1a chose the
+* socket and wrote its high byte into every SIMM entry, and section 11 recovers
+* it by reading MAPHI+6 back -- but the toolbox's own MapB writes MAPHI+6 on
+* its first call, so by the time the dialog is over that byte is the ROM's.
+* Read before, restore after.
+        lda     MAPHI+6
+        sta     simmhi
+
+* --- CoG: the fields tbox and the row layer below actually read ------------
+* Each one, and why it is here.  Anything NOT set is unread on these paths:
+*   CG.WinA   only ca_row's MapA, which tbox cannot call - Co.WinA is its code
+*   CG.Off, CG.DBlk   DSeek/DNext, the DRAM-store back end, which CG.TStr = 0
+*                     never reaches
+*   CG.MFg, CG.MBg, CG.MTr   RowMask and Glyph, which have no TbVec entry at
+*                     all, so no toolbox call can reach them
+*   CG.CurS   CoArm's TbPalSet/TbPalShw want a screen record; ours do not
+*   CG.RX, RY, RN, FH   written by tbox itself before every single call out
+        ldx     #tbvec
+        stx     COG+CG_TBV      TVCALL adds the entry offset to this and
+*                               jsr [,]s through it: with it unset the first
+*                               rectangle jumps into whatever the SIMM holds
+        ldx     #tbdev
+        stx     COG+CG_DEV      PN answers WT.Parms+1 off this, which is how
+*                               TStr finds a call's string and its length
+        ldd     #0
+        std     COG+CG_OX       the origin: parameters are screen pixels
+        std     COG+CG_OY
+        std     COG+CG_CX0      the clip, inclusive - FillC clamps to it and
+        std     COG+CG_CY0      BlitRow drops a row outside it, so unset it
+        std     COG+CG_TSTR     "the card" (the row layer below is card-only,
+*                               and TImage's raw path is the only tbox code
+*                               that reads it)
+        std     COG+CG_TTOP     the ring row of screen row 0: VSCROLL is 0
+        ldd     #639
+        std     COG+CG_CX1
+        ldd     #199
+        std     COG+CG_CY1
+        ldd     #$FFFF          ⛔ MapB is a COMPARE against CG.WinB: a stale
+        std     COG+CG_WINB     value that happens to match leaves the wrong
+*                               ROM page in the window and says nothing
+
+* --- the palette, the screen, and the dialog -------------------------------
+* ⚠ THE DISPLAY IS OFF FOR THIS, which is section 3's rule and the same reason:
+* a PDATH write posts a commit to the next HLOAD, and outside vertical blank
+* that commit fires twice (see 3).  The toolbox's Pal writes the index for
+* every entry, so it would survive it, but there is no reason to pay for the
+* fetch slots either.  It goes back on before anything waits for a frame.
+        clr     tbctl           CT_OFF: display off, bitmap, WMODE 00
+        lda     #CT_OFF
+        sta     VCTRL
+        ldb     #TF_PAL         256 Haiku entries, from the toolbox's own pages
+        ldx     #ppal
+        lbsr    tbcall
+        ldb     #TF_RECT        and the screen cleared to the desktop's blue
+        ldx     #pclear
+        lbsr    tbcall
+        ldb     #TF_WIN         the Haiku tab and frame, titled
+        ldx     #pwin
+        lbsr    tbcall
+        lbsr    dlgcont         the content panel
+        lbsr    dlgicon         ... and the disk icon on it
+        ldb     #TF_TEXTC
+        ldx     #ptlook
+        lbsr    tbcall
+
+        lda     #CT_ON          the display on, and a frame to be seen in
+        sta     tbctl
+        sta     VCTRL
+        lda     #P_DLGL
+        sta     SIMPORT
+        lda     #DLGSET
+        lbsr    dlgwait
+
+* --- which state? ----------------------------------------------------------
+* ⭐ SDSTAT b1, CARD DETECT (storage/docs/sdcard.md 6.3).  A read of SDSTAT has
+* no side effect; nothing else in the four-byte window is touched.
+* ⚠ ON A MACHINE WITH NO STORAGE CARD nothing drives $FF59 and the answer is
+* whatever the bus was holding, so "found" is possible with no socket at all.
+* That is harmless - the ROM disk is still the boot device either way - and it
+* is the honest reading of a machine that cannot tell.
+        lda     SDSTAT
+        bita    #SD_CD
+        beq     dlgnone
+
+* ⭐⭐ THE HOOK.  docs/boot-and-desktop.md 2: "found" is to mean a card the ROM
+* has READ A BOOT SIGNATURE OFF - 9.0's power-up, 9.1's CMD17, CMD58's CCS and
+* block 0's header - and this ROM has no SD reader.  When it gets one, it goes
+* here: leave `dlgnone` as the answer when the signature is not there, and fall
+* through to `dlgfnd` when it is.  The two pictures either side of it are
+* already drawn, so the reader is the only thing that has to be written.
+bootchk equ     *
+        lbsr    dlgcont
+        lbsr    dlgicon
+        ldb     #TF_TEXTC
+        ldx     #ptfound
+        lbsr    tbcall
+        lda     #P_DLGF
+        sta     SIMPORT
+        lda     #DLGSET
+        lbsr    dlgwait
+        bra     dlgend
+
+* --- no disk: the Macintosh's blinking question mark -----------------------
+dlgnone lbsr    dlgcont
+        lbsr    dlgicon
+        ldb     #TF_TEXTC
+        ldx     #ptnone
+        lbsr    tbcall
+        lbsr    dlgqm           the question mark, on the icon
+        lda     #P_DLGQ
+        sta     SIMPORT
+        lda     #DLGSET
+        lbsr    dlgwait
+        lda     #DLGBLK
+        sta     nblink
+dlgb1   lda     #DLGBLF
+        lbsr    dlgwait
+        ldb     #TF_RECT        off: the icon's box, erased
+        ldx     #picbox
+        lbsr    tbcall
+        lda     #DLGBLF
+        lbsr    dlgwait
+        lbsr    dlgicon         ... and on again, with the mark
+        lbsr    dlgqm
+        dec     nblink
+        bne     dlgb1
+
+* --- put the machine back the way section 11 expects it --------------------
+dlgend  lda     simmhi          the socket 1a chose, taken before MapB ran
+        sta     MAPHI+5
+        sta     MAPHI+6
+        lda     #$06            ⚠ block 6 FIRST: the stack cannot come home
+        sta     MAPLO+6         until $C000-$DFFF is the SIMM again
+        lda     #$05
+        sta     MAPLO+5
+        lds     dstksv
+        rts
+
+* --- the pieces each state is made of --------------------------------------
+* dlgcont - the content area, panel grey.  TWin leaves it C.Frame.
+dlgcont pshs    b,x
+        ldb     #TF_RECT
+        ldx     #pcont
+        lbsr    tbcall
+        puls    b,x,pc
+
+* dlgicon - the icon's 32 x 32 box, cleared and then the `disk` icon on it
+dlgicon pshs    b,x
+        ldb     #TF_RECT
+        ldx     #picbox
+        lbsr    tbcall
+        ldb     #TF_ICON
+        ldx     #picon
+        lbsr    tbcall
+        puls    b,x,pc
+
+* dlgqm - the question mark, centred over the icon.  The ramp is the white one
+* and the font asks for its paper (F.Opaq), so the glyph brings its own box and
+* is legible on top of the disk.
+dlgqm   pshs    b,x
+        ldb     #TF_TEXTC
+        ldx     #pquest
+        lbsr    tbcall
+        puls    b,x,pc
+
+* dlgwait - A vertical blanks, so a state or a blink is on the screen long
+* enough to be seen and long enough to be captured.  ⛔ Bounded, like settle:
+* each half is vwait0/vwait1, which report $E5 rather than spin.
+*
+* ⛔ AND IT IS NOT `settle`, WHICH IS THE SAME WAIT.  settle counts its frames
+* in `nfrm`, which is RAMWIN+$16 -- BLOCK 6, and block 6 is the toolbox's data
+* page for the length of the dialog.  Calling it here would store a frame count
+* into a ROM page: the write goes nowhere, `dec` reads back a byte of a font,
+* and the loop ends when that byte happens to be 1.  The counter below is in
+* block 0 with the rest of 10a's state, which is why 10a has any state there.
+dlgwait pshs    a,b
+        sta     nblnkf
+dlgw1   ldb     #$40
+        lbsr    vwait0
+        ldb     #$40
+        lbsr    vwait1
+        dec     nblnkf
+        bne     dlgw1
+        puls    a,b,pc
+
+*==============================================================================
+* tbcall - B = a toolbox function, X = a parameter block: a COUNT byte and then
+* the bytes themselves, big-endian words, exactly as a CoWin escape carries
+* them.  The count is what PN answers, which is how tbox finds a call's string.
+*
+* ⚠ Y IS THE VG.  tbox.asm's header: "Y = VG, which every path here keeps" --
+* it never reads the structure itself, but everything it calls back into does,
+* and the row layer below reaches the card through VG.Base.
+*==============================================================================
+tbcall  pshs    x
+        lda     ,x+
+        sta     tbpcnt
+        ldy     #vgstub
+        jsr     TBENT
+        bcs     tbcbad
+        puls    x,pc
+* ⛔ AND AN ERROR IS REPORTED, NOT IGNORED.  A dialog that half drew itself is
+* a machine that looks broken in a way nobody can name; $E6 names it.  The map
+* and the stack still have to be put back, so it goes out through dlgend.
+tbcbad  lda     #P_BADTB
+        sta     SIMPORT
+        leas    2,s             tbcall's own saved X
+        jmp     dlgend
+
+*==============================================================================
+* The row layer the toolbox draws through -- ca_tbox.asm's TbVec, for a machine
+* with no CoArm in it.  tbox reaches exactly five of these seven (TV.Rect,
+* TV.Put, TV.MapB, TV.PalSet, TV.PalShw); the other two are the table's shape.
+*
+* ⚠ EVERY REGISTER PASSES THROUGH BOTH WAYS.  TVCALL does not save anything,
+* and its callers rely on that: TPal keeps the entry number in B and the
+* directory pointer in X ACROSS the palette write, and every path in tbox keeps
+* Y.  So each entry below preserves all of them.
+*==============================================================================
+tbvec   lbra    tbrow           0  TV.Fill    A = a colour: CG.RN at (RY, RX)
+        lbra    tbput           3  TV.Put     X = CG.RN bytes to put there
+        lbra    tbmapb          6  TV.MapB    D = a block at Co.WinB
+        lbra    tbrect          9  TV.Rect    A = a colour: CG.RN x CG.FH
+        lbra    tbpset          12 TV.PalSet  B = an entry, CG.Tmp = RGB565
+        lbra    tbpshw          15 TV.PalShw  (nothing: see below)
+        lbra    tbdisp          18 TV.IsDisp  (nothing: see below)
+
+*------------------------------------------------------------------------------
+* tbmapb - D = a block, at Co.WinB.  ca_row.asm's MapA is the rule this
+* follows: the low byte of the block is the map's low byte, and the high byte
+* plus RAM.Hi is its high byte -- so $FF00+page, which is what DMap passes, is
+* map high $01, the boot ROM.
+*------------------------------------------------------------------------------
+tbmapb  pshs    cc,a,b
+        cmpd    COG+CG_WINB
+        beq     tbmb1
+        std     COG+CG_WINB
+        orcc    #$50
+        stb     MAPLO+6
+        adda    #$02            $FF + RAM.Hi = $01 = ROM.Hi
+        sta     MAPHI+6
+tbmb1   puls    cc,a,b,pc
+
+*------------------------------------------------------------------------------
+* tbaddr - WPTR := the card address of (CG.RY, CG.RX).  U = the card's base.
+* ca_row.asm's CardAddr: the ring row (CG.TTop + RY) in bits 18-10 and the
+* column in bits 9-0, which on this card is row * 1024 + column (plan 2.5).
+*------------------------------------------------------------------------------
+tbaddr  pshs    a,b
+        ldd     COG+CG_RX
+        stb     R_WPTR0,u       A7..A0 -- the column's low byte
+        pshs    a               ... and A9..A8, to go under the row
+        ldd     COG+CG_TTOP
+        addd    COG+CG_RY
+        anda    #$01            the ring is 512 rows
+        lslb
+        rola
+        lslb
+        rola                    A = row >> 6, B = (row & $3F) << 2
+        orb     ,s+
+        stb     R_WPTR1,u
+        sta     R_WPTR2,u
+        puls    a,b,pc
+
+*------------------------------------------------------------------------------
+* tbrow - A = a colour: CG.RN pixels from (CG.RY, CG.RX), span-solid.
+* ⚠ IN CHUNKS OF 256, because SPANLEN is one byte, and with a bounded
+* SPANBUSY poll before each: plan 5 says no register may be written under a
+* span, and 640 pixels is three spans.
+*------------------------------------------------------------------------------
+tbrow   pshs    cc,a,b,x,u
+        ldd     COG+CG_RN
+        lbeq    tbrw9
+* ⛔ NO COMMA IN A COMMENT ON A pshs/puls LINE.  A09 has no comment delimiter
+* and keeps parsing the register list across the whitespace, so
+* `pshs d    ,s = pixels left` assembled as PSHS A,B,U -- four bytes where two
+* were meant, every stack offset below it off by two, and the row layer drew
+* with TB.Opq as its colour and then returned into the weeds.  It cost a day.
+* The stack here is: 0,1 pixels left / 2 CC / 3 the colour / 4 B / 5,6 X / 7,8 U
+        pshs    a,b
+        ldu     VGBASE,y
+        lbsr    idlespn
+        lda     tbctl
+        ora     #CT_SOL
+        sta     R_CTRL,u
+        clra
+        sta     R_WADV,u        00: continue, and no step-by-two
+        lda     3,s
+        sta     R_WFG,u
+        lbsr    tbaddr
+tbrw1   ldd     ,s
+        beq     tbrw8
+        cmpd    #256
+        bls     tbrw2
+        ldd     #256
+tbrw2   stb     tbchunk         256 comes out as 0, which is what SPANLEN wants
+        pshs    a,b
+        ldd     2,s
+        subd    ,s++
+        std     ,s
+        lbsr    idlespn
+        ldb     tbchunk
+        decb                    the span's length - 1
+        stb     R_SPLEN,u
+        stb     R_VDATA,u       the trigger: any byte
+        bra     tbrw1
+tbrw8   lbsr    idlespn
+        leas    2,s
+tbrw9   puls    cc,a,b,x,u,pc
+
+*------------------------------------------------------------------------------
+* tbrect - A = a colour: CG.RN x CG.FH pixels from (CG.RX, CG.RY).  ca_scr.asm's
+* FillRect, which is one tbrow a row with CG.RY put back at the end.
+*------------------------------------------------------------------------------
+tbrect  pshs    cc,a,b,x,u
+        ldd     COG+CG_RY
+        pshs    a,b             (0,1 the row to restore; 3 the colour - and
+*                                see tbrow for why that comment has no comma)
+        ldx     COG+CG_FH
+        beq     tbrc9
+tbrc1   lda     3,s
+        lbsr    tbrow
+        ldd     COG+CG_RY
+        addd    #1
+        std     COG+CG_RY
+        leax    -1,x
+        bne     tbrc1
+tbrc9   puls    a,b
+        std     COG+CG_RY
+        puls    cc,a,b,x,u,pc
+
+*------------------------------------------------------------------------------
+* tbput - X = CG.RN bytes, at (CG.RY, CG.RX), WMODE 00 direct.
+* ⚠ NO POLL BETWEEN THE BYTES, and section 10 (f) is why: a direct VDATA store
+* is posted and the card's /WAIT holds the CPU off exactly as long as it needs.
+*------------------------------------------------------------------------------
+tbput   pshs    cc,a,b,x,u
+        ldd     COG+CG_RN
+        beq     tbpt9
+        ldu     VGBASE,y
+        lbsr    idlespn
+        lda     tbctl
+        sta     R_CTRL,u        WMODE 00 -- direct
+        clra
+        sta     R_WADV,u
+        lbsr    tbaddr
+        ldd     COG+CG_RN
+        pshs    a,b
+tbpt1   lda     ,x+
+        sta     R_VDATA,u       VRAM at WPTR, post-increment
+        ldd     ,s
+        subd    #1
+        std     ,s
+        bne     tbpt1
+        leas    2,s
+tbpt9   puls    cc,a,b,x,u,pc
+
+*------------------------------------------------------------------------------
+* tbpset - B = a palette entry, CG.Tmp = its RGB565.  Sub-palette 0, which is
+* what bitmap mode looks up (plan 2.4).
+* ⚠ B IS THE ENTRY AND vwait0 TAKES ITS MASK IN B, so the entry is read off the
+* stack and the poll is left to have B to itself.
+*------------------------------------------------------------------------------
+tbpset  pshs    cc,a,b,u
+        ldu     VGBASE,y
+        lbsr    idlespn
+        ldb     2,s             the entry
+        stb     R_PIDXL,u
+        clrb
+        stb     R_PIDXH,u
+        ldd     COG+CG_TMP      RGB565, high byte first
+        stb     R_PDATL,u       GGGBBBBB
+        sta     R_PDATH,u       RRRRRGGG -- and this posts the commit
+        ldb     #$02
+        lbsr    vwait0          PBUSY, bounded
+        puls    cc,a,b,u,pc
+
+*------------------------------------------------------------------------------
+* tbpshw - CoArm's is "the screen's 256 entries onto the card, if it is
+* displayed".  There is one screen here and tbpset wrote the card's LUT
+* directly, so there is nothing left to show.
+* tbdisp - "Z set if this screen is displayed".  It is; and no path the toolbox
+* takes calls this at all -- the entry exists so the table is TbVec's shape.
+*------------------------------------------------------------------------------
+tbpshw  rts
+tbdisp  orcc    #$04            Z: the screen is displayed
+        rts
+
+*==============================================================================
+* The dialog's parameter blocks.  A count byte, then the call's own parameters
+* -- big-endian words, as tbox.asm's header lists them.
+*==============================================================================
+ppal    FCB     0               7 Pal - no parameters
+
+pclear  FCB     9               5 Rect X Y W H COLOUR: the whole screen
+        FDB     0
+        FDB     0
+        FDB     640
+        FDB     200
+        FCB     C_DESK
+
+pwin    FCB     16              4 Window X Y W H FLAGS title (9 + 7)
+        FDB     WINX
+        FDB     WINY
+        FDB     WINW
+        FDB     WINH
+        FCB     $01             b0: the active tab
+        FCC     "arm6309"
+
+pcont   FCB     9               the content area, panel grey
+        FDB     CONX
+        FDB     CONY
+        FDB     CONW
+        FDB     CONH
+        FCB     C_PANEL
+
+picbox  FCB     9               ... and just the icon's box, for the blink
+        FDB     ICONX
+        FDB     ICONY
+        FDB     ICONS
+        FDB     ICONS
+        FCB     C_PANEL
+
+picon   FCB     6               2 Icon N X Y SEL
+        FCB     1               `disk` -- mktbox.py's ICON_NAMES, entry 1
+        FDB     ICONX
+        FDB     ICONY
+        FCB     0               not the dark variant
+
+ptlook  FCB     26              1 TextC X W Y RAMP FONT string (8 + 18)
+        FDB     TXTX
+        FDB     TXTW
+        FDB     TXTY
+        FCB     R_PANEL
+        FCB     F_REG
+        FCC     "Looking for a disk"
+
+ptfound FCB     18              (8 + 10)
+        FDB     TXTX
+        FDB     TXTW
+        FDB     TXTY
+        FCB     R_PANEL
+        FCB     F_REG
+        FCC     "Disk found"
+
+ptnone  FCB     15              (8 + 7)
+        FDB     TXTX
+        FDB     TXTW
+        FDB     TXTY
+        FCB     R_PANEL
+        FCB     F_REG
+        FCC     "No disk"
+
+pquest  FCB     9               the question mark, centred on the icon (8 + 1)
+        FDB     ICONX
+        FDB     ICONS
+        FDB     ICONY+8
+        FCB     R_WHITE
+        FCB     F_BOLD+F_OPAQ
+        FCC     "?"
+
+* ⭐ THE FABRICATED VG.  tbox keeps Y across everything it does because the row
+* layer under it reads the video globals through it; CoArm's VG is kilobytes of
+* driver state, and the only field anything on these paths reads is VG.Base.
+* So this is that field and the padding in front of it, in ROM -- nothing here
+* ever writes to a VG.
+vgstub  FCB     0,0,0,0,0,0,0,0
+        FCB     0,0,0,0,0,0,0,0
+        FDB     VBASE           VGBASE ($10): the card
+
 *==============================================================================
 * 11. A program in ROM. machine.md 7.2: everything after page 0 is for "a
 *     read-only ROM disk", and until there is one the handoff is the simplest
@@ -1533,6 +2191,33 @@ wpage   EQU     RAMWIN+$17      WPTR[18:16] for the next setwptr/setcptr
 cpexp   EQU     RAMWIN+$18      7a's expected byte
 vidx    EQU     RAMWIN+$1A      section 10's byte index - which byte, on a failure
 vgot    EQU     RAMWIN+$1B      ... and the byte that was read
+
+*==============================================================================
+* 10a's variables, and its stack, are in BLOCK 0 and not block 6.
+*
+* ⛔ BECAUSE BLOCK 6 IS WHERE THE TOOLBOX'S DATA GOES.  Co.WinB is $C000, so
+* for the length of the dialog logical $C000-$DFFF is a ROM page and neither
+* the variables above nor a stack descending from $E000 exists.  Block 0 is
+* the same SIMM, is mapped throughout, and holds nothing but the memory
+* descriptor at $0000-$0002 (1a).
+*
+* ⚠ These are all under $100 and DP is 0 out of reset and never written, so
+* they assemble direct-page - which is what makes the row layer below cheap
+* enough to fill 128,000 pixels with.
+*==============================================================================
+DSTK    EQU     $2000           the dialog's stack: block 0, descending
+dstksv  EQU     $0010           where S was, two bytes
+tbctl   EQU     $0012           CTRL as the row layer is to write it, WMODE 00
+tbchunk EQU     $0013           tbrow: this span's length, 256 as 0
+nblink  EQU     $0014           the question mark's blinks left
+nblnkf  EQU     $0015           ... and the blanks left in a phase
+simmhi  EQU     $0016           the SIMM's map high byte, before MapB ate it
+* ⭐ THE FABRICATED WINDOW.  tbox's PN answers `WT.Parms+1` off CG.Dev, and
+* that byte - the call's parameter COUNT - is the only field of a CoWin window
+* record anything on these paths reads.  So the record is one byte, at the
+* offset a real one would have it.
+tbdev   EQU     $0020
+tbpcnt  EQU     tbdev+WT_PCNT
 
 *==============================================================================
 * The vector page.  machine.md 7.2: $FFC0-$FFFF is served by the ROM
