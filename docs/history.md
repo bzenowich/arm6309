@@ -12,6 +12,81 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## boot-and-desktop.md §5 items 7 and 8, and §3.6 — the repaint was unmeasured and `F.Opaq` was a prediction (2026-09-21)
+
+[`boot-and-desktop.md`](boot-and-desktop.md) §5 items 7 and 8 are the present design and
+are written in present tense. This records what they said while the file manager's repaint
+had never been timed and the `F.Opaq` finding was an untested hypothesis.
+
+**Item 7 said:**
+
+> 7. ⚠ **A click that arrives while the shell is drawing is lost** (§3.6). The event loop
+>    polls the button's level once a pass; nothing latches the edge. A sticky bit in
+>    `ca_ptr.asm`'s packet is one fix, and it is not written — but see item 8, which may be
+>    the better one: the click is only lost because the draw is *slow*.
+
+**Item 8's closing three paragraphs and its order of work said:**
+
+> ⭐ **The prize is item 7's repaint.** The file manager's twelve rows are opaque
+> rectangles of known content, and redrawing them run-by-run through the CPU is what
+> makes a pass seconds long and a click inside it disappear. That is the copy engine's
+> own shape. ⚠ **Unmeasured**: the current repaint has not been timed, and the claim that
+> the engine would fix item 7 rather than merely improve it rests on that number. Measure
+> before building — `monster`'s bench already has the instrument (a store to `$FF2E`,
+> timestamped in picoseconds).
+>
+> ⭐⭐ **AND THE FIRST STEP IS NOT THE COPY ENGINE AT ALL — found 2026-09-21.**
+> `desk.asm` never sets **`F.Opaq`**. Its `ad` field is `1` (bold) at every call site, so
+> every list row and every title takes `tbox`'s **transparent** path: the `KEY` fill, the
+> run scan, and one `RowPut` per run. That *is* the ~395-calls-per-40-character-line
+> figure, and `run-v3text.sh` measured it at **41 % of the bill**.
+>
+> `F.Opaq` is the toolbox's own answer and it has been there all along: the glyph writes
+> the ramp's own paper, so **a row becomes ONE run**. That is "pre-render the text
+> against the background it will sit on", done in software — with no glyph bank, no VRAM
+> upload, no palette renumbering and no engine. It applies exactly where the file manager
+> draws: the white list body (`R_WHITE`), the grey panel and the yellow tab. ⚠ It does
+> **not** apply over the desktop wallpaper or over an icon, because opaque text paints
+> its own background and would square off whatever is behind it.
+>
+> **Order, if it is taken:**
+> 1. ⭐ Set `F.Opaq` where the background is uniform and known, and **measure the repaint
+>    before and after** with `monster`'s instrument (a store to `$FF2E`). This is one
+>    flag and may close open item 7 on its own.
+> 2. Only then ask whether the icons are worth a keyed blit — and if they are, decide the
+>    palette question (renumber to key on 0, or give the engine its own blobs).
+> 3. Leave the text to `F.Opaq`. It is already the cheaper mechanism.
+
+**§3.6 said** "a pass that repaints twelve rows is seconds long".
+
+**Three of those statements did not survive being measured:**
+
+- **"its `ad` field is `1` (bold) at every call site"** is not what the file said. Every
+  `Text`/`TextC` call site in `desk.asm` cleared `ad` — the regular font, not bold — and
+  the `1`s in the file were a `Bevel`'s style byte and an `Icon`'s variant. The finding
+  itself held: no call site set bit 2.
+- **"the white list body, the grey panel and the yellow tab"** is not where it applies.
+  The yellow tab's ramp `R.Tab` has **no flat paper** — it is a step of the tab's
+  gradient, and `tbox.asm`'s `RPaper` already answers `255` for it and refuses the opaque
+  path. The grey panel's two uses in the manager, the column header and the status strip,
+  are **17-row bevels** and the font is 17 rows, so an opaque line box would take the
+  bevel's own bottom shadow; the menu bar's titles would take `GEO.RULEY`. Only the list's
+  rows (18 rows) and a pull-down's items (20 rows) have room, and those are the two that
+  were changed.
+- ⛔ **"may close open item 7 on its own"** is the one the measurement was for, and the
+  answer is no. `DrawList` went from 2,565.7 ms to 2,085.4 ms, −18.7 %, and the shortest
+  interval at which six clicks on a scroll arrow all arrive went from 2.6 s to 2.2 s. The
+  threshold *is* the repaint; a click is 120 ms and a human clicks three times a second.
+  The sticky button bit in `ca_ptr.asm` remains the fix for item 7.
+
+What replaced them: `desk.asm` marks its own drawing at `$FF2E` (`$50`–`$55`), sets
+`F.Opaq` at the two call sites where the background is that ramp's paper, and carries a
+`⛔` at each of the four that stay transparent saying which pixel it would have taken.
+Item 8's next step is the **icons**, which the same measurement puts at 47.2 ms a row —
+565 ms, 27 % of a repaint — and which are the keyed copy's own shape.
+
+---
+
 ## boot-and-desktop.md §2 and §0 — the machine had no SD reader, and *found* meant a switch (2026-09-21)
 
 [`boot-and-desktop.md`](boot-and-desktop.md) §2 is the design and is written in present
@@ -183,6 +258,31 @@ instead is the consequence nobody wants: the desktop is *deaf* for as long as a 
 
 **§5 item 5 said** "`stardew` is unbuilt **and the other two games do not yet launch from
 anything**"; the second half is no longer true.
+
+---
+
+## §3.2 and §5 item 5 — `Stardew` was on the menu greyed (2026-09-21)
+
+`desk.asm`'s Applications menu carried a fourth item that did nothing, and §3.2 said why:
+
+> ⛔ `stardew` is specified ([`video3/docs/stardew.md`](../video3/docs/stardew.md)) and
+> not built; carrying it greyed is how a person notices it is missing.
+
+and §5 item 5:
+
+> 5. **`stardew` is unbuilt.** It is on the menu, greyed (§3.2). The other two games launch.
+
+The scene was built on 2026-09-21 (`video3/docs/stardew.md`, the port's
+`level2/arm6309/cmds/stardew.asm` and `video3/bench/run-v3star.sh`) and the item's action
+went from `A.Dis` to `A.Run` — one byte of `MTab`. ⚠ `A.Dis` itself stays: it is the
+mechanism, and `video3/bench/checkdesk.py` parses the menu table out of the source, so an
+item that is greyed again moves the bench's claims with it.
+
+⚠ **`run-v3desk.sh`'s card deliberately does not carry `stardew`.** The module is 23 KB
+and its world is another 480, and it owns the screen for twenty seconds; that bench is
+about a menu, so what it asserts is that clicking the item *asks* for the launch
+(`DESK-RUN Stardew` on the console) and that nothing new was drawn, because `F$Fork`
+found no module. The scene itself is `run-v3star.sh`'s business.
 
 ---
 

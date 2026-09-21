@@ -235,14 +235,16 @@ put-character.
 
 ### 3.2 The menu bar, and what the bench reads
 
-Two titles — **Desk** (About, Quit) and **Applications** (Paint, Monsterland, Pinball,
-and `Stardew` greyed) — in an 18-pixel bar of `C.ITab` with one row of `C.Frame` under it.
+Two titles — **Desk** (About, Quit) and **Applications** (Paint, Monsterland, Pinball
+and Stardew) — in an 18-pixel bar of `C.ITab` with one row of `C.Frame` under it.
 A pull-down is a `tbox` bevel; an item is highlighted by repainting its rectangle in
 `C.Sel` and its label in the `sel` ramp, and unhighlighted by repainting it in `C.Panel`.
 
 ⭐ **A greyed item is refused the highlight as well as the action**, so hovering it says so
-too. ⛔ `stardew` is specified ([`video3/docs/stardew.md`](../video3/docs/stardew.md)) and
-not built; carrying it greyed is how a person notices it is missing.
+too — the mechanism is `A.Dis` and it is what carried `Stardew` while it was specified and
+not built. ⭐ **All four items are live since 2026-09-21**, when
+[`video3/docs/stardew.md`](../video3/docs/stardew.md)'s farm was built; `history.md` has
+what the greyed entry was for.
 
 ⭐ **Dismissal repaints rather than saving pixels.** The rectangle the pull-down covered is
 filled with the desktop colour and every desktop icon is drawn again — `desk` holds its own
@@ -333,13 +335,21 @@ do honestly, because a pass is `F$Sleep 1` plus whatever drawing the last event 
 The same rule governs the desktop icons (§5 item 6).
 
 ⚠ **A click that lands while the manager is redrawing is lost.** The loop samples the
-button once a pass and a pass that repaints twelve rows is seconds long, so a 120 ms click
+button once a pass and a pass that repaints twelve rows is **2.09 s**, so a 120 ms click
 inside one never produces an edge. This is not slowness, it is a polled loop with no
 latched button: `ca_ptr.asm`'s packet carries the button's **level**, and nothing between
 the IRQ and `SS.Mouse` remembers that it went down and up again. `run-v3files.sh` found it
 by clicking a scroll arrow three times a second apart and moving the list one row; the
-bench now leaves 4.5 s between clicks and says why. **Fixing it belongs in the driver** —
-a sticky "was pressed" bit in `VG.MsBtn` that `SS.Mouse` clears on read.
+bench leaves 4.5 s between clicks and says why. **Fixing it belongs in the driver** —
+a sticky "was pressed" bit in `VG.MsBtn` that `SS.Mouse` clears on read. Item 7 is the
+number; item 8 is what the repaint is made of.
+
+⭐ **The repaint is timed by the program itself.** `desk` stores `$50`–`$55` to `$FF2E`,
+which decodes nowhere on the board and which the host emulator timestamps into
+`marks.txt` in picoseconds (`software/demo/demo.asm`'s `MARK`, `monster`'s instrument):
+`DrawFiles` begins and ends, `DrawList` begins, and each row's `Rect`, `Icon` and name are
+bracketed. Three stores a repaint and three a row — 39 of them, about 0.2 ms of 2,085 —
+and they are **inside** every number the two items below quote.
 
 ⚠ **The window title is clipped at 55 characters.** `ca_tbox.asm`'s `DoTbCall` refuses a
 call of more than 64 parameter bytes (`WT.Poly` is 64) and a `Window` call is the title
@@ -409,17 +419,47 @@ Everything in §3 is an application and belongs on the card.
    a child owns the screen the desktop is deaf, and there is no way to leave it — no
    command key, no force-quit, and no second screen to switch back to. A shell that cannot
    interrupt what it launched is a shell with one application.
-5. **`stardew` is unbuilt.** It is on the menu, greyed (§3.2). The other two games launch.
+5. **The desktop's four applications all launch (answered 2026-09-21; §3.2).** `stardew`
+   was the last greyed item; its scene is built
+   ([`video3/docs/stardew.md`](../video3/docs/stardew.md), and
+   `video3/bench/run-v3star.sh`) and the item is `A.Run` like the other three. ⚠ What is
+   still true is that `stardew` needs its 491,520-byte world on the card, so a card built
+   without `stardew.pic` launches it and gets its error page.
 6. ⭐ **The desktop icons (answered 2026-09-21; §3.6).** `IcTab` carries an action and an
    argument per icon and `IconAt` hit-tests the
    64 × 48 cell: a click selects (the icon's dark variant, its label in the selection
    ramp), a click on the selection acts. The disk and Tracker icons open the file manager
    on `/SD0`; `Paint` forks what the menu item forks; `Zelda`, `home` and `Trash` select
    and do nothing, because there is nothing for them to do yet.
-7. ⚠ **A click that arrives while the shell is drawing is lost** (§3.6). The event loop
-   polls the button's level once a pass; nothing latches the edge. A sticky bit in
-   `ca_ptr.asm`'s packet is one fix, and it is not written — but see item 8, which may be
-   the better one: the click is only lost because the draw is *slow*.
+7. ⚠ **A click that arrives while the shell is drawing is lost** (§3.6), and since
+   2026-09-21 the window it is lost in is a measured **2.09 s** rather than "seconds".
+   The event loop polls the button's level once a pass; nothing latches the edge.
+
+   ⭐ **What survives, measured.** Six clicks on the file manager's scroll arrows at one
+   interval, counted by the repaints they cause (`$52` marks):
+
+   | clicks 6 apart by | before item 8 | after |
+   |---|---|---|
+   | 3.0 s | 6 of 6 | 6 of 6 |
+   | 2.6 s | 6 of 6 | 6 of 6 |
+   | **2.2 s** | **3 of 6** | **6 of 6** |
+   | **2.0 s** | 3 of 6 | **3 of 6** |
+   | 1.5 s | 3 of 6 | 3 of 6 |
+   | 1.0 s | 2 of 6 | 2 of 6 |
+   | 0.5 s | 1 of 6 | 2 of 6 |
+
+   ⛔ **So item 8's flag improves this and does not close it.** The threshold is the
+   repaint, exactly: it moved from between 2.2 and 2.6 s to between 2.0 and 2.2 s because
+   `DrawList` moved from 2.57 s to 2.09 s. **A person clicking a scroll arrow three times
+   a second loses two clicks in three, before and after.** Closing it needs the driver —
+   a sticky "was pressed" bit in `VG.MsBtn` that `SS.Mouse` clears on read, in
+   `ca_ptr.asm` — and that is still not written. ⚠ Making the draw fast enough instead
+   would mean a repaint under ~150 ms, which is **fourteen times** what item 8's next
+   step is worth on its own arithmetic.
+
+   ⚠ `run-v3files.sh` keeps its 4.5 s between clicks. Two seconds of margin over a
+   threshold that is itself the draw time is what stops a bench failing because a row's
+   name got one glyph longer.
 
 8. ⛔ **THE TOOLBOX DOES NOT USE THE COPY ENGINE, AND THE KEYED COPYRECT WAS BUILT FOR
    THIS** — opened 2026-09-21.
@@ -452,44 +492,136 @@ Everything in §3 is an application and belongs on the card.
    rendered for shows its fringe. Text stays where it is until something renders glyphs
    per background, which is a different feature.
 
-   ⭐ **The prize is item 7's repaint.** The file manager's twelve rows are opaque
-   rectangles of known content, and redrawing them run-by-run through the CPU is what
-   makes a pass seconds long and a click inside it disappear. That is the copy engine's
-   own shape. ⚠ **Unmeasured**: the current repaint has not been timed, and the claim that
-   the engine would fix item 7 rather than merely improve it rests on that number. Measure
-   before building — `monster`'s bench already has the instrument (a store to `$FF2E`,
-   timestamped in picoseconds).
+   ⭐ **The prize is item 7's repaint**, and since 2026-09-21 it is a number rather than
+   an argument. `desk` marks its own drawing at `$FF2E` (§3.6) and the file manager's
+   twelve rows cost this, on `/SD0/DATA`'s twenty entries with six- to eight-character
+   names:
 
-   ⭐⭐ **AND THE FIRST STEP IS NOT THE COPY ENGINE AT ALL — found 2026-09-21.**
-   `desk.asm` never sets **`F.Opaq`**. Its `ad` field is `1` (bold) at every call site, so
-   every list row and every title takes `tbox`'s **transparent** path: the `KEY` fill, the
-   run scan, and one `RowPut` per run. That *is* the ~395-calls-per-40-character-line
-   figure, and `run-v3text.sh` measured it at **41 % of the bill**.
+   | | transparent text | **opaque text** | |
+   |---|---|---|---|
+   | a row's `Rect` (404 × 18, the span writer) | 18.3 ms | 18.3 ms | — |
+   | a row's **icon** (16 × 16, run scanned) | 47.2 ms | 47.2 ms | — |
+   | a row's **name** | 109.5 ms | **71.4 ms** | −34.8 % |
+   | **one row** | 175.0 ms | **136.9 ms** | −21.8 % |
+   | **`DrawList`** — 12 rows, the scroll bar, the count | **2,565.7 ms** | **2,085.4 ms** | −18.7 % |
+   | **`DrawFiles`** — that plus the window, the tab and the header | **3,437.0 ms** | **2,956.8 ms** | −14.0 % |
 
-   `F.Opaq` is the toolbox's own answer and it has been there all along: the glyph writes
-   the ramp's own paper, so **a row becomes ONE run**. That is "pre-render the text
-   against the background it will sit on", done in software — with no glyph bank, no VRAM
-   upload, no palette renumbering and no engine. It applies exactly where the file manager
-   draws: the white list body (`R_WHITE`), the grey panel and the yellow tab. ⚠ It does
-   **not** apply over the desktop wallpaper or over an icon, because opaque text paints
-   its own background and would square off whatever is behind it.
+   ⭐⭐ **STEP ONE IS DONE AND IT WAS `F.Opaq`, NOT THE COPY ENGINE.** `desk.asm` never
+   set it, so every list row took `tbox`'s **transparent** path: the `KEY` fill, the run
+   scan, and one `RowPut` per run — the ~395-calls-per-40-character-line figure that
+   `run-v3text.sh` measured at 41 % of the bill. `F.Opaq` is the toolbox's own answer and
+   had been there all along: the glyph writes the ramp's own paper, so **a row is ONE
+   run**. It is "pre-render the text against the background it will sit on", done in
+   software — no glyph bank, no VRAM upload, no palette renumbering, no engine.
 
-   ⛔ **And the arithmetic says a per-glyph blit would be SLOWER than that.** A copy costs
-   ~87 µs of setup whatever its size (`monster`'s measurement), so a 40-character title as
-   40 glyph copies is ~3.5 ms — against twelve `RowPut`s for an opaque line. **The engine
-   wins on big rectangles and loses on small ones**; a 12 px glyph is the wrong shape for
-   it. Where it would still win is the **32 × 32 icons**, which are irregular and
-   run-scanned today, and whole-row or whole-window fills. Not the type.
+   ⛔ **It is set where the background is uniform, known, AND is that ramp's paper** —
+   two call sites, the list's rows (`R.White` on `C.White`, `R.Sel` on `C.Sel`) and a
+   pull-down's items (`R.Panel`/`R.Dim` on `C.Panel`, `R.Sel` on `C.Sel`). The pixels
+   there are unchanged, because level 0 of the glyph now writes the byte the `Rect`
+   underneath had already written.
+
+   ⚠ **Four call sites are deliberately left transparent, and three of them for one
+   pixel.** The font is **17 rows** and `tbox` paints the whole line box, so an opaque
+   line needs 17 rows of its own to land in:
+
+   | | why not |
+   |---|---|
+   | the desktop icons' labels | they sit on the **wallpaper**, and a selected one is drawn in the selection ramp over it. This is the case the flag would be visible in |
+   | the manager's column header | `FM.HH` is 17, so a box at `+1` runs to row 17 of a bevel whose rows are 0–16: it would take the bevel's own bottom shadow and bleed a row into the list |
+   | its status strip | `FM.SH` is 17. The same pixel |
+   | the menu bar's titles | `GEO.TITY` is 2, so the box ends on row 18 — which is `GEO.RULEY`, the `C.Frame` rule under the bar |
+
+   Together they are four calls against the list's twelve, so the cost of refusing them is
+   small; giving the header and the strip one more row each would recover it, and that is
+   a geometry change the benches read, not a flag.
+
+   ⛔ **IT DID NOT CLOSE ITEM 7 — see the table there.** The threshold for a click
+   surviving moved from 2.6 s to 2.2 s, which is exactly `DrawList`. **What is left is not
+   the text.** Of the 137 ms a row now costs, **47 ms is the 16 × 16 icon** — 565 ms of
+   every repaint, 27 % of it, drawn by scanning each row for runs. That is the irregular,
+   fixed-size, per-row shape the keyed copy exists for, and it is now the largest single
+   item that is not already the span writer.
+
+   ⛔ **And the arithmetic still says a per-glyph blit would be SLOWER than `F.Opaq`.** A
+   copy costs ~87 µs of setup whatever its size (`monster`'s measurement), so a
+   40-character title as 40 glyph copies is ~3.5 ms — against one opaque line. **The
+   engine wins on big rectangles and loses on small ones**; a 12 px glyph is the wrong
+   shape for it. A 16 × 16 icon at one copy each is 12 × 87 µs = ~1 ms a repaint against
+   565 ms, which is the case for doing the icons and not the type.
 
    ⚠ **Two sizing notes** for whoever does build a bank: an OS-9 listing is **mixed case**
    — `OS9Boot` sits beside `CMDS` and `DATA` — so a body alphabet is ~70 glyphs and not
    64; and the bank must live in **VRAM**, because the copy engine is VRAM-to-VRAM, which
    is a start-up upload the software path does not need.
 
-   **Order, if it is taken:**
-   1. ⭐ Set `F.Opaq` where the background is uniform and known, and **measure the repaint
-      before and after** with `monster`'s instrument (a store to `$FF2E`). This is one
-      flag and may close open item 7 on its own.
-   2. Only then ask whether the icons are worth a keyed blit — and if they are, decide the
-      palette question (renumber to key on 0, or give the engine its own blobs).
+   ### What the early Macintosh did, and which of it is left to take
+
+   Asked 2026-09-21: *what did the early Macs do to draw proportional text quickly, and
+   what can this borrow?* The answer turns out to be mostly **"`tbox` already does it"**,
+   and the two pieces it does not do are worth different amounts. ⚠ The figures below
+   marked *estimated* are cycle counts read off the source at E = 2.0979 MHz, not
+   measurements; the last paragraph says which measurement settles them.
+
+   | the Mac's technique | `tbox` | |
+   |---|---|---|
+   | **compose the string into a buffer, then move it** — `DrawText` built a line and blitted it, rather than going to the screen per glyph | ⭐ **already done.** `TextAt` fills `TB.Buf` with the paper, walks the string laying each glyph's row in at `TB.CX`, and calls `BlitRow` once | — |
+   | **the strike**: every glyph of a face packed side by side in one wide bitmap, with a location table whose *differences* are the widths | partly. The font has a 3-byte directory entry per glyph (width, 2-byte offset) and `Glyph` reads it — ⛔ but **once per glyph per row**, so a 17-row line does the lookup and a `mul` for the row offset seventeen times over | ⚠ ~4 ms of 71, **estimated** |
+   | **the source layout is the destination layout**, so a row is a shift-and-mask of whole words with no per-pixel work | ⛔ **and this one is already paid for.** The font is 2 bits a pixel and the screen is 8, so `GRow` must expand — but `TB.NTab` makes a nibble **two destination bytes in one `ldd`/`std`**, which is the same two-pixels-an-instruction a pre-expanded font would achieve | ⛔ **nothing**, see below |
+   | **synthesized styles** — bold as the glyph OR'd with itself shifted one pixel, italic as a per-row shear | not done: `F.Bold` selects a **second font** and `FontMap` maps its page | saves ROM, not time |
+   | **the system font resident in ROM** | ⭐ already: the fonts are ROM pages, mapped at `Co.WinB` by `FontMap` | — |
+
+   ⛔ **THE CACHE-OF-EXPANDED-GLYPHS IDEA IS DEAD, AND `TB.NTab` IS WHY.** The obvious
+   borrow — "pre-expand each glyph to destination bytes for its ramp, so drawing is a
+   copy" — assumes the expansion is the cost. It is not: a nibble is one table index and
+   one `std`, which is **two pixels an instruction**, and a `memcpy` of pre-expanded
+   bytes is also two pixels an instruction. The bank would cost ~275 KB across three
+   ramps, or a VRAM upload at start-up, **to run the same speed**. The 32-byte table in
+   RAM already bought the win; it is dated in `tbox.asm` at *"~45 cycles a pixel"* saved.
+
+   ⭐ **AND THE ARITHMETIC SAYS THE GLYPH LOOP IS NOT THE BILL AT ALL.** A seven-character
+   name is ~50 px wide and 17 rows. ⚠ **Estimated**, from the source:
+
+   | | |
+   |---|---|
+   | the paper fill — 50 bytes a row, 2 at a time, × 17 | ~2.4 ms |
+   | `GRow` — 850 pixels at ~10 cycles | ~4.1 ms |
+   | `Glyph` + the row-offset `mul`, ⛔ **× 17 rows** | ~3.9 ms |
+   | **all the pixel work** | **~10 ms** |
+   | **measured, the whole name** | **71.4 ms** |
+
+   ⛔ **So ~60 ms of the 71 is not glyphs.** What is left in the loop is **seventeen
+   `BlitRow`s and seventeen `FontAgain`s** — one transfer and one page remap per row,
+   each of them a `TVCALL` into CoArm and back. The Mac's *"blit the line once"* is
+   therefore the one technique here with real money behind it, and ⚠ **it is not about
+   the card**: `F.Opaq` already made each row a single `RowPut`, so the seventeen
+   `RowPut`s are as few as a row-at-a-time design can make them. The saving would have to
+   come from **moving the row loop to the far side of one call** — `BlitBox`, a 17-row
+   `TB.Buf` handed over once — not from a different way of drawing a glyph.
+
+   ⚠ **THE MEASUREMENT THAT SETTLES IT, AND NOTHING SHOULD BE BUILT BEFORE IT.** The
+   ~60 ms above is a subtraction, not an observation, and subtractions are how the last
+   two of these went wrong — item 8's own text predicted the glyphs and the icon turned
+   out to be 27 %. `desk` marks its drawing at `$FF2E` already; marking **`GRow`+fill,
+   `BlitRow`, and `FontAgain` separately inside one `TextAt`** gives the three numbers
+   directly, and each of the three points at a different fix:
+
+   - **`BlitRow` dominates** → build `BlitBox`; the per-row round trip is the bill.
+   - **`FontAgain` dominates** → the remap is the bill and it is nearly free to fix: the
+     font page only moves when `BlitRow`'s `TVCALL` moved it, and `tbox.asm` line 30
+     already calls `MapB` *"a compare when nothing moved"* — so the compare is either not
+     reached or not cheap.
+   - **`GRow`+fill dominates** → the estimate above is wrong, and only then does hoisting
+     `Glyph` out of the row loop (the strike's running pointer, ~4 ms) earn its change.
+
+   **Order, from here:**
+   1. ⭐ **`F.Opaq` is set and measured** (2026-09-21) — the table above.
+   2. ⭐ **The icons are next**, because they are now 27 % of the repaint and they are the
+      engine's own shape. Deciding it means deciding the palette question above (renumber
+      to key on 0, or give the engine its own blobs in VRAM).
    3. Leave the text to `F.Opaq`. It is already the cheaper mechanism.
+   4. ⭐ **Then the three-way `TextAt` measurement above**, before any of the Mac ideas is
+      built. The only one it could vindicate is `BlitBox`; the glyph bank is already ruled
+      out on arithmetic.
+   5. ⛔ And none of this closes item 7: a repaint would have to reach ~150 ms. **The
+      sticky button bit is the fix for item 7**, and it is independent of all of the
+      above.
