@@ -417,5 +417,49 @@ Everything in §3 is an application and belongs on the card.
    on `/SD0`; `Paint` forks what the menu item forks; `Zelda`, `home` and `Trash` select
    and do nothing, because there is nothing for them to do yet.
 7. ⚠ **A click that arrives while the shell is drawing is lost** (§3.6). The event loop
-   polls the button's level once a pass; nothing latches the edge. The fix is a sticky bit
-   in `ca_ptr.asm`'s packet, and it is not written.
+   polls the button's level once a pass; nothing latches the edge. A sticky bit in
+   `ca_ptr.asm`'s packet is one fix, and it is not written — but see item 8, which may be
+   the better one: the click is only lost because the draw is *slow*.
+
+8. ⛔ **THE TOOLBOX DOES NOT USE THE COPY ENGINE, AND THE KEYED COPYRECT WAS BUILT FOR
+   THIS** — opened 2026-09-21.
+
+   `tbox.asm` contains no `CPTR`/`CCTRL` reference at all. Every icon and every glyph is
+   drawn by scanning each row for runs of non-transparent pixels and issuing one `RowPut`
+   per run — its own header counts *"~395 of them"* for one transparent glyph. Meanwhile
+   [`video3/docs/keyed-copy.md`](../video3/docs/keyed-copy.md) describes a copy that skips
+   a source byte of zero in hardware, at the engine's 0.247 µs a byte, and §6.3 of it
+   names a windowing GUI as the case it exists for. The demos use it (`v3lib.inc`), the
+   driver uses it (`vidcpy3.asm`), `v3drag` moves a whole window with it — and the thing
+   that draws the windows does not.
+
+   ⛔ **And the two mechanisms do not use the same key**, which is the first thing anyone
+   trying this will hit:
+
+   | | transparent index |
+   |---|---|
+   | the card's keyed copy | **0**, fixed in `v3lane` — the comparator a key *register* would need is a DIP-20 and the board had room for a DIP-14 |
+   | `tbox`'s software transparency | **15** — `KEY equ 15, never drawn: a transparent pixel` |
+
+   Index 0 is black in the toolbox's palette and 15 is the magenta key, so the ROM's art
+   cannot be handed to the engine as it stands. Renumbering reaches `mktbox.py`,
+   `v3show.py`, `tbox.asm`'s equates and the ROM data itself.
+
+   ⚠ **Window titles are the WORST candidate, not the best.** `tbox` keeps a ramp per
+   background — `R_PANEL` on grey, `R_WHITE` on white — precisely because the
+   anti-aliased levels *bake the background in*. A keyed copy is binary: it writes a byte
+   or it does not, and cannot blend, so a glyph keyed onto a background it was not
+   rendered for shows its fringe. Text stays where it is until something renders glyphs
+   per background, which is a different feature.
+
+   ⭐ **The prize is item 7's repaint.** The file manager's twelve rows are opaque
+   rectangles of known content, and redrawing them run-by-run through the CPU is what
+   makes a pass seconds long and a click inside it disappear. That is the copy engine's
+   own shape. ⚠ **Unmeasured**: the current repaint has not been timed, and the claim that
+   the engine would fix item 7 rather than merely improve it rests on that number. Measure
+   before building — `monster`'s bench already has the instrument (a store to `$FF2E`,
+   timestamped in picoseconds).
+
+   **Order, if it is taken:** time the repaint; decide the palette question (renumber, or
+   give the engine its own blobs with 0 as the key); do the list rows and the icons; leave
+   the text alone.
