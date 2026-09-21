@@ -58,6 +58,13 @@ python3 software/nitros9/tools/vgmodel.py --emit "$DATADIR" || { echo "FAIL  vgm
 # canvas, the CP437 BBS).  Only under V3=1: they are 640 x 480 and 80 x 25
 # character screens, neither of which video/ can show.
 [ -n "$V3" ] && { python3 software/nitros9/tools/v3show.py "$DATADIR" || { echo "FAIL  v3show.py"; exit 1; }; }
+# ⭐ AND THE PINBALL TABLE, which is 327,680 bytes of PICTURE and is the
+# reason a card exists at all: a NitrOS-9 module may occupy 64 K of address
+# space and this is five times that (video3/bench/mkpcb.py).  `pinball` opens
+# it by bare name through DOpen, so the desktop's Applications menu can fork
+# the scene off /SD0/CMDS and it finds its table in /SD0/DATA.
+[ -n "$V3" ] && { cp video3/bench/pcbtable.pic video3/bench/pcbtable.pal "$DATADIR/" \
+  || { echo "FAIL  no pcbtable.pic/.pal - run video3/bench/mkpcb.py"; exit 1; }; }
 # and the overworld's data (software/demo/tools/mkgame.py), with its model for the checker
 python3 software/demo/tools/mkgame.py "$OUT/gamedata" > "$OUT/gamedata.log" || { cat "$OUT/gamedata.log"; echo "FAIL  mkgame.py"; exit 1; }
 for f in tiles world sprites frames; do cp "$OUT/gamedata/$f.bin" "$DATADIR/$f.bin"; done

@@ -6,13 +6,23 @@ marks.txt, and usually frames.bin and vram.bin.  This reads them and makes
 four different kinds of claim:
 
   ⛔ THE VRAM GATE.  The table is decided by DATA, not by what the run
-     happened to do: every byte of ring rows 0..511, columns 0..639 is the
-     block its map names, with each flipper's REST frame composed over one
-     rectangle.  So the whole of VRAM is rebuilt here from pinball.json - the
-     block bank, the block map, the keyed art, the eight composed flipper
-     frames - and compared byte for byte.  A dropped restore, a save-behind
-     taken from the wrong row, a keyed copy that wrote its holes or a
-     composition that took the wrong background each fail it.
+     happened to do - and since 2026-09-21 the data is ⭐ THE FILE THE
+     MACHINE READ.  Ring rows 0..511, columns 0..639 must be pcbtable.pic,
+     byte for byte, 327,680 of them; the spare columns must hold the keyed
+     art and the eight flipper frames composed out of that same picture.  A
+     load to the wrong VRAM address, a truncated load, a dropped restore, a
+     save-behind taken from the wrong row, a keyed copy that wrote its holes
+     or a composition that took the wrong background each fail it.
+     ⭐ The expected VRAM now IS the file, which is both a stronger gate than
+     the block composition it replaced and a much shorter one to write.
+  ⭐ THE LOAD, which is the new path and therefore the new thing that can be
+     wrong: $1B, $1C and $1D bracket the palette and the picture, so the
+     bench reports the seconds and the KiB/s the machine really managed.
+  ⭐ THE COLLISION GRID REACHED THE PHYSICS.  Art and collision are separate
+     files now, so "the table looks right" says nothing about whether the
+     ball can hit any of it.  Every Hit marks its KIND ($01..$0C) and the
+     union over the runs must cover every kind pcbtable.json's colmap
+     carries - the one claim that fails if the grid never arrived.
   ⭐ THE LAMP GATE, which is the one this scene needs and the other two did
      not.  Its lamps and its six-digit score are PALETTE entries, so nothing
      they do reaches a VRAM dump at all - the whole feature is invisible to
@@ -36,6 +46,7 @@ four different kinds of claim:
 """
 import base64
 import bisect
+import hashlib
 import json
 import os
 import shutil
@@ -52,7 +63,11 @@ import frames as fr  # noqa: E402
 M_FRAME, M_SCROLL, M_LAMPS, M_SPRITE = 0x10, 0x11, 0x12, 0x13
 M_PHYS, M_FLIPS, M_ACTORS, M_SCALL = 0x14, 0x15, 0x16, 0x17
 M_BEGIN, M_LAST, M_WIPED, M_NOBLK = 0x18, 0x19, 0x1A, 0x1E
+M_PALLD, M_PICO, M_PICD = 0x1B, 0x1C, 0x1D
 M_POLL0, M_ACT0, M_CAMH, M_CAML, M_SLOT0, M_NIB = 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0
+# ⭐ $01..$0C: a ball met a cell of that collision kind.  ⚠ They are below
+# M_FRAME and outside every other range, so frames_of() ignores them.
+M_KIND0, M_KINDN = 0x01, 0x0C
 BUDGET_MS = 14.3                    # VMODE 00, keyed-copy.md §6.1
 # ⚠ THREE MILLISECONDS, WHERE monster USES TWO.  A frame declines the blank
 # because THE FRAME BEFORE IT overran, so the in-sync set is "frames whose
@@ -89,6 +104,10 @@ def mode_name(v):
         bits.append("⛔ MUTATION: the save-behind is one row low")
     if v & 0x40:
         bits.append("⛔ MUTATION: ball 1 is never restored")
+    if v & 0x100:
+        bits.append("⛔ MUTATION: the picture is loaded ONE VRAM ROW LOW")
+    if v & 0x200:
+        bits.append("⛔ MUTATION: the load is TRUNCATED")
     return ", ".join(bits)
 
 
@@ -169,64 +188,62 @@ def d64(s, shape=None):
 
 
 def expected_vram(j):
-    """⭐ WHAT THE CARD MUST HOLD, built from pinball.json and nothing else.
+    """⭐ WHAT THE CARD MUST HOLD.  The table is pcbtable.pic ITSELF - the
+    same 327,680 bytes the SD card carries and the machine read - and the
+    bank is built out of it and pinball.json's keyed art.
 
     The ROM and this share the DATA and no code (bench/README.md's rule): the
-    ROM reads pinballdat.asm, which mkpinball.py wrote from the same arrays
-    this reads out of pinball.json.
+    ROM reads the file off /SD0/DATA, and this reads it off the disk that
+    wrote the card.  ⛔ And the sha256 in pinball.json is checked first, so a
+    picture that was regenerated after the ROM was built fails LOUDLY here
+    rather than as 300,000 mismatched bytes.
     """
-    BLK, CW, CH, TW = j["blk"], j["cw"], j["ch"], j["tw"]
-    nblk, bpb = j["nblk"], j["bpb"]
+    TW, TH = j["tw"], j["th"]
     cb = j["c_bank"]
     fw, fh, nff = j["flipw"], j["fliph"], j["nflipf"]
     bw_, bh, nbf = j["ballw"], j["ballh"], j["nballf"]
-    blocks = d64(j["blocks"], (nblk, BLK, BLK))
-    blkmap = d64(j["blkmap"], (CH, CW))
     ballart = d64(j["ballart"], (bh, nbf * bw_))
-    flipart = d64(j["flipart"], (fh, 2 * nff * fw))
+    flipart = d64(j["flipart"], (2 * fh, nff * fw))
+    pic = np.fromfile(os.path.join(HERE, j["pic"]), dtype=np.uint8)
+    if pic.size != TW * TH:
+        raise SystemExit("FAIL  %s is %d bytes, not %d" % (j["pic"], pic.size, TW * TH))
+    pic = pic.reshape(TH, TW)
 
     v = np.zeros((512, 1024), dtype=np.uint8)
     know = np.zeros((512, 1024), dtype=bool)
 
-    # ── the table: one block a cell, and every byte of it spoken for
-    for cy in range(CH):
-        for cx in range(CW):
-            v[cy * BLK:(cy + 1) * BLK, cx * BLK:(cx + 1) * BLK] = blocks[blkmap[cy, cx]]
+    # ── ⭐ THE TABLE, which is the file
+    v[0:TH, 0:TW] = pic
     know[:, 0:TW] = True
 
-    # ── the block bank, in bands of bpb
-    for i in range(nblk):
-        r = j["r_bank"] + (i // bpb) * BLK
-        c = cb + (i % bpb) * BLK
-        v[r:r + BLK, c:c + BLK] = blocks[i]
-        know[r:r + BLK, c:c + BLK] = True
-
-    # ── the keyed art, which the ROM uploads verbatim
+    # ── the keyed art, which the ROM uploads verbatim out of its own module
     v[j["r_ball"]:j["r_ball"] + bh, cb:cb + nbf * bw_] = ballart
     know[j["r_ball"]:j["r_ball"] + bh, cb:cb + nbf * bw_] = True
-    v[j["r_fart"]:j["r_fart"] + fh, cb:cb + 2 * nff * fw] = flipart
-    know[j["r_fart"]:j["r_fart"] + fh, cb:cb + 2 * nff * fw] = True
+    v[j["r_fart"]:j["r_fart"] + 2 * fh, cb:cb + nff * fw] = flipart
+    know[j["r_fart"]:j["r_fart"] + 2 * fh, cb:cb + nff * fw] = True
 
     # ── ⭐ THE EIGHT COMPOSED FLIPPER FRAMES, exactly as Compose builds them:
-    # the TABLE's own pixels at the flipper's home rectangle, with the keyed
-    # flipper art blitted over them.  ⚠ Taken BEFORE the rest frames are put
-    # back on to the table, because that is the order the ROM runs in.
+    # the LOADED table's own pixels at the flipper's home rectangle, with the
+    # keyed flipper art blitted over them.  ⚠ Taken BEFORE the rest frames are
+    # put back on to the table, because that is the order the ROM runs in; and
+    # two bands of four, left over right, which is the ROM's addressing.
     fy = j["flip_y"]
-    comp = []
-    for slot in range(2 * nff):
-        fx = j["flip_lx"] if slot < nff else j["flip_rx"]
-        tile = v[fy:fy + fh, fx:fx + fw].copy()
-        art = flipart[:, slot * fw:(slot + 1) * fw]
-        tile[art != 0] = art[art != 0]
-        comp.append(tile)
-        c = cb + slot * fw
-        v[j["r_flip"]:j["r_flip"] + fh, c:c + fw] = tile
-        know[j["r_flip"]:j["r_flip"] + fh, c:c + fw] = True
+    comp = {}
+    for side in (0, 1):
+        fx = j["flip_lx"] if side == 0 else j["flip_rx"]
+        for f in range(nff):
+            tile = v[fy:fy + fh, fx:fx + fw].copy()
+            art = flipart[side * fh:(side + 1) * fh, f * fw:(f + 1) * fw]
+            tile[art != 0] = art[art != 0]
+            comp[(side, f)] = tile
+            r, c = j["r_flip"] + side * fh, cb + f * fw
+            v[r:r + fh, c:c + fw] = tile
+            know[r:r + fh, c:c + fw] = True
 
     # ── and the table's own flippers, which the Wipe leaves at rest
     for side in (0, 1):
         fx = j["flip_lx"] if side == 0 else j["flip_rx"]
-        v[fy:fy + fh, fx:fx + fw] = comp[side * nff]
+        v[fy:fy + fh, fx:fx + fw] = comp[(side, 0)]
 
     # ⚠ the save-behind scratch is whatever was last under a ball, so it is
     # the one region nothing can predict.  It stays unknown.
@@ -250,8 +267,9 @@ def vram_gate(out, j, claim, must_fail):
             rows[0], cols[0], len(rows), len(cols))
     what = ("%s: ⛔ THE MUTATION IS CAUGHT - VRAM is NOT what the table's data "
             "says (%d bytes differ%s)" if must_fail else
-            "%s: every byte of the table, the bank, the keyed art and the eight "
-            "composed flipper frames is what the data says (%d differ%s)")
+            "%s: ⭐ every byte of the table is pcbtable.pic itself, and the "
+            "keyed art and the eight composed flipper frames are what the "
+            "data says (%d differ%s)")
     claim(what % (name, bad, where), (bad > 0) if must_fail else (bad == 0))
     if must_fail:
         return
@@ -321,12 +339,53 @@ def lamp_gate(out, j, claim, must_fail, mode):
     # ⭐ AND THE CONTROL: the flasher must TOGGLE.  A lamp that is lit in every
     # frame would satisfy the claim above without a single write after the
     # first, so the last lamp pulses on its own and has to be seen both ways.
-    fl = j["nlamp"] - 1
+    fl = j["flash"]
     on = want[("lamp %d lit" % fl, j["lampon"][fl])]
     off = want[("lamp %d out" % fl, j["lampoff"][fl])]
     claim("%s: ... and the flasher TOGGLES - lamp %d is lit in %d frames and "
           "out in %d, of %d" % (name, fl, on, off, nfr),
           0 < on < nfr and 0 < off < nfr)
+
+
+def load_gate(out, j, claim):
+    """⭐ THE LOAD, WHICH IS THE NEW PATH.  $1B says the 512-byte palette is
+    in the LUT, $1C that the picture's path is open and $1D that all 327,680
+    bytes of it are in VRAM - so the difference is the whole cost of putting
+    a 320 KB playfield on the card instead of in a module, measured on the
+    machine rather than estimated.
+
+    ⚠ IT IS A CLAIM AND NOT JUST A NUMBER: a scene that silently fell back to
+    an empty screen would reach the loop with no $1C at all."""
+    name = os.path.basename(out.rstrip("/"))
+    mp = os.path.join(out, "marks.txt")
+    if not os.path.exists(mp):
+        return
+    _, _, M = read_marks(mp)
+    first = {}
+    for t, v in M:
+        if v in (M_PALLD, M_PICO, M_PICD) and v not in first:
+            first[v] = t
+    ok = all(v in first for v in (M_PALLD, M_PICO, M_PICD))
+    if ok:
+        dt = (first[M_PICD] - first[M_PICO]) / 1e12
+        rate = j["tw"] * j["th"] / dt / 1024.0
+        print("  the palette and the %d-byte picture came off /SD0/DATA: "
+              "%.2f s for the picture, %.1f KiB/s" % (j["tw"] * j["th"], dt, rate))
+    else:
+        dt, rate = 0.0, 0.0
+    claim("%s: ⭐ the table was READ OFF THE CARD - the palette is in the LUT "
+          "($1B), the picture's path opened ($1C) and all %d bytes reached "
+          "VRAM ($1D) in %.2f s, %.0f KiB/s"
+          % (name, j["tw"] * j["th"], dt, rate), ok)
+
+
+def kinds_of(out):
+    """Which collision kinds a run's balls actually met."""
+    mp = os.path.join(out, "marks.txt")
+    if not os.path.exists(mp):
+        return set()
+    _, _, M = read_marks(mp)
+    return set(v for _, v in M if M_KIND0 <= v <= M_KINDN)
 
 
 def budget(out, claim, sheets_here, j):
@@ -345,6 +404,15 @@ def budget(out, claim, sheets_here, j):
     sc = score_of(M, j["ndig"])
     if sc:
         print("  the table scored %s" % sc)
+    # ⛔ AND SCORING IS A CLAIM.  Twice now this table has run perfectly,
+    # kept its budget, passed its VRAM gate and scored NOTHING FOR EVER - a
+    # plunger that bounced instead of firing, and a lane mouth that returned
+    # the ball's own speed.  Neither is visible to a gate about pixels or one
+    # about microseconds.  ⚠ The six nibble marks are emitted after the Wipe,
+    # so a run that did not reach the end has no score at all and fails here.
+    claim("%s: ⛔ the table SCORED - %s, and not 000000"
+          % (name, sc if sc else "no score marks at all"),
+          bool(sc) and sc != "0" * j["ndig"])
     print("  blits  frames  work ms  frame ms | " +
           " ".join("%7s" % p[0] for p in PHASES) + " | idle ms  drops")
     rows = {}
@@ -560,16 +628,46 @@ def main():
         if not ok:
             fail += 1
 
-    summary = {}
+    # ⛔ THE ART IS THE ARBITER, AND IT HAS TO BE THE SAME ART.  The ROM was
+    # built against pinball.json, which mkpinball.py wrote from pcbtable.pic;
+    # if the picture has been regenerated since, the compare below would fail
+    # by a third of a megabyte and name a row number.  This names the file.
+    pic = os.path.join(HERE, j["pic"])
+    got = hashlib.sha256(open(pic, "rb").read()).hexdigest() if os.path.exists(pic) else ""
+    claim("%s is the picture the scene was generated against (sha256 %s)"
+          % (j["pic"], got[:12]), got == j["pic_sha256"])
+
+    summary, kinds = {}, set()
     for i, out in enumerate(outs):
         rows = budget(out, claim, not nosheet and i == 0, j)
         if rows:
             summary[os.path.basename(out.rstrip("/"))] = rows
+        load_gate(out, j, claim)
+        kinds |= kinds_of(out)
         vram_gate(out, j, claim, must_fail)
         if not must_fail:
             ap = os.path.join(out, "args.txt")
             mv = int(open(ap).read().split()[0]) if os.path.exists(ap) else None
             lamp_gate(out, j, claim, must_fail, mv)
+
+    # ── ⭐ THE COLLISION GRID REACHED THE PHYSICS, and it is the union over
+    # the runs because a three-ball scene is not obliged to visit a drain.
+    # ⛔ Without this, a scene whose ColMap was all zeroes would paint a
+    # perfect table, keep its budget, pass the VRAM gate and never bounce.
+    want = set(int(v) for v in np.unique(d64(j["colmap"])) if v)
+    inv = {v: k for k, v in j["kinds"].items()}
+    miss = sorted(want - kinds)
+    print("      kinds met: " + ", ".join(
+        inv[k] for k in sorted(kinds) if k in inv))
+    # ⚠ NOT ON A MUTATION RUN: those are 300 frames of one cast and are not
+    # obliged to visit a drain, and this claim is about the union over the
+    # scene, the sweep and the three controls.
+    if not must_fail:
+        claim("⭐ every collision kind pcbtable.json's grid carries was MET by "
+              "a ball over the runs - %d of %d%s"
+              % (len(want & kinds), len(want),
+                 ("; NEVER MET " + ", ".join(inv[m] for m in miss)) if miss else ""),
+              not miss)
 
     if len(summary) >= 2:
         keys = sorted(summary)

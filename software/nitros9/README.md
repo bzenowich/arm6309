@@ -136,6 +136,19 @@ sh software/nitros9/mksddisk.sh /tmp/demos.img mvania       # or the subset a be
 DATA=/tmp/out/data sh software/nitros9/mksddisk.sh /tmp/demos.img   # ... with its data
 ```
 
+⭐ **AND THE LARGEST THING ON THE CARD IS NOT A PROGRAM.** `pinball`'s playfield is
+`video3/bench/pcbtable.pic` — **327,680 bytes**, one palette index a pixel, 640 × 512,
+**exactly 640 SD blocks** — and it goes into `DATA` beside the streams, with its
+512-byte palette. ⛔ **It cannot be a module**: 327,680 bytes is five times the address
+space a NitrOS-9 module may occupy, which is why that table was 61 interned 16 × 16
+blocks composed into VRAM by 1,280 copies until 2026-09-21. `mkrom.sh` copies both files
+into `$OUT/data` under `V3=1`, and the scene opens them **by bare name through `DOpen`**
+(`/SD0/DATA/` first, `/DD/SYS/` after) so the desktop's Applications menu can fork it
+from `/SD0/CMDS` and it still finds its table. ⚠ It reads in **11.1 s at 28.9 KiB/s** —
+one `CMD17` a 512-byte block and a 6809 shifting every byte through SPI by hand — so the
+scene shows a **loading screen** while it arrives, which is period-correct and is not
+hidden (`video3/optimizations.md` §10.2).
+
 ⭐ **And the DESKTOP SHELL is one of them.** `desk` (`level2/arm6309/cmds/desk.asm`) is
 the program `docs/boot-and-desktop.md` §3 asks for — an event loop on the PS/2 mouse, a
 menu bar that pulls down and highlights, and a launcher that forks the other demos out of

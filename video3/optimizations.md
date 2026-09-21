@@ -43,7 +43,7 @@ Ordered by measured value against measured cost, not by how interesting it is.
 | 1 | ⭐ **A game that owns the screen should not call the OS per frame** (§8) — **BUILT 2026-09-20** | `monster` does it as its normal path, not as a mode: **0.042 ms against `SS.Scroll`'s 1.14**, 19 → 21 actors, measured again on a second scene. ⚠ What is left is a supported pattern in `libvid`, and §8's *recording tag* objection is answered — see there |
 | 2 | ⭐ **The block-streaming playfield** (§7.1) — **BUILT 2026-09-20** | `monster` streams a **10,240-pixel** level through the ring for **0.35 ms a frame** at a 4 px scroll, in bitmap mode with the sprite and the keyed blits, and **18 actors** still fit. §7.1's numbers held; two of them moved, and one of them by 2× |
 | 3 | ⭐ **The demo's art: 256 colours, Floyd–Steinberg, a cast of different sprites** — **BUILT 2026-09-20** | `video3/bench/mkmonster.py`: a palette median-cut out of the art, **snapped to the LUT's 5/6/5 grid before the dither**, Floyd–Steinberg against it, and eight different creatures as full-colour keyed blits. The contact sheets are what it is reviewed from |
-| 4 | ⭐ **Epic Pinball, and the LUT as a feature** (§10) — **BUILT 2026-09-20** | `pinball`: a 640 × 512 table, `VSCROLL` following the ball for **0.032 ms** a frame, the ball on the hardware sprite, and ⭐ **the lamps and a six-digit scoreboard as PALETTE writes** — 0.16 ms a frame of register traffic and no copy-engine time at all. §10's plan held; what it got wrong is in §10.1 |
+| 4 | ⭐ **Epic Pinball, and the LUT as a feature** (§10) — **BUILT 2026-09-20, and the table became a FILE 2026-09-21** | `pinball`: a 640 × 512 table, `VSCROLL` following the ball for **0.032 ms** a frame, the ball on the hardware sprite, and ⭐ **the lamps and a six-digit scoreboard as PALETTE writes** — 0.30 ms a frame of register traffic and no copy-engine time at all. §10's plan held; what it got wrong is in §10.1, and ⭐ **§10.2 is the playfield read off the SD card**: 327,680 bytes in 11.1 s, with art and collision as separate data |
 | 5 | **The copy-side step** (§1) | halves a character-mode scroll, 10.70 → ~8.9 ms a line. ⚠ `v3ptr` may refuse |
 | 6 | **Retire-only `WADV` b2** (§2) | ~5 µs a character and the mode stops being a hazard. ⚠ `v3ptr` may refuse |
 | 7 | ⭐ **`v3machine_tb`** — **BUILT 2026-09-19** | `machine3.v` puts a real 6809E, the motherboard and the card together and runs a ROM. **It found a card defect on its first run** (the palette commit firing twice outside vertical blanking), which is the same return the other card's machine bench gave. 48 claims, ~40 s, now in `check:video` |
@@ -448,13 +448,47 @@ lamps really do cost the copy engine nothing. Four of its numbers moved:
 | ⭐ **save-behind** | "a 327 KB table leaves no room for a clean page, so actors are save-behind" | right, and for a second reason §10 did not have: a *scrolling* clean band — `monster`'s actual shape — would cost **1.35 ms a frame** here, because the camera is driven by the ball and moves up to eight rows a frame. And save-behind costs the **interleave** as well as the third copy: restores, saves and draws have to be three separate phases |
 | the cast | "a ball, two flippers, bumpers: eight actors against the 19 measured" | ⭐ **9 balls** — 1.674 ms of frame + **1.459 ms a blit ball**, and the sprite ball is free. Fewer than eight *actors* only because a pinball ball costs three copies and 0.5 ms of physics where a `monster` creature costs two copies and no logic |
 
-⭐ **And one thing §10 could not have known: the table cannot be a picture.**
-327,680 bytes do not fit a NitrOS-9 module, so the table is 40 × 32 cells of
-16 × 16 **interned by content** — `monster`'s technique, without the strips,
-because a table is built once and never refilled. That bounded the art before
-it bounded anything else: the playfield is three *flat* zones so an overlay
-costs one block wherever it sits, where `monster`'s 208-row gradient cost it
-one block a row. **61 blocks** for a 1,280-cell table.
+⭐ **And one thing §10 could not have known: the table cannot be a MODULE.**
+327,680 bytes is five times the address space a NitrOS-9 module may occupy.
+The first build answered that by interning the table — 40 × 32 cells of
+16 × 16 **by content**, `monster`'s technique without the strips — and paid
+for it in the art. §10.2 is the answer that removes the constraint instead of
+working inside it.
+
+### 10.2 ⭐ BUILT 2026-09-21 — the table is a FILE, and art and collision separate
+
+The machine has storage (`storage/docs/sdcard.md` §9.4) and the demos and
+their data are on a card, so the constraint §10.1 worked inside is gone.
+`video3/bench/mkpcb.py` draws the playfield as a **picture** — a 1984 circuit
+board, 640 × 512, one palette index a pixel, **327,680 bytes, exactly 640 SD
+blocks** — and `pinball` reads it off `/SD0/DATA` straight into VRAM rows
+0–511. Nothing is interned and nothing is composed.
+
+| | interned blocks (2026-09-20) | the file (2026-09-21) |
+|---|---|---|
+| the table in the module | 61 blocks = **15,616 B**, plus a 1,280-byte block map | **none** |
+| what puts it in VRAM | **1,280 copy-engine rectangles**, about half a second | **512 `VDATA` runs** of 640 bytes, fed by 64 `I$Read`s |
+| what it costs | nothing but the art | ⭐ **11.1 s at 28.9 KiB/s**, and a loading screen that is period-correct rather than hidden |
+| what the art may be | three *flat* zones, so an overlay costs one block wherever it sits | **anything**: continuous tone, dithered into 205 entries, 223 distinct indices in the finished picture |
+| the collision map | derived from the same grid that chose the blocks | ⭐ **a separate 40 × 32 grid** (`colmap` + `idmap`, 2,560 B of module data) that `mkpcb.py` derives from the object rectangles and `checkpcb.py` asserts against the *pixels* |
+
+⭐ **The separation is the point, and it changes what can be checked.** When
+one grid decided both, "the art cannot disagree with the physics" was true by
+construction and therefore untestable. Now the picture is a picture and the
+grid is data: `checkpcb.py` classifies the *pixels* through the palette and
+asks whether every bumper cell has an IC under it, every drain cell a milled
+slot, and no open cell a wall — 299 claims and eleven mutations. And the
+scene marks the **collision kind** of every hit at `$FF2E`, so `checkv3pin.py`
+requires every kind the grid carries to have been met by a ball. ⛔ A table
+whose art is perfect and whose grid never arrived paints, scrolls, keeps its
+budget and passes the VRAM gate; those two claims are what see it.
+
+⭐ **And the VRAM gate got stronger by getting shorter.** It used to rebuild
+512 KB out of `pinball.json`'s bank, map and composition rules. The expected
+VRAM now *is* `pcbtable.pic`, byte for byte, plus the flipper frames composed
+out of it — so the gate compares the machine against **the same file the card
+carries**, and the two new mutations (`m256` loads it one VRAM row low,
+`m512` truncates it at ring row 448) are the ones that say it can fail.
 
 ⛔ **THE DEFECT THIS SCENE EXISTS TO HAVE FOUND IS NOT A CARD DEFECT.** The
 collision switch read its cell kind out of A, and the line that set the axis
