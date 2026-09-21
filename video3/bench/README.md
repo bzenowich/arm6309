@@ -10,7 +10,20 @@ sh video3/bench/run-v3mv.sh          # ⭐ the metroidvania scene, ~20 min
 sh video3/bench/run-v3mon.sh         # ⭐ the block-streamed platform world, ~6 min
 sh video3/bench/run-v3pin.sh         # ⭐ the pinball table, and the palette as a feature, ~20 min
 sh video3/bench/run-v3sd.sh          # ⭐ the desktop, Paint and a demo OFF THE SD CARD, ~3 min
+sh video3/bench/run-v3desk.sh        # ⭐ THE DESKTOP SHELL, CLICKED AT, ~3 min
 ```
+
+⭐ **`run-v3desk.sh` is the one that drives a program with a MOUSE.** Everything else
+here types a command and reads the picture; this one runs `desk` (the shell -
+`docs/boot-and-desktop.md` §3) off the card and clicks at it with a `PS2_SCRIPT`
+(`software/demo/emu/ps2script.h`), then reads every answer off the recorded frames:
+the menu bar's rows, the pull-down appearing where nothing was, the highlight landing
+on the item the pointer is over, the rectangle's CRC coming back to what was under it,
+and **Paint's own page** as the evidence that a menu item forked a program. ⛔ With a
+control that walks the bar and never clicks, in which the pull-down's rectangle must
+hold exactly **one** picture for the whole run - a desktop that drew a menu on a timer
+would pass every other claim. ⭐ Its geometry and its menu table are **parsed out of
+`desk.asm`**, so an item renamed or un-greyed moves the claims with it. **47 claims.**
 
 | Exerciser | plan | What only it can catch |
 |---|---|---|

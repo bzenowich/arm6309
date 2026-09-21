@@ -280,3 +280,34 @@ interrupt with interrupts masked for 40 ms (`software/nitros9/docs/video-console
 `docs/nitros9-hardware-improvements.md` H11). Replaced by: `KIRQEN` (b6) and `MIRQEN`
 (b7), one per port, on two GAL inputs that were spare — no package (`ps2.md` §3.1, §8.2).
 
+## §11.5 — the guest-pointer reconstruction counted a stale `MDATA` read (found 2026-09-20)
+
+`ps2.md` §11.5 now says that only a read with `MDR` set is a packet byte. Before that,
+`software/demo/emu/ps2script.h`'s `G` line was fed from **every** load of `MDATA`.
+
+`kbdarm.asm`'s `Init` finishes with
+
+```
+irq@                clr       VG.KbPort,u
+                    ldx       VG.KBase,u
+                    lda       PR.KDATA,x anything left in either latch
+                    lda       PR.MDATA,x
+```
+
+— a deliberate flush, and with the latch already empty that second load returned the
+**`F4` ACK a second time**. `$FA`'s b3 is set, which is precisely what §11.3's
+"byte 1's b3 is always 1" resynchronisation takes for the head of a packet, so the
+reconstruction consumed it as byte 0 (buttons `$FA & 7` = 2, both delta signs negative)
+and mis-framed the two packets after it.
+
+⭐ **Every delta after those two was right, which is what made it so quiet.** The `G` line
+tracked the mouse perfectly and reported an absolute position **708 pixels below** where
+the machine's own pointer was — and the `E` line's script-versus-guest comparison, which
+is the one thing that could have said so, was not being asserted by any bench that used
+`kbdarm`. `ps2tst`, which `run-ps2script.sh` drives, reads a byte only when `IOSTAT`
+offers one, so the bench that owns the file could not reach the defect.
+
+It was found by `video3/bench/run-v3desk.sh` on its first run, where the reported pointer
+and the item the desktop actually highlighted disagreed. Two rules replaced the one:
+`ps2_read` feeds the reconstruction only when `MDR` was set, and `ps2s_guest_arm` skips
+every byte the device still owed the host at `F4` rather than just that command's ACK.

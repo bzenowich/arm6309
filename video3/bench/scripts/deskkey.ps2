@@ -1,0 +1,15 @@
+# deskkey.ps2 - the keyboard leg of the event loop.
+#
+# `desk` polls the window's keyboard with SS.Ready and reads one byte only
+# when it says there is one, so the loop stays responsive; `q` quits.  This
+# script taps one key and nothing else, and the bench gives desk an iteration
+# bound it could not possibly reach inside the run - so DESK-BYE arriving at
+# all is the keystroke, and not the bound.
+#
+# ⚠ The key goes to the window CoArm has SELECTED (armio.asm routes it by
+# VG.CSel), which is desk's; the shell's own standard input is the serial
+# port and never sees it.  That separation is the whole reason a desktop can
+# be driven from the keyboard while a shell waits on the same machine.
+origin 320 240
+
+at 1.500    key tap q

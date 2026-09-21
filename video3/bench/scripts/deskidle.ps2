@@ -1,0 +1,26 @@
+# deskidle.ps2 - ⛔ THE NEGATIVE CONTROL.
+#
+# The same ROM, the same card, the same `desk`, and a mouse that walks the
+# whole length of the menu bar - over both titles, twice - and NEVER PRESSES
+# A BUTTON.  The menu must stay shut and the picture must not change.
+#
+# Without this every claim in run-v3desk.sh is satisfied by a program that
+# draws a pull-down on a timer and highlights its items in turn.
+#
+# ⚠ THE WALK IS AT y = 1, NOT y = 8, and that is the control's own
+# correctness rather than tidiness: video3 composites the pointer as a
+# 16 x 16 sprite whose hot spot is its top left, so a pointer at y = 8
+# covers rows 8..23 - and rows 19..23 are inside the pull-down's rectangle,
+# which is the rectangle this control asserts never changes.  At y = 1 the
+# sprite stops at row 16 and the assertion is about the desktop alone.
+origin 320 240
+
+at 1.500    move to 20 1
++0.700      move to 100 1
++0.700      move to 168 1
++0.700      move to 300 1
++0.700      move to 100 1
++0.700      move to 30 1
++0.700      move to 8 1
++0.700      move to 200 1
++0.700      move to 500 1

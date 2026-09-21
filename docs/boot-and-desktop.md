@@ -8,15 +8,19 @@ looking for a disk, changes the icon when it finds a bootable one, loads the ope
 system off the SD card, and comes up on a desktop with a working file manager and an
 application menu. **What is already built, what is a mock-up, and what is missing?**
 
-**Short answer: the drawing is real, the boot half is nearly there, and the desktop is a
-recording.** `v3desk`, `v3paint` and `v3menu` are not programs — they are scripted streams
-of CoArm escape sequences, played with `copy /sd0/data/v3desk /w3`, that paint a *picture*
-of a desktop. Everything needed to make them real exists in pieces; what does not exist is
-the shell that ties the pieces together and an event loop.
+**Short answer: the drawing was always real, the boot half is nearly there, and the
+desktop stopped being a recording on 2026-09-20.** `v3desk`, `v3paint` and `v3menu` are
+scripted streams of CoArm escape sequences, played with `copy /sd0/data/v3desk /w3`, that
+paint a *picture* of a desktop; they are still on the card and are still what the demo
+session shows. `desk` is the program that emits those escapes **live, off the mouse** —
+§3. What is left is the file manager and windows that move and close.
 
 > **Status: §1 is BUILT (2026-09-20) — `software/boot/boot.asm` §10a, and
 > `machine_tb`'s `disk` and `nodisk` scenarios read the picture off the
-> connector. §2 and §3 are specified and nothing of them is built.**
+> connector. §3's MILESTONES 1 AND 2 ARE BUILT (2026-09-20) — `desk`, a
+> NitrOS-9 command on the SD card, and `video3/bench/run-v3desk.sh` clicks at
+> it with a `PS2_SCRIPT` and reads the answers off the frames. §2, and §3's
+> milestones 3 and 4, are specified and not built.**
 
 ---
 
@@ -29,9 +33,9 @@ the shell that ties the pieces together and an event loop.
 | a dialog, with an icon: *looking for a disk* | `boot.asm` §10a, drawn with the ROM toolbox | ⭐ **built 2026-09-20** — §1 |
 | the icon changes when a disk is found | the same drawing path, and the Mac's blinking question mark when there is none | ⭐ **built 2026-09-20** — §1. ⚠ *found* means `SDSTAT` says a card is in the socket, not that it is bootable: §2 |
 | loads the OS from the disk | `rbsd` reads the card **under NitrOS-9**; the ROM has no SD reader of its own, and the OS still boots from the ROM disk | ⛔ §2 |
-| a desktop | `v3desk` is a **recording** | ⛔ §3 |
-| a file manager | `v3trk` fills a Tracker window's list **from a real directory** | ⚠ §3 |
-| an application menu | `v3menu` is a recording of one | ⛔ §3 |
+| a desktop | `desk` — a menu bar, an event loop on the PS/2 mouse, icons on the Haiku desktop | ⭐ **built 2026-09-20** — §3 milestone 1. ⚠ The icons are drawn and are not yet clickable: that is milestone 4 |
+| a file manager | `v3trk` fills a Tracker window's list **from a real directory** | ⚠ §3 milestone 3 |
+| an application menu | `desk`'s **Applications** menu forks `v3paint`, `monster` and `pinball` off `/SD0/CMDS` | ⭐ **built 2026-09-20** — §3 milestone 2 |
 
 ---
 
@@ -154,41 +158,114 @@ fallback**, which is what makes the question-mark state recoverable rather than 
 
 ## 3. The desktop, which is the whole job
 
-⛔ **What looks like a desktop today is `copy /sd0/data/v3desk /w3`** — a byte stream of
-CoArm escapes that draws icons, a Deskbar and a Tracker window. It is a faithful picture and
-it is not a program: nothing is clickable, and the window that drags does so because
-`v3drag` was told to drag it.
+⭐ **The event loop, the menu bar and the launcher are built** (2026-09-20):
+[`desk.asm`](../../nitros9/level2/arm6309/cmds/desk.asm), a NitrOS-9 command on the SD
+card beside the demos it launches. It is an application, not ROM — §4 — and its own
+header is the detailed design. `video3/bench/run-v3desk.sh` is the bench.
 
-**But the pieces are real, and there are more of them than the mock-up suggests:**
+⚠ **The recordings are still there and are still a recording.**
+`copy /sd0/data/v3desk /w3` draws a Tracker window, a Deskbar and a fuller desktop than
+`desk` does, and none of it is clickable. They are the *picture* the shell is being grown
+towards, and `v3show.py` remains where that picture is authored.
 
-| piece | what it already does |
+**The pieces this was assembled out of, all of which already existed:**
+
+| piece | what it does for the shell |
 |---|---|
-| `tbox` | Haiku windows, bevels, icons, anti-aliased Noto Sans, images — from ROM, drawn in place |
-| CoArm | windows, screens, the `/W1`–`/W5` devices, `SS.Excl` |
-| `v3trk` | **fills a Tracker window's list from a real directory** — the file manager's list view, already reading the filesystem |
-| `v3drag` | moves a window with the **copy engine** |
-| `v3grab`, `v3scrl` | drag a picture, scroll a canvas |
-| PS/2 mouse | `io/ps2`, and `ps2tst` reads real packets |
-| `rbsd` + `/SD0` | a filesystem with directories to manage |
+| `tbox` | every rectangle, bevel, icon and string `desk` draws is an `ESC $6A` call into the ROM toolbox. **There is no drawing code in `desk` at all** — only escape bytes and hit testing |
+| CoArm | the windows, the screens, `/W1`–`/W5`, `SS.Excl`, and `SS.Mouse`, which `armio.asm` answers out of the `Pt.*` packet `ca_ptr.asm` builds in `VG.MsPkt` |
+| PS/2 mouse | `kbdarm.asm`'s IRQ service keeps `VG.MsX`/`VG.MsY`/`VG.MsBtn`; `desk` polls them through `SS.Mouse` and never touches the hardware |
+| `F$Fork` | the launcher. The demos are at `/SD0/CMDS` and a bench's `chx /sd0/cmds` is what puts them on the execution path |
+| `v3trk` | **still unused by the shell** — it is milestone 3's list view |
+| `v3drag` | **still unused by the shell** — it is milestone 4's window move |
 
-**So what is missing is the shell**: an event loop that reads the mouse and keyboard, a
-front-window notion, hit-testing against a menu bar and a close box, and a launcher that
-forks a program. That is a real program — and the honest estimate is that it is larger than
-any single thing built for this machine so far, larger than the pinball scene.
+### 3.1 The event loop
 
-**Suggested order, smallest useful thing first:**
+One pass a system tick (`F$Sleep 1` — the tick *is* the card's vertical blank), and every
+pass is bounded work: the keyboard **non-blocking** (`SS.Ready` first, `I$Read` one byte
+only if it says there is one), then `SS.Mouse`, then a state machine of two states and
+four edges —
 
-1. **An event loop and a menu bar** that can pull down and highlight, over a static desktop.
-   Nothing launches yet. This is where the mouse meets `tbox`'s drawing.
-2. **The launcher**: menu items fork `pinball`, `monster`, `v3paint` from `/SD0/CMDS`.
-   ⭐ At this point the machine does what the owner asked for, minus the file manager.
+| state | event | what happens |
+|---|---|---|
+| idle | a button **press** in the bar over a title | that menu comes down |
+| open | motion | the highlight moves to the item the pointer is over |
+| open | a **press** on an enabled item | dismiss, then act |
+| open | a **press** anywhere else | dismiss |
+
+⚠ **A press is an EDGE, not a level.** The button is sampled every tick and acted on only
+where this tick has it down and the last did not; a click is ~50 ms and would otherwise be
+three presses. `Pt.Valid = 0` — our window is not the selected one — *resets* the edge
+detector rather than being ignored, so the first press after a launch is a fresh one.
+
+⚠ **And the loop carries an iteration bound**, which is the discipline `CLAUDE.md` asks of
+every wait in this repository: a desktop that has lost its window stops rather than
+spinning. It is not a timeout on anything inside the loop.
+
+⛔ **Echo is turned off** (`SS.Opt`, `PD.EKO = 0`) before the first read. SCF echoes what
+`I$Read` takes, and the echo would be drawn **on the desktop** by the console's own
+put-character.
+
+### 3.2 The menu bar, and what the bench reads
+
+Two titles — **Desk** (About, Quit) and **Applications** (Paint, Monsterland, Pinball,
+and `Stardew` greyed) — in an 18-pixel bar of `C.ITab` with one row of `C.Frame` under it.
+A pull-down is a `tbox` bevel; an item is highlighted by repainting its rectangle in
+`C.Sel` and its label in the `sel` ramp, and unhighlighted by repainting it in `C.Panel`.
+
+⭐ **A greyed item is refused the highlight as well as the action**, so hovering it says so
+too. ⛔ `stardew` is specified ([`video3/docs/stardew.md`](../video3/docs/stardew.md)) and
+not built; carrying it greyed is how a person notices it is missing.
+
+⭐ **Dismissal repaints rather than saving pixels.** The rectangle the pull-down covered is
+filled with the desktop colour and every desktop icon is drawn again — `desk` holds its own
+display list and never reads the card back. The two Applications items sit **over two of
+the icons on purpose**, so "dismissing restores what was underneath" is a claim about
+something rather than about flat blue: `run-v3desk.sh` compares the rectangle's CRC with
+the one it had before the menu existed.
+
+### 3.3 The launcher, and the exclusive screen
+
+⭐ **This is §5 item 4's answer, and what decides it is not `SS.Excl`.** It is that
+`ca_scr.asm`'s `DoDWSet` answers `E$WADef` to a **second** `DWSet` on a window that is
+already defined. So a child cannot make itself a screen on a device whose window the
+desktop is still holding, and the desktop cannot keep its window across a launch. It
+therefore gives it up:
+
+| | |
+|---|---|
+| 1 | **`DWEnd`.** `DevEnd` drops the desktop's window, `ScrFree` frees its 640 × 480 store and `CG.Disp` goes to 0. The desktop's picture is gone, and `desk`'s own display list is the only copy that matters |
+| 2 | the child is forked with a **duplicate of the window path** as its standard output (`I$Dup`), so its own `DWSet` lands on the same device — and so the keyboard and the mouse, which CoArm routes by `VG.CSel` to the **selected window's device**, keep pointing at the device the desktop will take back |
+| 3 | the child takes `SS.Excl` on **its** screen and owns the card. The desktop is asleep in **`F$Wait`**: it polls nothing, draws nothing, and cannot race the exclusive owner for `VG.CBusy` |
+| 4 | the child exits. ⭐ **The claim comes back twice over** and neither way needs the app to be well behaved: `vidxcl.asm`'s `XCheck` releases a screen whose owner process is gone, and the `DWEnd` the desktop does next reaches `ScrFree`, which calls `XRelease` for the screen it frees |
+| 5 | `DWEnd`, `DWSet`, `Select`, repaint. The desktop trusts nothing that was left on the card |
+
+⚠ **`PutGC` is issued once, at start-up, and never again.** It does not move the pointer,
+it moves the **mouse** (`ca_ptr.asm`'s `DoPutGC` writes `VG.MsX`/`VG.MsY`), and the mouse is
+relative — so a `PutGC` after a launch would silently teleport the user's hand. `GCSet` is
+re-issued every time, because `SS.Excl` saved `VG.PtrOn` and `XRelease` put back whatever
+the child left.
+
+⚠ **The consequence a bench has to know about: while a child runs, the desktop is deaf.**
+`v3paint` takes ~45 s of machine time from the click to the desktop's repaint, and a click
+sent inside that window reaches nobody. `run-v3desk.sh` states that as a claim
+(`deskback < C4.t`) rather than leaving a mistimed script to fail somewhere else.
+
+### 3.4 `v3paint`, and why a menu item cannot fork a stream
+
+`v3paint` was a *data file*; the menu needs a *program*. So
+[`v3paint.asm`](../../nitros9/level2/arm6309/cmds/v3paint.asm) is the smallest honest one:
+it opens `/SD0/DATA/v3paint`, sends it to its own standard output, and holds the picture up.
+The stream's own first escapes are `DWSet $13`, `Select` and `Pal`, so the program knows
+nothing about the card, the toolbox or the palette.
+
+### 3.5 What is left
+
 3. **The file manager**: `v3trk`'s directory list in a real window, with open, and a second
    window. Rename/copy/delete after.
-4. **Windows that move and close** — `v3drag` already moves one with the copy engine.
+4. **Windows that move and close** — `v3drag` already moves one with the copy engine — and
+   the desktop icons, which are drawn and not yet hit-tested.
 
-⚠ **`stardew` is one of the three games and it is not built** —
-[`video3/docs/stardew.md`](../video3/docs/stardew.md) specifies it. The menu can carry it
-before it exists, as a greyed item, which is also how a person would notice it was missing.
 
 ---
 
@@ -223,6 +300,12 @@ Everything in §3 is an application and belongs on the card.
 2. **Where `OS9Boot` lives on the card** — filesystem path or fixed blocks (§2).
 3. **Whether the ROM disk stays bootable** once the card is. It should, and the question-mark
    state is why.
-4. **The mouse under an exclusive-screen program.** The demos take `SS.Excl` and the desktop
-   must not; how the two coexist is unexamined.
-5. **`stardew` is unbuilt** and the other two games do not yet launch from anything.
+4. **The mouse under an exclusive-screen program (answered 2026-09-20; §3.3).** The
+   desktop gives its window up with `DWEnd` before it forks and sleeps in `F$Wait` while
+   the child has the card. ⚠ **What is still open is the part nobody wants**: for the ~45 s
+   a child owns the screen the desktop is deaf, and there is no way to leave it — no
+   command key, no force-quit, and no second screen to switch back to. A shell that cannot
+   interrupt what it launched is a shell with one application.
+5. **`stardew` is unbuilt.** It is on the menu, greyed (§3.2). The other two games launch.
+6. **The desktop icons are drawn and are not hit-tested**, so double-clicking `Paint` on
+   the desktop does nothing while the menu item does — milestone 4.

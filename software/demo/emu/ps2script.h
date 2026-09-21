@@ -108,8 +108,10 @@
  *
  * ⭐ So the `G` line is built from the bytes the guest ACTUALLY READ off
  * `MDATA` at $FF31 - not from what the script sent and not from what the
- * device transmitted.  The decoder arms on the host's `F4` (skipping that
- * command's own ACK), starts at the script's origin, honours ps2.md 11.3's
+ * device transmitted.  The decoder arms on the host's `F4` (skipping every
+ * byte the device still owed the host at that moment, that command's own
+ * ACK included - see ps2s_guest_arm, which is where a real defect lived),
+ * starts at the script's origin, honours ps2.md 11.3's
  * "byte 1's b3 is always 1" as its resynchronisation rule, sign-extends each
  * delta from byte 0's b4/b5, and negates Y back into screen coordinates.  A
  * bench asserts `G` == `M`; it does not assume it.
@@ -519,9 +521,26 @@ static uint64_t ps2s_ps(void) { return m->dots * DOT_PS; }
 
 /* ⭐ the guest's pointer: every byte it reads out of MDATA, decoded as
  * ps2.md 11.3's packet.  ps2_read() calls this; ps2_command() arms it. */
-static void ps2s_guest_arm(void)
+/* `pending` = every byte the device still owes the host when F4 is issued,
+ * the F4's own ACK included: the queue, plus a byte already latched in the
+ * card and not yet read.
+ *
+ * ⚠ It is the belt to machine.c's braces.  The defect found on 2026-09-20
+ * was the OTHER end - a read of MDATA with MDR clear, which returns a byte
+ * the guest has already taken, was being fed in as a new one; kbdarm.asm
+ * ends its init with exactly such a read ("anything left in either latch")
+ * and so handed the reconstruction the F4 ACK a second time.  $FA has b3
+ * set, which is precisely what ps2.md 11.3's "byte 1's b3 is always 1"
+ * resynchronisation takes for the head of a packet - so it was consumed as
+ * byte 0 (buttons $FA & 7 = 2, both delta signs negative) and the next two
+ * packets were mis-framed.  ⭐ Every delta AFTER that was right, which is
+ * what made it so quiet: the `G` line tracked the mouse perfectly and
+ * reported an absolute position 708 pixels below where the machine's own
+ * pointer really was.  ⚠ ps2tst reads a byte only when IOSTAT offers one,
+ * so the bench that owns this file could not see it. */
+static void ps2s_guest_arm(int pending)
 {
-    ps2g_arm = 1; ps2g_skip = 1;        /* the F4's own ACK is not a packet byte */
+    ps2g_arm = 1; ps2g_skip = pending;
     ps2g_n = 0; ps2g_btn = 0;
     ps2g_x = ps2s_ox; ps2g_y = ps2s_oy;
 }

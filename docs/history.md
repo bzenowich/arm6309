@@ -12,6 +12,57 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## boot-and-desktop.md §3 and §5 item 4 — the desktop was a recording, and the exclusive screen was unexamined (2026-09-20)
+
+[`boot-and-desktop.md`](boot-and-desktop.md) §3 is the design and is written in present
+tense; this records what it said before milestones 1 and 2 were built, and the open item
+that building them closed.
+
+**§3 said, on the day it was written:**
+
+> ⛔ **What looks like a desktop today is `copy /sd0/data/v3desk /w3`** — a byte stream of
+> CoArm escapes that draws icons, a Deskbar and a Tracker window. It is a faithful picture and
+> it is not a program: nothing is clickable, and the window that drags does so because
+> `v3drag` was told to drag it.
+>
+> **So what is missing is the shell**: an event loop that reads the mouse and keyboard, a
+> front-window notion, hit-testing against a menu bar and a close box, and a launcher that
+> forks a program. That is a real program — and the honest estimate is that it is larger than
+> any single thing built for this machine so far, larger than the pinball scene.
+>
+> **Suggested order, smallest useful thing first:**
+>
+> 1. **An event loop and a menu bar** that can pull down and highlight, over a static desktop.
+>    Nothing launches yet. This is where the mouse meets `tbox`'s drawing.
+> 2. **The launcher**: menu items fork `pinball`, `monster`, `v3paint` from `/SD0/CMDS`.
+>    ⭐ At this point the machine does what the owner asked for, minus the file manager.
+
+**Milestones 1 and 2 were built that same day** as `desk.asm` (990 lines) and `v3paint.asm`,
+on the SD card, with `video3/bench/run-v3desk.sh` (46 claims) driving them from a
+`PS2_SCRIPT`. The estimate was wrong in an interesting direction: the shell is *smaller* than
+the pinball scene, because it draws nothing itself — every rectangle, bevel, icon and string
+is an `ESC $6A` call into the ROM toolbox, and what is left is escape bytes and hit testing.
+Milestones 3 and 4 stand as written.
+
+**§5 item 4 said:**
+
+> 4. **The mouse under an exclusive-screen program.** The demos take `SS.Excl` and the desktop
+>    must not; how the two coexist is unexamined.
+
+**What decided it was not `SS.Excl` at all.** `ca_scr.asm`'s `DoDWSet` answers `E$WADef` to a
+**second** `DWSet` on a window that is already defined, so a child cannot make itself a screen
+on a device whose window the desktop is still holding — the desktop has to `DWEnd` before it
+forks whatever the child intends to do with the card. §3.3 is the sequence. The exclusive claim
+turned out to need no cooperation at all: `vidxcl.asm`'s `XCheck` releases a screen whose owner
+process is gone, and `ScrFree` calls `XRelease` for the screen the desktop's own `DWEnd` frees,
+so it comes back twice over whether or not the app released it. ⚠ What §5 item 4 now records
+instead is the consequence nobody wants: the desktop is *deaf* for as long as a child runs.
+
+**§5 item 5 said** "`stardew` is unbuilt **and the other two games do not yet launch from
+anything**"; the second half is no longer true.
+
+---
+
 ## §7.2 — the boot ROM puts up a Macintosh-style boot dialog, and the toolbox needed nothing added to it (2026-09-20)
 
 [`boot-and-desktop.md`](boot-and-desktop.md) §1 is the design and is written in present

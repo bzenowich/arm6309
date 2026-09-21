@@ -1180,7 +1180,9 @@ static void ps2_command(ps2dev *d, uint8_t c)
     case 0xFE: ps2_send(d, d->last_sent); break;
     case 0xF2: ps2_send(d, 0xFA); if (d->mouse) ps2_send(d, 0x00); else { ps2_send(d, 0xAB); ps2_send(d, 0x83); } break;
     case 0xF4: d->enabled = 1; d->f4_seen = 1; ps2_send(d, 0xFA);
-        if (d->mouse) ps2s_guest_arm();     /* from here, what the guest reads is packets */
+        /* from here, what the guest reads is packets - once it has taken the
+         * bytes the device already owed it, this ACK included (ps2script.h) */
+        if (d->mouse) ps2s_guest_arm(d->out_n + m->kdr[1]);
         break;
     case 0xF5: d->enabled = 0; ps2_send(d, 0xFA); break;
     case 0xEE: if (!d->mouse) { ps2_send(d, 0xEE); break; } /* fall through */
@@ -1311,7 +1313,19 @@ static uint8_t ps2_read(uint8_t r)
 {
     switch (r) {
     case 0: m->kdr[0] = 0; return m->kdata[0];
-    case 1: m->kdr[1] = 0; ps2s_guest_byte(m->kdata[1]); return m->kdata[1];
+    /* ⛔ ONLY A READ THAT TAKES A NEW BYTE IS A PACKET BYTE.  MDR says
+     * whether the latch holds one; a read with MDR clear returns the
+     * PREVIOUS byte again, and kbdarm.asm ends its init by reading KDATA and
+     * MDATA exactly so - "anything left in either latch".  Feeding that
+     * re-read to the reconstruction handed it the F4 ACK twice, and $FA's b3
+     * is set, so 11.3's resynchronisation took it for the head of a packet
+     * (ps2script.h's ps2s_guest_arm says what that cost). */
+    case 1: {
+        int fresh = m->kdr[1];
+        m->kdr[1] = 0;
+        if (fresh) ps2s_guest_byte(m->kdata[1]);
+        return m->kdata[1];
+    }
     case 2: return (uint8_t)(m->kdr[0] | (m->kdr[1] << 1) | (ps2_clk_low(0) << 2) | (ps2_dat_low(0) << 3)
                              | (ps2_clk_low(1) << 4) | (ps2_dat_low(1) << 5));
     default: return 0x00;               /* IOCTRL is write-only */

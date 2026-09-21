@@ -1,0 +1,41 @@
+# desk.ps2 - the session video3/bench/run-v3desk.sh drives the desktop with.
+#
+# ⭐ SCREEN COORDINATES, Y DOWN (software/demo/emu/ps2script.h).  Time zero is
+# PS2_SCRIPT_GATE: the moment `desk` has printed DESK-READY on the console,
+# which is after its first full paint - so nothing here races the drawing.
+#
+# ⚠ `origin` MUST BE desk.asm's GEO.ORGX/GEO.ORGY.  desk issues one PutGC at
+# start-up and never another (its header says why), so this is where the
+# machine's mouse really is; get it wrong and every coordinate below is off
+# by the difference and still self-consistent.
+origin 320 240
+gap 120                     # a click's down-to-up: three passes of a 60 Hz loop
+
+# --- 1  the bar, and the pull-down --------------------------------------
+at 1.500    move to 100 8   # over the Applications title
++0.700      click left      # C0: the menu comes down
++0.900      move to 168 32  # H: item 0, Paint
++0.900      move to 168 52  # H: item 1, Monsterland - a DIFFERENT item
++0.900      move to 168 92  # H: item 3, Stardew - greyed, and must NOT light
++0.900      move to 500 300 # off the menu, and off the pull-down's rectangle
++0.700      click left      # C1: dismissed, and what was under it comes back
+
+# --- 2  the launcher ----------------------------------------------------
++1.400      move to 100 8
++0.700      click left      # C2: open again
++0.900      move to 168 32  # Paint
++0.700      click left      # C3: ⭐ forks v3paint off /SD0/CMDS
+
+# --- 3  the item that is specified and not built ------------------------
+# ⚠ ABSOLUTE, not relative: everything between here and C3 is the child's -
+# and how long it takes is not this script's business.
+at 60.000   move to 100 8
++0.700      click left      # C4
++0.900      move to 168 92  # Stardew
++0.700      click left      # C5: dismisses, and launches NOTHING
+
+# --- 4  quit, through the menu that offers it ---------------------------
++1.400      move to 30 8    # the Desk title
++0.700      click left      # C6
++0.900      move to 60 52   # Quit
++0.700      click left      # C7: desk exits, and the shell prompt comes back

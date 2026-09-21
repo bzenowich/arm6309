@@ -8,8 +8,13 @@
 #
 # ⛔ THE EXIT CODE IS THE ANSWER.  Every line below is a claim.
 #
-# There is no GUI in this tree yet, so the thing under test is driven against
-# what does exist: `ps2tst` (level2/arm6309/cmds/ps2tst.asm) initialises both
+# The thing under test is driven against `ps2tst`, which is the narrowest guest
+# there is: it reads a FIXED count off each port and echoes it, so the bytes
+# that come out the far end can be compared with an encoding computed
+# independently.  ⚠ It is also, for the same reason, a guest that never reads
+# `MDATA` when `MDR` is clear - and that is the one thing it cannot exercise
+# (io/ps2/docs/history.md §11.5; video3/bench/run-v3desk.sh is what does).
+# `ps2tst` (level2/arm6309/cmds/ps2tst.asm) initialises both
 # PS/2 ports by ps2.md 7 and 11.2 and echoes every byte it reads back off the
 # card.  So the whole path is exercised - the script, the encoder, the
 # line-level device at 80 us a bit, the card's '193/'595 and its one-byte

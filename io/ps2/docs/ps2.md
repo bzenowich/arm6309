@@ -1136,9 +1136,11 @@ two `'574`s is the price of that byte being the byte it was told about.
 
 ### 11.5 Driving it before there is a driver — `PS2_SCRIPT`
 
-There is no keyboard or mouse driver yet (§13 step 5) and no GUI to test one against, and
-a card that can only be exercised by hand is a card whose software arrives on the same day
-as its hardware. The host emulator therefore takes a **timed, semantic input script**:
+A card that can only be exercised by hand is a card whose software arrives on the same day
+as its hardware, and when this was written there was neither a driver nor a GUI to test one
+against. There are both now — `kbdarm.asm` and, since 2026-09-20, `desk`, the desktop shell
+(`docs/boot-and-desktop.md` §3) — and the script is what clicks at it. The host emulator
+takes a **timed, semantic input script**:
 `PS2_SCRIPT=file` in `software/demo/emu/machine.c`, with the format, the scan code table
 and the encoding in [`software/demo/emu/ps2script.h`](../../../software/demo/emu/ps2script.h).
 
@@ -1168,12 +1170,24 @@ Three things about it matter to this document rather than to that one:
   *alignment*, not a packet. So the run's `ps2.txt` log carries a `G` line rebuilt from the
   bytes the guest actually read off `MDATA`, beside the `M` line saying where the script
   thinks the pointer is, and the bench asserts the two agree.
+  ⛔ **What counts as "a byte the guest read" is `MDR`, not the load.** A read of `MDATA`
+  with `MDR` clear returns the *previous* byte again — §5 — and a driver may do exactly
+  that on purpose: `kbdarm.asm` ends its initialisation by reading `KDATA` and `MDATA`
+  to clear "anything left in either latch". The reconstruction counts only reads that take
+  a **new** byte, and at `F4` it skips every byte the device still owed the host. History
+  records what the first rule alone cost.
 
 `software/demo/emu/test/run-ps2script.sh` is the bench: it encodes each script a second
 time, independently, in `emu/test/ps2check.py`, drives `ps2tst` on a booted NitrOS-9 and
 compares the bytes the 6809 echoed back off the card against that second encoding — with a
 moves-and-no-clicks control, an empty-script control, and a corrupted-expectation run of
 each comparison that is required to fail.
+
+⭐ **And since 2026-09-20 there is a second bench, which drives a GUI with it**:
+`video3/bench/run-v3desk.sh` runs the desktop shell off the SD card and clicks at its
+menu bar (`docs/boot-and-desktop.md` §3). It is the one that exercises the *driver* -
+`kbdarm.asm`'s IRQ service, its packet index, and `SS.Mouse` - rather than a program that
+echoes bytes, and the finding above is what it caught on its first run.
 
 ---
 

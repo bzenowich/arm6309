@@ -133,6 +133,14 @@ sh software/nitros9/mksddisk.sh /tmp/demos.img mvania       # or the subset a be
 DATA=/tmp/out/data sh software/nitros9/mksddisk.sh /tmp/demos.img   # ... with its data
 ```
 
+⭐ **And the DESKTOP SHELL is one of them.** `desk` (`level2/arm6309/cmds/desk.asm`) is
+the program `docs/boot-and-desktop.md` §3 asks for — an event loop on the PS/2 mouse, a
+menu bar that pulls down and highlights, and a launcher that forks the other demos out of
+`/SD0/CMDS`. It is an application and it lives on the card with them; `v3paint` goes with
+it, because a menu item can fork a program and cannot fork the byte stream `v3show.py`
+writes under that name. `video3/bench/run-v3desk.sh` runs both off a card and clicks at
+them with a `PS2_SCRIPT`.
+
 ### ⭐ `/DD/SYS` was 1,140 of the image's 1,952 sectors
 
 The second half, done 2026-09-20. Everything `mkrom.sh` generated — the Haiku
