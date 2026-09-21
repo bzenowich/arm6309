@@ -419,6 +419,14 @@ Everything in §3 is an application and belongs on the card.
    a child owns the screen the desktop is deaf, and there is no way to leave it — no
    command key, no force-quit, and no second screen to switch back to. A shell that cannot
    interrupt what it launched is a shell with one application.
+   ⛔ **And the floor is not the child's run time — it is ~26 s, measured 2026-09-21.**
+   `video3/bench/run-v3desk.sh` clicks Stardew on a card that carries the module and not
+   its world, so the scene gets as far as reporting the missing file and exits; the
+   recording still shows the card on the child's 640 × 400 screen from **96.2 s to
+   114.4 s**, and the desktop takes no click before then. The child's `DWSet`, the
+   desktop's `DWSet` back and its whole `DrawAll` all go through CoArm's toolbox escapes,
+   which is where the time is. ⚠ The bench's mouse script waits that out with an absolute
+   `at`, and a relative delay there is a Quit that is never seen.
 5. **The desktop's four applications all launch (answered 2026-09-21; §3.2).** `stardew`
    was the last greyed item; its scene is built
    ([`video3/docs/stardew.md`](../video3/docs/stardew.md), and

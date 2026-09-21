@@ -1,11 +1,151 @@
 # video3 — history
 
-Superseded claims from [`plan.md`](plan.md), [`signals.md`](signals.md),
+Superseded claims from [`plan.md`](plan.md), [`signals.md`](signals.md), [`stardew.md`](stardew.md),
 [`partition.md`](partition.md), [`keyed-copy.md`](keyed-copy.md),
 [`demo-report.md`](demo-report.md) and the two READMEs (`video3/README.md`,
 `hardware/gal/video3/README.md`), with the date each moved and what replaced it.
 `CLAUDE.md`'s rule: **specs describe only the present design**, and a superseded
 utilisation figure is a number `check:docs` cannot distinguish from a live one.
+
+## `optimizations.md` §10.1 and `bench/README.md` — the pinball table was 61 interned blocks (2026-09-21)
+
+The table became a **file** on 2026-09-21 — `video3/bench/mkpcb.py`'s
+`pcbtable.pic`, 327,680 bytes read off `/SD0/DATA` into VRAM rows 0–511
+(`optimizations.md` §10.2). Three things the documents said moved.
+
+### `optimizations.md` §10.1 — "the table cannot be a picture"
+
+> ⭐ **And one thing §10 could not have known: the table cannot be a picture.**
+> 327,680 bytes do not fit a NitrOS-9 module, so the table is 40 × 32 cells of
+> 16 × 16 **interned by content** — `monster`'s technique, without the strips,
+> because a table is built once and never refilled. That bounded the art before
+> it bounded anything else: the playfield is three *flat* zones so an overlay
+> costs one block wherever it sits, where `monster`'s 208-row gradient cost it
+> one block a row. **61 blocks** for a 1,280-cell table.
+
+⚠ The premise is still true and the conclusion is not: a module may not hold
+327,680 bytes, but a **file** may, and the machine gained a card
+(`storage/docs/sdcard.md` §9.4) between the two dates. What the sentence
+really said was "the table cannot be a module", and it was read as a
+statement about the art for a day.
+
+### `bench/README.md` §`run-v3pin.sh` — the VRAM gate, and what it rebuilt
+
+> | ⛔ The VRAM gate | The table is decided by DATA: every byte of ring rows 0–639
+> is the block its map names, with each flipper's **rest frame composed over one
+> rectangle**. `checkv3pin.py` rebuilds all of it from `pinball.json` — the bank,
+> the map, the keyed art and the **eight composed flipper frames** — and compares
+> byte for byte |
+
+The bank and the map are gone with the blocks. The expected VRAM is now
+`pcbtable.pic` itself plus the flipper frames composed out of it, which is a
+shorter model and a stronger claim: the gate compares the machine against the
+same file the SD card carries.
+
+### `bench/README.md` §`run-v3pin.sh` — what it measured, 2026-09-20
+
+The table, the cast and the frame are the same; the start-up and the module
+are not. The 2026-09-20 figures, on the interned table:
+
+| | |
+|---|---|
+| the module's data | 15,616 B block bank + 2,560 B maps + 13,568 B keyed art + 512 B palette |
+| the table into VRAM | **1,280 copy-engine rectangles**, about half a second, at start-up |
+| the blocks | **61** of a 96 budget, for 1,280 cells |
+| the table's own score | **065440** in fifteen seconds on three balls |
+| the mutations | two: mode b5 (the save-behind one row low, 35,255 bytes differ) and b6 (ball 1 never restored, 13,296 bytes differ) |
+
+### `mkpinball.py` — "why the table is built out of blocks, and why the art is flat"
+
+> ⛔ AND THE ART IS DELIBERATELY FLAT-GROUND, which is a block-budget decision
+> before it is an art one. `monster` gave its background a 208-row gradient and
+> paid for it with one block a row; anything laid OVER such a background
+> multiplies by the row it sits on. Here the playfield is three flat zones with
+> dither grain, so a bumper, a rail or a slope composites over ONE background
+> and costs ONE block wherever it is placed - which is what buys a 1,280-cell
+> table out of under 128 blocks. A real playfield is flat paint with art on
+> top, so the constraint and the subject agree.
+
+⭐ The constraint is gone and `mkpcb.py` spends what it bought: continuous
+tone, a ground pour with clearance, per-part silkscreen and 223 distinct
+indices in the finished picture. `mkpinball.py` now emits only the ACTORS —
+the keyed ball and flipper art, the sprite shapes, the loading banner — and
+copies the collision grid across without deriving a byte of it.
+
+## `stardew.md` — "specified, nothing built", and the tint's budget (2026-09-21)
+
+The farm was built on 2026-09-21 — the port's `level2/arm6309/cmds/stardew.asm`,
+the art in `video3/bench/mkstardew.py`, the bench in `video3/bench/run-v3star.sh`
+and `checkv3star.py`. Three things the document said moved.
+
+### The status line
+
+> > **Status: specified, nothing built.** The deliverable is this document.
+
+### §0 and §2 — four LUT entries in 0.24 ms *inside* the blank
+
+The summary table said:
+
+> | ⭐ **The day/night cycle** | **palette writes and nothing else.** Dawn to dusk to
+> night over the run, at ~4 LUT entries a frame, ~240 µs inside a blank that has 353 —
+> and **not one pixel of the world is redrawn** |
+
+and §2:
+
+> The driver holds the authored RGB and multiplies towards the key time's tint; each
+> frame it commits the next four entries it has not yet caught up on.
+
+⛔ **The arithmetic does not fit the blank, and it is not close.** A tint entry is
+nine multiplies and six clamps on a 2.098 MHz 6809E and it **measured 250 µs** —
+so four of them is 1.0 ms against a blank that has 353 µs, and "~240 µs for four"
+was out by a factor of four. What the derivation missed is that the number pinball
+measured — ~60 µs a commit — was for a commit that **has no arithmetic in it**: a
+lamp is a LUT word the scene already holds.
+
+⭐ **What has to be inside the blank is the WRITE, which is two register stores.**
+`stardew.asm` splits the two: a frame **computes** `SWMAXPW` words into a small RAM
+buffer in its own slack — where the frame has milliseconds — and the **next**
+frame's blank writes them, at ~31 µs an entry including the live `VSTAT` check
+before each. Six now fit comfortably where four of the original shape did not fit
+at all: the measured in-blank cost is **0.185 ms** of a **363 µs** blank, and
+`checkv3star.py`'s tearing gate asserts every one of them lands in `[V, A)`.
+
+⚠ The consequence for the checker is that an entry's colour lags the day by up to
+the round-robin's own depth — 29 of 256 phases at the scene's own rate — so the
+scene reports its **commit cursor** every frame and the gate reads which entries
+were written at which phase off the recording rather than replaying the schedule.
+
+### §4 — the per-frame budget
+
+The table said, "using `monster`'s measured figures":
+
+> | the farmer | **0**, he is the hardware sprite |
+> | six chickens, 16 × 16, restore + keyed blit | ~0.53 ms each ⇒ **3.2 ms** |
+> | the dog, 24 × 16 | ~0.6 ms |
+> | crop growth, one plant retired to its next stage per frame | ~0.15 ms |
+> | the day tint, four LUT entries | **0.24 ms**, and it is in the blank |
+> | the HUD's clock digits, when they change | ~0.1 ms |
+> | scroll | **0.03 ms** |
+> | **left** | **~9.4 ms** |
+
+Three of those were wrong in the same direction and §4 now carries the measurement.
+**The actors cost three copies each and not two** — the ring is spent, so there is
+no clean band and a save-behind is a restore, a save *and* a draw. **The HUD is not
+0.1 ms**: it follows the camera, so on a single-buffered card it is restored, saved
+and redrawn *every* frame, and at 160 × 16 that is three 2,560-byte rectangles —
+**2.2 ms**, the second largest line in the frame. And the tint is 1.4 ms of
+arithmetic outside the blank rather than 0.24 inside it. What is left at the
+scene's own cast is **2.4 ms**, not 9.4.
+
+### §6 item 2 — "whether the dither survives the tint"
+
+> 2. ⚠ **Whether the dither survives the tint.** … **Unverified, and it is the
+>    technical risk in this design.**
+
+Measured, before the whole farm was committed, by `mkstardew.py --tint-test`;
+§6 item 2 now carries the answer and the reason.
+
+---
 
 ## `changefont.asm` §, `overworld.asm`, `rastbar.asm`, `wave.asm` — "/DD/SYS is FLAT" (2026-09-20)
 

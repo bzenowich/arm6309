@@ -8,7 +8,8 @@ so `run-emu.sh`, `run-vid.sh` and `software/nitros9/run-emu.sh` are unaffected.
 sh video3/bench/run-v3.sh            # all four, ~1 min. Its exit code is the answer
 sh video3/bench/run-v3mv.sh          # ⭐ the metroidvania scene, ~20 min
 sh video3/bench/run-v3mon.sh         # ⭐ the block-streamed platform world, ~6 min
-sh video3/bench/run-v3pin.sh         # ⭐ the pinball table, and the palette as a feature, ~20 min
+sh video3/bench/run-v3pin.sh         # ⭐ the pinball table, READ OFF THE CARD, ~30 min
+sh video3/bench/run-v3star.sh        # ⭐ the farm, and the DAY in the palette, ~25 min
 sh video3/bench/run-v3sd.sh          # ⭐ the desktop, Paint and a demo OFF THE SD CARD, ~3 min
 sh video3/bench/run-v3desk.sh        # ⭐ THE DESKTOP SHELL, CLICKED AT, ~3 min
 sh video3/bench/run-v3files.sh       # ⭐ ITS FILE MANAGER, AND THE LISTING READ, ~11 min
@@ -205,21 +206,26 @@ at all** — which is the case where the card's scroll costs nothing and the
 work moves into the palette. It is `optimizations.md` §10, built.
 
 ```sh
-sh video3/bench/run-v3pin.sh          # five runs + two mutations, ~20 min. Its exit code is the answer
+sh video3/bench/run-v3pin.sh          # five runs + four mutations, ~30 min. Its exit code is the answer
 ```
 
 | | |
 |---|---|
 | The scene | `pinball`, a NitrOS-9 command in the port's tree (`level2/arm6309/cmds/pinball.asm`). A **640 × 512 table** — 327 KB of the card's 512 KB ring, two and a half screens tall — with `VSCROLL` following the ball, a scripted ball on the **hardware sprite**, extra balls as **keyed blits with save-behind**, and flippers **pre-composed over their own background**. Fifteen seconds at 70 Hz |
+| ⭐ **The table is a FILE** (2026-09-21) | `mkpcb.py`'s `pcbtable.pic` — a 1984 circuit board, **327,680 bytes**, one palette index a pixel, **exactly 640 SD blocks** — goes on the card in `DATA` and the scene reads it straight into VRAM rows 0–511. ⛔ It **cannot** be a module: that is five times the address space one may occupy, which is why the table was 61 interned 16 × 16 blocks composed by 1,280 copies until this bench got a card in its socket. `optimizations.md` §10.2 |
+| ⭐ **Art and collision are separate** | The picture is a picture. The physics reads `pcbtable.json`'s **40 × 32 grid** — `colmap` and the `idmap` that says *which* bumper, target, rollover, kicker or return lane a cell is — carried as 2,560 bytes of module data by `mkpinball.py`. ⛔ Nothing in the scene derives a wall from a pixel; `checkpcb.py` (299 claims, 11 mutations) is what asserts that the two agree |
+| ⭐ A loading screen, and it is not hidden | 320 KB is **11.1 s at 28.9 KiB/s** — one `CMD17` a 512-byte block and a 6809 shifting every byte through SPI by hand. The view is parked at the **bottom** of the table while it arrives, over a banner and a progress bar; ⛔ they are drawn in ring rows 312–511, which the picture itself overwrites, so nothing the loading screen drew survives into the VRAM gate |
 | ⭐ The scoreboard scrolls, and that is the hardware's answer and not a compromise | `VSCROLL` is latched in vertical blanking (plan §8.1), so it cannot change mid-frame and **there is no vertical split**. The six-digit scoreboard is therefore part of the playfield, at the bottom, and the view shows it when the ball is low |
 | ⭐ **The lamps and the score are PALETTE writes** | 50 of the 256 LUT entries are reserved — 8 lamps and 6 seven-segment digits — and the table is *painted* with them, after the dither, so nothing else can be them. A bumper lighting is then **three register writes** and a score digit twenty-one, and the copy engine never hears about it. `mkpinball.py` asserts no art **or sprite** colour equals a reserved one |
 | ⭐ No OS call per frame | `VSCROLL` and the frame's LUT commits go straight at the card inside the blank the frame poll already waited for, `monster`'s entry-1 path. **0.032 ms** against `SS.Scroll`'s **1.12** |
 | The instrument | a store to **`$FF2E`**, as the other two scenes use. Twelve a frame, about 34 µs of 14,270, inside every number below |
-| ⛔ The VRAM gate | The table is decided by DATA: every byte of ring rows 0–511, columns 0–639 is the block its map names, with each flipper's **rest frame composed over one rectangle**. `checkv3pin.py` rebuilds all of it from `pinball.json` — the bank, the map, the keyed art and the **eight composed flipper frames** — and compares byte for byte. Only the save-behind scratch is excluded, because it is the one region nothing can predict |
+| ⛔ The VRAM gate | ⭐ **The expected VRAM IS the file.** Ring rows 0–511, columns 0–639 must be `pcbtable.pic` byte for byte — the same 327,680 bytes the card carries — and the spare columns the keyed art and the **eight flipper frames composed out of that picture**. Only the save-behind scratch is excluded, because it is the one region nothing can predict. It is a shorter model than the block composition it replaced and a stronger claim |
+| ⭐ **The collision gate** | Art and collision are separate files now, so "the table looks right" says nothing about whether the ball can hit any of it. Every `Hit` marks its **kind** at `$FF2E` (`$01`–`$0C`) and the union over the runs must cover every kind the grid carries. ⛔ A scene whose `ColMap` was all zeroes paints, scrolls, keeps its budget and passes the gate above |
+| ⛔ **The score gate** | `pinball` emits its six digits as nibble marks after the `Wipe`, and **`000000` fails**. This table has twice run perfectly and scored nothing for ever — a plunger that bounced instead of firing, and a lane mouth that returned the ball's own speed — and neither is visible to a gate about pixels or one about microseconds |
 | ⭐ **The LAMP gate, which the other two scenes did not need** | A palette feature **touches no VRAM at all**, so the gate above is blind to the whole of it. It is read off the **recording** instead: each reserved entry's colour is unique in the picture, so "the lamp is lit in some frames and out in others" is a claim about what the card really produced. ⛔ With a negative control — **mode b1 writes no LUT at all and not one lamp may light** |
 | ⛔ The tearing gate | `$11` is marked the instant the `VSCROLL` stores are done and `marks.txt` carries `VBLANK`'s rise and each frame's first active line, so "the pair reached the card inside the blank" is read off the recording. ⭐ And the **LUT commits are inside the same claim**: they have to fit the blank too, or a commit posts to the next `HLOAD` |
 
-#### What it measured, 2026-09-20
+#### What it measured, 2026-09-21 (the table off the card)
 
 A frame is 14.27 ms. The scene's own cast is three balls — one on the sprite,
 two as keyed blits:
@@ -227,21 +233,43 @@ two as keyed blits:
 | | ms a frame |
 |---|---|
 | `VSCROLL`, written in the blank | **0.032** |
-| ⭐ the lamps and the scoreboard, committed in the same blank | **0.175** |
+| ⭐ the lamps and the scoreboard, committed in the same blank | **0.299** |
 | the sprite's shape, when the ball's highlight turned | 0.154 |
-| the physics, and the lamp/score bookkeeping with it | 1.631 |
-| the two flippers | 0.619 |
+| the physics, and the lamp/score bookkeeping with it | 2.435 |
+| the two flippers | 0.776 |
 | ⭐ the two blit balls: a restore, a save-behind and a keyed blit each | **1.968** |
-| what is left of the frame | **9.67** |
+| what is left of the frame | **8.59** |
 
 | | |
 |---|---|
-| ⭐ **the most balls that fit** | **9** — eight blit balls from the sweep's slope (**1.674 ms of frame + 1.459 ms a blit ball**), and the sprite ball is free. The work first passes 14.3 ms at nine blits and the first dropped frame is there too |
-| ⭐ **what the OS call costs** | `SS.Scroll` instead of the blank write: **+1.09 ms a frame** (4.59 → 5.68). §8's 1.05 ms of IOMan, SCF and the kernel, measured now on a **third** scene |
-| ⭐ **what the palette scoreboard costs** | **0.70 ms a frame** against mode b1, of which only **0.16** is the LUT writes themselves; the rest is deciding what changed, and it is deliberately outside the blank |
-| ⭐ **what pre-composing the flippers buys** | blitting them every frame instead of on a change is **+0.73 ms** (0.62 → 1.36). Eight rectangles built once at start-up |
-| ⛔ **the blank an exclusive owner really has** | the poll returns **1,186 µs into a 1,559 µs blank** and leaves **353** — `monster`'s measurement again. The scroll pair plus up to four LUT commits is **326 µs** at worst, which is why `MAXPW` is four |
-| the table's own score | **065440** in fifteen seconds on three balls |
+| ⭐ **what the table costs to load** | **11.09 s for 327,680 bytes — 28.9 KiB/s**, once, at start-up, with a loading screen over it. rbsd reads one 512-byte block a `CMD17` and a 6809 shifts every byte through SPI by hand; the 1,280 copy-engine rectangles it replaced took about half a second, and could not have drawn this picture |
+| ⭐ **the most balls that fit** | **8** — seven blit balls from the sweep's slope (**2.622 ms of frame + 1.484 ms a blit ball**), and the sprite ball is free. The work first passes 14.3 ms at eight blits and the first dropped frame is there too |
+| ⭐ **what the OS call costs** | `SS.Scroll` instead of the blank write: **+1.09 ms a frame** (5.68 → 6.77). §8's 1.05 ms of IOMan, SCF and the kernel, measured now on a **third** scene |
+| ⭐ **what the palette scoreboard costs** | **1.48 ms a frame** against mode b1 (5.68 → 4.20), of which **0.30** is the LUT writes themselves; the rest is deciding what changed, and it is deliberately outside the blank. ⚠ It is twice what the interned table measured because the **bonus ladder** steps a lamp every sixteenth scoring event and the queue now runs at its `MAXPW` of four almost every frame |
+| ⭐ **what pre-composing the flippers buys** | blitting them every frame instead of on a change is **+1.68 ms** (5.68 → 7.36) — more than before, because a flipper frame is now 56 × 64 rather than 48 × 32. Eight rectangles built once at start-up |
+| ⛔ **the blank an exclusive owner really has** | the poll returns **1,186 µs into a 1,558 µs blank** and leaves **353** — `monster`'s measurement again. The scroll pair plus four LUT commits is **326 µs** at worst, which is why `MAXPW` is four and why it is now nearly all of the blank |
+| the table's own score | **392,970** in fifteen seconds on three balls, and **598,350** over the sweep |
+| ⭐ **every collision kind was met** | all twelve `pcbtable.json` carries, over the five runs — `solid`, `slope_r`, `slope_l`, `bumper`, `target`, `rollover`, `kicker`, `drain`, `flip_l`, `flip_r`, `return`, `plunger` |
+
+⚠ **THE THREE-BALL SCENE DOES NOT REACH THE FLIPPERS, and the lamp gate said
+so.** The bumper nest at the top of the board keeps the cast there: `m0` meets
+`solid`, `bumper`, `target`, `rollover`, `kicker` and `plunger` and nothing
+else, so `D7` and `D8` — the slingshots' and the flippers' lamps — had no
+source at all and the gate reported `MISSING lamp 6 lit` with every other
+claim green. The sweep's fifteen balls do reach them. ⭐ What closed it is a
+**bonus ladder**: every sixteenth *scoring event* steps a lamp along the eight
+inserts, which is what a 1984 table does with the panel it has — and which is
+driven by scoring and by nothing else, so a table that hits nothing still
+lights nothing and the gate keeps its teeth.
+
+⚠ **And the scoreboard is only ever on screen when a ball is at the bottom**,
+because `VSCROLL` follows ball 0 and the six digits are painted into the
+backplane at the foot of the table. The one moment that is true is while a
+ball **waits in the shooter lane**, so `Launch` serves it there at rest and
+the `KPLNG` cell is what throws it, 60 frames later — long enough for the
+camera's 8 rows a frame to pan the 300 rows down and back. Before that the
+digits were never once in the picture, and `segon`/`segoff` were two of the
+gate's eighteen states that nothing could satisfy.
 
 #### ⛔ Why save-behind here, where `monster` uses a clean band
 
@@ -268,13 +296,25 @@ lane, so it is not a corner case — it was 2,067 bytes of trail.
 
 #### ⭐ The mutations, and the one thing no gate here could see
 
-`run-v3pin.sh` ends by running two deliberately broken scenes and **requiring
-the gate to fail**:
+`run-v3pin.sh` ends by running four deliberately broken scenes and **requiring
+the gate to fail**. ⭐ The last two are the gate on the path the scene gained
+when its table became a file:
 
 | Mutation | What the gate says |
 |---|---|
-| mode b5 — each ball's save-behind is taken one ROW below where it draws | 35,255 bytes differ, first at ring row 81 column 112 |
-| mode b6 — blit ball 1 is drawn and never restored | 13,296 bytes differ, first at ring row 84 column 406 |
+| mode b5 — each ball's save-behind is taken one ROW below where it draws | 39,316 bytes differ, first at ring row 16 column 16 |
+| mode b6 — blit ball 1 is drawn and never restored | 26,892 bytes differ, first at ring row 16 column 117 |
+| ⭐ mode b8 — the picture is loaded to the WRONG VRAM ADDRESS, one row low, so the whole table is rotated through the ring | 241,116 bytes differ, first at ring row 0 column 0 |
+| ⭐ mode b9 — the load is TRUNCATED at ring row 448, so the last four cell rows of the backplane keep the loading screen | 39,009 bytes differ, first at ring row 448 column 0 — **64 rows and no more**, which is what says it is a truncation and not a rotation |
+
+⛔ **And the b9 mutation was itself wrong for one run, which is worth the
+note.** `PicLd` read the mutation flags with `ldd #0` followed by
+`ldb mode,u` — a test that *leaves the mode's high byte in the low half of
+D*, so mode 512 started the load at ring row **two** and the truncation
+mutation was really a rotation. It failed the gate either way, which is
+exactly how a mutation that tests the wrong thing stays green; what caught it
+was reading *where* the differences were and finding them spread evenly over
+all 512 rows instead of confined to the last 64.
 
 ⛔ **AND THE DEFECT THAT COST A DAY WAS INVISIBLE TO EVERY ONE OF THEM.**
 `Move` set its axis flag with `lda #1` — and **A was the cell kind**. Every
@@ -309,11 +349,22 @@ the ROM disk was full, see [`../docs/history.md`](../docs/history.md)).
 `software/nitros9/mkrom.sh` writes the data set to `$OUT/data`, and
 `software/nitros9/mksddisk.sh` puts both on an SD image. The ROM disk is the
 kernel, the shell, the shared modules, `errmsg` and a rescue command set,
-with **350 K of its 488 K free**. `run-v3pin.sh` and the other older scene benches
-boot with an **empty socket** and type their command at `/DD`, so they still
-pass `CMDS_EXTRA=<name>` — but nothing has to be **given back** any more, and
-the recipe's disk rule now depends on the command list itself (`.cmdlist`), so
-nothing has to delete `romdisk.dsk` either.
+with **350 K of its 488 K free**. The older scene benches boot with an **empty
+socket** and type their command at `/DD`, so they pass `CMDS_EXTRA=<name>` —
+but nothing has to be **given back** any more, and the recipe's disk rule now
+depends on the command list itself (`.cmdlist`), so nothing has to delete
+`romdisk.dsk` either.
+
+⭐ **`run-v3pin.sh` is no longer one of them** (2026-09-21). Its table is
+327,680 bytes of picture, so there **is** no empty-socket version of that
+scene: the bench builds a card with `pinball` in `CMDS` and `pcbtable.pic`
+plus `pcbtable.pal` in `DATA`, boots with it in the socket and `chx
+/sd0/cmds` before typing. ⚠ `chd` is deliberately not done, because it would
+change the prompt and with it the bench's `SERIAL_GATE`. And `mkrom.sh` puts
+the same two files in `$OUT/data` under `V3=1`, so a **full** demo card —
+the one the desktop's Applications menu forks the scene from — carries them
+too; `run-v3pin.sh` claims both, by copying the picture back off the image
+and comparing it byte for byte with the source.
 
 ### ⭐ They were mutation-tested, because a green check proves nothing on its own
 
@@ -349,6 +400,73 @@ records its sprite position in `$C208`/`$C20A`, which start at zero — and `(0,
 test position, so frames recorded while the screen was still being built could have
 been judged as if the sprite were live. The ROM now writes `$FFFF` there until the
 screen is up, so those frames are skipped **explicitly**.
+
+### ⭐ `run-v3star.sh` — `stardew`, and the day in the palette
+
+`mvania` asks what a game can put on a screen when the room is already in
+VRAM, `monster` what it can when the level is longer than VRAM, and
+`pinball` what happens when the whole world is resident and nothing streams.
+**This one is not about where the bytes are at all.** It replaces
+`overworld` — the archived `video/` card's flagship — and the thing it
+exists to show is [`../docs/stardew.md`](../docs/stardew.md)'s headline:
+⭐ **the time of day changes by palette writes and nothing else.**
+
+```sh
+sh video3/bench/run-v3star.sh         # four runs + three mutations + two controls, ~25 min
+python3 video3/bench/mkstardew.py --tint-test    # ⚠ §6 item 2, on its own, ~25 s
+```
+
+| | |
+|---|---|
+| The scene | `stardew`, a NitrOS-9 command in the port's tree (`level2/arm6309/cmds/stardew.asm`). A **1024 × 480 farm** — 491,520 of the ring's 524,288 bytes — read off `/SD0` straight into VRAM rows 0..479, a 640 × 200 view scrolled over it in **both** axes, the farmer on the hardware sprite, six chickens and a dog as **keyed blits with save-behind**, crops that grow, and a HUD that follows the camera |
+| ⭐ The day | 256 phases, four key times, and the driver holds the **authored** 8-bit RGB and multiplies towards the phase's six coefficients. The lit set (LUT 201–230 — windows, lanterns, the stove, fireflies, the moon on the pond) is never touched, so it *becomes* the light as everything else darkens |
+| ⛔ The ring is spent, so there is no clean band | 491,520 of 524,288 bytes are the world. The actors restore with **save-behind**, which forces **three phases** — every restore before any save and every save before any draw (`pinball`'s finding, and two chickens in one place is not a corner case) |
+| The instrument | a store to **`$FF2E`**, as the other three scenes use. Seventeen a frame, ~57 µs of 14,270 |
+| ⛔ The VRAM gate | every byte of the world is `stardew.pic` with exactly the crop stages the scene's own retirement count says it grew, and the keyed art bank with it. ⭐ And separately: outside the crop plots the world is the file **byte for byte**, which is what says 491,520 bytes came off the card unaltered |
+| ⭐ **THE PALETTE GATE, which no other scene here needed** | ⛔ A day cycle **touches no VRAM at all**, so the byte compare is structurally blind to the whole feature. The LUT is read off the **recording** instead, and **index by index**: the world is known and the camera is in the marks, so every pixel's palette index is known, and the **modal colour of an index's pixels IS what the card's LUT held**. ⛔ With a negative control — mode b0 writes no LUT entry and must read the authored palette at every checkpoint |
+| ⛔ **The compounding gate** | `stardew.md` §2: the tint must be applied to the **authored** colour, never the current one, or it compounds and the world converges on black over a thousand frames. The scene ends by pinning the day at noon and putting every entry back through the same arithmetic at unity gain — after which the LUT must be the authored palette **bit for bit** |
+| ⭐ The one-line statement of the feature | the run **with** the cycle and the run **without** it leave the world byte for byte the same, and their palettes do not agree |
+| The sheets | `stardew-sheets/`, beside this file - the fifteen seconds as a contact sheet, labelled with the camera, the day's phase and the cast |
+| ⛔ The tearing gate | `$11` is marked when the scroll pair is in and `$12` when the frame's LUT writes are, and `marks.txt` carries `VBLANK`'s rise and each frame's first active line — so "both reached the card inside the blank" is read off the recording |
+
+#### ⭐ Three things it found
+
+⛔ **The tint cannot be done in the blank, and `stardew.md` §2's budget for it
+was wrong by 4×.** Nine multiplies and six clamps an entry measured **250 µs**
+on this CPU, so "four entries in 0.24 ms inside a blank that has 353" is not
+merely tight, it is impossible. What has to be in the blank is the **write**,
+which is two register stores. The scene therefore **computes** `SWMAXPW` words
+in the frame's own slack and **writes** them in the next frame's blank, at
+~31 µs an entry — and six now fit where four of the original shape did not.
+
+⛔ **And the palette gate caught a defect on its first green run of everything
+else.** `PalPrep` saved its loop counter with `pshs b` around a call that
+**returns in D**, and `puls b` put the counter back over the answer's low
+byte: every LUT word had the right `PDATH` and a `PDATL` of 1..6. That is a
+whole-world colour error — every blue and the low two bits of every green —
+and **the VRAM gate passed it, the tearing gate passed it, and a contact
+sheet looks like a farm at dusk.** Only a claim about the LUT's *contents*
+saw it. ⚠ `pinball`'s lamp gate is the same lesson (`bench/README.md`
+above): a scene needs at least one claim about what the picture *is*, not
+only about what the machine did.
+
+⛔ **AND A DEMO THAT FAILS HAS TO LEAVE THE MACHINE USABLE.** `stardew`'s first
+error path printed its message and exited without a `DWEnd`, so the window it
+had `DWSet` stayed **defined** — and the next `DWSet` on it answered
+`E$WADef`. At the shell that is visible (`stardew` twice in a row:
+`Error #184 - Window already defined`); under the desktop it is not, because
+`desk` forks the scene, the scene fails, and `desk`'s own `Setup` then cannot
+have its window back. The error path now ends the window; ⚠ the **successful**
+path deliberately does not, because `DWEnd` frees the screen's store and that
+path's VRAM is what the gate dumps.
+
+⚠ **The join has to be physical, not nearest-match.** A recorded field's
+pixels were decided in the blank **before** its first active line, so the
+frame mark to use is the last `$10` before that `A` — and the camera cannot
+be used to pick between candidates, because **when the camera is clamped at
+an edge two consecutive frames report the same one**. Three checkpoints of
+twelve were joined one frame early that way, which presented as exactly one
+batch of six LUT entries carrying the previous sweep's phase.
 
 ### ⭐ `run-v3sd.sh` — the desktop, Paint and a demo, all **off the SD card**
 

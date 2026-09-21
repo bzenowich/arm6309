@@ -86,7 +86,7 @@ command -v os9 >/dev/null || {
 # there it has to be added here: the two are not derived from one another, and
 # a demo missing from this list is one that silently never reaches the card.
 # The check below is what makes that visible - an ALL run demands every name.
-ALL="rastbar wave overworld v3drag v3scrl v3grab v3trk changefont v3cpyb mvania monster pinball desk v3paint"
+ALL="rastbar wave overworld v3drag v3scrl v3grab v3trk changefont v3cpyb mvania monster pinball desk v3paint stardew"
 # ⚠ libvid is not a demo, it is a subroutine module, and it goes on the card
 # anyway: overworld.asm F$Loads "libvid" FROM THE EXECUTION DIRECTORY when
 # F$Link finds none in memory, and the execution directory is the card's CMDS

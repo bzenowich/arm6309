@@ -20,7 +20,9 @@
 #
 # ⛔ AND NOTHING IS CLICKED WHILE THE MANAGER IS REDRAWING.  boot-and-desktop.md
 # §3.6: desk samples the button's level once a pass, and a pass that repaints
-# twelve rows is seconds long, so a click inside one is not slow - it is gone.
+# twelve rows is 2.09 s, so a click inside one is not slow - it is gone.  Item
+# 7 has the measured threshold: six clicks all arrive 2.2 s apart, three of six
+# at 2.0 s.
 
 origin 320 240
 gap 120

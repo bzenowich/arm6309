@@ -31,10 +31,17 @@
 # ⛔ AND NOTHING IS CLICKED WHILE THE MANAGER IS REDRAWING, which the first
 # run of this bench learnt the hard way: three clicks on the scroll arrow
 # 1.0 s apart moved the list by ONE row.  desk samples the button once a
-# pass and a pass that repaints twelve rows is seconds long, so a 120 ms
-# click inside one is not slow - it is GONE.  That is a real limitation of
-# a polled loop with no latched button (desk.asm's header says so); here it
+# pass and a pass that repaints twelve rows is 2.09 s, so a 120 ms click
+# inside one is not slow - it is GONE.  That is a real limitation of a
+# polled loop with no latched button (desk.asm's header says so); here it
 # means every click gets a clear four and a half seconds to itself.
+#
+# ⭐ AND THE THRESHOLD IS MEASURED (2026-09-21, docs/boot-and-desktop.md
+# item 7): six clicks on a scroll arrow all arrive at 2.2 s apart and three
+# of six at 2.0 s, which is DrawList to the tenth.  ⚠ THE 4.5 s STAYS.  The
+# threshold IS the draw time, so it moves with the length of a row's name
+# and with anything else the repaint grows; two seconds of margin over it
+# is what stops this bench failing for a reason that is not a defect.
 origin 320 240
 gap 120
 

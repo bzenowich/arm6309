@@ -31,8 +31,11 @@
 #      was ever opened, and desktop icons are deliberately under it
 #   5  ⭐ A MENU ITEM FORKS ITS PROGRAM: Paint runs, and the claim is PAINT'S
 #      OWN PICTURE on the card's output, not that a click happened
-#   6  `stardew` is there, greyed, refuses the highlight, and CLICKING IT
-#      LAUNCHES NOTHING
+#   6  ⭐ `stardew` is there and LIVE since 2026-09-21; clicking it forks it.
+#      ⛔ The card carries the MODULE and not its 491,520-byte world, so the
+#      scene reports its own missing data and exits in about two seconds -
+#      a child short enough to click through, and the console line is the
+#      claim that the fork really happened
 #   7  the KEYBOARD leg: `q` on the window's own keyboard ends the program,
 #      read non-blocking so the loop never stalls on it
 #   8  ⛔ THE NEGATIVE CONTROL: the same everything, and a script that walks
@@ -53,7 +56,7 @@ ROOT=$(pwd)
 OUT=${OUT:-/tmp/arm6309-v3desk}
 S="$ROOT/video3/bench/scripts"
 DESKASM=${DESKASM:-}
-SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-105}
+SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-145}
 IDLE_SECONDS=${IDLE_SECONDS:-50}
 TICKS=${TICKS:-5000}                    # desk's iteration bound; Quit is what normally ends it
 IDLETICKS=${IDLETICKS:-1200}            # the control's: it exits on the bound
@@ -80,7 +83,14 @@ ROM="$OUT/arm6309_rom.bin"
 # ⭐ THE CARD: the shell, the app the menu launches, and the two games the
 # menu offers.  They are on the card and NOT in the ROM disk, which is what
 # `desk`'s launcher has to reach through the execution directory.
-DATA="$OUT/data" sh software/nitros9/mksddisk.sh "$OUT/sd.img" desk v3paint monster pinball \
+# ⭐ stardew IS ON THE CARD AND ITS WORLD IS NOT, which is deliberate.  The
+# farm's 491,520-byte stardew.pic would double this image and the scene owns
+# the screen for twenty seconds, and neither is what this bench is about - but
+# the MODULE has to be here, because the menu item is `A.Run` since 2026-09-21
+# and a click on it has to fork something.  ⛔ With the module and without the
+# world the scene reports its own missing data and exits in about two seconds,
+# which is a child short enough to click through and a claim worth having.
+DATA="$OUT/data" sh software/nitros9/mksddisk.sh "$OUT/sd.img" desk v3paint monster pinball stardew \
   > "$OUT/mksddisk.log" 2>&1 || { cat "$OUT/mksddisk.log"; echo "FAIL  the card did not build"; exit 1; }
 cat "$OUT/mksddisk.log"
 
@@ -176,8 +186,8 @@ claim "⭐ HOVERING ITEM 0 (Paint) HIGHLIGHTS ITEM 0, AND ONLY IT" \
   test "$(hiat click 168 32)" = 0
 claim "⭐ AND MOVING TO ITEM 1 (Monsterland) MOVES THE HIGHLIGHT THERE - a different item" \
   test "$(hiat click 168 52)" = 1
-claim "⛔ and hovering the GREYED item highlights nothing at all" \
-  test "$(hiat click 168 92)" = -
+claim "⭐ AND ON TO ITEM 3 (Stardew), which was the greyed one until 2026-09-21" \
+  test "$(hiat click 168 92)" = 3
 
 # --- 4. dismissal, and what was underneath --------------------------------
 claim "clicking off the menu dismissed it"                     test "$(field click C1 post)" = shut
@@ -204,14 +214,21 @@ claim "the desktop's own state survived the launch: the menu was shut again" \
   test "$(field click C4 pre)" = shut
 claim "   and the menu bar's own rectangle survived the launch"  test "$(field click C4 post)" = open
 
-# --- 6. ⛔ specified and not built -----------------------------------------
-claim "⛔ Stardew is on the menu, and the source declares it greyed" \
-  grep -q '^item 1 3 0 Stardew' "$OUT/click/desk.txt"
-claim "⛔ clicking it dismisses the menu"                       test "$(field click C5 post)" = shut
-claim "⛔ AND LAUNCHES NOTHING: the console says it was asked for and refused" \
-  has click 'DESK-DIS Stardew'
-claim "⛔ ...and never says it was run"                         nohas click 'DESK-RUN Stardew'
-claim "⛔ and no second program drew: Paint's picture was on the card exactly ONCE ($(get click paintruns) run)" \
+# --- 6. ⭐ the fourth item, which was greyed until 2026-09-21 --------------
+# ⛔ AND THE CARD THIS BENCH BUILDS DELIBERATELY DOES NOT CARRY IT.  `stardew`
+# is 23 KB of module and a 491,520-byte world file, and it owns the screen for
+# twenty seconds - none of which this bench is about.  So the claim here is
+# that the ITEM IS LIVE and that clicking it asks for a launch; the scene
+# itself has its own bench (arm6309 video3/bench/run-v3star.sh).
+claim "⭐ Stardew is on the menu, and the source declares it RUNNABLE" \
+  grep -q '^item 1 3 1 Stardew stardew' "$OUT/click/desk.txt"
+claim "⛔ ...and it is no longer the greyed one: no Applications item is" \
+  sh -c "test -s '$OUT/click/desk.txt' && ! grep -q '^item 1 [0-9]* 0 ' '$OUT/click/desk.txt'"
+claim "⭐ clicking it ASKS FOR THE LAUNCH: the console names it"  has click 'DESK-RUN Stardew'
+claim "   and never reports it as refused"                      nohas click 'DESK-DIS Stardew'
+claim "⭐ AND IT RAN: the card carries the module and not its 480 KB world, so the scene says so itself" \
+  has click 'no world file'
+claim "   and it is still Paint's picture that is the only one drawn ($(get click paintruns) run)" \
   test "$(get click paintruns)" = 1
 
 # --- 7. quit, through the menu that offers it -----------------------------
