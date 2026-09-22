@@ -33,11 +33,36 @@ typedef struct cpu6809_line { int lvl, prev; int64_t t; } cpu6809_line;
 typedef struct cpu6809 {
     uint8_t a, b, dp, cc;
     uint16_t x, y, u, s, pc;
+
+    /* ---- HD6309 ---------------------------------------------------------
+     * ⭐ `is6309` selects. With it CLEAR this core is byte-identical to the
+     * 6809 the differential test has always run against mc6809e.v, and every
+     * 6309-only encoding is refused (see undef6309 below). With it SET, the
+     * encodings hd6309.c implements execute and the rest are still refused.
+     * ⚠ The GHOST decode is a 6809 property and does NOT apply in 6309 mode:
+     * $01 is OIM on an HD6309E, not a ghost of NEG. */
+    int is6309;
+    uint8_t e, f;                /* W = E:F;  Q = D:W = A:B:E:F */
+    uint16_t v;                  /* the 6309's V scratch register */
+    uint8_t md;                  /* b0 native mode, b1 FIRQ-stacks-like-IRQ */
     int irq, firq, nmi;          /* input line levels, 1 = asserted (active) */
     uint64_t cycles;             /* E cycles executed since reset */
     void *ctx;
     uint8_t (*read)(void *ctx, uint16_t addr);
     void (*write)(void *ctx, uint16_t addr, uint8_t v);
+
+    /* ⭐ Called when a 6309-ONLY opcode is fetched, before it is decoded.
+     * `page` is 0/1/2 for no prefix, $10, $11; `op` is the RAW byte (not the
+     * ghost-mapped one); `pc` addresses the opcode itself.
+     *
+     * ⛔ THE DEFAULT IS TO ABORT, AND THAT IS THE POINT.  Without this hook a
+     * 6309 instruction decodes as its 6809 ghost - $01 OIM executes as NEG,
+     * $1138 TFM as an invalid 2-cycle no-op - and the machine runs on to a
+     * plausible wrong answer.  armio.asm:513 is the standing rule that exists
+     * because of it: "a TFM here assembled, linked, booted - and copied
+     * NOTHING."  Set this to observe instead of dying; leave it NULL to die.
+     * It is also the seam a real 6309 core plugs into. */
+    void (*undef6309)(void *ctx, int page, uint8_t op, uint16_t pc);
 
     uint64_t now;                /* E cycle of the access in progress (valid inside read/write) */
     int wait;                    /* 0 running, 1 CWAI, 2 SYNC, 3 seized (see cpu6809.c) */
@@ -49,6 +74,15 @@ typedef struct cpu6809 {
 } cpu6809;
 
 enum { CPU6809_IRQ, CPU6809_FIRQ, CPU6809_NMI };
+
+/* Make this core an HD6309E. Call before cpu6809_reset(). */
+void cpu6309_enable(cpu6809 *c);
+
+/* The indexed effective address, exposed for hd6309.c. */
+int  cpu6809_idx_ea(cpu6809 *c, int64_t base, int n, uint8_t b2,
+                    uint16_t *eap, int *seize);
+
+int  cpu6809_int_pending(cpu6809 *c, int64_t at);
 
 void cpu6809_reset(cpu6809 *c);   /* PC from $FFFE/$FFFF, CC = I|F set */
 int  cpu6809_step(cpu6809 *c);    /* take a pending interrupt or execute one instruction; returns E cycles consumed and adds them to c->cycles */

@@ -58,7 +58,7 @@ BOOT="$REC/bootfile" NAME="arm6309" \
 cat "$OUT/mksddisk.log"
 
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
-   software/demo/emu/cpu6809.c "$ROOT/audio/refplayer/card.c"
+   software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 
 # ----------------------------------------------------------------- the run --
 # ⚠ CR, not LF.  `desk` is forked onto /W3 and prints DESK-READY when its first

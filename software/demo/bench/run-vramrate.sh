@@ -31,6 +31,6 @@ code = open(b + "/vramrate.bin", "rb").read()
 rom[8192:8192 + len(code)] = code
 open(b + "/vramrate.rom", "wb").write(rom)
 PY
-cc -O2 -w -I"$ROOT/audio/refplayer" -o "$OUT/emu" emu/machine.c emu/cpu6809.c "$ROOT/audio/refplayer/card.c"
+cc -O2 -w -I"$ROOT/audio/refplayer" -o "$OUT/emu" emu/machine.c emu/cpu6809.c emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 "$OUT/emu" $B/vramrate.rom "$OUT" "$SECS" > "$OUT/emu.out" 2> "$OUT/emu.log" || true
 python3 tools/vramrate.py "$OUT/emu.log"

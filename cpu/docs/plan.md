@@ -1308,12 +1308,84 @@ trick in §3.4(3) usable. It fails exactly when the next address depends on data
   runs native**, so this table is on the critical path to the success criterion.
 - **New instructions:** inter-register `ADDR`/`SUBR`/`ANDR`/`ORR`/`EORR`/`CMPR`; bit ops
   `BAND`/`BIAND`/`BOR`/`LDBT`/`STBT`; `MULD`, `DIVD`, `DIVQ`; `LDQ`/`STQ`, `ADDW`.
-- **`TFM` block transfer** — the hard one. Interruptible mid-transfer, per-byte bus cycles,
-  specific state on interrupt/resume. Budget real time.
+- **`TFM` block transfer** — the hard one. Interruptible mid-transfer, per-byte bus
+  cycles. ⭐ **Its interrupt/resume behaviour is SPECIFIED in §4.3.1, not inherited.**
 - **Traps** — illegal instruction and divide-by-zero both vector through `$FFF0` (§2.4).
 - **`BUSY`** asserted during read-modify-write and `TFM`.
 - **`/HALT` state machine** per §2.2 — instruction-boundary entry, `BA`=`BS`=1, buses to
   high-Z via `BUS_OE`, precedence over interrupts.
+
+
+#### 4.3.1 ⭐⭐ `TFM`'s interrupt and resume behaviour — DECIDED 2026-09-21
+
+⭐ **This core completes the current byte before it takes an interrupt.** On an
+interrupt request during `TFM`, the byte in flight is **stored**, the incrementing
+pointer(s) advance, `W` decrements, and only then is the interrupt recognised.
+Nothing is ever held across an interrupt, so on resume there is nothing to recover:
+**the source is never re-read and the destination is never written twice.**
+
+⛔ **This is a deliberate divergence from an HD63C09E**, and it is the only one in
+this core that is a choice rather than a bug. `docs/6309.md` §5.1 is the full
+argument; `storage/docs/sdcard.md` §11.6 priced it. In short:
+
+| | |
+|---|---|
+| what silicon does | *"An interrupt during Form 4 re-reads the peripheral referenced by r1 **without storing the previous data byte**, advancing r2, or decrementing W; use Form 4 only with interrupts disabled"* — `reference/manuals/The 6309 Book (Burke & Burke).pdf`, the `TFM` page |
+| what it costs here | a `TFM` against a side-effecting port loses a byte, silently, ~**one block in seven** on a 512-byte SD read (`sdcard.md` §4.2). The containment is `orcc #$50` around every such transfer, chunked to bound latency — **21 %** |
+| what this rule costs | ⭐ **nothing.** It is a boundary condition in the `TFM` state machine, not extra work, and the added interrupt latency is **one byte — 3 cycles** |
+
+**Why it is safe to diverge, stated precisely:**
+
+- ⭐ **It cannot break a program that is correct on silicon.** A correct program
+  already masks around a port-facing `TFM` — the book says to — and a masked `TFM`
+  never reaches the divergent path. This rule only ever changes the behaviour of a
+  program that is *already* broken on a real 6309.
+- ⭐ **It is unobservable to NitrOS-9.** All 126 `TFM` sites in the OS are either
+  RAM↔RAM, or a RAM-source memset, or masked; every one of the 9 port-source sites
+  is masked. There is no working path on which this rule differs
+  (`docs/6309.md` §5.1.5 has the census).
+- ⭐⭐ **It is the fix the OS authors wanted and could not afford.**
+  `level1/modules/rb1773.asm:547` abandoned a 4× block move over exactly this
+  hazard — *"the tfm will repeat a byte and lose track"* — because the only
+  available remedy, masking, cost more interrupt latency than a floppy driver
+  sharing the CPU with the keyboard poller could spend. This rule is that remedy at
+  three cycles.
+
+**Requirements this places on the implementation:**
+
+1. ⭐ **`W` is 0 on normal completion, always.** Five NitrOS-9 sites depend on it,
+   one of them across an intervening `bsr` (`rel.asm:400`, *"E=$00 already from TFM
+   above"*). Nothing in the OS ever inspects `W` to detect a short transfer, so
+   this is not defence in depth — it is load-bearing.
+2. **The interrupt is recognised at a byte boundary, not an instruction boundary.**
+   `TFM` stays interruptible; worst-case added latency is one byte.
+3. ⛔ **`MD` — or an equivalent core-private control — selects the compatible
+   behaviour, and that is the RESET DEFAULT.** §4.3.2.
+4. **`BUSY` remains asserted for the whole transfer**, unchanged.
+
+⛔ **And it does not delete the masked path from any driver.** A driver that
+assumed this rule would corrupt transfers on real silicon, which matters because
+this firmware is also the CoCo 3 drop-in SKU. The masked loop stays as the
+compatible path and the mode bit selects between them — about ten bytes of driver
+(`sdcard.md` §11.6).
+
+#### 4.3.2 The mode bit, and the SKU rule
+
+⭐ **Default: compatible (faithful re-read).** The divergent rule is opt-in.
+
+- **The CoCo 3 drop-in SKU ships with it OFF and no way to turn it on.** That
+  target's whole value is being indistinguishable from the part it replaces.
+  ⚠ On a stock CoCo 3 the difference is arguably unobservable — there is no
+  side-effecting port a `TFM` can reach — but that is a judgement about software
+  that exists, not a property of the machine, and a third-party cartridge could
+  present one.
+- **This machine's boot ROM turns it on**, and records that it did.
+
+⚠ **Phase 5's exit criterion needs a carve-out.** §7 says *"discrepancies resolved
+in favour of silicon"*. That is right for every discrepancy except this one, which
+is a specification. **A silicon capture still happens** — it is what tells us what
+the compatible mode must do, and it still owes the **Form 3** question
+(`sdcard.md` §12 step 1), which neither the book nor the OS answers.
 
 ### 4.4 Portability
 

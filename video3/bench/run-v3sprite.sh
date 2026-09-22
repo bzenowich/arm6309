@@ -28,7 +28,7 @@ rom[8192:8192 + len(code)] = code
 open(b + "/v3sprite.rom", "wb").write(rom)
 PY
 cc -O2 -w -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
-   software/demo/emu/cpu6809.c "$ROOT/audio/refplayer/card.c"
+   software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 VIDEO3=1 "$OUT/emu" $B/v3sprite.rom "$OUT" "$SECS" > "$OUT/emu.out" 2> "$OUT/emu.log" || true
 # ⚠ the ROM reports $E0-$EF for a fault of its own - an arm that did not
 # take, say - and the emulator stops there.  Say so rather than letting it

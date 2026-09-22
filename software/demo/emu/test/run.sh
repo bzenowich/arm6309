@@ -39,11 +39,43 @@ CORE="$ROOT/hardware/vendor/mc6809/mc6809e.v $ROOT/hardware/vendor/mc6809/mc6809
 
 # ---- build ---------------------------------------------------------------------
 CC="gcc -std=c99 -O2 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=199309L"
-$CC -o "$O/cpu_run" ../cpu6809.c cpu_run.c || { say "FAIL  cpu_run does not build"; exit 1; }
-$CC -o "$O/demo_run" ../cpu6809.c demo_run.c || { say "FAIL  demo_run does not build"; exit 1; }
+$CC -o "$O/cpu_run" ../cpu6809.c ../hd6309.c cpu_run.c || { say "FAIL  cpu_run does not build"; exit 1; }
+$CC -o "$O/demo_run" ../cpu6809.c ../hd6309.c demo_run.c || { say "FAIL  demo_run does not build"; exit 1; }
 $V --top-module cpu_tb -Mdir obj_cpu $CORE cpu_tb.sv -o cpu_tb > "$O/cpu_tb_build.log" 2>&1 ||
   { tail -20 "$O/cpu_tb_build.log"; say "FAIL  cpu_tb does not build"; exit 1; }
+$CC -I.. -o "$O/refuse6309" ../cpu6809.c ../hd6309.c refuse6309.c || { say "FAIL  refuse6309 does not build"; exit 1; }
 say "ok    built cpu_run, demo_run (-Wall -Wextra -Werror) and cpu_tb"
+
+# ---- (a0) the 6309 refusal set -------------------------------------------------
+# ⛔ This core is a 6809 and the machine's CPU is an HD6309E.  Every 6309-only
+# encoding must be REFUSED rather than decoded as its 6809 ghost - see
+# arm6309 docs/6309.md §4.0 and armio.asm:513.  Two claims: the generated
+# header still matches the checked-in table, and the core acts on it.
+python3 mk6309tab.py --from-tab > /dev/null 2>&1 || { say "FAIL  cannot regenerate hd6309ops.h from hd6309.tab"; fail=1; }
+if git -C "$ROOT" diff --quiet -- software/demo/emu/hd6309ops.h 2>/dev/null; then
+  say "ok    hd6309ops.h is what hd6309.tab generates"
+else
+  say "FAIL  hd6309ops.h and hd6309.tab disagree - re-run test/mk6309tab.py"; fail=1
+fi
+"$O/refuse6309" || fail=1
+
+# ---- (a1) the 6309 core, and TFM's decided semantics ---------------------------
+# ⭐ cpu/docs/plan.md §4.3.1: this core completes the byte before it takes an
+# interrupt, so an interrupted TFM loses nothing. The control build models what
+# SILICON does and is required to fail - a test that cannot see the difference
+# is not testing the specification.
+python3 mkimg.py tfm.asm "$O/tfm.bin" > /dev/null || { say "FAIL  tfm.asm does not assemble"; fail=1; }
+$CC -I.. -o "$O/tfm6309" ../cpu6809.c ../hd6309.c tfm6309.c || { say "FAIL  tfm6309 does not build"; fail=1; }
+$CC -I.. -DHD6309_FAITHFUL_TFM -o "$O/tfm_sil" ../cpu6809.c ../hd6309.c tfm6309.c || { say "FAIL  tfm_sil does not build"; fail=1; }
+"$O/tfm6309" "$O/tfm.bin" || fail=1
+"$O/tfm_sil" "$O/tfm.bin" || fail=1
+
+# ⭐ and the cycle counts, against Appendix A of The 6309 Book via hd6309.tab.
+# A wrong one is invisible - the instruction does the right thing and the
+# machine is the wrong speed - and docs/proportional-font.md quotes benchmarks
+# that rest on them. It found 20 of 32 forms wrong on its first run.
+$CC -I.. -o "$O/one6309" ../cpu6809.c ../hd6309.c one6309.c || { say "FAIL  one6309 does not build"; fail=1; }
+python3 cyc6309.py || fail=1
 
 # ---- (a) the exercisers, four at a time -------------------------------------------
 one_seed() {

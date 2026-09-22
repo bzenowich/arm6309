@@ -42,7 +42,7 @@ printf 'the storage card works\n' > "$OUT/hello.txt"
 os9 copy -l "$OUT/hello.txt" "$IMG,HELLO.TXT" >> "$OUT/format.log" 2>&1
 os9 makdir "$IMG,SUB" >> "$OUT/format.log" 2>&1
 
-cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c audio/refplayer/card.c
+cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c software/demo/emu/hd6309.c audio/refplayer/card.c
 
 # /SD0 is not the boot device - /DD is still the ROM disk - so the card is
 # reached by name.  `free` reads the allocation bitmap, `list` a file's data

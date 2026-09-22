@@ -97,7 +97,7 @@ Every rate in this document is quoted at the specified ÷12 `E` = 2.0979 MHz.
 |---|---|---|
 | The read-triggers-next-burst topology; the self-resetting 8-clock generator; ~130 KB/s at 5 MHz (the source's own decimal figure; 127 KiB/s) | **NormalLuser, *BE6502 Fast SD Card Interface*** — <https://github.com/NormalLuser/BE6502-Fast-SD-Card-Interface> | **read directly**; a working, measured design |
 | `TFM` has four forms including `TFM r0,r1+` (fixed source, incrementing destination); `W` holds the count; 3 cycles/byte | HD63B09EP Technical Reference Guide; this repo's own `plan.md` §4.3 and `modplayer.md` §4.4 | **corroborated**, and already load-bearing elsewhere in this project |
-| **`TFM` is interruptible, uses a one-byte internal cache, and re-reads the source address on resume** | HD63B09EP Technical Reference; *A Memo on the Secret Features of 6309* | ⚠ **community documentation, not silicon. §13 item 1; §4's statement of the hazard, §9.1's read path and §9.2's write-path caveat all rest on it.** |
+| **`TFM` is interruptible, and an interrupt on the FIXED-SOURCE form re-reads the source without storing the byte, advancing the destination or decrementing `W`** | ⭐ **Appendix 3-139 of `reference/manuals/The 6309 Book (Burke & Burke).pdf`**, which states it outright and says *"use Form 4 only with interrupts disabled"*; and ⭐ **NitrOS-9's own `level1/modules/rb1773.asm:547-551`**, an eyewitness: *"the tfm will repeat a byte and lose track"* | ⭐ **documented AND corroborated by practice** — §9.1's read path rests on it, and 9 of 9 port-source `TFM` sites in NitrOS-9 are masked. ⛔ **§9.2's write-path caveat does NOT rest on it**: the book is silent on the fixed-*destination* form and the OS is split 1–3 (`llscsi` masks, `tccchd` does not). See `docs/6309.md` §5.1 |
 | SD SPI mode: ≤400 kHz until initialised, then up to 25 MHz; ≥74 clocks with `CS` high at power-up; `FE` data token; 2 CRC bytes per block | SD Simplified Specification, recalled | ⚠ **no SD specification in `reference/` — §13 item 2** |
 | Initialisation dialog: `CMD0` with `CS` low and CRC `$95`; `CMD8` with CRC `$87` and check-pattern echo; `ACMD41` with `HCS`; `CMD58`/`CCS`; `CMD16` for SDSC only | SD Simplified Specification, recalled | ⚠ §13 item 2 — **§9.0 is entirely recalled and must be re-derived from the spec** |
 | Write protocol: `$FE` start token, 2 CRC bytes, data-response token `xxx00101`, then `DO` held low for the program time | SD Simplified Specification, recalled | ⚠ §13 item 2 |
@@ -1324,7 +1324,16 @@ real HD63C09E in" property is kept, a driver that assumes the fix would corrupt 
 real silicon. The masked loop stays as the compatible path and the mode bit selects between
 them — about ten bytes of driver.
 
-> **Priced, not decided.** +27 % on reads, an unmasked write path and a machine with no
+> ⭐⭐ **DECIDED 2026-09-21, IN FAVOUR — `cpu/docs/plan.md` §4.3.1.** The core
+> completes the byte before taking an interrupt. ⛔ **The chunking and masking in
+> §4.4, §9.1 step 6 and §9.2 step 6 stay in the driver** as the compatible path,
+> selected by the mode bit — they are what runs on silicon and on the CoCo 3 SKU.
+> What changes is that this machine's boot ROM turns the rule on, and the driver's
+> fast path becomes one unmasked `TFM` a block. ⚠ **§12 step 4's 10⁵-block test is
+> still required**, and more so: the paths this rule changes are exactly the ones
+> nothing exercises under interrupts.
+>
+> **Priced, and now decided.** +27 % on reads, an unmasked write path and a machine with no
 > `TFM` caveat anywhere, against one entry in the divergence ledger and one mode bit.
 > **The fidelity
 > call is the owner's**, and this document does not make it. It should be settled when
@@ -1485,7 +1494,9 @@ will experience**; every other number in this document is a component of it.
 | [`ps2.md`](../../io/ps2/docs/ps2.md) | §4.1 the `'595` storage-register pattern; §4.2 the `HC`-versus-`HCT` lesson §7 repeats |
 | [`serial.md`](../../io/serial/docs/serial.md) | §3.1 the 6551 that bounds §11.3's DriveWire link and §4.5 the `16C550` that unbounds it; §4.4 the bit-banging argument §11.5 distinguishes itself from |
 | [`drivewire.md`](../../docs/drivewire.md) | the owning document for §11.3 — throughput, the client, the wall clock, and why the boot ROM changed its job |
-| HD63B09EP Technical Reference Guide; *A Memo on the Secret Features of 6309* | §4.1's `TFM` behaviour. ⚠ Neither is in `reference/` |
+| ⭐ **`reference/manuals/The 6309 Book (Burke & Burke).pdf`, Appendix 3-139 and Appendix A** | §4.1's `TFM` behaviour, stated outright, **and it IS in `reference/`**; plus `6+3W` cycles in *both* modes, so §5's throughput figures do not improve in native mode. ⚠ The PDF is `.gitignore`d (not redistributable); the opcode and cycle table derived from it is checked in at `software/demo/emu/test/hd6309.tab` |
+| ⭐ **NitrOS-9's own sources** — `rb1773.asm`, `llscsi.asm`, `llcocosdc.asm`, `archive/drivers/tccc/tccchd.asm` | §4's hazard, as **practice on real silicon**: every port-source `TFM` masked, one driver abandoning `TFM` outright over it. `docs/6309.md` §5.1.5 has the census |
+| HD63B09EP Technical Reference Guide; *A Memo on the Secret Features of 6309* | §4.1, as it was cited until 2026-09-21. ⚠ Neither is in `reference/` — and neither is needed now |
 | [`audio.md`](../../audio/docs/audio.md) | §9.3 the read-triggers-prefetch pattern §3.1 shares; §13.2 `ADATA`/`SDATA`'s auto-increment, which makes §9.2's doubled-write caveat apply there too |
 | SD Simplified Specification (Physical Layer, SPI mode) | §9.0's init dialog, §9.1's tokens, §9.2's write sequence, §9.3's R1/error tokens and timeout ceilings. ⚠ **Not in `reference/` — §13 item 2, and §9 is entirely recalled until it is** |
 | NitrOS-9 `RBF` — 256-byte logical sectors | §9.4.1's deblocking. ⚠ recalled, and the CoCoSDC driver is the place to check it against |

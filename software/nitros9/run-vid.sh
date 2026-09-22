@@ -33,7 +33,7 @@ if [ -z "$NOBUILD" ]; then
 fi
 ROM="$OUT/arm6309_rom.bin"
 [ -f "$ROM" ] || { echo "FAIL  no $ROM"; exit 1; }
-cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c audio/refplayer/card.c
+cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c software/demo/emu/hd6309.c audio/refplayer/card.c
 
 STOP=$(printf '\nDONE-arm6309')
 # the VBL service, timed call by call (the emulator's CALLTIME)

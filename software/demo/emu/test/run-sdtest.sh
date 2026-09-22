@@ -16,5 +16,5 @@ cd "$(dirname "$0")"
 ROOT=$(cd ../../../.. && pwd)
 OUT=${OUT:-obj_sd}
 mkdir -p "$OUT"
-cc -O2 -w -I"$ROOT/audio/refplayer" -o "$OUT/sdtest" sdtest.c ../cpu6809.c "$ROOT/audio/refplayer/card.c"
+cc -O2 -w -I"$ROOT/audio/refplayer" -o "$OUT/sdtest" sdtest.c ../cpu6809.c ../hd6309.c "$ROOT/audio/refplayer/card.c"
 "$OUT/sdtest" "$OUT"

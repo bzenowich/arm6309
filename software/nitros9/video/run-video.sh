@@ -25,7 +25,7 @@ if [ -z "$NOBUILD" ]; then
   # only errmsg (software/nitros9/mkrom.sh, mksddisk.sh).
   CMDS_EXTRA="rastbar wave overworld" SYSROM=all sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { cat "$OUT/mkrom.log"; exit 1; }
 fi
-cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c audio/refplayer/card.c
+cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c software/demo/emu/hd6309.c audio/refplayer/card.c
 python3 $V/session.py "$OUT"
 
 STOP=$(printf '\nDONE-arm6309')

@@ -11,7 +11,7 @@ SECS=${1:-90}
 OUT=${OUT:-/tmp/arm6309-emu}
 mkdir -p "$OUT"
 [ -n "$NOBUILD" ] || sh build.sh > "$OUT/build.log" 2>&1 || { tail -20 "$OUT/build.log"; exit 1; }
-cc -O2 -Wall -I../../audio/refplayer -o "$OUT/emu" emu/machine.c emu/cpu6809.c ../../audio/refplayer/card.c
+cc -O2 -Wall -I../../audio/refplayer -o "$OUT/emu" emu/machine.c emu/cpu6809.c emu/hd6309.c ../../audio/refplayer/card.c
 "$OUT/emu" build/rom.bin "$OUT" "$SECS" 2> "$OUT/emu.log" || { tail "$OUT/emu.log"; exit 1; }
 tail -1 "$OUT/emu.log"
 [ -n "$VIDEO" ] || exit 0

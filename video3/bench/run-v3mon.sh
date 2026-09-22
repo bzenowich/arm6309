@@ -56,7 +56,7 @@ if [ -z "$NOBUILD" ]; then
 fi
 [ -f "$OUT/arm6309_rom.bin" ] || { echo "FAIL  no ROM in $OUT"; exit 1; }
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
-   software/demo/emu/cpu6809.c "$ROOT/audio/refplayer/card.c"
+   software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 
 STOP=$(printf '\nDONE-arm6309')
 fail=0

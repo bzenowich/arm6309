@@ -20,6 +20,48 @@ section that moved twice appears twice.
 
 ---
 
+## sdcard.md §4.1 and §14 — the `TFM` rule was cited to documents this project does not hold (2026-09-21)
+
+§4.1's hazard is the present design. This records the provenance it was carried on
+until the primary source was found **in `reference/`** and the operating system's
+own practice was surveyed. `docs/6309.md` §5.1 is the full treatment.
+
+**The confidence table said:**
+
+> | **`TFM` is interruptible, uses a one-byte internal cache, and re-reads the
+> source address on resume** | HD63B09EP Technical Reference; *A Memo on the
+> Secret Features of 6309* | ⚠ **community documentation, not silicon. §13 item 1;
+> §4's statement of the hazard, §9.1's read path and §9.2's write-path caveat all
+> rest on it.** |
+
+**and §14 said:**
+
+> | HD63B09EP Technical Reference Guide; *A Memo on the Secret Features of 6309* |
+> §4.1's `TFM` behaviour. ⚠ Neither is in `reference/` |
+
+⭐ **Both understated the provenance.** `reference/manuals/The 6309 Book (Burke &
+Burke).pdf` — which *is* in `reference/` — states the rule outright on the `TFM`
+instruction page: *"The instruction is interruptible. An interrupt during Form 4
+re-reads the peripheral referenced by r1 without storing the previous data byte,
+advancing r2, or decrementing W; use Form 4 only with interrupts disabled."* And
+NitrOS-9's `level1/modules/rb1773.asm:547-551` is an eyewitness account of the
+same failure — *"the tfm will repeat a byte and lose track"* — beside the
+vestigial `ldw`/`ldy` of the `TFM` its author removed because of it.
+
+⛔ **And the correction cuts the other way for §9.2.** The old row made the
+read-path and write-path caveats rest on one citation. They do not: the book names
+**Form 4 only** and is silent on the fixed-destination form, and NitrOS-9 is split
+1–3 on it — `llscsi.asm:637` masks its port write, `archive/drivers/tccc/tccchd.asm`
+runs an unmasked 1024-byte one, in the same file whose read path it chunks into
+four masked pieces. **§9.2's caveat is weaker-sourced than §9.1's, not equally
+sourced**, and §12 step 1 still owes that capture.
+
+⚠ **An interim reading on 2026-09-21 claimed NitrOS-9 "has masked exactly the
+Form 3 case since 6309 support was written."** That generalised from `llscsi`
+before `tccchd` was looked at, and it is wrong.
+
+---
+
 ## §0 Summary — the buffer revision, and the numbers it replaced (2026-09-08)
 
 The summary carried this revision banner:

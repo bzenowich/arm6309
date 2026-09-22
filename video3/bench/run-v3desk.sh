@@ -95,7 +95,7 @@ DATA="$OUT/data" sh software/nitros9/mksddisk.sh "$OUT/sd.img" desk v3paint mons
 cat "$OUT/mksddisk.log"
 
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
-   software/demo/emu/cpu6809.c "$ROOT/audio/refplayer/card.c"
+   software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 
 # ⚠ CR, not LF.  ⛔ And `chx /sd0/cmds` comes last: after it the only things
 # the shell can fork are the card's commands and shell+'s built-ins, which is

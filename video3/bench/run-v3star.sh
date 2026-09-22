@@ -76,7 +76,7 @@ DATA="$FD" sh software/nitros9/mksddisk.sh "$OUT/sd.img" stardew \
 tail -3 "$OUT/mksddisk.log"
 
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
-   software/demo/emu/cpu6809.c "$ROOT/audio/refplayer/card.c"
+   software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 
 STOP=$(printf '\nDONE-arm6309')
 fail=0

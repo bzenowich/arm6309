@@ -127,6 +127,8 @@ int main(int argc, char **argv)
 
     cpu.read = rd;
     cpu.write = wr;
+    /* undef6309 stays NULL: this runs the demo's own 6809 code, and a 6309
+     * opcode reaching it is a bug worth dying on.  docs/6309.md §4.0. */
     cpu6809_reset(&cpu);
     int rc = 0;
     struct timespec t0, t1;

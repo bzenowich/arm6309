@@ -24,6 +24,12 @@ static uint8_t rd(void *ctx, uint16_t a)
 }
 
 static cpu6809 cpu;
+static unsigned long n6309;
+static void note6309(void *ctx, int page, uint8_t op, uint16_t pc)
+{
+    (void)ctx; (void)page; (void)op; (void)pc;
+    n6309++;
+}
 
 /* coverage: documented opcodes executed, and indexed postbyte forms */
 static long cov[3][256], covidx[256];
@@ -120,6 +126,15 @@ int main(int argc, char **argv)
     cpu.ctx = &sys;
     cpu.read = rd;
     cpu.write = wr;
+    /* ⭐ THE ONE PLACE THAT MUST NOT REFUSE A 6309 OPCODE.  gen.py runs with
+     * --undoc, so the exerciser deliberately executes the GHOST encodings -
+     * $01/$02/$05/$0B and friends - because the whole point of this harness is
+     * that this core and mc6809i.v agree about them.  Those same bytes are
+     * OIM/AIM/EIM/TIM on a 6309, so cpu6809.c refuses them by default and the
+     * machine emulator keeps that default.  Here we count and carry on.
+     * ⚠ The count is reported so a silent change in how many get executed is
+     * visible; it is not asserted, because it depends on the seed. */
+    cpu.undef6309 = note6309;
     cpu6809_reset(&cpu);
     long nbound = 0;
     int rc = 0;
@@ -146,6 +161,7 @@ int main(int argc, char **argv)
         FILE *cf = fopen(argv[5], "wb");
         if (cf) { fwrite(cov, sizeof cov, 1, cf); fwrite(covidx, sizeof covidx, 1, cf); fclose(cf); }
     }
+    printf("cpu_run: %lu 6309-only encodings executed as their 6809 ghosts\n", n6309);
     printf("cpu_run: %ld boundaries, %ld writes, %llu cycles; vector fetches IRQ %ld FIRQ %ld NMI %ld\n",
            nbound, sys.nwrite, (unsigned long long)cpu.cycles, sys.nvec[0], sys.nvec[1], sys.nvec[2]);
     return rc;

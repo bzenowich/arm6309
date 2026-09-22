@@ -27,7 +27,7 @@ python3 video3/bench/mkv3text.py "$OUT/sys" > "$OUT/mk.log" || { cat "$OUT/mk.lo
 # this bench boots with an empty socket, so it asks for v3cpyb by name.
 V3=1 CMDS_EXTRA=v3cpyb sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
-   software/demo/emu/cpu6809.c "$ROOT/audio/refplayer/card.c"
+   software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 
 # ⚠ CR, not LF (demo-report.md §15.3).  Each pass starts from the same
 # cleared screen, so the only difference can be the copies themselves.

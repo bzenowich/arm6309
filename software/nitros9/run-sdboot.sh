@@ -99,7 +99,7 @@ sig=$(od -An -v -tx1 -j240 -N8 "$OUT/sdplain.img" | tr -d ' \n')
   echo "FAIL  the plain card carries $sig at LSN 0 +\$F0 - it is not the control it claims to be"; exit 1; }
 
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
-   software/demo/emu/cpu6809.c "$ROOT/audio/refplayer/card.c"
+   software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 
 # ⚠ CR, not LF.  `mdir` first: it is the claim, and a long listing that
 # scrolls is still all in serial.out.

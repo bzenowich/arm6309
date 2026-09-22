@@ -32,6 +32,10 @@
  * combinations that seize the Verilog core in ALU_EA seize this one too.
  */
 #include "cpu6809.h"
+#include "hd6309ops.h"
+#include "hd6309.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 #define CC_E 0x80
 #define CC_F 0x40
@@ -525,6 +529,26 @@ static int alu_ea(cpu6809 *c, int64_t base, int n, const dec_t *d, uint16_t ea)
     }
 }
 
+/* Is an interrupt pending as of E cycle `at`?  Exposed for hd6309.c's TFM,
+ * which is the only interruptible instruction and must ask between bytes.
+ * ⚠ It resolves the NMI edge as a side effect, exactly as cpu6809_step does. */
+int cpu6809_int_pending(cpu6809 *c, int64_t at)
+{
+    nmi_resolve(c, at);
+    if (c->nmi_latched) return 1;
+    if (!(c->cc & CC_F) && line_at(&c->l_firq, at - 2)) return 1;
+    if (!(c->cc & CC_I) && line_at(&c->l_irq, at - 2)) return 1;
+    return 0;
+}
+
+void cpu6309_enable(cpu6809 *c)
+{
+    c->is6309 = 1;
+    c->e = c->f = 0;
+    c->v = 0;
+    c->md = 0;                   /* 6809 emulation mode until LDMD says otherwise */
+}
+
 void cpu6809_reset(cpu6809 *c)
 {
     if (!dec_ready) build();
@@ -554,12 +578,73 @@ void cpu6809_set_line(cpu6809 *c, int line, int level, uint64_t at)
     else c->nmi = level;
 }
 
+/* The indexed effective address, INDEXED_BASE onward.  ⚠ Lifted out of
+ * cpu6809_step 2026-09-21 so hd6309.c can reach it; the arms are unchanged and
+ * the differential test against mc6809e.v is what says so.  `*seize` is set for
+ * the postbytes the Verilog's PostIllegalState swallows ($8A, $8E), on which the
+ * caller must abandon the instruction exactly as the inline version did. */
+int cpu6809_idx_ea(cpu6809 *c, int64_t base, int n, uint8_t b2,
+                  uint16_t *eap, int *seize)
+{
+    uint16_t ea = 0, t;
+    uint8_t lo;
+    int mode = (b2 & 0x80) ? (b2 & 15) : 7;
+    int ind = (b2 & 0x80) ? (b2 >> 4) & 1 : 0;
+    uint16_t *rp;
+    *seize = 0;
+    switch ((b2 >> 5) & 3) {
+    case 0: rp = &c->x; break;
+    case 1: rp = &c->y; break;
+    case 2: rp = &c->u; break;
+    default: rp = &c->s; break;
+    }
+    switch (mode) {
+        case 4: ea = *rp; n += 1; break;                                /* straight to ALU_EA or INDIRECT_HI */
+        case 7: {                                                       /* DONTCARE3 */
+            int o = b2 & 0x1F;
+            if (o & 0x10) o -= 0x20;
+            ea = (uint16_t)(*rp + o); n += 2; break;
+        }
+        case 8:  ea = (uint16_t)(*rp + (int8_t)RD(c->pc)); c->pc++; n += 2; break;
+        case 12: { int8_t o = (int8_t)RD(c->pc); c->pc++; ea = (uint16_t)(c->pc + o); n += 2; break; }
+        case 6:  ea = (uint16_t)(*rp + (int8_t)c->a); n += 2; break;
+        case 5:  ea = (uint16_t)(*rp + (int8_t)c->b); n += 2; break;
+        case 11: ea = (uint16_t)(*rp + ((c->a << 8) | c->b)); n += 5; break;  /* DOFF1, DOFF2, 16OFF2, 16OFF3 */
+        case 0:  ea = *rp; *rp = (uint16_t)(*rp + 1); n += 3; break;          /* 16OFF2, 16OFF3 */
+        case 1:  ea = *rp; *rp = (uint16_t)(*rp + 2); n += 4; break;          /* 16OFF0, 16OFF2, 16OFF3 */
+        case 2:  *rp = (uint16_t)(*rp - 1); ea = *rp; n += 3; break;
+        case 3:  *rp = (uint16_t)(*rp - 2); ea = *rp; n += 4; break;
+        case 9:                                                          /* 16OFFSET_LO, 16OFF1, 2, 3 */
+            t = (uint16_t)(RD(c->pc) << 8); c->pc++; n++;
+            t |= RD(c->pc); c->pc++; n++;
+            ea = (uint16_t)(*rp + t); n += 3; break;
+        case 13:                                                         /* ... and PC16OFF_DONTCARE */
+            t = (uint16_t)(RD(c->pc) << 8); c->pc++; n++;
+            t |= RD(c->pc); c->pc++; n++;
+            ea = (uint16_t)(c->pc + t); n += 4; break;
+        case 15:                                                         /* IDX_EXTIND_LO, IDX_EXTIND_DONTCARE */
+            t = (uint16_t)(RD(c->pc) << 8); c->pc++; n++;
+            t |= RD(c->pc); c->pc++; n++;
+            ea = t; n += 1; break;
+    default: *seize = 1; *eap = 0; return n + 1;              /* $8A, $8E: PostIllegalState */
+    }
+    if (ind) {                                                      /* INDIRECT_HI, _LO, _DONTCARE */
+        uint8_t hi = RD(ea); n++;
+        lo = RD((uint16_t)(ea + 1)); n++;
+        ea = (uint16_t)((hi << 8) | lo);
+        n++;
+    }
+    *eap = ea;
+    return n;
+}
+
 int cpu6809_step(cpu6809 *c)
 {
     const int64_t base = (int64_t)c->cycles;
     const uint16_t s0 = c->s;
     int n, page = 0;
-    uint8_t op, b2, lo;
+    uint8_t op, b2, lo, raw = 0;
+    uint16_t opc_pc = 0;
     uint16_t ea, t;
     const dec_t *d;
 
@@ -576,13 +661,37 @@ int cpu6809_step(cpu6809 *c)
     if (!(c->cc & CC_F) && line_at(&c->l_firq, base - 2)) { n = interrupt(c, base, 1, T_FIRQ); goto done; }
     if (!(c->cc & CC_I) && line_at(&c->l_irq, base - 2)) { n = interrupt(c, base, 1, T_IRQ); goto done; }
 
-    op = ghost[RD(c->pc)]; c->pc++; n = 1;
+    /* ⚠ THE RAW BYTE IS KEPT, BECAUSE `ghost[]` DESTROYS THE EVIDENCE.  $01 is
+     * OIM on a 6309 and ghosts to $00 NEG here, so a check made after the
+     * mapping sees a perfectly ordinary 6809 instruction. */
+    raw = RD(c->pc); op = ghost[raw]; c->pc++; n = 1;
+    opc_pc = (uint16_t)(c->pc - 1);
     if (op == 0x10 || op == 0x11) {                                     /* FETCH_I1V2; first prefix wins */
         page = op == 0x10 ? 1 : 2;
         do {
-            op = ghost[RD(c->pc)]; c->pc++; n++;
+            raw = RD(c->pc); op = ghost[raw]; c->pc++; n++;
             if (n > 0x20000) { c->wait = 3; goto done; }
         } while (op == 0x10 || op == 0x11);
+    }
+    if (hd6309_is_only(page, raw)) {
+        if (c->is6309) {
+            int r = hd6309_exec(c, base, n, page, raw, opc_pc);
+            if (r != HD6309_UNIMPL) { n = r; goto done; }
+            /* ⛔ falls through to the refusal: an encoding this build does not
+             * implement is NAMED and stops, never executed as its 6809 ghost. */
+        }
+        if (c->undef6309) {
+            c->undef6309(c->ctx, page, raw, opc_pc);
+        } else {
+            fprintf(stderr,
+                    "cpu6809: 6309-only opcode %s (%s$%02X) at $%04X after %llu E cycles.\n"
+                    "  This core is a 6809 (it models mc6809i.v). Executing it as its 6809\n"
+                    "  ghost would give a wrong answer silently - see docs/6309.md.\n",
+                    hd6309_name(page, raw),
+                    page == 0 ? "" : (page == 1 ? "$10 " : "$11 "),
+                    raw, opc_pc, (unsigned long long)c->cycles);
+            abort();
+        }
     }
     d = &dec[page][op];
 
@@ -740,52 +849,9 @@ int cpu6809_step(cpu6809 *c)
         break;
 
     case M_IDX: {
-        /* INDEXED_BASE is cycle n; the comment on each arm is the states after it */
-        int mode = (b2 & 0x80) ? (b2 & 15) : 7;
-        int ind = (b2 & 0x80) ? (b2 >> 4) & 1 : 0;
-        uint16_t *rp;
-        switch ((b2 >> 5) & 3) {
-        case 0: rp = &c->x; break;
-        case 1: rp = &c->y; break;
-        case 2: rp = &c->u; break;
-        default: rp = &c->s; break;
-        }
-        switch (mode) {
-        case 4: ea = *rp; n += 1; break;                                /* straight to ALU_EA or INDIRECT_HI */
-        case 7: {                                                       /* DONTCARE3 */
-            int o = b2 & 0x1F;
-            if (o & 0x10) o -= 0x20;
-            ea = (uint16_t)(*rp + o); n += 2; break;
-        }
-        case 8:  ea = (uint16_t)(*rp + (int8_t)RD(c->pc)); c->pc++; n += 2; break;
-        case 12: { int8_t o = (int8_t)RD(c->pc); c->pc++; ea = (uint16_t)(c->pc + o); n += 2; break; }
-        case 6:  ea = (uint16_t)(*rp + (int8_t)c->a); n += 2; break;
-        case 5:  ea = (uint16_t)(*rp + (int8_t)c->b); n += 2; break;
-        case 11: ea = (uint16_t)(*rp + ((c->a << 8) | c->b)); n += 5; break;  /* DOFF1, DOFF2, 16OFF2, 16OFF3 */
-        case 0:  ea = *rp; *rp = (uint16_t)(*rp + 1); n += 3; break;          /* 16OFF2, 16OFF3 */
-        case 1:  ea = *rp; *rp = (uint16_t)(*rp + 2); n += 4; break;          /* 16OFF0, 16OFF2, 16OFF3 */
-        case 2:  *rp = (uint16_t)(*rp - 1); ea = *rp; n += 3; break;
-        case 3:  *rp = (uint16_t)(*rp - 2); ea = *rp; n += 4; break;
-        case 9:                                                          /* 16OFFSET_LO, 16OFF1, 2, 3 */
-            t = (uint16_t)(RD(c->pc) << 8); c->pc++; n++;
-            t |= RD(c->pc); c->pc++; n++;
-            ea = (uint16_t)(*rp + t); n += 3; break;
-        case 13:                                                         /* ... and PC16OFF_DONTCARE */
-            t = (uint16_t)(RD(c->pc) << 8); c->pc++; n++;
-            t |= RD(c->pc); c->pc++; n++;
-            ea = (uint16_t)(c->pc + t); n += 4; break;
-        case 15:                                                         /* IDX_EXTIND_LO, IDX_EXTIND_DONTCARE */
-            t = (uint16_t)(RD(c->pc) << 8); c->pc++; n++;
-            t |= RD(c->pc); c->pc++; n++;
-            ea = t; n += 1; break;
-        default: n += 1; goto done;                                      /* $8A, $8E: PostIllegalState */
-        }
-        if (ind) {                                                      /* INDIRECT_HI, _LO, _DONTCARE */
-            uint8_t hi = RD(ea); n++;
-            lo = RD((uint16_t)(ea + 1)); n++;
-            ea = (uint16_t)((hi << 8) | lo);
-            n++;
-        }
+        int seize = 0;
+        n = cpu6809_idx_ea(c, base, n, b2, &ea, &seize);
+        if (seize) goto done;
         if (d->jmp) { c->pc = ea; break; }
         n = alu_ea(c, base, n, d, ea);
         break;
