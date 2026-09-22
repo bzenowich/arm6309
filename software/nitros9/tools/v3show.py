@@ -79,6 +79,39 @@ def text(x, y, s, ramp="panel", bold=False, opaque=False):
     return tb(0, W(x, y) + bytes([RAMP[ramp], fnt]) + s.encode("latin-1"))
 
 
+def strip(x, y, s, ramp="panel", bold=False, opaque=True):
+    """⭐ Compose a string OFF-SCREEN, in the margin - tbox.asm's TStrip (10).
+    The clip comes off for the call, so x may be 640..1023, which no window
+    covers. Pair it with blit() below: compose once, copy on every redraw."""
+    fnt = int(bold) | (F_OPAQ if opaque else 0)
+    return tb(10, W(x, y) + bytes([RAMP[ramp], fnt]) + s.encode("latin-1"))
+
+
+def sktext(x, y, s, ramp="panel", bold=False):
+    """⭐ Text out of the glyph strike - tbox.asm's TSkText (12).  One
+    copy-engine rectangle a glyph; the first call for a (font, ramp) builds
+    the strike.  docs/proportional-font.md §4.
+    ⛔ F_OPAQ IS NOT OPTIONAL HERE.  A strike band is composed on the ramp's
+    own paper, so SkText refuses a transparent call and composes instead -
+    this used to send `int(bold)` and would now have measured the slow path
+    under the fast path's name."""
+    fnt = int(bold) | F_OPAQ
+    return tb(12, W(x, y) + bytes([RAMP[ramp], fnt]) + s.encode("latin-1"))
+
+
+def textp(x, y, s, ramp="panel", bold=False, opaque=False):
+    """⛔ Text COMPOSED, never blitted - tbox.asm's TTextP (13).  Call 0 picks
+    the strike when it can, so this is the only way left to time the path it
+    replaced; the ratios in docs/proportional-font.md §6.1 are against this."""
+    fnt = int(bold) | (F_OPAQ if opaque else 0)
+    return tb(13, W(x, y) + bytes([RAMP[ramp], fnt]) + s.encode("latin-1"))
+
+
+def blit(sx, sy, dx, dy, w, h):
+    """⭐ The copy engine moves a rectangle - tbox.asm's TBlit (11)."""
+    return tb(11, W(sx, sy, dx, dy, w, h))
+
+
 def textc(x, w, y, s, ramp="panel", bold=False):
     return tb(1, W(x, w, y) + bytes([RAMP[ramp], int(bold)]) + s.encode("latin-1"))
 

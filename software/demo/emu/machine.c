@@ -1831,7 +1831,17 @@ int main(int argc, char **argv)
             trace_n--;
             char nm[16]; unsigned off;
             module_of(m->cpu.pc, nm, sizeof nm, &off);
-            fprintf(stderr, "PC %04X A %02X B %02X X %04X Y %04X U %04X S %04X CC %02X DP %02X T %d %s+$%04X\n", m->cpu.pc, m->cpu.a,
+            /* â DOTS, BECAUSE AN INSTRUCTION IS NOT A UNIT OF TIME.  A PC
+             * histogram answers "where does the CPU go", and on this machine
+             * that is a different question from "where does the time go":
+             * /WAIT stretches a single store to hundreds of dots, so a
+             * routine can be 0.3% of the instructions and most of the clock.
+             * The difference between one line's dots and the next line's is
+             * what that instruction cost.  â  It is printed before the
+             * register columns so the module+offset stays LAST, which is what
+             * CLAUDE.md's `awk '{print $NF}'` recipe reads. */
+            fprintf(stderr, "PC %04X D %llu A %02X B %02X X %04X Y %04X U %04X S %04X CC %02X DP %02X T %d %s+$%04X\n", m->cpu.pc,
+                    (unsigned long long)m->dots, m->cpu.a,
                     m->cpu.b, m->cpu.x, m->cpu.y, m->cpu.u, m->cpu.s, m->cpu.cc, m->cpu.dp, m->task, nm, off);
         }
         {   /* CALLTIME */

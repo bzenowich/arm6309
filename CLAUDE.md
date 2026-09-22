@@ -90,7 +90,8 @@ under `~/.wine_atf` (`gal/prjbureau/extract-wincupl.sh`).
 | `sh gal/verilog/run-demo.sh 118` | **the whole machine with BOTH cards**, running `software/demo/`'s show from ROM — a desktop, an audio player, a paint program, a BBS, raster bars, the overworld — then: the card's register stream against refplayer, the card's sound A/B'd against libopenmpt, every checkpoint frame against `show.Model`'s picture and every game frame against the game model, and an H.264 file for the web. ⚠ **~4.5 h on a quiet host**, and not in any aggregate. ⭐ `sh ../software/demo/emu/run-emu.sh 120` runs the same ROM on the host emulator in seconds, and `checkdemo.py` reads either recording. `software/demo/bench/run-replay.sh` is the replayer alone on the CPU, in two minutes |
 | ⭐ **`sh software/demo/emu/test/run-ps2script.sh`** | **the PS/2 input script**: `PS2_SCRIPT=file` gives the host emulator a timed, semantic keyboard and mouse script (`move to 320 240`, `click left`, `type "..."`), encoded into set-2 scan codes and 9-bit-split mouse packets and fed to `machine.c`'s **line-level** devices rather than past them (`io/ps2/docs/ps2.md` §11.5, `software/demo/emu/ps2script.h`). The bench encodes every script a SECOND time in Python (`emu/test/ps2check.py`), drives `ps2tst 24` on a booted NitrOS-9 and compares the bytes the 6809 echoed back off the card — plus a moves-and-no-clicks control, an empty-script control, and a corrupted-expectation run of each comparison that is **required to fail**. **27 claims, ~2 min**; needs `../nitros9` on its `arm6309` branch, so it is in no aggregate |
 | ⭐ **`sh software/nitros9/run-sdboot.sh`** | ⭐ **THE OS BOOTS OFF THE CARD.** From reset, through `boot.asm` §10b's own SD reader and NitrOS-9's `boot_sd` module, to a shell — `storage/docs/sdcard.md` §9.5. ⛔ **"A shell appeared" is not evidence**: the ROM disk is the fallback and it works, so a machine that silently ignored the card reaches the same prompt. Two independent answers are asserted — `boot_sd`'s own `s`/`r` character on the console, and **a different `OS9Boot` on the card** (the ROM's bootfile plus the FIRQ stub's two modules) that `mdir` must name. ⛔ **Three card states**, each booted and each `reboot`ed back through the POST so §10b's verdict codes can be read: blessed, **present and not bootable** (the Macintosh's real question mark, and the state the old card-detect test could not see), and empty. **45 claims, ~4 min**; needs `../nitros9` on its `arm6309` branch, so it is in no aggregate |
-| ⭐ **`sh video3/bench/run-v3desk.sh`** | ⭐ **THE DESKTOP SHELL, CLICKED AT.** `desk` (nitros9 `level2/arm6309/cmds/desk.asm`) is the program that emits live what `v3desk` and `v3menu` only recorded — an event loop on `SS.Mouse`, a menu bar that pulls down and highlights, and a launcher that forks `v3paint`, `monster` and `pinball` off `/SD0/CMDS` (`docs/boot-and-desktop.md` §3). The bench boots the machine, runs it off the card and drives it with a **`PS2_SCRIPT`**, then reads every answer off the recorded FRAMES: the bar's rows, the pull-down where nothing was, the highlight on the item the pointer is over, the rectangle's CRC restored on dismissal, and **Paint's own page** as the proof a program was forked. ⛔ **With a control that walks the bar and never clicks**, in which the pull-down's rectangle must hold exactly ONE picture. ⭐ Its geometry and its menu table are **parsed out of `desk.asm`**, so a renamed or un-greyed item moves the claims with it. **47 claims, ~3 min**; needs `../nitros9` on its `arm6309` branch, so it is in no aggregate |
+| ⭐ **`sh video3/bench/run-v3desk.sh`** | ⭐ **THE DESKTOP SHELL, CLICKED AT.** `desk` (nitros9 `level2/arm6309/cmds/desk.asm`) is the program that emits live what `v3desk` and `v3menu` only recorded — an event loop on `SS.Mouse`, a menu bar that pulls down and highlights, and a launcher that forks `v3paint`, `monster` and `pinball` off `/SD0/CMDS` (`docs/boot-and-desktop.md` §3). The bench boots the machine, runs it off the card and drives it with a **`PS2_SCRIPT`**, then reads every answer off the recorded FRAMES: the bar's rows, the pull-down where nothing was, the highlight on the item the pointer is over, the rectangle's CRC restored on dismissal, and **Paint's own page** as the proof a program was forked. ⛔ **With a control that walks the bar and never clicks**, in which the pull-down's rectangle must hold exactly ONE picture. ⭐ Its geometry and its menu table are **parsed out of `desk.asm`**, so a renamed or un-greyed item moves the claims with it. **48 claims, ~3 min**; needs `../nitros9` on its `arm6309` branch, so it is in no aggregate |
+| ⭐ **`sh video3/bench/run-v3text.sh`** | ⭐ **WHAT A TOOLBOX TEXT CALL COSTS, MEASURED** — the only timing bench of `tbox.asm` there is. Every stream is copied twice, to `/nil` and to a window, and the difference is the drawing; it prices the escape parser, a call that draws nothing, a character, and a line. ⭐⭐ **And since 2026-09-22 it is the gate on the GLYPH STRIKE** (`docs/proportional-font.md` §6.1): a 40-character line is **222.93 ms composed and 33.41 ms out of the strike — 6.7×** — and the same bench asserts the two are **pixel for pixel identical**, below row 320 as well as above it. ⛔ **`v3t40p` must use toolbox call 13 and not call 0**, because call 0 takes the strike now and a baseline that is the thing under test measures 1.0×. **29 claims, ~11 min**; needs `../nitros9` on its `arm6309` branch, so it is in no aggregate |
 | ⭐ **`sh video3/bench/run-v3files.sh`** | ⭐ **THE FILE MANAGER, AND THE LISTING READ OFF THE PIXELS.** `desk`'s Tracker window (`docs/boot-and-desktop.md` §3.6) lists a real directory, enters one, scrolls, goes back up and forks what is clicked. The bench drives it with a **`PS2_SCRIPT`** and then **rebuilds every candidate name out of the ROM's own font blob** (`mktbox.py` wrote it) to match the glyphs in each row — so the listing it prints is what the machine DREW, and the claims compare that with what the host's **`os9 dir`** says is on the image. ⭐ Three runs: the driven one, ⛔ a **control** whose window is already up on `/SD0/DATA` and whose mouse walks the list, both scroll arrows and the menu bar without ever pressing (the list must hold exactly ONE picture), and **`v3trk` driven from the shell into the same rectangle**, which is the other side of `modules/v3dir.inc`. **65 claims, ~11 min**; needs `../nitros9` on its `arm6309` branch, so it is in no aggregate. `RUNS='idle trk'` re-does one leg |
 | ⭐ **`npm run check:reach`** | **every signal the machine produces must reach something.** `design-review2.md` closed the direction "a fitted part reads what nothing produces"; this is the other one — a signal that is *produced* and that nothing reads, which for a register bit means **a feature the host can write and the card cannot perform**. ⭐ **And since 2026-09-18 the same question of INPUTS** for video3: its four parts turned out to be a datapath and an arbiter with **neither sequencer built** — 19 control lines nothing produces. ⭐ Since 2026-09-19 video3's board is `video3_card.v` (a model, not a drawing), and counting against it found a macrocell nothing read. Part of `npm run check` |
 | ⭐ **`npm run check:pins`** | **every programmable part's pin has the sense of what it is wired to.** The generated Verilog is in asserted sense and the wrappers invert by hand, so **no simulation can see a pin declared with the wrong polarity** — nine passed every check until 2026-09-11. Asserts backplane `/` signals are active-low, a signal crossing between two parts has one sense at both ends, and each pin in its `CONSUMERS` table matches the discrete part pin it drives. ⚠ It found three more on 2026-09-18, the day video3 was added to it. Part of `npm run check` |
@@ -266,7 +267,7 @@ matrix, product-term cascading and placement are `fit1508.exe`'s business and
 phase *at all* is logic, not delay, and this model does see that — which is
 where two of `design-review2.md`'s findings came from.
 
-### Twelve traps this repository has already paid for
+### Fourteen traps this repository has already paid for
 
 - **A failed CPLD fit leaves the previous `.fit` in place.** A stale
   utilisation report reads exactly like a passing one. Compare the file's hash
@@ -418,6 +419,85 @@ where two of `design-review2.md`'s findings came from.
   comment that does it. **A `pshs`/`puls` comment never starts with a comma,
   and the register list is always written out in full** (`cc,a,b,x,u`, never
   `cc,d,x,u`). `boot.lst` has the postbytes: `$06` is `A,B`, `$46` is `A,B,U`.
+
+- ⛔ **DEBUGGING BY HYPOTHESIS WHEN THE EMULATOR WILL JUST TELL YOU** — paid
+  for on 2026-09-22, at roughly six bench runs of ten minutes each. A toolbox
+  copy drew its pixels perfectly and then the console went silent and the
+  machine never ran another command. Four plausible causes were reasoned out
+  and each one cost a full run to disprove: the block mapper being handed a
+  `$FFFF` sentinel, a `WMODE`/`WADV` that was not put back, the copy engine
+  left `CBUSY` so the next register write stalled in `/WAIT`, and a stale
+  `VG.PtrGen`. ⭐ **The host emulator resolves the PC to a module and an
+  offset and will hand you the answer in one run:**
+
+  ```sh
+  cd /tmp/arm6309-nitros9          # any bench's OUT dir, with its built ROM
+  SERIAL_IN=typed.txt SERIAL_GATE="DD:" WILD=1 VIDEO3=1     TRACE_AT=200 TRACE=300 ./emu arm6309_rom.bin . 202 2>trace.log
+  grep '^PC ' trace.log | awk '{print $NF}' | sort | uniq -c | sort -rn
+  ```
+
+  `TRACE_AT` is machine seconds and `TRACE` is how many instructions to print;
+  `machine.c`'s `module_of()` turns each `PC` into `CoArm+$0112`, and the
+  register columns come with it. The histogram above named the routine
+  immediately, and the instructions before it named the caller: `RowCopy` was
+  calling `IsDisp`, which takes its screen in **X** and hands it to `SIdx` —
+  a loop that subtracts `SC.Size` until it reaches zero, so a pointer that is
+  not a screen record spins for ever. `X` still held the toolbox's own
+  `Co.WinA` address.
+  ⚠ **Find the wedge's time first** — the last line of `serial.times`, or the
+  last `s  prog` line in `emu.log` that still changes — and set `TRACE_AT`
+  just after it and the run length just past that, so the trace is seconds of
+  wall clock rather than the whole session.
+  ⚠ And the other diagnostics are worth knowing before guessing: `WATCH`
+  (addresses), `MARKS`, `MASKLOG`, `CALLTIME`, `VRAMDUMP`, `RINGDUMP`,
+  `KEEPFRAMES=1` on the video3 benches — a decoded frame is what proved the
+  screen was uniformly black and ruled out fonts, the tab and the page header
+  at a stroke.
+  ⭐ **The rule: once a symptom is "it completes its work and then something
+  else dies", stop reasoning and take a trace.** A hypothesis costs a bench
+  run to disprove; the trace costs one run and disproves all of them.
+
+  ⭐⭐ **AND FOR "WHERE DOES THE TIME GO", THE SAME TRACE ANSWERS IT — but only
+  weighted by DOTS.** The trace line carries `D <dots>`, and
+  `software/demo/emu/test/pchist.py` charges each instruction the difference to
+  the next line and resolves it to a routine out of the recipe's own listings
+  (`mkdir -p LST/.mods; make -C l2 … LISTDIR=LST AFLAGS_EXTRA=-DV3=1
+  .mods/coarm`). It is what priced `proportional-font.md` §6.2 — 1,310 cycles a
+  glyph, of which the register protocol is 60 and the copy engine 52.
+  ⛔ **Two traps in that script's own first three runs**, both of which produced
+  a confident wrong answer rather than an error: **counting instructions instead
+  of dots** reported 92 % in the kernel over a window that held almost no
+  drawing (true of instructions, useless about cost, and `/WAIT` is invisible to
+  it); and **taking a PC range for a module** — the toolbox is a ROM page run in
+  place at `$A000` with no module header, and so is every task-0 user program
+  linked there, so `rbromdisk` was reported as 15 % toolbox time. The test is the
+  range **and** the module `module_of()` resolved from the live map.
+  ⚠ A third: a listing's source column is **verbatim and padded**, so a label is
+  a symbol at column 9 and a mnemonic is one at column 29 — strip the whitespace
+  first and every `lbsr` becomes a label, and the histogram reports the time
+  under instruction names, which reads exactly like an answer.
+
+- ⛔ **A SCALAR THAT BECOMES AN ARRAY LEAVES READERS BEHIND, AND THE ONE IT
+  LEAVES BEHIND STILL ASSEMBLES** — found 2026-09-22. `tbox.asm`'s glyph
+  strike grew from one cached face to three slots, so `TB.SkF` went from a
+  byte to `rmb SK.Slots`. Every writer was updated; one reader in `SkBuild`'s
+  second pass still said `lda >TB+TB.SkF` — now slot 0's byte, which the
+  allocator had just set to `$FF` to mark the slot empty. FONT `$FF` is a
+  legal FONT byte: `FontMap` clamps the index to 0 and `F.Bold` and `F.Opaq`
+  both take. So 95 glyphs were composed into the margin **in the wrong face**,
+  every copy out of it was faithful, and the result still looked like text.
+  ⚠ **`>SYMBOL` and `SYMBOL,x` assemble identically whether `SYMBOL` names one
+  byte or the first of many**, so nothing warns. The fix is to give the
+  build-time value its own name (`TB.SkFi`) rather than read an element of the
+  table the build is about to write.
+  ⛔ **And the tracer could not have found this one.** The PC histogram is flat
+  and correct — the machine executes exactly the routine it should, with the
+  wrong datum. What found it was **rendering both bands as ASCII and looking**:
+  the reference was letters and the strike was a dense 57-column repeat.
+  ⭐ **The rule that pairs with the tracer note above: trace when the symptom is
+  CONTROL FLOW (it hangs, it dies, it never returns); look at the DATA when the
+  symptom is a wrong answer of the right shape.** Six bench runs went into
+  hypotheses before the first `print(''.join('.' if c==1 else '#' ...))`.
 
 - **A hang is worse than a failure.** `vsync_tb` waited on
   `SLOTTICK == 0 && PH == 0`; `SLOTTICK` later moved phase, the conjunction

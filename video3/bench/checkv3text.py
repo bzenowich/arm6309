@@ -50,7 +50,48 @@ def spans(out):
     return got
 
 
+def tbox_equ(name):
+    """An equate out of tbox.asm - the same discipline checkfiles.py uses.
+    ⛔ The strike's geometry lives in TWO files (mktbox.py bakes the glyph
+    positions, tbox.asm reads them) and a disagreement is silent: the ROM
+    would blit from rows the host never drew. This is what makes them agree."""
+    nd = os.environ.get("NITROS9DIR") or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "nitros9")
+    src = open(os.path.join(nd, "level2", "arm6309", "modules",
+                            "tbox.asm")).read()
+    m = re.search(r"^%s\s+equ\s+([^\s;*]+)" % re.escape(name), src, re.M)
+    if not m:
+        sys.exit("FAIL  checkv3text: tbox.asm has no %s equate" % name)
+    return m.group(1)
+
+
+def geometry():
+    """⭐ THE STRIKE'S GEOMETRY, ASSERTED ACROSS THE TWO FILES THAT HOLD IT."""
+    sys.path.insert(0, os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "..", "..", "software", "nitros9", "tools"))
+    import mktbox as MK
+    smax = int(tbox_equ("SK.Max"))
+    slots = int(tbox_equ("SK.Slots"))
+    bandh = int(tbox_equ("SK.BandH"))
+    row = int(tbox_equ("SK.Row"))
+    ok(smax == MK.STRIKE_MAXBAND,
+       "tbox.asm SK.Max is mktbox.py STRIKE_MAXBAND",
+       "%d vs %d" % (smax, MK.STRIKE_MAXBAND))
+    end = row + slots * smax * bandh
+    # ⚠ 480 is vidcpy3.asm's CpScratch, and tbox.asm's own header says so.
+    ok(end <= 480,
+       "⛔ the %d slots end above the copy engine's staging at row 480" % slots,
+       "last strike row %d" % end)
+    # ⚠ and the bench's own strip must not be inside them
+    ok(not (row <= M.SK_Y < end),
+       "⛔ ...and the bench composes its strip clear of them",
+       "strip at row %d, strike %d-%d" % (M.SK_Y, row, end))
+    return row, end
+
+
 def main(out):
+    geometry()
     s = spans(out)
     draw = {}
     print("  stream    to /nil     to /w5        drawing   per call")
@@ -103,6 +144,54 @@ def main(out):
         ok(opaq < clear, "opaque text is faster than transparent",
            "%.2f ms vs %.2f ms" % (opaq, clear))
 
+    # ⭐⭐ THE NUMBER THE STRIKE EXISTS FOR - docs/proportional-font.md §4.
+    if {"v3tlow", "v3t40s"} <= set(draw):
+        low = 1000 * draw["v3tlow"] / M.N
+        sk = 1000 * draw["v3t40s"] / M.N
+        print("  ⛔ the same line BELOW row 320:               %.2f ms" % low)
+        # ⚠ v3tlow is ONE call and v3t40s is N, so the comparison is against
+        # the composed baseline rather than against each other: what must be
+        # true is that drawing low is not the SLOW path.  A composed line is
+        # ~223 ms; a copied one ~54.  Anything near the former means RowCopy
+        # refused and SkText fell back, which is exactly the defect the
+        # disjoint test fixes and which draws the right pixels while doing it.
+        if "v3t40p" in draw:
+            opaq = 1000 * draw["v3t40p"] / M.N
+            ok(low < opaq / 2,
+               "⛔ drawing BELOW the strike's rows still COPIES, not composes",
+               "%.2f ms vs %.2f ms composed" % (low, opaq))
+            # ⭐⭐ AND IT IS THE STEADY STATE, which v3t40s is not: v3t40s is
+            # the first strike user in the session and carries the BUILD,
+            # amortised over N. v3tlow runs after it in the same (font, ramp),
+            # so it is what a GUI redrawing a label actually pays.
+            print("      ⭐ so the STEADY STATE is                %.2f ms"
+                  " a line, %.0f us a glyph,  %.1fx"
+                  % (low, (low - 2.68) / 40 * 1000, opaq / low))
+            ok(low < sk,
+               "⭐⭐ ...and it is CHEAPER than the run that paid for the build",
+               "%.2f ms against %.2f ms, so the build is ~%.0f ms"
+               % (low, sk, (sk - low) * M.N))
+
+    if {"v3t40s", "v3t40p", "v3tnop"} <= set(draw):
+        sk = 1000 * draw["v3t40s"] / M.N
+        opaq = 1000 * draw["v3t40p"] / M.N
+        floor = 1000 * draw["v3tnop"] / M.N
+        print("  ⭐⭐ 40 characters, OUT OF THE STRIKE:        %.2f ms   %.2fx"
+              % (sk, opaq / sk if sk else 0))
+        print("      ...of which the call's floor is          %.2f ms" % floor)
+        print("      so a glyph costs                         %.0f us"
+              % ((sk - floor) / 40 * 1000))
+        ok(sk < opaq,
+           "⭐⭐ a 40-character line OUT OF THE STRIKE beats composing it opaque",
+           "%.2f ms vs %.2f ms - %.1fx" % (sk, opaq, opaq / sk if sk else 0))
+        # ⚠ AND A BOUND, because the point of the strike is that a glyph is a
+        # rectangle and not a composition: the engine's own share of a 7x17
+        # glyph is ~29 us, so anything above ~300 us a glyph means the copy is
+        # not what the time is going on. §6 of the document owns that number.
+        ok((sk - floor) / 40 * 1000 < 2000,
+           "...and a glyph costs less than 2 ms, so it is a copy and not a compose",
+           "%.0f us a glyph" % ((sk - floor) / 40 * 1000))
+
     if len(draw) == len(M.TIMED):
         call1 = 1000 * draw["v3t01"] / M.N
         call40 = 1000 * draw["v3t40"] / M.N
@@ -135,7 +224,10 @@ def main(out):
     except OSError:
         vram = b""
     if vram:
-        w = 8 * M.CMP_N + 16                      # generous: the line's box
+        # ⛔ THE LINE'S REAL WIDTH (mkv3text's own), not a generous guess: past
+        # it the bands legitimately differ - screen on one side, untouched
+        # margin on the other - and comparing that far compares the background.
+        w = M.CACHE_W
         a = b"".join(vram[(M.CMP_Y1 + r) * 1024 + M.X:
                           (M.CMP_Y1 + r) * 1024 + M.X + w] for r in range(17))
         b = b"".join(vram[(M.CMP_Y2 + r) * 1024 + M.X:
@@ -144,6 +236,38 @@ def main(out):
         ok(any(a) and diff == 0,
            "⛔ opaque text draws the SAME PIXELS as transparent",
            "%d of %d bytes differ" % (diff, len(a)))
+
+        # ⭐ and the string cache: composed once in the margin, copied here
+        c = b"".join(vram[(M.CMP_Y3 + r) * 1024 + M.X:
+                          (M.CMP_Y3 + r) * 1024 + M.X + w] for r in range(17))
+        dc = sum(1 for p, q in zip(b, c) if p != q)
+        ok(any(c) and dc == 0,
+           "⭐ a string COMPOSED OFF-SCREEN AND COPIED BACK is the same pixels",
+           "%d of %d bytes differ" % (dc, len(b)))
+        # ⚠ the control: the strip itself must be in the margin, or the blit
+        # copied whatever happened to be there and the claim above is vacuous
+        strip = b"".join(vram[(M.SK_Y + r) * 1024 + M.SK_X:
+                              (M.SK_Y + r) * 1024 + M.SK_X + w] for r in range(17))
+        # ⭐ and the strike: the same line, drawn as one copy a glyph
+        k = b"".join(vram[(M.CMP_Y4 + r) * 1024 + M.X:
+                          (M.CMP_Y4 + r) * 1024 + M.X + w] for r in range(17))
+        dk = sum(1 for p, q in zip(b, k) if p != q)
+        ok(any(k) and dk == 0,
+           "⭐⭐ a line drawn OUT OF THE GLYPH STRIKE is the same pixels",
+           "%d of %d bytes differ" % (dk, len(b)))
+
+        # ⛔ AND BELOW THE STRIKE'S OWN ROWS - ca_row.asm's disjoint test.
+        lo = b"".join(vram[(M.CMP_Y5 + r) * 1024 + M.X:
+                           (M.CMP_Y5 + r) * 1024 + M.X + w] for r in range(17))
+        dl = sum(1 for p, q in zip(b, lo) if p != q)
+        ok(any(lo) and dl == 0,
+           "⛔ ...and the same pixels BELOW row 320, where the strike lives",
+           "%d of %d bytes differ" % (dl, len(b)))
+
+        ok(any(strip) and strip == c,
+           "⛔ ...and the margin really holds it, so the copy had a source",
+           "%d of %d bytes differ from the band" %
+           (sum(1 for p, q in zip(strip, c) if p != q), len(c)))
 
     print("\n%d claims, %d failed" % (ok_n + fail_n, fail_n))
     sys.exit(1 if fail_n else 0)

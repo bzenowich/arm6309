@@ -106,9 +106,11 @@ def font(bold):
                                        "NotoSans-Bold.ttf" if bold else "NotoSans-Regular.ttf"))
     h, _asc, first, count = blob[0], blob[1], blob[2], blob[3]
     g = {}
+    # ⚠ FIVE bytes an entry since 2026-09-21: width, the rows' offset, and the
+    # 2-byte strike position mktbox.py bakes in (strike_layout).
     for i in range(count):
-        w = blob[4 + 3 * i]
-        off = int.from_bytes(blob[5 + 3 * i:7 + 3 * i], "big")
+        w = blob[4 + 5 * i]
+        off = int.from_bytes(blob[5 + 5 * i:7 + 5 * i], "big")
         bpr = (w + 3) // 4
         lv = np.zeros((h, w), np.uint8)
         for y in range(h):
@@ -136,6 +138,17 @@ def levels(band, ramp):
     for k, v in enumerate(ramp):
         out[band == v] = k + 1
     return out
+
+
+def tbox_equ(name):
+    """An equate out of tbox.asm - the same discipline checkdesk.py uses on
+    desk.asm's GEO.*: the number lives in the source that draws it."""
+    nd = os.environ.get("NITROS9DIR") or os.path.join(ROOT, "..", "nitros9")
+    src = open(os.path.join(nd, "level2", "arm6309", "modules", "tbox.asm")).read()
+    m = re.search(r"^%s\s+equ\s+(\d+)" % re.escape(name), src, re.M)
+    if not m:
+        sys.exit("FAIL  checkfiles: tbox.asm has no %s equate" % name)
+    return int(m.group(1))
 
 
 def match(band, cands, g, h, ramp):
@@ -219,6 +232,8 @@ def main():
           % (WX, WY, WW, WH, S["FM.LX"], S["FM.LY"], S["FM.LW"], S["FM.LH"],
              S["FM.ROWS"], S["FM.ROWH"]))
 
+    TITY = tbox_equ("TitY")
+    print("title row: TitY=%d" % TITY)
     reg = font(False)
     bld = font(True)
     rWhite, rSel, rPanel, rTab = (ramp565("white"), ramp565("sel"),
@@ -243,8 +258,11 @@ def main():
             return dict(win="no", title="-", items="-", sel="-", rows="-", tab="-")
         ok = (w[19, 0] == C["shadow"] and w[19 + 4, 100] == C["frame"]
               and w[19 + 10, 300] == C["panel"])
-        # ⚠ the title is BOLD and in the tab's ramp (tbox.asm TWin)
-        ty, tx = 19 - 18, 26
+        # ⚠ the title is BOLD and in the tab's ramp (tbox.asm TWin), and its
+        # row comes from tbox.asm's own TitY rather than being repeated here -
+        # it moved from 18 to 17 when the tab went flat and the title dropped
+        # below C.Pale's highlight row, and a hard-coded 18 failed 8 claims.
+        ty, tx = 19 - TITY, 26
         title = match(w[ty:ty + bld[1], tx:tx + 300], cands + PATHS, *bld, rTab)
         sy = S["FM.SY"] - TOP + 1
         sx = S["FM.CX"] - WX + 6

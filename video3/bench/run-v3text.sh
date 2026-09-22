@@ -22,7 +22,7 @@ rm -rf "$OUT"; mkdir -p "$OUT/sys"
 python3 video3/bench/mkv3text.py "$OUT/sys" > "$OUT/mk.log" || { cat "$OUT/mk.log"; exit 1; }
 V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
-   software/demo/emu/cpu6809.c "$ROOT/audio/refplayer/card.c"
+   software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 
 # ⚠ CR, NOT LF.  A \n-terminated typed.txt is echoed by the shell and run by
 # nothing, which reads exactly like a hung machine (demo-report.md §14.3).
@@ -33,7 +33,12 @@ import mkv3text as M
 lines = ["iniz w5", "copy /dd/sys/v3tset /w5"]
 for n in M.TIMED:                      # /nil first: the stream's own cost
     lines += ["copy /dd/sys/%s /nil" % n, "copy /dd/sys/%s /w5" % n]
-lines += ["copy /dd/sys/v3tcmp /w5"]   # last, so the dump holds both bands
+# ⚠ v3tcache runs FIRST of the two, then v3tcmp, then a marker copy: if the
+# session wedges, whether the LATER commands ran says whether the console
+# survived the call or the copy itself never returned.  Both bands survive to
+# the dump either way - nothing after this draws in them.
+lines += ["copy /dd/sys/v3tcache /w5", "copy /dd/sys/v3tstrk /w5",
+          "copy /dd/sys/v3tcmp /w5", "echo CACHE-PAST"]
 lines += ["echo DONE-arm6309"]
 open(sys.argv[1] + "/typed.txt", "w").write("\r".join(lines) + "\r")
 PY

@@ -37,12 +37,22 @@ UI = [
 ]
 PAL = {n: i for i, (n, _) in enumerate(UI)}
 TABG, GREYG = 16, 24                     # 8-step gradients: the tab, and bars
+# ⭐ THE ACTIVE TAB IS FLAT BEHIND ITS TITLE, and this is which step it is.
+# The tab is 18 rows and an opaque text box is the font's 17, so there is
+# exactly ONE spare row - the pale highlight at the top. The other 17 are one
+# colour, so `tab` has a flat paper, so RPaper stops being 255 and F.Opaq works
+# on the most-drawn text in the GUI. docs/proportional-font.md §4.4.
+TAB_FLAT = TABG + 4                      # the step the flat band uses
 # 32-55: text ramps, three entries each - the two anti-aliased levels and the
 # ink - for one ink on one paper.  A glyph pixel of level L is RAMP + L - 1.
 RAMPS = [
     ("panel", (0, 0, 0), (216, 216, 216)),
     ("white", (0, 0, 0), (255, 255, 255)),
-    ("tab", (0, 0, 0), (255, 214, 60)),
+    # ⚠ THE PAPER IS THE EXACT RGB OF PALETTE ENTRY TAB_FLAT, not an eyeballed
+    # midpoint. It used to be (255, 214, 60) - close to the gradient's middle
+    # and equal to no palette entry at all, which is why ramp_papers() answered
+    # 255 and opaque text was refused here.
+    ("tab", (0, 0, 0), None),            # filled in below, once TABG exists
     ("desk", (255, 255, 255), (51, 102, 152)),
     ("sel", (255, 255, 255), (40, 92, 170)),
     ("menu", (0, 0, 0), (232, 232, 232)),
@@ -61,9 +71,20 @@ def lerp(a, b, t):
     return tuple(int(round(a[i] + (b[i] - a[i]) * t)) for i in range(3))
 
 
+def _tabg(i):
+    """Palette entry TABG + i, the tab gradient's own colours."""
+    return lerp((255, 238, 150), (255, 190, 0), i / 7)
+
+
+# ⭐ Resolve the `tab` ramp's paper to the colour that is actually DRAWN behind
+# the title, so the ramp is baked against the band rather than near it.
+RAMPS = [(n, ink, (_tabg(TAB_FLAT - TABG) if paper is None else paper))
+         for n, ink, paper in RAMPS]
+RAMP = {n: 32 + 3 * i for i, (n, _, _) in enumerate(RAMPS)}
+
 def palette_rgb():
     pal = [c for _, c in UI]
-    pal += [lerp((255, 238, 150), (255, 190, 0), i / 7) for i in range(8)]     # the tab
+    pal += [_tabg(i) for i in range(8)]                                        # the tab
     pal += [lerp((250, 250, 250), (200, 200, 200), i / 7) for i in range(8)]   # bars
     for _, ink, paper in RAMPS:
         pal += [lerp(paper, ink, 1 / 3), lerp(paper, ink, 2 / 3), ink]
@@ -103,10 +124,19 @@ def ramp_papers():
     """⭐ For each ramp, the palette index its PAPER is, or 255 where the
     paper is not a palette entry at all.  tbox.asm's opaque text fills a row
     with this instead of KEY, so a row becomes one run; a ramp with no flat
-    paper (`tab`, which is a step of the tab's gradient) must keep the
-    transparent path, and 255 is how it says so."""
-    byrgb = {rgb: i for i, (_, rgb) in enumerate(UI)}
-    return [byrgb.get(paper, 255) for _, _, paper in RAMPS]
+    paper must keep the transparent path, and 255 is how it says so."""
+    # ⭐ THE SEARCH IS THE FLAT REGION, 0-31: the UI colours AND the two 8-step
+    # gradients. It used to be UI alone, which is why `tab` answered 255 - its
+    # paper is a gradient step, and a gradient step is a perfectly good flat
+    # paper once the band behind the text really is flat, which since
+    # 2026-09-21 it is (TAB_FLAT).
+    # ⚠ NOT the whole palette: 56-255 is a 5x8x5 cube and a paper could collide
+    # with a cube entry by accident, answering an index nobody meant.
+    flat = palette_rgb()[:32]
+    byrgb = {}
+    for i, rgb in enumerate(flat):
+        byrgb.setdefault(tuple(rgb), i)
+    return [byrgb.get(tuple(paper), 255) for _, _, paper in RAMPS]
 
 
 def check_asm():
@@ -116,6 +146,7 @@ def check_asm():
     want = {"C.Black": PAL["black"], "C.White": PAL["white"], "C.Panel": PAL["panel"],
             "C.Frame": PAL["frame"], "C.Shadow": PAL["shadow"], "C.Light": PAL["light"],
             "C.Tab": PAL["tab"], "C.ITab": PAL["itab"], "C.Pale": PAL["pale"],
+            "C.TabF": TAB_FLAT,
             "KEY": PAL["key"], "C.TabG": TABG, "R.Tab": RAMP["tab"], "R.Menu": RAMP["menu"],
             "F.Bold": FONT["bold"]}
     for name, v in want.items():
@@ -131,8 +162,49 @@ def check_asm():
 
 
 # -------------------------------------------------------------------- fonts
+# ⭐ THE STRIKE'S BAND WIDTH, and it is 256 because that is a power of two.
+# A glyph's place in the strike is stored as ONE 16-bit word whose HIGH byte is
+# the band and whose LOW byte is the column in it, so the ROM unpacks it with
+# `lda`/`ldb` and no arithmetic at all. 384 - the margin's real width - would
+# have needed a divide per glyph. The 128 columns a band gives up are free:
+# the margin is 512 rows deep and a face needs three bands.
+STRIKE_BAND = 256
+# ⛔ SK.Max IN tbox.asm, AND THE TWO MUST AGREE.  The strike holds three
+# (font, ramp) slots stacked down the margin at 51 rows each, so a face that
+# needed a fourth band would lay its glyphs into the next slot's rows.  The
+# ROM refuses such a face at run time and composes instead; this refuses it at
+# build time, which is the half that can name the font.  checkfiles.py greps
+# the equate so the two numbers cannot drift apart silently.
+STRIKE_MAXBAND = 3
+
+
+def strike_layout(widths):
+    """Where each glyph sits in the strike: band<<8 | column, packed greedily.
+
+    ⚠ A glyph never straddles a band, so the last few columns of one go unused
+    - at most max(width) - 1 of 256. The ROM does not need to know that; it
+    reads the word and believes it, which is the point of baking it here."""
+    pos, band, x = [], 0, 0
+    for w in widths:
+        if x + w > STRIKE_BAND:
+            band, x = band + 1, 0
+        assert x <= 255, x
+        pos.append((band << 8) | x)
+        x += w
+    return pos, band + 1
+
+
 def font_blob(path, size=12):
-    """95 glyphs, 32-126, anti-aliased to four levels, clipped to the advance."""
+    """95 glyphs, 32-126, anti-aliased to four levels, clipped to the advance.
+
+    ⭐ FIVE BYTES A GLYPH SINCE 2026-09-21: width, the 2-byte offset of its
+    rows, and the 2-byte STRIKE POSITION - where the glyph sits in the
+    pre-rendered strike the copy engine blits from
+    (docs/proportional-font.md §4). It is baked here rather than derived in the
+    ROM because it is a pure function of the widths, and the toolbox's RAM is
+    CoArm's 1 KB display-list scratch with 238 bytes free - a 95-entry table
+    would have taken 190 of them, for one face.
+    """
     f = ImageFont.truetype(path, size)
     asc, desc = f.getmetrics()
     h = asc + desc
@@ -153,16 +225,23 @@ def font_blob(path, size=12):
                 data.append((q[0] << 6) | (q[1] << 4) | (q[2] << 2) | q[3])
         widths.append(w)
         rows.append(bytes(data))
+    pos, nband = strike_layout(widths)
+    assert nband <= STRIKE_MAXBAND, (
+        "%s needs %d strike bands and a slot holds %d (tbox.asm SK.Max): "
+        "either narrow the face or add a slot - there are %d margin rows "
+        "below 480 and a slot costs 51" % (path, nband, STRIKE_MAXBAND, 160))
     head = bytearray([h, asc, 32, 95])
-    off = 4 + 3 * 95
+    off = 4 + 5 * 95
     table = bytearray()
     body = bytearray()
-    for w, d in zip(widths, rows):
+    for w, d, pw in zip(widths, rows, pos):
         assert w < 256
-        table += bytes([w]) + (off + len(body)).to_bytes(2, "big")
+        table += (bytes([w]) + (off + len(body)).to_bytes(2, "big")
+                  + pw.to_bytes(2, "big"))
         body += d
     blob = bytes(head + table + body)
     assert len(blob) <= PAGE, len(blob)
+    f.strike_bands = nband
     return blob, f
 
 

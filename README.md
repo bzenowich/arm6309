@@ -197,6 +197,16 @@ comparisons against the two chips this machine stands in the tradition of — is
   point of view.
 - [`docs/video-comparison.md`](docs/video-comparison.md) — the video card against both
   of them.
+- ⭐ [`docs/proportional-font.md`](docs/proportional-font.md) — a design study:
+  antialiased proportional text, the Macintosh's strike and GEOS's mega-font, and
+  what the copy engine can take off the CPU. ⛔ It corrects a 2026-09-21 claim in
+  `boot-and-desktop.md` §5 item 8.
+- ⭐ [`docs/coarm-overlay.md`](docs/coarm-overlay.md) — a design: CoArm's code
+  window is **full to the byte**, and what an overlay would cost. ⛔ The crux is
+  the build layout, not the mapping.
+- ⭐ [`docs/6309.md`](docs/6309.md) — a plan: nothing in this machine has ever
+  executed a 6309 instruction, what that costs, and how to simulate one before
+  there is a Verilog core that is one.
 
 [`reference/`](reference/) holds datasheets, service manuals and ROMs. The large scans
 are deliberately **not** in git — see [`reference/README.md`](reference/README.md) — and

@@ -12,6 +12,63 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## boot-and-desktop.md §5 item 8 — the per-glyph blit was ruled out against the wrong baseline (2026-09-21)
+
+Item 8 is the present design. This records the two paragraphs that said a per-glyph
+blit could not pay, and the reason each was withdrawn the day after it was written.
+[`proportional-font.md`](proportional-font.md) §2 is the argument; the numbers that
+retired these are `demo-report.md` §16 (a 40-character line, **218.64 ms**) and item
+8's own measured table (a seven-character name, **71.4 ms** opaque).
+
+**It said, of the copy engine:**
+
+> ⛔ **And the arithmetic still says a per-glyph blit would be SLOWER than `F.Opaq`.** A
+> copy costs ~87 µs of setup whatever its size (`monster`'s measurement), so a
+> 40-character title as 40 glyph copies is ~3.5 ms — against one opaque line. **The
+> engine wins on big rectangles and loses on small ones**; a 12 px glyph is the wrong
+> shape for it. A 16 × 16 icon at one copy each is 12 × 87 µs = ~1 ms a repaint against
+> 565 ms, which is the case for doing the icons and not the type.
+
+⛔ **The arithmetic is right and the baseline is not.** "One opaque line" is neither
+3.5 ms nor 87 µs — it is 218.64 ms for forty characters, which the same document
+measures four paragraphs earlier at 71.4 ms for seven. The comparison was against a
+*string* cache (one copy of a pre-composed line, `keyed-copy.md` §3.2), which does
+beat a glyph cache; as written it reads as "glyph copies lose to software text", and
+that is wrong by about eighty times. The icon half of the paragraph was correct and
+is kept.
+
+**And, of the Mac's strike:**
+
+> ⛔ **THE CACHE-OF-EXPANDED-GLYPHS IDEA IS DEAD, AND `TB.NTab` IS WHY.** The obvious
+> borrow — "pre-expand each glyph to destination bytes for its ramp, so drawing is a
+> copy" — assumes the expansion is the cost. It is not: a nibble is one table index and
+> one `std`, which is **two pixels an instruction**, and a `memcpy` of pre-expanded
+> bytes is also two pixels an instruction. The bank would cost ~275 KB across three
+> ramps, or a VRAM upload at start-up, **to run the same speed**. The 32-byte table in
+> RAM already bought the win; it is dated in `tbox.asm` at *"~45 cycles a pixel"* saved.
+
+⛔ **It compares CPU-expanding against CPU-copying, and a strike in VRAM is neither.**
+The engine moves it at 0.247 µs a byte and the CPU's part is six register stores; and
+a strike deletes `TB.Buf`, and with it the seventeen `BlitRow`s and seventeen
+`FontAgain`s that the very next paragraph identifies as **~60 ms of the 71**. The
+residual the section finds is what the design it rejects removes. The `TB.NTab`
+argument survives for a glyph bank **in main memory**, which is what it was aimed at.
+
+**And its order of work said:**
+
+> 3. Leave the text to `F.Opaq`. It is already the cheaper mechanism.
+> 4. ⭐ **Then the three-way `TextAt` measurement above**, before any of the Mac ideas is
+>    built. The only one it could vindicate is `BlitBox`; the glyph bank is already ruled
+>    out on arithmetic.
+
+⚠ **This entry is the third prediction in two days that measurement or arithmetic
+overturned**, after item 8's own "the text is the bill" (the icon turned out to be
+27 %) and `keyed-copy.md` §3.2's 5.81 ms (a forked command's wall clock). All three
+were subtractions or borrowed constants. `proportional-font.md` §9 and §10 carry the
+same warning forward, because it is a longer subtraction than either.
+
+---
+
 ## boot-and-desktop.md §5 items 7 and 8, and §3.6 — the repaint was unmeasured and `F.Opaq` was a prediction (2026-09-21)
 
 [`boot-and-desktop.md`](boot-and-desktop.md) §5 items 7 and 8 are the present design and
@@ -1522,3 +1579,56 @@ text they replaced follows.
 ### docs/machine.md — §5 open-items table, the second pass
 
 ⚠ `vctrl` and `vsup` both fit only on the fitter's second pass (`graphics.md` §19 item 46)
+
+## The glyph strike: `boot-and-desktop.md` §5 item 8's arithmetic, superseded by the build (2026-09-22)
+
+`proportional-font.md` was written on 2026-09-21 as an argument and §6.1 is what
+happened when it was built. Three numbers in it were wrong and the way each was
+wrong is worth keeping.
+
+### `proportional-font.md` §6 — "the ceiling on all protocol work is exactly 2×"
+
+> ⛔ **§6 — `/WAIT` forbids overlapping the CPU's set-up with the engine's run**,
+> and the two cost the same to within 1 %. So the ceiling on *all* protocol work
+> is exactly 2× … | caps §5 at 2×, and prices the one piece of silicon worth
+> asking for
+
+**Retracted.** A glyph measures **769 µs** and the copy engine's share of it is
+**29 µs**, so the driver and the engine do not cost the same and `/WAIT`'s
+serialization is not what binds. The shadowed-`GO` register set §7 item 3 asks
+for is worth under 4 %, not 2×. What the section never counted is the **per-copy
+call** — toolbox → `TVCALL` → `TbVec` → `RowCopy` — which is 97 % of the bill.
+
+### `proportional-font.md` §6 — the estimate table
+
+> | ⭐ strike, serialized by `/WAIT` (27 + 27) | **2.2 ms** | **99×** |
+> | + building the per-string list (~14 µs a glyph) | **2.8 ms** | ⭐ **78×** |
+
+Measured: **33.42 ms, 6.7×** in steady state; 55.68 ms and 4.0× on the run that
+also pays for the build. The estimate is **nineteen times** optimistic. Its
+*direction* was right, which is the whole of §2's correction to
+`boot-and-desktop.md`, and that is what survived.
+
+### `boot-and-desktop.md` §5 item 8 — "a copy costs ~87 µs of setup whatever its size"
+
+`monster`'s figure is for a process that owns the card. Through the toolbox a
+glyph copy is **769 µs**, nine times that, and `keyed-copy.md` §7.1 already had
+the shape of it (2,143 µs through `SS.Copy`, 344 µs through `SS.CopyN`). A
+per-copy cost is a property of the *path*, not of the engine.
+
+### Two things the build taught that no estimate had reached
+
+- ⛔ **One strike is slower than no strike.** `desk` draws a list whose selected
+  row is a different ramp from the other eleven, so a single cached face rebuilt
+  three times in one repaint at **~556 ms a build**. The toolbox holds **three**,
+  one per (font, ramp) — `tbox.asm` `SK.Slots`.
+- ⛔ **The strike lives in the margin of whichever screen is up.** `desk` forked
+  `v3paint`, whose 640 × 480 screen took that VRAM, and when the desktop came
+  back its cache still claimed a face whose pixels were Paint's: the listing
+  redrew as unreadable glyphs and every earlier frame of the same run was
+  perfect. `CG.Disp` cannot say this — it goes 1 → 2 → 1 — so `armvid.d` gained
+  **`CG.SGen`**, a counter `ca_scr.asm` bumps wherever `CG.Disp` is written.
+- ⚠ **And the fill is visible.** Laid down lazily, the 556 ms lands between two
+  rows of the first listing. `run-v3files.sh`'s negative control caught it as a
+  second picture in a rectangle that must hold one. Toolbox call 14 (`SkWarm`)
+  is what `desk` uses to pay it before its window is up.

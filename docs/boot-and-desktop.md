@@ -550,12 +550,26 @@ Everything in §3 is an application and belongs on the card.
    fixed-size, per-row shape the keyed copy exists for, and it is now the largest single
    item that is not already the span writer.
 
-   ⛔ **And the arithmetic still says a per-glyph blit would be SLOWER than `F.Opaq`.** A
-   copy costs ~87 µs of setup whatever its size (`monster`'s measurement), so a
-   40-character title as 40 glyph copies is ~3.5 ms — against one opaque line. **The
-   engine wins on big rectangles and loses on small ones**; a 12 px glyph is the wrong
-   shape for it. A 16 × 16 icon at one copy each is 12 × 87 µs = ~1 ms a repaint against
-   565 ms, which is the case for doing the icons and not the type.
+   ⭐ **A 16 × 16 icon at one copy each is 12 × 87 µs = ~1 ms a repaint against 565 ms**
+   (`monster`'s ~87 µs of set-up, which a copy costs whatever its size). That is the case
+   for doing the icons, and it stands.
+
+   ⭐⭐ **AND IT IS ALSO THE CASE FOR DOING THE TYPE — BUILT AND MEASURED 2026-09-22.**
+   The strike is in `tbox.asm` (`SkHave`/`SkBuild`/`SkText`) and **toolbox call 0 picks it
+   whenever it is safe to**, so `desk`'s own text takes it: a forty-character line costs
+   **33.42 ms against `F.Opaq`'s 222.89 — 6.7×**, drawing pixel-identical output
+   (`run-v3text.sh`, 29 claims). ⛔ **A glyph costs 769 µs, not the 87 this paragraph
+   assumed** — the per-copy call through the toolbox is nine times `monster`'s figure, and
+   `proportional-font.md` §6.1 is where that is taken apart. The estimate below is kept
+   because its *direction* was right and the size of its error is the finding.
+   A per-glyph blit at the same 87 µs is
+   **~3.5 ms for a forty-character title, against the 218.64 ms `F.Opaq` costs** for one
+   (`demo-report.md` §16) and the 71.4 ms measured above for seven characters. **The
+   engine wins on big rectangles and loses on small ones** is true of a copy against
+   *another copy*; against this machine's software text a 12 px glyph is not the wrong
+   shape by anything like enough to matter. ⚠ What a glyph cache loses to is a **string**
+   cache — one copy of a pre-composed line, `keyed-copy.md` §3.2 — and the two are not
+   alternatives: a strike pays on the first draw and a string cache only on the second.
 
    ⚠ **Two sizing notes** for whoever does build a bank: an OS-9 listing is **mixed case**
    — `OS9Boot` sits beside `CMDS` and `DATA` — so a body alphabet is ~70 glyphs and not
@@ -578,13 +592,22 @@ Everything in §3 is an application and belongs on the card.
    | **synthesized styles** — bold as the glyph OR'd with itself shifted one pixel, italic as a per-row shear | not done: `F.Bold` selects a **second font** and `FontMap` maps its page | saves ROM, not time |
    | **the system font resident in ROM** | ⭐ already: the fonts are ROM pages, mapped at `Co.WinB` by `FontMap` | — |
 
-   ⛔ **THE CACHE-OF-EXPANDED-GLYPHS IDEA IS DEAD, AND `TB.NTab` IS WHY.** The obvious
+   ⚠ **A GLYPH CACHE IN MAIN MEMORY IS DEAD, AND `TB.NTab` IS WHY.** The obvious
    borrow — "pre-expand each glyph to destination bytes for its ramp, so drawing is a
-   copy" — assumes the expansion is the cost. It is not: a nibble is one table index and
-   one `std`, which is **two pixels an instruction**, and a `memcpy` of pre-expanded
+   `memcpy`" — assumes the expansion is the cost. It is not: a nibble is one table index
+   and one `std`, which is **two pixels an instruction**, and a `memcpy` of pre-expanded
    bytes is also two pixels an instruction. The bank would cost ~275 KB across three
-   ramps, or a VRAM upload at start-up, **to run the same speed**. The 32-byte table in
-   RAM already bought the win; it is dated in `tbox.asm` at *"~45 cycles a pixel"* saved.
+   ramps **to run the same speed**. The 32-byte table in RAM already bought the win; it
+   is dated in `tbox.asm` at *"~45 cycles a pixel"* saved.
+
+   ⛔ **THAT ARGUMENT DOES NOT REACH A CACHE IN VRAM, AND AN EARLIER DRAFT SAID IT DID.**
+   It compares CPU-expanding against CPU-copying and finds them equal — which they are.
+   A strike in VRAM is copied by **neither**: the engine moves it at 0.247 µs a byte, and
+   the CPU's part is six register stores. More to the point, a strike deletes `TB.Buf`
+   entirely, and with it **the seventeen `BlitRow`s and seventeen `FontAgain`s that the
+   next paragraph identifies as ~60 ms of the 71**. The residual this section finds is
+   exactly what the rejected design removes.
+   [`proportional-font.md`](proportional-font.md) is that argument in full.
 
    ⭐ **AND THE ARITHMETIC SAYS THE GLYPH LOOP IS NOT THE BILL AT ALL.** A seven-character
    name is ~50 px wide and 17 rows. ⚠ **Estimated**, from the source:
@@ -626,10 +649,23 @@ Everything in §3 is an application and belongs on the card.
    2. ⭐ **The icons are next**, because they are now 27 % of the repaint and they are the
       engine's own shape. Deciding it means deciding the palette question above (renumber
       to key on 0, or give the engine its own blobs in VRAM).
-   3. Leave the text to `F.Opaq`. It is already the cheaper mechanism.
-   4. ⭐ **Then the three-way `TextAt` measurement above**, before any of the Mac ideas is
-      built. The only one it could vindicate is `BlitBox`; the glyph bank is already ruled
-      out on arithmetic.
+   3. ⭐ **Flatten the window tab** — gradient for two or three rows at each edge, a flat
+      band behind the text. `RPaper`'s `255` becomes a palette index, `F.Opaq` starts
+      working on the most-drawn text in the GUI, and the only case that wanted a colour
+      key for text goes away — and with it the palette renumber above.
+      [`proportional-font.md`](proportional-font.md) §4.4.
+   4. ⭐⭐ ~~Then the three-way `TextAt` measurement, and one glyph blitted out of a
+      strike~~ — **DONE 2026-09-22, and the strike is what shipped.** `Text` (call 0)
+      takes it when the call is opaque and every glyph is inside the clip, and composes
+      otherwise, so nothing had to change in `desk`. **6.7× on a forty-character line**,
+      gated by `run-v3text.sh` (29), `run-v3desk.sh` (48) and `run-v3files.sh` (65).
+      ⛔ **Two things the build taught that the estimate could not**: the cache must hold
+      **one strike per (font, ramp)** — a list whose selected row is a different ramp from
+      the other eleven would otherwise rebuild three times a repaint, at ~556 ms a build,
+      which is *slower than no strike at all* — and it must be **invalidated when the
+      screen changes**, because a forked program takes the margin the strike lives in
+      (`armvid.d` `CG.SGen`). `BlitBox` is moot: a strike deletes the row loop it would
+      have moved.
    5. ⛔ And none of this closes item 7: a repaint would have to reach ~150 ms. **The
       sticky button bit is the fix for item 7**, and it is independent of all of the
       above.
