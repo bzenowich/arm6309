@@ -14,7 +14,7 @@ scripted streams of CoArm escape sequences, played with `copy /sd0/data/v3desk /
 paint a *picture* of a desktop; they are still on the card and are still what the demo
 session shows. `desk` is the program that emits those escapes **live, off the mouse** —
 §3 — and since 2026-09-21 it has a file manager that lists, enters and runs what is
-really on the card. What is left is windows that move and close.
+really on the card, and since 2026-09-22 **its windows move**.
 
 > **Status: §1 is BUILT (2026-09-20) — `software/boot/boot.asm` §10a, and
 > `machine_tb`'s `disk` and `nodisk` scenarios read the picture off the
@@ -28,7 +28,11 @@ really on the card. What is left is windows that move and close.
 > reads the card before there is an OS (`boot.asm` §10b) and NitrOS-9's
 > `boot_sd` loads `OS9Boot` off it, with the ROM disk as the fallback;
 > `software/nitros9/run-sdboot.sh` boots all three card states from reset.
-> §3's milestone 4 is specified and not built.**
+> ⭐ **§3's MILESTONE 4's WINDOW MOVE IS BUILT (2026-09-22)** — the manager's
+> tab is grabbable and the card moves the window, one `SS.Copy` a step;
+> `video3/bench/run-v3move.sh` reads the figure-8 off the frames and asserts
+> the window went where the *mouse* went. **Closing, a second window, rename,
+> copy and delete are still §3.5.**
 
 ---
 
@@ -44,6 +48,7 @@ really on the card. What is left is windows that move and close.
 | a desktop | `desk` — a menu bar, an event loop on the PS/2 mouse, icons on the Haiku desktop | ⭐ **built 2026-09-20** — §3 milestone 1. ⭐ The icons became clickable 2026-09-21 |
 | a file manager | `desk`'s Tracker window, listing a real directory through `v3dir.inc` — the reader `v3trk` has always used | ⭐ **built 2026-09-21** — §3 milestone 3 |
 | an application menu | `desk`'s **Applications** menu forks `v3paint`, `monster` and `pinball` off `/SD0/CMDS` | ⭐ **built 2026-09-20** — §3 milestone 2 |
+| a window you drag by its title bar | `desk`'s tab grab, and **the copy engine moves the pixels** — the CPU never touches one | ⭐ **built 2026-09-22** — §3.7 |
 
 ---
 
@@ -204,7 +209,7 @@ towards, and `v3show.py` remains where that picture is authored.
 | PS/2 mouse | `kbdarm.asm`'s IRQ service keeps `VG.MsX`/`VG.MsY`/`VG.MsBtn`; `desk` polls them through `SS.Mouse` and never touches the hardware |
 | `F$Fork` | the launcher. The demos are at `/SD0/CMDS` and a bench's `chx /sd0/cmds` is what puts them on the execution path |
 | `v3trk` | ⭐ **the directory reader, shared at source.** `v3trk`'s read loop is `modules/v3dir.inc` since 2026-09-21 and `desk` includes the same file — §3.6 |
-| `v3drag` | **still unused by the shell** — it is milestone 4's window move |
+| `v3drag` | ⭐ **the window move, proven before it was adopted.** `desk` does not call it and does not share its code — it shares its *shape* (§3.7): draw at the new place first, then put back only the sliver vacated. ⛔ What `desk` could **not** take is its backing store, and the reason is arithmetic — see §3.7 |
 
 ### 3.1 The event loop
 
@@ -291,10 +296,14 @@ nothing about the card, the toolbox or the palette.
 ### 3.5 What is left
 
 3. **The file manager (built 2026-09-21; §3.6).**
-4. **Windows that move and close** — `v3drag` already moves one with the copy engine. A
-   second manager window needs that first: two windows with no clipping is whichever was
-   drawn last (`v3show.py`'s `stream_cmds` says so), so the move has to come before the
-   second window does. Rename, copy and delete after.
+4. **Windows that move (built 2026-09-22; §3.7) and close.** The move is done; **closing
+   is not**, and neither is the second window it was blocking. Two windows with no
+   clipping is whichever was drawn last (`v3show.py`'s `stream_cmds` says so), which is
+   why the move had to come first. Rename, copy and delete after.
+   ⭐ **And §3.7's store is what unblocks the second window**, which is why the move came
+   first: `SB` holds whatever background is behind the manager, so another window under it
+   is restored like anything else. ⚠ What is *not* solved is the second window being
+   dragged — one region is kept, and it is the manager's.
 
 ### 3.6 The file manager — built
 
@@ -373,6 +382,140 @@ arrows, `Go > Up` and `Go > Close`, a desktop icon opening the manager, and `v3p
 forked from a list row and the window still there afterwards — **65 claims**, with a
 control that walks the list and presses nothing.
 
+### 3.7 The window moves, and the card moves it — built
+
+⭐ **A press in the tab grabs the window; every pass after it is one `SS.Copy` of the
+window's bounding box from where it was to where the pointer has put it, and a restore of
+the sliver it vacated out of an off-screen copy of the background.** The list is never
+redrawn — which is the whole point, because `DrawFiles` is 2,957 ms and a pass has 16.7.
+`video3/bench/run-v3move.sh` is the bench.
+
+The window's place is **model**, exactly as its listing is: two words, `fdx` and `fdy`,
+offsets from `FM.X`/`FM.Y`. `SetX`/`SetY` add them on the way out and `FileHit` takes them
+off on the way in, so all forty drawing sites and every hit test stay written in the
+literal `FM.*` they always were, and a launch (§3.3's `DWEnd`) takes the pixels and not
+the position.
+
+#### The backing store, and the number that sized the window
+
+⛔ **`FM.W` IS 344, AND TWO DIFFERENT LIMITS SET IT.** `SB` holds the background of a
+region around the window — the window plus `Marg` on every side — and the only off-screen
+VRAM wide enough is the scroll margin at columns 640–1023 (§4 of `video3/docs/plan.md`).
+
+| limit | what it says |
+|---|---|
+| width | `FM.W + 2·Marg ≤ 384`, the margin's columns |
+| ⛔ **height** | `FM.H + FM.TABH + 2·Marg ≤ 320`, because **`tbox.asm`'s glyph strike is in the same margin** — `SK.Col` 640, `SK.Row` 320, three slots of 51 rows |
+
+**The height is the binding one**: it caps `Marg` at **20**, which then leaves the width at
+**344**. ⚠ **It was 420 until 2026-09-22**, with no store at all; `history.md` has what
+that cost.
+
+⛔ **A store that ran past `SK.Row` ATE THE TEXT.** With `Marg` = 50 the region was 379
+rows and overlapped the strike by 59 — and every name in the listing came out as a **solid
+bar**. That reads as a font bug and is a memory conflict; nothing in the drag looked wrong
+at all. `video3/bench/checkmove.py` asserts the clearance against `tbox.asm`'s own
+`SK.Row` rather than trusting a comment.
+
+⚠ **`Marg` is also the step cap and the re-base interval**, so sharing the margin with the
+toolbox costs drag speed as well as width. ⭐ **The height never had to move**, so the list
+still shows all **12** of its rows.
+
+⭐ **And there is no `SW`.** `v3drag` keeps its window's own pixels off-screen as well,
+because it *redraws* the window from there every step. This moves screen to screen, old
+position to new, so the pixels never leave the card. ⚠ That matters arithmetically, not
+just aesthetically: `SW` + `SB` stacked would be 279 + 379 = **658 rows** and the margin
+has 480. **A design with both does not fit at any width.**
+
+| | |
+|---|---|
+| the move | **one** copy of the whole 344 × 279 bounding box, screen to screen, ~20 ms — or ~40 when it moves down or right and `vidcpy3.asm` stages it |
+| the restore | `DVac` puts back old-box-minus-new-box **out of `SB`**. That is at most **two** rectangles, each taking the old box's full extent on the other axis; they overlap at the corner and are written twice with the same background, which buys no case analysis beyond the sign of each delta |
+| the re-base | `NewB`, when the *next* box would not be inside the region. ⛔ **The hole first, and it is a store-to-store copy**: the background under the window cannot come off the screen, because the window is on it. Then four screen-to-store pieces which are exactly region-minus-window, so no pixel is copied twice and none is missed |
+| the step cap | **`Marg`.** `NewB` re-bases around where the window *is*, so the next box has to be within `Marg` of it. ⚠ A hand faster than 50 px a pass drags at 50 a pass and the pointer runs ahead of the tab — visible, and far better than v3drag's lines 726–732, which record what a margin smaller than the step does: black lines beside the tab, first flickering and then stuck |
+
+⛔ **`InFit` MUST FIRE BEFORE THE MOVE, NOT AFTER.** `NewB` reads the hole out of the
+**old** store, which only holds it while the window is still inside the old region. A test
+that waits until the window has actually left re-bases one step too late and the store
+fills with whatever was on the screen outside it. That is `v3drag`'s lines 655–660 and it
+cost that program a day.
+
+⛔ **AND THE STORE IS TAKEN WHERE THE BACKGROUND IS REALLY ON THE SCREEN** — `DrawAll`,
+between `DrawIcons` and `DrawFiles`, and `FMShow` **only when no window was up**.
+
+⛔ **AND THE GUARD ITSELF HAD THE REAL BUG IN IT: `PULS` DOES NOT AFFECT CC.**
+`puls a` / `bne` tests the flags the *previous* instruction left — here `ReadDir`'s last
+compare — and not the byte just pulled. So the guard fired on the directory reader's
+condition codes, `PhotoB` ran on a navigation redraw with the window up, and **the store
+swallowed the window**. It needs an explicit `tsta`. ⚠ This is `grep '^FAIL'` and
+`sh -c "! helper"` in a third costume: *an instruction that looks like it sets the flags
+and does not*, producing a confident wrong answer rather than an error.
+
+⚠ **`FMShow` IS THE NAVIGATION PATH TOO**, and that is what made the guard necessary.
+`ActUp`, `ActGoIn` and `OpenEnt` all reach it, and taking the store there puts **the
+window itself** in it — after which `DVac` faithfully restores window pixels into the
+trail and the drag leaves a second window smeared across the desktop. The guard is the
+previous value of `fopen`, read before `FMShow` sets it.
+
+⛔ **And the bench could not see what was wrong.** Its window detector simply reported the
+window as *undetectable* from the moment of the grab; the picture — two windows, one of
+them a trail — only appeared when a frame was rendered as ASCII and looked at. That is
+`CLAUDE.md`'s rule paying out again: **trace when the symptom is control flow; look at the
+data when the symptom is a wrong answer of the right shape.**
+
+#### The notch, and why the tab band is painted
+
+⛔ **`tbox.asm`'s `TWin` makes the tab only `TextW(title, bold) + 52` wide**, so the window
+is an **L** and the rectangle around it has a notch at the top right — about 152 × 19 here
+— which is background. A single copy of the bounding box carries that background along and
+stamps it at the new place, and ⛔ **`DVac` cannot put it back**, because the notch at the
+*new* position is inside the new box and `DVac` only restores old-minus-new.
+
+`v3drag` copies the L as two rectangles and restores the notch as a third. ⛔ **This
+program cannot: that needs the tab's width, and nothing hands it back.** The toolbox escape
+interface is one-way and call 10's `TB.TW` lives in the toolbox's own RAM, so `desk` cannot
+ask how wide the tab it just requested came out.
+
+⭐ **So `DrawFiles` paints the notch instead** — one `Rect` of `C.ITab` across the whole tab
+band before the `Window` call — and the bounding box becomes genuinely all window. Then one
+copy is exact, there is no notch rectangle to get wrong, and `v3drag`'s lines 357–362 (a
+staircase of white bevel pixels climbing away from the title) cannot happen here.
+⚠ **What it costs is the look**: Haiku shows desktop beside a narrow tab, and this manager
+shows a full-width strip in the inactive tab's own grey.
+
+⚠ **The grab band is the window's full width**, for the same missing measurement. There is
+grab surface on the painted strip to the right of the drawn tab — which, now that the strip
+is window-coloured, is at least honest about being part of the window.
+
+#### What it costs, and what the bench establishes
+
+⭐ **The travel box is the whole screen** — x 0–296, tab-y 19–201, the physical limits and
+nothing else. The window is dragged **straight over the desktop icons** and they come back,
+which is the entire difference between a store and a flat fill.
+
+⭐ **A step is 20–40 ms** plus the loop's `F$Sleep 1`. ⚠ **Sampling the mouse faster does
+not make the drag smoother**: `desk` chases the pointer's *absolute* position, so the
+window falls behind and the pointer visibly detaches from the tab it is holding.
+
+⭐ **What the bench establishes**, off the pixels: the window took dozens of distinct
+positions, every one inside the travel box, **every one a position the PS/2 script put the
+pointer at** less the grab offset — ⛔ which is the claim that separates this from
+`v3drag`, because a canned curve satisfies every other claim here — that it came home
+**bit-exact**, and ⛔ **that every pixel outside the window is the one it was before the
+grab**, icons included. ⛔ With a control that walks the same path and never presses, in
+which the window holds exactly **one** position.
+
+⚠ **`DESK-LIM` is not `DESK-BYE`.** Both exits printed `DESK-BYE` until 2026-09-22, so
+"the desktop stopped" and "the desktop was told to stop" were the same line on the console
+— and a drag that ended early read exactly like a `Quit` that had been clicked. The
+iteration bound says so in its own words now.
+
+⚠ **And the bit-exact claim has a trap in it**, paid for on 2026-09-22: **the pointer is
+in the picture.** video3 composites it as a 16 × 16 sprite and the script parks it on the
+tab to grab, where its bottom six rows reach into the frame. Comparing the last home frame
+of the run against the last one before the grab compares a picture with the pointer in it
+against one without — it failed on a perfectly good drag, and the CRC differed by exactly
+those six rows.
 
 ---
 

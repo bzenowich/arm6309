@@ -256,14 +256,19 @@ def main():
         """title, "N items", the selected row and every row, off the pixels"""
         if w is None:
             return dict(win="no", title="-", items="-", sel="-", rows="-", tab="-")
-        ok = (w[19, 0] == C["shadow"] and w[19 + 4, 100] == C["frame"]
-              and w[19 + 10, 300] == C["panel"])
+        # ⚠ COLUMNS RELATIVE TO FM.W, NOT LITERALS.  This sampled column 300,
+        # which is inside a 420-wide window and OFF THE END of the 284-wide
+        # one FM.W became on 2026-09-22 - numpy indexed past the crop and
+        # every claim that needed the window reported "0 frames", which reads
+        # like a machine that drew nothing rather than a bench that moved.
+        ok = (w[19, 0] == C["shadow"] and w[19 + 4, WW // 4] == C["frame"]
+              and w[19 + 10, WW // 2] == C["panel"])
         # ⚠ the title is BOLD and in the tab's ramp (tbox.asm TWin), and its
         # row comes from tbox.asm's own TitY rather than being repeated here -
         # it moved from 18 to 17 when the tab went flat and the title dropped
         # below C.Pale's highlight row, and a hard-coded 18 failed 8 claims.
         ty, tx = 19 - TITY, 26
-        title = match(w[ty:ty + bld[1], tx:tx + 300], cands + PATHS, *bld, rTab)
+        title = match(w[ty:ty + bld[1], tx:tx + WW - tx - 2], cands + PATHS, *bld, rTab)
         sy = S["FM.SY"] - TOP + 1
         sx = S["FM.CX"] - WX + 6
         items = match(w[sy:sy + reg[1], sx:sx + 90], COUNTS, *reg, rPanel)

@@ -12,6 +12,95 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## boot-and-desktop.md §3.5 and §3.7 — milestone 4's window move was unbuilt, and then built twice (2026-09-22)
+
+§3.7 is the present design. This records both what §3.5 said while the move did not
+exist, and the **first** built version of it, which was replaced the same day.
+
+### §3.5 item 4, as it stood until 2026-09-22
+
+> 4. **Windows that move and close** — `v3drag` already moves one with the copy engine. A
+>    second manager window needs that first: two windows with no clipping is whichever was
+>    drawn last (`v3show.py`'s `stream_cmds` says so), so the move has to come before the
+>    second window does. Rename, copy and delete after.
+
+And §3's table of pieces carried, against `v3drag`:
+
+> | `v3drag` | **still unused by the shell** — it is milestone 4's window move |
+
+### The first build: a flat fill, and a travel box chosen to make it true
+
+The move was first built with **no backing store at all**. The reasoning was arithmetic
+and correct as far as it went: `v3drag` keeps `SW` (its own pixels) and `SB` (the
+background around them) in the off-screen scroll margin at columns 640–1023, which is
+**384 columns**, and the manager's window was **420** wide — so neither rectangle fitted,
+at any origin.
+
+What that version did instead was make the background *knowable* rather than saved:
+
+> ⛔ **AND THE TRAVEL BOX IS A CONSTRAINT, NOT A PREFERENCE.** Restoring what the window
+> uncovers needs either a saved copy of the background or the knowledge that it is
+> uniform. There is no room for the first … So the second is what this uses, and the box
+> is exactly the region in which the desktop behind the window is flat `C.Desk`:
+> x ≥ 96 clears `IcTab`'s three left-column icons, all at x < 96; y ≥ 100 clears its three
+> top-row icons, none of which reach row 100; and the far edges keep the whole window on
+> screen.
+
+`FM.MNX` 96, `FM.MXX` 220, `FM.MNY` 100, `FM.MXY` 201 — a travel box of **124 × 101**, and
+`DVac` filled what the window uncovered with `C.Desk` rather than restoring it. The
+invariant that no `IcTab` cell reached the swept region was asserted by the bench, which
+is also what retired a `DrawIcons` in `DragEnd`: it had been there as insurance and cost
+**1.4 s of dead screen at the end of every drag** for damage the travel box made
+impossible.
+
+**That version passed its bench — 13 claims and a 7-claim control, 2026-09-22.** What was
+wrong with it was not correctness but reach: the window could only be dragged over ground
+that was already blank.
+
+### What replaced it, and the number that did it
+
+⭐ **`FM.W` went from 420 to 344** and the backing store became possible. Three things had
+been missed in the arithmetic above — and the first attempt at the fix missed the third,
+sizing the window at **284** with `Marg` = 50 before the glyph strike was noticed:
+
+- **`SW` does not fit either, at any width.** `SW` + `SB` stacked need
+  `H + (H + 2·Marg)` = 279 + 379 = **658 rows**, and the usable margin is rows 0–479
+  (480–510 are `vidcpy3.asm`'s overlap staging, row 511 holds the pointer's shape).
+- **It does not need to exist.** `SW` is in `v3drag` only because that program *redraws*
+  its window from off-screen every step. A screen-to-screen move never takes the pixels
+  off the card, so only `SB` is needed.
+- ⛔ **AND THE MARGIN IS NOT EMPTY.** `tbox.asm`'s glyph strike — added 2026-09-22, the
+  commit before this one — lives at `SK.Col` 640, `SK.Row` 320, three slots of 51 rows.
+  A `Marg` of 50 makes the region 379 rows and **overlaps the strike by 59**. The symptom
+  was that every name in the listing came out as a **solid bar**: it reads as a font bug,
+  the drag itself looked perfect, and nothing in the bench pointed at memory. So the real
+  cap is `FM.H + FM.TABH + 2·Marg ≤ 320`, which fixes `Marg` at **20** — and *that* is
+  what leaves the width at 344 rather than 284. `checkmove.py` now asserts the clearance
+  against `tbox.asm`'s own `SK.Row`.
+
+The height never had to move, so the list kept all 12 rows. The travel box became the
+whole screen, and the bench's claim inverted with it: from *"no desktop icon is inside
+the swept region"* to *"the window is dragged straight over three of them and every pixel
+outside it is the one it was before the grab"*.
+
+### And the notch, which the flat fill had hidden
+
+The flat-fill version copied the window's whole bounding box as one rectangle and said so:
+
+> ⛔ **ONE COPY OF THE BOUNDING BOX, NOT `v3drag`'s TWO.** … here it is free, because
+> inside the travel box below that desktop is a single flat colour and the blue it stamps
+> is the blue that was already there.
+
+⚠ **That is only true on a uniform background**, which the travel box guaranteed and the
+new one does not. `tbox.asm`'s `TWin` makes the tab `TextW(title, bold) + 52` wide, so the
+window is an L with a ~152 × 19 notch of background at its top right, and one copy carries
+that background to the new place — where `DVac` cannot reach it, because the notch at the
+new position is inside the new box. `v3drag` restores it as a third rectangle; `desk`
+cannot, because nothing returns the tab's width. ⭐ So `DrawFiles` **paints** the notch
+(one `Rect` of `C.ITab` across the whole tab band, under the `Window` call) and the
+bounding box becomes genuinely all window. The cost is the look: a full-width grey strip
+where Haiku shows desktop beside a narrow tab.
+
 ## boot-and-desktop.md §5 item 8 — the per-glyph blit was ruled out against the wrong baseline (2026-09-21)
 
 Item 8 is the present design. This records the two paragraphs that said a per-glyph

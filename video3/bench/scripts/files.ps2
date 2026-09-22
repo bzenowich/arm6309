@@ -11,8 +11,8 @@
 #   108 50    IcTab[0], the "arm6309" disk: cell 76,34, 64 x 48
 #   200 191   the list's row 0   (FM.LY + 9)
 #   200 209   its row 1          (FM.LY + FM.ROWH + 9)
-#   504 188   the scroll bar's UP arrow   (FM.BX + 7, FM.LY + 6)
-#   504 390   ... and its DOWN arrow      (FM.BX + 7, FM.LY + FM.LH - 13)
+#   428 188   the scroll bar's UP arrow   (FM.BX + 7, FM.LY + 6)
+#   428 390   ... and its DOWN arrow      (FM.BX + 7, FM.LY + FM.LH - 13)
 #   200  32   the Go menu's item 0, Files (GEO.DROPY + GEO.MPAD + 10)
 #   200  52   ... its item 1, Up           (+ GEO.ITEMH)
 #   200  92   ... its item 3, Close        (+ 3 x GEO.ITEMH)
@@ -42,6 +42,9 @@
 # threshold IS the draw time, so it moves with the length of a row's name
 # and with anything else the repaint grows; two seconds of margin over it
 # is what stops this bench failing for a reason that is not a defect.
+# ⚠ THESE MOVED ON 2026-09-22, when FM.W went from 420 to 284 to make room
+# for the drag's backing store (docs/boot-and-desktop.md §3.7): FM.BX is
+# 421 now, not 497, so the scroll arrows are at x 428 and not 504.
 origin 320 240
 gap 120
 
@@ -62,14 +65,14 @@ at 32.000   move to 200 209
 +0.500      move to 580 300
 
 # --- 3  the scroll bar: three rows down ---------------------------------
-at 44.000   move to 504 390
+at 44.000   move to 428 390
 +0.700      click left      # C4
 +4.500      click left      # C5
 +4.500      click left      # C6
 +0.500      move to 580 300
 
 # --- 3b  and one row back, on the OTHER arrow ---------------------------
-at 63.000   move to 504 188
+at 63.000   move to 428 188
 +0.700      click left      # C7: ⭐ the UP arrow, which nothing else reaches
 +0.500      move to 580 300
 
