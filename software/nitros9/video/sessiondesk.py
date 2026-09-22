@@ -30,6 +30,16 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 # the drag was cut off by the bound, which desk reports as DESK-LIM now.
 TICKS = 60000
 
+# ⛔ `reboot` FIRST, AND IT IS THE ONLY WAY TO SEE THE BOOT DIALOG.
+# software/demo/emu/machine.c enters at $8004 with boot.asm's handoff already
+# applied (the map, the memory descriptor), so on a fresh start the POST and
+# §10a's "looking for a disk" dialog NEVER RUN - the card stays dark until
+# NitrOS-9 brings /W3 up, which is the 24 seconds of black this session used
+# to open on.  `reboot` (F$Debug 255) re-enters at the reset vector with the
+# map live and the ROM runs for real.  run-sdboot.sh says the same thing for
+# the same reason.
+# ⚠ SERIAL_GATE closes on every CR (machine.c:1105) and re-opens on the next
+# prompt, so one SERIAL_IN survives the reboot: the lines below simply wait.
 LINES = [
     "iniz w3",
     "chd /sd0",
@@ -39,6 +49,18 @@ LINES = [
     "chx /sd0/cmds",
     "desk /w3 %d" % TICKS,
     "echo DONE-arm6309",
+    # ⛔ LAST, AND THE VIDEO ENDS ON IT.  machine.c enters at $8004 with
+    # boot.asm's handoff already applied, so on a fresh start the POST and
+    # §10a's dialog NEVER RUN - the card is simply dark until NitrOS-9 brings
+    # /W3 up.  `reboot` (F$Debug 255) re-enters at the reset vector and the
+    # ROM runs for real.  ⚠ It does NOT survive: about a second later the
+    # machine is in empty RAM and WILD stops the run, which is why this is the
+    # last line rather than the first.  The dialog is on the card by then.
+    # ⚠ chx BACK TO THE ROM DISK FIRST: `reboot` is one of the ROM's commands
+    # and the execution directory is /SD0/CMDS by now, so without this the
+    # shell answers "Error #216 - Path Name Not Found" and the ROM never runs.
+    "chx /dd/cmds",
+    "reboot",
 ]
 
 # ⭐ KEYED OFF desk's OWN CONSOLE LINES, not off a stopwatch.  Every trigger
@@ -48,6 +70,7 @@ LINES = [
 # over the wrong picture.
 CAPTIONS = [
     ("RKBoot", "NitrOS-9 Level 2 boots from ROM onto video3 - and an SD card in the socket"),
+
     ("02}/DD:", "A shell on the serial port. /DD is the ROM disk; /SD0 is the SD card"),
     ("desk /w3", "`desk` takes /W3: a menu bar, desktop icons, and an event loop on SS.Mouse"),
     ("DESK-READY", "Drawn by the ROM TOOLBOX on page 64 - there is no drawing code in desk at all"),
@@ -59,6 +82,14 @@ CAPTIONS = [
     ("DESK-DROP", "Dropped home bit-exact - the background it crossed came out of off-screen VRAM"),
     ("DESK-MENU Desk", "Desk > Quit, off the same menu bar the session started on"),
     ("DESK-BYE", "desk exits and the shell gets its prompt back"),
+    # ⚠ ":reboot" AND NOT "DD:reboot": `chx` moves the EXECUTION directory and
+    # the prompt still says /SD0, so the trigger has to be the command itself.
+    # ⛔ And the dialog cannot have a trigger of its own - §10a runs before
+    # there is a kernel, let alone a serial driver, so nothing is transmitted
+    # while it is on screen.  This caption is keyed to the command that causes
+    # it and stays up, which is why it is the last one in the list.
+    (":reboot", "⭐ `reboot` re-enters at the RESET VECTOR: boot.asm's POST, and §10a's "
+                "dialog - the Macintosh question, answered off the card"),
 ]
 
 

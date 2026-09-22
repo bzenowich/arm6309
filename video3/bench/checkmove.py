@@ -82,13 +82,13 @@ def boxes(path, S, desk):
     So a window row is one where a run STARTS at x and another ENDS at
     x+FM.W-1 - the window's two edges against the desktop - whatever the
     pixels between them are.
-    ⚠ The tab band counts too: DrawFiles paints it full width (§3.7), so the
-    topmost such row IS the box's top, with nothing to subtract.
+    ⚠ ONLY THE FRAME'S ROWS ARE FM.W WIDE.  The tab is narrower - the window
+    is an L and the desktop shows beside it - so the topmost full-width row is
+    the FRAME's top, and the box's top is FM.TABH above it.
     ⚠ And the POINTER can merge with an edge, which costs those rows; the
     threshold below has slack for it.
     """
     W, TAB = S["FM.W"], S["FM.TABH"]
-    H = S["FM.H"] + TAB
     out = []
     for meta, px in fr.read(path):
         if px is None or px.shape != (S["GEO.SCRH"], S["GEO.SCRW"]):
@@ -105,13 +105,31 @@ def boxes(path, S, desk):
         if len(xs) == 0:
             out.append((meta["t"], None, None))
             continue
-        vals, counts = np.unique(xs, return_counts=True)
-        bx = int(vals[counts.argmax()])
-        rows = ys[xs == bx]
-        if len(rows) < H - 40:
+        # ⛔ THE LONGEST CONTIGUOUS RUN OF ROWS, not the topmost one.  The
+        # bracket allows gaps inside (it has to - the list's icons contain
+        # C.Desk's blue), so a run that STARTS at x on one object and another
+        # that ENDS at x+FM.W-1 on a different one brackets a row that is not
+        # the window at all.  With a narrow tab that happens on the tab's own
+        # top row and put the window FM.TABH too high.  The frame is FM.H
+        # unbroken rows; nothing else on this desktop is.
+        best = None
+        for x in np.unique(xs):
+            r = np.sort(ys[xs == x])
+            cut = np.flatnonzero(np.diff(r) != 1)
+            for a, b in zip(np.r_[0, cut + 1], np.r_[cut + 1, len(r)]):
+                if best is None or b - a > best[0]:
+                    best = (b - a, int(x), int(r[a]))
+        # ⛔ NEARLY THE WHOLE FRAME, because a PARTLY COPIED one is not a
+        # position.  A step is two copies (the tab, then the body) and the
+        # body's is 20-40 ms against a 16.7 ms frame, so the raster can catch
+        # the body half moved - and the longest contiguous run is then a
+        # FRAGMENT whose top is nowhere the window ever was.  At 40 rows of
+        # slack that put four positions 29-32 px outside the travel box and
+        # read like a drag that had escaped its clamp; at 8 it is 0 of 157.
+        if best is None or best[0] < S["FM.H"] - 8:
             out.append((meta["t"], None, None))
             continue
-        out.append((meta["t"], bx, int(rows.min())))
+        out.append((meta["t"], best[1], best[2] - TAB))
     return out
 
 
@@ -199,6 +217,19 @@ def main():
        % (S["BW"], S["BH"], S["SBX"], S["SBY"], sk_col, sk_row,
           S["SBY"] + S["BH"], sk_row))
 
+    # ⛔ THE PASTED WIDTH TABLE MUST BE THE ROM'S.  desk.asm carries the bold
+    # face's 95 advances so it can work out how wide tbox made its tab -
+    # nothing hands that back - and a table that drifted from the font would
+    # put the notch in the wrong place, which is a trail beside the title.
+    tbl = re.search(r"TBWTab\s+equ\s+\*(.*?)\n\*", 
+                    open(deskasm, encoding="utf-8", errors="replace").read(), re.S)
+    pasted = [int(v) for m in re.finditer(r"fcb\s+([0-9,]+)", tbl.group(1) if tbl else "")
+              for v in m.group(1).split(",")]
+    real = T.glyph_widths(bold=True)
+    ok(pasted == real, "⛔ desk.asm's PASTED bold widths are the font's own (%d of %d "
+                       "entries, %s)" % (len(pasted), len(real),
+                                         "identical" if pasted == real else "DRIFTED"))
+
     bs = boxes(os.path.join(out, "frames.bin"), S, desk)
     seen = [b for b in bs if b[1] is not None]
     pos = [(b[1], b[2]) for b in seen]
@@ -228,7 +259,12 @@ def main():
 
     want = set(wanted(os.path.join(out, "drag.ps2"), S))
     cover = len(want & set(uniq)) / float(len(want))
-    ok(cover > 0.70, "⭐ AND IT WENT WHERE THE MOUSE WENT: %d of %d of the script's own "
+    # ⚠ 0.55, NOT 0.70: a step is THREE copies now (the tab, the body and the
+    # notch restore) where it was one, so the window spends proportionally
+    # more of each pass in flight and lands on fewer of the script's exact
+    # samples.  The substance of the claim is carried by the two below - every
+    # position inside the travel box, and none further than Marg from a sample.
+    ok(cover > 0.55, "⭐ AND IT WENT WHERE THE MOUSE WENT: %d of %d of the script's own "
                      "samples, %.0f%% - the window followed the POINTER, not a curve of "
                      "its own" % (len(want & set(uniq)), len(want), 100 * cover))
 
