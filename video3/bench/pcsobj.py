@@ -475,59 +475,9 @@ def initball(sim, p):
     p.setL(L_BDY, 0xFF)
 
 
-# ⭐ THE TABLE THE PORT REPLACES `DA <RUN> / DA <INIT> / DA <HIT>` WITH.  A part
-# type id at L[10] indexes it; the names are the 6502's, so a reader can follow
-# a claim in RUN.s straight to the routine that answers it.
-PROCS = {
-    'POLY':      (null_run, null_init, pbounce),
-    'BALL':      (moveball, initball, nullbounce),
-    'BMP':       (bumprun, bumpinit, bumphit),
-    'KICK':      (bumprun, bumpinit, kickhit),
-    'KNOCK1':    (knockrun, bumpinit, knock1hit),
-    'KNOCK2':    (knockrun, bumpinit, knock2hit),
-    'ROLL':      (flashrun, bumpinit, rollhit),
-    'TARG':      (flashrun, bumpinit, flashhit),
-    'LANE':      (null_run, null_init, pbounce),
-    'GATE':      (null_run, null_init, gatehit),
-    'GATE2':     (null_run, null_init, gate2hit),
-    'GATE3':     (null_run, null_init, gate3hit),
-    'SPIN':      (spinrun, spininit, spinhit),
-    'CATCH2':    (catch2run, bumpinit, catch2hit),
-    'MAG':       (null_run, null_init, maghit),
-}
+# ⭐ The part tables - PROCS, TYPES and OF_PROCS - are at the END of this
+# file, because they name every proc and the last of them is written last.
 
-# ⛔ THE ID IS THE INDEX INTO THIS TUPLE AND IT IS APPEND-ONLY.  A saved table
-# stores the id, so inserting a type renumbers every table ever written - the
-# same rule mktbox.py's ICON_NAMES carries for the desktop's art.
-TYPES = ('POLY', 'BALL', 'BMP', 'KICK', 'KNOCK1', 'KNOCK2', 'ROLL', 'TARG',
-         'LANE', 'GATE', 'GATE2', 'GATE3', 'SPIN', 'CATCH2', 'MAG')
-TYPEID = dict((n, i) for i, n in enumerate(TYPES))
-
-# The 6502 proc names each type answers to, so `pcsparts.Part.run`/`.hit` can be
-# mapped onto it and the 43 templates keyed automatically.
-OF_PROCS = {
-    ('NULL', 'NULL', 'PBOUNCE'): 'LANE',
-    ('NULL', 'NULL', 'GATEHIT'): 'GATE',
-    ('NULL', 'NULL', 'GATE2HIT'): 'GATE2',
-    ('NULL', 'NULL', 'GATE3HIT'): 'GATE3',
-    ('NULL', 'NULL', 'MAGHIT'): 'MAG',
-    ('MOVEBALL', 'INITBALL', 'NULLBOUNCE'): 'BALL',
-    ('BUMPRUN', 'BUMPINIT', 'BUMPHIT'): 'BMP',
-    ('BUMPRUN', 'BUMPINIT', 'KICKHIT'): 'KICK',
-    ('KNOCKRUN', 'BUMPINIT', 'KNOCK1HIT'): 'KNOCK1',
-    ('KNOCKRUN', 'BUMPINIT', 'KNOCK2HIT'): 'KNOCK2',
-    ('FLASHRUN', 'BUMPINIT', 'ROLLHIT'): 'ROLL',
-    ('FLASHRUN', 'BUMPINIT', 'FLASHHIT'): 'TARG',
-    ('SPINRUN', 'SPININIT', 'SPINHIT'): 'SPIN',
-    ('CATCH2RUN', 'BUMPINIT', 'CATCH2HIT'): 'CATCH2',
-}
-
-
-def kind_of(part):
-    """The port's type id for one of pcsparts.py's 43 templates, or None for a
-    part whose procs are step 3b-ii (the launcher, the flippers, the drop
-    banks, the stacking catcher)."""
-    return OF_PROCS.get((part.run, part.init, part.hit))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -541,8 +491,10 @@ class Sim(object):
     proc; what RUN2.s adds is a layer on top, and it is step 3c.
     """
 
-    def __init__(self, pbdata, pak, wset=(0, 0, 0, 0), width=160):
+    def __init__(self, pbdata, pak, wset=(0, 0, 0, 0), width=160, logic=None):
         self.pbdata = bytearray(pbdata)
+        # LOGIC[24] - six three-input AND gates, {in0, in1, in2, action}.
+        self.logic = list(logic or [0] * 24)
         self.world = P.World(pak, wset, width)
         self.world.dispatch = self._dohit
         self.ball = P.Ball(x=0, y=0, bdx=0, bdy=0)
@@ -641,11 +593,57 @@ class Sim(object):
             self.score()
         if (self.ptm1 & 0x07) == 0:
             self.sound()
-        # ⚠ WIRING is `(PTM1 & 3) == 0` and is step 3b-ii.
+        if (self.ptm1 & 0x03) == 0:
+            self.wiring()
 
     def play(self, n):
         for _ in range(n):
             self.step()
+
+    # -- WIRING (RUN.s:2050) ---------------------------------------------
+    def wiring(self):
+        """⭐⭐ THE WHOLE WIRING KIT IS TWENTY-FOUR BYTES.
+
+        Six gates, each three object indices and an action byte.  ⚠ An UNUSED
+        input reads $80 and so counts as satisfied - the gate is an AND over
+        however many wires were actually drawn - but a gate with no real inputs
+        at all never fires.  Firing awards a bonus, may bump the multiplier,
+        may make a noise, and calls each input's INIT proc, which is what
+        "turning the part off" means.
+
+        ⭐ AND THE SOUND NIBBLE IS MASKED WITH $70 HERE.  PUTSP2 does the same
+        shift without the mask (RUN.s:1330); that this one has it is the
+        evidence that the other is a slip.
+        """
+        for g in range(0, 24, 4):
+            n = 0
+            fired = True
+            for k in range(3):
+                o = self.logic[g + k]
+                if o == 0:
+                    continue                 # GETS2: `LDA #$80`, so satisfied
+                n += 1
+                p = self.parts.get(o)
+                v = p.L(L_STATE) if p is not None else 0x80
+                if not (v & 0x80):
+                    fired = False
+                    break
+            if not fired or n == 0:
+                continue
+            act = self.logic[g + 3]
+            self.dbonus = min(255, self.dbonus + _tbl('BONUSTBL')[act & 0x0F])
+            if act & 0x80:                   # PRBMULT (RUN.s:1963)
+                if self.bmult + 1 < 6:
+                    self.bmult += 1
+            snd = (act & 0x70) >> 4
+            if snd:
+                dosound(self, SOUNDTBL[snd - 1])
+            for k in range(3):
+                o = self.logic[g + k]
+                if o and o in self.parts:
+                    p = self.parts[o]
+                    self.objid = o
+                    PROCS[p.kind][1](self, p)
 
     # -- SCORE / DOSCORE (RUN.s:1885) ------------------------------------
     def score(self):
@@ -858,6 +856,110 @@ def selftest():
     if s3.series != 0x4C:
         bad.append('a loud effect did not preempt')
 
+    # -- 10  the launcher tracks the paddle, and FIRES on the button -----
+    p = mk('LAUNCH')
+    s2.btn0 = 0
+    for pdl, want in ((0, 0), (0x20, 1), (0x40, 2), (0xE0, 3), (0xE0, 4)):
+        s2.pdl0 = pdl
+        launchrun(s2, p)
+        if p.L(L_STATE) != want:
+            bad.append('LAUNCHRUN at paddle $%02X reached %d, wanted %d'
+                       % (pdl, p.L(L_STATE), want))
+    # ⛔ AND IT STOPS AT 5, whatever the paddle says.
+    s2.pdl0 = 0xFF
+    for _ in range(8):
+        launchrun(s2, p)
+    if p.L(L_STATE) != 5:
+        bad.append('LAUNCHRUN wound past its last frame to %d' % p.L(L_STATE))
+    s2.btn0 = 0x80
+    for _ in range(8):
+        launchrun(s2, p)
+    if p.L(L_STATE) != 0:
+        bad.append('LAUNCHRUN did not fire back to rest')
+
+    # ⛔ THE SHOT IS NOT A BOUNCE: with the button down and the ball above the
+    # plunger, BDY is SET from the paddle and the carry comes back CLEAR.
+    p = mk('LAUNCH')
+    p.setL(L_VERT, 100)
+    s2.btn0, s2.pdl0 = 0x80, 0xFC
+    b3 = P.Ball(x=10, y=90, bdx=0, bdy=0)
+    if launchhit(s2, p, b3) is not False:
+        bad.append('LAUNCHHIT deflected the ball instead of launching it')
+    if b3.bdy != 0x3F:
+        bad.append('LAUNCHHIT launched at %d, wanted 63' % b3.bdy)
+
+    # -- 11  the flipper sweeps up while the button is down, and back ----
+    p = mk('LFLIP')
+    p.setL(L_VERT, 100)
+    s2.btn0 = 0x80
+    seen, verts = [], []
+    for _ in range(9):
+        fliprun(s2, p)
+        seen.append(p.L(L_STATE))
+        verts.append(p.L(L_VERT))
+    if seen != [1, 2, 3, 4, 5, 6, 7, 7, 7]:
+        bad.append('the flipper swept %s' % seen)
+    # ⭐ AND THE PART ITSELF MOVED: a flipper's art changes top row and height
+    # as it sweeps, which is why the hit test has to read L[2] back.
+    if len(set(verts)) < 2:
+        bad.append('the flipper swept without moving its art')
+    s2.btn0 = 0
+    for _ in range(9):
+        fliprun(s2, p)
+    if p.L(L_STATE) != 0:
+        bad.append('the flipper did not come back to rest')
+    if p.L(L_VERT) != 100:
+        bad.append('the flipper came home to row %d, not 100' % p.L(L_VERT))
+
+    # -- 12  the drop bank: four targets in one nibble -------------------
+    p = mk('DROP1')
+    p.setL(L_BSTAT, 0b0101)                  # two of them struck
+    droprun(s2, p)
+    if p.L(L_STATE) & 0x0F != 0b0101:
+        bad.append('DROPRUN dropped %s' % bin(p.L(L_STATE) & 0x0F))
+    p.setL(L_BSTAT, 0b1010)
+    droprun(s2, p)
+    if p.L(L_STATE) & 0x0F != 0x0F:
+        bad.append('DROPRUN did not complete the bank')
+    # ⛔ AND THE NEXT TICK STANDS THEM ALL UP AND SETS $80, which is what the
+    # wiring kit reads as "this part fired".
+    droprun(s2, p)
+    if p.L(L_STATE) != 0x80:
+        bad.append('a completed bank came to $%02X, wanted $80' % p.L(L_STATE))
+
+    # -- 13  the wiring kit: an AND over however many wires were drawn ---
+    class _Sim3(_Sim2):
+        pass
+    w = _Sim3()
+    w.parts = {}
+    w.logic = [0] * 24
+    w.dbonus = 0
+    w.bmult = 0
+    w.objid = 0
+    for i, kind in ((1, 'TARG'), (2, 'TARG'), (3, 'TARG')):
+        w.parts[i] = mk(kind, score=0x55)
+    w.logic[0:4] = [1, 2, 0, 0x03]           # two wires, bonus 3, no sound
+    Sim.wiring(w)
+    if w.dbonus != 0:
+        bad.append('a gate fired with neither input on')
+    w.parts[1].setL(L_STATE, 0x80)
+    Sim.wiring(w)
+    if w.dbonus != 0:
+        bad.append('a gate fired with only one of two inputs on')
+    w.parts[2].setL(L_STATE, 0x80)
+    Sim.wiring(w)
+    if w.dbonus != _tbl('BONUSTBL')[3]:
+        bad.append('a satisfied gate awarded %d bonus' % w.dbonus)
+    # ⛔ ... and it TURNED THE PARTS OFF, by calling their INIT procs.
+    if w.parts[1].L(L_STATE) or w.parts[2].L(L_STATE):
+        bad.append('a fired gate left its inputs on')
+    # ⛔ A GATE WITH NO WIRES AT ALL NEVER FIRES, however satisfied it looks.
+    w.dbonus = 0
+    w.logic[4:8] = [0, 0, 0, 0x05]
+    Sim.wiring(w)
+    if w.dbonus != 0:
+        bad.append('an unwired gate fired')
+
     for m in bad:
         print('FAIL  %s' % m)
     if not bad:
@@ -865,8 +967,415 @@ def selftest():
               '      TSET\'s guard, the three one-way gates and the magnet\'s\n'
               '      hold, a rollover that scores without deflecting, PUTSP\'s\n'
               '      carry gate, the spinner\'s ratchet, DOSCORE\'s carry and\n'
-              '      DOSOUND\'s priority.')
+              '      DOSOUND\'s priority - and the plunger tracking the paddle,\n'
+              '      the flipper sweep moving the part itself, the drop bank\'s\n'
+              '      nibble, and the wiring kit as an AND over the wires that\n'
+              '      were actually drawn.')
     return not bad
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STEP 3b-ii: the parts the PLAYER drives, and the wiring kit.
+#
+# ⭐ These are the five that read the host's input - the launcher off the
+# paddle, the four flippers off the two triggers - plus the two drop banks and
+# the stacking catcher, which are the only parts with state beyond one byte.
+# ═══════════════════════════════════════════════════════════════════════════
+def _t(name, src='RUN.s'):
+    return _tbl(name) if src == 'RUN.s' else None
+
+
+FRAMES = ['FFRAME%d' % k for k in range(1, 9)] + \
+         ['SFRAME%d' % k for k in range(1, 9)]
+
+
+# ── the launcher (RUN.s:192) ──────────────────────────────────────────────
+def launchrun(sim, p):
+    """LAUNCHRUN - the plunger tracks the paddle until the button is pressed.
+
+    ⭐ `PDL0 >> 5` is 0..7 and the state follows it one frame at a time, so
+    pulling the plunger back IS the animation.  Pressing the button retreats it
+    to rest, which is the shot.  ⚠ BTN0 bit 7 SET means pressed."""
+    if sim.btn0 & 0x80:
+        if p.L(L_STATE):
+            retreat(sim, p)
+        return
+    want = sim.pdl0 >> 5
+    st = p.L(L_STATE)
+    if want < st:
+        retreat(sim, p)
+    elif want == st:
+        return
+    elif st < 5:
+        advance(sim, p)
+
+
+def launchhit(sim, p, b):
+    """LAUNCHHIT (RUN.s:217) - ⛔ THE SHOT IS NOT A BOUNCE.  With the button
+    down and the ball above the plunger's top row, BDY is SET from the paddle
+    (`PDL0 >> 2`, so 0..63) and the proc returns carry CLEAR - the ball is not
+    deflected, it is launched.  Anywhere else the plunger is an ordinary wall."""
+    if (sim.btn0 & 0x80) and b.y2 < p.L(L_VERT):
+        b.bdy = sim.pdl0 >> 2
+        return False
+    return sim.world.pbounce(b, sim.tta)
+
+
+# ── the flippers (RUN.s:233) ──────────────────────────────────────────────
+# ⭐ EIGHT FRAMES, AND EVERY ONE OF THEM MOVES THE PART.  A flipper's art
+# changes height AND top row as it sweeps, so FXDVERT/FXHEIGHT patch L[2] and
+# L[5] on the way up and FDDVERT/FHEIGHT are what the HIT proc reads back.
+# ⚠ The port drops the FXLEN write into L[7]: it is the frame's BYTE LENGTH,
+# which is what chained the bitmap pointer, and the port indexes its art
+# instead (pcs.md 2).  L[2] and L[5] stay, because the hit test reads them.
+def _flipbase(kind):
+    """0 for the big flippers, 8 for the small pair - the offset into the four
+    sixteen-entry tables, which hold both sizes end to end."""
+    return 8 if kind in ('LFLIP2', 'RFLIP2') else 0
+
+
+def _flipbtn(sim, kind):
+    return sim.btn1 if kind in ('RFLIP', 'RFLIP2') else sim.btn0
+
+
+def fliprun(sim, p):
+    """FLIPRUN - one frame of the sweep, in whichever direction the button says."""
+    base = _flipbase(p.kind)
+    st = p.L(L_STATE)
+    if _flipbtn(sim, p.kind) & 0x80:
+        if st >= 7:
+            return
+        x = st + base
+        p.setL(L_VERT, p.L(L_VERT) + _sb(_tbl('FXDVERT')[x + 1]))
+        p.setL(L_HEIGHT, _tbl('FXHEIGHT')[x + 1])
+        advance(sim, p)
+        return
+    if st == 0:
+        return
+    _flipret(sim, p, st, base)
+
+
+def _flipret(sim, p, st, base):
+    """FLPRUN4 - one frame back down.  ⚠ The two directions do NOT read the
+    same table entries: up takes FXDVERT[x+1] and down takes FXDVERT[x], which
+    is what makes the sweep reversible."""
+    x = st + base
+    retreat(sim, p)
+    p.setL(L_VERT, p.L(L_VERT) - _sb(_tbl('FXDVERT')[x]))
+    p.setL(L_HEIGHT, _tbl('FXHEIGHT')[x - 1])
+
+
+def flipinit(sim, p):
+    """FLIPINIT (RUN.s:297) - wind the sweep all the way back."""
+    base = _flipbase(p.kind)
+    n = 0
+    while p.L(L_STATE):
+        _flipret(sim, p, p.L(L_STATE), base)
+        n += 1
+        if n > 16:
+            raise RuntimeError('FLIPINIT did not settle')
+
+
+FWIDTH = {'LFLIP': 0, 'LFLIP2': 0, 'RFLIP2': 13, 'RFLIP': 19}
+
+
+def fliphit(sim, p, b):
+    """FLIPHIT (RUN.s:356).  ⭐⭐ THE ONE PART THAT IS NOT A POLYGON.
+
+    A flipper's collision is resolved against its ART, row by row: each of the
+    sixteen frames carries a list of (right, left) pairs, one per row, and the
+    proc finds the row the ball is entering, reads that row's two ends, and
+    only then decides whether the ball touched it at all.  ⭐ The kick is
+    FLPVCTR indexed by WHERE ALONG THE FLIPPER the ball struck - which is why a
+    tip shot is hard and worth it, and it is a table lookup.
+
+    ⚠ The right-hand flippers are the same tables read backwards from FWIDTH.
+    """
+    base = _flipbase(p.kind)
+    right = p.kind in ('RFLIP', 'RFLIP2')
+    fdir = _flipbtn(sim, p.kind)
+    bmove = sim.world.bmove
+
+    # Which row, and which columns, is the ball entering?
+    if not (bmove & P.BM_HORIZ):
+        yt = (b.y2 + 1) if (bmove & P.BM_POS) else (b.y1 - 1)
+        fx1, fx2 = b.x1, b.x2
+    else:
+        if bmove & P.BM_POS:
+            fx1, fx2 = b.x1 + 1, b.x2 + 1
+        else:
+            fx1, fx2 = b.x1 - 1, b.x2 - 1
+        yt = (b.y1 - 1) if (b.bdy & 0x80) else (b.y2 + 1)
+    yt &= 0xFF
+
+    frame = p.L(L_STATE)
+    x = (frame + base) & 0xFF
+    top = (p.L(L_VERT) + _sb(_tbl('FDDVERT')[x])) & 0xFF
+    if top > yt:
+        return False
+    if ((top + _tbl('FHEIGHT')[x]) & 0x1FF) < yt:
+        return False
+
+    leftx = p.leftx
+    rows = _tbl(FRAMES[x])
+    i = ((yt - top) & 0xFF) * 2
+    if i + 1 >= len(rows):
+        return False
+
+    if not right:
+        a = (rows[i] + leftx) & 0xFF
+        if a > fx2:
+            return False
+        e = (rows[i + 1] + leftx) & 0xFF
+        if e < fx1:
+            return False
+        t = e
+        yidx = (fx2 - leftx) & 0xFF
+        tta = _tbl('FTTA')[x]
+    else:
+        w = FWIDTH[p.kind]
+        a = (w - rows[i + 1] + leftx) & 0xFF
+        if a > fx2:
+            return False
+        e = (w - rows[i] + leftx) & 0xFF
+        if e < fx1:
+            return False
+        t = e
+        yidx = (w - fx1 + leftx) & 0xFF
+        tta = (32 - _tbl('FTTA')[x]) & 0xFF
+
+    # ⭐ WHICH FACE?  A vertical approach takes the near face; a horizontal one
+    # is decided by where along the row the ball met it.  X is $00 for the
+    # striking face and $80 for the back, and FLIPH12 turns TTA by 16.
+    if bmove & P.BM_HORIZ:
+        if right:
+            face = 0x80 if t < fx2 else 0x00
+        else:
+            face = 0x00 if t < fx2 else 0x80
+    elif bmove & P.BM_POS:
+        face = 0x00
+    else:
+        face = 0x80
+    if face == 0x80:
+        tta = (16 + tta) & 0xFF
+        if tta >= 32:
+            tta -= 32
+
+    # FLIPH13: the kick, by position along the flipper - and only while the
+    # flipper is actually sweeping.
+    vec = _tbl('FLPVCTR')
+    kick = vec[yidx] if yidx < len(vec) else 0
+    if frame == 0 or frame == 7:
+        kick = 0
+    elif fdir & 0x80:
+        kick = kick if face == 0x00 else 0
+    else:
+        kick = ((kick ^ 0xFF) + 1) & 0xFF if face == 0x80 else 0
+
+    sim.tta = tta
+    bdx, bdy, did = P.bounce(tta, b.bdx, b.bdy, kick=kick, elastic=True,
+                             wset3=sim.world.wset[3])
+    b.bdx, b.bdy = bdx, bdy
+    return putsp(sim, p, did)
+
+
+# ── the drop banks (RUN.s:761) ────────────────────────────────────────────
+def droprun(sim, p):
+    """DROPRUN - four targets in one part, one nibble of L[8] each.
+
+    ⭐ L[16] is "hit since the last tick" and L[8]'s low nibble is "down".  The
+    RUN proc moves the first into the second and redraws whichever fell; when
+    all four are down it stands them all back up and sets L[8] to $80, which is
+    what the WIRING kit reads as "this part fired"."""
+    down = p.L(L_STATE) & 0x0F
+    if down == 0x0F:
+        for k in range(3, -1, -1):
+            sim.drawn.append((sim.ptm1, p.kind, 0x80 | k))
+        p.setL(L_STATE, 0x80)
+        p.setL(L_BSTAT, 0)
+        return
+    a = (down ^ 0x0F) & p.L(L_BSTAT)         # up, and struck
+    p.setL(L_STATE, p.L(L_STATE) | a)
+    for k in range(3, -1, -1):
+        if a & 1:
+            sim.drawn.append((sim.ptm1, p.kind, k))
+        a >>= 1
+
+
+def dropinit(sim, p):
+    a = p.L(L_STATE) & 0x0F
+    for k in range(3, -1, -1):
+        if a & 1:
+            sim.drawn.append((sim.ptm1, p.kind, k))
+        a >>= 1
+    p.setL(L_STATE, 0)
+    p.setL(L_BSTAT, 0)
+
+
+def drophit(sim, p, b):
+    """DROP1HIT / DROP2HIT (RUN.s:854).  ⭐ WHICH of the four did the ball
+    strike?  The offset along the bank, against a four-entry threshold table -
+    and a miss returns carry CLEAR, so the ball passes between the targets."""
+    if p.kind == 'DROP1':
+        a = (b.x2 - p.leftx) & 0xFF
+    else:
+        a = (b.y2 - p.L(L_VERT)) & 0xFF
+    tbl = _tbl('DHITTBL')
+    bit = 1
+    for k in range(3, -1, -1):
+        if a >= tbl[k]:
+            p.setL(L_BSTAT, p.L(L_BSTAT) | bit)
+            did = sim.world.pbounce(b, sim.tta)
+            return putsp(sim, p, did)
+        bit <<= 1
+    return False
+
+
+# ── the stacking catcher (RUN.s:917) ──────────────────────────────────────
+def catch1init(sim, p):
+    p.setL(L_STATE, 0)
+    p.setL(L_BSTAT, 0)
+
+
+def catch1hit(sim, p, b):
+    """CATCH1HIT - ⭐ IT HOLDS THREE BALLS AND THEN GIVES THEM ALL BACK.
+
+    L[16] counts what is stacked; `BSTAT = $20` is "this ball is held", and the
+    ball's own MOVEBALL stops stepping it.  ⚠ CATCHSTOP is where each of the
+    three comes to rest, so the stack is three fixed positions and not a queue.
+    """
+    bmove = sim.world.bmove
+    if (bmove & P.BM_HORIZ) or not (bmove & P.BM_POS):
+        return _catch1side(sim, p, b)
+    if ((p.rec[p.lb - 7] + 3) & 0xFF) != b.x1:
+        return _catch1side(sim, p, b)
+
+    yt = p.L(L_VERT)
+    t = p.L(L_BSTAT)
+    if not (t & 0x80):
+        if b.bstat & 0x40:
+            return True
+        p.setL(L_BSTAT, t | 0x80)
+        b.bdx = 0
+        b.bstat = 0x20
+        putsp2(sim, p, False)
+        return False
+
+    stop = _tbl('CATCHSTOP')
+    if not (t & 0x40):                       # `ROL / BMI CTCH1HIT6`
+        if not (b.bstat & 0x20):
+            return True
+        k = t & 0x7F
+        if k >= len(stop):
+            return True
+        if ((yt + stop[k] + 1) & 0xFF) != b.y2:
+            return False
+        t += 1
+        k = t & 0x7F
+        b.bstat = 0x40 if k != 3 else 0
+        if k == 3:
+            t = 0xC2
+        p.setL(L_BSTAT, t)
+        return True
+
+    # CTCH1HIT6: giving them back
+    if ((yt + 16) & 0xFF) != b.y2:
+        return False
+    if not (b.bstat & 0x40):
+        return False
+    t = (t - 1) & 0xFF
+    if t == 0xC0:
+        p.setL(L_STATE, 0)
+        t = 0
+    p.setL(L_BSTAT, t)
+    b.bstat = 0
+    return False
+
+
+def _catch1side(sim, p, b):
+    """CTCH1HIT3 - the catcher's walls.  ⚠ A TTA of 0 - a flat floor - is not
+    bounced off at all: BDX is nudged one pixel and the ball is reported
+    blocked, which is what walks it off the lip instead of sitting on it."""
+    if sim.tta != 0:
+        return sim.world.pbounce(b, sim.tta)
+    b.bdx = 1
+    return True
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ⭐ THE TABLE THE PORT REPLACES `DA <RUN> / DA <INIT> / DA <HIT>` WITH.  A part
+# type id at L[10] indexes it; the names are the 6502's, so a reader can follow
+# a claim in RUN.s straight to the routine that answers it.
+PROCS = {
+    'POLY':      (null_run, null_init, pbounce),
+    'BALL':      (moveball, initball, nullbounce),
+    'BMP':       (bumprun, bumpinit, bumphit),
+    'KICK':      (bumprun, bumpinit, kickhit),
+    'KNOCK1':    (knockrun, bumpinit, knock1hit),
+    'KNOCK2':    (knockrun, bumpinit, knock2hit),
+    'ROLL':      (flashrun, bumpinit, rollhit),
+    'TARG':      (flashrun, bumpinit, flashhit),
+    'LANE':      (null_run, null_init, pbounce),
+    'GATE':      (null_run, null_init, gatehit),
+    'GATE2':     (null_run, null_init, gate2hit),
+    'GATE3':     (null_run, null_init, gate3hit),
+    'SPIN':      (spinrun, spininit, spinhit),
+    'CATCH2':    (catch2run, bumpinit, catch2hit),
+    'MAG':       (null_run, null_init, maghit),
+    # -- step 3b-ii: the parts the PLAYER drives, and the two with state --
+    'LAUNCH':    (launchrun, initb, launchhit),
+    'LFLIP':     (fliprun, flipinit, fliphit),
+    'RFLIP':     (fliprun, flipinit, fliphit),
+    'LFLIP2':    (fliprun, flipinit, fliphit),
+    'RFLIP2':    (fliprun, flipinit, fliphit),
+    'DROP1':     (droprun, dropinit, drophit),
+    'DROP2':     (droprun, dropinit, drophit),
+    'CATCH1':    (null_run, catch1init, catch1hit),
+}
+
+# ⛔ THE ID IS THE INDEX INTO THIS TUPLE AND IT IS APPEND-ONLY.  A saved table
+# stores the id, so inserting a type renumbers every table ever written - the
+# same rule mktbox.py's ICON_NAMES carries for the desktop's art.
+TYPES = ('POLY', 'BALL', 'BMP', 'KICK', 'KNOCK1', 'KNOCK2', 'ROLL', 'TARG',
+         'LANE', 'GATE', 'GATE2', 'GATE3', 'SPIN', 'CATCH2', 'MAG',
+         'LAUNCH', 'LFLIP', 'RFLIP', 'LFLIP2', 'RFLIP2', 'DROP1', 'DROP2',
+         'CATCH1')
+TYPEID = dict((n, i) for i, n in enumerate(TYPES))
+
+# The 6502 proc names each type answers to, so `pcsparts.Part.run`/`.hit` can be
+# mapped onto it and the 43 templates keyed automatically.
+OF_PROCS = {
+    ('NULL', 'NULL', 'PBOUNCE'): 'LANE',
+    ('NULL', 'NULL', 'GATEHIT'): 'GATE',
+    ('NULL', 'NULL', 'GATE2HIT'): 'GATE2',
+    ('NULL', 'NULL', 'GATE3HIT'): 'GATE3',
+    ('NULL', 'NULL', 'MAGHIT'): 'MAG',
+    ('MOVEBALL', 'INITBALL', 'NULLBOUNCE'): 'BALL',
+    ('BUMPRUN', 'BUMPINIT', 'BUMPHIT'): 'BMP',
+    ('BUMPRUN', 'BUMPINIT', 'KICKHIT'): 'KICK',
+    ('KNOCKRUN', 'BUMPINIT', 'KNOCK1HIT'): 'KNOCK1',
+    ('KNOCKRUN', 'BUMPINIT', 'KNOCK2HIT'): 'KNOCK2',
+    ('FLASHRUN', 'BUMPINIT', 'ROLLHIT'): 'ROLL',
+    ('FLASHRUN', 'BUMPINIT', 'FLASHHIT'): 'TARG',
+    ('SPINRUN', 'SPININIT', 'SPINHIT'): 'SPIN',
+    ('CATCH2RUN', 'BUMPINIT', 'CATCH2HIT'): 'CATCH2',
+    ('LAUNCHRUN', 'INITB', 'LAUNCHHIT'): 'LAUNCH',
+    ('LFLIPRUN', 'FLIPINIT', 'LFLIPHIT'): 'LFLIP',
+    ('RFLIPRUN', 'FLIPINIT', 'RFLIPHIT'): 'RFLIP',
+    ('LFLIP2RUN', 'FLIP2INIT', 'LFLIP2HIT'): 'LFLIP2',
+    ('RFLIP2RUN', 'FLIP2INIT', 'RFLIP2HIT'): 'RFLIP2',
+    ('DROP1RUN', 'DROP1INIT', 'DROP1HIT'): 'DROP1',
+    ('DROP2RUN', 'DROP2INIT', 'DROP2HIT'): 'DROP2',
+    ('NULL', 'CATCH1INIT', 'CATCH1HIT'): 'CATCH1',
+}
+
+
+def kind_of(part):
+    """The port's type id for one of pcsparts.py's 43 templates.
+
+    ⭐ Keyed off the 6502 PROC NAMES, so a template whose behaviour the port has
+    not implemented answers None rather than being silently mis-keyed."""
+    return OF_PROCS.get((part.run, part.init, part.hit))
 
 
 if __name__ == '__main__':
