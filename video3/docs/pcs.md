@@ -339,6 +339,14 @@ the answer.
   about the card or the emulator's model of it. The bench's streams reposition at every row
   boundary, so they do not depend on the answer — but `graphics.md` §19 should settle it.
 - ⚠ **`TIMETBL` re-derivation is an unmeasured number** until the program runs at frame rate.
-- ⚠ **Steps 4–6 are not written**: the editor, the magnifier, the wiring kit's UI, load and
-  save, and `desk` integration. `RUN2.s`'s four-player game loop, the bonus tally and
-  multiball are step 3c.
+- ⚠⚠ **The editor's database operations are modelled and gated but the 6809 side does not
+  yet agree.** `pcsedit.py` and its self-tests are the specification and are green; the
+  bench's `m6` leg runs the same twelve-edit session on the machine and compares what each
+  step came to, every byte of the object area and the whole span database — and it is
+  **asked for by name** (`RUNS=m6`) until it passes, so the default bench stays honest.
+  What is established by measurement: the record each operation builds is byte-identical to
+  the model's, and the object area comes back with the original object count, so something
+  between the rebuild and the commit is undoing the session.
+- ⚠ **Not written**: the editor's UI (tools, bin, drag, magnifier, World panel), the wiring
+  kit's UI, load and save, and `desk` integration. `RUN2.s`'s four-player game loop, the
+  bonus tally and multiball are step 3c.
