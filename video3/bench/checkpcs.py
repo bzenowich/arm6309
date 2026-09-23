@@ -26,6 +26,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import mkpcs                                                   # noqa: E402
+import pcsobj                                                  # noqa: E402
 import pcsphys                                                 # noqa: E402
 import pcspak as K                                             # noqa: E402
 import pcspal                                                  # noqa: E402
@@ -63,30 +64,50 @@ def expected():
     return pak, fb, w, h
 
 
-def trajectory(vram, pak, n=600, row=490):
-    """⭐⭐ THE BALL, FRAME FOR FRAME, AGAINST A TRANSLITERATION OF RUN.s.
+STRIDE_ROWS = 4                 # x, y, bdx, bdy - the stream's record
+PLAYR, PLAYS, PLAYT = 490, 494, 495
 
-    This is the claim the whole port is built on.  Because the world stayed in
-    the Atari's own units, the simulation is exact integer arithmetic - so the
-    model can be run over the SAME table from the SAME seven bytes and required
-    to produce the same (x, y, bdx, bdy) on every one of 600 frames.
+
+def _stream(vram, row, n):
+    """`n` bytes of a VRAM stream, reassembled across its rows.
+
+    ⛔ The pointer's auto-increment does not carry out of a VRAM row, so pcs
+    repositions every 1,024 bytes and the stream has to be read the same way.
+    """
+    out = bytearray()
+    r = row
+    while len(out) < n:
+        out += vram[r * STRIDE:r * STRIDE + 1024]
+        r += 1
+    return bytes(out[:n])
+
+
+def trajectory(vram, pak, n=600):
+    """⭐⭐ THE WHOLE SIMULATOR, FRAME FOR FRAME, AGAINST A TRANSLITERATION.
+
+    This is the claim the port is built on.  Because the world stayed in the
+    Atari's own units, everything here is exact integer arithmetic - so the
+    model runs the SAME table through the SAME PLAY loop and is required to
+    produce the same ball, the same part states, the same score and the same
+    sound state.
 
     Not "the ball looks right".  A reflection off by one unit, an elasticity
     table entered at the wrong offset, a gravity mask applied on the wrong
-    tick, a slope nibble read from the wrong end of a record: none of them
-    survives six hundred frames of this.
+    tick, a slope nibble read from the wrong end of a record, a bumper that
+    flashes for two frames instead of one, a knocker whose direction bit is
+    read the wrong way up: none of them survives six hundred frames of this.
     """
-    w = pcsphys.World(pak, wset=mkpcs.WSET, width=mkpcs.TW)
-    b = pcsphys.Ball(x=mkpcs.BALL[0], y=mkpcs.BALL[1],
-                     bdx=mkpcs.BALL[2], bdy=mkpcs.BALL[3])
-    got = bytes(x for r in range(0, (n * 4 + 1023) // 1024 + 1)
-                for x in vram[(row + r) * STRIDE:(row + r) * STRIDE + 1024])
+    objs = mkpcs.test_table()
+    sim = pcsobj.Sim(mkpcs.serialise(objs), pak, wset=mkpcs.WSET,
+                     width=mkpcs.TW)
+    ball = sim.parts[sim.ballobj]
+    got = _stream(vram, PLAYR, n * 4)
 
-    hits = 0
     for f in range(1, n + 1):
-        hits += pcsphys.moveball(w, b, f)
+        sim.step()
         i = (f - 1) * 4
-        m = (b.x1, b.y1, b.bdx, b.bdy)
+        m = (ball.L(pcsobj.L_X1), ball.L(pcsobj.L_Y1),
+             ball.L(pcsobj.L_BDX), ball.L(pcsobj.L_BDY))
         g = tuple(got[i:i + 4])
         if g != m:
             print('FAIL  the ball diverges at frame %d of %d' % (f, n))
@@ -100,12 +121,51 @@ def trajectory(vram, pak, n=600, row=490):
                       'bdx=%4d bdy=%4d)'
                       % (p[0], p[1], pcsphys._sb(p[2]), pcsphys._sb(p[3])))
             return False
-    print('    the ball agrees with RUN.s for all %d frames, %d hits' % (n, hits))
-    # ⛔ A ball that never moved would agree trivially.  It has to have BOUNCED.
+    hits = len(sim.world.hits)
+    struck = sorted(set(h[1] for h in sim.world.hits))
+    print('    the ball agrees with RUN.s for all %d frames, %d hits on %s'
+          % (n, hits, ', '.join(str(o) for o in struck)))
+
+    # ⛔ A ball that never moved would agree trivially, and one that only ever
+    # met the backdrop would prove nothing about the object system.
     if hits < 2:
-        print('FAIL  the ball hit something only %d times - the run proves nothing'
-              % hits)
+        print('FAIL  the ball hit something only %d times - the run proves '
+              'nothing' % hits)
         return False
+    parts_struck = [o for o in struck if o in sim.parts]
+    if len(parts_struck) < 5:
+        print('FAIL  only %d LIBRARY PARTS were struck - the part procs are '
+              'what this leg is for' % len(parts_struck))
+        return False
+
+    # -- every part's state byte, at the end of the run -------------------
+    want = bytes(sim.parts[o].L(pcsobj.L_STATE) for o in sim.rcn)
+    gots = _stream(vram, PLAYS, len(want))
+    if gots != want:
+        print('FAIL  the part states differ')
+        print('      drew %s' % ' '.join('%02X' % b for b in gots))
+        print('      want %s' % ' '.join('%02X' % b for b in want))
+        print('      (%s)' % ' '.join(sim.parts[o].kind for o in sim.rcn))
+        return False
+
+    # -- the score, the sound, and the shape of the run -------------------
+    tail = _stream(vram, PLAYT, 23)
+    wtail = (bytes(sim.score1) + bytes(sim.bonus)
+             + bytes((sim.dscore, sim.series, sim.slice, sim.runlen,
+                      sim.lasty)))
+    if tail != wtail:
+        print('FAIL  the score, the sound or the run chain differs')
+        for nm, a, b in (('score ', tail[:9], wtail[:9]),
+                         ('bonus ', tail[9:18], wtail[9:18]),
+                         ('tail  ', tail[18:], wtail[18:])):
+            mark = '  ' if a == b else '<<'
+            print('      %s drew %s  want %s %s'
+                  % (nm, ' '.join('%d' % v for v in a),
+                     ' '.join('%d' % v for v in b), mark))
+        return False
+    print('    %d parts in the run chain, the drain line is %d, the score is '
+          '%s' % (sim.runlen, sim.lasty,
+                  ''.join(str(d) for d in sim.score1).lstrip('0') or '0'))
     return True
 
 

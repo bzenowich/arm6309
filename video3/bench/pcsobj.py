@@ -61,10 +61,31 @@ L_BYACC = 22
 
 LREC = 23               # bytes of L a library object carries
 
-# SCORETBL / SOUNDTBL (RUN.s:1345).
-SCORETBL = (0, 1, 2, 3, 4, 5, 0x0A, 0x0F, 0x14, 0x19, 0x1E, 0x28, 0x32,
-            0x4B, 0x64, 0x96)
-SOUNDTBL = (0x00, 0x04, 0x0C, 0x14, 0x24, 0x38, 0x4C)
+# SCORETBL / SOUNDTBL (RUN.s:1345), read out of the source rather than typed -
+# ⚠ the same bytes mkpcs.py emits for the 6809, from the same place.
+_TBL = {}
+
+
+def _tbl(name):
+    if name not in _TBL:
+        import pcsasm as A
+        _TBL[name] = A.block('RUN.s', name)
+    return _TBL[name]
+
+
+class _Lazy(object):
+    def __init__(self, name):
+        self._n = name
+
+    def __getitem__(self, i):
+        return _tbl(self._n)[i]
+
+    def __len__(self):
+        return len(_tbl(self._n))
+
+
+SCORETBL = _Lazy('SCORETBL')
+SOUNDTBL = _Lazy('SOUNDTBL')
 
 
 def _sb(v):

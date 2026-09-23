@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pcsasm as A                                             # noqa: E402
 import pcsparts as P                                           # noqa: E402
+import pcsobj as O                                            # noqa: E402
 import pcspal                                                  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -110,7 +111,7 @@ def physics_tables():
     for name in ('C05625', 'C1125', 'C225', 'C45', 'C675', 'C7875', 'C84375'):
         t[name] = A.block('RUN.s', name)
     for name in ('GRAVTBL', 'TIMETBL', 'KICKTBL', 'ELASTLO', 'ELASTHI',
-                 'SCORETBL', 'BONUSTBL', 'FTTA', 'FLPVCTR',
+                 'SCORETBL', 'SOUNDTBL', 'BONUSTBL', 'FTTA', 'FLPVCTR',
                  'FXDVERT', 'FXHEIGHT', 'FXLEN', 'FDDVERT', 'FHEIGHT',
                  'DHITTBL', 'EFFECTS', 'NOTES'):
         t[name] = A.block('RUN.s', name)
@@ -454,12 +455,12 @@ def emit(path):
         w('* %-8s x %3d..%3d  y %3d..%3d' % (k, x, x + ww, y, y + hh))
     w('')
     w('* ══════════════════ THE BALL THE BENCH RUNS ═══════════════════════')
-    w("* ⭐ Where mode 4 serves it, and how fast.  Defined here so checkpcs.py")
-    w('* starts its model from exactly the same seven bytes.')
+    w("* ⭐ Where the ball PART is placed, which is all the bench chooses:")
+    w('* INITBALL (RUN.s:626) puts the ball on its own template\'s top-left')
+    w('* vertex with BDX 0 and BDY $FF.  Defined here so checkpcs.py starts its')
+    w('* model from exactly the same bytes.')
     w('PC.BallX            equ       %d' % BALL[0])
     w('PC.BallY            equ       %d' % BALL[1])
-    w('PC.BallDX           equ       %d' % BALL[2])
-    w('PC.BallDY           equ       %d' % (BALL[3] & 0xFF))
     w('PC.WGrav            equ       %d         the World sliders' % WSET[0])
     w('PC.WTime            equ       %d' % WSET[1])
     w('PC.WKick            equ       %d' % WSET[2])
@@ -474,6 +475,36 @@ def emit(path):
     w('PC.MaxEdge          equ       8         PPAK.s:568 - 4 spans a scanline')
     w('PC.SpanHead         equ       32        bytes of span-DB headroom, or roll back')
     w('PC.Gates            equ       6         LOGIC[24], 6 x 4')
+    w('')
+    w('* ══════════════════ THE LIBRARY TAIL ═════════════════════════════')
+    w('* ⭐ L, the sixteen bytes after the two vertex arrays (GETINFO,')
+    w('* PPAK.s:209).  ⚠ THE OFFSETS ARE THE ORIGINAL\'S and stay so: every')
+    w('* part proc indexes them with a literal, and the ball\'s record is')
+    w('* L[0..22] entire.')
+    for nm, off in (('Frame', O.L_FRAME), ('Vert', O.L_VERT), ('PX', O.L_PX),
+                    ('Hgt', O.L_HEIGHT), ('Wid', O.L_WIDTH),
+                    ('Strid', O.L_STRIDE), ('State', O.L_STATE),
+                    ('Score', O.L_SCORE), ('Type', O.L_TYPE),
+                    ('BStat', O.L_BSTAT), ('X1', O.L_X1), ('Y1', O.L_Y1),
+                    ('BDX', O.L_BDX), ('BDY', O.L_BDY),
+                    ('BXAcc', O.L_BXACC), ('BYAcc', O.L_BYACC)):
+        w('LB.%-16s equ       %d' % (nm, off))
+    w('LB.Size             equ       %d' % O.LREC)
+    w('')
+    w('* ⛔ THE PART TYPE, WHERE THE 6502 HAD THREE ADDRESSES.  A saved table')
+    w('* cannot carry 6502 vectors across a change of machine, so L[10] is a')
+    w('* type id and the vectors are rebuilt on load (pcs.md 5b).')
+    w('* ⛔ THE LIST IS APPEND-ONLY: inserting a type renumbers every table ever')
+    w('* written, which is mktbox.py\'s ICON_NAMES rule for the same reason.')
+    for i, nm in enumerate(O.TYPES):
+        w('PT.%-16s equ       %d' % (nm.capitalize(), i))
+    w('PT.Count            equ       %d' % len(O.TYPES))
+    w('')
+    w('* ⚠ SCORETBL, SOUNDTBL, EFFECTS and NOTES ARE EMITTED BY physics_tables()')
+    w('* BELOW, as PCSCORETBL, PCSOUNDTBL, PCEFFECTS and PCNOTES.  They were')
+    w('* briefly emitted here as well, and lwasm - which is case-insensitive -')
+    w('* caught the collision: two copies of a generated table is the same')
+    w('* defect as a constant agreed by number rather than by symbol.')
     w('')
     w('* Object kinds (PPAK.s), unchanged.')
     w('PC.Poly             equ       1')
@@ -603,7 +634,7 @@ def emit(path):
     w('*   ELASTLO/HI  eight ENTRY POINTS into the cosine tables, which is how')
     w('*               one curve gives eight restitutions')
     for name in ('GRAVTBL', 'TIMETBL', 'KICKTBL', 'ELASTLO', 'ELASTHI',
-                 'SCORETBL', 'BONUSTBL', 'DXCODESA', 'DXCODESB',
+                 'SCORETBL', 'SOUNDTBL', 'BONUSTBL', 'DXCODESA', 'DXCODESB',
                  'FTTA', 'FLPVCTR', 'FXDVERT', 'FXHEIGHT', 'FXLEN',
                  'FDDVERT', 'FHEIGHT', 'DHITTBL', 'EFFECTS', 'NOTES'):
         w('')
