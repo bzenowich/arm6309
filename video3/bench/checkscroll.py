@@ -27,9 +27,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "video3" / "bench"))
 import mkscroll as S                                        # noqa: E402
 
-# the camera's path, and it has to agree with scroll.asm's PathTab
-PATH = [(2, 0, 420), (2, 2, 200), (0, 2, 200), (-2, 2, 200),
-        (-2, 0, 420), (-2, -2, 200), (0, -2, 200), (2, -2, 200)]
+# ⭐ The camera's path, in 8.8 PIXELS A FRAME, and it has to agree with
+# scroll.asm's PathTab exactly - including the 362 that makes a diagonal leg
+# the same SPEED as a cardinal one (2/sqrt(2)) rather than 41 % faster.
+PATH = [(512, 0, 420), (362, 362, 200), (0, 512, 200), (-362, 362, 200),
+        (-512, 0, 420), (-362, -362, 200), (0, -512, 200), (362, -362, 200)]
 WPX, HPX = S.ZWLDW * S.ZTILE, S.ZWLDH * S.ZTILE
 
 
@@ -39,14 +41,21 @@ def walk(frames):
     hsl, vlo = 0, S.ZTILE * 20
     col = [S.ZTSLOT - 1 + c for c in range(S.ZBCOL)]         # ring slot of strip c
     pidx, pcnt = len(PATH) - 1, 0
+    cax = cay = 0                                            # the 8.8 fractions
     for _ in range(frames):
         if pcnt == 0:
             pidx = (pidx + 1) % len(PATH)
             pcnt = PATH[pidx][2]
         pcnt -= 1
         dx, dy, _n = PATH[pidx]
-        wx = (wx + dx) % WPX
-        wy = (wy + dy) % HPX
+        # ⚠ exactly what the 6809 does: add, take the WHOLE part signed, keep
+        # the low byte as the new fraction
+        cax += dx
+        whole, cax = cax >> 8, cax & 0xFF
+        wx = (wx + whole) % WPX
+        cay += dy
+        whole, cay = cay >> 8, cay & 0xFF
+        wy = (wy + whole) % HPX
         # --- the horizontal slot, and the rotation it asks for -------------
         nh = wx >> 5
         d = (nh - hsl) & S.ZWLDW - 1

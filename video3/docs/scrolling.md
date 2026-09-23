@@ -265,11 +265,61 @@ marker (progress `$F7`) is 10 ms before the first "missing" frame. ⛔ A bench
 that measures a scene must bound the window with something the SCENE emits, not
 with the length of the recording.
 
+### 6.5 ⭐⭐ Most of them are standing still, and that is the whole budget
+
+**2026-09-23.** The creatures in the top half of the screen tore frequently —
+the pass was 7.3 ms and the raster reaches screen row 150 at 6.2 ms. The fix
+was not to draw faster:
+
+> *not every on-screen creature needs to be moving in every frame. Limit it to
+> just 1–2 moving creatures trying to reach their goal positions, with the
+> others resting. Once one reaches its goal it can rest, and that frees up
+> another to start on a path toward its goal.*
+
+⭐ **And a resting actor costs nothing at all.** The ring does not move when
+the camera scrolls — `HSCROLL` and `VSCROLL` change what the raster *reads*,
+not what is written — so an actor that does not move **stays drawn, for free,
+for as long as it likes**. ⛔ It also cannot tear, because nothing rewrites it.
+Only the movers cost the three copies, and `Token` keeps at most `ZMOVE` = 2 of
+them walking.
+
+| | |
+|---|---|
+| **⛔ only pairs with an ACTIVE member count** | skipping a resting actor leaves its pixels in the world while the others take their saves, so a mover's save captures it and the ghost returns when that mover leaves. The overlap test wakes a resting actor that an *active* one is standing on — ⚠ but testing **every** pair cost the whole optimisation, because some pair of six actors in a 640 × 480 view is nearly always within 40 pixels. Two resting creatures on each other are harmless: neither is redrawn, so neither takes a save |
+| **⛔ and `Sort` and `Actv` are not in the pass** | they are pure arithmetic with nothing to draw, and at its head they were **2.9 ms of 6809 in front of 4.4 ms of copies**. Moved to the end of `Logic`: **7.3 ms → 3.5 ms median, 4.45 p90**. §11's lesson, paid for a second time |
+| **⭐ a token needs the creature to be BELOW the beam line** | the raster reaches screen row *R* at 1430 + 31.78·*R* µs, so a 4.45 ms pass is ahead of everything below row 95. `ZTOPB` = 112 is the line: a creature may only hold a movement token below it, and one that drifts above stops — which is indistinguishable from the resting it does anyway. ⛔ **This is `zelda`'s top wall said a different way**: there the room's geometry kept actors out of the dangerous rows, here the movement budget does |
+| **⭐ the budget counts VISIBLE movers only** | an actor off screen costs nothing to move — `Actors` skips it entirely, since save and draw are both gated on visibility — so one that walks out of view keeps walking for free and never denies a slot to a creature the player can see. ⚠ That also settles what happens when a mover leaves mid-journey: **nothing**. It is not interrupted and nobody is woken in its place, which is what stops a resting creature jerking into motion the instant another scrolls off the edge. Walking back into view over budget, it stops where it is — it has just arrived, so standing still is what that looks like |
+
+**The result**, measured over 1,074 scene frames with the octorok's red (the one
+body colour no terrain tile shares):
+
+| | before | after |
+|---|---|---|
+| torn sprites | **4.31 %**, all in screen rows 60–119 | ⭐ **0.12 %** — one in 802, in the top 60 rows |
+| the hero | 0 of 1,077 missing | 1 of 1,074 |
+| the actor pass | 7.3 ms median | **3.5 ms**, 4.45 at p90 |
+
+⚠ **The moblin cannot be measured this way**: its body green is `$30`, and so
+is the forest's lit canopy. A census on a colour the terrain shares reports
+90 % torn and means nothing.
+
+### 6.6 ⚠ A diagonal is 1/√2 of an axis
+
+A camera moving two pixels in *each* axis crosses the ground at 2.83 — **41 %
+faster than a cardinal leg**. `PathTab` is in **8.8 pixels a frame** and a
+diagonal leg is **362** rather than 512, which is 2/√2; the camera carries a
+fraction (`cax`, `cay`) so the whole part can be added each frame and the rest
+kept. The creatures do the same with a one-byte 0.8 fraction an axis: `STEP1`
+is `$FF` and `STEPD` is `$B5`.
+
+⚠ **The model has to do it identically** or the byte-exact gate is measuring
+its own arithmetic — `checkscroll.py`'s `walk()` carries the same two
+accumulators and takes the whole part the same way.
+
 ## 7. Open items
 
 | | |
 |---|---|
 | **the load** | 147,456 bytes through `VDATA` is ~5 s of loading screen. `zelda`'s 491,520 was 17 s; this is the same rate, not a better one |
-| **the creatures' draw order** | they are drawn after the hero in ascending screen row, so the topmost is written at `2N+2` copies ≈ 6.3 ms and the beam is at row 154 — a creature above that row can still be caught mid-blit. `optimizations.md` §11's arithmetic, with 485 µs copies instead of 186 |
 | **the camera** | a `PathTab` the program walks, not an input device. `run-ps2script.sh`'s machinery is what would drive it from a real one |
 | **a horizontal blit that straddles column 1023** | the copy engine's address is linear, so a 32-wide rectangle at column 1008 wraps into the next ring row. Nothing does that yet; an actor at the right-hand edge of the torus will |
