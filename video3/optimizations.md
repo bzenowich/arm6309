@@ -48,7 +48,8 @@ Ordered by measured value against measured cost, not by how interesting it is.
 | 6 | **Retire-only `WADV` b2** (§2) | ~5 µs a character and the mode stops being a hazard. ⚠ `v3ptr` may refuse |
 | 7 | ⭐ **`v3machine_tb`** — **BUILT 2026-09-19** | `machine3.v` puts a real 6809E, the motherboard and the card together and runs a ROM. **It found a card defect on its first run** (the palette commit firing twice outside vertical blanking), which is the same return the other card's machine bench gave. 48 claims, ~40 s, now in `check:video` |
 | 8 | **A pixel gate for the staged copy path** (§4) | `CpOne` (overlapping copies) has no check that compares pixels, and waits moved inside it |
-| 9 | more hardware sprites (§6), a programmable key (§5) | ⛔ both blocked by pins and board space, and §7.1 removed the reason to want the first |
+| 9 | ⭐ **Run the blits first and the game afterwards** (§11) — **BUILT 2026-09-22** | `zelda`'s actor tear, **25 % of actor-frames → 2.5 %**, for a reordering of `Body` and a sort. ⛔ The ordering alone bought a third of it; the other two thirds was that the pass did not START at the blank |
+| 10 | more hardware sprites (§6), a programmable key (§5) | ⛔ both blocked by pins and board space, and §7.1 removed the reason to want the first |
 
 ---
 
@@ -501,3 +502,39 @@ table, and the score read **000000** for four runs. ⭐ What caught it was the
 **lamp gate**, which is the only claim in any of the three scenes that asks
 whether the scene *did* anything rather than whether the card drew what it
 was told. `bench/README.md` has that and the two smaller ones beside it.
+
+---
+
+## 11. ⭐ CLOSED 2026-09-22 — where a frame's CPU goes, and that it must not go FIRST
+
+**Asked and answered 2026-09-22, by `zelda`.** A scene whose actors are keyed
+blits with save-behind tears — an actor drawn in pieces, because the beam
+crossed its rows while the copy engine was still writing them. `zelda` with
+eight actors tore **~25 % of the actor-frames** and the tear was measured, not
+guessed: every component of a creature's unique body colour in 4,117 recorded
+frames, its pixel count against the two walk frames, the view edge excluded.
+
+⭐ **Three findings, in the order they were worth:**
+
+| | |
+|---|---|
+| **1. The pass must be ordered by screen row** | 15 copies is ~2.8 ms and the blank is 1,559 µs, so the pass **overhangs the top of the picture by ~19 rows** whatever else is done. An actor drawn in ascending screen-row order is drawn before the beam reaches it: a creature at sorted rank *k* finishes at ~186·(2+3(*k*+1)) µs and is safe if its row exceeds (that − 1560)/63.6. Sorted, the constraint is met by every actor below the overhang. **25 % → 8 %** |
+| **2. ⛔ AND THE PASS MUST *START* AT THE BLANK** | Ordering is worth nothing if the copies do not begin until the beam is already down the picture. `zelda`'s `Body` ran `Logic` — the walk, the camera, the wander rolls, the sort, several milliseconds of 6809 — **before** `Actors`. The tear was measured at picture rows 75..125, which is exactly where that put it, and no amount of ordering could reach it. ⭐ **Run the blits first and the game afterwards**: `Logic` computes the NEXT frame's positions, `Body` is `Frame → Actors → ScCall → Logic`, and `Loop` primes `Logic` once. One frame of latency, invisible. **8 % → 2.5 %** |
+| **3. What is left is the machine** | The residue is confined to the top ~60 scanlines — the overhang from finding 1 — and to actors the hero is standing in front of, which is occlusion and not a tear. To remove it you must remove copies, not reorder them |
+
+⛔ **And the correctness rule the first attempt broke.** Interleaving
+restore/save/draw per actor is only safe because the creatures' wander boxes
+are disjoint; the **hero** is not disjoint from anything. The first cut
+restored only the hero before saving what was under him — and the creatures
+were still drawn from last frame, so a hero standing on one saved it and
+painted it back when he moved off. **67 bytes of ghost**, caught by the wipe
+gate and by nothing else. ⚠ **Every restore comes first, then the rover's
+save, then the ordered restore/save/draw of the rest.** A save sees pristine
+world or it is wrong.
+
+⚠ **How to measure this, rather than reason about it.** Two frame-level
+statistics settle it without a trace: *display frames per distinct actor
+position* (1 means the pass fits in a frame; 2 means it does not), and *the
+partial rate by screen-row band* (clustered at the top = the overhang;
+clustered mid-screen = the pass is starting late). The second is what named
+finding 2.
