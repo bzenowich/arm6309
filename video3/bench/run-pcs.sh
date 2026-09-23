@@ -143,6 +143,7 @@ for r in $RUNS; do
     m2) run m2 2 ;;
     m5) run m5 5 ;;
     m6) run m6 6 ;;
+    m7) run m7 7 ;;
   esac
 done
 

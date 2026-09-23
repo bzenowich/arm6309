@@ -549,6 +549,56 @@ class _Tmpl(dict):
 TMPL = _Tmpl()
 
 
+def demo_table():
+    """⭐⭐ THE DEFAULT TABLE, and it had to be built rather than found.
+
+    ⛔ THE ORIGINAL'S DEFAULT TABLE IS NOT IN THE SOURCE RELEASE.  PCS shipped
+    one on its disk, but `$4B00` - LOGIC, WSET and the object table - is
+    assembled by NO source file: `GOATARI.s` is `ORG $4B45`, forty-one bytes
+    INTO `PBDATA`, so what lived there came off the 1983 boot sectors and the
+    MIT release does not carry it.  This is the port's own, and every part on
+    it is Budge's.
+
+    ⭐ It is also the first thing in this port that is a TABLE rather than a
+    test: `test_table()` is a geometry exercise chosen to reach every arm of
+    the scan converter, and it looks like one.
+    """
+    import pcspak as K
+    o = [
+        # 0  THE BACKDROP: a B-polygon whose RECORDS are the open playfield, so
+        #    the GAPS between them are wall (pcs.md 5a).  Chamfered top corners,
+        #    a chute up the right, and a drain between the flippers.
+        K.Obj(K.BPOLY, pcspal.PAINT0 + 13,
+              [136, 152, 152, 90, 70, 8, 8, 24],
+              [6, 24, 214, 232, 232, 214, 24, 6]),
+        # 1  the launcher chute's divider
+        K.Obj(K.POLY, pcspal.PAINT0 + 9, [134, 134, 128, 128], [30, 232, 232, 30]),
+        # 2, 3  the slingshots above the flippers
+        K.Obj(K.POLY, pcspal.PAINT0 + 3, [8, 44, 8], [184, 210, 210]),
+        K.Obj(K.POLY, pcspal.PAINT0 + 3, [120, 120, 84], [184, 210, 210]),
+        # 4, 5  the lane guides that feed them
+        K.Obj(K.POLY, pcspal.PAINT0 + 5, [20, 30, 34, 24], [128, 128, 176, 176]),
+        K.Obj(K.POLY, pcspal.PAINT0 + 5, [108, 118, 114, 104], [128, 128, 176, 176]),
+        # 6  ⭐ the centre post, and its FILLCOLOR is not 0 - an unfilled
+        #    polygon is invisible AND SOLID, which is a different part
+        K.Obj(K.POLY, pcspal.PAINT0 + 7, [74, 82, 82, 74], [178, 178, 186, 186]),
+    ]
+    for name, x, y in (
+            ('LAUNCHER', 140, 210), ('LEFTFLIPPER', 26, 206),
+            ('RIGHTFLIPPER', 82, 206),
+            ('BMP1', 36, 66), ('BMP2', 78, 58), ('BMP5', 56, 90),
+            ('ROLL1', 32, 28), ('ROLL2', 60, 24), ('ROLL3', 88, 28),
+            ('DROP1', 46, 122), ('TARG4', 88, 94), ('TARG5', 94, 94),
+            ('TARG6', 100, 94), ('SPIN', 60, 106), ('KICK1', 12, 158),
+            ('KICK2', 96, 186), ('LKICK', 10, 96), ('GATE1', 60, 44),
+            ('BALL', 140, 190)):
+        o.append(place(name, x, y))
+    for q in o:
+        if not q.align():
+            raise ValueError('%s is degenerate' % q)
+    return o
+
+
 def serialise(objs):
     """The objects as `pbdata` holds them: the count, the record lengths, then
     the records.  ⭐ pbdata[0] doubles as the count AND as the offset from
@@ -844,6 +894,17 @@ def emit(path):
     for i, (x, y, ww, hh) in enumerate(boxes):
         w('                    fcb       %-18s %2d %s'
           % ('%d,%d,%d,%d' % (x, y, ww, hh), i, parts[i].name))
+    w('')
+    w('* ══════════════════ THE DEFAULT TABLE ════════════════════════════')
+    w('* ⭐⭐ A TABLE RATHER THAN A TEST.  ⛔ The original shipped one on its')
+    w('* disk and the MIT source release does NOT carry it: $4B00 - LOGIC,')
+    w('* WSET and the object table - is assembled by no source file, and')
+    w("* GOATARI.s is ORG $4B45, forty-one bytes INTO PBDATA.  This is the")
+    w("* port's own, and every part on it is Budge's.")
+    dt = serialise(demo_table())
+    w('PCDemoN             equ       %d' % len(dt))
+    w('PCDemo              equ       *')
+    _fcb(o, dt)
     w('')
     w('* ══════════════════ THE EDIT SCRIPT ══════════════════════════════')
     w("* ⭐ A construction session, five bytes a step: the operation and four")
