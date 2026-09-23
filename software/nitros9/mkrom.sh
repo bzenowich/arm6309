@@ -76,6 +76,11 @@ cp video3/bench/pcbtable.pic video3/bench/pcbtable.pal "$DATADIR/" \
 rm -f "$DATADIR/zelda.pic"
 cp video3/bench/zelda.bnk video3/bench/zelda.art "$DATADIR/" \
   || { echo "FAIL  no zelda.bnk/.art - run video3/bench/mkzelda.py"; exit 1; }
+# ⭐ AND `scroll`'s, which is the whole of ITS world: 288 x 512 bytes of tile
+# bank, with the keyed actor shapes and their save-behind scratch inside it
+# (video3/bench/mkscroll.py).  The map is assembled into the module.
+cp video3/bench/scroll.bnk "$DATADIR/" \
+  || { echo "FAIL  no scroll.bnk - run video3/bench/mkscroll.py"; exit 1; }
 # and the overworld's data (software/demo/tools/mkgame.py), with its model for the checker
 python3 software/demo/tools/mkgame.py "$OUT/gamedata" > "$OUT/gamedata.log" || { cat "$OUT/gamedata.log"; echo "FAIL  mkgame.py"; exit 1; }
 for f in tiles world sprites frames; do cp "$OUT/gamedata/$f.bin" "$DATADIR/$f.bin"; done

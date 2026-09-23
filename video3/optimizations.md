@@ -50,6 +50,7 @@ Ordered by measured value against measured cost, not by how interesting it is.
 | 8 | **A pixel gate for the staged copy path** (§4) | `CpOne` (overlapping copies) has no check that compares pixels, and waits moved inside it |
 | 9 | ⭐ **Run the blits first and the game afterwards** (§11) — **BUILT 2026-09-22** | `zelda`'s actor tear, **25 % of actor-frames → 2.5 %**, for a reordering of `Body` and a sort. ⛔ The ordering alone bought a third of it; the other two thirds was that the pass did not START at the blank |
 | 9a | ⭐⭐ **A ROOM, so the actor count is data** (§11.1) — **BUILT 2026-09-22** | the last 2.5 % and the 17-second loading screen with it. A scene that lets the player roam cannot bound what it has to draw; one that freezes, slides and re-places can, and the budget becomes a derivation against the top wall's thickness |
+| 9b | ⭐⭐ **A CAMERA THAT ROAMS A WORLD OF ANY SIZE** (`docs/scrolling.md`) — **BUILT 2026-09-23** | the other answer to §11.1's problem. The ring is 1024 × 512 and the view 640 × 480, so 384 × 512 of VRAM is never on screen **and it moves with the camera**: the tile bank lives there and rotates through it one 32-column strip at a time. A 4096 × 2048 world for 147,456 bytes off the card, 0.57 ms a frame at two pixels, and the gate is all 524,288 bytes of the ring against the invariant |
 | 10 | more hardware sprites (§6), a programmable key (§5) | ⛔ both blocked by pins and board space, and §7.1 removed the reason to want the first |
 
 ---
