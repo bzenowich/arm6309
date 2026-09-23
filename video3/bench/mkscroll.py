@@ -74,6 +74,16 @@ ZWLDW, ZWLDH = 128, 64
 # last bank column is art rather than terrain, and it rotates with the rest.
 ZART0 = ZNTILE - 16           # the last column of the bank is the actors
 ZNART = 16
+# ⭐ AND THE SAVE-BEHIND SCRATCH IS BANK TILES TOO.  There is nowhere else: by
+# construction every ring byte is either on screen or about to be, and the bank
+# is the only thing that moves out of the way as the camera travels.  The
+# tileset uses 61 of the 144 slots and the art 16, so column 6 is free - and an
+# actor is exactly one 32 x 32 tile, which is what makes this fit at all.
+# ⚠ A strip that rotates carries its scratch with it, and `TileSrc` looks the
+# position up live, so a save and the restore that follows it a frame later
+# survive the strip moving in between.
+ZSCR0 = 96
+ZMXAC = 8
 
 KEY = 0x00                    # the copy engine's colour key is index 0
 
@@ -401,6 +411,9 @@ ZWYMSK              equ       ZWLDH-1
 
 ZART0               equ       {ZART0}      the bank's last column is the actors
 ZNART               equ       {ZNART}
+ZSCR0               equ       {ZSCR0}       ... and column 6 is their scratch
+ZMXAC               equ       {ZMXAC}
+ZNHERO              equ       {ZNHERO}        art tiles 0..7 are the hero's
 ZKEY                equ       ${KEY:02X}
 
 * ⭐ THE BANK STARTS AT SLOT ZBK0 and runs ZBCOL slots.  At wx = 0 the terrain
@@ -436,7 +449,8 @@ def main(cmds):
         ZRINGW=ZRINGW, ZRINGH=ZRINGH, ZVW=ZVW, ZVH=ZVH, ZTILE=ZTILE,
         ZSLOTS=ZSLOTS, ZVSLOT=ZVSLOT, ZTSLOT=ZTSLOT, ZBCOL=ZBCOL,
         ZBROW=ZBROW, ZNTILE=ZNTILE, ZVBAND=ZVBAND, ZWLDW=ZWLDW, ZWLDH=ZWLDH,
-        ZART0=ZART0, ZNART=ZNART, KEY=KEY, ZBK0=ZTSLOT - 1,
+        ZART0=ZART0, ZNART=ZNART, ZSCR0=ZSCR0, ZMXAC=ZMXAC, ZNHERO=8,
+        KEY=KEY, ZBK0=ZTSLOT - 1,
         MAP="\n".join("* row %d\n%s" % (y, fcb(m[y])) for y in range(ZWLDH))))
     print("ok    %s/scroll.bnk: %d terrain + %d art of %d slots, %d x %d bytes"
           % (d, len(tiles), len(art), ZNTILE, b.shape[1], b.shape[0]))

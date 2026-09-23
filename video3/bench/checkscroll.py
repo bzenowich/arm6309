@@ -113,7 +113,18 @@ def main(d, frames):
     want = expect(hsl, vlo, col, m, cells, bank)
     live = np.frombuffer((pathlib.Path(d) / "vram.bin").read_bytes(),
                          np.uint8).reshape(S.ZRINGH, S.ZRINGW)
-    bad = int((live != want).sum())
+    # ⛔ AND THE SCRATCH TILES ARE NOT PREDICTABLE.  Each actor's save-behind
+    # rides in a bank tile (there is nowhere else), so after the run those
+    # ZMXAC tiles hold whatever was last saved into them - terrain from
+    # wherever the actor happened to be standing.  The invariant has nothing
+    # to say about them and they are masked out here rather than asserted.
+    mask = np.ones_like(want, bool)
+    for a in range(S.ZMXAC):
+        t = S.ZSCR0 + a
+        x = col[t // S.ZBROW] * S.ZTILE
+        y = (t % S.ZBROW) * S.ZTILE
+        mask[y:y + S.ZTILE, x:x + S.ZTILE] = False
+    bad = int(((live != want) & mask).sum())
     ok = 0
     print("%s  the ring is what the invariant says: %d of %d bytes differ"
           % ("ok   " if bad == 0 else "FAIL ", bad, want.size))

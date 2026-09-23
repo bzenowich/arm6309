@@ -132,16 +132,17 @@ frames to spare.
 ⚠ **A scene that scrolls faster has to raise them**, or the camera walks into
 terrain that has not been drawn yet. The budget is the whole safety argument.
 
-⭐ **The strip moves in four pieces, not one.** 32 × 512 is 16,384 bytes and
-4.05 ms of engine in a single copy — a quarter of a frame in which no actor
-can be drawn, and a copy cannot be interrupted once started.
+⭐ **The strip moves in four pieces, all in ONE frame.** 32 × 512 cannot be a
+single copy — `CHEIGHT` is nine bits, so 512 rows do not fit in one rectangle —
+and it must not be spread across frames either: §6.2 has what that cost.
 
 ### 3.1 Why 32 × 32 and not 16 × 16
 
 Costed both. Per 32 pixels of travel, 32 × 32 needs 16 terrain blits plus one
-strip move: 32,768 engine bytes and 17 register protocols ≈ **9.1 ms**. 16 × 16
-halves the bytes and doubles the blit count, and the ~60 µs per-copy protocol
-then dominates: **12.0 ms** for the same distance. Bigger tiles win until the
+strip move: 32,768 engine bytes and 21 register protocols. 16 × 16 halves the
+bytes and doubles the blit count, and the per-copy protocol then dominates —
+⚠ and that protocol turned out to be **232 µs and not 60** (§6.4), which makes
+the case for the bigger tile stronger than the estimate did. Bigger tiles win until the
 bank gets too small to hold the art — 144 slots at 32 × 32, of which the
 tileset uses 61 and the actors 16.
 
@@ -211,11 +212,64 @@ engine defect at all.
 
 ---
 
-## 6. Open items
+## 6. The actors
+
+**Built 2026-09-23.** The hero holds the middle of the screen and creatures
+wander the world around him. Three things are different from `zelda`'s actors,
+and each follows from the camera being free.
+
+**6.1 Its position is in the world, not the ring.** The ring *is* the world
+modulo 1024 × 512, so the ring address is `(WX & 1023, WY & 511)` and the
+screen position is `(WX - wx)` and `(WY - wy)` modulo the world. An actor is
+drawn only while it is **wholly** on screen — half off the left edge would put
+it in the margin slot, which is the one the streamer is about to compose or
+hand to a bank strip.
+
+**6.2 ⛔ Its save-behind is a bank tile**, because there is nowhere else: every
+other byte of the ring is on screen or about to be, and the bank is the only
+thing that moves out of the way. The tileset uses 61 of the 144 slots and the
+art 16, so column 6 is free, and an actor is exactly one 32 × 32 tile.
+⭐ `TileSrc` looks the position up **live**, so a strip that rotates between a
+save and its restore carries the saved background with it.
+
+⛔ **And that is why the strip has to move in ONE frame.** It was four pieces
+spread over two; a save taken *between* two of them was written into the
+strip's old slot, and the pieces already copied did not carry it, so the
+restore a frame later read a tile that had been left behind. 509 bytes of
+residue at 300 frames, growing with travel. It is 4.3 ms in that one frame,
+once every 32 pixels — affordable where a wrong answer is not.
+
+**6.3 ⛔ Three phases, and here that is not negotiable.** `zelda` interleaves a
+creature's save with its draw, which shortens the window in which it is erased;
+it is allowed to because its wander boxes are **disjoint by construction**.
+Nothing is disjoint here. An interleaved save sees an actor that has already
+been drawn and paints it back as a ghost when its owner moves off — 1,752
+bytes of it, and the **art colours in the residue** are what named it.
+
+**6.4 ⭐ And the hero is drawn FIRST among the draws.** A copy here is **485 µs**
+and not the 313 the engine's 1024 bytes would suggest — the register protocol
+is the other half — so a seven-actor pass is **10.2 ms** and the beam reaches
+his row 224 at **1,430 + 224 × 31.78 = 8,549 µs**. Drawn in his sorted place he
+was erased under the raster in **84 %** of frames: on screen, a hero who
+flickers on and off in half-second blocks. Drawn first he is written at
+`(2N+1)` copies rather than `(2N+rank)`, and is **missing in 0 of 1,076 scene
+frames**. ⚠ The price is that a creature standing above him is drawn over him
+rather than behind; they are 32 pixels across in a 640 × 480 view and he is at
+its centre, so it is rare — and a hero who flickers is not a trade against
+anything.
+
+⚠ **THE MEASUREMENT THAT NEARLY WASN'T.** The first count said he was still
+missing 9 % of the time, and those 109 frames were **the recording continuing
+after the program had finished and wiped the actors off**. The scene's own end
+marker (progress `$F7`) is 10 ms before the first "missing" frame. ⛔ A bench
+that measures a scene must bound the window with something the SCENE emits, not
+with the length of the recording.
+
+## 7. Open items
 
 | | |
 |---|---|
-| **the actors** | the bank's last column is sixteen keyed 32 × 32 shapes and the unused tile slots are their save-behind scratch — **there is nowhere else for it**, since every other byte of the ring is on screen or about to be, and the bank is the only thing that moves out of the way. Nothing draws them yet |
 | **the load** | 147,456 bytes through `VDATA` is ~5 s of loading screen. `zelda`'s 491,520 was 17 s; this is the same rate, not a better one |
+| **the creatures' draw order** | they are drawn after the hero in ascending screen row, so the topmost is written at `2N+2` copies ≈ 6.3 ms and the beam is at row 154 — a creature above that row can still be caught mid-blit. `optimizations.md` §11's arithmetic, with 485 µs copies instead of 186 |
 | **the camera** | a `PathTab` the program walks, not an input device. `run-ps2script.sh`'s machinery is what would drive it from a real one |
 | **a horizontal blit that straddles column 1023** | the copy engine's address is linear, so a 32-wide rectangle at column 1008 wraps into the next ring row. Nothing does that yet; an actor at the right-hand edge of the torus will |
