@@ -217,6 +217,588 @@ def divide(dx, dy, positive):
     return coeff, fract, code
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# THE BALL
+#
+# ⭐⭐ ANGLES ARE 0..31 FOR A FULL TURN, AND THEY ARE NOT EVENLY SPACED.
+# `angle >> 3` is the quadrant and `angle & 7` picks one of eight sub-angles:
+#
+#     SUB = 0, 5.625, 11.25, 22.5, 45, 67.5, 78.75, 84.375 degrees
+#
+# so the steps crowd towards the axes and spread out at 45.  That is not an
+# approximation of an even scale - it is a deliberate one, and it is why a
+# ball rolling along a nearly flat surface has fine angular resolution while a
+# 45-degree wall has coarse.  Seven cosine tables cover both roles: CTBL1[s]
+# is cos(SUB[s]) and CTBL2[s] is cos(90 - SUB[s]), which is sin(SUB[s]).
+# ═══════════════════════════════════════════════════════════════════════
+
+_COS = {}
+
+
+def _cos(name):
+    if name not in _COS:
+        _COS[name] = A.block('RUN.s', name)
+    return _COS[name]
+
+
+# RUN.s:1160-1166's CTBL1LO/HI and CTBL2LO/HI, by name.  ⚠ Indexed from 1:
+# `LDA CTBL1LO-1,X` with X = angle & 7, which is never 0 here (s == 0 skips
+# the rotation entirely).
+CTBL1 = [None, 'C05625', 'C1125', 'C225', 'C45', 'C675', 'C7875', 'C84375']
+CTBL2 = [None, 'C84375', 'C7875', 'C675', 'C45', 'C225', 'C1125', 'C05625']
+
+
+def _sb(v):
+    """A byte as a signed value."""
+    v &= 0xFF
+    return v - 256 if v & 0x80 else v
+
+
+def _neg(v):
+    """`EOR #$FF / CLC / ADC #1` - two's complement in a byte."""
+    return ((v ^ 0xFF) + 1) & 0xFF
+
+
+def _quad(n, vx, vy):
+    """One of the three 90-degree folds (QUAD1/2/3, RUN.s:1199-1220).
+
+    QUAD1  (x, y) -> (-y,  x)
+    QUAD2  (x, y) -> (-x, -y)
+    QUAD3  (x, y) -> ( y, -x)
+    """
+    if n == 1:
+        return _neg(vy), vx
+    if n == 2:
+        return _neg(vx), _neg(vy)
+    if n == 3:
+        return vy, _neg(vx)
+    return vx, vy
+
+
+def rotate(angle, vx, vy):
+    """ROTATE (RUN.s:1117).  Rotate (vx, vy) by `angle`, both signed bytes in.
+
+    ⭐ `(x cos t - y sin t, x sin t + y cos t)` WITH NO MULTIPLY: fold the
+    vector into the first quadrant counting the folds, look the two products
+    up in a pair of cosine tables, and apply the remaining quarter-turns at the
+    end.  Two table reads and an add, for a rotation by any of 32 angles.
+    """
+    t = angle & 0xFF
+    xt = t >> 3
+
+    if _sb(vx) >= 0:
+        if _sb(vy) >= 0:
+            count = 0
+        else:
+            vx, vy = _quad(1, vx, vy)
+            count = 3
+    else:
+        if _sb(vy) >= 0:
+            vx, vy = _quad(3, vx, vy)
+            count = 1
+        else:
+            vx, vy = _quad(2, vx, vy)
+            count = 2
+
+    total = (count + xt) & 0xFF
+    if total >= 4:                       # `CMP #4 / BCC *+4 / SBC #4`
+        total -= 4
+
+    # ROT6: both components are table indices now, so 63 is the ceiling.
+    if vy >= 0x40:
+        vy = 0x3F
+    if vx >= 0x40:
+        vx = 0x3F
+
+    s = t & 7
+    if s:
+        t1 = _cos(CTBL1[s])
+        t2 = _cos(CTBL2[s])
+        # ⭐ nx = (t1[vx] - t2[vy]) >> 2, ARITHMETICALLY.  `SBC / PHP / ROR /
+        # PLP / ROR / EOR #$C0` shifts the 9-bit difference right twice,
+        # feeding the SAME carry into bit 7 both times and then inverting both
+        # top bits - which is a sign extension written as two rotates.
+        d = (t1[vx] - t2[vy]) & 0xFF
+        carry = 1 if t1[vx] >= t2[vy] else 0
+        a = ((carry << 7) | (d >> 1)) & 0xFF
+        a = ((carry << 7) | (a >> 1)) & 0xFF
+        nx = a ^ 0xC0
+
+        # ⭐ ny = (t2[vx] + t1[vy]) >> 2, clamped.  The first ROR takes the
+        # add's carry as bit 7; a negative result there means the sum
+        # overflowed nine bits, and $7F before the second shift is 63 after it.
+        e = t2[vx] + t1[vy]
+        a = ((e & 0x1FF) >> 1) & 0xFF
+        if a & 0x80:
+            a = 0x7F
+        ny = a >> 1
+        vx, vy = nx, ny
+
+    for _ in range(total):               # FIXQUAD: `total` more quarter-turns
+        vx, vy = _quad(1, vx, vy)
+    return vx & 0xFF, vy & 0xFF
+
+
+# ─────────────────────────────────────────────────────────────── the bounce ─
+def _world():
+    """The four World sliders' tables (INITWORLD, RUN.s:2169)."""
+    return (A.block('RUN.s', 'GRAVTBL'), A.block('RUN.s', 'TIMETBL'),
+            A.block('RUN.s', 'KICKTBL'),
+            A.block('RUN.s', 'ELASTLO'), A.block('RUN.s', 'ELASTHI'))
+
+
+_ELAST_OF = None
+
+
+def elast_table(wset3):
+    """The cosine table the elasticity slider selects.
+
+    ⭐ EIGHT RESTITUTIONS OUT OF ONE CURVE.  ELASTLO/ELASTHI are not values,
+    they are the ADDRESSES of cosine tables - so `ELAST[vn]` is
+    `vn * 4 * cos(a)` for a chosen a, and `>> 2` makes it `vn * cos(a)`.  The
+    slider picks which cosine.  ⚠ Positions 2 and 3 name the SAME table
+    (C675), so they behave identically; reproduced, not fixed.
+    """
+    global _ELAST_OF
+    if _ELAST_OF is None:
+        # ⚠ THE COSINE TABLES ARE `HEX` LABELS, NOT EQUATES, so their addresses
+        # come from the ORG and their order in the source.  RUN.s is `ORG $8200`
+        # and they are the first thing in it, 64 bytes apart - which is what
+        # makes ELASTLO/HI's addresses decodable at all.
+        base = 0x8200
+        order = ['C05625', 'C1125', 'C225', 'C45', 'C675', 'C7875', 'C84375']
+        lo, hi = A.block('RUN.s', 'ELASTLO'), A.block('RUN.s', 'ELASTHI')
+        out = []
+        for l, h in zip(lo, hi):
+            k = ((l | (h << 8)) - base) // 64
+            if not 0 <= k < len(order):
+                raise ValueError('ELAST entry $%04X is not a cosine table'
+                                 % (l | (h << 8)))
+            out.append(order[k])
+        _ELAST_OF = out
+    return _cos(_ELAST_OF[wset3])
+
+
+def bounce(tta, bdx, bdy, kick=0, elastic=True, wset3=0):
+    """BOUNCE (RUN.s:1235).  Reflect the ball off a surface.
+
+    `tta` is defined so that rotating the velocity BY it puts the surface's
+    outward normal on +Y: 0 is a floor, 16 a ceiling, 8 a rightward-facing
+    wall and 24 a leftward-facing one.
+
+    ⭐ Returns (bdx, bdy, hit).  `hit` is ALWAYS true - even when the ball was
+    already moving away and nothing changed, which is what lets a ball resting
+    on a bumper keep scoring, and is deliberate (MOVEB9's three-frame re-probe
+    is built on it).
+    """
+    vx, vy = rotate(tta, bdx, bdy)
+    if _sb(vy) >= 0:                      # already moving away
+        return bdx, bdy, True
+    vn = _neg(vy)
+    if elastic:
+        vn = elast_table(wset3)[vn & 0x3F] >> 2
+        if vn == 0:
+            vn = 1
+    vn = vn + kick
+    if vn > 0x3F:
+        vn = 0x3F
+    nx, ny = rotate((32 - tta) & 0xFF, vx, vn)
+    return nx, ny, True
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# THE BALL'S WORLD
+#
+# ⭐⭐ THE BALL COLLIDES WITH THE SPAN DATABASE, NOT WITH THE SCREEN.  PCS is
+# often described as reading its own framebuffer; it does not.  CHECKHORIZ and
+# CHECKVERT walk the same four-byte records the scan converter built, and the
+# slope nibbles in them ARE the surface normals.  That is why the editor has to
+# keep the database consistent through every drag, and why this port could gate
+# on the database before it had a ball at all.
+#
+# ⛔ AND OBJECT 0 IS READ INSIDE OUT.  The backdrop is a B-polygon whose
+# records are the OPEN area, so a span belonging to object 0 is free space and
+# the GAPS BETWEEN its spans are wall.  Every other object's spans are solid.
+# CHECKVERT switches between those two readings mid-scanline, at the first
+# record whose object is 0.
+# ═══════════════════════════════════════════════════════════════════════
+
+BM_HORIZ = 0x80         # BMOVE b7: this step is horizontal
+BM_POS = 0x40           # BMOVE b6: ... in the positive direction (down / right)
+
+
+class Ball(object):
+    """The seven bytes of L+16..L+22, and nothing else (RUN.s:1352)."""
+
+    def __init__(self, x=0, y=0, bdx=0, bdy=0):
+        self.bstat = 0
+        self.x1, self.y1 = x, y
+        self.bdx, self.bdy = bdx & 0xFF, bdy & 0xFF
+        self.bxacc, self.byacc = 0, 0
+        self.idle = 0                     # L[7], the frames since a hit
+
+    @property
+    def x2(self):
+        return (self.x1 + 4) & 0xFF
+
+    @property
+    def y2(self):
+        return (self.y1 + 4) & 0xFF
+
+    def __repr__(self):
+        return '(%3d,%3d) v=(%4d,%4d)' % (self.x1, self.y1,
+                                          _sb(self.bdx), _sb(self.bdy))
+
+
+class World(object):
+    """A table the ball can be run against.
+
+    `rows[y]` is scanline y's span records, as pcspak.Pak builds them, and
+    `hit(obj, tta, ball)` is the dispatcher DOHIT reaches - PBOUNCE for a plain
+    polygon, the part's own HIT proc for a library part.
+    """
+
+    def __init__(self, pak, wset=(0, 0, 0, 0), width=160):
+        self.rows = pak.rows
+        self.wset = list(wset)
+        self.TW = width
+        g, t, k, _lo, _hi = _world()
+        self.gravmask = g[wset[0]]
+        self.time = t[wset[1]]
+        self.kick = k[wset[2]]
+        self.hits = []                    # (frame, obj, tta) - for the bench
+
+    # -- DOHIT (RUN.s:1443).  ⚠ Plain polygons only, for now: a library part's
+    # HIT proc is step 3b and each one is a few lines of RUN.s.
+    def hit(self, ball, obj, tta, frame):
+        self.hits.append((frame, obj, tta))
+        bdx, bdy, did = bounce(tta, ball.bdx, ball.bdy, kick=0,
+                               elastic=True, wset3=self.wset[3])
+        ball.bdx, ball.bdy = bdx, bdy
+        return did
+
+
+def _ror9(a, carry):
+    """`ROR` on a byte with an incoming carry - a nine-bit shift right."""
+    return (((carry & 1) << 7) | (a >> 1)) & 0xFF
+
+
+def checkhoriz(w, ball, x, y, frame):
+    """CHECKHORIZ (RUN.s:1570).  Is column `x` solid on scanline `y`?
+
+    ⭐ Three cases, and the third is the one that makes the ball solid rather
+    than merely bouncy: x exactly on a span's left edge, x exactly on its
+    right edge, or x strictly INSIDE a span that is not object 0 - which is the
+    ball having got into solid material and is forced to a hit so it is pushed
+    back out.
+    """
+    if y >= len(w.rows):
+        return False
+    recs = w.rows[y]
+    for (xl, obj, xr, sl) in recs:
+        if x == xl:
+            tta = ((32 if obj else 16) - (sl & 0x0F)) & 0xFF
+            if w.hit(ball, obj, tta, frame):
+                _fixh(ball, obj, left=True)
+                return True
+            continue
+        if x < xl:
+            continue
+        if x == xr or x > xr:
+            if x == xr:
+                tta = ((16 if obj else 32) - (sl >> 4)) & 0xFF
+                if w.hit(ball, obj, tta, frame):
+                    _fixh(ball, obj, left=False)
+                    return True
+            continue
+        # strictly inside
+        if obj != 0:
+            tta = ((16 if obj else 32) - (sl >> 4)) & 0xFF
+            if w.hit(ball, obj, tta, frame):
+                _fixh(ball, obj, left=False)
+                return True
+    return False
+
+
+def _fixh(ball, obj, left):
+    """FIXLEFT / FIXRIGHT (RUN.s:1638).  ⭐ A ball with no horizontal speed at
+    all would sit against a wall for ever, so one unit is pushed INTO the free
+    side; and the pending sub-pixel step is discarded so the move does not
+    happen anyway."""
+    if ball.bdx == 0:
+        if left:
+            ball.bdx = _neg(1) if obj else 1
+        else:
+            ball.bdx = 1 if obj else _neg(1)
+    ball.byacc = ball.byacc          # (unchanged)
+    ball.bxacc &= 0x1F
+
+
+def _vfix(code, bmove, rising_rule):
+    """VLFIX / VRFIX (RUN.s:1828).  ⭐ "Did I land on top of it, or hit its
+    side?"  A steep edge met while falling becomes a FLAT FLOOR; the thresholds
+    are 6 and 11 out of the sixteen slope codes, and which one applies depends
+    on the direction of travel.  This heuristic IS the game's feel."""
+    down = bool(bmove & BM_POS)
+    use_down = down if rising_rule else not down
+    if use_down:
+        flat = code >= 6
+    else:
+        flat = code < 11
+    if not flat:
+        return code
+    return 0 if down else 16
+
+
+def dovhit(w, ball, p1, p2, lftta, rttta, bmove, frame):
+    """DOVHIT (RUN.s:1778).  Which side of the obstacle [p1, p2] is the ball on,
+    and what surface did it meet?"""
+    if p2 == ball.x1:
+        tta = (16 - rttta) & 0xFF
+        return _vdo(w, ball, tta, frame, right=True)
+    mid = (_ror9((p2 + p1) & 0xFF, 1 if (p2 + p1) > 0xFF else 0) + 2) & 0xFF
+    if mid < ball.x2:
+        code = _vfix(rttta & 0x0F, bmove, rising_rule=False)
+        tta = 0 if code == 0 else (16 - code) & 0xFF
+        return _vdo(w, ball, tta, frame, right=True)
+    lftta &= 0x0F
+    if p1 == ball.x2:
+        tta = (32 - lftta) & 0xFF
+        return _vdo(w, ball, tta, frame, right=False)
+    code = _vfix(lftta, bmove, rising_rule=True)
+    tta = 0 if code == 0 else (32 - code) & 0xFF
+    return _vdo(w, ball, tta, frame, right=False)
+
+
+def _vdo(w, ball, tta, frame, right):
+    did = w.hit(ball, w._obj, tta, frame)
+    if did and ball.bdx == 0:
+        ball.bdx = 1 if right else _neg(1)
+    return did
+
+
+def checkvert(w, ball, y, bmove, frame):
+    """CHECKVERT (RUN.s:1668).  Is row `y` solid anywhere under the ball?
+
+    ⛔ TWO READINGS OF THE SAME RECORDS.  Until the first record belonging to
+    object 0, a span IS the obstacle.  From there on, the obstacle is the GAP
+    BETWEEN consecutive object-0 spans - because the backdrop's records are the
+    open playfield and the wall is what is left over.
+    """
+    if y >= len(w.rows) or not w.rows[y]:
+        # OFFBOARD (RUN.s:1657): a scanline with no records at all is an
+        # invisible floor or ceiling, depending on which way the ball is going.
+        w._obj = 0
+        tta = 0 if (bmove & BM_POS) else 16
+        return _vdo(w, ball, tta, frame, right=False)
+
+    recs = w.rows[y]
+    i = 0
+    # -- OBJECT mode ---------------------------------------------------
+    while i < len(recs):
+        xl, obj, xr, sl = recs[i]
+        if obj == 0:
+            break
+        if xl <= ball.x2 and xr >= ball.x1:
+            w._obj = obj
+            if dovhit(w, ball, xl, xr, sl & 0x0F, sl >> 4, bmove, frame):
+                ball.byacc &= 0x1F
+                return True
+        i += 1
+    if i >= len(recs):
+        return False
+
+    # -- BACKGROUND mode: the gaps between object 0's spans -------------
+    p1, lftta = 0, 8
+    while i < len(recs):
+        xl, obj, xr, sl = recs[i]
+        if obj != 0:
+            break
+        if ball.x2 >= p1 and xl >= ball.x1:
+            w._obj = 0
+            if dovhit(w, ball, p1, xl, lftta, sl & 0x0F, bmove, frame):
+                ball.byacc &= 0x1F
+                return True
+        p1 = xr
+        lftta = sl >> 4
+        i += 1
+    # the last gap, out to the right wall
+    if ball.x2 >= p1:
+        w._obj = 0
+        if dovhit(w, ball, p1, w.TW - 7, lftta, 8, bmove, frame):
+            ball.byacc &= 0x1F
+            return True
+    return False
+
+
+def moveball(w, ball, frame):
+    """MOVEBALL (RUN.s:1352).  One frame of the ball.
+
+    ⭐⭐ ONE PIXEL AT A TIME, Y THEN X, AND THE STEP IS ONLY COMMITTED WHEN THE
+    PROBE SAYS CLEAR - so the ball never overlaps geometry and never has to be
+    pushed out of it.  Moving both axes and then testing gives no way to know
+    which face was met, and a ball in a corner leaves along the diagonal it
+    arrived on.
+
+    ⭐ Gravity is not an acceleration constant: it is HOW OFTEN one unit is
+    taken off BDY.  The slider picks a mask, and `(frame & mask) == 0` is the
+    whole of it - eight strengths from one decrement, with terminal velocity a
+    clamp at -47.
+    """
+    ball.bxacc = (ball.bxacc + _sb(ball.bdx)) & 0xFF
+    ball.byacc = (ball.byacc + _sb(ball.bdy)) & 0xFF
+    htcnt = [0]
+
+    if (frame & w.gravmask) == 0:
+        v = (_sb(ball.bdy) - 1)
+        if v < 0 and v < _sb(0xD1):
+            v = _sb(0xD1)                 # terminal velocity
+        ball.bdy = v & 0xFF
+
+    real_hit = w.hit
+
+    def counted(*a):
+        htcnt[0] += 1
+        return real_hit(*a)
+    w.hit = counted
+
+    try:
+        while True:                       # MOVEB2
+            if ball.bstat & 0x80:
+                break
+            ya = _sb(ball.byacc)
+            if ya < 0:                                    # MOVEB3: down
+                ball.byacc = (ball.byacc + 0x20) & 0xFF
+                if not checkvert(w, ball, (ball.y2 + 1) & 0xFF, BM_POS, frame):
+                    ball.y1 = (ball.y1 + 1) & 0xFF
+            elif ball.byacc >= 0x20:                      # MOVEB4: up
+                ball.byacc = (ball.byacc - 0x20) & 0xFF
+                if not checkvert(w, ball, (ball.y1 - 1) & 0xFF, 0, frame):
+                    ball.y1 = (ball.y1 - 1) & 0xFF
+            else:
+                if _sb(ball.bxacc) >= 0 and ball.bxacc < 0x20:
+                    break                                 # -> MOVEB9
+            if ball.bstat & 0x80:
+                break
+            xa = _sb(ball.bxacc)
+            if xa < 0:                                    # MOVEB7: left
+                ball.bxacc = (ball.bxacc + 0x20) & 0xFF
+                a = checkhoriz(w, ball, (ball.x1 - 1) & 0xFF, ball.y1, frame)
+                b = a or checkhoriz(w, ball, (ball.x1 - 1) & 0xFF, ball.y2, frame)
+                if not b and ball.x1 != 0:
+                    ball.x1 = (ball.x1 - 1) & 0xFF
+            elif ball.bxacc >= 0x20:                      # MOVEB6: right
+                ball.bxacc = (ball.bxacc - 0x20) & 0xFF
+                a = checkhoriz(w, ball, (ball.x2 + 1) & 0xFF, ball.y1, frame)
+                b = a or checkhoriz(w, ball, (ball.x2 + 1) & 0xFF, ball.y2, frame)
+                if not b and ball.x2 < 153:
+                    ball.x1 = (ball.x1 + 1) & 0xFF
+    finally:
+        w.hit = real_hit
+
+    # MOVEB9.  ⭐ A RESTING BALL RE-PROBES ITS OWN FLOOR.  After three frames
+    # with no hit at all it tests the row below itself once more, which is what
+    # keeps a ball sitting on a bumper scoring and a ball in a pocket held.
+    ball.idle = (ball.idle + 1) & 0xFF
+    if htcnt[0]:
+        ball.idle = 0
+    elif ball.idle >= 3:
+        checkvert(w, ball, (ball.y2 + 1) & 0xFF, BM_POS, frame)
+        ball.idle = 0
+    return htcnt[0]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+def physics_selftest():
+    """⭐ THE BALL, CHECKED BY ITS BEHAVIOUR rather than by reading it.
+
+    These are the properties a pinball simulation has to have, stated so that
+    a transliteration error cannot satisfy them by accident.
+    """
+    import pcspak as K
+    bad = []
+
+    # -- 1  ROTATE's identities ----------------------------------------
+    for vx, vy in ((20, 10), (-20, 10), (20, -10), (-20, -10), (63, 0), (0, 63)):
+        x, y = rotate(0, vx & 0xFF, vy & 0xFF)
+        if (_sb(x), _sb(y)) != (vx, vy):
+            bad.append('rotate by 0 changed (%d,%d) to (%d,%d)'
+                       % (vx, vy, _sb(x), _sb(y)))
+    for vx, vy in ((20, 10), (-13, 7)):
+        x, y = vx & 0xFF, vy & 0xFF
+        for _ in range(4):                       # four quarter-turns
+            x, y = rotate(8, x, y)
+        if (_sb(x), _sb(y)) != (vx, vy):
+            bad.append('four rotations by 8 did not return (%d,%d)' % (vx, vy))
+    x, y = rotate(8, 20, 0)                      # +90: (1,0) -> (0,1)
+    if (_sb(x), _sb(y)) != (0, 20):
+        bad.append('rotate by 8 put (20,0) at (%d,%d), wanted (0,20)'
+                   % (_sb(x), _sb(y)))
+
+    # -- 2  the bounce off the four cardinal surfaces --------------------
+    for tta, vin, want in ((0, (20, -20), (20, 20)),      # a floor
+                           (16, (20, 20), (20, -20)),     # a ceiling
+                           (8, (-20, 10), (20, 10)),      # a wall facing right
+                           (24, (20, 10), (-20, 10))):    # ... and facing left
+        x, y, did = bounce(tta, vin[0] & 0xFF, vin[1] & 0xFF, elastic=False)
+        if (_sb(x), _sb(y)) != want:
+            bad.append('bounce tta=%d on (%d,%d) gave (%d,%d), wanted (%d,%d)'
+                       % (tta, vin[0], vin[1], _sb(x), _sb(y), want[0], want[1]))
+    # ⭐ and a surface the ball is already leaving is a HIT that changes nothing
+    x, y, did = bounce(0, 20, 20, elastic=False)
+    if not did or (_sb(x), _sb(y)) != (20, 20):
+        bad.append('a ball leaving a floor was not reported as an unchanged hit')
+
+    # -- 3  the elasticity slider names the cosine tables ---------------
+    for i in range(8):
+        elast_table(i)
+    want = ['C84375', 'C7875', 'C675', 'C675', 'C45', 'C225', 'C1125', 'C05625']
+    if _ELAST_OF != want:
+        bad.append('the elasticity slider maps to %s' % (_ELAST_OF,))
+    # ⚠ positions 2 and 3 ARE the same table in the original.  Asserted so that
+    # a future "fix" has to argue with this line.
+    if _ELAST_OF[2] != _ELAST_OF[3]:
+        bad.append('elasticity 2 and 3 no longer name the same table')
+    # and a harder bounce comes back faster than a soft one
+    soft = bounce(0, 0, _neg(40), elastic=True, wset3=0)[1]
+    hard = bounce(0, 0, _neg(40), elastic=True, wset3=7)[1]
+    if not 0 < _sb(soft) < _sb(hard) <= 40:
+        bad.append('elasticity is not monotonic: soft %d, hard %d'
+                   % (_sb(soft), _sb(hard)))
+
+    # -- 4  gravity is a RATE, and the mask is what sets it -------------
+    # GRAVTBL is FF 7F 3F 1F 0F 07 03 01, so slider n fires 2^n times in 256
+    # frames: the weakest setting takes one unit off BDY once every 256 frames
+    # and the strongest every other frame.  ⭐ Eight strengths out of a single
+    # `DEC`, which is why there is no acceleration constant anywhere.
+    g = A.block('RUN.s', 'GRAVTBL')
+    for i, m in enumerate(g):
+        n = sum(1 for f in range(256) if (f & m) == 0)
+        if n != (1 << i):
+            bad.append('gravity %d fires %d times in 256 frames, wanted %d'
+                       % (i, n, 1 << i))
+
+    # -- 5  ⭐⭐ THE INVARIANT THAT MATTERS: a ball in a closed box stays in it.
+    back = K.Obj(K.BPOLY, 1, [10, 150, 150, 10], [10, 10, 200, 200])
+    back.align()
+    pak = K.Pak(height=240, width=160)
+    pak.objs = [back]
+    pak.display()
+    for wset in ((5, 3, 3, 4), (7, 1, 0, 7), (0, 7, 7, 0)):
+        w = World(pak, wset=wset)
+        b = Ball(x=80, y=20, bdx=12, bdy=0)
+        for f in range(1, 2000):
+            moveball(w, b, f)
+            if not (9 <= b.x1 and b.x2 <= 151 and 9 <= b.y1 and b.y2 <= 201):
+                bad.append('world %s: the ball left the box at frame %d, %s'
+                           % (wset, f, b))
+                break
+        if not w.hits:
+            bad.append('world %s: the ball never hit anything in 2000 frames'
+                       % (wset,))
+    return bad
+
+
 if __name__ == '__main__':
     exact, low, other = characterise()
     n = exact + low + other
@@ -237,3 +819,14 @@ if __name__ == '__main__':
           % (160, 240))
     print('      over its dy scanlines - which is the only thing the scan')
     print('      converter asks of the divide, and is independent of how it works.')
+
+    bad = physics_selftest()
+    for b in bad:
+        print('FAIL ', b)
+    if bad:
+        sys.exit(1)
+    print('ok    the ball: ROTATE\'s identities, the bounce off all four')
+    print('      cardinal surfaces, the elasticity slider naming its cosine')
+    print('      tables (2 and 3 the same, as in the original), gravity as a')
+    print('      rate, and a ball that stays inside a closed box for 2,000')
+    print('      frames at three different World settings.')
