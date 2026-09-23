@@ -542,6 +542,12 @@ class Sim(object):
         self.hits = 0
         self.objid = self.tta = 0
         self.frameno = 0
+        # ⭐ THE BENCH'S CANNED HOST INPUT.  PLAY9 reads a paddle and two
+        # triggers; the port reads a mouse and two keys.  Neither is
+        # reproducible, so the bench drives all three off the frame counter by
+        # the rule in `_autoinput`, which the 6809 implements identically -
+        # otherwise nothing that answers to the player could be gated at all.
+        self.autoinput = True
 
         self.initobjs(0)                # `STY INITMODE / JSR INITOBJS`
 
@@ -567,6 +573,8 @@ class Sim(object):
         if self.ptm1 == 0:
             self.ptm2 = (self.ptm2 + 1) & 0xFF
         self.frameno = self.ptm1
+        if self.autoinput:
+            _autoinput(self)
 
         for i in range(self.runlen):
             o = self.rcn[i]
@@ -670,6 +678,17 @@ class Sim(object):
         self.slice = (self.slice + 1) & 0xFF
         if eff[(x + 1) & 0xFF] == 0:
             initsound(self)
+
+
+def _autoinput(sim):
+    """⭐ THE ONE RULE BOTH SIDES IMPLEMENT, so the flippers and the plunger can
+    be gated.  ⚠ It is the BENCH's input and not the program's: `pbauto` is set
+    only by the recording mode, and a real session reads the mouse and the
+    keyboard into exactly these three bytes."""
+    f = sim.ptm1
+    sim.pdl0 = f
+    sim.btn0 = 0x80 if (f & 0x18) == 0x18 else 0
+    sim.btn1 = 0x80 if (f & 0x30) == 0x30 else 0
 
 
 def _walk(pbdata):

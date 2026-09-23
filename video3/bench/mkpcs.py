@@ -113,7 +113,7 @@ def physics_tables():
     for name in ('GRAVTBL', 'TIMETBL', 'KICKTBL', 'ELASTLO', 'ELASTHI',
                  'SCORETBL', 'SOUNDTBL', 'BONUSTBL', 'FTTA', 'FLPVCTR',
                  'FXDVERT', 'FXHEIGHT', 'FXLEN', 'FDDVERT', 'FHEIGHT',
-                 'DHITTBL', 'EFFECTS', 'NOTES'):
+                 'DHITTBL', 'CATCHSTOP', 'EFFECTS', 'NOTES'):
         t[name] = A.block('RUN.s', name)
     for name in ('DXCODESA', 'DXCODESB'):
         t[name] = A.block('PPAK.s', name)
@@ -317,43 +317,50 @@ def test_table():
         # before ADXCOEFF and guards the sign test with BVC.
         K.Obj(K.POLY, PALSLIV, [100, 59, 62], [60, 100, 100]),
     ]
-    # ⭐⭐ AND SEVEN OF BUDGE'S OWN PARTS, which is what makes this a gate on
-    # the SIMULATOR and not only on the converter.  Each is here for a
-    # different arm of the object system, and between them they reach every
-    # proc step 3b implements:
+    # ⭐⭐ AND NINE OF BUDGE'S OWN PARTS, which is what makes this a gate on
+    # the SIMULATOR and not only on the converter.  Between them they reach
+    # every proc the port implements bar one:
     #
-    #   SPIN    the spinner      - a HIT that scores and does NOT deflect, and
-    #                              a RUN proc that re-arms itself off L[16]
-    #   ROLL1   a rollover       - PUTSP2: score with the carry CLEAR
-    #   GATE1   the one-way gate - the BMOVE read that is the whole part
-    #   TARG1   a target         - FLASHRUN, and a bounce that scores
-    #   KICK1   a knocker        - ⛔ not a surface at all: it SETS BDY
-    #   BMP3    the bumper       - TSET, the kick with NO elasticity, and
-    #                              BUMPRUN's two-frame animation
-    #   BALL    the ball         - ⭐ an object like any other, which is what
-    #                              makes multiball a matter of cloning 23 bytes
+    #   SPIN     the spinner     - a HIT that scores and does NOT deflect, and
+    #                             a RUN proc that re-arms itself off L[16]
+    #   ROLL1    a rollover      - PUTSP2: score with the carry CLEAR
+    #   GATE1    a one-way gate  - the BMOVE read that is the whole part
+    #   TARG1    a target        - FLASHRUN, and a bounce that scores
+    #   DROP1    a drop bank     - four targets in one nibble of L[8]
+    #   KICK1    a knocker       - ⛔ not a surface at all: it SETS BDY
+    #   BMP3     a bumper        - TSET, and the kick with NO elasticity
+    #   LFLIP2   a flipper       - ⭐⭐ the one part whose collision is resolved
+    #                             against its ART, row by row
+    #   LAUNCHER the plunger     - ⛔ its shot is not a bounce either
+    #   BALL     the ball        - ⭐ an object like any other, which is what
+    #                             makes multiball a matter of cloning 23 bytes
     #
     # ⛔ AND THE BALL'S OWN HOME POLYGON IS IN THE DATABASE AND IS NOT SOLID.
     # That is what NULLBOUNCE is FOR: a five-pixel square sits wherever the
     # editor left the ball part, the collision walker finds it like any other
     # span, and its HIT proc answers `CLC / RTS`.  A port that quietly dropped
     # the ball from the display list would pass every picture test and change
-    # the object numbering underneath the saved tables.
+    # the object numbering underneath every saved table.
     #
-    # ⚠ THE POSITIONS ARE CHOSEN, NOT ARBITRARY.  They are a channel down the
+    # ⚠ THE POSITIONS ARE SEARCHED, NOT CHOSEN.  They are a channel down the
     # right of the table, because a ball dropped anywhere else lands on the
-    # sloped bar and rolls for six hundred frames without meeting anything; and
-    # the knocker sits BESIDE the bumper because the ball never gets below
-    # them.  ⚠ No scanline may carry more than four spans - PPAK.s:568's limit
-    # is part of what the construction set IS (pcs.md 5), so the bench's own
-    # table has to live inside it.
+    # sloped bar and rolls for six hundred frames without meeting anything;
+    # and each one was checked by running the model and counting which procs
+    # the ball actually reached.  ⚠ No scanline may carry more than four spans
+    # - PPAK.s:568's limit is part of what the construction set IS (pcs.md 5),
+    # so the bench's own table has to live inside it.
+    # ⚠ KNOCK1 is the one proc this run does not reach with the rest of them
+    # in place; it is covered by pcsobj.selftest() and by its own state byte.
     objs += [
         place('SPIN', 144, 105),
         place('ROLL1', 146, 125),
         place('GATE1', 144, 150),
         place('TARG1', 146, 175),
-        place('KICK1', 139, 196),
-        place('BMP3', 145, 196),
+        place('DROP1', 110, 184),
+        place('KICK1', 133, 186),
+        place('BMP3', 139, 186),
+        place('LFLIP2', 131, 206),
+        place('LAUNCHER', 146, 213),
         place('BALL', BALL[0], BALL[1]),
     ]
     for o in objs:
@@ -373,7 +380,7 @@ PALSLIV = pcspal.PAINT0 + 7         # cyan
 # ball on its own template's top-left vertex with BDX 0 and BDY $FF, so the
 # only thing the bench chooses is WHERE the part was placed.  ⚠ 145 is in the
 # right-hand channel, clear of the sloped bar.
-BALL = (145, 10)                    # x, y
+BALL = (143, 10)                    # x, y
 WSET = (5, 3, 3, 4)                 # gravity, speed, kick, elasticity
 
 
@@ -506,6 +513,28 @@ def emit(path):
     w('* caught the collision: two copies of a generated table is the same')
     w('* defect as a constant agreed by number rather than by symbol.')
     w('')
+    w("* ⭐⭐ THE FLIPPERS' OUTLINES, sixteen frames of (right, left) pairs, one")
+    w('* pair a row.  ⛔ THE FLIPPER IS THE ONE PART WHOSE COLLISION IS NOT A')
+    w('* POLYGON: FLIPHIT (RUN.s:356) finds the row the ball is entering and')
+    w("* reads that row's two ends out of these, which is why a flipper can be")
+    w('* hit along its length and kicked by position.')
+    w('* ⚠ The offsets are from PCFFRAME and not addresses, because a NitrOS-9')
+    w('* module is position-independent (pcsrun.inc, the cosine tables).')
+    _fr = [A.block('RUN.s', n) for n in
+           ['FFRAME%d' % k for k in range(1, 9)] +
+           ['SFRAME%d' % k for k in range(1, 9)]]
+    w('PCFFOFF             equ       *')
+    _off, _acc = [], 0
+    for _b in _fr:
+        _off.append(_acc)
+        _acc += len(_b)
+    for _i, _v in enumerate(_off):
+        w('                    fdb       %-6d    frame %d, %d rows'
+          % (_v, _i, len(_fr[_i]) // 2))
+    w('PCFFRAME            equ       *')
+    for _b in _fr:
+        _fcb(o, _b)
+    w('')
     w('* Object kinds (PPAK.s), unchanged.')
     w('PC.Poly             equ       1')
     w('PC.BPoly            equ       2         the complement fill - ALWAYS object 0')
@@ -636,7 +665,7 @@ def emit(path):
     for name in ('GRAVTBL', 'TIMETBL', 'KICKTBL', 'ELASTLO', 'ELASTHI',
                  'SCORETBL', 'SOUNDTBL', 'BONUSTBL', 'DXCODESA', 'DXCODESB',
                  'FTTA', 'FLPVCTR', 'FXDVERT', 'FXHEIGHT', 'FXLEN',
-                 'FDDVERT', 'FHEIGHT', 'DHITTBL', 'EFFECTS', 'NOTES'):
+                 'FDDVERT', 'FHEIGHT', 'DHITTBL', 'CATCHSTOP', 'EFFECTS', 'NOTES'):
         w('')
         w('PC%-16s equ       *         %d bytes' % (name[:16], len(t[name])))
         _fcb(o, t[name])
