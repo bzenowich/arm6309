@@ -49,10 +49,15 @@ class Abort(Exception):
 class Obj(object):
     """One object record, as PKObj unpacks it."""
 
-    def __init__(self, objid, fillcolor, xs, ys):
+    def __init__(self, objid, fillcolor, xs, ys, L=None):
         assert len(xs) == len(ys)
         self.objid = objid
         self.fillcolor = fillcolor
+        # ⭐ THE LIBRARY TAIL, and only a LIBOBJ has one.  GETINFO (PPAK.s:209)
+        # puts it straight after the two vertex arrays, so `LB = OBJ + 3 + 2n`
+        # and every part proc indexes it from there - including backwards, into
+        # the vertices (pcsobj.Part).  An empty tail is a plain polygon.
+        self.L = bytearray(L or b'')
         self.x = list(xs)
         self.y = list(ys)
 

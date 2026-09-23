@@ -467,15 +467,34 @@ class World(object):
         self.time = t[wset[1]]
         self.kick = k[wset[2]]
         self.hits = []                    # (frame, obj, tta) - for the bench
+        # ⭐ BMOVE, which is not the ball's velocity but the direction of THIS
+        # ONE PIXEL STEP - $40 down, $00 up, $C0 right, $80 left (MOVEB3/4/6/7).
+        # Half the part procs read it and nothing else carries it.
+        self.bmove = 0
+        # ⭐ The library parts, by object index, and the routine that runs their
+        # HIT procs.  pcsobj.Sim installs both; with neither, every object is a
+        # plain polygon and DOHIT is PBOUNCE, which is what step 2's gate ran.
+        self.parts = {}
+        self.dispatch = None
 
-    # -- DOHIT (RUN.s:1443).  ⚠ Plain polygons only, for now: a library part's
-    # HIT proc is step 3b and each one is a few lines of RUN.s.
-    def hit(self, ball, obj, tta, frame):
-        self.hits.append((frame, obj, tta))
+    def pbounce(self, ball, tta):
+        """PBOUNCE (RUN.s:1232) - the plain reflection, no part behaviour."""
         bdx, bdy, did = bounce(tta, ball.bdx, ball.bdy, kick=0,
                                elastic=True, wset3=self.wset[3])
         ball.bdx, ball.bdy = bdx, bdy
         return did
+
+    def hit(self, ball, obj, tta, frame):
+        """DOHIT (RUN.s:1547) - the part's own HIT proc, or PBOUNCE.
+
+        ⛔ `LDA VHI,Y / BNE DOHIT2 / JSR PBOUNCE` - the test is whether the
+        object HAS a library base at all, so a plain polygon reaches the
+        reflection without a vector and a library part always has one."""
+        self.hits.append((frame, obj, tta))
+        p = self.parts.get(obj)
+        if p is None or self.dispatch is None:
+            return self.pbounce(ball, tta)
+        return self.dispatch(p, ball, obj, tta, frame)
 
 
 def _ror9(a, carry):
@@ -580,10 +599,24 @@ def _vdo(w, ball, tta, frame, right):
 def checkvert(w, ball, y, bmove, frame):
     """CHECKVERT (RUN.s:1668).  Is row `y` solid anywhere under the ball?
 
-    ⛔ TWO READINGS OF THE SAME RECORDS.  Until the first record belonging to
-    object 0, a span IS the obstacle.  From there on, the obstacle is the GAP
-    BETWEEN consecutive object-0 spans - because the backdrop's records are the
-    open playfield and the wall is what is left over.
+    ⛔⛔ TWO READINGS OF THE SAME RECORDS, AND IT ALTERNATES BETWEEN THEM.
+    A span belonging to any object is itself the obstacle; a span belonging to
+    object 0 is OPEN PLAYFIELD and the obstacle is the GAP between it and the
+    next one, because the backdrop is a B-polygon that stores its interior.
+    The walk switches at every record whose object changes: `BEQ BCHECKV2`
+    leaves object mode and `BCHKV5`'s `JMP PCHECKV2` - after a `DEY` that puts
+    the record back - returns to it.
+
+    ⚠ NOT "objects first, then the backdrop".  The records are in DRAW order,
+    so object 0's come FIRST on every scanline of a normal table and the
+    alternation is the only thing that ever reaches an object at all.  A walk
+    that leaves object mode for good sees nothing but backdrop gaps - and passes
+    every test whose objects are only ever met side-on, because CHECKHORIZ
+    walks the same list without the two modes.
+
+    ⚠ Transliterated with the 6502's own Y, in bytes, because the mode switches
+    re-read a record from a different offset and any tidier structure loses
+    that.  `f` is the scanline's records flattened, which is what PBDX counts.
     """
     if y >= len(w.rows) or not w.rows[y]:
         # OFFBOARD (RUN.s:1661): a scanline with no records at all is an
@@ -599,43 +632,111 @@ def checkvert(w, ball, y, bmove, frame):
         ball.bdx, ball.bdy = bdx, bdy
         return did
 
-    recs = w.rows[y]
-    i = 0
-    # -- OBJECT mode ---------------------------------------------------
-    while i < len(recs):
-        xl, obj, xr, sl = recs[i]
-        if obj == 0:
-            break
-        if xl <= ball.x2 and xr >= ball.x1:
-            w._obj = obj
-            if dovhit(w, ball, xl, xr, sl & 0x0F, sl >> 4, bmove, frame):
-                ball.byacc &= 0x1F
-                return True
-        i += 1
-    if i >= len(recs):
-        return False
+    f = [b for r in w.rows[y] for b in r]
+    hcnt = len(f)
+    Y = 1
+    x = p1 = 0
+    lftta = 8
+    w._obj = 0
+    state = 'PCHECKV2'
 
-    # -- BACKGROUND mode: the gaps between object 0's spans -------------
-    p1, lftta = 0, 8
-    while i < len(recs):
-        xl, obj, xr, sl = recs[i]
-        if obj != 0:
-            break
-        if ball.x2 >= p1 and xl >= ball.x1:
-            w._obj = 0
-            if dovhit(w, ball, p1, xl, lftta, sl & 0x0F, bmove, frame):
-                ball.byacc &= 0x1F
-                return True
-        p1 = xr
-        lftta = sl >> 4
-        i += 1
-    # the last gap, out to the right wall
-    if ball.x2 >= p1:
-        w._obj = 0
-        if dovhit(w, ball, p1, w.TW - 7, lftta, 8, bmove, frame):
-            ball.byacc &= 0x1F
-            return True
-    return False
+    while True:
+        # -- object mode: the span IS the obstacle ----------------------
+        if state == 'PCHECKV2':
+            Y -= 1
+            state = 'PCHECKV'
+        if state == 'PCHECKV':
+            x = f[Y]
+            Y += 1
+            obj = f[Y]
+            if obj == 0:
+                state = 'BCHECKV2'
+            else:
+                w._obj = obj
+                if x > ball.x2:                       # CPX X2 / BCC / BNE
+                    state = 'PCHKV2'
+                else:
+                    p1 = x
+                    Y += 1
+                    a = f[Y]
+                    if a < ball.x1:                   # CMP X1 / BCC PCHKV3
+                        state = 'PCHKV3'
+                    else:
+                        p2 = a
+                        Y += 1
+                        sl = f[Y]
+                        if dovhit(w, ball, p1, p2, sl & 0x0F, sl >> 4,
+                                  bmove, frame):
+                            ball.byacc &= 0x1F
+                            return True
+                        state = 'PCHKV4'
+        if state == 'PCHKV2':
+            Y += 1
+            state = 'PCHKV3'
+        if state == 'PCHKV3':
+            Y += 1
+            state = 'PCHKV4'
+        if state == 'PCHKV4':
+            Y += 1
+            if Y != hcnt:
+                state = 'PCHECKV'
+                continue
+            return False
+
+        # -- background mode: the obstacle is the GAP -------------------
+        if state == 'BCHECKV2':
+            p1 = 0                                    # the left wall
+            lftta = 8
+            state = 'BCHKV2'
+        while True:
+            if state == 'BCHECKV':
+                x = f[Y]
+                Y += 1
+                if f[Y] != 0:
+                    state = 'BCHKV4'
+                else:
+                    w._obj = 0
+                    state = 'BCHKV2'
+            if state == 'BCHKV2':
+                if ball.x2 < p1 or x < ball.x1:       # LDA X2/CMP P1, CPX X1
+                    state = 'BCHKV3'
+                else:
+                    p2 = x
+                    Y += 2
+                    rttta = f[Y] & 0x0F
+                    Y -= 2
+                    if dovhit(w, ball, p1, p2, lftta, rttta, bmove, frame):
+                        ball.byacc &= 0x1F
+                        return True
+                    state = 'BCHKV3'
+            if state == 'BCHKV3':
+                Y += 1
+                p1 = f[Y]
+                Y += 1
+                lftta = f[Y] >> 4
+                Y += 1
+                if Y != hcnt:
+                    state = 'BCHECKV'
+                    continue
+                state = 'BCHKV4'
+            if state == 'BCHKV4':
+                # ⭐ THE LAST GAP, OUT TO THE RIGHT WALL - and it is tested BOTH
+                # when the list runs out AND when an object interrupts the
+                # backdrop's run, which is what makes the alternation safe.
+                if ball.x2 >= p1:
+                    # ⚠ `LDA #153` in a 160-wide world, and RUN.s:1864's wall
+                    # clamp is 153 too while PPAK.s:774's right edge is 159.
+                    # The Apple II version is self-consistent at 154/153, so
+                    # this is a port slip in the ORIGINAL; reproduced, and
+                    # written as TW-7 so the port has one constant for it.
+                    p2 = w.TW - 7
+                    if dovhit(w, ball, p1, p2, lftta, 8, bmove, frame):
+                        ball.byacc &= 0x1F
+                        return True
+                if Y == hcnt:
+                    return False
+                state = 'PCHECKV2'
+                break
 
 
 def moveball(w, ball, frame):
@@ -676,10 +777,12 @@ def moveball(w, ball, frame):
             ya = _sb(ball.byacc)
             if ya < 0:                                    # MOVEB3: down
                 ball.byacc = (ball.byacc + 0x20) & 0xFF
+                w.bmove = BM_POS                          # $40: down
                 if not checkvert(w, ball, (ball.y2 + 1) & 0xFF, BM_POS, frame):
                     ball.y1 = (ball.y1 + 1) & 0xFF
             elif ball.byacc >= 0x20:                      # MOVEB4: up
                 ball.byacc = (ball.byacc - 0x20) & 0xFF
+                w.bmove = 0                               # $00: up
                 if not checkvert(w, ball, (ball.y1 - 1) & 0xFF, 0, frame):
                     ball.y1 = (ball.y1 - 1) & 0xFF
             else:
@@ -690,12 +793,14 @@ def moveball(w, ball, frame):
             xa = _sb(ball.bxacc)
             if xa < 0:                                    # MOVEB7: left
                 ball.bxacc = (ball.bxacc + 0x20) & 0xFF
+                w.bmove = BM_HORIZ                        # $80: left
                 a = checkhoriz(w, ball, (ball.x1 - 1) & 0xFF, ball.y1, frame)
                 b = a or checkhoriz(w, ball, (ball.x1 - 1) & 0xFF, ball.y2, frame)
                 if not b and ball.x1 != 0:
                     ball.x1 = (ball.x1 - 1) & 0xFF
             elif ball.bxacc >= 0x20:                      # MOVEB6: right
                 ball.bxacc = (ball.bxacc - 0x20) & 0xFF
+                w.bmove = BM_HORIZ | BM_POS               # $C0: right
                 a = checkhoriz(w, ball, (ball.x2 + 1) & 0xFF, ball.y1, frame)
                 b = a or checkhoriz(w, ball, (ball.x2 + 1) & 0xFF, ball.y2, frame)
                 if not b and ball.x2 < 153:
@@ -710,6 +815,7 @@ def moveball(w, ball, frame):
     if htcnt[0]:
         ball.idle = 0
     elif ball.idle >= 3:
+        w.bmove = BM_POS
         checkvert(w, ball, (ball.y2 + 1) & 0xFF, BM_POS, frame)
         ball.idle = 0
     return htcnt[0]

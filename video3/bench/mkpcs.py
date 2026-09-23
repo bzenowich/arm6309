@@ -232,6 +232,55 @@ def art():
 
 
 # --------------------------------------------------------- the test table --
+def place(name, tx, ty, fillcolor=None):
+    """⭐ ONE OF BUDGE'S 43 TEMPLATES, MOVED FROM THE PARTS BIN ONTO THE TABLE.
+
+    The record is the template's own - the same bytes EDIT.s's ADDOBJ copies -
+    translated so its bounding box's top-left corner lands at (tx, ty).
+    ⚠ L[2] and L[3], where the ART sits, move with the vertices because they
+    are the same coordinate system; that is why the port keeps one `px` where
+    the Atari had HDIV8 and HMOD8 (pcs.md 4).
+
+    ⛔ AND L[10] IS A PART TYPE ID WHERE THE 6502 HAD THREE ADDRESSES.  A saved
+    table cannot carry 6502 vectors across a change of machine, so the type is
+    stored and the vectors are rebuilt on load (pcs.md 5b).
+    """
+    import pcsobj
+    import pcsparts as T
+    tm = None
+    for t in T.parts():
+        if t.name == name:
+            tm = t
+            break
+    if tm is None:
+        raise KeyError('no template named %s' % name)
+    kind = pcsobj.kind_of(tm)
+    if kind is None:
+        raise KeyError('%s\'s procs are step 3b-ii' % name)
+
+    dx, dy = tx - min(tm.x), ty - min(tm.y)
+    xs = [v + dx for v in tm.x]
+    ys = [v + dy for v in tm.y]
+    if min(xs) < 0 or max(xs) >= TW or min(ys) < 0 or max(ys) >= TH:
+        raise ValueError('%s at (%d, %d) does not fit the table' % (name, tx, ty))
+
+    L = bytearray(pcsobj.LREC)
+    L[pcsobj.L_VERT] = tm.vert + dy
+    L[pcsobj.L_PX] = tm.px + dx
+    L[pcsobj.L_HEIGHT] = tm.height
+    L[pcsobj.L_WIDTH] = tm.width
+    L[pcsobj.L_STATE] = tm.time                 # lifted into TIME[] by PLAY
+    L[pcsobj.L_SCORE] = tm.score_snd
+    L[pcsobj.L_TYPE] = pcsobj.TYPEID[kind]
+
+    import pcspak as K
+    o = K.Obj(K.LIBOBJ, tm.fillcolor if fillcolor is None else fillcolor,
+              xs, ys, L)
+    if not o.align():
+        raise ValueError('%s is degenerate' % name)
+    return o
+
+
 def test_table():
     """⭐ THE TABLE STEP 2's GATE IS BUILT ON, defined ONCE and used twice.
 
@@ -267,6 +316,45 @@ def test_table():
         # before ADXCOEFF and guards the sign test with BVC.
         K.Obj(K.POLY, PALSLIV, [100, 59, 62], [60, 100, 100]),
     ]
+    # ⭐⭐ AND SEVEN OF BUDGE'S OWN PARTS, which is what makes this a gate on
+    # the SIMULATOR and not only on the converter.  Each is here for a
+    # different arm of the object system, and between them they reach every
+    # proc step 3b implements:
+    #
+    #   SPIN    the spinner      - a HIT that scores and does NOT deflect, and
+    #                              a RUN proc that re-arms itself off L[16]
+    #   ROLL1   a rollover       - PUTSP2: score with the carry CLEAR
+    #   GATE1   the one-way gate - the BMOVE read that is the whole part
+    #   TARG1   a target         - FLASHRUN, and a bounce that scores
+    #   KICK1   a knocker        - ⛔ not a surface at all: it SETS BDY
+    #   BMP3    the bumper       - TSET, the kick with NO elasticity, and
+    #                              BUMPRUN's two-frame animation
+    #   BALL    the ball         - ⭐ an object like any other, which is what
+    #                              makes multiball a matter of cloning 23 bytes
+    #
+    # ⛔ AND THE BALL'S OWN HOME POLYGON IS IN THE DATABASE AND IS NOT SOLID.
+    # That is what NULLBOUNCE is FOR: a five-pixel square sits wherever the
+    # editor left the ball part, the collision walker finds it like any other
+    # span, and its HIT proc answers `CLC / RTS`.  A port that quietly dropped
+    # the ball from the display list would pass every picture test and change
+    # the object numbering underneath the saved tables.
+    #
+    # ⚠ THE POSITIONS ARE CHOSEN, NOT ARBITRARY.  They are a channel down the
+    # right of the table, because a ball dropped anywhere else lands on the
+    # sloped bar and rolls for six hundred frames without meeting anything; and
+    # the knocker sits BESIDE the bumper because the ball never gets below
+    # them.  ⚠ No scanline may carry more than four spans - PPAK.s:568's limit
+    # is part of what the construction set IS (pcs.md 5), so the bench's own
+    # table has to live inside it.
+    objs += [
+        place('SPIN', 144, 105),
+        place('ROLL1', 146, 125),
+        place('GATE1', 144, 150),
+        place('TARG1', 146, 175),
+        place('KICK1', 139, 196),
+        place('BMP3', 145, 196),
+        place('BALL', BALL[0], BALL[1]),
+    ]
     for o in objs:
         if not o.align():
             raise ValueError('a test object is degenerate')
@@ -280,7 +368,11 @@ PALSLIV = pcspal.PAINT0 + 7         # cyan
 
 # ⭐ The ball the bench serves, and the World it serves it into.  Defined once
 # and used twice: `pcs 4` starts from these and checkpcs.py's model does too.
-BALL = (80, 20, 12, 0)              # x, y, bdx, bdy
+# ⭐ The ball's HOME, which is all it is now: INITBALL (RUN.s:626) puts the
+# ball on its own template's top-left vertex with BDX 0 and BDY $FF, so the
+# only thing the bench chooses is WHERE the part was placed.  ⚠ 145 is in the
+# right-hand channel, clear of the sloped bar.
+BALL = (145, 10)                    # x, y
 WSET = (5, 3, 3, 4)                 # gravity, speed, kick, elasticity
 
 
@@ -290,7 +382,8 @@ def serialise(objs):
     pbdata+1 to the first record, which is why GETOBJ needs no index."""
     recs = []
     for o in objs:
-        recs.append(bytes([o.objid, o.fillcolor, o.n]) + bytes(o.x) + bytes(o.y))
+        recs.append(bytes([o.objid, o.fillcolor, o.n]) + bytes(o.x) + bytes(o.y)
+                    + bytes(o.L))
     out = bytearray([len(recs)])
     out += bytes(len(r) for r in recs)
     for r in recs:
