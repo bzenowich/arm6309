@@ -285,7 +285,11 @@ def render_table(pak, objs, parts=None):
         k = 0
         p = (parts or {}).get(i)
         if p is not None:
-            L = [p.L(j) for j in range(pcsobj.LREC)]
+            # ⚠ Only the four bytes the picture needs.  A part's tail is
+            # OBJLEN - 3 - 2n bytes and that is SIXTEEN for most of them;
+            # reading LREC of them walks into the next record, or off the end.
+            L = dict((j, p.L(j)) for j in (pcsobj.L_TMPL, pcsobj.L_PX,
+                                           pcsobj.L_VERT))
             k = p.L(pcsobj.L_STATE) & 0x7F
         first, count = index[L[pcsobj.L_TMPL]]
         if count == 0:
@@ -313,6 +317,35 @@ def render_table(pak, objs, parts=None):
 
 
 # --------------------------------------------------------- the test table --
+def template_record(tm):
+    """⭐ THE BYTES ADDOBJ COPIES: one template, exactly as it joins the
+    database - OBJLEN of them, so `PCTLen` walks the blob and nothing else has
+    to.
+
+    ⛔ IT IS NOT BUDGE'S RAW TEMPLATE.  His tail holds THREE 6502 ADDRESSES
+    (pcs.md 5b), so L[0] - which was the bitmap pointer - becomes the template
+    index, and L[10] - which was the RUN vector - becomes the part type.  Every
+    other byte is his, and the re-keying happens ONCE, here, at generation
+    time, rather than on the machine after every add.
+
+    ⚠ And anything past what he wrote is runtime state (`L[16..22]` for the
+    parts that keep any), which starts zeroed.
+    """
+    rec = bytearray([tm.objid, tm.fillcolor, tm.nvertex])
+    rec += bytes(tm.x) + bytes(tm.y)
+    L = bytearray(tm.raw[tm.lbase:]) + bytes(tm.objlen - tm.tmpllen)
+    if tm.lib:
+        import pcsobj
+        k = pcsobj.kind_of(tm)
+        L[pcsobj.L_TMPL] = tm.index
+        L[pcsobj.L_TYPE] = pcsobj.TYPEID[k] if k else 0xFF
+    rec += L
+    if len(rec) != tm.objlen:
+        raise ValueError('%s: %d bytes, OBJLEN says %d'
+                         % (tm.name, len(rec), tm.objlen))
+    return bytes(rec)
+
+
 def place(name, tx, ty, fillcolor=None):
     """⭐ ONE OF BUDGE'S 43 TEMPLATES, MOVED FROM THE PARTS BIN ONTO THE TABLE.
 
@@ -345,15 +378,13 @@ def place(name, tx, ty, fillcolor=None):
     if min(xs) < 0 or max(xs) >= TW or min(ys) < 0 or max(ys) >= TH:
         raise ValueError('%s at (%d, %d) does not fit the table' % (name, tx, ty))
 
-    L = bytearray(pcsobj.LREC)
-    L[pcsobj.L_TMPL] = tm.index           # ⭐ which of the 43 pictures this is
+    # ⭐ THE SAME RECORD THE MACHINE COPIES, translated.  PEAdd on the 6809
+    # copies `template_record`'s bytes out of PCTmpl and then moves them; doing
+    # anything else here would compare two different programs.
+    rec = template_record(tm)
+    L = bytearray(rec[3 + 2 * tm.nvertex:])
     L[pcsobj.L_VERT] = tm.vert + dy
     L[pcsobj.L_PX] = tm.px + dx
-    L[pcsobj.L_HEIGHT] = tm.height
-    L[pcsobj.L_WIDTH] = tm.width
-    L[pcsobj.L_STATE] = tm.time                 # lifted into TIME[] by PLAY
-    L[pcsobj.L_SCORE] = tm.score_snd
-    L[pcsobj.L_TYPE] = pcsobj.TYPEID[kind]
 
     import pcspak as K
     o = K.Obj(K.LIBOBJ, tm.fillcolor if fillcolor is None else fillcolor,
@@ -776,19 +807,34 @@ def emit(path):
     w('* ⚠ OBJLEN >= the template: the surplus is uninitialised runtime state')
     w('* the Atari copied from whatever followed in ROM.  Zeroed here.')
     w('PCTmpl              equ       *')
+    w("* ⭐⭐ EACH RECORD IS EXACTLY WHAT ADDOBJ COPIES - OBJLEN bytes - so")
+    w('* PCTLen walks this blob and NOTHING ELSE HAS TO.  ⛔ It used to hold a')
+    w('* condensed port-specific summary instead, which no length table')
+    w("* described: PETPtr walked it with OBJLEN, landed in the middle of")
+    w('* another template, and the vertex count PEPlace then read sent it 400')
+    w("* bytes past the staging buffer and through the editor's own variables.")
+    w('* ⚠ A generated blob whose packing no table describes is the same defect')
+    w('* as a constant agreed by number rather than by symbol.')
+    _tot = 0
     for p in parts:
+        rec = template_record(p)
+        _tot += len(rec)
         w('* %2d %-13s %s' % (p.index, p.name,
                               'poly %d-gon' % p.nvertex if not p.lib else
                               '%dx%d x%d %s  TIME $%02X' %
                               (p.width * 8, p.height, p.nframes, p.anim, p.time)))
-        w('                    fcb       %d,%d,%d' % (p.objid, p.fillcolor, p.nvertex))
-        w('                    fcb       %s' % ','.join(str(v) for v in p.x))
-        w('                    fcb       %s' % ','.join(str(v) for v in p.y))
-        if p.lib:
-            w('                    fcb       %d,%d,%d,%d,%d,%d'
-              % (p.index, p.vert, p.px, p.height * SCALE, p.width * SCALE, p.time))
-            w('                    fcb       $%02X,%d       score/sound, state bytes'
-              % (p.score_snd, p.statebytes))
+        _fcb(o, rec)
+    w('PCTmplN             equ       %d       ⚠ = sum(PCTLen), and checked' % _tot)
+    if _tot != sum(p.objlen for p in parts):
+        print('FAIL  PCTmpl is %d bytes and PCTLen sums to %d'
+              % (_tot, sum(p.objlen for p in parts)))
+        sys.exit(1)
+    w('')
+    w('* ⛔ THE PART TYPE A TEMPLATE BECOMES, which is what ADDOBJ has to put')
+    w('* at L[10] where Budge had a 6502 address.  $FF for a plain polygon.')
+    w('PCTType             equ       *')
+    _fcb(o, bytes((O.TYPEID[O.kind_of(p)] if (p.lib and O.kind_of(p)) else 0xFF)
+                  for p in parts))
     w('')
     w('PCTLen              equ       *         OBJLEN, EDIT.s:1282')
     _fcb(o, bytes(p.objlen for p in parts))

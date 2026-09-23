@@ -76,6 +76,7 @@ class Part(object):
 
     def __init__(self, index, name, raw, objlen, chain_len, das):
         self.index, self.name = index, name
+        self.raw = bytes(raw)       # ⭐ Budge's own record, kept whole
         self.objlen = objlen                # bytes ADDOBJ copies
         self.tmpllen = len(raw)             # bytes Budge wrote
         self.statebytes = objlen - len(raw)

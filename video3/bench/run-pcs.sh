@@ -28,6 +28,12 @@
 #   m2  a B-polygon paints its RECORDS instead of their complement - the bug
 #       the Python model caught, and the one that looks plausible on screen
 #       while inverting the ball's world
+#   m6  ⭐⭐ THE EDITOR - a dozen edits from `mkpcs.edit_script()`, run by the
+#       machine and by pcsedit.DB, compared on what each step came to, on every
+#       byte of the object area and on the whole span database.  ⛔ Two of them
+#       must be REFUSED: an edit the database will not take has to leave no
+#       trace, and a gate that never sees a refusal has not checked the
+#       rollback at all.
 #   m5  ⭐ BOUNCE rotates back by TTA instead of 32 - TTA, which is the gate on
 #       the TRAJECTORY rather than on the picture.  ⛔ The two are the SAME for
 #       tta 0 and 16, so a ball in a box of flat walls behaves identically and
@@ -42,6 +48,8 @@ ROOT=$(pwd)
 OUT=${OUT:-/tmp/arm6309-pcs}
 FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
+# ⚠ m6 IS NOT IN THE DEFAULT SET: the editor's 6809 side does not yet agree
+# with pcsedit.py, which is the specification and is green.  `RUNS=m6` runs it.
 RUNS=${RUNS:-"m0 m4 m1 m2 m5"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
@@ -134,6 +142,7 @@ for r in $RUNS; do
     m1) run m1 1 ;;
     m2) run m2 2 ;;
     m5) run m5 5 ;;
+    m6) run m6 6 ;;
   esac
 done
 
@@ -150,6 +159,8 @@ for r in $RUNS; do
         then echo "FAIL  the gate passed a run with every sloped edge moved"
              fail=1
         else echo "ok    the gate rejected it"; head -4 "$OUT/m1.txt" | tail -2; fi ;;
+    m6) echo "--- m6 ⭐⭐ THE EDITOR: a construction session, and the database it left ---"
+        python3 video3/bench/checkpcs.py "$OUT/m6" edit || fail=1 ;;
     m5) echo "--- m5 ⛔ MUTATION: BOUNCE rotates back by TTA - this must FAIL ---"
         if python3 video3/bench/checkpcs.py "$OUT/m5" ball > "$OUT/m5.txt" 2>&1
         then echo "FAIL  the gate passed a run whose every bounce is mirrored"

@@ -26,6 +26,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import mkpcs                                                   # noqa: E402
+import pcsedit                                                 # noqa: E402
 import pcsobj                                                  # noqa: E402
 import pcsphys                                                 # noqa: E402
 import pcspak as K                                             # noqa: E402
@@ -56,6 +57,7 @@ def expected(parts=None):
 
 
 PLAYR, PLAYS, PLAYT, PLAYD = 490, 494, 495, 496
+EDITR, EDITO = 498, 505
 
 
 def _stream(vram, row, n):
@@ -159,6 +161,57 @@ def trajectory(vram, pak, n=600):
     return sim
 
 
+def edit_session(vram):
+    """⭐⭐ A CONSTRUCTION SESSION, AND THE DATABASE IT LEFT BEHIND.
+
+    `mkpcs.edit_script()` is a dozen edits - two parts out of the bin, a drag,
+    a vertex moved, one pasted and cut again, a repaint, a delete - and two the
+    database must REFUSE.  The machine runs them through pcsedit.inc and the
+    model through pcsedit.DB, and three things are compared: what each step
+    came to, every byte of the object area, and the whole span database.
+
+    ⛔ THE REFUSALS ARE THE POINT.  An edit the database will not take has to
+    leave NO TRACE, and a gate that never sees one has not checked the rollback
+    at all - which is why the script deletes the backdrop and drags a
+    triangle's third vertex level with the other two.
+    """
+    objs = mkpcs.test_table()
+    db = pcsedit.DB(objs, width=mkpcs.TW, height=mkpcs.TH)
+    want = pcsedit.run_script(db, mkpcs.edit_script())
+    got = _stream(vram, EDITR, len(want))
+    names = [mkpcs.EDIT_OPS[st[0]] for st in mkpcs.edit_script()][:len(want)]
+    if got != want:
+        print('FAIL  the session went differently')
+        for i, (g, w) in enumerate(zip(got, want)):
+            print('      %2d %-6s machine %s, EDIT.s %s %s'
+                  % (i, names[i], 'refused' if g else 'took',
+                     'refused' if w else 'took', '' if g == w else '<<'))
+        return False
+    nref = sum(want)
+    if nref < 2:
+        print('FAIL  only %d edit(s) were refused - the rollback is unchecked'
+              % nref)
+        return False
+    print('    the session: %d edits, %d of them refused'
+          % (len(want), nref))
+
+    wantpb = mkpcs.serialise(db.objs)
+    gotpb = _stream(vram, EDITO, len(wantpb))
+    if gotpb != wantpb:
+        i = next(k for k in range(len(wantpb)) if gotpb[k] != wantpb[k])
+        print('FAIL  the object area differs at byte %d of %d'
+              % (i, len(wantpb)))
+        lo = max(0, i - 6)
+        print('      drew %s' % ' '.join('%3d' % b for b in gotpb[lo:i + 10]))
+        print('      want %s' % ' '.join('%3d' % b for b in wantpb[lo:i + 10]))
+        print('      (%d objects, lengths %s)'
+              % (wantpb[0], list(wantpb[1:1 + wantpb[0]])))
+        return False
+    print('    the object area matches: %d objects, %d bytes'
+          % (wantpb[0], len(wantpb)))
+    return _database(vram, db.pak)
+
+
 def main():
     if len(sys.argv) < 2:
         print('usage: checkpcs.py OUTDIR')
@@ -186,6 +239,8 @@ def main():
     # holding is each part's FINAL frame.  Rendering frame 0 and comparing
     # happened to pass, which is exactly the kind of agreement that stops
     # being true the day a part comes to rest mid-animation.
+    if len(sys.argv) > 2 and sys.argv[2] == 'edit':
+        return 0 if edit_session(vram) else 1
     ball = len(sys.argv) > 2 and sys.argv[2] == 'ball'
     if ball:
         sim = trajectory(vram, pak)
