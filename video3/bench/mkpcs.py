@@ -231,6 +231,59 @@ def art():
     return bytes(blob), frames, index
 
 
+# --------------------------------------------------------- the test table --
+def test_table():
+    """⭐ THE TABLE STEP 2's GATE IS BUILT ON, defined ONCE and used twice.
+
+    `pcs` mode 0 copies the serialised form below into its database and runs
+    the scan converter over it; `checkpcs.py` builds the same objects through
+    pcspak.py and compares.  Defining it here rather than in either of them is
+    what stops the two drifting - the same reason checkscroll.py imports
+    mkscroll rather than restating the world.
+
+    Four objects, chosen so that every arm of the converter is exercised:
+
+      0  the backdrop      a B-POLYGON, so the complement path and the
+                           "records are the open area" rule
+      1  a wide sloped bar both edges sloping, so DIVIDE and the midpoint
+                           rounding
+      2  a concave U       two spans a scanline, and horizontal edges, which
+                           is what PROCESSVERTEX's skip is for
+      3  an unfilled wall  fillcolor 0: solid, and drawn as nothing
+    """
+    import pcspak as K
+    objs = [
+        K.Obj(K.BPOLY, PALTABLE, [6, 154, 154, 6], [4, 4, 232, 232]),
+        K.Obj(K.POLY, PALBAR, [20, 140, 120, 40], [30, 46, 70, 54]),
+        K.Obj(K.POLY, PALU, [30, 60, 60, 100, 100, 130, 130, 30],
+              [96, 96, 150, 150, 96, 96, 178, 178]),
+        K.Obj(K.POLY, 0, [70, 96, 96, 70], [190, 190, 214, 214]),
+    ]
+    for o in objs:
+        if not o.align():
+            raise ValueError('a test object is degenerate')
+    return objs
+
+
+PALTABLE = pcspal.UI_TABLE
+PALBAR = pcspal.PAINT0 + 3          # red
+PALU = pcspal.PAINT0 + 5            # yellow
+
+
+def serialise(objs):
+    """The objects as `pbdata` holds them: the count, the record lengths, then
+    the records.  ⭐ pbdata[0] doubles as the count AND as the offset from
+    pbdata+1 to the first record, which is why GETOBJ needs no index."""
+    recs = []
+    for o in objs:
+        recs.append(bytes([o.objid, o.fillcolor, o.n]) + bytes(o.x) + bytes(o.y))
+    out = bytearray([len(recs)])
+    out += bytes(len(r) for r in recs)
+    for r in recs:
+        out += r
+    return bytes(out)
+
+
 # ------------------------------------------------------------ the emitter --
 def _fcb(out, data, per=16, indent=' ' * 20):
     for i in range(0, len(data), per):
@@ -407,6 +460,16 @@ def emit(path):
     for i, (x, y, ww, hh) in enumerate(boxes):
         w('                    fcb       %-3d,%-3d,%-3d,%-3d   %2d %s'
           % (x, y, ww, hh, i, parts[i].name))
+    w('')
+    w('* ══════════════════ THE TEST TABLE ════════════════════════════════')
+    w("* ⭐ Step 2's gate: `pcs 0` copies this into its database, runs the scan")
+    w('* converter over it and paints the result; checkpcs.py builds the same')
+    w('* four objects through pcspak.py and compares.  Defined in mkpcs.py so')
+    w('* the program and the checker cannot drift.')
+    tt = serialise(test_table())
+    w('PCTestN             equ       %d' % len(tt))
+    w('PCTest              equ       *')
+    _fcb(o, tt)
     w('')
     w('* ══════════════════ PHYSICS ═══════════════════════════════════════')
     w('* ⛔ EVERY BYTE VERBATIM FROM RUN.s AND PPAK.s.  Nothing here is')
