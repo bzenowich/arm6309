@@ -67,8 +67,12 @@ python3 software/nitros9/tools/v3show.py "$DATADIR" || { echo "FAIL  v3show.py";
 # space and this is five times that (video3/bench/mkpcb.py).  `pinball` opens
 # it by bare name through DOpen, so the desktop's Applications menu can fork
 # the scene off /SD0/CMDS and it finds its table in /SD0/DATA.
-cp video3/bench/pcbtable.pic video3/bench/pcbtable.pal "$DATADIR/" \
-  || { echo "FAIL  no pcbtable.pic/.pal - run video3/bench/mkpcb.py"; exit 1; }
+# ⭐ AND SINCE 2026-09-23 IT IS A TILE BANK, not a 327,680-byte picture: the
+# table is 640 x 1280 and does not fit the ring, so `pinball` streams it
+# through tscroll.inc the way `scroll` does (video3/bench/mkpcbt.py).
+rm -f "$DATADIR/pcbtable.pic" "$DATADIR/pcbtable.pal"
+cp video3/bench/pcbt.bnk video3/bench/pcbt.pal "$DATADIR/" \
+  || { echo "FAIL  no pcbt.bnk/.pal - run video3/bench/mkpcbt.py"; exit 1; }
 # ⭐ AND THE OVERWORLD, for the same reason.  ⛔ IT IS 8,192 BYTES SINCE
 # 2026-09-22, not 491,520: `zelda` became a ROOM game and a room is a tile MAP
 # assembled into the module, so what has to reach the card is the 50-tile bank

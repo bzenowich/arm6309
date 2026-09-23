@@ -521,6 +521,20 @@ ZSCR0               equ       {ZSCR0}
 ZMXAC               equ       {ZMXAC}
 ZKEY                equ       $00
 
+* ⚠ THE STREAMING BUDGET IS THE SCENE'S: copies a frame each job may take.
+* ⭐ TWELVE, because this camera chases a falling ball rather than walking at
+* two pixels a frame - a band has to be finished in two frames, not six.
+HJOBN               equ       4
+VJOBN               equ       12
+
+* ⭐ THE PALETTE'S THREE TENANTS: art 1..{NARTX}, lamps, then six digits of
+* seven segments.  A lamp and a segment are RESERVED INDICES painted into the
+* tiles, so lighting one is a palette write and no pixels at all.
+NLAMP               equ       {NLAMP}
+NDIG                equ       {NDIG}
+LAMP0               equ       {LAMP0}
+SEG0                equ       {SEG0}
+
 * ⭐ THE TABLE, and the camera's travel over it
 PT.W                equ       {TABW}      640 x 1280
 PT.H                equ       {TABH}
@@ -576,7 +590,8 @@ def main(cmds):
         ZSLOTS=ZSLOTS, ZVSLOT=ZVW // ZTILE + 1, ZTSLOT=ZTSLOT, ZBCOL=ZBCOL,
         ZBROW=ZBROW, ZNTILE=ZNTILE, ZBK0=ZBK0, ZVBAND=ZVBAND,
         ZWLDW=ZWLDW, ZWLDH=ZWLDH, ZART0=ZART0, ZNART=ZNART, ZSCR0=ZSCR0,
-        ZMXAC=ZMXAC, TABW=TW * ZTILE, TABH=TH * ZTILE, CELL=CELL, CW=CW, CH=CH,
+        ZMXAC=ZMXAC, NLAMP=NLAMP, NDIG=NDIG, LAMP0=LAMP0, SEG0=SEG0,
+        NARTX=NART, TABW=TW * ZTILE, TABH=TH * ZTILE, CELL=CELL, CW=CW, CH=CH,
         TABW_T=TW, TABH_T=TH,
         KINDS="\n".join("K.%-16s equ       %d" % (k.capitalize(), v)
                         for k, v in KINDS.items()),

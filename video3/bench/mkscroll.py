@@ -416,6 +416,10 @@ ZMXAC               equ       {ZMXAC}
 ZNHERO              equ       {ZNHERO}        art tiles 0..7 are the hero's
 ZKEY                equ       ${KEY:02X}
 
+* ⚠ THE STREAMING BUDGET IS THE SCENE'S: copies a frame each job may take.
+HJOBN               equ       2
+VJOBN               equ       4
+
 * ⭐ THE BANK STARTS AT SLOT ZBK0 and runs ZBCOL slots.  At wx = 0 the terrain
 * window is world slots -1..21, which is ring slots 31 and 0..21, so the bank
 * has ring slots 22..30 - exactly the 288 columns scroll.bnk is wide.
