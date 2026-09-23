@@ -278,6 +278,11 @@ PALBAR = pcspal.PAINT0 + 3          # red
 PALU = pcspal.PAINT0 + 5            # yellow
 PALSLIV = pcspal.PAINT0 + 7         # cyan
 
+# ⭐ The ball the bench serves, and the World it serves it into.  Defined once
+# and used twice: `pcs 4` starts from these and checkpcs.py's model does too.
+BALL = (80, 20, 12, 0)              # x, y, bdx, bdy
+WSET = (5, 3, 3, 4)                 # gravity, speed, kick, elasticity
+
 
 def serialise(objs):
     """The objects as `pbdata` holds them: the count, the record lengths, then
@@ -354,6 +359,18 @@ def emit(path):
     w('* The original\'s own rects (EDIT.s), in ITS coordinates - x 0..319.')
     for k, (x, y, ww, hh) in sorted(r.items()):
         w('* %-8s x %3d..%3d  y %3d..%3d' % (k, x, x + ww, y, y + hh))
+    w('')
+    w('* ══════════════════ THE BALL THE BENCH RUNS ═══════════════════════')
+    w("* ⭐ Where mode 4 serves it, and how fast.  Defined here so checkpcs.py")
+    w('* starts its model from exactly the same seven bytes.')
+    w('PC.BallX            equ       %d' % BALL[0])
+    w('PC.BallY            equ       %d' % BALL[1])
+    w('PC.BallDX           equ       %d' % BALL[2])
+    w('PC.BallDY           equ       %d' % (BALL[3] & 0xFF))
+    w('PC.WGrav            equ       %d         the World sliders' % WSET[0])
+    w('PC.WTime            equ       %d' % WSET[1])
+    w('PC.WKick            equ       %d' % WSET[2])
+    w('PC.WElast           equ       %d' % WSET[3])
     w('')
     w('* ══════════════════ LIMITS ════════════════════════════════════════')
     w('* ⚠ THE ORIGINAL\'S, KEPT.  They are part of what the construction set')
@@ -499,6 +516,27 @@ def emit(path):
         w('')
         w('PC%-16s equ       *         %d bytes' % (name[:16], len(t[name])))
         _fcb(o, t[name])
+    w('')
+    # ⭐ THE ELASTICITY SLIDER AS AN INDEX, NOT AN ADDRESS.  ELASTLO/ELASTHI
+    # are the ADDRESSES of cosine tables on the Atari, which say nothing on a
+    # 6809 - and a position-independent NitrOS-9 module cannot carry an address
+    # table anyway.  Decoded here into "which of the seven", so the port
+    # multiplies by 64 and adds.
+    base = 0x8200
+    order = ['C05625', 'C1125', 'C225', 'C45', 'C675', 'C7875', 'C84375']
+    idx = []
+    for lo, hi in zip(t['ELASTLO'], t['ELASTHI']):
+        k = ((lo | (hi << 8)) - base) // 64
+        if not 0 <= k < len(order):
+            print('FAIL  ELAST entry $%04X is not a cosine table' % (lo | (hi << 8)))
+            sys.exit(1)
+        idx.append(k)
+    w('')
+    w('* ⭐ Which cosine table each elasticity setting uses, 0..6 into the seven')
+    w('* below.  ⚠ Settings 2 and 3 name the SAME table in the original and')
+    w('* therefore behave identically; reproduced, not fixed.')
+    w('PCELASTI            equ       *         %s' % idx)
+    _fcb(o, bytes(idx))
     w('')
     w('* The seven cosine tables (RUN.s:129-190): cos[v] = round(v * 4 * cos a),')
     w('* v in 0..63.  ROTATE picks a pair - cos(SUB[s]) and cos(90-SUB[s]) - so')

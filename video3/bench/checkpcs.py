@@ -26,6 +26,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import mkpcs                                                   # noqa: E402
+import pcsphys                                                 # noqa: E402
 import pcspak as K                                             # noqa: E402
 import pcspal                                                  # noqa: E402
 
@@ -60,6 +61,52 @@ def expected():
         for k in range(s):
             fb[(y * s + k) * w:(y * s + k) * w + w] = row
     return pak, fb, w, h
+
+
+def trajectory(vram, pak, n=600, row=490):
+    """⭐⭐ THE BALL, FRAME FOR FRAME, AGAINST A TRANSLITERATION OF RUN.s.
+
+    This is the claim the whole port is built on.  Because the world stayed in
+    the Atari's own units, the simulation is exact integer arithmetic - so the
+    model can be run over the SAME table from the SAME seven bytes and required
+    to produce the same (x, y, bdx, bdy) on every one of 600 frames.
+
+    Not "the ball looks right".  A reflection off by one unit, an elasticity
+    table entered at the wrong offset, a gravity mask applied on the wrong
+    tick, a slope nibble read from the wrong end of a record: none of them
+    survives six hundred frames of this.
+    """
+    w = pcsphys.World(pak, wset=mkpcs.WSET, width=mkpcs.TW)
+    b = pcsphys.Ball(x=mkpcs.BALL[0], y=mkpcs.BALL[1],
+                     bdx=mkpcs.BALL[2], bdy=mkpcs.BALL[3])
+    got = bytes(x for r in range(0, (n * 4 + 1023) // 1024 + 1)
+                for x in vram[(row + r) * STRIDE:(row + r) * STRIDE + 1024])
+
+    hits = 0
+    for f in range(1, n + 1):
+        hits += pcsphys.moveball(w, b, f)
+        i = (f - 1) * 4
+        m = (b.x1, b.y1, b.bdx, b.bdy)
+        g = tuple(got[i:i + 4])
+        if g != m:
+            print('FAIL  the ball diverges at frame %d of %d' % (f, n))
+            print('      machine  x=%3d y=%3d bdx=%4d bdy=%4d'
+                  % (g[0], g[1], pcsphys._sb(g[2]), pcsphys._sb(g[3])))
+            print('      RUN.s    x=%3d y=%3d bdx=%4d bdy=%4d'
+                  % (m[0], m[1], pcsphys._sb(m[2]), pcsphys._sb(m[3])))
+            if f > 1:
+                p = tuple(got[i - 4:i])
+                print('      (the frame before, both agreed: x=%3d y=%3d '
+                      'bdx=%4d bdy=%4d)'
+                      % (p[0], p[1], pcsphys._sb(p[2]), pcsphys._sb(p[3])))
+            return False
+    print('    the ball agrees with RUN.s for all %d frames, %d hits' % (n, hits))
+    # ⛔ A ball that never moved would agree trivially.  It has to have BOUNCED.
+    if hits < 2:
+        print('FAIL  the ball hit something only %d times - the run proves nothing'
+              % hits)
+        return False
+    return True
 
 
 def main():
@@ -119,6 +166,10 @@ def main():
         _dump(vram, want, w, y)
         return 1
 
+    # ⭐ and the ball, when this run was one that played
+    if len(sys.argv) > 2 and sys.argv[2] == 'ball':
+        if not trajectory(vram, pak):
+            return 1
     print('ok    all %d bytes of the table are what PPAK.s builds' % total)
     print('      %d objects, %d scanlines carrying spans'
           % (len(pak.objs), sum(1 for r in pak.rows if r)))

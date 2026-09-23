@@ -586,11 +586,18 @@ def checkvert(w, ball, y, bmove, frame):
     open playfield and the wall is what is left over.
     """
     if y >= len(w.rows) or not w.rows[y]:
-        # OFFBOARD (RUN.s:1657): a scanline with no records at all is an
+        # OFFBOARD (RUN.s:1661): a scanline with no records at all is an
         # invisible floor or ceiling, depending on which way the ball is going.
+        # ⛔ `LDA #0 / BIT BMOVE / BVS *+4 / LDA #16 / STA TTA / JMP PBOUNCE` -
+        # a TAIL CALL to the bounce, so this path takes neither DOHIT's hit
+        # count nor DOVHIT's "if bdx came out zero, nudge it off the wall"
+        # epilogue, and it returns the bounce's own carry.
         w._obj = 0
         tta = 0 if (bmove & BM_POS) else 16
-        return _vdo(w, ball, tta, frame, right=False)
+        bdx, bdy, did = bounce(tta, ball.bdx, ball.bdy, kick=0,
+                               elastic=True, wset3=w.wset[3])
+        ball.bdx, ball.bdy = bdx, bdy
+        return did
 
     recs = w.rows[y]
     i = 0

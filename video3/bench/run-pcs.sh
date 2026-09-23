@@ -28,7 +28,11 @@
 #   m2  a B-polygon paints its RECORDS instead of their complement - the bug
 #       the Python model caught, and the one that looks plausible on screen
 #       while inverting the ball's world
-# Both are REQUIRED to be rejected.
+#   m5  ⭐ BOUNCE rotates back by TTA instead of 32 - TTA, which is the gate on
+#       the TRAJECTORY rather than on the picture.  ⛔ The two are the SAME for
+#       tta 0 and 16, so a ball in a box of flat walls behaves identically and
+#       only a slope tells them apart - which is why the test table has one.
+# All three are REQUIRED to be rejected.
 #
 # ⚠ Needs ../nitros9 on its arm6309 branch, so it is in no aggregate.
 # ⛔ Its exit code is the answer.
@@ -38,7 +42,7 @@ ROOT=$(pwd)
 OUT=${OUT:-/tmp/arm6309-pcs}
 FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
-RUNS=${RUNS:-"m0 m1 m2"}
+RUNS=${RUNS:-"m0 m4 m1 m2 m5"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH
@@ -126,8 +130,10 @@ run() {
 for r in $RUNS; do
   case "$r" in
     m0) run m0 0 ;;
+    m4) run m4 4 ;;
     m1) run m1 1 ;;
     m2) run m2 2 ;;
+    m5) run m5 5 ;;
   esac
 done
 
@@ -137,11 +143,18 @@ for r in $RUNS; do
   case "$r" in
     m0) echo "--- m0: the scan converter, and it must be exact ---"
         python3 video3/bench/checkpcs.py "$OUT/m0" || fail=1 ;;
+    m4) echo "--- m4 ⭐⭐ THE BALL, frame for frame against RUN.s ---"
+        python3 video3/bench/checkpcs.py "$OUT/m4" ball || fail=1 ;;
     m1) echo "--- m1 ⛔ MUTATION: no midpoint rounding - this must FAIL ---"
         if python3 video3/bench/checkpcs.py "$OUT/m1" > "$OUT/m1.txt" 2>&1
         then echo "FAIL  the gate passed a run with every sloped edge moved"
              fail=1
         else echo "ok    the gate rejected it"; head -4 "$OUT/m1.txt" | tail -2; fi ;;
+    m5) echo "--- m5 ⛔ MUTATION: BOUNCE rotates back by TTA - this must FAIL ---"
+        if python3 video3/bench/checkpcs.py "$OUT/m5" ball > "$OUT/m5.txt" 2>&1
+        then echo "FAIL  the gate passed a run whose every bounce is mirrored"
+             fail=1
+        else echo "ok    the gate rejected it"; grep -m1 'diverges' "$OUT/m5.txt"; fi ;;
     m2) echo "--- m2 ⛔ MUTATION: the B-polygon paints its records - this must FAIL ---"
         if python3 video3/bench/checkpcs.py "$OUT/m2" > "$OUT/m2.txt" 2>&1
         then echo "FAIL  the gate passed a run with the backdrop inside out"
@@ -151,6 +164,6 @@ for r in $RUNS; do
 done
 
 echo
-[ "$fail" = 0 ] && echo "ok    run-pcs.sh: the span database is what PPAK.s builds, and both mutations were caught"
+[ "$fail" = 0 ] && echo "ok    run-pcs.sh: the span database and the ball are what PPAK.s and RUN.s build, and every mutation was caught"
 [ "$fail" = 0 ] || echo "FAIL  run-pcs.sh"
 exit "$fail"
