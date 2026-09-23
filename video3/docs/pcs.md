@@ -297,6 +297,17 @@ The legs:
 | `m2` | ⛔ MUTATION: a B-polygon paints its RECORDS instead of their complement — the bug that looks plausible on screen while inverting the ball's world |
 | `m5` | ⛔ MUTATION: `BOUNCE` rotates back by `TTA` instead of `32 - TTA`. ⛔ The two are the SAME for `tta` 0 and 16, so a ball in a box of flat walls behaves identically and only a slope tells them apart |
 
+⭐ **The picture includes the parts' art**, and the ball leg compares it against each part's
+**final** frame and position — not against frame 0, which happened to pass and stops being
+true the day a part comes to rest mid-animation. Tightening it is what found the missing
+repaint.
+
+⛔ **`fcb 6   ,8` emits ONE byte.** lwasm ends the operand field at the first space, so
+printf padding turned `PCPIdx` into a table half its length: every part found the wrong
+frame and it assembled without a murmur. `mkpcs.py`'s `_checkgen` now refuses any `fcb`/`fdb`
+whose operand ends at a space, on every generation. ⚠ Same defect class as `grep '^FAIL'`
+matching nothing — it reads exactly like success.
+
 ⭐ **The gate requires at least five LIBRARY PARTS to have been struck.** A ball that only
 ever met the backdrop proves nothing about the object system, and that is exactly the run an
 earlier table gave — 600 frames and 21 bounces agreeing over a collision walk that was
@@ -311,8 +322,14 @@ the answer.
 
 ## 8. Open
 
-- ⚠ **`ADVANCE`'s repaint is not built yet.** `L[8]` is stepped and the bench compares it,
-  but nothing draws the part's new frame; §2 says what it will do.
+- ⭐ **The animation's repaint is built.** A part whose state byte or whose art's top row
+  changed damages a row range; at the end of the frame those rows are **erased**, repainted
+  from the span database and every picture over them put back. ⛔ The erase is not optional
+  and not obvious: a library part's polygon is unfilled, `PCFill` refuses colour 0, and the
+  backdrop paints its *complement* — so a repaint never writes the open playfield at all,
+  and the previous frame stays underneath.
+  ⚠ **The damage is a whole row range across the table**, which is honest but coarse; a
+  column range would be the obvious next economy, and nothing measures the cost yet.
 - ⚠ **Whether a VRAM pointer's auto-increment carries out of a row** is an open question
   about the card or the emulator's model of it. The bench's streams reposition at every row
   boundary, so they do not depend on the answer — but `graphics.md` §19 should settle it.
