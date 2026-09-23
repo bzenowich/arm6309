@@ -35,37 +35,27 @@ STRIDE = 1024           # the card's VRAM row stride - plan 4
 VRAMSZ = 512 * 1024
 
 
-def expected():
-    """The table as PPAK.s would build it, at card resolution.
+def expected(parts=None):
+    """The table as PPAK.s builds it and the card shows it, at card resolution.
 
     ⭐ Doubling the world render is EXACT rather than approximate: PCFill sets
     dcol = 2*xl and dlen = 2*xr + 2 - 2*xl, so a world span [xl..xr] covers card
     columns [2*xl .. 2*xr+1] and a world row y covers card rows 2y and 2y+1 -
     which is what WADV 01's second trigger paints.
+
+    ⭐ And then every library part's picture goes on top, because its polygon is
+    UNFILLED and draws nothing: the span database is the collision world and the
+    1bpp frame is the picture (pcs.md 2, 4).
     """
     objs = mkpcs.test_table()
     pak = K.Pak(height=mkpcs.TH, width=mkpcs.TW)
     pak.objs = objs
     pak.display()
-
-    colours = [o.fillcolor for o in objs]
-    world = K.render(pak, colours, mkpcs.TW, mkpcs.TH)
-
-    s = mkpcs.SCALE
-    w, h = mkpcs.TW * s, mkpcs.TH * s
-    fb = bytearray(w * h)
-    for y in range(mkpcs.TH):
-        row = bytearray(w)
-        for x in range(mkpcs.TW):
-            v = world[y * mkpcs.TW + x]
-            row[x * s:x * s + s] = bytes([v]) * s
-        for k in range(s):
-            fb[(y * s + k) * w:(y * s + k) * w + w] = row
+    fb, w, h = mkpcs.render_table(pak, objs, parts)
     return pak, fb, w, h
 
 
-STRIDE_ROWS = 4                 # x, y, bdx, bdy - the stream's record
-PLAYR, PLAYS, PLAYT = 490, 494, 495
+PLAYR, PLAYS, PLAYT, PLAYD = 490, 494, 495, 496
 
 
 def _stream(vram, row, n):
@@ -120,7 +110,7 @@ def trajectory(vram, pak, n=600):
                 print('      (the frame before, both agreed: x=%3d y=%3d '
                       'bdx=%4d bdy=%4d)'
                       % (p[0], p[1], pcsphys._sb(p[2]), pcsphys._sb(p[3])))
-            return False
+            return None
     hits = len(sim.world.hits)
     struck = sorted(set(h[1] for h in sim.world.hits))
     print('    the ball agrees with RUN.s for all %d frames, %d hits on %s'
@@ -131,12 +121,12 @@ def trajectory(vram, pak, n=600):
     if hits < 2:
         print('FAIL  the ball hit something only %d times - the run proves '
               'nothing' % hits)
-        return False
+        return None
     parts_struck = [o for o in struck if o in sim.parts]
     if len(parts_struck) < 5:
         print('FAIL  only %d LIBRARY PARTS were struck - the part procs are '
               'what this leg is for' % len(parts_struck))
-        return False
+        return None
 
     # -- every part's state byte, at the end of the run -------------------
     want = bytes(sim.parts[o].L(pcsobj.L_STATE) for o in sim.rcn)
@@ -146,7 +136,7 @@ def trajectory(vram, pak, n=600):
         print('      drew %s' % ' '.join('%02X' % b for b in gots))
         print('      want %s' % ' '.join('%02X' % b for b in want))
         print('      (%s)' % ' '.join(sim.parts[o].kind for o in sim.rcn))
-        return False
+        return None
 
     # -- the score, the sound, and the shape of the run -------------------
     tail = _stream(vram, PLAYT, 23)
@@ -162,11 +152,11 @@ def trajectory(vram, pak, n=600):
             print('      %s drew %s  want %s %s'
                   % (nm, ' '.join('%d' % v for v in a),
                      ' '.join('%d' % v for v in b), mark))
-        return False
+        return None
     print('    %d parts in the run chain, the drain line is %d, the score is '
           '%s' % (sim.runlen, sim.lasty,
                   ''.join(str(d) for d in sim.score1).lstrip('0') or '0'))
-    return True
+    return sim
 
 
 def main():
@@ -190,6 +180,18 @@ def main():
     # actually read - and because a picture can be right for the wrong reason.
     if not _database(vram, pak):
         return 1
+
+    # ⭐ AND THE BALL BEFORE THE PICTURE, when this run was one that played:
+    # every part's animation counter has moved, and the picture the card is
+    # holding is each part's FINAL frame.  Rendering frame 0 and comparing
+    # happened to pass, which is exactly the kind of agreement that stops
+    # being true the day a part comes to rest mid-animation.
+    ball = len(sys.argv) > 2 and sys.argv[2] == 'ball'
+    if ball:
+        sim = trajectory(vram, pak)
+        if sim is None:
+            return 1
+        pak2, want, w, h = expected(sim.parts)
 
     # A quick sanity line before the comparison, so a run that painted NOTHING
     # is distinguishable from one that painted the wrong thing.
@@ -226,10 +228,6 @@ def main():
         _dump(vram, want, w, y)
         return 1
 
-    # ⭐ and the ball, when this run was one that played
-    if len(sys.argv) > 2 and sys.argv[2] == 'ball':
-        if not trajectory(vram, pak):
-            return 1
     print('ok    all %d bytes of the table are what PPAK.s builds' % total)
     print('      %d objects, %d scanlines carrying spans'
           % (len(pak.objs), sum(1 for r in pak.rows if r)))

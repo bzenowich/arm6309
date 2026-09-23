@@ -45,13 +45,17 @@ UI_FRAME = 23           # the selection box
 UI_TABLE = 24           # the table's default backdrop
 UI_SCORE = 25           # the score strip's digits
 UI_BALLICON = 26        # the remaining-balls icons
+UI_PART = 27            # ⭐ a library part's ART.  The original's is 1bpp and
+#                         its polygon's FILLCOLOR is 0 (unfilled but solid), so
+#                         the picture needs a colour of its own - and `WM.Sprite`
+#                         renders the 1bpp mask verbatim in it, 8 px a store.
 
 # Named so the port and the checker agree without either quoting a number.
 NAMES = {
     'key': KEY, 'panel': UI_PANEL, 'light': UI_LIGHT, 'dark': UI_DARK,
     'ink': UI_INK, 'hilite': UI_HILITE, 'dot': UI_DOT, 'wire': UI_WIRE,
     'frame': UI_FRAME, 'table': UI_TABLE, 'score': UI_SCORE,
-    'ballicon': UI_BALLICON,
+    'ballicon': UI_BALLICON, 'part': UI_PART,
 }
 
 # --- the colours -----------------------------------------------------------
@@ -89,6 +93,7 @@ CHROME = {
     UI_TABLE:     (0x10, 0x14, 0x20),
     UI_SCORE:     (0xFF, 0xCC, 0x44),
     UI_BALLICON:  (0xDD, 0xDD, 0xEE),
+    UI_PART:      (0xEE, 0xEE, 0xF4),
 }
 
 

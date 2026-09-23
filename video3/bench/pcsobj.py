@@ -40,7 +40,12 @@ import pcsphys as P                                            # noqa: E402
 # ── the L record ────────────────────────────────────────────────────────────
 # ⚠ THE OFFSETS ARE THE ORIGINAL'S and must stay so: the procs below index them
 # with literal `LDY #n`, and the ball's record is L[0..22] entire.
-L_FRAME = 0             # was the bitmap pointer's low byte; unused in the port
+L_TMPL = 0              # ⭐ WAS THE BITMAP POINTER; is the TEMPLATE INDEX.  The
+#                         byte that used to select the art still selects it -
+#                         but by which of the 43 templates this part is, which
+#                         is what indexes the generated art bank.  ⚠ Not the
+#                         same thing as L[10]'s part TYPE: six bumpers are one
+#                         type and six different pictures.
 L_VERT = 2              # the art's top row - flippers MOVE it (FXDVERT)
 L_PX = 3                # the art's left column.  ⭐ One number: chunky 8bpp
 L_XM = 4                #   has no shift, so HDIV8/HMOD8 collapse (pcs.md 4)

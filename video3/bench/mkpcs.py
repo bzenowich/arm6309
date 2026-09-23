@@ -232,6 +232,86 @@ def art():
     return bytes(blob), frames, index
 
 
+_ARTBANK = None
+
+
+def artbank():
+    """(blob, frames, index), built once.  ⭐ The model and the machine read the
+    SAME bytes: this is what `PCArt`/`PCFrm`/`PCPIdx` are emitted from."""
+    global _ARTBANK
+    if _ARTBANK is None:
+        _ARTBANK = art()
+    return _ARTBANK
+
+
+def render_table(pak, objs, parts=None):
+    """⭐ THE TABLE AS THE CARD SHOWS IT: the span database painted at 2x, and
+    then every library part's current frame blitted over it in UI_PART.
+
+    ⛔ THE ART IS ALREADY DOUBLED.  `art()` doubles each frame's bits on the way
+    into the blob, so a frame of `h` rows by `w` bytes covers `w*8` CARD columns
+    and `h` CARD rows and goes down verbatim - `WM.Sprite` expands each byte to
+    eight pixels and writes NOTHING for a 0 bit, which is the transparency and
+    is why the original's 1bpp art renders here without being redrawn (pcs.md 4).
+
+    ⚠ The frame index's `dy` is NOT applied: L[2] already tracks the flipper's
+    moving top edge, and adding FXDVERT twice would move it twice.
+
+    ⚠ `parts` maps an object index to the LIVE pcsobj.Part, whose L the
+    simulator has been mutating - its frame AND its position.  Rendering the
+    final frame at the placed record's position instead is wrong for exactly
+    one part, the flipper, because a flipper's art moves its own top edge as it
+    sweeps; the picture differed by two world rows and nothing else.
+    """
+    import pcsobj
+    import pcspak as K
+    world = K.render(pak, [o.fillcolor for o in objs], TW, TH)
+    s = SCALE
+    w, h = TW * s, TH * s
+    fb = bytearray(w * h)
+    for y in range(TH):
+        row = bytearray(w)
+        for x in range(TW):
+            v = world[y * TW + x]
+            row[x * s:x * s + s] = bytes([v]) * s
+        for k in range(s):
+            fb[(y * s + k) * w:(y * s + k) * w + w] = row
+
+    blob, frs, index = artbank()
+    for i, o in enumerate(objs):
+        if o.objid != K.LIBOBJ or not o.L:
+            continue
+        L = o.L
+        k = 0
+        p = (parts or {}).get(i)
+        if p is not None:
+            L = [p.L(j) for j in range(pcsobj.LREC)]
+            k = p.L(pcsobj.L_STATE) & 0x7F
+        first, count = index[L[pcsobj.L_TMPL]]
+        if count == 0:
+            continue
+        if k >= count:
+            k = count - 1
+        off, fh, fw, _dy = frs[first + k]
+        col = L[pcsobj.L_PX] * s
+        row0 = L[pcsobj.L_VERT] * s
+        for r in range(fh):
+            yy = row0 + r
+            if not 0 <= yy < h:
+                continue
+            base = off + r * fw
+            for b in range(fw):
+                byte = blob[base + b]
+                if not byte:
+                    continue
+                for bit in range(8):
+                    if byte & (0x80 >> bit):
+                        xx = col + b * 8 + bit
+                        if 0 <= xx < w:
+                            fb[yy * w + xx] = pcspal.UI_PART
+    return fb, w, h
+
+
 # --------------------------------------------------------- the test table --
 def place(name, tx, ty, fillcolor=None):
     """⭐ ONE OF BUDGE'S 43 TEMPLATES, MOVED FROM THE PARTS BIN ONTO THE TABLE.
@@ -266,6 +346,7 @@ def place(name, tx, ty, fillcolor=None):
         raise ValueError('%s at (%d, %d) does not fit the table' % (name, tx, ty))
 
     L = bytearray(pcsobj.LREC)
+    L[pcsobj.L_TMPL] = tm.index           # ⭐ which of the 43 pictures this is
     L[pcsobj.L_VERT] = tm.vert + dy
     L[pcsobj.L_PX] = tm.px + dx
     L[pcsobj.L_HEIGHT] = tm.height
@@ -405,6 +486,31 @@ def _fcb(out, data, per=16, indent=' ' * 20):
         out.append('%sfcb       %s' % (indent, ','.join('$%02X' % b for b in data[i:i + per])))
 
 
+def _checkgen(lines):
+    """⛔ NO `fcb`/`fdb` OPERAND MAY CONTAIN WHITESPACE BEFORE A COMMA.
+
+    lwasm ends the operand field at the first space, so `fcb 6   ,8` emits ONE
+    byte and reads as a comment for the rest.  `PCPIdx` was written that way and
+    came out at half its length: every part found the wrong frame, the table
+    assembled without a murmur, and the picture looked like art drawn in the
+    wrong places rather than like a table half as long.  ⚠ A generated table
+    that is silently short is the same defect class as `grep '^FAIL'` matching
+    nothing - it reads exactly like success.
+    """
+    bad = []
+    for n, l in enumerate(lines, 1):
+        t = l.split(None, 1)
+        if len(t) < 2 or t[0].lower() not in ('fcb', 'fdb', 'fqb'):
+            continue
+        # the operand runs to the first space; anything after it is a comment
+        operand = t[1].split()[0]
+        rest = t[1][len(operand):].lstrip()
+        if rest.startswith(',') or (',' in t[1] and ',' not in operand
+                                    and rest and rest[0] == ','):
+            bad.append('line %d: `%s` - the operand ends at the space' % (n, l.strip()))
+    return bad
+
+
 def emit(path):
     t = physics_tables()
     bad = check_tables(t) + P.check()
@@ -488,7 +594,7 @@ def emit(path):
     w('* PPAK.s:209).  ⚠ THE OFFSETS ARE THE ORIGINAL\'S and stay so: every')
     w('* part proc indexes them with a literal, and the ball\'s record is')
     w('* L[0..22] entire.')
-    for nm, off in (('Frame', O.L_FRAME), ('Vert', O.L_VERT), ('PX', O.L_PX),
+    for nm, off in (('Tmpl', O.L_TMPL), ('Vert', O.L_VERT), ('PX', O.L_PX),
                     ('Hgt', O.L_HEIGHT), ('Wid', O.L_WIDTH),
                     ('Strid', O.L_STRIDE), ('State', O.L_STATE),
                     ('Score', O.L_SCORE), ('Type', O.L_TYPE),
@@ -588,8 +694,8 @@ def emit(path):
     w('* One (first frame, count) a part, in the parts-bin order.')
     w('PCPIdx              equ       *')
     for i, (first, n) in enumerate(index):
-        w('                    fcb       %-4d,%-3d    %2d %s'
-          % (first, n, i, parts[i].name))
+        w('                    fcb       %-10s %2d %s'
+          % ('%d,%d' % (first, n), i, parts[i].name))
     w('')
     w('* One (offset, height, width, dy) a frame.  dy is the flipper\'s moving')
     w('* top edge (FXDVERT), in card pixels; 0 for everything else.')
@@ -637,8 +743,8 @@ def emit(path):
     w('* The parts bin, in the ORIGINAL\'s screen coordinates (x 160..319).')
     w('PCBox               equ       *         x, y, w, h a part')
     for i, (x, y, ww, hh) in enumerate(boxes):
-        w('                    fcb       %-3d,%-3d,%-3d,%-3d   %2d %s'
-          % (x, y, ww, hh, i, parts[i].name))
+        w('                    fcb       %-18s %2d %s'
+          % ('%d,%d,%d,%d' % (x, y, ww, hh), i, parts[i].name))
     w('')
     w('* ══════════════════ THE TEST TABLE ════════════════════════════════')
     w("* ⭐ Step 2's gate: `pcs 0` copies this into its database, runs the scan")
@@ -701,6 +807,11 @@ def emit(path):
         _fcb(o, t[name])
     w('')
 
+    gen = _checkgen(o)
+    if gen:
+        for g in gen:
+            print('FAIL  %s' % g)
+        sys.exit(1)
     text = '\n'.join(o) + '\n'
     with open(path, 'w', encoding='utf-8') as f:
         f.write(text)
