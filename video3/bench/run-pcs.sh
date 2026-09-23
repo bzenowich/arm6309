@@ -79,7 +79,11 @@ tail -3 "$OUT/mksddisk.log"
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
    software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 
-STOP=$(printf '\nDONE-arm6309')
+# ⛔ THE RUN STOPS ON PCS-RAN, NOT ON THE SHELL'S PROMPT.  VRAMDUMP is taken
+# when the emulator stops, and `pcs` prints this line while it still owns the
+# card; stopping on DONE-arm6309 instead dumps a screen the driver has already
+# begun repainting, and the gate reads twelve pixels of somebody else's window.
+STOP="PCS-RAN"
 fail=0
 
 run() {
@@ -107,9 +111,16 @@ run() {
     fail=1; fi
   grep -q "PCS-RAN" "$D/console.txt" || {
     echo "FAIL  $1: pcs did not say it ran"; fail=1; }
-  grep -q "PCS-ERR" "$D/console.txt" && {
+  # ⛔ `grep -q X && { ... }` AS THE LAST STATEMENT OF A FUNCTION IS A TRAP.
+  # When X is ABSENT - which here is the SUCCESS case - grep exits 1, so the
+  # function exits 1, and `set -e` kills the whole bench with no message at
+  # exactly the moment everything started working.  CLAUDE.md records the same
+  # shape for `grep -c`; `if ... then ... fi` has no exit status of its own.
+  if grep -q "PCS-ERR" "$D/console.txt"; then
     echo "FAIL  $1: ⛔ the scan converter ABORTED - the database is not consistent"
-    fail=1; }
+    fail=1
+  fi
+  return 0
 }
 
 for r in $RUNS; do
