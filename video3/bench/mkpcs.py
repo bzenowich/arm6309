@@ -258,6 +258,14 @@ def test_table():
         K.Obj(K.POLY, PALU, [30, 60, 60, 100, 100, 130, 130, 30],
               [96, 96, 150, 150, 96, 96, 178, 178]),
         K.Obj(K.POLY, 0, [70, 96, 96, 70], [190, 190, 214, 214]),
+        # ⭐ 4  A SLIVER, and it is here for one line of the converter.  Both
+        # edges leave the apex at the SAME x, so the active list's tie-break
+        # fires - and their slopes differ only BELOW THE POINT, so an insert
+        # that compares the integer parts alone orders them wrongly and the
+        # span's two ends are swapped for as long as they run together.  The
+        # Apple II source made that visible: ADDSTARTS6 subtracts ADXFRACT
+        # before ADXCOEFF and guards the sign test with BVC.
+        K.Obj(K.POLY, PALSLIV, [100, 59, 62], [60, 100, 100]),
     ]
     for o in objs:
         if not o.align():
@@ -268,6 +276,7 @@ def test_table():
 PALTABLE = pcspal.UI_TABLE
 PALBAR = pcspal.PAINT0 + 3          # red
 PALU = pcspal.PAINT0 + 5            # yellow
+PALSLIV = pcspal.PAINT0 + 7         # cyan
 
 
 def serialise(objs):
