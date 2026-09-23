@@ -69,11 +69,13 @@ python3 software/nitros9/tools/v3show.py "$DATADIR" || { echo "FAIL  v3show.py";
 # the scene off /SD0/CMDS and it finds its table in /SD0/DATA.
 cp video3/bench/pcbtable.pic video3/bench/pcbtable.pal "$DATADIR/" \
   || { echo "FAIL  no pcbtable.pic/.pal - run video3/bench/mkpcb.py"; exit 1; }
-# ⭐ AND THE OVERWORLD, for the same reason: `zelda`'s playfield is 491,520
-# bytes - a picture, not a tile bank - and its keyed art bank another 8,192
-# (video3/bench/mkzelda.py).
-cp video3/bench/zelda.pic video3/bench/zelda.art "$DATADIR/" \
-  || { echo "FAIL  no zelda.pic/.art - run video3/bench/mkzelda.py"; exit 1; }
+# ⭐ AND THE OVERWORLD, for the same reason.  ⛔ IT IS 8,192 BYTES SINCE
+# 2026-09-22, not 491,520: `zelda` became a ROOM game and a room is a tile MAP
+# assembled into the module, so what has to reach the card is the 50-tile bank
+# and the keyed art (video3/bench/mkzelda.py).
+rm -f "$DATADIR/zelda.pic"
+cp video3/bench/zelda.bnk video3/bench/zelda.art "$DATADIR/" \
+  || { echo "FAIL  no zelda.bnk/.art - run video3/bench/mkzelda.py"; exit 1; }
 # and the overworld's data (software/demo/tools/mkgame.py), with its model for the checker
 python3 software/demo/tools/mkgame.py "$OUT/gamedata" > "$OUT/gamedata.log" || { cat "$OUT/gamedata.log"; echo "FAIL  mkgame.py"; exit 1; }
 for f in tiles world sprites frames; do cp "$OUT/gamedata/$f.bin" "$DATADIR/$f.bin"; done

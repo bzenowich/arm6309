@@ -49,6 +49,7 @@ Ordered by measured value against measured cost, not by how interesting it is.
 | 7 | ⭐ **`v3machine_tb`** — **BUILT 2026-09-19** | `machine3.v` puts a real 6809E, the motherboard and the card together and runs a ROM. **It found a card defect on its first run** (the palette commit firing twice outside vertical blanking), which is the same return the other card's machine bench gave. 48 claims, ~40 s, now in `check:video` |
 | 8 | **A pixel gate for the staged copy path** (§4) | `CpOne` (overlapping copies) has no check that compares pixels, and waits moved inside it |
 | 9 | ⭐ **Run the blits first and the game afterwards** (§11) — **BUILT 2026-09-22** | `zelda`'s actor tear, **25 % of actor-frames → 2.5 %**, for a reordering of `Body` and a sort. ⛔ The ordering alone bought a third of it; the other two thirds was that the pass did not START at the blank |
+| 9a | ⭐⭐ **A ROOM, so the actor count is data** (§11.1) — **BUILT 2026-09-22** | the last 2.5 % and the 17-second loading screen with it. A scene that lets the player roam cannot bound what it has to draw; one that freezes, slides and re-places can, and the budget becomes a derivation against the top wall's thickness |
 | 10 | more hardware sprites (§6), a programmable key (§5) | ⛔ both blocked by pins and board space, and §7.1 removed the reason to want the first |
 
 ---
@@ -531,6 +532,56 @@ painted it back when he moved off. **67 bytes of ghost**, caught by the wipe
 gate and by nothing else. ⚠ **Every restore comes first, then the rover's
 save, then the ordered restore/save/draw of the rest.** A save sees pristine
 world or it is wrong.
+
+### 11.1 ⭐⭐ AND THE ANSWER WAS THE STRUCTURE, NOT THE ORDERING — 2026-09-22
+
+The ordering above took `zelda` from 25 % to 2.5 % and could not take it
+further, because what is left is arithmetic: fifteen copies is 2.8 ms, the
+blank is 1.43 ms, and the pass overhangs the picture whatever order it runs
+in. ⛔ **The fix is not to draw faster. It is to bound what there is to draw**,
+which is what the NES did and what this scene does now:
+
+> *when the hero touches the edge of the room, all enemies freeze, the next
+> room scrolls into place, then that room's enemies are placed and begin
+> moving. The game is in control of how many enemies are in each room, so we
+> can be sure there is always enough draw time.*
+
+⭐ **The budget becomes a derivation.** `Actors` draws in ascending screen row
+and the pass starts at the blank, so the actor at sorted rank *k* is written at
+~186·(3*k*+5) µs and the beam reaches picture row *Y* at 1430 + 63.56·*Y* µs
+(`VMODE` 01: 45 blanked lines of 525, a 31.78 µs line, two lines to a VRAM
+row). Rank 3 is safe above row 18.5 and the hero — drawn last — above 21.4.
+**The room's top wall is 24 rows**, so four creatures and a hero clear both *by
+construction*. A fifth needs row 27.3 and the wall would have to grow with it.
+`mkzelda.py`'s `ZMAXCR` carries that derivation as a comment and the program
+clamps to it.
+
+⛔ **AND THE ROOM IS 512 COLUMNS WIDE BECAUSE OF THE CARD.** Every `VMODE` is
+640 dots across and the ring is a **1024-column torus**, so two horizontally
+adjacent 640-wide rooms *cannot both be resident* — a room that exactly fills
+the screen has nothing to slide to. Rooms of 512 tile the torus exactly, two at
+a time, and the view shows 64 columns of each neighbour. ⭐ **Which is why
+every room's outer eight cells are the same wall**: you are looking at your
+neighbour's wall and it is identical to your own, so the seam does not exist.
+The vertical axis has no such problem — two 240-row rooms cover 0..479 of a
+512-row torus, and ⭐ **the 32 rows left over are the only VRAM on this card the
+raster cannot reach**, which is where the tile bank, the actor art and the
+save-behind scratch live.
+
+| | before | after |
+|---|---|---|
+| torn actor-frames | 25 % → 2.5 % | ⭐ **none found**: 24 of 24 flagged cases were a sprite *occluded* by the hero or by a tree whose foliage shares its palette index |
+| the playfield | 491,520 bytes off the card, **17 s of loading screen** | ⭐ **8,192** — a 50-tile bank. A room is a 1,920-byte MAP assembled into the module and composed by 1,152 copy rectangles (~90 ms) into the slot the camera is not looking at |
+| the world | 1024 × 480, exactly the ring | **8 rooms** and as many more as there is module space for |
+| the gate | the live page equals the file's picture | ⭐ **every one of the four slots equals some room's composition byte for byte**, and index 0 appears nowhere |
+
+⚠ **Two ordering defects fell out of building it**, and both are the same
+shape as the ones above. **The restores were still in INDEX order** while the
+draws were in screen order, so an actor was erased for the whole length of the
+pass rather than for the three copies between its own restore and its own draw
+— 1.75 % on its own. And ⛔ **`Actors` walks the SORT and not `nact`**: a slide
+that dropped `nact` to 1 and left `nord` at six went on saving and drawing six
+creatures that had just been wiped, in the room they were no longer in.
 
 ⚠ **How to measure this, rather than reason about it.** Two frame-level
 statistics settle it without a trace: *display frames per distinct actor
