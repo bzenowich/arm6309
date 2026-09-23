@@ -43,6 +43,14 @@ if [ -z "$NOBUILD" ]; then
 fi
 ROM="$OUT/arm6309_rom.bin"
 [ -f "$ROM" ] || { echo "FAIL  no $ROM"; exit 1; }
+# ⛔ THE CARD IS THE SYSTEM DISK since 2026-09-22 (docs/history.md): the ROM
+# carries the toolbox and no filesystem, so a session with an empty socket
+# never reaches a shell to run `ps2tst` in.  mkrom.sh writes system.img beside
+# the ROM out of the same build.
+SDIMG="$OUT/system.img"; export SDIMG
+# ⛔ AND THE V3 EMULATOR, because every ROM is a video3 ROM since 2026-09-22.
+export VIDEO3=1
+[ -f "$SDIMG" ] || { echo "FAIL  no $SDIMG - mkrom.sh should have built the system card"; exit 1; }
 cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c software/demo/emu/hd6309.c audio/refplayer/card.c
 
 fail=0; n=0

@@ -25,7 +25,14 @@ rm -rf "$OUT"; mkdir -p "$OUT/sys"
 python3 video3/bench/mkv3text.py "$OUT/sys" > "$OUT/mk.log" || { cat "$OUT/mk.log"; exit 1; }
 # ⚠ CMDS_EXTRA: the demos live on an SD card now (software/nitros9/mksddisk.sh);
 # this bench boots with an empty socket, so it asks for v3cpyb by name.
-V3=1 CMDS_EXTRA=v3cpyb sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
+CMDS_EXTRA=v3cpyb sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
+# ⛔ THE CARD IS THE SYSTEM DISK since 2026-09-22 (arm6309 docs/history.md):
+# the ROM carries the toolbox and no filesystem, so a session with an EMPTY
+# SOCKET does not reach a shell at all.  mkrom.sh writes system.img beside the
+# ROM out of the same build, and /DD is that card - which is why the
+# `copy /dd/sys/...` lines below still read what SYSROM/$OUT/sys put there.
+SDIMG="$OUT/system.img"; export SDIMG
+[ -f "$SDIMG" ] || { echo "FAIL  no $SDIMG - mkrom.sh should have built the system card"; exit 1; }
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
    software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 

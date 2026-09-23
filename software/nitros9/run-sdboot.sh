@@ -23,11 +23,13 @@
 #     §9.1's CMD17 - which decides which of the boot dialog's three pictures
 #     is true (docs/boot-and-desktop.md §1, §2)
 #   nitros9 level2/arm6309/modules/boot_sd.asm, the F$Boot module, which reads
-#     OS9Boot off the card and falls back to the ROM disk when it cannot
+#     OS9Boot off the card and, since 2026-09-22, has nowhere else to look
 #
-# ⛔ "A SHELL APPEARED" IS NOT EVIDENCE, and that is the whole difficulty: the
-# fallback works, so a machine that silently ignored the card boots to exactly
-# the same prompt.  Two independent things say the card was the source:
+# ⛔ "A SHELL APPEARED" WAS NOT EVIDENCE while the ROM disk existed: the
+# fallback worked, so a machine that silently ignored the card booted to
+# exactly the same prompt.  It is evidence now - but the two independent
+# answers stay, because they are what distinguishes THIS card's OS9Boot from
+# a stale image left in the build directory:
 #
 #   1. boot_sd prints `s` through D.BtBug where the fallback prints `r`, so
 #      the console carries the answer from the code path that ran.
@@ -35,9 +37,9 @@
 #      FIRQ stub's two modules to the bootfile it puts on the card, so a
 #      machine that booted from the card has `FIRQDrv` and `FT0` in its
 #      module directory WITHOUT ANYTHING HAVING LOADED THEM, and one that
-#      booted from the ROM disk does not.  `mdir` is asked, and the ROM
-#      disk's own OS9Boot is asked of the HOST, so the claim cannot pass on
-#      a ROM that happened to carry them too.
+#      booted from anything else does not.  `mdir` is asked, and the recipe's
+#      own bootfile is asked of the HOST, so the claim cannot pass on an
+#      image that happened to carry them too.
 #
 # ⛔ AND THREE CARD STATES, because the interesting one is in the middle:
 #
@@ -48,7 +50,11 @@
 #            question mark: there IS a disk and it is not a system disk
 #   nocard   an empty socket
 #
-# The last two must both reach a shell off the ROM disk and SAY they did.
+# ⛔ AND THE LAST TWO DO NOT BOOT AT ALL (2026-09-22).  The ROM carries no
+# filesystem - pages 3-63 are zeros - so there is nothing to fall back TO:
+# boot_sd says `n`, and on real hardware boot.asm never hands off, it blinks
+# §10a's question mark for ever.  That is the Macintosh's answer and it is
+# what these two controls now assert.
 #
 # ⛔ The exit code is the answer.
 set -e
@@ -56,7 +62,10 @@ cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
 OUT=${OUT:-/tmp/arm6309-sdboot}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-120}
-REBOOT_SECONDS=${REBOOT_SECONDS:-20}
+# ⚠ 32, not 20: a card boot reads OS9Boot over SPI and then points the
+# execution directory at /SD0/CMDS, so the prompt the `reboot` line waits for
+# arrives later than it did when the ROM carried the system (2026-09-22).
+REBOOT_SECONDS=${REBOOT_SECONDS:-32}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 REC="$NITROS9DIR/recipes/arm6309/l2"
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
@@ -67,7 +76,7 @@ mkdir -p "$OUT"
 # it draws with is ROM page 64, which only a V3=1 build has.  Without it the
 # ROM writes $63 (no toolbox) and never reaches the reader at all.
 if [ -z "$NOBUILD" ]; then
-  V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-sdboot.log" 2>&1 || {
+  sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-sdboot.log" 2>&1 || {
     tail -20 "$OUT/mkrom-sdboot.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 ROM="$OUT/arm6309_rom.bin"
@@ -83,16 +92,22 @@ cat "$REC/bootfile" "$REC/modules_firqtst" > "$OUT/cardboot"
 cmp -s "$REC/bootfile" "$OUT/cardboot" && {
   echo "FAIL  the card's bootfile is identical to the ROM disk's - the whole test is vacuous"; exit 1; }
 
-BOOT="$OUT/cardboot" NAME="arm6309 boot" \
-  sh software/nitros9/mksddisk.sh "$OUT/sdboot.img" overworld > "$OUT/mksddisk.log" 2>&1 || {
+# ⛔ A SYSTEM CARD, NOT A DATA CARD, SINCE 2026-09-22.  The ROM carries no
+# filesystem, so the command set, /MODULES, /SYS and `startup` have to be on
+# the card too or the machine that boots reaches a kernel with no shell -
+# which is what this bench found the day the ROM disk went.  mksyscard.sh is
+# what owns that list, and BOOT= points it at the FIRQ-carrying bootfile above.
+BOOT="$OUT/cardboot" NAME="arm6309 boot" OUT="$OUT" DATA="$OUT/data" \
+  sh software/nitros9/mksyscard.sh "$OUT/sdboot.img" overworld > "$OUT/mksddisk.log" 2>&1 || {
     cat "$OUT/mksddisk.log"; echo "FAIL  the bootable card did not build"; exit 1; }
 cat "$OUT/mksddisk.log"
 # ...and the same card WITHOUT the blessing: same tools, same files, no
-# `os9 gen` and no signature.  ⛔ It has to be a VALID RBF VOLUME, or the
-# middle state would be "a card the machine cannot read" rather than "a card
-# the machine can read and must not boot from".
-NAME="arm6309 data" \
-  sh software/nitros9/mksddisk.sh "$OUT/sdplain.img" overworld > "$OUT/mksddisk-plain.log" 2>&1 || {
+# `os9 gen` and no signature.  ⛔ It has to be a VALID RBF VOLUME with a whole
+# system on it, or the middle state would be "a card the machine cannot use"
+# rather than "a card the machine can read and must not boot from".
+# ⚠ BOOT= is SET AND EMPTY on purpose - mksyscard.sh's `${BOOT-...}`.
+BOOT= NAME="arm6309 data" OUT="$OUT" DATA="$OUT/data" \
+  sh software/nitros9/mksyscard.sh "$OUT/sdplain.img" overworld > "$OUT/mksddisk-plain.log" 2>&1 || {
     cat "$OUT/mksddisk-plain.log"; echo "FAIL  the plain card did not build"; exit 1; }
 sig=$(od -An -v -tx1 -j240 -N8 "$OUT/sdplain.img" | tr -d ' \n')
 [ "$sig" = "0000000000000000" ] || {
@@ -114,10 +129,10 @@ STOP=$(printf '\nDONE-arm6309-sdboot')
 # all.  It is also what run-emu.sh does for the same reason.
 printf 'reboot\r' > "$OUT/typedr.txt"
 
-run() {   # run <name> <image or empty> <typed file> <machine seconds> [stop]
+run() {   # run <name> <image or empty> <typed file> <machine seconds> [stop] [COLDBOOT]
   D="$OUT/$1"; rm -rf "$D"; mkdir -p "$D"
   (cd "$D" && SERIAL_IN="../$3" SERIAL_GATE="02}" SERIAL_TYPE=60 SERIAL_THINK=700 \
-     SERIAL_STOP="$5" WILD=1 VIDEO3=1 SDIMG=$2 \
+     SERIAL_STOP="$5" WILD=1 VIDEO3=1 SDIMG=$2 COLDBOOT=${6:-0} \
      "$OUT/emu" "$ROM" . "$4" > /dev/null 2> emu.log) || true
   tr -d '\000' < "$D/serial.out" | tr -d '\r' > "$D/console.txt"
   sed 's/\x1b\[[0-9;]*m//g' "$D/emu.log" > "$D/emu.txt"
@@ -128,9 +143,14 @@ if [ -z "$NORUN" ]; then
   run card   "$OUT/sdboot.img" typed.txt "$SECONDS_OF_MACHINE" "$STOP"
   run plain  "$OUT/sdplain.img" typed.txt "$SECONDS_OF_MACHINE" "$STOP"  # readable, NOT bootable
   run nocard ""                 typed.txt "$SECONDS_OF_MACHINE" "$STOP"  # machine.c reports CD = 0
-  run rcard   "$OUT/sdboot.img" typedr.txt "$REBOOT_SECONDS" ""
-  run rplain  "$OUT/sdplain.img" typedr.txt "$REBOOT_SECONDS" ""
-  run rnocard ""                 typedr.txt "$REBOOT_SECONDS" ""
+  # ⛔ COLDBOOT=1, NOT `reboot`, SINCE 2026-09-22.  These three exist to read
+  # boot.asm's own verdict codes off the progress port, and `reboot` is typed
+  # AT A SHELL - which two of the three no longer reach, because there is no
+  # ROM disk to boot when the card will not.  machine.c's COLDBOOT enters at
+  # the RESET VECTOR instead, which is where the real machine starts.
+  run rcard   "$OUT/sdboot.img" typedr.txt "$REBOOT_SECONDS" "" 1
+  run rplain  "$OUT/sdplain.img" typedr.txt "$REBOOT_SECONDS" "" 1
+  run rnocard ""                 typedr.txt "$REBOOT_SECONDS" "" 1
 fi
 [ -f "$OUT/card/console.txt" ] || { echo "FAIL  no run to read (drop NORUN)"; exit 1; }
 
@@ -156,7 +176,7 @@ echo
 # boot.asm §10b writes $64 or $65 BEFORE the picture it chooses, so these say
 # which question the ROM answered and not merely which picture came out.
 for s in rcard rplain rnocard; do
-  claim "[$s] boot.asm's POST ran again and finished (\$52, then the video POST's \$40)" \
+  claim "[$s] boot.asm's POST ran from the reset vector and finished (\$52, then the video POST's \$40)" \
     sh -c "grep -q 'progress .52' '$OUT/$s/emu.txt' && grep -q 'progress .40' '$OUT/$s/emu.txt'"
   claim "[$s] ...and reached the dialog, so the toolbox is on ROM page 64 (\$60, not \$63)" \
     sh -c "grep -q 'progress .60' '$OUT/$s/emu.txt' && ! grep -q 'progress .63' '$OUT/$s/emu.txt'"
@@ -179,11 +199,16 @@ claim "   and no \$61"                                                          
 # --- 2. where OS9Boot came from -------------------------------------------
 # boot_sd prints one character between krn's "tb" and boot_common's "0".
 claim "⭐ boot_sd read OS9Boot OFF THE CARD and said so (tb s 0)"    inc card 'tbs0'
-claim "⛔ the unbootable card fell back to the ROM disk (tb r 0)"    inc plain 'tbr0'
-claim "⛔ the empty socket did too"                                  inc nocard 'tbr0'
-claim "   and the card run did NOT take the fallback"                notin card 'tbr0'
+# ⛔ THERE IS NOWHERE ELSE TO LOOK SINCE 2026-09-22.  The ROM carries no
+# filesystem, so boot_sd's old `r` - the ROM disk - is gone and the two
+# controls say `n`: no system disk.  ⚠ These machines do NOT reach a shell,
+# which is the whole point of removing the fallback.
+claim "⛔ the unbootable card found no system disk (tb n 0)"         inc plain 'tbn'
+claim "⛔ the empty socket did too"                                  inc nocard 'tbn'
+claim "   and the card run did NOT say that"                         notin card 'tbn'
 claim "   and neither control claims the card"                       notin plain 'tbs0'
 claim "   nor the empty socket"                                      notin nocard 'tbs0'
+claim "⛔ and the OLD ROM-disk answer is gone entirely"              notin card 'tbr0'
 
 # ⭐ AND THE SECOND, INDEPENDENT ANSWER: the card's OS9Boot carries two
 # modules the ROM disk's does not, and nothing loaded them.
@@ -206,21 +231,41 @@ claim "   while the card's does - so the pattern is one that CAN match" \
   sh -c "grep -qa FIRQDr '$OUT/cardboot'"
 
 # --- 3. it is a working machine, in all three states ----------------------
+claim "⭐ [card] the machine reached a shell"            inc card '{Term|02}/DD:'
+claim "⛔ [plain] and the unbootable card did NOT"       notin plain '{Term|02}/DD:'
+claim "⛔ [nocard] nor the empty socket"                 notin nocard '{Term|02}/DD:'
+claim "[card] the run ended at the last command"          grep -q 'SERIAL_STOP seen' "$OUT/card/emu.txt"
+claim "[card] no crash: nothing printed D.Crash's '!'"    notin card '![0-9A-F][0-9A-F]'
+# ⛔ AND THE TWO CONTROLS MUST FAIL, WHICH IS A CLAIM AND NOT A MISSING ONE.
+# ⚠ These runs enter at $8004, so boot.asm never gets to REFUSE the handoff -
+# §10a's question mark is what the rcard/rplain/rnocard runs above assert.
+# Here the loader runs, boot_sd answers `n`, and the kernel has no bootfile:
+# it takes D.Crash.  ⭐ That crash is the ASSERTION.  A machine that fell back
+# to something would print a prompt instead, and the whole of section 2 would
+# be passing on a fallback nobody asked for.
+for s in plain nocard; do
+  claim "⛔ [$s] ...and did not finish the typed commands either" \
+    sh -c "! grep -q 'SERIAL_STOP seen' '$OUT/$s/emu.txt'"
+  claim "⛔ [$s] the kernel took D.Crash - there was no OS9Boot to load" \
+    inc $s '![0-9A-F][0-9A-F]'
+done
 for s in card plain nocard; do
-  claim "[$s] the machine reached a shell"                inc $s '{Term|02}/DD:'
-  claim "[$s] the run ended at the last command"          grep -q 'SERIAL_STOP seen' "$OUT/$s/emu.txt"
-  claim "[$s] no crash: nothing printed D.Crash's '!'"    notin $s '![0-9A-F][0-9A-F]'
   claim "[$s] the CPU never ran through empty RAM (WILD)" sh -c "! grep -q '^WILD' '$OUT/$s/emu.txt'"
 done
-# ⚠ /DD IS STILL THE ROM DISK EVEN WHEN THE BOOT CAME OFF THE CARD.  Only
-# OS9Boot moved; the system disk is a separate decision (sdcard.md §9.5) and
-# this is where that is stated rather than assumed.
-claim "⭐ /DD is the ROM disk in every case - only OS9Boot moved" \
-  inc card 'OS9Boot *CMDS *MODULES *SYS *startup'
+# ⭐ /DD IS THE CARD.  One descriptor source assembled twice, so /DD and /SD0
+# are the same disk - which is what lets SysGo, init and armio.asm's CoPath
+# keep naming /DD with no ROM disk under them.
+claim "⭐ /DD is the CARD: its root is the card's, OS9Boot and all" \
+  inc card 'OS9Boot *CMDS *DATA'
 claim "   and the card is still an ordinary RBF volume beside it" inc card 'CMDS *DATA'
 claim "   whose own OS9Boot the host tools wrote"                 inc card '"arm6309 boot" created'
-claim "⛔ and the control card mounts too - it is readable and simply not blessed" \
-  inc plain '"arm6309 data" created'
+# ⛔ ASKED OF THE HOST, because the plain card's machine never boots: the
+# control has to be a card that is READABLE and not blessed, and the only
+# thing left that can read it is `os9 dir`.  ⚠ A card the machine could not
+# read would make `rplain`'s $65 mean "unreadable" rather than "not a system
+# disk", which is the state this whole bench exists to separate.
+claim "⛔ and the control card is a VALID RBF volume - it is readable and simply not blessed" \
+  sh -c "os9 dir '$OUT/sdplain.img' | grep -q CMDS"
 
 echo
 echo "      $n claims, $fail failed        (consoles in $OUT/{card,plain,nocard}/console.txt)"

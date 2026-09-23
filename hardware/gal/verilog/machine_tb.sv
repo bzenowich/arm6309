@@ -83,10 +83,24 @@ module machine_tb;
    * answer CMD0 is no longer the found state - it is the THIRD state, the
    * Macintosh's question mark, "there is a disk and it is not a system
    * disk". `disk` therefore carries a real, blessed card image and `nodisk`
-   * an open socket. Every other run leaves sd_cd 0 and never reads any of
-   * it: §10a only gets as far as the card at all when there is a TOOLBOX on
-   * ROM page 64, which only the whole-ROM scenarios have. */
+   * an open socket. The SIMM and fault runs leave sd_cd 0 and never read any
+   * of it: §10a only gets as far as the card at all when there is a TOOLBOX
+   * on ROM page 64, which only the whole-ROM scenarios have.
+   *
+   * ⛔ AND `nitros9`/`reboot` NEED A REAL CARD SINCE 2026-09-22, because that
+   * is where NitrOS-9 now is. ROM pages 3-63 are zeros; `boot_sd` reads
+   * `OS9Boot` over SPI out of the image run-machine.sh builds with
+   * software/nitros9/mksyscard.sh, and a run with an empty socket reaches
+   * `krn` and takes D.Crash. */
   logic sd_cd = 0;
+
+  /* ⚠ THE WHOLE SYSTEM CARD FITS IN THE MODEL, and that is what sets this.
+   * mksyscard.sh writes ~898 KB - the bootfile, the command set, /MODULES,
+   * /SYS and the demo data - so sd_model.v's array has to span it or
+   * `arg % NBLOCKS` would wrap a read of the bootfile back onto block 0.
+   * `disk`'s much smaller image is padded to the same length by
+   * run-machine.sh, for the reason its comment gives. */
+  localparam int SDB = 1792;
 
   wire [15:0] RGB;
   wire BLANK, HSYNC, VSYNC;
@@ -103,7 +117,7 @@ module machine_tb;
   // AUDIO: the audio card at $FF40 on /FIRQ, in every run. boot.asm never
   // addresses it and reset leaves it silent with no interrupt enabled, so
   // the seven boot runs see an idle slot; NitrOS-9's firqtst is what drives it.
-  machine3 #(.SIMMS(4), .SERIAL(1), .AUDIO(1), .STORAGE(1)) m (.*);
+  machine3 #(.SIMMS(4), .SERIAL(1), .AUDIO(1), .STORAGE(1), .SDBLOCKS(SDB)) m (.*);
 
   // ---- what the card used to bring out on a port -------------------------
   // machine.v exported SPANBUSY, VBLANK, WPTR and VMODE because it had to
@@ -849,7 +863,14 @@ module machine_tb;
     localparam int SEC = 2097917;
     $display("NITROS9. software/nitros9/: boot.asm, the loader, krn, and a shell on the UART");
     $display("");
-    wait_text("RK", 0, 2 * SEC, "boot.asm handed page 1 the machine, and the loader entered krn (R, K)", at);
+    /* ⚠ THE BUDGETS GREW ON 2026-09-22, and for a reason and not a hunch:
+     * this scenario used to read OS9Boot out of ROM PAGES through the map, and
+     * now it reads 26,633 bytes off an SD card over BIT-BANGED SPI - eight
+     * shifts a byte in 6809 code, and the whole boot ROM's §10a dialog drawn
+     * with the toolbox before any of it. ⛔ CLAUDE.md's rule still applies:
+     * "budget more time" is how a HANG gets misdiagnosed, so these are bounds
+     * that fail loudly, not waits that grow until something appears. */
+    wait_text("RK", 0, 4 * SEC, "boot.asm handed page 1 the machine, and the loader entered krn (R, K)", at);
     ok(saw_8004, "the CPU fetched $8004 - boot.asm's handoff, not a crash that printed");
     if (at < 0) return;
     /* ⛔ `rbsd SD0` JOINED THIS LIST ON 2026-09-20 and this line did not, so
@@ -859,22 +880,33 @@ module machine_tb;
      * updated with them; this one was missed, which is what a scenario nobody
      * ran that week looks like. ⚠ The pattern is the WHOLE order, deliberately
      * - a module that moves or vanishes has to fail here. */
-    wait_text("rbromdisk DD R0 rbsd SD0 SCF sc16550 Term", at, 2 * SEC,
-              "krn's Boot read OS9Boot from the ROM disk, through the map's ROM pages", at);
+    /* ⛔ AND `rbromdisk DD R0` LEFT IT ON 2026-09-22, with the ROM disk. The
+     * card is the system disk now and answers to BOTH names - one descriptor
+     * source assembled twice - so `rbsd DD SD0` is the whole of it. */
+    wait_text("rbsd DD SD0 SCF sc16550 Term", at, 6 * SEC,
+              "krn's Boot read OS9Boot, and rbsd drives the one disk under both names", at);
     if (at < 0) return;
-    wait_text("\narm6309\n", at, 2 * SEC, "SysGo printed the banner, naming this machine", at);
+    /* ⭐ AND IT CAME OFF THE CARD, over SPI, before there was an OS to do it
+     * with: boot_sd.asm prints `s` between krn's `tb` and boot_common's `0`,
+     * where `n` would mean no system disk. ⛔ There is nothing else to boot,
+     * so this is not a preference - it is the only path there is. */
+    ok(find_text("tbs0", 0) >= 0 && find_text("tbn", 0) < 0,
+       "⭐ OS9Boot came off the SD CARD - boot_sd's own `s`, and not its `n`");
+    wait_text("\narm6309\n", at, 4 * SEC, "SysGo printed the banner, naming this machine", at);
     if (at < 0) return;
-    wait_text("{Term|02}/DD:", at, 3 * SEC, "the shell prompted on /Term", prompt1);
+    /* ⚠ AND THE SHELL IS FORKED FROM THE CARD, which is the slowest single
+     * step in the boot: SysGo opens /DD/CMDS/shell over SPI. */
+    wait_text("{Term|02}/DD:", at, 10 * SEC, "the shell prompted on /Term", prompt1);
     if (prompt1 < 0) return;
     begin
       string typed;
       typed = "dir\r";
       for (int i = 0; i < typed.len(); i++) m.ser.rx_push(typed[i]);
     end
-    wait_text("OS9Boot         CMDS            MODULES         SYS             startup", prompt1, 3 * SEC,
-              "dir, typed at the UART, lists the ROM disk's root", at);
+    wait_text("OS9Boot         CMDS            DATA            MODULES         SYS", prompt1, 3 * SEC,
+              "dir, typed at the UART, lists the CARD's root - /DD is the card", at);
     if (at < 0) return;
-    wait_text("{Term|02}/DD:", at, 2 * SEC, "and the shell prompted again", at);
+    wait_text("{Term|02}/DD:", at, 4 * SEC, "and the shell prompted again", at);
     if (at < 0) return;
     begin
       string typed;
@@ -884,12 +916,12 @@ module machine_tb;
     wait_text("Total:  3F5  8104k", at, 3 * SEC,
               "mfree reports 8 MB: the loader sized RAM from boot.asm's own SIMM descriptor, and NitrOS-9's 16-bit blocks map past the first 2 MB", at);
     if (at < 0) return;
-    wait_text("{Term|02}/DD:", at, 2 * SEC, "and the shell prompted a third time", at);
+    wait_text("{Term|02}/DD:", at, 5 * SEC, "and the shell prompted a third time", at);
     if (at < 0) return;
     // ⭐ /FIRQ, which no bench on this machine had raised: firqtst's driver runs
     // the audio card's tempo timer at 50 Hz and counts through krn's FIRQ stub.
-    type_text("load /dd/modules/firqtst\r");
-    wait_text("{Term|02}/DD:", at + 1, 3 * SEC, "load put the FIRQ test driver in memory", at);
+    type_text("load /dd/modules/firqtst\r");   // ⭐ off the card, through /DD
+    wait_text("{Term|02}/DD:", at + 1, 8 * SEC, "load put the FIRQ test driver in memory", at);
     if (at < 0) return;
     type_text("firqtst q\r");
     wait_text("registers intact", at, 4 * SEC,
@@ -926,35 +958,38 @@ module machine_tb;
      * and `SD0` went in that day, and the banner was printing at 4 s with the
      * prompt still to come. run_nitros9 allows 2 + 3 for the same journey;
      * this now allows 6 for the POST plus it. */
-    wait_text("{Term|02}/DD:", 0, 6 * SEC, "NitrOS-9 booted to the shell", at);
+    /* ⚠ 20, NOT 6, SINCE 2026-09-22: the POST plus a whole boot off the CARD
+     * over bit-banged SPI (run_nitros9's note says the rest). */
+    wait_text("{Term|02}/DD:", 0, 20 * SEC, "NitrOS-9 booted to the shell", at);
     if (at < 0) return;
-    /* ⭐ $62 OR $63, NOT $40, SINCE 2026-09-20. boot.asm's last stage is
+    /* ⭐ $61 OR $63, NOT $40 (2026-09-20; $62 became $61 on 2026-09-22). boot.asm's last stage is
      * §10a's boot dialog, so the code it leaves behind is the dialog's.
      * ⚠ WHICH of the two is a property of the ROM this scenario was handed,
      * and the bench cannot see it: the toolbox is ROM page 64 and
      * recipes/arm6309.mak only assembles it under -DV3=1, which
      * run-machine.sh does NOT pass for `nitros9`/`reboot`. So $63 - "no
-     * toolbox, dialog skipped" - is what a default build gives, and $62 -
-     * "no disk", because sd_cd is 0 here - is what a V3=1 one does. Both say
+     * toolbox, dialog skipped" - is what a default build gives, and $61 -
+     * "Disk found", because sd_cd is 1 since 2026-09-22 and the card in the
+     * socket IS the system disk - is what a V3=1 one would. Both say
      * the POST reached §10a; neither is $40 any more, and an error code still
      * fails. */
-    ok((progress == 8'h62 || progress == 8'h63) && !saw_progress_error,
+    ok((progress == 8'h61 || progress == 8'h63) && !saw_progress_error,
        $sformatf("boot.asm ran every stage the first time, ending in §10a's dialog (last progress $%02h)", progress));
     writes0 = progress_writes;
     type_text("reboot\r");
     wait_text("RK", at, 4 * SEC,
               "reboot: the kernel quieted the cards and re-entered the boot ROM, and its handoff reached the loader again", at);
     if (at < 0) return;
-    ok(progress_writes - writes0 >= 17 && (progress == 8'h62 || progress == 8'h63),
+    ok(progress_writes - writes0 >= 17 && (progress == 8'h61 || progress == 8'h63),
        $sformatf("boot.asm's POST ran again from its reset vector: %0d more progress writes, ending at $%02h - with the map already live, which it rewrites first",
                  progress_writes - writes0, progress));
     ok(!saw_progress_error, "and it reported no error ($E0-$EF) - SIMM walk, TASK 1, palette, spans, lists, tiles and VRAM read-back all passed again");
-    wait_text("\narm6309\n", at, 3 * SEC, "SysGo printed the banner a second time", at);
+    wait_text("\narm6309\n", at, 6 * SEC, "SysGo printed the banner a second time", at);
     if (at < 0) return;
-    wait_text("{Term|02}/DD:", at, 3 * SEC, "and the shell prompted", at);
+    wait_text("{Term|02}/DD:", at, 10 * SEC, "and the shell prompted", at);
     if (at < 0) return;
     type_text("dir\r");
-    wait_text("OS9Boot         CMDS            MODULES         SYS             startup", at, 3 * SEC,
+    wait_text("OS9Boot         CMDS            DATA            MODULES         SYS", at, 3 * SEC,
               "dir runs on the rebooted system", at);
     ok(!saw_bus_conflict, "no cycle had two drivers on D0-D7");
     ok(!saw_pa_conflict,  "no cycle had two drivers on physical A20-A13");
@@ -1292,7 +1327,7 @@ module machine_tb;
     if (scenario == "alias") m.mb.set_small(4'b0001);
     // ⭐ the storage card's CARD DETECT, which is the whole difference between
     // the two dialog runs (machine3.v's stub, and boot.asm §10a reads it)
-    sd_cd = (scenario == "disk");
+    sd_cd = (scenario == "disk" || scenario == "nitros9" || scenario == "reboot");
     DRAM_C000 = pop_base() + 32'h00C000;
 
     repeat (240) @(posedge CLK25);
@@ -1791,12 +1826,16 @@ module machine_tb;
   // than a failure, and run.sh's exit code cannot see one.
   initial begin
     #1;
-    // ~7.9 s of machine (one dot is two timesteps), and ~20 s for NitrOS-9.
+    // ~7.9 s of machine (one dot is two timesteps), and ~40 s for NitrOS-9.
     // ⚠ `disk` and `nodisk` take the SHORT one: they are the POST plus §10a,
     // which is ~0.9 s of machine, and a backstop is only a backstop if it
     // fires in less time than a person will wait - 20 s of machine is well
     // over an hour here.
-    if (scenario == "nitros9" || scenario == "reboot") #999999999;
+    // ⛔ DOUBLED ON 2026-09-22, because the boot itself got slower and not
+    // because anything was hanging: NitrOS-9 comes off an SD card over
+    // bit-banged SPI now, not out of ROM pages through the map. The per-step
+    // bounds above are what catch a real hang; this only stops a spin.
+    if (scenario == "nitros9" || scenario == "reboot") #1999999999;
     else #399999999;
     $display("FAIL  machine_tb: global timeout - progress $%02h at %0d E cycles",
              progress, e_cycles);

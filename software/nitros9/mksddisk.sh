@@ -8,9 +8,26 @@
 #   BOOT=/tmp/x/bootfile sh software/nitros9/mksddisk.sh ...      ⭐ BOOTABLE
 #   MODS=dir  NAME="..."  SLACK=sectors  ...
 #
+# ⭐ AND SINCE 2026-09-22 IT CAN BUILD A SYSTEM CARD - one that carries
+# NitrOS-9 ITSELF and not just the demos it runs:
+#
+#   SYSCMDS="dir copy ..."   the OS's own command set, into CMDS alongside
+#                            the demos
+#   SYSDIR=dir               its contents become /SYS (errmsg and friends)
+#   SYSMODDIR=dir            its contents become /MODULES.  ⚠ A DIRECTORY of
+#                            files already named for the module, not a list of
+#                            .dr/.dd: `load /sd0/modules/firqtst` names a FILE
+#   STARTUP=file             copied to the root as `startup`, which SysGo runs
+#
+# ⛔ WITH ALL FOUR AND BOOT=, THE CARD IS THE WHOLE MACHINE.  That is the
+# point of the 2026-09-22 change: the ROM stops carrying a filesystem at all,
+# and the card is where NitrOS-9 lives.  ⚠ software/nitros9/mksyscard.sh is
+# what decides that list; this script is the plumbing under it.
+#
 # ⭐ BOOT= IS WHAT MAKES A CARD THE MACHINE CAN BOOT FROM, and it is opt-in:
-# without it the image is an ordinary data card and the ROM disk is still the
-# only boot device (storage/docs/sdcard.md §9.5, docs/boot-and-desktop.md §2).
+# without it the image is an ordinary data card, and since 2026-09-22 a
+# machine with nothing else in the socket does not start at all
+# (storage/docs/sdcard.md §9.5, docs/boot-and-desktop.md §2).
 # Two things go on a blessed card and neither is a file the machine opens:
 #
 #   OS9Boot, written CONTIGUOUSLY by `os9 gen` and named by DD.BT (LSN 0
@@ -28,14 +45,14 @@
 # ⭐ CMDS AND DATA, and both halves moved.  CMDS is the demo PROGRAMS; DATA is
 # what they open - the Haiku desktop and Paint's streams, the BBS, the
 # overworld's world, the console faces.  software/nitros9/mkrom.sh writes the
-# whole data set to $OUT/data and DATA= points here at it; the ROM disk's
-# /DD/SYS keeps errmsg and nothing else.
+# whole data set to $OUT/data and DATA= points here at it; /SYS keeps errmsg
+# and whatever SYSROM= asked for.
 #
 # Since 2026-09-20 neither the demo programs nor their data are in the boot
-# ROM's ROM disk (nitros9 recipes/arm6309/arm6309.mak): the ROM is the kernel,
-# the shell, the shared modules, errmsg and a rescue command set, and the
-# applications live here.  /DD/SYS alone used to be 1,140 of the image's
-# 1,952 sectors.
+# ROM's ROM disk (nitros9 recipes/arm6309/arm6309.mak), and ⛔ since
+# 2026-09-22 there is no ROM disk: the kernel, the shell, the shared modules,
+# errmsg, the command set and the applications all live here.  /DD/SYS alone
+# used to be 1,140 of that image's 1,952 sectors.
 #
 # ⭐ THE IMAGE IS WRITTEN BY THE TOOLCHAIN AND READ BY THE MACHINE, which is
 # the point, and the same discipline run-sd.sh keeps: two independent
@@ -64,6 +81,7 @@ shift
 
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 MODS=${MODS:-$NITROS9DIR/recipes/arm6309/l2/.mods}
+REC=${REC:-$NITROS9DIR/recipes/arm6309/l2}
 NAME=${NAME:-arm6309 demos}
 SLACK=${SLACK:-32}
 BOOT=${BOOT:-}
@@ -82,11 +100,13 @@ command -v os9 >/dev/null || {
   echo "FAIL  no module directory $MODS (build the ROM first: software/nitros9/mkrom.sh)"; exit 1; }
 [ -z "$BOOT" ] || [ -f "$BOOT" ] || { echo "FAIL  BOOT names $BOOT, which is not a file"; exit 1; }
 
-# ⭐ THE DEMO SET, and it is the recipe's $(DEMOS) list.  ⚠ If a name is added
-# there it has to be added here: the two are not derived from one another, and
-# a demo missing from this list is one that silently never reaches the card.
-# The check below is what makes that visible - an ALL run demands every name.
-ALL="rastbar wave overworld v3drag v3scrl v3grab v3trk changefont v3cpyb mvania monster pinball desk v3paint stardew"
+# ⭐ THE DEMO SET, AND IT COMES OUT OF THE RECIPE (2026-09-22).
+# ⛔ It used to be a hand-written copy of $(DEMOS) with a comment saying "if a
+# name is added there it has to be added here" - and the first time one was,
+# it was not.  `make print-demos` expands the real variable, so the two cannot
+# drift; only make knows what the `+=` lines after $(DEMOS) added.
+ALL=$(make -s -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" print-demos 2>/dev/null)
+[ -n "$ALL" ] || { echo "FAIL  the recipe printed no DEMOS list"; exit 1; }
 # ⚠ libvid is not a demo, it is a subroutine module, and it goes on the card
 # anyway: overworld.asm F$Loads "libvid" FROM THE EXECUTION DIRECTORY when
 # F$Link finds none in memory, and the execution directory is the card's CMDS
@@ -108,8 +128,26 @@ else
     [ -f "$MODS/$d" ] || { echo "FAIL  no module $MODS/$d (a -DV3=1 build? 'make demos'?)"; exit 1; }
   done
 fi
+# ⛔ DEDUPED, because a name can arrive twice - libvid is in SUPPORT and is
+# also one of the OS's own commands - and `os9 copy` answers "error 218 file
+# already exists", PRINTS IT AND EXITS 0.  The round-trip gate below cannot
+# see it either: the file IS there and does match.  So the duplicate has to be
+# removed here or it is simply noise in the log that nothing acts on.
 FILES=""
-for d in $WANT $SUPPORT; do [ -f "$MODS/$d" ] && FILES="$FILES $d"; done
+for d in $WANT $SUPPORT $SYSCMDS; do
+  case " $FILES " in *" $d "*) continue ;; esac
+  [ -f "$MODS/$d" ] && FILES="$FILES $d"
+done
+# ⛔ A NAMED SYSTEM MODULE THAT IS NOT THERE IS A FAILURE TOO.  A card missing
+# one of the OS's own commands boots and then cannot run it, which reads as a
+# broken command rather than a short card.
+for d in $SYSCMDS; do
+  [ -f "$MODS/$d" ] || { echo "FAIL  no system module $MODS/$d"; exit 1; }
+done
+MODFILES=""
+[ -n "$SYSMODDIR" ] && [ -d "$SYSMODDIR" ] && MODFILES=$(ls -1 "$SYSMODDIR" 2>/dev/null)
+SYSFILES=""
+[ -n "$SYSDIR" ] && [ -d "$SYSDIR" ] && SYSFILES=$(ls -1 "$SYSDIR" 2>/dev/null)
 
 # ---------------------------------------------------------------------------
 # ⭐ THE SIZE.  RBF: one sector for a file's descriptor plus ceil(bytes/256)
@@ -123,6 +161,8 @@ NF=$(echo $FILES | wc -w)
 DATAFILES=""
 [ -n "$DATA" ] && [ -d "$DATA" ] && DATAFILES=$(ls -1 "$DATA" 2>/dev/null)
 ND=$(echo $DATAFILES | wc -w)
+NM=$(echo $MODFILES | wc -w)
+NS=$(echo $SYSFILES | wc -w)
 
 payload=0
 # ⭐ OS9Boot costs its own file descriptor and its data, exactly like any
@@ -139,6 +179,19 @@ for f in $DATAFILES; do
   b=$(wc -c < "$DATA/$f")
   payload=$((payload + 1 + (b + 255) / 256))
 done
+for f in $MODFILES; do
+  b=$(wc -c < "$SYSMODDIR/$f")
+  payload=$((payload + 1 + (b + 255) / 256))
+done
+for f in $SYSFILES; do
+  b=$(wc -c < "$SYSDIR/$f")
+  payload=$((payload + 1 + (b + 255) / 256))
+done
+# ⚠ startup is a file in the ROOT, not in a directory of its own
+if [ -n "$STARTUP" ]; then
+  b=$(wc -c < "$STARTUP")
+  payload=$((payload + 1 + (b + 255) / 256))
+fi
 # ⚠ A DIRECTORY IS NOT SIZED LIKE A FILE.  `os9 makdir` takes a whole
 # allocation unit - eight sectors - however few entries are in it, and grows
 # by eight.  Modelling a directory as ceil(entries/8) sectors made the first
@@ -149,6 +202,8 @@ dirsec() {                              # sectors for a directory of $1 entries
   echo $(( 1 + s ))                     # its file descriptor, then its data
 }
 dirs=$(( $(dirsec $NF) + $(dirsec $ND) + $(dirsec 2) ))   # CMDS, DATA, root
+[ "$NM" -gt 0 ] && dirs=$(( dirs + $(dirsec $NM) ))       # MODULES
+[ "$NS" -gt 0 ] && dirs=$(( dirs + $(dirsec $NS) ))       # SYS
 base=$(( 1 + dirs + payload + SLACK ))  # LSN 0, the directories, the files
 N=$base
 i=0
@@ -183,6 +238,27 @@ os9 attr -q -pe -npw -pr -e -w -r $(for f in $FILES; do echo "$IMG,CMDS/$f"; don
 for f in $DATAFILES; do
   os9 copy -o=0 "$DATA/$f" "$IMG,DATA/$f" || { echo "FAIL  $f did not copy into DATA"; exit 1; }
 done
+if [ "$NM" -gt 0 ]; then
+  os9 makdir "$IMG,MODULES" || { echo "FAIL  makdir MODULES"; exit 1; }
+  for f in $MODFILES; do
+    os9 copy -o=0 "$SYSMODDIR/$f" "$IMG,MODULES/$f" || { echo "FAIL  $f did not copy into MODULES"; exit 1; }
+  done
+  # ⛔ AND THE EXECUTE BIT, exactly as CMDS gets: a module without it answers
+  # "Error #214 - No Permission" to `load`, which reads as a missing file
+  # rather than a missing attribute.
+  os9 attr -q -pe -npw -pr -e -w -r $(for f in $MODFILES; do echo "$IMG,MODULES/$f"; done) \
+    || { echo "FAIL  attr on MODULES"; exit 1; }
+fi
+if [ "$NS" -gt 0 ]; then
+  os9 makdir "$IMG,SYS" || { echo "FAIL  makdir SYS"; exit 1; }
+  for f in $SYSFILES; do
+    os9 copy -o=0 "$SYSDIR/$f" "$IMG,SYS/$f" || { echo "FAIL  $f did not copy into SYS"; exit 1; }
+  done
+fi
+# ⚠ TEXT, NOT A MODULE: startup is read by SysGo as a line of shell input, so
+# it copies without -o=0's module handling and carries no execute bit.
+[ -n "$STARTUP" ] && { os9 copy -o=0 "$STARTUP" "$IMG,startup" \
+  || { echo "FAIL  startup did not copy"; exit 1; }; }
 
 # ---------------------------------------------------------------------------
 # ⛔ THE GATE, AND IT IS NOT OPTIONAL: `os9 copy` PRINTS "disk is filled to
@@ -207,6 +283,18 @@ for f in $DATAFILES; do
   os9 copy -o=0 "$IMG,DATA/$f" "$VER/d_$f" >/dev/null 2>&1 && cmp -s "$DATA/$f" "$VER/d_$f" \
     || { echo "FAIL  DATA/$f did not survive the round trip"; bad=1; }
 done
+for f in $MODFILES; do
+  os9 copy -o=0 "$IMG,MODULES/$f" "$VER/m_$f" >/dev/null 2>&1 && cmp -s "$SYSMODDIR/$f" "$VER/m_$f" \
+    || { echo "FAIL  MODULES/$f did not survive the round trip"; bad=1; }
+done
+for f in $SYSFILES; do
+  os9 copy -o=0 "$IMG,SYS/$f" "$VER/s_$f" >/dev/null 2>&1 && cmp -s "$SYSDIR/$f" "$VER/s_$f" \
+    || { echo "FAIL  SYS/$f did not survive the round trip"; bad=1; }
+done
+if [ -n "$STARTUP" ]; then
+  os9 copy -o=0 "$IMG,startup" "$VER/startup" >/dev/null 2>&1 && cmp -s "$STARTUP" "$VER/startup" \
+    || { echo "FAIL  startup did not survive the round trip"; bad=1; }
+fi
 [ "$bad" -eq 0 ] || exit 1
 
 # ---------------------------------------------------------------------------
@@ -240,5 +328,8 @@ free=$(os9 free "$IMG" | sed -n 's/^\([0-9]*\) Free sectors.*/\1/p')
 echo "ok    $IMG: $N sectors ($((bytes / 1024)) KB, $((bytes / 512)) SD blocks), ${free:-?} free"
 [ -n "$BOOT" ] && echo "      ⭐ BOOTABLE: OS9Boot at LSN 0x$bt, $((0x$bsz)) bytes, signature at LSN 0 +\$F0"
 echo "      CMDS: $FILES"
+[ -n "$MODFILES" ] && echo "      MODULES: $(echo $MODFILES)"
+[ -n "$SYSFILES" ] && echo "      SYS: $(echo $SYSFILES)"
+[ -n "$STARTUP" ] && echo "      startup: $(cat "$STARTUP")"
 [ -n "$DATAFILES" ] && echo "      DATA: $(echo $DATAFILES)"
 exit 0

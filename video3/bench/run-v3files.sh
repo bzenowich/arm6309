@@ -61,7 +61,19 @@ SAMPLE_AT=${SAMPLE_AT:-7.0}; export SAMPLE_AT
 # ⛔ A BOUND THE RUN CANNOT REACH, on purpose: Quit is what ends the driven
 # run, so DESK-BYE arriving is the menu and never the clock
 TICKS=${TICKS:-60000}
-IDLETICKS=${IDLETICKS:-1200}            # the control's: it exits on the bound
+# ⛔ 3,000 AND NOT 1,200, SINCE 2026-09-22.  The control still ends on its own
+# bound - that is a claim below - but the bound has to outlast the SCRIPT, and
+# with five more desktop icons the desktop is slower to draw and `desk` reaches
+# 1,200 passes while the mouse is still walking: 8 of the script's 16 events
+# were never delivered, and the run stopped 1.2 s after the last one.
+# ⚠ THE 1.2 s IS WHY IT MATTERED.  `desk` moves the hardware sprite once a
+# loop pass, so the pointer LAGS the script - the recording shows it still
+# sitting in the list rectangle 1.2 s after the script had parked it at
+# (580, 300).  `checkfiles.py` counts a frame only where the pointer is clear,
+# and it believes the SCRIPT's coordinates; the arrow was therefore counted as
+# a second "picture" of the list.  A longer bound gives the sprite time to
+# arrive and the run frames in which it has.
+IDLETICKS=${IDLETICKS:-3000}            # the control's: it exits on the bound
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 [ -n "$DESKASM" ] || DESKASM="$NITROS9DIR/level2/arm6309/cmds/desk.asm"
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
@@ -75,7 +87,7 @@ mkdir -p "$OUT"
 eval "$(python3 video3/bench/checkfiles.py --geom "$DESKASM")"
 
 if [ -z "$NOBUILD" ]; then
-  V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-v3files.log" 2>&1 || {
+  sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-v3files.log" 2>&1 || {
     tail -20 "$OUT/mkrom-v3files.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 ROM="$OUT/arm6309_rom.bin"
@@ -97,7 +109,10 @@ for f in "$OUT"/data/font.*; do
 done
 [ "$(ls -1 "$FD" | wc -l)" -eq 20 ] || { echo "FAIL  the curated DATA is not 20 files"; exit 1; }
 
-DATA="$FD" sh software/nitros9/mksddisk.sh "$OUT/sd.img" desk v3paint monster pinball v3trk \
+# ⛔ BOOTABLE, because the ROM carries no filesystem since 2026-09-22:
+# a data card here is a machine that does not start.
+# ⭐ EVERY APPLICATION THE DESKTOP CAN LAUNCH (2026-09-22), plus v3trk.
+OUT="$OUT" DATA="$FD" sh software/nitros9/mksyscard.sh "$OUT/sd.img" desk v3paint pinball monster stardew v3bbs v3art v3trk \
   > "$OUT/mksddisk.log" 2>&1 || { cat "$OUT/mksddisk.log"; echo "FAIL  the card did not build"; exit 1; }
 cat "$OUT/mksddisk.log"
 
@@ -214,9 +229,12 @@ claim "⭐ and the pointer the MACHINE rebuilt is where the script said" \
   test "$(get click mg)" = ok
 claim "the card put a picture out ($(get click frames) frames)" \
   test "$(get click frames)" -gt 300
-# ⛔ the script aims at rows by NUMBER, so the order it aims at is a claim
-claim "⛔ the image really has DATA as the root's second entry ($ROOTROWS)" \
-  test "$(sed -n 2p "$OUT/root.txt")" = DATA
+# ⛔ the script aims at rows by NUMBER, so the order it aims at is a claim.
+# ⚠ DATA IS THE THIRD ENTRY SINCE 2026-09-22, not the second: the card is
+# BOOTABLE now (the ROM has no filesystem to fall back to), so `os9 gen` puts
+# OS9Boot at the head of the root and everything after it moved down a row.
+claim "⛔ the image really has DATA as the root's THIRD entry ($ROOTROWS)" \
+  test "$(sed -n 3p "$OUT/root.txt")" = DATA
 claim "⛔ ...and v3paint as CMDS's second ($CMDSROWS)" \
   test "$(sed -n 2p "$OUT/cmds.txt")" = v3paint
 
@@ -248,7 +266,9 @@ claim "   ...and nothing is selected in it yet"                test "$(field cli
 
 # --- 4. ⭐ entering a directory -------------------------------------------
 claim "⭐ ONE CLICK ON A ROW SELECTS IT"                        has click 'DESK-SEL DATA'
-claim "   ...it is the row that was clicked"                   test "$(field click S2 sel)" = 1
+# ⚠ ROW 2 SINCE 2026-09-22: the card is bootable, so OS9Boot heads the root
+# and DATA moved down a row with everything else (files.ps2 clicks y=227).
+claim "   ...it is the row that was clicked"                   test "$(field click S2 sel)" = 2
 claim "⛔ ...AND ENTERS NOTHING: the list is still the root's" \
   test "$(field click S2 rows)" = "$ROOTROWS"
 claim "⭐ AND THE SECOND CLICK ENTERS IT"                       test "$(field click S3 title)" = /SD0/DATA
@@ -317,8 +337,17 @@ claim "⛔ and the script walked the mouse OVER THE LIST ($(get idle restsin) of
 claim "⛔ AND PRESSED NOTHING: no click reached the machine"    test "$(get idle clicks)" = 0
 claim "⛔ ...and the window was up the whole run ($(get idle chrome) of $(get idle frames) frames of chrome)" \
   test "$(get idle chrome)" -ge 400
-claim "⛔ AND THE LIST HELD EXACTLY ONE PICTURE, over every frame the pointer was off it" \
+claim "⛔ AND THE LIST HELD EXACTLY ONE PICTURE, over every frame the pointer was off it ($(get idle listn) of them)" \
   test "$(get idle listcrcs)" = 1
+# ⛔ AND THE CLAIM ABOVE IS NOT VACUOUS, which is a claim in its own right.
+# It counts only frames where the pointer has been clear of the list for
+# checkfiles.py's SETTLE - a figure that had to GROW on 2026-09-22, because
+# `desk` moves the sprite once a loop pass and the arrow was still in the
+# rectangle 1.2 s after the script had parked it elsewhere.  ⚠ A settle long
+# enough to exclude every frame would make "exactly one picture" pass on
+# nothing at all, which is the shape this repository keeps paying for.
+claim "   ⛔ ...and there WERE frames to count: $(get idle listn), not zero" \
+  test "$(get idle listn)" -ge 40
 claim "⛔ ...and it is still /SD0/DATA's real listing, so a blank window is not what passed it" \
   test "$(field idle SE title)/$(field idle SE rows)" = "/SD0/DATA/$DATAROWS"
 claim "⛔ NOTHING WAS EVER SELECTED"                            test "$(field idle SE sel)" = -

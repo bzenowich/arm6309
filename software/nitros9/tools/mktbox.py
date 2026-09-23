@@ -296,8 +296,14 @@ def icon_term():
     return im
 
 
+# ⛔ APPEND ONLY.  desk.asm's IcTab names its art by NUMBER (`fcb A.Run,16`),
+# so inserting here renumbers every icon after the insertion and repaints the
+# desktop with its neighbours' pictures - silently, because a number is always
+# a valid number.  The three at the end went on 2026-09-22 with the desktop's
+# applications (arm6309 docs/boot-and-desktop.md §3).
 ICON_NAMES = ["home", "disk", "files", "trash", "paint", "bbs", "game", "image", "doc",
-              "folder16", "image16", "doc16", "leaf", "app16", "term", "folder"]
+              "folder16", "image16", "doc16", "leaf", "app16", "term", "folder",
+              "pinball", "monster", "farm"]
 
 
 def build_icons():
@@ -315,6 +321,7 @@ def build_icons():
         "game": M.icon_game(), "image": M.icon_image(), "doc": M.icon_doc(),
         "folder16": M.icon_folder(16), "image16": M.icon_image(16), "doc16": M.icon_doc(16),
         "leaf": M.icon_leaf(), "app16": icon_app16(), "term": icon_term(), "folder": M.icon_folder(),
+        "pinball": M.icon_pinball(), "monster": M.icon_monster(), "farm": M.icon_farm(),
     }
     icons = []
     for n in ICON_NAMES:

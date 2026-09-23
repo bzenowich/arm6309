@@ -29,6 +29,15 @@ fi
 ROM="$OUT/arm6309_rom.bin"
 [ -f "$ROM" ] || { echo "FAIL  no $ROM"; exit 1; }
 
+# ⛔ A V3 ROM NEEDS THE V3 EMULATOR, AND EVERY ROM IS A V3 ROM SINCE
+# 2026-09-22.  CoArm carries video3's code and polls VSTAT at $FF6D; run
+# against this emulator's DEFAULT card - archive/video/'s - that read answers
+# out of a register file and the poll SPINS FOR EVER.  The machine prints its
+# banner and never reaches a shell, which reads as a broken boot rather than a
+# mismatched pair.  ⚠ This used to follow a `$V3` the caller set; the recipe
+# puts -DV3=1 in AFLAGS itself now, so there is nothing left to follow and the
+# pairing is unconditional.
+export VIDEO3=1
 cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c software/demo/emu/hd6309.c audio/refplayer/card.c
 
 # What is typed, from 8 s of machine time on: the shell is up by ~3 s.
@@ -38,7 +47,7 @@ cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c softwar
 # to the second, which is what defs/arm6309.d's per-tick period replaced.
 # `firqtst` runs twice: the second run is after the driver's Term has put the
 # previous FIRQ service back, so it is the install/remove path as well.
-printf 'dir\rdir /dd/cmds\rmfree\rdate -t\rsleep 2100\rdate -t\rprocs\rvmodetst 1\rdate -t\rsleep 1800\rdate -t\rvmodetst 0\rload /dd/modules/firqtst\rfirqtst\rfirqtst\rps2tst\rload pmap\rmemtst\recho DONE-arm6309\r' > "$OUT/typed.txt"
+printf 'dir /sd0\rdir /sd0/cmds\rdir /dd/cmds\rmfree\rdate -t\rsleep 2100\rdate -t\rprocs\rvmodetst 1\rdate -t\rsleep 1800\rdate -t\rvmodetst 0\rload /sd0/modules/firqtst\rfirqtst\rfirqtst\rps2tst\rload pmap\rmemtst\recho DONE-arm6309\r' > "$OUT/typed.txt"
 
 # SERIAL_STOP is the echo's OUTPUT line: a line feed then the word, which the
 # typed command line ("echo DONE-...") does not contain.
@@ -47,7 +56,12 @@ STOP=$(printf '\nDONE-arm6309')
 # bytes from each: these, which the emulator's devices send once they are
 # enabled.
 export PS2_KBD="1C F0 1C" PS2_MOUSE="09 05 FB"
-(cd "$OUT" && SERIAL_IN=typed.txt SERIAL_AT=8 SERIAL_STOP="$STOP" WILD=1 ./emu "$ROM" . "$SECONDS_OF_MACHINE" > /dev/null 2> emu.log) || true
+# ⛔ AND IT BOOTS OFF THE CARD SINCE 2026-09-22.  The ROM carries no
+# filesystem at all - pages 3-63 are zeros - so a run with an EMPTY SOCKET
+# does not reach a prompt: boot_sd finds no system disk and the kernel takes
+# D.Crash.  mkrom.sh builds system.img beside the ROM for exactly this.
+[ -f "$OUT/system.img" ] || { echo "FAIL  no $OUT/system.img - mkrom.sh should have built the system card"; exit 1; }
+(cd "$OUT" && SERIAL_IN=typed.txt SERIAL_AT=8 SERIAL_STOP="$STOP" WILD=1 SDIMG="$OUT/system.img" ./emu "$ROM" . "$SECONDS_OF_MACHINE" > /dev/null 2> emu.log) || true
 tr -d '\000' < "$OUT/serial.out" | tr -d '\r' > "$OUT/console.txt"
 
 fail=0; n=0
@@ -58,26 +72,36 @@ claim() {  # claim "what" command...
 has() { grep -q -- "$1" "$OUT/console.txt"; }
 
 claim "the loader ran and entered krn (R, K)"                has '^RK'
-# ⭐ rbsd and SD0 joined the bootfile on 2026-09-20 - the SD card's driver
-# and descriptor (storage/docs/sdcard.md 9.4).  /DD is still the ROM disk.
-claim "krn found Boot and loaded OS9Boot from the ROM disk"  has 'bKrnP2 KrnP3 Init IOMan RBF rbromdisk DD R0 rbsd SD0 SCF sc16550 Term'
+# ⭐ ONE DISK, TWO NAMES (2026-09-22).  rbromdisk, its DD and its R0 left the
+# bootfile with the ROM disk; what is left is the card's driver and its two
+# descriptors - /DD, which SysGo and every program's data path name, and /SD0.
+claim "krn found Boot and loaded OS9Boot"                    has 'bKrnP2 KrnP3 Init IOMan RBF rbsd DD SD0 SCF sc16550 Term'
+claim "⛔ ...and NO rbromdisk: there is no ROM disk to drive" \
+  sh -c "! grep -q 'rbromdisk' '$OUT/console.txt'"
+# ⭐ AND IT CAME OFF THE CARD, which is boot_sd.asm's own character: `s` for
+# a card it read, `n` for no system disk.  ⚠ It mattered more when there was
+# a ROM disk to fall back to; it is kept because it says WHICH of sdcard.md
+# §9.0's steps refused when one does.
+claim "⭐ ...and OS9Boot came off the SD CARD, not the ROM (boot_sd's 's')" has 'tbs0'
 claim "SysGo printed the banner, naming this machine"        has '^arm6309$'
 claim "the shell prompted on /Term"                          has '{Term|02}/DD:'
-claim "dir lists the ROM disk's root"                        has 'OS9Boot *CMDS *MODULES *SYS *startup'
-# ⭐ 2026-09-20: `format` joined the command set and the demo programs left it
-# (software/nitros9/README.md - they are on an SD card now), which moved every
-# name in dir's five-column layout by one.  The old pattern was
-# 'mfree *mmap *more' and `more` is now the first name on the NEXT line; this
-# one is a pair on one line, so it still says the column layout is intact.
-claim "dir /dd/cmds lists commands on the ROM disk"          has 'mfree *mmap *$'
-# ⭐ AND WHAT THE ROM DISK IS FOR, asserted rather than assumed: it is a rescue
-# system, so it must be able to make a filesystem on a blank card and fill it
-claim "⭐ and the rescue set is there: format, dcheck, copy, makdir" \
-  sh -c "for c in format dcheck copy makdir; do grep -qw \$c '$OUT/console.txt' || exit 1; done"
-# ⛔ ...and the applications are NOT.  Without this the claim above is satisfied
-# by a ROM disk that still carries everything, and the card would be pointless
-claim "⛔ and the demos are NOT: mvania, monster, overworld, rastbar, wave" \
-  sh -c "! sed -n '/Directory of .dd.cmds/,/^\$/p' '$OUT/console.txt' | grep -qwE 'mvania|monster|overworld|rastbar|wave'"
+claim "⭐ dir /sd0 lists the CARD's root: NitrOS-9 lives here now"  has 'OS9Boot *CMDS *DATA *MODULES *SYS'
+# ⚠ NOT A COLUMN PATTERN: the card carries the demos as well as the command
+# set, so the five-column layout depends on how many demos this build made.
+claim "dir /sd0/cmds lists the whole command set" \
+  sh -c "for c in mfree mmap procs setime verify; do sed -n '/Directory of .sd0.cmds/,/^\$/p' '$OUT/console.txt' | grep -qw \$c || exit 1; done"
+# ⭐ AND /DD IS THE CARD - the same disk under both names, which is what lets
+# SysGo, armio.asm's CoPath and every program's /DD path keep working with no
+# ROM disk under them.
+claim "⭐ /DD and /SD0 are the SAME disk: /DD/CMDS is the card's command set" \
+  sh -c "for c in mfree mmap procs setime verify; do sed -n '/Directory of .dd.cmds/,/^\$/p' '$OUT/console.txt' | grep -qw \$c || exit 1; done"
+# ⛔ ...and the ROM carries no filesystem at all.  The host asks, because the
+# machine cannot see what is not mounted.
+claim "⛔ AND THE ROM HAS NO FILESYSTEM: pages 3-63 are all zero" \
+  sh -c "python3 -c \"
+import sys
+d=open('$OUT/arm6309_rom.bin','rb').read()[3*8192:64*8192]
+sys.exit(0 if not any(d) else 1)\""
 # (free blocks: the bootfile, system memory and the shell, loaded from /DD/CMDS, have the rest)
 claim "mfree reports 8 MB of RAM mapped: four SIMM sockets, capped at F\$GBlkMp's 1024 blocks" has 'Total: *3F5 *8104k'
 claim "procs shows the shell running procs"                  has 'Procs *$'
@@ -112,7 +136,7 @@ claim "sleep 1800 in VMODE 01 took 30 s of the clock: the 59.940 Hz family keeps
 # A one-socket machine: the loader sizes RAM from the boot ROM's descriptor.
 printf 'mfree\recho DONE-arm6309\r' > "$OUT/typed1.txt"
 mkdir -p "$OUT/one"
-(cd "$OUT/one" && EMU_SIMMS=1 SERIAL_IN=../typed1.txt SERIAL_AT=4 SERIAL_STOP="$STOP" ../emu "$ROM" . 30 > /dev/null 2> emu.log) || true
+(cd "$OUT/one" && EMU_SIMMS=1 SERIAL_IN=../typed1.txt SERIAL_AT=4 SERIAL_STOP="$STOP" SDIMG="$OUT/system.img" ../emu "$ROM" . 30 > /dev/null 2> emu.log) || true
 tr -d '\000' < "$OUT/one/serial.out" | tr -d '\r' > "$OUT/one/console.txt"
 claim "with one SIMM socket, mfree reports 4 MB: the size comes from the boot ROM's descriptor" grep -q 'Total: *1F5 *4008k' "$OUT/one/console.txt"
 
@@ -121,7 +145,7 @@ claim "with one SIMM socket, mfree reports 4 MB: the size comes from the boot RO
 # NitrOS-9 boots a second time.
 printf 'reboot\r' > "$OUT/typedr.txt"
 mkdir -p "$OUT/reboot"
-(cd "$OUT/reboot" && SERIAL_IN=../typedr.txt SERIAL_AT=4 ../emu "$ROM" . 14 > /dev/null 2> emu.log) || true
+(cd "$OUT/reboot" && SERIAL_IN=../typedr.txt SERIAL_AT=4 SDIMG="$OUT/system.img" ../emu "$ROM" . 14 > /dev/null 2> emu.log) || true
 tr -d '\000' < "$OUT/reboot/serial.out" | tr -d '\r' > "$OUT/reboot/console.txt"
 claim "reboot: boot.asm's POST ran again - the map, the SIMM walk, TASK 1 and the store-rate blocks, with no error" \
   sh -c "grep -q 'progress \$01' '$OUT/reboot/emu.log' && grep -q 'progress \$07' '$OUT/reboot/emu.log' && grep -q 'progress \$52' '$OUT/reboot/emu.log' && ! grep -q 'FAIL' '$OUT/reboot/emu.log'"
@@ -132,8 +156,14 @@ claim "reboot: boot.asm's POST ran again - the map, the SIMM walk, TASK 1 and th
 # at $FF6D against THAT card reads a register-file byte and can spin for ever.
 # $40 is what VIDEO3=1 reports - software/nitros9/video/run-video3.sh - and
 # what npm run check:machine asserts against the real design.
-claim "⭐ and §2c reported \$06: no video3 card in this emulator, so the video POST was SKIPPED rather than polling a VSTAT that is not there" \
-  grep -q 'progress \$06' "$OUT/reboot/emu.log"
+# ⚠ $06 without VIDEO3 (§2c probes, finds no card and skips §3-§10) and $40
+# with it (the POST runs to the VRAM read-back).
+# ⚠ $06 without VIDEO3 (§2c probes, finds no card and skips §3-§10) and $40
+# with it (the POST runs to the VRAM read-back).  ⛔ NOT `${V3:+40}${V3:-06}`:
+# with V3=1 that is "40" and "1" and gives $401.
+PROG2C=40      # ⚠ video3's, and there is no other flavour since 2026-09-22
+claim "⭐ and §2c's probe decided the video POST: \$$PROG2C" \
+  grep -q "progress \$$PROG2C" "$OUT/reboot/emu.log"
 claim "and NitrOS-9 booted a second time, to the shell" test "$(grep -c '{Term|02}/DD:' "$OUT/reboot/console.txt")" -ge 2
 
 echo "$n claims, $fail failed        (console in $OUT/console.txt)"

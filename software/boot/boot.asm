@@ -1601,8 +1601,12 @@ dlgrun  sts     dstksv          ⛔ the stack leaves block 6 - see the header
 * boot_sd.asm) - because that code runs in a different map with a different
 * stack and cannot trust a byte this one left behind, and because a ROM that
 * published a flag would have two places to get the precedence wrong.  Both
-* apply the same rule (sdcard.md 9.5) and the ROM disk is the fallback in
-* both, which is what makes this state recoverable rather than terminal.
+* apply the same rule (sdcard.md 9.5).
+*
+* ⛔ AND SINCE 2026-09-22 THIS STATE IS TERMINAL.  The ROM used to carry a
+* NitrOS-9 to fall back to; it carries a boot monitor and a toolbox now, so a
+* machine with no system disk has nothing to start.  The question mark blinks
+* for ever rather than handing off to a kernel with nothing to load.
 bootchk lbsr    sdprobe
         bcc     bootok
         lda     #P_SDBAD        a card, and not one this machine can boot
@@ -1643,8 +1647,14 @@ dlgb1   lda     #DLGBLF
         lbsr    dlgwait
         lbsr    dlgicon         ... and on again, with the mark
         lbsr    dlgqm
-        dec     nblink
-        bne     dlgb1
+* ⛔ FOR EVER.  It used to blink DLGBLK times and fall through to section 11,
+* because the ROM disk was there to boot instead.  There is no ROM disk: a
+* hand-off here reaches krn, whose boot_sd finds no card and cannot load
+* OS9Boot, and the machine dies with a crash code instead of the picture that
+* explains it.  This is the Macintosh's answer and it is the honest one.
+* ⚠ nblink and DLGBLK are kept: the blink RATE is still theirs, and a bench
+* that wants a bounded run bounds it with its own clock.
+        bra     dlgb1
 
 * --- put the machine back the way section 11 expects it --------------------
 dlgend  lda     simmhi          the socket 1a chose, taken before MapB ran
@@ -2139,8 +2149,19 @@ tbcbad  lda     #P_BADTB
 
 *==============================================================================
 * The row layer the toolbox draws through -- ca_tbox.asm's TbVec, for a machine
-* with no CoArm in it.  tbox reaches exactly five of these seven (TV.Rect,
-* TV.Put, TV.MapB, TV.PalSet, TV.PalShw); the other two are the table's shape.
+* with no CoArm in it.  tbox reaches five of these nine (TV.Rect, TV.Put,
+* TV.MapB, TV.PalSet, TV.PalShw); the rest are the table's shape.
+*
+* ⛔⛔ THE TABLE MUST BE AS LONG AS tbox's TV.* LIST, AND NOTHING CHECKS IT.
+* TVCALL is `jsr [CG.TbV + TV.<name>]` -- an ENTRY NUMBER indexed into whatever
+* is at CG.TbV -- so a vector tbox has and this table does not is a jump into
+* the bytes that happen to follow.  It cost a boot: the glyph strike (2026-09-22)
+* gave tbox TV.CopyN at offset 24, this table ended at 18, and `SkFlush` jumped
+* to tbvec+24 -- the MIDDLE of tbmapb's `cmpd`.  The dialog's question mark then
+* executed four bytes of an operand, RTS'd into VRAM, and the machine ran wild
+* two seconds into every no-disk boot; the "Disk found" path never flushed a
+* batch and was perfect, so the defect was invisible on the card that works.
+* ⚠ A new TV.* entry in tbox.asm is a new entry HERE, on the same day.
 *
 * ⚠ EVERY REGISTER PASSES THROUGH BOTH WAYS.  TVCALL does not save anything,
 * and its callers rely on that: TPal keeps the entry number in B and the
@@ -2154,6 +2175,8 @@ tbvec   lbra    tbrow           0  TV.Fill    A = a colour: CG.RN at (RY, RX)
         lbra    tbpset          12 TV.PalSet  B = an entry, CG.Tmp = RGB565
         lbra    tbpshw          15 TV.PalShw  (nothing: see below)
         lbra    tbdisp          18 TV.IsDisp  (nothing: see below)
+        lbra    tbnocp          21 TV.Copy    ⛔ refused: there is no engine here
+        lbra    tbnocp          24 TV.CopyN   ⛔ and no list of them either
 
 *------------------------------------------------------------------------------
 * tbmapb - D = a block, at Co.WinB.  ca_row.asm's MapA is the rule this
@@ -2314,6 +2337,15 @@ tbpset  pshs    cc,a,b,u
 *------------------------------------------------------------------------------
 tbpshw  rts
 tbdisp  orcc    #$04            Z: the screen is displayed
+        rts
+* ⭐ THE COPY ENGINE, REFUSED -- and refusing is a documented answer, not a
+* stub.  tbox.asm's TV.Copy says "carry set if it could not" and TV.CopyN says
+* "carry back means COMPOSE THE WHOLE STRING", so a row layer that cannot copy
+* says so and the caller draws the glyphs the long way.  That is what the boot
+* dialog did before the strike existed, and it is ~30 characters once.
+* ⚠ THE CARRY IS THE WHOLE CONTRACT: a `rts` with carry CLEAR claims the
+* rectangle was copied and leaves the text unwritten.
+tbnocp  orcc    #$01            C: this machine's row layer cannot
         rts
 
 *==============================================================================

@@ -1056,7 +1056,7 @@ eight ICs.
 | **Writes are write-through** | §9.4.1 wants write-back and prices it at 126 against 63 KiB/s. `rbsd` does not take it: a deferred write that is never flushed is a corrupted filesystem and RBF offers no flush call the driver can rely on. The cache still makes the other half of every sequential read free |
 | ⛔ **What it actually achieves, and it is not 537 KiB/s** | **~130 KiB/s sequential.** Two independent reasons, both software: it issues **`CMD17` per block**, so it pays the card's ~1 ms access latency every time (§9.1.1's 253 KiB/s ceiling), and the port builds **`CPU=6809`**, so the transfer is `LDA`/`STA` at ~11 cycles a byte rather than `TFM` at 3.81. Neither needs hardware to fix |
 | ⭐ **And one thing the 6809 build gets for free** | §4's hazard is a property of an *interruptible block move*. A 6809 has none, so the 6809 path needs no masking at all; §4.4's chunk-and-mask is compiled in only under `-DH6309=1` |
-| ⭐ **What it is FOR, since 2026-09-20** | the demo programs **and their data**. The boot ROM's 488 K RBF image was full — `/DD/SYS` alone was 1,140 of its 1,952 sectors — so the applications and the pictures moved onto a card and the ROM disk became a rescue system with 350 K free (`software/nitros9/README.md`). `software/nitros9/mksddisk.sh` writes the image; `video3/bench/run-v3sd.sh` boots both cards and runs the Haiku desktop, Paint, `changefont` and a game off `/SD0` — **29 claims**, with an empty-socket control in which each of them reports `E$NotRdy` or `E$PNNF` and ⛔ the screens that are still selected stay **blank**, which the two shape counts are there to say |
+| ⭐ **What it is FOR, since 2026-09-20** | the demo programs **and their data**. The boot ROM's 488 K RBF image was full — `/DD/SYS` alone was 1,140 of its 1,952 sectors — so the applications and the pictures moved onto a card (`software/nitros9/README.md`). ⛔ **And on 2026-09-22 the rest followed**: there is no ROM disk at all, and the card carries the operating system too (question 15) — so "what it is for" is now *everything the machine runs*. `software/nitros9/mksddisk.sh` writes the image; `video3/bench/run-v3sd.sh` boots both cards and runs the Haiku desktop, Paint, `changefont` and a game off `/SD0` — **29 claims**, with an empty-socket control in which each of them reports `E$NotRdy` or `E$PNNF` and ⛔ the screens that are still selected stay **blank**, which the two shape counts are there to say |
 
 > ⛔ **Two defects worth recording, because neither was visible by reading.**
 > **The data-response token** (§9.2 step 8, corrected above) — the driver read `$FF`,
@@ -1141,29 +1141,30 @@ when it hands the machine to ROM page 1: one machine, one signature.
 device descriptor's options into LSN 0's `DD.OPT` area and rewrites the header. That is the
 right behaviour — a reformatted card has no `OS9Boot` either — but it means a card is
 blessed by the *host* tools (`software/nitros9/mksddisk.sh`, `BOOT=<bootfile>`) and not by
-the machine. The rescue path is the ROM disk, which is why it stays bootable.
+the machine. ⛔ **And since 2026-09-22 there is no rescue path**: the ROM carries no
+filesystem, so a card the machine reformatted is a machine that no longer starts.
 
-#### The precedence: the card first, the ROM disk always
+#### The precedence: the card, and nothing else
 
 **The rule, applied in two places and stated once:**
 
 > A card is booted from **iff** the socket says a card is present, §9.0's initialisation
 > completes with `CMD58` reporting `CCS` (SDHC/SDXC — §9.0.1), block 0 reads, its `DD.BT`
-> is non-zero and its signature is `"6309"` version 1. **Otherwise the ROM disk**, and
-> "otherwise" includes an empty socket, a card that will not initialise, an SDSC card, an
-> unformatted or unblessed volume, and a read that failed.
+> is non-zero and its signature is `"6309"` version 1. ⛔ **Otherwise the machine does
+> not start**, and "otherwise" includes an empty socket, a card that will not initialise,
+> an SDSC card, an unformatted or unblessed volume, and a read that failed.
 
 | | |
 |---|---|
 | **`software/boot/boot.asm` §10b** | the boot ROM's reader: §9.0's init and §9.1's `CMD17` of block 0, ~640 bytes, no filesystem, no write path, **no block buffer at all** — the eight bytes the verdict needs are picked out of the stream and the other 504 are read and dropped. It drives §10a's dialog and **nothing else**; progress `$64` is a bootable card and `$65` a card that is not |
-| **`boot_sd.asm`** | the NitrOS-9 `F$Boot` module (`level2/arm6309/modules/`, 881 bytes of the loader's 896), providing `HWInit`/`HWTerm`/`HWRead` to `boot_common.asm`. It is `boot_romdisk`'s ROM-page reader with the card in front of it, and it applies the rule again from scratch |
+| **`boot_sd.asm`** | the NitrOS-9 `F$Boot` module (`level2/arm6309/modules/`, 881 bytes of the loader's 896), providing `HWInit`/`HWTerm`/`HWRead` to `boot_common.asm`. It began as `boot_romdisk`'s ROM-page reader with the card in front of it; ⛔ since 2026-09-22 the ROM-page half is deleted and `HWRead` is `SDRead`. It applies the rule again from scratch |
 | ⛔ **and the ROM's answer is NOT handed on** | the two probes agree because the rule is the same, not because one told the other. The ROM's ran in a different map, on a different stack, before `krn` existed; a flag left in memory by one and read by the other would be two places to get the precedence wrong, and the ROM's picture has no authority over what the kernel loads |
-| ⭐ **and `boot_sd` says which it used** | one character through `D.BtBug`, between `krn`'s `tb` and `boot_common`'s `0`: **`s`** for the card, **`r`** for the ROM disk. ⛔ Without it "a shell appeared" is not evidence of anything — *the fallback works*, so a machine that silently ignored the card reaches the same prompt |
-| **How a bench asks for the ROM disk** | it puts no bootable card in the socket, which is what every bench written before this already did. `BOOTMOD=boot_romdisk` builds the ROM that cannot read a card at all, and is there so that "the card was used" can be tested against a build in which it cannot have been |
+| ⭐ **and `boot_sd` says what it did** | one character through `D.BtBug`, between `krn`'s `tb` and `boot_common`'s `0`: **`s`** for a card it read, **`n`** for no bootable card. ⛔ It mattered more when there was a fallback — "a shell appeared" proved nothing, because the ROM disk reached the same prompt. It is kept because it distinguishes *which* of §9.0's steps refused |
+| ⛔ **and there is nothing else to boot** | ROM pages 3–63 have been **zeros since 2026-09-22** (question 15). `BSNone` returns `E$NotRdy`, the loader fails, and `boot.asm` §10a's question mark is what the machine shows |
 
-⚠ **`/DD` does not move.** Only `OS9Boot` comes off the card; the system disk is still the
-ROM disk, and `/SD0` is still mounted beside it by `rbsd`. Making the card `/DD` is a
-separate decision about `init`'s default device and is **not taken here**.
+⭐ **`/DD` IS THE CARD.** `sddesc.asm` is assembled twice — `dd_sd.dd` and `sd0.dd` — so
+the one disk answers to both names, and `/DD` is what `SysGo`, `init` and `armio.asm`'s
+`CoPath` were already naming.
 
 **`boot_sd` has no cache**, and the reason is not laziness: `RBF`'s sector is 256 bytes and
 the block is 512 (§9.4.1), so every sector read transfers a whole block and drops half of
@@ -1174,12 +1175,13 @@ stack claimed at boot before anything has measured it. `rbsd` is the driver with
 | | |
 |---|---|
 | ⭐ **What runs it** | `sh software/nitros9/run-sdboot.sh` — **45 claims**, three card states × (a boot to a shell + a `reboot` through the ROM's own POST). It is the only bench in this repository that executes §10b |
-| ⛔ **The negative control** | the middle state: **a card that is present and readable and not bootable**. The machine must fall back, say `r`, and draw the question mark — and the run that proves the ROM's test *changed* is `$65` where the old card-detect test would have said `$61` |
-| ⭐ **And "it came off the card" is asserted, not assumed** | the bench puts a **different `OS9Boot`** on the card — the ROM's bootfile with the FIRQ stub's two modules appended — so `mdir` on the running machine names `FIRQDrv` and `FT0` with nothing having loaded them. The ROM disk's own bootfile is checked on the host for the same bytes, so the claim cannot pass on a ROM that happened to carry them |
+| ⛔ **The negative control** | the middle state: **a card that is present and readable and not bootable**. It must say `n` and reach **no shell at all**, and the run that proves the ROM's test *changed* is `$65` where the old card-detect test would have said `$61` |
+| ⭐ **And "it came off the card" needs no argument now** | the ROM has no bootfile to have supplied one. The bench still asserts the card's own modules by name with `mdir`, because that distinguishes *this* card's `OS9Boot` from a stale image in the build directory |
 
-⚠ **The host emulator does not cold-start the boot ROM** — `software/demo/emu/machine.c`
-enters at `$8004` with boot.asm's handoff already applied — so §10b runs there only after a
-`reboot`, which is how that bench reaches it. In Verilog, `machine_tb`'s `disk` scenario is
+⚠ **The host emulator enters at `$8004` by default** — `software/demo/emu/machine.c`, with
+boot.asm's handoff already applied — so §10b runs there after a `reboot`, or from reset
+with **`COLDBOOT=1`**, which is what `software/nitros9/video/run-desk.sh` passes to show
+the POST and the dialog. In Verilog, `machine_tb`'s `disk` scenario is
 a cold start with the whole card (`machine3.v` `STORAGE = 1`) and a blessed image in the
 socket.
 
@@ -1242,8 +1244,9 @@ not the baud generator. That is 283× slower than this card, and **49× slower e
 
 ⚠ **It is no longer "the right way to get a filesystem onto the machine before this card
 exists", because it is no longer the only way.** `machine.md` §7.2's 1 MB motherboard ROM
-(2026-09-08) holds the NitrOS-9 distribution as a read-only ROM disk, so the machine boots
-standalone. What DriveWire is uniquely good at — a **writable** volume whose media is a
+held the NitrOS-9 distribution as a read-only ROM disk from 2026-09-08, so the machine
+booted standalone; ⛔ **since 2026-09-22 it boots off this card instead** (question 15),
+and DriveWire is again the way to get bytes onto a machine whose card is not ready. What DriveWire is uniquely good at — a **writable** volume whose media is a
 file on the developer's desk, and the machine's only source of a **wall-clock time**
 (there is no RTC anywhere in this design) — is in
 [`drivewire.md`](../../docs/drivewire.md), which is the owning document.
@@ -1463,20 +1466,29 @@ will experience**; every other number in this document is a component of it.
 
 14. **⚠ A card can only be BLESSED by the host tools** (§9.5). `os9 gen` writes `DD.BT`
     and `DD.BSZ` and `software/nitros9/mksddisk.sh` stamps the signature; the machine's
-    own `format` **un**-blesses a card, and there is no `os9gen` in the ROM disk's rescue
-    command set. So a machine on its own can make a *filesystem* on a blank card and fill
-    it, and cannot make it bootable. Whether that matters depends on whether this machine
-    is ever expected to be its own development host — which is a `machine.md` question,
-    not a storage one — but it is the reason the ROM disk's bootability is load-bearing
-    rather than a courtesy.
+    own `format` **un**-blesses a card, so a machine on its own can make a *filesystem*
+    on a blank card and cannot make it bootable. Whether that matters depends on whether
+    this machine is ever expected to be its own development host — which is a
+    `machine.md` question, not a storage one. ⛔ **Since 2026-09-22 it is the machine's
+    only failure mode with no recovery on the machine** (question 15): the ROM carries
+    no filesystem at all, so a machine whose card has died needs a host to write it a
+    new one. That is the Macintosh 128K's position exactly, and it is the accepted cost
+    of the ROM being a toolbox rather than a distribution.
 
-15. **Whether `/DD` should follow `OS9Boot` onto the card** (§9.5). Today it does not:
-    the card boots the kernel and the ROM disk is still the system disk, so `startup`,
-    `/DD/CMDS` and the shell all come out of ROM even on a machine that booted from the
-    card. Making the card `/DD` is a change to `init`'s default device and to what a
-    blessed card has to carry, and it has not been designed. ⚠ It is also what would
-    make the fallback *visible* to a user rather than silent, because today the only
-    difference between the two boots is one character on the console.
+15. ⭐ **SETTLED 2026-09-22: THE ROM DISK IS GONE.** Not moved, and not reduced to a
+    rescue kit — removed. ROM pages 3–63 are **499,712 bytes, 47.7 % of the flash,
+    verified all zero**; the ROM is page 0's monitor, pages 1–2's loader and kernel, and
+    the toolbox on pages 64–127. NitrOS-9 — `OS9Boot`, the whole command set, `SYS`,
+    `MODULES` and `startup` — is on the card, built by `software/nitros9/mksyscard.sh`
+    out of the port's own recipe.
+    ⭐ **And `/DD` IS the card.** `sddesc.asm` is assembled twice, once as `dd_sd.dd` and
+    once as `sd0.dd`, so the one disk answers to both names — which is what `SysGo`,
+    `init` and `armio.asm`'s `CoPath` were already asking for.
+    ⛔ **There is no fallback, and that is the answer to what the question was really
+    about.** The two boots used to differ by one character on the console, so *"a shell
+    appeared"* proved nothing. Now a machine that cannot read its card blinks §10a's
+    question mark for ever, and reaching a shell is itself the evidence —
+    `software/nitros9/run-sdboot.sh` asserts all three card states.
 
 ---
 

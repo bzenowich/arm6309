@@ -19,12 +19,20 @@ if [ -z "$NOBUILD" ]; then
   # ⚠ CMDS_EXTRA: the demos live on an SD card now (software/nitros9/mksddisk.sh);
   # session.py types these three at /DD with an empty socket, so they are asked
   # for by name.
-  # ⚠ SYSROM=all: this session boots with an EMPTY SOCKET and types
-  # `copy /dd/sys/...` at the shell, so the demo data has to be in the ROM
-  # disk.  Since 2026-09-20 it is on an SD card by default and /DD/SYS holds
-  # only errmsg (software/nitros9/mkrom.sh, mksddisk.sh).
+  # ⚠ SYSROM=all: this session types `copy /dd/sys/...` at the shell, so the
+  # demo data has to be in /DD/SYS.  It is on the card's DATA directory by
+  # default (2026-09-20) and /SYS holds only errmsg; SYSROM= is what also
+  # copies it to /SYS.  ⛔ AND /DD IS THE CARD SINCE 2026-09-22: mksyscard.sh
+  # puts $OUT/romsys there, because the ROM has no filesystem to put it in.
   CMDS_EXTRA="rastbar wave overworld" SYSROM=all sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { cat "$OUT/mkrom.log"; exit 1; }
 fi
+# ⛔ THE CARD IS THE SYSTEM DISK since 2026-09-22 (arm6309 docs/history.md):
+# the ROM carries the toolbox and no filesystem, so a session with an EMPTY
+# SOCKET does not reach a shell at all.  mkrom.sh writes system.img beside the
+# ROM out of the same build, and /DD is that card - which is why the
+# `copy /dd/sys/...` lines below still read what SYSROM/$OUT/sys put there.
+SDIMG="$OUT/system.img"; export SDIMG
+[ -f "$SDIMG" ] || { echo "FAIL  no $SDIMG - mkrom.sh should have built the system card"; exit 1; }
 cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c software/demo/emu/hd6309.c audio/refplayer/card.c
 python3 $V/session.py "$OUT"
 

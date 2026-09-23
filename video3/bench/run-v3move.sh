@@ -61,9 +61,14 @@ mkdir -p "$OUT"
 
 if [ -z "$NOBUILD" ]; then
   # ⛔ V3=1 OR NOTHING: desk, the toolbox and SS.Copy are all inside `IFNE V3`.
-  V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
+  sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
     tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
-  DATA="$OUT/data" sh software/nitros9/mksddisk.sh "$OUT/sd.img" desk v3paint \
+  # ⛔ BOOTABLE, because the ROM carries no filesystem since 2026-09-22:
+  # a data card here is a machine that does not start.
+  # ⭐ EVERY APPLICATION THE DESKTOP CAN LAUNCH, because since 2026-09-22 each
+  # is a clickable ICON (desk.asm's IcTab) and an icon whose module is not on
+  # the card is one that draws and answers E$MNF.
+  OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" desk v3paint pinball monster stardew v3bbs v3art \
     > "$OUT/mksddisk.log" 2>&1 || { cat "$OUT/mksddisk.log"
     echo "FAIL  the card did not build"; exit 1; }
   cat "$OUT/mksddisk.log"

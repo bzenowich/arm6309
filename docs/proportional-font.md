@@ -877,6 +877,55 @@ shadowed `GO`; the register sequence and the copy engine together were 8.6 % of
 a glyph before any of this and are ~13 % of one now. Everything above came from
 deleting software that was doing per rectangle what a run needs once.
 
+### 6.4.2 ⛔ What it broke: the BOOT ROM's dialog (found and fixed 2026-09-22)
+
+`TVCALL` is `jsr [CG.TbV + TV.<name>]` — an **offset into whatever the caller
+put at `CG.TbV`** — and §6.3 gave `tbox.asm` a new one, `TV.CopyN` at offset 24.
+⛔ **`software/boot/boot.asm` has its own row layer** (`tbvec`, seven entries,
+last at offset 18) because the boot dialog draws with the toolbox before there
+is a CoArm, and it was not extended. `SkFlush` therefore jumped to `tbvec+24`,
+which is **the middle of `tbmapb`'s `cmpd` operand**: four bytes of an operand
+executed as instructions, an `rts` into VRAM, and the machine ran wild two
+seconds into every boot with no bootable card.
+
+⚠ **It was invisible on the machine that works.** *"Disk found"* is `F.Reg` and
+flushes no batch; only the question mark's `F.Bold+F.Opaq` reaches `SkFlush`
+with a list pending. So the card path drew perfectly and every bench that had a
+card passed — `software/nitros9/run-sdboot.sh`'s two controls are what found it,
+and only after they stopped being able to fall back to a ROM disk.
+
+⭐ **The fix is the documented answer, not a stub.** `TV.Copy` says *"carry set
+if it could not"* and `TV.CopyN` says *"carry back means compose the whole
+string"*, so `boot.asm` answers both with `orcc #$01` and the dialog composes its
+thirty characters the long way — which is what it did before the strike existed.
+⛔ **Nothing checks the two tables against each other**, and that is the live
+hazard: a new `TV.*` entry in `tbox.asm` is a new entry in `boot.asm` on the same
+day, or the next thing that flushes jumps into an operand.
+
+⛔ **And that fix alone was not enough — `machine_tb`'s `nodisk` caught the rest.**
+A refused flush still left `SkHave` having *built* the strike: 95 glyphs composed
+into the margin at ~556 ms a face, for a layer that can never copy one out.
+`$60` → `$62` took **846 ms**, and the RTL scenario timed out with the progress
+port stuck at `$60`. ⭐ **`SkHave` asks first now** — `SkCan`, an **empty run**
+(`CG.CpLN = 0`, which `ca_row.asm`'s `RowCopyN` answers carry-clear and draws
+nothing) — and a layer with no copy engine refuses it whatever the list says.
+One probe a face, and the dialog is **274 ms**: the 572 ms saved is exactly the
+build that was being thrown away.
+⚠ **The general shape is worth the name**: a cache whose *only* use is a fast
+path must not be filled by a caller that cannot take that path. The strike has
+no other consumer, so "can I copy?" is the question that gates the build.
+
+### 6.4.3 ⛔ And it had stopped the `video/` build assembling at all
+
+`CpSrcA` — §6.2's shared entry point into `CardAddr`, the one that saved eight
+instructions a rectangle — was hoisted **above** `ca_row.asm`'s `IFNE V3` guard
+while `CG.CpSY`/`CG.CpSX` stayed inside `armvid.d`'s. So a build without `V3=1`
+died on *"Undefined symbol CG.CpSY"*, and **nothing noticed for a day**: every
+bench that runs CoArm passes `V3=1`, because the desktop, the toolbox and the
+copy engine are all inside that flag. ⚠ `machine_tb`'s `nitros9` scenario is the
+one that does not — and it is asked for by name, so it is not in any aggregate
+either. ⭐ It is inside the guard now.
+
 ---
 
 ## 7. What silicon would buy, in order

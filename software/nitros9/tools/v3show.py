@@ -1118,11 +1118,194 @@ def stream_pal():
         T.rgb565(tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))).to_bytes(2, "big") for h in VGA16)
 
 
+# ⭐⭐ AN ORIGINAL PIECE, BECAUSE THE IMPORTED ONE CANNOT SHIP (2026-09-22).
+# we-tortuga.ans is Blocktronics' and is not in this repository, so `v3art`
+# only existed on a machine that happened to have it - and a DESKTOP ICON that
+# works here and is dead on a clone is not an application.  What follows is
+# this project's own 80 x 25, composed out of CP437 and the sixteen DOS
+# colours, so the stream is always there and is always the same bytes.
+#
+# ⚠ THE PALETTE IS STILL VGA16 and the encoder below is still the one the
+# imported piece used: what changed is where the grid comes from.  ART_FROM /
+# ART_ROWS and `have_art()` still select the import when it IS present, so
+# nothing that used to work stopped.
+
+# a 5 x 7 pixel face, enough for the logo.  ⚠ Rendered with the UPPER HALF
+# BLOCK (CP437 223), so one cell is TWO pixel rows: the ink is the cell's
+# foreground for the top pixel and its background for the bottom one, which is
+# how ANSI art has always got twice the vertical resolution it is given.
+LOGO5x7 = {
+    "A": ".###.|#...#|#...#|#####|#...#|#...#|#...#",
+    "R": "####.|#...#|#...#|####.|#..#.|#...#|#...#",
+    "M": "#...#|##.##|#.#.#|#...#|#...#|#...#|#...#",
+    "6": "..##.|.#...|#....|####.|#...#|#...#|.###.",
+    "3": "####.|....#|....#|.###.|....#|....#|####.",
+    "0": ".###.|#...#|#..##|#.#.#|##..#|#...#|.###.",
+    "9": ".###.|#...#|#...#|.####|....#|...#.|.##..",
+}
+SHADE = [0xB0, 0xB1, 0xB2, 0xDB]        # . : light, medium, dark, full
+HALF_UP = 0xDF                          # the upper half block
+
+
+def _blank_grid(w, h, bg=0):
+    return [[(32, 7, bg) for _ in range(w)] for _ in range(h)]
+
+
+def _put(grid, x, y, text, fg, bg):
+    """A run of CP437 codes (a str is encoded, a bytes is taken as codes)."""
+    codes = text.encode("cp437") if isinstance(text, str) else text
+    for i, c in enumerate(codes):
+        if 0 <= y < len(grid) and 0 <= x + i < len(grid[0]):
+            grid[y][x + i] = (c, fg, bg)
+
+
+def _logo(grid, text, x0, y0, colour_of_row):
+    """Lay `text` out of LOGO5x7 with the half-block trick.  `colour_of_row`
+    is called with the PIXEL row and gives the ink, so the logo can carry a
+    vertical gradient the way a hand-drawn one would."""
+    px = []                                     # pixel rows, as strings
+    for r in range(7):
+        row = ""
+        for ch in text:
+            row += LOGO5x7[ch].split("|")[r] + "."
+        px.append(row)
+    px.append("." * len(px[0]))                 # 7 rows pad to 4 cell rows
+    for cy in range(4):
+        top, bot = px[cy * 2], px[cy * 2 + 1]
+        for cx in range(len(top)):
+            t, b = top[cx] == "#", bot[cx] == "#"
+            if not t and not b:
+                continue
+            ink_t, ink_b = colour_of_row(cy * 2), colour_of_row(cy * 2 + 1)
+            if t and b:
+                grid[y0 + cy][x0 + cx] = (0xDB, ink_t, 0)
+            elif t:
+                grid[y0 + cy][x0 + cx] = (HALF_UP, ink_t, 0)
+            else:
+                grid[y0 + cy][x0 + cx] = (HALF_UP, 0, ink_b)
+
+
+def art_grid_original(w=80, h=25):
+    """⭐ THIS PROJECT'S OWN ANSI PIECE - `v3art`, as rows of (code, fg, bg).
+
+    Everything here is a CP437 code point and one of the sixteen DOS colours,
+    which is the whole of what `ca_ext.asm`'s terminal implements; there is no
+    bitmap compositing anywhere in it.  ⚠ Deterministic on purpose: the bench
+    compares bytes, so nothing may come from a clock or an unseeded random."""
+    g = _blank_grid(w, h, 0)
+
+    # --- the field: a dithered vertical gradient, black up into blue --------
+    # ⭐ THE DITHER IS THE POINT.  Two adjacent palette entries and the four
+    # shade blocks give seven tones out of two colours, which is how a
+    # sixteen-colour medium has always drawn a sky.
+    #
+    # ⛔ AND THE DITHER IS ORDERED, NOT A MODULO.  The first cut picked the
+    # heavier block when `(x * 7 + y * 13) % 5 == 0`, which is not a dither -
+    # it is a comb, and it drew vertical stripes straight down the sky.  A
+    # 4 x 4 Bayer threshold is the classic answer and costs nothing: it blends
+    # each pair of ADJACENT tones, so the ramp reads as a ramp.
+    # ⚠ Ordered, and therefore deterministic - the bench compares bytes.
+    TONES = [(0, 4, 0), (0, 4, 1), (0, 4, 2), (0, 4, 3),
+             (4, 12, 1), (4, 12, 2), (4, 12, 3)]
+    BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
+    y0, y1 = 9, 17
+    for y in range(y0, y1 + 1):
+        t = (y - y0) / (y1 - y0) * (len(TONES) - 1)
+        k, frac = int(t), t - int(t)
+        for x in range(w):
+            step = min(k + (1 if BAYER[y % 4][x % 4] / 16.0 < frac else 0), len(TONES) - 1)
+            lo, hi, lvl = TONES[step]
+            g[y][x] = (SHADE[lvl], hi, lo)
+
+    # --- the night above it -------------------------------------------------
+    # ⚠ A FIXED LIST AND NOT A GENERATOR, for the same reason the dither is
+    # ordered: the bench compares bytes.
+    for i, (sx, sy) in enumerate([(6, 1), (17, 0), (31, 2), (48, 1), (61, 0), (71, 2),
+                                  (12, 3), (68, 3), (25, 1), (55, 3), (3, 6), (76, 5),
+                                  (9, 8), (72, 8), (40, 0), (22, 6), (64, 6), (50, 7)]):
+        g[sy][sx] = (0xFA if i % 3 else 0x07, 15 if i % 2 else 8, 0)
+    # a moon, top right: two cells of the half block against the black
+    _put(g, 70, 1, bytes([0xDC, 0xDB, 0xDD]), 15, 0)
+    _put(g, 70, 2, bytes([0xDF, 0xDB, 0xDE]), 7, 0)
+
+    # --- the logo -----------------------------------------------------------
+    # ⚠ VGA16 IS IN SGR ORDER, not in VGA attribute order (the note above it
+    # says so): 6 is cyan, 12 is bright blue, 14 bright cyan, 15 white.  The
+    # first cut read it as attributes and asked for 11, which is bright YELLOW.
+    ramp = [6, 6, 14, 14, 14, 15, 15, 15]
+    _logo(g, "ARM6309", (w - 7 * 6) // 2, 2, lambda r: ramp[r])
+
+    # --- a rule, and the titles ---------------------------------------------
+    for x in range(8, w - 8):
+        t = min(abs(x - w // 2) * 4 // (w // 2 - 8), 3)
+        g[7][x] = (SHADE[3 - t], 12, 0)
+    _put(g, (w - 26) // 2, 8, "A 6809 THAT DRAWS BACK", 15, 0)
+
+    # --- the skyline: a card standing in a backplane, in silhouette ---------
+    # ⚠ Solid black on the gradient, so the shape reads as a cut-out rather
+    # than as another colour - which is what a silhouette is.
+    sky = [0] * w
+    for x in range(w):
+        # three boards of different heights, and the connector fingers under
+        h1 = 3 if 8 <= x < 30 else 0
+        h2 = 5 if 34 <= x < 52 else 0
+        h3 = 4 if 56 <= x < 72 else 0
+        sky[x] = max(h1, h2, h3)
+    for x in range(w):
+        for k in range(sky[x]):
+            g[17 - k][x] = (0xDB, 0, 0)
+    # the ICs on the boards: a row of small dark blocks
+    for x in range(10, 28, 3):
+        g[16][x] = (0xFE, 8, 0)
+    for x in range(36, 50, 3):
+        g[15][x] = (0xFE, 8, 0)
+    for x in range(58, 70, 3):
+        g[15][x] = (0xFE, 8, 0)
+    # the backplane, and the fingers
+    for x in range(4, w - 4):
+        g[18][x] = (0xDB, 8, 0)
+    for x in range(4, w - 4, 2):
+        g[19][x] = (HALF_UP, 6, 0)
+
+    # --- the sixteen, which is the medium ------------------------------------
+    _put(g, 4, 21, "CP437 + SGR", 7, 0)
+    for i in range(16):
+        g[21][17 + i] = (0xDB, i, 0)
+    _put(g, 35, 21, "on ca_ext.asm's terminal - no bitmap anywhere", 8, 0)
+
+    # --- the signature ------------------------------------------------------
+    box = "arm6309 . video3 . 256 colours, one sprite, a copy engine"
+    x0 = (w - len(box) - 4) // 2
+    _put(g, x0, 23, bytes([0xC9]) + bytes([0xCD]) * (len(box) + 2) + bytes([0xBB]), 12, 0)
+    _put(g, x0, 24, bytes([0xBA]), 12, 0)
+    _put(g, x0 + 2, 24, box, 14, 0)
+    _put(g, x0 + len(box) + 3, 24, bytes([0xBA]), 12, 0)
+    return g
+
+
 def stream_art():
-    """ART_ROWS rows of the piece from ART_FROM, as SGR and CP437 - one SGR
-    where the colour changes, and nothing our terminal does not implement."""
-    rows = art_grid()[ART_FROM:ART_FROM + ART_ROWS]
+    """`v3art`: the piece as SGR and CP437 - one SGR where the colour changes,
+    and nothing our terminal does not implement.
+
+    ⭐ SELF-CONTAINED SINCE 2026-09-22.  It used to be three commands - a
+    PalRange while the terminal was off, then AnsiSw, then this - because the
+    session copied it onto a screen the BBS had already set up.  A desktop
+    icon forks ONE program onto a fresh window, so the screen, the palette and
+    the terminal switch are all in here now.  ⛔ The order still matters:
+    PalRange is not one of the four escapes `ca_ext.asm` passes through while
+    ANSI is on, so it goes BEFORE the switch or it is dropped in silence."""
+    # ⛔ OURS BY DEFAULT, THE IMPORT ONLY IF ASKED FOR.  Preferring
+    # we-tortuga.ans whenever it happened to be on the disk would mean this
+    # machine and a fresh clone ship DIFFERENT PICTURES under one name - and a
+    # bench cannot assert pixels it cannot predict.  `V3ART=import` opts in.
+    rows = (art_grid()[ART_FROM:ART_FROM + ART_ROWS]
+            if os.environ.get("V3ART") == "import" and have_art()
+            else art_grid_original())
     out = bytearray()
+    out += dwset(0x18, 0, 0, 80, 25, 7, 0, 0) + SELECT
+    out += esc(0x61, 0, 16) + b"".join(
+        T.rgb565(tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))).to_bytes(2, "big") for h in VGA16)
+    out += esc(0x69, 1)                              # AnsiSw: the terminal on
     out += b"\x1b[0m\x1b[2J\x1b[H"                  # the piece starts on a clear screen
     fg = bg = None
     for r in rows:
@@ -1177,10 +1360,19 @@ def main(out):
                         ("v3spec", stream_spec)]
     else:
         print("note  no wildbits fonts: the word processor scene is left out")
+    # ⭐ v3art IS ALWAYS EMITTED SINCE 2026-09-22.  It used to be conditional on
+    # we-tortuga.ans, which is Blocktronics' and is not in this repository - so
+    # the desktop's ANSI-Art icon would have been live here and dead on a
+    # clone.  `art_grid_original()` is this project's own piece and is always
+    # there; the import is still preferred when it IS present.
+    # ⚠ v3pal stays conditional: it is the palette ALONE, for the old session
+    # that copied it before turning the terminal on.  stream_art carries its
+    # own now, so nothing else needs it.
+    streams[6:6] = [("v3art", stream_art)]
     if have_art():
-        streams[6:6] = [("v3pal", stream_pal), ("v3art", stream_art)]
-    else:
-        print("note  no %s: the ANSI art scene is left out (see art_grid)" % ART.name)
+        streams[6:6] = [("v3pal", stream_pal)]
+        if os.environ.get("V3ART") != "import":
+            print("note  %s is here but not used: V3ART=import to see it" % ART.name)
     # ⭐ every wildbits face as a file of its own, for `changefont`: 2,048
     # bytes, exactly the glyph bank's format, so the command reads it and
     # hands it straight to SS.CFont.

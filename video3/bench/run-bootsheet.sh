@@ -39,7 +39,7 @@ mkdir -p "$OUT"
 # V3=1: the machine's card is video3, and the POST's video sections and its
 # dialog only exist under it (archive/video was retired 2026-09-20).
 if [ -z "$NOBUILD" ]; then
-  V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
+  sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
     tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 ROM="$OUT/arm6309_rom.bin"

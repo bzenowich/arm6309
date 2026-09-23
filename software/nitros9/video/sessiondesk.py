@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """sessiondesk.py OUT - the DESKTOP session, as the emulator's inputs.
 
-The brief: boot NitrOS-9 Level 2 from ROM, let the shell hand the screen to
+The brief: cold-start the machine, boot NitrOS-9 Level 2 off the SD card -
+the ROM has carried no filesystem since 2026-09-22 - let the shell hand the
+screen to
 `desk`, and then drive the desktop with a mouse - open the file manager off
 the `home` icon, walk into /DD/CMDS - NitrOS-9's own ~60 commands, which is
 the only listing long enough to fill its twelve rows - and drag the window
@@ -30,37 +32,19 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 # the drag was cut off by the bound, which desk reports as DESK-LIM now.
 TICKS = 60000
 
-# ⛔ `reboot` FIRST, AND IT IS THE ONLY WAY TO SEE THE BOOT DIALOG.
-# software/demo/emu/machine.c enters at $8004 with boot.asm's handoff already
-# applied (the map, the memory descriptor), so on a fresh start the POST and
-# §10a's "looking for a disk" dialog NEVER RUN - the card stays dark until
-# NitrOS-9 brings /W3 up, which is the 24 seconds of black this session used
-# to open on.  `reboot` (F$Debug 255) re-enters at the reset vector with the
-# map live and the ROM runs for real.  run-sdboot.sh says the same thing for
-# the same reason.
-# ⚠ SERIAL_GATE closes on every CR (machine.c:1105) and re-opens on the next
-# prompt, so one SERIAL_IN survives the reboot: the lines below simply wait.
+# ⭐ NO `reboot` HERE, AND THAT IS THE POINT.  machine.c used to enter at
+# $8004 - boot.asm's handoff entry - so the POST and §10a's dialog never ran
+# and the only way to SEE a boot was to reboot a running machine.  COLDBOOT=1
+# starts the emulator at the RESET VECTOR instead, where the real machine
+# starts, so this session simply boots.  run-desk.sh passes it.
 LINES = [
     "iniz w3",
-    "chd /sd0",
-    # ⚠ chx LAST: after it the only things the shell can fork are the card's
-    # commands and shell+'s built-ins, which is the arrangement desk's own
-    # launcher has to work in.
-    "chx /sd0/cmds",
+    # ⚠ /DD IS THE CARD.  One descriptor source assembled twice, so /DD and
+    # /SD0 are the same disk - and /DD is what SysGo, init and armio.asm's
+    # CoPath name, which is why it is the one used here.
+    "chx /dd/cmds",
     "desk /w3 %d" % TICKS,
     "echo DONE-arm6309",
-    # ⛔ LAST, AND THE VIDEO ENDS ON IT.  machine.c enters at $8004 with
-    # boot.asm's handoff already applied, so on a fresh start the POST and
-    # §10a's dialog NEVER RUN - the card is simply dark until NitrOS-9 brings
-    # /W3 up.  `reboot` (F$Debug 255) re-enters at the reset vector and the
-    # ROM runs for real.  ⚠ It does NOT survive: about a second later the
-    # machine is in empty RAM and WILD stops the run, which is why this is the
-    # last line rather than the first.  The dialog is on the card by then.
-    # ⚠ chx BACK TO THE ROM DISK FIRST: `reboot` is one of the ROM's commands
-    # and the execution directory is /SD0/CMDS by now, so without this the
-    # shell answers "Error #216 - Path Name Not Found" and the ROM never runs.
-    "chx /dd/cmds",
-    "reboot",
 ]
 
 # ⭐ KEYED OFF desk's OWN CONSOLE LINES, not off a stopwatch.  Every trigger
@@ -68,28 +52,22 @@ LINES = [
 # a caption cannot drift out of step with the thing it is describing - if the
 # program stops saying it, the caption stops appearing rather than appearing
 # over the wrong picture.
+# ⚠ 78 CHARACTERS AND cp437, which is mkvideo.py's bitmap font: a longer line is
+# TRUNCATED and a star or a warning sign comes out as `?`.  The sheet renders
+# them properly and the video does not, so what goes here is plain ASCII.
 CAPTIONS = [
-    ("RKBoot", "NitrOS-9 Level 2 boots from ROM onto video3 - and an SD card in the socket"),
-
-    ("02}/DD:", "A shell on the serial port. /DD is the ROM disk; /SD0 is the SD card"),
-    ("desk /w3", "`desk` takes /W3: a menu bar, desktop icons, and an event loop on SS.Mouse"),
-    ("DESK-READY", "Drawn by the ROM TOOLBOX on page 64 - there is no drawing code in desk at all"),
-    ("DESK-ICON", "The pointer is video3's 16x16 HARDWARE SPRITE. One click selects `home`"),
-    ("DESK-DIR /DD", "A second click OPENS it: the file manager, listing the REAL /DD - the ROM disk"),
+    ("RKBoot", "A COLD START: the POST ran, found the SIMMs and the video card"),
+    ("Krn tbs", "boot_sd read OS9Boot OFF THE CARD ('s'). The ROM carries no filesystem at all"),
+    ("Shell+", "NitrOS-9 Level 2, loaded entirely from the SD card, on the serial console"),
+    ("DESK-READY", "`desk`: a menu bar, desktop icons and an event loop on SS.Mouse"),
+    ("DESK-ICON", "Drawn by the ROM TOOLBOX on page 64 - the one thing the ROM still carries"),
+    ("DESK-DIR /DD", "The file manager, listing the REAL card - /DD and /SD0 are one disk"),
     ("DESK-SEL CMDS", "A click selects CMDS - there is no double-click timer to race"),
-    ("DESK-DIR /DD/CMDS", "... and a second enters it: NitrOS-9's own commands, twelve rows at 2.1 s"),
-    ("DESK-GRAB", "⭐ THE TAB IS GRABBED: every step is ONE SS.Copy of 344 x 279 by the card"),
+    ("DESK-DIR /DD/CMDS", "... and a second enters it: NitrOS-9's own commands, on the card"),
+    ("DESK-GRAB", "THE TAB IS GRABBED: every step is ONE SS.Copy of 344 x 279 by the card"),
     ("DESK-DROP", "Dropped home bit-exact - the background it crossed came out of off-screen VRAM"),
     ("DESK-MENU Desk", "Desk > Quit, off the same menu bar the session started on"),
     ("DESK-BYE", "desk exits and the shell gets its prompt back"),
-    # ⚠ ":reboot" AND NOT "DD:reboot": `chx` moves the EXECUTION directory and
-    # the prompt still says /SD0, so the trigger has to be the command itself.
-    # ⛔ And the dialog cannot have a trigger of its own - §10a runs before
-    # there is a kernel, let alone a serial driver, so nothing is transmitted
-    # while it is on screen.  This caption is keyed to the command that causes
-    # it and stays up, which is why it is the last one in the list.
-    (":reboot", "⭐ `reboot` re-enters at the RESET VECTOR: boot.asm's POST, and §10a's "
-                "dialog - the Macintosh question, answered off the card"),
 ]
 
 

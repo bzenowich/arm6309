@@ -1721,3 +1721,187 @@ per-copy cost is a property of the *path*, not of the engine.
   rows of the first listing. `run-v3files.sh`'s negative control caught it as a
   second picture in a rectangle that must hold one. Toolbox call 14 (`SkWarm`)
   is what `desk` uses to pay it before its window is up.
+
+## The ROM disk is removed: NitrOS-9 moves to the SD card (2026-09-22)
+
+The owner's framing: *"our ROM should only contain toolbox code, the reset vector, and
+the ability to find the SD card and boot from that disk"*, and, when in doubt, *"mimic
+how the Mac 128k handled the boot process"*. ROM pages 3–63 are **499,712 bytes,
+verified all zero**; `software/nitros9/mksyscard.sh` builds the card the machine boots
+from, out of the port's own recipe.
+
+⚠ **An intermediate design lived for part of the same day and is archived here too**: a
+**14-page rescue disk** on ROM pages 3–16 — `format dcheck free copy makdir dir del
+deldir rename merge iniz load link devs list mdir`, `shell` and `CoArm` — so that a
+blank card could be brought up *with a screen*. It was cut on the owner's instruction
+("We can cut the rescue disk feature. Let's just have the boot dialog box and continue
+booting to the desktop"), and the text below that describes it never described a ROM
+that was built.
+
+### `machine.md` §0 — the Boot row
+
+> **a 1 MB boot ROM on the motherboard** — 2 ICs plus one `'244`, at physical 2.0–3.0 MB,
+> holding the boot monitor **and a read-only ROM disk with the whole NitrOS-9
+> distribution in it** — §7.2.
+
+…and, for the few hours the rescue disk existed: *"holding the boot monitor, the ROM
+toolbox **and a read-only RESCUE disk**"*.
+
+### `machine.md` §7.2 — "What the megabyte is for"
+
+> | **pages 1–63 — ~504 KB** | ⭐ **a read-only ROM disk**, mounted by an `RBF` descriptor: a rescue NitrOS-9 that boots with no card, no serial cable and no host |
+>
+> **That is why the ROM is 1 MB and not 8 KB.** A machine that boots to a NitrOS-9 shell
+> with no SD card, no serial cable and no host is a different machine to bring up than one
+> that needs two of those working first, and `sdcard.md` §12 step 0's circularity —
+> DriveWire needs a client, the client needs a ROM — disappears rather than being worked
+> around.
+
+The circularity was real and is paid for differently now: the card is written on a host,
+as a Macintosh's disks were. ⚠ **The 1 MB is still spent** — the toolbox is pages 64–127
+and 262,430 of its bytes are non-zero — so no IC count moves.
+
+### `machine.md` §7.2 — "What it costs"
+
+> | ⚠ **A ROM disk is only as current as the last time it was burned** | which is
+> `drivewire.md`'s entire job — §1 there |
+
+### `boot-and-desktop.md` §2 — "the ROM disk stays bootable"
+
+> ⛔ **The ROM disk stays bootable, and that is the point.** It is this machine's rescue
+> system: `format`, `dcheck`, `copy` and `makdir` are on it so that a blank card can be
+> brought up from nothing, and a boot that refused to happen because the card was bad would
+> take the tool for fixing the card with it. So the precedence is **card first, rescue disk
+> always**. `BOOTMOD=boot_romdisk` builds the ROM that cannot read a card at all.
+>
+> ⭐ **`/DD` IS THE RESCUE DISK AND `/SD0` IS THE SYSTEM DISK.**
+>
+> ⛔ **And the difference between the two boots is now visible.** It used to be one
+> character on the console; it is *which command set the machine has*. `dir /dd/cmds` after
+> a card boot lists a repair kit, `dir /sd0/cmds` lists NitrOS-9.
+
+⭐ **What replaced it is one disk with two names.** `sddesc.asm` is assembled twice —
+`dd_sd.dd` and `sd0.dd` — so `/DD` and `/SD0` are the same card, which is what `SysGo`,
+`init` and `armio.asm`'s `CoPath` were already naming.
+
+### `boot-and-desktop.md` §2 / `sdcard.md` §9.5 — the precedence and `boot_sd`'s answer
+
+> | ⭐ **and `boot_sd` says which it used** | one character through `D.BtBug` … **`s`** for
+> the card, **`r`** for the ROM disk. ⛔ Without it "a shell appeared" is not evidence of
+> anything — *the fallback works*, so a machine that silently ignored the card reaches
+> the same prompt |
+> | **How a bench asks for the ROM disk** | it puts no bootable card in the socket … |
+
+`boot_sd.asm`'s `ROMRead` is deleted and `HWRead` is `SDRead`; `BSRom` became **`BSNone`**,
+which emits `n` and returns `E$NotRdy`. ⭐ **The warning it carried is retired by the
+change**: with nothing to fall back to, reaching a shell *is* the evidence.
+
+### `sdcard.md` question 15 — the answer given earlier the same day
+
+> 15. ⭐ **SETTLED 2026-09-22, and not the way the question framed it.** The system moved
+>     to the card and **`/DD` did not follow it** — the card is `/SD0` and stays `/SD0`, and
+>     `/DD` is now the ROM's **rescue** volume. … ROM pages 17–63 are free: **401,408
+>     bytes, 47.7 % of the flash, verified all zero**.
+
+### What it cost the benches, and what that taught
+
+- ⛔ **`$(ROMDSK)` was the only dependant of `bootfile`.** Taking the ROM disk out of
+  `arm6309.mak` took `bootfile` out of `all` with it, so `mkrom.sh` copied a **stale**
+  `OS9Boot` — still carrying `rbromdisk` — onto the card, and the machine booted a
+  driver for a disk that no longer existed. `bootfile` is a build output in its own
+  right now, and `.bootlist: FORCE` makes a change to the module *list* relink it.
+- ⛔ **`ArmIO` left `CT.VIRQ` set when its `Init` failed**, and `IOMan`'s `IRQPoll`
+  then spun on a device that was never installed: the banner printed and the machine
+  starved. ⚠ **`Init` cannot load `CoArm`** — the only disk is the card, and a module
+  cannot open a path from inside another module's `Init` — so the failure is normal and
+  the interrupt has to be masked on the way out. `ConDown` does it.
+- ⚠ **Every bench that booted "with an empty socket" was booting off the ROM disk**, and
+  there were seven of them. `mkrom.sh` writes `system.img` beside the ROM now, and each
+  passes it as `SDIMG`; `machine_tb`'s `nitros9` and `reboot` scenarios get the same
+  image through `+sdimage=`, with `sd_model.v` grown from 128 blocks to 1,792.
+
+## The `video/` card's benches are retired, and the build becomes V3-only (2026-09-22)
+
+The owner's framing: *"We don't need bench tests for the old video card."* Two things
+happened together, and the second is the one that mattered.
+
+### The benches
+
+Moved to [`archive/video/bench/`](../archive/video/bench/), which has its own README
+saying what each one proved: `run-vid.sh` (the NitrOS-9 video console against
+`vtmodel.py`/`vgmodel.py`), `video/run-video.sh` (the progress video), `run-demo.sh`
+(~4.5 h, `demo_tb`, the whole machine with both cards), `run-demo-emu.sh`,
+`run-replay.sh`, `run-calib.sh`, both `run-vramrate` scripts, and the five testbenches
+`vsync_tb`, `vaddr_tb`, `vtile_tb`, `vspan_tb`, `vpal_tb` with `demo_tb.sv`.
+
+⚠ **`software/demo/` itself did not move**, and not out of sentiment:
+`software/nitros9/tools/mktbox.py`'s `build_icons()` imports `show` and `mkshow` from
+it, so **the ROM toolbox's icon art is generated by the demo's own drawing code**, and
+`software/demo/emu/machine.c` is the host emulator every live bench runs. What retired
+is the demo's benches, not its code.
+
+⛔ **What that finishes, stated plainly.** `archive/README.md` §"What did NOT move"
+recorded that the card's design sources stayed in `hardware/gal/` because `demo_tb`
+still instantiated them. `demo_tb` is in `archive/` now, so those sources — `vaddr.v`,
+`vctrl.v`, `vsup.v`, `rfa.v`, `vlen.v`, `pxsel.v` — are **emitted by `gen.ts`, compiled,
+and executed by nothing at all**.
+
+### `-DV3=1` moves into `AFLAGS`
+
+> ```make
+> DEMOS = rastbar wave overworld
+> # video3's own commands call SS.Copy and the toolbox, which only a -DV3=1 build
+> # has; listing them for video/ as well broke that flavour's build
+> ifneq ($(findstring -DV3=1,$(AFLAGS_EXTRA)),)
+> ```
+
+⛔ **The flavour was a caller's flag, and the half nobody ran was broken.**
+`ca_row.asm`'s `CpSrcA` had been hoisted *out* of an `IFNE V3` guard while the CoG
+fields it reads stayed *in* one, so a build without the flag died on *"Undefined symbol
+CG.CpSY"* — and nothing noticed for a day, because **every bench that runs CoArm passes
+`V3=1`**. The one that does not is `machine_tb`'s `nitros9` scenario, which is asked for
+by name and is in no aggregate.
+
+⭐ So the recipe puts `-DV3=1` in `AFLAGS` itself. `rastbar` and `wave` left `$(DEMOS)`
+with the card they drive (`SS.Raster` and a display list have no video3 equivalent);
+`overworld` stays until its bitmap replacement lands.
+
+⚠ **And the trap on the other side of that change**: `VIDEO3=1` selects the emulator's
+card *model*, and every bench that set it did so from the same `$V3`. With `$V3` gone
+and the ROM always video3, a bench that did not set `VIDEO3` would have run a video3
+ROM against `archive/video/`'s model — CoArm polls `VSTAT` at `$FF6D`, reads a register
+file, and spins for ever. It is unconditional now in `run-emu.sh`, `run-sd.sh` and
+`run-ps2script.sh`.
+
+### What the benches became
+
+| | |
+|---|---|
+| `run-sd.sh` | its premise was *"the card is a second drive, reached by name"*, which this machine no longer has. It rides its test file on the system card's `DATA` now and still asserts the **write** path — `merge >`, `del`, and the host reading the image back. Its control flipped from "boots without a card" to "never reaches a shell". **17 claims** |
+| `run-v3sd.sh` | its section 2 was *"the ROM disk does not carry any of it"*, asked of a disk that no longer exists. It asserts **`/DD` and `/SD0` are one card** now, that no `rbromdisk` is in the boot module list, and — of the host — that ROM pages 3–63 are 499,712 bytes of zeros. **27 claims** |
+| `machine_tb` `nitros9`/`reboot` | one ROM instead of two flavours, and they boot **off the card over bit-banged SPI**, which is new and slow: the per-step bounds grew and the backstop doubled |
+
+### ⭐ And five applications became desktop icons
+
+`desk.asm`'s `IcTab` gained Pinball, Monster, BBS, ANSI Art and Stardew in a column at
+x 568 (`NICON` 6 → 11), and the Applications menu gained the two new ones.
+
+- **BBS and ANSI Art were not programs.** Both were recorded CoArm streams the old
+  sessions played with `copy /sd0/data/v3bbs /w2`, and `F$Fork` takes a module *name*.
+  `cmds/v3strm.inc` is now one body instantiated three times — `v3paint`, `v3bbs`,
+  `v3art` — because three copies of 170 lines differing in three strings is three
+  places for a fix to be applied twice and forgotten once.
+- ⛔ **The ANSI art could not ship.** `we-tortuga.ans` is Blocktronics' and is not in
+  this repository, so `v3art` existed only on a machine that happened to have it.
+  `v3show.py`'s `art_grid_original()` is this project's own 80 × 25 — a half-block
+  logo over an **ordered-dither** sky with the machine's boards in silhouette — and it
+  is emitted unconditionally; `V3ART=import` opts back into the import. ⚠ The first cut
+  *preferred* the import whenever it was present, which would have shipped different
+  pictures under one name here and on a clone.
+- ⚠ **And it cost responsiveness, measured.** `desk` repaints the whole desktop on a
+  menu dismissal and on a child's return, and samples the mouse button once a loop
+  pass, so a click inside a repaint is **gone, not late**. Five more icons took the
+  launch round-trip from ~26 s to **46 s** (`checkdesk.py`: click at 45.8 s, Paint's
+  page up 70.4→91.2 s, desktop back at 92.1 s) and cut `desk`'s 5,000-pass bound short
+  mid-script. Thirteen claims failed describing a desktop that was merely still
+  drawing. `DrawAll` is O(icons) and there are about to be twelve.

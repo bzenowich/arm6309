@@ -1,5 +1,6 @@
 #!/bin/sh
-# ⭐ A DEMO THAT IS NOT IN THE ROM, RUN OFF THE SD CARD.
+# ⭐ A DEMO THAT IS NOT IN THE ROM, RUN OFF THE SD CARD - AND SINCE 2026-09-22
+# NEITHER IS THE OPERATING SYSTEM.
 #
 #   sh video3/bench/run-v3sd.sh          ~3 min (the card run is 130 machine s).
 #                                        OUT=dir, DEMO=name, DEMOARGS=..., NOBUILD=1
@@ -9,9 +10,10 @@
 # for its command and give back the room (CMDS_EXTRA / CMDS_DROP); /DD/SYS
 # alone was 1,140 of the 1,952 sectors, and all of it pictures.  The machine
 # has storage now - an SD card at $FF58, the rbsd driver, /SD0 (storage/docs/
-# sdcard.md §9.4) - so the programs AND their data moved onto a card, and the
-# ROM disk is a rescue system: the kernel, the shell, the shared modules,
-# errmsg, and enough commands to format a card and fill it.
+# sdcard.md §9.4) - so the programs AND their data moved onto a card.
+# ⛔ AND ON 2026-09-22 THE REST FOLLOWED.  ROM pages 3-63 are zeros; `OS9Boot`,
+# the command set, /MODULES, /SYS and `startup` are on the card too, and the
+# ONE disk answers to both /DD and /SD0 (sddesc.asm assembled twice).
 #
 # ⭐ THIS BENCH IS ABOUT WHERE THE PROGRAM CAME FROM, not about the scene.  It
 # runs a few frames and no more; run-v3mv.sh is what measures the scene.  The
@@ -25,18 +27,19 @@
 #      checkv3sd.py's `desk` and `paint` counts.  ⭐ And `changefont` for the
 #      other half - a program opening a data file for ITSELF, through DOpen's
 #      card-then-ROM search
-#   3. the ROM disk does NOT carry that demo - asked of the machine
-#      (`dir /dd/cmds`) and of the image on the host, because if it were
-#      still in the ROM the run above would prove nothing at all
+#   3. ⭐ /DD AND /SD0 ARE THE SAME DISK, asked of the machine: the two
+#      listings hold the same names, and `rbromdisk` is in no module list
+#      because there is nothing left for it to drive
 #   4. ⛔ THE NEGATIVE CONTROL: the same ROM, the same keystrokes, and NO
-#      CARD IN THE SOCKET.  /SD0 must refuse at 9.0, every stream and every
-#      program must fail to find what it needs and SAY SO, and the run must
-#      REACH THE END rather than hang - a bench that hangs on a missing card
-#      cannot tell a missing card from a slow one.
-#      ⛔ AND A BLANK SCREEN IS NOT A PASS.  `iniz w3` and `display 1b 21`
-#      need no card, so the control still SELECTS screens and the emulator
-#      still records eleven hundred frames of them.  `desk` and `paint` must
-#      both be zero: the frames are there and there is nothing on them.
+#      CARD IN THE SOCKET.  ⭐ It used to mean "the machine boots off the ROM
+#      and everything on the card is missing"; since 2026-09-22 it means the
+#      machine NEVER REACHES A SHELL - there is nothing else to boot.  The run
+#      must still REACH THE END rather than hang, because a bench that hangs
+#      on a missing card cannot tell a missing card from a slow one.
+#      ⛔ AND A BLANK SCREEN IS NOT A PASS.  boot.asm's POST and its dialog
+#      draw, so the emulator still records hundreds of frames.  `desk` and
+#      `paint` must both be zero: the frames are there and there is nothing
+#      of this bench's on them.
 #
 # ⛔ The exit code is the answer.
 set -e
@@ -59,7 +62,7 @@ PATH="$TOOLS:$PATH"; export PATH
 mkdir -p "$OUT"
 
 if [ -z "$NOBUILD" ]; then
-  V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-v3sd.log" 2>&1 || {
+  sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-v3sd.log" 2>&1 || {
     tail -20 "$OUT/mkrom-v3sd.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 ROM="$OUT/arm6309_rom.bin"
@@ -69,7 +72,9 @@ ROM="$OUT/arm6309_rom.bin"
 # sized to what it is given, so this is ~30 KB rather than the 100 KB a full
 # demo card is, and a short one would fail loudly there rather than quietly
 # here (software/nitros9/mksddisk.sh).
-DATA="$OUT/data" sh software/nitros9/mksddisk.sh "$OUT/sd.img" $DEMOS > "$OUT/mksddisk.log" 2>&1 || {
+# ⛔ A SYSTEM CARD SINCE 2026-09-22: the ROM carries no filesystem, so the
+# card has to hold NitrOS-9 as well as the demo or the machine does not start.
+OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" $DEMOS > "$OUT/mksddisk.log" 2>&1 || {
   cat "$OUT/mksddisk.log"; echo "FAIL  the demo card did not build"; exit 1; }
 cat "$OUT/mksddisk.log"
 
@@ -171,24 +176,26 @@ indirall()  { d=$1; shift; for nm in "$@"; do indir "$d" "$nm" || return 1; done
 noneindir() { d=$1; shift; for nm in "$@"; do indir "$d" "$nm" && return 1; done; return 0; }
 claim "the machine booted to a shell"                          has '/DD:'
 claim "the bootfile carries rbsd and its SD0 descriptor"       has 'rbsd'
-claim "⭐ /SD0 mounted: the root the host's os9 tools wrote"    has '^CMDS  *DATA'
+claim "⭐ /SD0 mounted: the root the host's os9 tools wrote"    indirall /sd0 OS9Boot CMDS DATA
 claim "   and CMDS on the card holds $DEMO and changefont"     indirall /sd0/cmds "$DEMO" changefont
 claim "⭐ and DATA on the card holds the desktop and Paint"     indirall /sd0/data v3desk v3paint v3draw
 
-# --- 2. the ROM disk does not have any of it ------------------------------
-# asked of the machine...
-claim "⛔ the ROM disk's CMDS does NOT carry $DEMO"             noneindir /dd/cmds "$DEMO"
-claim "   but does carry the rescue set (format, dcheck, copy)" indirall /dd/cmds format dcheck copy makdir
-claim "⛔ and /DD/SYS carries neither the desktop nor Paint"    noneindir /dd/sys v3desk v3paint v3draw
-claim "⛔ nor the face changefont just read off the card"       noneindir /dd/sys font.uncial
-claim "   what is left in /DD/SYS is errmsg, which the shell needs to print an error at all" \
-  indir /dd/sys errmsg
-# ...and of the images on the host, which are the arbiter: a `dir` that
-# scrolled off and the claims above pass on nothing
-claim "⛔ and the ROM disk IMAGE has no $DEMO either (the host asks)" \
-  sh -c "os9 dir '$REC/romdisk.dsk',CMDS | grep -qw -- '$DEMO' && exit 1; exit 0"
-claim "⛔ and its /DD/SYS is errmsg ALONE (the host asks)" \
-  sh -c "test \"\$(os9 dir '$REC/romdisk.dsk',SYS | grep -c '[A-Za-z]')\" -le 2"
+# --- 2. ⭐ /DD IS THE CARD (2026-09-22) -----------------------------------
+# One descriptor source assembled twice - dd_sd.dd and sd0.dd - so the same
+# volume answers to both names.  ⛔ THE CLAIM IS THE TWO LISTINGS AGREEING:
+# `dir /dd/cmds` and `dir /sd0/cmds` are two paths through RBF to one disk,
+# and a /DD that was anything else would list something different.
+claim "⭐ /DD/CMDS holds $DEMO too - it IS /SD0"                indirall /dd/cmds "$DEMO" changefont
+claim "   and the system command set with it"                  indirall /dd/cmds format dcheck copy makdir
+claim "⭐ and /DD/SYS is the card's SYS"                        indir /dd/sys errmsg
+# ⛔ AND THE THING THAT USED TO DRIVE THE OTHER DISK IS GONE.  rbromdisk is
+# what served /DD out of the ROM; its absence from the boot module list is
+# the machine saying there is no second disk to confuse this with.
+claim "⛔ and NO rbromdisk in the bootfile - there is no ROM disk left" \
+  nohas 'rbromdisk'
+# ...and the ROM itself is the arbiter, asked of the HOST: 61 pages of zeros.
+claim "⛔ and ROM pages 3-63 are 499,712 bytes of ZERO (the host asks)" \
+  sh -c "test \"\$(dd if='$ROM' bs=8192 skip=3 count=61 2>/dev/null | tr -d '\\000' | wc -c)\" -eq 0"
 
 # --- 3. it ran ------------------------------------------------------------
 # ⛔ ONE error is expected and it is deliberate: `changefont /sd0/data/nosuchface`
@@ -215,23 +222,21 @@ claim "⭐ and it ANIMATED: the picture changed on ${c_changed:-0} frames, so it
 
 # --- 4. ⛔ the negative control --------------------------------------------
 nc() { grep -q -- "$1" "$OUT/nocard/console.txt"; }
-claim "⛔ with an EMPTY socket the machine still boots"         nc '/DD:'
-claim "⛔ and /SD0 refuses at 9.0 - E\$NotRdy, not silence"     nc 'Error #246'
-claim "⛔ and the demo is NOT FOUND - E\$PNNF, not a hang"      nc 'Error #216'
-# ⭐ DOpen's SECOND leg, asserted: a bare name misses the card AND misses
-# /DD/SYS, so changefont reports the ROM's E$PNNF and not the card's E$NotRdy.
-# ⚠ If the build had kept the faces in ROM (SYSROM), this would pass silently
-# for the wrong reason - which is why the /DD/SYS claims above are here.
-claim "⛔ and changefont's bare name misses BOTH legs of DOpen" \
-  test "$(grep -c 'Error #216' "$OUT/nocard/console.txt")" -ge 2
-# ⛔ AND THE ONE THAT MATTERS: the screens are still opened and selected with
-# no card - `iniz w3` and `display 1b 21` do not need one - so the emulator
-# records over a thousand frames of a BLANK SCREEN.  A blank screen is not a
-# pass, and the shape counts are what say so.
-claim "⛔ and NOTHING was drawn on them: ${n_frames:-?} frames, ${n_painted:-?} coloured, desk ${n_desk:-?}, paint ${n_paint:-?}" \
-  sh -c "test ${n_painted:-1} -eq 0 && test ${n_desk:-1} -eq 0 && test ${n_paint:-1} -eq 0"
-claim "⛔ and it FAILS rather than hanging - the run reached the end" \
-  grep -q 'SERIAL_STOP seen' "$OUT/nocard/emu.txt"
+# ⛔ IT USED TO BOOT.  With the ROM disk gone an empty socket is a machine
+# that reaches krn, finds no OS9Boot and takes D.Crash - and on real hardware
+# boot.asm never hands off at all (software/nitros9/run-sdboot.sh is the bench
+# that asserts all three card states from reset).
+claim "⛔ with an EMPTY socket the machine NEVER REACHES A SHELL"  sh -c "! grep -q -- '/DD:' '$OUT/nocard/console.txt'"
+claim "⛔ and boot_sd said so: no system disk (tb n)"             nc 'tbn'
+claim "   and it did NOT claim the card"                          sh -c "! grep -q -- 'tbs0' '$OUT/nocard/console.txt'"
+claim "⛔ and nothing of this bench's was typed or run"           sh -c "! grep -q -- 'Directory of' '$OUT/nocard/console.txt'"
+# ⛔ AND THE ONE THAT MATTERS: the POST and the boot dialog still draw, so the
+# emulator records hundreds of frames.  A screen with a picture on it is not a
+# pass either - the shape counts are what say WHOSE picture it is.
+claim "⛔ and NEITHER the desktop NOR Paint is on any of them: ${n_frames:-?} frames, ${n_painted:-?} coloured, desk ${n_desk:-?}, paint ${n_paint:-?}" \
+  sh -c "test ${n_desk:-1} -eq 0 && test ${n_paint:-1} -eq 0"
+claim "⛔ and it FAILS rather than hanging - the run reached its own clock" \
+  sh -c "! grep -q 'SERIAL_STOP seen' '$OUT/nocard/emu.txt'"
 
 echo
 echo "      $n claims, $fail failed        (console in $OUT/card/console.txt)"

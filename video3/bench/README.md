@@ -344,16 +344,16 @@ same RGB565**, and the lamp gate spent a run reading a ball as a lamp.
 three sprite banks and the key.
 
 ⭐ **Neither the demos nor their data are in the ROM any more** (2026-09-20;
-the ROM disk was full, see [`../docs/history.md`](../docs/history.md)).
+the ROM disk was full, see [`../../docs/history.md`](../../docs/history.md)).
+⛔ **And since 2026-09-22 NOTHING is: the ROM disk is gone**, pages 3–63 are
+zeros, and NitrOS-9 itself is on the card.
 `recipes/arm6309/arm6309.mak`'s `$(DEMOS)` builds the programs,
-`software/nitros9/mkrom.sh` writes the data set to `$OUT/data`, and
-`software/nitros9/mksddisk.sh` puts both on an SD image. The ROM disk is the
-kernel, the shell, the shared modules, `errmsg` and a rescue command set,
-with **350 K of its 488 K free**. The older scene benches boot with an **empty
-socket** and type their command at `/DD`, so they pass `CMDS_EXTRA=<name>` —
-but nothing has to be **given back** any more, and the recipe's disk rule now
-depends on the command list itself (`.cmdlist`), so nothing has to delete
-`romdisk.dsk` either.
+`software/nitros9/mkrom.sh` writes the data set to `$OUT/data` **and a whole
+`system.img` beside the ROM**, and `software/nitros9/mksyscard.sh` is what
+decides what a bootable card carries. ⚠ **There is no "empty socket" bench any
+more** — a machine with no card does not start — so the older scene benches
+pass `SDIMG=$OUT/system.img` and still pass `CMDS_EXTRA=<name>`, which now
+means "add this to the card's command set".
 
 ⭐ **`run-v3pin.sh` is no longer one of them** (2026-09-21). Its table is
 327,680 bytes of picture, so there **is** no empty-socket version of that
@@ -527,9 +527,11 @@ requires **exactly one** `Error #` — two would mean the *first* `changefont`,
 a bare name that goes through `DOpen`, had not found its face on the card. So
 the count is the positive claim about `DOpen` as well.
 
-Five more claims say the ROM disk carries none of it — `mvania` not in
+Five more claims said the ROM disk carried none of it — `mvania` not in
 `/DD/CMDS`, the desktop, Paint and the faces not in `/DD/SYS`, `errmsg` still
-there — asked both of the machine and of `romdisk.dsk` on the host.
+there. ⚠ **They are about a disk that no longer exists** (2026-09-22): `/DD`
+is the card, so what they now assert is that the *card* carries the demo only
+when a bench asked for it.
 
 ## ⚠ What this model does and does not answer
 

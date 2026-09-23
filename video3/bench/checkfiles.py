@@ -64,7 +64,17 @@ import mktbox as T                                              # noqa: E402
 RGB = T.palette_rgb()
 C = {n: T.rgb565(RGB[i]) for n, i in T.PAL.items()}
 SAMPLE = float(os.environ.get("SAMPLE_AT", "3.0"))   # after a click
-SETTLE = 0.35                                        # after a mouse packet
+# ⛔ 1.5 s, AND IT IS A LAG AND NOT A HABIT.  `desk` moves the hardware sprite
+# once a loop pass, so the POINTER ARRIVES AFTER THE SCRIPT SAYS IT DID - and
+# the `clear` test below believes the SCRIPT's coordinates, because nothing
+# tells this checker where the card actually put the sprite.  On 2026-09-22 a
+# recording showed the arrow still sitting in the list rectangle **1.2 s**
+# after the script had parked it at (580, 300): ONE frame out of 532, counted
+# as a second "picture" of a list that had not been touched.
+# ⚠ A longer settle is only safe because it is not vacuous - `listn` below is
+# printed and the bench claims a floor on it.  At 1.5 s that run kept 106
+# frames; at 0.35 it kept 532 and two of them disagreed.
+SETTLE = 1.5                                         # after a mouse packet
 # ⚠ WHERE A ROW'S TEXT SITS INSIDE ITS 18-PIXEL ROW, and desk and v3trk do
 # not agree: desk.asm's DrawRow puts the icon AND the name at row + 1, and
 # v3trk.asm's Entry puts the icon at row + 1 and the name at row + 0 (it
@@ -313,6 +323,7 @@ def main():
     n = nchrome = npaint = nrestin = 0
     paint_t, desk_t = [], []
     listcrcs = set()
+    listn = 0
     for t, x, y in rests:
         if LRECT[2] <= x < LRECT[3] and LRECT[0] <= y < LRECT[1]:
             nrestin += 1
@@ -359,6 +370,7 @@ def main():
                      or myp + 16 <= LRECT[0] or myp >= LRECT[1])
             if clear:
                 listcrcs.add(zlib.crc32(px[LRECT[0]:LRECT[1], LRECT[2]:LRECT[3]].tobytes()))
+                listn += 1
         while ki < len(targets) and t > targets[ki][1]:
             got[targets[ki][0]] = prev
             ki += 1
@@ -367,8 +379,8 @@ def main():
         got[targets[ki][0]] = prev
         ki += 1
 
-    print("frames=%d chrome=%d listcrcs=%d paint=%d mg=%s"
-          % (n, nchrome, len(listcrcs), npaint,
+    print("frames=%d chrome=%d listcrcs=%d listn=%d paint=%d mg=%s"
+          % (n, nchrome, len(listcrcs), listn, npaint,
              {None: "na", True: "ok", False: "bad"}[mg_agree(ppath)]))
     print("clicks=%d rests=%d restsin=%d" % (len(clicks), len(rests), nrestin))
     for i, (t, x, y) in enumerate(clicks):

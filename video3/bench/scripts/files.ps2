@@ -11,6 +11,7 @@
 #   108 50    IcTab[0], the "arm6309" disk: cell 76,34, 64 x 48
 #   200 191   the list's row 0   (FM.LY + 9)
 #   200 209   its row 1          (FM.LY + FM.ROWH + 9)
+#   200 227   its row 2          (FM.LY + 2*FM.ROWH + 9)
 #   428 188   the scroll bar's UP arrow   (FM.BX + 7, FM.LY + 6)
 #   428 390   ... and its DOWN arrow      (FM.BX + 7, FM.LY + FM.LH - 13)
 #   200  32   the Go menu's item 0, Files (GEO.DROPY + GEO.MPAD + 10)
@@ -56,11 +57,13 @@ at 12.000   move to 108 50
 +0.700      click left      # C1: ⭐ the manager comes up on /SD0
 +0.500      move to 580 300
 
-# --- 2  into DATA, which is row 1 of the root ---------------------------
-at 22.000   move to 200 209
+# --- 2  into DATA, which is row 2 of the root ---------------------------
+# ⚠ ROW 2, NOT ROW 1, SINCE 2026-09-22: the card is bootable, so OS9Boot is
+# the root's first entry and CMDS, DATA and the rest moved down a row.
+at 22.000   move to 200 227
 +0.700      click left      # C2: selects it
 +0.500      move to 580 300
-at 32.000   move to 200 209
+at 32.000   move to 200 227
 +0.700      click left      # C3: ⭐ enters it
 +0.500      move to 580 300
 
@@ -100,11 +103,13 @@ at 97.000   move to 108 50
 +0.700      click left      # C12: ⭐ the selection survived, so this OPENS
 +0.500      move to 580 300
 
-# --- 7  into CMDS, which is row 0 ---------------------------------------
-at 108.000  move to 200 191
+# --- 7  into CMDS, which is row 1 ---------------------------------------
+# ⚠ ROW 1 SINCE 2026-09-22, for the same reason DATA moved: the card is
+# bootable, so OS9Boot heads the root and everything after it shifted down.
+at 108.000  move to 200 209
 +0.700      click left      # C13: selects it
 +0.500      move to 580 300
-at 118.000  move to 200 191
+at 118.000  move to 200 209
 +0.700      click left      # C14: CMDS
 +0.500      move to 580 300
 

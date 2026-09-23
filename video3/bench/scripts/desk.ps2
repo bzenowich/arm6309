@@ -22,7 +22,14 @@ at 1.500    move to 100 8   # over the Applications title
 +0.700      click left      # C1: dismissed, and what was under it comes back
 
 # --- 2  the launcher ----------------------------------------------------
-+1.400      move to 100 8
+# ⛔ SIX SECONDS AFTER THE DISMISSAL, AND IT IS MEASURED, NOT SLACK.  Shutting
+# a menu repaints the WHOLE desktop (desk.asm's DrawAll), and `desk` samples
+# the button once a loop pass - so a click that lands inside that repaint is
+# not late, it is GONE, exactly as files.ps2's header records for the file
+# manager.  ⚠ 1.400 was enough for six desktop icons and is not enough for
+# ELEVEN: on 2026-09-22 C2 arrived 2.24 s after C1, the menu never reopened,
+# and seven claims failed describing a desktop that was simply still drawing.
++6.000      move to 100 8
 +0.700      click left      # C2: open again
 +0.900      move to 168 32  # Paint
 +0.700      click left      # C3: ⭐ forks v3paint off /SD0/CMDS
@@ -30,7 +37,14 @@ at 1.500    move to 100 8   # over the Applications title
 # --- 3  the fourth item, whose module this card does not carry ----------
 # ⚠ ABSOLUTE, not relative: everything between here and C3 is the child's -
 # and how long it takes is not this script's business.
-at 60.000   move to 100 8
+# ⛔ 75, NOT 60, AND IT IS MEASURED (2026-09-22).  checkdesk.py reports the
+# child's own frames: C3 clicked at 45.8 s, Paint's page was on the card from
+# 70.4 s to 91.2 s and the desktop was back at 92.1 - ⭐ FORTY-SIX SECONDS
+# from the click, where the note below recorded ~26 when the desktop had six
+# icons.  Most of it is the child (the fork, the DWSet, and 33 KB of stream
+# through the toolbox), not the repaint.  60 put C4 at 91.3 s, INSIDE Paint's
+# last second, and five claims failed describing a desktop that was busy.
+at 75.000   move to 100 8
 +0.700      click left      # C4
 +0.900      move to 168 92  # Stardew
 +0.700      click left      # C5: ⭐ asks for the launch by name.  The module
@@ -46,7 +60,7 @@ at 60.000   move to 100 8
 # its world file is missing: ⭐ THE DESKTOP IS DEAF FOR ~26 s AFTER A LAUNCH
 # WHATEVER THE CHILD DOES (docs/boot-and-desktop.md §5 item 4).  A relative
 # +1.400 here put C6 inside that window and the Quit was never seen.
-at 95.000   move to 30 8    # the Desk title
+at 110.000  move to 30 8    # the Desk title
 +0.700      click left      # C6
 +0.900      move to 60 52   # Quit
 +0.700      click left      # C7: desk exits, and the shell prompt comes back

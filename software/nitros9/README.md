@@ -110,7 +110,7 @@ at the handoff rather than at reset.
 The console shows every stage: `R` (loader), `K` (kernel), the module names, `t` `b` `0`,
 a dot per bootfile sector, then the module directory and the banner.
 
-## ⭐ The ROM disk is a rescue system; the applications are on the card
+## ⭐ There is no ROM disk: the card carries NitrOS-9 and the applications
 
 The 488 K RBF image in ROM pages 3–63 was, until 2026-09-20, where every demo
 program lived, and **it was full** — 6,656 bytes free, with `pinball` at 36 K
@@ -118,22 +118,39 @@ and a scene therefore having to ask the recipe for its command and give one
 back (`CMDS_EXTRA` / `CMDS_DROP`). The machine has storage now
 (`storage/docs/sdcard.md` §9.4), so:
 
-- **the ROM keeps** the kernel, the shell, the two modules a video program
-  loads *by name* (`CoArm`, which `armio.asm` opens as the literal
-  `/DD/CMDS/CoArm`, and `libvid`), the machine's self-tests, and a command set
-  that can bring a blank card up from nothing: `format`, `dcheck`, `free`,
-  `makdir`, `copy`, `merge`, `dir`, `del`, `deldir`, `rename`, `iniz`, `load`,
-  `link`, `devs`. That leaves **~65 K free** in the image;
-- **the card carries** the applications **and their data**.
-  `recipes/arm6309/arm6309.mak`'s `$(DEMOS)` builds the programs into `.mods`
-  (they are part of `all`, so one that stops assembling is still noticed),
-  `mkrom.sh` writes the data set to `$OUT/data`, and **`mksddisk.sh`** formats
-  an image, makes `CMDS` and `DATA` on it, and copies both in:
+⭐ **AND SINCE 2026-09-22 THE ROM KEEPS NOTHING AT ALL.** It carried a 61-page RBF
+image — 499,712 bytes, 47.7 % of the flash — and now carries **no filesystem**: pages
+3–63 are zeros. `machine.md` §7.2 has the map.
+
+- **the ROM keeps** the boot monitor (the POST, §10a's dialog, the SD reader and the
+  vectors), the loader and `krn`, and **the toolbox** the desktop and its apps draw
+  with — that is all;
+- **the card carries NitrOS-9**: `OS9Boot`, the whole command set, `MODULES`, `SYS`,
+  `startup`, the applications **and their data**. ⚠ It answers to **both `/DD` and
+  `/SD0`** — one descriptor source assembled twice — which is what lets `SysGo`,
+  `init`, `armio.asm`'s `CoPath` and every program's `/DD` path keep working with no
+  ROM disk under them;
+- ⛔ **and with no bootable card the machine stops.** `boot.asm` blinks §10a's question
+  mark for ever rather than handing off to a kernel with nothing to load. A blank card
+  is written on a host, which is what a Macintosh needed too.
+
+`recipes/arm6309/arm6309.mak`'s `$(DEMOS)` builds the programs into `.mods` (they are
+part of `all`, so one that stops assembling is still noticed), `mkrom.sh` writes the
+data set to `$OUT/data` **and a whole `system.img` beside the ROM**, and
+**`mksyscard.sh`** is what decides what a system card carries — the command set and the
+`/MODULES` list come out of `make print-syscard` / `print-modules`, so a card cannot
+drift from the NitrOS-9 built beside it:
 
 ```sh
-sh software/nitros9/mksddisk.sh /tmp/demos.img              # every demo the build made
-sh software/nitros9/mksddisk.sh /tmp/demos.img mvania       # or the subset a bench wants
-DATA=/tmp/out/data sh software/nitros9/mksddisk.sh /tmp/demos.img   # ... with its data
+# ⭐ a BOOTABLE system card - NitrOS-9 itself plus the demos named
+sh software/nitros9/mksyscard.sh /tmp/sd.img               # every demo the build made
+sh software/nitros9/mksyscard.sh /tmp/sd.img mvania        # or the subset a bench wants
+DATA=/tmp/out/data sh software/nitros9/mksyscard.sh /tmp/sd.img    # ... with its data
+
+# ⛔ mksddisk.sh still builds a card with NO system on it, which since
+# 2026-09-22 is a machine that does not start.  It is what run-sdboot.sh's
+# `plain` control wants and nothing else.
+sh software/nitros9/mksddisk.sh /tmp/data.img mvania
 ```
 
 ⭐ **AND THE LARGEST THING ON THE CARD IS NOT A PROGRAM.** `pinball`'s playfield is
@@ -168,24 +185,27 @@ the Macintosh story it belongs to; the short version:
 | **What makes a card bootable** | `BOOT=<bootfile>` on `mksddisk.sh`. It runs `os9 gen` **first**, before any other file, so `OS9Boot` gets a contiguous run at a low LSN, and stamps the four bytes `"6309"` and a version at LSN 0 `+$F0`. Both are read back and checked before the script says `ok` |
 | **Where it is** | `DD.BT` and `DD.BSZ` in `RBF`'s own volume header — LSN 0 `+$15` and `+$18`, the first half of SD block 0. No new structure, and `boot_common.asm` has read that pair since 2005 |
 | **Who decides** | `boot.asm` §10b for the boot dialog's picture, `boot_sd.asm` for what is actually loaded. Neither trusts the other; both apply §9.5's rule |
-| **Precedence** | **card first, ROM disk always.** The fallback is inside `boot_sd`, so there is no configuration in which the machine will not start |
-| ⭐ **How you can tell** | one character on the console between `krn`'s `tb` and `boot_common`'s `0`: `tb`**`s`**`0` is the card, `tb`**`r`**`0` is the ROM disk |
-| **How a bench asks for the ROM disk** | it puts no bootable card in the socket — which is what `run-emu.sh`, `run-sd.sh`, `run-v3sd.sh` and `run-v3desk.sh` all already do. Their cards are made without `BOOT=`, so they carry no signature and boot nothing |
+| **Precedence** | ⛔ **the card, and nothing else, since 2026-09-22.** There is no ROM disk to fall back to: `BSNone` returns `E$NotRdy` and `boot.asm` blinks §10a's question mark for ever |
+| ⭐ **How you can tell** | one character on the console between `krn`'s `tb` and `boot_common`'s `0`: `tb`**`s`**`0` is a card it read, `tb`**`n`** is no system disk |
+| **Which benches boot off a card** | all of them now. `mkrom.sh` writes `system.img` beside the ROM and every bench passes it as `SDIMG`; a bench that wants its own card calls `mksyscard.sh` |
 
-⛔ **`run-sdboot.sh` is the bench, and it does not trust "a shell appeared".** The
-fallback works, so a machine that silently ignored the card reaches the same prompt. It
-puts a **different** `OS9Boot` on the card — the ROM's bootfile with the FIRQ stub's two
-modules appended — and asks `mdir` for them. Three card states: blessed, **present and
-not bootable**, and empty; each booted from reset, and each `reboot`ed back through
-`boot.asm`'s POST so that §10b's own verdict codes (`$64` bootable, `$65` not) can be
-read off the progress port.
+⛔ **`run-sdboot.sh` is the bench, and it asserts THREE CARD STATES.** Blessed,
+**present and not bootable**, and empty — each booted from reset, and each `reboot`ed
+back through `boot.asm`'s POST so that §10b's own verdict codes (`$64` bootable, `$65`
+not) can be read off the progress port. ⭐ **Only the first reaches a shell**; the other
+two take `D.Crash` with no `OS9Boot` to load, which is itself a claim. It also puts a
+**different** `OS9Boot` on the blessed card — the recipe's bootfile with the FIRQ stub's
+two modules appended — and asks `mdir` for them, so "it came off *this* card" does not
+rest on a stale image in the build directory.
 
-⚠ **The host emulator enters at `$8004`**, with `boot.asm`'s handoff already applied, so
-the POST and the boot dialog do not run on a cold start there — `reboot` is the only way
-to reach §10b under `software/demo/emu/`. In Verilog, `machine_tb`'s `disk` scenario is a
+⚠ **The host emulator enters at `$8004`** by default, with `boot.asm`'s handoff already
+applied, so the POST and the boot dialog do not run on a cold start there. `reboot`
+re-enters at the reset vector, and ⭐ **`COLDBOOT=1`** starts at it — which is what
+`software/nitros9/video/run-desk.sh` passes to put the POST and the dialog at the front
+of the demo video. In Verilog, `machine_tb`'s `disk` scenario is a
 cold start with the whole storage card and a blessed image in its socket.
 
-### ⭐ `/DD/SYS` was 1,140 of the image's 1,952 sectors
+### ⭐ `/DD/SYS` was 1,140 of the ROM image's 1,952 sectors
 
 The second half, done 2026-09-20. Everything `mkrom.sh` generated — the Haiku
 desktop and Paint's streams, the BBS and its ANSI art, the overworld's world
@@ -194,13 +214,17 @@ copied into `/DD/SYS`. That is **291,840 bytes, 58% of the ROM disk**, and
 none of it is needed to boot or to bring up a console: nothing in the bootfile
 opens a path under `/DD/SYS`, and the only thing `armio.asm` opens by name is
 `/DD/CMDS/CoArm`. What stays is **`errmsg`** — the shell reads it to print
-`Error #216 - Path Name Not Found` at all, so a rescue system without it
-cannot tell you what went wrong.
+`Error #216 - Path Name Not Found` at all, so a system without it cannot tell
+you what went wrong.
+
+⚠ **`/DD/SYS` IS ON THE CARD since 2026-09-22**, with the rest of the filesystem.
+`mksyscard.sh` copies `errmsg`, `$OUT/sys` and `$OUT/romsys` into it, so the two
+knobs below mean the same thing they always did — they just land somewhere else.
 
 | | |
 |---|---|
-| `SYSROM=all` | ⚠ puts the whole data set back in `/DD/SYS`, in one word. The sessions that boot with an **empty socket** and type `copy /dd/sys/...` pass it: `run-vid.sh`, `video/run-video.sh`, `video/run-video3.sh`. `SYSROM="a b c"` names individual files |
-| `$OUT/sys` | the caller's own streams, dropped there before calling `mkrom.sh` (`run-v3text.sh`, `run-v3copyn.sh` do this). ⛔ Every name `mkrom.sh` generates is **removed** from it first, so yesterday's `SYSROM=all` cannot leave the data in the ROM and make a card bench pass on nothing |
+| `SYSROM=all` | ⚠ puts the whole data set in `/DD/SYS` as well as `/DD/DATA`, in one word. The sessions that type `copy /dd/sys/...` pass it: `run-vid.sh`, `video/run-video.sh`, `video/run-video3.sh`. `SYSROM="a b c"` names individual files |
+| `$OUT/sys` | the caller's own streams, dropped there before calling `mkrom.sh` (`run-v3text.sh`, `run-v3copyn.sh` do this). ⛔ Every name `mkrom.sh` generates is **removed** from it first, so yesterday's `SYSROM=all` cannot leave the data there and make a bench pass on nothing |
 
 **How a program finds its data.** The streams are opened by whoever types the
 command (`copy /sd0/data/v3desk /w3`), so the path is already the caller's. The
@@ -211,8 +235,10 @@ routine that tries, in order:
 1. the path the caller gave, if it has a `/` in it (`changefont` only, which
    already had that rule);
 2. **`/SD0/DATA/<name>`** — the card, the copy that can be updated;
-3. **`/DD/SYS/<name>`** — the ROM, so a rescue boot still works when the build
-   kept a copy.
+3. **`/DD/SYS/<name>`** — the card's own `SYS`, which is where `SYSROM=` and
+   `$OUT/sys` land (`mksyscard.sh`). ⚠ This was the *ROM* disk until 2026-09-22;
+   `/DD` is the card now, so both paths name the same volume and the second is
+   only a second directory to look in.
 
 ⚠ Both are **absolute** on purpose. A bare relative name would resolve against
 the caller's data directory, and a demo must not stop working because somebody

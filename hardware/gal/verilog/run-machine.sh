@@ -81,6 +81,9 @@ SCENARIOS=${SCENARIOS:-"main e1 s1 s2 s3 alias e2 disk nodisk"}
 # to a second prompt:
 #   SCENARIOS=reboot npm run check:machine
 # It needs the port's ROM, built from $NITROS9DIR (software/nitros9/README.md).
+# ⭐ ONE ROM FOR ALL FOUR SINCE 2026-09-22.  They used to be two flavours in
+# two directories; `recipes/arm6309/arm6309.mak` puts -DV3=1 in AFLAGS itself
+# now, so there is one build and /tmp/arm6309-nitros9 is where it goes.
 case " $SCENARIOS " in *" nitros9 "*|*" reboot "*)
   sh ../../../software/nitros9/mkrom.sh /tmp/arm6309-nitros9 || exit 1 ;;
 esac
@@ -89,15 +92,15 @@ esac
 # which is SDSTAT b1, "a card is in the socket":
 #   SCENARIOS="disk nodisk" npm run check:machine
 #
-# ⛔ AND THEIR ROM IS A V3=1 ROM, IN A DIRECTORY OF ITS OWN. The toolbox is
-# ROM page 64 and recipes/arm6309/arm6309.mak only builds it under -DV3=1
-# (`TBOX = tbox` is inside that ifneq) - without the flag page 64 is 8 KB of
-# zeros, boot.asm 10a finds no "TB" there, reports $63 and skips the dialog,
-# and every claim about the picture would be waiting for a progress code that
-# never comes. The `nitros9` and `reboot` runs above build the OTHER flavour,
-# so the two cannot share an output directory.
+# ⚠ THEY USED TO NEED A ROM OF THEIR OWN. The toolbox is ROM page 64 and the
+# recipe only built it under -DV3=1, so a default build left page 64 blank,
+# boot.asm 10a found no "TB" there, reported $63 and skipped the dialog - and
+# every claim about the picture waited for a progress code that never came.
+# ⭐ Since 2026-09-22 every build has the toolbox, so this is the SAME ROM as
+# the two above; it keeps its own directory only so that a run of
+# SCENARIOS="disk nodisk" alone still builds one.
 case " $SCENARIOS " in *" disk "*|*" nodisk "*)
-  V3=1 sh ../../../software/nitros9/mkrom.sh /tmp/arm6309-dialog || exit 1 ;;
+  sh ../../../software/nitros9/mkrom.sh /tmp/arm6309-dialog || exit 1 ;;
 esac
 # ⭐ AND `disk` NEEDS A CARD THE ROM WILL ACTUALLY BOOT FROM, because since
 # 2026-09-21 "Disk found" means sdcard.md 9.5's signature over a non-zero
@@ -108,21 +111,45 @@ esac
 # ⚠ THE HEX IS PADDED AND TRUNCATED TO EXACTLY THAT, and both halves matter:
 # $readmemh warns and stops early on a short file and errors on a long one,
 # and either way the card in the socket would not be the card on disk.
-SDB=128                                   # sd_model.v's NBLOCKS for this machine
+# ⛔ 1792, NOT 128, SINCE 2026-09-22: `nitros9` and `reboot` boot NitrOS-9 OFF
+# THE CARD now, and mksyscard.sh's image is ~898 KB.  machine_tb.sv's SDB is
+# the same number and sd_model.v's array is NBLOCKS*512 bytes; a smaller one
+# would wrap a read of the bootfile back onto block 0 (`arg % NBLOCKS`).
+SDB=1792                                  # sd_model.v's NBLOCKS for this machine
+
+# ⭐ hexcard <image> <out-base> - pad or truncate to SDB blocks and $readmemh it
+hexcard() {
+  head -c $((SDB * 512)) "$1" > "$2.bin"
+  pad=$((SDB * 512 - $(wc -c < "$2.bin")))
+  [ "$pad" -gt 0 ] && dd if=/dev/zero bs=1 count=$pad >> "$2.bin" 2>/dev/null
+  od -An -v -tx1 -w16 "$2.bin" | tr -s ' ' '\n' | grep -v '^$' > "$2.hex"
+  [ "$(wc -l < "$2.hex")" -eq $((SDB * 512)) ] || {
+    echo "FAIL  $2.hex is not $((SDB * 512)) records"; exit 1; }
+}
+
+# ⛔ AND `nitros9`/`reboot` NEED THE SYSTEM CARD, because the ROM has carried no
+# filesystem since 2026-09-22.  mkrom.sh writes system.img beside the ROM out of
+# the same build, so the modules on the card are the modules in that ROM's
+# recipe - which is the only way `mdir`'s answer means anything.
+case " $SCENARIOS " in *" nitros9 "*|*" reboot "*)
+  D=/tmp/arm6309-nitros9
+  [ -f "$D/system.img" ] || { echo "FAIL  no $D/system.img - mkrom.sh should have built it"; exit 1; }
+  hexcard "$D/system.img" "$D/sdcard"
+  sig=$(sed -n '241,248p' "$D/sdcard.hex" | tr -d '\n')
+  [ "$sig" = "3633303901000000" ] || {
+    echo "FAIL  the system card carries $sig at LSN 0 +\$F0, not the boot signature"; exit 1; }
+  ;;
+esac
+
 case " $SCENARIOS " in *" disk "*)
   D=/tmp/arm6309-dialog
   N9=${NITROS9DIR:-$(cd ../../../../nitros9 2>/dev/null && pwd)}
   [ -f "$N9/recipes/arm6309/l2/bootfile" ] || {
     echo "FAIL  no $N9/recipes/arm6309/l2/bootfile - the ROM build did not run"; exit 1; }
-  BOOT="$N9/recipes/arm6309/l2/bootfile" NAME="arm6309 boot" \
-    sh ../../../software/nitros9/mksddisk.sh "$D/sdboot.img" overworld > "$D/mksddisk.log" 2>&1 || {
+  OUT="$D" DATA="$D/data" NAME="arm6309 boot" NITROS9DIR="$N9" \
+    sh ../../../software/nitros9/mksyscard.sh "$D/sdboot.img" overworld > "$D/mksddisk.log" 2>&1 || {
       cat "$D/mksddisk.log"; echo "FAIL  the bootable card image did not build"; exit 1; }
-  head -c $((SDB * 512)) "$D/sdboot.img" > "$D/sdcard.bin"
-  pad=$((SDB * 512 - $(wc -c < "$D/sdcard.bin")))
-  [ "$pad" -gt 0 ] && dd if=/dev/zero bs=1 count=$pad >> "$D/sdcard.bin" 2>/dev/null
-  od -An -v -tx1 -w16 "$D/sdcard.bin" | tr -s ' ' '\n' | grep -v '^$' > "$D/sdcard.hex"
-  [ "$(wc -l < "$D/sdcard.hex")" -eq $((SDB * 512)) ] || {
-    echo "FAIL  $D/sdcard.hex is not $((SDB * 512)) records"; exit 1; }
+  hexcard "$D/sdboot.img" "$D/sdcard"
   # ⛔ AND THE SIGNATURE IS CHECKED HERE TOO, because a card image that lost
   # it would make `disk` draw the question mark and read as a ROM defect.
   sig=$(sed -n '241,248p' "$D/sdcard.hex" | tr -d '\n')
@@ -135,6 +162,7 @@ for sc in $SCENARIOS; do
   log="$OUT/$sc.log"
   SDARG=""
   [ "$sc" = "disk" ] && SDARG="+sdimage=/tmp/arm6309-dialog/sdcard.hex"
+  case "$sc" in nitros9|reboot) SDARG="+sdimage=/tmp/arm6309-nitros9/sdcard.hex" ;; esac
   ./obj_dir/machine_tb $ARGS $SDARG +scenario=$sc | tee "$log"
   ok=$((ok + $(grep -c '^ok' "$log" || true)))
   bad=$((bad + $(grep -c '^FAIL' "$log" || true)))

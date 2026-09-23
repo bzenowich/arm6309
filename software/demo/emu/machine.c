@@ -1785,7 +1785,18 @@ int main(int argc, char **argv)
     m->cpu.read = rd;
     m->cpu.write = wr;
     cpu6809_reset(&m->cpu);
-    m->cpu.pc = 0x8004;
+    /* ⭐ COLDBOOT=1 STARTS WHERE THE MACHINE DOES: at the reset vector, so
+     * boot.asm's POST, its SIMM walk and §10a's boot dialog all run - which
+     * is the only way to SEE the boot sequence on this emulator.
+     * ⛔ The default is still $8004, boot.asm's handoff entry, because every
+     * bench that is not about the ROM would otherwise pay for the POST twice
+     * over; the map and the memory descriptor set up above are exactly what
+     * the POST would have left, which is why entering past it works at all.
+     * ⚠ A cold start does NOT need them undone: the POST writes both itself. */
+    if (getenv("COLDBOOT") && atoi(getenv("COLDBOOT")))
+        fprintf(stderr, "emu: ⭐ COLDBOOT - entering at the reset vector, not $8004\n");
+    else
+        m->cpu.pc = 0x8004;
 
     /* TRACE=n prints the PC and registers of the first n instructions */
     long trace_n = getenv("TRACE") ? atol(getenv("TRACE")) : 0;

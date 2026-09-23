@@ -226,6 +226,30 @@ with a comma**, and every register list is written out in full — `pshs
 cc,a,b,x,u`, never `cc,d,x,u`. The encodings are in `boot.lst` and are worth a
 look after any edit to them: `$06` is `A,B` and `$46` is `A,B,U`.
 
+### ⛔ `tbvec` is a dispatch table, and tbox.asm decides how long it has to be
+
+⭐ **The boot dialog draws with the ROM toolbox**, which calls its host back
+through `TVCALL`: `jsr [CG.TbV + TV.<name>]`, where the `TV.*` offsets are
+equates in nitros9 `level2/arm6309/modules/tbox.asm` and `CG.TbV` points at
+whichever row layer is running. There are two — CoArm's, and §10a's own
+`tbvec`, because there is no CoArm at boot.
+
+⛔ **They agree by a NUMBER, and no assembler checks it.** The glyph strike
+added `TV.CopyN` at offset 24 on 2026-09-22; `tbvec` still ended at 18, so
+`SkFlush` jumped to `tbvec+24` — the **middle of `tbmapb`'s `cmpd` operand**.
+Four operand bytes executed as instructions, the `rts` went into VRAM, and the
+machine ran wild two seconds into every boot with no bootable card.
+
+⚠ **And it was invisible on the machine that works.** *"Disk found"* is `F.Reg`
+and flushes no batch; only the question mark is `F.Bold+F.Opaq`. The card path
+was perfect. `software/nitros9/run-sdboot.sh`'s two controls found it — and
+only once the ROM disk was gone, because until then that path fell back to a
+working boot and looked fine.
+
+⭐ `tbvec` answers `TV.Copy` and `TV.CopyN` with **carry set**, which is what
+both calls document as "I could not; compose it yourself". A `rts` with carry
+clear would claim the rectangle was copied and leave the text unwritten.
+
 ## §10b — the SD reader, and what *found* now means
 
 ⭐ **New 2026-09-21.** [`storage/docs/sdcard.md`](../../storage/docs/sdcard.md) §9.0,
@@ -254,7 +278,9 @@ assembles as `LDX #21+$00..`, which is the same trap as the comma below wearing 
 sign. And in `boot_sd.asm`, the deblocking routine takes "keep this half" in `B` and the
 even case called it with `B = 0`, so the half the caller asked for was the half that was
 dropped: `DD.BT` read as zero, the card read as unblessed, and the machine booted from
-the ROM disk and said nothing. **The bench's `s`/`r` character is what found it.**
+the ROM disk and said nothing. **The bench's `s` character is what found it** — ⚠ its
+`r` counterpart is `n` now, because the ROM disk it named was removed on 2026-09-22
+(`docs/history.md`) and a card that reads as unblessed is a machine that stops.
 
 ## Sizing memory, and the descriptor it leaves
 

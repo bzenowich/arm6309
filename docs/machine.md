@@ -36,7 +36,7 @@ undecided, or that this document has had to decide itself.
 | | |
 |---|---|
 | **CPU** | HD6309E in native mode, synthesised on an **STM32G431CBU6** ([`cpu/`](../cpu/)) — UFQFPN48 (§5 item 6) |
-| **Boot** | **a 1 MB boot ROM on the motherboard** — 2 ICs plus one `'244`, at physical 2.0–3.0 MB, holding the boot monitor **and a read-only ROM disk with the whole NitrOS-9 distribution in it** — §7.2. ⭐ It also serves `$FFC0`–`$FFFF`, so the vectors are where a 6809 expects them |
+| **Boot** | **a 1 MB boot ROM on the motherboard** — 2 ICs plus one `'244`, at physical 2.0–3.0 MB, holding the boot monitor **and the ROM toolbox** — §7.2. ⭐ **NitrOS-9 itself is on the SD card** since 2026-09-22; pages 3–63 are free. ⭐ It also serves `$FFC0`–`$FFFF`, so the vectors are where a 6809 expects them |
 | **MMU** | **on the motherboard: 5 ICs, the SAM/GIME/DAT arrangement** — `graphics.md` §6.3.1. Register set is a free design, not GIME-compatible (§5 item 3) |
 | **Address space** | 64 KB logical, MMU-mapped; **32 MB physical (A0–A24)** — 16-bit map entries in **two windows** (`$FF90` high, `$FFA0` low), `hardware/ram.md` §4.3 and §5.2. ⚠ **`A21`–`A24` stay on the motherboard**; the backplane carries `A0`–`A20` |
 | **System RAM** | **four 30-pin SIMM sockets, 4–16 MB of DRAM** — `hardware/ram.md` §6, and **4M × 8 modules only** (§6.3.1). ⭐ **The boot monitor sizes it, because nothing in hardware can**: a 30-pin SIMM has no presence-detect pins, so it is a stackless firmware walk — `ram.md` §6.4.1, §5 item 13. **No SRAM anywhere on the motherboard** — `ram.md` §6.4 |
@@ -1120,14 +1120,25 @@ timer free-runs off `CLK25` from reset, which §5 item 10's rule requires of it 
 | | |
 |---|---|
 | **ROM page 0 — 8 KB** | the boot monitor: the sequence above, a `16C550` DriveWire loader ([`drivewire.md`](drivewire.md) §6.1), the video POST, ⭐ **§10a's boot dialog** ([`boot-and-desktop.md`](boot-and-desktop.md) §1) and the `$FFC0`–`$FFFF` vector table |
-| **pages 1–63 — ~504 KB** | ⭐ **a read-only ROM disk**, mounted by an `RBF` descriptor: a rescue NitrOS-9 that boots with no card, no serial cable and no host |
+| **pages 1–2 — 16 KB** | `rel_arm6309`: the loader, `boot_sd` and `krn` — the code that finds `OS9Boot` and enters the kernel |
+| **pages 3–63 — 488 KB** | ⭐ **free, and verified zero.** These were a read-only ROM disk until 2026-09-22 |
 | **pages 64–127 — 512 KB** | ⭐ **the ROM toolbox** — `tbox.asm` on page 64 and its fonts, icons, palette and pictures on the pages after it. CoArm draws Haiku windows out of it in place, the way a Macintosh drew with QuickDraw, **and so does page 0's own boot dialog** |
 
-**That is why the ROM is 1 MB and not 8 KB.** A machine that boots to a NitrOS-9 shell
-with no SD card, no serial cable and no host is a different machine to bring up than one
-that needs two of those working first, and `sdcard.md` §12 step 0's circularity —
-DriveWire needs a client, the client needs a ROM — disappears rather than being worked
-around.
+**That is why the ROM is 1 MB and not 8 KB** — and it is the *toolbox* that spends it,
+not a filesystem. ⭐ **The ROM carried the whole NitrOS-9 distribution until
+2026-09-22**: 61 pages, 499,712 bytes, **47.7 % of the flash**, and pages 3–63 are
+zeros now. The operating system is on the SD card.
+
+⛔ **This is the Macintosh 128K arrangement, and the costs come with it.** The ROM
+clears the screen, draws "Looking for disk" and "Disk found", and reads the system
+software off the disk — §10a and §10b, `boot-and-desktop.md` §1. A machine with no
+bootable card blinks the question mark and **does not reach a prompt at all**: there
+is no rescue system to fall back to, because a fallback that works is a fallback
+that hides a card that does not (`storage/docs/sdcard.md` §9.5, and
+`software/nitros9/run-sdboot.sh`'s three card states are what assert it).
+What the ROM *does* still carry is the **toolbox** — the fonts, icons and drawing
+routines the desktop and its applications share — which is the half of the
+Macintosh ROM that was never a filesystem.
 
 #### ⭐ What it buys back
 
@@ -1144,7 +1155,7 @@ around.
 |---|---|
 | **3 ICs on the motherboard** | 14 → **17**. The shadow ROM cost zero, and this is the whole of the price. ⭐ **The logic was free**: `RUN` and the buffer's enable went into two of the three macrocells `ram.md` §6.2's departed system RAM had just vacated on U6, and the ROM's decode fits U9 at six outputs of ten (`ram.md` §6.7.1) |
 | ⚠ **The vectors are in ROM, so the OS cannot retarget them** | as on a CoCo: the ROM vectors point at a fixed RAM jump table and the OS writes *that*. It is a software convention the boot monitor has to publish, and `software/6809/README.md` is where it lands |
-| ⚠ **A ROM disk is only as current as the last time it was burned** | which is `drivewire.md`'s entire job — §1 there |
+| ⚠ **What is in the ROM is only as current as the last time it was burned** | which is `drivewire.md`'s entire job — §1 there. ⭐ **Much less of it since 2026-09-22**: the operating system moved to the card, so what the flash still fixes is the monitor, the loader and the toolbox |
 | **`$FFC0`–`$FFFF` is no longer available for I/O** | it never was; nothing decoded it |
 
 ---

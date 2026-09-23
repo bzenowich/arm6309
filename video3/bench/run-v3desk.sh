@@ -56,9 +56,20 @@ ROOT=$(pwd)
 OUT=${OUT:-/tmp/arm6309-v3desk}
 S="$ROOT/video3/bench/scripts"
 DESKASM=${DESKASM:-}
-SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-145}
+# ⚠ 175, NOT 145, SINCE 2026-09-22: desk.ps2's absolute times moved out to
+# clear a 46-second launch round-trip that its own measurements now record.
+SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-175}
 IDLE_SECONDS=${IDLE_SECONDS:-50}
-TICKS=${TICKS:-5000}                    # desk's iteration bound; Quit is what normally ends it
+# ⛔ 60,000 AND NOT 5,000, SINCE 2026-09-22 - a bound this run cannot reach,
+# for the same reason KEYTICKS below is one and for the reason run-v3move.sh
+# learnt the hard way.  `desk` counts LOOP PASSES, not seconds, and the
+# PS2_SCRIPT is gated on DESK-READY: five more desktop icons push that gate
+# later, so a fixed pass count that used to outlast the script stopped doing
+# so - and desk printed DESK-LIM in the middle of it, with twelve of the
+# script's twenty-nine events never delivered.  ⚠ The bench then failed
+# THIRTEEN claims about things that simply had not happened yet, which reads
+# exactly like a broken desktop.  Quit is what ends this run.
+TICKS=${TICKS:-60000}                   # desk's iteration bound; Quit is what normally ends it
 IDLETICKS=${IDLETICKS:-1200}            # the control's: it exits on the bound
 KEY_SECONDS=${KEY_SECONDS:-40}
 # ⛔ A BOUND THE RUN CANNOT REACH, on purpose: the keyboard run's DESK-BYE
@@ -74,7 +85,7 @@ mkdir -p "$OUT"
 [ -f "$DESKASM" ] || { echo "FAIL  no $DESKASM (../nitros9 on its arm6309 branch?)"; exit 1; }
 
 if [ -z "$NOBUILD" ]; then
-  V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-v3desk.log" 2>&1 || {
+  sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-v3desk.log" 2>&1 || {
     tail -20 "$OUT/mkrom-v3desk.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 ROM="$OUT/arm6309_rom.bin"
@@ -90,9 +101,12 @@ ROM="$OUT/arm6309_rom.bin"
 # and a click on it has to fork something.  ⛔ With the module and without the
 # world the scene reports its own missing data and exits in about two seconds,
 # which is a child short enough to click through and a claim worth having.
-DATA="$OUT/data" sh software/nitros9/mksddisk.sh "$OUT/sd.img" desk v3paint monster pinball stardew \
-  > "$OUT/mksddisk.log" 2>&1 || { cat "$OUT/mksddisk.log"; echo "FAIL  the card did not build"; exit 1; }
-cat "$OUT/mksddisk.log"
+# ⛔ THE BUILD'S OWN SYSTEM CARD, not a data card of our own.  Since
+# 2026-09-22 the ROM carries no filesystem, so a card that is not BOOTABLE is
+# a machine that does not start - and mkrom.sh already writes system.img with
+# NitrOS-9, the whole command set and every demo on it.
+[ -f "$OUT/system.img" ] || { echo "FAIL  no $OUT/system.img - mkrom.sh should have built it"; exit 1; }
+cp "$OUT/system.img" "$OUT/sd.img" || { echo "FAIL  cannot copy the system card"; exit 1; }
 
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
    software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"

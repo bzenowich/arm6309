@@ -9,9 +9,13 @@
 #                     the BBS, the overworld's world and the console fonts.
 #                     software/nitros9/mksddisk.sh puts it in the card's DATA
 #   sys/              what the caller left here before calling, copied into the
-#                     ROM disk's /DD/SYS
-#   romsys/           the SYSROM=... selection, likewise (SYSROM=all is the
-#                     pre-2026-09-20 arrangement, for a bench with no card)
+#                     CARD's /SYS by mksyscard.sh
+#   romsys/           the SYSROM=... selection, likewise
+#   ⭐ system.img     THE SYSTEM CARD - NitrOS-9 itself: OS9Boot, the whole
+#                     command set, MODULES, SYS and a startup that points at
+#                     the card.  ⛔ Since 2026-09-22 the ROM carries NO
+#                     filesystem, so this is the only thing the machine can
+#                     boot.  NOSYSIMG=1 skips it
 #
 # Used by software/nitros9/run-emu.sh and by hardware/gal/verilog/run-machine.sh
 # for +scenario=nitros9.
@@ -55,16 +59,21 @@ mkdir -p "$DATADIR" "$OUT/romsys" "$OUT/sys"
 python3 software/nitros9/tools/vtmodel.py --emit "$DATADIR" || { echo "FAIL  vtmodel.py --emit"; exit 1; }
 python3 software/nitros9/tools/vgmodel.py --emit "$DATADIR" || { echo "FAIL  vgmodel.py --emit"; exit 1; }
 # ⭐ video3's demo streams (the desktop, the draggable window, the paint
-# canvas, the CP437 BBS).  Only under V3=1: they are 640 x 480 and 80 x 25
+# canvas, the CP437 BBS).  They are 640 x 480 and 80 x 25
 # character screens, neither of which video/ can show.
-[ -n "$V3" ] && { python3 software/nitros9/tools/v3show.py "$DATADIR" || { echo "FAIL  v3show.py"; exit 1; }; }
+python3 software/nitros9/tools/v3show.py "$DATADIR" || { echo "FAIL  v3show.py"; exit 1; }
 # ⭐ AND THE PINBALL TABLE, which is 327,680 bytes of PICTURE and is the
 # reason a card exists at all: a NitrOS-9 module may occupy 64 K of address
 # space and this is five times that (video3/bench/mkpcb.py).  `pinball` opens
 # it by bare name through DOpen, so the desktop's Applications menu can fork
 # the scene off /SD0/CMDS and it finds its table in /SD0/DATA.
-[ -n "$V3" ] && { cp video3/bench/pcbtable.pic video3/bench/pcbtable.pal "$DATADIR/" \
-  || { echo "FAIL  no pcbtable.pic/.pal - run video3/bench/mkpcb.py"; exit 1; }; }
+cp video3/bench/pcbtable.pic video3/bench/pcbtable.pal "$DATADIR/" \
+  || { echo "FAIL  no pcbtable.pic/.pal - run video3/bench/mkpcb.py"; exit 1; }
+# ⭐ AND THE OVERWORLD, for the same reason: `zelda`'s playfield is 491,520
+# bytes - a picture, not a tile bank - and its keyed art bank another 8,192
+# (video3/bench/mkzelda.py).
+cp video3/bench/zelda.pic video3/bench/zelda.art "$DATADIR/" \
+  || { echo "FAIL  no zelda.pic/.art - run video3/bench/mkzelda.py"; exit 1; }
 # and the overworld's data (software/demo/tools/mkgame.py), with its model for the checker
 python3 software/demo/tools/mkgame.py "$OUT/gamedata" > "$OUT/gamedata.log" || { cat "$OUT/gamedata.log"; echo "FAIL  mkgame.py"; exit 1; }
 for f in tiles world sprites frames; do cp "$OUT/gamedata/$f.bin" "$DATADIR/$f.bin"; done
@@ -94,14 +103,14 @@ SYSFILES=$(ls "$OUT"/sys/* "$OUT"/romsys/* 2>/dev/null | tr '\n' ' ')
 # with `grep -c` therefore made an EMPTY /DD/SYS - the whole point of this
 # change - abort the build with no message at all.  Count with wc.
 nsys=$(( $(ls -1 "$OUT"/sys 2>/dev/null | wc -l) + $(ls -1 "$OUT"/romsys 2>/dev/null | wc -l) ))
-echo "ok    the ROM disk's /DD/SYS: errmsg + $nsys file(s); the card's DATA: $(ls -1 "$DATADIR" | wc -l)"
+echo "ok    the card's /SYS: errmsg + $nsys file(s); its DATA: $(ls -1 "$DATADIR" | wc -l)"
 # ⭐ the ROM toolbox's data - fonts, icons, the Haiku palette, the paint
 # document - for ROM pages 65 on (tbox.asm; mktbox.py says what is where)
 python3 software/nitros9/tools/mktbox.py "$OUT/tbox.bin" > "$OUT/tbox.log" || { cat "$OUT/tbox.log"; echo "FAIL  mktbox.py"; exit 1; }
 
-# ⭐ V3=1 builds the port against video3 (video3/docs/plan.md) instead of
-# video/ (graphics.md).  The difference is defs/armvid.d's register map and
-# the code guarded by IFNE V3; see video3/docs/demo-report.md.
+# ⛔ THERE IS ONLY ONE FLAVOUR SINCE 2026-09-22.  `recipes/arm6309/arm6309.mak`
+# puts -DV3=1 in AFLAGS itself, so this script no longer chooses a card and a
+# caller's `V3=1` is accepted and ignored.  video/ is retired to archive/.
 #
 # ⛔ THE RECIPE HAS ONE OBJECT DIRECTORY, and changing AFLAGS does not make
 # anything out of date - so switching flavour without a clean links modules
@@ -112,7 +121,10 @@ python3 software/nitros9/tools/mktbox.py "$OUT/tbox.bin" > "$OUT/tbox.log" || { 
 # flags (-DBTMARK=1, the SS.Batch instrument) that change the code without
 # changing a file, so a toggle has to force the clean too.
 REC="$NITROS9DIR/recipes/arm6309/l2"
-FLAV=${V3:+v3}; FLAV=${FLAV:-v1}; FLAV="$FLAV${AFLAGS_MORE:+ $AFLAGS_MORE}"
+# ⚠ THE STAMP STAYS, and it still earns its keep: AFLAGS_MORE (-DBTMARK=1)
+# and BOOTMOD change the code without changing a file.  The card half of it is
+# now a constant, which is the point - it cannot be got wrong.
+FLAV="v3${AFLAGS_MORE:+ $AFLAGS_MORE}"
 # ⭐ AND BOOTMOD IS IN THE STAMP TOO, for a weaker version of the same reason:
 # it selects which F$Boot module goes into OS9Kernel (boot_sd, the default, or
 # boot_romdisk) and `os9kernel`'s prerequisite list changing is not by itself
@@ -125,7 +137,7 @@ if [ "$(cat "$REC/.flavour" 2>/dev/null)" != "$FLAV" ]; then
 fi
 make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" SYSFILES="$SYSFILES" TBOXDATA="$OUT/tbox.bin" \
   ${BOOTMOD:+BOOTMOD=$BOOTMOD} \
-  AFLAGS_EXTRA="${V3:+-DV3=1} $AFLAGS_MORE" \
+  AFLAGS_EXTRA="$AFLAGS_MORE" \
   > "$OUT/build.log" 2>&1 || { grep -v '^lwasm\|^lwlink' "$OUT/build.log" | tail -20; echo "FAIL  the ROM did not build"; exit 1; }
 
 cp "$NITROS9DIR/recipes/arm6309/l2/arm6309_rom.bin" "$OUT/arm6309_rom.bin"
@@ -141,3 +153,17 @@ cmp -s -n 8192 "$OUT/arm6309_rom.bin" software/boot/boot.bin || { echo "FAIL  RO
 # nothing would notice (software/nitros9/tools/checkcg.py says the rest).
 python3 software/nitros9/tools/checkcg.py "$NITROS9DIR" || exit 1
 echo "ok    $OUT/arm6309_rom.bin and .hex, page 0 = software/boot/boot.bin"
+
+# ---------------------------------------------------------------------------
+# ⭐ AND THE SYSTEM CARD, because the ROM does not carry NitrOS-9 any more.
+# ⛔ A build that produced only a ROM would produce a machine that DOES NOT
+# START - which looks like a broken port rather than a missing card.  So the
+# card is a build output, not something a bench has to remember to assemble.
+if [ -z "$NOSYSIMG" ]; then
+  # ⭐ THE SYSTEM CARD.  software/nitros9/mksyscard.sh owns what goes on one,
+  # so a bench that needs its own card builds it the same way this does.
+  OUT="$OUT" DATA="$OUT/data" NITROS9DIR="$NITROS9DIR" \
+    sh software/nitros9/mksyscard.sh "$OUT/system.img" > "$OUT/system.log" 2>&1 || {
+      tail -20 "$OUT/system.log"; echo "FAIL  the system card did not build"; exit 1; }
+  grep -E '^ok    |⭐ BOOTABLE' "$OUT/system.log" | head -2
+fi

@@ -194,6 +194,52 @@ def icon_doc(n=32):
     return im
 
 
+# ⭐ THREE MORE FOR THE DESKTOP'S APPLICATIONS (2026-09-22).  arm6309
+# docs/boot-and-desktop.md §3 asks for Pinball, Monsterland, BBS, ANSI-Art and
+# Stardew as clickable ICONS; `bbs` and `image` above already serve two of
+# them, and these are the other three.  ⚠ They are APPENDED to
+# mktbox.py's ICON_NAMES, not inserted: desk.asm's IcTab carries icon NUMBERS
+# as literals, so an insertion would silently repaint every icon on the
+# desktop with its neighbour's art.
+def icon_pinball():
+    im, d = canvas()
+    d.rounded_rectangle([4, 1, 28, 30], radius=5, fill=(20, 25, 70), outline=(150, 160, 190))
+    d.ellipse([8, 6, 15, 13], fill=(230, 60, 60), outline=(255, 180, 180))
+    d.ellipse([18, 9, 25, 16], fill=(60, 140, 240), outline=(190, 220, 255))
+    d.line([(7, 22), (14, 26)], fill=(230, 200, 90), width=3)     # the flippers
+    d.line([(25, 22), (18, 26)], fill=(230, 200, 90), width=3)
+    d.ellipse([14, 17, 19, 22], fill=(235, 235, 245), outline=(120, 120, 140))
+    return im
+
+
+def icon_monster():
+    im, d = canvas()
+    d.rectangle([2, 25, 30, 30], fill=(70, 50, 35))               # the ground
+    d.rectangle([2, 25, 30, 26], fill=(110, 180, 70))
+    d.ellipse([7, 8, 25, 26], fill=(80, 190, 90), outline=(40, 120, 50))
+    d.polygon([(9, 11), (12, 3), (15, 11)], fill=(80, 190, 90))   # two horns
+    d.polygon([(17, 11), (20, 3), (23, 11)], fill=(80, 190, 90))
+    for cx in (12, 20):
+        d.ellipse([cx - 3, 13, cx + 3, 19], fill=(255, 255, 255))
+        d.ellipse([cx - 1, 15, cx + 1, 17], fill=(20, 20, 30))
+    d.arc([12, 19, 20, 24], 20, 160, fill=(30, 90, 40), width=2)
+    return im
+
+
+def icon_farm():
+    im, d = canvas()
+    d.rectangle([2, 2, 30, 13], fill=(140, 200, 240))             # sky
+    d.ellipse([21, 3, 29, 11], fill=(255, 220, 90))               # sun
+    d.rectangle([2, 13, 30, 30], fill=(120, 85, 55))              # tilled earth
+    for y in range(16, 30, 4):                                    # the furrows
+        d.line([(3, y), (29, y)], fill=(95, 65, 40))
+    for x in (7, 15, 23):                                         # three crops
+        d.line([(x, 27), (x, 20)], fill=(60, 150, 60), width=2)
+        d.ellipse([x - 4, 15, x, 20], fill=(90, 190, 80))
+        d.ellipse([x, 15, x + 4, 20], fill=(70, 165, 70))
+    return im
+
+
 def icon_leaf():
     im, d = canvas(16)
     d.polygon([(2, 14), (5, 6), (12, 2), (14, 3), (11, 10), (4, 14)], fill=(40, 90, 200))

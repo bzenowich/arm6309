@@ -51,10 +51,17 @@ if [ -z "$NOBUILD" ]; then
   # This bench boots with an empty socket and types `monster` at /DD, so it
   # asks the recipe for that one command.  Nothing has to be given back any
   # more: the ROM disk has ~65 K free.
-  V3=1 CMDS_EXTRA=monster sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
+  CMDS_EXTRA=monster sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
     tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 [ -f "$OUT/arm6309_rom.bin" ] || { echo "FAIL  no ROM in $OUT"; exit 1; }
+# ⛔ THE CARD IS THE SYSTEM DISK since 2026-09-22 (arm6309 docs/history.md):
+# the ROM carries the toolbox and no filesystem, so a session with an EMPTY
+# SOCKET does not reach a shell at all.  mkrom.sh writes system.img beside the
+# ROM out of the same build, and /DD is that card - which is why the
+# `copy /dd/sys/...` lines below still read what SYSROM/$OUT/sys put there.
+SDIMG="$OUT/system.img"; export SDIMG
+[ -f "$SDIMG" ] || { echo "FAIL  no $SDIMG - mkrom.sh should have built the system card"; exit 1; }
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
    software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 

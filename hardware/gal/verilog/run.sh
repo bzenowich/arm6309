@@ -10,14 +10,14 @@
 set -e
 cd "$(dirname "$0")"
 V="verilator --binary --timing -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC"
-CARD="video_card.v vctrl.v vaddr.v vsup.v"
-# ⭐ THE `video` CARD'S FIVE LEFT THE DEFAULT ON 2026-09-20 - vsync, vaddr,
-# vtile, vspan and vpal. The card was archived that day and `video3` is the
-# machine's video card (archive/README.md). The benches, video_card.v and the
-# generated vctrl.v/vaddr.v/vsup.v are all still here and still run when asked
-# for by name - `TBS="vsync vaddr vtile vspan vpal" sh run.sh` - because
-# machine_tb and demo_tb still instantiate the card. They are simply not what
-# this repository checks by default any more.
+# ⛔ THE `video` CARD'S FIVE ARE GONE FROM HERE (2026-09-22).  They left the
+# default on 2026-09-20 when the card was archived, and stayed runnable by name
+# because `machine_tb` and `demo_tb` still instantiated the card.  Neither does
+# now - the boot ROM was retargeted, and `demo_tb` followed its benches into
+# `archive/video/bench/`.  ⚠ `video_card.v` and the generated `vctrl.v`,
+# `vaddr.v` and `vsup.v` are STILL HERE and still emitted by `gen.ts`; what is
+# gone is anything that executes them.  `archive/video/bench/README.md` is the
+# record of that, and `archive/README.md` §"What did NOT move" the trade.
 TBS=${TBS:-"audio mainboard storage v3dot v3card v3machine"}
 out=$(mktemp)
 trap 'rm -f "$out"' EXIT
@@ -28,7 +28,11 @@ for tb in $TBS; do
     # by searching the current directory, so "vctrl.v" and "audio.v" alone
     # compiled - and a stale or renamed file would have been picked up the
     # same way, silently (2026-09-11).
-    vsync)     SRC="$CARD" ;;
+    # ⛔ AND THE ARCHIVED CARD'S NAMES ANSWER, rather than failing obscurely
+    # three steps later on a missing .sv file.
+    vsync|vaddr|vtile|vspan|vpal)
+      echo "FAIL  '$tb' is the archived video/ card's bench - archive/video/bench/"
+      exit 1 ;;
     audio)     SRC="audio_card.v audio.v aseq.v" ;;
     mainboard) SRC="mainboard.v ../clkdec.v ../mmu.v u9.v u10.v" ;;
     # ⭐ the storage card, with a behavioural SPI-mode SD card in the socket.

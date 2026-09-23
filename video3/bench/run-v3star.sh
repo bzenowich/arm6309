@@ -57,7 +57,7 @@ if [ -z "$NOBUILD" ]; then
     > "$OUT/mkart.log" 2>&1 || {
       cat "$OUT/mkart.log"; echo "FAIL  the art did not generate"; exit 1; }
   tail -6 "$OUT/mkart.log"
-  V3=1 sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
+  sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
     tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 ROM="$OUT/arm6309_rom.bin"

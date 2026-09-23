@@ -58,10 +58,17 @@ if [ -z "$NOBUILD" ]; then
   # on an SD card - software/nitros9/mksddisk.sh, video3/bench/run-v3sd.sh).
   # This bench boots with an empty socket and types `mvania` at /DD, so it
   # asks the recipe for that one command.
-  V3=1 CMDS_EXTRA=mvania sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
+  CMDS_EXTRA=mvania sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
     tail -20 "$OUT/mkrom.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 [ -f "$OUT/arm6309_rom.bin" ] || { echo "FAIL  no ROM in $OUT"; exit 1; }
+# ⛔ THE CARD IS THE SYSTEM DISK since 2026-09-22 (arm6309 docs/history.md):
+# the ROM carries the toolbox and no filesystem, so a session with an EMPTY
+# SOCKET does not reach a shell at all.  mkrom.sh writes system.img beside the
+# ROM out of the same build, and /DD is that card - which is why the
+# `copy /dd/sys/...` lines below still read what SYSROM/$OUT/sys put there.
+SDIMG="$OUT/system.img"; export SDIMG
+[ -f "$SDIMG" ] || { echo "FAIL  no $SDIMG - mkrom.sh should have built the system card"; exit 1; }
 cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
    software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
 
@@ -136,15 +143,18 @@ fi
 if [ -z "$NOTEAR" ]; then
   BT="$OUT/btmark"
   mkdir -p "$BT"
-  V3=1 AFLAGS_MORE=-DBTMARK=1 sh software/nitros9/mkrom.sh "$BT" > "$BT/mkrom.log" 2>&1 || {
+  AFLAGS_MORE=-DBTMARK=1 sh software/nitros9/mkrom.sh "$BT" > "$BT/mkrom.log" 2>&1 || {
     tail -20 "$BT/mkrom.log"; echo "FAIL  the instrumented ROM did not build"; fail=1; }
   TDIRS=""
   for m in 81 209 337 9; do
     D="$OUT/t$m"
     rm -rf "$D"; mkdir -p "$D"
     printf 'iniz w5\rmvania %d 6 %d >/w5\recho DONE-arm6309\r' "$m" "${FIX:-1393}" > "$D/typed.txt"
+    # ⛔ $BT's OWN CARD, not $OUT's.  The instrumented ROM is a different
+    # build (-DBTMARK=1 forces the clean), so its modules are different bytes
+    # and the card that boots it has to come out of the same make.
     (cd "$D" && SERIAL_IN=typed.txt SERIAL_GATE="DD:" SERIAL_TYPE=60 SERIAL_THINK=700 \
-       SERIAL_STOP="$STOP" WILD=1 VIDEO3=1 MARKS=1104 \
+       SERIAL_STOP="$STOP" WILD=1 VIDEO3=1 MARKS=1104 SDIMG="$BT/system.img" \
        "$OUT/emu" "$BT/arm6309_rom.bin" . 120 > /dev/null 2> emu.log) || true
     rm -f "$D/frames.bin"
     grep -q "SERIAL_STOP seen" "$D/emu.log" || { echo "FAIL  tear gate $m did not finish"; fail=1; }

@@ -31,4 +31,10 @@ at 2.000    move to 580 300
 +1.200      move to 580 300
 +1.200      move to 200 8       # the Go title in the menu bar
 +1.200      move to 108 50      # the disk icon
+# ⛔ AND THE PARK IS THE LAST THING, WITH ROOM AFTER IT.  `desk` moves the
+# hardware sprite once a loop pass, so the pointer arrives at the park some
+# time AFTER the script says it did - 1.2 s in the 2026-09-22 recording, which
+# is long enough for checkfiles.py to count the arrow itself as a second
+# picture of the list.  The run has to carry on well past this line; run-v3files.sh's
+# IDLETICKS is what buys that, and its comment says so.
 +1.200      move to 580 300

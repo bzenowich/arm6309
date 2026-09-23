@@ -26,8 +26,13 @@ really on the card, and since 2026-09-22 **its windows move**.
 > `video3/bench/run-v3files.sh` reads the listing off the pixels and compares
 > it with the host's `os9 dir`. ⭐ **§2 IS BUILT (2026-09-21)** — the machine
 > reads the card before there is an OS (`boot.asm` §10b) and NitrOS-9's
-> `boot_sd` loads `OS9Boot` off it, with the ROM disk as the fallback;
+> `boot_sd` loads `OS9Boot` off it — ⛔ **with no fallback since 2026-09-22**:
+> the ROM carries no filesystem, so a machine with no bootable card blinks the
+> question mark and never reaches a prompt.
 > `software/nitros9/run-sdboot.sh` boots all three card states from reset.
+> ⭐ **THE APPLICATIONS ARE ICONS (2026-09-22)** — Pinball, Monster, BBS, ANSI
+> Art and Stardew, §3.4.1; the BBS and the art became programs to do it, and
+> the art itself had to be written rather than imported.
 > ⭐ **§3's MILESTONE 4's WINDOW MOVE IS BUILT (2026-09-22)** — the manager's
 > tab is grabbable and the card moves the window, one `SS.Copy` a step;
 > `video3/bench/run-v3move.sh` reads the figure-8 off the frames and asserts
@@ -44,10 +49,10 @@ really on the card, and since 2026-09-22 **its windows move**.
 | clears the screen | the POST already paints all of 640 × 200 with the span writer | ⭐ built |
 | a dialog, with an icon: *looking for a disk* | `boot.asm` §10a, drawn with the ROM toolbox | ⭐ **built 2026-09-20** — §1 |
 | the icon changes when a disk is found | the same drawing path, and the Mac's blinking question mark when there is none | ⭐ **built 2026-09-20** — §1. ⭐ *found* means a card the ROM has read a boot signature off since 2026-09-21: §2 |
-| loads the OS from the disk | `boot.asm` §10b reads block 0 before there is an OS; `boot_sd` reads `OS9Boot` off the card, and the ROM disk is the fallback | ⭐ **built 2026-09-21** — §2, `sdcard.md` §9.5 |
+| loads the OS from the disk | `boot.asm` §10b reads block 0 before there is an OS; `boot_sd` reads `OS9Boot` off the card, and ⛔ **since 2026-09-22 there is no fallback** | ⭐ **built 2026-09-21** — §2, `sdcard.md` §9.5 |
 | a desktop | `desk` — a menu bar, an event loop on the PS/2 mouse, icons on the Haiku desktop | ⭐ **built 2026-09-20** — §3 milestone 1. ⭐ The icons became clickable 2026-09-21 |
 | a file manager | `desk`'s Tracker window, listing a real directory through `v3dir.inc` — the reader `v3trk` has always used | ⭐ **built 2026-09-21** — §3 milestone 3 |
-| an application menu | `desk`'s **Applications** menu forks `v3paint`, `monster` and `pinball` off `/SD0/CMDS` | ⭐ **built 2026-09-20** — §3 milestone 2 |
+| an application menu | `desk`'s **Applications** menu forks `v3paint`, `monster`, `pinball`, `stardew`, `v3bbs` and `v3art` off `/SD0/CMDS` | ⭐ **built 2026-09-20** — §3 milestone 2. ⭐ **All six are desktop ICONS too since 2026-09-22** — §3.4.1 |
 | a window you drag by its title bar | `desk`'s tab grab, and **the copy engine moves the pixels** — the CPU never touches one | ⭐ **built 2026-09-22** — §3.7 |
 
 ---
@@ -140,9 +145,10 @@ bytes of variables and a stack in block 0 — plus `CoG`'s scratch and `tbox`'s 
 
 ## 2. Booting NitrOS-9 off the card
 
-⭐ **Built 2026-09-21.** `OS9Boot` comes off the SD card when there is a bootable one in
-the socket, and off the ROM disk when there is not. `storage/docs/sdcard.md` §9.5 is the
-design; this is what it is made of and what it changed here.
+⭐ **Built 2026-09-21.** `OS9Boot` comes off the SD card, and ⛔ **since 2026-09-22 there
+is nowhere else it can come from**: the ROM carries no filesystem, so no bootable card is
+a machine that stops at §10a's question mark. `storage/docs/sdcard.md` §9.5 is the design;
+this is what it is made of and what it changed here.
 
 **Two readers, because there are two moments.** The boot ROM has to read the card before
 there is an OS; the kernel's `F$Boot` module has to read it again once there is.
@@ -150,7 +156,7 @@ there is an OS; the kernel's `F$Boot` module has to read it again once there is.
 | | |
 |---|---|
 | `boot.asm` **§10b** | the ROM's reader: §9.0's initialisation and §9.1's `CMD17` of block 0, ~640 bytes. No filesystem, no directory walk, no write path, **no block buffer** — the eight bytes the verdict needs are picked out of the 512 as they go by. ⚠ It never loads anything. Its whole output is which of §1's three pictures is true |
-| `boot_sd.asm` | the NitrOS-9 `F$Boot` module (nitros9 `level2/arm6309/modules/`), 881 bytes of the loader's 896: `HWInit`/`HWTerm`/`HWRead` for `boot_common.asm`, which is `boot_romdisk`'s ROM-page reader with the card in front of it. It reads `OS9Boot` and, when it cannot, falls back to the ROM disk in the same call |
+| `boot_sd.asm` | the NitrOS-9 `F$Boot` module (nitros9 `level2/arm6309/modules/`), 881 bytes of the loader's 896: `HWInit`/`HWTerm`/`HWRead` for `boot_common.asm`. It reads `OS9Boot` off the card, and ⛔ when it cannot it returns `E$NotRdy` — `BSNone`, since 2026-09-22 — so the loader fails and §10a's question mark is what the machine shows |
 
 **Where `OS9Boot` lives: a contiguous run named by `DD.BT` and `DD.BSZ` in LSN 0** — which
 is the first half of SD block 0. Of the two options this section used to offer, that is
@@ -167,21 +173,28 @@ so the third picture is the Macintosh's real one: **there is a disk in the drive
 not a system disk.** The old test — `SDSTAT` b1, the socket's mechanical switch — could not
 tell those two apart at all, and drew *Disk found* over a blank card.
 
-⛔ **The ROM disk stays bootable, and that is the point.** It is this machine's rescue
-system: `format`, `dcheck`, `copy` and `makdir` are on it so that a blank card can be
-brought up from nothing, and a boot that refused to happen because the card was bad would
-take the tool for fixing the card with it. So the precedence is **card first, ROM disk
-always**, and a bench asks for the ROM disk by not putting a bootable card in the socket —
-which is what every bench written before this already does. `BOOTMOD=boot_romdisk` builds
-the ROM that cannot read a card at all.
+⛔ **AND SINCE 2026-09-22 THERE IS NOTHING TO FALL BACK TO.** The ROM used to carry
+the whole NitrOS-9 distribution — 61 pages, **47.7 % of the flash** — mounted as a
+bootable RBF disk, so a bad card meant a rescue prompt rather than a stop. Pages 3–63
+are zeros now: the ROM finds the card, draws the dialog and boots from it, and a
+machine with no bootable card blinks the question mark for ever. `machine.md` §7.2 has
+the page map and `storage/docs/sdcard.md` question 15 the decision.
 
-⚠ **`/DD` does not move.** Only `OS9Boot` came off the card; the system disk is still the
-ROM disk and `/SD0` is still mounted beside it by `rbsd`.
+⭐ **That is not a regression, it is the point.** A fallback that works is a fallback
+that *hides a card that does not*: `run-sdboot.sh`'s own warning — "a shell appeared is
+not evidence" — existed only because the ROM disk reached the same prompt. With the
+ROM disk gone, reaching a shell **is** the evidence.
 
-⭐ **And it says which one it used**: `boot_sd` prints one character through `D.BtBug`,
-between `krn`'s `tb` and `boot_common`'s `0` — **`s`** for the card, **`r`** for the ROM
-disk. ⛔ Without it, *"a shell appeared"* is evidence of nothing, because the fallback
-works: a machine that silently ignored the card reaches exactly the same prompt.
+⭐ **`/DD` AND `/SD0` ARE THE SAME CARD.** One descriptor source (`sddesc.asm`)
+assembled twice, so `OS9Boot`, the whole command set, `SYS`, `MODULES` and `startup`
+answer to either name — and `/DD` is what `SysGo`, `init` and `armio.asm`'s `CoPath`
+already named. ⚠ `SysGo` points the execution directory at the card **in `sysgo.asm`,
+not in `startup`**: SysGo *forks* a shell to run `startup`, so a `chx` there changes
+the child's execution directory and nothing else.
+
+⭐ **And `boot_sd` still says what it did**: one character through `D.BtBug`, between
+`krn`'s `tb` and `boot_common`'s `0` — **`s`** for a card it read, **`n`** for no
+bootable card, which is now a boot that fails rather than one that falls back.
 `software/nitros9/run-sdboot.sh` (**45 claims**) is the bench, and it asserts the same
 thing a second, independent way — the card carries a **different** `OS9Boot`, with two
 extra modules in it, so `mdir` names them only on a machine that read the card.
@@ -285,13 +298,53 @@ the child left.
 sent inside that window reaches nobody. `run-v3desk.sh` states that as a claim
 (`deskback < C4.t`) rather than leaving a mistimed script to fail somewhere else.
 
-### 3.4 `v3paint`, and why a menu item cannot fork a stream
+### 3.4 `v3paint`, `v3bbs`, `v3art` — why an icon cannot fork a stream
 
 `v3paint` was a *data file*; the menu needs a *program*. So
-[`v3paint.asm`](../../nitros9/level2/arm6309/cmds/v3paint.asm) is the smallest honest one:
-it opens `/SD0/DATA/v3paint`, sends it to its own standard output, and holds the picture up.
-The stream's own first escapes are `DWSet $13`, `Select` and `Pal`, so the program knows
+[`v3strm.inc`](../../nitros9/level2/arm6309/cmds/v3strm.inc) is the smallest honest one:
+it opens `/SD0/DATA/<name>`, sends it to its own standard output, and holds the picture up.
+The stream's own first escapes are `DWSet`, `Select` and `Pal`, so the program knows
 nothing about the card, the toolbox or the palette.
+
+⭐ **THREE OF THEM SINCE 2026-09-22, OUT OF ONE BODY.** `v3bbs` and `v3art` had the same
+problem and the same answer, and the three differ in a module name, a file name and a
+console token — so the body is an lwasm **macro** and each program is those three
+strings. ⚠ Three copies of 170 lines is three places for a fix to be applied twice and
+forgotten once, which this repository has already paid for once this week.
+
+⛔ **And `v3art`'s picture had to be written, not imported.** The stream was built from
+`we-tortuga.ans`, which is Blocktronics' and is **not in this repository** — so an
+ANSI-Art icon would have worked on the machine that happened to have it and been dead on
+a clone. `v3show.py`'s `art_grid_original()` is this project's own 80 × 25: a half-block
+`ARM6309` over an ordered-dither sky with the machine's own boards in silhouette, all of
+it CP437 and the sixteen DOS colours, which is the whole of what `ca_ext.asm` implements.
+⚠ It is emitted **unconditionally**; `V3ART=import` opts back into the import. The first
+cut preferred the import whenever it was present, which would have shipped two different
+pictures under one name.
+
+### 3.4.1 ⭐ The applications are ICONS — built 2026-09-22
+
+`IcTab` carries **Pinball, Monster, BBS, ANSI Art and Stardew** in a column at x 568,
+between the file manager's home position (which ends at 380) and the screen's edge;
+`NICON` went 6 → 11 and the Applications menu gained the two new names. Their art —
+`pinball`, `monster`, `farm` — was **appended** to `mktbox.py`'s `ICON_NAMES`, because
+this table names art by number and an insertion repaints every icon after it with its
+neighbour's picture, silently.
+
+⚠ **At full right travel the manager crosses them**, which is wanted rather than
+avoided: it is exactly the question §3.7's backing store answers, and
+`checkmove.py` reads `IcTab` out of the source to find which ones the drag went over.
+
+⛔ **AND IT COST RESPONSIVENESS, MEASURED.** `desk` repaints the *whole* desktop on a
+menu dismissal and on a child's return (`DrawAll`), and samples the mouse button **once
+a loop pass** — so a click that lands inside a repaint is not late, it is **gone**. Five
+more icons took the launch round-trip from ~26 s to **46 s**: `checkdesk.py` records the
+click at 45.8 s, Paint's page on the card from 70.4 s to 91.2 s, and the desktop back at
+92.1 s. Thirteen of `run-v3desk.sh`'s claims failed describing a desktop that was merely
+still drawing, and `desk`'s own 5,000-pass bound cut the script short.
+⚠ **`DrawAll` is O(icons) and there are about to be twelve.** The honest fix is the one
+§3.7 already built for the window — keep the background and restore a rectangle — and it
+is not done.
 
 ### 3.5 What is left
 
@@ -546,8 +599,8 @@ those six rows.
 ## 4. What this costs the ROM, and the division of labour
 
 The owner's framing has been consistent: **the ROM is for toolbox routines, the card is for
-apps.** After today's work that is nearly literally true — the ROM disk is 72 % free and
-holds a rescue system, the demos and their data are on the card.
+apps.** Since 2026-09-22 that is literally true — there is no ROM disk, pages 3–63 are
+zeros, and the operating system, the demos and their data are all on the card.
 
 This document does not change that. What it adds to the ROM is small and all of it is
 *machine*, not *application*:
@@ -575,11 +628,11 @@ Everything in §3 is an application and belongs on the card.
    fixed block range, and it is `RBF`'s own `DD.BT`/`DD.BSZ` in LSN 0 — no new structure,
    and `boot_common.asm` already reads it. The signature at LSN 0 `+$F0` is what says the
    volume was blessed for this machine.
-3. **Whether the ROM disk stays bootable (answered 2026-09-21; §2).** It does, and the
-   precedence is card first, ROM disk always — the fallback is inside `boot_sd`, so there
-   is no configuration in which the machine will not start. ⚠ What is **not** answered is
-   whether `/DD` should follow `OS9Boot` onto the card; today it does not, and the card is
-   `/SD0` beside a ROM disk that is still the system disk.
+3. **Whether the ROM disk stays bootable (answered 2026-09-21, and REVERSED 2026-09-22;
+   §2).** It does not stay at all — it is gone, ROM pages 3–63 are zeros, and there is no
+   configuration in which a machine with no bootable card reaches a prompt. ⭐ And `/DD`
+   did follow `OS9Boot` onto the card: `sddesc.asm` is assembled twice, so the one disk
+   is both `/DD` and `/SD0`. `storage/docs/sdcard.md` question 15.
 4. **The mouse under an exclusive-screen program (answered 2026-09-20; §3.3).** The
    desktop gives its window up with `DWEnd` before it forks and sleeps in `F$Wait` while
    the child has the card. ⚠ **What is still open is the part nobody wants**: for the ~45 s

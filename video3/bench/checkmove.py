@@ -258,15 +258,25 @@ def main():
        "⭐ and every one of them is inside desk.asm's own travel box")
 
     want = set(wanted(os.path.join(out, "drag.ps2"), S))
-    cover = len(want & set(uniq)) / float(len(want))
-    # ⚠ 0.55, NOT 0.70: a step is THREE copies now (the tab, the body and the
-    # notch restore) where it was one, so the window spends proportionally
-    # more of each pass in flight and lands on fewer of the script's exact
-    # samples.  The substance of the claim is carried by the two below - every
-    # position inside the travel box, and none further than Marg from a sample.
-    ok(cover > 0.55, "⭐ AND IT WENT WHERE THE MOUSE WENT: %d of %d of the script's own "
-                     "samples, %.0f%% - the window followed the POINTER, not a curve of "
-                     "its own" % (len(want & set(uniq)), len(want), 100 * cover))
+    hit = len(want & set(uniq))
+    # ⛔ THE FRACTION IS OF THE POSITIONS THE WINDOW TOOK, NOT OF THE SAMPLES,
+    # and the first form was mis-conditioned in a way that cost a green run.
+    #
+    # `hit / len(want)` cannot exceed `len(uniq) / len(want)`: the window takes
+    # ~87 distinct positions and the script names 150 samples, so the CEILING
+    # is 58% and a threshold of 55% sat 3 points under it.  A drag that tracked
+    # the pointer perfectly but in slightly coarser steps then "failed" - which
+    # is what happened on 2026-09-22, at 51%, on a run whose very next claim
+    # says the window was never more than FIVE pixels from a sample.
+    #
+    # ⭐ Turned round it is well conditioned and says the same thing: of the
+    # places the window went, how many are places the pointer was?  A canned
+    # curve of desk's own would score near zero on it either way.
+    cover = hit / float(len(uniq))
+    ok(cover > 0.70, "⭐ AND IT WENT WHERE THE MOUSE WENT: %d of the %d positions it took "
+                     "are the script's own samples, %.0f%% - the window followed the "
+                     "POINTER, not a curve of its own (%d samples in the script)"
+                     % (hit, len(uniq), 100 * cover, len(want)))
 
     # ⛔ AND THE REST ARE NOT STRAY, THEY ARE IN FLIGHT.  A step's copy is
     # 20-40 ms and a frame is 16.7, so the raster can read the framebuffer
