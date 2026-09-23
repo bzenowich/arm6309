@@ -13,6 +13,7 @@ sh video3/bench/run-v3star.sh        # ⭐ the farm, and the DAY in the palette,
 sh video3/bench/run-v3sd.sh          # ⭐ the desktop, Paint and a demo OFF THE SD CARD, ~3 min
 sh video3/bench/run-v3desk.sh        # ⭐ THE DESKTOP SHELL, CLICKED AT, ~3 min
 sh video3/bench/run-v3files.sh       # ⭐ ITS FILE MANAGER, AND THE LISTING READ, ~11 min
+sh video3/bench/run-pcs.sh           # ⭐⭐ PINBALL CONSTRUCTION SET, PROVED, ~8 min
 ```
 
 ⭐ **`run-v3desk.sh` is the one that drives a program with a MOUSE.** Everything else
@@ -41,6 +42,27 @@ picture, and **it must still be the real listing**, so a blank window is not wha
 passes it. ⭐ And a third run driving **`v3trk`** into the same rectangle from the
 shell, because since 2026-09-21 the two programs share one directory reader
 (`modules/v3dir.inc`). **65 claims.**
+
+⭐⭐ **`run-pcs.sh` is the one that PROVES A SIMULATION rather than showing it.**
+`pcs` is Bill Budge's *Pinball Construction Set* (Atari 800, 1983), ported from his
+own MIT-licensed 6502 in `reference/pcs/`; `video3/docs/pcs.md` is the spec. The
+decision the whole port rests on is that **the world stayed in the Atari's own
+units and only the renderer is doubled** — so every number in the database and the
+simulator is exact integer arithmetic, and a Python transliteration of the 6502 can
+be the gate. The bench requires the 6809 to produce the identical ball, the
+identical part states and the identical score on every one of 600 frames.
+
+⛔ **The model is checked before the machine is built**, and ⛔ **it is never
+corrected to agree with the 6809** — when they differ the 6502 decides. Correcting
+the model against the *6502* is the one direction allowed, and it has happened
+twice.
+
+⛔ **The gate requires five LIBRARY PARTS to have been struck.** A ball that only
+ever met the backdrop proves nothing about the object system, and that is exactly
+the run an earlier table gave: 600 frames and 21 bounces agreeing over a collision
+walk that was reading half the world, because five plain polygons are only ever met
+side-on and `CHECKHORIZ` has no two modes to get wrong.
+
 
 | Exerciser | plan | What only it can catch |
 |---|---|---|
