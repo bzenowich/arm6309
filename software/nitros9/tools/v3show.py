@@ -1223,7 +1223,15 @@ def art_grid_original(w=80, h=25):
     for i, (sx, sy) in enumerate([(6, 1), (17, 0), (31, 2), (48, 1), (61, 0), (71, 2),
                                   (12, 3), (68, 3), (25, 1), (55, 3), (3, 6), (76, 5),
                                   (9, 8), (72, 8), (40, 0), (22, 6), (64, 6), (50, 7)]):
-        g[sy][sx] = (0xFA if i % 3 else 0x07, 15 if i % 2 else 8, 0)
+        # ⛔⛔ NOT $07.  In CP437 $07 is a bullet and it is exactly the glyph a
+        # bright star wants - and it is also BEL.  `ca_ext.asm`'s terminal
+        # ACTS on a code below 32 and draws nothing, so each one EATS A CELL
+        # and shifts the rest of its row left: char row 1 lost two cells, rows
+        # 3, 6 and 8 one each.  ⚠ It is invisible in this file's own preview,
+        # which draws from the grid and never goes near a terminal; it took
+        # measuring the machine's picture against the preview, one character
+        # row at a time, to see it.  $F9 is the same dot and is printable.
+        g[sy][sx] = (0xFA if i % 3 else 0xF9, 15 if i % 2 else 8, 0)
     # a moon, top right: two cells of the half block against the black
     _put(g, 70, 1, bytes([0xDC, 0xDB, 0xDD]), 15, 0)
     _put(g, 70, 2, bytes([0xDF, 0xDB, 0xDE]), 7, 0)
@@ -1280,6 +1288,16 @@ def art_grid_original(w=80, h=25):
     _put(g, x0, 24, bytes([0xBA]), 12, 0)
     _put(g, x0 + 2, 24, box, 14, 0)
     _put(g, x0 + len(box) + 3, 24, bytes([0xBA]), 12, 0)
+
+    # ⛔ AND NOTHING IN THE PIECE MAY BE A CONTROL CHARACTER.  Every cell goes
+    # to `ca_ext.asm`'s terminal as a literal byte, and a byte below 32 is a
+    # command to it - BEL, BS, LF, CR - not a glyph.  The failure is not a
+    # wrong picture, it is a row that is one or two cells to the LEFT of where
+    # it should be, which is the kind of thing a preview cannot show you.
+    for y, row in enumerate(g):
+        for x, (code, _, _) in enumerate(row):
+            assert 32 <= code <= 255, (
+                "cell (%d, %d) is code %d - the terminal would act on it" % (x, y, code))
     return g
 
 
@@ -1301,6 +1319,7 @@ def stream_art():
     rows = (art_grid()[ART_FROM:ART_FROM + ART_ROWS]
             if os.environ.get("V3ART") == "import" and have_art()
             else art_grid_original())
+    last = len(rows) - 1
     out = bytearray()
     out += dwset(0x18, 0, 0, 80, 25, 7, 0, 0) + SELECT
     out += esc(0x61, 0, 16) + b"".join(
@@ -1308,7 +1327,7 @@ def stream_art():
     out += esc(0x69, 1)                              # AnsiSw: the terminal on
     out += b"\x1b[0m\x1b[2J\x1b[H"                  # the piece starts on a clear screen
     fg = bg = None
-    for r in rows:
+    for ri, r in enumerate(rows):
         # ⚠ A ROW THAT FILLS THE WIDTH TAKES NO NEWLINE: the terminal wraps,
         # and a CR LF after it would leave a blank row between every two - the
         # same wrap-then-newline the 80-character lines of video3.txt show.
@@ -1337,7 +1356,14 @@ def stream_art():
             if bg not in (0, None):
                 out += b"\x1b[0m"
                 fg, bg = 7, 0
-            out += b"\r\n"
+            # ⛔ AND THE LAST ROW TAKES NO NEWLINE EITHER.  An 80 x 25 terminal
+            # on its bottom row SCROLLS when it is given one, so the piece came
+            # out one character row high and lost its top line - which is a
+            # thing you have to measure to see: the machine's picture and this
+            # file's own rendering differed by 33% of their pixels, and by
+            # 0.02% once shifted sixteen connector lines.
+            if ri != last:
+                out += b"\r\n"
     return bytes(out)
 
 
