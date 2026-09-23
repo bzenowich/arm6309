@@ -330,11 +330,11 @@ def place(name, tx, ty, fillcolor=None):
     import pcsparts as T
     tm = None
     for t in T.parts():
-        if t.name == name:
+        if t.name == name or t.index == name:
             tm = t
             break
     if tm is None:
-        raise KeyError('no template named %s' % name)
+        raise KeyError('no template %r' % (name,))
     kind = pcsobj.kind_of(tm)
     if kind is None:
         raise KeyError('%s\'s procs are step 3b-ii' % name)
@@ -463,6 +463,59 @@ PALSLIV = pcspal.PAINT0 + 7         # cyan
 # right-hand channel, clear of the sloped bar.
 BALL = (143, 10)                    # x, y
 WSET = (5, 3, 3, 4)                 # gravity, speed, kick, elasticity
+
+
+# ⭐ THE EDIT SCRIPT, defined ONCE and run twice - by `pcs 6` on the machine and
+# by pcsedit.DB in checkpcs.py.  Each step is one operation and up to four
+# arguments; ⛔ the LAST TWO ARE REQUIRED TO BE REFUSED, because an edit the
+# converter will not take has to leave no trace, and a gate that never sees a
+# refusal has not checked the rollback at all.
+PE_END, PE_ADD, PE_DEL, PE_DRAG, PE_DRAGP, PE_CUT, PE_PASTE, PE_PAINT = range(8)
+
+EDIT_OPS = ('END', 'ADD', 'DEL', 'DRAG', 'DRAGP', 'CUT', 'PASTE', 'PAINT')
+
+
+def edit_script():
+    """A construction session: pull two parts out of the bin, drag one, move a
+    vertex, paste one and cut it again, paint, delete - and then two edits the
+    four-span limit must refuse.
+
+    ⚠ Every argument is a byte and a displacement is two's complement, because
+    the machine reads these out of the generated table and the model reads the
+    same tuples."""
+    return [
+        (PE_ADD,   TMPL['BMP2'], 20, 8, 0),      # a bumper, in clear space
+        (PE_ADD,   TMPL['ROLL2'], 96, 20, 0),    # ... and a rollover
+        (PE_DRAG,  15, 6, 0xFB, 0),              # drag the bumper +6, -5
+        (PE_DRAGP, 1, 0, 24, 33),                # a vertex of the sloped bar
+        (PE_PASTE, 1, 1, 0, 0),                  # a new vertex on that edge
+        (PE_PAINT, 1, 9, 0, 0),                  # repaint the bar
+        (PE_PAINT, 1, 9, 0, 0),                  # ⭐ again: the toggle clears it
+        (PE_PAINT, 14, 9, 0, 0),                 # ⛔ a library part: refused
+        (PE_CUT,   1, 1, 0, 0),                  # take the vertex back out
+        (PE_DEL,   16, 0, 0, 0),                 # and the rollover with it
+        # ⛔ AND TWO THE DATABASE MUST REFUSE, because a gate that never sees
+        # a refusal has not checked the rollback at all.
+        (PE_DEL,   0, 0, 0, 0),                  # the backdrop: refused
+        (PE_DRAGP, 4, 0, 100, 100),              # ⭐ the sliver's third vertex
+        #                                          level with the other two:
+        #                                          ALIGNPOLY has no descending
+        #                                          edge left, and the move is
+        #                                          undone
+        (PE_END,   0, 0, 0, 0),
+    ]
+
+
+class _Tmpl(dict):
+    def __missing__(self, k):
+        for t in P.parts():
+            if t.name == k:
+                self[k] = t.index
+                return t.index
+        raise KeyError(k)
+
+
+TMPL = _Tmpl()
 
 
 def serialise(objs):
@@ -745,6 +798,24 @@ def emit(path):
     for i, (x, y, ww, hh) in enumerate(boxes):
         w('                    fcb       %-18s %2d %s'
           % ('%d,%d,%d,%d' % (x, y, ww, hh), i, parts[i].name))
+    w('')
+    w('* ══════════════════ THE EDIT SCRIPT ══════════════════════════════')
+    w("* ⭐ A construction session, five bytes a step: the operation and four")
+    w('* arguments.  `pcs 6` runs it and checkpcs.py runs the same tuples')
+    w('* through pcsedit.DB, so the program and the checker cannot drift.')
+    w('* ⛔ The last two steps are REQUIRED to be refused - an edit the')
+    w('* converter will not take has to leave no trace, and a gate that never')
+    w('* sees a refusal has not checked the rollback.')
+    for nm, v in (('End', PE_END), ('Add', PE_ADD), ('Del', PE_DEL),
+                  ('Drag', PE_DRAG), ('DragP', PE_DRAGP), ('Cut', PE_CUT),
+                  ('Paste', PE_PASTE), ('Paint', PE_PAINT)):
+        w('PE.%-16s equ       %d' % (nm, v))
+    _sc = edit_script()
+    w('PE.Steps            equ       %d' % (len(_sc) - 1))
+    w('PCEdit              equ       *')
+    for st in _sc:
+        w('                    fcb       %-18s %s'
+          % (','.join(str(v & 0xFF) for v in st), EDIT_OPS[st[0]]))
     w('')
     w('* ══════════════════ THE TEST TABLE ════════════════════════════════')
     w("* ⭐ Step 2's gate: `pcs 0` copies this into its database, runs the scan")

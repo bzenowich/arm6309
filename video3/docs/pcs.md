@@ -164,9 +164,14 @@ indexes them with a literal:
 reason: they are the first bytes of a saved table. `PBDATA[0]` is the object count **and**
 the offset from `PBDATA+1` to the first record, which is why the walk needs no index.
 
-⚠ **Keep the original's limits** — 127 objects, 63 vertices, **8 active edges / 4 spans a
-scanline** (`PPAK.s:568`), 32-byte span-DB headroom with rollback on overflow. They are part
-of what the construction set *is*.
+⚠ **Keep the original's limits** — 127 objects, 63 vertices, **8 active edge records**
+(`PPAK.s:568`), 32-byte span-DB headroom with rollback on overflow. They are part of what
+the construction set *is*.
+
+⛔ **And the eight is PER OBJECT, not per scanline.** The active list belongs to the polygon
+being scanned, so one polygon may have four spans on a line and the next gets its own eight;
+there is no cap on spans per scanline anywhere in `PPAK.s`. ⚠ This spec and the bench both
+claimed otherwise until the edit gate went looking for a refusal and could not provoke one.
 
 **The art.** `BITMAPS.OBJ` (1,792 bytes) with the offset table at `RUN.s:100`. ⭐
 `mkpcs.py` reads all of it straight out of the original sources, doubles each byte's bits,

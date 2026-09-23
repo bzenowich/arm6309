@@ -85,17 +85,22 @@ class DB(object):
     def _commit(self, snap):
         """⭐ THE SHAPE OF EVERY OPERATION: re-scan, and if the converter gave
         up, put the object back exactly as it was.  `DRAWOBJ`'s carry is the
-        whole protocol (PPAK.s:568 aborts past four spans a scanline)."""
+        whole protocol.
+        ⛔ AND THE LIMIT IS PER OBJECT, NOT PER SCANLINE.  `PRVRTX3` aborts at
+        eight ACTIVE EDGE RECORDS (PPAK.s:568) and the active list belongs to
+        the polygon being scanned - so one polygon may have four spans on a
+        line and the next polygon gets its own eight.  There is no cap on spans
+        per scanline anywhere in PPAK.s; the only other refusal is the gap
+        buffer running out, which ADDOBJ and PASTEPOINT check up front.
+        ⚠ A "four spans a scanline" check was invented here and had to come
+        out: the model is corrected against the 6502, never the other way.
+        """
         try:
             self.rescan()
         except K.Abort:
             self._restore(snap)
             self.rescan()
             raise Abort('the scan converter refused the edit')
-        if any(len(r) > K.NEDGE // 2 for r in self.pak.rows):
-            self._restore(snap)
-            self.rescan()
-            raise Abort('a scanline would carry more than four spans')
 
     # ── ADDOBJ (EDIT.s:703) ────────────────────────────────────────────
     def add(self, obj):
@@ -265,6 +270,46 @@ def _align_rot(o):
     return None
 
 
+def run_script(db, script):
+    """⭐ THE SESSION, STEP BY STEP, AND WHAT EACH ONE CAME TO.
+
+    Returns one byte a step: 0 for "the edit took", 1 for "the database refused
+    it".  ⛔ That sequence is half the gate - an edit the converter will not
+    take has to leave NO TRACE, and the only way to check a rollback is to
+    provoke one and then compare everything.
+    """
+    import mkpcs
+    out = []
+    for (op, a, b, c, d) in script:
+        if op == mkpcs.PE_END:
+            break
+        try:
+            if op == mkpcs.PE_ADD:
+                db.add(mkpcs.place(a, b, c))
+            elif op == mkpcs.PE_DEL:
+                db.delete(a)
+            elif op == mkpcs.PE_DRAG:
+                db.drag(a, _sb(b), _sb(c))
+            elif op == mkpcs.PE_DRAGP:
+                db.dragpoint(a, b, c, d)
+            elif op == mkpcs.PE_CUT:
+                db.cutpoint(a, b)
+            elif op == mkpcs.PE_PASTE:
+                db.pastepoint(a, b)
+            elif op == mkpcs.PE_PAINT:
+                db.paint(a, b)
+            else:
+                raise Abort('unknown operation %d' % op)
+            out.append(0)
+        except (Abort, ValueError, IndexError, KeyError):
+            out.append(1)
+    return bytes(out)
+
+
+def _sb(v):
+    return v - 256 if v & 0x80 else v
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 def selftest():
     """⭐ THE OPERATIONS, CHECKED BY WHAT THEY LEAVE BEHIND.
@@ -404,28 +449,28 @@ def selftest():
     if db.objs[lib].fillcolor != c:
         bad.append('a library part was painted')
 
-    # -- 8  ⛔ AN EDIT THE CONVERTER REFUSES IS UNDONE ENTIRELY -------------
-    # Four spans a scanline is the limit (PPAK.s:568), and the answer to
-    # exceeding it is not a broken picture - it is the edit not happening.
-    db = fresh()
+    # -- 8  ⛔ AN EDIT THE DATABASE REFUSES IS UNDONE ENTIRELY --------------
+    # ⭐ ALIGNPOLY's precondition is the one a script can reach: a triangle
+    # whose third vertex is dragged level with the other two has no edge that
+    # slopes down, and the answer is not a broken picture - it is the edit not
+    # happening.
+    db = plain()
+    o = db.objs[1]
+    o.x, o.y = [30, 90, 60], [40, 40, 100]
+    o.align()
+    db.rescan()
     before = [list(r) for r in db.pak.rows]
-    nb = len(db.objs)
-    refused = 0
-    for x in range(8, 150, 8):
-        try:
-            db.add(mkpcs.place('TARG1', x, 218))
-        except Abort:
-            refused += 1
-            break
-    if not refused:
-        bad.append('the four-span limit was never reached')
-    elif len(db.objs) == nb:
-        bad.append('nothing was added at all, so the rollback proves nothing')
-    else:
-        # the refused one left no trace
-        db2 = DB(db.objs, width=mkpcs.TW, height=mkpcs.TH)
-        if [list(r) for r in db2.pak.rows] != [list(r) for r in db.pak.rows]:
-            bad.append('a refused edit left the database inconsistent')
+    was = (list(o.x), list(o.y))
+    v = next(i for i in range(3) if o.y[i] != 40)
+    try:
+        db.dragpoint(1, v, o.x[v], 40)
+        bad.append('a degenerate polygon was accepted')
+    except Abort:
+        pass
+    if (db.objs[1].x, db.objs[1].y) != was:
+        bad.append('the refused vertex move was not undone')
+    if [list(r) for r in db.pak.rows] != before:
+        bad.append('a refused edit left the database changed')
 
     for m in bad:
         print('FAIL  %s' % m)
