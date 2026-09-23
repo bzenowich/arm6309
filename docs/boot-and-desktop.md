@@ -324,12 +324,28 @@ pictures under one name.
 
 ### 3.4.1 ⭐ The applications are ICONS — built 2026-09-22
 
-`IcTab` carries **Pinball, Monster, BBS, ANSI Art and Stardew** in a column at x 568,
-between the file manager's home position (which ends at 380) and the screen's edge;
-`NICON` went 6 → 11 and the Applications menu gained the two new names. Their art —
-`pinball`, `monster`, `farm` — was **appended** to `mktbox.py`'s `ICON_NAMES`, because
-this table names art by number and an insertion repaints every icon after it with its
-neighbour's picture, silently.
+`IcTab` carries **Pinball, Monster, BBS, ANSI Art, Stardew and Explore** in a column at
+x 568, between the file manager's home position (which ends at 380) and the screen's
+edge; `NICON` went 6 → 11 → 12 and the Applications menu gained the new names. Their
+art — `pinball`, `monster`, `farm`, `world` — was **appended** to `mktbox.py`'s
+`ICON_NAMES`, because this table names art by number and an insertion repaints every
+icon after it with its neighbour's picture, silently.
+
+⚠ **The column's pitch is 72 and not 80** since 2026-09-23, which is what makes six of
+them fit. An icon's cell is `GEO.ICONY+14` = 48 tall (the 32 × 32 art and its label),
+so a sixth at 80 would start at 434 and end at **482** — two rows past `GEO.SCRH`. At
+72 the column runs 34..441 and clears the bottom by 39.
+
+⭐ **Explore is `scroll`** (`video3/docs/scrolling.md`): a camera roaming a 4096 × 2048
+world with the hero in the middle of it, where `zelda` is a grid of rooms. ⚠ It is the
+only scene here that runs in **`VMODE` 11**, so its own `DWSet` asks for a 640 × 480
+screen; the desktop's is untouched, because `A.Run` gives its window up first.
+
+⚠ **AND A SECOND CLICK NEEDS ROOM.** Selecting an icon repaints the icon column and
+`desk` samples the button once a loop pass, so a launch click 0.9 s after the selecting
+one is not late — it is **gone**, and the console shows `DESK-ICON` with no `DESK-RUN`
+after it. 3 s apart works. It is the same rule this document already records for a
+click that lands inside `DrawAll`.
 
 ⚠ **At full right travel the manager crosses them**, which is wanted rather than
 avoided: it is exactly the question §3.7's backing store answers, and

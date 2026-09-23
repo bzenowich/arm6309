@@ -303,7 +303,7 @@ def icon_term():
 # applications (arm6309 docs/boot-and-desktop.md §3).
 ICON_NAMES = ["home", "disk", "files", "trash", "paint", "bbs", "game", "image", "doc",
               "folder16", "image16", "doc16", "leaf", "app16", "term", "folder",
-              "pinball", "monster", "farm"]
+              "pinball", "monster", "farm", "world"]
 
 
 def build_icons():
@@ -322,6 +322,7 @@ def build_icons():
         "folder16": M.icon_folder(16), "image16": M.icon_image(16), "doc16": M.icon_doc(16),
         "leaf": M.icon_leaf(), "app16": icon_app16(), "term": icon_term(), "folder": M.icon_folder(),
         "pinball": M.icon_pinball(), "monster": M.icon_monster(), "farm": M.icon_farm(),
+        "world": M.icon_world(),
     }
     icons = []
     for n in ICON_NAMES:

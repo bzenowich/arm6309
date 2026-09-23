@@ -240,6 +240,28 @@ def icon_farm():
     return im
 
 
+def icon_world():
+    """⭐ `scroll`'s: the overworld seen from above, which is what the scene is.
+
+    The terrain is the demo's own four - grass, a sand path, a pond and a dark
+    wood - with the hero a speck at the middle of it, because the middle is
+    exactly where that scene keeps him."""
+    im, d = canvas()
+    d.rectangle([2, 2, 30, 30], fill=(58, 140, 52))               # grass
+    d.polygon([(2, 20), (10, 16), (18, 19), (26, 14), (30, 15),
+               (30, 22), (20, 25), (10, 23), (2, 26)],
+              fill=(228, 202, 146))                               # a sand path
+    d.ellipse([19, 3, 30, 12], fill=(46, 96, 210))                # a pond
+    d.ellipse([21, 5, 28, 10], fill=(96, 150, 240))
+    for cx, cy in ((4, 5), (9, 8), (5, 11), (11, 3)):             # a dark wood
+        d.ellipse([cx - 3, cy - 3, cx + 3, cy + 3], fill=(22, 74, 30))
+    d.rectangle([14, 13, 18, 20], fill=(30, 110, 44))             # the hero
+    d.rectangle([14, 10, 18, 14], fill=(246, 206, 160))
+    d.rectangle([14, 9, 18, 11], fill=(26, 92, 40))
+    d.rectangle([13, 14, 14, 18], fill=(226, 230, 240))
+    return im
+
+
 def icon_leaf():
     im, d = canvas(16)
     d.polygon([(2, 14), (5, 6), (12, 2), (14, 3), (11, 10), (4, 14)], fill=(40, 90, 200))
