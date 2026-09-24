@@ -229,6 +229,9 @@ def main():
 
     pak, want, w, h = expected()
 
+    if len(sys.argv) > 2 and sys.argv[2] == 'kit':
+        return 0 if kit_panel(vram) else 1
+
     # ⛔ THE EDIT SESSION BEFORE THE UNEDITED DATABASE, because mode 6 dumps
     # the database AFTER the session: comparing it with the table as built is
     # comparing it with the one thing it must no longer be.  edit_session
@@ -292,6 +295,46 @@ def main():
     print('      %d objects, %d scanlines carrying spans'
           % (len(pak.objs), sum(1 for r in pak.rows if r)))
     return 0
+
+
+def kit_panel(vram):
+    """⭐ THE KIT PANEL, EVERY CARD PIXEL, against pcskit.py's DRAWKIT.
+
+    x 320..639, y 0..383: thirteen tools, the parts bin and the three paint
+    pots; and the strip under it, y 384..479, which is the panel colour.
+    ⚠ The bitmap and this comparison come out of the same model, so what this
+    proves is the MACHINE's half - the doubling, the placement, WM.Mask's bit
+    order and both colours, and the pots.  That the model is DRAWKIT is
+    pcskit.py's self-test and a picture a person has looked at.
+    """
+    import pcskit
+    import pcspal
+    want = pcskit.card(pcspal.UI_PANEL, pcspal.UI_INK)
+    W, H = 2 * pcskit.KW, 2 * pcskit.KH
+    bad, first = 0, None
+    for y in range(H):
+        for x in range(W):
+            got = vram[y * STRIDE + 320 + x]
+            if got != want[y * W + x]:
+                bad += 1
+                if first is None:
+                    first = (x, y, got, want[y * W + x])
+    for y in range(384, 480):
+        for x in range(320, 640):
+            if vram[y * STRIDE + x] != pcspal.UI_PANEL:
+                bad += 1
+                if first is None:
+                    first = (x - 320, y, vram[y * STRIDE + x], pcspal.UI_PANEL)
+    ink = sum(1 for v in want if v == pcspal.UI_INK)
+    if bad:
+        x, y, g, w = first
+        print('FAIL  the kit panel: %d card pixels differ; first at panel (%d, %d):'
+              ' got %d, wanted %d' % (bad, x, y, g, w))
+        return False
+    print('ok    the kit panel: all %d card pixels are DRAWKIT\'s, %d of them ink,'
+          % (W * H, ink))
+    print('      the three pots in their paint, and the strip under it')
+    return True
 
 
 def _database(vram, pak):

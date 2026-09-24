@@ -49,7 +49,7 @@ ROOT=$(pwd)
 OUT=${OUT:-$(cd "$_here/.." && pwd)/build/pcs}
 FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
-RUNS=${RUNS:-"m0 m4 m6 f0 fX m1 m2 m5"}
+RUNS=${RUNS:-"m0 m4 m6 k0 f0 fX m1 m2 m5"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH
@@ -61,6 +61,7 @@ mkdir -p "$OUT"
 echo "=== the model, first ==="
 python3 software/pcs/bench/pcsphys.py || { echo "FAIL  the divide"; exit 1; }
 python3 software/pcs/bench/pcspak.py  || { echo "FAIL  the scan converter"; exit 1; }
+python3 software/pcs/bench/pcskit.py || { echo "FAIL  the kit panel"; exit 1; }
 python3 software/pcs/bench/pcsparts.py > "$OUT/parts.log" 2>&1 || {
   cat "$OUT/parts.log"; echo "FAIL  the part extraction"; exit 1; }
 tail -2 "$OUT/parts.log"
@@ -169,6 +170,7 @@ for r in $RUNS; do
     m2) run m2 2 ;;
     m5) run m5 5 ;;
     m6) run m6 6 ;;
+    k0) run k0 22 ;;
     m7) run m7 7 ;;
   esac
 done
@@ -223,6 +225,8 @@ for r in $RUNS; do
         mutation m1 "every sloped edge moved" || fail=1 ;;
     m6) echo "--- m6 ⭐⭐ THE EDITOR: a construction session, and the database it left ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/m6" edit || fail=1 ;;
+    k0) echo "--- k0 ⭐ THE EDITOR'S KIT PANEL, against EDIT.s's DRAWKIT ---"
+        python3 software/pcs/bench/checkpcs.py "$OUT/k0" kit || fail=1 ;;
     m5) echo "--- m5 ⛔ MUTATION: BOUNCE rotates back by TTA - this must FAIL ---"
         mutation m5 "every bounce mirrored" ball || fail=1 ;;
     m2) echo "--- m2 ⛔ MUTATION: the B-polygon paints its records - this must FAIL ---"

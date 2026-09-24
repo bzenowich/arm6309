@@ -269,6 +269,7 @@ nitros9/level2/arm6309/cmds/pcsobj.inc     RUN.s — the part procs and the PLAY
 nitros9/level2/arm6309/cmds/pcsedit.inc    EDIT.s — tools, bin, magnifier, World   (step 4)
 nitros9/level2/arm6309/cmds/pcswire.inc    WIRE.s — the wiring kit                 (step 5)
 nitros9/level2/arm6309/cmds/pcsfile.inc    DISK.s — ⭐ LOAD, done; save is step 5
+nitros9/level2/arm6309/cmds/pcsui.inc      EDIT.s — DRAWKIT: the kit panel; MAIN's dispatch to come
 
 arm6309/software/pcs/bench/pcsasm.py             a reader for the 6502 sources' data directives
 arm6309/software/pcs/bench/pcsparts.py           the 43 templates and their art
@@ -276,6 +277,7 @@ arm6309/software/pcs/bench/pcspal.py             the palette
 arm6309/software/pcs/bench/pcspak.py             PPAK.s — the scan converter, modelled
 arm6309/software/pcs/bench/pcsphys.py            RUN.s — the ball, modelled
 arm6309/software/pcs/bench/pcsobj.py             RUN.s — the part procs, modelled
+arm6309/software/pcs/bench/pcskit.py             EDIT.s's DRAWKIT - the kit panel, rendered
 arm6309/software/pcs/bench/mkpcs.py              the generator, and the bench's table
 arm6309/software/pcs/bench/checkpcs.py           the gate
 arm6309/software/pcs/bench/run-pcs.sh            the bench
@@ -299,6 +301,7 @@ The legs:
 | `m0` | the scan converter: all 153,600 bytes of the table rectangle, and the span database record for record |
 | `m4` | ⭐⭐ **the whole simulator**, 600 frames — the ball's `(x, y, BDX, BDY)` every frame, every part's state byte, and the score, the sound and the run chain |
 | `m6` | ⭐⭐ **the editor**: a twelve-edit session through `pcsedit.inc`, two of them required to be refused, and the step results, the object area and the span database it leaves, against `pcsedit.py` |
+| `k0` | ⭐ **the editor's kit panel**: `pcs 22`'s 320 × 384 panel and the strip under it, every card pixel, against `pcskit.py`'s rendering of `DRAWKIT` (the tools, the parts bin, and the paint pots in their paint) |
 | `m1` | ⛔ MUTATION: the midpoint x rounding is dropped, so every sloped edge moves |
 | `m2` | ⛔ MUTATION: a B-polygon paints its RECORDS instead of their complement — the bug that looks plausible on screen while inverting the ball's world |
 | `m5` | ⛔ MUTATION: `BOUNCE` rotates back by `TTA` instead of `32 - TTA`. ⛔ The two are the SAME for `tta` 0 and 16, so a ball in a box of flat walls behaves identically and only a slope tells them apart |

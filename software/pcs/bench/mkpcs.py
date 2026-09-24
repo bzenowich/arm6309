@@ -741,6 +741,16 @@ def _checkgen(lines):
         if rest.startswith(',') or (',' in t[1] and ',' not in operand
                                     and rest and rest[0] == ','):
             bad.append('line %d: `%s` - the operand ends at the space' % (n, l.strip()))
+        # ⛔ AND NO `fcb` VALUE OVER 255, because lwasm keeps the low byte and
+        # says nothing: the kit's paint pots were emitted at x 276, assembled
+        # at x 20, and were painted onto the TABLE - outside the region the
+        # gate was comparing, so it read as pots that were never drawn.
+        if t[0].lower() == 'fcb':
+            for v in operand.split(','):
+                v = v.strip()
+                if v.isdigit() and int(v) > 255:
+                    bad.append('line %d: `%s` - %s does not fit a byte'
+                               % (n, l.strip(), v))
     return bad
 
 
@@ -1000,6 +1010,38 @@ def emit(path):
     for i, (x, y, ww, hh) in enumerate(boxes):
         w('                    fcb       %-18s %2d %s'
           % ('%d,%d,%d,%d' % (x, y, ww, hh), i, parts[i].name))
+    w('')
+    # ⭐ THE KIT PANEL, as pcskit.py renders it out of EDIT.s's DRAWKIT: the
+    # bitmap already doubled to card pixels so KitDraw is one WM.Mask store per
+    # eight pixels, and the three paint pots as fill rectangles.
+    import pcskit
+    kit = pcskit.packed()
+    w('* ══════════════════ THE KIT PANEL ════════════════════════════════')
+    w('* pcskit.py: DRAWKIT (EDIT.s:220) at 1bpp, 160 world pixels a row, MSB')
+    w('* first.  KitDraw doubles each nibble through PCKDbl, and writes each')
+    w('* of the 192 rows twice.')
+    w('PC.KitRB            equ       %d        bytes a row' % (pcskit.KW // 8))
+    w('PCKit               equ       *         %d bytes' % len(kit))
+    _fcb(o, kit)
+    w('PCKDbl              equ       *         a nibble, each bit doubled')
+    _fcb(o, pcskit.doubled_nibbles())
+    ps = pcskit.pots()
+    w('* The paint pots: x FROM THE KIT\'S LEFT EDGE (world 160), y, w, h in')
+    w('* world units, and the palette entry.  ⚠ Relative, because the kit runs')
+    w('* to x 319 and an fcb holds one byte.')
+    w('PC.NPot             equ       %d' % len(ps))
+    w('PCKPot              equ       *')
+    for (x, y, ww, hh, c) in ps:
+        w('                    fcb       %s' % ','.join(
+            str(v) for v in (x - pcskit.KX, y, ww, hh, c)))
+    tl = pcskit.tools()
+    w("* CMDMENU's tool rectangles (EDIT.s:1166): x from the kit's left edge,")
+    w('* y, w, h, INCLUSIVE, in its order - the index is the tool.')
+    w('PC.NTool            equ       %d' % len(tl))
+    w('PCTool              equ       *')
+    for (nm, x, y, ww, hh) in tl:
+        w('                    fcb       %-18s %s'
+          % ('%d,%d,%d,%d' % (x - pcskit.KX, y, ww, hh), nm))
     w('')
     w('* ══════════════════ THE DEFAULT TABLE ════════════════════════════')
     w('* ⭐⭐ A TABLE RATHER THAN A TEST.  ⛔ The original shipped one on its')
