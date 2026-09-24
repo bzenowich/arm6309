@@ -268,7 +268,7 @@ nitros9/level2/arm6309/cmds/pcsrun.inc     RUN.s — the ball
 nitros9/level2/arm6309/cmds/pcsobj.inc     RUN.s — the part procs and the PLAY loop
 nitros9/level2/arm6309/cmds/pcsedit.inc    EDIT.s — tools, bin, magnifier, World   (step 4)
 nitros9/level2/arm6309/cmds/pcswire.inc    WIRE.s — the wiring kit                 (step 5)
-nitros9/level2/arm6309/cmds/pcsfile.inc    DISK.s — load and save                  (step 5)
+nitros9/level2/arm6309/cmds/pcsfile.inc    DISK.s — ⭐ LOAD, done; save is step 5
 
 arm6309/video3/bench/pcsasm.py             a reader for the 6502 sources' data directives
 arm6309/video3/bench/pcsparts.py           the 43 templates and their art
@@ -355,16 +355,21 @@ the answer.
   §2); `DEMO4`'s did **not** — which is what proved it was not the algorithm and
   sent the search to the database, where object 10's span turned out to be stored
   with its ends swapped. See `history.md`.
-- ⛔⛔ **THE TABLES BELONG ON THE CARD, AND THE MODULE IS THE WRONG PLACE FOR THEM.**
-  They are in `pcsdat.asm` today, which was fine for the four `DEMO*.PB` and stopped
-  being fine the moment two disks' worth turned up: **26 tables are 32 KB of object
-  area**, and a `pcs` carrying all of them fails to fork — `Error #207`, `E$MemFul`,
-  on a machine that boots perfectly. ⚠ The stopgap is a byte budget (`PCS_BUDGET`,
-  8 KB) with `PCSTBLS=first-last` to pick a different slice, which is how
-  `run-pcssheet.sh` paints all 26 six to a ROM. **The answer is `pcsfile.inc`**:
-  one table per file on `/SD0`, named, listed and loaded on demand, with the
-  module carrying **none** of them. That is step 5 and it is what the original did
-  too — `DISK.s` is a catalogue and a loader, and PCS never held two tables at once.
+- ⭐⭐ **A TABLE IS A FILE ON THE CARD** (2026-09-23), which is what `DISK.s`
+  did and for the reason it did it: PCS never held two tables at once.
+  `pcs <mode> <frames> <name>` takes a **bare name**, and `pcsfile.inc`'s
+  `DOpen` tries `/SD0/DATA/` then `/DD/SYS/` — `scroll.asm`'s and
+  `changefont.asm`'s, verbatim. `mkpcs.py` writes `video3/bench/pcstbl/*.pbt`
+  and `mkrom.sh` copies whatever is there onto the card; the four `DEMO*.PB` are
+  there today (`PCS_FILES=n` writes more). ⛔ **The files are not in the
+  repository** — same container, same shipped bytes, same rule (§5c).
+  ⚠ **Still open**: `pcs` cannot **save**, and the container carries no
+  free-hand magnifier layer. The format has the room, and the loader refuses a
+  payload longer than the object area, so a longer one is a version it does not
+  know rather than a buffer it overruns.
+  ⚠ And the module **still carries** up to `PCS_BUDGET` (8 KB, 7 tables) for the
+  built-in modes the bench's mutation legs use. That is the last of the old
+  arrangement, and it goes when `desk` gains a table picker.
 - ⚠ **Not written**: the editor's UI (tools, bin, drag, magnifier, World panel), the wiring
   kit's UI, load and save, and `desk` integration. `RUN2.s`'s four-player game loop, the
   bonus tally and multiball are step 3c.

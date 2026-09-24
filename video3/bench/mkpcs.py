@@ -1124,6 +1124,48 @@ def preview(path):
     return im.size
 
 
+# ⭐⭐ A TABLE AS A FILE, which is where they belong (pcs.md §9).  The header
+# is pcsdata.inc's, and the payload is exactly the bytes pcsfile.inc reads into
+# logic,u: LOGIC[24], WSET[4] and the object area, contiguous as they are at
+# the Atari's $4B00.
+PBT_MAGIC = b'PCS1'
+PBT_ROWS = 192                      # ⚠ what the ORIGINAL authored them for
+
+
+def table_file(logic, wset, objs):
+    payload = bytes(logic) + bytes(wset) + serialise(objs)
+    return (PBT_MAGIC + bytes([PBT_ROWS, objs and len(objs) or 0])
+            + bytes([len(payload) >> 8, len(payload) & 0xFF]) + payload)
+
+
+def pbt_name(name):
+    """`DEMO1.PB` -> `demo1.pbt`.  ⚠ RBF allows 29 characters and no spaces."""
+    base = name.rsplit('.', 1)[0].lower().replace(' ', '')
+    return (base[:24] or 'table') + '.pbt'
+
+
+def write_tables(dirpath, limit=None):
+    """⛔ THE BYTES ARE NOT IN THIS REPOSITORY and these files must not be
+    committed - .gitignore covers video3/bench/pcstbl/.  A clone with no disk
+    images writes nothing here and everything downstream treats that as
+    normal."""
+    import pcsfile
+    os.makedirs(dirpath, exist_ok=True)
+    for old in os.listdir(dirpath):
+        if old.endswith('.pbt'):
+            os.remove(os.path.join(dirpath, old))
+    out = []
+    for name, logic, wset, objs in pcsfile.demo_tables()[:limit]:
+        for o in objs:
+            o.fillcolor = pcspal.FROM_APPLE.get(o.fillcolor, pcspal.PAINT0 + 5)
+        fn = pbt_name(name)
+        blob = table_file(logic, wset, objs)
+        with open(os.path.join(dirpath, fn), 'wb') as f:
+            f.write(blob)
+        out.append((fn, len(blob), len(objs)))
+    return out
+
+
 def main():
     cmds = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
         os.path.dirname(ROOT), 'nitros9', 'level2', 'arm6309', 'cmds')
@@ -1146,6 +1188,18 @@ def main():
           % (len(P.parts()), len(frames), len(blob)))
     print('             world %d x %d, screen %d x %d at %dx'
           % (TW, TH, SCRW, SCRH, SCALE))
+
+    # ⭐ THE FOUR DEMO TABLES AS FILES.  PCS_FILES=n writes the first n of the
+    # 26; the default is the four the game shipped with, which is what `desk`
+    # and the bench ask for by name.
+    tdir = os.path.join(HERE, 'pcstbl')
+    made = write_tables(tdir, int(os.environ.get('PCS_FILES', 4)))
+    if made:
+        print('pcstbl/      %d table files' % len(made))
+        for fn, n, nobj in made:
+            print('             %-16s %5d bytes, %d objects' % (fn, n, nobj))
+    else:
+        print('pcstbl/      none - no disk images in reference/')
 
 
 if __name__ == '__main__':

@@ -89,3 +89,9 @@ software/nitros9/video/build3/tbox-doc.png
 video3/we-tortuga.ans
 video3/we-tortuga.ans.png
 software/nitros9/video/build3/sys/v3art
+
+# ⛔ AND THE TABLE FILES GENERATED FROM THEM.  video3/bench/mkpcs.py writes
+# pcstbl/*.pbt out of the disk images above; they are the same shipped game
+# data in the port's own container, and the container does not change who owns
+# the bytes.  mkrom.sh copies whatever is there onto the card.
+video3/bench/pcstbl/

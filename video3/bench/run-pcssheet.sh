@@ -41,7 +41,9 @@ while [ "$i" -lt "$N" ]; do
     > "$OUT/mkart.log" 2>&1 || { cat "$OUT/mkart.log"; exit 1; }
   sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
     tail -20 "$OUT/mkrom.log"; exit 1; }
-  sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs > "$OUT/mkcard.log" 2>&1 || {
+  # ⛔ OUT= and DATA= explicitly - see run-pcs.sh.
+  OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs \
+    > "$OUT/mkcard.log" 2>&1 || {
     tail -20 "$OUT/mkcard.log"; exit 1; }
 
   k=$i

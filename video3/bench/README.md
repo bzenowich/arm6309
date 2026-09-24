@@ -67,6 +67,17 @@ corrected to agree with the 6809** — when they differ the 6502 decides. Correc
 the model against the *6502* is the one direction allowed, and it has happened
 twice.
 
+⭐⭐ **And since 2026-09-23 a table is a FILE ON THE CARD.** `pcs 0 30 demo2.pbt`
+loads `/SD0/DATA/demo2.pbt` through `pcsfile.inc` — the container is `mkpcs.py`'s,
+the payload is exactly the bytes at `logic,u`, and the `f0` leg compares the span
+database it came to **record for record** rather than just the picture, because a
+loader that dropped a byte would still paint something. ⛔ With an `fX` control
+naming a table that is not there, which must print `PCS-NOFILE` and refuse: a
+named table that will not load is an error, not a quiet fall back to the built-in
+one. ⚠ The `.pbt` files are generated from the retail disks and are **not in the
+repository**, so a clone without them has no tables on the card and `fX`'s
+sibling legs say so rather than passing vacuously.
+
 ⛔ **The gate requires five LIBRARY PARTS to have been struck.** A ball that only
 ever met the backdrop proves nothing about the object system, and that is exactly
 the run an earlier table gave: 600 frames and 21 bounces agreeing over a collision

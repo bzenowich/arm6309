@@ -50,7 +50,7 @@ FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
 # ⚠ m6 IS NOT IN THE DEFAULT SET: the editor's 6809 side does not yet agree
 # with pcsedit.py, which is the specification and is green.  `RUNS=m6` runs it.
-RUNS=${RUNS:-"m0 m4 m1 m2 m5"}
+RUNS=${RUNS:-"m0 m4 f0 fX m1 m2 m5"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH
@@ -83,7 +83,13 @@ ROM="$OUT/arm6309_rom.bin"
 # and every claim after that fails for a reason that is not the thing under
 # test.  CLAUDE.md's table says so; run-scroll.sh records that it still cost a
 # run.
-sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs \
+# ⛔ OUT= AND DATA= ARE PASSED EXPLICITLY.  mksyscard.sh has its own
+# `OUT=${OUT:-/tmp/arm6309-nitros9}` default and this script never exported
+# its own, so the card was built from ANOTHER BENCH'S data directory - which
+# nothing noticed for as long as `pcs` needed no data file, and which then
+# presented as a table file that mkrom.sh had just written and the card did
+# not have.
+OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs \
   > "$OUT/mksddisk.log" 2>&1 || {
     cat "$OUT/mksddisk.log"; echo "FAIL  the card did not build"; exit 1; }
 tail -3 "$OUT/mksddisk.log"
@@ -135,9 +141,30 @@ run() {
   return 0
 }
 
+# ⭐ A TABLE OFF THE CARD, which is where tables live (pcsfile.inc).  `run`
+# builds `pcs <mode> <frames>`; this one appends a bare table NAME, which
+# `Build` takes in preference to anything in the module.
+runf() {
+  D="$OUT/$1"; shift
+  rm -rf "$D"; mkdir -p "$D"
+  printf 'chx /sd0/cmds\riniz w5\rpcs %s >/w5\recho DONE-arm6309\r' "$*" \
+    > "$D/typed.txt"
+  # ⛔ IT STOPS ON THE SHELL'S ECHO, NOT ON PCS-RAN, because the refusal leg
+  # must be able to NOT print PCS-RAN and still finish.
+  (cd "$D" && SERIAL_IN=typed.txt SERIAL_GATE="02}" SERIAL_TYPE=60 \
+     SERIAL_THINK=700 SERIAL_STOP="DONE-arm6309" WILD=1 VIDEO3=1 \
+     SDIMG="$OUT/sd.img" VRAMDUMP=vram.bin "$OUT/emu" "$ROM" . \
+     "$SECONDS_OF_MACHINE" > /dev/null 2> emu.log) || true
+  tr -d '\000' < "$D/serial.out" | tr -d '\r' > "$D/console.txt"
+  sed 's/\x1b\[[0-9;]*m//g' "$D/emu.log" > "$D/emu.txt"
+  return 0
+}
+
 for r in $RUNS; do
   case "$r" in
     m0) run m0 0 ;;
+    f0) runf f0 0 "$FRAMES" demo2.pbt ;;
+    fX) runf fX 0 "$FRAMES" nosuch.pbt ;;
     m4) run m4 4 ;;
     m1) run m1 1 ;;
     m2) run m2 2 ;;
@@ -151,6 +178,16 @@ echo
 echo "=== the table, against PPAK.s ==="
 for r in $RUNS; do
   case "$r" in
+    f0) echo "--- f0 ⭐⭐ A TABLE LOADED OFF THE CARD ---"
+        python3 video3/bench/checkpbt.py "$OUT/f0" demo2.pbt || fail=1 ;;
+    fX) echo "--- fX ⛔ a table that is not there - this must be REFUSED ---"
+        if grep -q "PCS-RAN" "$OUT/fX/console.txt"; then
+          echo "FAIL  pcs ran on a table it could not load"; fail=1
+        elif grep -q "PCS-NOFILE" "$OUT/fX/console.txt"; then
+          echo "ok    it refused, and said so"
+        else
+          echo "FAIL  no PCS-NOFILE and no PCS-RAN - it did neither"; fail=1
+        fi ;;
     m0) echo "--- m0: the scan converter, and it must be exact ---"
         python3 video3/bench/checkpcs.py "$OUT/m0" || fail=1 ;;
     m4) echo "--- m4 ⭐⭐ THE BALL, frame for frame against RUN.s ---"

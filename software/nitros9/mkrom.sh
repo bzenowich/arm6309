@@ -85,6 +85,16 @@ cp video3/bench/zelda.bnk video3/bench/zelda.art "$DATADIR/" \
 # (video3/bench/mkscroll.py).  The map is assembled into the module.
 cp video3/bench/scroll.bnk "$DATADIR/" \
   || { echo "FAIL  no scroll.bnk - run video3/bench/mkscroll.py"; exit 1; }
+# ⭐⭐ AND PINBALL CONSTRUCTION SET'S TABLES, one file each.  `pcs` loads a
+# table by bare name through DOpen (pcsfile.inc), which is what DISK.s did: PCS
+# never held two tables at once, and a module carrying all 26 does not fork.
+# ⛔ THEY ARE NOT IN THE REPOSITORY - they are generated from the retail disk
+# images the user supplies locally (pcs.md §5c), so a clone without them simply
+# has no tables on the card and every bench that names one says so.
+if ls video3/bench/pcstbl/*.pbt >/dev/null 2>&1; then
+  cp video3/bench/pcstbl/*.pbt "$DATADIR/"
+fi
+
 # and the overworld's data (software/demo/tools/mkgame.py), with its model for the checker
 python3 software/demo/tools/mkgame.py "$OUT/gamedata" > "$OUT/gamedata.log" || { cat "$OUT/gamedata.log"; echo "FAIL  mkgame.py"; exit 1; }
 for f in tiles world sprites frames; do cp "$OUT/gamedata/$f.bin" "$DATADIR/$f.bin"; done
