@@ -1038,6 +1038,7 @@ def emit(path):
     w('PC.PickW            equ       %d' % pcspal.PICKW)
     w('PC.PickH            equ       %d' % pcspal.PICKH)
     w('PC.Pick0            equ       %d' % pcspal.PICK0)
+    w('PC.BoxGap           equ       %d        the white box, this far out' % pcskit.BOXGAP)
     import pcsicons
     ics = pcsicons.packed()
     w('* ⭐ THE TOOL ICONS, redrawn at card resolution (pcsicons.py), each')

@@ -53,6 +53,9 @@ POTS = ('WHITEPAINT', 'GREENPAINT', 'VIOLETPAINT')
 CELL = 8
 PICKX = (2 * KW - 12 * CELL) // 2          # 112: panel x 112..207
 PICKY = 360                                 # rows 360..439
+# ⭐ ... and a white box round it, a pixel thick with two pixels of panel
+# between it and the cells (asked for on 2026-09-24).
+BOXGAP = 2
 
 
 def rect(label):
@@ -179,6 +182,13 @@ def card(panel, ink, cur=0):
         for yy in range(y0, y0 + CELL):
             for xx in range(x0, x0 + CELL):
                 out[yy * W + xx] = pcspal.PICK0 + i
+    bx0, by0 = PICKX - BOXGAP - 1, PICKY - BOXGAP - 1
+    bx1 = PICKX + pcspal.PICKW * CELL + BOXGAP
+    by1 = PICKY + pcspal.PICKH * CELL + BOXGAP
+    for xx in range(bx0, bx1 + 1):
+        out[by0 * W + xx] = out[by1 * W + xx] = ink
+    for yy in range(by0, by1 + 1):
+        out[yy * W + bx0] = out[yy * W + bx1] = ink
     x0 = PICKX + (cur % pcspal.PICKW) * CELL
     y0 = PICKY + (cur // pcspal.PICKW) * CELL
     f = frame_colour(cur)
@@ -251,7 +261,7 @@ def selftest():
         bad.append('%d bin boxes, wanted 43' % len(bin_boxes()))
     # ⭐ The picker fits the panel, under the tools, and above the screen's end.
     last = max(y + h for _, _, y, _, h in tl)
-    if PICKY < 2 * last or PICKY + 10 * CELL > 480 or PICKX < 0 \
+    if PICKY - BOXGAP - 1 < 2 * last or PICKY + 10 * CELL > 480 or PICKX < 0 \
             or PICKX + 12 * CELL > 2 * KW:
         bad.append('the picker at (%d, %d) is not under the tools' % (PICKX, PICKY))
     for m in bad:

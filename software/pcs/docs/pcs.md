@@ -178,7 +178,8 @@ artefact colours on the Atari). It is a 12 × 10 grid of palette entries **32–
 (`pcspal.PICK`): a row of greys from white to black, then nine rows of twelve hues from
 dark to light, sampled from the reference picker supplied on 2026-09-24. Cells are 8 × 8
 card pixels, centred in the kit panel under the tool column (x 432–527, y 360–439), and the
-current colour carries a one-pixel frame, white on a dark cell and ink on a light one. A
+current colour carries a one-pixel frame, white on a dark cell and black on a light one.
+A white box, a pixel thick and two pixels clear of the cells, surrounds the grid. A
 table's `FILLCOLOR` is the entry number, so ⚠ **entries 32–151 are file format** and are
 append-only. Entries 1–3 stay the translation of an imported table's dither masks, and the
 editor starts on white (cell 0), the original's `COLOR = $FF`.
