@@ -1,0 +1,131 @@
+# files.ps2 - the session software/desk/bench/run-v3files.sh drives the FILE
+# MANAGER with (arm6309 software/desk/docs/boot-and-desktop.md §3, milestone 3).
+#
+# ⭐ SCREEN COORDINATES, Y DOWN (software/emu/ps2script.h).  Time zero
+# is PS2_SCRIPT_GATE: the moment `desk` has printed DESK-READY, which is
+# after its first full paint.
+#
+# ⚠ `origin` MUST BE desk.asm's GEO.ORGX/GEO.ORGY, and every coordinate
+# below is desk.asm's own geometry:
+#
+#   108 50    IcTab[0], the "arm6309" disk: cell 76,34, 64 x 48
+#   200 191   the list's row 0   (FM.LY + 9)
+#   200 209   its row 1          (FM.LY + FM.ROWH + 9)
+#   200 227   its row 2          (FM.LY + 2*FM.ROWH + 9)
+#   428 188   the scroll bar's UP arrow   (FM.BX + 7, FM.LY + 6)
+#   428 390   ... and its DOWN arrow      (FM.BX + 7, FM.LY + FM.LH - 13)
+#   200  32   the Go menu's item 0, Files (GEO.DROPY + GEO.MPAD + 10)
+#   200  52   ... its item 1, Up           (+ GEO.ITEMH)
+#   200  92   ... its item 3, Close        (+ 3 x GEO.ITEMH)
+#    30   8 / 60 52   the Desk menu, and Quit
+#   580 300   ⛔ THE PARK, and it is not decoration.  video3 draws the
+#             pointer as a 16 x 16 sprite, so a pointer left on a row is
+#             sixteen columns of the name the bench is about to read.
+#             Every sample is taken SAMPLE_AT seconds after a click, by
+#             which time this has moved it off the window entirely
+#
+# ⭐ EVERY OPEN IS TWO SEPARATE CLICKS TEN SECONDS APART, which is the point
+# of desk.asm's rule: a click selects, and a click on the selection opens.
+# There is no double-click timer to race, so the bench can read the screen
+# BETWEEN the two and assert that the first one did not open it.
+#
+# ⛔ AND NOTHING IS CLICKED WHILE THE MANAGER IS REDRAWING, which the first
+# run of this bench learnt the hard way: three clicks on the scroll arrow
+# 1.0 s apart moved the list by ONE row.  desk samples the button once a
+# pass and a pass that repaints twelve rows is 2.09 s, so a 120 ms click
+# inside one is not slow - it is GONE.  That is a real limitation of a
+# polled loop with no latched button (desk.asm's header says so); here it
+# means every click gets a clear four and a half seconds to itself.
+#
+# ⭐ AND THE THRESHOLD IS MEASURED (2026-09-21, software/desk/docs/boot-and-desktop.md
+# item 7): six clicks on a scroll arrow all arrive at 2.2 s apart and three
+# of six at 2.0 s, which is DrawList to the tenth.  ⚠ THE 4.5 s STAYS.  The
+# threshold IS the draw time, so it moves with the length of a row's name
+# and with anything else the repaint grows; two seconds of margin over it
+# is what stops this bench failing for a reason that is not a defect.
+# ⚠ THESE MOVED ON 2026-09-22, when FM.W went from 420 to 284 to make room
+# for the drag's backing store (software/desk/docs/boot-and-desktop.md §3.7): FM.BX is
+# 421 now, not 497, so the scroll arrows are at x 428 and not 504.
+origin 320 240
+gap 120
+
+# --- 1  the desktop icon that is the card -------------------------------
+at 2.000    move to 108 50
++0.700      click left      # C0: selects the disk, and must NOT open it
++0.500      move to 580 300
+at 12.000   move to 108 50
++0.700      click left      # C1: ⭐ the manager comes up on /SD0
++0.500      move to 580 300
+
+# --- 2  into DATA, which is row 2 of the root ---------------------------
+# ⚠ ROW 2, NOT ROW 1, SINCE 2026-09-22: the card is bootable, so OS9Boot is
+# the root's first entry and CMDS, DATA and the rest moved down a row.
+at 22.000   move to 200 227
++0.700      click left      # C2: selects it
++0.500      move to 580 300
+at 32.000   move to 200 227
++0.700      click left      # C3: ⭐ enters it
++0.500      move to 580 300
+
+# --- 3  the scroll bar: three rows down ---------------------------------
+at 44.000   move to 428 390
++0.700      click left      # C4
++4.500      click left      # C5
++4.500      click left      # C6
++0.500      move to 580 300
+
+# --- 3b  and one row back, on the OTHER arrow ---------------------------
+at 63.000   move to 428 188
++0.700      click left      # C7: ⭐ the UP arrow, which nothing else reaches
++0.500      move to 580 300
+
+# --- 4  back up, through the Go menu ------------------------------------
+at 73.000   move to 200 8
++0.700      click left      # C8: the Go menu comes down
++0.900      move to 200 52
++0.700      click left      # C9: ⭐ Up - /SD0 again
++0.500      move to 580 300
+
+# --- 5  Go > Close, and the window goes ---------------------------------
+# ⭐ The Go menu's four items are Files, Up, Open and Close.  Up is C9; Open
+# is the same OpenEnt a second click on a row reaches; Files is the same
+# action the disk icon carries.  Close is reached from nowhere else, so it
+# is clicked here - a bit the host can ask for and nothing performs is
+# exactly what CLAUDE.md's reach census is about.
+at 85.000   move to 200 8
++0.700      click left      # C10: the Go menu again
++0.900      move to 200 92
++0.700      click left      # C11: ⛔ Close - the window goes
++0.500      move to 580 300
+
+# --- 6  and the icon, still selected, brings it back in ONE click -------
+at 97.000   move to 108 50
++0.700      click left      # C12: ⭐ the selection survived, so this OPENS
++0.500      move to 580 300
+
+# --- 7  into CMDS, which is row 1 ---------------------------------------
+# ⚠ ROW 1 SINCE 2026-09-22, for the same reason DATA moved: the card is
+# bootable, so OS9Boot heads the root and everything after it shifted down.
+at 108.000  move to 200 209
++0.700      click left      # C13: selects it
++0.500      move to 580 300
+at 118.000  move to 200 209
++0.700      click left      # C14: CMDS
++0.500      move to 580 300
+
+# --- 8  ⭐ and run a program out of the list ----------------------------
+at 130.000  move to 200 209
++0.700      click left      # C15: selects v3paint
++0.500      move to 580 300
+at 140.000  move to 200 209
++0.700      click left      # C16: ⭐ forks it.  It owns the screen ~45 s
++0.500      move to 580 300
+
+# --- 9  quit, once the desktop AND the window are back ------------------
+# ⚠ ABSOLUTE, not relative: everything between here and C16 is the child's,
+# and how long it takes is not this script's business.  A17 - one second
+# before this click - is where the bench reads the restored window.
+at 205.000  move to 30 8
++0.700      click left      # C17
++0.900      move to 60 52
++0.700      click left      # C18: Quit

@@ -2,7 +2,7 @@
 
 ## The `arm6309` Card vs. the GIME vs. the VIC-II
 
-**Question this answers:** the card specified in [`graphics.md`](../archive/video/docs/graphics.md) is an
+**Question this answers:** the card specified in [`graphics.md`](../hardware/archive/video/docs/graphics.md) is an
 adaptation of colormin's 256-colour design to a 6309 machine. How does it actually compare
 to the two chips it stands in the tradition of — the **GIME** (Tandy CoCo 3, 1986) and the
 **VIC-II** (Commodore 64, 1982)?
@@ -21,7 +21,7 @@ from 1986 and 1982. That gap is the whole story: three to seven years of silicon
 
 | Claim class | Source | Confidence |
 |---|---|---|
-| `arm6309` card geometry, bandwidth, register map, chip count | [`graphics.md`](../archive/video/docs/graphics.md) §§2, 6, 7, 9, 11, 12, 14 | **specified, not built** — timing closes on paper **at ÷12 only**, and §11's read budget closes only under §5.2.2's spare-first sub-slot ordering |
+| `arm6309` card geometry, bandwidth, register map, chip count | [`graphics.md`](../hardware/archive/video/docs/graphics.md) §§2, 6, 7, 9, 11, 12, 14 | **specified, not built** — timing closes on paper **at ÷12 only**, and §11's read budget closes only under §5.2.2's spare-first sub-slot ordering |
 | CPU-side timings for the card | `graphics.md` §7.3 | ⚠ scales on an assumed **one write per 5 core cycles** — flagged there for verification |
 | GIME registers, MMU, palette, modes, arbitration | *Color Computer 3 Service Manual* (Cat. 26-3334), pp. 10–20, §5.2–5.3 — [`coco3_ServiceManual.pdf`](../reference/manuals/coco3_ServiceManual.pdf) | **verified against the PDF** |
 | VIC-II cycle behaviour, registers, timing | Bauer, *The MOS 6567/6569 video controller* (1996); *C64 Programmer's Reference Guide* | recalled, widely corroborated — **not** verified against a document in this repo |
@@ -202,7 +202,7 @@ microcontroller that knows the beam position.
 | What the system needs alongside it | raster compare **inside `arm6309`** (two GPIO pins — HSYNC *and* VSYNC, or the line number has no origin); MMU **on the motherboard**, **5 ICs**; the master oscillator and the E/Q divider GAL, also on the motherboard — **7 parts** in all | very little — it absorbed the SAM and the VDG | **PLA for banking, 2× CIA for timers and interrupts** |
 | Programmable logic | **2 × `ATF1508AS` + 1 × `GAL22V10`** (`graphics.md` §10.1.6) | none — mask ROM | none |
 | Power | **~0.5–0.85 A, 0.65 A nominal** ⚠ estimate, design to 1 A (`graphics.md` §14.2) | one chip | one chip, famously hot |
-| Area | **99.1 cm² of courtyard on a 100 × 180 mm card** — measured by `hardware/place/`, not estimated | a socket | a socket |
+| Area | **99.1 cm² of courtyard on a 100 × 180 mm card** — measured by `hardware/tools/place/`, not estimated | a socket | a socket |
 | Buildable from parts available today | **yes** | no | no |
 
 That last row is the card's real justification. The other two columns describe chips nobody

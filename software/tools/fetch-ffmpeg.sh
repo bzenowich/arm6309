@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fetch an ffmpeg with libx264, for software/demo/tools/mkvideo.py.
+# Fetch an ffmpeg with libx264, for software/archive/demo/tools/mkvideo.py.
 #
 # The imageio-ffmpeg wheel on PyPI carries a static ffmpeg built with libx264
 # and AAC. It is fetched and unpacked here rather than pip-installed, because
@@ -7,8 +7,9 @@
 # ffmpeg is GPL and a build tool, the same rule fetch-a09.sh states.
 #
 # Prints the path of the executable.
+_here=$(cd "$(dirname "$0")" && pwd)   # before any cd: $0 may be relative
 set -e
-DEST="${FFMPEG_DIR:-/tmp/arm6309-ffmpeg}"
+DEST="${FFMPEG_DIR:-$(cd "$_here/../.." && pwd)/.tools/ffmpeg}"
 if [ ! -x "$DEST/ffmpeg" ]; then
   mkdir -p "$DEST"
   pip download imageio-ffmpeg --no-deps --only-binary=:all: -d "$DEST/wheel" > /dev/null

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """frame2png.py OUT [N] - the Nth frame (default: the last) of OUT/frames.bin as OUT/frame.png."""
 import os, sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "demo", "tools"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools"))
 import frames as fr
 from PIL import Image
 out = sys.argv[1]

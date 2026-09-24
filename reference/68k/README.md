@@ -13,7 +13,7 @@
 
 QuickDraw is here for the same reason `docs/coco3_c64.md` is: it is the best-documented
 worked example of getting a lot of graphics out of very little hardware, and
-`archive/video/docs/graphics.md`'s span writer solves a related problem in TTL.
+`hardware/archive/video/docs/graphics.md`'s span writer solves a related problem in TTL.
 
 > ⚠ **These were tracked in git until 2026-09-04, and should not have been.** The
 > argument was that they are small — which is true and beside the point.

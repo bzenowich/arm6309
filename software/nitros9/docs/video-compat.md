@@ -12,8 +12,8 @@ and `grfdrv.asm` themselves, and what P0–P3 actually built (`video-console.md`
 says "built", `video-console.md` is the authority; where it says "costs", the number is
 from `run-vid.sh`'s `MASKLOG`/`CALLTIME` or from `graphics.md`.
 
-**Sibling documents.** `video-console.md` is what exists. `docs/nitros9-av-plan.md` is the
-plan. `docs/nitros9-hardware-improvements.md` is the ranked list of card changes; this
+**Sibling documents.** `video-console.md` is what exists. `software/nitros9/docs/nitros9-av-plan.md` is the
+plan. `software/nitros9/docs/nitros9-hardware-improvements.md` is the ranked list of card changes; this
 document feeds it and cites its H-numbers rather than repeating their cost models. Two
 new items are proposed here (H18, H19) and one correction to H4's cost (§5.1); all three
 belong in that list.
@@ -243,7 +243,7 @@ anything that reads video memory back needs a `VDATA` stream where GrfDrv used a
 
 ## 5. Hardware shortfalls, ranked
 
-Everything here is already in `docs/nitros9-hardware-improvements.md` with a cost model
+Everything here is already in `software/nitros9/docs/nitros9-hardware-improvements.md` with a cost model
 except the three marked **new**. This is the same list read from the *interface's* side —
 what a CoWin or GrfDrv program cannot get — rather than from the driver's.
 
@@ -262,7 +262,7 @@ what a CoWin or GrfDrv program cannot get — rather than from the driver's.
 
 ### 5.1 ⭐ One correction to H4's cost, found while writing this
 
-`docs/nitros9-hardware-improvements.md` rank 7 prices "more VRAM with a selectable scan
+`software/nitros9/docs/nitros9-hardware-improvements.md` rank 7 prices "more VRAM with a selectable scan
 start" at **≈ +2–3 packages** (another pair of `AS6C8016`s and a page select).
 `graphics.md` §14.2.2 says the packages are **already fitted**: each `AS6C8016` is 512K×16
 with two address pins tied off, so the two parts on the card hold **2 MB** and address
@@ -534,7 +534,7 @@ and needs no card change.
 | **5** | ⭐ **Page-aware `Select` + `SS.Flip`** for 200/240-line screens (§6.4) | turns a 128 KB copy into a register write, with no hardware change |
 | **6** | **`SS.VRead`/`SS.VWrite` `$D2`/`$D3`**, then the Wildbits background converter (§7.4) | unlocks twelve images and the interchange format |
 | **7** | **H9, the six-bit cell row** — the first *card* item, and the one the console feels | 80×50/80×60 fast text; ends the 80×30 glitch. ⚠ on `vaddr` (§5) |
-| **8** | **H1, the hardware cursor** | the pointer, the bitmap caret, and cell-screen pointers all at once — `docs/nitros9-hardware-improvements.md` already ranks it 5 |
+| **8** | **H1, the hardware cursor** | the pointer, the bitmap caret, and cell-screen pointers all at once — `software/nitros9/docs/nitros9-hardware-improvements.md` already ranks it 5 |
 | **9** | **H18's software half: two colour pairs per bank** (§3.1 item 3), at 128 glyphs each. The hardware half — a real attribute plane — is a card revision | per-region colour on the fast console, for no silicon |
 | **10** | `SS.AScrn` shim (§6.6), `DWProtSw`, `PropSw`, underline-by-glyph | completeness |
 

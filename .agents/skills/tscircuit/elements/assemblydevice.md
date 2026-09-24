@@ -29,4 +29,4 @@ Commonly used: `name`
 ## References
 
 - Props: [AssemblyDeviceProps](https://github.com/tscircuit/props/blob/main/lib/assembly/device.ts)
-- See also: [`<enclosure.fdm.box />`](./enclosurefdmbox.md), [`<board />`](./board.md)
+- See also: [`<enclosure.fdm.box />`](enclosurefdmbox.md), [`<board />`](board.md)

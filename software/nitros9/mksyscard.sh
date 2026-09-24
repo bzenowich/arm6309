@@ -15,12 +15,13 @@
 # The command set and the /MODULES list come from the port's own recipe
 # (`make print-syscard`, `print-modules`), so a card cannot drift from the
 # NitrOS-9 that is built beside it.
+_here=$(cd "$(dirname "$0")" && pwd)   # before any cd: $0 may be relative
 set -e
 cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
 IMG=$1; shift || true
 [ -n "$IMG" ] || { echo "FAIL  usage: mksyscard.sh IMG [demo ...]"; exit 1; }
-OUT=${OUT:-/tmp/arm6309-nitros9}
+OUT=${OUT:-$(cd "$_here/." && pwd)/build/rom}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 REC="$NITROS9DIR/recipes/arm6309/l2"
 export PATH="$ROOT/.tools/bin:$PATH"

@@ -15,17 +15,21 @@
 # entry points at the same physical page, so it is the same byte. The source
 # therefore ORGs at $E000 and the image is offset 0: logical $E000 IS ROM $0000
 # and logical $FFFE IS ROM $1FFE, which is the byte the reset vector comes from.
+_here=$(cd "$(dirname "$0")" && pwd)   # before any cd: $0 may be relative
 set -e
 
 cd "$(dirname "$0")/../.."          # the repository root
 ROOT=$(pwd)
 OUT="$ROOT/software/boot"
-A09_DIR="${A09_DIR:-/tmp/arm6309-a09}"
+# the image is a tracked design output; its hex and listing are build output
+B="$OUT/build"
+mkdir -p "$B"
+A09_DIR="${A09_DIR:-$(cd "$_here/../.." && pwd)/.tools/a09}"
 
 sh "$ROOT/software/tools/fetch-a09.sh" >/dev/null
 A09="$A09_DIR/a09"
 
-"$A09" -B"$OUT/boot.bin" -L"$OUT/boot.lst" "$OUT/boot.asm"
+"$A09" -B"$OUT/boot.bin" -L"$B/boot.lst" "$OUT/boot.asm"
 
 size=$(wc -c < "$OUT/boot.bin")
 if [ "$size" -ne 8192 ]; then
@@ -35,9 +39,9 @@ fi
 
 # $readmemh, one byte per line from address 0. mainboard.v's rom[] is 1 MB and
 # fills from the bottom, which is where page 0 is.
-od -An -v -tx1 -w16 "$OUT/boot.bin" | tr -s ' ' '\n' | grep -v '^$' > "$OUT/boot.hex"
+od -An -v -tx1 -w16 "$OUT/boot.bin" | tr -s ' ' '\n' | grep -v '^$' > "$B/boot.hex"
 
-lines=$(wc -l < "$OUT/boot.hex")
+lines=$(wc -l < "$B/boot.hex")
 [ "$lines" -eq 8192 ] || { echo "FAIL  boot.hex has $lines records, want 8192"; exit 1; }
 
 # ⛔ THE VECTORS ARE COMPARED, NOT PRINTED. This used to print the reset vector
@@ -52,11 +56,11 @@ for v in FFF2:SWI3 FFF4:SWI2 FFF6:FIRQ FFF8:IRQ FFFA:SWI FFFC:NMI FFFE:RESET; do
   off=$(( 0x$addr - 0xE000 ))
   img=$(od -An -v -tx1 -j "$off" -N 2 "$OUT/boot.bin" | tr -d ' \n' | tr 'a-f' 'A-F')
   # " FFFE E000                    FDB     reset           RESET"
-  line=$(grep -E "^ *$addr [0-9A-F]{4} +FDB " "$OUT/boot.lst" | head -1)
+  line=$(grep -E "^ *$addr [0-9A-F]{4} +FDB " "$B/boot.lst" | head -1)
   lst=$(echo "$line" | awk '{print $2}')
   label=$(echo "$line" | awk '{print $4}')
   # " E000 4F              reset   clra" - the label's own definition
-  def=$(grep -E "^ *[0-9A-F]{4} [0-9A-F]* +$label( |$)" "$OUT/boot.lst" | head -1 | awk '{print $1}')
+  def=$(grep -E "^ *[0-9A-F]{4} [0-9A-F]* +$label( |$)" "$B/boot.lst" | head -1 | awk '{print $1}')
   if [ -z "$line" ] || [ -z "$def" ] || [ "$img" != "$lst" ] || [ "$img" != "$def" ]; then
     echo "FAIL  $name vector: image \$$img, listing \$${lst:-?}, label '${label:-?}' at \$${def:-?}"
     fail=1

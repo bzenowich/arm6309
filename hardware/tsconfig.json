@@ -10,5 +10,5 @@
     "noEmit": true,
     "types": ["@tscircuit/core"]
   },
-  "include": ["lib", "mainboard", "cards"]
+  "include": ["tools/lib", "*/board", "archive/*/board"]
 }

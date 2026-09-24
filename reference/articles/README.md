@@ -5,8 +5,7 @@ Prior art and design history — writing rather than specification. **Not in git
 
 | File | What | Cited by |
 |---|---|---|
-| `folklore-apple2-mouse-card.pdf` | Andy Hertzfeld, *Apple II Mouse Card*, folklore.org, June 1981. Burrell Smith's two-chip mouse interface: a 6522 VIA and a dual flip-flop, where the Apple II division later shipped "more than a dozen" chips. | `io/ps2/docs/ps2.md` §4.4 — the interrupt argument, the derive-it-from-the-bus habit, and §4.4(c)'s rejection of interrupt-per-notch |
-| `gal.html` + `gal_files/` | Frank DeCaire, *Generic Array Logic Devices*, January 2017. Reverse-engineers the GAL16V8 JEDEC fuse map by hand, having failed to find a PALASM in any language but FORTRAN, and programs a part from it. | `hardware/gal/jedec/README.md` — the fuse-polarity convention (`0` is an intact link), and the demonstration that hand-writing a fuse map is ordinary rather than exotic |
+| `gal.html` + `gal_files/` | Frank DeCaire, *Generic Array Logic Devices*, January 2017. Reverse-engineers the GAL16V8 JEDEC fuse map by hand, having failed to find a PALASM in any language but FORTRAN, and programs a part from it. | `hardware/tools/gal/jedec/README.md` — the fuse-polarity convention (`0` is an intact link), and the demonstration that hand-writing a fuse map is ordinary rather than exotic |
 
 | `VIC-Article.txt` | Christian Bauer, *The MOS 6567/6569 video controller (VIC-II) and its application in the Commodore 64*, 2024-09-29. The canonical VIC-II reference: the block diagram, all 47 registers, the four access types (`c`/`g`/`p`/`s`), Bad Lines, the VC/VCBASE/RC/VMLI counter model, sprite DMA, priority and collision, and the raster geometry of all three chip types. | [`docs/video-options.md`](../../docs/video-options.md) §1 and §5 — the fetch-rate ladder, the line-buffer argument, and which recalled VIC-II figures it settled |
 

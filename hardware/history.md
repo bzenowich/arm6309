@@ -1,8 +1,8 @@
 # Hardware — archived history
 
 Superseded passages from the `hardware/` documents — [`README.md`](README.md),
-[`ram.md`](ram.md), [`gal/README.md`](gal/README.md) and
-[`place/README.md`](place/README.md) — moved here when the specs were cut down to the
+[`ram.md`](mainboard/docs/ram.md), [`tools/gal/README.md`](tools/gal/README.md) and
+[`tools/place/README.md`](tools/place/README.md) — moved here when the specs were cut down to the
 present design. Entries are organized by source file and section; the archived text is
 kept verbatim or lightly trimmed, because the archive is the record.
 
@@ -10,7 +10,7 @@ kept verbatim or lightly trimmed, because the archive is the record.
 
 ## `vctrl` 53 → 56 of 64 I/O — the list writes `HSCROLL[1:0]` on both parts (2026-09-13)
 
-`archive/video/docs/graphics.md` §19 item 49: a display-list `MOVE` to `HSCROLL` wrote `vsup`'s copy
+`hardware/archive/video/docs/graphics.md` §19 item 49: a display-list `MOVE` to `HSCROLL` wrote `vsup`'s copy
 of the fine pair and not `vctrl`'s, which `seqph`'s `MUXSEL` reads, so a listed
 `HSCROLL[1:0]` ≠ 0 rotated every four-pixel group. `vctrl`'s pair gained the list's write
 port: `LWHSL` from `vsup` and the operand's two bits (`DB0`, `DB1`) from the card's internal
@@ -23,13 +23,13 @@ The alternative that was fitted first and is **not** taken: delete `vctrl`'s cop
 (pass 1: "Placement fail"), including with the two inputs on the free dedicated pins, which
 this flow's `Preassign = IGNORE` does not honour.
 
-## `ram.md` §3.1, §6.3.1 and `lib/parts.ts` — the motherboard's HC parts become HCT; U6's `/WAIT` sense (2026-09-11)
+## `ram.md` §3.1, §6.3.1 and `tools/lib/parts.ts` — the motherboard's HC parts become HCT; U6's `/WAIT` sense (2026-09-11)
 
 A three-board review found two motherboard defects that no check could see.
 
 **Families.** Seven parts read the CPU module's address or write data directly: U2
 (`TASK`), U4 and U18 (map isolation), U5 (map index mux) and U11–U13 (SIMM row/column
-mux). All seven were `74HC`. The module's `74LVC` buffers drive 3.3 V (`cpu/docs/plan.md`
+mux). All seven were `74HC`. The module's `74LVC` buffers drive 3.3 V (`hardware/cpu/docs/plan.md`
 §2.6), and a `74HC` input at 5 V needs 0.7 × V<sub>CC</sub> = 3.5 V to see a one. All seven
 are `74HCT` now; the pinouts are the same. `ram.md` said:
 
@@ -44,26 +44,26 @@ are `74HCT` now; the pinouts are the same. `ram.md` said:
 declaration". A pull-up inverts nothing. The idle bus therefore held every divider cell,
 and E never toggled. `clkdec.v` takes the asserted sense, and every GAL check held pin 10
 at 0, so nothing saw it. The pin is now `PIN 10 = !WAIT ;`, `jedec/cupl.check.ts` drives
-pin 10 low as well as high, and `gal/pins.check.ts` holds every backplane pin to its sense.
+pin 10 low as well as high, and `tools/gal/pins.check.ts` holds every backplane pin to its sense.
 
-## `ram.md` §5.3 and `gal/README.md` — `vctrl`'s pin count after `VDATA` (2026-09-11)
+## `ram.md` §5.3 and `tools/gal/README.md` — `vctrl`'s pin count after `VDATA` (2026-09-11)
 
 `graphics.md` §19 item 47 gave `vctrl` one input pin, `VDSEL`, for `+$15` `VDATA`, taking it
 from 55 to 56 of 64 I/O. The superseded text follows, verbatim.
 
 **ram.md §5.3 — vctrl's pins — said:**
 
-> have. `vctrl` has the pins, at **55 of 64 I/O** (`gal/cpld/vctrl.fit`), but four more
+> have. `vctrl` has the pins, at **55 of 64 I/O** (`archive/video/logic/cpld/vctrl.fit`), but four more
 
-**hardware/gal/README.md — vctrl's pins — said:**
+**hardware/tools/gal/README.md — vctrl's pins — said:**
 
 > > 55 of 64 I/O now, but 127 of 128 cells on the fitter's second pass (§19 item 46).
 
 ---
 
-## `lib/parts.ts` `HC4040` and `FLASH_512K` — the last two unverified pinouts, and finding 4 repeating (2026-09-10)
+## `tools/lib/parts.ts` `HC4040` and `FLASH_512K` — the last two unverified pinouts, and finding 4 repeating (2026-09-10)
 
-The two pinouts `lib/parts.ts` still carried "from familiarity" were read off datasheets
+The two pinouts `tools/lib/parts.ts` still carried "from familiarity" were read off datasheets
 fetched from Octopart's CDN. **One was right and one was finding 4 all over again.**
 
 ### `FLASH_512K` — right on all 32 pins
@@ -103,7 +103,7 @@ spent twice the refresh bandwidth for ever. `MR` active high was confirmed as st
 
 `UNVERIFIED_PARTS` had been derived from `provenance` since 2026-09-06 and **nothing
 imported it** — no check read it, and the comment beside it claimed it was empty while it
-held three parts. `lib/netlist.check.ts` now pins its contents against a declared
+held three parts. `tools/lib/netlist.check.ts` now pins its contents against a declared
 `KNOWN_UNVERIFIED`, so adding a part without a datasheet fails the check and so does
 confirming one without striking it off. **`SIMM30` is the one left**, and it closes
 against a JEDEC standard rather than a vendor sheet.
@@ -111,7 +111,7 @@ against a JEDEC standard rather than a vendor sheet.
 ⛔ **The gap this leaves is the cards.** `check:netlist` reads the motherboard's
 `circuit.json` and nothing else, so **no card's pinout is checked by anything at all** —
 which is how the I/O card's `TL16C550C` came to have `RD1` and `RD2` swapped
-(`io/serial/docs/serial.md` §12.1, found the same day).
+(`hardware/io/serial/docs/serial.md` §12.1, found the same day).
 
 ---
 
@@ -141,7 +141,7 @@ out of reach.
 **Repaired at +1 IC (U18) and U3's last pin (`ISOOE_HI`).** ⚠ And it narrowed U6: see
 the `clkdec.pld` entry below.
 
-## `gal/README.md` / `ram.md` §11 item 5 — U3 pin 23 as a spare input (2026-09-09)
+## `tools/gal/README.md` / `ram.md` §11 item 5 — U3 pin 23 as a spare input (2026-09-09)
 
 The pin budget chose the row *"6 outputs, 16 available inputs, 15 needed, one pin
 spare"*, and `mmu.jedec.ts` left pin 23 undriven on purpose so the macrocell held it at
@@ -156,7 +156,7 @@ is untouched… pin 23 stays a spare **input**."* That is still true of a write 
 and it was never true of an output **enable**. The part takes the budget's other row now
 — **7 outputs, 15 available inputs, 15 needed, nothing left** — and **U3 is full.**
 
-## `gal/clkdec.pld` — `BOOTOE` as the complement of the map-SRAM chip-enable UNION (2026-09-09)
+## `mainboard/logic/clkdec.pld` — `BOOTOE` as the complement of the map-SRAM chip-enable UNION (2026-09-09)
 
 Fixed the same morning as `design-review2.md` M-2 and M-3, and wrong by lunchtime:
 
@@ -233,7 +233,7 @@ where the module's own address counts words. Wired as written, every DRAM access
 have landed on the wrong address and the bottom bit would have been unreachable.
 
 Corrected to **row = physical `A10`–`A0`, column = `A21`–`A11`**, and
-`lib/netlist.check.ts` asserts both halves so it cannot drift back.
+`tools/lib/netlist.check.ts` asserts both halves so it cannot drift back.
 
 **And the mux select stopped being a GAL output.** It was `MUX_ROW` from U10; it is `E` —
 high for counts 6–11 of U6's divider, which is exactly the column window. One wire, and
@@ -246,7 +246,7 @@ now carries three attributes to match instead of one.
 
 ---
 
-## `gal/clkdec.pld` — the system RAM's control lines, and the three macrocells boot mode took (2026-09-09)
+## `mainboard/logic/clkdec.pld` — the system RAM's control lines, and the three macrocells boot mode took (2026-09-09)
 
 U6 carried a third job until 2026-09-09: `ramsel`, `RAM_CE`, `RAM_OE` and `RAM_WE`,
 decoding one `AS6C4008` at physical `A20 = 0, A19 = 0`. `ram.md` §6.2 removed that part
@@ -404,7 +404,7 @@ all**, because U10's refresh timer free-runs off `CLK25` from reset (which
 `machine.md` §5 item 10's rule requires of it independently).
 
 **The scratch-RAM proposal is withdrawn**, and the reason is worth keeping: it was the
-last thing that would have kept boot inside the CPU module, and `cpu/docs/plan.md` §4.5 —
+last thing that would have kept boot inside the CPU module, and `hardware/cpu/docs/plan.md` §4.5 —
 the mechanism it paralleled — was retired the same day.
 
 ---
@@ -435,11 +435,11 @@ placed.
 
 **The status paragraph also said "Three things gate layout"** and listed the video output
 stage among them; `graphics.md` §9.1–§9.3 specified it and
-`hardware/cards/video.circuit.tsx` draws it, so that clause is gone.
+`hardware/archive/video/board/video.circuit.tsx` draws it, so that clause is gone.
 
 **And the slot's power bullet quoted the video card at "~1.1–1.7 A, design to 2 A"**,
 which `graphics.md` §14.2 had already taken to **~0.5–0.85 A, 0.65 A nominal** when the
-ten GALs became two CPLDs and the seven SRAMs became four. `lib/slot.check.ts` carried
+ten GALs became two CPLDs and the seven SRAMs became four. `tools/lib/slot.check.ts` carried
 the same stale figure in a comment and in `WORST_CARD_A`; both are corrected, and the
 check still passes with 5 A of finger against it.
 
@@ -448,8 +448,8 @@ check still passes with 5 A of finger against it.
 ## README.md §The two decisions — card format: Eurocard → 250 × 100 → per-card lengths
 
 The card-format cell carried its own chain: ⚠ *"**Was a 100 × 160 mm Eurocard.**
-[`place/`](place/) drew the boards and the video card did not fit one: 134.4 cm² of
-courtyard against 133.4 cm² of placeable area."* `place/README.md` recorded the
+[`place/`](tools/place/) drew the boards and the video card did not fit one: 134.4 cm² of
+courtyard against 133.4 cm² of placeable area."* `tools/place/README.md` recorded the
 intermediate step: the overflow *"moved the card format to 250 × 100 and then to
 per-card lengths."*
 
@@ -480,10 +480,10 @@ not the connector.
 > map SRAM is byte-wide, its eighth bit was already stored and read back through the
 > isolation `'245`, and it drove nothing. One trace, no ICs, 1 MB.
 >
-> **`net/docs/net.md` §13.1 wanted two of these pins for a DMA request/grant pair and
+> **`hardware/net/docs/net.md` §13.1 wanted two of these pins for a DMA request/grant pair and
 > lost the same day.**
 
-Replaced by: A34 is physical `A20`; there is no spare position, and `lib/slot.check.ts`
+Replaced by: A34 is physical `A20`; there is no spare position, and `tools/lib/slot.check.ts`
 prices what a seventh signal would cost.
 
 ## README.md §What the layout found 1 — system RAM is one part, not four (applied 2026-09-06)
@@ -538,7 +538,7 @@ slot" were `machine.md` §2, `graphics.md` §17 (twice), `audio.md` §9.1 and `p
 
 The window itself then changed twice more: the strobe was first written as
 **`$FF40`–`$FF7F`** (`/IOPAGE · A7 · /A6` — and the term as originally written had its
-polarity wrong: see the gal/README.md §U6 entry below), and on 2026-09-08 `machine.md`
+polarity wrong: see the tools/gal/README.md §U6 entry below), and on 2026-09-08 `machine.md`
 §5 item 1 option A widened it to **`$FF00`–`$FF7F`** (`/IOPAGE · /A7`), moving the
 card-side decode from `A0`–`A5` to `A0`–`A6`.
 
@@ -552,7 +552,7 @@ and the pinouts were read off them rather than recalled.
 
 Four of the five parts were right as drawn — `74HC574`, `74HC245`, `74HC157` and the
 `AS6C4008` matched their datasheets pin for pin, the 512K × 8's awkward 25–31 block
-included. **The map SRAM did not.** `lib/parts.ts` had pins 21–23 as A9 / A8 / `/WE`;
+included. **The map SRAM did not.** `tools/lib/parts.ts` had pins 21–23 as A9 / A8 / `/WE`;
 the part is `/WE` / A9 / A8. The three were rotated, and the package was drawn 600-mil
 when the `CY7C128A`'s DIP is the 300-mil skinny one.
 
@@ -569,7 +569,7 @@ The hand-written `UNVERIFIED_PARTS` list had also gone stale once, still naming
 `SRAM_512K` as four packages after finding 1 made it one — which is why the list is
 derived from `provenance` instead.
 
-Replaced by: `lib/parts.ts` carries a datasheet `source` on every part, and
+Replaced by: `tools/lib/parts.ts` carries a datasheet `source` on every part, and
 `UNVERIFIED_PARTS` is derived.
 
 ## README.md §Open items — closed items 1, 4, 7
@@ -586,13 +586,13 @@ Replaced by: `lib/parts.ts` carries a datasheet `source` on every part, and
 - **Item 4** read *"⚠ The system RAM's control lines are not driven."* Closed
   2026-09-06: `RAM_CE`, `RAM_OE` and `RAM_WE` reached `U8` and nothing else, behind a
   comment claiming U3 formed the term — U3 forms no such term, and once
-  [`gal/mmu.pld`](gal/mmu.pld) existed that stopped being arguable. U3 could not take
+  [`mainboard/logic/mmu.pld`](mainboard/logic/mmu.pld) existed that stopped being arguable. U3 could not take
   them either: one free pin, and `/CE` alone needs two. They went to **U6**
-  (`gal/clkdec.pld`).
+  (`mainboard/logic/clkdec.pld`).
 - **Item 7** read *"`machine.md` §5 item 1 is still the machine's blocking decision"* —
   closed 2026-09-08 by options A and D. The finding had said the decode "is one GAL term
   today and a board respin after the backplane is etched", and it was right: the
-  widening was one literal *removed* from `gal/clkdec.pld`, taken while the backplane
+  widening was one literal *removed* from `mainboard/logic/clkdec.pld`, taken while the backplane
   was still a table.
 
 ## README.md §Conventions — the marked-not-deleted convention
@@ -647,18 +647,18 @@ dropped all four DIP SRAMs once the SIMM sockets existed — *"a 2 MB of SRAM ag
 4–16 MB of DRAM in four sockets"* — for the final **14 ICs + 4 SIMM sockets**. §6.5's
 table struck the `RAM2`–`RAM4` row without showing the −1 for the system RAM itself; the
 cleaned table carries the −1 row so the arithmetic sums to 14, which is the count
-`place/svg.ts` draws.
+`tools/place/svg.ts` draws.
 
 ## ram.md §7 — `vctrl` at 64 of 64, then 62 of 64
 
 §5.3 and §7 said `vctrl` was at **64 of 64 I/O** (citing `graphics.md` §10.1.6.3) — the
-figure from the arbiter-out-to-a-GAL arrangement (see the gal/README.md CPLD-refit entry
+figure from the arbiter-out-to-a-GAL arrangement (see the tools/gal/README.md CPLD-refit entry
 below). The arbiter merged back and the register-file address split out to `rfa`;
-`gal/cpld/vctrl.fit` put the part at **62 of 64**.
+`archive/video/logic/cpld/vctrl.fit` put the part at **62 of 64**.
 
 Then **59 of 64**, and then **64 of 64**, both later the same day: `graphics.md` §6.4.1's cell address was taking
 its vertical fields from the sync line counter, which meant `vctrl` exported `V0..V2`
-to `vaddr` for a field that should never have crossed parts (`archive/video/docs/history.md`
+to `vaddr` for a field that should never have crossed parts (`hardware/archive/video/docs/history.md`
 has the correction). Three pins came back on each part — and `graphics.md` §6.4.9's
 fetch cadence spent them again hours later, landing the part at **64 of 64 I/O and
 120 of 128 cells**. Both parts still fit with JTAG reserved. The spec carries 64 of
@@ -677,7 +677,7 @@ four address lines plus the JTAG the part now uses them for.
 
 ---
 
-## gal/README.md §intro — before there were equations
+## tools/gal/README.md §intro — before there were equations
 
 > Nothing in this repository had a GAL equation in it before 2026-09-06 —
 > `grep -rn equation` returned three hits and all three were *exit criteria saying the
@@ -685,7 +685,7 @@ four address lines plus the JTAG the part now uses them for.
 
 Replaced by: the directory *is* the fitting; the observation dates it.
 
-## gal/README.md §Deliverables — two live GALs → three (2026-09-08)
+## tools/gal/README.md §Deliverables — two live GALs → three (2026-09-08)
 
 The deliverables section read **"Two GALs are live and get burned into silicon"** —
 `mmu` and `clkdec`. On 2026-09-08 the register-file address decode split off `vctrl`
@@ -696,7 +696,7 @@ came back the same day (see the CPLD-refit entry below), so it stays on the supe
 list; its CUPL reference and check are kept anyway, because the design is still what the
 CPLD is built from (`jedec/cupl.check.ts`).
 
-## gal/README.md §The register map — proposed → signed off; the entry byte fills up
+## tools/gal/README.md §The register map — proposed → signed off; the entry byte fills up
 
 - The section was headed *"proposed"*, opening: *"That item has been open since the
   project began… It cannot stay open and have equations, so here is the map the
@@ -712,13 +712,13 @@ CPLD is built from (`jedec/cupl.check.ts`).
 Replaced by: bits 7–0 are physical `A20..A13`; the rationale (one backplane pin, no
 parts) stays in the spec.
 
-## gal/README.md §Pin budget — `/IOSEL`'s term chain
+## tools/gal/README.md §Pin budget — `/IOSEL`'s term chain
 
 The bullet read: *"`/IOSEL` moves to U6. It is ~~`/IOPAGE · A7 · /A6`~~
 **`/IOPAGE · /A7`**… (**Two corrections on 2026-09-08**: the term written here was the
 wrong polarity, and the window then widened.)"* The two corrections are the next entry.
 
-## gal/README.md §U6 — `/IOSEL` was the wrong 64 bytes, from the day it was written until 2026-09-08
+## tools/gal/README.md §U6 — `/IOSEL` was the wrong 64 bytes, from the day it was written until 2026-09-08
 
 It read **`/IOPAGE · A7 · /A6`**. `LA7` and `LA6` are true-sense on this part —
 `mmu.pld` uses them the same way to decode `$FFA0`–`$FFBF` as `A7..A5 = 101` — so that
@@ -753,7 +753,7 @@ two-literal version.
 Replaced by: the one-literal decode and the sweep-`A6` testbench claim, which would have
 failed loudly on the old equation.
 
-## gal/README.md §U6 — `/WAIT` had a producer and no consumer (fixed 2026-09-08)
+## tools/gal/README.md §U6 — `/WAIT` had a producer and no consumer (fixed 2026-09-08)
 
 `vctrl` had driven `/WAIT` open-drain since the video card was captured
 (`WAIT.oe = SPANBUSY & VRAMSEL & !IOPAGE`), and **U6 had no `/WAIT` input at all.**
@@ -763,7 +763,7 @@ item 8 — with the hold terms the spec describes; `E` went from 7 terms of 16 t
 `& E` was added at the source. (`access.jedec.ts` later added `!RW` as well — only
 writes wait, 2026-09-08, so reads are never exposed to the 40.7 µs bound.)
 
-## gal/README.md §The video CPLD refit — a package worth noticing, and a GAL that lived one day (2026-09-08)
+## tools/gal/README.md §The video CPLD refit — a package worth noticing, and a GAL that lived one day (2026-09-08)
 
 `vctrl.pld` gained three literals on 2026-09-08: `A6` on `REGSEL`, `/A20` on `VRAMSEL`,
 and `& E` on `WAIT.oe`. It fit at 78 of 80 I/O and 123 of 128 logic cells, on the
@@ -797,7 +797,7 @@ Replaced by: `vctrl` fits a PLCC-84 at 62 of 64 I/O and 97 of 128 logic cells
 (`cpld/vctrl.fit`), with the arbiter inside and `rfa` live beside it — still programmed
 out of circuit.
 
-## gal/README.md §Open-drain — every open-drain output in the machine drove its line the wrong way
+## tools/gal/README.md §Open-drain — every open-drain output in the machine drove its line the wrong way
 
 Compiling `/WAIT` as a GAL for the first time made `jedec/cupl.check.ts` **disagree with
 Atmel's compiler on exactly one signal.** Both emitters wrote `'b'0` for the no-terms
@@ -819,7 +819,7 @@ also pull), and audio's `/FIRQ` (`audio.jedec.ts`). Both emitters were changed t
 
 Replaced by: the `'b'1` convention, stated in the spec.
 
-## gal/README.md §Toolchain — stale progress counters
+## tools/gal/README.md §Toolchain — stale progress counters
 
 The toolchain table's first row said *"five parts assemble, fit and are checked at the
 fuse level"*, and the closing paragraph *"Two GALs are written of roughly twenty in the
@@ -827,7 +827,7 @@ machine"* — both from before the video sync/scan/access/sequencer fits, the au
 and `rfa`. Every GAL design now assembles and is checked at the fuse level, and three
 ship.
 
-## gal/README.md §Open items — closed items 1 and 4
+## tools/gal/README.md §Open items — closed items 1 and 4
 
 - **Item 1** read *"~~Nothing has been fitted~~"* — closed 2026-09-06 by `jedec/`, with
   a correction: the item had said *"product terms are all small (the widest is an
@@ -842,7 +842,7 @@ ship.
   respecified for 8 × 8 cells per `graphics.md` §7.4), and the card's logic consolidated
   into the two CPLDs plus `rfa`.
 
-## gal/README.md §place.ts — the claim that had to be weakened
+## tools/gal/README.md §place.ts — the claim that had to be weakened
 
 > The placer used to refuse an over-wide equation with *"sorted pairing is optimal, so
 > this does not fit on this part at all."* Sorted pairing is optimal over **assignments
@@ -854,7 +854,7 @@ Replaced by: the same distinction, stated as the message's present behaviour.
 
 ---
 
-## place/README.md §intro — the unchecked area claim
+## tools/place/README.md §intro — the unchecked area claim
 
 > Nothing in this repository had ever been placed; `graphics.md` §14 carried an area
 > claim (*"~150 of 160 cm²"*) that nobody had checked against a package outline.
@@ -862,7 +862,7 @@ Replaced by: the same distinction, stated as the message's present behaviour.
 Replaced by: the study itself — every board drawn 1 : 1, and the claim checked. The
 check's verdict (the video card over budget on a Eurocard) stays in the spec.
 
-## place/README.md §What it found — the 250 × 100 intermediate format
+## tools/place/README.md §What it found — the 250 × 100 intermediate format
 
 > That is what moved the card format to 250 × 100 and then to per-card lengths.
 
@@ -928,27 +928,27 @@ ROM must.**
 
 ## Utilisation figures brought to the fit, after `docs.check` stopped missing them (2026-09-12)
 
-`hardware/lib/docs.check.ts` scanned one line at a time, matched only "N of N", and
+`hardware/tools/lib/docs.check.ts` scanned one line at a time, matched only "N of N", and
 exempted a whole line on one past-tense word. Widened to paragraphs, table rows and
 clauses (workplan 2026-09-12 P3 item 12), it reported these present-tense figures as
-stale against `gal/cpld/*.fit`. Each was corrected or put visibly in the past; the
+stale against `<card>/logic/cpld/*.fit`. Each was corrected or put visibly in the past; the
 text they replaced follows.
 
-### hardware/gal/README.md — the U3 pin-full note, vctrl's figures
+### hardware/tools/gal/README.md — the U3 pin-full note, vctrl's figures
 
 **53 of 64 I/O and 125 of 128 cells** since 2026-09-12
 
-### hardware/gal/README.md — the U3 pin-full note, the FCLK sentence
+### hardware/tools/gal/README.md — the U3 pin-full note, the FCLK sentence
 
 clock scheme — collapsed into one.
 
-### hardware/gal/README.md — the video card's fitted-logic table
+### hardware/tools/gal/README.md — the video card's fitted-logic table
 
 | `vaddr` | **63 of 64** | **113 of 128** | scan address, `WPTR`, tile address sources |
 | `vctrl` | **64 of 64** | **98 of 128** | sync, sequencer, span control, the arbiter, `CTRL` |
 | `vsup` | **58 of 64** | **84 of 128** | register-file address, `SPANLEN`, §8.2's rank select, §9's palette write path, §10.3's descriptor decode |
 
-### hardware/gal/README.md — the JTAG paragraphs
+### hardware/tools/gal/README.md — the JTAG paragraphs
 
 ⭐ **Both fits reserve JTAG and both still fit**, so the video card's CPLDs are
 programmed **in circuit** — unlike the audio card's U1. `JTAG=on prjbureau/fit1508.sh
@@ -968,28 +968,28 @@ input and two product terms, and `vctrl` placed on the fitter's first pass: 53 o
 and 93 of 128 cells, from 52 and 123 on pass 2. `vaddr` is 59 of 64 I/O. The replaced
 text follows.
 
-### hardware/gal/README.md — the U3 pin-full note, vctrl's figures
+### hardware/tools/gal/README.md — the U3 pin-full note, vctrl's figures
 
 **52 of 64 I/O and 123 of 128 cells** since 2026-09-12, still on the fitter's
 > second pass (§19 item 46).
 
-### hardware/gal/README.md — the video card's fitted-logic table
+### hardware/tools/gal/README.md — the video card's fitted-logic table
 
 | `vaddr` | **58 of 64** | **113 of 128** | scan address, `WPTR`, tile address sources |
 | `vctrl` | **52 of 64** | **123 of 128** | sync, sequencer, span control, the arbiter, `CTRL` |
 
-### hardware/gal/README.md — the JTAG paragraphs
+### hardware/tools/gal/README.md — the JTAG paragraphs
 
 `vaddr` 58 + 4 = 62 pins and `vctrl` 52 + 4 = 56 have room, and
 `vsup` 61 + 4 = 65 does not. `vctrl` is the part with the cells nearly gone: 123 of 128.
 
-### hardware/ram.md — §4, what vctrl has room for
+### hardware/mainboard/docs/ram.md — §4, what vctrl has room for
 
-`vctrl` has the pins, at **52 of 64 I/O** (`gal/cpld/vctrl.fit`), and since
+`vctrl` has the pins, at **52 of 64 I/O** (`archive/video/logic/cpld/vctrl.fit`), and since
 2026-09-12 it has cells too — **123 of 128**, five back from two cleanups: §19 item
 23(a)'s four identical `FCLK` outputs collapsed into one, and `CELLTICK` merged into
 `MCADV`, which was its equation letter for letter.
 
-### hardware/ram.md — the slot, not the CPLD
+### hardware/mainboard/docs/ram.md — the slot, not the CPLD
 
 `vctrl` is at **123 of 128 cells** since 2026-09-12

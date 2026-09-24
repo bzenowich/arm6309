@@ -7,7 +7,7 @@ tile mode, a display list, sprite mode, a boot ROM, a 32 MB map, SIMM sockets,
 programmable panning, a headphone amplifier and a `16C550`. Every one of them
 landed with a passing check. **The checks pass and several of the features do
 not work**, and the reason is structural rather than careless: every check in
-`hardware/gal/` executes *one design's equations* against *that design's model*,
+`hardware/<card>/logic/`'s checks execute *one design's equations* against *that design's model*,
 and the defects below are all in the seams — a signal produced on one part and
 consumed on another, a name that means two things, a latch whose contents are
 right and whose lifetime is not, a package that is counted as absorbed and never
@@ -22,7 +22,7 @@ written.
 1. **A port census.** Every `Merged` CPLD and every `Design` GAL was enumerated
    for signals it *consumes* and nothing in the machine *produces*. This is
    two dozen lines of TypeScript and it found eleven.
-2. **Simulation.** `hardware/gal/verilog/emit.ts` generates Verilog from the
+2. **Simulation.** `hardware/tools/sim/emit.ts` generates Verilog from the
    same `Cell` term lists that `cupl.ts` compiles for the fitter, so the
    simulation runs **the fitted design and not a retyped copy** — the one-origin
    rule `jedec/cupl.ts` already states. Six testbenches run the video card, the
@@ -694,7 +694,7 @@ design.
 
 §13 item 1 is still open and it is the blocking one: **no `16C550` datasheet is
 in `reference/datasheets/`**, so §7.2's eight-register layout and §7.3's `IIR`
-encoding are from memory. `hardware/cards/io.circuit.tsx` marks the pinout
+encoding are from memory. `hardware/io/board/io.circuit.tsx` marks the pinout
 unverified. **Do not cut a board.**
 
 ---
@@ -770,14 +770,14 @@ component's `history.md` and the spec is rewritten in the present tense.
 
 | # | Document | Was | Is |
 |---|---|---|---|
-| D-1 | `archive/video/docs/features.md` §3.2 | "≈32.4 M spare accesses/s… **77×** more memory bandwidth" | `graphics.md` §14.2.3 replaced the four ×8 framebuffer parts with two ×16: **8.1 M/s and 15×** |
-| D-2 | `archive/video/docs/features.md` §3.1 | a three-row `WMODE` table, and the mask serialiser and length counter as a `74HC165` and a `'161` pair | four modes since §8.4's sprite mode; both parts were booked into the CPLDs by `graphics.md` §10.1.6 (**and see V-1**) |
-| D-3 | `archive/video/docs/graphics.md` §6.4.6, `features.md` §1.4 | cell row is "`VSCROLL[8:3]`" | `SA17..SA13` is five bits — **`VSCROLL[7:3]`**. The 32-row ring the same tables state is the giveaway |
-| D-4 | `archive/video/docs/graphics.md` §14 | the motherboard census is "**17 ICs**" | 18 since `ram.md` §6.3.1's refresh timebase |
-| D-5 | `io/ps2/docs/ps2.md` §0 | "Moved from `$FF30` on 2026-09-09" | the card moved **to** `$FF30`, from `$FF50` |
-| D-6 | `io/serial/docs/serial.md` §0 | "The card as specified is 3 ICs and 19,200 baud… The 6551 design is the specified one and the tiers are proposals" | §9.1 took the `TL16C550C` on 2026-09-09; the same table's own rows say so |
-| D-7 | `io/serial/docs/serial.md` §2 | "This machine boots NitrOS-9 from floppy" | `machine.md` §7.2 — a 1 MB boot ROM with a ROM disk; there is no floppy controller in the machine |
-| D-8 | `io/serial/docs/serial.md` §0, `docs/machine.md` §4.1 | "~1,030 interrupts/s at 115,200 with a 14-byte trigger" | **823/s** — 11,520 B/s ÷ 14 |
+| D-1 | `hardware/archive/video/docs/features.md` §3.2 | "≈32.4 M spare accesses/s… **77×** more memory bandwidth" | `graphics.md` §14.2.3 replaced the four ×8 framebuffer parts with two ×16: **8.1 M/s and 15×** |
+| D-2 | `hardware/archive/video/docs/features.md` §3.1 | a three-row `WMODE` table, and the mask serialiser and length counter as a `74HC165` and a `'161` pair | four modes since §8.4's sprite mode; both parts were booked into the CPLDs by `graphics.md` §10.1.6 (**and see V-1**) |
+| D-3 | `hardware/archive/video/docs/graphics.md` §6.4.6, `features.md` §1.4 | cell row is "`VSCROLL[8:3]`" | `SA17..SA13` is five bits — **`VSCROLL[7:3]`**. The 32-row ring the same tables state is the giveaway |
+| D-4 | `hardware/archive/video/docs/graphics.md` §14 | the motherboard census is "**17 ICs**" | 18 since `ram.md` §6.3.1's refresh timebase |
+| D-5 | `hardware/io/ps2/docs/ps2.md` §0 | "Moved from `$FF30` on 2026-09-09" | the card moved **to** `$FF30`, from `$FF50` |
+| D-6 | `hardware/io/serial/docs/serial.md` §0 | "The card as specified is 3 ICs and 19,200 baud… The 6551 design is the specified one and the tiers are proposals" | §9.1 took the `TL16C550C` on 2026-09-09; the same table's own rows say so |
+| D-7 | `hardware/io/serial/docs/serial.md` §2 | "This machine boots NitrOS-9 from floppy" | `machine.md` §7.2 — a 1 MB boot ROM with a ROM disk; there is no floppy controller in the machine |
+| D-8 | `hardware/io/serial/docs/serial.md` §0, `docs/machine.md` §4.1 | "~1,030 interrupts/s at 115,200 with a 14-byte trigger" | **823/s** — 11,520 B/s ÷ 14 |
 
 **Not corrected, because they are decisions rather than errors** —
 `serial.md` §3 and §5 are written against the 6551 and are the *reasoning* that
@@ -788,12 +788,12 @@ in place with their existing pointers.
 
 ## 8. What this review did not cover
 
-- **`storage/`**, at the owner's instruction.
+- **`hardware/storage/`**, at the owner's instruction.
 - **Analogue.** The video card's drive stage (`graphics.md` §9.1), the audio
   card's converter cascade and filters (`audio.md` §6, §7), and every timing
   margin in either. Simulation says nothing about any of them and the bench
   items in both documents stand unchanged.
-- **`cpu/`.** `plan.md`'s emulator, its microcode budget and `TFM`'s
+- **`hardware/cpu/`.** `plan.md`'s emulator, its microcode budget and `TFM`'s
   interrupt/resume behaviour (`machine.md` §6) are untouched here.
 - **NitrOS-9.** The divergence ledger `machine.md` §5 item 6 says nobody keeps
   is still not kept, and this review adds to it: `machine.md` §3's MMU register
@@ -806,11 +806,11 @@ in place with their existing pointers.
 
 | | |
 |---|---|
-| `hardware/gal/verilog/emit.ts` | `Merged`/`Design` → Verilog, from the same term lists `cupl.ts` compiles for the fitter. One origin, three devices |
-| `hardware/gal/verilog/gen.ts` | emits `vaddr.v`, `vctrl.v`, `rfa.v`, `audio.v`, `u9.v`, `u10.v` |
-| `hardware/gal/verilog/video_card.v` | the video card wired: three parts, four interleaved framebuffer chips, the fetch latches and the `'153` mux |
+| `hardware/tools/sim/emit.ts` | `Merged`/`Design` → Verilog, from the same term lists `cupl.ts` compiles for the fitter. One origin, three devices |
+| `hardware/tools/sim/gen.ts` | emits `vaddr.v`, `vctrl.v`, `rfa.v`, `audio.v`, `u9.v`, `u10.v` |
+| `hardware/archive/video/sim/video_card.v` | the video card wired: three parts, four interleaved framebuffer chips, the fetch latches and the `'153` mux |
 | `hardware/gal/verilog/vshim.v` | ⚠ **the size of V-1, as one file.** Every signal in it is an input to a fitted part that nothing on the card produces |
-| `hardware/gal/verilog/mainboard.v` | U3, U6, U9, U10, both map SRAMs, the `'157`, the `TASK` `'574`, the boot `'244`, both flash devices and the SIMM bank |
+| `hardware/mainboard/sim/mainboard.v` | U3, U6, U9, U10, both map SRAMs, the `'157`, the `TASK` `'574`, the boot `'244`, both flash devices and the SIMM bank |
 | six testbenches | `vsync`, `vaddr`, `vtile`, `vspan`, `audio`, `mainboard` |
 | `npm run check:video` | generates and runs all six — **122 ok, 16 FAIL** as of this document |
 

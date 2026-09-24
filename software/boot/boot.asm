@@ -1,18 +1,18 @@
 *******************************************************************************
 * boot.asm -- the machine's first instructions, and a video bring-up.
 *
-* docs/machine.md 7.2 is the boot sequence; hardware/ram.md 6.4 is why it has
-* no JSR in it.  video3/docs/plan.md 10 is the video register map, 5 the span
+* docs/machine.md 7.2 is the boot sequence; hardware/mainboard/docs/ram.md 6.4 is why it has
+* no JSR in it.  hardware/video3/docs/plan.md 10 is the video register map, 5 the span
 * writer, 6 the copy engine, 7 the sprite and 2.5 the four-byte cell and the
 * 1024-byte stride.
 *
 * ⭐ RETARGETED TO video3, 2026-09-20.  Until then the video section drove
-* archive/video/docs/graphics.md 13's card, which was archived that day
-* (archive/README.md).  software/v3boot/v3boot.asm is the fixture this section
+* hardware/archive/video/docs/graphics.md 13's card, which was archived that day
+* (hardware/archive/README.md).  software/boot/v3boot/v3boot.asm is the fixture this section
 * was ported from, and it is still the smaller model to read first.
 *
 * This is assembled by A09 (software/tools/fetch-a09.sh) and executed by
-* hardware/gal/verilog/machine_tb.sv on the REAL DESIGN: Greg Miller's
+* hardware/tools/sim/machine_tb.sv on the REAL DESIGN: Greg Miller's
 * cycle-accurate 6809E core in the socket, mainboard.v under it (U3, U6, U9,
 * U10 generated from the same term lists the CPLD fitter compiles) and
 * video3_card.v in a slot -- v3dot, v3scan, v3ptr, v3host and the v3lane GAL.
@@ -29,8 +29,8 @@
 *   7. runs the copy engine, and then the hardware sprite
 *   8. tile mode - a tilemap on the four-byte cell stride
 *  10. reads VRAM back, through the window and through VDATA
-*  10a. ⭐ PUTS UP THE BOOT DIALOG -- docs/boot-and-desktop.md 1
-*  10b. ⭐ READS THE SD CARD -- storage/docs/sdcard.md 9.0, 9.1 and 9.5 -- to
+*  10a. ⭐ PUTS UP THE BOOT DIALOG -- software/desk/docs/boot-and-desktop.md 1
+*  10b. ⭐ READS THE SD CARD -- hardware/storage/docs/sdcard.md 9.0, 9.1 and 9.5 -- to
 *       decide which of 10a's three pictures is the true one
 *  11. hands the machine to a program in ROM page 1, if there is one
 *
@@ -54,7 +54,7 @@ TASKR   EQU     $FFB0           TASK, and $FFB0 is EVEN so it stays in boot mode
 RUNSTB  EQU     $FFB1           the strobe that leaves it -- one way per reset
 
 *--------------------------------------------------------------- the video ---
-* video3/docs/plan.md 10 -- 32 bytes at $FF60.  nitros9 defs/armvid.d's IFNE V3
+* hardware/video3/docs/plan.md 10 -- 32 bytes at $FF60.  nitros9 defs/armvid.d's IFNE V3
 * block is the same map, and the two have to agree.
 VBASE   EQU     $FF60
 VCTRL   EQU     VBASE+$00       b1-0 VMODE, b3-2 MODE, b5-4 WMODE, b6 IRQEN, b7 DISPEN
@@ -96,7 +96,7 @@ CT_TILE EQU     $08             MODE 10 - tile (plan 2.4)
 CT_ON   EQU     $80             display ON, WMODE 00, VMODE 00 = 640x200 @ 70 Hz
 
 *--------------------------------------------------------------- the card ---
-* storage/docs/sdcard.md 6.2 -- four bytes at $FF58.  10a reads the one with
+* hardware/storage/docs/sdcard.md 6.2 -- four bytes at $FF58.  10a reads the one with
 * no side effect (SDSTAT is read-only and reading it starts nothing, 6.3) and
 * 10b drives the other three.
 *
@@ -165,7 +165,7 @@ P_STUK  EQU     $E5             ⛔ a VSTAT poll ran out of patience - vwait0
 P_ST0   EQU     $50             2a - the store-rate blocks: A begins
 P_ST1   EQU     $51             ... A done (32 stores), B begins
 P_ST2   EQU     $52             ... B done (64 stores)
-* 10a's boot dialog -- docs/boot-and-desktop.md 1.  Each state is a picture,
+* 10a's boot dialog -- software/desk/docs/boot-and-desktop.md 1.  Each state is a picture,
 * so each gets a code: a testbench that only saw "the dialog ran" would not
 * know WHICH of the three was drawn, and the three are the whole point.
 P_DLGL  EQU     $60             the dialog is up, state "looking for a disk"
@@ -386,7 +386,7 @@ rambad  lda     #P_BADR
 *     plan 5's /WAIT, which would measure the card rather than the CPU -- and
 *     the card's own retire rate is already measured elsewhere.
 *
-*     ⚠ IT IS THE 6809 NUMBER.  vendor/mc6809 is cycle-accurate and it is a
+*     ⚠ IT IS THE 6809 NUMBER.  cpu/sim/mc6809 is cycle-accurate and it is a
 *     6809, so this is emulation mode -- the baseline 7.3's native-mode claim
 *     says it beats.  19 item 1 stays open for the 6309 figure.
 *==============================================================================
@@ -498,7 +498,7 @@ strate  ldx     #STORET
 * 2c. ⭐ IS THERE A video3 CARD IN THE SLOT?  AND THIS IS NOT OPTIONAL.
 *
 *     boot.bin is ROM page 0 of EVERY build of this machine, including builds
-*     whose NitrOS-9 drives archive/video/'s card, and software/demo/emu models
+*     whose NitrOS-9 drives hardware/archive/video/'s card, and software/emu models
 *     both (machine.c's m->v3).  Sections 3..10 below poll VSTAT; on the other
 *     card $FF6D is not VSTAT at all but a plain register-file byte, so a poll
 *     of it reads back whatever was last written there and CAN SPIN FOR EVER.
@@ -511,7 +511,7 @@ strate  ldx     #STORET
 *                         an ordinary register-file location: v3host's RDBKOE
 *                         covers it (A4 is set), so a read gives back the byte
 *                         that was written.
-*       archive/video     +$13 is VSTAT, and graphics.md 13 says it is read
+*       hardware/archive/video     +$13 is VSTAT, and graphics.md 13 says it is read
 *                         "through the '244 of 12.1, not the register file".
 *                         That '244 carries SPANBUSY, VBLANK, HBLANK, LRUN,
 *                         PBUSY and IRQ -- and b2 and b3 are hardwired zero.
@@ -853,7 +853,7 @@ cpf1    lda     cprow
 
 * ⚠ WADV IS ALREADY 00 AND MUST BE.  b2 is the WRITE POINTER's step, and the
 * copy's destination is WPTR: a GO with b2 set would walk the destination two
-* bytes a byte.  plan 10 says so and software/demo/emu reports it as a fault.
+* bytes a byte.  plan 10 says so and software/emu reports it as a fault.
         lbsr    idlespn
         ldd     #CPSLOW
         lbsr    setcptr         the source
@@ -1319,7 +1319,7 @@ vri     lda     VDATA
         lbra    prog            ... and then 11, past the code it is made of
 
 *==============================================================================
-* 10a. ⭐ THE BOOT DIALOG -- docs/boot-and-desktop.md 1.
+* 10a. ⭐ THE BOOT DIALOG -- software/desk/docs/boot-and-desktop.md 1.
 *
 * A Macintosh 128K finds its video hardware, clears the screen, and puts up a
 * dialog with an icon that says it is looking for a disk; the icon changes when
@@ -1574,7 +1574,7 @@ dlgrun  sts     dstksv          ⛔ the stack leaves block 6 - see the header
         lbsr    dlgwait
 
 * --- which state? ----------------------------------------------------------
-* ⭐ SDSTAT b1, CARD DETECT (storage/docs/sdcard.md 6.3).  A read of SDSTAT has
+* ⭐ SDSTAT b1, CARD DETECT (hardware/storage/docs/sdcard.md 6.3).  A read of SDSTAT has
 * no side effect; nothing else in the four-byte window is touched.  It is the
 * CHEAP half of the question and it is asked first: a socket with nothing in
 * it needs no SPI at all, and 10b's reader would spend its whole bounded
@@ -1587,7 +1587,7 @@ dlgrun  sts     dstksv          ⛔ the stack leaves block 6 - see the header
         bita    #SD_CD
         beq     dlgnone
 
-* ⭐⭐ THE HOOK, AND IT IS WIRED (2026-09-21).  docs/boot-and-desktop.md 2:
+* ⭐⭐ THE HOOK, AND IT IS WIRED (2026-09-21).  software/desk/docs/boot-and-desktop.md 2:
 * "found" means a card the ROM has READ A BOOT SIGNATURE OFF - 9.0's power-up,
 * 9.1's CMD17, CMD58's CCS and block 0's header - and not merely a socket
 * switch that is closed.  10b is that reader; it answers carry clear for a
@@ -1715,7 +1715,7 @@ dlgw1   ldb     #$40
         puls    a,b,pc
 
 *==============================================================================
-* 10b. THE BOOT ROM'S SD READER -- storage/docs/sdcard.md 9.0 and 9.1.
+* 10b. THE BOOT ROM'S SD READER -- hardware/storage/docs/sdcard.md 9.0 and 9.1.
 *
 * Enough of the card to answer ONE question: is the thing in the socket a
 * volume this machine can boot from?  9.0's initialisation and 9.1's CMD17
@@ -2491,7 +2491,7 @@ vstuck  lda     #P_STUK
 * (vwait1), BOUNDED.
 *
 * ⭐ THE BOUND IS THE WHOLE POINT, and it is the one place this ROM differs in
-* kind from software/v3boot/v3boot.asm, whose header says its polls are
+* kind from software/boot/v3boot/v3boot.asm, whose header says its polls are
 * unbounded on purpose because its bench bounds them.  Nothing bounds a boot
 * ROM on a real machine.  65,536 reads is about 0.3 s at this machine's E rate
 * - longer than any span (a 256-byte span-solid is ~1,000 dots), any copy
@@ -2728,11 +2728,11 @@ sdsig   EQU     $005B           LSN 0 +$F0 -- "6309" and a version byte
 * ⭐ THE SIX INTERRUPT VECTORS POINT AT $FEEE-$FEFD, WHICH IS WHERE A CoCo 3's
 * DO. That is not in this page's fixed $FFC0-$FFFF window: it is logical
 * block 7, so what runs is whatever block 7 holds. In boot mode, and under any
-* program handed page 1 (software/demo/), block 7 is this ROM page and the six
+* program handed page 1 (software/archive/demo/), block 7 is this ROM page and the six
 * entries below are its own jumps - to the same RAM vectors as before. Under
 * NitrOS-9 block 7 is the kernel's RAM block in every map, and NitrOS-9's krn
 * ends at $FF00 with its BRA stubs at exactly these addresses
-* (docs/nitros9-av-plan.md 8 item X3). One ROM serves both.
+* (software/nitros9/docs/nitros9-av-plan.md 8 item X3). One ROM serves both.
         ORG     $FEEE
 vswi3   jmp     halt            $FEEE  SWI3
 vswi2   jmp     halt            $FEF1  SWI2

@@ -119,7 +119,7 @@ is right for every connector. Do not reuse `insertionDirection` to steer an
 opening on a part that has nothing inserted into it -- it is read by other tools
 as the mating side, and a switch has none.
 
-These drive [`<enclosure.cutoutaperture />`](./enclosurecutoutaperture.md#which-face-it-pierces).
+These drive [`<enclosure.cutoutaperture />`](enclosurecutoutaperture.md#which-face-it-pierces).
 
 ## Props
 

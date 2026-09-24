@@ -5,7 +5,7 @@ a friction-fit lip, sized from the board plus clearances, with an opening cut fo
 every aperture the enclosed parts declare.
 
 Place it as a sibling of the board, inside an
-[`<assembly.device />`](./assemblydevice.md), and point it at the board:
+[`<assembly.device />`](assemblydevice.md), and point it at the board:
 
 ## Example
 
@@ -54,4 +54,4 @@ are not inferred, so check their CAD height yourself.
 
 - Props: [EnclosureFdmBoxProps](https://github.com/tscircuit/props/blob/main/lib/enclosure/fdm/box.ts)
 - Solver: [@tscircuit/create-fdm-enclosure](https://github.com/tscircuit/create-fdm-enclosure)
-- See also: [`<enclosure.cutoutaperture />`](./enclosurecutoutaperture.md), [`<assembly.device />`](./assemblydevice.md)
+- See also: [`<enclosure.cutoutaperture />`](enclosurecutoutaperture.md), [`<assembly.device />`](assemblydevice.md)

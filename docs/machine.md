@@ -3,13 +3,13 @@
 ## What Is Frozen, What Is Merely Proposed, and What Nobody Has Decided
 
 **Question this answers:** the project has a CPU module plan
-([`cpu/docs/plan.md`](../cpu/docs/plan.md)) and six card specifications
-([`archive/video/docs/graphics.md`](../archive/video/docs/graphics.md),
-[`audio/docs/audio.md`](../audio/docs/audio.md),
-[`io/ps2/docs/ps2.md`](../io/ps2/docs/ps2.md),
-[`io/serial/docs/serial.md`](../io/serial/docs/serial.md),
-[`storage/docs/sdcard.md`](../storage/docs/sdcard.md),
-[`net/docs/net.md`](../net/docs/net.md)), and each of them has, as **step 0 of its
+([`hardware/cpu/docs/plan.md`](../hardware/cpu/docs/plan.md)) and six card specifications
+([`hardware/archive/video/docs/graphics.md`](../hardware/archive/video/docs/graphics.md),
+[`hardware/audio/docs/audio.md`](../hardware/audio/docs/audio.md),
+[`hardware/io/ps2/docs/ps2.md`](../hardware/io/ps2/docs/ps2.md),
+[`hardware/io/serial/docs/serial.md`](../hardware/io/serial/docs/serial.md),
+[`hardware/storage/docs/sdcard.md`](../hardware/storage/docs/sdcard.md),
+[`hardware/net/docs/net.md`](../hardware/net/docs/net.md)), and each of them has, as **step 0 of its
 own build order**, "freeze the machine spec". None of them can do that, because the
 machine spec is the thing that spans them. This document is where that lives.
 
@@ -35,20 +35,20 @@ undecided, or that this document has had to decide itself.
 
 | | |
 |---|---|
-| **CPU** | HD6309E in native mode, synthesised on an **STM32G431CBU6** ([`cpu/`](../cpu/)) — UFQFPN48 (§5 item 6) |
+| **CPU** | HD6309E in native mode, synthesised on an **STM32G431CBU6** ([`hardware/cpu/`](../hardware/cpu/)) — UFQFPN48 (§5 item 6) |
 | **Boot** | **a 1 MB boot ROM on the motherboard** — 2 ICs plus one `'244`, at physical 2.0–3.0 MB, holding the boot monitor **and the ROM toolbox** — §7.2. ⭐ **NitrOS-9 itself is on the SD card** since 2026-09-22; pages 3–63 are free. ⭐ It also serves `$FFC0`–`$FFFF`, so the vectors are where a 6809 expects them |
 | **MMU** | **on the motherboard: 5 ICs, the SAM/GIME/DAT arrangement** — `graphics.md` §6.3.1. Register set is a free design, not GIME-compatible (§5 item 3) |
-| **Address space** | 64 KB logical, MMU-mapped; **32 MB physical (A0–A24)** — 16-bit map entries in **two windows** (`$FF90` high, `$FFA0` low), `hardware/ram.md` §4.3 and §5.2. ⚠ **`A21`–`A24` stay on the motherboard**; the backplane carries `A0`–`A20` |
-| **System RAM** | **four 30-pin SIMM sockets, 4–16 MB of DRAM** — `hardware/ram.md` §6, and **4M × 8 modules only** (§6.3.1). ⭐ **The boot monitor sizes it, because nothing in hardware can**: a 30-pin SIMM has no presence-detect pins, so it is a stackless firmware walk — `ram.md` §6.4.1, §5 item 13. **No SRAM anywhere on the motherboard** — `ram.md` §6.4 |
+| **Address space** | 64 KB logical, MMU-mapped; **32 MB physical (A0–A24)** — 16-bit map entries in **two windows** (`$FF90` high, `$FFA0` low), `hardware/mainboard/docs/ram.md` §4.3 and §5.2. ⚠ **`A21`–`A24` stay on the motherboard**; the backplane carries `A0`–`A20` |
+| **System RAM** | **four 30-pin SIMM sockets, 4–16 MB of DRAM** — `hardware/mainboard/docs/ram.md` §6, and **4M × 8 modules only** (§6.3.1). ⭐ **The boot monitor sizes it, because nothing in hardware can**: a 30-pin SIMM has no presence-detect pins, so it is a stackless firmware walk — `ram.md` §6.4.1, §5 item 13. **No SRAM anywhere on the motherboard** — `ram.md` §6.4 |
 | **System master clock** | one 25.175 MHz oscillator, **on the motherboard** — §1 |
 | **E rate** | 25.175 / 12 = **2.0979 MHz**. This is the only rate the machine is specified at; ÷8 is experimental — §1 |
 | **OS target** | NitrOS-9 Level 2 |
-| **Video3** | 80×25 / 80×60 character mode with attributes, 640×200/240/400/480 chunky 8bpp bitmap, 8×8 tile mode, a span writer, a keyed copy engine and one 16×16 sprite; VGA out. **45 ICs on a 240 mm board**, the programmable logic being **4 × `ATF1508AS` PLCC-84 and a `GAL22V10`, all five fitted** ([`video3/`](../video3/), `plan.md` §13.1). ⭐ **The machine's video card since 2026-09-20**, the date `video/` — 33 ICs, three CPLDs, specified and simulated — moved to [`archive/`](../archive/) along with the paper `video2/` (`history.md`). ⚠ `video3` has **no board file and no power budget** (`plan.md` §14 items 1 and 13), so `check:netlist` has nothing to read for it; what it does have is `v3card_tb` and `v3machine_tb`, which run whole frames and a 6809E against the card |
-| **Audio** | 4-channel 8-bit PCM, Paula-exact, ⚠ **fixed LRRL panning** (programmable panning was withdrawn 2026-09-09: it cost **one converter half per channel**, six `AD7528` where four do, and classic MOD does not use it) — **35 ICs on an 18 cm board**, ⛔ **two** `ATF1508AS` PLCC-84 and the second one is **scoped and not fitted** ([`audio/`](../audio/), `audio.md` §10.1). A **headphone-driven 3.5 mm stereo jack** on the card's own rear edge, and a line-level pair on the backplane. ⚠ **32 ICs on 18 cm until 2026-09-09**: §10's budget was six packages short of the datapath `audio.md` itself specifies, and `npm run check:place` refused 18 cm at 39 |
-| **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`io/ps2/`](../io/ps2/)); RS-232 serial, **3 ICs** — a **`TL16C550C` at 115,200 baud with 16-byte FIFOs** ([`io/serial/`](../io/serial/)). One 14-IC card at `$FF30`–`$FF3F`. Both on `/IRQ`, both **specified** |
-| **Storage** | SD card over SPI, **8 ICs**, **537 KiB/s** sustained — **two GAL22V10s built and checked**, the rest of the card specified ([`storage/`](../storage/)). ⚠ The first of the machine's two period exceptions. ⭐ **8 and not 14 since 2026-09-20**: the memory-mapped block buffer is gone and the card is NormalLuser's BE6502 interface (`sdcard.md` §3.1), with §4.4's chunk-and-mask carrying the read path as it already carried the write path. It costs 21 % and returns six packages, a physical-address region and §5 item 7's bus schedule |
-| **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs**, two of them `ATF1508AS` — **specified** ([`net/`](../net/)). The second period exception. ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
-| **Total silicon** | **133 ICs** — **114 on cards** (video3 45, audio 35, I/O 14, storage 8, net 12, from `hardware/place/parts.ts`), **19** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8. ⭐ **121 until 2026-09-20**, when `video3` (45) replaced the archived `video` (33) in the slot population. ⚠ **The motherboard is 19 and not 18** because the high map byte had no data path to `D0`–`D7` at all, and two common-I/O SRAMs cannot share one isolation `'245` — `ram.md` §3.1 and §11 item 11 |
+| **Video3** | 80×25 / 80×60 character mode with attributes, 640×200/240/400/480 chunky 8bpp bitmap, 8×8 tile mode, a span writer, a keyed copy engine and one 16×16 sprite; VGA out. **45 ICs on a 240 mm board**, the programmable logic being **4 × `ATF1508AS` PLCC-84 and a `GAL22V10`, all five fitted** ([`hardware/video3/`](../hardware/video3/), `plan.md` §13.1). ⭐ **The machine's video card since 2026-09-20**, the date `video/` — 33 ICs, three CPLDs, specified and simulated — moved to [`hardware/archive/`](../hardware/archive/) along with the paper `video2/` (`history.md`). ⚠ `video3` has **no board file and no power budget** (`plan.md` §14 items 1 and 13), so `check:netlist` has nothing to read for it; what it does have is `v3card_tb` and `v3machine_tb`, which run whole frames and a 6809E against the card |
+| **Audio** | 4-channel 8-bit PCM, Paula-exact, ⚠ **fixed LRRL panning** (programmable panning was withdrawn 2026-09-09: it cost **one converter half per channel**, six `AD7528` where four do, and classic MOD does not use it) — **35 ICs on an 18 cm board**, ⛔ **two** `ATF1508AS` PLCC-84 and the second one is **scoped and not fitted** ([`hardware/audio/`](../hardware/audio/), `audio.md` §10.1). A **headphone-driven 3.5 mm stereo jack** on the card's own rear edge, and a line-level pair on the backplane. ⚠ **32 ICs on 18 cm until 2026-09-09**: §10's budget was six packages short of the datapath `audio.md` itself specifies, and `make -C hardware place` refused 18 cm at 39 |
+| **I/O** | PS/2 keyboard + mouse, **11 ICs** ([`hardware/io/ps2/`](../hardware/io/ps2/)); RS-232 serial, **3 ICs** — a **`TL16C550C` at 115,200 baud with 16-byte FIFOs** ([`hardware/io/serial/`](../hardware/io/serial/)). One 14-IC card at `$FF30`–`$FF3F`. Both on `/IRQ`, both **specified** |
+| **Storage** | SD card over SPI, **8 ICs**, **537 KiB/s** sustained — **two GAL22V10s built and checked**, the rest of the card specified ([`hardware/storage/`](../hardware/storage/)). ⚠ The first of the machine's two period exceptions. ⭐ **8 and not 14 since 2026-09-20**: the memory-mapped block buffer is gone and the card is NormalLuser's BE6502 interface (`sdcard.md` §3.1), with §4.4's chunk-and-mask carrying the read path as it already carried the write path. It costs 21 % and returns six packages, a physical-address region and §5 item 7's bus schedule |
+| **Network** | 10BASE-T with no MAC or PHY chip, **12 ICs**, two of them `ATF1508AS` — **specified** ([`hardware/net/`](../hardware/net/)). The second period exception. ⚠ **56 % of the wire**, because a `TFM` at 2.0979 MHz is 681 KiB/s and 10BASE-T is 1221. Ported from `~/code/applenet` |
+| **Total silicon** | **133 ICs** — **114 on cards** (video3 45, audio 35, I/O 14, storage 8, net 12, from `hardware/tools/place/parts.ts`), **19** on the motherboard plus four SIMM sockets (`hardware/mainboard/docs/ram.md` §6.5). See §8. ⭐ **121 until 2026-09-20**, when `video3` (45) replaced the archived `video` (33) in the slot population. ⚠ **The motherboard is 19 and not 18** because the high map byte had no data path to `D0`–`D7` at all, and two common-I/O SRAMs cannot share one isolation `'245` — `ram.md` §3.1 and §11 item 11 |
 
 Note the two CPU targets, which are different machines and are easy to confuse:
 
@@ -61,7 +61,7 @@ Note the two CPU targets, which are different machines and are easy to confuse:
 | MMU | GIME's, emulated | 5 ICs on the motherboard — `graphics.md` §6.3.1 |
 | Boot | the CoCo's own ROM | **a 1 MB ROM on the motherboard** — §7.2 |
 
-`cpu/docs/plan.md` is written against the first. `graphics.md` and `audio.md` are
+`hardware/cpu/docs/plan.md` is written against the first. `graphics.md` and `audio.md` are
 written against the second. Both are live.
 
 ---
@@ -85,7 +85,7 @@ matters for the video card's arbitration. The divider is off-card, on the mother
 **The oscillator is on the motherboard, not the video card, deliberately**: if the can
 sat on the video card, pulling that card would kill E and stop the CPU — fatal for
 exactly the bring-up sequences that run *before* video exists (`sdcard.md` §12,
-and any serial-first DriveWire link — [`drivewire.md`](drivewire.md)). The card
+and any serial-first DriveWire link — [`drivewire.md`](../software/nitros9/docs/drivewire.md)). The card
 receives the master clock from the backplane, which §2 carries.
 
 ### 1.1 ÷12 is the machine's rate. ÷8 is experimental.
@@ -138,7 +138,7 @@ From `graphics.md` §17, which retargets colormin's slot model:
 | `D0–D7` | |
 
 **`A24..A19` selects a 512 KB quadrant of a 32 MB map** —
-[`hardware/ram.md`](../hardware/ram.md) §5.2:
+[`hardware/mainboard/docs/ram.md`](../hardware/mainboard/docs/ram.md) §5.2:
 
 | `A24..A19` | Range | 512 KB |
 |---|---|---|
@@ -151,7 +151,7 @@ From `graphics.md` §17, which retargets colormin's slot model:
 | `101xxx`–`111xxx` | 20–32 M | reserved |
 
 **`VRAM` sits at `A20:A19 = 01` and the card regions at `A20 = 1`.**
-`gal/clkdec.pld`'s `ramsel` and `gal/vctrl.pld`'s `VRAMSEL` decode the bottom 2 MB; the
+`mainboard/logic/clkdec.pld`'s `ramsel` and `archive/video/logic/vctrl.pld`'s `VRAMSEL` decode the bottom 2 MB; the
 quadrants above it are decoded by a motherboard GAL (`ram.md` §6.2).
 
 > ### ⭐ `/IOPAGE` is redefined, and every card author has to know
@@ -263,13 +263,13 @@ quadrants above it are decoded by a motherboard GAL (`ram.md` §6.2).
 > against its base**, which is what `A0`–`A6` are on the backplane *for*.
 > Seven bits, not six: with `A6` outside the strobe, a six-bit card answers at its base
 > **and 64 bytes below it** — two cards on `D0`–`D7`, silently.
-> `hardware/lib/cards.check.ts` asserts the seven bits and
-> `hardware/lib/decode.check.ts` asserts that each card's own logic reads them.
+> `hardware/tools/lib/cards.check.ts` asserts the seven bits and
+> `hardware/tools/lib/decode.check.ts` asserts that each card's own logic reads them.
 >
 > ⚠ **"Jumpered" is an aspiration, not a description.** This paragraph said *"its
 > jumpered base"* until 2026-09-09 and **no card in the repository has a jumper**: the
 > video card's `rfa` hardcodes `regsel = IOSEL & A6 & A5`, which is `$FF60` and nothing
-> else. Every base in `hardware/cards/windows.ts` is a fixed decode today, so the
+> else. Every base in `hardware/tools/lib/windows.ts` is a fixed decode today, so the
 > collision hazard below is a **schematic** error rather than a build-time one — which
 > makes it easier to catch and no less real.
 >
@@ -306,9 +306,9 @@ Geographic decode spans **`$FF00`–`$FF7F`** (§5 item 1 A): `/IOSEL` is
 
 > ⚠ **The cost is on the cards, and it is mandatory.** With `A6` out of the strobe, a card
 > that matches only `A0`–`A5` answers **twice** — at its base and 64 bytes below it.
-> **Every card decodes `A0`–`A6`.** `hardware/gal/vctrl.pld` is the one card decode that
+> **Every card decodes `A0`–`A6`.** `hardware/archive/video/logic/vctrl.pld` is the one card decode that
 > exists in this repository and it carries the seven bits;
-> `hardware/lib/cards.check.ts` asserts them so the next card cannot inherit the
+> `hardware/tools/lib/cards.check.ts` asserts them so the next card cannot inherit the
 > old habit from a sibling document.
 
 | Window | Size | Owner | Status |
@@ -317,12 +317,12 @@ Geographic decode spans **`$FF00`–`$FF7F`** (§5 item 1 A): `/IOSEL` is
 | **`$FF30`–`$FF3F`** | **16 B** | **I/O — PS/2 keyboard, mouse and RS-232, one card** | *proposed* — `ps2.md` §3.2 + `serial.md` §7.1. ⚠ **Moved and doubled 2026-09-09**: a `16C550` has eight registers where a 6551 had four |
 | `$FF40`–`$FF4F` | 16 B | **audio** | *proposed* — `audio.md` §9.1 |
 | `$FF50`–`$FF57` | **8 B** | **free** | vacated by the I/O card |
-| `$FF58`–`$FF5B` | 4 B | **SD card storage** | *proposed* — `storage/docs/sdcard.md` §6.1 |
-| `$FF5C`–`$FF5F` | 4 B | **network** | *proposed* — [`net/docs/net.md`](../net/docs/net.md) §5.1 |
+| `$FF58`–`$FF5B` | 4 B | **SD card storage** | *proposed* — `hardware/storage/docs/sdcard.md` §6.1 |
+| `$FF5C`–`$FF5F` | 4 B | **network** | *proposed* — [`hardware/net/docs/net.md`](../hardware/net/docs/net.md) §5.1 |
 | `$FF60`–`$FF7F` | 32 B | **video** | *taken* — `graphics.md` §13 |
 | `$FF80`–`$FF8F` | 16 B | **free** | ⚠ the machine's last motherboard-decoded block, and §5 item 15 says leave it that way |
 | **`$FF90`–`$FF9F`** | **16 B** | ⭐ **MMU block registers, HIGH byte** | physical `A24..A21` + `ram.md` §3.3's flags, and it reads back as a whole byte. **New 2026-09-09** — `ram.md` §4.3 |
-| `$FFA0`–`$FFAF` | 16 B | **MMU block registers, LOW byte** | 16 entries, index = `A3..A0` = `{TASK, block}`. Bits 7–0 are physical `A20..A13` — `hardware/gal/README.md` |
+| `$FFA0`–`$FFAF` | 16 B | **MMU block registers, LOW byte** | 16 entries, index = `A3..A0` = `{TASK, block}`. Bits 7–0 are physical `A20..A13` — `hardware/tools/gal/README.md` |
 | `$FFB0`–`$FFBF` | 16 B | **MMU and boot control** | **two bytes, aliased 8× each on the address's parity**: `$FFB0` even is `TASK`, `$FFB1` odd is the **`RUN`** strobe (§7.2). One literal — `A0` — and no more; decoding the sixteen bytes apart would cost four GAL inputs U6 has not got. ⚠ **`$FFB1` is a strobe, not a register**: the value written is ignored, and it is one-way per reset |
 | `$FFC0`–`$FFFF` | 64 B | ⭐ **the boot ROM's vector page** | §7.2 — the ROM answers here unconditionally, so `$FFFE` is a reset vector and not an undriven bus. **The one region of the I/O page that is not I/O** |
 
@@ -374,7 +374,7 @@ Geographic decode spans **`$FF00`–`$FF7F`** (§5 item 1 A): `/IOSEL` is
 > could see on its own.
 
 > **`$FFA0`–`$FFAF` holds the sixteen block registers and nothing else**
-> (`hardware/gal/README.md`):
+> (`hardware/tools/gal/README.md`):
 >
 > - **Sixteen block registers need all sixteen bytes**, so nothing else can share them.
 >   **Nothing in this machine decodes `$FF80`–`$FF9F`**; `$FF90`–`$FF9F` was the CPU
@@ -395,14 +395,14 @@ Geographic decode spans **`$FF00`–`$FF7F`** (§5 item 1 A): `/IOSEL` is
 >   ⭐ **It lives on U6 rather than U9**, and the reason is a device fact: a `GAL22V10`
 >   has **one** clock and **one** asynchronous reset, and U6 has `CLK25` on pin 1 and
 >   `/RESET` in the array because it is the divider. U9 would have paid three pins for
->   what U6 already had (`hardware/gal/clkdec.pld`).
+>   what U6 already had (`hardware/mainboard/logic/clkdec.pld`).
 >
 > What is left is `TASK` and `RUN`, and it is why the control window holds two bits.
 
 ### The map has 56 bytes free
 
 16 + 16 + 4 + 4 + 32 = **72** allocated, in a window of 128; the free 56 are
-`$FF00`–`$FF2F` and `$FF50`–`$FF57`. `hardware/lib/cards.check.ts` prints the margin on
+`$FF00`–`$FF2F` and `$FF50`–`$FF57`. `hardware/tools/lib/cards.check.ts` prints the margin on
 every run, and it prints how it was got.
 
 ⚠ **It was 64 free until 2026-09-09**, and the eight bytes went to the I/O card when
@@ -427,7 +427,7 @@ space entirely.
 
 | Line | Owner | Source |
 |---|---|---|
-| `/IRQ` | **shared, open-drain** | video's VBL and raster compare — `graphics.md` §12. VBL is NitrOS-9's system tick. **PS/2 is a third source** — `io/ps2/docs/ps2.md` §3.1. **Serial a fourth** — `serial.md` §6. **Net a fifth** — `net/docs/net.md` §6, and it is the only source that can out-rate VBL |
+| `/IRQ` | **shared, open-drain** | video's VBL and raster compare — `graphics.md` §12. VBL is NitrOS-9's system tick. **PS/2 is a third source** — `hardware/io/ps2/docs/ps2.md` §3.1. **Serial a fourth** — `serial.md` §6. **Net a fifth** — `hardware/net/docs/net.md` §6, and it is the only source that can out-rate VBL |
 | `/FIRQ` | **audio, and audio alone** | the on-card tempo timer — `audio.md` §8.1 |
 | `/NMI` | unassigned | and should stay that way — a non-maskable I/O source would pre-empt the replayer tick |
 
@@ -537,13 +537,13 @@ decisions here, because other documents cite them by item number.
    ### A — the geographic window is `$FF00`–`$FF7F`. Taken.
 
    `/IOSEL` is `/IOPAGE · /A7` — **one literal fewer than the 64-byte decode it
-   replaces** (`gal/clkdec.pld`).
+   replaces** (`mainboard/logic/clkdec.pld`).
 
    | | |
    |---|---|
    | **Gained** | 64 bytes at `$FF00`–`$FF3F` — the machine's whole margin, and 16× what it had |
    | **Motherboard cost** | **negative.** One product-term literal removed from U6 |
-   | **⚠ Card cost** | **every card must decode `A0`–`A6`, not `A0`–`A5`.** With `A6` out of the strobe, a card matching six bits answers at its base **and 64 bytes below it** — two cards on `D0`–`D7`, silently. `hardware/lib/cards.check.ts` asserts the seven bits; `gal/vctrl.pld` is the one card decode in this repository and it carries them |
+   | **⚠ Card cost** | **every card must decode `A0`–`A6`, not `A0`–`A5`.** With `A6` out of the strobe, a card matching six bits answers at its base **and 64 bytes below it** — two cards on `D0`–`D7`, silently. `hardware/tools/lib/cards.check.ts` asserts the seven bits; `archive/video/logic/vctrl.pld` is the one card decode in this repository and it carries them |
    | **Given up** | `$FF00`–`$FF3F` is a CoCo 3's PIA0 and PIA1. Answering at the canonical PIA addresses is impossible — one more line for the divergence ledger item 6 says nobody keeps, and a cheap one: this machine has no PIAs, and PS/2 and serial replaced what they did |
    | **Not extended to `$FF80`–`$FF8F`** | 16 more bytes, but the decode becomes `/A7` **+** `(A7·/A6·/A5·/A4)` — two terms and two more inputs, for a window that is then discontiguous and needs every card to know it. **U6 pin 6 keeps its `LA6` trace precisely so this stays a one-line change**, and it is not taken today |
 
@@ -557,15 +557,15 @@ decisions here, because other documents cite them by item number.
    **The eighth bit was already there.** The map SRAM is byte-wide, the isolation `'245`
    already carries all eight bits, and the block register's bit 7 was already written and
    read back. **It drove nothing.** It is now physical `A20`
-   (`hardware/gal/README.md`).
+   (`hardware/tools/gal/README.md`).
 
    | | |
    |---|---|
    | **Cost** | **one backplane pin and zero ICs.** Slot position A34, which was the machine's one spare, is `A20`. `mainboard.circuit.tsx`'s map SRAM `DQ7` is `net.A20`; U6 takes it on pin 9 |
-   | Decode cost | one literal each on `ramsel` (U6, on a part with spare inputs) and `VRAMSEL` (`gal/vctrl.pld`) |
+   | Decode cost | one literal each on `ramsel` (U6, on a part with spare inputs) and `VRAMSEL` (`archive/video/logic/vctrl.pld`) |
    | **Gained** | `A20 = 1` — **1 MB for card buffers**, addressed as ordinary memory through the MMU's 8 KB blocks |
    | **⚠ And it retires a hazard** | `sdcard.md` §4's `TFM` re-read corrupts a block because the *port* read pops a byte. `sdcard.md` §4.2 already shows the mirror-image `TFM` against RAM is safe. **A memory-mapped card buffer is idempotent to re-read**, so the chunk-and-mask tax — 21 % on storage, 21 % on net — was a symptom of this shortage and not an independent CPU problem. It does not delete `cpu`'s obligation to settle the behaviour (§6), because a port is still a port; it deletes the two cards' need to care |
-   | **⚠ Given up** | **the backplane has no spare pin now, and two things wanted it.** `hardware/README.md` earmarked A34 for a future rail; `net.md` §13.1 wanted **two** pins for a DMA request/grant pair, plus `BA`/`BS` brought out. `A20` beat both on arithmetic — one pin, no ICs, 1 MB — and **that competition is decided, not deferred.** A seventh signal position would now come out of the ground or power allocation, and `lib/slot.check.ts` is what prices that |
+   | **⚠ Given up** | **the backplane has no spare pin now, and two things wanted it.** `hardware/README.md` earmarked A34 for a future rail; `net.md` §13.1 wanted **two** pins for a DMA request/grant pair, plus `BA`/`BS` brought out. `A20` beat both on arithmetic — one pin, no ICs, 1 MB — and **that competition is decided, not deferred.** A seventh signal position would now come out of the ground or power allocation, and `tools/lib/slot.check.ts` is what prices that |
 
    ### What was not taken, and why
 
@@ -583,7 +583,7 @@ decisions here, because other documents cite them by item number.
      and unnecessary.
 
 2. **CLOSED — I/O interrupts ride `/IRQ`.**
-   [`io/ps2/docs/ps2.md`](../io/ps2/docs/ps2.md) §3.1 takes **`/IRQ`, as a third
+   [`hardware/io/ps2/docs/ps2.md`](../hardware/io/ps2/docs/ps2.md) §3.1 takes **`/IRQ`, as a third
    source** — see §4: `/IRQ` is open-drain, already carries VBL and raster compare, and
    its handler already polls. Only `/FIRQ` is exclusive.
 
@@ -605,8 +605,8 @@ decisions here, because other documents cite them by item number.
    > them destroys its own status on read.
 
 3. **CLOSED 2026-09-06 — the MMU register set is written down, and it is hardware.**
-   [`hardware/gal/README.md`](../hardware/gal/README.md) carries the map and
-   [`hardware/gal/mmu.pld`](../hardware/gal/mmu.pld) the equations that decode it; §3
+   [`hardware/tools/gal/README.md`](../hardware/tools/gal/README.md) carries the map and
+   [`hardware/mainboard/logic/mmu.pld`](../hardware/mainboard/logic/mmu.pld) the equations that decode it; §3
    above holds the map. **`$FFA0`–`$FFAF` is 16 block registers, `$FFB0`–`$FFBF` is one
    control bit.**
 
@@ -622,13 +622,13 @@ decisions here, because other documents cite them by item number.
 
 5. **CLOSED 2026-09-06 — backplane, and [`hardware/README.md`](../hardware/README.md)
    is the owning document.** Three decisions came with it and each is checked rather
-   than asserted ([`hardware/lib/slot.check.ts`](../hardware/lib/slot.ts)):
+   than asserted ([`hardware/tools/lib/slot.check.ts`](../hardware/tools/lib/slot.ts)):
 
    | | |
    |---|---|
    | **Connector** | **72-pin 0.1″ card edge, 2 × 36** — 45 signals, 5 × +5 V, 18 GND, 2 analogue returns, 1 key, **no spare** |
-   | **Card format** | **100 mm high × 120, 180 or 240 mm long**, per card — `hardware/place/` draws each board 1 : 1 and `place.check.ts` asserts it takes the shortest length that works |
-   | **CPU siting** | **a 40-pin DIP socket on the motherboard**, so the drop-in module `cpu/` already builds is literally the same hardware SKU |
+   | **Card format** | **100 mm high × 120, 180 or 240 mm long**, per card — `hardware/tools/place/` draws each board 1 : 1 and `place.check.ts` asserts it takes the shortest length that works |
+   | **CPU siting** | **a 40-pin DIP socket on the motherboard**, so the drop-in module `hardware/cpu/` already builds is literally the same hardware SKU |
    | **Slots** | **six** — five specified cards plus one spare. ⚠ **Unargued**; `hardware/README.md` open item 5 |
 
    > ⚠ **What is still open is a smaller question than this item was.** The connector's
@@ -733,13 +733,13 @@ decisions here, because other documents cite them by item number.
 
 8. **⚠ FIXED 2026-09-08 — `/WAIT` holds E in U6, and it carries a machine-level rule.**
 
-   [`hardware/gal/vctrl.pld`](../hardware/gal/vctrl.pld) drives `/WAIT` open-drain —
+   [`hardware/archive/video/logic/vctrl.pld`](../hardware/archive/video/logic/vctrl.pld) drives `/WAIT` open-drain —
    the video card holding the CPU off VRAM while the span writer runs — and U6's divider
-   ([`hardware/gal/clkdec.pld`](../hardware/gal/clkdec.pld)) consumes it: every
+   ([`hardware/mainboard/logic/clkdec.pld`](../hardware/mainboard/logic/clkdec.pld)) consumes it: every
    registered macrocell carries a hold term (`Cn.d = next & /WAIT # Cn & WAIT`), +1
    product term each (E is at 8 of 16), input on a free pin, no macrocells spent — and
    U6 has none spare. `clkdec_tb.sv` carries the claims, including *"/RESET beats
-   /WAIT"*; Atmel's own CUPL agrees with the fuse map; and `lib/netlist.check.ts`
+   /WAIT"*; Atmel's own CUPL agrees with the fuse map; and `tools/lib/netlist.check.ts`
    asserts that U6 takes the signal, which is what stops a consumerless `/WAIT`
    recurring.
 
@@ -777,7 +777,7 @@ decisions here, because other documents cite them by item number.
    every other card on the wire. Three signals use the idiom — video `/WAIT`, video
    `/IRQ`, audio `/FIRQ` — and all three once had it wrong; `jedec/cupl.ts` and
    `jedec/galpld.ts` now emit `'b'1` for an active-low cell, verified by
-   `hardware/gal/jedec/cupl.check.ts` running Atmel's own compiler against our fuse map
+   `hardware/tools/gal/jedec/cupl.check.ts` running Atmel's own compiler against our fuse map
    (agreement over all 512 input combinations of the arbiter). Every affected device
    was refitted. The full account, and the lesson about second implementations, is in
    [history.md](history.md).
@@ -802,7 +802,7 @@ decisions here, because other documents cite them by item number.
 
     ### What it settles
 
-    - ⭐ **DRAM refresh is safe** — `hardware/ram.md` §6.6's open question, closed.
+    - ⭐ **DRAM refresh is safe** — `hardware/mainboard/docs/ram.md` §6.6's open question, closed.
       `/WAIT` here is qualified on `VRAMSEL`, so the CPU is stalled *on VRAM* and the
       DRAM bus is idle for the whole 40.7 µs while the refresh controller runs off
       `CLK25`. **They never contend**, and a maximal span is 2.6 refresh intervals of
@@ -867,7 +867,7 @@ decisions here, because other documents cite them by item number.
 
     ⛔ **Hardware presence detect was refused on a device fact, not on cost: a 30-pin
     SIMM has no presence-detect pins.** `PD1`–`PD4` are a **72-pin** module's feature;
-    on a 30-pin module those positions are `NC` (`hardware/lib/parts.ts`). Anything
+    on a 30-pin module those positions are `NC` (`hardware/tools/lib/parts.ts`). Anything
     calling itself hardware detection here is a **jumper block a human sets** — read
     through spare GAL inputs, at **+1 package** because the four bits have to reach U10
     and U10 has two free pins — which moves the obligation from firmware to a person and
@@ -928,7 +928,7 @@ decisions here, because other documents cite them by item number.
     | Motherboard | **+1 `'138`** |
     | ⭐ **And it retires a recorded loss** | §2's *"nothing prevents two cards being set to the same base and nothing detects it"* becomes impossible by construction, which is what colormin had and this machine gave up |
 
-    ⚠ **`hardware/lib/slot.ts` and `slot.check.ts` will need rewriting**: `A5` and `A6`
+    ⚠ **`hardware/tools/lib/slot.ts` and `slot.check.ts` will need rewriting**: `A5` and `A6`
     leave the connector and a `/SLOTSEL` position arrives. ⚠ **And `$FF80`–`$FF8F` must
     stay free** — under this plan the pressure on it disappears, so it is not to be
     spent on anything in the meantime.
@@ -944,13 +944,13 @@ a cross-card dependency.
 |---|---|---|
 | **machine** | **Keep a NitrOS-9 divergence ledger** — video registers, interrupt block, MMU, the PIA addresses. Each is priced individually and nothing sums them. ⭐ **It got shorter on 2026-09-08**: §7.2's motherboard ROM put the boot code and the vectors where a CoCo has them, so two entries came off | §5 item 6 |
 | **machine** | **Draw the motherboard.** ⭐ **CLOSED 2026-09-09** — [`hardware/`](../hardware/) has the backplane pinout, the motherboard at **19 ICs and four SIMM sockets**, and every card's bus interface, at schematic level. **All four of the board's GALs are fitted at the fuse level and checked against Atmel's own CUPL; there is no unwritten logic on it.** Placement waits on a measured slot-socket footprint and on four unverified pinouts | §2.1, §7.1, §7.2, [`hardware/README.md`](../hardware/README.md) |
-| **machine** | **⚠ RAM expansion — decided, not built.** `hardware/ram.md`: 16-bit map entries, a 32 MB map, four 30-pin SIMM sockets and **no SRAM**, for **five packages, zero backplane pins and zero card changes**. **The boot path it owed is closed** — §7.2's ROM. ⭐ Also: `TASK` widens from 1 bit to 8 **for nothing** — 256 contexts and a one-write process switch | `hardware/ram.md` §5, §6, §10 |
-| cpu | Confirm the GIME accepts a 3.3 V `V_OH` from the level buffers | `cpu/README.md` TODO |
-| cpu | First silicon measurement, against the recorded predictions | `cpu/docs/plan.md` §5 |
+| **machine** | **⚠ RAM expansion — decided, not built.** `hardware/mainboard/docs/ram.md`: 16-bit map entries, a 32 MB map, four 30-pin SIMM sockets and **no SRAM**, for **five packages, zero backplane pins and zero card changes**. **The boot path it owed is closed** — §7.2's ROM. ⭐ Also: `TASK` widens from 1 bit to 8 **for nothing** — 256 contexts and a one-write process switch | `hardware/mainboard/docs/ram.md` §5, §6, §10 |
+| cpu | Confirm the GIME accepts a 3.3 V `V_OH` from the level buffers | `hardware/cpu/README.md` TODO |
+| cpu | First silicon measurement, against the recorded predictions | `hardware/cpu/docs/plan.md` §5 |
 | cpu | **Provision the option bytes** (`nSWBOOT0 = 0`) — PB8 is A8 *and* BOOT0, so an unprovisioned part boots nondeterministically in the socket | `design-review.md` §Cpu-M2 |
-| **cpu** | ⭐ **DECIDED 2026-09-21 — `cpu/docs/plan.md` §4.3.1.** This core **completes the byte before it takes an interrupt**, so a `TFM` never re-reads its source or re-writes its destination. ⛔ A deliberate divergence, opt-in, **off by default and absent on the CoCo 3 SKU** (§4.3.2), and one entry in item 6's ledger. ⚠ **The silicon capture is still owed** — it says what the *compatible* mode must do, and `sdcard.md` §12 step 1's **Form 3** question is answered by neither the book nor NitrOS-9. ⚠ **One card waited on it, not two**: net retired its exposure when its ring became memory (`net.md` §3.2) | `cpu/docs/plan.md` §4.3.1; `sdcard.md` §11.6, §13 item 1; `docs/6309.md` §5.1 |
+| **cpu** | ⭐ **DECIDED 2026-09-21 — `hardware/cpu/docs/plan.md` §4.3.1.** This core **completes the byte before it takes an interrupt**, so a `TFM` never re-reads its source or re-writes its destination. ⛔ A deliberate divergence, opt-in, **off by default and absent on the CoCo 3 SKU** (§4.3.2), and one entry in item 6's ledger. ⚠ **The silicon capture is still owed** — it says what the *compatible* mode must do, and `sdcard.md` §12 step 1's **Form 3** question is answered by neither the book nor NitrOS-9. ⚠ **One card waited on it, not two**: net retired its exposure when its ring became memory (`net.md` §3.2) | `hardware/cpu/docs/plan.md` §4.3.1; `sdcard.md` §11.6, §13 item 1; `hardware/cpu/docs/6309.md` §5.1 |
 | video | Bench the dot path and fit the sequencer GALs *before* layout | `graphics.md` §18 steps 1–2 |
-| ~~video~~ | **CLOSED — the video output stage is specified.** `graphics.md` §9.1 is a 1 kΩ/2 kΩ ladder, three NPN emitter followers on a shared `V_be` reference and a 75 Ω series source, with the arithmetic; §9.2 makes blanking a `74AHCT273` `/MR` for zero packages, and §9.3 deletes `BORDER` because VGA has no overscan. **Drawn** in `hardware/cards/video.circuit.tsx` | `graphics.md` §9.1–§9.3, was `design-review.md` §Vid-M4 |
+| ~~video~~ | **CLOSED — the video output stage is specified.** `graphics.md` §9.1 is a 1 kΩ/2 kΩ ladder, three NPN emitter followers on a shared `V_be` reference and a 75 Ω series source, with the arithmetic; §9.2 makes blanking a `74AHCT273` `/MR` for zero packages, and §9.3 deletes `BORDER` because VGA has no overscan. **Drawn** in `hardware/archive/video/board/video.circuit.tsx` | `graphics.md` §9.1–§9.3, was `design-review.md` §Vid-M4 |
 | **video** | **⚠ The list engine clobbers `WPTR`, and that is software's rule to keep.** Sharing the write pointer is what made the display list fit; anything that starts a list reloads `+$08`–`$0A` afterwards, three writes. §10.3 owns the semantics | `graphics.md` §10.1.6.2, §13 |
 | **video** | **⚠ `vaddr` is the tight part, on fan-in.** `vctrl` is **95 of 128 cells, 56 of 64 I/O and 2 of 4 dedicated inputs**, on the fitter's first pass since `graphics.md` §19 item 48's refit. `vaddr` is **113 of 128 cells and 59 of 64 I/O**, and ⛔ **the binding limit on that part is neither: it is SWITCH-MATRIX FAN-IN.** An `ATF1508AS` logic block admits 40 signals, and three separate one-literal changes to `vaddr` were refused on 2026-09-09 — two `Grouping fail` and one `INTERNAL ERROR`, each leaving the previous `.fit` in place. **Fan-in is the third thing this family runs out of, after cells and pins**, and it is the one nothing warns you about. `vsup` is 94 of 128 cells and 63 of 64 I/O. ⚠ `vsup` fits only on the fitter's second pass (`graphics.md` §19 item 46) | `cpld/*.fit`, `graphics.md` §19 items 33, 46 |
 | **video** | **⚠ No hardware character generator, and text is two modes not one.** §6.4.3's Variant B is dropped. Text that mixes with graphics or colours per cell is the span writer in bitmap mode at **13 writes/cell** — a scrolled line is 2.5 ms, **3 % of the CPU at 9600 baud**, and a full 80×25 redraw is 62 ms against the 2–4 s a full ANSI screen takes to arrive over the modem. A **one-colour-pair console** is §6.4.8's cell mode instead, at **1 write/cell**, 0.19 ms per scrolled line and 4.8 ms per screen — bounded by 256 (glyph, colour) pairs, 32 cell rows, and a global mode. **Under NitrOS-9 neither is per-window**: §6.4.6's mode is global | `graphics.md` §6.4.3, §6.4.8 |
@@ -965,7 +965,7 @@ a cross-card dependency.
 | **io** | **⚠ Fit `net`'s U2 before laying out its board** — 118 of 128 macrocells and 56 of 60 pins, with a five-step cut order behind it | `net.md` §7.3, §16 item 1 |
 | **io** | **Find out whether a NitrOS-9 network stack exists.** It is the net card's largest cost and nobody has looked — the same shape of unknown as `serial`'s `sc6551` | `net.md` §14.2, §16 item 12 |
 | **storage** | **CLOSED 2026-09-20.** The read path is on the port too now, so both pay §4.4's 32-byte chunk-and-mask and the inconsistency the item booked is gone. ⭐ What replaces it: `cpu`'s `TFM` capture below is now worth **21 %** on this card rather than nothing | `sdcard.md` §13 item 6 |
-| **storage** | **CLOSED 2026-09-20 by the card shrinking instead.** `hardware/gal/storage/census.ts` counts pins rather than macrocells and finds the *buffered* card was four GAL22V10s and so 16 ICs, not 14 — which is what made a CPLD look necessary. The port card is two GALs and 8 ICs, and keeps the fuse-level verification a CPLD gives up | `sdcard.md` §8.1, §13 item 12 |
+| **storage** | **CLOSED 2026-09-20 by the card shrinking instead.** `hardware/storage/logic/census.ts` counts pins rather than macrocells and finds the *buffered* card was four GAL22V10s and so 16 ICs, not 14 — which is what made a CPLD look necessary. The port card is two GALs and 8 ICs, and keeps the fuse-level verification a CPLD gives up | `sdcard.md` §8.1, §13 item 12 |
 | storage | A NitrOS-9 `RBF` driver — larger than the card. Evaluate matching CoCoSDC's map to inherit one | `sdcard.md` §13 item 4 |
 | **project** | **Choose a licence.** The repository has none for its own work | `design-review.md` §Sys-M6 |
 
@@ -980,7 +980,7 @@ not supply them; both are decided here.
 ### 7.1 System RAM
 
 **Four 30-pin SIMM sockets, 4–16 MB of DRAM**, at physical 4–20 MB —
-[`hardware/ram.md`](../hardware/ram.md) §5.2, §6.
+[`hardware/mainboard/docs/ram.md`](../hardware/mainboard/docs/ram.md) §5.2, §6.
 
 > ⭐ **Decided 2026-09-08.** The map entry is 16 bits wide, so system RAM does not have
 > to fit inside a 2 MB map — and once SIMM sockets are on the board, DIP SRAM has no
@@ -1016,7 +1016,7 @@ has 2.0–4.0 MB reserved and nothing wanting it.
 | Qty | Part | Role |
 |---|---|---|
 | **2** | **`SST39SF040`** — 512K×8, 5 V, 70 ns, **PDIP-32**, current production, ~$2.50 | the 1 MB ROM. Physical `A19` selects between them — one literal on U9 |
-| **1** | **`74HCT244`** | drives physical `A20`–`A13` in the map's place — the whole of the mechanism below. ⭐ **A `'244` and not a `'541`**, because the `'244` has a datasheet in `reference/datasheets/` and the `'541` does not: both are octal three-state buffers, so the tie-break is which pinout can be *read* rather than remembered (`hardware/lib/parts.ts`) |
+| **1** | **`74HCT244`** | drives physical `A20`–`A13` in the map's place — the whole of the mechanism below. ⭐ **A `'244` and not a `'541`**, because the `'244` has a datasheet in `reference/datasheets/` and the `'541` does not: both are octal three-state buffers, so the tie-break is which pinout can be *read* rather than remembered (`hardware/tools/lib/parts.ts`) |
 
 ⚠ **Two packages because no 5 V 1M×8 part comes in a DIP.** `AM29F080B` (1M×8) is
 PLCC-44/TSOP-40 and `M27C801` is a UV EPROM needing an eraser; the `SST39SF040` is
@@ -1035,7 +1035,7 @@ availability is the first question about a part (`net.md` §13.6).
 **In both forced modes the map SRAMs are deselected and the `'244` is on**, and they are
 mutually exclusive **by construction rather than by timing**: U6 forms the buffer's enable
 and U9 forms the SRAMs' chip enables **from the same two conditions**, and
-`hardware/gal/jedec.check.ts` asserts over every combination of `RUN`, `/IOPAGE`, `LA7`
+`hardware/tools/gal/jedec.check.ts` asserts over every combination of `RUN`, `/IOPAGE`, `LA7`
 and `LA6` that the two are never both asserted.
 
 ⭐ **The handover edge is free too.** `RUN` is set by a write to `$FFB1`, which is an
@@ -1046,7 +1046,7 @@ independent reason. There is no instant at which one turns on as the other turns
 chosen: a `GAL22V10` has **one** asynchronous reset shared by every registered macrocell
 and it resets to **zero**, with no per-macrocell preset. A bit that had to come up *set*
 could not live on that part at all. So the register holds "the map is trustworthy", it is
-0 out of reset, and `BOOT` is its complement (`hardware/gal/clkdec.pld`).
+0 out of reset, and `BOOT` is its complement (`hardware/mainboard/logic/clkdec.pld`).
 
 ⚠ **`A24`–`A21` float in both forced modes and nothing may read them.** The `'244`
 drives **eight** lines — `A20`–`A13` — because the ROM needs `A19`–`A13` above the
@@ -1113,13 +1113,13 @@ timer free-runs off `CLK25` from reset, which §5 item 10's rule requires of it 
 > **`$FFB0` even and `$FFB1` odd is one literal**, and it is what makes the order above
 > possible at all: boot code has to write `TASK` *before* the sixteen map entries,
 > because the map index is `{TASK, block}` — and a control window that left boot mode on
-> **any** write would have made that impossible. `hardware/gal/clkdec.pld`.
+> **any** write would have made that impossible. `hardware/mainboard/logic/clkdec.pld`.
 
 #### What the megabyte is for
 
 | | |
 |---|---|
-| **ROM page 0 — 8 KB** | the boot monitor: the sequence above, a `16C550` DriveWire loader ([`drivewire.md`](drivewire.md) §6.1), the video POST, ⭐ **§10a's boot dialog** ([`boot-and-desktop.md`](boot-and-desktop.md) §1) and the `$FFC0`–`$FFFF` vector table |
+| **ROM page 0 — 8 KB** | the boot monitor: the sequence above, a `16C550` DriveWire loader ([`drivewire.md`](../software/nitros9/docs/drivewire.md) §6.1), the video POST, ⭐ **§10a's boot dialog** ([`boot-and-desktop.md`](../software/desk/docs/boot-and-desktop.md) §1) and the `$FFC0`–`$FFFF` vector table |
 | **pages 1–2 — 16 KB** | `rel_arm6309`: the loader, `boot_sd` and `krn` — the code that finds `OS9Boot` and enters the kernel |
 | **pages 3–63 — 488 KB** | ⭐ **free, and verified zero.** These were a read-only ROM disk until 2026-09-22 |
 | **pages 64–127 — 512 KB** | ⭐ **the ROM toolbox** — `tbox.asm` on page 64 and its fonts, icons, palette and pictures on the pages after it. CoArm draws Haiku windows out of it in place, the way a Macintosh drew with QuickDraw, **and so does page 0's own boot dialog** |
@@ -1134,7 +1134,7 @@ clears the screen, draws "Looking for disk" and "Disk found", and reads the syst
 software off the disk — §10a and §10b, `boot-and-desktop.md` §1. A machine with no
 bootable card blinks the question mark and **does not reach a prompt at all**: there
 is no rescue system to fall back to, because a fallback that works is a fallback
-that hides a card that does not (`storage/docs/sdcard.md` §9.5, and
+that hides a card that does not (`hardware/storage/docs/sdcard.md` §9.5, and
 `software/nitros9/run-sdboot.sh`'s three card states are what assert it).
 What the ROM *does* still carry is the **toolbox** — the fonts, icons and drawing
 routines the desktop and its applications share — which is the half of the
@@ -1168,19 +1168,19 @@ motherboard and system RAM owe measured figures at bring-up
 
 | Rail | Consumer | ICs | Estimate |
 |---|---|---|---|
-| 5 V | **video card** (`video3`) | **45** — 4 CPLDs, a GAL, 3 SRAMs | ⛔ **not yet estimated** — `video3/docs/plan.md` §14 item 13 owes one. ⚠ The archived `video` card's figure was ~0.5–0.85 A, 0.65 A nominal at 33 packages (`archive/video/docs/graphics.md` §14.2); `video3` is twelve packages larger with a fourth CPLD, so that number is a **floor** and not a substitute |
+| 5 V | **video card** (`video3`) | **45** — 4 CPLDs, a GAL, 3 SRAMs | ⛔ **not yet estimated** — `hardware/video3/docs/plan.md` §14 item 13 owes one. ⚠ The archived `video` card's figure was ~0.5–0.85 A, 0.65 A nominal at 33 packages (`hardware/archive/video/docs/graphics.md` §14.2); `video3` is twelve packages larger with a fourth CPLD, so that number is a **floor** and not a substitute |
 | 5 V | **audio card** | **35** on an 18 cm board — `audio.md` §10.1 | **~340–500 mA** — `audio.md` §10. ⚠ **That estimate was made at 32 packages**, before §10's six-package datapath shortfall and the second CPLD; it is now a floor rather than a range |
 | 5 V | **PS/2**, plus ~50–100 mA per attached device from each mini-DIN pin 4 | 11 | not yet estimated; order 100 mA of logic + up to 200 mA of devices |
-| 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `net/docs/net.md` §10. **The largest single-card draw with an estimate behind it** — ⚠ the video card's is unestimated (see the video row), and at 45 packages and four CPLDs it will not be smaller — and the only figure on that card that cannot be derived from a datasheet with confidence |
+| 5 V | **net** | 12 (2 CPLDs) | **~410–510 mA**, of which ~250 mA is the two `ATF1508AS` with reduced-power mode set per-macrocell — `hardware/net/docs/net.md` §10. **The largest single-card draw with an estimate behind it** — ⚠ the video card's is unestimated (see the video row), and at 45 packages and four CPLDs it will not be smaller — and the only figure on that card that cannot be derived from a datasheet with confidence |
 | 5 V | **serial**; **storage** (plus SD write bursts behind its own LDO) | 3 + **8** | not yet estimated |
-| 5 V | **motherboard**: MMU (5, +1 map SRAM, **+1 isolation `'245`**), divider GAL, oscillator, reset supervisor, U9/U10 GALs, 3 × `'157`, **the `'4040` refresh timebase**, and 2 × `SST39SF040` boot ROM with its `'244` — `hardware/ram.md` §6.5 | **19** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load. The ROM adds ~30 mA per part while it is selected and ~10 µA when it is not, which is most of the time |
+| 5 V | **motherboard**: MMU (5, +1 map SRAM, **+1 isolation `'245`**), divider GAL, oscillator, reset supervisor, U9/U10 GALs, 3 × `'157`, **the `'4040` refresh timebase**, and 2 × `SST39SF040` boot ROM with its `'244` — `hardware/mainboard/docs/ram.md` §6.5 | **19** + 4 SIMM sockets | not yet estimated. ⚠ **DRAM is the machine's first refreshed memory**; a populated SIMM bank is not a small load. The ROM adds ~30 mA per part while it is selected and ~10 µA when it is not, which is most of the time |
 | 3.3 V | CPU module and its buffers; the SD card | 8 | not yet estimated |
 
 ⛔ **The machine's total current is no longer a stated range.** It was **1.8–3.0 A**
 at 5 V across 121 ICs, and the video row was the largest term in it; `video3` replaced
 `video` on 2026-09-20 with twelve more packages and no estimate at all, so the sum has
 nothing to add there. **1.8–3.0 A is a floor**, not the figure, until `plan.md` §14
-item 13 is answered. The package count, from `hardware/place/parts.ts`, which is what
+item 13 is answered. The package count, from `hardware/tools/place/parts.ts`, which is what
 places on the boards:
 
 | video3 | audio | PS/2 | serial | storage | net | **cards** | motherboard | **machine** |
@@ -1188,7 +1188,7 @@ places on the boards:
 | **45** | **35** | 11 | 3 | **8** | **12** | **114** | **19** | **133** |
 
 ⚠ **The table follows the parts list, and the cards' own sections are the number of
-record** — `video3/docs/plan.md` §13.1, `audio.md` §10.1.
+record** — `hardware/video3/docs/plan.md` §13.1, `audio.md` §10.1.
 
 The backplane-distribution question this used to leave open — **how many power and
 ground pins per slot** — was answered with the connector (§5 item 5): **5 × +5 V and
@@ -1199,7 +1199,7 @@ measured figure at its own bring-up.
 > `audio.md` §16 item 19 raised it, and the count has moved several times since — the
 > analogue section is now **twelve converter halves and thirteen amplifier channels**
 > after `audio.md` §11.1's panning, against the two converters and four channels the
-> original one-board assertion was made about. `hardware/place/` puts the card on
+> original one-board assertion was made about. `hardware/tools/place/` puts the card on
 > **18 cm** and that is a courtyard-area check, not a layout. **Measure it, with the
 > analogue section physically separate.** (The assertion was originally made about a
 > **Eurocard**, which the machine stopped using on 2026-09-08 — §5 item 5.)

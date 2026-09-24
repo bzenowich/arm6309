@@ -4,33 +4,33 @@
 sequence that leaves boot mode, and a video bring-up that puts a picture on the
 connector. It is the first code this project has ever executed.
 
-⭐ **The video half drives [`video3`](../../video3/docs/plan.md) since 2026-09-20.** It
-drove [`archive/video/`](../../archive/video/docs/graphics.md) until that day, and the
+⭐ **The video half drives [`video3`](../../hardware/video3/docs/plan.md) since 2026-09-20.** It
+drove [`hardware/archive/video/`](../../hardware/archive/video/docs/graphics.md) until that day, and the
 two cards' register maps differ in almost every offset (`plan.md` §10). The motherboard
 half — §1, §1a, §2, §2a, §2b and §11 — did not change, and neither did any of
-`machine_tb`'s claims about it. [`../v3boot/v3boot.asm`](../v3boot/v3boot.asm) is the
+`machine_tb`'s claims about it. [`../v3boot/v3boot.asm`](v3boot/v3boot.asm) is the
 smaller fixture the video half was ported from and is still the thing to read first.
 
 ```sh
-npm run rom            # from hardware/ -- assemble, and write boot.hex
-npm run check:machine  # ... and run it on the real design
+make -C software/boot rom            # from hardware/ -- assemble, and write boot.hex
+make -C hardware machine  # ... and run it on the real design
 ```
 
 | | |
 |---|---|
 | `boot.asm` | the source |
 | `boot.bin` | the 8 KB image — what goes in the first page of the `SST39SF040`. ⭐ **Tracked** |
-| `boot.hex` | the same bytes as `$readmemh` records, loaded by `mainboard.v` |
-| `boot.lst` | A09's listing, and the only place the encodings are visible |
+| `build/boot.hex`, `build/boot.lst` | the same bytes as `$readmemh` records, loaded by `mainboard.v`; and A09's listing, the only place the encodings are visible (both build output since 2026-09-23) |
+| `video/run-video.sh` | ⭐ the boot as a demo video, from the reset vector to the file manager: `make video` (`make sheet` is the same session as a contact sheet) |
 
 ⭐ **`boot.bin` is committed, and the other two are not.** The image is what the machine
 executes, so it is a design output in the sense `CLAUDE.md` means: the fitted `.jed`
 files are tracked for the same reason. It also makes the assembler a visible dependency.
 `fetch-a09.sh` builds A09 from `master`, so a change in A09's output shows up as a diff
-in `boot.bin` the next time `npm run rom` runs. `boot.hex` and `boot.lst` are derived
+in `boot.bin` the next time `make -C software/boot rom` runs. `boot.hex` and `boot.lst` are derived
 from the same assembly and are rebuilt with it.
 
-`npm run rom` checks the image, not just that it assembled: 8,192 bytes, 8,192 `$readmemh`
+`make -C software/boot rom` checks the image, not just that it assembled: 8,192 bytes, 8,192 `$readmemh`
 records, and all seven vectors. For each one, the two bytes in the image, the value in
 A09's listing and the address of the label its `FDB` names must agree, and RESET must
 be `$E000`.
@@ -39,9 +39,9 @@ be `$E000`.
 
 **A09**, Hermann Seib's 6809/6309 assembler, fetched and built on demand by
 [`../tools/fetch-a09.sh`](../tools/fetch-a09.sh). It is GPL v2 and it is **not
-vendored** — the same rule `hardware/gal/verilog/oracle/fetch-paula.sh` states for
+vendored** — the same rule `hardware/audio/sim/oracle/fetch-paula.sh` states for
 `Paula.v`, applied to a build tool. It assembles the HD6309 instruction set as well as
-the 6809's, which is the CPU `cpu/README.md` says goes in the socket.
+the 6809's, which is the CPU `hardware/cpu/README.md` says goes in the socket.
 
 ## The address mapping, which is the part that surprises
 
@@ -53,7 +53,7 @@ the source `ORG`s at `$E000` and the image is offset 0, and why `$FFFE` — the 
 vector — is ROM `$1FFE`.
 
 ⚠ **One entry must point at the page the code is running from**, or setting `RUN`
-moves the instruction stream out from under the CPU. `hardware/ram.md` §6.4 states it
+moves the instruction stream out from under the CPU. `hardware/mainboard/docs/ram.md` §6.4 states it
 as a rule about the ROM's source; this is that source.
 
 ## What the video half draws, and why that shape
@@ -66,7 +66,7 @@ as a rule about the ROM's source; this is that source.
 
 ⛔ **The palette writes the index for EVERY entry**, which is two register writes an
 entry more than the auto-increment needs, and the reason is a live defect
-(`video3/docs/history.md`, 2026-09-19): **outside `VBLANK` the posted commit fires on
+(`hardware/video3/docs/history.md`, 2026-09-19): **outside `VBLANK` the posted commit fires on
 every dot of `HLOAD`**, so `PIDX` steps twice and a 256-entry load that leans on the
 auto-increment writes 479 entries at every other address and then wraps over the ones it
 got right. `v3boot.asm` §2a asks that question on purpose and in one place; this ROM
@@ -86,7 +86,7 @@ this one.
 
 ⛔ **This is the one part of the retarget that is not optional.** `boot.bin` is page 0
 of **every** build of this machine, including builds whose NitrOS-9 drives the archived
-card, and [`software/demo/emu/machine.c`](../demo/emu/machine.c) models both (`m->v3`,
+card, and [`software/emu/machine.c`](../emu/machine.c) models both (`m->v3`,
 selected by `VIDEO3=1`). Sections 3–10 poll `VSTAT` at `$FF6D`; on the other card that
 offset is not `VSTAT` at all but a plain register-file byte, so a poll of it reads back
 whatever was written there and **can spin for ever**. `CLAUDE.md`: a hang is worse than
@@ -99,7 +99,7 @@ wrong in either direction:**
 | | `+$13` is | a write of `$A5`, then `$5A`, reads back as |
 |---|---|---|
 | **`video3`** | `CPTR1`, the copy source's middle byte — an ordinary register-file location (`v3host`'s `RDBKOE` covers it, `A4` set) | the byte that was written. **Probe passes** |
-| **`archive/video`** | `VSTAT`, read "through the `'244` of §12.1, **not** the register file" (`graphics.md` §13) | `SPANBUSY`, `VBLANK`, `HBLANK`, `LRUN`, `PBUSY`, `IRQ` — and **b2 and b3 are hardwired zero**. `$A5` has b2 set and `$5A` has b3 set, so neither pattern can come back in any state of the card at any point in the frame. **Probe fails** |
+| **`hardware/archive/video`** | `VSTAT`, read "through the `'244` of §12.1, **not** the register file" (`graphics.md` §13) | `SPANBUSY`, `VBLANK`, `HBLANK`, `LRUN`, `PBUSY`, `IRQ` — and **b2 and b3 are hardwired zero**. `$A5` has b2 set and `$5A` has b3 set, so neither pattern can come back in any state of the card at any point in the frame. **Probe fails** |
 | **an empty slot** | nothing | whatever the bus last carried — and a known ROM byte is read between the store and the load, `ram.md` §6.4.1's rule, so that is `$C3`. **Probe fails** |
 
 Two patterns rather than one, so a bus stuck at either level fails one of them. The
@@ -161,7 +161,7 @@ The scene is `VMODE 00` anyway, so that the frame is the same 640×200 as §4's.
 
 ## §10a — the boot dialog, and how it calls a toolbox that is not there yet
 
-⭐ **New 2026-09-20.** [`docs/boot-and-desktop.md`](../../docs/boot-and-desktop.md) §1
+⭐ **New 2026-09-20.** [`software/desk/docs/boot-and-desktop.md`](../desk/docs/boot-and-desktop.md) §1
 is the design and says the most of it; this is what the ROM does.
 
 A Macintosh 128K finds its video hardware, clears the screen and puts up a dialog with
@@ -184,7 +184,7 @@ whole map, so it reproduces that layout and calls in exactly as `ca_tbox.asm` do
 ⛔ **`$63` is the usual answer, and that is not a defect.** `boot.bin` is page 0 of every
 build, and page 64 only exists in a NitrOS-9 ROM built with `-DV3=1`
 (`recipes/arm6309/arm6309.mak`: `TBOX = tbox` is inside that `ifneq`). A bare
-`npm run rom` produces 8 KB and no more, and six of `check:machine`'s seven default
+`make -C software/boot rom` produces 8 KB and no more, and six of `check:machine`'s seven default
 scenarios load exactly that. The signature test is `ca_tbox.asm`'s own — the two bytes
 `"TB"` at `Co.WinA` — and it costs one map write and a compare.
 
@@ -252,7 +252,7 @@ clear would claim the rectangle was copied and leave the text unwritten.
 
 ## §10b — the SD reader, and what *found* now means
 
-⭐ **New 2026-09-21.** [`storage/docs/sdcard.md`](../../storage/docs/sdcard.md) §9.0,
+⭐ **New 2026-09-21.** [`hardware/storage/docs/sdcard.md`](../../hardware/storage/docs/sdcard.md) §9.0,
 §9.1 and §9.5 are the design. §10b is ~640 bytes: the card's initialisation and one
 `CMD17` read of block 0, and **nothing else** — no filesystem, no directory walk, no
 write path, and **no block buffer at all**. Its whole output is which of §10a's three
@@ -284,7 +284,7 @@ the ROM disk and said nothing. **The bench's `s` character is what found it** �
 
 ## Sizing memory, and the descriptor it leaves
 
-§1a is `hardware/ram.md` §6.4.1's walk. It runs after `RUN` and before `LDS`, so it is
+§1a is `hardware/mainboard/docs/ram.md` §6.4.1's walk. It runs after `RUN` and before `LDS`, so it is
 stackless: its state is `B` (the socket under test) and `U` (the bitmap). For each socket,
 block 0 is pointed at its base, then:
 
@@ -321,21 +321,21 @@ about the card and that a failed bound has nowhere to report. Two things changed
   E rate, longer than any span (a 256-byte span-solid is ~1,000 dots), any copy and any
   frame (359,200 dots), and short enough that a dead card reports rather than hangs.
 
-⚠ [`../v3boot/v3boot.asm`](../v3boot/v3boot.asm) still leaves its polls unbounded and
+⚠ [`../v3boot/v3boot.asm`](v3boot/v3boot.asm) still leaves its polls unbounded and
 says so: it is a **fixture**, and `v3machine_tb` bounds every stage of it. A boot ROM on
 real hardware has no bench underneath it, which is the whole difference.
 
 ## ⛔ Only one check in this repository executes this ROM from reset
 
-`npm run check:machine` is it — and since 2026-09-20 two of its runs are asked for by
+`make -C hardware machine` is it — and since 2026-09-20 two of its runs are asked for by
 name, `SCENARIOS="disk nodisk"`, which are the only things anywhere that execute §10a:
 they load a **`V3=1`** 1 MB ROM (the one with a toolbox on page 64) and read the dialog
 off `RGB` at the connector, pixel by pixel, with `machine3.v`'s `sd_cd` as the only
 difference between them. The host emulator
-([`software/demo/emu/machine.c`](../demo/emu/machine.c)) **starts the CPU at `$8004`**
+([`software/emu/machine.c`](../emu/machine.c)) **starts the CPU at `$8004`**
 with the map, the stack and the SIMM descriptor pre-set the way §1–§1a would have left
 them — `m->cpu.pc = 0x8004` — so `software/nitros9/run-emu.sh`, `run-sd.sh` and
-`video3/bench/run-v3sd.sh` boot NitrOS-9 **without running a single instruction of this
+`software/nitros9/bench/run-v3sd.sh` boot NitrOS-9 **without running a single instruction of this
 file**. The one path that does run it there is `reboot`: `F$Debug` re-enters the reset
 vector with the map live, and `run-emu.sh`'s two reboot claims are the only emulator
 claims this ROM can fail.
@@ -362,7 +362,7 @@ cell, passes that compare. So `machine_tb` also checks these stages from outside
 | 8 | the map in VRAM: `code` at `MAPBASE`·64K + row·1024 + col·4, which is the four-byte cell `WADV` b2 writes two stores at a time |
 | 10 | all 1,250 bytes the CPU loads from VRAM, window and `VDATA`, against the read sequence restated in the testbench. VRAM itself is peeked at both span starts and at the end |
 
-**And the error paths run.** `npm run check:machine` is four runs of the bench
+**And the error paths run.** `make -C hardware machine` is four runs of the bench
 (`+scenario=`), and in three of them the right answer is a failure:
 
 | scenario | population or fault | asserted |
@@ -388,7 +388,7 @@ block 7 holds:
 
 | Block 7 holds | `$FEEE`–`$FEFD` is |
 |---|---|
-| **this ROM page**: boot mode, and any program handed page 1 (`software/demo/`) | page 0's own jumps. IRQ goes through the word at **`$C004`**, FIRQ through **`$C006`**, and SWI, SWI2, SWI3 and NMI go to `halt` |
+| **this ROM page**: boot mode, and any program handed page 1 (`software/archive/demo/`) | page 0's own jumps. IRQ goes through the word at **`$C004`**, FIRQ through **`$C006`**, and SWI, SWI2, SWI3 and NMI go to `halt` |
 | **NitrOS-9's kernel block** (`software/nitros9/`) | `krn`'s BRA stubs. The kernel ends at `$FF00` so they land exactly here |
 
 `$C004` and `$C006` are in block 6, the SIMM. Boot sets both to `halt` as soon as the
@@ -399,12 +399,12 @@ are one claim.
 pages 1 and 2 at `$8000` and `$A000`. If `$8000` holds `"6309"`, it jumps to `$8004`, with
 the stack, the map and the RAM vectors set up. Otherwise it points the two blocks back at
 the SIMM and halts as before. `machine_tb` loads page 0 only, so it takes the second path.
-`software/demo/` and `software/nitros9/` take the first.
+`software/archive/demo/` and `software/nitros9/` take the first.
 
 ## What it does not do yet
 
 - **Boot itself takes no interrupt.** FIRQ and IRQ stay masked through every test here,
-  and the image contains no `SWI`. `software/demo/` is what takes both: the video card's
+  and the image contains no `SWI`. `software/archive/demo/` is what takes both: the video card's
   VBL `/IRQ` and the audio card's `/FIRQ`, through the RAM vectors above. ⚠ So the
   VBL interrupt `plan.md` §9 makes NitrOS-9's system tick is **not** in this POST;
   `v3boot.asm` §8 and `v3machine_tb` are where it is exercised.

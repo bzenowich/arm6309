@@ -1,0 +1,277 @@
+/* Does every programmable part's pin have the sense of the thing it is wired to?
+ *
+ *   npm run check:pins
+ *
+ * ⛔ WHY THIS EXISTS. On 2026-09-11 a review found NINE pins across all three
+ * boards declared with the wrong sense - U6's /WAIT, the video card's /IOSEL,
+ * /IOPAGE, BLANKD into the '273s' /MR, six fetch-rank /OEs and the register
+ * file's /WE, the audio card's /IOSEL and seven of U2's enables - and every one
+ * of them passed every check in this repository, for the same reason:
+ *
+ *   - verilog/emit.ts emits the ASSERTED sense of every signal and ignores
+ *     activeLow/assertedLow entirely, and every hand-written wrapper inverts the
+ *     backplane lines by hand (machine.v: "active low on the connector and
+ *     asserted-high inside the models"). So the simulation cannot see a pin
+ *     sense at all.
+ *   - the fuse-map checks drive pins at whatever level their author believed,
+ *     and for U6 that belief was the bug.
+ *   - the cards' CPLDs are not drawn, so check:netlist has nothing to compare.
+ *
+ * But the fitter programs exactly what the .pld declares. A wrong `PIN = X`
+ * is a JEDEC that fails on the board and a simulation that passes.
+ *
+ * WHAT IT ASSERTS, three ways:
+ *   1. BACKPLANE. A pin named for an active-low backplane signal (tools/lib/slot.ts,
+ *      the ones spelled with a leading "/") is active-low, input or output.
+ *   2. CROSSINGS. A signal that leaves one part of a card and enters another
+ *      under the same name has the same sense at both ends - which is how a
+ *      fix to one end cannot leave the other behind.
+ *   3. CONSUMERS. Each pin in CONSUMERS below drives a discrete part pin whose
+ *      datasheet sense is recorded beside it.
+ *
+ * ⚠ WHAT IT CANNOT SEE. CONSUMERS is a table, not a netlist: a pin not listed
+ * is not checked against its consumer, and an entry is only as right as the
+ * part it names. It is the list of pins whose consumer is known today, and it
+ * should grow as the cards are drawn - check:netlist is what closes it for
+ * good, once U1-U3 of each card exist in a .circuit.tsx.
+ */
+
+import { SLOT_PINS } from "../lib/slot"
+import { audioCpld } from "../../audio/logic/audio.cpld"
+import { aseqCpld } from "../../audio/logic/aseq.cpld"
+import { mmuDesign } from "../../mainboard/logic/mmu.jedec"
+import { clkdecDesign } from "../../mainboard/logic/clkdec.jedec"
+import { u9Design } from "../../mainboard/logic/u9.jedec"
+import { u10Design } from "../../mainboard/logic/u10.jedec"
+import { v3dot } from "../../video3/logic/v3dot.cpld"
+import { v3scan } from "../../video3/logic/v3scan.cpld"
+import { v3ptr } from "../../video3/logic/v3ptr.cpld"
+import { v3host } from "../../video3/logic/v3host.cpld"
+import { v3laneDesign } from "../../video3/logic/v3lane.jedec"
+import { sdbusDesign } from "../../storage/logic/sdbus.jedec"
+import { sdengDesign } from "../../storage/logic/sdeng.jedec"
+
+let failures = 0, passes = 0
+const check = (ok: boolean, claim: string, detail = "") => {
+  if (!ok) { failures++; console.error(`FAIL  ${claim}${detail ? `  (${detail})` : ""}`) }
+  else { passes++; console.log(`ok    ${claim}`) }
+}
+
+type Dir = "in" | "out"
+interface Pin { name: string; dir: Dir; low: boolean }
+interface Part { name: string; board: string; pins: Pin[] }
+
+/* A merged CPLD's pins are its inputs and its EXTERNAL cells; buried cells
+ * have no sense because they have no pin. A GAL design's cells are all pins. */
+const cpld = (board: string, m: { name: string; inputs: { name: string; activeLow?: boolean }[];
+  cells: { name: string; assertedLow: boolean }[]; external: Set<string> }): Part => ({
+  name: m.name, board,
+  pins: [
+    ...m.inputs.map((i) => ({ name: i.name, dir: "in" as Dir, low: !!i.activeLow })),
+    ...m.cells.filter((c) => m.external.has(c.name))
+      .map((c) => ({ name: c.name, dir: "out" as Dir, low: c.assertedLow })),
+  ],
+})
+const gal = (board: string, d: { name: string; inputs: { name: string; activeLow?: boolean }[];
+  cells: { name: string; assertedLow: boolean }[] }): Part => {
+  const produced = new Set(d.cells.map((c) => c.name))
+  return {
+    name: d.name, board,
+    pins: [
+      ...d.inputs.filter((i) => !produced.has(i.name))
+        .map((i) => ({ name: i.name, dir: "in" as Dir, low: !!i.activeLow })),
+      ...d.cells.map((c) => ({ name: c.name, dir: "out" as Dir, low: c.assertedLow })),
+    ],
+  }
+}
+
+const PARTS: Part[] = [
+  gal("mainboard", mmuDesign), gal("mainboard", clkdecDesign),
+  gal("mainboard", u9Design), gal("mainboard", u10Design),
+  /* ⭐ `video`'s THREE ATF1508AS LEFT THIS LIST ON 2026-09-20 - vaddr, vctrl
+   * and vsup. The card was archived that day and `video3` replaced it
+   * (`hardware/archive/README.md`, `docs/history.md`); `archive/video/logic/video.cpld.ts` and
+   * `archive/video/logic/vsup.cpld.ts` are still there, and nothing checks their pin senses
+   * any more. ⚠ That is a real loss of coverage on a design `machine_tb`
+   * still instantiates, and it is the price of the card not being in the
+   * machine - `hardware/archive/README.md` records it. */
+  cpld("audio", audioCpld), cpld("audio", aseqCpld),
+  /* ⛔ VIDEO3, ADDED 2026-09-18, and rules 1 and 2 found three pins the
+   * moment it was: /IOSEL declared active-high and the open-drain /WAIT and
+   * /IRQ likewise, because v3host's own `reg`/`comb` helpers hard-coded
+   * `assertedLow: false` and nothing on the part COULD be declared low.
+   * ⚠ Rule 3 does not reach this card: CONSUMERS needs a drawn board and
+   * plan.md §15 step 8 owes one. */
+  cpld("video3", v3dot), cpld("video3", v3scan),
+  cpld("video3", v3ptr), cpld("video3", v3host), gal("video3", v3laneDesign),
+  /* ⭐ STORAGE, 2026-09-20. Eight ICs, two of them these; every pin below
+   * that leaves the package drives a discrete part this card really has, so
+   * unlike video3 rule 3 DOES reach it. */
+  gal("storage", sdbusDesign), gal("storage", sdengDesign),
+]
+
+const find = (part: string, name: string): Pin => {
+  const p = PARTS.find((x) => x.name === part)
+  if (!p) throw new Error(`no part ${part}`)
+  const pin = p.pins.find((x) => x.name === name)
+  /* A table entry naming a pin that does not exist is a failure, not a skip:
+   * a rename must not turn a claim into nothing. */
+  if (!pin) throw new Error(`${part} has no pin ${name} - update CONSUMERS`)
+  return pin
+}
+
+/* -- 1. the backplane --------------------------------------------------- */
+console.log("\n      1. every pin named for an active-low backplane signal is active-low\n")
+const ACTIVE_LOW_BP = [...new Set(SLOT_PINS.map((p) => p.signal).filter((s) => s.startsWith("/"))
+  .map((s) => s.slice(1)))]
+/* _BP and _MB are this repository's two spellings of "the same signal, on the
+ * backplane / on the motherboard only" - u9's IOPAGE_BP, the page term's
+ * IOPAGE_MB net. Both carry the signal's sense. */
+/* ⚠ AND VIDEO3 SPELLS THEM WITH AN `N`. Where the other three cards name the
+ * pin for the signal - `WAIT`, `IRQ` - v3host writes `WAITN` and `IRQN`. The
+ * stems that can precede it are the eight active-low slot signals and nothing
+ * else, so stripping a trailing N cannot reach a pin that is not one of them;
+ * not stripping it leaves both pins UNCHECKED, which is how they were wrong. */
+const bpName = (n: string) => n.replace(/_(BP|MB)$/, "").replace(/^(RESET|HALT|WAIT|IOSEL|IOPAGE|IRQ|FIRQ|NMI)N$/, "$1")
+const bpHits: string[] = []
+for (const part of PARTS) {
+  for (const pin of part.pins) {
+    if (!ACTIVE_LOW_BP.includes(bpName(pin.name))) continue
+    bpHits.push(`${part.name}.${pin.name}`)
+    check(pin.low, `${part.board} ${part.name}: ${pin.dir === "in" ? "input" : "output"} ${pin.name} ` +
+      `is active-low, like /${bpName(pin.name)} on the slot`)
+  }
+}
+/* Vacuity guard: the pins that exposed this class must be among those checked. */
+/* ⚠ `vsup.IOSEL`, `vctrl.IOPAGE`, `vctrl.WAIT` and `vctrl.IRQ` were four of
+ * these until 2026-09-20, when `video` was archived. */
+for (const must of ["clkdec.WAIT",
+  "audio.IOSEL", "audio.FIRQ", "u9.IOPAGE_BP", "aseq.RESET",
+  /* ⭐ and video3's three, which is what adding the card was for */
+  "v3host.IOSEL", "v3host.WAITN", "v3host.IRQN"]) {
+  check(bpHits.includes(must), `and ${must} is one of the ${bpHits.length} backplane pins checked`)
+}
+
+/* -- 2. crossings between parts of one card ------------------------------ */
+console.log("\n      2. a signal crossing between two parts has one sense at both ends\n")
+let crossings = 0
+for (const board of ["mainboard", "audio", "video3"]) {
+  const parts = PARTS.filter((p) => p.board === board)
+  for (const src of parts) {
+    for (const out of src.pins.filter((p) => p.dir === "out")) {
+      for (const dst of parts) {
+        if (dst === src) continue
+        const inp = dst.pins.find((p) => p.dir === "in" && p.name === out.name)
+        if (!inp) continue
+        crossings++
+        check(inp.low === out.low,
+          `${board}: ${src.name}.${out.name} -> ${dst.name}.${inp.name} agree ` +
+          `(${out.low ? "active-low" : "active-high"})`,
+          `driver ${out.low ? "low" : "high"}, receiver ${inp.low ? "low" : "high"}`)
+      }
+    }
+  }
+}
+check(crossings >= 20, `and there are ${crossings} crossings, not a vacuous handful`)
+/* ⚠ THE VACUITY GUARD USED TO NAME `vsup.WSTB -> vaddr.WSTB`, the crossing a
+ * one-ended fix would have split. It went with the `video` card on
+ * 2026-09-20; `v3host.WSTB` is the same job on `video3` and `v3lane.RFOE` is
+ * its other end, so the class is still represented. */
+check(PARTS.some((p) => p.name === "v3host" && p.pins.some((x) => x.name === "WSTB" && x.dir === "out")),
+  "including WSTB, v3host to the register file - a register-file write strobe is still among them")
+
+/* -- 3. named consumers -------------------------------------------------- */
+console.log("\n      3. pins whose consumer is a discrete part, against that part's pin\n")
+interface Consumer { part: string; pin: string; drives: string; low: boolean; where: string }
+const CONSUMERS: Consumer[] = [
+  /* mainboard - mainboard.circuit.tsx draws every one of these */
+  { part: "mmu", pin: "MAPWE", drives: "CY7C128A /WE (U1, U1B)", low: true, where: "mainboard.circuit.tsx" },
+  { part: "mmu", pin: "MAPOE", drives: "CY7C128A /OE (U1, U1B)", low: true, where: "mainboard.circuit.tsx" },
+  { part: "mmu", pin: "ISOOE_LO", drives: "74HCT245 /OE (U4)", low: true, where: "mainboard.circuit.tsx" },
+  { part: "mmu", pin: "ISOOE_HI", drives: "74HCT245 /OE (U18)", low: true, where: "mainboard.circuit.tsx" },
+  { part: "clkdec", pin: "BOOTOE", drives: "74HCT244 /1G /2G (U16)", low: true, where: "mainboard.circuit.tsx" },
+  { part: "u9", pin: "ROMCE0", drives: "SST39SF040 /CE (U14)", low: true, where: "mainboard.circuit.tsx" },
+  { part: "u9", pin: "ROMCE1", drives: "SST39SF040 /CE (U15)", low: true, where: "mainboard.circuit.tsx" },
+  { part: "u9", pin: "MAPCE_LO", drives: "CY7C128A /CE (U1)", low: true, where: "mainboard.circuit.tsx" },
+  { part: "u9", pin: "MAPCE_HI", drives: "CY7C128A /CE (U1B)", low: true, where: "mainboard.circuit.tsx" },
+  ...[0, 1, 2, 3].map((n) => ({ part: "u10", pin: `RAS${n}`, drives: `30-pin SIMM /RAS (SIMM${n})`,
+    low: true, where: "mainboard.circuit.tsx" })),
+  { part: "u10", pin: "CAS", drives: "30-pin SIMM /CAS, all four", low: true, where: "mainboard.circuit.tsx" },
+  { part: "u10", pin: "DWE", drives: "30-pin SIMM /WE, all four", low: true, where: "mainboard.circuit.tsx" },
+
+  /* ⭐ THE `video` CARD'S EIGHT LEFT ON 2026-09-20 - vctrl.BLANKD, vsup.WSTB
+   * and vsup's six fetch-rank output enables. Every one of them has a
+   * `video3` counterpart below, which is why the classes they covered are
+   * still covered. `hardware/archive/video/docs/graphics.md` §8.2 and §9.2 are where
+   * they were written down. */
+
+  /* ⭐ video3 - plan.md §13.1, as video3_card.v wires it. ⛔ Not one of these
+   * was declared active-low until 2026-09-19: the generated Verilog is in
+   * asserted sense and video3_card.v reads it that way, so the card bench
+   * passes whatever the pins say - exactly the class pxsel's ranks were. */
+  ...["OEA0", "OEA1", "OEA2", "OEB0", "OEB1", "OEB2"].map((pin) => ({
+    part: "v3dot", pin, drives: "74AHCT574 /OE (fetch ranks)", low: true, where: "plan.md 13.1, graphics.md 8.2" })),
+  { part: "v3dot", pin: "PIXOE", drives: "74AHCT574 /OE (index) and IS61C6416 /OE (LUT)", low: true, where: "plan.md 3" },
+  { part: "v3dot", pin: "PIDXOE", drives: "74AHCT244 /1G /2G (PIDX onto the LUT address)", low: true, where: "plan.md 13.1" },
+  { part: "v3dot", pin: "SPRLD", drives: "74HC165 /PL, all four", low: true, where: "plan.md 7" },
+  { part: "v3dot", pin: "SPRSH", drives: "74HC165 CLK INH, all four - the chain shifts while it is LOW", low: true, where: "plan.md 7" },
+  { part: "v3dot", pin: "LDPIDXL", drives: "74AHCT163A /LD (PIDX low, both)", low: true, where: "plan.md 13.1" },
+  { part: "v3dot", pin: "LDPIDXH", drives: "74AHCT574 CLK (PIDX high) - the rising edge ends the write", low: true, where: "plan.md 13.1" },
+  { part: "v3dot", pin: "LDPDATL", drives: "74HC573 LE (PDATL) - transparent while high", low: false, where: "plan.md 13.1" },
+  { part: "v3dot", pin: "LDPDATH", drives: "74HC573 LE (PDATH)", low: false, where: "plan.md 13.1" },
+  { part: "v3dot", pin: "OMR", drives: "74AHCT273 /MR (output pair) - asserted is 'the pixel shows', /MR high", low: false, where: "plan.md 9.2" },
+  { part: "v3ptr", pin: "VWE", drives: "AS6C8016 /WE (both parts)", low: true, where: "plan.md 4" },
+  { part: "v3host", pin: "WSTB", drives: "register-file SRAM /WE", low: true, where: "plan.md 5" },
+  { part: "v3host", pin: "RDBKOE", drives: "74HCT245 /OE (host - both directions)", low: true, where: "plan.md 13.1" },
+  { part: "v3host", pin: "VSTATOE", drives: "74HC244 /1G /2G (VSTAT)", low: true, where: "plan.md 10" },
+  { part: "v3host", pin: "RDOE", drives: "74HCT574 /OE (vread)", low: true, where: "plan.md 11" },
+  { part: "v3host", pin: "LUTWE", drives: "IS61C6416 /WE (LUT)", low: true, where: "plan.md 13.1" },
+  { part: "v3host", pin: "RDCK", drives: "74HCT574 CLK (vread) - the rising edge ends the access", low: true, where: "plan.md 11" },
+  { part: "v3host", pin: "PWCK", drives: "74HC574 CLK (posted write) - the rising edge ends the strobe", low: true, where: "plan.md 6" },
+  { part: "v3host", pin: "DIR", drives: "74AHCT245 DIR, all four lanes - A is IDB, so high is IDB to the lane", low: false, where: "plan.md 13.1" },
+  ...[0, 1, 2, 3].map((l) => ({ part: "v3lane", pin: `LOE${l}`, drives: `74AHCT245 /OE (lane ${l})`, low: true, where: "plan.md 13.1" })),
+  ...["LB0", "UB0", "LB1", "UB1"].map((pin) => ({ part: "v3lane", pin, drives: `AS6C8016 /${pin.slice(0, 2)} (part ${pin[2]})`, low: true, where: "plan.md 4" })),
+  { part: "v3lane", pin: "PWOE", drives: "74HC574 /OE (posted write)", low: true, where: "plan.md 13.1" },
+  { part: "v3lane", pin: "RFOE", drives: "register-file SRAM /OE", low: true, where: "plan.md 5" },
+
+  /* storage - storage/sim/storage_card.v is the board, and sdcard.md 8 the
+   * table. ⭐ Three of these are pins doing a job a macrocell would
+   * otherwise do, which is what keeps the card inside two GALs: BUSY is the
+   * '163's /CLR AND the '165's SH//LD, and SCK is the '165's clock. */
+  { part: "sdbus", pin: "OE595", drives: "74HCT595 /OE (U3)", low: true, where: "sdcard.md 6.2" },
+  { part: "sdbus", pin: "MOSICK", drives: "74HC574 CLK (U5) - the RISING edge is E-fall", low: true, where: "sdcard.md 6.2" },
+  { part: "sdeng", pin: "SCK", drives: "74HCT595 SRCLK (U3), and the card's own SCK", low: false, where: "sdcard.md 3.1" },
+  /* ⭐ the inverted copy, 2026-09-20: the '165 alone takes it, so MOSI moves
+   * on SCK's falling edge and is stable a half period before the card
+   * samples it. sdcard.md 6.6 - and FALL being inlined into BUSY is what
+   * freed the macrocell. */
+  { part: "sdeng", pin: "SCKN", drives: "74HC165 CLK (U4) - the INVERTED gated clock", low: true, where: "sdcard.md 6.6" },
+  { part: "sdeng", pin: "RCLK", drives: "74HCT595 RCLK (U3) - released at the burst's end", low: true, where: "sdcard.md 3.4" },
+  /* ⚠ BUSY is declared active-HIGH although both parts it drives have an
+   * active-low input, and that is the design rather than a slip: the wire
+   * carries BUSY, and "/CLR asserted" is exactly "not BUSY". The counter is
+   * held clear while idle and the shifter parallel-loads while idle, so the
+   * inversion IS the function. Getting this backwards gives a counter that
+   * only counts when nothing is happening. */
+  { part: "sdeng", pin: "BUSY", drives: "74HC163 /CLR (U6) and 74HC165 SH//LD (U4) - both asserted by !BUSY, deliberately", low: false, where: "sdcard.md 6.5" },
+  { part: "sdeng", pin: "SPICLK", drives: "74HC163 CLK (U6)", low: false, where: "sdcard.md 3.3" },
+  { part: "sdeng", pin: "CS", drives: "74LVC125 1A (U8) -> the card's /CS", low: false, where: "sdcard.md 6.2" },
+
+  /* audio card - audio.md 10.2.2; the parts are not drawn yet */
+  { part: "aseq", pin: "BLATOE", drives: "74HC574 /OE (BLAT)", low: true, where: "audio.md 10.2.2" },
+  { part: "aseq", pin: "ONESOE", drives: "74HC244 /1G /2G (B = $FFFF)", low: true, where: "audio.md 10.2.2" },
+  { part: "aseq", pin: "SUMOE", drives: "74HC244 /1G /2G (SUM -> SD)", low: true, where: "audio.md 10.2.2" },
+  { part: "aseq", pin: "SBOE", drives: "74HC574 /OE (SBLAT)", low: true, where: "audio.md 10.2.2" },
+  { part: "aseq", pin: "PWOE", drives: "74HC574 /OE (posted-write latch)", low: true, where: "audio.md 10.2.2" },
+  { part: "aseq", pin: "SROE", drives: "AS6C4008 /OE (sample RAM)", low: true, where: "audio.md 10.2.2" },
+  { part: "aseq", pin: "SRWE", drives: "AS6C4008 /WE (sample RAM)", low: true, where: "audio.md 10.2.2" },
+]
+for (const c of CONSUMERS) {
+  const pin = find(c.part, c.pin)
+  check(pin.low === c.low,
+    `${c.part}.${c.pin} is ${c.low ? "active-low" : "active-high"}: it drives ${c.drives} - ${c.where}`,
+    `declared ${pin.low ? "active-low" : "active-high"}`)
+}
+
+console.log(`\n${passes} claims, ${failures} failed`)
+if (failures) process.exit(1)

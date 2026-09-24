@@ -6,7 +6,7 @@
 #   NOBUILD=1 sh software/nitros9/run-emu.sh    (use the ROM already built)
 #   OUT=dir   overrides /tmp/arm6309-nitros9
 #
-# ⚠ NOT THE MACHINE. software/demo/emu/machine.c says what it models. It is the
+# ⚠ NOT THE MACHINE. software/emu/machine.c says what it models. It is the
 # CPU core checked against mc6809e.v, the map with both tasks, the video card's
 # vertical blank as the system tick, and a TL16C550C on the console.
 #
@@ -16,10 +16,11 @@
 #
 # ⛔ The exit code is the answer. Each check below is a claim that fails the
 # run; the emulator is bounded by SECONDS of machine time and by SERIAL_STOP.
+_here=$(cd "$(dirname "$0")" && pwd)   # before any cd: $0 may be relative
 set -e
 cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
-OUT=${OUT:-/tmp/arm6309-nitros9}
+OUT=${OUT:-$(cd "$_here/." && pwd)/build/rom}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-150}
 mkdir -p "$OUT"
 
@@ -31,14 +32,14 @@ ROM="$OUT/arm6309_rom.bin"
 
 # ⛔ A V3 ROM NEEDS THE V3 EMULATOR, AND EVERY ROM IS A V3 ROM SINCE
 # 2026-09-22.  CoArm carries video3's code and polls VSTAT at $FF6D; run
-# against this emulator's DEFAULT card - archive/video/'s - that read answers
+# against this emulator's DEFAULT card - hardware/archive/video/'s - that read answers
 # out of a register file and the poll SPINS FOR EVER.  The machine prints its
 # banner and never reaches a shell, which reads as a broken boot rather than a
 # mismatched pair.  ⚠ This used to follow a `$V3` the caller set; the recipe
 # puts -DV3=1 in AFLAGS itself now, so there is nothing left to follow and the
 # pairing is unconditional.
 export VIDEO3=1
-cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c software/demo/emu/hd6309.c audio/refplayer/card.c
+cc -O2 -Wall -Ihardware/audio/refplayer -o "$OUT/emu" software/emu/machine.c software/emu/cpu6809.c software/emu/hd6309.c hardware/audio/refplayer/card.c
 
 # What is typed, from 8 s of machine time on: the shell is up by ~3 s.
 # `sleep 2100` is 2100 ticks: 30 s at VMODE 00's 70.086 Hz. Then `vmodetst 1`
@@ -152,9 +153,9 @@ claim "reboot: boot.asm's POST ran again - the map, the SIMM walk, TASK 1 and th
 # ⭐ AND IT STOPS AT $06, NOT $40, SINCE 2026-09-20 - which is the answer this
 # configuration must give. boot.asm §2c probes for a video3 card before its
 # video POST and skips §3-§10 when there is none; this emulator models
-# archive/video/'s card unless VIDEO3=1 (machine.c's m->v3), and a VSTAT poll
+# hardware/archive/video/'s card unless VIDEO3=1 (machine.c's m->v3), and a VSTAT poll
 # at $FF6D against THAT card reads a register-file byte and can spin for ever.
-# $40 is what VIDEO3=1 reports - software/nitros9/video/run-video3.sh - and
+# $40 is what VIDEO3=1 reports - software/archive/nitros9-video/run-video3.sh - and
 # what npm run check:machine asserts against the real design.
 # ⚠ $06 without VIDEO3 (§2c probes, finds no card and skips §3-§10) and $40
 # with it (the POST runs to the VRAM read-back).

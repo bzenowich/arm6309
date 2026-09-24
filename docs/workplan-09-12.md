@@ -13,7 +13,7 @@ across-the-walk re-timing, which stopped the card playing) and audited
 - ⛔ **The regression was invisible to every aggregate command.** `audio_tb`
   passed 67 claims throughout, because it backdoor-loads `card.SRAM` instead of
   uploading through `SDATA`. `check:modplay` is the only bench that drives that
-  path, and it is in neither `npm run check` nor `npm run build:all`.
+  path, and it is in neither `make -C hardware check` nor `make -C hardware all`.
 - ⛔ **The same shape is sitting in `machine_tb` right now.** `boot.asm`'s two
   largest stages are self-verified: they pass iff the ROM's own comparisons
   pass, and nothing reads the memory independently.
@@ -22,7 +22,7 @@ across-the-walk re-timing, which stopped the card playing) and audited
 
 ## P0 — landed 2026-09-12
 
-Items 1–4 are done: `audio.md` §16 items 46 and 47, and `audio/docs/history.md`. The
+Items 1–4 are done: `audio.md` §16 items 46 and 47, and `hardware/audio/docs/history.md`. The
 four-channel probe found a live host-port defect on its first run (§16 item 47), which
 is fixed.
 

@@ -105,7 +105,7 @@ where Haiku shows desktop beside a narrow tab.
 
 Item 8 is the present design. This records the two paragraphs that said a per-glyph
 blit could not pay, and the reason each was withdrawn the day after it was written.
-[`proportional-font.md`](proportional-font.md) §2 is the argument; the numbers that
+[`proportional-font.md`](../software/toolbox/docs/proportional-font.md) §2 is the argument; the numbers that
 retired these are `demo-report.md` §16 (a 40-character line, **218.64 ms**) and item
 8's own measured table (a seven-character name, **71.4 ms** opaque).
 
@@ -160,7 +160,7 @@ same warning forward, because it is a longer subtraction than either.
 
 ## boot-and-desktop.md §5 items 7 and 8, and §3.6 — the repaint was unmeasured and `F.Opaq` was a prediction (2026-09-21)
 
-[`boot-and-desktop.md`](boot-and-desktop.md) §5 items 7 and 8 are the present design and
+[`boot-and-desktop.md`](../software/desk/docs/boot-and-desktop.md) §5 items 7 and 8 are the present design and
 are written in present tense. This records what they said while the file manager's repaint
 had never been timed and the `F.Opaq` finding was an untested hypothesis.
 
@@ -235,8 +235,8 @@ Item 8's next step is the **icons**, which the same measurement puts at 47.2 ms 
 
 ## boot-and-desktop.md §2 and §0 — the machine had no SD reader, and *found* meant a switch (2026-09-21)
 
-[`boot-and-desktop.md`](boot-and-desktop.md) §2 is the design and is written in present
-tense; [`../storage/docs/sdcard.md`](../storage/docs/sdcard.md) §9.5 carries the rule.
+[`boot-and-desktop.md`](../software/desk/docs/boot-and-desktop.md) §2 is the design and is written in present
+tense; [`../storage/docs/sdcard.md`](../hardware/storage/docs/sdcard.md) §9.5 carries the rule.
 This records what §2, §0 and §1 said while the reader was specified and not built, and
 what changed when it was.
 
@@ -282,7 +282,7 @@ and **§0's row for "loads the OS from the disk"** said
 
 **`boot.asm`'s §10a header said**, where §10b now is:
 
-> ⭐ AND THE MACHINE HAS NO SD READER YET.  docs/boot-and-desktop.md 2
+> ⭐ AND THE MACHINE HAS NO SD READER YET.  software/desk/docs/boot-and-desktop.md 2
 > specifies one and it is a separate job, so "found" is driven by the one thing
 > the machine already knows: SDSTAT's card-detect bit.  `bootchk` below is the
 > hook where "...and it is bootable" goes.
@@ -326,7 +326,7 @@ actually boot from in the socket.
 
 ## boot-and-desktop.md §3.5 and §5 item 6 — the file manager was unbuilt and the desktop icons were dead (2026-09-21)
 
-[`boot-and-desktop.md`](boot-and-desktop.md) §3.6 is the design and is written in present
+[`boot-and-desktop.md`](../software/desk/docs/boot-and-desktop.md) §3.6 is the design and is written in present
 tense; this records what §3.5 and §5 item 6 said before milestone 3 was built.
 
 **§3.5's "What is left" said:**
@@ -350,7 +350,7 @@ view".
 
 What replaced them: a Tracker window in `desk.asm` whose model is a 48-entry table, the
 directory read moved out of `v3trk.asm` into `modules/v3dir.inc` so there is one reader,
-and `IcTab` given an action and an argument per icon. `video3/bench/run-v3files.sh` is the
+and `IcTab` given an action and an argument per icon. `software/desk/bench/run-v3files.sh` is the
 bench; it reads the listing off the pixels, rebuilding each candidate name from the ROM's
 own font blob, and compares it with the host's `os9 dir`.
 
@@ -358,7 +358,7 @@ own font blob, and compares it with the host's `os9 dir`.
 
 ## boot-and-desktop.md §3 and §5 item 4 — the desktop was a recording, and the exclusive screen was unexamined (2026-09-20)
 
-[`boot-and-desktop.md`](boot-and-desktop.md) §3 is the design and is written in present
+[`boot-and-desktop.md`](../software/desk/docs/boot-and-desktop.md) §3 is the design and is written in present
 tense; this records what it said before milestones 1 and 2 were built, and the open item
 that building them closed.
 
@@ -382,7 +382,7 @@ that building them closed.
 >    ⭐ At this point the machine does what the owner asked for, minus the file manager.
 
 **Milestones 1 and 2 were built that same day** as `desk.asm` (990 lines) and `v3paint.asm`,
-on the SD card, with `video3/bench/run-v3desk.sh` (46 claims) driving them from a
+on the SD card, with `software/desk/bench/run-v3desk.sh` (46 claims) driving them from a
 `PS2_SCRIPT`. The estimate was wrong in an interesting direction: the shell is *smaller* than
 the pinball scene, because it draws nothing itself — every rectangle, bevel, icon and string
 is an `ESC $6A` call into the ROM toolbox, and what is left is escape bytes and hit testing.
@@ -411,17 +411,17 @@ anything**"; the second half is no longer true.
 
 `desk.asm`'s Applications menu carried a fourth item that did nothing, and §3.2 said why:
 
-> ⛔ `stardew` is specified ([`video3/docs/stardew.md`](../video3/docs/stardew.md)) and
+> ⛔ `stardew` is specified ([`software/stardew/docs/stardew.md`](../software/stardew/docs/stardew.md)) and
 > not built; carrying it greyed is how a person notices it is missing.
 
 and §5 item 5:
 
 > 5. **`stardew` is unbuilt.** It is on the menu, greyed (§3.2). The other two games launch.
 
-The scene was built on 2026-09-21 (`video3/docs/stardew.md`, the port's
-`level2/arm6309/cmds/stardew.asm` and `video3/bench/run-v3star.sh`) and the item's action
+The scene was built on 2026-09-21 (`software/stardew/docs/stardew.md`, the port's
+`level2/arm6309/cmds/stardew.asm` and `software/stardew/bench/run-v3star.sh`) and the item's action
 went from `A.Dis` to `A.Run` — one byte of `MTab`. ⚠ `A.Dis` itself stays: it is the
-mechanism, and `video3/bench/checkdesk.py` parses the menu table out of the source, so an
+mechanism, and `software/desk/bench/checkdesk.py` parses the menu table out of the source, so an
 item that is greyed again moves the bench's claims with it.
 
 ⚠ **`run-v3desk.sh`'s card deliberately does not carry `stardew`.** The module is 23 KB
@@ -434,7 +434,7 @@ found no module. The scene itself is `run-v3star.sh`'s business.
 
 ## §7.2 — the boot ROM puts up a Macintosh-style boot dialog, and the toolbox needed nothing added to it (2026-09-20)
 
-[`boot-and-desktop.md`](boot-and-desktop.md) §1 is the design and is written in present
+[`boot-and-desktop.md`](../software/desk/docs/boot-and-desktop.md) §1 is the design and is written in present
 tense; this records what it said before the section was built, because the thing it
 proposed is the thing that turned out not to be needed.
 
@@ -486,10 +486,10 @@ document."*
 
 ## §0 and §8 — `video/` and `video2/` are archived, `video3` is the machine's video card (2026-09-20)
 
-The owner took the decision on 2026-09-20. [`video3/`](../video3/) is the machine's video
-card; [`video/`](../archive/video/) and [`video2/`](../archive/video2/) moved to
-[`archive/`](../archive/), which is a new directory and has its own
-[`README.md`](../archive/README.md) stating what it is for — including that **an archived
+The owner took the decision on 2026-09-20. [`hardware/video3/`](../hardware/video3/) is the machine's video
+card; [`video/`](../hardware/archive/video/) and [`video2/`](../hardware/archive/video2/) moved to
+[`hardware/archive/`](../hardware/archive/), which is a new directory and has its own
+[`README.md`](../hardware/archive/README.md) stating what it is for — including that **an archived
 document is still citable as provenance**. `graphics.md` is where this machine's
 backplane, slot model, arbitration rule and clock tree were designed, and the card it was
 written for being retired does not make those derivations wrong.
@@ -502,15 +502,15 @@ and a `GAL22V10`, all five fitted, with a keyed copy engine and one 16×16 sprit
 **no display list**. `video2` was a microcoded ANSI card, paper only, never built;
 `video3` took the question it was asked to answer.
 
-**The numbers that moved.** `place/parts.ts`'s `CARDS` is the machine's slot population
+**The numbers that moved.** `tools/place/parts.ts`'s `CARDS` is the machine's slot population
 and `video3` came out of `ALTERNATES` into it, with `video` going the other way (placed,
-counted and window-less). `cards/windows.ts` hands `$FF60` to `video3`, which is a
+counted and window-less). `tools/lib/windows.ts` hands `$FF60` to `video3`, which is a
 one-line change because `plan.md` §10's register map is at the same base and the same 32
 bytes.
 
 **machine.md §0 — the Total silicon row — said:**
 
-> | **Total silicon** | **121 ICs** — **102 on cards** (video 33, audio 35, I/O 14, storage 8, net 12, from `hardware/place/parts.ts`), **19** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8.
+> | **Total silicon** | **121 ICs** — **102 on cards** (video 33, audio 35, I/O 14, storage 8, net 12, from `hardware/tools/place/parts.ts`), **19** on the motherboard plus four SIMM sockets (`hardware/mainboard/docs/ram.md` §6.5). See §8.
 
 **machine.md §8 — the power sum — said:**
 
@@ -533,10 +533,10 @@ scripts left the chain — `sync`, `scan`, `access`, `regfile`, `seqph`, `seqctl
 `cadence`, `vlen`, `pxsel` (192 claims) — and three surviving checks shrank: the CUPL
 registry lost `arb` and `rfa`'s exhaustive sweeps (−2), `pins.check.ts` lost `vaddr`,
 `vctrl` and `vsup` (−58), `reach.check.ts` lost the `video` card and its `+$15 VDATA`
-claim (−2). `gal/verilog/run.sh`'s default `TBS` lost `vsync`, `vaddr`, `vtile`, `vspan`
+claim (−2). `tools/sim/run.sh`'s default `TBS` lost `vsync`, `vaddr`, `vtile`, `vspan`
 and `vpal`.
 
-⚠ **The design sources did not move**, and `archive/README.md` records why: `gen.ts`
+⚠ **The design sources did not move**, and `hardware/archive/README.md` records why: `gen.ts`
 emits the card's Verilog from them and `machine_tb`/`demo_tb` still instantiate it,
 because `software/boot/boot.asm` still drives `video`. Retargeting the boot ROM is a
 separate job. Until it is done, `video`'s term lists are compiled by `check:machine`
@@ -545,16 +545,16 @@ and checked by nothing.
 **Two checks were repaired on the way**, both defects the move exposed rather than
 caused:
 
-- `lib/decode.check.ts` split term strings on `&` alone. `v3host`'s `WAITN` output
+- `tools/lib/decode.check.ts` split term strings on `&` alone. `v3host`'s `WAITN` output
   enable is a sum, so the split yielded the token `CARDBUSY # IOSEL`, which ends in
   `SEL` and is not a literal any part reads — the card was reported as importing a
   pre-decoded select the moment the check was pointed at it. It splits on `&` and `#`
   now.
 - `video3`'s own IC total said **44** in `plan.md` §13.1, §13.3, §13.5 and §14 and in
-  `partition.md` §9 and `optimizations.md`, against `place/parts.ts`'s 45. The 45th is
+  `partition.md` §9 and `optimizations.md`, against `tools/place/parts.ts`'s 45. The 45th is
   the keyed copy's `74HC4078` (`keyed-copy.md` §0, built 2026-09-19), which
-  `keyed-copy.md` counted and the plan never did. `lib/docs.check.ts`'s `OWNER` now
-  names `video3/`, so the next one is caught.
+  `keyed-copy.md` counted and the plan never did. `tools/lib/docs.check.ts`'s `OWNER` now
+  names `hardware/video3/`, so the next one is caught.
 
 ---
 
@@ -562,13 +562,13 @@ caused:
 
 Later on the day `video/` was archived. `software/boot/boot.asm` is ROM page 0 of every
 build of this machine and its video half still drove the archived card's register map;
-[`archive/README.md`](../archive/README.md) recorded that as the reason `video/`'s
+[`hardware/archive/README.md`](../hardware/archive/README.md) recorded that as the reason `video/`'s
 design sources could not move. This entry is that job.
 
 **What changed and what did not.** Sections 1, 1a, 2, 2a, 2b and 11 — the map, the SIMM
 walk, the descriptor, `TASK`, the store-rate blocks and the ROM-page handoff — are
 untouched, and so is every `machine_tb` claim about them, including all six population
-and fault scenarios. The video half moved to `video3/docs/plan.md` §10's map: `WADV`
+and fault scenarios. The video half moved to `hardware/video3/docs/plan.md` §10's map: `WADV`
 `$14`→`$0B`, `VDATA` `$15`→`$0C`, `VSTAT` `$13`→`$0D` (b4 is `CBUSY`, not `LRUN`),
 `PIDX` `$10` → `PIDXL`/`PIDXH` at `$0E`/`$0F`, `PDATL`/`PDATH` `$11`/`$12`→`$10`/`$11`,
 `TILEBAS` `$17` → `TBASE` `$18`, `MAPBAS` `$19` unchanged but three bits wide,
@@ -594,12 +594,12 @@ is six bits rather than five, so the old `⚠ VMODE 00, because the cell row is 
 constraint does not carry.
 
 **Section 2c is new, and it is the part that is not optional.** `boot.bin` is page 0 of
-builds whose NitrOS-9 drives the archived card, and `software/demo/emu/machine.c` still
+builds whose NitrOS-9 drives the archived card, and `software/emu/machine.c` still
 models both (`m->v3`). A `VSTAT` poll at `$FF6D` against the other card reads a plain
 register-file byte and can spin for ever, which `CLAUDE.md` calls worse than a failure.
 The POST therefore writes `$A5` and then `$5A` to `+$13` and reads each back with a ROM
 read in between: on `video3` that is `CPTR1`, an ordinary register-file location; on
-`archive/video` it is `VSTAT`, read through §12.1's `'244`, whose b2 and b3 are
+`hardware/archive/video` it is `VSTAT`, read through §12.1's `'244`, whose b2 and b3 are
 hardwired zero — so neither pattern can come back. With no card the bus holds the ROM
 byte. On a miss the ROM writes `$06` and jumps straight to section 11.
 
@@ -614,7 +614,7 @@ grew `machine.v`'s two other slots — the audio card at `$FF40` and the TL16C55
 `$FF38` — so that the `nitros9` and `reboot` scenarios moved with it. `run-machine.sh`
 compiles `video3_card.v` and the card's five parts instead of `video_card.v` and its
 three. ⛔ **`machine.v`, `video_card.v` and the generated `vaddr.v`/`vctrl.v`/`vsup.v`
-stay**, because `demo_tb` still instantiates them: `software/demo/`'s raster bars and
+stay**, because `demo_tb` still instantiates them: `software/archive/demo/`'s raster bars and
 per-scanline palette writes have no `video3` equivalent, and retargeting the demo is a
 redesign rather than a port. So the archived card left the last aggregate that executed
 it, and what holds its sources in the tree is now the demo alone.
@@ -643,7 +643,7 @@ constant page is missing, and the kernel needed that.
 
 `graphics.md` §19 item 44 deleted the video card's three unclocked address latches (36 → 33).
 Two things went with that. §0's and §8's machine totals were recomputed from
-`hardware/place/parts.ts`: they had still carried video at 27–28 and audio at 39, from
+`hardware/tools/place/parts.ts`: they had still carried video at 27–28 and audio at 39, from
 before the audio card came back to 35. And the backplane row's reason for carrying physical
 `A0`–`A18` stopped naming the video card, which decodes only `A19`/`A20` for VRAM. The
 superseded text follows, verbatim.
@@ -662,7 +662,7 @@ superseded text follows, verbatim.
 
 **machine.md §0 — total silicon — said:**
 
-> | **Total silicon** | **126 ICs** — **107 on cards**, **19** on the motherboard plus four SIMM sockets (`hardware/ram.md` §6.5). See §8. ⚠ **The motherboard went 18 → 19 on 2026-09-09**: the high map byte had no data path to `D0`–`D7` at all, and two common-I/O SRAMs cannot share one isolation `'245` — `ram.md` §3.1 and §11 item 11. ⚠ **Audio went 32 → 39 the same day**, and its second CPLD is scoped and not fitted. ⚠ **Video is in flight** as its third CPLD lands; `graphics.md` §14.1 is the number of record |
+> | **Total silicon** | **126 ICs** — **107 on cards**, **19** on the motherboard plus four SIMM sockets (`hardware/mainboard/docs/ram.md` §6.5). See §8. ⚠ **The motherboard went 18 → 19 on 2026-09-09**: the high map byte had no data path to `D0`–`D7` at all, and two common-I/O SRAMs cannot share one isolation `'245` — `ram.md` §3.1 and §11 item 11. ⚠ **Audio went 32 → 39 the same day**, and its second CPLD is scoped and not fitted. ⚠ **Video is in flight** as its third CPLD lands; `graphics.md` §14.1 is the number of record |
 
 **machine.md §8 — the power table — said:**
 
@@ -849,7 +849,7 @@ The item read:
 **It had been answered for two days and this document had not noticed.**
 [`hardware/README.md`](../hardware/README.md) decided all three parts on 2026-09-06 — a
 72-pin 0.1″ card edge, a per-card 100 mm × 120/180/240 mm format, and the CPU module in
-a 40-pin DIP socket on the motherboard — and `hardware/lib/slot.ts` has carried the
+a 40-pin DIP socket on the motherboard — and `hardware/tools/lib/slot.ts` has carried the
 pinout as data since, with `slot.check.ts` re-deriving the claims §2 makes about it.
 The power question the item's last sentence raised was answered with the connector:
 5 × +5 V and 18 grounds.
@@ -870,7 +870,7 @@ reference and a 75 Ω series source, arithmetic included; §9.2 answers blanking
 specifying the post-LUT latches as `74AHCT273` and driving `/MR` from the existing
 `BLANK` term, for zero packages; and §9.3 deletes the `BORDER` register because VGA has
 no overscan to paint one into. The row is a closed record now, and the stage is drawn in
-`hardware/cards/video.circuit.tsx`.
+`hardware/archive/video/board/video.circuit.tsx`.
 
 **§8's power section ended on "⚠ Whether 29 ICs of audio fit a single Eurocard has to be
 measured."** The machine's card format stopped being a Eurocard on 2026-09-08 (§5
@@ -914,7 +914,7 @@ Kept current values only; the chains were:
 | Row | Chain | Notes |
 |---|---|---|
 | CPU package | LQFP48 → **UFQFPN48** | "not the LQFP48 this table named until 2026-09-04 (§5 item 6)" — `design-review.md` §Cpu-C1: the pinout's pins are not bonded out on the LQFP48 |
-| Address space | 1 MB → 2 MB → **32 MB (A0–A24)** | 1 MB was `graphics.md` §6.3's whole map; 2 MB was §5 item 1 option D (physical `A20`, 2026-09-08); 32 MB is `hardware/ram.md` §5.2's 16-bit map entries, same day |
+| Address space | 1 MB → 2 MB → **32 MB (A0–A24)** | 1 MB was `graphics.md` §6.3's whole map; 2 MB was §5 item 1 option D (physical `A20`, 2026-09-08); 32 MB is `hardware/mainboard/docs/ram.md` §5.2's 16-bit map entries, same day |
 | System RAM | 512 KB of SRAM → 2 MB of SRAM → **four 30-pin SIMM sockets, 4–16 MB of DRAM** | the SRAM stages are §7.1's history below |
 | Video ICs | 41 → 31 → 28 → **27** | see §8 below for the per-step reasons |
 | Storage ICs | 7 → **14** | the block buffer (§5 item 7) |
@@ -976,7 +976,7 @@ confusion arose is archived here.
 
 ## §2 — the physical-map carve: `A19` alone → `A20:A19` → `A24..A19` (2026-09-08)
 
-The quadrant table was "re-carved 2026-09-08 by `hardware/ram.md` §5.2 so the
+The quadrant table was "re-carved 2026-09-08 by `hardware/mainboard/docs/ram.md` §5.2 so the
 motherboard's three reserved SRAM footprints could be populated" — and then the same
 day's §6.2 deleted the DIP SRAM entirely, so the footprints the re-carve was for never
 shipped. The carve itself (a 32 MB map in 512 KB quadrants) stands. The table's
@@ -1029,7 +1029,7 @@ term "further qualified by `A7,A6 = 01` — one more product term", with a card 
 ## §2 — the `/IOSEL` equation was wrong from the day it was written until 2026-09-08
 
 > ⚠ **And the equation that implements it was wrong from the day it was written until
-> 2026-09-08.** `gal/clkdec.pld` read `/IOPAGE · A7 · /A6` — A7 = 1, A6 = 0, which is
+> 2026-09-08.** `mainboard/logic/clkdec.pld` read `/IOPAGE · A7 · /A6` — A7 = 1, A6 = 0, which is
 > **`$FF80`–`$FFBF`**: the MMU's own two windows and the CPU module's vector RAM.
 > `$FF40`–`$FF7F` is A7 = 0, A6 = 1. **Every card's `/IOSEL` fired on an MMU
 > block-register write and never on the card window at all** — six cards driving
@@ -1037,13 +1037,13 @@ term "further qualified by `A7,A6 = 01` — one more product term", with a card 
 > cause.
 >
 > **Five artefacts carried it and agreed with each other**: `clkdec.pld`, `clkdec.v`,
-> `clkdec.jedec.ts`, `clkdec.model.ts` and `hardware/gal/README.md`. What let it survive
+> `clkdec.jedec.ts`, `clkdec.model.ts` and `hardware/tools/gal/README.md`. What let it survive
 > is that `clkdec_tb.sv` **asserted the wrong sense under a message stating the right
 > one** — `a7 == 1 && a6 == 0` printed as *"the I/O page with A7,A6 = 01"* — and the
 > implementation was written from the assertion. Fifteen passing claims, and the prose
 > beside them was correct the whole time.
 >
-> The lesson is the one `gal/jedec/cupl.check.ts` already draws about a second
+> The lesson is the one `tools/gal/jedec/cupl.check.ts` already draws about a second
 > implementation, one step further out: **a check written from the same understanding as
 > the design tests the understanding, not the design.** The replacement claim is the one
 > that could not have been written wrong in the same direction — sweep A6 and require it
@@ -1077,7 +1077,7 @@ none.~~ The map has 64.
 
 > **Twice amended, and the second one closes it.**
 >
-> - **2026-09-07 — `net/docs/net.md` §5.1 took the last four bytes.** 16 + 4 + 4 + 4 +
+> - **2026-09-07 — `hardware/net/docs/net.md` §5.1 took the last four bytes.** 16 + 4 + 4 + 4 +
 >   4 net + 32 = **64 of 64, nothing free.** The heading below had called those four
 >   "one small card's worth, once", and net was that card. For one day the answer to
 >   "where does the next card go?" was *nowhere* — not "nowhere if it is large",
@@ -1111,7 +1111,7 @@ it right).
 
 > ⚠ **This table said `$FFA0`–`$FFAF` held "enable, task select, the shadow-ROM disable
 > and the vector RAM" until 2026-09-06.** Writing the MMU's GAL equations
-> (`hardware/gal/README.md`) showed that none of the four survives.
+> (`hardware/tools/gal/README.md`) showed that none of the four survives.
 
 The three reasons (sixteen block registers need all sixteen bytes; MMU enable cannot
 exist; the shadow-ROM disable cannot reach a motherboard latch) are present design and
@@ -1120,7 +1120,7 @@ stay in §3.
 ## §3 — the block-register width: bits 6–0 / `A19..A13` → bits 7–0 / `A20..A13` (2026-09-08)
 
 The table said "Bits 6–0 are physical `A19..A13`" until §5 item 1 option D turned the
-stored-but-unused bit 7 into physical `A20`. `hardware/gal/README.md` carries the
+stored-but-unused bit 7 into physical `A20`. `hardware/tools/gal/README.md` carries the
 current 8-bit entry.
 
 ## §4 / §4.1 — the polling order's own history (2026-09-04, amended 2026-09-07)
@@ -1129,7 +1129,7 @@ The original decision specified **three** polled sources:
 `1. video VSTAT → 2. PS/2 IOSTAT → 3. serial STATUS (last, always)`, then:
 
 > ⚠ **Amended 2026-09-07 — a fifth source, and the order is now `video → net → PS/2 →
-> serial`** (`net/docs/net.md` §6).
+> serial`** (`hardware/net/docs/net.md` §6).
 
 The decision block also recorded a corrected claim:
 
@@ -1192,7 +1192,7 @@ Original text:
 > **The MMU register set is not written down.** `graphics.md` §6.3 said
 > "GIME-register-compatible, `$FFA0`–`$FFAF`, 8 blocks, two task registers, 6-bit block
 > numbers" and stopped there. `graphics.md` §18 step 0 lists it as an exit criterion.
-> Nothing in `cpu/` implements it yet — Phase 1 is the timing spike and has no MMU.
+> Nothing in `hardware/cpu/` implements it yet — Phase 1 is the timing spike and has no MMU.
 
 Closed 2026-09-06. The closure note briefly carried this warning, superseded within two
 days by §3 and §7.2 (the vector RAM moved to `$FF90`–`$FF9F` and the disable into the
@@ -1229,7 +1229,7 @@ Original question:
 
 > **LQFP48 vs LQFP64 for the CPU module.** `graphics.md` §6.3 recommends the LQFP64
 > part for the homebrew card, because the MMU needs a second store for A16–A19.
-> `cpu/docs/plan.md` §3.2 closes the pin budget on the LQFP48 — but for the *CoCo 3*
+> `hardware/cpu/docs/plan.md` §3.2 closes the pin budget on the LQFP48 — but for the *CoCo 3*
 > drop-in, which has no MMU of its own to emulate at that width.
 
 The decision (MMU off the CPU) stands; the package correction in full:
@@ -1258,10 +1258,10 @@ was decided the same day. The region count carried:
 
 The discovery, as the item recorded it:
 
-> `hardware/gal/vctrl.pld` line 419 drives it open-drain —
+> `hardware/archive/video/logic/vctrl.pld` line 419 drives it open-drain —
 > `WAIT.oe = SPANBUSY & VRAMSEL & !IOPAGE`, the video card holding the CPU off VRAM
 > while the span writer runs. **Nothing on the motherboard listens.** §1's E and Q come
-> from U6's divider (`hardware/gal/clkdec.pld`) and that part has no `/WAIT` input;
+> from U6's divider (`hardware/mainboard/logic/clkdec.pld`) and that part has no `/WAIT` input;
 > "it holds E" (§2) names an effect with no mechanism.
 >
 > So the video card's span writer, as drawn, **did not hold anything** — the CPU read
@@ -1277,7 +1277,7 @@ item.
 The full account, condensed in the spec:
 
 > Fixing item 8 meant compiling `/WAIT` for a real GAL for the first time, and
-> `hardware/gal/jedec/cupl.check.ts` — the falsification check that runs Atmel's own
+> `hardware/tools/gal/jedec/cupl.check.ts` — the falsification check that runs Atmel's own
 > compiler against our fuse map — **disagreed on exactly one signal.**
 >
 > The idiom is a cell with **no product terms**: it drives a constant and the condition
@@ -1320,7 +1320,7 @@ bound, what it settles, and the free-run-on-`CLK25` rule stay in the item.
 
 - **"Write the MMU register set"** and **"Fit `$FFA0`–`$FFAF` — map entries, task,
   enable, shadow-ROM disable and vector RAM in 16 bytes"** — both closed by §5 item 3
-  and §3: the register set is hardware (`hardware/gal/README.md`, `mmu.pld`), and
+  and §3: the register set is hardware (`hardware/tools/gal/README.md`, `mmu.pld`), and
   nothing beyond the sixteen block registers shares the window (vector RAM at
   `$FF90`–`$FF9F`, disable inside the module). The "fit it before the GAL is fitted"
   worry dissolved with the sharing.
@@ -1332,7 +1332,7 @@ bound, what it settles, and the free-run-on-`CLK25` rule stay in the item.
   (`rfa`) and §6.4.3's Variant B came out for the display list, leaving it at 46 of
   64 — at which point the arbiter came back in and deleted its package. **Fit chain:
   64/64 I/O, 112/128 cells → 50/64, 91/128 → 46/64, 87/128 → 62/64, 97/128 → final
-  59/64, 97/128** (`hardware/gal/video.cpld.ts`, `cpld/vctrl.fit`).
+  59/64, 97/128** (`hardware/archive/video/logic/video.cpld.ts`, `cpld/vctrl.fit`).
 - **"`vctrl` has zero spare pins and therefore no JTAG"** — done 2026-09-08:
   `RA0`–`RA4` and `WSTB` moved to `rfa`, a second `GAL22V10`. The estimate said five
   pins; it was **fourteen**, because nine inputs existed only to feed those outputs.
@@ -1343,7 +1343,7 @@ bound, what it settles, and the free-run-on-`CLK25` rule stay in the item.
   parts, and removing them returned three pins on each. `vaddr` 61/64 and `vctrl`
   59/64 both fit with `TMS`/`TDI`/`TDO`/`TCK` reserved, so the machine's video CPLDs
   are programmed in circuit and `machine.md` §6's JTAG row is struck.
-  (`archive/video/docs/history.md` has the correction.)
+  (`hardware/archive/video/docs/history.md` has the correction.)
 - **"Bound `SPANBUSY`"** — done 2026-09-08: **40.7 µs** worst case, **10.2 µs** once
   `graphics.md` §14.2's broadcast write lands; `/WAIT` also qualified on `R/W`, so
   reads never wait (`graphics.md` §7.4). Now §5 item 10.
@@ -1423,7 +1423,7 @@ finally replaced in the arithmetic as well as in the design."
 
 **Serial/storage row:** storage 7 → **14** (its block buffer, §5 item 7).
 
-**Motherboard row:** 13 → 9 → **14** (`hardware/ram.md` §6.5).
+**Motherboard row:** 13 → 9 → **14** (`hardware/mainboard/docs/ram.md` §6.5).
 
 **Machine totals:** "plausibly ~~2–3~~ **1.8–2.8 A** at 5 V across ~~~106~~ ~~108~~
 ~~113~~ ~~114~~ ~~111~~ **110 ICs**".
@@ -1586,7 +1586,7 @@ trigger"*.
 ### §3 — the MMU block-register window
 
 **Not superseded — the defect is live.** `$FFA0`–`$FFAF`'s description here is
-`ram.md` §4's **Layout B** and `hardware/gal/u9.jedec.ts` implements **Layout A**, with
+`ram.md` §4's **Layout B** and `hardware/mainboard/logic/u9.jedec.ts` implements **Layout A**, with
 `mainboard.circuit.tsx`'s `'157` wired for B. §3 now carries the ⛔ block that says so;
 [`design-review2.md`](design-review2.md) §3.3 (M-1) has the simulation and the two
 repairs. **This document's text becomes correct if Layout B is taken and must be
@@ -1637,10 +1637,10 @@ falls out of it with no term of its own. `design-review2.md` §3.4.
 
 ## Utilisation figures brought to the fit, after `docs.check` stopped missing them (2026-09-12)
 
-`hardware/lib/docs.check.ts` scanned one line at a time, matched only "N of N", and
+`hardware/tools/lib/docs.check.ts` scanned one line at a time, matched only "N of N", and
 exempted a whole line on one past-tense word. Widened to paragraphs, table rows and
 clauses (workplan 2026-09-12 P3 item 12), it reported these present-tense figures as
-stale against `gal/cpld/*.fit`. Each was corrected or put visibly in the past; the
+stale against `<card>/logic/cpld/*.fit`. Each was corrected or put visibly in the past; the
 text they replaced follows.
 
 ### docs/machine.md — §5 open-items table, the vctrl row
@@ -1827,22 +1827,22 @@ happened together, and the second is the one that mattered.
 
 ### The benches
 
-Moved to [`archive/video/bench/`](../archive/video/bench/), which has its own README
+Moved to [`hardware/archive/video/bench/`](../hardware/archive/video/bench/), which has its own README
 saying what each one proved: `run-vid.sh` (the NitrOS-9 video console against
 `vtmodel.py`/`vgmodel.py`), `video/run-video.sh` (the progress video), `run-demo.sh`
 (~4.5 h, `demo_tb`, the whole machine with both cards), `run-demo-emu.sh`,
 `run-replay.sh`, `run-calib.sh`, both `run-vramrate` scripts, and the five testbenches
 `vsync_tb`, `vaddr_tb`, `vtile_tb`, `vspan_tb`, `vpal_tb` with `demo_tb.sv`.
 
-⚠ **`software/demo/` itself did not move**, and not out of sentiment:
-`software/nitros9/tools/mktbox.py`'s `build_icons()` imports `show` and `mkshow` from
+⚠ **`software/archive/demo/` itself did not move**, and not out of sentiment:
+`software/toolbox/tools/mktbox.py`'s `build_icons()` imports `show` and `mkshow` from
 it, so **the ROM toolbox's icon art is generated by the demo's own drawing code**, and
-`software/demo/emu/machine.c` is the host emulator every live bench runs. What retired
+`software/emu/machine.c` is the host emulator every live bench runs. What retired
 is the demo's benches, not its code.
 
-⛔ **What that finishes, stated plainly.** `archive/README.md` §"What did NOT move"
+⛔ **What that finishes, stated plainly.** `hardware/archive/README.md` §"What did NOT move"
 recorded that the card's design sources stayed in `hardware/gal/` because `demo_tb`
-still instantiated them. `demo_tb` is in `archive/` now, so those sources — `vaddr.v`,
+still instantiated them. `demo_tb` is in `hardware/archive/` now, so those sources — `vaddr.v`,
 `vctrl.v`, `vsup.v`, `rfa.v`, `vlen.v`, `pxsel.v` — are **emitted by `gen.ts`, compiled,
 and executed by nothing at all**.
 
@@ -1869,7 +1869,7 @@ with the card they drive (`SS.Raster` and a display list have no video3 equivale
 ⚠ **And the trap on the other side of that change**: `VIDEO3=1` selects the emulator's
 card *model*, and every bench that set it did so from the same `$V3`. With `$V3` gone
 and the ROM always video3, a bench that did not set `VIDEO3` would have run a video3
-ROM against `archive/video/`'s model — CoArm polls `VSTAT` at `$FF6D`, reads a register
+ROM against `hardware/archive/video/`'s model — CoArm polls `VSTAT` at `$FF6D`, reads a register
 file, and spins for ever. It is unconditional now in `run-emu.sh`, `run-sd.sh` and
 `run-ps2script.sh`.
 
@@ -1905,3 +1905,153 @@ x 568 (`NICON` 6 → 11), and the Applications menu gained the two new ones.
   page up 70.4→91.2 s, desktop back at 92.1 s) and cut `desk`'s 5,000-pass bound short
   mid-script. Thirteen claims failed describing a desktop that was merely still
   drawing. `DrawAll` is O(icons) and there are about to be twelve.
+
+## The tree is reorganised: one directory per component (2026-09-23)
+
+Until 2026-09-23 the cards' documents lived at the root (`audio/`, `video3/`,
+`storage/`, …), their logic lived together in `hardware/gal/`, all their Verilog in
+`hardware/gal/verilog/`, and every program's generator and bench in `video3/bench/`
+— so no component could be read in one place. Every component now has its own
+directory under `hardware/` or `software/`, laid out the same way (the root
+`README.md` §Layout). **Nothing was rewritten but paths**: every file moved with
+`git mv` (so `git log --follow` crosses the move), and the frozen records —
+`design-review*.md`, every `history.md`, and the archives — had their **paths**
+updated so their citations still resolve, and nothing else.
+
+### Where things went
+
+| Until 2026-09-23 | Since |
+|---|---|
+| `audio/`, `cpu/`, `io/`, `net/`, `storage/`, `video3/` | `hardware/<same>/` |
+| `archive/` (`video/`, `video2/`) | `hardware/archive/` |
+| `hardware/ram.md`, `hardware/mainboard/mainboard.circuit.tsx` | `hardware/mainboard/docs/ram.md`, `hardware/mainboard/board/` |
+| `hardware/cards/<card>.circuit.tsx` | `hardware/<card>/board/` (`video`'s to `hardware/archive/video/board/`) |
+| `hardware/gal/<part>.*` | `hardware/<card>/logic/` — `mmu`, `clkdec`, `u9`, `u10` to `mainboard`; `audio`, `aseq`, `arom` and the superseded audio GALs to `audio`; the `video` card's to `archive/video` |
+| `hardware/gal/video3/`, `hardware/gal/storage/` | `hardware/video3/logic/`, `hardware/storage/logic/` |
+| `hardware/gal/cpld/<part>.{fit,jed}` | `hardware/<card>/logic/cpld/` |
+| `hardware/gal/jedec/reference/<part>.cupl.jed` | `hardware/<card>/logic/cupl/` |
+| `hardware/gal/verilog/<card's files>` | `hardware/<card>/sim/` — generated parts, board models and testbenches together |
+| `hardware/gal/verilog/{emit,gen}.ts`, `run.sh`, `run-machine.sh`, `machine3.v`, `machine_tb.sv` | `hardware/tools/sim/` |
+| `hardware/gal/{jedec,prjbureau}/`, the cross-card checks | `hardware/tools/gal/` |
+| `hardware/lib/`, `hardware/place/`, `hardware/cards/windows.ts` | `hardware/tools/lib/`, `hardware/tools/place/` |
+| `hardware/vendor/mc6809/` | `hardware/cpu/sim/mc6809/` |
+| `video3/bench/<program's files>` | `software/<program>/bench/` — desk, pcs, zelda, scroll, stardew, monster, mvania; the text-timing bench to `software/toolbox/bench/`, the SD-card run to `software/nitros9/bench/` |
+| `video3/docs/{pcs,stardew,scrolling}.md` | `software/{pcs,stardew,scroll}/docs/` |
+| `docs/boot-and-desktop.md`, `docs/proportional-font.md` | `software/desk/docs/`, `software/toolbox/docs/` |
+| `docs/{coarm-overlay,drivewire,nitros9-av-plan,nitros9-hardware-improvements}.md` | `software/nitros9/docs/` |
+| `docs/6309.md` | `hardware/cpu/docs/` |
+| `pinball-status.md` | `software/pcs/docs/status.md` |
+| `software/demo/emu/` | `software/emu/` |
+| `software/demo/tools/{frames,show,mkshow,mkparrots}.py` | `software/tools/` — live code that had been left in the archived show |
+| `software/demo/tools/mkgame.py` | `software/zelda/bench/` — `mkzelda.py` builds on its terrain |
+| `software/demo/` (the rest) | `software/archive/demo/` |
+| `software/v3boot/` | `software/boot/v3boot/` |
+| `software/nitros9/tools/{mktbox,mkfonts,mkcp437}.py`, `v3show.py` | `software/toolbox/tools/`, `software/paint/tools/` |
+| `software/nitros9/video/` | `software/desk/video/` (`run-desk.sh` and what it uses); the recorded sessions to `software/archive/nitros9-video/` |
+| `reference/<component's own>` | `<component>/reference/` — each component's `reference/README.md` lists its files; `reference/` keeps what several share |
+
+### What retired the same day
+
+`overworld` (the tile-mode world, with its `libvid` module and `vgmodel.py`
+streams) and `pinball` (all three generations before `pcs`) left the build: their
+sources went to `../nitros9`'s `level2/arm6309/archive/`, their generators and benches
+to `software/archive/`, `pinball` came off `desk`'s Applications menu (8 items → 7)
+and its icon column (`NICON` 12 → 11, the five below it moved up one pitch), and the
+benches that put `overworld` on a card (`run-sdboot.sh`, `run-machine.sh`) put
+`zelda` there instead. `rastbar` and `wave`, out of the recipe since 2026-09-22, moved
+to the same archive.
+
+### What the move found
+
+- `software/demo/` was archived on 2026-09-20 while **five live tools were still in
+  it**: every checker imports `frames.py`, the toolbox imports `show.py`, `mkshow.py`
+  and `mkparrots.py`, and `mkzelda.py` imports `mkgame.py`. They are in
+  `software/tools/` and `software/zelda/bench/` now.
+- Two **supplied inputs were living in an ignored build directory**
+  (`software/demo/build/parrots-image.jpg`, and the `.mod` files) — a `make clean`
+  away from gone. They are reference material now (`software/toolbox/reference/`,
+  `software/archive/demo/reference/`).
+- The archived `vsup.pld` is **stale against its own term list**: `gen:pld` writes a
+  second `PS0` term (`VBLANK`) the committed file does not have. Left as committed —
+  it is an archived design output, and nothing fits it.
+
+## Every build and check becomes a `make` target, and writes to its component's `build/` (2026-09-23)
+
+The same day as the reorganisation above. Until then the checks were `npm run`
+scripts in `hardware/package.json`, the host C builds were one root CMake project
+(`build-host/`, `build-arm/` at the root), and every bench wrote to its own
+`/tmp/arm6309-<name>` — thirty-odd directories, five of them shared between
+scripts, and all of them gone at the end of a sandboxed session.
+
+| Until 2026-09-23 | Since |
+|---|---|
+| `npm run check`, `check:video`, `check:machine`, `check:sim`, `gen:pld`, `build`, `build:all`, … | `make -C hardware check`, `sim`, `machine`, `sim-hand`, `pld`, `boards`, `all`; each card's own in `make -C hardware/<card> help`. ⚠ The npm names are kept, as aliases |
+| `cmake -B build-host` / `build-arm` at the root, one project | `hardware/cpu/` and `hardware/audio/` are CMake projects of their own: `make -C hardware/cpu check` / `firmware` → `hardware/cpu/build/{host,arm}/`, `make -C hardware/audio host` → `hardware/audio/build/host/`. `cmake/arm-none-eabi.cmake` → `hardware/cpu/cmake/` |
+| `/tmp/arm6309-<bench>` | `<component>/build/<bench>`, computed from the script's own location |
+| `/tmp/arm6309-nitros9`, `/tmp/arm6309-dialog` (the NitrOS-9 ROMs every OS bench shares) | `software/nitros9/build/rom`, `software/nitros9/build/dialog` |
+| `/tmp/arm6309-a09`, `/tmp/arm6309-ffmpeg` | `.tools/a09`, `.tools/ffmpeg`, beside LWTOOLS and ToolShed |
+| Verilator's `obj_dir/` beside the sources; the machine bench's screenshots in `gal/verilog/` | each card's `build/obj_<tb>/`; `hardware/tools/build/` |
+| `software/boot/boot.{hex,lst}`, `software/v3boot/v3boot.*` | `software/boot/build/` — ⚠ `boot.bin` stays tracked beside `boot.asm`: it is a design output the recipe reads |
+| `hardware/dist/` (tsci) | each board's `build/board/`; `dist/` is not kept |
+
+**What stays in the source tree on purpose**: the fitter's `.jed`/`.fit`, CUPL's
+reference JEDECs, the generated Verilog and `.pld`, and `boot.bin` — every one a
+design output this repository tracks so a change to it shows in review.
+
+### `boot-and-desktop.md` §0, §3 and §3.4.1 — Pinball, as it stood until 2026-09-23
+
+Retired the same day as the reorganisation, with `pcs` its replacement. The spec said:
+
+> ⭐ **THE APPLICATIONS ARE ICONS (2026-09-22)** — Pinball, Monster, BBS, ANSI
+> Art and Stardew, §3.4.1
+
+> | an application menu | `desk`'s **Applications** menu forks `v3paint`, `monster`, `pinball`, `stardew`, `v3bbs` and `v3art` off `/SD0/CMDS` | ⭐ **built 2026-09-20** — §3 milestone 2. ⭐ **All six are desktop ICONS too since 2026-09-22** — §3.4.1 |
+
+> Two titles — **Desk** (About, Quit) and **Applications** (Paint, Monsterland, Pinball
+> and Stardew)
+
+> `IcTab` carries **Pinball, Monster, BBS, ANSI Art, Stardew and Explore** in a column at
+> x 568, …; `NICON` went 6 → 11 → 12 and the Applications menu gained the new names. Their
+> art — `pinball`, `monster`, `farm`, `world` — was **appended** to `mktbox.py`'s
+> `ICON_NAMES` …
+
+> ⚠ **The column's pitch is 72 and not 80** since 2026-09-23, which is what makes six of
+> them fit. … At 72 the column runs 34..441 and clears the bottom by 39.
+
+(The §3 menu sentence had also gone stale before this: the menu carried eight items,
+not four.)
+
+## `zelda` retired, `scroll` renamed `tilescroll`, and `v3art` is we-tortuga only (2026-09-24)
+
+**`zelda`**, the overworld as a room game, is archived — `software/archive/zelda/`,
+and its source in `../nitros9`'s `level2/arm6309/archive/`. It left the recipe, the
+card, the Applications menu (7 items → 6) and the icon row (`NICON` 11 → 10). The two
+boot benches that put a demo on the card (`run-sdboot.sh`, `run-machine.sh`) carry
+`tilescroll` now. The hero and creature art that `tilescroll` borrowed from
+`mkzelda.py` moved to `software/tilescroll/bench/cast.py`, verbatim — the generator's
+bank and data table came out byte-identical — so a live program imports nothing
+archived.
+
+**`scroll` is `tilescroll`**: the command and module name, `cmds/tilescroll.asm` and
+`tilescrolldat.asm`, the component directory, `mktilescroll.py`, `checktilescroll.py`,
+`run-tilescroll.sh`, the card's `tilescroll.bnk`, and the Explore icon and menu item.
+The spec keeps its name, `software/tilescroll/docs/scrolling.md`: it is about the
+technique.
+
+**`v3art` is Blocktronics' *we-tortuga* only.** This project's own piece, drawn so the
+icon would work on a clone, is archived in `software/archive/paint/ansi-original.py`.
+
+### `boot-and-desktop.md`, as it stood until 2026-09-24
+
+> forks `v3paint`, `monster`, `stardew`, `v3bbs`, `v3art`, `zelda` and `tilescroll` off
+> BBS, ANSI Art, Zelda and Explore) — in an 18-pixel bar
+> ⛔ **And `v3art`'s picture had to be written, not imported.** The stream was built from
+> `we-tortuga.ans`, which is Blocktronics' and is **not in this repository** — so an
+> ANSI-Art icon would have worked on the machine that happened to have it and been dead on
+> a clone. `v3show.py`'s `art_grid_original()` is this project's own 80 × 25: a half-block
+> `ARM6309` over an ordered-dither sky with the machine's own boards in silhouette, all of
+> it CP437 and the sixteen DOS colours, which is the whole of what `ca_ext.asm` implements.
+> ⚠ It is emitted **unconditionally**; `V3ART=import` opts back into the import. The first
+> cut preferred the import whenever it was present, which would have shipped two different
+> pictures under one name.
+> world with the hero in the middle of it, where `zelda` is a grid of rooms. ⚠ It is the

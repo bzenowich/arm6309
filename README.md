@@ -14,22 +14,22 @@ GAL will not carry the design. A documented register map before a board, an hone
 count, and a measurement in place of an estimate wherever one can be taken.
 
 > **The rule used to read "no CPLDs, no FPGAs", and it was retired on 2026-09-08.** It
-> was never a period rule — `archive/video/docs/graphics.md` §10.1.2: Altera's first EPLD is
+> was never a period rule — `hardware/archive/video/docs/graphics.md` §10.1.2: Altera's first EPLD is
 > 1984 and the first CPLD 1988, both older than parts this machine already uses. It was
 > a style rule that bought one function per package and everything visible on a scope,
 > and **three of six cards had already spent it**: video to compete with a GIME on even
 > terms, audio because its interrupt block does not fit a `GAL22V10` either way, and net
 > because a 74xx 10BASE-T MAC is 41 ICs across two slots and the machine has one left.
 > A fourth — storage — had an `ATF1508AS` costed, worth **five packages**, and refused
-> it on the rule alone (`storage/docs/sdcard.md` §8.1). ⭐ **That question closed itself
+> it on the rule alone (`hardware/storage/docs/sdcard.md` §8.1). ⭐ **That question closed itself
 > on 2026-09-20**: the card shrank to 8 ICs and two GAL22V10s, so the CPLD would now buy
-> nothing and would give up the fuse-level verification `hardware/gal/jedec/` provides.
+> nothing and would give up the fuse-level verification `hardware/tools/gal/jedec/` provides.
 >
 > **A rule three cards deep in exceptions, blocking a fifth-package saving on the
 > fourth, was not describing the machine any more.** The
-> test that actually decided each case is the one `io/README.md` derived independently:
+> test that actually decided each case is the one `hardware/io/README.md` derived independently:
 > **does a part exist, is it available, and does it fit the I/O budget** — in that
-> order, which is the ordering `net/docs/net.md` §13.6 paid to learn.
+> order, which is the ordering `hardware/net/docs/net.md` §13.6 paid to learn.
 >
 > ⚠ **One thing this does not decide: FPGAs.** No card has proposed one and none of the
 > arguments above reaches them — a CPLD is a fitted, fuse-level-verifiable part with a
@@ -70,7 +70,7 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > 2026-09-10 a cycle-accurate **6809E core** went in the socket, the motherboard and
 > the video card went in with it, and the machine executed
 > [`software/boot/boot.asm`](software/boot/boot.asm) out of its own ROM
-> (`hardware/gal/verilog/machine_tb.sv`). **It did not reach its second span.**
+> (`hardware/tools/sim/machine_tb.sv`). **It did not reach its second span.**
 >
 > Three defects, all of them seams between parts that are individually correct, and
 > **all three invisible to every check that existed for the same reason: a testbench
@@ -87,7 +87,7 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > ⭐ **All three are repaired, `vctrl` and `vsup` re-fit, and the machine draws a
 > 640 × 200 picture whose every pixel is the index the software wrote** — 226
 > Verilator claims, 543 model claims and 22 machine claims, **none failing**.
-> `graphics.md` §19 items 36–38, and `archive/video/docs/history.md` has the derivations.
+> `graphics.md` §19 items 36–38, and `hardware/archive/video/docs/history.md` has the derivations.
 >
 > ⭐ **A fourth followed from the picture itself and is repaired too** (§19 item 35):
 > it sat **five dots right of the active window**, so the last five columns of every
@@ -98,7 +98,7 @@ count, and a measurement in place of an estimate wherever one can be taken.
 > macrocells, zero pins**. `VSTAT`'s `HBLANK`/`VBLANK` are deliberately *not* delayed,
 > because what those have to agree with is the sync.
 >
-> ⛔ **AND THE CENSUS THAT FOUND THOSE IS A CHECK NOW — `npm run check:reach`.**
+> ⛔ **AND THE CENSUS THAT FOUND THOSE IS A CHECK NOW — `make -C hardware reach`.**
 > `design-review2.md` closed the direction *"a fitted part reads what nothing
 > produces"*; this is the other one, and it was open in twenty-five places. A
 > signal that is **produced and read by nothing** is, for a register bit, a
@@ -162,19 +162,62 @@ count, and a measurement in place of an estimate wherever one can be taken.
 
 ---
 
+## Layout
+
+Since 2026-09-23 the tree is **one directory per component**, hardware and software
+alike, and every component is laid out the same way:
+
+```
+hardware/<card>/            mainboard, cpu, video3, audio, io (ps2, serial), storage, net
+    README.md               what it is and where to start
+    docs/                   its specification, and history.md beside it
+    board/                  the tscircuit drawing (<card>.circuit.tsx)
+    logic/                  its GAL/CPLD designs: *.jedec.ts / *.cpld.ts term lists, the
+                            generated .pld, the fitter's cpld/*.fit and CUPL's cupl/*.cupl.jed
+    sim/                    its Verilog: the generated parts, the hand-written board model,
+                            and its testbench
+    bench/, tools/          host-side exercisers and models, where it has them
+    reference/              datasheets and other material it is checked against
+hardware/tools/             what every card shares: lib/ (the slot, the checks), place/,
+                            gal/ (the JEDEC assembler, CUPL cross-check, fitter wrappers),
+                            sim/ (the Verilog generator, the runners, the whole-machine bench)
+hardware/archive/           retired hardware - frozen, and still citable
+
+software/<program>/         boot, nitros9, toolbox, desk, pcs, stardew, monster,
+                            mvania, tilescroll, paint
+    README.md               what it is, and where its 6809 source is
+    bench/                  its generator (mk*.py), its model and checker, its run-*.sh
+    docs/, reference/       as above
+software/emu/               the host emulator every software bench runs on
+software/tools/             shared host tools (the frame decoder, the assemblers' fetchers)
+software/archive/           retired software - the video/ card's demo show, the tile-mode
+                            overworld and zelda, three pinball attempts before pcs
+
+docs/                       the machine as a whole: machine.md, the design reviews, history
+reference/                  reference material more than one component uses
+```
+
+⚠ **The applications' 6809 source is not in this repository.** It is part of the
+NitrOS-9 port, in `../nitros9` on its `arm6309` branch (`level2/arm6309/cmds/`,
+`modules/`), because the NitrOS-9 recipe builds it there. Each `software/<program>/`
+README names its files; this repository holds everything around them — the
+generators that write their data tables, the models they are checked against, the
+benches, the art and the docs.
+
 ## The subsystems
 
 | | What | Status | Start here |
 |---|---|---|---|
-| [`cpu/`](cpu/) | HD6309E on an **STM32G431CBU6**, 40-pin drop-in. One UFQFPN48 SKU for the CoCo 3 and this machine, running **byte-identical firmware on both** — the MMU is on the motherboard and so, since 2026-09-08, is the boot ROM. | **Phase 1 — timing spike written, not yet measured on silicon** | [`cpu/README.md`](cpu/README.md), [`cpu/docs/plan.md`](cpu/docs/plan.md) |
-| [`video3/`](video3/) | ⭐ **The machine's video card since 2026-09-20.** 80×25 / 80×60 character mode with **per-cell colour**, 640×200/240/400/480 chunky 8bpp bitmap with a span writer and **full copyrect**, 8×8 tile mode and one 16×16 sprite. **45 ICs** on a 24 cm board — 4 `ATF1508AS` and a `GAL22V10`, all five fitted. ⛔ **No display list**, so nothing per-scanline. | ⭐ **Fitted, and simulated end to end**: `v3card_tb` runs whole frames pixel for pixel in every mode and `v3machine_tb` runs a 6809E against the card out of the boot ROM. ⚠ Nothing is timed, drawn or costed in current (`plan.md` §14) | [`video3/README.md`](video3/README.md), [`video3/docs/plan.md`](video3/docs/plan.md), [`video3/docs/partition.md`](video3/docs/partition.md) |
-| [`archive/`](archive/) | ⭐ **Retired designs, kept whole and kept citable.** [`archive/video/`](archive/video/) is the machine's *previous* video card — 640×200 × 256 colours, a display list, 33 ICs, three fitted `ATF1508AS`, simulated and repaired — and it is where this machine's **backplane, slot model, arbitration rule and clock tree were designed**, so the rest of the repository still cites `graphics.md` for those. [`archive/video2/`](archive/video2/) is a microcoded ANSI card that was planned and never built. | **Archived 2026-09-20 — superseded, not wrong** | [`archive/README.md`](archive/README.md) |
-| [`audio/`](audio/) | 4-channel 8-bit PCM modelled on Paula, **with programmable panning**, 512 KB of samples in one package and a headphone-driven jack. ⭐ **35 ICs on an 18 cm card** — **two** `ATF1508AS`, both fitted. It reached 45 when the sequencer was built and came back the same day: programmable panning given up for classic MOD's fixed LRRL, and the counter, comparator and read-back latch absorbed into U1. Whether the analogue section fits the same card is open. Host reference model **builds and passes**. | ⭐ **Both CPLDs fitted, and the sequencer exactly fills its part; the card is simulated end to end — a sample byte reaches an `AD7528` and a buffer reloads from its shadow.** The analogue half is still unmeasured | [`audio/README.md`](audio/README.md), [`audio/docs/audio.md`](audio/docs/audio.md) |
-| [`io/`](io/) | PS/2 keyboard and mouse — **11 ICs** of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does, and since 2026-09-09 it is a **`TL16C550C` at 115,200 baud with 16-byte FIFOs**. One 14-IC card. | **Both specified** | [`io/README.md`](io/README.md), [`io/ps2/docs/ps2.md`](io/ps2/docs/ps2.md), [`io/serial/docs/serial.md`](io/serial/docs/serial.md) |
-| [`storage/`](storage/) | SD card interface — **8 ICs**, **537 KiB/s sustained**, an SPI burst started by the bus read strobe. ⭐ **8 and not 14 since 2026-09-20**: the block buffer that once made this card 16 packages is gone, and §4.4's 32-byte chunk-and-mask carries the read path as it already carried the write path. ⚠ The `TFM` hazard is mitigated, not retired — and §11.6 gives the 21 % back if the CPU's resume is specified. | ⭐ **Both GAL22V10s built, fitted and checked against Atmel's CUPL — 24 claims. The rest specified** | [`storage/README.md`](storage/README.md), [`storage/docs/sdcard.md`](storage/docs/sdcard.md) |
-| [`net/`](net/) | 10BASE-T with no MAC or PHY chip — **12 ICs**, two `ATF1508AS`, ported from `~/code/applenet`. ⚠ The host takes **56 % of the wire**; its sixteen-frame ring lives in the machine's new physical space. | **Specified** | [`net/README.md`](net/README.md), [`net/docs/net.md`](net/docs/net.md) |
-| [`software/`](software/) | 6809/6309 code that runs *on* the machine. | Third-party monitor and FORTH, imported | [`software/README.md`](software/README.md) |
-| [`hardware/`](hardware/) | Board layouts in **tscircuit** — the 72-pin backplane pinout as one table, the motherboard, the bus interface of all six cards, and the video card's analogue back end. Plus [`hardware/ram.md`](hardware/ram.md), the memory system: a 32 MB map, four SIMM sockets and a **1 MB boot ROM**. | **Schematic-level; boot, the map and all four SIMM windows simulate** | [`hardware/README.md`](hardware/README.md) |
+| [`hardware/cpu/`](hardware/cpu/) | HD6309E on an **STM32G431CBU6**, 40-pin drop-in. One UFQFPN48 SKU for the CoCo 3 and this machine, running **byte-identical firmware on both** — the MMU is on the motherboard and so, since 2026-09-08, is the boot ROM. | **Phase 1 — timing spike written, not yet measured on silicon** | [`hardware/cpu/README.md`](hardware/cpu/README.md), [`hardware/cpu/docs/plan.md`](hardware/cpu/docs/plan.md) |
+| [`hardware/video3/`](hardware/video3/) | ⭐ **The machine's video card since 2026-09-20.** 80×25 / 80×60 character mode with **per-cell colour**, 640×200/240/400/480 chunky 8bpp bitmap with a span writer and **full copyrect**, 8×8 tile mode and one 16×16 sprite. **45 ICs** on a 24 cm board — 4 `ATF1508AS` and a `GAL22V10`, all five fitted. ⛔ **No display list**, so nothing per-scanline. | ⭐ **Fitted, and simulated end to end**: `v3card_tb` runs whole frames pixel for pixel in every mode and `v3machine_tb` runs a 6809E against the card out of the boot ROM. ⚠ Nothing is timed, drawn or costed in current (`plan.md` §14) | [`hardware/video3/README.md`](hardware/video3/README.md), [`hardware/video3/docs/plan.md`](hardware/video3/docs/plan.md), [`hardware/video3/docs/partition.md`](hardware/video3/docs/partition.md) |
+| [`hardware/archive/`](hardware/archive/) | ⭐ **Retired designs, kept whole and kept citable.** [`hardware/archive/video/`](hardware/archive/video/) is the machine's *previous* video card — 640×200 × 256 colours, a display list, 33 ICs, three fitted `ATF1508AS`, simulated and repaired — and it is where this machine's **backplane, slot model, arbitration rule and clock tree were designed**, so the rest of the repository still cites `graphics.md` for those. [`hardware/archive/video2/`](hardware/archive/video2/) is a microcoded ANSI card that was planned and never built. | **Archived 2026-09-20 — superseded, not wrong** | [`hardware/archive/README.md`](hardware/archive/README.md) |
+| [`hardware/audio/`](hardware/audio/) | 4-channel 8-bit PCM modelled on Paula, **with programmable panning**, 512 KB of samples in one package and a headphone-driven jack. ⭐ **35 ICs on an 18 cm card** — **two** `ATF1508AS`, both fitted. It reached 45 when the sequencer was built and came back the same day: programmable panning given up for classic MOD's fixed LRRL, and the counter, comparator and read-back latch absorbed into U1. Whether the analogue section fits the same card is open. Host reference model **builds and passes**. | ⭐ **Both CPLDs fitted, and the sequencer exactly fills its part; the card is simulated end to end — a sample byte reaches an `AD7528` and a buffer reloads from its shadow.** The analogue half is still unmeasured | [`hardware/audio/README.md`](hardware/audio/README.md), [`hardware/audio/docs/audio.md`](hardware/audio/docs/audio.md) |
+| [`hardware/io/`](hardware/io/) | PS/2 keyboard and mouse — **11 ICs** of logic, because no period chip decodes PS/2. RS-232 serial — 3 ICs, because one does, and since 2026-09-09 it is a **`TL16C550C` at 115,200 baud with 16-byte FIFOs**. One 14-IC card. | **Both specified** | [`hardware/io/README.md`](hardware/io/README.md), [`hardware/io/ps2/docs/ps2.md`](hardware/io/ps2/docs/ps2.md), [`hardware/io/serial/docs/serial.md`](hardware/io/serial/docs/serial.md) |
+| [`hardware/storage/`](hardware/storage/) | SD card interface — **8 ICs**, **537 KiB/s sustained**, an SPI burst started by the bus read strobe. ⭐ **8 and not 14 since 2026-09-20**: the block buffer that once made this card 16 packages is gone, and §4.4's 32-byte chunk-and-mask carries the read path as it already carried the write path. ⚠ The `TFM` hazard is mitigated, not retired — and §11.6 gives the 21 % back if the CPU's resume is specified. | ⭐ **Both GAL22V10s built, fitted and checked against Atmel's CUPL — 24 claims. The rest specified** | [`hardware/storage/README.md`](hardware/storage/README.md), [`hardware/storage/docs/sdcard.md`](hardware/storage/docs/sdcard.md) |
+| [`hardware/net/`](hardware/net/) | 10BASE-T with no MAC or PHY chip — **12 ICs**, two `ATF1508AS`, ported from `~/code/applenet`. ⚠ The host takes **56 % of the wire**; its sixteen-frame ring lives in the machine's new physical space. | **Specified** | [`hardware/net/README.md`](hardware/net/README.md), [`hardware/net/docs/net.md`](hardware/net/docs/net.md) |
+| [`hardware/mainboard/`](hardware/mainboard/) | The motherboard: the MMU (a 32 MB map), four SIMM sockets, a **1 MB boot ROM**, the clock and the six-slot backplane. [`docs/ram.md`](hardware/mainboard/docs/ram.md) is the memory system | **Schematic-level; boot, the map and all four SIMM windows simulate** | [`hardware/mainboard/README.md`](hardware/mainboard/README.md) |
+| [`software/`](software/) | ⭐ Everything that runs *on* the machine: the boot ROM and its drawing **toolbox**, NitrOS-9 Level 2 off the SD card, the **desktop** it boots to, and the applications — *Pinball Construction Set*, a Stardew-like farm, *Mayhem in Monsterland*, a metroidvania scene, a tile-streamed world of any size (`tilescroll`), and Paint with its BBS and ANSI-art viewers | ⭐ **Boots from reset to the desktop off the card**, in simulation and on the host emulator | [`software/README.md`](software/README.md) |
+| [`hardware/tools/`](hardware/tools/) | What every card shares: the 72-pin backplane pinout as one table and the tscircuit library, the JEDEC assembler and Atmel cross-checks, the Verilog generator and the whole-machine testbench | | [`hardware/README.md`](hardware/README.md) |
 
 Machine-level material that belongs to no single card — the system map, and the
 comparisons against the two chips this machine stands in the tradition of — is in
@@ -183,7 +226,7 @@ comparisons against the two chips this machine stands in the tradition of — is
 - [`docs/machine.md`](docs/machine.md) — the machine spec: bus, `$FF` map, interrupt
   ownership, clock tree, and now boot, system RAM, power and the electrical rules.
   **The open item that both card specs name as step 0.**
-- [`docs/drivewire.md`](docs/drivewire.md) — the host link: virtual disks over serial for
+- [`software/nitros9/docs/drivewire.md`](software/nitros9/docs/drivewire.md) — the host link: virtual disks over serial for
   zero ICs, what it costs on each serial tier, and the machine's only source of a
   wall-clock time.
 - [`docs/design-review.md`](docs/design-review.md) — the 2026-09-04 review of every
@@ -191,20 +234,20 @@ comparisons against the two chips this machine stands in the tradition of — is
   contradicts.
 - [`docs/design-review2.md`](docs/design-review2.md) — ⛔ **the 2026-09-09 review, by
   simulation.** What the term-list checks could not see, why they could not see it, and
-  the tooling (`npm run check:video`) it leaves behind. Both reviews are frozen dated
+  the tooling (`make -C hardware sim`) it leaves behind. Both reviews are frozen dated
   records.
 - [`docs/coco3_c64.md`](docs/coco3_c64.md) — GIME vs VIC-II, from a CPU-replacement's
   point of view.
 - [`docs/video-comparison.md`](docs/video-comparison.md) — the video card against both
   of them.
-- ⭐ [`docs/proportional-font.md`](docs/proportional-font.md) — a design study:
+- ⭐ [`software/toolbox/docs/proportional-font.md`](software/toolbox/docs/proportional-font.md) — a design study:
   antialiased proportional text, the Macintosh's strike and GEOS's mega-font, and
   what the copy engine can take off the CPU. ⛔ It corrects a 2026-09-21 claim in
   `boot-and-desktop.md` §5 item 8.
-- ⭐ [`docs/coarm-overlay.md`](docs/coarm-overlay.md) — a design: CoArm's code
+- ⭐ [`software/nitros9/docs/coarm-overlay.md`](software/nitros9/docs/coarm-overlay.md) — a design: CoArm's code
   window is **full to the byte**, and what an overlay would cost. ⛔ The crux is
   the build layout, not the mapping.
-- ⭐ [`docs/6309.md`](docs/6309.md) — a plan: nothing in this machine has ever
+- ⭐ [`hardware/cpu/docs/6309.md`](hardware/cpu/docs/6309.md) — a plan: nothing in this machine has ever
   executed a 6309 instruction, what that costs, and how to simulate one before
   there is a Verilog core that is one.
 
@@ -220,61 +263,43 @@ neither, since 2026-09-04, is anything this project has no right to redistribute
 
 ## Building
 
-Two configurations, building disjoint sets of targets. Both run from this directory.
-
-### Host — no cross toolchain needed
-
-Syntax-checks the firmware sources, builds the audio reference player, runs the tests.
+⭐ **`make`, everywhere.** Every component has a `Makefile` with the same targets —
+`make help` lists them — and writes only to its own `build/`. From the root:
 
 ```sh
-cmake -B build-host -G Ninja
-cmake --build build-host
-ctest --test-dir build-host --output-on-failure
+make check        # hardware's static checks (every GAL and CPLD design against its
+                  #   model and Atmel's CUPL, the slot, the map, the documents' own
+                  #   numbers) and software's fast ones - ~2 min
+make sim          # the card testbenches under Verilator - ~4 min
+make machine      # the whole machine off its boot ROM - ~25 min
+make help         # the rest
 ```
 
-Produces `build-host/refplayer` and the two test binaries.
-
-### Hardware — the design files, the fuse maps and the simulation
-
-Needs `verilator`; `bun` comes from `hardware/`'s own `devDependencies`.
+and per component:
 
 ```sh
-cd hardware
-npm ci
-npm run check         # every GAL design against its model, and against Atmel's CUPL
-npm run check:sim     # the motherboard's two hand-written Verilog models
-npm run check:video   # ⛔ the cards and the motherboard, generated and simulated
+make -C hardware/audio help     # check, sim, oracle, modplay, bench, fit, host, test
+make -C hardware/cpu firmware   # the STM32 timing spike -> hardware/cpu/build/arm/spike.elf
+make -C software/pcs bench      # Pinball Construction Set's gate, ~8 min
 ```
 
-`check:video` reports **144 ok and no failures** as of 2026-09-09 — 140 after that
-day's repairs, plus four for `graphics.md` §10.3.2's descriptor format. It reported 122
-and 16 before the repairs, and [`docs/design-review2.md`](docs/design-review2.md) §10
-says what each one turned into.
+**What it needs.** `verilator` (5.020 verified) for anything that simulates;
+`bun` comes from `hardware/`'s own `devDependencies` (`npm ci` there, which the
+Makefiles run for you); `cmake` and Ninja for the host builds;
+`arm-none-eabi-gcc` (13.2.1 verified) for the firmware; `wine` and the WinCUPL
+extraction for the CPLD fitter (`CLAUDE.md`). **Every software bench also needs
+`../nitros9` on its `arm6309` branch**, and LWTOOLS and ToolShed:
+`make -C software/tools all` builds them into `.tools/`.
 
-### Firmware — `cpu/` only
-
-Needs `arm-none-eabi-gcc` (13.2.1 verified).
-
-```sh
-# Debian/Ubuntu
-sudo apt install gcc-arm-none-eabi
-
-cmake -B build-arm -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -G Ninja
-cmake --build build-arm
-```
-
-Produces `build-arm/spike.elf`, `.bin`, `.hex` and a link map.
-
-Each subsystem owns its own `CMakeLists.txt`; the top-level file only decides which
-subdirectories a given configuration visits. `video3/` and `io/` are specification-only
-and build nothing.
+The old `npm run check`, `check:video`, `check:machine`, … still work from
+`hardware/`: they are aliases for these targets.
 
 ---
 
 ## Conventions
 
 - **Paths in source comments and in cross-subsystem prose are repository-root-relative**
-  — `cpu/src/gpio.c`, not `../src/gpio.c`. Inside a subsystem's own README, paths are
+  — `hardware/cpu/src/gpio.c`, not `../src/gpio.c`. Inside a subsystem's own README, paths are
   relative to that subsystem and it says so at the top. Markdown *links* are always
   relative, because they have to resolve.
 - **Every card's specification is one document**, and it owns its own open-items list and
@@ -284,9 +309,9 @@ and build nothing.
   overturned estimate inline; at ~500 markers they stopped being readable. Each
   component now splits in two: the **specification describes only the present
   design**, and a `history.md` beside it archives what was superseded, with dates and
-  the reason each number moved (`archive/video/docs/history.md`, `audio/docs/history.md`,
-  `cpu/docs/history.md`, `net/docs/history.md`, `storage/docs/history.md`,
-  `io/ps2/docs/history.md`, `io/serial/docs/history.md`, `hardware/history.md`,
+  the reason each number moved (`hardware/archive/video/docs/history.md`, `hardware/audio/docs/history.md`,
+  `hardware/cpu/docs/history.md`, `hardware/net/docs/history.md`, `hardware/storage/docs/history.md`,
+  `hardware/io/ps2/docs/history.md`, `hardware/io/serial/docs/history.md`, `hardware/history.md`,
   `docs/history.md`). The wrong predictions are still visible on purpose — one
   directory over. A `⚠` in a spec now marks only a **live** hazard or unverified
   assumption, never a revision. Section numbers are never reused: a section whose

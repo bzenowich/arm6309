@@ -6,11 +6,11 @@
 #   NOBUILD=1 sh software/nitros9/run-sdboot.sh (use the ROM already built)
 #   OUT=dir   overrides /tmp/arm6309-sdboot
 #
-# ⚠ NOT THE MACHINE, in the sense software/demo/emu/machine.c means: it is the
+# ⚠ NOT THE MACHINE, in the sense software/emu/machine.c means: it is the
 # CPU core checked against mc6809e.v, the map, video3, the vertical blank as
 # the system tick, a TL16C550C on the console - and the storage card at $FF58
 # with a real SDHC card in SPI mode behind it, backed by an image file, ported
-# byte for byte from hardware/gal/verilog/storage_card.v and sd_model.v.  The
+# byte for byte from hardware/storage/sim/storage_card.v and sd_model.v.  The
 # 74-clock power-up gate is a GATE there: a reader that skips sdcard.md §9.0
 # step 1's `SDMOSI <- $FF` gets $FF from CMD0 for ever, here as on a bench.
 #
@@ -21,7 +21,7 @@
 #
 #   software/boot/boot.asm §10b, the boot ROM's own reader - §9.0's init and
 #     §9.1's CMD17 - which decides which of the boot dialog's three pictures
-#     is true (docs/boot-and-desktop.md §1, §2)
+#     is true (software/desk/docs/boot-and-desktop.md §1, §2)
 #   nitros9 level2/arm6309/modules/boot_sd.asm, the F$Boot module, which reads
 #     OS9Boot off the card and, since 2026-09-22, has nowhere else to look
 #
@@ -57,10 +57,11 @@
 # what these two controls now assert.
 #
 # ⛔ The exit code is the answer.
+_here=$(cd "$(dirname "$0")" && pwd)   # before any cd: $0 may be relative
 set -e
 cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
-OUT=${OUT:-/tmp/arm6309-sdboot}
+OUT=${OUT:-$(cd "$_here/." && pwd)/build/sdboot}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-120}
 # ⚠ 32, not 20: a card boot reads OS9Boot over SPI and then points the
 # execution directory at /SD0/CMDS, so the prompt the `reboot` line waits for
@@ -98,7 +99,7 @@ cmp -s "$REC/bootfile" "$OUT/cardboot" && {
 # which is what this bench found the day the ROM disk went.  mksyscard.sh is
 # what owns that list, and BOOT= points it at the FIRQ-carrying bootfile above.
 BOOT="$OUT/cardboot" NAME="arm6309 boot" OUT="$OUT" DATA="$OUT/data" \
-  sh software/nitros9/mksyscard.sh "$OUT/sdboot.img" overworld > "$OUT/mksddisk.log" 2>&1 || {
+  sh software/nitros9/mksyscard.sh "$OUT/sdboot.img" tilescroll > "$OUT/mksddisk.log" 2>&1 || {
     cat "$OUT/mksddisk.log"; echo "FAIL  the bootable card did not build"; exit 1; }
 cat "$OUT/mksddisk.log"
 # ...and the same card WITHOUT the blessing: same tools, same files, no
@@ -107,21 +108,21 @@ cat "$OUT/mksddisk.log"
 # rather than "a card the machine can read and must not boot from".
 # ⚠ BOOT= is SET AND EMPTY on purpose - mksyscard.sh's `${BOOT-...}`.
 BOOT= NAME="arm6309 data" OUT="$OUT" DATA="$OUT/data" \
-  sh software/nitros9/mksyscard.sh "$OUT/sdplain.img" overworld > "$OUT/mksddisk-plain.log" 2>&1 || {
+  sh software/nitros9/mksyscard.sh "$OUT/sdplain.img" tilescroll > "$OUT/mksddisk-plain.log" 2>&1 || {
     cat "$OUT/mksddisk-plain.log"; echo "FAIL  the plain card did not build"; exit 1; }
 sig=$(od -An -v -tx1 -j240 -N8 "$OUT/sdplain.img" | tr -d ' \n')
 [ "$sig" = "0000000000000000" ] || {
   echo "FAIL  the plain card carries $sig at LSN 0 +\$F0 - it is not the control it claims to be"; exit 1; }
 
-cc -O2 -Wall -I"$ROOT/audio/refplayer" -o "$OUT/emu" software/demo/emu/machine.c \
-   software/demo/emu/cpu6809.c software/demo/emu/hd6309.c "$ROOT/audio/refplayer/card.c"
+cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machine.c \
+   software/emu/cpu6809.c software/emu/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
 
 # ⚠ CR, not LF.  `mdir` first: it is the claim, and a long listing that
 # scrolls is still all in serial.out.
 printf 'mdir\rdir\rdir /sd0\rfree /sd0\recho DONE-arm6309-sdboot\r' > "$OUT/typed.txt"
 STOP=$(printf '\nDONE-arm6309-sdboot')
 # ⛔ AND A SECOND RUN OF EACH, BECAUSE THIS EMULATOR DOES NOT COLD-START THE
-# BOOT ROM.  software/demo/emu/machine.c enters at $8004 with boot.asm's
+# BOOT ROM.  software/emu/machine.c enters at $8004 with boot.asm's
 # handoff already applied - the map, the memory descriptor - so the POST and
 # §10a's dialog never run on a fresh start, and the progress port reads $00
 # for the whole of one.  `reboot` (F$Debug 255) re-enters at the reset vector

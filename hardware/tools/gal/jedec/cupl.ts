@@ -1,0 +1,300 @@
+/* Emit CUPL source from a Design, so the CPLD is compiled from the same term
+ * lists the GAL checks exercise.
+ *
+ * The audio card's logic is verified as six GAL22V10 designs (audio.check.ts,
+ * exhaustively where that is cheap). Retyping it as CUPL for the ATF1508AS
+ * would make a second source that nothing compares against the first - which is
+ * the exact failure mode that put two errors in the fuse map on 2026-09-07.
+ * So it is generated instead: one origin, two devices.
+ *
+ * What this is NOT is a fitter. It emits equations; cupl.exe compiles them and
+ * fit1508.exe places and routes them. jedec/README.md explains why that split
+ * is where it is.
+ */
+
+import type { Cell, Design } from "./assemble"
+import { literalsOf, reduceTerms } from "./minimise"
+
+export interface Merged {
+  name: string
+  /** the clock every register runs on. A GAL22V10 has one clock on pin 1 and
+   *  CUPL infers it; an ATF1508AS has three global clocks and the fitter
+   *  refuses a registered node without an explicit .ck. */
+  clock?: string
+  partNo: string
+  location: string
+  device: string
+  /** signals that leave the part; everything else the fitter may bury */
+  external: Set<string>
+  inputs: { name: string; activeLow?: boolean }[]
+  cells: Cell[]
+  ar?: string
+}
+
+/** Rewrite a design's signal names. Two of the video card's fits call their
+ *  outputs A2..A18 - the scan address and the write pointer - and they are
+ *  different nets that collide the moment the parts merge. Renaming has to
+ *  reach the term strings as well as the cell names, which is why it lives
+ *  here rather than in each design. */
+export const rename = (d: Design, map: Record<string, string>): Design => {
+  const sub = (text: string) =>
+    text.replace(/!?[A-Za-z_][A-Za-z0-9_]*/g, (tok) => {
+      const neg = tok.startsWith("!")
+      const bare = neg ? tok.slice(1) : tok
+      return (neg ? "!" : "") + (map[bare] ?? bare)
+    })
+  return {
+    ...d,
+    cells: d.cells.map((c) => ({
+      ...c, name: map[c.name] ?? c.name,
+      terms: c.terms.map(sub), oe: c.oe ? sub(c.oe) : undefined,
+    })),
+    inputs: d.inputs.map((i) => ({ ...i, name: map[i.name] ?? i.name })),
+    ar: d.ar ? sub(d.ar) : undefined,
+  }
+}
+
+/* ⭐ FOLD THE CONSTANTS A RENAME LEAVES BEHIND - 2026-09-12.
+ *
+ * ⛔ WHY THIS EXISTS. `rename` substitutes one name for another, and when the
+ * replacement is a cell that is constant 0 the result is an equation that is
+ * false by inspection and nobody notices. vctrl.pld carried this, and the
+ * fitter compiled it:
+ *
+ *     ACPU0 = VPORT & !CPUIDLE & CPUIDLE & !CPUIDLE & !CPUIDLE ;
+ *
+ * CPUIDLE is `terms: []` - video.parts.ts, "arbDesign's CPU address and R/W,
+ * defeated: the CPU reserves no chip" (graphics.md 11) - so ARB_MAP maps four
+ * different inputs onto it and every CPU-exclusion term in the arbiter becomes
+ * either impossible or unconditional. Four dead grants, thirteen vacuous GSPN
+ * terms, and SPNGRANT reduced to SPNREQG exactly. All of it went to
+ * fit1508.exe, which minimised it away in silence - so the design was right
+ * and the DESIGN FILES were not, and every reader after the substitution had
+ * to re-derive that CPUIDLE was zero to know what the part did.
+ *
+ * The rule is the whole of Boolean constant folding: a term containing the
+ * constant is impossible and dies; a term containing its negation loses the
+ * literal. reduceTerms then removes what that leaves duplicated or subsumed.
+ *
+ * ⚠ WHAT THIS IS NOT. It is not a minimiser. jedec/minimise.ts declines
+ * Quine-McCluskey on purpose - "the answer is a better decomposition, not a
+ * better minimiser" - and this does not overrule it: `A&B # A&!B` on two real
+ * signals is left exactly as written. Only literals that are CONSTANT BY
+ * CONSTRUCTION are folded, which is bookkeeping on a substitution, not a
+ * judgement about anyone's equations. */
+const foldConstants = (cells: Cell[]): Cell[] => {
+  /* ⚠ A DECLARED CONSTANT IS `terms: []` **AND NO oe**. A cell with an oe and
+   * no terms is an OPEN-DRAIN DRIVER - its value is 1 whenever the enable says
+   * so, and its whole condition lives in the oe: WAIT here, FIRQ on the audio
+   * card (access.jedec.ts, audio.jedec.ts). Treating those as constant 0 would
+   * fold away any equation that read one, which is a silent way to delete
+   * logic. Only `terms: []` with no oe is a constant. */
+  const zero = new Set(cells
+    .filter((c) => c.terms.length === 0 && c.oe === undefined)
+    .map((c) => c.name))
+  if (zero.size === 0) return cells
+  const fold = (conj: string): string | null => {
+    const kept: string[] = []
+    for (const lit of literalsOf(conj)) {
+      const bare = lit.replace(/^!/, "")
+      if (!zero.has(bare)) { kept.push(lit); continue }
+      if (!lit.startsWith("!")) return null      // & 0  -> the term is impossible
+      /* & !0 -> & 1: drop the literal and keep going */
+    }
+    return kept.join(" & ")
+  }
+  return cells.map((c) => {
+    if (zero.has(c.name)) return c               // the declared constants themselves
+    /* ⚠ An open-drain cell falls through to here on purpose: its terms are
+     * empty and its oe is the thing that needs folding. */
+    const folded = c.terms.map(fold).filter((t): t is string => t !== null)
+    const oe = c.oe === undefined ? undefined : fold(c.oe)
+    return {
+      ...c,
+      terms: reduceTerms(folded.map(literalsOf)).map((t) => t.join(" & ")),
+      /* ⚠ An oe that folds to impossible would mean a pin that never drives.
+       * Leave it as written rather than silently deleting the output - that is
+       * a design question, and this pass does not get to answer it. */
+      oe: oe === null ? c.oe : oe,
+    }
+  /* ⚠ DROP WHAT FOLDED TO NOTHING, AND ONLY THAT. A cell whose every term died
+   * is constant 0 and drives nothing - the four ACPU grants. A cell that was
+   * DECLARED constant is kept, because something was renamed onto it and the
+   * scan in `merge` would otherwise synthesise it as an input PIN. `zero` is
+   * the set of the declared ones, taken before any folding. */
+  }).filter((c) => c.terms.length > 0 || c.oe !== undefined || zero.has(c.name))
+}
+
+/** Fold several 22V10 designs into one part. Any signal produced by one and
+ *  consumed by another stops being a pin and becomes an internal node - which
+ *  is the whole reason for doing it. */
+export const merge = (
+  designs: Design[], extra: Cell[], meta: Omit<Merged, "inputs" | "cells" | "external">,
+): Merged => {
+  /* ⚠ FOLD BEFORE THE INPUT SCAN BELOW, not after. The scan synthesises an
+   * input for every literal it cannot find a producer for, so a fold that ran
+   * later would leave CPUIDLE already turned into a PIN. */
+  const cells = foldConstants([...designs.flatMap((d) => d.cells), ...extra])
+  const produced = new Set(cells.map((c) => c.name))
+  const inputs = new Map<string, { name: string; activeLow?: boolean }>()
+  for (const d of designs) {
+    for (const i of d.inputs) {
+      if (!produced.has(i.name)) inputs.set(i.name, { name: i.name, activeLow: i.activeLow })
+    }
+  }
+  /* Every literal any equation reads must be produced or supplied. */
+  for (const c of cells) {
+    for (const t of [...c.terms, c.oe ?? ""].join(" & ").split("&")) {
+      const n = t.trim().replace(/^!/, "")
+      if (n && /^[A-Za-z_]/.test(n) && !produced.has(n) && !inputs.has(n)) {
+        inputs.set(n, { name: n })
+      }
+    }
+  }
+  /* ⛔ `?? meta.ar`, since 2026-09-11. Without it a part built from cells alone
+   * - aseq, whose `merge([], …)` names RESET in its meta - had its reset
+   * overwritten with undefined, so aseq.pld carried no .ar and U2 had no
+   * reset in silicon or in Verilog. Verilator's zero-initialised registers hid
+   * it. */
+  const ar = designs.map((d) => d.ar).find(Boolean) ?? meta.ar
+  return { ...meta, inputs: [...inputs.values()], cells, ar }
+}
+
+/** Declare inputs of a merged part active-low. `merge` synthesises an input it
+ *  finds only as a literal in some equation, and a synthesised input is
+ *  active-high - which for a backplane strobe like /IOSEL or /IOPAGE is the
+ *  wrong pin sense, and nothing downstream can see it: the emitted Verilog is
+ *  in asserted sense and every wrapper inverts by hand. pins.check.ts is what
+ *  catches the next one. Throws on a name that is not an input, so a rename
+ *  cannot leave a declaration pointing at nothing. */
+export const withActiveLow = (m: Merged, names: string[]): Merged => {
+  for (const n of names) {
+    if (!m.inputs.some((i) => i.name === n)) throw new Error(`${m.name}: ${n} is not an input`)
+  }
+  return {
+    ...m,
+    inputs: m.inputs.map((i) => (names.includes(i.name) ? { ...i, activeLow: true } : i)),
+  }
+}
+
+const banner = (m: Merged) => [
+  `Name       ${m.name} ;`,
+  `PartNo     ${m.partNo} ;`,
+  `Date       generated ;`,
+  `Revision   01 ;`,
+  `Designer   arm6309 ;`,
+  `Company    - ;`,
+  `Assembly   ${m.location} ;`,
+  `Location   ${m.location} ;`,
+  `Device     ${m.device} ;`,
+].join("\n")
+
+/* Split a name list so that no emitted line exceeds `width` characters of
+ * payload. CUPL counts characters, not names. */
+const wrap = (names: string[], width: number): string[][] => {
+  const chunks: string[][] = [[]]
+  let n = 0
+  for (const name of names) {
+    if (n > 0 && n + name.length + 1 > width) { chunks.push([]); n = 0 }
+    chunks[chunks.length - 1].push(name)
+    n += name.length + 1
+  }
+  return chunks
+}
+
+export const toCupl = (m: Merged): string => {
+  const out: string[] = [banner(m), ""]
+  out.push("/* GENERATED by hardware/tools/gal/jedec/cupl.ts - do not edit.")
+  out.push(" *")
+  out.push(" * The equations below are the same term lists the card's GAL22V10 checks")
+  out.push(" * exercise. Writing them twice would create a second source with nothing")
+  out.push(" * checking it against the first, which is how two errors got into the 22V10")
+  out.push(" * fuse map. One origin, two devices.")
+  out.push(" *")
+  out.push(" * Pins are left unassigned: the fitter places them. The card's datapath pinout")
+  out.push(" * is not settled, so fixing")
+  out.push(" * pins here would be inventing a constraint rather than recording one.")
+  out.push(" */")
+  out.push("")
+
+  out.push("/* --- inputs ------------------------------------------------------- */")
+  /* The clock is only named in a .ck statement, which nothing else scans, so
+   * it has to be declared here or CUPL reports it as an intermediate variable
+   * with no expression. */
+  const named = new Set(m.inputs.map((i) => i.name))
+  if (m.clock && !named.has(m.clock)) out.push(`PIN = ${m.clock} ;`)
+  for (const i of m.inputs) out.push(`PIN = ${i.activeLow ? "!" : ""}${i.name} ;`)
+  out.push("")
+
+  const internal = m.cells.filter((c) => !m.external.has(c.name))
+  const external = m.cells.filter((c) => m.external.has(c.name))
+  out.push("/* --- outputs ------------------------------------------------------ */")
+  for (const c of external) out.push(`PIN = ${c.assertedLow ? "!" : ""}${c.name} ;`)
+  out.push("")
+  /* Only REGISTERED internal signals need a node. A combinational one is an
+   * ordinary CUPL intermediate variable: it is substituted into whatever reads
+   * it and costs no macrocell and no pin. Declaring those as PINNODE is what
+   * made the fitter count 91 I/Os for a design with 47. */
+  const buriedRegs = internal.filter((c) => c.registered)
+  const buriedComb = internal.filter((c) => !c.registered)
+  out.push("/* --- buried registers: state that used to cross a package boundary - */")
+  for (const c of buriedRegs) out.push(`PINNODE = ${c.assertedLow ? "!" : ""}${c.name} ;`)
+  out.push("")
+  /* ⚠ WRAPPED, and it is not cosmetic. CUPL's lexer has a maximum source line
+   * length and it applies to COMMENTS: the sequencer has sixty combinational
+   * internals, the list ran past the bound, and cupl.exe stopped with
+   * "line exceeds maximum length" and wrote no .tt2 at all - which
+   * fit1508.sh's own guard then reported as "CUPL produced no .tt2". The same
+   * bound already chunks the .ck and .ar register lists below. */
+  out.push("/* Combinational internals are left undeclared - CUPL substitutes them:")
+  for (const chunk of wrap(buriedComb.map((c) => c.name), 60)) {
+    out.push(` * ${chunk.join(", ")}`)
+  }
+  out.push(" */")
+  out.push("")
+
+  out.push("/* --- equations ---------------------------------------------------- */")
+  for (const c of m.cells) {
+    const lhs = `${c.name}${c.registered ? ".d" : ""}`
+    /* An EMPTY term list is the open-drain idiom: the cell drives a constant
+     * and the condition rides entirely on .oe, so the pin pulls to one rail or
+     * floats and never drives the other.
+     *
+     * THE CONSTANT IS 'b'1 FOR AN ACTIVE-LOW CELL, NOT 'b'0, and getting that
+     * backwards is how /WAIT acquired its third defect on 2026-09-08. The pin
+     * is declared `PIN n = !WAIT`, so CUPL inverts: writing `WAIT = 'b'0`
+     * makes the pin drive HIGH whenever the enable is true - which on a shared
+     * open-drain line is not "no wait", it is this card fighting the
+     * motherboard's 3.3k pull-up and every other card on the wire.
+     *
+     * jedec/cupl.check.ts caught it by disagreeing with Atmel's own compiler
+     * over exactly one signal, which is the entire reason that file exists. */
+    if (c.terms.length === 0) {
+      out.push(`${lhs} = 'b'${c.assertedLow ? 1 : 0} ;`)
+    } else {
+      out.push(`${lhs} = ${c.terms.join("\n${pad}# ".replace("${pad}", " ".repeat(lhs.length + 3)))} ;`)
+    }
+    if (c.oe) out.push(`${c.name}.oe = ${c.oe} ;`)
+  }
+  const regs = m.cells.filter((c) => c.registered).map((c) => c.name)
+  if (m.clock && regs.length) {
+    out.push("")
+    out.push("/* One clock for every register: the card is one slot-walked datapath")
+    out.push(" * referred to its own oscillator (3.1), so there is only one. */")
+    /* CUPL has a maximum source line length and a hundred-register list runs
+     * past it - "line exceeds maximum length", after which it writes no .tt2
+     * at all. Chunked, and deliberately not by a round number of names: the
+     * bound is characters. */
+    for (const chunk of wrap(regs, 60)) out.push(`[${chunk.join(",")}].ck = ${m.clock} ;`)
+  }
+  if (m.ar) {
+    out.push("")
+    out.push(`/* One asynchronous reset for every register, as on the GALs. */`)
+    for (const chunk of wrap(regs, 60)) out.push(`[${chunk.join(",")}].ar = ${m.ar} ;`)
+    /* No .sp. A GAL22V10 has a synchronous preset term shared by every
+     * macrocell and mmu.pld ties it off explicitly; an ATF1508AS does not have
+     * one, and the fitter says so - "Warning - .P extension unknown", once per
+     * register, while counting each as another output it has to place. */
+  }
+  return out.join("\n") + "\n"
+}

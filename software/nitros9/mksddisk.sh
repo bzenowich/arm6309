@@ -1,6 +1,6 @@
 #!/bin/sh
 # ⭐ THE DEMO SD CARD: an RBF image the host's os9 tools write and the machine
-# reads through rbsd (storage/docs/sdcard.md §9.4).
+# reads through rbsd (hardware/storage/docs/sdcard.md §9.4).
 #
 #   sh software/nitros9/mksddisk.sh /tmp/x/demos.img              every demo
 #   sh software/nitros9/mksddisk.sh /tmp/x/demos.img mvania       just one
@@ -27,7 +27,7 @@
 # ⭐ BOOT= IS WHAT MAKES A CARD THE MACHINE CAN BOOT FROM, and it is opt-in:
 # without it the image is an ordinary data card, and since 2026-09-22 a
 # machine with nothing else in the socket does not start at all
-# (storage/docs/sdcard.md §9.5, docs/boot-and-desktop.md §2).
+# (hardware/storage/docs/sdcard.md §9.5, software/desk/docs/boot-and-desktop.md §2).
 # Two things go on a blessed card and neither is a file the machine opens:
 #
 #   OS9Boot, written CONTIGUOUSLY by `os9 gen` and named by DD.BT (LSN 0
@@ -107,11 +107,10 @@ command -v os9 >/dev/null || {
 # drift; only make knows what the `+=` lines after $(DEMOS) added.
 ALL=$(make -s -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" print-demos 2>/dev/null)
 [ -n "$ALL" ] || { echo "FAIL  the recipe printed no DEMOS list"; exit 1; }
-# ⚠ libvid is not a demo, it is a subroutine module, and it goes on the card
-# anyway: overworld.asm F$Loads "libvid" FROM THE EXECUTION DIRECTORY when
-# F$Link finds none in memory, and the execution directory is the card's CMDS
-# once a bench has done `chx /sd0/cmds`.  The ROM keeps its copy too.
-SUPPORT="libvid"
+# Subroutine modules a demo F$Loads from its execution directory go on the
+# card too.  There are none since 2026-09-23: the only one was libvid, and it
+# left with `overworld` (software/archive/overworld/).
+SUPPORT=""
 
 WANT=$*
 if [ -z "$WANT" ]; then

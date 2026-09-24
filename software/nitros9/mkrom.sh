@@ -17,12 +17,13 @@
 #                     filesystem, so this is the only thing the machine can
 #                     boot.  NOSYSIMG=1 skips it
 #
-# Used by software/nitros9/run-emu.sh and by hardware/gal/verilog/run-machine.sh
+# Used by software/nitros9/run-emu.sh and by hardware/tools/sim/run-machine.sh
 # for +scenario=nitros9.
+_here=$(cd "$(dirname "$0")" && pwd)   # before any cd: $0 may be relative
 set -e
 cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
-OUT=${1:-/tmp/arm6309-nitros9}
+OUT=${1:-$(cd "$_here/." && pwd)/build/rom}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 export PATH="$ROOT/.tools/bin:$PATH"
 mkdir -p "$OUT"
@@ -37,7 +38,7 @@ sh software/tools/mkrom.sh > "$OUT/mkrom.log" 2>&1 || { tail -5 "$OUT/mkrom.log"
 #
 # It used to all be copied into the ROM disk's /DD/SYS, and it is **1,140 of
 # the image's 1,952 sectors** under V3=1 - 58% of the ROM disk spent on
-# pictures.  The machine has storage now (storage/docs/sdcard.md 9.4), so:
+# pictures.  The machine has storage now (hardware/storage/docs/sdcard.md 9.4), so:
 #
 #   $OUT/data     everything generated here.  software/nitros9/mksddisk.sh
 #                 puts it in the card's DATA directory
@@ -57,47 +58,40 @@ rm -rf "$DATADIR" "$OUT/romsys"
 mkdir -p "$DATADIR" "$OUT/romsys" "$OUT/sys"
 # the scripted clients' byte streams (software/nitros9/tools/vtmodel.py)
 python3 software/nitros9/tools/vtmodel.py --emit "$DATADIR" || { echo "FAIL  vtmodel.py --emit"; exit 1; }
-python3 software/nitros9/tools/vgmodel.py --emit "$DATADIR" || { echo "FAIL  vgmodel.py --emit"; exit 1; }
+# (vgmodel.py's streams went with `overworld`, 2026-09-23: software/archive/overworld/)
 # ⭐ video3's demo streams (the desktop, the draggable window, the paint
 # canvas, the CP437 BBS).  They are 640 x 480 and 80 x 25
 # character screens, neither of which video/ can show.
-python3 software/nitros9/tools/v3show.py "$DATADIR" || { echo "FAIL  v3show.py"; exit 1; }
+python3 software/paint/tools/v3show.py "$DATADIR" || { echo "FAIL  v3show.py"; exit 1; }
 # ⭐ AND THE PINBALL TABLE, which is 327,680 bytes of PICTURE and is the
 # reason a card exists at all: a NitrOS-9 module may occupy 64 K of address
-# space and this is five times that (video3/bench/mkpcb.py).  `pinball` opens
+# space and this is five times that (software/archive/pinball/mkpcb.py).  `pinball` opens
 # it by bare name through DOpen, so the desktop's Applications menu can fork
 # the scene off /SD0/CMDS and it finds its table in /SD0/DATA.
 # ⭐ AND SINCE 2026-09-23 IT IS A TILE BANK, not a 327,680-byte picture: the
 # table is 640 x 1280 and does not fit the ring, so `pinball` streams it
-# through tscroll.inc the way `scroll` does (video3/bench/mkpcbt.py).
-rm -f "$DATADIR/pcbtable.pic" "$DATADIR/pcbtable.pal"
-cp video3/bench/pcbt.bnk video3/bench/pcbt.pal "$DATADIR/" \
-  || { echo "FAIL  no pcbt.bnk/.pal - run video3/bench/mkpcbt.py"; exit 1; }
-# ⭐ AND THE OVERWORLD, for the same reason.  ⛔ IT IS 8,192 BYTES SINCE
-# 2026-09-22, not 491,520: `zelda` became a ROOM game and a room is a tile MAP
-# assembled into the module, so what has to reach the card is the 50-tile bank
-# and the keyed art (video3/bench/mkzelda.py).
-rm -f "$DATADIR/zelda.pic"
-cp video3/bench/zelda.bnk video3/bench/zelda.art "$DATADIR/" \
-  || { echo "FAIL  no zelda.bnk/.art - run video3/bench/mkzelda.py"; exit 1; }
-# ⭐ AND `scroll`'s, which is the whole of ITS world: 288 x 512 bytes of tile
+# through tscroll.inc the way `tilescroll` does (software/archive/pinball/mkpcbt.py).
+# ⛔ AND SINCE 2026-09-23 IT IS NOT HERE AT ALL: `pinball` was retired in favour
+# of `pcs` (software/pcs/) and its table went to software/archive/pinball/.
+# (zelda's bank and art went with it on 2026-09-24 - software/archive/zelda/.)
+# ⭐ AND `tilescroll`'s, which is the whole of ITS world: 288 x 512 bytes of tile
 # bank, with the keyed actor shapes and their save-behind scratch inside it
-# (video3/bench/mkscroll.py).  The map is assembled into the module.
-cp video3/bench/scroll.bnk "$DATADIR/" \
-  || { echo "FAIL  no scroll.bnk - run video3/bench/mkscroll.py"; exit 1; }
+# (software/tilescroll/bench/mktilescroll.py).  The map is assembled into the module.
+cp software/tilescroll/bench/tilescroll.bnk "$DATADIR/" \
+  || { echo "FAIL  no tilescroll.bnk - run software/tilescroll/bench/mktilescroll.py"; exit 1; }
 # ⭐⭐ AND PINBALL CONSTRUCTION SET'S TABLES, one file each.  `pcs` loads a
 # table by bare name through DOpen (pcsfile.inc), which is what DISK.s did: PCS
 # never held two tables at once, and a module carrying all 26 does not fork.
 # ⛔ THEY ARE NOT IN THE REPOSITORY - they are generated from the retail disk
 # images the user supplies locally (pcs.md §5c), so a clone without them simply
 # has no tables on the card and every bench that names one says so.
-if ls video3/bench/pcstbl/*.pbt >/dev/null 2>&1; then
-  cp video3/bench/pcstbl/*.pbt "$DATADIR/"
+if ls software/pcs/bench/pcstbl/*.pbt >/dev/null 2>&1; then
+  cp software/pcs/bench/pcstbl/*.pbt "$DATADIR/"
 fi
 
-# and the overworld's data (software/demo/tools/mkgame.py), with its model for the checker
-python3 software/demo/tools/mkgame.py "$OUT/gamedata" > "$OUT/gamedata.log" || { cat "$OUT/gamedata.log"; echo "FAIL  mkgame.py"; exit 1; }
-for f in tiles world sprites frames; do cp "$OUT/gamedata/$f.bin" "$DATADIR/$f.bin"; done
+# (the tile-mode overworld's tiles/world/sprites/frames .bin files went with
+# `overworld`, 2026-09-23, and its terrain model mkgame.py with `zelda`,
+# 2026-09-24: software/archive/zelda/bench/.)
 
 # ⛔ AND YESTERDAY'S SYSROM=all HAS TO GO, which cost a run to learn.  $OUT/sys
 # is the CALLER's directory and is deliberately not cleaned - run-v3text.sh and
@@ -127,11 +121,11 @@ nsys=$(( $(ls -1 "$OUT"/sys 2>/dev/null | wc -l) + $(ls -1 "$OUT"/romsys 2>/dev/
 echo "ok    the card's /SYS: errmsg + $nsys file(s); its DATA: $(ls -1 "$DATADIR" | wc -l)"
 # ⭐ the ROM toolbox's data - fonts, icons, the Haiku palette, the paint
 # document - for ROM pages 65 on (tbox.asm; mktbox.py says what is where)
-python3 software/nitros9/tools/mktbox.py "$OUT/tbox.bin" > "$OUT/tbox.log" || { cat "$OUT/tbox.log"; echo "FAIL  mktbox.py"; exit 1; }
+python3 software/toolbox/tools/mktbox.py "$OUT/tbox.bin" > "$OUT/tbox.log" || { cat "$OUT/tbox.log"; echo "FAIL  mktbox.py"; exit 1; }
 
 # ⛔ THERE IS ONLY ONE FLAVOUR SINCE 2026-09-22.  `recipes/arm6309/arm6309.mak`
 # puts -DV3=1 in AFLAGS itself, so this script no longer chooses a card and a
-# caller's `V3=1` is accepted and ignored.  video/ is retired to archive/.
+# caller's `V3=1` is accepted and ignored.  video/ is retired to hardware/archive/.
 #
 # ⛔ THE RECIPE HAS ONE OBJECT DIRECTORY, and changing AFLAGS does not make
 # anything out of date - so switching flavour without a clean links modules

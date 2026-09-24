@@ -14,11 +14,12 @@
 # whose $HOME does not survive the session. `.tools/` is .gitignored.
 #
 # Then:   export PATH="$(pwd)/.tools/bin:$PATH"     (from the repo root)
+_here=$(cd "$(dirname "$0")" && pwd)   # before any cd: $0 may be relative
 set -e
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PREFIX="${NITROS9_TOOLS:-$ROOT/.tools}"
-WORK="${NITROS9_TOOLS_WORK:-/tmp/arm6309-nitros9-tools}"
+WORK="${NITROS9_TOOLS_WORK:-$(cd "$_here/." && pwd)/build/nitros9-tools}"
 LWTAR="${LWTOOLS_TAR:-$ROOT/software/tools/lwtools-4.25.tar.gz}"
 TSREV="${TOOLSHED_REV:-master}"
 

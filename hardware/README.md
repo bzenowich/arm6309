@@ -1,6 +1,11 @@
 # `hardware/`
 
-**Board layouts, in [tscircuit](https://tscircuit.com).** Paths in this document are
+**The machine's hardware, one directory per component** — [`mainboard/`](mainboard/),
+[`cpu/`](cpu/), [`video3/`](video3/), [`audio/`](audio/), [`io/`](io/),
+[`storage/`](storage/), [`net/`](net/) — each with its `docs/`, `board/` (the
+[tscircuit](https://tscircuit.com) drawing), `logic/`, `sim/` and `reference/`, plus
+[`tools/`](tools/) for what they share and [`archive/`](archive/) for retired designs
+(the root [`README.md`](../README.md) §Layout). Paths in this document are
 relative to `hardware/`; paths in source comments are repository-root-relative, per the
 convention at the bottom of the root [`README.md`](../README.md).
 
@@ -13,11 +18,11 @@ at that, and at the five cards that plug into it.
 
 **Status: schematic-level, and nothing is placed or routed.** Every package pinout is
 read off a datasheet — open item 1, and it was not a formality: see history.md's
-finding 4. [`gal/`](gal/) holds the motherboard GALs' equations, fitted as `.jed` files
+finding 4. [`mainboard/logic/`](mainboard/logic/) holds the motherboard GALs' equations, fitted as `.jed` files
 checked at the fuse level — fitting them found four defects in the board below
 (history.md).
 
-⭐ **The motherboard file matches the documents.** [`ram.md`](ram.md) §3.1, §6.2 and
+⭐ **The motherboard file matches the documents.** [`ram.md`](mainboard/docs/ram.md) §3.1, §6.2 and
 §6.7 make the board **19 ICs and four SIMM sockets** — two map SRAMs and **two isolation
 `'245`**, no DIP system RAM, U9/U10 and three `'157`, and a 1 MB boot ROM with its
 `'244`. ⚠ **The nineteenth arrived on 2026-09-09**: the high map byte had no data path
@@ -25,10 +30,10 @@ to `D0`–`D7` at all, because two common-I/O SRAMs cannot share one buffer — 
 §3.1 and §11 item 11.
 
 > **The MMU register map is signed off (2026-09-06) and the board implements the
-> equations.** `machine.md` §5 item 3 is closed with it. `npm run check:netlist` asserts
+> equations.** `machine.md` §5 item 3 is closed with it. `make -C hardware netlist` asserts
 > the five properties the equations force — no dead nets, `U3` takes `Q`, `/IOSEL`
 > is on `U6`, the `'245`'s direction is `R/W`, and the `'157`'s select is not the
-> write strobe. See [`gal/README.md`](gal/README.md). What exists
+> write strobe. See [`tools/gal/README.md`](tools/gal/README.md). What exists
 today is the **bus interface of every board, generated from one table**, so the
 motherboard and a card cannot disagree about what A17 is.
 
@@ -44,8 +49,8 @@ closed record of them since 2026-09-08.
 | | Decision | Why |
 |---|---|---|
 | **Connector** | **72-pin 0.1" card edge, 2 × 36** | 45 signals + 2 audio returns need more than colormin's 50 pins. A 100 mm Eurocard edge at 0.1" pitch holds 39 positions; 36 leaves 8.6 mm for the notch and mechanical margin, so **the card format sizes the connector**. ⚠ **That premise expired on 2026-09-08** — see below. |
-| **Card format** | **100 mm high × 120, 180 or 240 mm long** — Apple II proportions, per card | [`place/`](place/) drew the boards: the video card does not fit a 100 × 160 mm Eurocard (134.4 cm² of courtyard against 133.4 cm² of placeable area), and three of the five cards fit 12 cm — so the length is per-card and `place.check.ts` asserts each takes the shortest that works. |
-| **CPU siting** | **A 40-pin DIP socket on the motherboard** | The module is the drop-in board [`cpu/`](../cpu/) already builds for the CoCo 3, plugged in — **one hardware SKU serving both machines literally**, not by recompilation. Its own `'541`/`'245` level buffers ride with it (`plan.md` §2.6), so the motherboard adds no buffering. |
+| **Card format** | **100 mm high × 120, 180 or 240 mm long** — Apple II proportions, per card | [`place/`](tools/place/) drew the boards: the video card does not fit a 100 × 160 mm Eurocard (134.4 cm² of courtyard against 133.4 cm² of placeable area), and three of the five cards fit 12 cm — so the length is per-card and `place.check.ts` asserts each takes the shortest that works. |
+| **CPU siting** | **A 40-pin DIP socket on the motherboard** | The module is the drop-in board [`hardware/cpu/`](cpu/) already builds for the CoCo 3, plugged in — **one hardware SKU serving both machines literally**, not by recompilation. Its own `'541`/`'245` level buffers ride with it (`plan.md` §2.6), so the motherboard adds no buffering. |
 
 **Slot count is six, and that is a guess** — five specified cards (PS/2 and serial share
 one I/O card, merged 2026-09-08) plus one spare. Nothing in the machine documents has
@@ -56,7 +61,7 @@ supply and not the connector is the limit.
 > justification no longer binds.** The 72-pin decision was derived from the Eurocard —
 > *"the card format sizes the connector"* — and the format changed. Three things that
 > were foreclosed by having exactly one spare pin come back into scope: the DMA
-> request/grant pair `net/docs/net.md` §13.1 wanted, a future rail, and the spare that
+> request/grant pair `hardware/net/docs/net.md` §13.1 wanted, a future rail, and the spare that
 > physical `A20` spent. **The connector is not re-specified**; this is a note that it
 > could be, and `machine.md` §5 item 5 is where it would be decided.
 
@@ -64,8 +69,8 @@ supply and not the connector is the limit.
 
 ## The slot
 
-[`lib/slot.ts`](lib/slot.ts) is the single source of truth. The motherboard's sockets and
-every card's gold fingers are generated from it, and [`lib/slot.check.ts`](lib/slot.check.ts)
+[`tools/lib/slot.ts`](tools/lib/slot.ts) is the single source of truth. The motherboard's sockets and
+every card's gold fingers are generated from it, and [`tools/lib/slot.check.ts`](tools/lib/slot.check.ts)
 re-derives the claims `machine.md` §2 and `graphics.md` §17 make about it.
 
 ```
@@ -116,16 +121,16 @@ Four properties are load-bearing, and each is checked rather than asserted:
   CPLDs and the seven SRAMs became four). At a conservative ~1 A per gold finger that is
   5 A against a whole machine's 1.8–2.9 A (`machine.md` §8).
 - **Logical A13–A15 appear nowhere.** They are the map SRAM's address inputs and stay on
-  the motherboard (`machine.md` §2). `lib/netlist.check.ts` proves they reach no slot.
+  the motherboard (`machine.md` §2). `tools/lib/netlist.check.ts` proves they reach no slot.
 
 > ⚠ **A34 is physical `A20`** — `machine.md` §5 item 1 option D (2026-09-08), doubling
 > the physical map to 2 MB. The reason that use of the pin won is that it needs
 > **nothing else**: the map SRAM is byte-wide, its eighth bit was already stored and read
 > back through the isolation `'245`, and it drove nothing. One trace, no ICs, 1 MB.
 >
-> **There is no spare position.** `net/docs/net.md` §13.1's DMA request/grant pair lost
+> **There is no spare position.** `hardware/net/docs/net.md` §13.1's DMA request/grant pair lost
 > to `A20` the same day; a seventh signal would come out of the ground or power
-> allocation, and `lib/slot.check.ts` is what prices that.
+> allocation, and `tools/lib/slot.check.ts` is what prices that.
 
 The backplane carries **5 V only** — the storage card makes its own 3.3 V behind an LDO
 (`sdcard.md` §7) and the CPU module regulates for itself.
@@ -136,46 +141,46 @@ The backplane carries **5 V only** — the storage card makes its own 3.3 V behi
 
 | | | |
 |---|---|---|
-| [`lib/slot.ts`](lib/slot.ts) | the 72-pin pinout, as data | + [`slot.check.ts`](lib/slot.check.ts) |
-| [`lib/SlotConnector.tsx`](lib/SlotConnector.tsx) | `SlotSocket` (motherboard) and `CardEdge` (card), both from that table | |
-| [`lib/parts.ts`](lib/parts.ts) | package pinouts | every one datasheet-verified, each naming its source |
-| [`lib/Card.tsx`](lib/Card.tsx) | the card scaffold — 100 mm high, length per card | + [`place/`](place/) |
-| [`cards/windows.ts`](cards/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](lib/cards.check.ts) |
-| [`mainboard/`](mainboard/) | the motherboard | + [`netlist.check.ts`](lib/netlist.check.ts) |
-| [`cards/`](cards/) | audio, video, **io** (PS/2 + serial, merged 2026-09-08), storage, net — bus interface each. ⚠ `video.circuit.tsx` is the **archived** card ([`../archive/README.md`](../archive/README.md)); `video3`, which replaced it on 2026-09-20, has no board file yet (`plan.md` §15 step 8) | |
-| [`ram.md`](ram.md) | **the memory system — decided 2026-09-08**: 16-bit map entries, a 32 MB physical map, four 30-pin SIMM sockets of DRAM, **a 1 MB boot ROM** and no SRAM outside the map. The address path costs one SRAM because the MMU was built with 128× the map storage it uses; §§2.1, 4 and 9 are still options | |
-| [`place/`](place/) | **the placement study** — every board drawn 1 : 1 from its parts list, and the check that found the video card did not fit a Eurocard | + [`place/place.check.ts`](place/place.check.ts) |
-| [`gal/`](gal/) | **the programmable logic** — U3 and U6's equations in CUPL and Verilog, and [`gal/jedec/`](gal/jedec/), which assembles them into the fuse maps a programmer burns | + [`gal/mmu.check.ts`](gal/mmu.check.ts), [`gal/mmu_tb.sv`](gal/mmu_tb.sv), [`gal/jedec.check.ts`](gal/jedec.check.ts) |
-| [`vendor/mc6809/`](vendor/mc6809/) | **third-party** — Greg Miller's cycle-accurate MC6809E core, BSD, byte-identical to upstream | |
+| [`tools/lib/slot.ts`](tools/lib/slot.ts) | the 72-pin pinout, as data | + [`slot.check.ts`](tools/lib/slot.check.ts) |
+| [`tools/lib/SlotConnector.tsx`](tools/lib/SlotConnector.tsx) | `SlotSocket` (motherboard) and `CardEdge` (card), both from that table | |
+| [`tools/lib/parts.ts`](tools/lib/parts.ts) | package pinouts | every one datasheet-verified, each naming its source |
+| [`tools/lib/Card.tsx`](tools/lib/Card.tsx) | the card scaffold — 100 mm high, length per card | + [`place/`](tools/place/) |
+| [`tools/lib/windows.ts`](tools/lib/windows.ts) | the `$FF` map as data | + [`cards.check.ts`](tools/lib/cards.check.ts) |
+| [`mainboard/`](mainboard/) | the motherboard — `board/`, its four GALs in `logic/`, its Verilog in `sim/` | + [`netlist.check.ts`](tools/lib/netlist.check.ts) |
+| [`audio/`](audio/), [`io/`](io/), [`storage/`](storage/), [`net/`](net/), [`video3/`](video3/) | audio, video, **io** (PS/2 + serial, merged 2026-09-08), storage, net — bus interface each, in each card's own `board/`. ⚠ `video.circuit.tsx` is the **archived** card ([`../archive/README.md`](archive/README.md)); `video3`, which replaced it on 2026-09-20, has no board file yet (`plan.md` §15 step 8) | |
+| [`ram.md`](mainboard/docs/ram.md) | **the memory system — decided 2026-09-08**: 16-bit map entries, a 32 MB physical map, four 30-pin SIMM sockets of DRAM, **a 1 MB boot ROM** and no SRAM outside the map. The address path costs one SRAM because the MMU was built with 128× the map storage it uses; §§2.1, 4 and 9 are still options | |
+| [`place/`](tools/place/) | **the placement study** — every board drawn 1 : 1 from its parts list, and the check that found the video card did not fit a Eurocard | + [`tools/place/place.check.ts`](tools/place/place.check.ts) |
+| [`tools/gal/`](tools/gal/) | **the programmable-logic toolchain** — [`jedec/`](tools/gal/jedec/) assembles each card's `logic/` term lists into the fuse maps a programmer burns and checks them against Atmel's CUPL; the fitter and CUPL wrappers are in [`prjbureau/`](tools/gal/prjbureau/) | the designs themselves are in each card's `logic/` |
+| [`cpu/sim/mc6809/`](cpu/sim/mc6809/) | **third-party** — Greg Miller's cycle-accurate MC6809E core, BSD, byte-identical to upstream | |
 
 ```sh
 npm install            # bun comes with it; the tsci CLI needs it
-npm run build          # all six boards -> dist/
-npm run render:boards  # the drawings -> dist/boards.html
+make -C hardware boards          # all six boards -> dist/
+make -C hardware render  # the drawings -> dist/boards.html
 
-npm run check          # 641 claims: every GAL and CPLD design against its own
+make -C hardware check          # 641 claims: every GAL and CPLD design against its own
                        #   model, the live ones against Atmel's own CUPL, the
                        #   slot pinout, the $FF map, each card's decode, and
                        #   the documentation's own numbers.  ~60 s
-npm run check:video    # 320 claims: the DESIGNS, run under Verilator rather
+make -C hardware sim    # 320 claims: the DESIGNS, run under Verilator rather
                        #   than their equations - the audio card, the
                        #   motherboard, storage and video3, as a card and as a
                        #   machine.  ~4 min
-npm run check:sim      # 56 claims: gal/mmu.v and gal/clkdec.v, hand-written
-npm run check:netlist  # 155 claims: the motherboard's connectivity, and the
+make -C hardware sim-hand      # 56 claims: mainboard/sim/mmu.v and mainboard/sim/clkdec.v, hand-written
+make -C hardware netlist  # 155 claims: the motherboard's connectivity, and the
                        #   archived video card's (build first)
-npm run check:place    # every card places on the length it declares
-npm run build:all      # all of the above, in order
+make -C hardware place    # every card places on the length it declares
+make -C hardware all      # all of the above, in order
 ```
 
 **1,172 claims, and every one of them fails loudly.** The three that guard the
 *documentation* rather than the design are the newest and were added on
 2026-09-09 because stale headline numbers are this repository's oldest recurring
 defect: `check:docs` holds every utilisation figure and IC total in the prose
-against `gal/cpld/*.fit` and `place/parts.ts`, and `check:decode` asserts that
+against `<card>/logic/cpld/*.fit` and `tools/place/parts.ts`, and `check:decode` asserts that
 each card's own logic completes its `$FF` decode. ⚠ **They catch numbers, not
 claims** — a paragraph describing a mechanism the design does not have is still
-`gal/census.ts`'s job, and `docs/design-review2.md` §1.2 is what happens when
+`archive/video/logic/census.ts`'s job, and `docs/design-review2.md` §1.2 is what happens when
 nobody runs it.
 
 `npm run dev` opens tscircuit's viewer.
@@ -198,15 +203,15 @@ live DRC caveat.
 
 **What the layout found** was that one `AS6C4008` is the whole 512 KB requirement and
 that with one part there is nothing to decode: `/CE` is the `A19 = 0 · /IOPAGE` term.
-[`mainboard/mainboard.circuit.tsx`](mainboard/mainboard.circuit.tsx) fits **U8 alone**,
-and `lib/netlist.check.ts` asserts both halves — one package, A0–A18, and no sight of
+[`mainboard/board/mainboard.circuit.tsx`](mainboard/board/mainboard.circuit.tsx) fits **U8 alone**,
+and `tools/lib/netlist.check.ts` asserts both halves — one package, A0–A18, and no sight of
 A19.
 
-⚠ **Two days later there is no DIP SRAM on the board at all.** [`ram.md`](ram.md) §6.2
+⚠ **Two days later there is no DIP SRAM on the board at all.** [`ram.md`](mainboard/docs/ram.md) §6.2
 dropped it for four 30-pin SIMM sockets, and the part went to the audio card
 (`audio.md` §5). **The finding stands as a finding** — drawing the board is what showed
 the four-part decode was imaginary — and it no longer describes the design. **The board
-file caught up on 2026-09-09** and `lib/netlist.check.ts` now asserts the *absence* of
+file caught up on 2026-09-09** and `tools/lib/netlist.check.ts` now asserts the *absence* of
 the part this finding was about.
 
 ### 2. `/IOSEL` is the `$FF00`–`$FF7F` window strobe, not geographic (applied 2026-09-06; see history.md)
@@ -237,7 +242,7 @@ cannot see a number-level footprint error, so only reading the datasheet caught 
 full account, and why the 6116-standard pinout is exactly the one that gets written from
 memory, is in history.md.
 
-`lib/parts.ts` carries a `source` on every part naming the datasheet file and page, and
+`tools/lib/parts.ts` carries a `source` on every part naming the datasheet file and page, and
 `UNVERIFIED_PARTS` is **derived from `provenance`** rather than hand-maintained.
 
 
@@ -246,13 +251,13 @@ memory, is in history.md.
 1. **Closed 2026-09-06 for the motherboard, and the last two pinouts closed 2026-09-10.**
    Every motherboard pinout is read off a datasheet: see finding 4 for what that caught,
    and [`reference/datasheets/README.md`](../reference/datasheets/README.md) for the files
-   and what cites each. `lib/parts.ts`'s `FLASH_512K` was the board's last unverified
+   and what cites each. `tools/lib/parts.ts`'s `FLASH_512K` was the board's last unverified
    pinout and is now confirmed against `SST39SF040.pdf` — **and it was right on all 32
    pins**, including the two its own note flagged.
 
    ⭐ **`UNVERIFIED_PARTS` is load-bearing since 2026-09-10.** It had been derived from
    `provenance` since 2026-09-06 and **nothing imported it**, so no check read it and its
-   comment claimed it was empty while it held three parts. `lib/netlist.check.ts` now pins
+   comment claimed it was empty while it held three parts. `tools/lib/netlist.check.ts` now pins
    its contents against a declared `KNOWN_UNVERIFIED`, so adding a part without a
    datasheet fails and so does confirming one without striking it off. **Two remain:**
    `SIMM30` (a JEDEC standard rather than a vendor sheet, and still wants open item 2's
@@ -271,21 +276,21 @@ memory, is in history.md.
    outline is not. It needs a measured footprint once a receptacle is sourced.
 3. **⚠ Nothing is placed.** The board-file half of this item **closed 2026-09-09** —
    `mainboard.circuit.tsx` draws all 19 ICs and the four SIMM sockets, and
-   `lib/netlist.check.ts` grew to assert what the new parts are wired to.
+   `tools/lib/netlist.check.ts` grew to assert what the new parts are wired to.
 
    **Every board's components still sit at the origin**, so the PCB DRC reports overlaps
    that mean nothing yet — it was **299 plated-hole clearance errors on the motherboard**
    and the new parts make it many more. It becomes a real number the moment placement
    starts and not before. Placement waits on open item 2 and on the GAL fitting
    `graphics.md` §18 step 0 requires — the motherboard's **three** GALs are fitted
-   ([`gal/jedec/`](gal/jedec/)), **U10 is not** ([`ram.md`](ram.md) §11 item 6), and the
-   video card's two CPLDs and its `rfa` GAL are ([`gal/cpld/`](gal/cpld/),
-   `gal/rfa.jed`).
+   ([`tools/gal/jedec/`](tools/gal/jedec/)), **U10 is not** ([`ram.md`](mainboard/docs/ram.md) §11 item 6), and the
+   video card's two CPLDs and its `rfa` GAL are ([`<card>/logic/cpld/`](gal/cpld/),
+   `archive/video/logic/rfa.jed`).
 4. **Closed 2026-09-06, and moot since 2026-09-09** — the system RAM's control lines
-   were driven by nothing at all until this item; then [`ram.md`](ram.md) §6.2 removed the
+   were driven by nothing at all until this item; then [`ram.md`](mainboard/docs/ram.md) §6.2 removed the
    part they drove. U6's three macrocells went to boot mode and the equations are in
    [history.md](history.md). The finding stands as a finding. What it said: `RAM_CE`,
-   `RAM_OE` and `RAM_WE` come from **U6** ([`gal/clkdec.pld`](gal/clkdec.pld)), with `/OE`
+   `RAM_OE` and `RAM_WE` come from **U6** ([`mainboard/logic/clkdec.pld`](mainboard/logic/clkdec.pld)), with `/OE`
    qualified by `R/W` rather than tied low — which removes ~90 ns of SRAM-versus-CPU
    contention on every write. `check:netlist` asserts all three run from U6 to U8. (The
    defect this closed is archived in history.md.)
@@ -294,42 +299,42 @@ memory, is in history.md.
 6. **Decoupling is not drawn.** One 0.1 µF per package plus bulk, everywhere; it is
    mechanical and belongs with placement.
 7. **CLOSED 2026-09-08** — `machine.md` §5 item 1 is decided: the window is
-   `$FF00`–`$FF7F`, 64 bytes of it free (`npm run check` prints the figure), and the
+   `$FF00`–`$FF7F`, 64 bytes of it free (`make -C hardware check` prints the figure), and the
    physical map gained its second megabyte — options A and D. The widening was one
-   literal *removed* from [`gal/clkdec.pld`](gal/clkdec.pld), taken while the backplane
-   is still a table. ([`ram.md`](ram.md) §5.2 has since re-carved the map to 32 MB; the
+   literal *removed* from [`mainboard/logic/clkdec.pld`](mainboard/logic/clkdec.pld), taken while the backplane
+   is still a table. ([`ram.md`](mainboard/docs/ram.md) §5.2 has since re-carved the map to 32 MB; the
    `$FF` window is unchanged.)
 
 8. **CLOSED 2026-09-09 — U9 fits at six outputs of ten**, two macrocells left as spare
    inputs, widest equation five product terms of sixteen
-   ([`gal/u9.pld`](gal/u9.pld)) — checked at the fuse level against a model and against
+   ([`mainboard/logic/u9.pld`](mainboard/logic/u9.pld)) — checked at the fuse level against a model and against
    Atmel's own CUPL. This item said it might not fit; **the count was wrong in both
-   directions**, and [`ram.md`](ram.md) §6.7.1 has why: four SIMM selects collapse to
+   directions**, and [`ram.md`](mainboard/docs/ram.md) §6.7.1 has why: four SIMM selects collapse to
    one, two map-SRAM chip enables nobody had counted appeared, and the boot-mode latch
    belonged on U6, which already had the clock and the reset a registered bit needs.
 
-9. **⚠ NEW — three pinouts in the machine are unverified**, and `npm run check` lists
+9. **⚠ NEW — three pinouts in the machine are unverified**, and `make -C hardware check` lists
    them because `UNVERIFIED_PARTS` is derived from the field rather than
    hand-maintained: the **`SST39SF040`** boot ROM and the **30-pin SIMM socket** on this
    board, and the **`TL16C550C`** on the I/O card. Open item 1 closed on 2026-09-06 with
    *"every motherboard pinout is read off a datasheet"*, and this reopens it —
    **finding 4 below is what happened last time a pinout was written from familiarity**,
-   on a part whose numbering was equally obvious. `lib/parts.ts` names the specific pins
+   on a part whose numbering was equally obvious. `tools/lib/parts.ts` names the specific pins
    to check on each.
 
 10. **⚠ NEW — the I/O card's two GALs are unwritten and they grew.** `serial.md` §4.5's
     `16C550` added Intel-style strobes, an active-high `MR` and an open-drain inversion
     of `INTR`, and the card's window moved to `$FF30`–`$FF3F` — **and `A6` was missing
     from its decode entirely** until 2026-09-09, which is the silent answers-twice
-    failure `machine.md` §2 warns about. [`gal/README.md`](gal/README.md) open item 3.
+    failure `machine.md` §2 warns about. [`tools/gal/README.md`](tools/gal/README.md) open item 3.
 
 ---
 
 ## Conventions
 
-- **`lib/slot.ts` is the only place a pin number and a signal name appear together.** A
+- **`tools/lib/slot.ts` is the only place a pin number and a signal name appear together.** A
   board that hardcodes one has a bug.
-- **Every claim a check can make, a check makes.** `npm run check` is arithmetic out of
+- **Every claim a check can make, a check makes.** `make -C hardware check` is arithmetic out of
   the machine documents, not style.
 - **Superseded material is archived, not lost** — it moves to [`history.md`](history.md),
   one archive for the whole `hardware/` area. Unverified material is still marked in

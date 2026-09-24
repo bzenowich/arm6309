@@ -4,7 +4,7 @@
     python3 vtmodel.py --emit DIR      write the scripted clients' streams into DIR
     python3 vtmodel.py --png NAME OUT  render a stream's expected screen as OUT
 
-docs/nitros9-av-plan.md phase P1 is closed by "a scripted client's output:
+software/nitros9/docs/nitros9-av-plan.md phase P1 is closed by "a scripted client's output:
 emulator frames vs a Python model of the expected text screen". This is the
 model. It interprets CoWin's byte protocol as CoArm is meant to - the control
 codes $01-$0D, $1F's pairs and the escapes P1 acts on - WITHOUT sharing any code
@@ -351,7 +351,7 @@ if __name__ == "__main__":
             open(os.path.join(sys.argv[2], name), "wb").write(fn())
     elif sys.argv[1] == "--png":
         from PIL import Image
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "demo", "tools"))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools"))
         import frames as fr
         Image.fromarray(fr.rgb565_to_rgb8(expected(sys.argv[2]).render())).save(sys.argv[3])
     elif sys.argv[1] == "--keys":

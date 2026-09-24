@@ -12,7 +12,7 @@ neither has been assembled or run against `arm6309` yet.
 
 A monitor is what you want on a bus the first time a synthesised CPU drives it: small,
 self-contained, and it exercises the interesting paths — interrupts, the stack, and
-character I/O — without needing a disk. `archive/video/docs/graphics.md` §18 step 6's exit
+character I/O — without needing a disk. `hardware/archive/video/docs/graphics.md` §18 step 6's exit
 criterion is literally "a monitor ROM prints to the 80×25 screen".
 
 ## What retargeting actually costs
@@ -31,7 +31,7 @@ physical map to carve one — "ROM-able" described a property the machine could 
 
 **2. The console layer is a rewrite, not a rebase.** Both programs drive a **6850** ACIA
 (the FORTH at `$9800`/`$9801`; ASSIST09 at `$BE00`), and this machine's serial card is a
-**6551** ([`../../io/serial/docs/serial.md`](../../io/serial/docs/serial.md)). The two
+**6551** ([`../../io/serial/docs/serial.md`](../../hardware/io/serial/docs/serial.md)). The two
 parts are not register-compatible in any useful sense:
 
 | | 6850 | 6551 |

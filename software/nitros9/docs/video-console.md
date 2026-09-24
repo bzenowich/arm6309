@@ -3,7 +3,7 @@
 The window devices `/W1`… are NitrOS-9 Level 2 text and graphics windows on the video card
 (`../../archive/video/docs/graphics.md`, archived 2026-09-20), typed at on the PS/2
 keyboard (`../../io/ps2/docs/ps2.md`). Programs
-speak CoCo 3 CoWin's byte protocol to them. `docs/nitros9-av-plan.md` is the plan this
+speak CoCo 3 CoWin's byte protocol to them. `software/nitros9/docs/nitros9-av-plan.md` is the plan this
 came from; this document is what is built.
 
 ```sh
@@ -95,7 +95,7 @@ CoCo 3 gives GrfDrv's globals. CoArm's stack is under `$1F00`, and the flip's fr
 it. The I/O page is decoded ahead of the map, so the card is in every map.
 
 ⚠ **Two things this costs.** A window call pays a task switch each way
-(`docs/nitros9-hardware-improvements.md` H13). And CoArm's own memory is two blocks: eight
+(`software/nitros9/docs/nitros9-hardware-improvements.md` H13). And CoArm's own memory is two blocks: eight
 screen records and 32 window records live there, and everything larger is in blocks it maps.
 
 ## VidCore: the card's rules
@@ -137,7 +137,7 @@ line's `WMODE` kept. **Measured** by the emulator's `CALLTIME`: at most **183 µ
 ⛔ **The first measurement was 1.57 ms.** The service waited for VBLANK to fall on a
 family change (1.2 ms after the IRQ) and committed 32 palette entries a blank; then 468 µs
 with a main-line family wait and 16 entries. The card's frame-end family latch and posted
-palette commit (`docs/nitros9-hardware-improvements.md`, "Taken") removed both.
+palette commit (`software/nitros9/docs/nitros9-hardware-improvements.md`, "Taken") removed both.
 
 ## The fast-text screen (types `$18`, `$19`)
 
@@ -193,7 +193,7 @@ primitive draws into the card or the store through one row layer (`ca_row.asm`:
 - **Select** takes the pointer off and the display off in the next blank, copies the old
   screen's VRAM to its store, the new store to VRAM (or repaints a text screen), changes
   family if it must, commits the palette and the scrolls, and turns the display on.
-  ⚠ 640 × 200 is 128 K each way at CPU speed (`docs/nitros9-hardware-improvements.md` H4).
+  ⚠ 640 × 200 is 128 K each way at CPU speed (`software/nitros9/docs/nitros9-hardware-improvements.md` H4).
 
 ## The pointer and the mouse
 
@@ -265,11 +265,11 @@ The owner has:
 | `SS.MapWr` | a rectangle of map codes, `WPTR` reloaded where the ring's 128 columns wrap |
 | `SS.TBank` | `TILEBASE` in the next blank |
 | `SS.Batch` | records the next VBL commits, in order, first thing in the service: register writes (the scroll pairs, the bases), puts, pokes (a byte each at many addresses, one `WPTR2` load), and two tags for `VG.MkCam` and `VG.MkHero`. A batch waiting for its blank makes the next one wait (`VG.MkMiss` counts it) |
-| ⭐ `SS.Scroll` | **`SS.Batch`'s fast path, and what a scrolling game calls every frame**: `X` = `HSCROLL`, `Y` = `VSCROLL`, `U` = the tag for `VG.MkHero` (`VG.MkCam` := `X`). It commits through `VG.BFlag`'s `BF.HScr`/`BF.VScr` pair — the same one CoArm's own scroll uses and the same blank — and the pair is set under the IRQ mask so a service cannot take `H` from one call and `V` from the next. No `F$Move`, no records to walk and **no wait**: a shadow is last-write-wins, where a batch is a buffer the next one has to queue behind. **1.90 ms → 1.13 ms** a frame on `mvania` (`video3/bench/run-v3mv.sh`, modes 209 and 81) |
+| ⭐ `SS.Scroll` | **`SS.Batch`'s fast path, and what a scrolling game calls every frame**: `X` = `HSCROLL`, `Y` = `VSCROLL`, `U` = the tag for `VG.MkHero` (`VG.MkCam` := `X`). It commits through `VG.BFlag`'s `BF.HScr`/`BF.VScr` pair — the same one CoArm's own scroll uses and the same blank — and the pair is set under the IRQ mask so a service cannot take `H` from one call and `V` from the next. No `F$Move`, no records to walk and **no wait**: a shadow is last-write-wins, where a batch is a buffer the next one has to queue behind. **1.90 ms → 1.13 ms** a frame on `mvania` (`software/mvania/bench/run-v3mv.sh`, modes 209 and 81) |
 | `SS.FrmWait`, `SS.FrmSig` | sleep until a VBL is served (X := the count), or a signal every *n* frames. ⚠ `SS.FrmSig` is built and no run exercises it. ⭐ **On video3 the service also writes the count's low byte into the card's spare register** (`plan.md` §10's `+$1F`), so a process holding the screen reads a frame end instead of calling: the call costs ~1.4 ms, which is a tenth of a frame |
 
 ⭐ **SCF hands the driver a whole RUN of printable characters on video3**
-(`video3/docs/demo-report.md` §11). Stock `scf.asm` already does this for a CoCo 3 — it
+(`hardware/video3/docs/demo-report.md` §11). Stock `scf.asm` already does this for a CoCo 3 — it
 scans past the control characters and calls GrfDrv once — but the test is the driver's
 name and `G.GrfEnt`, so this port failed it and paid the trip into the driver, a task
 flip and CoArm's per-character setup for **every byte**: ~900 instructions a character,
@@ -288,7 +288,7 @@ through it. The same shape waits for anything entered with a register convention
 `/FIRQ` service gets **U = `D.FIRQSt`**.
 | **`libvid`** | a subroutine module the owner links: `VlWait`, `VlPut` and `VlGet` (a `WPTR` and up to 16 bytes), `VlFill`, `VlPoke` (up to 13 addresses) and `VlRect` (span-solid). Each waits for the card, reloads `WPTR`, reads `CTRL`'s `WMODE` and `WADV` back and sets them, and masks `/IRQ` for the call: **398 µs** at most, measured. Not built: text, icons, polygons and images |
 
-**`overworld` is the demo's game on these** (`software/demo/demo.asm`'s loop): it steps the
+**`overworld` is the demo's game on these** (`software/archive/demo/demo.asm`'s loop): it steps the
 camera through the frame records by the frames `SS.FrmWait` says passed, writes the map
 strips that scroll into view with `libvid`, builds the hero's fifteen tiles by reading the
 background tiles back out of VRAM, and hands the scroll, the hero's flip and the two
@@ -305,7 +305,7 @@ and took the flip's IRQ over the 16C550's 1.4 ms, so video/ still builds **a til
 Both keep the rest: `cbuf` **is** four `libvid` records, so a tile is read and written in place
 rather than copied; the sprite loop visits only the columns inside the sprite; and there are
 **three hero buffers**, so the next build starts in the frame of the flip.
-`video3/docs/demo-report.md` §10.3 has the trace and the numbers.
+`hardware/video3/docs/demo-report.md` §10.3 has the trace and the numbers.
 
 ⛔ **Three things the first runs found.** The hero's next build began in the pass that queued
 the flip, and wrote into the buffer still on the screen until that batch's blank — which is
@@ -349,7 +349,7 @@ touched**. It is sixteen writes of 128 bytes.
 8 × 8, one bit a pixel, eight bytes each, in code order**. ⭐ That is the format
 NitrOS-9's own font modules are already in — `level1/wildbits/sys/fonts/*.asm`
 are exactly this — so the 27 wildbits faces drop in without conversion.
-`software/nitros9/tools/mkfonts.py` reads the glyph bytes out of that source and
+`software/toolbox/tools/mkfonts.py` reads the glyph bytes out of that source and
 writes each face to `/DD/SYS/FONT.<name>`; `changefont` reads one and hands it
 over. **Nothing is assembled and no font module is loaded**: the ROM never links
 them.

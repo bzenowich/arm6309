@@ -7,7 +7,7 @@ to the CPU's bus, and when?"** — and on that question the two machines differ
 fundamentally.
 
 **Date:** 2026-08-21
-**Companion:** [`cpu/docs/plan.md`](../cpu/docs/plan.md) §2 (CoCo 3 host requirements), §3.3 (timing budget)
+**Companion:** [`hardware/cpu/docs/plan.md`](../hardware/cpu/docs/plan.md) §2 (CoCo 3 host requirements), §3.3 (timing budget)
 
 ---
 

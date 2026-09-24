@@ -26,7 +26,7 @@ lands in the lid above a lever that points at a wall:
 </footprint>
 ```
 
-See [`<footprint />`](./footprint.md#insertion-and-aperture-directions).
+See [`<footprint />`](footprint.md#insertion-and-aperture-directions).
 
 ## References
 

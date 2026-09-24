@@ -1,0 +1,289 @@
+Name       clkdec ;
+PartNo     ARM6309-U6 ;
+Date       2026-09-06 ;
+Revision   01 ;
+Designer   arm6309 ;
+Company    - ;
+Assembly   motherboard ;
+Location   U6 ;
+Device     g22v10 ;
+
+/* ------------------------------------------------------------------------
+ * Motherboard U6. Three jobs, one part:
+ *
+ *   1. the E/Q divider - docs/machine.md 1. 25.175 / 12 = 2.0979 MHz, with
+ *      /8 = 3.1469 MHz as fast-E mode (machine.md 1.1: an experiment a
+ *      builder opts into, not a speed software may throw)
+ *   2. /IOSEL, the $FF00-$FF7F window strobe - machine.md 2 and 3. It is
+ *      here and not on U3 because U3 does not fit with it (tools/gal/README.md).
+ *      TWO changes landed on this one equation on 2026-09-08 and they are
+ *      separate findings - see the equation itself
+ *   3. BOOT MODE - machine.md 7.2, added 2026-09-09. The RUN latch and the
+ *      '244's output enable. It is here and not on U9 for one reason: a
+ *      22V10 has exactly one clock and one asynchronous reset, and this is
+ *      the only part on the motherboard that already has CLK25 on pin 1 and
+ *      /RESET in the array. Putting the latch on U9 would have cost U9 both
+ *      of those plus the eight literals of the $FFB1 decode, all of which
+ *      this part carries anyway.
+ *
+ * WHAT LEFT, 2026-09-09: the system RAM's /CE, /OE and /WE. There is no
+ * system RAM - hardware/mainboard/docs/ram.md 6.2 dropped the DIP SRAM for four SIMM
+ * sockets on 2026-09-08, and these three outputs had been driving a part
+ * that was no longer on the board. They are the three macrocells boot mode
+ * moved into, and one of them is left SPARE. The equations are archived in
+ * hardware/history.md.
+ *
+ * PIN PLACEMENT IS DELIBERATE. A 22V10's macrocells do not have equal
+ * product-term capacity - 8, 10, 12, 14, 16, 16, 14, 12, 10, 8 across pins
+ * 14..23. E and Q are the widest equations here at 7 and 5 terms, so they sit
+ * on the two 16-term macrocells (18, 19). Everything else is 4 terms or
+ * fewer. The counter bits land on pins nothing connects to, which makes them
+ * four free test points on the one signal hardest to probe indirectly.
+ * ---------------------------------------------------------------------- */
+
+/* --- inputs ----------------------------------------------------------- */
+PIN 1  = CLK25 ;     /* 25.175 MHz master. Also the registered macrocells'
+                      * clock - a 22V10 has exactly one, on pin 1.        */
+PIN 2  = FAST_E ;    /* high = /8. Tied low on the board; machine.md 1.1  */
+PIN 3  = !RESET ;
+PIN 4  = !IOPAGE ;   /* from U3 - this part does not form it              */
+PIN 5  = LA7 ;
+PIN 6  = LA6 ;      /* WAS WIRED AND USED BY NOTHING for a day: the window
+                     * widened to $FF00-$FF7F on 2026-09-08 and LA6 fell out
+                     * of /IOSEL. The trace was kept anyway, on the argument
+                     * that $FF80-$FF8F would then be a one-line change
+                     * rather than a respin. Boot mode is what came instead -
+                     * both `vecsel` and `ctlwr` read it (2026-09-09), and
+                     * this is the second time on this part that a trace kept
+                     * for no reason turned out to have one. */
+PIN 7  = LA5 ;       /* $FFA0-$FFBF window select, with LA7/LA6.          */
+PIN 8  = RW ;
+PIN 9  = LA4 ;       /* 0 = $FFA0-$FFAF block registers, 1 = $FFB0-$FFBF  */
+PIN 10 = !WAIT ;     /* /WAIT from the backplane: open-drain, pulled high
+                      * by R3, asserted LOW. The ! is what makes WAIT true
+                      * when the pin is low - a pull-up inverts nothing, and
+                      * without it the idle bus held the whole divider
+                      * (fixed 2026-09-11). It HOLDS the whole divider - see
+                      * the counter below. machine.md 5 item 8 */
+PIN 11 = LA0 ;       /* $FFB0 even is TASK, $FFB1 odd is BOOT - machine.md
+                      * 3. One literal, and it is what lets boot code set
+                      * TASK without leaving boot mode.                    */
+/* PIN 13 IS FREE. Pins 7 and 9 carried physical A19 and A20 for the system
+ * RAM's decode until 2026-09-09; the RAM went and LA5/LA4 took the pins. */
+
+/* --- outputs ---------------------------------------------------------- */
+PIN 14 = !BOOTOE ;    /*  8 terms available, 2 used */
+PIN 15 = !IOSEL ;    /* 10, 1 */
+PIN 16 = C0 ;        /* 12, 1 */
+PIN 17 = C1 ;        /* 14, 2 */
+PIN 18 = E ;         /* 16, 7 - the widest */
+PIN 19 = Q ;         /* 16, 5 */
+PIN 20 = C2 ;        /* 14, 4 */
+PIN 21 = C3 ;        /* 12, 3 */
+PIN 22 = RUN ;       /* 10, 2 - REGISTERED. See boot mode below.          */
+/* PIN 23 IS DELIBERATELY NOT DECLARED. It held RAM_WE; with the system RAM
+ * gone the macrocell is left at high-Z, which makes the pin a spare INPUT
+ * rather than a driven output. Same reasoning as mmu.pld's pin 23, and the
+ * same arithmetic: a driven output is a macrocell AND a pin, and this part
+ * has never had either to spare. jedec.check.ts asserts it. */
+
+/* --- the counter ------------------------------------------------------ */
+/* Terminal count. 11 = 1011 and 7 = 0111, and both PARTIAL decodes below
+ * are exact because the counter never reaches 15 - which is what keeps them
+ * to one product term each instead of four. */
+tc12 = C3 & C1 & C0 ;
+tc8  = C2 & C1 & C0 ;
+
+/* --- /WAIT, added 2026-09-08 ------------------------------------------
+ * machine.md 5 item 8: vctrl.pld has driven /WAIT open-drain since the video
+ * card was captured, and NOTHING LISTENED. E and Q are made here and this
+ * part had no WAIT input, so "it holds E" (machine.md 2) named an effect with
+ * no mechanism - the span writer held nothing and the CPU read VRAM out from
+ * under it.
+ *
+ * The fix is one hold term on every registered macrocell: the counter stops,
+ * so E and Q stop with it, and the bus cycle stretches. It costs ONE PRODUCT
+ * TERM each against 8-16 available and NO macrocells, which matters because
+ * this part uses all ten.
+ *
+ * TWO RULES GO WITH IT, and neither is optional:
+ *
+ *   1. /WAIT IS DRIVEN SYNCHRONOUSLY TO CLK25. This gates a counter clocked
+ *      by CLK25 and there is no macrocell left for a synchroniser. Every card
+ *      that can drive it already has CLK25 from the backplane.
+ *   2. /WAIT IS ASSERTED ONLY WHILE E IS HIGH. Stretching the low half of a
+ *      cycle helps nobody and costs the machine time. Qualifying it here
+ *      would double the term count on E; qualifying it at the source is one
+ *      literal, and vctrl.pld now does that.
+ */
+hold = WAIT ;
+
+/* C0 and C1 need no terminal-count term at all: both terminal counts have
+ * C1 = C0 = 1, so a plain toggle and a plain XOR already land on zero. */
+C0.d = !C0 & !hold
+     #  C0 &  hold ;
+C1.d = (C1 $ C0) & !hold
+     #  C1 &  hold ;
+
+/* C2 must be suppressed at 11 (it would carry into a 12th count) but not at
+ * 7, where the XOR already gives zero. */
+C2.d = (C2 $ (C1 & C0)) & !(!FAST_E & tc12) & !hold
+     #  C2 &  hold ;
+
+/* C3 exists only in /12. In fast-E mode the counter is three bits. */
+C3.d = !FAST_E & (C3 & !C1 # C3 & !C0 # !C3 & C2 & C1 & C0) & !hold
+     #  C3 &  hold ;
+
+/* --- E and Q ---------------------------------------------------------- */
+/* Both are REGISTERED and decoded from the NEXT count, not the current one.
+ * A combinational decode of a 4-bit counter glitches wherever several bits
+ * change together, and this output is the machine's clock.
+ *
+ * THE Q TAP IS DIVISOR-DEPENDENT, and it is the one subtle thing in this
+ * part. machine.md 1 says "Q = same divider, 3 dots early" - which is 90
+ * degrees at /12 and 135 at /8. Q must lead E by a quarter cycle in both, so
+ * the tap is 3 counts at /12 and 2 at /8. graphics.md 18 step 0 lists this
+ * as an exit criterion and this is where it is discharged. */
+
+/* E is high for counts 6-11 (/12) or 4-7 (/8), so E.d decodes 5-10 or 3-6. */
+E.d = ( !FAST_E & ( !C3 & C2 & C0        /* 5, 7        */
+                  # !C3 & C2 & C1        /* 6, 7        */
+                  #  C3 & !C1            /* 8, 9        */
+                  #  C3 & !C0 )          /* 8, 10       */
+      #  FAST_E & ( !C3 & !C2 & C1 & C0  /* 3           */
+                  # !C3 & C2 & !C1       /* 4, 5        */
+                  # !C3 & C2 & !C0 ) ) & !hold
+    # E & hold ;
+
+/* Q is high for counts 3-8 (/12) or 2-5 (/8), so Q.d decodes 2-7 or 1-4. */
+Q.d = ( !FAST_E & ( !C3 & C1             /* 2, 3, 6, 7  */
+                  # !C3 & C2 )           /* 4, 5, 6, 7  */
+      #  FAST_E & ( !C3 & !C2 & C0       /* 1, 3        */
+                  # !C3 & !C2 & C1       /* 2, 3        */
+                  # !C3 & C2 & !C1 & !C0 ) ) & !hold  /* 4 */
+    # Q & hold ;
+
+/* --- boot mode, added 2026-09-09 --------------------------------------
+ * machine.md 7.2. Out of reset the machine has a 1 MB ROM behind every
+ * logical block and no valid MMU map, because the map SRAM's contents at
+ * power-up are whatever they are. RUN is the bit that says the map is
+ * trustworthy.
+ *
+ * THE POLARITY IS NOT A PREFERENCE. A 22V10 has ONE asynchronous reset term
+ * shared by every registered macrocell and it resets to ZERO - there is no
+ * per-macrocell preset. So the register has to hold the sense that is zero
+ * at reset, which is "not running yet". BOOT is /RUN and the board carries
+ * RUN; a register that had to come up SET could not live on this part at
+ * all, and finding that out after layout is the kind of thing this file
+ * exists to prevent.
+ *
+ *   RUN = 0   boot mode: the buffer drives physical A20-A13, the map SRAMs
+ *             are deselected (U9), and the ROM answers every cycle except
+ *             $FF00-$FFBF
+ *   RUN = 1   normal: the map drives, the ROM is ordinary memory at
+ *             physical 2.0-3.0 M
+ *
+ * ONE WRITE TO $FFB1 SETS IT, and nothing clears it but /RESET. A wild store
+ * cannot put the machine back into boot mode over live RAM - the same
+ * one-way property machine.md's superseded shadow-ROM disable had, for the
+ * same reason. The value written is ignored; $FFB1 is a strobe, like the
+ * 6551's programmed reset.
+ *
+ * $FFB0 (LA0 = 0) is TASK and does NOT set RUN, which is what lets boot code
+ * write TASK, then the sixteen map entries, then $FFB1 - in that order, and
+ * the order matters because the map index is {TASK, block}. */
+ctlwr = IOPAGE & LA7 & !LA6 & LA5 & LA4 & !RW & E ;
+RUN.d = RUN # ctlwr & LA0 ;
+
+/* ** THE '244 DRIVES PHYSICAL A20-A13 EXACTLY WHEN THE MAP SRAMs DO NOT, and
+ * since 2026-09-09 that is what this equation says rather than what its
+ * comment claimed. It is now the literal complement of U9's MAPCE, one
+ * condition written once:
+ *
+ *     BOOTOE = /( translating # a block-register access )
+ *
+ * XX WHAT IT WAS: `!RUN # vecsel`, enumerating the two modes in which the
+ * buffer should drive. That list was incomplete in one direction and wrong in
+ * the other, and both mattered:
+ *
+ *   BOOT MODE AND $FFA0 AT ONCE.  U9 selects a map SRAM for a block-register
+ *   access whatever RUN says, and the '245 then drives the SRAM's common I/O
+ *   - which IS physical A20-A13 (mainboard.circuit.tsx). With !RUN in the
+ *   list the buffer was on as well. The sixteen map writes of machine.md
+ *   7.2's boot sequence are exactly that case: EVERY ONE OF THEM WAS A BUS
+ *   FIGHT between this buffer and U4. design-review2.md M-3.
+ *
+ *   AN ORDINARY I/O CYCLE.  RUN = 1, not a block access, so U9 deselects both
+ *   SRAMs - and the old list did not mention I/O cycles, so the buffer stayed
+ *   off too. Physical A20-A13 FLOATED on the backplane for the whole of every
+ *   register access in the machine, into six cards' inputs. graphics.md 6.3.2
+ *   asks for them "parked at a defined pattern"; nothing parked them.
+ *   design-review2.md M-2.
+ *
+ * ** AND VECSEL DISAPPEARS INTO IT. $FFC0-$FFFF is an I/O cycle and not a
+ * block access, so the map SRAMs are already deselected there and the general
+ * rule covers the vector page without naming it. One equation, three
+ * behaviours, three terms - one FEWER literal than the two-term version it
+ * replaces, because the block windows were already being decoded on this part
+ * for the $FFB1 strobe.
+ *
+ * IMPLEMENTED COMPLEMENTED. The pin is declared !BOOTOE, so the macrocell
+ * forms the DE-asserted condition - "a map SRAM is selected" - in three terms
+ * where the asserted form is nine. */
+/* !! AND IT IS THE LOW CHIP ENABLE, NOT THE UNION OF BOTH - 2026-09-09, in
+ * the same pass that gave the high map byte a data path of its own. Only U1,
+ * the LOW map SRAM, drives physical A20-A13; U1B drives A24-A21 and those four
+ * never leave the board. The union was correct while ONE '245 served both
+ * windows, because that buffer then drove A20-A13 during a high-byte write
+ * too. With U4 shut for the high window (mmu.pld) the union would leave
+ * A20-A13 with NO driver for the sixteen high-byte writes of every boot -
+ * M-2 again, in a narrower window. mainboard_tb caught it as "16 of 32".
+ *
+ * ** One product term fewer, and the same rule said more exactly: THE BUFFER
+ * DRIVES A NET EXACTLY WHEN THAT NET'S OTHER DRIVER DOES NOT. */
+mapsel = RUN & !IOPAGE                       /* translating                  */
+       # IOPAGE & LA7 & !LA6 &  LA5 & !LA4 ; /* $FFA0-$FFAF, the low byte    */
+!BOOTOE = mapsel ;
+
+/* The 22V10's asynchronous reset is one term shared by every registered
+ * macrocell, so the counter, E, Q and RUN all land in a defined state
+ * together. There is no other way to reset them on this part, and no need
+ * for one. RUN = 0 IS BOOT MODE - see above. */
+[C0,C1,C2,C3,E,Q,RUN].ar = RESET ;
+[C0,C1,C2,C3,E,Q,RUN].sp = 'b'0 ;
+
+/* --- the two decodes -------------------------------------------------- */
+/* $FF00-$FF7F, common to every slot - machine.md 2, corrected 2026-09-06
+ * from "geographic, per slot".
+ *
+ * TWO CHANGES, 2026-09-08, and they are independent:
+ *
+ *   1. THE POLARITY WAS WRONG. This read `IOPAGE & LA7 & !LA6`, which is
+ *      A7 = 1, A6 = 0 - that is $FF80-$FFBF, the MMU's own windows and the
+ *      CPU module's vector RAM. $FF40-$FF7F is A7 = 0, A6 = 1. Every card's
+ *      /IOSEL fired on an MMU block-register write and never on the card
+ *      window at all. Five artefacts carried it - this file, clkdec.v,
+ *      clkdec.jedec.ts, clkdec.model.ts and tools/gal/README.md - and
+ *      clkdec_tb.sv asserted the wrong sense under a message stating the
+ *      right one, which is why 15 passing claims did not see it.
+ *
+ *   2. THE WINDOW WIDENED to $FF00-$FF7F - machine.md 5 item 1 option A,
+ *      64 bytes to 128. That deletes the LA6 term outright, so this decode
+ *      is now cheaper than the broken one it replaces.
+ *
+ * A CARD MUST DECODE A6. With A6 out of this term, a card that matches only
+ * A0-A5 answers twice - at its base and 64 bytes below it. machine.md 2 is
+ * where that rule lives. */
+IOSEL = IOPAGE & !LA7 ;
+
+/* --- what is NOT here any more ----------------------------------------
+ * ramsel, RAM_CE, RAM_OE and RAM_WE decoded one AS6C4008 at physical
+ * A20 = 0, A19 = 0. hardware/mainboard/docs/ram.md 6.2 removed that part from the design on
+ * 2026-09-08 and this file kept driving it for a day. The equations are in
+ * hardware/history.md, including the /OE-qualified-by-R/W argument, which is
+ * worth keeping because U9's ROM decode makes the same move for the same
+ * reason (tools/gal/README.md).
+ *
+ * WHAT REPLACED THEM IS NOT A SUBSTITUTE. The SIMM windows are decoded on U9
+ * and timed on U10; nothing about a DRAM bank fits on the part that also
+ * makes E and Q. */

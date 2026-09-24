@@ -6,7 +6,7 @@
 #   NOBUILD=1 sh software/nitros9/run-sd.sh     (use the ROM already built)
 #   OUT=dir   overrides /tmp/arm6309-sd
 #
-# ⚠ WHAT THIS EXERCISES that software/demo/emu/test/run-sdtest.sh does not:
+# ⚠ WHAT THIS EXERCISES that software/emu/test/run-sdtest.sh does not:
 # that test drives the card's registers from C and proves the MODEL is the
 # card.  This one puts NitrOS-9's RBF, the rbsd driver and a real filesystem
 # on top and asks whether the whole stack works - 9.4.1's deblocking against
@@ -14,10 +14,11 @@
 # directory and bitmap update.
 #
 # ⛔ The exit code is the answer.
+_here=$(cd "$(dirname "$0")" && pwd)   # before any cd: $0 may be relative
 set -e
 cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
-OUT=${OUT:-/tmp/arm6309-sd}
+OUT=${OUT:-$(cd "$_here/." && pwd)/build/sd}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-120}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 mkdir -p "$OUT"
@@ -60,7 +61,7 @@ OUT="$OUT" DATA="$SD" NAME="arm6309 SD" \
   sh software/nitros9/mksyscard.sh "$IMG" > "$OUT/format.log" 2>&1 || {
     cat "$OUT/format.log"; echo "FAIL  the system card did not build"; exit 1; }
 
-cc -O2 -Wall -Iaudio/refplayer -o "$OUT/emu" software/demo/emu/machine.c software/demo/emu/cpu6809.c software/demo/emu/hd6309.c audio/refplayer/card.c
+cc -O2 -Wall -Ihardware/audio/refplayer -o "$OUT/emu" software/emu/machine.c software/emu/cpu6809.c software/emu/hd6309.c hardware/audio/refplayer/card.c
 
 # ⚠ /SD0 IS THE BOOT DEVICE NOW, and /DD is the same disk under its other
 # name.  `free` reads the allocation bitmap, `list` a file's data sectors, and

@@ -2,7 +2,7 @@
 
 Deprecated schematic net label alias. Prefer `<netlabel />`.
 
-Deprecated in `@tscircuit/props`; prefer [`<netlabel />`](./netlabel.md).
+Deprecated in `@tscircuit/props`; prefer [`<netlabel />`](netlabel.md).
 
 ## Example
 

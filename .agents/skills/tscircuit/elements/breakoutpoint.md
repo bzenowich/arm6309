@@ -1,6 +1,6 @@
 # `<breakoutpoint />`
 
-A `<breakoutpoint />` defines an explicit location where a connection should exit a [`<breakout />`](./breakout.md). Use it when you want to control exactly where a net escapes the breakout region instead of relying on auto-generated breakout points.
+A `<breakoutpoint />` defines an explicit location where a connection should exit a [`<breakout />`](breakout.md). Use it when you want to control exactly where a net escapes the breakout region instead of relying on auto-generated breakout points.
 
 ## Example
 
@@ -23,5 +23,5 @@ Commonly used: `connection` (the pin selector that should exit at this point), `
 
 - Props: [BreakoutPointProps](https://github.com/tscircuit/props#breakoutpointprops-breakoutpoint)
 - Source: [lib/components/breakout-point.ts](https://github.com/tscircuit/props/blob/main/lib/components/breakout-point.ts)
-- Related: [`<breakout />`](./breakout.md)
+- Related: [`<breakout />`](breakout.md)
 - Docs: https://docs.tscircuit.com/elements/breakoutpoint

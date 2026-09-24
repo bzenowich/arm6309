@@ -132,7 +132,7 @@ direction alone:
 ```
 
 The direction must match the part's CAD model, if it has one -- see
-[`<cadmodel />`](./cadmodel.md#model-orientation).
+[`<cadmodel />`](cadmodel.md#model-orientation).
 
 `from_front` and `from_back` are deprecated spellings of `from_top` and
 `from_bottom`. They still parse, but are never emitted; prefer the canonical

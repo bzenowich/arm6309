@@ -1,0 +1,109 @@
+# `hardware/io/ps2/` — PS/2 keyboard and mouse
+
+Two PS/2 ports, **11 ICs**, no MCU, no FIFO, no transmit engine.
+
+Paths below are relative to this directory.
+
+| | |
+|---|---|
+| [`docs/ps2.md`](docs/ps2.md) | the card — protocol, the borrowed receiver, register map, IC budget |
+
+## Where the design comes from
+
+**§4.1 is the important section.** Slu4's Minimal 64x4 receives PS/2 in **three
+packages** — one `74HC595`, one `74HC193`, one `74HCT132` — and reading its schematic cut
+this card from 16 ICs to 9. Four ideas transfer intact:
+
+- The `'595`'s **separate storage register** solves the 11-bit-frame-into-8-bit-register
+  problem for free. ⚠ It does **not** give a byte of buffering — see below.
+- **`Q0` of the bit counter drives `RCLK`**, so no decode of "the ninth clock" is needed.
+- **The bit order is reversed in the wiring** — PS/2 is LSB-first, so `QA`→`BUS7`.
+- **Schmitt inputs are mandatory, and `HCT` not `HC`**: PS/2 edges can exceed the 400 ns
+  rise-time limit of a plain HC input, and a 3.3 V device does not clear `HC`'s `V_IH`.
+
+What it does *not* do accounts for the difference: one port, receive-only (so no mouse —
+a mouse is silent until it is told `F4`), and bus-attached by **microcode strobes and a
+CPU branch flag** rather than an address decoder. Three of this card's eight extra packages
+are the tax for the 6309 being a fixed CPU, and two more are the tax for not having that
+branch flag either.
+
+> ### ⚠ The buffering is not the `'595`'s — a `74HC574` per port is what makes it real
+>
+> `RCLK` is `Q0` of the bit counter, and `Q0` toggles on **every clock edge of every
+> frame**, so the storage register is re-copied throughout the *next* frame — and
+> edge 1 of frame N+1 is its **start bit**. Without the latch, the service deadline
+> is the **inter-byte gap**, which the host does not control and which inside a
+> 3-byte mouse packet can be a couple of hundred microseconds, against a NitrOS-9
+> dispatch of ~191 µs — and with no parity or framing check the resulting torn byte
+> is indistinguishable from a good one.
+>
+> **The `74HC574` per port, clocked once at end-of-frame**, makes the buffer
+> genuinely one frame deep: 660 µs at the fastest PS/2 clock rate, 1.1 ms at the
+> slowest. Alongside it: the `'193` is *loaded* (preset strapped to 10, `~TCD`
+> looped back to `/PL`), `IOCTRL` is a `74HC273` cleared by backplane `/RESET` (a
+> `DR` latch stuck set at boot would hang the machine on the shared `/IRQ`), and
+> §7's software transmit runs with `/IRQ` **masked** — the longest interrupt-off
+> window in the machine, which costs the serial card data. `docs/ps2.md` §5, §6.1,
+> §8.4, §7.1; the 9-IC claim this corrected is in
+> [`docs/history.md`](docs/history.md).
+
+**§4.4 is the second piece of prior art**, and it argues in two directions. Burrell
+Smith's 1981 Apple II mouse card did the job in *two* chips — a 6522 VIA and a flip-flop —
+because the mouse interrupted per notch of movement and software did the rest; the Apple
+II division, not trusting interrupts, shipped "more than a dozen". That is the same
+mistake this document's first revision made, at the same price. But the specific trick
+**reverses** here: interrupt-per-notch scales with hand velocity and is unbounded — up to
+4,000/s against PS/2's fixed 180 — so **PS/2's packetisation, which looks heavyweight next
+to four quadrature wires, is exactly what makes it affordable on a machine with a
+real-time replayer.** §4.5 evaluates and rejects the 6522 route it suggests, on I/O space.
+
+## The two machine-level answers
+
+- **`/IRQ`, as a third source.** `graphics.md` §12 already puts VBL and raster compare on
+  it, open-drain; only `/FIRQ` is exclusive to audio. With an interrupt there is nothing to
+  *queue*, which is what deletes the FIFO. Cost is ~1.1 % of the CPU while input is
+  happening, zero otherwise — **with the mouse at 60 samples/s**, which is the largest
+  standard PS/2 rate below the 70.09 Hz frame rate, and you cannot display a pointer faster
+  than that. (The card asked for 40 /s until the design review pointed out that 60 is a
+  standard rate and 40 was chosen from a menu that omitted it.) **The line is shared and
+  the polling order was fixed:** video `VSTAT`, then this card, then serial last —
+  `docs/ps2.md` §3.1.
+- **`$FF30`–`$FF33`, four bytes** — the bottom of the merged I/O card's sixteen-byte
+  window, moved there 2026-09-09 when the serial half took a `16C550` (`ps2.md` §3.2).
+
+**Transmit is software.** It happens twice at boot and on caps-lock, at ~1 ms per frame —
+absurd to spend a shift register, a sequencer and a timer on. Two control bits drive the
+lines low through a `7407`, two status bits read them back, and the driver walks the
+protocol directly.
+
+**And it runs with `/IRQ` masked**, which is the part the first three revisions left out.
+The host has to present each bit inside a 30–50 µs window and one NitrOS-9 dispatch is
+48–191 µs, so a single mouse or serial byte landing mid-transmit blows several bit slots.
+Masking for the frame costs 0.8–1.3 ms of interrupt-off time — against a 521 µs byte time
+at 19,200 baud, a caps-lock LED update in the middle of a download **guarantees a serial
+overrun**. `docs/ps2.md` §7.1 tabulates the options; the choice is the owner's.
+
+## Status
+
+**Specified, nothing built.** No code and no `CMakeLists.txt`; the card is discrete logic
+and the deliverable is the document.
+
+⭐ **But it can be driven.** `software/emu/machine.c` models both ports and both
+devices at the line level, and since 2026-09-20 takes a **timed, semantic input script** —
+`move to 320 240`, `click left`, `type "..."`, each at a machine time — encoded into set-2
+scan codes and 9-bit-split mouse packets and handed to that model rather than past it
+(`docs/ps2.md` §11.5, `software/emu/ps2script.h`).
+`software/emu/test/run-ps2script.sh` is its bench: **27 claims**, the round trip
+asserted against a second, independent encoder in Python, with `ps2tst` on a booted
+NitrOS-9 as the thing being driven. So a keyboard and mouse driver — §13 step 5 — has
+something to be written against before the card exists.
+
+`docs/ps2.md` §13 gives the build order. **Step 1 measures the protocol on a scope** —
+§2.2's timings are recalled, not read from a document, and it now has to measure one
+specific number: **the inter-byte gap inside a 3-byte mouse packet**, which is what the
+no-FIFO decision actually rests on. **Step 2 breadboards the Minimal 64x4 receiver
+verbatim** before generalising it, and falsifies the `'193` preload value of 10 while it is
+there. **Step 8 can send the design back**: if NitrOS-9's interrupt dispatch is worse than
+the guessed 400 cycles, the mouse drops to 40 /s and then the FIFO returns and the card is
+13 — 11 − 2 + 4, because the FIFO subsumes the second-stage latch. **Step 9 is new** and
+needs the serial card on the backplane beside it.

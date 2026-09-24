@@ -1,6 +1,6 @@
 # `<breakout />`
 
-A `<breakout />` is similar to a [`<group />`](./group.md) but is meant for situations where you want to guide the autorouter on where connections should exit the group. Inside a breakout you can place [`<breakoutpoint />`](./breakoutpoint.md) elements to define explicit exit locations, or let tscircuit generate breakout points automatically for connections that leave the breakout.
+A `<breakout />` is similar to a [`<group />`](group.md) but is meant for situations where you want to guide the autorouter on where connections should exit the group. Inside a breakout you can place [`<breakoutpoint />`](breakoutpoint.md) elements to define explicit exit locations, or let tscircuit generate breakout points automatically for connections that leave the breakout.
 
 ## Example
 
@@ -64,5 +64,5 @@ export default () => (
 
 - Props: [BreakoutProps](https://github.com/tscircuit/props#breakoutprops-breakout)
 - Source: [lib/components/breakout.ts](https://github.com/tscircuit/props/blob/main/lib/components/breakout.ts)
-- Related: [`<breakoutpoint />`](./breakoutpoint.md), [`<group />`](./group.md)
+- Related: [`<breakoutpoint />`](breakoutpoint.md), [`<group />`](group.md)
 - Docs: https://docs.tscircuit.com/elements/breakout

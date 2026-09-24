@@ -5,12 +5,12 @@
 > ⛔ **HISTORICAL — frozen 2026-09-20. This document does not describe the machine.**
 >
 > It compares three candidate video cards, and **the machine built none of them.** On
-> 2026-09-20 the owner took [`video3/`](../video3/) as the machine's video card and
-> archived `video/` and `video2/` ([`../archive/README.md`](../archive/README.md),
+> 2026-09-20 the owner took [`hardware/video3/`](../hardware/video3/) as the machine's video card and
+> archived `video/` and `video2/` ([`../archive/README.md`](../hardware/archive/README.md),
 > [`history.md`](history.md)); the VIC-II derivative was never written down anywhere
 > but here. ⚠ Every feature table, package count and area below is measured against
 > the three cards *this* document is about, so **none of it is a `video3` figure** —
-> `video3/docs/plan.md` §13 is, and `video3`'s own §11 records what it borrowed from
+> `hardware/video3/docs/plan.md` §13 is, and `video3`'s own §11 records what it borrowed from
 > `video/` component by component.
 >
 > It is kept, and not updated, because it is the record of a decision: it is where the
@@ -18,19 +18,19 @@
 > and `video3` is the answer that came out of asking the question this way.
 
 **Question this answered:** the project then had three video designs —
-[`video/`](../archive/video/) as specified and fitted, [`video2/`](../archive/video2/) as planned, and a
+[`video/`](../hardware/archive/video/) as specified and fitted, [`video2/`](../hardware/archive/video2/) as planned, and a
 sprite-less RGB332 derivative of the VIC-II extended to 80 columns. They are not three
 versions of one card; they are three different answers, and the differences are
 mostly *not* the ones the names suggest. This document compares them on features first
 and cost second.
 
-> This is a **comparison**, not a specification. `archive/video/docs/graphics.md` and
-> `archive/video2/plan.md` are the owning documents for their cards; the VIC-II derivative has
+> This is a **comparison**, not a specification. `hardware/archive/video/docs/graphics.md` and
+> `hardware/archive/video2/plan.md` are the owning documents for their cards; the VIC-II derivative has
 > no document of its own and this is currently it.
 >
 > ⚠ **Two numbers here supersede figures quoted in conversation.** Every package count
 > and every area below is measured from **one** parts list through
-> `hardware/place/pack.ts`, so that the three cards cannot be compared across different
+> `hardware/tools/place/pack.ts`, so that the three cards cannot be compared across different
 > BOM generations. Earlier VIC-II figures of "43 / 40 packages" and "fits a 180 mm
 > board" came from an earlier list with one fewer control-store flash, and are
 > withdrawn — see §3.1.
@@ -39,7 +39,7 @@ and cost second.
 
 ## 0. The three cards
 
-| | [`video/`](../archive/video/) | [`video2/`](../archive/video2/) | **VIC-II, extended** |
+| | [`video/`](../hardware/archive/video/) | [`video2/`](../hardware/archive/video2/) | **VIC-II, extended** |
 |---|---|---|---|
 | **Shape** | 8bpp chunky framebuffer with a drawing engine | microcoded, fixed-palette, hardware text | character/bitmap card, 1bpp + per-cell colour |
 | **Programmable logic** | 3 × `ATF1508AS` | none, or 2 × `GAL22V10` | none, or 2 × `GAL22V10` |
@@ -228,7 +228,7 @@ already does for free on the other two.
 
 ### 3.1 Packages and board, measured
 
-From one parts list through `hardware/place/pack.ts`, on the 100 × 240 mm board:
+From one parts list through `hardware/tools/place/pack.ts`, on the 100 × 240 mm board:
 
 | Design | Packages | Courtyard | 240 mm |
 |---|---|---|---|
@@ -347,8 +347,8 @@ accepting the VIC-II derivative's cell colour.
 2. ⚠ **The store rate.** Every CPU-cost figure in §2.3 scales on `graphics.md` §7.3's
    unverified 5 cycles per store — `graphics.md` §19 item 1.
 3. ⚠ **Power on the discrete designs** (§3.3) is an order-of-magnitude guess.
-4. **Neither new design is in `hardware/place/parts.ts`.** Until each has an entry and
-   a board file with an `icBudget`, `npm run check:place` asserts none of §3.1.
+4. **Neither new design is in `hardware/tools/place/parts.ts`.** Until each has an entry and
+   a board file with an `icBudget`, `make -C hardware place` asserts none of §3.1.
 5. **The VIC-II derivative has no specification.** This document is the only account of
    it; the register map, the microword and the fetch cadence are unwritten.
 6. ⚠ **The 27 ns CPU-read margin** both flat-addressed designs depend on is derived
@@ -360,10 +360,10 @@ accepting the VIC-II derivative's cell colour.
 
 | | |
 |---|---|
-| [`archive/video/docs/graphics.md`](../archive/video/docs/graphics.md) | the first card: §2.1 bandwidth, §6.1–6.4 geometry and modes, §7 text and the span writer, §9 the palette argument, §10.3 the display list, §11 readable VRAM, §14 the budget, §15 the period audit |
-| [`archive/video/docs/features.md`](../archive/video/docs/features.md) | the same card by capability — §2 text, §3 the span writer, §8 sprites, §10 what it cannot do |
-| [`archive/video2/plan.md`](../archive/video2/plan.md) | the second card, and §11 its budget |
-| [`archive/video2/bitmap-datapath.pdf`](../archive/video2/bitmap-datapath.pdf) | its bitmap datapath drawn subsection by subsection, with the recount that moved 62 to 67 |
+| [`hardware/archive/video/docs/graphics.md`](../hardware/archive/video/docs/graphics.md) | the first card: §2.1 bandwidth, §6.1–6.4 geometry and modes, §7 text and the span writer, §9 the palette argument, §10.3 the display list, §11 readable VRAM, §14 the budget, §15 the period audit |
+| [`hardware/archive/video/docs/features.md`](../hardware/archive/video/docs/features.md) | the same card by capability — §2 text, §3 the span writer, §8 sprites, §10 what it cannot do |
+| [`hardware/archive/video2/plan.md`](../hardware/archive/video2/plan.md) | the second card, and §11 its budget |
+| [`hardware/archive/video2/bitmap-datapath.pdf`](../hardware/archive/video2/bitmap-datapath.pdf) | its bitmap datapath drawn subsection by subsection, with the recount that moved 62 to 67 |
 | [`reference/articles/VIC-Article.txt`](../reference/articles/VIC-Article.txt) | Christian Bauer on the VIC-II — §3.1 the block diagram, §3.4 geometry, §3.5 Bad Lines, §3.6 access types, §3.7.2 VC and RC, §3.8 sprites |
 | [`docs/video-comparison.md`](video-comparison.md) | ⚠ **a different comparison** — `video/` against the GIME and the real VIC-II, rather than these three against each other |
-| `hardware/place/pack.ts` | every package count and area in §3.1 |
+| `hardware/tools/place/pack.ts` | every package count and area in §3.1 |

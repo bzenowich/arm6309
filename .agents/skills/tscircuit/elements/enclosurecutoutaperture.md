@@ -36,7 +36,7 @@ Most parts need only `insertionDirection`: a cable arrives through the opening i
 needs, so the two directions coincide. Declare `cutoutApertureDirection` when
 they differ -- a side-actuated switch is *installed* from above and *actuated*
 from the side, so its opening pierces a wall while nothing is ever inserted into
-it. See [`<footprint />`](./footprint.md#insertion-and-aperture-directions).
+it. See [`<footprint />`](footprint.md#insertion-and-aperture-directions).
 
 `from_above` and `from_below` exit through the lid and the floor instead of a
 wall. Which one is carried by the direction itself: a layer flip is a 180 degree
@@ -77,7 +77,7 @@ across the face, along those same two axes. Both may be negative.
 Zero means *wherever the part puts it*, which is usually right:
 
 - **Side faces** centre the opening on the part's body above the board, taken
-  from the model's measured bounds (see [`<cadmodel />`](./cadmodel.md#measured-bounds)).
+  from the model's measured bounds (see [`<cadmodel />`](cadmodel.md#measured-bounds)).
   A part with no measured bounds falls back to half the opening's own height,
   which rests its lower edge on the mounting surface.
 - **Lid and floor** centre on the part's own position.
@@ -99,4 +99,4 @@ aperture prop; it is derived from the owning component's `layer`.
 
 - Props: [EnclosureCutoutApertureProps](https://github.com/tscircuit/props/blob/main/lib/enclosure/cutout-aperture.ts)
 - Solver: [@tscircuit/create-fdm-enclosure](https://github.com/tscircuit/create-fdm-enclosure)
-- See also: [`<enclosure.fdm.box />`](./enclosurefdmbox.md)
+- See also: [`<enclosure.fdm.box />`](enclosurefdmbox.md)

@@ -1,7 +1,7 @@
 # `software/nitros9/` — NitrOS-9 Level 2 on this machine
 
 NitrOS-9 Level 2 boots from the boot ROM to a shell on the serial console, running on the
-host emulator. `docs/nitros9-av-plan.md` is the plan this belongs to. This README covers its
+host emulator. `software/nitros9/docs/nitros9-av-plan.md` is the plan this belongs to. This README covers its
 phase P0: the port skeleton that the video and audio drivers will be built on.
 
 ```sh
@@ -14,24 +14,24 @@ BOOT=.../bootfile sh software/nitros9/mksddisk.sh out/boot.img   # ... a BOOTABL
 ```
 
 ```sh
-SCENARIOS=nitros9 npm run check:machine        # the same ROM on the RTL machine: 19 claims, ~13 min (from hardware/)
-SCENARIOS=reboot npm run check:machine         # ... and reboot through the boot ROM: 11 claims, ~14 min
-SCENARIOS="disk nodisk" npm run check:machine  # ⭐ boot.asm 10a's boot dialog, both card-detect states: 52 claims, ~20 min
+SCENARIOS=nitros9 make -C hardware machine        # the same ROM on the RTL machine: 19 claims, ~13 min (from hardware/)
+SCENARIOS=reboot make -C hardware machine         # ... and reboot through the boot ROM: 11 claims, ~14 min
+SCENARIOS="disk nodisk" make -C hardware machine  # ⭐ boot.asm 10a's boot dialog, both card-detect states: 52 claims, ~20 min
 ```
 
 ⛔ **The dialog pair needs a `V3=1` ROM and builds its own**, into
-`/tmp/arm6309-dialog`. The toolbox it draws with is ROM page 64 and
+`software/nitros9/build/dialog`. The toolbox it draws with is ROM page 64 and
 `recipes/arm6309/arm6309.mak` only assembles it under `-DV3=1`; without the flag page
 64 is 8 KB of zeros, `boot.asm` §10a finds no `"TB"` there and reports `$63`. The
-`nitros9` and `reboot` runs above build the other flavour into `/tmp/arm6309-nitros9`,
+`nitros9` and `reboot` runs above build the other flavour into `software/nitros9/build/rom`,
 and the recipe has one object directory — so alternating the two forces a clean rebuild,
 which `mkrom.sh`'s `.flavour` stamp does on purpose.
 
 `run-emu.sh` rebuilds `software/boot/boot.bin` and the NitrOS-9 ROM (`mkrom.sh`, which also
 writes the `.hex` the RTL loads). It then boots on
-`software/demo/emu/`, types `dir`, `mfree`, `date -t`, `sleep 2100` and `procs` at the
+`software/emu/`, types `dir`, `mfree`, `date -t`, `sleep 2100` and `procs` at the
 shell (including `firqtst`, twice), and checks the console output. **Its exit code is the answer.** The full console
-is kept as `/tmp/arm6309-nitros9/console.txt`.
+is kept as `software/nitros9/build/rom/console.txt`.
 
 ## Where the port lives
 
@@ -116,7 +116,7 @@ The 488 K RBF image in ROM pages 3–63 was, until 2026-09-20, where every demo
 program lived, and **it was full** — 6,656 bytes free, with `pinball` at 36 K
 and a scene therefore having to ask the recipe for its command and give one
 back (`CMDS_EXTRA` / `CMDS_DROP`). The machine has storage now
-(`storage/docs/sdcard.md` §9.4), so:
+(`hardware/storage/docs/sdcard.md` §9.4), so:
 
 ⭐ **AND SINCE 2026-09-22 THE ROM KEEPS NOTHING AT ALL.** It carried a 61-page RBF
 image — 499,712 bytes, 47.7 % of the flash — and now carries **no filesystem**: pages
@@ -154,7 +154,7 @@ sh software/nitros9/mksddisk.sh /tmp/data.img mvania
 ```
 
 ⭐ **AND THE LARGEST THING ON THE CARD IS NOT A PROGRAM.** `pinball`'s playfield is
-`video3/bench/pcbtable.pic` — **327,680 bytes**, one palette index a pixel, 640 × 512,
+`software/archive/pinball/pcbtable.pic` — **327,680 bytes**, one palette index a pixel, 640 × 512,
 **exactly 640 SD blocks** — and it goes into `DATA` beside the streams, with its
 512-byte palette. ⛔ **It cannot be a module**: 327,680 bytes is five times the address
 space a NitrOS-9 module may occupy, which is why that table was 61 interned 16 × 16
@@ -164,20 +164,20 @@ into `$OUT/data` under `V3=1`, and the scene opens them **by bare name through `
 from `/SD0/CMDS` and it still finds its table. ⚠ It reads in **11.1 s at 28.9 KiB/s** —
 one `CMD17` a 512-byte block and a 6809 shifting every byte through SPI by hand — so the
 scene shows a **loading screen** while it arrives, which is period-correct and is not
-hidden (`video3/optimizations.md` §10.2).
+hidden (`hardware/video3/optimizations.md` §10.2).
 
 ⭐ **And the DESKTOP SHELL is one of them.** `desk` (`level2/arm6309/cmds/desk.asm`) is
-the program `docs/boot-and-desktop.md` §3 asks for — an event loop on the PS/2 mouse, a
+the program `software/desk/docs/boot-and-desktop.md` §3 asks for — an event loop on the PS/2 mouse, a
 menu bar that pulls down and highlights, and a launcher that forks the other demos out of
 `/SD0/CMDS`. It is an application and it lives on the card with them; `v3paint` goes with
 it, because a menu item can fork a program and cannot fork the byte stream `v3show.py`
-writes under that name. `video3/bench/run-v3desk.sh` runs both off a card and clicks at
+writes under that name. `software/desk/bench/run-v3desk.sh` runs both off a card and clicks at
 them with a `PS2_SCRIPT`.
 
 ## ⭐ Booting off the card
 
 Since 2026-09-21 `OS9Boot` comes off the SD card when there is a bootable one in the
-socket. `storage/docs/sdcard.md` §9.5 is the design and `docs/boot-and-desktop.md` §2 is
+socket. `hardware/storage/docs/sdcard.md` §9.5 is the design and `software/desk/docs/boot-and-desktop.md` §2 is
 the Macintosh story it belongs to; the short version:
 
 | | |
@@ -201,7 +201,7 @@ rest on a stale image in the build directory.
 ⚠ **The host emulator enters at `$8004`** by default, with `boot.asm`'s handoff already
 applied, so the POST and the boot dialog do not run on a cold start there. `reboot`
 re-enters at the reset vector, and ⭐ **`COLDBOOT=1`** starts at it — which is what
-`software/nitros9/video/run-desk.sh` passes to put the POST and the dialog at the front
+`software/desk/video/run-desk.sh` passes to put the POST and the dialog at the front
 of the demo video. In Verilog, `machine_tb`'s `disk` scenario is a
 cold start with the whole storage card and a blessed image in its socket.
 
@@ -252,7 +252,7 @@ file is read back off the image and compared with the source**, because
 round trip a short image announces itself as a good one and the machine loads
 a module with a bad CRC.
 
-`video3/bench/run-v3sd.sh` is the check: both cards, the Haiku desktop and
+`software/nitros9/bench/run-v3sd.sh` is the check: both cards, the Haiku desktop and
 Paint drawn from the card, `changefont` reading a face through `DOpen`, a demo
 program loaded off `/SD0` — and a negative control with an empty socket in
 which every one of them fails to find what it needs and says so.
@@ -338,11 +338,11 @@ the code and is left as `main` has it.
   card's receive counter literally, so a transmit that skips §7 step 1 (holding `KRST`)
   receives garbage there, as it would on the card.
   ⭐ **What there IS, since 2026-09-20, is a way to script the input**: `PS2_SCRIPT=file`
-  (`software/demo/emu/ps2script.h`, `ps2.md` §11.5) takes `move to 320 240`, `click left`
+  (`software/emu/ps2script.h`, `ps2.md` §11.5) takes `move to 320 240`, `click left`
   and `type "..."` at machine times and encodes them properly, so a GUI can be tested
-  before the drivers or the card exist. `software/demo/emu/test/run-ps2script.sh` drives
+  before the drivers or the card exist. `software/emu/test/run-ps2script.sh` drives
   `ps2tst 24` with one and checks the bytes that come back — 27 claims, ~2 min.
-- **The emulator's audio card is `audio/refplayer/card.c`**, register level, stepped per
+- **The emulator's audio card is `hardware/audio/refplayer/card.c`**, register level, stepped per
   colour clock. Its host port is never busy (`ASTAT` b6), so a driver's wait on that bit
   runs only on the RTL.
 - **Five NUL bytes follow the echo of every command line.** The descriptor's end-of-line

@@ -5,9 +5,9 @@ between them: *could a blitter-first card carry character, bitmap and tile modes
 and align better with NitrOS-9's graphics primitives; do we instead need
 memory-mapped VRAM; and is there anything in QuickDraw worth taking?*
 
-> This is a **design note**, not a specification. `archive/video/docs/graphics.md` owns
+> This is a **design note**, not a specification. `hardware/archive/video/docs/graphics.md` owns
 > the card; `docs/video-options.md` compares the three card shapes;
-> `docs/nitros9-hardware-improvements.md` is the ranked change list this feeds.
+> `software/nitros9/docs/nitros9-hardware-improvements.md` is the ranked change list this feeds.
 > ⚠ **Nothing here is fitted, placed or costed by `pack.ts`.** Package counts are
 > estimates against the fitted parts' headroom, and §3 says what would refute
 > them.
@@ -91,7 +91,7 @@ one write access:
 | **H5** 192-row window scroll | ~350 ms | **7.6 ms** | 46× |
 | **H4** `Select`, 640 × 200 | ~2.6 s each way | **7.9 ms** | ~320× |
 | `GetBlk`/`PutBlk`, 64 × 64 | ~41 ms | **0.25 ms** | 160× |
-| **H15** the hero's fifteen tiles | a hero every 5 frames (2026-09-17, measured) | ~95 copies a hero **with a key**, so 1–2 frames; one copy for the figure in bitmap mode | ⚠ a tile is a 64-byte run, not a rectangle on the stride — `video3/docs/demo-report.md` §10.5 |
+| **H15** the hero's fifteen tiles | a hero every 5 frames (2026-09-17, measured) | ~95 copies a hero **with a key**, so 1–2 frames; one copy for the figure in bitmap mode | ⚠ a tile is a 64-byte run, not a rectangle on the stride — `hardware/video3/docs/demo-report.md` §10.5 |
 
 ⭐ **It makes the hardware cursor unnecessary.** `H1` is ranked 5 at ≈ +4–5
 packages for a 16 × 16 overlay that `features.md` §8 says may not fit the pixel
@@ -175,7 +175,7 @@ nothing sideways.**
 > byte-granular, **with no shifter anywhere** — at 4.05 MB/s, still 40× `Strm`.
 > The four-byte fast path then survives wherever the two columns are congruent mod
 > 4, which every 8-pixel-aligned blit is. So the ladder is **vertical-only → a
-> second column counter → (never) a barrel rotate**. `docs/nitros9-hardware-improvements.md` H5 already asked for
+> second column counter → (never) a barrel rotate**. `software/nitros9/docs/nitros9-hardware-improvements.md` H5 already asked for
 "even one limited to vertical moves"; this is what that costs and what it buys.
 
 ---
@@ -187,7 +187,7 @@ nothing sideways.**
 | ⚠ **`vaddr` is the binding constraint, as always** | the framebuffer address mux is already four-source with one spare, and `graphics.md` §6.4.1 says a macrocell holds five before cascading. `RPTR` is the fifth — and §10.1.6.2 records that **a fifth or sixth source per bit is exactly what the list engine's fits ran out of**, which is why the engine shares `WPTR`. `vaddr` is at 113/128 cells and **40/40 fan-in in every block** |
 | ⚠ **Alignment** | four bytes an access needs **`src` and `dst` columns congruent mod 4** — not absolute alignment. Vertical-only satisfies it by construction, and so does **every 8-pixel-aligned GUI blit** (a glyph cell, a tile, an icon on a cell boundary), because 8 is a multiple of 4. An arbitrary x falls to one byte an access: **4.05 MB/s, 40× `Strm` and 17× the unrolled form** (§6) — so the fast path is worth having and **a barrel rotate to rescue the non-congruent case is not** |
 | ⚠ **The write-data path is eight bits wide** | `graphics.md` §7.4: there is **one** `74HC574` posted-write latch that fans out to all four byte lanes, which is what makes the broadcast write free. A copy needs four *distinct* bytes, so the read latches have to become the write drivers |
-| **What would refute it** | a fit. `sh gal/prjbureau/fit1508.sh` on a `vaddr` carrying a second pointer, and `pack.ts` on a parts list carrying the fourth CPLD. Until then this is arithmetic against headroom |
+| **What would refute it** | a fit. `sh tools/gal/prjbureau/fit1508.sh` on a `vaddr` carrying a second pointer, and `pack.ts` on a parts list carrying the fourth CPLD. Until then this is arithmetic against headroom |
 
 ---
 
@@ -277,7 +277,7 @@ plug in at five places instead of fifty.
 ### 5.3 ⭐ Compiled inner loops — measured, §6
 
 Atkinson generated code at run time. The 6809 analogue is an unrolled store block.
-`docs/nitros9-hardware-improvements.md` quotes VidCore at **~10 µs a byte**, and
+`software/nitros9/docs/nitros9-hardware-improvements.md` quotes VidCore at **~10 µs a byte**, and
 every H-item's cost is denominated in it. §6 measures what that is made of.
 
 ### 5.4 ⚠ Transfer modes are the one place QuickDraw needs hardware we lack
@@ -312,11 +312,11 @@ invented to avoid spending.
 
 ---
 
-## 6. ⭐ The store rate, measured — `software/demo/bench/vramrate.asm`
+## 6. ⭐ The store rate, measured — `software/archive/demo/bench/vramrate.asm`
 
 ```sh
-sh software/demo/bench/run-vramrate.sh        # the host emulator, ~1 min
-sh software/demo/bench/run-vramrate-rtl.sh    # the whole machine, ~15 min
+sh software/archive/demo/bench/run-vramrate.sh        # the host emulator, ~1 min
+sh software/archive/demo/bench/run-vramrate-rtl.sh    # the whole machine, ~15 min
 ```
 
 Eight phases, **130,560 bytes each** (85 chunks of 96, so that no form's
@@ -416,7 +416,7 @@ by argument: **4.26× on fills and 3.80× on copies** against `Strm` today.
 
 ### 6.2 ⚠ What this does to the improvements list
 
-**Every cost in `docs/nitros9-hardware-improvements.md` is quoted in VidCore
+**Every cost in `software/nitros9/docs/nitros9-hardware-improvements.md` is quoted in VidCore
 byte-times**, so a 2.2–3× software win moves the whole table before any silicon is
 bought. §7 of that document is where the re-ranking lands.
 
