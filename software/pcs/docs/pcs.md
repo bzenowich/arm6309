@@ -173,6 +173,16 @@ being scanned, so one polygon may have four spans on a line and the next gets it
 there is no cap on spans per scanline anywhere in `PPAK.s`. ⚠ This spec and the bench both
 claimed otherwise until the edit gate went looking for a refusal and could not provoke one.
 
+**The colour picker** replaces `EDIT.s`'s three paint pots (`$FF`, `$55`, `$AA`,
+artefact colours on the Atari). It is a 12 × 10 grid of palette entries **32–151**
+(`pcspal.PICK`): a row of greys from white to black, then nine rows of twelve hues from
+dark to light, sampled from the reference picker supplied on 2026-09-24. Cells are 8 × 8
+card pixels, centred in the kit panel under the tool column (x 432–527, y 360–439), and the
+current colour carries a one-pixel frame, white on a dark cell and ink on a light one. A
+table's `FILLCOLOR` is the entry number, so ⚠ **entries 32–151 are file format** and are
+append-only. Entries 1–3 stay the translation of an imported table's dither masks, and the
+editor starts on white (cell 0), the original's `COLOR = $FF`.
+
 **The art.** `BITMAPS.OBJ` (1,792 bytes) with the offset table at `RUN.s:100`. ⭐
 `mkpcs.py` reads all of it straight out of the original sources, doubles each byte's bits,
 and emits the art bank — **the parts are Budge's drawings, not redrawn ones**.
@@ -301,7 +311,7 @@ The legs:
 | `m0` | the scan converter: all 153,600 bytes of the table rectangle, and the span database record for record |
 | `m4` | ⭐⭐ **the whole simulator**, 600 frames — the ball's `(x, y, BDX, BDY)` every frame, every part's state byte, and the score, the sound and the run chain |
 | `m6` | ⭐⭐ **the editor**: a twelve-edit session through `pcsedit.inc`, two of them required to be refused, and the step results, the object area and the span database it leaves, against `pcsedit.py` |
-| `k0` | ⭐ **the editor's kit panel**: `pcs 22`'s 320 × 384 panel and the strip under it, every card pixel, against `pcskit.py`'s rendering of `DRAWKIT` (the tools, the parts bin, and the paint pots in their paint) |
+| `k0` | ⭐ **the editor's kit panel**: `pcs 22`'s whole 320 × 480 panel column, every card pixel, against `pcskit.py` — `DRAWKIT`'s tools and parts bin, and the 12 × 10 colour picker with its frame on the current colour |
 | `m1` | ⛔ MUTATION: the midpoint x rounding is dropped, so every sloped edge moves |
 | `m2` | ⛔ MUTATION: a B-polygon paints its RECORDS instead of their complement — the bug that looks plausible on screen while inverting the ball's world |
 | `m5` | ⛔ MUTATION: `BOUNCE` rotates back by `TTA` instead of `32 - TTA`. ⛔ The two are the SAME for `tta` 0 and 16, so a ball in a box of flat walls behaves identically and only a slope tells them apart |

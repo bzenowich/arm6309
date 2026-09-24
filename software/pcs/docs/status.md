@@ -20,7 +20,7 @@ checkers).
 | `pcsobj.inc` + `pcsrun.inc` — the simulator | 2,299 | ⭐⭐ **bit-exact over 600 frames** against a Python transliteration of `RUN.s`: the ball's `(x, y, BDX, BDY)` every frame, 95 hits on 11 objects, every part's state byte, and the score |
 | `pcsdraw.inc` — the painter, the 1bpp art blit | 589 | every pixel of the table, against the model |
 | `pcsedit.inc` — the editor's **database** operations | 950 | ⭐⭐ **agrees with `pcsedit.py`** over a twelve-edit session: step results, object area and span database (`m6`, in the default bench since 2026-09-24) |
-| `pcsui.inc` — the editor's screen (`pcs 22`) | 150 | ⭐ **the kit panel, every card pixel**, against `pcskit.py`'s `DRAWKIT` (`k0`). ⚠ No interaction yet |
+| `pcsui.inc` — the editor's screen (`pcs 22`) | 250 | ⭐ **the kit panel and the 12 × 10 colour picker, every card pixel**, against `pcskit.py` (`k0`). ⚠ No interaction yet |
 | `pcsfile.inc` — a table is a file on the card | 192 | ⭐ all four `DEMO*.PB` load off `/SD0/DATA` with **byte-identical span databases** |
 | `pcstext.inc` — the original's proportional font | 216 | screenshotted: the glyphs, the spacing, right-aligned numbers, boxes and frames |
 | `pcsin.inc` — mouse, keyboard, cursor | 230 | the cursor is the **card's hardware sprite**; a scripted mouse drives a real game |

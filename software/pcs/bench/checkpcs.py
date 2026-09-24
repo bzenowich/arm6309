@@ -298,19 +298,20 @@ def main():
 
 
 def kit_panel(vram):
-    """⭐ THE KIT PANEL, EVERY CARD PIXEL, against pcskit.py's DRAWKIT.
+    """⭐ THE KIT PANEL, EVERY CARD PIXEL, against pcskit.py.
 
-    x 320..639, y 0..383: thirteen tools, the parts bin and the three paint
-    pots; and the strip under it, y 384..479, which is the panel colour.
+    x 320..639, y 0..479: DRAWKIT's thirteen tools and parts bin, the strip
+    under them, and the 12 x 10 picker with its frame on the current colour -
+    which `pcs 22` starts at cell 0, white.
     ⚠ The bitmap and this comparison come out of the same model, so what this
     proves is the MACHINE's half - the doubling, the placement, WM.Mask's bit
-    order and both colours, and the pots.  That the model is DRAWKIT is
-    pcskit.py's self-test and a picture a person has looked at.
+    order and both colours, and the picker's cells and frame.  That the model
+    is DRAWKIT is pcskit.py's self-test and a picture a person has looked at.
     """
     import pcskit
     import pcspal
-    want = pcskit.card(pcspal.UI_PANEL, pcspal.UI_INK)
-    W, H = 2 * pcskit.KW, 2 * pcskit.KH
+    want = pcskit.card(pcspal.UI_PANEL, pcspal.UI_INK, 0)
+    W, H = 2 * pcskit.KW, 480
     bad, first = 0, None
     for y in range(H):
         for x in range(W):
@@ -319,21 +320,15 @@ def kit_panel(vram):
                 bad += 1
                 if first is None:
                     first = (x, y, got, want[y * W + x])
-    for y in range(384, 480):
-        for x in range(320, 640):
-            if vram[y * STRIDE + x] != pcspal.UI_PANEL:
-                bad += 1
-                if first is None:
-                    first = (x - 320, y, vram[y * STRIDE + x], pcspal.UI_PANEL)
     ink = sum(1 for v in want if v == pcspal.UI_INK)
     if bad:
         x, y, g, w = first
         print('FAIL  the kit panel: %d card pixels differ; first at panel (%d, %d):'
               ' got %d, wanted %d' % (bad, x, y, g, w))
         return False
-    print('ok    the kit panel: all %d card pixels are DRAWKIT\'s, %d of them ink,'
+    print('ok    the kit panel: all %d card pixels are pcskit.py\'s, %d of them ink,'
           % (W * H, ink))
-    print('      the three pots in their paint, and the strip under it')
+    print('      and the 12 x 10 picker with its frame on white')
     return True
 
 

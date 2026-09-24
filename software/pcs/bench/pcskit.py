@@ -8,21 +8,24 @@ in `POLYS`.  This does the same, in the same order, at the Atari's own
 resolution: one bit per world unit, which is one hi-res pixel, 160 x 192.
 
 ⭐ THE KIT IS MONOCHROME, and that is not a simplification: every icon is 1bpp
-and all four bin polygons fill with `$FF`.  The only colour in it is the three
-paint pots, which on the Atari were artefact colours (`$FF`, `$55`, `$AA`).
-Here they are cut out of the bitmap and filled with the palette entries those
-masks translate to (pcsdat.asm's table: `$FF` -> 1, `$55` -> 2, `$AA` -> 3).
+and all four bin polygons fill with `$FF`.  The colour is the PICKER, which is
+this port's and not the original's: EDIT.s offered three paint pots (`$FF`,
+`$55`, `$AA` - artefact colours on the Atari), and here a 12 x 10 grid of
+palette entries 32..151 replaces them (pcspal.PICK), centred in the panel under
+the tool column, 8 x 8 card pixels a cell.  ⛔ So the pots are NOT drawn: the
+three rectangles CMDMENU still lists for them are empty panel.
 
 ⚠ AND THE MACHINE DOES NOT SCAN-CONVERT THE KIT'S POLYGONS: their x runs to
 243 in a panel that starts at 160, and the port's converter is one byte of x
 over a 160-wide table.  They are rendered here, into the bitmap, once.
 
 The outputs:
-    bits()      160 x 192, 0/1 - what DRAWKIT leaves in KITB
-    pots()      [(x, y, w, h, colour)] in world units - the paint pots
-    card()      320 x 384 palette indices - the panel as the card shows it,
-                which is what the bench compares
+    bits()      160 x 192, 0/1 - what DRAWKIT leaves in KITB, without the pots
+    card(cur)   320 x 480 palette indices - the panel column as the card shows
+                it, the picker and its frame on cell `cur` included; what the
+                bench compares
     tools()     [(name, x, y, w, h)] - CMDMENU's hit rectangles, in order
+    picker()    (x, y, cell) in card pixels, from the panel's left edge
 """
 
 import os
@@ -41,8 +44,15 @@ KX, KW, KH = 160, 160, 192      # KITB: x 160..319, y 0..191 (EDIT.s:1378)
 TOOLS = ('HAND', 'POINTER', 'SCISSOR', 'HAMMER', 'BRUSH',
          'WHITE', 'GREEN', 'VIOLET', 'PLAY', 'MAGN', 'WORLD', 'WIRE', 'DISK')
 
-# The pots, and what their masks mean in this palette.
-POTS = (('WHITEPAINT', 1), ('GREENPAINT', 2), ('VIOLETPAINT', 3))
+# The pots, which the picker replaces and which are therefore not drawn.
+POTS = ('WHITEPAINT', 'GREENPAINT', 'VIOLETPAINT')
+
+# ⭐ The picker, in CARD pixels from the panel's left edge: 12 x 10 cells of
+# 8 x 8, centred across the panel and starting just under the tool column,
+# whose last rectangle (DISK) ends at world row 174 - card row 349.
+CELL = 8
+PICKX = (2 * KW - 12 * CELL) // 2          # 112: panel x 112..207
+PICKY = 360                                 # rows 360..439
 
 
 def rect(label):
@@ -79,11 +89,9 @@ _cache = {}
 
 def _render():
     if 'bits' in _cache:
-        return _cache['bits'], _cache['pots']
+        return _cache['bits']
     canvas = [[0] * KW for _ in range(KH)]
     tmpl = dict((t.name, t) for t in T.parts())
-    pots = []
-    potnames = dict(POTS)
     for sym in A.block_syms('EDIT.s', 'ICONS'):
         name = sym.split('+')[0].strip()
         if name in tmpl:
@@ -94,25 +102,7 @@ def _render():
             _xor(canvas, t.px, t.vert + dy, h, w, bits)
             continue
         x, y, h, w, bits = _icon(name)
-        if name in potnames:
-            # ⛔ The pot is NOT drawn: its pattern is an artefact colour, and
-            # drawn as 1bpp it would come out as stripes of ink.  ⭐ A row with
-            # any bit set is paint across the pot's whole width (the union of
-            # its set bits - a GREEN row of $5540 is still ten pixels of
-            # paint), and an all-zero row is the gap between lid and body.
-            # Consecutive rows merge into one rectangle.
-            ext = [c * 8 + b for c in range(w) for b in range(8)
-                   if any(bits[r * w + c] & (0x80 >> b) for r in range(h))]
-            x0, x1 = min(ext), max(ext)
-            for r in range(h):
-                if not any(bits[r * w:(r + 1) * w]):
-                    continue
-                if pots and pots[-1][4] == potnames[name] and \
-                        pots[-1][1] + pots[-1][3] == y + r:
-                    px_, py_, pw_, ph_, pc_ = pots[-1]
-                    pots[-1] = (px_, py_, pw_, ph_ + 1, pc_)
-                else:
-                    pots.append((x + x0, y + r, x1 - x0 + 1, 1, potnames[name]))
+        if name in POTS:
             continue
         _xor(canvas, x, y, h, w, bits)
     # ⭐ POLYS (EDIT.s:1547) - DRAWOBJ with SCANMODE $80, so drawn and never
@@ -130,16 +120,26 @@ def _render():
                 for x in range(rec[0], rec[2] + 1):
                     if KX <= x < KX + KW:
                         canvas[y][x - KX] ^= 1
-    _cache['bits'], _cache['pots'] = canvas, pots
-    return canvas, pots
+    _cache['bits'] = canvas
+    return canvas
 
 
 def bits():
-    return _render()[0]
+    return _render()
 
 
-def pots():
-    return _render()[1]
+def picker():
+    return PICKX, PICKY, CELL
+
+
+def frame_colour(i):
+    """The current cell's frame: white on a dark cell and INK on a light one,
+    because a white frame round the white cell is no frame at all."""
+    import pcspal
+    v = pcspal.PICK[i]
+    r, g, b = (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF
+    return pcspal.UI_INK if (299 * r + 587 * g + 114 * b) > 150000 \
+        else pcspal.PAINT0          # entry 1 is white
 
 
 def tools():
@@ -152,21 +152,32 @@ def bin_boxes():
     return [rect(s.lstrip('<').strip()) for s in names]
 
 
-def card(panel, ink):
-    """320 x 384 palette indices, row-major: the panel as the card shows it."""
-    cv, ps = _render()
-    out = [panel] * (2 * KW * 2 * KH)
-    W = 2 * KW
+def card(panel, ink, cur=0):
+    """320 x 480 palette indices, row-major: the panel column as the card
+    shows it - the kit, the strip under it, and the picker with its frame."""
+    import pcspal
+    cv = _render()
+    W, H = 2 * KW, 480
+    out = [panel] * (W * H)
     for y in range(KH):
         for x in range(KW):
             if cv[y][x]:
                 for dy in (0, 1):
                     for dx in (0, 1):
                         out[(2 * y + dy) * W + 2 * x + dx] = ink
-    for (x, y, w, h, c) in ps:
-        for yy in range(2 * (y), 2 * (y + h)):
-            for xx in range(2 * (x - KX), 2 * (x - KX + w)):
-                out[yy * W + xx] = c
+    for i in range(pcspal.PICKW * pcspal.PICKH):
+        x0 = PICKX + (i % pcspal.PICKW) * CELL
+        y0 = PICKY + (i // pcspal.PICKW) * CELL
+        for yy in range(y0, y0 + CELL):
+            for xx in range(x0, x0 + CELL):
+                out[yy * W + xx] = pcspal.PICK0 + i
+    x0 = PICKX + (cur % pcspal.PICKW) * CELL
+    y0 = PICKY + (cur // pcspal.PICKW) * CELL
+    f = frame_colour(cur)
+    for k in range(CELL):
+        for (xx, yy) in ((x0 + k, y0), (x0 + k, y0 + CELL - 1),
+                         (x0, y0 + k), (x0 + CELL - 1, y0 + k)):
+            out[yy * W + xx] = f
     return out
 
 
@@ -175,7 +186,7 @@ def packed():
     ⛔ NOT DOUBLED: doubled it was 7,680 bytes, and a 35 KB module plus pcs's
     21 KB of data is 64 KB in 8 KB blocks - `Error #207` before the first
     instruction.  KitDraw doubles each nibble through a 16-byte table."""
-    cv, _ = _render()
+    cv = _render()
     out = bytearray()
     for y in range(KH):
         for i in range(0, KW, 8):
@@ -200,7 +211,7 @@ def doubled_nibbles():
 
 def selftest():
     bad = []
-    cv, ps = _render()
+    cv = _render()
     n = sum(map(sum, cv))
     if n == 0:
         bad.append('the kit is empty')
@@ -227,24 +238,28 @@ def selftest():
             bad.append('%s\'s icon at (%d, %d) is outside its rectangle' % (nm, ix, iy))
     if len(bin_boxes()) != 43:
         bad.append('%d bin boxes, wanted 43' % len(bin_boxes()))
-    if len(ps) < 3 or set(p[4] for p in ps) != {1, 2, 3}:
-        bad.append('the pots came out as %s' % ps)
+    # ⭐ The picker fits the panel, under the tools, and above the screen's end.
+    last = max(y + h for _, _, y, _, h in tl)
+    if PICKY < 2 * last or PICKY + 10 * CELL > 480 or PICKX < 0 \
+            or PICKX + 12 * CELL > 2 * KW:
+        bad.append('the picker at (%d, %d) is not under the tools' % (PICKX, PICKY))
     for m in bad:
         print('FAIL  %s' % m)
     if not bad:
         print('ok    the kit: %d ink pixels, 13 tools each inside its own\n'
-              '      rectangle in TOOLB\'s column, 43 bin boxes, and the three\n'
-              '      pots as %d fill rectangles' % (n, len(ps)))
+              '      rectangle in TOOLB\'s column, 43 bin boxes, and the 12 x 10\n'
+              '      picker under them' % n)
     return not bad
 
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'png':
         from PIL import Image
-        img = Image.new('RGB', (320, 384))
-        pal = {16: (40, 44, 60), 19: (230, 230, 220), 1: (255, 255, 255),
-               2: (60, 200, 80), 3: (170, 80, 220)}
-        img.putdata([pal[v] for v in card(16, 19)])
+        import pcspal
+        pal = pcspal.palette()
+        img = Image.new('RGB', (320, 480))
+        img.putdata([pal[v] for v in card(pcspal.UI_PANEL, pcspal.UI_INK,
+                                          int(sys.argv[3]) if len(sys.argv) > 3 else 0)])
         img.save(sys.argv[2])
         sys.exit(0)
     sys.exit(0 if selftest() else 1)
