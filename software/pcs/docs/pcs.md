@@ -183,6 +183,18 @@ table's `FILLCOLOR` is the entry number, so ⚠ **entries 32–151 are file form
 append-only. Entries 1–3 stay the translation of an imported table's dither masks, and the
 editor starts on white (cell 0), the original's `COLOR = $FF`.
 
+**The tool icons are redrawn** (`pcsicons.py`, 2026-09-24) at the card's own resolution,
+white on a **black** panel: the original's were drawn for one Atari hi-res pixel a world
+unit and came out doubled. ⛔ **Each is centred in its tool's `CMDMENU` rectangle, which
+is unchanged**, so the hit test is the original's and only the picture is finer. The bin's
+parts keep their own art, because it is also what the table shows; the bin's polygon entry
+is an icon and is redrawn too.
+
+⚠ **The `pcs` module must stay under 32 KB.** With 21 KB of data, one byte over is five
+8 KB blocks plus three, `F$Fork` answers `Error #207`, and nothing runs. The kit bitmap is
+stored at world resolution and cropped to the bin for exactly this reason; it is 31.1 KB
+today.
+
 **The art.** `BITMAPS.OBJ` (1,792 bytes) with the offset table at `RUN.s:100`. ⭐
 `mkpcs.py` reads all of it straight out of the original sources, doubles each byte's bits,
 and emits the art bank — **the parts are Budge's drawings, not redrawn ones**.
@@ -288,6 +300,7 @@ arm6309/software/pcs/bench/pcspak.py             PPAK.s — the scan converter, 
 arm6309/software/pcs/bench/pcsphys.py            RUN.s — the ball, modelled
 arm6309/software/pcs/bench/pcsobj.py             RUN.s — the part procs, modelled
 arm6309/software/pcs/bench/pcskit.py             EDIT.s's DRAWKIT - the kit panel, rendered
+arm6309/software/pcs/bench/pcsicons.py           the tool icons, redrawn at card resolution
 arm6309/software/pcs/bench/mkpcs.py              the generator, and the bench's table
 arm6309/software/pcs/bench/checkpcs.py           the gate
 arm6309/software/pcs/bench/run-pcs.sh            the bench
@@ -311,7 +324,7 @@ The legs:
 | `m0` | the scan converter: all 153,600 bytes of the table rectangle, and the span database record for record |
 | `m4` | ⭐⭐ **the whole simulator**, 600 frames — the ball's `(x, y, BDX, BDY)` every frame, every part's state byte, and the score, the sound and the run chain |
 | `m6` | ⭐⭐ **the editor**: a twelve-edit session through `pcsedit.inc`, two of them required to be refused, and the step results, the object area and the span database it leaves, against `pcsedit.py` |
-| `k0` | ⭐ **the editor's kit panel**: `pcs 22`'s whole 320 × 480 panel column, every card pixel, against `pcskit.py` — `DRAWKIT`'s tools and parts bin, and the 12 × 10 colour picker with its frame on the current colour |
+| `k0` | ⭐ **the editor's kit panel**: `pcs 22`'s whole 320 × 480 panel column, every card pixel, against `pcskit.py` — the parts bin, the redrawn tool icons, and the 12 × 10 colour picker with its frame on the current colour |
 | `m1` | ⛔ MUTATION: the midpoint x rounding is dropped, so every sloped edge moves |
 | `m2` | ⛔ MUTATION: a B-polygon paints its RECORDS instead of their complement — the bug that looks plausible on screen while inverting the ball's world |
 | `m5` | ⛔ MUTATION: `BOUNCE` rotates back by `TTA` instead of `32 - TTA`. ⛔ The two are the SAME for `tta` 0 and 16, so a ball in a box of flat walls behaves identically and only a slope tells them apart |

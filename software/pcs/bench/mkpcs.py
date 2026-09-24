@@ -1015,12 +1015,16 @@ def emit(path):
     # bitmap already doubled to card pixels so KitDraw is one WM.Mask store per
     # eight pixels, and the three paint pots as fill rectangles.
     import pcskit
-    kit = pcskit.packed()
+    kb0, ky0, krb, krows, kit = pcskit.packed()
     w('* ══════════════════ THE KIT PANEL ════════════════════════════════')
-    w('* pcskit.py: DRAWKIT (EDIT.s:220) at 1bpp, 160 world pixels a row, MSB')
-    w('* first.  KitDraw doubles each nibble through PCKDbl, and writes each')
-    w('* of the 192 rows twice.')
-    w('PC.KitRB            equ       %d        bytes a row' % (pcskit.KW // 8))
+    w('* pcskit.py: DRAWKIT (EDIT.s:220) at 1bpp - the parts bin and its')
+    w('* polygons - CROPPED to what carries a bit, MSB first.  KitDraw fills')
+    w('* the panel, doubles each nibble through PCKDbl and writes each row twice.')
+    w('PC.KitBX            equ       %d       the first column, card, absolute'
+      % (2 * pcskit.KX + 16 * kb0))
+    w('PC.KitBY            equ       %d        ... the first world row' % ky0)
+    w('PC.KitRB            equ       %d        bytes a row' % krb)
+    w('PC.KitRows          equ       %d' % krows)
     w('PCKit               equ       *         %d bytes' % len(kit))
     _fcb(o, kit)
     w('PCKDbl              equ       *         a nibble, each bit doubled')
@@ -1034,6 +1038,18 @@ def emit(path):
     w('PC.PickW            equ       %d' % pcspal.PICKW)
     w('PC.PickH            equ       %d' % pcspal.PICKH)
     w('PC.Pick0            equ       %d' % pcspal.PICK0)
+    import pcsicons
+    ics = pcsicons.packed()
+    w('* ⭐ THE TOOL ICONS, redrawn at card resolution (pcsicons.py), each')
+    w("* centred in its tool's rectangle: x, y in card pixels ABSOLUTE (fdb, as")
+    w('* both pass 255), the width in bytes, the rows, then the rows, MSB first.')
+    w('PC.NIcon            equ       %d' % len(ics))
+    w('PCIcon              equ       *')
+    for (nm, x, y, wb, h, data) in ics:
+        w('* %s' % nm)
+        w('                    fdb       %d,%d' % (2 * pcskit.KX + x, y))
+        w('                    fcb       %d,%d' % (wb, h))
+        _fcb(o, data)
     w("* ... and each cell's frame colour when it is the current one: white")
     w('* on a dark cell, ink on a light one.')
     w('PCPickF             equ       *')

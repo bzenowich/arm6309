@@ -101,10 +101,10 @@ def _render():
             h, w, bits, dy = t.frames()[0]
             _xor(canvas, t.px, t.vert + dy, h, w, bits)
             continue
-        x, y, h, w, bits = _icon(name)
-        if name in POTS:
-            continue
-        _xor(canvas, x, y, h, w, bits)
+        # ⭐ Every other entry is a TOOL icon (or the bin's polygon icon), and
+        # those are redrawn at the card's resolution by pcsicons.py - so they
+        # are not in this bitmap at all.  The pots are gone to the picker.
+        continue
     # ⭐ POLYS (EDIT.s:1547) - DRAWOBJ with SCANMODE $80, so drawn and never
     # merged into the database.  ⚠ Scanned in a 320-wide world, because their
     # x is in the kit.
@@ -138,7 +138,9 @@ def frame_colour(i):
     import pcspal
     v = pcspal.PICK[i]
     r, g, b = (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF
-    return pcspal.UI_INK if (299 * r + 587 * g + 114 * b) > 150000 \
+    # ⚠ Ink is white on the black panel, so "dark" is the picker's own black
+    # cell (row 0, column 11) and not UI_INK.
+    return pcspal.PICK0 + 11 if (299 * r + 587 * g + 114 * b) > 150000 \
         else pcspal.PAINT0          # entry 1 is white
 
 
@@ -165,6 +167,12 @@ def card(panel, ink, cur=0):
                 for dy in (0, 1):
                     for dx in (0, 1):
                         out[(2 * y + dy) * W + 2 * x + dx] = ink
+    import pcsicons
+    for name, x0, y0, w, h, rows in pcsicons.icons():
+        for yy in range(h):
+            for xx in range(w):
+                if rows[yy][xx]:
+                    out[(y0 + yy) * W + x0 + xx] = ink
     for i in range(pcspal.PICKW * pcspal.PICKH):
         x0 = PICKX + (i % pcspal.PICKW) * CELL
         y0 = PICKY + (i // pcspal.PICKW) * CELL
@@ -182,19 +190,26 @@ def card(panel, ink, cur=0):
 
 
 def packed():
-    """The bitmap as the machine stores it: 160 bits a row, 20 bytes, MSB first.
-    ⛔ NOT DOUBLED: doubled it was 7,680 bytes, and a 35 KB module plus pcs's
-    21 KB of data is 64 KB in 8 KB blocks - `Error #207` before the first
-    instruction.  KitDraw doubles each nibble through a 16-byte table."""
+    """The bitmap as the machine stores it, CROPPED to the bytes and rows that
+    carry anything: -> (first byte column, first row, bytes a row, rows, data),
+    MSB first.  ⛔ The module has to stay inside four 8 KB blocks: with pcs's
+    21 KB of data, one byte over 32 K is `Error #207` before the first
+    instruction - which the icons did, by 268 bytes, until the tool column
+    and the empty rows came out of this bitmap.  KitDraw fills the panel first
+    and doubles each nibble through PCKDbl."""
     cv = _render()
+    ys = [y for y in range(KH) if any(cv[y])]
+    xs = [x for y in ys for x in range(KW) if cv[y][x]]
+    b0, b1 = min(xs) // 8, max(xs) // 8
+    y0, y1 = min(ys), max(ys)
     out = bytearray()
-    for y in range(KH):
-        for i in range(0, KW, 8):
+    for y in range(y0, y1 + 1):
+        for i in range(b0 * 8, (b1 + 1) * 8, 8):
             v = 0
             for b in cv[y][i:i + 8]:
                 v = (v << 1) | b
             out.append(v)
-    return bytes(out)
+    return b0, y0, b1 - b0 + 1, y1 - y0 + 1, bytes(out)
 
 
 def doubled_nibbles():
@@ -228,14 +243,10 @@ def selftest():
         if b0 < a1:
             bad.append('two tool rectangles overlap at y %d' % b0)
     # ⭐ And every tool icon is INSIDE its own rectangle, which is what makes
-    # the rectangle the icon's hit test.
-    for nm, x, y, w, h in tl:
-        icon = {'WHITE': 'WHITEPAINT', 'GREEN': 'GREENPAINT',
-                'VIOLET': 'VIOLETPAINT', 'PLAY': 'PLAYICON', 'MAGN': 'MAGNIFIER',
-                'WIRE': 'ANDG'}.get(nm, nm)
-        ix, iy, ih, iw, _ = _icon(icon)
-        if not (x <= ix and iy >= y and iy + ih <= y + h):
-            bad.append('%s\'s icon at (%d, %d) is outside its rectangle' % (nm, ix, iy))
+    # the rectangle the icon's hit test (pcsicons.py checks the placement).
+    import pcsicons
+    if not pcsicons.selftest():
+        bad.append('the redrawn icons do not sit in their rectangles')
     if len(bin_boxes()) != 43:
         bad.append('%d bin boxes, wanted 43' % len(bin_boxes()))
     # ⭐ The picker fits the panel, under the tools, and above the screen's end.
