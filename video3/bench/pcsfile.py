@@ -279,18 +279,47 @@ def demo_tables(root=None):
 
     Returns [(name, logic, wset, objs)], newest reading first, or [].
     """
-    import io
+    import glob
     import zipfile
     root = root or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', '..')
-    z = os.path.join(root, DEMOZIP)
-    if not os.path.isfile(z):
-        return []
-    with zipfile.ZipFile(z) as zf:
-        dsk = [n for n in zf.namelist() if n.lower().endswith('.dsk')]
-        if not dsk:
-            return []
-        img = zf.read(dsk[0])
+    imgs = []
+    for z in sorted(glob.glob(os.path.join(root, 'reference', '*.zip'))):
+        try:
+            with zipfile.ZipFile(z) as zf:
+                for n in zf.namelist():
+                    if n.lower().endswith(('.dsk', '.po', '.do')):
+                        imgs.append((os.path.basename(n), zf.read(n)))
+        except Exception:
+            pass
+    for d in sorted(glob.glob(os.path.join(root, 'reference', '*.dsk'))):
+        imgs.append((os.path.basename(d), open(d, 'rb').read()))
+    out = []
+    # ⭐ DEDUPED BY PAYLOAD.  The two disks overlap - `DEMO 1` on pinball2 is
+    # `DEMO1` and `META PIN` is `DEMO2`, byte for byte - and an identical table
+    # under a second name costs a kilobyte of a module that has to fork.
+    seen = set()
+    for _who, img in imgs:
+        for t in _tables_on(img):
+            key = (bytes(t[1]), bytes(t[2]),
+                   b''.join(bytes([o.objid, o.fillcolor, o.n]) + bytes(o.x) +
+                            bytes(o.y) + bytes(o.L) for o in t[3]))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(t)
+
+    # ⭐ PCSTBLS="first-last" keeps only that slice, because all of them at once
+    # is 32 KB of table and `pcs` then fails to fork with E$MemFul (207).  The
+    # contact sheet builds one batch at a time; everything else takes them all.
+    sel = os.environ.get('PCSTBLS')
+    if sel:
+        a, _, b = sel.partition('-')
+        out = out[int(a):int(b) + 1 if b else int(a) + 1]
+    return out
+
+
+def _tables_on(img):
     out = []
     for name, blob in _dos33_files(img):
         if not name.endswith('.PB'):
@@ -311,13 +340,41 @@ def demo_tables(root=None):
     return out
 
 
-def _dos33_files(img):
+# ⛔ AN IMAGE CAN BE IN EITHER SECTOR ORDER AND THE CATALOG READS THE SAME WAY
+# IN BOTH.  DOS order stores sector n at offset n; ProDOS order interleaves, and
+# a `.dsk` that is really a `.po` gives perfect FILE NAMES and garbage FILE
+# DATA - because the catalog and the VTOC happen to live on sectors the two
+# orders agree about.  `pinball2.dsk` is one, and it read as six damaged files
+# until the order was tried the other way, whereupon it gave up twenty-five.
+PRODOS_ORDER = (0, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 15)
+
+
+def _dos33_files(img, order=None):
     """Every file on an Apple II DOS 3.3 disk image, as (name, bytes).
+
+    ⭐ THE SECTOR ORDER IS DETECTED, not assumed: the image is read both ways
+    and the one that yields more files whose contents are plausible wins.
 
     ⚠ The catalog chains sector to sector and a damaged disk can loop, so the
     walk remembers where it has been - a hang is worse than a failure.
     """
+    if order is None:
+        best, bestn = (), -1
+        for o in ((), PRODOS_ORDER):
+            n = 0
+            for nm, b in _dos33_files(img, o):
+                a = apple_bin(b)
+                if a and a[0] in (0x4000, 0x0800, 0x2000, 0x0300):
+                    n += 1
+            if n > bestn:
+                best, bestn = o, n
+        order = best
+
     def ts(t, s):
+        if order and 0 <= s < 16:
+            s = order[s]
+        if not 0 <= s < 16 or not 0 <= t < 35:
+            return b'\0' * 256
         o = (t * 16 + s) * 256
         return img[o:o + 256] if 0 <= o and o + 256 <= len(img) else b'\0' * 256
     v = ts(17, 0)

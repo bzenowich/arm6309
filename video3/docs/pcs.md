@@ -347,13 +347,24 @@ the answer.
   What is established by measurement: the record each operation builds is byte-identical to
   the model's, and the object area comes back with the original object count, so something
   between the rebuild and the commit is undoing the session.
-- ⛔ **Two of the four shipped tables do not paint correctly**, and the span
-  databases are **byte-identical to the model's** on all four — so it is in the
-  painting, not the converter. `DEMO1` and `DEMO3` are within 0.26 % of the
-  model; `DEMO2` is 20 % out and the cause is known — its backdrop has **more
-  than one span on 73 of its rows**, and `PCRow`'s complement is written for a
-  single-span backdrop (§2). `DEMO4` is 21 % out with no multi-span rows and no
-  second B-polygon, and that one is not yet explained.
+- ⚠ Not open any more, but worth keeping as a method note: the two tables that
+  did not paint (2026-09-23) were **two different defects wearing one symptom**,
+  and both were found by **modelling the 6809 routine in Python and diffing it
+  against `pcspak.render` over all 29 shipped tables** rather than by running the
+  machine. `DEMO2`'s reproduced in the model (`PCRow`'s per-record complement,
+  §2); `DEMO4`'s did **not** — which is what proved it was not the algorithm and
+  sent the search to the database, where object 10's span turned out to be stored
+  with its ends swapped. See `history.md`.
+- ⛔⛔ **THE TABLES BELONG ON THE CARD, AND THE MODULE IS THE WRONG PLACE FOR THEM.**
+  They are in `pcsdat.asm` today, which was fine for the four `DEMO*.PB` and stopped
+  being fine the moment two disks' worth turned up: **26 tables are 32 KB of object
+  area**, and a `pcs` carrying all of them fails to fork — `Error #207`, `E$MemFul`,
+  on a machine that boots perfectly. ⚠ The stopgap is a byte budget (`PCS_BUDGET`,
+  8 KB) with `PCSTBLS=first-last` to pick a different slice, which is how
+  `run-pcssheet.sh` paints all 26 six to a ROM. **The answer is `pcsfile.inc`**:
+  one table per file on `/SD0`, named, listed and loaded on demand, with the
+  module carrying **none** of them. That is step 5 and it is what the original did
+  too — `DISK.s` is a catalogue and a loader, and PCS never held two tables at once.
 - ⚠ **Not written**: the editor's UI (tools, bin, drag, magnifier, World panel), the wiring
   kit's UI, load and save, and `desk` integration. `RUN2.s`'s four-player game loop, the
   bonus tally and multiball are step 3c.

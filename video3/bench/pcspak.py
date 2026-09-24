@@ -227,9 +227,15 @@ class Pak(object):
             ahead = self.axcoeff[b] < self.axcoeff[y]
             if not ahead and self.axcoeff[b] == self.axcoeff[y]:
                 # Equal x: the shallower slope goes first (ADDSTARTS6).
-                d = ((self.adxcoeff[b] << 8) | self.adxfract[b]) - \
-                    ((self.adxcoeff[y] << 8) | self.adxfract[y])
-                ahead = _s16(d) < 0
+                # ⛔ A SIGNED COMPARE, NOT THE SIGN OF THE WRAPPED DIFFERENCE.
+                # ADDSTARTS6 subtracts the two 8.8 slopes and then guards the
+                # test with `BVC *+5`: on overflow it falls back to the sign of
+                # ADXCOEFF,X, and X and Y have opposite signs exactly when the
+                # subtraction overflows - so the rule is s(X) < s(Y) for every
+                # input, and `_s16(X - Y) < 0` is only the same while it does
+                # not overflow.  Two slopes of opposite sign near +-127 differ.
+                ahead = _s16((self.adxcoeff[b] << 8) | self.adxfract[b]) < \
+                        _s16((self.adxcoeff[y] << 8) | self.adxfract[y])
             if ahead:
                 self.anext[b] = y
                 if y == self.firstactv:

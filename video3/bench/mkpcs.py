@@ -917,8 +917,32 @@ def emit(path):
     w('* right to redistribute is the criterion.  pcsfile.demo_tables() reads')
     w('* them out of a disk image the user supplies locally, and this table is')
     w('* EMPTY in a clone that has none.')
+    w('* ⛔ AND THERE IS A BUDGET, because the module has to FORK.  All 26 that')
+    w('* come off the two disks are 32 KB of object area on top of the art, the')
+    w('* templates and the span database, and `pcs` then answers E$MemFul (207)')
+    w('* on a machine that booted perfectly.  PCS_BUDGET bytes are taken, in')
+    w('* order, and `PCSTBLS=first-last` picks a different slice -')
+    w('* `run-pcssheet.sh` paints all of them six to a ROM that way.')
     import pcsfile
     _tb = pcsfile.demo_tables()
+    _budget = int(os.environ.get('PCS_BUDGET', 8192))
+    _kept, _n = [], 0
+    for _t in _tb:
+        # ⛔ SIZE ONLY - DO NOT REMAP THE COLOUR HERE.  The emitter below maps
+        # FILLCOLOR through FROM_APPLE, and FROM_APPLE is not idempotent: a
+        # second pass over an already-mapped index misses and takes the default,
+        # so every object in every table comes out PAINT0+5.  It renders
+        # perfectly and in one flat colour, which looks like a palette problem
+        # and is not one.
+        _sz = 28 + len(serialise(_t[3]))
+        if _kept and _n + _sz > _budget:
+            break
+        _kept.append(_t)
+        _n += _sz
+    if len(_kept) < len(_tb):
+        print('    %d of %d tables embedded (%d of %d bytes); PCSTBLS picks others'
+              % (len(_kept), len(_tb), _n, _budget))
+    _tb = _kept
     w('PC.NTbl             equ       %d' % len(_tb))
     if _tb:
         _blobs = []

@@ -48,6 +48,15 @@ reference/**/*.tiff
 reference/**/*.ROM
 reference/**/*.rom
 reference/**/*.zip
+# ⛔ AND DISK IMAGES.  A retail game disk is not the MIT-licensed sources, and
+# reference/pcs/README.md's rule is that the right to redistribute is the
+# criterion - the same rule that purged Apple's ROM and the CHM archives on
+# 2026-09-04.  pcsfile.py reads the tables out of these locally; nothing in the
+# tree depends on them being present.
+reference/**/*.dsk
+reference/**/*.atr
+reference/**/*.po
+reference/**/*.woz
 
 # Vendor installers. awincupl.exe.zip is Microchip's WinCUPL, which
 # hardware/gal/prjbureau/extract-wincupl.sh unpacks for the ATF15xx fitters and

@@ -14,7 +14,17 @@ sh video3/bench/run-v3sd.sh          # ⭐ the desktop, Paint and a demo OFF THE
 sh video3/bench/run-v3desk.sh        # ⭐ THE DESKTOP SHELL, CLICKED AT, ~3 min
 sh video3/bench/run-v3files.sh       # ⭐ ITS FILE MANAGER, AND THE LISTING READ, ~11 min
 sh video3/bench/run-pcs.sh           # ⭐⭐ PINBALL CONSTRUCTION SET, PROVED, ~8 min
+sh video3/bench/run-pcssheet.sh      # ⭐ every shipped PCS table, on one sheet, ~15 min
 ```
+
+⭐ **`run-pcssheet.sh` is a review tool and not a gate**: it paints all 26 tables
+that come off the retail disks and puts them on a contact sheet, with the pixel
+distance from the model printed under each name — so a table that looks plausible
+and a table that IS the 6502's are told apart at a glance. ⛔ It is **batched, six
+to a ROM**, because 32 KB of object area in one module makes `pcs` fail to fork
+with `E$MemFul` — a machine that boots perfectly and answers `Error #207`.
+⚠ The tables are not in this repository (`pcs.md` §5c); it prints and exits if the
+disk images are not in `reference/`.
 
 ⭐ **`run-v3desk.sh` is the one that drives a program with a MOUSE.** Everything else
 here types a command and reads the picture; this one runs `desk` (the shell -
