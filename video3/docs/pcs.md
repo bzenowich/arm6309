@@ -347,6 +347,13 @@ the answer.
   What is established by measurement: the record each operation builds is byte-identical to
   the model's, and the object area comes back with the original object count, so something
   between the rebuild and the commit is undoing the session.
+- ⛔ **Two of the four shipped tables do not paint correctly**, and the span
+  databases are **byte-identical to the model's** on all four — so it is in the
+  painting, not the converter. `DEMO1` and `DEMO3` are within 0.26 % of the
+  model; `DEMO2` is 20 % out and the cause is known — its backdrop has **more
+  than one span on 73 of its rows**, and `PCRow`'s complement is written for a
+  single-span backdrop (§2). `DEMO4` is 21 % out with no multi-span rows and no
+  second B-polygon, and that one is not yet explained.
 - ⚠ **Not written**: the editor's UI (tools, bin, drag, magnifier, World panel), the wiring
   kit's UI, load and save, and `desk` integration. `RUN2.s`'s four-player game loop, the
   bonus tally and multiball are step 3c.

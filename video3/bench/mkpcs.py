@@ -906,6 +906,39 @@ def emit(path):
     w('PCDemo              equ       *')
     _fcb(o, dt)
     w('')
+    w('* ══════════════════ THE FOUR TABLES PCS SHIPS WITH ═══════════════')
+    w('* ⭐⭐ DEMO1..DEMO4 off the retail disk, DEMO1 being ASTRO BLAST - the')
+    w('* one it boots with.  Each is LOGIC[24], WSET[4] and the object area,')
+    w("* with every 6502 address re-keyed: L[0] is the template index and")
+    w('* L[10] the part type, and L[3] is ONE pixel column where the Apple')
+    w('* stored (byte column, bit) at seven pixels to the byte (pcs.md 5b).')
+    w('* ⛔ THE BYTES ARE NOT IN THIS REPOSITORY.  They are shipped game data,')
+    w("* not the MIT sources, and reference/pcs/README.md's rule is that the")
+    w('* right to redistribute is the criterion.  pcsfile.demo_tables() reads')
+    w('* them out of a disk image the user supplies locally, and this table is')
+    w('* EMPTY in a clone that has none.')
+    import pcsfile
+    _tb = pcsfile.demo_tables()
+    w('PC.NTbl             equ       %d' % len(_tb))
+    if _tb:
+        _blobs = []
+        for _nm, _lg, _ws, _objs in _tb:
+            for _o in _objs:
+                _o.fillcolor = pcspal.FROM_APPLE.get(_o.fillcolor, pcspal.PAINT0 + 5)
+            _blobs.append((_nm, bytes(_lg) + bytes(_ws) + serialise(_objs)))
+        w('PCTblO              equ       *         each table, from PCTbls')
+        _a = 0
+        for _nm, _b in _blobs:
+            w('                    fdb       %-6d    %s' % (_a, _nm))
+            _a += len(_b)
+        w('PCTblL              equ       *         ... and how long it is')
+        for _nm, _b in _blobs:
+            w('                    fdb       %-6d    %s' % (len(_b), _nm))
+        w('PCTbls              equ       *')
+        for _nm, _b in _blobs:
+            w('* %s - %d objects, %d bytes' % (_nm, _b[28], len(_b)))
+            _fcb(o, _b)
+    w('')
     w('* ══════════════════ THE EDIT SCRIPT ══════════════════════════════')
     w("* ⭐ A construction session, five bytes a step: the operation and four")
     w('* arguments.  `pcs 6` runs it and checkpcs.py runs the same tuples')

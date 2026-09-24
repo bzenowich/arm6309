@@ -130,6 +130,13 @@ def blob():
 # and it is the only place it is written down.
 FROM_ATARI = {0x00: KEY, 0xFF: PAINT0 + 0, 0x55: PAINT0 + 1, 0xAA: PAINT0 + 2}
 
+# ⭐ AND THE APPLE II's, which is what the shipped tables are saved in.  Its
+# hi-res has eight colour codes and PCS stores them doubled; `$10` is the
+# library parts' "no fill", which is this port's index 0 - unfilled AND SOLID.
+FROM_APPLE = {0x00: KEY, 0x02: PAINT0 + 1, 0x04: PAINT0 + 2, 0x06: PAINT0 + 0,
+              0x08: KEY, 0x0A: PAINT0 + 4, 0x0C: PAINT0 + 8, 0x0E: PAINT0 + 0,
+              0x10: KEY}
+
 
 if __name__ == '__main__':
     pal = palette()
