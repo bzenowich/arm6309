@@ -28,7 +28,7 @@ rom[8192:8192 + len(code)] = code
 open(b + "/v3char.rom", "wb").write(rom)
 PY
 cc -O2 -w -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machine.c \
-   software/emu/cpu6809.c software/emu/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
+   hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
 VIDEO3=1 "$OUT/emu" $B/v3char.rom "$OUT" "$SECS" > "$OUT/emu.out" 2> "$OUT/emu.log" || true
 # ⚠ the ROM reports $E0-$EF for a fault of its own - an arm that did not
 # take, say - and the emulator stops there.  Say so rather than letting it

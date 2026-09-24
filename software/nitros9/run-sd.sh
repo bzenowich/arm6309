@@ -61,7 +61,7 @@ OUT="$OUT" DATA="$SD" NAME="arm6309 SD" \
   sh software/nitros9/mksyscard.sh "$IMG" > "$OUT/format.log" 2>&1 || {
     cat "$OUT/format.log"; echo "FAIL  the system card did not build"; exit 1; }
 
-cc -O2 -Wall -Ihardware/audio/refplayer -o "$OUT/emu" software/emu/machine.c software/emu/cpu6809.c software/emu/hd6309.c hardware/audio/refplayer/card.c
+cc -O2 -Wall -Ihardware/audio/refplayer -o "$OUT/emu" software/emu/machine.c hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c hardware/audio/refplayer/card.c
 
 # ⚠ /SD0 IS THE BOOT DEVICE NOW, and /DD is the same disk under its other
 # name.  `free` reads the allocation bitmap, `list` a file's data sectors, and

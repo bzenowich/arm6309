@@ -30,7 +30,7 @@ sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || { tail -20 "$OUT/
 SDIMG="$OUT/system.img"; export SDIMG
 [ -f "$SDIMG" ] || { echo "FAIL  no $SDIMG - mkrom.sh should have built the system card"; exit 1; }
 cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machine.c \
-   software/emu/cpu6809.c software/emu/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
+   hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
 
 # ⚠ CR, NOT LF.  A \n-terminated typed.txt is echoed by the shell and run by
 # nothing, which reads exactly like a hung machine (demo-report.md §14.3).

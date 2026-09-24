@@ -11,4 +11,4 @@ Reference material for the CPU: the HD6309E it replaces, the STM32 that replaces
 | `stm32g4-refman.pdf` | ST RM0440 Rev 9, STM32G4 reference manual | `hardware/cpu/docs/plan.md`, `hardware/cpu/include/stm32g431.h` — every register constant, and the DMAMUX/EXTI verification |
 | `stm32g431kb.pdf` | ST STM32G431 datasheet | `hardware/cpu/docs/plan.md` §3.2 — pin budget, and the `TT_a` 3.6 V pins that made buffers mandatory |
 | `ATSAMD51G19A.pdf` | Microchip SAMD51 | `hardware/cpu/docs/plan.md` §3.7 — the MCU review, i.e. the part that was *not* chosen |
-| `The 6309 Book (Burke & Burke).pdf` | *The 6309 Book*, Burke & Burke | `software/emu/test/mk6309tab.py` — appendix A's native-mode cycle counts (the `#` column), which `hd6309.tab` is re-derived from |
+| `The 6309 Book (Burke & Burke).pdf` | *The 6309 Book*, Burke & Burke | `hardware/cpu/sim/test/mk6309tab.py` — appendix A's native-mode cycle counts (the `#` column), which `hd6309.tab` is re-derived from |

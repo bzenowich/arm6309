@@ -1,8 +1,8 @@
 #!/bin/sh
 # cpu6809.c against mc6809e.v, the core every machine simulation runs.
 #
-#   sh software/emu/test/run.sh
-#   SEEDS=8 CYC=3000000 SECS=40 ITRACE=1 DEMO=software/archive/demo sh software/emu/test/run.sh
+#   sh hardware/cpu/sim/test/run.sh          (or make -C hardware/cpu sim)
+#   SEEDS=8 CYC=3000000 SECS=40 ITRACE=1 DEMO=software/archive/demo sh hardware/cpu/sim/test/run.sh
 #
 # EXIT CODE IS THE ANSWER: 0 only if every claim below printed ok.
 #
@@ -19,18 +19,21 @@
 #      (as demo_tb.sv) is identical instruction by instruction, for the whole
 #      run. ~4 minutes of Verilator; ITRACE=0 skips it.
 #
-# Build products and traces go in obj_c/, obj_cpu/ and obj_demo/ beside this
+# Build products and traces go in hardware/cpu/build/sim/{obj_c,obj_cpu,obj_demo}
+# - the component's own build/, since the move of 2026-09-24.  (Was: beside this
 # file. Traces of passing seeds are deleted; a failing seed's are kept.
 set -u
 cd "$(dirname "$0")"
 T=$(pwd)
-ROOT=$(cd ../../.. && pwd)
+ROOT=$(cd ../../../.. && pwd)
+B=$ROOT/hardware/cpu/build/sim
+MKIMG=$ROOT/software/emu/test/mkimg.py
 DEMO=${DEMO:-$ROOT/software/archive/demo}       # another checkout's software/archive/demo, if this one is mid-edit
 SEEDS=${SEEDS:-8}
 CYC=${CYC:-3000000}
 SECS=${SECS:-40}
 ITRACE=${ITRACE:-1}
-O=$T/obj_c
+O=$B/obj_c
 mkdir -p "$O"
 fail=0
 say() { echo "$@"; }
@@ -41,7 +44,7 @@ CORE="$ROOT/hardware/cpu/sim/mc6809/mc6809e.v $ROOT/hardware/cpu/sim/mc6809/mc68
 CC="gcc -std=c99 -O2 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=199309L"
 $CC -o "$O/cpu_run" ../cpu6809.c ../hd6309.c cpu_run.c || { say "FAIL  cpu_run does not build"; exit 1; }
 $CC -o "$O/demo_run" ../cpu6809.c ../hd6309.c demo_run.c || { say "FAIL  demo_run does not build"; exit 1; }
-$V --top-module cpu_tb -Mdir obj_cpu $CORE cpu_tb.sv -o cpu_tb > "$O/cpu_tb_build.log" 2>&1 ||
+$V --top-module cpu_tb -Mdir "$B/obj_cpu" $CORE cpu_tb.sv -o cpu_tb > "$O/cpu_tb_build.log" 2>&1 ||
   { tail -20 "$O/cpu_tb_build.log"; say "FAIL  cpu_tb does not build"; exit 1; }
 $CC -I.. -o "$O/refuse6309" ../cpu6809.c ../hd6309.c refuse6309.c || { say "FAIL  refuse6309 does not build"; exit 1; }
 say "ok    built cpu_run, demo_run (-Wall -Wextra -Werror) and cpu_tb"
@@ -52,7 +55,7 @@ say "ok    built cpu_run, demo_run (-Wall -Wextra -Werror) and cpu_tb"
 # arm6309 hardware/cpu/docs/6309.md §4.0 and armio.asm:513.  Two claims: the generated
 # header still matches the checked-in table, and the core acts on it.
 python3 mk6309tab.py --from-tab > /dev/null 2>&1 || { say "FAIL  cannot regenerate hd6309ops.h from hd6309.tab"; fail=1; }
-if git -C "$ROOT" diff --quiet -- software/emu/hd6309ops.h 2>/dev/null; then
+if git -C "$ROOT" diff --quiet -- hardware/cpu/sim/hd6309ops.h 2>/dev/null; then
   say "ok    hd6309ops.h is what hd6309.tab generates"
 else
   say "FAIL  hd6309ops.h and hd6309.tab disagree - re-run test/mk6309tab.py"; fail=1
@@ -64,7 +67,7 @@ fi
 # interrupt, so an interrupted TFM loses nothing. The control build models what
 # SILICON does and is required to fail - a test that cannot see the difference
 # is not testing the specification.
-python3 mkimg.py tfm.asm "$O/tfm.bin" > /dev/null || { say "FAIL  tfm.asm does not assemble"; fail=1; }
+python3 "$MKIMG" tfm.asm "$O/tfm.bin" > /dev/null || { say "FAIL  tfm.asm does not assemble"; fail=1; }
 $CC -I.. -o "$O/tfm6309" ../cpu6809.c ../hd6309.c tfm6309.c || { say "FAIL  tfm6309 does not build"; fail=1; }
 $CC -I.. -DHD6309_FAITHFUL_TFM -o "$O/tfm_sil" ../cpu6809.c ../hd6309.c tfm6309.c || { say "FAIL  tfm_sil does not build"; fail=1; }
 "$O/tfm6309" "$O/tfm.bin" || fail=1
@@ -83,7 +86,7 @@ one_seed() {
   python3 gen.py "$s" "$O" --maxcyc "$CYC" --undoc || { echo "FAIL" > "$O/seed_$s.result"; return; }
   timeout 1200 "$O/cpu_run" "$O/prog_$s.bin" "$O/prog_$s.sched" "$O/c$s.trace" "$CYC" "$O/prog_$s.cov" > "$O/c$s.log" 2>&1
   crc=$?
-  timeout 1200 obj_cpu/cpu_tb +image="$O/prog_$s.hex" +sched="$O/prog_$s.sched" +trace="$O/v$s.trace" +maxcyc="$CYC" > "$O/v$s.log" 2>&1
+  timeout 1200 "$B/obj_cpu/cpu_tb" +image="$O/prog_$s.hex" +sched="$O/prog_$s.sched" +trace="$O/v$s.trace" +maxcyc="$CYC" > "$O/v$s.log" 2>&1
   vrc=$?
   if [ $crc -ne 0 ] || [ $vrc -ne 0 ] || grep -q FAIL "$O/v$s.log"; then
     echo "FAIL run (cpu_run $crc, cpu_tb $vrc)" > "$O/seed_$s.result"
@@ -173,7 +176,7 @@ fi
 # ---- (c) the demo, instruction by instruction, against the Verilog ------------------------
 if [ "$ITRACE" = 1 ]; then
   python3 mkdemotb.py "$DEMO/bench/replay_tb.sv" "$O/demo_tb.sv" || exit 1
-  $V --top-module demo_tb -Mdir obj_demo $CORE "$O/demo_tb.sv" -o demo_tb > "$O/demo_tb_build.log" 2>&1 ||
+  $V --top-module demo_tb -Mdir "$B/obj_demo" $CORE "$O/demo_tb.sv" -o demo_tb > "$O/demo_tb_build.log" 2>&1 ||
     { tail -20 "$O/demo_tb_build.log"; say "FAIL  demo_tb does not build"; exit 1; }
   rm -f "$O/v.fifo" "$O/c.fifo" "$O/icmp.out"
   mkfifo "$O/v.fifo" "$O/c.fifo" || exit 1
@@ -184,7 +187,7 @@ if [ "$ITRACE" = 1 ]; then
   ITMAX=$(( $(sed -n 's/.* \([0-9]*\) E cycles in .*/\1/p' "$O/demo_run.log") - 30000 ))
   timeout 1800 cmp "$O/v.fifo" "$O/c.fifo" > "$O/icmp.out" 2>&1 &
   cmp_pid=$!
-  timeout 1800 obj_demo/demo_tb +rom="$DEMO/build/rom-replay.hex" +trace="$O/demo_tb.trace" +ticks=$((TICKS + 1)) \
+  timeout 1800 "$B/obj_demo/demo_tb" +rom="$DEMO/build/rom-replay.hex" +trace="$O/demo_tb.trace" +ticks=$((TICKS + 1)) \
     +itrace="$O/v.fifo" +itracemax=$ITMAX > "$O/demo_tb.log" 2>&1 &
   v_pid=$!
   timeout 1800 "$O/demo_run" --rom "$DEMO/build/rom-replay.bin" --trace "$O/replay2.trace" --ticks $((TICKS + 1)) \
@@ -204,7 +207,7 @@ if [ "$ITRACE" = 1 ]; then
         --itrace-cycles $ITMAX > /dev/null 2>&1
       stopcyc=$(sed -n "$((line + 4))p" "$O/c.itrace" | awk '{print $1+1}')
       head -n $((line + 4)) "$O/c.itrace" > "$O/c.head"; rm -f "$O/c.itrace"
-      timeout 1800 obj_demo/demo_tb +rom="$DEMO/build/rom-replay.hex" +trace=/dev/null +ticks=$((TICKS + 1)) \
+      timeout 1800 "$B/obj_demo/demo_tb" +rom="$DEMO/build/rom-replay.hex" +trace=/dev/null +ticks=$((TICKS + 1)) \
         +itrace="$O/v.itrace" +itracemax="$stopcyc" > /dev/null 2>&1
       head -n $((line + 4)) "$O/v.itrace" > "$O/v.head"
       say "      (< Verilog, > C)"

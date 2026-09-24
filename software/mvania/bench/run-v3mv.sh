@@ -71,7 +71,7 @@ fi
 SDIMG="$OUT/system.img"; export SDIMG
 [ -f "$SDIMG" ] || { echo "FAIL  no $SDIMG - mkrom.sh should have built the system card"; exit 1; }
 cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machine.c \
-   software/emu/cpu6809.c software/emu/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
+   hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
 
 STOP=$(printf '\nDONE-arm6309')
 FIRST=$(echo $MODES | awk '{print $1}')

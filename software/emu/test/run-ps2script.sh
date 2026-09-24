@@ -52,7 +52,7 @@ SDIMG="$OUT/system.img"; export SDIMG
 # ⛔ AND THE V3 EMULATOR, because every ROM is a video3 ROM since 2026-09-22.
 export VIDEO3=1
 [ -f "$SDIMG" ] || { echo "FAIL  no $SDIMG - mkrom.sh should have built the system card"; exit 1; }
-cc -O2 -Wall -Ihardware/audio/refplayer -o "$OUT/emu" software/emu/machine.c software/emu/cpu6809.c software/emu/hd6309.c hardware/audio/refplayer/card.c
+cc -O2 -Wall -Ihardware/audio/refplayer -o "$OUT/emu" software/emu/machine.c hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c hardware/audio/refplayer/card.c
 
 fail=0; n=0
 claim() {  # claim "what" command...

@@ -67,7 +67,7 @@ DATA="$SD" sh software/nitros9/mksyscard.sh "$OUT/sd.img" tilescroll \
 tail -3 "$OUT/mksddisk.log"
 
 cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machine.c \
-   software/emu/cpu6809.c software/emu/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
+   hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
 
 STOP=$(printf '\nDONE-arm6309')
 fail=0

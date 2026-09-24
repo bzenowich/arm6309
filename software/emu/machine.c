@@ -112,7 +112,7 @@ static void gate_feed(gate_t *g, uint8_t v)
     else g->match = ((char)v == g->s[0]) ? 1 : 0;
 }
 static gate_t ser_gate, kbd_gate, mouse_gate, scr_gate;
-#include "cpu6809.h"
+#include "../../hardware/cpu/sim/cpu6809.h"   /* the core lives with the CPU since 2026-09-24 */
 #include "card.h"                   /* hardware/audio/refplayer: the audio card, register level */
 
 #define DOTS_PER_E   12          /* E = 25.175 MHz / 12 */

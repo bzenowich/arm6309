@@ -22,6 +22,13 @@ the pin budget that decided it.
 
 Full analysis, pinout rationale, timing budgets and phase plan: **[`docs/plan.md`](docs/plan.md)**.
 
+**The CPU models are here too**, in [`sim/`](sim/): `cpu6809.c` (a model of the
+`mc6809e.v` core in `sim/mc6809/`, bugs included) and `hd6309.c`, the 6309 layer beside
+it — which the host emulator (`software/emu/machine.c`) and every software bench run on.
+`make sim` is their suite (`sim/test/run.sh`): `cpu6809.c` against the Verilog
+instruction by instruction, and `hd6309.c` against the opcode table and The 6309 Book's
+cycle counts. [`docs/6309.md`](docs/6309.md) is the 6309 plan.
+
 > Superseded material is archived in [`docs/history.md`](docs/history.md); this README
 > describes only the present design.
 

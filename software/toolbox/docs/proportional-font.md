@@ -422,7 +422,7 @@ b@      ldd     ,y++            6     CPTR pair, pre-swapped
                                56 E cycles = 26.7 us
 ```
 
-⭐ **MEASURED 2026-09-21: 60.42 cycles, 28.80 µs** (`test/glyphloop.asm`, 40
+⭐ **MEASURED 2026-09-21: 60.42 cycles, 28.80 µs** (`hardware/cpu/sim/test/glyphloop.asm`, 40
 glyphs on the host emulator). The estimate above was **56 — 8 % optimistic**, which
 is about what reading a loop off the page is worth. The measured figure is what §6
 and §8 use.
@@ -677,7 +677,7 @@ agreeing.
 
 ### 6.2.1 ⛔ The layering is 22× the protocol it wraps
 
-`test/glyphloop.asm` measured the **register sequence itself at 60.42 cycles**
+`hardware/cpu/sim/test/glyphloop.asm` measured the **register sequence itself at 60.42 cycles**
 (§5.3) and the engine's share of a 7 × 17 glyph is ~29 µs, or **52 cycles** of
 `/WAIT`. So:
 
@@ -969,13 +969,13 @@ turns out not to be the cost.
 
 ## 8. The 6309 — MEASURED 2026-09-21, and §5.4's estimate was wrong
 
-⭐ **The host emulator executes 6309 instructions now.** `emu/hd6309.c` (2026-09-21,
+⭐ **The host emulator executes 6309 instructions now.** `hardware/cpu/sim/hd6309.c` (2026-09-21,
 `hardware/cpu/docs/6309.md` §4.1) runs `TFM`, `LDW`/`STW`, `LDQ`/`STQ`, `ADDW`/`SUBW`/`CMPW`,
 the inter-register group, `PSHSW`/`PULSW`/`PSHUW`/`PULUW`, `SEXW`, `LDMD` and the
 extended `TFR`/`EXG` codes; everything else is **refused by name** rather than
 executed as a 6809 ghost. So this section stops estimating.
 
-`test/glyphloop.asm` runs §5.3's loop and two 6309 forms of it, 40 glyphs each,
+`hardware/cpu/sim/test/glyphloop.asm` runs §5.3's loop and two 6309 forms of it, 40 glyphs each,
 and counts. **Measured, emulation mode:**
 
 | a strike glyph, the CPU's own work | E cycles | µs | |
@@ -1005,8 +1005,8 @@ unchanged at `8+`. §9 item 6 is what settles it.
 
 ⚠ **And the cycle counts themselves are gated**, because a wrong one is invisible —
 the instruction does the right thing and the machine is simply the wrong speed.
-`test/cyc6309.py` times every implemented form against Appendix A via
-`test/hd6309.tab`. ⛔ **It found 20 of 32 forms wrong on its first run**, and the
+`hardware/cpu/sim/test/cyc6309.py` times every implemented form against Appendix A via
+`hardware/cpu/sim/test/hd6309.tab`. ⛔ **It found 20 of 32 forms wrong on its first run**, and the
 table above is what they became after that was fixed; the numbers in the first
 draft of this section were taken before it existed and were not trustworthy.
 
@@ -1066,7 +1066,7 @@ measurements, in the order they decide something:
       card — **`monster`'s figure, borrowed, not re-measured here.** Everything
       in §2 rests on it.
 - [x] ⭐ **§5.3's loop is measured**: 60.42 cycles, not the 56 estimated
-      (`test/glyphloop.asm`, 2026-09-21).
+      (`hardware/cpu/sim/test/glyphloop.asm`, 2026-09-21).
 - [ ] It survives contact with a real `TextAt` — the list build, the clip and the
       byte-swapped pen are outside the measured loop and are still estimated.
 - [ ] ⚠ **§8's 6309 figures are re-taken in native mode.** They are

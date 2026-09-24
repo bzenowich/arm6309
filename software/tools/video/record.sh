@@ -58,8 +58,8 @@ SDIMG=${SDIMG:-$ROMDIR/system.img}
 
 # ---- the emulator ----------------------------------------------------------
 cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" \
-   "$ROOT/software/emu/machine.c" "$ROOT/software/emu/cpu6809.c" \
-   "$ROOT/software/emu/hd6309.c" "$ROOT/hardware/audio/refplayer/card.c"
+   "$ROOT/software/emu/machine.c" "$ROOT/hardware/cpu/sim/cpu6809.c" \
+   "$ROOT/hardware/cpu/sim/hd6309.c" "$ROOT/hardware/audio/refplayer/card.c"
 
 # ---- the run ---------------------------------------------------------------
 # ⚠ CR, not LF, between lines: the shell's line editor ends a line on CR

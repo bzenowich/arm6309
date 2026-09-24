@@ -31,7 +31,7 @@ N=$(python3 -c "import sys;sys.path.insert(0,'hardware/video3/bench');import pcs
 echo "=== $N tables, $BATCH to a ROM ==="
 
 cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machine.c \
-   software/emu/cpu6809.c software/emu/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
+   hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
 
 # FIRST= re-does only the tables from that index on.
 i=${FIRST:-0}

@@ -387,7 +387,7 @@ after a frame that had already overrun.
 
 | | |
 |---|---|
-| `TFM` for cell runs | The 6309's block move would stream a run to `VDATA` at 3 cycles a byte. ⛔ `software/emu/cpu6809.c` has no 6309 opcodes, so it cannot even be tried on the emulator yet |
+| `TFM` for cell runs | The 6309's block move would stream a run to `VDATA` at 3 cycles a byte. ⛔ `hardware/cpu/sim/cpu6809.c` has no 6309 opcodes, so it cannot even be tried on the emulator yet |
 | `SS.Batch`'s tile puts | `BT.Put`'s raw byte runs go out with `WADV` forced to 00, so `overworld`'s tile writes still cost four bytes a cell where `SS.MapWr` costs two. The record has nowhere to ask for the step |
 | `v3scan_mq` | The variant with the map latches discrete is fitted against a design two changes old. Either refit it or retire it |
 | `v3machine_tb` **with the other cards** | ⭐ the bench exists (`machine3.v`), but with **no audio card and no UART**: plan §15.2's "two cards, one backplane" and NitrOS-9's tick on the VBL are still unasked |
@@ -447,7 +447,7 @@ lamps really do cost the copy engine nothing. Four of its numbers moved:
 |---|---|---|
 | a frame, at the scene's own cast | scroll 0.04 + ball 0.74 + flippers ~1.1 | 0.032 + **1.97 for two blit balls** + **0.62** for both flippers |
 | ⭐ **lamps and flashers** | "nothing" | ⭐ **0.16 ms a frame** of LUT writes, and **0.70** with the bookkeeping that decides what changed. Still free of the copy engine, which is the claim that mattered |
-| ⭐ **the physics** | "~12 ms left … sub-stepped collision on a 6309 in native mode, with its 16 × 16 multiply and divide" | ⛔ **there is no 6309 to use**: `software/emu/cpu6809.c` has no 6309 opcodes (§9), so the scene is plain 6809. It does not need them — **1.63 ms a frame** for three balls on a 16-pixel collision grid whose cell index is the coordinate's HIGH BYTE. 9.7 ms is left, not 12 |
+| ⭐ **the physics** | "~12 ms left … sub-stepped collision on a 6309 in native mode, with its 16 × 16 multiply and divide" | ⛔ **there is no 6309 to use**: `hardware/cpu/sim/cpu6809.c` has no 6309 opcodes (§9), so the scene is plain 6809. It does not need them — **1.63 ms a frame** for three balls on a 16-pixel collision grid whose cell index is the coordinate's HIGH BYTE. 9.7 ms is left, not 12 |
 | ⭐ **save-behind** | "a 327 KB table leaves no room for a clean page, so actors are save-behind" | right, and for a second reason §10 did not have: a *scrolling* clean band — `monster`'s actual shape — would cost **1.35 ms a frame** here, because the camera is driven by the ball and moves up to eight rows a frame. And save-behind costs the **interleave** as well as the third copy: restores, saves and draws have to be three separate phases |
 | the cast | "a ball, two flippers, bumpers: eight actors against the 19 measured" | ⭐ **9 balls** — 1.674 ms of frame + **1.459 ms a blit ball**, and the sprite ball is free. Fewer than eight *actors* only because a pinball ball costs three copies and 0.5 ms of physics where a `monster` creature costs two copies and no logic |
 

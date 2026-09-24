@@ -110,7 +110,7 @@ ROM="$OUT/arm6309_rom.bin"
 cp "$OUT/system.img" "$OUT/sd.img" || { echo "FAIL  cannot copy the system card"; exit 1; }
 
 cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machine.c \
-   software/emu/cpu6809.c software/emu/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
+   hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
 
 # ⚠ CR, not LF.  ⛔ And `chx /sd0/cmds` comes last: after it the only things
 # the shell can fork are the card's commands and shell+'s built-ins, which is

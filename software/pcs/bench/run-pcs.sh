@@ -95,7 +95,7 @@ OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs \
 tail -3 "$OUT/mksddisk.log"
 
 cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machine.c \
-   software/emu/cpu6809.c software/emu/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
+   hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
 
 # ⛔ THE RUN STOPS ON PCS-RAN, NOT ON THE SHELL'S PROMPT.  VRAMDUMP is taken
 # when the emulator stops, and `pcs` prints this line while it still owns the

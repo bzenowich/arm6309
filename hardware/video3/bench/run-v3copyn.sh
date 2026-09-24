@@ -35,7 +35,7 @@ CMDS_EXTRA=v3cpyb sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 ||
 SDIMG="$OUT/system.img"; export SDIMG
 [ -f "$SDIMG" ] || { echo "FAIL  no $SDIMG - mkrom.sh should have built the system card"; exit 1; }
 cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machine.c \
-   software/emu/cpu6809.c software/emu/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
+   hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
 
 # ⚠ CR, not LF (demo-report.md §15.3).  Each pass starts from the same
 # cleared screen, so the only difference can be the copies themselves.

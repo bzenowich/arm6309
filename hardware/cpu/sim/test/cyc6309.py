@@ -19,7 +19,7 @@ the book's base is what it is compared against.
 import os, re, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
+ROOT = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
 LWASM = os.path.join(ROOT, ".tools", "bin", "lwasm")
 
 # Only what hd6309.c implements today. Anything else is still refused by name,
@@ -79,7 +79,7 @@ def base_cycles(s):
 def main():
     tab = table()
     bad = ok = skipped = 0
-    runner = os.path.join(HERE, "obj_c", "one6309")
+    runner = os.path.join(ROOT, "hardware", "cpu", "build", "sim", "obj_c", "one6309")
     if not os.path.exists(runner):
         print("FAIL  cyc6309: %s not built" % runner)
         return 1
@@ -98,7 +98,7 @@ def main():
             a = os.path.join(d, "p.asm")
             open(a, "w").write("\torg $1000\n\t%s\n\tswi\n" % src)
             b = os.path.join(d, "p.bin")
-            r = subprocess.run([sys.executable, os.path.join(HERE, "mkimg.py"), a, b],
+            r = subprocess.run([sys.executable, os.path.join(ROOT, "software", "emu", "test", "mkimg.py"), a, b],
                                capture_output=True, text=True)
             if r.returncode != 0:
                 print("FAIL  cyc6309: %s did not assemble" % src)

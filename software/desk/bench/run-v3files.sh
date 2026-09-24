@@ -138,7 +138,7 @@ NDATA=$(wc -l < "$OUT/data.txt" | tr -d ' ')
 NROOT=$(wc -l < "$OUT/root.txt" | tr -d ' ')
 
 cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machine.c \
-   software/emu/cpu6809.c software/emu/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
+   hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c "$ROOT/hardware/audio/refplayer/card.c"
 
 STOP=$(printf '\nDONE-arm6309')
 # run <dir> <ps2 script or -> <typed commands> <seconds of machine>

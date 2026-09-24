@@ -62,7 +62,7 @@ cannot drift without this script saying so.
 import argparse, os, re, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
+ROOT = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
 BOOK = os.path.join(ROOT, "hardware", "cpu", "reference", "The 6309 Book (Burke & Burke).pdf")
 LWASM = os.path.join(ROOT, ".tools", "bin", "lwasm")
 

@@ -39,7 +39,7 @@ ROM="$OUT/arm6309_rom.bin"
 # puts -DV3=1 in AFLAGS itself now, so there is nothing left to follow and the
 # pairing is unconditional.
 export VIDEO3=1
-cc -O2 -Wall -Ihardware/audio/refplayer -o "$OUT/emu" software/emu/machine.c software/emu/cpu6809.c software/emu/hd6309.c hardware/audio/refplayer/card.c
+cc -O2 -Wall -Ihardware/audio/refplayer -o "$OUT/emu" software/emu/machine.c hardware/cpu/sim/cpu6809.c hardware/cpu/sim/hd6309.c hardware/audio/refplayer/card.c
 
 # What is typed, from 8 s of machine time on: the shell is up by ~3 s.
 # `sleep 2100` is 2100 ticks: 30 s at VMODE 00's 70.086 Hz. Then `vmodetst 1`

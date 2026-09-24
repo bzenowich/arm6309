@@ -1942,6 +1942,8 @@ updated so their citations still resolve, and nothing else.
 | `docs/6309.md` | `hardware/cpu/docs/` |
 | `pinball-status.md` | `software/pcs/docs/status.md` |
 | `software/demo/emu/` | `software/emu/` |
+| `software/emu/{cpu6809,hd6309}.[ch]`, `hd6309ops.h` — **moved again 2026-09-24** | `hardware/cpu/sim/` — the CPU models beside the Verilog core; `software/emu/` keeps the machine (`machine.c`). `make -C hardware/cpu sim` runs their suite, and `make -C software/emu check` still calls it |
+| `software/emu/test/{run.sh,gen.py,cycles.py,cpu_run.c,cpu_tb.sv,demo_run.c,mkdemotb.py,hd6309.tab,mk6309tab.py,cyc6309.py,refuse6309.c,tfm6309.c,tfm.asm,one6309.c,glyphloop.*}` — 2026-09-24 | `hardware/cpu/sim/test/`; their build products to `hardware/cpu/build/sim/`. `mkimg.py`, `pchist.py`, the SD and PS/2 tests stay in `software/emu/test/` |
 | `software/demo/tools/{frames,show,mkshow,mkparrots}.py` | `software/tools/` — live code that had been left in the archived show |
 | `software/demo/tools/mkgame.py` | `software/zelda/bench/` — `mkzelda.py` builds on its terrain |
 | `software/demo/` (the rest) | `software/archive/demo/` |
