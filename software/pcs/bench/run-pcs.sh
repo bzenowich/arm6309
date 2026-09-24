@@ -34,6 +34,11 @@
 #       must be REFUSED: an edit the database will not take has to leave no
 #       trace, and a gate that never sees a refusal has not checked the
 #       rollback at all.
+#   e0  ⭐⭐ THE EDITOR WITH A MOUSE - `pcs 23`, EdLoop, driven by
+#       scripts/pcsedit.ps2.  Every gesture's fifteen-byte record against what
+#       checkpcs.py works out from the SCRIPT'S points alone, then the object
+#       area, the span database and the whole table's picture - and ⛔ the same
+#       recording against a mutated script, which must fail.
 #   m5  ⭐ BOUNCE rotates back by TTA instead of 32 - TTA, which is the gate on
 #       the TRAJECTORY rather than on the picture.  ⛔ The two are the SAME for
 #       tta 0 and 16, so a ball in a box of flat walls behaves identically and
@@ -49,7 +54,7 @@ ROOT=$(pwd)
 OUT=${OUT:-$(cd "$_here/.." && pwd)/build/pcs}
 FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
-RUNS=${RUNS:-"m0 m4 m6 k0 f0 fX m1 m2 m5"}
+RUNS=${RUNS:-"m0 m4 m6 e0 k0 f0 fX m1 m2 m5"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH
@@ -144,6 +149,35 @@ run() {
   return 0
 }
 
+# ⭐⭐ THE EDITOR, DRIVEN: `pcs 23` with a PS/2 script for a hand.  ⚠ Time zero is
+# PCS-EDIT - printed once the screen is up - so the script is timed against the
+# editor and not against the boot.  The frame budget is EdLoop's bound; the
+# script ends with `q` well inside it.
+EFRAMES=${EFRAMES:-9000}
+ESECONDS=${ESECONDS:-240}
+rune() {
+  D="$OUT/$1"; m=$2; script=$3
+  rm -rf "$D"; mkdir -p "$D"
+  printf 'chx /sd0/cmds\riniz w5\rpcs %d %d >/w5\recho DONE-arm6309\r' \
+    "$m" "$EFRAMES" > "$D/typed.txt"
+  (cd "$D" && SERIAL_IN=typed.txt SERIAL_GATE="02}" SERIAL_TYPE=60 \
+     SERIAL_THINK=700 SERIAL_STOP="$STOP" WILD=1 VIDEO3=1 SDIMG="$OUT/sd.img" \
+     PS2_SCRIPT="$script" PS2_SCRIPT_GATE=PCS-EDIT \
+     VRAMDUMP=vram.bin "$OUT/emu" "$ROM" . "$ESECONDS" \
+     > /dev/null 2> emu.log) || true
+  tr -d '\000' < "$D/serial.out" | tr -d '\r' > "$D/console.txt"
+  sed 's/\x1b\[[0-9;]*m//g' "$D/emu.log" > "$D/emu.txt"
+  grep -q "SERIAL_STOP seen" "$D/emu.txt" || {
+    echo "FAIL  $1 did not finish"; tail -5 "$D/emu.txt"; fail=1; }
+  if grep -q '^FAIL\|^WILD' "$D/emu.txt"; then
+    echo "FAIL  $1: the emulator objected"; grep -m4 '^FAIL\|^WILD' "$D/emu.txt"
+    fail=1; fi
+  for t in PCS-EDIT PCS-RAN; do
+    grep -q "$t" "$D/console.txt" || { echo "FAIL  $1: pcs never said $t"; fail=1; }
+  done
+  return 0
+}
+
 # ⭐ A TABLE OFF THE CARD, which is where tables live (pcsfile.inc).  `run`
 # builds `pcs <mode> <frames>`; this one appends a bare table NAME, which
 # `Build` takes in preference to anything in the module.
@@ -181,6 +215,7 @@ for r in $RUNS; do
     m5) run m5 5 ;;
     m6) run m6 6 ;;
     k0) run k0 22 ;;
+    e0) rune e0 23 "$ROOT/software/pcs/bench/scripts/pcsedit.ps2" ;;
     m7) run m7 7 ;;
   esac
 done
@@ -235,6 +270,26 @@ for r in $RUNS; do
         mutation m1 "every sloped edge moved" || fail=1 ;;
     m6) echo "--- m6 ⭐⭐ THE EDITOR: a construction session, and the database it left ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/m6" edit || fail=1 ;;
+    e0) echo "--- e0 ⭐⭐ THE EDITOR WITH A MOUSE: every gesture, and the table it left ---"
+        python3 software/pcs/bench/checkpcs.py "$OUT/e0" ui \
+          software/pcs/bench/scripts/pcsedit.ps2 || fail=1
+        # ⛔ AND THE SAME RECORDING AGAINST A SCRIPT THAT DRAGGED BMP1 FOUR CARD
+        # PIXELS FURTHER, which is REQUIRED to fail - on the records, by name.
+        # A checker that models the session from the script has to be shown to
+        # read the script, or it could be agreeing with the machine about
+        # anything.
+        sed 's/^+0.300      move to 108 152/+0.300      move to 112 152/' \
+          software/pcs/bench/scripts/pcsedit.ps2 > "$OUT/e0/mutant.ps2"
+        if cmp -s software/pcs/bench/scripts/pcsedit.ps2 "$OUT/e0/mutant.ps2"; then
+          echo "FAIL  the e0 mutation changed nothing"; fail=1
+        elif python3 software/pcs/bench/checkpcs.py "$OUT/e0" ui "$OUT/e0/mutant.ps2" \
+             > "$OUT/e0/mutant.log" 2>&1; then
+          echo "FAIL  a script that dragged BMP1 two units further passed"; fail=1
+        elif grep -q "is not the one the script makes" "$OUT/e0/mutant.log"; then
+          echo "ok    ⛔ the mutated script (BMP1 dragged by 12, not 10) is rejected"
+        else
+          tail -3 "$OUT/e0/mutant.log"; echo "FAIL  the e0 mutation failed for the wrong reason"; fail=1
+        fi ;;
     k0) echo "--- k0 ⭐ THE EDITOR'S KIT PANEL, against EDIT.s's DRAWKIT ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/k0" kit || fail=1 ;;
     m5) echo "--- m5 ⛔ MUTATION: BOUNCE rotates back by TTA - this must FAIL ---"

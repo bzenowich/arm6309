@@ -57,7 +57,7 @@ def expected(parts=None):
 
 
 PLAYR, PLAYS, PLAYT, PLAYD = 490, 494, 495, 496
-EDITR, EDITO = 498, 505
+EDITR, EDITO = 498, 510     # ⚠ 510: PCDump fills 500..508
 
 
 def _stream(vram, row, n):
@@ -196,6 +196,10 @@ def edit_session(vram):
           % (len(want), nref))
 
     wantpb = mkpcs.serialise(db.objs)
+    if len(wantpb) > 2048:
+        print('FAIL  the edited table is %d bytes and mode 23 dumps 2048'
+              % len(wantpb))
+        return False
     gotpb = _stream(vram, EDITO, len(wantpb))
     if gotpb != wantpb:
         i = next(k for k in range(len(wantpb)) if gotpb[k] != wantpb[k])
@@ -210,6 +214,271 @@ def edit_session(vram):
     print('    the object area matches: %d objects, %d bytes'
           % (wantpb[0], len(wantpb)))
     return _database(vram, db.pak)
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# THE EDITOR WITH A MOUSE (`pcs 23`, pcsui.inc's EdLoop)
+# ═══════════════════════════════════════════════════════════════════════════
+UIREC = 15                  # tool, press x/y, release x/y (16-bit), op[5], answer
+EDL_MISS, EDL_TOOL, EDL_PICK, EDL_BIN = 0, 1, 2, 3
+ED_HAND, ED_PTR, ED_CUT, ED_HAM, ED_BRSH, ED_NTL = 0, 1, 2, 3, 4, 5
+
+
+def ps2_gestures(path):
+    """Every left-button press and its release, in card pixels, out of the
+    PS/2 script - the pointer the SCRIPT believes in, which is the one a test
+    author means (emu/ps2script.h).  ⚠ Only what moves the pointer or the left
+    button is read; times do not matter here, only order."""
+    import shlex
+    x = y = 0
+    down = None
+    out = []
+    for raw in open(path):
+        line = raw.split('#')[0].split(';')[0].strip()
+        if not line:
+            continue
+        w = shlex.split(line)
+        if w[0] == 'at':
+            w = w[2:]
+        elif w[0].startswith('+'):
+            w = w[1:]
+        if not w:
+            continue
+        if w[0] == 'origin':
+            x, y = int(w[1]), int(w[2])
+        elif w[:2] == ['move', 'to']:
+            x, y = int(w[2]), int(w[3])
+        elif w[:2] == ['move', 'by']:
+            x, y = x + int(w[2]), y + int(w[3])
+        elif w[:2] == ['down', 'left']:
+            down = (x, y)
+        elif w[:2] == ['up', 'left'] and down is not None:
+            out.append(down + (x, y))
+            down = None
+        elif w[:2] == ['click', 'left']:
+            out.append((x, y, x, y))
+    return out
+
+
+def _pksel(db, wx, wy):
+    """SELECTPOLY as PKSel does it: the LAST span on the row that holds x,
+    skipping the backdrop."""
+    if not 0 <= wy < db.TH:
+        return None
+    hit = None
+    for (xl, obj, xr, _sl) in db.pak.rows[wy]:
+        if obj and xl <= wx <= xr:
+            hit = obj
+    return hit
+
+
+def _selpoint(db, wx, wy, hammer):
+    """SELECTPOINT (EDIT.s:1038): polygons only, |dx| < 8 and |dy| < 8, the
+    smallest sum and the first on a tie.  In hammer mode the candidate is the
+    midpoint of the edge ENDING at each vertex."""
+    best = None
+    md = 0xFF
+    for i, o in enumerate(db.objs):
+        if o.objid not in (K.POLY, K.BPOLY):
+            continue
+        for v in range(o.n):
+            cx, cy = o.x[v], o.y[v]
+            if hammer:
+                p = v - 1 if v else o.n - 1
+                cx, cy = (o.x[p] + cx) // 2, (o.y[p] + cy) // 2
+            dx, dy = abs(cx - wx), abs(cy - wy)
+            if dx >= 8 or dy >= 8:
+                continue
+            if dx + dy < md:
+                md = dx + dy
+                best = (i, v, cx, cy, o.n)
+    return best
+
+
+def _op(db, op):
+    return pcsedit.run_script(db, [tuple(op)])[0]
+
+
+def ui_model(gestures, db):
+    """⭐ WHAT EdLoop MUST HAVE DONE, from the script's points alone: the tool,
+    the colour, and for every gesture the record it writes - `(tool, px, py,
+    rx, ry, op0..op4, answer)` - with each edit applied to `db` as it goes."""
+    import pcskit
+    import pcsparts
+    tools = pcskit.tools()
+    boxes = mkpcs.bin_boxes()
+    parts = pcsparts.parts()
+    tw, th = mkpcs.TW, mkpcs.TH
+    pkx, pky, cell = pcskit.picker()
+    pkx += 2 * pcskit.KX                # the panel's own origin -> card pixels
+    tool, pk = ED_HAND, 0
+    recs = []
+    sb = lambda v: max(-128, min(127, v)) & 0xFF      # noqa: E731
+    for (px, py, rx, ry) in gestures:
+        wx, wy, rwx, rwy = px // 2, py // 2, rx // 2, ry // 2
+        op, res, extra = [0] * 5, 0xFF, None
+        if px < tw * 2:
+            if tool == ED_HAND:
+                o = _pksel(db, wx, wy)
+                if o is not None:
+                    if rx >= tw * 2:
+                        op = [mkpcs.PE_DEL, o, 0, 0, 0]
+                    elif (rwx - wx, rwy - wy) != (0, 0):
+                        op = [mkpcs.PE_DRAG, o, sb(rwx - wx), sb(rwy - wy), 0]
+            elif tool == ED_BRSH:
+                o = _pksel(db, wx, wy) or 0
+                op = [mkpcs.PE_PAINT, o, pcspal.PICK0 + pk, 0, 0]
+            else:
+                sp = _selpoint(db, wx, wy, tool == ED_HAM)
+                if sp is not None:
+                    obj, v, mx, my, n = sp
+                    if tool == ED_PTR:
+                        op = [mkpcs.PE_DRAGP, obj, v, rwx, rwy]
+                    elif tool == ED_CUT:
+                        op = [mkpcs.PE_CUT, obj, v, 0, 0]
+                    else:
+                        op = [mkpcs.PE_PASTE, obj, (v - 1) % n, 0, 0]
+                        extra = (obj, mx, my)
+        elif (0 <= px - pkx < pcspal.PICKW * cell
+              and 0 <= py - pky < pcspal.PICKH * cell):
+            pk = ((py - pky) // cell * pcspal.PICKW + (px - pkx) // cell)
+            op = [0, EDL_PICK, pk, 0, 0]
+        else:
+            hit = next((i for i, (_n, x, y, w, h) in enumerate(tools)
+                        if 0 <= wx - x < w and 0 <= wy - y < h), None)
+            if hit is not None:
+                op = [0, EDL_TOOL, hit, 0, 0]
+                if hit < ED_NTL:
+                    tool = hit
+            elif tool == ED_HAND:
+                b = next((i for i, (x, y, w, h) in enumerate(boxes)
+                          if 0 <= wx - x <= w and 0 <= wy - y <= h), None)
+                if b is not None and rx >= tw * 2:
+                    op = [0, EDL_BIN, b, 0, 0]
+                elif b is not None:
+                    p = parts[b]
+                    w = max(p.x) - min(p.x)
+                    h = max(p.y) - min(p.y)
+                    tx = max(1, min(tw - 2 - w, rwx - wx + min(p.x)))
+                    ty = max(1, min(th - 2 - h, rwy - wy + min(p.y)))
+                    op = [mkpcs.PE_ADD, b, tx, ty, 0]
+        if op[0]:
+            res = _op(db, op)
+        recs.append([tool, px, py, rx, ry] + op + [res])
+        # ⭐ THE HAMMER IS TWO EDITS: the paste, and then DRAGPOINT of the new
+        # vertex - found again by where it is, because ALIGNPOLY may rotate.
+        if extra and res == 0:
+            obj, mx, my = extra
+            o = db.objs[obj]
+            k = next((i for i in range(o.n) if (o.x[i], o.y[i]) == (mx, my)),
+                     None)
+            if k is not None:
+                op = [mkpcs.PE_DRAGP, obj, k, rwx, rwy]
+                recs.append([tool, px, py, rx, ry] + op + [_op(db, op)])
+    return recs
+
+
+def _uirecs(vram):
+    s = _stream(vram, EDITR, 2 * 1024)
+    out = []
+    for i in range(0, len(s) - UIREC, UIREC):
+        r = s[i:i + UIREC]
+        if r[0] == 0xFF:
+            return out
+        out.append([r[0], r[1] << 8 | r[2], r[3] << 8 | r[4],
+                    r[5] << 8 | r[6], r[7] << 8 | r[8]] + list(r[9:15]))
+    return None
+
+
+def _uifmt(r):
+    t = ('hand', 'ptr', 'cut', 'ham', 'brush')
+    op = r[5]
+    if op:
+        what = '%-5s %s' % (mkpcs.EDIT_OPS[op], r[6:10])
+        what += ' refused' if r[10] else ' took'
+    else:
+        what = ('-', 'tool %d' % r[7], 'colour %d' % r[7],
+                'bin %d let go off the table' % r[7])[r[6]] if r[6] < 4 else '?'
+    return '%-5s (%3d,%3d)->(%3d,%3d)  %s' % (
+        t[r[0]] if r[0] < 5 else r[0], r[1], r[2], r[3], r[4], what)
+
+
+def ui_session(vram, script):
+    """⭐⭐ THE EDITOR, DRIVEN: every gesture EdLoop recorded against the one the
+    script made and the edit the model makes of it; then the object area, the
+    span database and the picture the session left.
+
+    ⛔ THE POSITIONS ARE COMPARED FIRST AND EXACTLY.  A press the machine saw
+    somewhere else - a missed click, a pointer that is not where the script
+    believes - makes every later answer a comparison of two different
+    sessions, and says so here rather than as a mystery twenty edits on.
+    """
+    gest = ps2_gestures(script)
+    got = _uirecs(vram)
+    if got is None:
+        print('FAIL  the gesture stream has no end marker - EdLoop never returned')
+        return False
+    db = pcsedit.DB(mkpcs.demo_table(), width=mkpcs.TW, height=mkpcs.TH)
+    want = ui_model(gest, db)
+    ok = True
+    for i in range(max(len(got), len(want))):
+        g = got[i] if i < len(got) else None
+        w = want[i] if i < len(want) else None
+        if g != w:
+            ok = False
+        print('    %2d %s  %s' % (i, _uifmt(g) if g else '(nothing)',
+                                  '' if g == w else '<< wanted ' +
+                                  (_uifmt(w) if w else 'nothing')))
+    if not ok:
+        print('FAIL  the machine\'s session is not the one the script makes')
+        return False
+    kinds = set(r[5] for r in want if r[5])
+    nref = sum(1 for r in want if r[5] and r[10])
+    print('    %d gestures, %d records: %d edits of %d kinds, %d refused'
+          % (len(gest), len(want), sum(1 for r in want if r[5]),
+             len(kinds), nref))
+    # ⛔ A SESSION THAT NEVER REACHED AN OPERATION HAS NOT TESTED IT.
+    missing = [mkpcs.EDIT_OPS[k] for k in range(1, 8) if k not in kinds]
+    if missing:
+        print('FAIL  the session never made a %s' % ', '.join(missing))
+        return False
+    if nref < 1:
+        print('FAIL  nothing was refused - the rollback is unchecked')
+        return False
+
+    wantpb = mkpcs.serialise(db.objs)
+    if len(wantpb) > 2048:
+        print('FAIL  the edited table is %d bytes and mode 23 dumps 2048'
+              % len(wantpb))
+        return False
+    gotpb = _stream(vram, EDITO, len(wantpb))
+    if gotpb != wantpb:
+        i = next(k for k in range(len(wantpb)) if gotpb[k] != wantpb[k])
+        print('FAIL  the object area differs at byte %d of %d' % (i, len(wantpb)))
+        lo = max(0, i - 6)
+        print('      drew %s' % ' '.join('%3d' % b for b in gotpb[lo:i + 10]))
+        print('      want %s' % ' '.join('%3d' % b for b in wantpb[lo:i + 10]))
+        return False
+    print('    the object area matches: %d objects, %d bytes'
+          % (wantpb[0], len(wantpb)))
+    if not _database(vram, db.pak):
+        return False
+
+    # ⭐ AND THE PICTURE: the last repaint is the whole table, every part at its
+    # frame 0.  ⚠ The sprite is composited at scan time and is not in VRAM.
+    fb, w, h = mkpcs.render_table(db.pak, db.objs)
+    bad = [(x, y) for y in range(h) for x in range(w)
+           if vram[y * STRIDE + x] != fb[y * w + x]]
+    if bad:
+        x, y = bad[0]
+        print('FAIL  %d of %d table pixels differ; first at card (%d, %d): '
+              'got %d, wanted %d' % (len(bad), w * h, x, y,
+                                     vram[y * STRIDE + x], fb[y * w + x]))
+        return False
+    print('ok    all %d bytes of the edited table are what the model builds'
+          % (w * h))
+    return True
 
 
 def main():
@@ -238,6 +507,10 @@ def main():
     # compares it with the model's edited table instead.
     if len(sys.argv) > 2 and sys.argv[2] == 'edit':
         return 0 if edit_session(vram) else 1
+
+    # ⭐ MODE 23: the editor with a mouse, against the PS/2 script that drove it.
+    if len(sys.argv) > 3 and sys.argv[2] == 'ui':
+        return 0 if ui_session(vram, sys.argv[3]) else 1
 
     # ⭐⭐ THE DATABASE FIRST, because it is what the hit test and the ball
     # actually read - and because a picture can be right for the wrong reason.

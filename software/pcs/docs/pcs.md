@@ -323,7 +323,7 @@ nitros9/level2/arm6309/cmds/pcsobj.inc     RUN.s — the part procs and the PLAY
 nitros9/level2/arm6309/cmds/pcsedit.inc    EDIT.s — tools, bin, magnifier, World   (step 4)
 nitros9/level2/arm6309/cmds/pcswire.inc    WIRE.s — the wiring kit                 (step 5)
 nitros9/level2/arm6309/cmds/pcsfile.inc    DISK.s — ⭐ LOAD, done; save is step 5
-nitros9/level2/arm6309/cmds/pcsui.inc      EDIT.s — DRAWKIT: the kit panel; MAIN's dispatch to come
+nitros9/level2/arm6309/cmds/pcsui.inc      EDIT.s — DRAWKIT, the kit panel, and MAIN, the editor's event loop
 
 arm6309/software/pcs/bench/pcsasm.py             a reader for the 6502 sources' data directives
 arm6309/software/pcs/bench/pcsparts.py           the 43 templates and their art
@@ -336,6 +336,7 @@ arm6309/software/pcs/bench/pcsicons.py           the tool icons, redrawn at card
 arm6309/software/pcs/bench/mkpcs.py              the generator, and the bench's table
 arm6309/software/pcs/bench/checkpcs.py           the gate
 arm6309/software/pcs/bench/run-pcs.sh            the bench
+arm6309/software/pcs/bench/scripts/pcsedit.ps2   e0's editor session, as a mouse script
 ```
 
 ## 7. Verification — `sh software/pcs/bench/run-pcs.sh`
@@ -356,6 +357,7 @@ The legs:
 | `m0` | the scan converter: all 153,600 bytes of the table rectangle, and the span database record for record |
 | `m4` | ⭐⭐ **the whole simulator**, 600 frames — the ball's `(x, y, BDX, BDY)` every frame, every part's state byte, and the score, the sound and the run chain |
 | `m6` | ⭐⭐ **the editor**: a twelve-edit session through `pcsedit.inc`, two of them required to be refused, and the step results, the object area and the span database it leaves, against `pcsedit.py` |
+| `e0` | ⭐⭐ **the editor with a mouse** (`pcs 23`): `scripts/pcsedit.ps2`'s 22 gestures through `EdLoop` — every gesture's record against what `checkpcs.py` works out from the **script's points alone**, then the object area, the span database and all 153,600 bytes of the table. ⛔ The same recording against a script that dragged one part two units further must fail |
 | `k0` | ⭐ **the editor's kit panel**: `pcs 22`'s whole 320 × 480 panel column, every card pixel, against `pcskit.py` — the parts bin, the redrawn tool icons, and the 12 × 10 colour picker with its frame on the current colour |
 | `m1` | ⛔ MUTATION: the midpoint x rounding is dropped, so every sloped edge moves |
 | `m2` | ⛔ MUTATION: a B-polygon paints its RECORDS instead of their complement — the bug that looks plausible on screen while inverting the ball's world |
@@ -406,9 +408,44 @@ the answer.
   object area before `PBPlay` keys the parts and restores it before the session, because
   `PBPlay` borrows every part's `L[8]` and runs every INIT proc. `PBClose` (`CLOSEOBJS`)
   is the way back from a game, and it runs the INIT procs again, as the original does.
-  ⚠ **Nothing rebuilds the run chain after an edit yet**: `vlo`/`rcn` point into the
-  object area, which `PERbld` rewrites, so the editor UI has to re-key (`PBPlay`'s first
-  half) before it draws parts again.
+  ⭐ **Every edit re-keys**: `vlo`/`rcn` point into the object area, which `PERbld`
+  rewrites, so `EdDone` runs `PBKey` (`PBPlay`'s first half) before it draws a part.
+- ⭐⭐ **The editor has a mouse** (`pcs 23`, `pcsui.inc`'s `EdLoop` — `EDIT.s`'s `MAIN`).
+  ⭐ **One gesture is a press and its release, and the edit is made on the release**:
+  the database operation is atomic and its rollback is the whole refusal, so the port
+  does not re-run it at every mouse step the way the original re-XORs a rubber band.
+  The press is classified in this order:
+  - **on the table** (card x < 320), by the current tool. The **hand** picks with
+    `SELECTPOLY` (the last span on the row that holds x, never the backdrop) and drags
+    by the release less the press, in world units; released over the kit, the part is
+    **deleted**. The **pointer**, **scissors** and **hammer** pick with `SELECTPOINT`
+    (a polygon's vertex, or for the hammer the midpoint of the edge ending at it, within
+    7 units on both axes, the smallest sum and the first on a tie) and then move the
+    vertex to the release point, cut it, or paste a new one there — ⭐ the hammer's paste
+    is **two edits**: the new vertex is found again by where it is, because `ALIGNPOLY`
+    may have rotated the polygon, and then dragged to the release. The **brush** paints
+    what `SELECTPOLY` finds, or the backdrop on a miss, with the picker's colour; painting
+    a colour an object already has clears it to 0.
+  - **on the picker**: the colour.
+  - **on a tool**: the first five (hand, pointer, scissors, hammer, brush) become the
+    tool; the other eight are recorded and not yet built.
+  - **on the parts bin**, with the hand: the template is added where it is released,
+    keeping the offset it was grabbed at, and ⚠ its corner is **clamped inside the
+    table's border** (1 .. 158 − w, 1 .. 238 − h) rather than refused. Released over the
+    kit, nothing is added.
+
+  After an edit that took, `EdDone` re-keys and repaints the whole table; a paint only
+  re-fills, which `PEPaint` does itself. ⚠ **A press and release that both fall inside
+  a repaint are lost** — about a second — because the loop does not sample the mouse
+  while it draws.
+  ⭐ **Every gesture writes fifteen bytes** to the `EditR` stream: the tool after it, the
+  press and the release in card pixels (16-bit, big-endian), the five-byte operation
+  (the `PE` tuple, or 0 and a kind: 1 tool, 2 colour, 3 a part let go over the kit, 0
+  nothing), and the answer (0 took, 1 refused, `$FF` no edit). A hammer paste writes two
+  records. The stream ends with `$FF`, and `EditO` then carries 2,048 bytes of the object
+  area. `q` ends the session.
+  ⚠ **The pointer is at (0, 0) when `pcs` starts** — the mouse is relative — so a PS/2
+  script for it begins `origin 0 0`.
 - ⚠ Not open any more, but worth keeping as a method note: the two tables that
   did not paint (2026-09-23) were **two different defects wearing one symptom**,
   and both were found by **modelling the 6809 routine in Python and diffing it
@@ -432,6 +469,6 @@ the answer.
   ⚠ And the module **still carries** up to `PCS_BUDGET` (8 KB, 7 tables) for the
   built-in modes the bench's mutation legs use. That is the last of the old
   arrangement, and it goes when `desk` gains a table picker.
-- ⚠ **Not written**: the editor's UI (tools, bin, drag, magnifier, World panel), the wiring
-  kit's UI, load and save, and `desk` integration. `RUN2.s`'s four-player game loop, the
+- ⚠ **Not written**: the magnifier, the World panel, the tool bar's other eight tools, the
+  wiring kit's UI, save, and `desk` integration. `RUN2.s`'s four-player game loop, the
   bonus tally and multiball are step 3c.

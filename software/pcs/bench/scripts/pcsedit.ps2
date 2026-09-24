@@ -1,0 +1,127 @@
+# pcsedit.ps2 - a construction session at the editor, with the mouse (`pcs 23`).
+#
+# ⭐ EVERY GESTURE IS ONE PRESS AND ONE RELEASE, and pcsui.inc's EdLoop makes the
+# edit on the release (pcs.md §8).  checkpcs.py `ui` reads THIS FILE, works out
+# where each press and release was, models the editor's answer from those
+# points alone, and compares it with the fifteen bytes the machine recorded for
+# the same gesture - and then the object area and the span database it left.
+#
+# ⚠ Card pixels, Y down.  The table is x 0..319 (world x = card x / 2), the kit
+# is x 320..639, the tool column's icons are at card x 536..591, and the
+# picker's cells are 8 x 8 from (432, 360).
+# ⚠ `origin 0 0` because that is where the pointer IS when pcs starts: the mouse
+# is relative, and a script that believed 320 240 put every press 320 left and
+# 240 up of where it meant.
+# ⚠ The gestures are FOUR SECONDS APART because a repaint is about a second and
+# EdLoop does not sample the mouse during one: a press and release that both
+# fall inside it are gone (pcsin.inc's header).  The hammer's gesture is two
+# edits and two repaints, so it gets six.
+origin 0 0
+gap 300
+
+# 1  the picker: row 1, column 5 - colour 32 + 17
+at 1.000    move to 476 372
++0.300      click left
+
+# 2  ⭐ the hand (the tool EdLoop starts with) drags BMP1, object 10, by (+10, +4)
+at 5.000    move to 88 144
++0.300      down left
++0.300      move to 108 152
++0.400      up left
+
+# 3  ⭐ a BMP4 out of the bin (template 8, pressed at world (212, 55)) and onto
+#    the table, keeping the grab offset: its corner lands at (50, 140)
+at 9.000    move to 424 110
++0.300      down left
++0.300      move to 110 284
++0.400      up left
+
+# 4  a TARG1 out of the bin and let go OVER THE KIT - DELETEOBJ's case, and nothing
+#    is added
+at 13.000   move to 388 322
++0.300      down left
++0.300      move to 500 300
++0.400      up left
+
+# 5  ⭐ TARG6, object 19, dragged off the table: deleted, and everything above it
+#    renumbers
+at 17.000   move to 202 194
++0.300      down left
++0.300      move to 400 200
++0.400      up left
+
+# 6  a click on BMP2 that goes nowhere: no edit
+at 21.000   move to 168 126
++0.300      click left
+
+# 7  the POINTER
+at 25.000   move to 560 40
++0.300      click left
+
+# 8  ⭐ the divider's top-right corner (134, 30), pressed a unit below it, to (138, 40)
+at 29.000   move to 268 62
++0.300      down left
++0.300      move to 276 80
++0.400      up left
+
+# 9  ⛔ REFUSED: the right slingshot's apex (120, 184) dragged level with its base -
+#    every Y equal, so ALIGNPOLY fails and the vertex goes back
+at 33.000   move to 240 368
++0.300      down left
++0.300      move to 200 420
++0.400      up left
+
+# 10  the HAMMER
+at 37.000   move to 560 90
++0.300      click left
+
+# 11  ⭐ the left lane guide's right edge: its midpoint (32, 152) is pasted, and then
+#     dragged to (40, 150) - two edits, two records
+at 41.000   move to 66 304
++0.300      down left
++0.300      move to 80 300
++0.400      up left
+
+# 12  the SCISSORS
+at 47.000   move to 560 60
++0.300      click left
+
+# 13  ... and that new vertex cut away again
+at 51.000   move to 80 300
++0.300      click left
+
+# 14  ⭐ the left slingshot's corner (44, 210): a triangle cut is a DELETE
+at 55.000   move to 88 418
++0.300      click left
+
+# 15  the BRUSH
+at 59.000   move to 560 116
++0.300      click left
+
+# 16  ⭐ the centre post, painted colour 49
+at 63.000   move to 156 364
++0.300      click left
+
+# 17  ⭐ ... and painted 49 AGAIN, which clears it to 0 - unfilled and solid
+at 67.000   move to 156 364
++0.300      click left
+
+# 18  ⭐ bare table: SELECTPOLY misses and the brush paints the BACKDROP
+at 71.000   move to 220 120
++0.300      click left
+
+# 19  a library part cannot be painted: PAINTOBJ answers "took" and touches nothing
+at 75.000   move to 168 126
++0.300      click left
+
+# 20  PLAY is recorded and not built: the brush stays the tool
+at 79.000   move to 560 220
++0.300      click left
+
+# 21  the hammer, pressed where no edge is: SELECTPOINT misses
+at 83.000   move to 560 90
++0.300      click left
+at 87.000   move to 220 120
++0.300      click left
+
+at 91.000   type "q"

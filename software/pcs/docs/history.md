@@ -144,3 +144,35 @@ row. The new `PCSpn` swaps, and both arms of `PCRow` go through it.
 ⚠ So fix 2 removed *this* table's reversed span, and fix 3 is what stops the next
 one — they are separate, and only fix 3 covers `FIREBALL`.
 
+## `pcs.md` §8 — the editor's UI "not written", and "nothing rebuilds the run chain" (2026-09-24)
+
+Superseded by `pcs 23`, `pcsui.inc`'s `EdLoop` (§8, gated by `e0`). §8 said:
+
+> ⚠ **Nothing rebuilds the run chain after an edit yet**: `vlo`/`rcn` point into the
+> object area, which `PERbld` rewrites, so the editor UI has to re-key (`PBPlay`'s first
+> half) before it draws parts again.
+
+and
+
+> ⚠ **Not written**: the editor's UI (tools, bin, drag, magnifier, World panel), the wiring
+> kit's UI, load and save, and `desk` integration.
+
+`PBKey` is that first half, and `EdDone` runs it after every edit. Four defects fell out
+of the first `e0` runs, each in code older than the loop:
+
+- ⛔ **`pcs` forced 120 frames whenever no table file was named.** `pcs.asm` tested
+  `bne` on **`PFArg`'s flags** to decide whether a frame count had been given, not on
+  `frames`; the loop ended after the first gesture. It now tests `frames` and falls back
+  to `DEFFRM` when it is 0, so `m0`'s hold went from 120 frames to the 30 it asks for.
+- ⛔ **`EditO` was row 505, inside `PCDump`'s rows 500..508** for a table the size of
+  `PCDemo`. It is 510. And mode 23 dumps 2,048 bytes of it, not mode 6's 512: the demo
+  table is 610 bytes before a part is added, and the first full run compared 512 and
+  called byte 512 a difference.
+- ⛔ **`PEPaint`'s toggle to 0 left the old colour on screen.** It re-filled without
+  erasing, and `PCFill` refuses colour 0, so an object cleared to "unfilled" kept its
+  paint. It wipes the rows first now.
+- ⛔ **In the editor the ball was drawn at its last game's `X1`/`Y1`**, so a dragged ball
+  stayed behind. `PBArtI` draws it from its header when `pbedk` is set, as the model's
+  `render_table` always did.
+- ⚠ And a PS/2 script's `origin` has to be where the pointer really is. The first script
+  said `320 240`, and every press landed 320 left and 240 up of where it was meant.

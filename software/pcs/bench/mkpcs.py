@@ -457,8 +457,11 @@ def place(name, tx, ty, fillcolor=None):
             break
     if tm is None:
         raise KeyError('no template %r' % (name,))
-    kind = pcsobj.kind_of(tm)
-    if kind is None:
+    # ⛔ ONLY A LIBRARY PART NEEDS PROCS.  The bin's five plain polygons - the
+    # square and the four walls - carry no tail at all, and refusing them here
+    # while PEAdd takes them made the model disagree with the machine about
+    # the one thing a construction set is for.
+    if tm.lib and pcsobj.kind_of(tm) is None:
         raise KeyError('%s\'s procs are step 3b-ii' % name)
 
     dx, dy = tx - min(tm.x), ty - min(tm.y)
@@ -472,12 +475,13 @@ def place(name, tx, ty, fillcolor=None):
     # anything else here would compare two different programs.
     rec = template_record(tm)
     L = bytearray(rec[3 + 2 * tm.nvertex:])
-    L[pcsobj.L_VERT] = tm.vert + dy
-    L[pcsobj.L_PX] = tm.px + dx
+    if tm.lib:
+        L[pcsobj.L_VERT] = tm.vert + dy
+        L[pcsobj.L_PX] = tm.px + dx
 
     import pcspak as K
-    o = K.Obj(K.LIBOBJ, tm.fillcolor if fillcolor is None else fillcolor,
-              xs, ys, L)
+    o = K.Obj(K.LIBOBJ if tm.lib else tm.objid,
+              tm.fillcolor if fillcolor is None else fillcolor, xs, ys, L)
     if not o.align():
         raise ValueError('%s is degenerate' % name)
     return o
@@ -726,7 +730,7 @@ def _fcb(out, data, per=16, indent=' ' * 20):
 PCSLIB_OF = {
     'PCTmpl': 1, 'PCTType': 1, 'PCTLen': 1, 'PCEdit': 1,          # pcsed
     'PCBox': 2, 'PCKit': 2, 'PCKDbl': 2, 'PCIcon': 2,             # pcsui
-    'PCPickF': 2, 'PCTool': 2,
+    'PCPickF': 2, 'PCTool': 2, 'PCTSz': 2,
     'PCDemo': 3, 'PCTest': 3,                                     # pcsfl
 }
 
@@ -1105,6 +1109,16 @@ def emit(path):
     for (nm, x, y, ww, hh) in tl:
         w('                    fcb       %-18s %s'
           % ('%d,%d,%d,%d' % (x - pcskit.KX, y, ww, hh), nm))
+    # ⭐ AND WHERE EACH TEMPLATE SITS IN THE BIN, which is where its vertices
+    # are: a part pulled out keeps the grab offset DRAGOBJ keeps, and a drop
+    # is clamped by the part's own extent rather than by its hit box.
+    w("* Each template's bounding box as it sits in the bin: x from the kit's")
+    w('* left edge, y, and the extent - max - min, so a part is w+1 wide.')
+    w('PCTSz               equ       *')
+    for p in parts:
+        w('                    fcb       %-18s %s'
+          % ('%d,%d,%d,%d' % (min(p.x) - pcskit.KX, min(p.y),
+                              max(p.x) - min(p.x), max(p.y) - min(p.y)), p.name))
     w('')
     w('* ══════════════════ THE DEFAULT TABLE ════════════════════════════')
     w('* ⭐⭐ A TABLE RATHER THAN A TEST.  ⛔ The original shipped one on its')

@@ -20,7 +20,7 @@ checkers).
 | `pcsobj.inc` + `pcsrun.inc` — the simulator | 2,299 | ⭐⭐ **bit-exact over 600 frames** against a Python transliteration of `RUN.s`: the ball's `(x, y, BDX, BDY)` every frame, 95 hits on 11 objects, every part's state byte, and the score |
 | `pcsdraw.inc` — the painter, the 1bpp art blit | 589 | every pixel of the table, against the model |
 | `pcsedit.inc` — the editor's **database** operations | 950 | ⭐⭐ **agrees with `pcsedit.py`** over a twelve-edit session: step results, object area and span database (`m6`, in the default bench since 2026-09-24) |
-| `pcsui.inc` — the editor's screen (`pcs 22`) | 250 | ⭐ **the kit panel (tool icons redrawn at card resolution, white on black) and the 12 × 10 colour picker, every card pixel**, against `pcskit.py` (`k0`). ⚠ No interaction yet |
+| `pcsui.inc` — the editor's screen (`pcs 22`) and its event loop (`pcs 23`) | 835 | ⭐ **the kit panel and the 12 × 10 colour picker, every card pixel**, against `pcskit.py` (`k0`). ⭐⭐ **And the editor with a mouse** (`e0`): 22 scripted gestures — the hand, the bin, the pointer, the hammer, the scissors and the brush — each one's record against what the checker works out from the script alone, then the object area, the span database and the whole table picture |
 | `pcsfile.inc` — a table is a file on the card | 192 | ⭐ all four `DEMO*.PB` load off `/SD0/DATA` with **byte-identical span databases** |
 | `pcstext.inc` — the original's proportional font | 216 | screenshotted: the glyphs, the spacing, right-aligned numbers, boxes and frames |
 | `pcsin.inc` — mouse, keyboard, cursor | 230 | the cursor is the **card's hardware sprite**; a scripted mouse drives a real game |
@@ -43,14 +43,14 @@ grow without the one-module 32 KB ceiling. The whole gate runs on the paged buil
 
 ## 2. What is left
 
-⛔ **The editor's UI is the gap.** `pcsedit.inc`'s 950 lines of database operations —
-add, delete, drag, drag-point, cut, paste, paint, with rollback — exist and **nothing
-calls them**, because there is no tool bar, no parts bin and no drag. That is the one
-piece where a large amount of working code is waiting on a small amount of missing code.
+⭐ **The editor has a mouse** (2026-09-24): `pcs 23` runs `EDIT.s`'s `MAIN` as
+`EdLoop`, and all seven of `pcsedit.inc`'s operations are reached through the tool bar,
+the parts bin and drag-and-drop (`pcs.md` §8). What is left is the rest of the editor
+around it:
 
 | | of the 6502 | note |
 |---|---|---|
-| The editor shell: tool bar, **parts bin**, drag-and-drop | part of `EDIT.s` | the data is already generated — `PCBox` (43 hit rects), `PCTLen`, `PCTmpl`, the screen rects. What is missing is the loop and the dispatch |
+| The tool bar's other eight tools | part of `EDIT.s` | PLAY, the wiring kit, the World, the magnifier, LOAD/SAVE and the rest are recorded when clicked and do nothing yet |
 | The wiring kit's UI | `WIRE.s`, 1,143 | ⭐ the **evaluator** is already built and gated (`PBWire`, `TURNOFF`); only the screen and the three tools are missing |
 | The World panel — four sliders | part of `EDIT.s` | `wset` already loads and drives the physics; it is not editable |
 | The magnifier — fat-bits paint | part of `EDIT.s` | and the free-hand layer, which the original RLE-compresses on save |
@@ -60,9 +60,9 @@ piece where a large amount of working code is waiting on a small amount of missi
 
 ### Known open items on work already written
 
-- ⚠ **Nothing re-keys the parts after an edit.** `vlo`/`rcn` point into the object area
-  and `PERbld` rewrites it, so the editor UI must re-run `PBPlay`'s keying half before it
-  draws parts or plays.
+- ⚠ **A gesture made during a repaint is lost** (about a second after each edit): the
+  loop does not sample the mouse while it draws. `e0` spaces its gestures four seconds
+  apart for that reason.
 - ⚠ **`TIMETBL` re-derivation for 59.94 Hz is still unmeasured.** Gravity, flipper sweep
   and the drain delay are all counted in frames and the original busy-waited.
 - ⚠ **Sound is unverified by anything.** A bench cannot hear. The note *sequences* are
@@ -175,3 +175,16 @@ stayed lit on screen. It now records damage the same way. ⚠ **No leg checks it
 - ⚠ `PCS_BUDGET` now defaults to **0**: the module carries no shipped tables at all, only
   the bench's test table and the built-in demo. That is the intended end state, but it
   means `pcs 7`..`pcs 32` no longer select a table. A table is named, not numbered.
+
+---
+
+## 6. The editor's mouse, 2026-09-24, and four older defects it found
+
+`e0` agreed with the model on all 23 records the first time it ran. What it took to get
+there was four faults in code that was already written, each listed in `history.md`
+(§8's entry):
+- `pcs` forced 120 frames whenever no table was named, because it tested `PFArg`'s
+  flags instead of `frames`. It also changes `m0`'s hold from 120 frames to 30.
+- `EditO` sat inside `PCDump`'s rows.
+- `PEPaint` left the old colour on screen when the brush cleared it to 0.
+- In the editor, the ball was drawn where the last game left it.
