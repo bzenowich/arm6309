@@ -7,6 +7,91 @@ is current.
 
 ---
 
+## `6309.md` §4.4, §4.5, §5.2 and §6 — the plan before the build flipped (2026-09-24)
+
+Superseded when NitrOS-9 was built `CPU=6309` and booted in native mode on
+`hd6309.c`.  §4.4's step 1, "`H6309=1` with native mode still off", turned out not
+to exist: an `H6309` kernel's register frames carry `E` and `F`, and in emulation
+mode the first system call returned through the wrong address.  §4.5's "Verilog
+core, last" became "not required" by the user's decision the same day.  §5.2's
+constants were re-derived.  The sections said:
+
+> ### 4.4 Then flip the build, one item at a time
+>
+> ⛔ **Not `CPU=6309` as one change.** The order that keeps a failure attributable:
+>
+> 1. `H6309=1` **with native mode still off** — `rbsd.asm`'s `TFM` and the
+>    kernel's wide-register paths, but the 6809 cycle counts and stacking. Gate:
+>    `run-sdboot.sh`, `SCENARIOS=nitros9`.
+> 2. **Native mode** (`LDMD`) — ⚠ this is the one that moves timing, §5.2. Gate:
+>    the same, plus a re-derivation of §5.2's constants.
+> 3. Then hand-written 6309 in **our own** modules — `vidcore`'s streams,
+>    `vidcpy3`'s register sequences, `tbox`'s `GRow`. ⚠ And `armio.asm:513`'s rule
+>    is rewritten rather than deleted: it becomes *"6309 is allowed; here is what
+>    guarantees it runs"*.
+
+> ### 4.5 The Verilog core, last
+>
+> A 6309 Verilog core is the long pole and nothing above waits on it. When it
+> comes, `hardware/cpu/sim/test/run.sh` is already the harness that will validate it — against a
+> `cpu6809.c` that by then has an oracle behind it, which is a much better position
+> than the one the 6809 core was validated from.
+>
+> ⚠ **`machine3.v` keeps `mc6809e` until then**, which means `check:machine` and
+> `v3machine_tb` continue to run `boot.asm` as 6809 code. That is fine — the boot
+> ROM has no reason to be 6309 — but it has to be **said**, because otherwise
+> "146 claims, 0 failed" reads as coverage of a machine that is not the one being
+> built.
+
+and
+
+> ### 5.2 ⚠ Native mode moves every timing constant in the tree
+>
+> The machine's software spaces its card accesses by **instruction count**:
+>
+> - `vidcore.asm:32-35` — *"at 10 cycles a write they are spaced 4.8 µs apart"*;
+>   the `Strm` loop is **16 E cycles = 7.63 µs a VRAM byte**, and
+>   `keyed-copy.md:361` quotes that figure as a property of the machine.
+> - `docs/video-copyrect.md:357` concludes *"the card never stalled the CPU"* from
+>   consecutive E cycles being 476 ns apart against a direct write's ≤318 ns of
+>   `SPANBUSY` — ⛔ **derived from the 6809 cycle table.**
+> - `vidcpy3.asm`'s measured 129.7 µs IRQ-masked stretch, `CpWait`'s
+>   `VcPolls` timeout budget, and every µs in `proportional-font.md` §5.3.
+>
+> ⭐ **Native mode makes the CPU faster, which is a hazard and not only a win**:
+> writes arrive closer together, and a claim of the form "the card never stalled
+> the CPU" has to be re-derived, not inherited. ⚠ `/WAIT` makes it *correct*
+> either way — `v3host`'s `WAITN` holds a write under `CARDBUSY` — so the risk is
+> to the **numbers and the claims**, not to the pixels. But this repository's
+> documents are made of those numbers.
+>
+> ⛔ **And one place it is not merely numbers**: any loop that relies on being
+> *slower* than something. §9 of this document is where to look for them; I have
+> not enumerated them and do not claim there are none.
+
+and
+
+> ## 6. The order, and what each step unblocks
+>
+> | | | unblocks |
+> |---|---|---|
+> | 0 | ⭐⭐ **BUILT** — `cpu6809.c` refuses all 168 6309-only encodings by name, gated by `hardware/cpu/sim/test/refuse6309.c` (§4.0) | ⭐ the silent-wrong-answer failure mode, closed. ⛔ `mc6809e.v` still owes the same |
+> | 0b | ⭐ **BUILT** — `CPU=6309` implies `-DH6309=1`, and a bad `CPU` is an error (§4.3) | the half-configured build, which linked the 6309 library with every 6309 path compiled out |
+> | 1 | ⭐ **HALF BUILT** — `hd6309.tab` carries both cycle columns for 436 opcodes, cross-checked against lwasm. What is left is pointing `cycles.py` at it | the cycle half, statically, with no second implementation |
+> | 2 | ⭐ **STARTED** — `hd6309.c` runs `TFM`, `LDW`/`STW`, `LDQ`/`STQ` and the inter-register group, gated by `hardware/cpu/sim/test/tfm6309.c` and its faithful-silicon control (§4.1). ⛔ The rest is refused by name | ⭐ the SD and video driver work; the rest of §2 still needs the remaining groups |
+> | 3 | **`gen.py` grows 6309 chunks** (§4.2) | per-opcode attribution instead of end-to-end |
+> | 4 | ⭐ **`H6309=1`, native mode off** (§4.3) | the SD card at 537 KiB/s; `F$Move` |
+> | 5 | **Native mode**, and §5.2's constants re-derived | ~15 % everywhere, and the timing claims stay honest |
+> | 6 | Hand-written 6309 in our own modules | `proportional-font.md` §5.4, `optimizations.md` §9 |
+> | 7 | A 6309 Verilog core in `machine3.v` | `check:machine` runs the machine being built |
+>
+> ⭐ **Steps 0 and 1 are small, independent, and worth doing this week.** Step 2 is
+> the one that costs real work and it is the one everything else is waiting for.
+>
+> ---
+
+---
+
 ## `6309.md` §1, §1.1 and §3 — "nothing has ever executed a 6309 instruction" (2026-09-24)
 
 Superseded when the recipe's default became `CPU=6309` and NitrOS-9 booted native on

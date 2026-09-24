@@ -36,7 +36,7 @@ cc -O2 -Wall -I"$ROOT/hardware/audio/refplayer" -o "$OUT/emu" software/emu/machi
 # nothing, which reads exactly like a hung machine (demo-report.md §14.3).
 python3 - "$OUT" <<'PY'
 import sys
-sys.path.insert(0, "hardware/video3/bench")
+sys.path.insert(0, "software/toolbox/bench")
 import mkv3text as M
 lines = ["iniz w5", "copy /dd/sys/v3tset /w5"]
 for n in M.TIMED:                      # /nil first: the stream's own cost

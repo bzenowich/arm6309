@@ -74,7 +74,12 @@ TICKS=${TICKS:-60000}
 # and it believes the SCRIPT's coordinates; the arrow was therefore counted as
 # a second "picture" of the list.  A longer bound gives the sprite time to
 # arrive and the run frames in which it has.
-IDLETICKS=${IDLETICKS:-3000}            # the control's: it exits on the bound
+# ⛔ 4,500 SINCE 2026-09-24, AND FOR THE SAME REASON: THE BOUND IS PASSES, NOT
+# SECONDS.  The native 6309 build runs `desk`'s loop faster, so 3,000 passes
+# ran out at 43.2 s - the very moment the script parked the pointer - and
+# `listn` was 0: no frame after the park had had its 1.5 s settle.  At ~97
+# passes a second 4,500 ends near 58 s, inside IDLE_SECONDS.
+IDLETICKS=${IDLETICKS:-4500}            # the control's: it exits on the bound
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 [ -n "$DESKASM" ] || DESKASM="$NITROS9DIR/level2/arm6309/cmds/desk.asm"
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
