@@ -1,0 +1,44 @@
+# hd6309.silicon - where SILICON corrects The 6309 Book's Appendix A cycles.
+#
+# ⭐ hd6309.tab is the book's record and stays so; this is the list of places
+# it is wrong, and mk6309tab.py applies it when it writes hd6309ops.h - so the
+# core runs on silicon's figure and the book's is still there to read.  The
+# authority is hoglet67's 6809Decoder (instr_table_6309, validated against
+# logic-analyser captures of real HD6309s); oracle/checkcyc.py fetches it and
+# requires the corrected table to agree with it EXACTLY.
+#
+#   page op em nm   reason
+#
+# ⭐ THE PREFIXED INHERENT OPS, all of them: the book gives 2/1 for NEGD..CLRD
+# and 2/2 for COME..CLRF, which a two-byte instruction cannot take - each byte
+# is a bus cycle.  The book dropped the prefix's cycle for the whole group.
+1 40 3 2   NEGD - the prefix's cycle
+1 43 3 2   COMD
+1 44 3 2   LSRD
+1 46 3 2   RORD
+1 47 3 2   ASRD
+1 48 3 2   ASLD
+1 49 3 2   ROLD
+1 4A 3 2   DECD
+1 4C 3 2   INCD
+1 4D 3 2   TSTD
+1 4F 3 2   CLRD
+1 5F 3 2   CLRW - the book's native 1 is the same slip
+2 43 3 2   COME
+2 4A 3 2   DECE
+2 4C 3 2   INCE
+2 4D 3 2   TSTE
+2 4F 3 2   CLRE
+2 53 3 2   COMF
+2 5A 3 2   DECF
+2 5C 3 2   INCF
+2 5D 3 2   TSTF
+2 5F 3 2   CLRF
+# ⭐ TIM never writes, so it is the SHORTEST of the four logical-memory ops,
+# not the longest - the book's 6 and 7+ are OCR or transcription.
+0 0B 4 4   TIM direct
+0 6B 5 5   TIM indexed (base, before the postbyte)
+0 65 7 7   EIM indexed: the book's 6+ is one short of OIM and AIM's 7+
+0 14 4 4   SEXW
+0 1A 3 3   ORCC: no native saving
+0 13 4 3   SYNC: the minimum, which native mode shortens by one

@@ -68,6 +68,16 @@ def table():
             continue
         f = line.split()
         t[(int(f[0]), int(f[1], 16))] = (f[2], f[3], int(f[4]), f[5], f[6])
+    # ⭐ hd6309.silicon: where silicon corrects the book (oracle/checkcyc.py
+    # holds these to hoglet67's measured table) - the core runs on these.
+    for line in open(os.path.join(HERE, "hd6309.silicon")):
+        if line.startswith("#") or not line.strip():
+            continue
+        f = line.split()
+        k = (int(f[0]), int(f[1], 16))
+        if k in t:
+            m, md, nb, em, nm = t[k]
+            t[k] = (m, md, nb, f[2] + ("+" if em.endswith("+") else ""), f[3])
     return t
 
 

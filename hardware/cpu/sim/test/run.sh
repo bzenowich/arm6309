@@ -80,6 +80,39 @@ $CC -I.. -DHD6309_FAITHFUL_TFM -o "$O/tfm_sil" ../cpu6809.c ../hd6309.c tfm6309.
 $CC -I.. -o "$O/one6309" ../cpu6809.c ../hd6309.c one6309.c || { say "FAIL  one6309 does not build"; fail=1; }
 python3 cyc6309.py || fail=1
 
+# ---- (a2) ⭐⭐ hd6309.c AGAINST AN INDEPENDENT 6309 ------------------------------------
+# The complete core (2026-09-24) against XRoar's HD6309, fetched and built as a
+# separate program (../oracle/fetch-xroar.sh - GPL-3.0, never copied here), on
+# generated programs covering every encoding in both modes, every indexed
+# postbyte, the traps, and IRQ/FIRQ/NMI through CWAI, SYNC and ANDCC.  Registers
+# and writes must agree exactly; timing where XRoar is known to differ from
+# silicon is listed by name in cmp6309.py.  And checkcyc.py holds the cycle
+# table itself to hoglet67's silicon-measured one.
+# ⛔ NO ORACLE IS A FAILURE, NOT A SKIP: a gate that did not run reads like one
+# that passed.  The fetch is cached in hardware/cpu/build/oracle.
+SEEDS6309=${SEEDS6309:-16}
+sh ../oracle/fetch-xroar.sh > "$O/oracle.log" 2>&1 || { cat "$O/oracle.log"; say "FAIL  the 6309 oracle does not build"; fail=1; }
+python3 ../oracle/checkcyc.py || fail=1
+$CC -I.. -o "$O/run6309" ../cpu6809.c ../hd6309.c run6309.c || { say "FAIL  run6309 does not build"; fail=1; }
+n6309=0; covargs=""
+for s in $(seq 1 "$SEEDS6309"); do
+  python3 gen6309.py "$s" "$O/h$s.asm" && python3 "$MKIMG" "$O/h$s.asm" "$O/h$s.bin" > /dev/null || {
+    say "FAIL  gen6309 seed $s does not assemble"; fail=1; continue; }
+  "$O/run6309" "$O/h$s.bin" "$O/h$s.ours" 3000000
+  "$ROOT/hardware/cpu/build/oracle/xroar_run" "$O/h$s.bin" "$O/h$s.xroar" 3000000
+  if python3 cmp6309.py "$O/h$s.ours" "$O/h$s.xroar" "$O/h$s.asm" > "$O/h$s.cmp"; then
+    n6309=$((n6309 + 1)); covargs="$covargs $O/h$s.bin $O/h$s.ours"
+    rm -f "$O/h$s.xroar"
+  else
+    say "FAIL  6309 seed $s:"; head -12 "$O/h$s.cmp"; fail=1
+  fi
+done
+if [ "$n6309" = "$SEEDS6309" ]; then
+  say "ok    hd6309.c agrees with XRoar's HD6309 on all $SEEDS6309 seeds - registers and writes exactly"
+  sed -n 's/^ok    /      /p' "$O/h1.cmp"
+  python3 cov6309.py $covargs || fail=1
+fi
+
 # ---- (a) the exercisers, four at a time -------------------------------------------
 one_seed() {
   s=$1

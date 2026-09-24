@@ -13,6 +13,7 @@ import re, subprocess, sys, os
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 LWASM = os.path.join(ROOT, ".tools", "bin", "lwasm")
 LINE = re.compile(r"^([0-9A-F]{4}) ([0-9A-F]+)\s+\(")
+CONT = re.compile(r"^     ([0-9A-F]+)\s*$")
 
 
 def main():
@@ -26,14 +27,26 @@ def main():
         return 1
     img = bytearray(65536)
     placed = 0
+    # ⛔ A LINE OF MORE THAN EIGHT BYTES CONTINUES ON LINES WITH NO ADDRESS.
+    # lwasm lists eight bytes beside the address and the rest below, indented;
+    # reading only the addressed line dropped the tail of every longer fcb/fdb -
+    # half of a sixteen-byte data row, and the reset vector at the end of a
+    # vector table, which is how it was found (2026-09-24, gen6309.py).
+    nxt = None
     for ln in p.stdout.splitlines():
         m = LINE.match(ln)
-        if not m:
-            continue
-        addr = int(m.group(1), 16)
-        data = bytes.fromhex(m.group(2))
+        if m:
+            addr = int(m.group(1), 16)
+            data = bytes.fromhex(m.group(2))
+        else:
+            c = CONT.match(ln)
+            if not c or nxt is None:
+                nxt = None
+                continue
+            addr, data = nxt, bytes.fromhex(c.group(1))
         img[addr:addr + len(data)] = data
         placed += len(data)
+        nxt = addr + len(data)
     if placed == 0:
         sys.stderr.write("FAIL  mkimg: nothing placed from %s\n" % src)
         return 1

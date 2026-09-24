@@ -44,7 +44,9 @@ typedef struct cpu6809 {
     int is6309;
     uint8_t e, f;                /* W = E:F;  Q = D:W = A:B:E:F */
     uint16_t v;                  /* the 6309's V scratch register */
-    uint8_t md;                  /* b0 native mode, b1 FIRQ-stacks-like-IRQ */
+    uint8_t md;                  /* b0 native mode, b1 FIRQ-stacks-like-IRQ, b6 IL, b7 /0 */
+    uint8_t m;                   /* [silicon] the hidden M register (hd6309.c) */
+    int took_int;                /* the last step entered an interrupt (hd6309.c) - for a trace */
     int irq, firq, nmi;          /* input line levels, 1 = asserted (active) */
     uint64_t cycles;             /* E cycles executed since reset */
     void *ctx;
@@ -83,6 +85,9 @@ int  cpu6809_idx_ea(cpu6809 *c, int64_t base, int n, uint8_t b2,
                     uint16_t *eap, int *seize);
 
 int  cpu6809_int_pending(cpu6809 *c, int64_t at);
+int  cpu6809_line_at(const cpu6809 *c, int line, int64_t at);
+void cpu6809_nmi_resolve(cpu6809 *c, int64_t at);
+void cpu6809_sync_lines(cpu6809 *c, int64_t base);
 
 void cpu6809_reset(cpu6809 *c);   /* PC from $FFFE/$FFFF, CC = I|F set */
 int  cpu6809_step(cpu6809 *c);    /* take a pending interrupt or execute one instruction; returns E cycles consumed and adds them to c->cycles */

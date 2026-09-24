@@ -9,25 +9,20 @@
  * beside the 6809 rather than inside it, `c->is6309` selects, and with it clear
  * the core is byte-identical to what the differential test has always run.
  *
- * ⛔ WHAT IS NOT IMPLEMENTED IS REFUSED, NOT IGNORED.  hd6309_exec() returns
- * HD6309_UNIMPL for an encoding it does not yet handle, and cpu6809.c then takes
- * the same refusal path a 6809 takes - the opcode is named and the run stops.
- * That is what makes building this out one group at a time safe: the failure mode
- * is never "it did nothing", which is the defect armio.asm:513 records.
+ * ⭐ SINCE 2026-09-24 IT IS A COMPLETE CORE: every encoding the HD6309 defines,
+ * both modes, native mode's timing and stacking, and both traps.  An encoding
+ * the 6309 does not define takes the illegal-instruction trap, as on silicon;
+ * a 6309 opcode on a 6809 core is still refused by name (cpu6809.c).
  */
 #ifndef HD6309_H
 #define HD6309_H
 
 #include "cpu6809.h"
 
-#define HD6309_UNIMPL (-1)
-
-/* Execute one 6309-only instruction whose opcode has already been fetched.
- * `page` is 0/1/2, `op` the raw opcode byte, `n` the cycles consumed so far
- * (the opcode and any prefix). Returns the total cycle count, or HD6309_UNIMPL
- * if this build does not implement it. */
-int hd6309_exec(cpu6809 *c, int64_t base, int n, int page, uint8_t op,
-                uint16_t opc_pc);
+/* One step of an HD6309E: take a pending interrupt, or execute one
+ * instruction; returns the E cycles it took and adds them to c->cycles.
+ * cpu6809_step() calls this whenever c->is6309 is set. */
+int hd6309_step(cpu6809 *c);
 
 /* The 6309's own reading of TFR/EXG postbyte codes, which extends the 6809's:
  * 6 = W, 7 = V, 12/13 = the zero register, 14 = E, 15 = F. */

@@ -7,6 +7,73 @@ is current.
 
 ---
 
+## `6309.md` §4.1 and §4.1.1 — "STARTED: hd6309.c, and TFM runs" (2026-09-24)
+
+Superseded by the complete core (§4.1).  The sections said:
+
+> ### 4.1 ⭐ STARTED 2026-09-21 — `hd6309.c`, and `TFM` runs
+>
+> ⭐ **The emulator executes 6309 instructions.** `cpu6309_enable()` makes a core an
+> HD6309E; with the flag clear it is byte-identical to the 6809 the differential
+> test has always run, which is why **4,006,882 instruction boundaries still match
+> `mc6809e.v` exactly**.
+>
+> | | |
+> |---|---|
+> | ⭐ **`hardware/cpu/sim/hd6309.c`** | a layer *beside* `cpu6809.c`, not inside it. ⛔ **The 6309 must not inherit the ghost decode**: `cpu6809.c` is a model of `mc6809i.v` including its bugs, and on an HD6309E `$01` is `OIM`, not a ghost of `NEG` |
+> | built | **`TFM` (all four forms)**, `LDW`/`STW`, `LDQ`/`STQ`, `ADDW`/`SUBW`/`CMPW`, `ADDR`/`ADCR`/`SUBR`/`SBCR`/`ANDR`/`ORR`/`EORR`/`CMPR`, `PSHSW`/`PULSW`/`PSHUW`/`PULUW`, `SEXW`, `LDMD`, and the extended `TFR`/`EXG` register codes |
+> | ⛔ not built | everything else — the bit operations, `DIVD`/`DIVQ`/`MULD`, `AIM`/`OIM`/`EIM`/`TIM`, the E/F arithmetic, the D/W shift group, native-mode cycle counts, both traps |
+> | ⭐ **and not-built is REFUSED** | `hd6309_exec()` returns `HD6309_UNIMPL` and the core takes the same refusal path a 6809 takes — the opcode is named and the run stops. **That is what makes building this out one group at a time safe**: the failure mode is never "it did nothing" |
+>
+> ⭐⭐ **`TFM` implements §4.3.1 and the test proves it can tell the difference.**
+> `hardware/cpu/sim/test/tfm.asm` runs all four forms against RAM **and against a modelled
+> side-effecting port** — every read pops, every write is logged — first quiet and
+> then with a device interrupting. `hardware/cpu/sim/test/tfm6309.c` **sweeps the interrupt rate**
+> rather than picking one, because too fast is an interrupt storm in which the CPU
+> makes no progress and too slow never lands inside a transfer:
+>
+> - **43 usable rates, 7,621 interrupts taken mid-transfer, not one byte lost or
+>   doubled**, and `W` is 0 after every form.
+> - ⛔ **A `HD6309_FAITHFUL_TFM` build models what silicon is documented to do and
+>   is REQUIRED to fail** — it corrupts at 9 of 37 rates. A test that cannot see
+>   the difference is not testing the specification.
+>
+> ⚠ **Three wrong versions of that test are worth remembering**, because the first
+> two looked green:
+>
+> 1. ⛔ **A per-STEP interrupt level never changes during a `TFM` at all** — a
+>    `TFM` is one instruction however many bytes it moves. The "interrupted" run
+>    was not interrupted, and **the faithful-silicon control PASSED**, which is
+>    exactly what a vacuous test looks like.
+> 2. ⛔ **A per-ACCESS pulse train broke the API.** `cpu6809.h`: `set_line()` is
+>    exact *"provided the same line does not change twice within one instruction"*,
+>    and `cpu6809_line` holds one transition. Toggling it dozens of times inside a
+>    `TFM` livelocked the CPU at `$100A` after a single byte.
+> 3. ⭐ **What works is what hardware does**: assert on an event, and let the
+>    handler acknowledge. One rise and one fall per interrupt, inside the contract.
+>
+> ### 4.1.1 What is left to teach `cpu6809.c`
+>
+> What has to go in:
+>
+> | | |
+> |---|---|
+> | registers | `E`, `F` (and `W` = `E:F`, `Q` = `D:W`), `V`, `MD`, the zero register |
+> | modes | `MD` b0 **native mode** — different cycle counts and a different stacking — and `MD` b1 FIRQ-stacks-like-IRQ |
+> | instruction groups | inter-register (`TFR`/`EXG` on all widths, `ADDR`/`SUBR`/`CMPR`/`ANDR`/`ORR`/`EORR`), the `E`/`F`/`W`/`Q` loads, stores and arithmetic, `MULD`, `DIVD`, `DIVQ`, `SEXW`, the bit operations (`BAND`/`BIAND`/`BOR`/`BEOR`/`LDBT`/`STBT`), the logical-memory ops (`AIM`/`OIM`/`EIM`/`TIM`), `TFM`, `LDMD` |
+> | traps | the **illegal-instruction trap at `$FFF0`** — `hardware/cpu/docs/plan.md` §2.4 already flags it as something NitrOS-9 depends on being right — and the **divide-by-zero** trap |
+>
+> ⚠ **And the file's own discipline has to be respected.** `cpu6809.c` is not a
+> 6809 model; it is a model **of `mc6809i.v`**, matched to that core's bugs on
+> purpose — `SWI` at 20 cycles, `SEX` setting no flags, `DAA` leaving V alone, the
+> NMI-out-of-`CWAI` latch. Its header exists so a count can be checked against the
+> Verilog by reading. ⛔ **A 6309 addition has no Verilog to be matched to**, so it
+> must be matched to something else, and §4.2 is that something. Until it is, every
+> 6309 opcode in the file is an assertion nobody has checked — which is the state
+> this whole project refuses for silicon and should refuse here.
+
+---
+
 ## fast-E's reasons — VRAM read-back left the list (2026-09-11)
 
 The video card's read-back was built prefetched at `WPTR` (`graphics.md` §11), so it no longer breaks at ÷8.

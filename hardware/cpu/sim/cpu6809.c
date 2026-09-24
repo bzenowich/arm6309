@@ -529,6 +529,24 @@ static int alu_ea(cpu6809 *c, int64_t base, int n, const dec_t *d, uint16_t ea)
     }
 }
 
+/* ⭐ THE LINE HELPERS, for hd6309.c's step - which takes the whole instruction
+ * when is6309 is set, interrupts included, and must sample the lines exactly as
+ * this file does. */
+int cpu6809_line_at(const cpu6809 *c, int line, int64_t at)
+{
+    const cpu6809_line *l = line == CPU6809_IRQ ? &c->l_irq : line == CPU6809_FIRQ ? &c->l_firq : &c->l_nmi;
+    return line_at(l, at);
+}
+
+void cpu6809_nmi_resolve(cpu6809 *c, int64_t at) { nmi_resolve(c, at); }
+
+void cpu6809_sync_lines(cpu6809 *c, int64_t base)
+{
+    if (c->nmi != c->l_nmi.lvl) cpu6809_set_line(c, CPU6809_NMI, c->nmi, (uint64_t)base);
+    line_sync(&c->l_irq, c->irq != 0, base);
+    line_sync(&c->l_firq, c->firq != 0, base);
+}
+
 /* Is an interrupt pending as of E cycle `at`?  Exposed for hd6309.c's TFM,
  * which is the only interruptible instruction and must ask between bytes.
  * ⚠ It resolves the NMI edge as a side effect, exactly as cpu6809_step does. */
@@ -640,6 +658,12 @@ int cpu6809_idx_ea(cpu6809 *c, int64_t base, int n, uint8_t b2,
 
 int cpu6809_step(cpu6809 *c)
 {
+    /* ⭐ AN HD6309 IS A DIFFERENT CORE, not this one with extras: hd6309.c takes
+     * the whole step - the 6309's own decode, its traps, native mode's timing
+     * and stacking - so nothing of mc6809i.v's (the ghost decode, SWI at 20,
+     * SEX without flags) leaks into it, and this path stays byte-identical to
+     * what the differential test holds against the Verilog. */
+    if (c->is6309) return hd6309_step(c);
     const int64_t base = (int64_t)c->cycles;
     const uint16_t s0 = c->s;
     int n, page = 0;
@@ -674,12 +698,8 @@ int cpu6809_step(cpu6809 *c)
         } while (op == 0x10 || op == 0x11);
     }
     if (hd6309_is_only(page, raw)) {
-        if (c->is6309) {
-            int r = hd6309_exec(c, base, n, page, raw, opc_pc);
-            if (r != HD6309_UNIMPL) { n = r; goto done; }
-            /* ⛔ falls through to the refusal: an encoding this build does not
-             * implement is NAMED and stops, never executed as its 6809 ghost. */
-        }
+        /* ⛔ A 6809 REFUSES A 6309 ENCODING: it is NAMED and stops, never
+         * executed as its 6809 ghost.  (An HD6309 never gets here.) */
         if (c->undef6309) {
             c->undef6309(c->ctx, page, raw, opc_pc);
         } else {
