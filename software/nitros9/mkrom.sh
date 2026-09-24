@@ -139,7 +139,10 @@ REC="$NITROS9DIR/recipes/arm6309/l2"
 # ⚠ THE STAMP STAYS, and it still earns its keep: AFLAGS_MORE (-DBTMARK=1)
 # and BOOTMOD change the code without changing a file.  The card half of it is
 # now a constant, which is the point - it cannot be got wrong.
-FLAV="v3${AFLAGS_MORE:+ $AFLAGS_MORE}"
+# ⭐ AND THE CPU: 6309 by default (the recipe's), 6809 for the Verilator benches,
+# whose machine3.v has a 6809 in it (hardware/tools/sim/run-machine.sh).
+CPU=${CPU:-6309}
+FLAV="v3 cpu$CPU${AFLAGS_MORE:+ $AFLAGS_MORE}"
 # ⭐ AND BOOTMOD IS IN THE STAMP TOO, for a weaker version of the same reason:
 # it selects which F$Boot module goes into OS9Kernel (boot_sd, the default, or
 # boot_romdisk) and `os9kernel`'s prerequisite list changing is not by itself
@@ -150,7 +153,7 @@ if [ "$(cat "$REC/.flavour" 2>/dev/null)" != "$FLAV" ]; then
   rm -rf "$REC/.mods" "$REC/.lib"
   echo "$FLAV" > "$REC/.flavour"
 fi
-make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" SYSFILES="$SYSFILES" TBOXDATA="$OUT/tbox.bin" \
+make -C "$REC" NITROS9DIR="$NITROS9DIR" ARM6309DIR="$ROOT" CPU="$CPU" SYSFILES="$SYSFILES" TBOXDATA="$OUT/tbox.bin" \
   ${BOOTMOD:+BOOTMOD=$BOOTMOD} \
   AFLAGS_EXTRA="$AFLAGS_MORE" \
   > "$OUT/build.log" 2>&1 || { grep -v '^lwasm\|^lwlink' "$OUT/build.log" | tail -20; echo "FAIL  the ROM did not build"; exit 1; }

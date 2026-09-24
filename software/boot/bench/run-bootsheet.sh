@@ -53,7 +53,7 @@ ROM="$OUT/arm6309_rom.bin"
 # Macintosh's question mark.
 [ -f "$REC/bootfile" ] || { echo "FAIL  no bootfile in $REC - build the ROM first"; exit 1; }
 BOOT="$REC/bootfile" NAME="arm6309" \
-  sh software/nitros9/mksddisk.sh "$OUT/sd.img" desk v3paint v3trk monster pinball \
+  sh software/nitros9/mksddisk.sh "$OUT/sd.img" desk v3paint v3trk monster \
   > "$OUT/mksddisk.log" 2>&1 || {
     cat "$OUT/mksddisk.log"; echo "FAIL  the bootable card did not build"; exit 1; }
 cat "$OUT/mksddisk.log"

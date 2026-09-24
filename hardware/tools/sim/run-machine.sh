@@ -94,11 +94,14 @@ SCENARIOS=${SCENARIOS:-"main e1 s1 s2 s3 alias e2 disk nodisk"}
 # to a second prompt:
 #   SCENARIOS=reboot npm run check:machine
 # It needs the port's ROM, built from $NITROS9DIR (software/nitros9/README.md).
+# ⛔ CPU=6809, because machine3.v's CPU is mc6809e.v: the recipe builds for the
+# 6309 by default since 2026-09-24, and a 6309 build on a 6809 core runs until
+# its first 6309 opcode and then does something else (hardware/cpu/docs/6309.md).
 # ⭐ ONE ROM FOR ALL FOUR SINCE 2026-09-22.  They used to be two flavours in
 # two directories; `recipes/arm6309/arm6309.mak` puts -DV3=1 in AFLAGS itself
 # now, so there is one build and $N9ROM is where it goes.
 case " $SCENARIOS " in *" nitros9 "*|*" reboot "*)
-  sh ../../../software/nitros9/mkrom.sh $N9ROM || exit 1 ;;
+  CPU=6809 sh ../../../software/nitros9/mkrom.sh $N9ROM || exit 1 ;;
 esac
 # ⭐ AND TWO MORE, `disk` and `nodisk`: boot.asm 10a's boot dialog
 # (software/desk/docs/boot-and-desktop.md 1). They differ in one bit - machine3.v's sd_cd,
@@ -113,7 +116,7 @@ esac
 # the two above; it keeps its own directory only so that a run of
 # SCENARIOS="disk nodisk" alone still builds one.
 case " $SCENARIOS " in *" disk "*|*" nodisk "*)
-  sh ../../../software/nitros9/mkrom.sh $N9DLG || exit 1 ;;
+  CPU=6809 sh ../../../software/nitros9/mkrom.sh $N9DLG || exit 1 ;;
 esac
 # ⭐ AND `disk` NEEDS A CARD THE ROM WILL ACTUALLY BOOT FROM, because since
 # 2026-09-21 "Disk found" means sdcard.md 9.5's signature over a non-zero

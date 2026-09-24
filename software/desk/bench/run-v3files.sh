@@ -113,7 +113,7 @@ done
 # ⛔ BOOTABLE, because the ROM carries no filesystem since 2026-09-22:
 # a data card here is a machine that does not start.
 # ⭐ EVERY APPLICATION THE DESKTOP CAN LAUNCH (2026-09-22), plus v3trk.
-OUT="$OUT" DATA="$FD" sh software/nitros9/mksyscard.sh "$OUT/sd.img" desk v3paint pinball monster stardew v3bbs v3art v3trk \
+OUT="$OUT" DATA="$FD" sh software/nitros9/mksyscard.sh "$OUT/sd.img" desk v3paint monster stardew v3bbs v3art v3trk \
   > "$OUT/mksddisk.log" 2>&1 || { cat "$OUT/mksddisk.log"; echo "FAIL  the card did not build"; exit 1; }
 cat "$OUT/mksddisk.log"
 

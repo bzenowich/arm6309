@@ -47,7 +47,7 @@ if [ -z "$NOBUILD" ]; then
   # ⭐ EVERY APPLICATION THE DESKTOP CAN LAUNCH, because since 2026-09-22 each
   # is a clickable ICON (desk.asm's IcTab) and an icon whose module is not on
   # the card is one that draws and answers E$MNF.
-    sh software/nitros9/mksyscard.sh "$OUT/sd.img" desk v3paint pinball monster stardew v3bbs v3art \
+    sh software/nitros9/mksyscard.sh "$OUT/sd.img" desk v3paint monster stardew v3bbs v3art \
     > "$OUT/mksddisk.log" 2>&1 || { cat "$OUT/mksddisk.log"
     echo "FAIL  the card did not build"; exit 1; }
   cat "$OUT/mksddisk.log"

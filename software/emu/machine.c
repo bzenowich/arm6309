@@ -910,10 +910,24 @@ static void sd_reset(void)
  * burst; nothing can observe the new byte before then, so the exchange is
  * done here rather than at the trigger - which is also what lets SDCTRL b7
  * abandon a burst that has not finished. */
+/* ⭐ WHEN AN ACCESS HAPPENS IS THE E CYCLE IT OCCUPIES, not the step's
+ * first: m->dots only moves between steps, and one step can be a 6309 TFM
+ * that reads SDDATA thirty-two times.  Timed by the step, all thirty-two
+ * land on the same dot, every trigger after the first falls inside the burst
+ * it started and is dropped (§6.5), and the block comes back as one byte
+ * repeated - which is what the H6309 build of rbsd.asm read LSN 0 as, until
+ * 2026-09-24.  cpu.now is valid inside a read or write callback, and is
+ * never earlier than the step's start. */
+static uint64_t sd_now(void)
+{
+    uint64_t t = m->cpu.now * DOTS_PER_E;
+    return t > m->dots ? t : m->dots;
+}
+
 static void sd_settle(void)
 {
     if (!sd.inited) sd_reset();
-    if (sd.pending && m->dots >= sd.burst_until) {
+    if (sd.pending && sd_now() >= sd.burst_until) {
         sd.pending = 0;
         if (sd.pend_cs) sd.rx = sd_exchange(sd.pend_mosi);
         else {
@@ -932,9 +946,10 @@ static void sd_settle(void)
 static void sd_trigger(void)
 {
     uint64_t p, start;
-    if (m->dots < sd.burst_until || sd.pending) { sd.dropped++; return; }   /* §6.5 */
+    uint64_t now = sd_now();
+    if (now < sd.burst_until || sd.pending) { sd.dropped++; return; }   /* §6.5 */
     p = sd.fast ? 2 : 64;                        /* the '393 tap's period, in dots */
-    start = (m->dots + p - 1) / p * p;           /* BUSY rises on its next fall */
+    start = (now + p - 1) / p * p;           /* BUSY rises on its next fall */
     sd.burst_until = start + 8 * p;
     sd.pending = 1;
     sd.pend_mosi = sd.hold;                      /* the '574 latched at E-fall */
@@ -952,7 +967,7 @@ static uint8_t sd_read(uint8_t r)
         return v;
     }
     case 1:                                      /* SDSTAT (§6.3) */
-        return (uint8_t)((m->dots < sd.burst_until ? 1 : 0)
+        return (uint8_t)((sd_now() < sd.burst_until ? 1 : 0)
                        | (sd.present ? 2 : 0)
                        | (sd.wp ? 4 : 0));
     default:
@@ -978,7 +993,7 @@ static void sd_write(uint8_t r, uint8_t v)
         sd.fast = (v >> 1) & 1;
         if (v & 0x80) {                          /* b7 soft reset: BUSY and the '163 */
             sd.pending = 0;
-            sd.burst_until = m->dots;
+            sd.burst_until = sd_now();
         }
         break;
     case 3: sd.hold = v; break;                  /* SDMOSI: load, no burst */
@@ -1784,6 +1799,13 @@ int main(int argc, char **argv)
     m->cpu.ctx = m;
     m->cpu.read = rd;
     m->cpu.write = wr;
+    /* ⭐ THE MACHINE'S CPU IS AN HD6309E, and since 2026-09-24 this runs one:
+     * hardware/cpu/sim/hd6309.c, the complete core held to XRoar's and to
+     * silicon's cycle table (hardware/cpu/docs/6309.md §4.1).  It powers up in
+     * emulation mode, as the chip does, so a 6809 build runs as it did - save
+     * that an undocumented 6809 opcode now TRAPS, as it would on the chip.
+     * CPU6809=1 puts back cpu6809.c's model of mc6809i.v, for a comparison. */
+    if (!getenv("CPU6809")) cpu6309_enable(&m->cpu);
     cpu6809_reset(&m->cpu);
     /* ⭐ COLDBOOT=1 STARTS WHERE THE MACHINE DOES: at the reset vector, so
      * boot.asm's POST, its SIMM walk and §10a's boot dialog all run - which

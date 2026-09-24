@@ -7,6 +7,69 @@ is current.
 
 ---
 
+## `6309.md` §1, §1.1 and §3 — "nothing has ever executed a 6309 instruction" (2026-09-24)
+
+Superseded when the recipe's default became `CPU=6309` and NitrOS-9 booted native on
+`hd6309.c` (§4.4).  The sections said:
+
+> ## 1. ⛔ The state today: nothing has ever executed a 6309 instruction
+>
+> | | |
+> |---|---|
+> | `nitros9/rules.mak:32-34` | passes **`--6309`** to `lwasm` — which only *permits* the mnemonics |
+> | `recipes/arm6309/arm6309.mak` | ⛔ **`CPU ?= 6809`**, so the build links `libnos96809l2.a`. ⭐ **Since 2026-09-21 `CPU=6309` implies `-DH6309=1`** and an unknown `CPU` is an error — §4.3 |
+> | anywhere | ⛔ **no `LDMD`.** The HD6309E would come out of reset in **6809 emulation mode** and stay there |
+> | every `IFNE H6309` in the kernel | ⛔ compiled to nothing by `--pragma=condundefzero` — `fallimg.asm`, `fallprc.asm`, `fclrblk.asm`, `ccbfsrqmem.asm`, … |
+> | the only 6309 mnemonics in the port | `rbsd.asm:502,566` — `LDW`/`TFM` for the SD block moves, **both inside `ifne H6309` with a 6809 fallback** |
+>
+> And the reason, stated in the port itself (`armio.asm:513-517`):
+>
+> > ⛔ **6809 INSTRUCTIONS ONLY, here and everywhere in this port.** The machine's
+> > CPU is an HD6309E, but nothing is built with H6309 set and the models are 6809
+> > cores (`machine_tb`'s `mc6809e`, `hardware/cpu/sim/cpu6809.c`), so a TFM here
+> > assembled, linked, booted — and **copied NOTHING**.
+>
+> ⛔ **That last clause is the whole problem, and it is worse than a missing
+> feature.** `cpu6809.c`'s decode treats an unknown byte as *"a 2-byte, 2-cycle
+> no-op"*, and `mc6809e.v` has its own ghost decode. So today a 6309 instruction
+> does not fail — **it silently does nothing, or does something else**, and the
+> machine runs on to a plausible wrong answer. §4.0 is the fix and it comes before
+> everything.
+>
+> ### 1.1 The three models, and which of them matters
+>
+> | | runs | 6309? |
+> |---|---|---|
+> | ⭐ **`hardware/cpu/sim/cpu6809.c`** — 801 lines of C, cycle-accurate | ⭐ **every text, desktop, file-manager and PS/2 measurement in this repository**, in seconds | ⛔ no |
+> | `mc6809e.v` in `machine3.v` | the boot ROM, `v3machine_tb`, `check:machine` — ~7.5 min | ⛔ no |
+> | `hardware/cpu/` — the real thing, an HD6309E on an STM32G431CB | ⛔ **nothing yet.** `src/stub_core.c` is **38 lines**; what is written is the bus timing (`spike_dma.c`, `spike_poll.c`), not the instruction set | ⛔ **not started** |
+>
+> ⭐ **Read the first row again: the host emulator is where the work happens.**
+> `run-v3text.sh`, `desk`'s `$FF2E` marks, `checkv3text.py`, `run-ps2script.sh`,
+> `run-emu.sh` — every number `proportional-font.md` argues from was taken on
+> `cpu6809.c`. The Verilator benches run `boot.asm`, not NitrOS-9's text path.
+>
+> ⭐⭐ **So the Verilog core is not the blocker, and waiting for it is the wrong
+> plan.** Teaching `cpu6809.c` the 6309 unblocks every measurement in the tree; the
+> Verilog core can lag by months.
+>
+> ---
+
+and §3 opened:
+
+> ## 3. ⛔ Why it cannot simply be switched on
+>
+> Flip `CPU=6309` today and the build succeeds, the image links, NitrOS-9 boots —
+> and `F$Move` copies nothing, on both models, silently. The failure mode is the
+> one `armio.asm` records, multiplied by every kernel path at once.
+
+§4.3 ended:
+
+> ⚠ And a `CPU=6309` build **warns that no model can run it** and points here, so
+> that is discovered at build time rather than as a machine that boots to nothing.
+
+---
+
 ## `6309.md` §4.1 and §4.1.1 — "STARTED: hd6309.c, and TFM runs" (2026-09-24)
 
 Superseded by the complete core (§4.1).  The sections said:
