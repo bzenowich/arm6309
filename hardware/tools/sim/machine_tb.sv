@@ -64,7 +64,20 @@ module machine_tb;
   // one. Neither clock is a multiple of the other, so the card's host port
   // sees E at every phase, as on the backplane. demo_tb does the same in ps.
   logic SLOTCLK = 0;
-  always #0.8872 SLOTCLK <= ~SLOTCLK;
+  /* ⭐ GATED SINCE 2026-09-24, because it was most of the run's cost: at
+   * 28.4 MHz it has more edges than the dot clock, and the card it clocks
+   * is idle in every scenario but one. It runs through reset (so the card
+   * comes out of reset in its reset state), stops, and starts again only
+   * where a scenario uses the card: before `firqtst` in run_nitros9.
+   * ⛔ And stopping it is not allowed to hide anything: `aud_cold` counts
+   * every bus cycle that selects the card while its clock is stopped, and
+   * every scenario ends with a claim that it is zero. */
+  bit slot_run = 1;
+  int aud_cold = 0;
+  always begin
+    wait (slot_run);
+    #0.8872 SLOTCLK <= ~SLOTCLK;
+  end
   wire [7:0] DACSAMP0, DACSAMP1, DACSAMP2, DACSAMP3;
   wire [7:0] DACVOL0, DACVOL1, DACVOL2, DACVOL3;
   wire [15:0] ACOUNT;
@@ -561,6 +574,16 @@ module machine_tb;
     if (n_reset && (m.card.OMR !== ~blank_sr[1])) omr_mismatch++;
   end
   wire pixon = ~blank_sr[1];
+  always @(negedge e) if (!slot_run && m.aud_sel) aud_cold++;
+  initial begin
+    wait (n_reset);
+    repeat (64) @(posedge CLK25);
+    slot_run = 0;
+  end
+  task automatic claim_aud_cold();
+    ok(aud_cold == 0,
+       $sformatf("the audio card was addressed only while its clock ran - a stopped SLOTCLK hid nothing (%0d cycles)", aud_cold));
+  endtask
 
   bit shot_overflow;
   task automatic capture_frame(input int budget);
@@ -920,6 +943,7 @@ module machine_tb;
     if (at < 0) return;
     // ⭐ /FIRQ, which no bench on this machine had raised: firqtst's driver runs
     // the audio card's tempo timer at 50 Hz and counts through krn's FIRQ stub.
+    slot_run = 1;                              // the card's clock, for firqtst
     type_text("load /dd/modules/firqtst\r");   // ⭐ off the card, through /DD
     wait_text("{Term|02}/DD:", at + 1, 8 * SEC, "load put the FIRQ test driver in memory", at);
     if (at < 0) return;
@@ -948,31 +972,31 @@ module machine_tb;
 
   // +scenario=reboot: F$Debug's reboot, through the boot ROM and back.
   task automatic run_reboot();
-    int at, writes0;
+    int at, writes0, fails0;
     localparam int SEC = 2097917;
-    $display("REBOOT. software/nitros9/: boot, `reboot`, the POST again, and NitrOS-9 again");
+    /* ⭐ THE FIRST BOOT IS run_nitros9's WHOLE SESSION, SINCE 2026-09-24.
+     * `reboot` used to boot, prompt, and reboot, and `nitros9` booted again
+     * in a run of its own to type its commands: two 6.6 s boots of machine,
+     * ~30 min of simulation each, to reach the same first prompt. Now the
+     * commands run in the first boot and the reboot follows them, so
+     * SCENARIOS=reboot asserts everything `nitros9` does, and `nitros9` alone
+     * is the first half. */
+    fails0 = fails;
+    run_nitros9();
+    if (fails != fails0) return;
     $display("");
-    /* ⚠ SIX SECONDS, NOT FOUR, SINCE 2026-09-20. This is the only wait in
-     * either NitrOS-9 scenario that spans the POST *and* the whole boot from
-     * one origin, so it is the one the bootfile's growth eats first: `rbsd`
-     * and `SD0` went in that day, and the banner was printing at 4 s with the
-     * prompt still to come. run_nitros9 allows 2 + 3 for the same journey;
-     * this now allows 6 for the POST plus it. */
-    /* ⚠ 20, NOT 6, SINCE 2026-09-22: the POST plus a whole boot off the CARD
-     * over bit-banged SPI (run_nitros9's note says the rest). */
-    wait_text("{Term|02}/DD:", 0, 20 * SEC, "NitrOS-9 booted to the shell", at);
+    $display("REBOOT. software/nitros9/: `reboot`, the POST again, and NitrOS-9 again");
+    $display("");
+    at = find_text("registers intact", 0);
+    wait_text("{Term|02}/DD:", at, 4 * SEC, "firqtst returned to the shell", at);
     if (at < 0) return;
     /* ⭐ $61 OR $63, NOT $40 (2026-09-20; $62 became $61 on 2026-09-22). boot.asm's last stage is
      * §10a's boot dialog, so the code it leaves behind is the dialog's.
-     * ⚠ WHICH of the two is a property of the ROM this scenario was handed,
-     * and the bench cannot see it: the toolbox is ROM page 64 and
-     * recipes/arm6309.mak only assembles it under -DV3=1, which
-     * run-machine.sh does NOT pass for `nitros9`/`reboot`. So $63 - "no
-     * toolbox, dialog skipped" - is what a default build gives, and $61 -
-     * "Disk found", because sd_cd is 1 since 2026-09-22 and the card in the
-     * socket IS the system disk - is what a V3=1 one would. Both say
-     * the POST reached §10a; neither is $40 any more, and an error code still
-     * fails. */
+     * ⚠ WHICH of the two is a property of the ROM this scenario was handed:
+     * $63 - "no toolbox, dialog skipped" - and $61 - "Disk found", because
+     * sd_cd is 1 since 2026-09-22 and the card in the socket IS the system
+     * disk. Both say the POST reached §10a; neither is $40 any more, and an
+     * error code still fails. */
     ok((progress == 8'h61 || progress == 8'h63) && !saw_progress_error,
        $sformatf("boot.asm ran every stage the first time, ending in §10a's dialog (last progress $%02h)", progress));
     writes0 = progress_writes;
@@ -980,6 +1004,20 @@ module machine_tb;
     wait_text("RK", at, 4 * SEC,
               "reboot: the kernel quieted the cards and re-entered the boot ROM, and its handoff reached the loader again", at);
     if (at < 0) return;
+    /* ⭐ AND THE AUDIO CARD REALLY WAS QUIETED: firqtst left its tempo timer
+     * running at 50 Hz, so 0.3 s with the clock still going is fifteen chances
+     * to raise /FIRQ, and none may. That is also what makes it safe to stop
+     * the clock for the second boot, which is ~9 s of machine that never
+     * addresses the card (aud_cold still counts, and must end at zero). */
+    begin
+      int r0;
+      r0 = firq_rises;
+      repeat (SEC * 3 / 10) @(negedge e);
+      $display("");                          // the console is mid-line here
+      ok(firq_rises == r0 && !firq_asserted,
+         $sformatf("⭐ and the audio card stayed silent for 0.3 s after it, timer and all: the kernel quieted it (%0d /FIRQ rises)", firq_rises - r0));
+      slot_run = 0;
+    end
     ok(progress_writes - writes0 >= 17 && (progress == 8'h61 || progress == 8'h63),
        $sformatf("boot.asm's POST ran again from its reset vector: %0d more progress writes, ending at $%02h - with the map already live, which it rewrites first",
                  progress_writes - writes0, progress));
@@ -1335,6 +1373,7 @@ module machine_tb;
 
     if (scenario != "main") begin
       run_scenario();
+      claim_aud_cold();
       $display("");
       if (fails == 0) $display("machine_tb [%s] OK - %0d claims", scenario, claims);
       else            $display("machine_tb [%s] - %0d of %0d claims FAILED", scenario, fails, claims);
@@ -1811,6 +1850,7 @@ module machine_tb;
        $sformatf("⭐ and the dot that shows is exactly the connector's BLANK two dots late, for the whole run - which is what makes the capture above a function of the four signals that leave the card (%0d dots disagree)",
                  omr_mismatch));
 
+    claim_aud_cold();
     $display("");
     $display("      %0d E cycles, %0d dots of /WAIT, %0d VRAM writes, %0d VRAM reads, %0d VSTAT reads",
              e_cycles, wait_dots, vram_writes, vram_reads, vstat_reads);

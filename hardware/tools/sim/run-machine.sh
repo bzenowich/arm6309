@@ -86,13 +86,13 @@ ARGS=""
 # error path is the right answer and is asserted as such. SCENARIOS narrows it:
 # SCENARIOS=main for the boot alone.
 SCENARIOS=${SCENARIOS:-"main e1 s1 s2 s3 alias e2 disk nodisk"}
-# ⭐ AND AN EIGHTH THAT IS NOT IN THAT LIST: `nitros9` boots NitrOS-9 Level 2
-# from reset through boot.asm to a shell on the UART and types `dir` - about
-# 2.5 s of machine, which is minutes here, so it is asked for by name:
-#   SCENARIOS=nitros9 npm run check:machine
-# and a ninth, `reboot`: boot, then F$Debug's reboot back through boot.asm's POST
-# to a second prompt:
-#   SCENARIOS=reboot npm run check:machine
+# ⭐ AND TWO THAT ARE NOT IN THAT LIST, asked for by name because they are
+# long. `nitros9` boots NitrOS-9 Level 2 from reset through boot.asm to a shell
+# on the UART and types `dir`, `mfree` and `firqtst q` - ~10 s of machine,
+# ~35 min here. `reboot` is that whole session, then F$Debug's reboot back
+# through boot.asm's POST to a second prompt - 32 claims, ~45 min, and it
+# asserts everything `nitros9` does, so it is the one to run:
+#   SCENARIOS=reboot make -C hardware machine
 # It needs the port's ROM, built from $NITROS9DIR (software/nitros9/README.md).
 # ⛔ CPU=6809, because machine3.v's CPU is mc6809e.v: the recipe builds for the
 # 6309 by default since 2026-09-24, and a 6309 build on a 6809 core runs until
@@ -172,6 +172,15 @@ case " $SCENARIOS " in *" disk "*)
   [ "$sig" = "3633303901000000" ] || {
     echo "FAIL  the card image carries $sig at LSN 0 +\$F0, not the boot signature"; exit 1; }
   ;;
+esac
+# ⭐ `reboot` RUNS `nitros9`'s WHOLE SESSION AS ITS FIRST BOOT (2026-09-24,
+# machine_tb.sv's run_reboot), so asking for both would boot NitrOS-9 twice to
+# assert the same things: ~30 min of simulation for nothing.
+case " $SCENARIOS " in *" reboot "*)
+  case " $SCENARIOS " in *" nitros9 "*)
+    echo "note  nitros9 is the first half of reboot - running reboot alone"
+    SCENARIOS=$(echo " $SCENARIOS " | sed 's/ nitros9 / /') ;;
+  esac ;;
 esac
 ok=0; bad=0; missing=0
 for sc in $SCENARIOS; do
