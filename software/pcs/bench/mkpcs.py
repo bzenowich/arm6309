@@ -422,6 +422,12 @@ def template_record(tm):
         k = pcsobj.kind_of(tm)
         L[pcsobj.L_TMPL] = tm.index
         L[pcsobj.L_TYPE] = pcsobj.TYPEID[k] if k else 0xFF
+        # ⛔ AND THE ART'S LEFT EDGE IS ONE PIXEL COLUMN, as every loaded
+        # table's is (pcsfile.rekey).  Budge's tail holds (HDIV8, HMOD8), and
+        # copied raw, PEAdd translated a BYTE COLUMN by a pixel displacement:
+        # a rollover placed at x=96 put its art at 198.
+        L[pcsobj.L_PX] = tm.px
+        L[pcsobj.L_XM] = 0
     rec += L
     if len(rec) != tm.objlen:
         raise ValueError('%s: %d bytes, OBJLEN says %d'
@@ -596,7 +602,17 @@ def edit_script():
 
     ⚠ Every argument is a byte and a displacement is two's complement, because
     the machine reads these out of the generated table and the model reads the
-    same tuples."""
+    same tuples.
+
+    ⚠ `PCS_EDIT_UPTO=n` keeps the first n steps, for bisecting a session that
+    goes wrong; the gate then fails on its refusal count, which is the point -
+    a truncated session is a diagnostic and never a pass."""
+    s = _edit_script()
+    n = os.environ.get('PCS_EDIT_UPTO')
+    return s if n is None else s[:int(n)] + [s[-1]]
+
+
+def _edit_script():
     return [
         (PE_ADD,   TMPL['BMP2'], 20, 8, 0),      # a bumper, in clear space
         (PE_ADD,   TMPL['ROLL2'], 96, 20, 0),    # ... and a rollover

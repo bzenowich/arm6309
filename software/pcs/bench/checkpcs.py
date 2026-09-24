@@ -229,6 +229,13 @@ def main():
 
     pak, want, w, h = expected()
 
+    # ⛔ THE EDIT SESSION BEFORE THE UNEDITED DATABASE, because mode 6 dumps
+    # the database AFTER the session: comparing it with the table as built is
+    # comparing it with the one thing it must no longer be.  edit_session
+    # compares it with the model's edited table instead.
+    if len(sys.argv) > 2 and sys.argv[2] == 'edit':
+        return 0 if edit_session(vram) else 1
+
     # ⭐⭐ THE DATABASE FIRST, because it is what the hit test and the ball
     # actually read - and because a picture can be right for the wrong reason.
     if not _database(vram, pak):
@@ -239,8 +246,6 @@ def main():
     # holding is each part's FINAL frame.  Rendering frame 0 and comparing
     # happened to pass, which is exactly the kind of agreement that stops
     # being true the day a part comes to rest mid-animation.
-    if len(sys.argv) > 2 and sys.argv[2] == 'edit':
-        return 0 if edit_session(vram) else 1
     ball = len(sys.argv) > 2 and sys.argv[2] == 'ball'
     if ball:
         sim = trajectory(vram, pak)

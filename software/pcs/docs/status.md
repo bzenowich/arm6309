@@ -19,7 +19,7 @@ checkers).
 | `pcspak.inc` — the scan converter and span database | 1,252 | ⭐⭐ **byte-identical to `PPAK.s`** on all 26 shipped tables |
 | `pcsobj.inc` + `pcsrun.inc` — the simulator | 2,299 | ⭐⭐ **bit-exact over 600 frames** against a Python transliteration of `RUN.s`: the ball's `(x, y, BDX, BDY)` every frame, 95 hits on 11 objects, every part's state byte, and the score |
 | `pcsdraw.inc` — the painter, the 1bpp art blit | 589 | every pixel of the table, against the model |
-| `pcsedit.inc` — the editor's **database** operations | 950 | ⚠ modelled and gated, and **the 6809 side does not yet agree** (`RUNS=m6`) |
+| `pcsedit.inc` — the editor's **database** operations | 950 | ⭐⭐ **agrees with `pcsedit.py`** over a twelve-edit session: step results, object area and span database (`m6`, in the default bench since 2026-09-24) |
 | `pcsfile.inc` — a table is a file on the card | 192 | ⭐ all four `DEMO*.PB` load off `/SD0/DATA` with **byte-identical span databases** |
 | `pcstext.inc` — the original's proportional font | 216 | screenshotted: the glyphs, the spacing, right-aligned numbers, boxes and frames |
 | `pcsin.inc` — mouse, keyboard, cursor | 230 | the cursor is the **card's hardware sprite**; a scripted mouse drives a real game |
@@ -55,8 +55,9 @@ piece where a large amount of working code is waiting on a small amount of missi
 
 ### Known open items on work already written
 
-- ⚠ **The `m6` editor leg is not green** — 11 of 12 edits complete. It is asked for by
-  name so the default bench stays honest.
+- ⚠ **Nothing re-keys the parts after an edit.** `vlo`/`rcn` point into the object area
+  and `PERbld` rewrites it, so the editor UI must re-run `PBPlay`'s keying half before it
+  draws parts or plays.
 - ⚠ **`TIMETBL` re-derivation for 59.94 Hz is still unmeasured.** Gravity, flipper sweep
   and the drain delay are all counted in frames and the original busy-waited.
 - ⚠ **Sound is unverified by anything.** A bench cannot hear. The note *sequences* are

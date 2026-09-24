@@ -49,9 +49,7 @@ ROOT=$(pwd)
 OUT=${OUT:-$(cd "$_here/.." && pwd)/build/pcs}
 FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
-# ⚠ m6 IS NOT IN THE DEFAULT SET: the editor's 6809 side does not yet agree
-# with pcsedit.py, which is the specification and is green.  `RUNS=m6` runs it.
-RUNS=${RUNS:-"m0 m4 f0 fX m1 m2 m5"}
+RUNS=${RUNS:-"m0 m4 m6 f0 fX m1 m2 m5"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH

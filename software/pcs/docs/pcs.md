@@ -298,6 +298,7 @@ The legs:
 |---|---|
 | `m0` | the scan converter: all 153,600 bytes of the table rectangle, and the span database record for record |
 | `m4` | ⭐⭐ **the whole simulator**, 600 frames — the ball's `(x, y, BDX, BDY)` every frame, every part's state byte, and the score, the sound and the run chain |
+| `m6` | ⭐⭐ **the editor**: a twelve-edit session through `pcsedit.inc`, two of them required to be refused, and the step results, the object area and the span database it leaves, against `pcsedit.py` |
 | `m1` | ⛔ MUTATION: the midpoint x rounding is dropped, so every sloped edge moves |
 | `m2` | ⛔ MUTATION: a B-polygon paints its RECORDS instead of their complement — the bug that looks plausible on screen while inverting the ball's world |
 | `m5` | ⛔ MUTATION: `BOUNCE` rotates back by `TTA` instead of `32 - TTA`. ⛔ The two are the SAME for `tta` 0 and 16, so a ball in a box of flat walls behaves identically and only a slope tells them apart |
@@ -339,14 +340,17 @@ the answer.
   about the card or the emulator's model of it. The bench's streams reposition at every row
   boundary, so they do not depend on the answer — but `graphics.md` §19 should settle it.
 - ⚠ **`TIMETBL` re-derivation is an unmeasured number** until the program runs at frame rate.
-- ⚠⚠ **The editor's database operations are modelled and gated but the 6809 side does not
-  yet agree.** `pcsedit.py` and its self-tests are the specification and are green; the
-  bench's `m6` leg runs the same twelve-edit session on the machine and compares what each
-  step came to, every byte of the object area and the whole span database — and it is
-  **asked for by name** (`RUNS=m6`) until it passes, so the default bench stays honest.
-  What is established by measurement: the record each operation builds is byte-identical to
-  the model's, and the object area comes back with the original object count, so something
-  between the rebuild and the commit is undoing the session.
+- ⭐⭐ **The editor's database operations agree with the model** (`m6`, in the default
+  bench). The twelve-edit session (two parts out of the bin, a drag, a vertex moved, one
+  pasted and cut again, three paints, a delete, and two edits that must be refused)
+  leaves the same step results, the same object area byte for byte, and the same span
+  database as `pcsedit.py`. ⚠ **The editor opens a table as loaded**: mode 6 snapshots the
+  object area before `PBPlay` keys the parts and restores it before the session, because
+  `PBPlay` borrows every part's `L[8]` and runs every INIT proc. `PBClose` (`CLOSEOBJS`)
+  is the way back from a game, and it runs the INIT procs again, as the original does.
+  ⚠ **Nothing rebuilds the run chain after an edit yet**: `vlo`/`rcn` point into the
+  object area, which `PERbld` rewrites, so the editor UI has to re-key (`PBPlay`'s first
+  half) before it draws parts again.
 - ⚠ Not open any more, but worth keeping as a method note: the two tables that
   did not paint (2026-09-23) were **two different defects wearing one symptom**,
   and both were found by **modelling the 6809 routine in Python and diffing it
