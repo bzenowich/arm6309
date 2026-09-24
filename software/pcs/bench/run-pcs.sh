@@ -175,6 +175,34 @@ for r in $RUNS; do
   esac
 done
 
+# ⛔⛔ A MUTATION LEG MUST PROVE THE CHECKER RAN.  Written as a bare
+# `if python3 ... then FAIL else ok`, a checker that CRASHES exits non-zero and
+# reads exactly like a caught mutation - and on 2026-09-23 an AttributeError in
+# render_table made all three legs report `ok` while checking nothing at all.
+# CLAUDE.md's own trap: "a negated claim that can only be satisfied by the thing
+# under test EXISTING must prove the tool ran".  A real rejection prints a FAIL
+# line; a crash prints a traceback and no FAIL.
+mutation() {
+  m=$1; what=$2; shift 2
+  if python3 software/pcs/bench/checkpcs.py "$OUT/$m" "$@" > "$OUT/$m.txt" 2>&1; then
+    echo "FAIL  the gate passed a run with $what"
+    return 1
+  fi
+  if grep -q "Traceback" "$OUT/$m.txt"; then
+    echo "FAIL  ⛔ the CHECKER crashed - this leg proved nothing"
+    tail -3 "$OUT/$m.txt"
+    return 1
+  fi
+  if ! grep -q "^FAIL" "$OUT/$m.txt"; then
+    echo "FAIL  ⛔ non-zero exit but no FAIL line - the checker did not reject it"
+    tail -3 "$OUT/$m.txt"
+    return 1
+  fi
+  echo "ok    the gate rejected it"
+  grep -m1 "^FAIL" "$OUT/$m.txt"
+  return 0
+}
+
 echo
 echo "=== the table, against PPAK.s ==="
 for r in $RUNS; do
@@ -194,22 +222,13 @@ for r in $RUNS; do
     m4) echo "--- m4 ⭐⭐ THE BALL, frame for frame against RUN.s ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/m4" ball || fail=1 ;;
     m1) echo "--- m1 ⛔ MUTATION: no midpoint rounding - this must FAIL ---"
-        if python3 video3/bench/checkpcs.py "$OUT/m1" > "$OUT/m1.txt" 2>&1
-        then echo "FAIL  the gate passed a run with every sloped edge moved"
-             fail=1
-        else echo "ok    the gate rejected it"; head -4 "$OUT/m1.txt" | tail -2; fi ;;
+        mutation m1 "every sloped edge moved" || fail=1 ;;
     m6) echo "--- m6 ⭐⭐ THE EDITOR: a construction session, and the database it left ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/m6" edit || fail=1 ;;
     m5) echo "--- m5 ⛔ MUTATION: BOUNCE rotates back by TTA - this must FAIL ---"
-        if python3 video3/bench/checkpcs.py "$OUT/m5" ball > "$OUT/m5.txt" 2>&1
-        then echo "FAIL  the gate passed a run whose every bounce is mirrored"
-             fail=1
-        else echo "ok    the gate rejected it"; grep -m1 'diverges' "$OUT/m5.txt"; fi ;;
+        mutation m5 "every bounce mirrored" ball || fail=1 ;;
     m2) echo "--- m2 ⛔ MUTATION: the B-polygon paints its records - this must FAIL ---"
-        if python3 video3/bench/checkpcs.py "$OUT/m2" > "$OUT/m2.txt" 2>&1
-        then echo "FAIL  the gate passed a run with the backdrop inside out"
-             fail=1
-        else echo "ok    the gate rejected it"; head -4 "$OUT/m2.txt" | tail -2; fi ;;
+        mutation m2 "the backdrop inside out" || fail=1 ;;
   esac
 done
 

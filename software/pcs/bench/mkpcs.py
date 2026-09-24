@@ -205,7 +205,54 @@ def font():
     for g in range(36):
         bits, h, bw = double(f[g * 7:g * 7 + 7], 7, 1)
         glyphs.append(bits)
-    return glyphs, [x * SCALE for x in w]
+    # ⛔ THE ADVANCE IS CWIDTH + 1, NOT CWIDTH.  CWIDTH is the glyph's INK width
+    # (verified: 'I' is $F0, four pixels, and its entry is 4); the inter-letter
+    # gap is the `SEC` before the `ADC` in SPACE (CDRAW.s:825-828), which is
+    # Budge's idiom for "+1" and reads as a stray flag if you are not looking
+    # for it.  Dropping it sets every word solid.
+    return glyphs, [(x + 1) * SCALE for x in w]
+
+
+
+# ⭐⭐ THE CURSOR IS THE HARDWARE SPRITE (pcs.md §2), which is the whole answer
+# to "the original XOR-drew its cursor and this card cannot XOR".  16 x 16 at
+# two bits a pixel: plane 0 is code 1 and plane 1 is code 2, and the card turns
+# each code into LUT bank 1 or 2 - the banks `PtrInit3` already made opaque
+# black and white for the system pointer, so the arrow needs no LUT writes.
+# ⚠ Packing is plan §7's: four bytes a row, plane0 cols 0-7, plane0 cols 8-15,
+# then plane1's two, MSB leftmost (mkmvania.py's HeroArt, same contract).
+CURSOR = [
+    "o               ",
+    "oo              ",
+    "obo             ",
+    "obbo            ",
+    "obbbo           ",
+    "obbbbo          ",
+    "obbbbbo         ",
+    "obbbbbbo        ",
+    "obbbbbbbo       ",
+    "obbbbbbbbo      ",
+    "obbbbbooooo     ",
+    "obbobbo         ",
+    "obo obbo        ",
+    "oo   obbo       ",
+    "o     obbo      ",
+    "       oo       ",
+]
+
+
+def cursor():
+    out = []
+    for r in CURSOR:
+        assert len(r) == 16, r
+        p0 = [1 if c == 'o' else 0 for c in r]
+        p1 = [1 if c == 'b' else 0 for c in r]
+
+        def by(bits, off):
+            return sum((1 << (7 - i)) for i in range(8) if bits[off + i])
+        out += [by(p0, 0), by(p0, 8), by(p1, 0), by(p1, 8)]
+    assert len(out) == 64
+    return out
 
 
 # ---------------------------------------------------------------- the art --
@@ -242,6 +289,14 @@ def artbank():
     if _ARTBANK is None:
         _ARTBANK = art()
     return _ARTBANK
+
+
+def _Lg(L, j):
+    """One byte of an L-record, whether it came as a dict of the few fields
+    the picture needs or as the record's own bytes."""
+    if isinstance(L, dict):
+        return L.get(j)
+    return L[j] if j < len(L) else None
 
 
 def render_table(pak, objs, parts=None):
@@ -289,7 +344,8 @@ def render_table(pak, objs, parts=None):
             # OBJLEN - 3 - 2n bytes and that is SIXTEEN for most of them;
             # reading LREC of them walks into the next record, or off the end.
             L = dict((j, p.L(j)) for j in (pcsobj.L_TMPL, pcsobj.L_PX,
-                                           pcsobj.L_VERT))
+                                           pcsobj.L_VERT, pcsobj.L_TYPE,
+                                           pcsobj.L_X1, pcsobj.L_Y1))
             k = p.L(pcsobj.L_STATE) & 0x7F
         first, count = index[L[pcsobj.L_TMPL]]
         if count == 0:
@@ -297,8 +353,35 @@ def render_table(pak, objs, parts=None):
         if k >= count:
             k = count - 1
         off, fh, fw, _dy = frs[first + k]
-        col = L[pcsobj.L_PX] * s
-        row0 = L[pcsobj.L_VERT] * s
+        # ⛔⛔ THE BALL IS DRAWN FROM X1/Y1 AND NOT FROM ITS BITMAP HEADER.
+        # `MOVEBALL` writes L[17]/L[18] and never touches L[2]/L[3]; the
+        # original has a `DRAWBALL` of its own that reads those two bytes and
+        # its own IBALL shape rather than going through XOFFDRAW.  Positioning
+        # it like every other part paints it where the EDITOR left it for the
+        # whole game, while the simulation carries it round the table.
+        # ⚠ `L` IS A DICT ONLY WHEN A LIVE PART WAS PASSED; otherwise it is the
+        # record's own bytes.  `.get` on the second is an AttributeError, and
+        # the bench's mutation legs then "passed" because the CHECKER crashed -
+        # CLAUDE.md's "a negated claim that can only be satisfied by the thing
+        # under test existing must prove the tool ran".
+        if _Lg(L, pcsobj.L_TYPE) == pcsobj.TYPEID['BALL']:
+            # ⚠ AND A BALL WITH NO LIVE PART IS AT ITS HOME, not at whatever
+            # L[17]/L[18] happen to hold.  `INITB2` (RUN.s:626) runs before the
+            # first frame and puts the ball on `Y1 = L[2]`, `X1 = L[-5]` - the
+            # record's LAST X VERTEX, which for the four-vertex ball is the
+            # shape's left edge.  "Home is where the editor left the ball
+            # part", which is why the ball is a part you place.  The machine
+            # calls INITOBJS in `PBPlay`, so rendering the raw template bytes
+            # here put the model's ball in the top-left corner.
+            if p is None:
+                col = o.x[-1] * s
+                row0 = _Lg(L, pcsobj.L_VERT) * s
+            else:
+                col = L[pcsobj.L_X1] * s
+                row0 = L[pcsobj.L_Y1] * s
+        else:
+            col = L[pcsobj.L_PX] * s
+            row0 = L[pcsobj.L_VERT] * s
         for r in range(fh):
             yy = row0 + r
             if not 0 <= yy < h:
@@ -811,6 +894,13 @@ def emit(path):
     w('PCFntW              equ       *         advance in card pixels, 37 entries')
     _fcb(o, cw)
     w('')
+    w('* ⭐ THE CURSOR, as the hardware sprite wants it (plan §7): 16 rows of')
+    w('* four - plane 0 columns 0-7 and 8-15, then plane 1\'s two.  Code 1 is')
+    w('* LUT bank 1 and code 2 is bank 2, which the system pointer already')
+    w('* made black and white, so it goes in with no LUT writes at all.')
+    w('PCCurs              equ       *         64 bytes')
+    _fcb(o, cursor())
+    w('')
     w('PCFont              equ       *')
     for g, bits in enumerate(glyphs):
         ch = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[g]
@@ -935,7 +1025,7 @@ def emit(path):
         # perfectly and in one flat colour, which looks like a palette problem
         # and is not one.
         _sz = 28 + len(serialise(_t[3]))
-        if _kept and _n + _sz > _budget:
+        if _n + _sz > _budget:
             break
         _kept.append(_t)
         _n += _sz
@@ -943,25 +1033,10 @@ def emit(path):
         print('    %d of %d tables embedded (%d of %d bytes); PCSTBLS picks others'
               % (len(_kept), len(_tb), _n, _budget))
     _tb = _kept
-    w('PC.NTbl             equ       %d' % len(_tb))
-    if _tb:
-        _blobs = []
-        for _nm, _lg, _ws, _objs in _tb:
-            for _o in _objs:
-                _o.fillcolor = pcspal.FROM_APPLE.get(_o.fillcolor, pcspal.PAINT0 + 5)
-            _blobs.append((_nm, bytes(_lg) + bytes(_ws) + serialise(_objs)))
-        w('PCTblO              equ       *         each table, from PCTbls')
-        _a = 0
-        for _nm, _b in _blobs:
-            w('                    fdb       %-6d    %s' % (_a, _nm))
-            _a += len(_b)
-        w('PCTblL              equ       *         ... and how long it is')
-        for _nm, _b in _blobs:
-            w('                    fdb       %-6d    %s' % (len(_b), _nm))
-        w('PCTbls              equ       *')
-        for _nm, _b in _blobs:
-            w('* %s - %d objects, %d bytes' % (_nm, _b[28], len(_b)))
-            _fcb(o, _b)
+    w('PC.NTbl             equ       %d         ⛔ ALWAYS 0 NOW: a table is a'
+      % 0)
+    w('*                                       FILE (pcsfile.inc), and 26 of them')
+    w('*                                       in the module is an E$MemFul')
     w('')
     w('* ══════════════════ THE EDIT SCRIPT ══════════════════════════════')
     w("* ⭐ A construction session, five bytes a step: the operation and four")
