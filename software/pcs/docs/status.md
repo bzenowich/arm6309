@@ -27,6 +27,10 @@ checkers).
 | `pcssnd.inc` — the seven effects on the audio card | 200 | ⚠ **unheard**. The note sequences are the original's tables; nothing gates a sound |
 | `pcsgame.inc` — players, balls, tally, panel | 380 | ⭐ **it plays**: a scripted mouse launches the ball, gravity pulls it down, it bounces, the panel draws |
 
+⭐ **Since 2026-09-24 `pcs` is a 22.8 KB core and three libraries** (`pcsed`, `pcsui`,
+`pcsfl`) paged through one 8 KB window (`pcs.md` §5, `pcscore.inc`), so the editor can
+grow without the one-module 32 KB ceiling. The whole gate runs on the paged build.
+
 **The two decisions the whole port rests on**, both holding:
 
 - ⭐⭐ **The world stayed in the Atari's own units and only the renderer is doubled.**

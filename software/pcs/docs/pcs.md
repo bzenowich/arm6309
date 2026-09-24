@@ -191,10 +191,35 @@ is unchanged**, so the hit test is the original's and only the picture is finer.
 parts keep their own art, because it is also what the table shows; the bin's polygon entry
 is an icon and is redrawn too.
 
-⚠ **The `pcs` module must stay under 32 KB.** With 21 KB of data, one byte over is five
-8 KB blocks plus three, `F$Fork` answers `Error #207`, and nothing runs. The kit bitmap is
-stored at world resolution and cropped to the bin for exactly this reason; it is 31.1 KB
-today.
+⭐ **`pcs` is a resident core and three libraries** (`pcscore.inc`, 2026-09-24). A process
+here has seven 8 KB slots (the eighth is the kernel's), and one module had filled them.
+The **core** (22.8 KB, three slots) keeps what the frame loop calls sixty times a second:
+the simulator, the scan converter, the drawing primitives, the game. The **libraries**
+are modules of their own, each under 8 KB, paged through **one window slot**:
+
+| | library | exports |
+|---|---|---|
+| 1 | `pcsed`: the editor's database operations, the templates, the bench's edit script | `PESnap`, `PERoll`, `PERun` |
+| 2 | `pcsui`: the editor's screen (the kit, the icons, the picker) | `KitDraw`, `IconDraw`, `PickDraw` |
+| 3 | `pcsfl`: tables in and out (the file layer, `Build`, the built-in tables) | `PFArg`, `Build` |
+
+`LibInit` loads them (`F$Link`, else `F$Load` from the execution directory), reads each
+one's block out of the process's own DAT image (`F$GPrDsc`), and unmaps it (`F$ClrBlk`),
+which leaves it linked and in memory. A core call to a library export lands on a
+generated stub that maps the library in (`F$MapBlk`, skipped if it is already there),
+calls the entry, and **maps back whichever library was there before**, so a library can
+call the core that calls another library and return to its own code. A library calls the
+core through `cvtab`, a table of addresses in the shared data area, by way of a
+four-byte trampoline per routine (`pcsstub.inc`), so its source is unchanged. `LibFini`
+unlinks all three on every exit.
+
+⛔ **The window is one fixed address**, and every return into it depends on that: there
+is exactly one free slot, and `LibMap` refuses (`PCS-NOLIB`) if `F$MapBlk` answers
+anything else. ⛔ **The stack is never paged**: it is at the top of the data area.
+⚠ **Two lists are file format between the modules**, `pcslxp.inc` (the exports) and
+`pcscve.inc` (the core routines a library may call). Each is one source expanded two
+ways, and both are append-only. ⚠ **A library over 8 KB fails to assemble**, and a card
+must carry all four modules: a card with `pcs` alone answers `PCS-NOLIB`.
 
 **The art.** `BITMAPS.OBJ` (1,792 bytes) with the offset table at `RUN.s:100`. ⭐
 `mkpcs.py` reads all of it straight out of the original sources, doubles each byte's bits,
@@ -282,7 +307,13 @@ We lock to the card's 59.94 Hz VBL and `wtime` is recorded rather than spun.
 ## 6. Where it lives
 
 ```
-nitros9/level2/arm6309/cmds/pcs.asm        main, modes, the event loop
+nitros9/level2/arm6309/cmds/pcs.asm        main, modes, the event loop: THE CORE
+nitros9/level2/arm6309/cmds/pcscore.inc    ... loading and paging the libraries
+nitros9/level2/arm6309/cmds/pcsvars.inc    the data area, shared by all four modules
+nitros9/level2/arm6309/cmds/pcslxp.inc     the libraries' exports     (append-only)
+nitros9/level2/arm6309/cmds/pcscve.inc     the core's, to libraries   (append-only)
+nitros9/level2/arm6309/cmds/pcsstub.inc    a library's entry table and trampolines
+nitros9/level2/arm6309/cmds/pcs{ed,ui,fl}.asm   the three LIBRARIES
 nitros9/level2/arm6309/cmds/pcsdat.asm     GENERATED — art, palette, templates, tables
 nitros9/level2/arm6309/cmds/pcsdata.inc    the data area
 nitros9/level2/arm6309/cmds/pcspak.inc     PPAK.s — scan converter + span DB  (the core)

@@ -719,6 +719,47 @@ def _fcb(out, data, per=16, indent=' ' * 20):
         out.append('%sfcb       %s' % (indent, ','.join('$%02X' % b for b in data[i:i + per])))
 
 
+# ⭐ WHICH MODULE CARRIES WHICH DATA.  pcs is a resident core and three
+# libraries paged through one window (pcs.md "The module is a core and
+# libraries"); each assembles this same file with PCSLIB set to its number -
+# 0, undefined, is the core - and gets the equates and ONLY its own data.
+PCSLIB_OF = {
+    'PCTmpl': 1, 'PCTType': 1, 'PCTLen': 1, 'PCEdit': 1,          # pcsed
+    'PCBox': 2, 'PCKit': 2, 'PCKDbl': 2, 'PCIcon': 2,             # pcsui
+    'PCPickF': 2, 'PCTool': 2,
+    'PCDemo': 3, 'PCTest': 3,                                     # pcsfl
+}
+
+
+def _sectioned(lines):
+    """Wrap every data block in `ifeq PCSLIB-n` for the module that owns it.
+    ⛔ The EQUATES stay outside every guard, because all four modules need the
+    geometry; a guard is closed before any line that is neither data nor a
+    comment."""
+    out, open_, cur = [], None, 0
+    for l in lines:
+        t = l.split()
+        is_label_star = len(t) >= 3 and t[1] == 'equ' and t[2] == '*'
+        is_data = is_label_star or (t and not l[:1].strip() and
+                                    t[0].lower() in ('fcb', 'fdb', 'fcc', 'fcs'))
+        if is_label_star:
+            cur = PCSLIB_OF.get(t[0], 0)
+        if is_data:
+            if open_ != cur:
+                if open_ is not None:
+                    out.append('                    endc')
+                out.append('                    ifeq      PCSLIB%s'
+                           % ('' if cur == 0 else '-%d' % cur))
+                open_ = cur
+        elif open_ is not None and not (l.startswith('*') or not l.strip()):
+            out.append('                    endc')
+            open_ = None
+        out.append(l)
+    if open_ is not None:
+        out.append('                    endc')
+    return out
+
+
 def _checkgen(lines):
     """⛔ NO `fcb`/`fdb` OPERAND MAY CONTAIN WHITESPACE BEFORE A COMMA.
 
@@ -1197,6 +1238,7 @@ def emit(path):
         _fcb(o, t[name])
     w('')
 
+    o[:] = _sectioned(o)
     gen = _checkgen(o)
     if gen:
         for g in gen:

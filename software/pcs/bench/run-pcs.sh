@@ -89,7 +89,10 @@ ROM="$OUT/arm6309_rom.bin"
 # nothing noticed for as long as `pcs` needed no data file, and which then
 # presented as a table file that mkrom.sh had just written and the card did
 # not have.
-OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs \
+# ⛔ AND THE THREE LIBRARIES WITH IT: pcs is a core that F$Loads pcsed, pcsui
+# and pcsfl out of its execution directory (pcscore.inc), and a card with pcs
+# alone answers PCS-NOLIB before the first table is read.
+OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs pcsed pcsui pcsfl \
   > "$OUT/mksddisk.log" 2>&1 || {
     cat "$OUT/mksddisk.log"; echo "FAIL  the card did not build"; exit 1; }
 tail -3 "$OUT/mksddisk.log"
@@ -146,13 +149,20 @@ run() {
 # `Build` takes in preference to anything in the module.
 runf() {
   D="$OUT/$1"; shift
+  # ⛔ A LEG THAT EXPECTS PCS TO RUN STOPS ON PCS-RAN, like `run` - while pcs
+  # still owns the card.  f0 stopped on the shell's echo, AFTER pcs had exited,
+  # and the driver's repaint of the top-left corner was in the dump: 416 pixels
+  # of colour 27 that checkpbt.py's part-art tolerance waved through, and that
+  # vanished the day pcs's exit got slower.  Only fX, which must NOT print
+  # PCS-RAN, needs the echo.
+  FSTOP=$1; shift
   rm -rf "$D"; mkdir -p "$D"
   printf 'chx /sd0/cmds\riniz w5\rpcs %s >/w5\recho DONE-arm6309\r' "$*" \
     > "$D/typed.txt"
-  # ⛔ IT STOPS ON THE SHELL'S ECHO, NOT ON PCS-RAN, because the refusal leg
-  # must be able to NOT print PCS-RAN and still finish.
+  # ⚠ FSTOP is DONE-arm6309 only for the refusal leg, which must be able to NOT
+  # print PCS-RAN and still finish.
   (cd "$D" && SERIAL_IN=typed.txt SERIAL_GATE="02}" SERIAL_TYPE=60 \
-     SERIAL_THINK=700 SERIAL_STOP="DONE-arm6309" WILD=1 VIDEO3=1 \
+     SERIAL_THINK=700 SERIAL_STOP="$FSTOP" WILD=1 VIDEO3=1 \
      SDIMG="$OUT/sd.img" VRAMDUMP=vram.bin "$OUT/emu" "$ROM" . \
      "$SECONDS_OF_MACHINE" > /dev/null 2> emu.log) || true
   tr -d '\000' < "$D/serial.out" | tr -d '\r' > "$D/console.txt"
@@ -163,8 +173,8 @@ runf() {
 for r in $RUNS; do
   case "$r" in
     m0) run m0 0 ;;
-    f0) runf f0 0 "$FRAMES" demo2.pbt ;;
-    fX) runf fX 0 "$FRAMES" nosuch.pbt ;;
+    f0) runf f0 PCS-RAN 0 "$FRAMES" demo2.pbt ;;
+    fX) runf fX DONE-arm6309 0 "$FRAMES" nosuch.pbt ;;
     m4) run m4 4 ;;
     m1) run m1 1 ;;
     m2) run m2 2 ;;

@@ -5,6 +5,29 @@ it. `CLAUDE.md`'s rule: **specs describe only the present design**. Entries befo
 2026-09-24 were written in `hardware/video3/docs/history.md`, when `pcs.md` lived under
 `video3/docs/`, and moved here with it.
 
+## `pcs.md` §5 — "the `pcs` module must stay under 32 KB" (2026-09-24)
+
+Superseded the same day it was written, by the core-and-libraries layout (§5,
+`pcscore.inc`). The paragraph said:
+
+> ⚠ **The `pcs` module must stay under 32 KB.** With 21 KB of data, one byte over is five
+> 8 KB blocks plus three, `F$Fork` answers `Error #207`, and nothing runs. The kit bitmap is
+> stored at world resolution and cropped to the bin for exactly this reason; it is 31.1 KB
+> today.
+
+The limit it describes was real: the redrawn tool icons had put the one module 268 bytes
+over four blocks, and `F$Fork` answered `Error #207`. The user's direction was not to be
+bound by a 32 KB chunk at all, so the editor, its screen and the file layer became
+libraries paged through one window slot, and the core is 22.8 KB.
+
+⚠ **One gate number moved with it, for a reason that had nothing to do with `pcs`.**
+`f0` had reported *"416 of 153600 card pixels differ, all of them part animation"* on
+every run. All 416 were the screen's top-left 64 × 8, in colour 27: the leg stopped on the
+shell's echo, after `pcs` had exited, and the window driver's repaint of that corner was
+in the dump. `checkpbt.py`'s part-art tolerance let it through because it happened to be
+colour 27. `LibFini` made the exit slower, the dump landed before the repaint, and the
+count went to 0. `f0` now stops on `PCS-RAN`, as `run` always has.
+
 ## `pcs.md` §8 — "the 6809 side does not yet agree" (2026-09-24)
 
 The bullet said:
