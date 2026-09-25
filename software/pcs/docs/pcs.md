@@ -75,7 +75,7 @@ range; nothing is ever XORed and nothing is saved behind.
 | XOR idiom in the original | here |
 |---|---|
 | cursor (`XDRAWCRSR`, save-behind) | ⭐ **the hardware sprite** — two register writes |
-| drag preview (`DRAWOBJ` twice a frame) | repaint the object's damaged rows from the DB |
+| drag preview (`DRAWOBJ` twice a frame) | ⭐ **the copy engine, keyed on index 0** (§8): the part drawn once, alone, in the margin, and each move a save-under and a transparent copy. A vertex drag is a rubber band whose pixels are read back first |
 | menu highlight (`SELECT` XOR-inverts a rect) | repaint the rect in a highlight colour |
 | brush repaint (`old ^ new` fill) | ⛔ **store the new colour and redraw.** `PAINTOBJ` stores `new XOR old` and XOR-blits; the Apple II diff proved that cannot survive 256 colours |
 | animation (`ADVANCE`/`RETREAT` step a bitmap pointer and XOR-draw) | ⭐ a **frame INDEX**: `L[8] & $7F` is exactly what the pointer encoded |
@@ -126,7 +126,7 @@ this is a port slip in the *original*; it is reproduced, written as one constant
 | ⭐⭐ **The original's 1bpp art renders VERBATIM, in colour** | `WM.Mask` takes the CPU's written byte *as a bitmap* and expands it to 8 pixels choosing `WFG`/`WBG`; `WM.Sprite` writes **nothing** for a 0 bit. So `DRAWBITS`, `XOFFDRAW` and `MASKS` collapse into one span write — **8 pixels a store, with transparency, in any colour** |
 | ⭐⭐ **A third of the 6502 does not port at all** | `HDIV8`/`HMOD8`, `LEFTMASK`/`RIGHTMASK`, `XOFFDRAW`'s shifter and the 6,144-byte `GPAK.OBJ` table of x÷8, x mod 8 and row addresses. **Chunky 8 bpp has no shift**: `WPTR` is a byte address *is* a pixel address, and a row is `(y << 10) + x`. The port carries ONE `px` where the Atari had `HDIV8` and `HMOD8` |
 | ⭐ **The screen is not in our address space** | the Atari spent 7.5 KB of 48 on the framebuffer and had to overlay `EDIT`/`WIRE`/`DISK`. **We have the whole 64 KB, and no overlays** |
-| ⭐ **The margin is 196 KB of free VRAM** | columns 640–1023 × 512 rows. The part-art bank and the magnifier's backing store live there |
+| ⭐ **The margin is 196 KB of free VRAM** | columns 640–1023 × 512 rows. The editor composes its repaints there, and a dragged part and what is under it (§8) |
 | ⛔ **No XOR** | §2 |
 | ⚠ **A click can be missed** | a polled loop that repaints samples the button once a pass, so the mouse is sampled **inside** the repaint loop |
 | ⚠ **The margin is shared** | the ROM toolbox's glyph strike sits at column 640, rows 320–472. Our stores stay above row 320 |
@@ -191,7 +191,7 @@ is unchanged**, so the hit test is the original's and only the picture is finer.
 parts keep their own art, because it is also what the table shows; the bin's polygon entry
 is an icon and is redrawn too.
 
-⭐ **`pcs` is a resident core and three libraries** (`pcscore.inc`, 2026-09-24). A process
+⭐ **`pcs` is a resident core and four libraries** (`pcscore.inc`, 2026-09-24). A process
 here has seven 8 KB slots (the eighth is the kernel's), and one module had filled them.
 The **core** (22.8 KB, three slots) keeps what the frame loop calls sixty times a second:
 the simulator, the scan converter, the drawing primitives, the game. The **libraries**
@@ -202,6 +202,7 @@ are modules of their own, each under 8 KB, paged through **one window slot**:
 | 1 | `pcsed`: the editor's database operations, the templates, the bench's edit script | `PESnap`, `PERoll`, `PERun` |
 | 2 | `pcsui`: the editor's screen (the kit, the icons, the picker) | `KitDraw`, `IconDraw`, `PickDraw` |
 | 3 | `pcsfl`: tables in and out (the file layer, `Build`, the built-in tables) | `PFArg`, `Build` |
+| 4 | `pcsmg`: the magnifier (§8) | `MgAct`, `MgOn`, `MgShow`, `MgDump` |
 
 `LibInit` loads them (`F$Link`, else `F$Load` from the execution directory), reads each
 one's block out of the process's own DAT image (`F$GPrDsc`), and unmaps it (`F$ClrBlk`),
@@ -211,7 +212,7 @@ calls the entry, and **maps back whichever library was there before**, so a libr
 call the core that calls another library and return to its own code. A library calls the
 core through `cvtab`, a table of addresses in the shared data area, by way of a
 four-byte trampoline per routine (`pcsstub.inc`), so its source is unchanged. `LibFini`
-unlinks all three on every exit.
+unlinks all four on every exit.
 
 ⛔ **The window is one fixed address**, and every return into it depends on that: there
 is exactly one free slot, and `LibMap` refuses (`PCS-NOLIB`) if `F$MapBlk` answers
@@ -219,11 +220,31 @@ anything else. ⛔ **The stack is never paged**: it is at the top of the data ar
 ⚠ **Two lists are file format between the modules**, `pcslxp.inc` (the exports) and
 `pcscve.inc` (the core routines a library may call). Each is one source expanded two
 ways, and both are append-only. ⚠ **A library over 8 KB fails to assemble**, and a card
-must carry all four modules: a card with `pcs` alone answers `PCS-NOLIB`.
+must carry all five modules: a card with `pcs` alone answers `PCS-NOLIB`.
 
 **The art.** `BITMAPS.OBJ` (1,792 bytes) with the offset table at `RUN.s:100`. ⭐
 `mkpcs.py` reads all of it straight out of the original sources, doubles each byte's bits,
 and emits the art bank — **the parts are Budge's drawings, not redrawn ones**.
+
+⭐⭐ **The free-hand layer is a whole 160 × 240 bitmap in RAM of its own** (`pcsdraw.inc`'s
+`Ly*`). The Apple II's magnifier toggled bits of the hi-res screen, and the screen was the
+drawing; here the span database is the picture (§2), so what the magnifier draws is a layer
+composed **over the spans and under the parts' art** on every repaint. It is eight 8 KB
+blocks from `F$AllRAM` (`LyInit`, at `Build`), 32 world rows a block at 256 bytes a row, and
+`lycnt[240]` counts each row's pixels — so a repaint skips an empty row without mapping it,
+and a row's page is cleared when its count leaves 0 rather than all 64 KB at start-up.
+⛔ **There is no slot to give it**: the layer's blocks are paged through the **library
+window**, by core code only (`LyOpen` … `LyClose`), which puts the caller's library back
+before it returns. No library may be called between the two. `PCPaint` opens once per
+repaint and maps a block only when the row crosses into the next 32. `LibFini` empties the
+window before `F$DelRAM` gives the blocks back. **Every pixel of the table can be drawn
+on**; there is no capacity to refuse.
+
+⭐ **A table file carries its layer after the payload**: `"PL"`, a big-endian count
+(≤ 38,400), and `(y, x, colour)` triples. The loader reads them in chunks of 64, refuses a
+count over 38,400 or a triple off the table or in colour 0 (`PF.ELay`), and a file with
+nothing after the payload has no layer — so every table written before this reads as it
+did. `PFSave` writes the section in row order.
 
 ### 5a. The simulator
 
@@ -309,21 +330,22 @@ We lock to the card's 59.94 Hz VBL and `wtime` is recorded rather than spun.
 ```
 nitros9/level2/arm6309/cmds/pcs.asm        main, modes, the event loop: THE CORE
 nitros9/level2/arm6309/cmds/pcscore.inc    ... loading and paging the libraries
-nitros9/level2/arm6309/cmds/pcsvars.inc    the data area, shared by all four modules
+nitros9/level2/arm6309/cmds/pcsvars.inc    the data area, shared by all five modules
 nitros9/level2/arm6309/cmds/pcslxp.inc     the libraries' exports     (append-only)
 nitros9/level2/arm6309/cmds/pcscve.inc     the core's, to libraries   (append-only)
 nitros9/level2/arm6309/cmds/pcsstub.inc    a library's entry table and trampolines
-nitros9/level2/arm6309/cmds/pcs{ed,ui,fl}.asm   the three LIBRARIES
+nitros9/level2/arm6309/cmds/pcs{ed,ui,fl,mg}.asm   the four LIBRARIES
 nitros9/level2/arm6309/cmds/pcsdat.asm     GENERATED — art, palette, templates, tables
 nitros9/level2/arm6309/cmds/pcsdata.inc    the data area
 nitros9/level2/arm6309/cmds/pcspak.inc     PPAK.s — scan converter + span DB  (the core)
-nitros9/level2/arm6309/cmds/pcsdraw.inc    CDRAW.s — blits, rects, the VRAM streams
+nitros9/level2/arm6309/cmds/pcsdraw.inc    CDRAW.s — blits, rects, the VRAM streams, the free-hand layer
 nitros9/level2/arm6309/cmds/pcsrun.inc     RUN.s — the ball
 nitros9/level2/arm6309/cmds/pcsobj.inc     RUN.s — the part procs and the PLAY loop
-nitros9/level2/arm6309/cmds/pcsedit.inc    EDIT.s — tools, bin, magnifier, World   (step 4)
+nitros9/level2/arm6309/cmds/pcsedit.inc    EDIT.s — the editor's database operations
 nitros9/level2/arm6309/cmds/pcswire.inc    WIRE.s — the wiring kit                 (step 5)
 nitros9/level2/arm6309/cmds/pcsfile.inc    DISK.s — ⭐ LOAD, done; save is step 5
 nitros9/level2/arm6309/cmds/pcsui.inc      EDIT.s — DRAWKIT, the kit panel, and MAIN, the editor's event loop
+nitros9/level2/arm6309/cmds/pcsmag.inc     EDIT.s — MAGNIFY, the fat bits (library 4)
 
 arm6309/software/pcs/bench/pcsasm.py             a reader for the 6502 sources' data directives
 arm6309/software/pcs/bench/pcsparts.py           the 43 templates and their art
@@ -337,6 +359,8 @@ arm6309/software/pcs/bench/mkpcs.py              the generator, and the bench's 
 arm6309/software/pcs/bench/checkpcs.py           the gate
 arm6309/software/pcs/bench/run-pcs.sh            the bench
 arm6309/software/pcs/bench/scripts/pcsedit.ps2   e0's editor session, as a mouse script
+arm6309/software/pcs/bench/scripts/mkpcsbuild.py writes pcsbuild.ps2: e1's table built from nothing, and the demo's
+arm6309/software/pcs/video/run-build.sh          that session as a contact sheet or a video
 ```
 
 ## 7. Verification — `sh software/pcs/bench/run-pcs.sh`
@@ -358,6 +382,9 @@ The legs:
 | `m4` | ⭐⭐ **the whole simulator**, 600 frames — the ball's `(x, y, BDX, BDY)` every frame, every part's state byte, and the score, the sound and the run chain |
 | `m6` | ⭐⭐ **the editor**: a twelve-edit session through `pcsedit.inc`, two of them required to be refused, and the step results, the object area and the span database it leaves, against `pcsedit.py` |
 | `e0` | ⭐⭐ **the editor with a mouse** (`pcs 23`): `scripts/pcsedit.ps2`'s 22 gestures through `EdLoop` — every gesture's record against what `checkpcs.py` works out from the **script's points alone**, then the object area, the span database and all 153,600 bytes of the table. ⛔ The same recording against a script that dragged one part two units further must fail |
+| `e1` | ⭐⭐ **a table built from nothing** (`pcs 24`): `scripts/pcsbuild.ps2`, generated by `mkpcsbuild.py`, pulls fifteen parts out of the bin, stretches a polygon into the launcher's divider by four vertex drags, paints, **PLAYs the table twice** with a bumper moved between — and every gesture, the object area, the span database and the picture are checked exactly as `e0`'s are, starting from `mkpcs.empty_table`. ⚠ The games are a scripted hand and not reproducible to the frame; the checker skips the mouse while a game is up, which is sound because PLAY hands the editor back the table it left |
+| `e2` | ⭐ **the magnifier** (`pcs 23`, `scripts/pcsmag.ps2`): lines of fat bits drawn and one **erased by the brush's toggle**, a miss on the panel, the box moved, QUIT, a tool that ends it, and left up at the end — every gesture's record against `pcsmag.py`, the layer `MgDump` streams to `EditL` (count and triples), the table with the layer composed in and the box's frame on it, and **every pixel of the viewer**. ⛔ The leg fails unless it saw a box move, a drawn line, a toggled erase and QUIT |
+| `f1` | ⭐ `demo2l.pbt` — demo2 with 1,206 layer pixels in its trailer (`pcsmag.demo_layer`) — loaded off the card: the database record for record, the picture with the layer in it, and every layer pixel not under a part's art on the card |
 | `k0` | ⭐ **the editor's kit panel**: `pcs 22`'s whole 320 × 480 panel column, every card pixel, against `pcskit.py` — the parts bin, the redrawn tool icons, and the 12 × 10 colour picker with its frame on the current colour |
 | `m1` | ⛔ MUTATION: the midpoint x rounding is dropped, so every sloped edge moves |
 | `m2` | ⛔ MUTATION: a B-polygon paints its RECORDS instead of their complement — the bug that looks plausible on screen while inverting the ball's world |
@@ -394,8 +421,18 @@ the answer.
   and not obvious: a library part's polygon is unfilled, `PCFill` refuses colour 0, and the
   backdrop paints its *complement* — so a repaint never writes the open playfield at all,
   and the previous frame stays underneath.
-  ⚠ **The damage is a whole row range across the table**, which is honest but coarse; a
-  column range would be the obvious next economy, and nothing measures the cost yet.
+  ⭐ **The damage is two bands of rows, and the art is clipped to them.** A frame's
+  damage merges into whichever band it touches (within 4 rows), or into the empty one,
+  or else into the nearer; the two merge if they come to touch. The ball damages only
+  its own seven rows; any other part, its rows from 2 above to 20 below its top. So a
+  flipper sweeping at the bottom and a ball at the top repaint two short bands and not
+  the table between them. Each band is wiped, painted, and has **only its own rows** of
+  every picture blitted back (`pcclo`/`pcchi`). ⭐ That took a game on a table built in
+  the editor from ~7 to 20–30 frames a second; `PCBlit` of whole pictures had been a
+  third of the time.
+  ⚠ **The repaint is on the screen**, so a wiped band can show for part of a frame (a
+  thin dark line, now and then, on the demo's sheet). The editor's margin composition
+  (`RpRows`) is the fix if it matters.
 - ⚠ **Whether a VRAM pointer's auto-increment carries out of a row** is an open question
   about the card or the emulator's model of it. The bench's streams reposition at every row
   boundary, so they do not depend on the answer — but `graphics.md` §19 should settle it.
@@ -428,16 +465,38 @@ the answer.
     a colour an object already has clears it to 0.
   - **on the picker**: the colour.
   - **on a tool**: the first five (hand, pointer, scissors, hammer, brush) become the
-    tool; the other eight are recorded and not yet built.
+    tool; **PLAY** plays the table and **MAGN** opens the magnifier (below); the other
+    six are recorded and not yet built.
   - **on the parts bin**, with the hand: the template is added where it is released,
     keeping the offset it was grabbed at, and ⚠ its corner is **clamped inside the
     table's border** (1 .. 158 − w, 1 .. 238 − h) rather than refused. Released over the
     kit, nothing is added.
 
-  After an edit that took, `EdDone` re-keys and repaints the whole table; a paint only
-  re-fills, which `PEPaint` does itself. ⚠ **A press and release that both fall inside
-  a repaint are lost** — about a second — because the loop does not sample the mouse
-  while it draws.
+  ⭐⭐ **The drag is live, and the card moves it** (`pcsui.inc`'s `Pv*`). At the press
+  the part's rows are recomposed **without it**, and the part is drawn alone onto index
+  0 in the margin, at (640, 0). Each mouse step is then three copies and no CPU pixel:
+  the save-under back, the screen at the new place into the save-under, and the part
+  over it with `WM.Sprite`, which skips index 0. ⭐ **The preview is the commit's own
+  arithmetic** — `EdHand`'s displacement with `PEDrag`'s clamp, and `EdBXY` for a part
+  out of the bin, which `EdBin` calls too — so where it is let go is where it lands.
+  Over the kit there is **no preview**, because letting go there deletes it (or adds
+  nothing). The margin holds a part up to 192 × 320 with its save-under beside it, or
+  384 × 160 with it below; a larger one moves on the release. ⭐ A **vertex** drag
+  (pointer or hammer) is a rubber band: the two edges meeting at the dragged point, in
+  `PCC.Hilite`, drawn by Bresenham a card pixel at a time, with each pixel read back
+  through `VDATA` first and given back in reverse order.
+  ⭐⭐ **And the repaint is only the rows an edit touched, with no flash.** The press
+  and the release each add the object's rows (its polygon and its art, or every row for
+  the backdrop) to a damage range, and `RpRows` repaints that range **in the margin** —
+  wiped, painted and its art blitted there, through the painter's `pcox`/`pcoy` offset
+  and `pcclo`/`pcchi` clip — in bands of up to 160 world rows, each copied onto the
+  screen whole. The screen never shows a wiped row. The painter's object filter
+  (`pcfmd`: all, all but one, or one alone) is what composes the table without the
+  dragged part and the part without the table. A paint still re-fills through
+  `PEPaint`, which draws on the screen.
+  ⚠ **A press and release that both fall inside a repaint are still lost**, because
+  the loop does not sample the mouse while it draws; the repaint is now a band of rows
+  rather than the table, so the window is shorter, and nothing measures it.
   ⭐ **Every gesture writes fifteen bytes** to the `EditR` stream: the tool after it, the
   press and the release in card pixels (16-bit, big-endian), the five-byte operation
   (the `PE` tuple, or 0 and a kind: 1 tool, 2 colour, 3 a part let go over the kit, 0
@@ -446,6 +505,47 @@ the answer.
   area. `q` ends the session.
   ⚠ **The pointer is at (0, 0) when `pcs` starts** — the mouse is relative — so a PS/2
   script for it begins `origin 0 0`.
+  ⭐⭐ **PLAY, and back to the editor with the table intact** (`EdPlay`). The kit is
+  cleared and `PGPanel`'s score strip (BONUS X / BONUS / BALL) drawn where it was, as
+  the original blanked its bin; the game is `pcs 20`'s, mouse and all (`status.md`
+  §4); `q` or the fifth ball ends it. ⭐ **The table comes back as it was left, not as
+  the game left it**: a game borrows every part's `L[8]` and runs every INIT proc, and
+  the original's way home, `CLOSEOBJS`, runs them again — so a ball would come back to
+  its INIT place rather than where the editor put it. The object area and the wiring
+  are snapshotted before the game and rolled back after it (the editor's own undo,
+  `PESnap`/`PERoll`), and the table is recomposed in the margin. The span database is
+  not touched by a game at all.
+  ⭐ **Mode 24 is the editor on a NEW table** — the backdrop's walls and nothing else
+  (`pcsfl.asm`'s `PCEmpty`) — which is how the Apple II session in
+  `reference/pcs-apple2-editor.mp4` starts. ⛔ **The World sliders take their defaults
+  before any table is built** (`PC.WGrav`…`PC.WElast`), and a file's own overwrite
+  them; a table built in the module would otherwise play at `wset` = 0, gravity once
+  in 256 frames.
+  ⭐⭐ **The magnifier** (`pcsmag.inc`, EDIT.s's MAGNIFY). MAGN clears the parts bin to
+  the panel colour and puts there a **viewer** of 24 × 40 world pixels, each an 8-pixel
+  cell with a 6 × 6 fat bit in a `PCC.Dark` grid, and **QUIT** under it; the picker
+  stays. On the table a 2-pixel `PCC.Hilite` frame sits just **outside** the viewed
+  rectangle, so the pixels the viewer shows are never the frame's. ⭐ **The fat bits are
+  read back off the card** (`VDATA`, post-incrementing), so they are the table, its art
+  and its layer exactly as the eye sees them. ⭐ **A cell row is its runs and three
+  copies**: cells of one colour are one span, painted over the grid between them; a
+  `WM.Sprite` copy of a grid strip kept below the raster (rows 480–481) puts the grid
+  back, keyed on index 0; and the copy engine repeats the two rows twice below. A table
+  is mostly large areas of one colour, so a row is a handful of spans rather than 24. While it is up, every press goes to `MgAct`
+  first:
+  - **on the table**: the box moves, centred on the release and clamped so its frame
+    stays on the table (record `EDL.MBox`, the new corner);
+  - **in the viewer**: a Bresenham line of fat bits from the press to the release (a
+    release outside the viewer ends it at the edge), into the layer in the picker's
+    colour — ⭐ **or erased**, if the press was on a layer pixel already that colour, the
+    brush's own toggle (`EDL.Plot`, the count and the colour, 0 for an erase). The rows
+    it spans are the damage;
+  - **QUIT** ends it (`EDL.MQuit`); **a tool** ends it and is taken as usual; **the
+    picker** is the picker's; anything else on the panel is a miss.
+  Ending it gives the box's rows to the damage and redraws the kit. ⚠ **The artifact
+  colour is not copied**: a pixel is a palette index and its fat bit shows that index.
+  Modes 23 and 24 stream the layer to `EditL` (VRAM row 496) after the session — the
+  count and up to 682 triples — for the bench.
 - ⚠ Not open any more, but worth keeping as a method note: the two tables that
   did not paint (2026-09-23) were **two different defects wearing one symptom**,
   and both were found by **modelling the 6809 routine in Python and diffing it
@@ -462,13 +562,13 @@ the answer.
   and `mkrom.sh` copies whatever is there onto the card; the four `DEMO*.PB` are
   there today (`PCS_FILES=n` writes more). ⛔ **The files are not in the
   repository** — same container, same shipped bytes, same rule (§5c).
-  ⚠ **Still open**: `pcs` cannot **save**, and the container carries no
-  free-hand magnifier layer. The format has the room, and the loader refuses a
-  payload longer than the object area, so a longer one is a version it does not
-  know rather than a buffer it overruns.
+  ⚠ **Still open**: `pcs` cannot **save** — `PFSave` is written, trailer and
+  all, and nothing in the editor calls it. The loader refuses a payload longer
+  than the object area, so a longer one is a version it does not know rather
+  than a buffer it overruns; the free-hand layer follows the payload (§5).
   ⚠ And the module **still carries** up to `PCS_BUDGET` (8 KB, 7 tables) for the
   built-in modes the bench's mutation legs use. That is the last of the old
   arrangement, and it goes when `desk` gains a table picker.
-- ⚠ **Not written**: the magnifier, the World panel, the tool bar's other eight tools, the
+- ⚠ **Not written**: the World panel, the tool bar's other seven tools, the
   wiring kit's UI, save, and `desk` integration. `RUN2.s`'s four-player game loop, the
   bonus tally and multiball are step 3c.

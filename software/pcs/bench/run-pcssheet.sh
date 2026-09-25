@@ -43,7 +43,7 @@ while [ "$i" -lt "$N" ]; do
   sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom.log" 2>&1 || {
     tail -20 "$OUT/mkrom.log"; exit 1; }
   # ⛔ OUT= and DATA= explicitly - see run-pcs.sh.
-  OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs pcsed pcsui pcsfl \
+  OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs pcsed pcsui pcsfl pcsmg \
     > "$OUT/mkcard.log" 2>&1 || {
     tail -20 "$OUT/mkcard.log"; exit 1; }
 

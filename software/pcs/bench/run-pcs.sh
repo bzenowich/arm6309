@@ -39,6 +39,10 @@
 #       checkpcs.py works out from the SCRIPT'S points alone, then the object
 #       area, the span database and the whole table's picture - and ⛔ the same
 #       recording against a mutated script, which must fail.
+#   e2  ⭐ THE MAGNIFIER - `pcs 23` driven by scripts/pcsmag.ps2: every
+#       gesture's record against pcsmag.py, the free-hand layer MgDump streams,
+#       the table with the layer composed in, the box, and every fat bit.
+#   f1  ⭐ demo2 with a layer in its file's trailer, loaded and composed.
 #   m5  ⭐ BOUNCE rotates back by TTA instead of 32 - TTA, which is the gate on
 #       the TRAJECTORY rather than on the picture.  ⛔ The two are the SAME for
 #       tta 0 and 16, so a ball in a box of flat walls behaves identically and
@@ -54,7 +58,7 @@ ROOT=$(pwd)
 OUT=${OUT:-$(cd "$_here/.." && pwd)/build/pcs}
 FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
-RUNS=${RUNS:-"m0 m4 m6 e0 k0 f0 fX m1 m2 m5"}
+RUNS=${RUNS:-"m0 m4 m6 e0 e1 e2 k0 f0 f1 fX m1 m2 m5"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH
@@ -94,10 +98,10 @@ ROM="$OUT/arm6309_rom.bin"
 # nothing noticed for as long as `pcs` needed no data file, and which then
 # presented as a table file that mkrom.sh had just written and the card did
 # not have.
-# ⛔ AND THE THREE LIBRARIES WITH IT: pcs is a core that F$Loads pcsed, pcsui
-# and pcsfl out of its execution directory (pcscore.inc), and a card with pcs
+# ⛔ AND THE FOUR LIBRARIES WITH IT: pcs is a core that F$Loads pcsed, pcsui,
+# pcsfl and pcsmg out of its execution directory (pcscore.inc), and a card with pcs
 # alone answers PCS-NOLIB before the first table is read.
-OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs pcsed pcsui pcsfl \
+OUT="$OUT" DATA="$OUT/data" sh software/nitros9/mksyscard.sh "$OUT/sd.img" pcs pcsed pcsui pcsfl pcsmg \
   > "$OUT/mksddisk.log" 2>&1 || {
     cat "$OUT/mksddisk.log"; echo "FAIL  the card did not build"; exit 1; }
 tail -3 "$OUT/mksddisk.log"
@@ -208,6 +212,7 @@ for r in $RUNS; do
   case "$r" in
     m0) run m0 0 ;;
     f0) runf f0 PCS-RAN 0 "$FRAMES" demo2.pbt ;;
+    f1) runf f1 PCS-RAN 0 "$FRAMES" demo2l.pbt ;;
     fX) runf fX DONE-arm6309 0 "$FRAMES" nosuch.pbt ;;
     m4) run m4 4 ;;
     m1) run m1 1 ;;
@@ -216,6 +221,10 @@ for r in $RUNS; do
     m6) run m6 6 ;;
     k0) run k0 22 ;;
     e0) rune e0 23 "$ROOT/software/pcs/bench/scripts/pcsedit.ps2" ;;
+    e1) python3 software/pcs/bench/scripts/mkpcsbuild.py \
+          > software/pcs/bench/scripts/pcsbuild.ps2
+        EFRAMES=20000 ESECONDS=340 rune e1 24 "$ROOT/software/pcs/bench/scripts/pcsbuild.ps2" ;;
+    e2) ESECONDS=200 rune e2 23 "$ROOT/software/pcs/bench/scripts/pcsmag.ps2" ;;
     m7) run m7 7 ;;
   esac
 done
@@ -254,6 +263,8 @@ for r in $RUNS; do
   case "$r" in
     f0) echo "--- f0 ⭐⭐ A TABLE LOADED OFF THE CARD ---"
         python3 software/pcs/bench/checkpbt.py "$OUT/f0" demo2.pbt || fail=1 ;;
+    f1) echo "--- f1 ⭐ A TABLE WITH A FREE-HAND LAYER, loaded off the card ---"
+        python3 software/pcs/bench/checkpbt.py "$OUT/f1" demo2l.pbt || fail=1 ;;
     fX) echo "--- fX ⛔ a table that is not there - this must be REFUSED ---"
         if grep -q "PCS-RAN" "$OUT/fX/console.txt"; then
           echo "FAIL  pcs ran on a table it could not load"; fail=1
@@ -290,6 +301,12 @@ for r in $RUNS; do
         else
           tail -3 "$OUT/e0/mutant.log"; echo "FAIL  the e0 mutation failed for the wrong reason"; fail=1
         fi ;;
+    e1) echo "--- e1 ⭐ A TABLE BUILT FROM NOTHING (pcs 24), and played twice ---"
+        python3 software/pcs/bench/checkpcs.py "$OUT/e1" ui-empty \
+          software/pcs/bench/scripts/pcsbuild.ps2 || fail=1 ;;
+    e2) echo "--- e2 ⭐ THE MAGNIFIER: fat bits drawn and erased, the box, the layer it left ---"
+        python3 software/pcs/bench/checkpcs.py "$OUT/e2" ui-mag \
+          software/pcs/bench/scripts/pcsmag.ps2 || fail=1 ;;
     k0) echo "--- k0 ⭐ THE EDITOR'S KIT PANEL, against EDIT.s's DRAWKIT ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/k0" kit || fail=1 ;;
     m5) echo "--- m5 ⛔ MUTATION: BOUNCE rotates back by TTA - this must FAIL ---"

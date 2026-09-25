@@ -114,14 +114,20 @@ at 71.000   move to 220 120
 at 75.000   move to 168 126
 +0.300      click left
 
-# 20  PLAY is recorded and not built: the brush stays the tool
+# 20  ⭐ PLAY: the kit goes, the score strip comes, and a game runs on the table as
+#     it stands - with no button pressed, so the ball waits in the lane and no
+#     press here can be read as a gesture.  `q` ends the GAME, not the editor,
+#     and the brush is still the tool when the kit comes back.  ⭐ The table
+#     has to come back exactly as it was: the checker's final picture and
+#     object area are taken after this.
 at 79.000   move to 560 220
 +0.300      click left
+at 85.000   type "q"
 
 # 21  the hammer, pressed where no edge is: SELECTPOINT misses
-at 83.000   move to 560 90
+at 90.000   move to 560 90
 +0.300      click left
-at 87.000   move to 220 120
+at 94.000   move to 220 120
 +0.300      click left
 
-at 91.000   type "q"
+at 98.000   type "q"

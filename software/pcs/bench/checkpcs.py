@@ -58,6 +58,7 @@ def expected(parts=None):
 
 PLAYR, PLAYS, PLAYT, PLAYD = 490, 494, 495, 496
 EDITR, EDITO = 498, 510     # ⚠ 510: PCDump fills 500..508
+EDITL = 496                 # MgDump: the free-hand layer (pcsmag.inc)
 
 
 def _stream(vram, row, n):
@@ -223,6 +224,7 @@ def edit_session(vram):
 UIREC = 15                  # tool, press x/y, release x/y (16-bit), op[5], answer
 EDL_MISS, EDL_TOOL, EDL_PICK, EDL_BIN = 0, 1, 2, 3
 ED_HAND, ED_PTR, ED_CUT, ED_HAM, ED_BRSH, ED_NTL = 0, 1, 2, 3, 4, 5
+ED_PLAY, ED_MAGN = 8, 9
 
 
 def ps2_gestures(path):
@@ -231,8 +233,14 @@ def ps2_gestures(path):
     author means (emu/ps2script.h).  ⚠ Only what moves the pointer or the left
     button is read; times do not matter here, only order."""
     import shlex
+    import pcskit
+    _n, px0, py0, pw, ph = pcskit.tools()[ED_PLAY]
+    # a press on PLAY hands the mouse to the game until a key comes back
+    hit_play = lambda g: (0 <= g[0] // 2 - px0 < pw           # noqa: E731
+                          and 0 <= g[1] // 2 - py0 < ph)
     x = y = 0
     down = None
+    play = False
     out = []
     for raw in open(path):
         line = raw.split('#')[0].split(';')[0].strip()
@@ -245,6 +253,10 @@ def ps2_gestures(path):
             w = w[1:]
         if not w:
             continue
+        if w[0] == 'type':
+            play = False                # ⭐ the key that ends PLAY
+        if play and w[0] in ('down', 'up', 'click'):
+            continue                    # ⭐ PLAYING: the buttons are flippers
         if w[0] == 'origin':
             x, y = int(w[1]), int(w[2])
         elif w[:2] == ['move', 'to']:
@@ -256,8 +268,10 @@ def ps2_gestures(path):
         elif w[:2] == ['up', 'left'] and down is not None:
             out.append(down + (x, y))
             down = None
+            play = hit_play(out[-1])
         elif w[:2] == ['click', 'left']:
             out.append((x, y, x, y))
+            play = hit_play(out[-1])
     return out
 
 
@@ -300,12 +314,22 @@ def _op(db, op):
     return pcsedit.run_script(db, [tuple(op)])[0]
 
 
-def ui_model(gestures, db):
+def ui_model(gestures, db, mag=None):
     """⭐ WHAT EdLoop MUST HAVE DONE, from the script's points alone: the tool,
     the colour, and for every gesture the record it writes - `(tool, px, py,
-    rx, ry, op0..op4, answer)` - with each edit applied to `db` as it goes."""
+    rx, ry, op0..op4, answer)` - with each edit applied to `db` as it goes.
+
+    ⭐ `mag`, a dict, is the magnifier's state (pcsmag.inc): `up`, the `box`,
+    and the free-hand `layer` every plot goes into - left as the session left
+    it, for ui_session to compare with what the machine drew and dumped."""
     import pcskit
     import pcsparts
+    import pcsmag
+    if mag is None:
+        mag = {}
+    mag.setdefault('up', False)
+    mag.setdefault('box', None)
+    mag.setdefault('layer', pcsmag.Layer())
     tools = pcskit.tools()
     boxes = mkpcs.bin_boxes()
     parts = pcsparts.parts()
@@ -318,6 +342,32 @@ def ui_model(gestures, db):
     for (px, py, rx, ry) in gestures:
         wx, wy, rwx, rwy = px // 2, py // 2, rx // 2, ry // 2
         op, res, extra = [0] * 5, 0xFF, None
+        # ⭐ THE MAGNIFIER FIRST, while it is up (MgAct): a gesture it takes is
+        # one record and nothing else happens.
+        if mag['up']:
+            took = True
+            if px < tw * 2:
+                mag['box'] = pcsmag.box_at(rwx, rwy)
+                op = [0, pcsmag.EDL_MBOX, mag['box'][0], mag['box'][1], 0]
+            elif pcsmag.in_viewer(px, py):
+                bx, by = mag['box']
+                x0, y0 = pcsmag.fat(px, py)
+                x1, y1 = pcsmag.fat(rx, ry)
+                pts = [(bx + x, by + y) for x, y in pcsmag.line(x0, y0, x1, y1)]
+                cc = mag['layer'].plot(pts, pcspal.PICK0 + pk)
+                op, res = [0, pcsmag.EDL_PLOT, len(pts), cc, 0], 0
+            elif pcsmag.in_quit(px, py):
+                mag['up'] = False
+                op = [0, pcsmag.EDL_MQUIT, 0, 0, 0]
+            elif (0 <= px - pkx < pcspal.PICKW * cell
+                  and 0 <= py - pky < pcspal.PICKH * cell):
+                took = False            # the picker is the editor's
+            elif wx >= pcsmag.TOOLX:
+                mag['up'] = False       # a tool ends it, and is taken
+                took = False
+            if took:
+                recs.append([tool, px, py, rx, ry] + op + [res])
+                continue
         if px < tw * 2:
             if tool == ED_HAND:
                 o = _pksel(db, wx, wy)
@@ -351,6 +401,9 @@ def ui_model(gestures, db):
                 op = [0, EDL_TOOL, hit, 0, 0]
                 if hit < ED_NTL:
                     tool = hit
+                elif hit == ED_MAGN:
+                    mag['up'] = True
+                    mag['box'] = mag['box'] or (pcsmag.BX0, pcsmag.BY0)
             elif tool == ED_HAND:
                 b = next((i for i, (x, y, w, h) in enumerate(boxes)
                           if 0 <= wx - x <= w and 0 <= wy - y <= h), None)
@@ -399,12 +452,15 @@ def _uifmt(r):
         what += ' refused' if r[10] else ' took'
     else:
         what = ('-', 'tool %d' % r[7], 'colour %d' % r[7],
-                'bin %d let go off the table' % r[7])[r[6]] if r[6] < 4 else '?'
+                'bin %d let go off the table' % r[7],
+                'magnifier box to (%d, %d)' % (r[7], r[8]),
+                'fat bits: %d in colour %d' % (r[7], r[8]),
+                'magnifier QUIT')[r[6]] if r[6] < 7 else '?'
     return '%-5s (%3d,%3d)->(%3d,%3d)  %s' % (
         t[r[0]] if r[0] < 5 else r[0], r[1], r[2], r[3], r[4], what)
 
 
-def ui_session(vram, script):
+def ui_session(vram, script, base=None, magnify=False):
     """⭐⭐ THE EDITOR, DRIVEN: every gesture EdLoop recorded against the one the
     script made and the edit the model makes of it; then the object area, the
     span database and the picture the session left.
@@ -419,8 +475,10 @@ def ui_session(vram, script):
     if got is None:
         print('FAIL  the gesture stream has no end marker - EdLoop never returned')
         return False
-    db = pcsedit.DB(mkpcs.demo_table(), width=mkpcs.TW, height=mkpcs.TH)
-    want = ui_model(gest, db)
+    db = pcsedit.DB(base() if base else mkpcs.demo_table(),
+                    width=mkpcs.TW, height=mkpcs.TH)
+    mag = {}
+    want = ui_model(gest, db, mag)
     ok = True
     for i in range(max(len(got), len(want))):
         g = got[i] if i < len(got) else None
@@ -440,6 +498,19 @@ def ui_session(vram, script):
              len(kinds), nref))
     # ⛔ A SESSION THAT NEVER REACHED AN OPERATION HAS NOT TESTED IT.
     missing = [mkpcs.EDIT_OPS[k] for k in range(1, 8) if k not in kinds]
+    if base:
+        missing, nref = [], 1       # a demo builds; it is not the coverage gate
+    if magnify:
+        # ⛔ THE MAGNIFIER'S OWN COVERAGE instead: the box moved, a line drawn,
+        # a line ERASED by the toggle, and QUIT - or the leg has not seen them.
+        import pcsmag
+        mk = [(r[6], r[8]) for r in want if r[5] == 0]
+        missing = [n for n, ok_ in (
+            ('box move', any(k == pcsmag.EDL_MBOX for k, _ in mk)),
+            ('fat-bit line', any(k == pcsmag.EDL_PLOT and c for k, c in mk)),
+            ('toggled erase', any(k == pcsmag.EDL_PLOT and not c for k, c in mk)),
+            ('QUIT', any(k == pcsmag.EDL_MQUIT for k, _ in mk))) if not ok_]
+        nref = 1
     if missing:
         print('FAIL  the session never made a %s' % ', '.join(missing))
         return False
@@ -465,9 +536,28 @@ def ui_session(vram, script):
     if not _database(vram, db.pak):
         return False
 
+    if not _layer(vram, mag['layer']):
+        return False
+
     # ⭐ AND THE PICTURE: the last repaint is the whole table, every part at its
-    # frame 0.  ⚠ The sprite is composited at scan time and is not in VRAM.
-    fb, w, h = mkpcs.render_table(db.pak, db.objs)
+    # frame 0, over the free-hand layer.  ⚠ The sprite is composited at scan
+    # time and is not in VRAM.
+    import pcsmag
+    fb, w, h = mkpcs.render_table(db.pak, db.objs, layer=mag['layer'])
+    table = bytes(fb)
+    if mag['up']:
+        # ⭐ Still up: its frame is on the table and the fat bits are in the kit
+        pcsmag.frame(fb, w, *mag['box'])
+        vw = pcsmag.viewer(table, w, *mag['box'])
+        vbad = [(x, y) for (x, y), c in vw.items() if vram[y * STRIDE + x] != c]
+        if vbad:
+            x, y = vbad[0]
+            print('FAIL  %d of %d viewer pixels differ; first at card (%d, %d): '
+                  'got %d, wanted %d' % (len(vbad), len(vw), x, y,
+                                         vram[y * STRIDE + x], vw[(x, y)]))
+            return False
+        print('ok    all %d pixels of the fat bits are the table\'s, read back'
+              % len(vw))
     bad = [(x, y) for y in range(h) for x in range(w)
            if vram[y * STRIDE + x] != fb[y * w + x]]
     if bad:
@@ -478,6 +568,27 @@ def ui_session(vram, script):
         return False
     print('ok    all %d bytes of the edited table are what the model builds'
           % (w * h))
+    return True
+
+
+def _layer(vram, layer):
+    """⭐ THE LAYER THE MACHINE KEPT, dumped by MgDump to EditL: its count and
+    as many triples as two VRAM rows hold, against the model's."""
+    want = layer.blob()
+    n = want[0] << 8 | want[1]
+    cap = 2 + 3 * min(n, 682)
+    got = _stream(vram, EDITL, cap)
+    if got[:2] != want[:2]:
+        print('FAIL  the layer holds %d pixels; the model says %d'
+              % (got[0] << 8 | got[1], n))
+        return False
+    if got != want[:cap]:
+        i = next(k for k in range(cap) if got[k] != want[k])
+        t = (i - 2) // 3
+        print('FAIL  the layer differs at pixel %d: got %s, wanted %s'
+              % (t, tuple(got[2 + 3 * t:5 + 3 * t]), tuple(want[2 + 3 * t:5 + 3 * t])))
+        return False
+    print('    the layer matches: %d pixels' % n)
     return True
 
 
@@ -511,6 +622,12 @@ def main():
     # ⭐ MODE 23: the editor with a mouse, against the PS/2 script that drove it.
     if len(sys.argv) > 3 and sys.argv[2] == 'ui':
         return 0 if ui_session(vram, sys.argv[3]) else 1
+    # ⭐ MODE 23 AGAIN, WITH THE MAGNIFIER: the fat bits, the layer they draw.
+    if len(sys.argv) > 3 and sys.argv[2] == 'ui-mag':
+        return 0 if ui_session(vram, sys.argv[3], magnify=True) else 1
+    # ⭐ MODE 24: the same, on a NEW table - the backdrop and nothing else.
+    if len(sys.argv) > 3 and sys.argv[2] == 'ui-empty':
+        return 0 if ui_session(vram, sys.argv[3], mkpcs.empty_table) else 1
 
     # ⭐⭐ THE DATABASE FIRST, because it is what the hit test and the ball
     # actually read - and because a picture can be right for the wrong reason.

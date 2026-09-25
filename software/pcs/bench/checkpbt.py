@@ -29,6 +29,13 @@ def main():
     want = sys.argv[2]
     ok = True
 
+    # ⭐ `demo2l.pbt` is demo2 with a free-hand layer in its trailer
+    # (mkpcs.write_tables): the same database, and the layer in the picture.
+    layer = None
+    if want == 'demo2l.pbt':
+        import pcsmag
+        layer = pcsmag.Layer(pcsmag.demo_layer())
+        want = 'demo2.pbt'
     tbl = [t for t in pcsfile.demo_tables() if mkpcs.pbt_name(t[0]) == want]
     if not tbl:
         print('FAIL  no table generates %s' % want)
@@ -39,7 +46,7 @@ def main():
     pak = K.Pak(height=mkpcs.TH, width=mkpcs.TW)
     pak.objs = objs
     pak.display()
-    fb, w, h = mkpcs.render_table(pak, objs, None)
+    fb, w, h = mkpcs.render_table(pak, objs, None, layer=layer)
 
     vram = open(os.path.join(d, 'vram.bin'), 'rb').read()
 
@@ -83,6 +90,19 @@ def main():
     else:
         print('ok    %d of %d card pixels differ, all of them part animation'
               % (len(diff), w * h))
+    if layer is not None:
+        # ⛔ AND THE LAYER HAS TO BE THERE: every one of its pixels not under
+        # a part's art is on the card in its colour.
+        miss = [1 for (x, y), c in layer.px.items()
+                if vram[2 * y * STRIDE + 2 * x] != c
+                and fb[2 * y * w + 2 * x] == c]
+        if miss or not layer.px:
+            print('FAIL  %d of the layer\'s %d pixels are not on the card'
+                  % (len(miss), len(layer.px)))
+            ok = False
+        else:
+            print('ok    the layer\'s %d pixels came off the card with the table'
+                  % len(layer.px))
     return 0 if ok else 1
 
 

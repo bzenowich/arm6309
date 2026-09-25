@@ -144,6 +144,71 @@ row. The new `PCSpn` swaps, and both arms of `PCRow` go through it.
 ⚠ So fix 2 removed *this* table's reversed span, and fix 3 is what stops the next
 one — they are separate, and only fix 3 covers `FIREBALL`.
 
+## `pcs.md` §2, §4 and §8 — the whole-table repaint, and a drag with no preview (2026-09-24)
+
+Superseded by the live drag and the margin-composed row repaint (§8, `pcsui.inc`'s `Pv*`
+and `RpRows`). §8 said:
+
+> After an edit that took, `EdDone` re-keys and repaints the whole table; a paint only
+> re-fills, which `PEPaint` does itself. ⚠ **A press and release that both fall inside
+> a repaint are lost** — about a second — because the loop does not sample the mouse
+> while it draws.
+
+§2's XOR table gave the drag preview as *"repaint the object's damaged rows from the DB"*,
+which was never built: until this entry nothing moved on the screen between the press and
+the release, and the whole table was wiped to black and repainted after every edit. §4
+reserved the margin for *"the part-art bank and the magnifier's backing store"*; the
+art is blitted straight out of the module and the margin now holds the repaint's bands
+and the dragged part.
+
+⭐ `e0`'s final 153,600-byte picture comparison is what gates the change from a
+whole-table repaint to one that covers only the damage: a row the damage range missed
+would keep the old picture and fail it. It passed on the first run.
+
+## `pcs.md` §8 — "the damage is a whole row range", and PLAY "not yet built" (2026-09-24)
+
+Superseded by two damage bands with the art clipped to them (`pcsobj.inc`'s `PBDmR`,
+`PBRep`), `EdPlay`, and mode 24. §8 said:
+
+> ⚠ **The damage is a whole row range across the table**, which is honest but coarse; a
+> column range would be the obvious next economy, and nothing measures the cost yet.
+
+and of the tool bar, *"the other eight are recorded and not yet built"* (PLAY was one).
+
+⭐ **It was measured when PLAY first ran from a table built in the editor**: 7 frames a
+second. A dots-weighted PC histogram (`TRACE_AT`/`TRACE`, CLAUDE.md's `pchist.py` method)
+put `PCBlit` at 31 %, and the band told why: every fourth frame it ran from the ball's row
+to row 230, because a flipper sweep is legitimate damage and one range has to span
+everything between. Three changes, each needed:
+
+- **the art is clipped to the band** — before this every picture that crossed a damaged
+  row was blitted whole;
+- **two bands**, so the flippers and the ball are two short ranges and not one long one;
+- **the ball damages its own seven rows**, not the 23 every other part gets (`PBDmg`'s
+  2 above to 20 below).
+
+20–30 frames a second after. ⚠ `m4`'s final-picture comparison is what gates a band that
+misses a row.
+
+Two more from the same work, both of which presented as "the ball does not launch":
+
+- ⛔ **A table built in the module played at `wset` = 0.** Only a file carried sliders, so
+  `pcs 22`/`23`/`24` ran with `GRAVTBL`'s `$FF` — gravity once in 256 frames. The defaults
+  are now set before `Build`.
+- ⛔ **`LAUNCHHIT` needs the button held on a frame the ball touches the plunger**, and a
+  ball dropped onto it bounces for a second or two. A scripted half-second click missed
+  every contact. `mkpcsbuild.py` holds it for 3.5 s.
+
+And a scripting trap: `mkpcsbuild.py`'s clock followed only its `at` lines, but `at` is
+absolute and `+` relative, so the next `at` landed inside the gesture before it — a tool
+click fired in the middle of a 2.2 s vertex drag, which the machine rightly took as its
+release. `e1` caught it as a record whose release was at the tool bar.
+
+⛔ **And the exit died with `PCS-NOLIB` after a game played from the editor.** `LibFini`
+unlinked each library through the window with `F$UnLink`, which needs the module mapped
+and leaves the caller's map to the kernel's per-process block link counts. It now empties
+the window once and `F$UnLoad`s each library by name.
+
 ## `pcs.md` §8 — the editor's UI "not written", and "nothing rebuilds the run chain" (2026-09-24)
 
 Superseded by `pcs 23`, `pcsui.inc`'s `EdLoop` (§8, gated by `e0`). §8 said:
@@ -176,3 +241,35 @@ of the first `e0` runs, each in code older than the loop:
   `render_table` always did.
 - ⚠ And a PS/2 script's `origin` has to be where the pointer really is. The first script
   said `320 240`, and every press landed 320 left and 240 up of where it was meant.
+
+## `pcs.md` §5, §6 and §8 — three libraries, "no free-hand layer", the magnifier "not written" (2026-09-24)
+
+The magnifier became library 4 (`pcsmg`) and the free-hand layer a paged bitmap
+(§5). What the spec said before:
+
+> ⭐ **`pcs` is a resident core and three libraries** (`pcscore.inc`, 2026-09-24).
+
+> `LibFini` unlinks all three on every exit. … a card must carry all four modules
+
+> ⚠ **Still open**: `pcs` cannot **save**, and the container carries no free-hand
+> magnifier layer. The format has the room, and the loader refuses a payload longer
+> than the object area, so a longer one is a version it does not know rather than a
+> buffer it overruns.
+
+> - ⚠ **Not written**: the magnifier, the World panel, the tool bar's other seven tools, …
+
+> **on a tool**: the first five (hand, pointer, scissors, hammer, brush) become the
+> tool; **PLAY** plays the table (below); the other seven are recorded and not yet built.
+
+§6 listed `pcsedit.inc` as "EDIT.s — tools, bin, magnifier, World (step 4)"; the
+magnifier is `pcsmag.inc` and the tools, bin and event loop are `pcsui.inc`.
+
+⚠ **The layer's first design was capped, and wrong twice over.** It kept a fixed number
+of `(y, x, colour)` triples in the data area, sized by the bytes left there, and
+refused a plot past the cap. The user's direction: *"we have literally 8 MB of RAM, a
+paging MMU, and relocatable code. Why are you worried about memory space?"* — so the
+layer is a whole bitmap in eight `F$AllRAM` blocks. ⛔ Its first paged version then gave
+the layer **a window slot of its own**, and `pcs` has none free (§5: seven slots, three
+data, three core, one library window): `F$MapBlk` would have answered with an address
+other than the one wanted, or failed, and the layer would silently not exist. It pages
+through the **library window** instead, by core code that puts the caller's library back.

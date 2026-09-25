@@ -299,9 +299,10 @@ def _Lg(L, j):
     return L[j] if j < len(L) else None
 
 
-def render_table(pak, objs, parts=None):
-    """⭐ THE TABLE AS THE CARD SHOWS IT: the span database painted at 2x, and
-    then every library part's current frame blitted over it in UI_PART.
+def render_table(pak, objs, parts=None, layer=None):
+    """⭐ THE TABLE AS THE CARD SHOWS IT: the span database painted at 2x, the
+    free-hand layer over it (pcsmag.Layer, pcsdraw.inc's LyRow), and then every
+    library part's current frame blitted over both in UI_PART.
 
     ⛔ THE ART IS ALREADY DOUBLED.  `art()` doubles each frame's bits on the way
     into the blob, so a frame of `h` rows by `w` bytes covers `w*8` CARD columns
@@ -331,6 +332,8 @@ def render_table(pak, objs, parts=None):
             row[x * s:x * s + s] = bytes([v]) * s
         for k in range(s):
             fb[(y * s + k) * w:(y * s + k) * w + w] = row
+    if layer is not None:
+        layer.compose(fb, w, s)
 
     blob, frs, index = artbank()
     for i, o in enumerate(objs):
@@ -702,6 +705,14 @@ def demo_table():
     return o
 
 
+
+def empty_table():
+    """⭐ A NEW TABLE: the default table's backdrop alone - the walls, the
+    chute's opening and the drain - and no part, no ball and no divider.
+    The Apple II session this editor is modelled on starts from exactly that,
+    and builds the rest out of the bin."""
+    return demo_table()[:1]
+
 def serialise(objs):
     """The objects as `pbdata` holds them: the count, the record lengths, then
     the records.  ⭐ pbdata[0] doubles as the count AND as the offset from
@@ -731,13 +742,13 @@ PCSLIB_OF = {
     'PCTmpl': 1, 'PCTType': 1, 'PCTLen': 1, 'PCEdit': 1,          # pcsed
     'PCBox': 2, 'PCKit': 2, 'PCKDbl': 2, 'PCIcon': 2,             # pcsui
     'PCPickF': 2, 'PCTool': 2, 'PCTSz': 2,
-    'PCDemo': 3, 'PCTest': 3,                                     # pcsfl
+    'PCDemo': 3, 'PCTest': 3, 'PCEmpty': 3,                       # pcsfl
 }
 
 
 def _sectioned(lines):
     """Wrap every data block in `ifeq PCSLIB-n` for the module that owns it.
-    ⛔ The EQUATES stay outside every guard, because all four modules need the
+    ⛔ The EQUATES stay outside every guard, because all five modules need the
     geometry; a guard is closed before any line that is neither data nor a
     comment."""
     out, open_, cur = [], None, 0
@@ -1131,6 +1142,14 @@ def emit(path):
     w('PCDemo              equ       *')
     _fcb(o, dt)
     w('')
+    w("* ⭐ AND THE EMPTY TABLE the editor starts a new one from (`pcs 24`):")
+    w("* the default table's backdrop and nothing else - walls, which is")
+    w("* what the Apple II's editor opens on (pcs.md 8).")
+    et = serialise(empty_table())
+    w('PCEmptyN            equ       %d' % len(et))
+    w('PCEmpty             equ       *')
+    _fcb(o, et)
+    w('')
     w('* ══════════════════ THE FOUR TABLES PCS SHIPS WITH ═══════════════')
     w('* ⭐⭐ DEMO1..DEMO4 off the retail disk, DEMO1 being ASTRO BLAST - the')
     w('* one it boots with.  Each is LOGIC[24], WSET[4] and the object area,')
@@ -1343,10 +1362,15 @@ PBT_MAGIC = b'PCS1'
 PBT_ROWS = 192                      # ⚠ what the ORIGINAL authored them for
 
 
-def table_file(logic, wset, objs):
+def table_file(logic, wset, objs, layer=()):
+    """⭐ `layer` is the free-hand drawing's (y, x, colour) triples, written
+    after the payload as pcsmag.trailer() - a section a reader that stops at
+    PF.Len never sees, and that a table with no drawing does not have."""
+    import pcsmag
     payload = bytes(logic) + bytes(wset) + serialise(objs)
     return (PBT_MAGIC + bytes([PBT_ROWS, objs and len(objs) or 0])
-            + bytes([len(payload) >> 8, len(payload) & 0xFF]) + payload)
+            + bytes([len(payload) >> 8, len(payload) & 0xFF]) + payload
+            + pcsmag.trailer(list(layer)))
 
 
 def pbt_name(name):
@@ -1374,6 +1398,15 @@ def write_tables(dirpath, limit=None):
         with open(os.path.join(dirpath, fn), 'wb') as f:
             f.write(blob)
         out.append((fn, len(blob), len(objs)))
+        if fn == 'demo2.pbt':
+            # ⭐ AND THE SAME TABLE WITH A FREE-HAND LAYER (pcsmag.demo_layer),
+            # which is what `f1` loads: the trailer read back and composed.
+            import pcsmag
+            fn = 'demo2l.pbt'
+            blob = table_file(logic, wset, objs, pcsmag.demo_layer())
+            with open(os.path.join(dirpath, fn), 'wb') as f:
+                f.write(blob)
+            out.append((fn, len(blob), len(objs)))
     return out
 
 

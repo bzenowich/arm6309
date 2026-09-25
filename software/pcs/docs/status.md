@@ -20,14 +20,14 @@ checkers).
 | `pcsobj.inc` + `pcsrun.inc` — the simulator | 2,299 | ⭐⭐ **bit-exact over 600 frames** against a Python transliteration of `RUN.s`: the ball's `(x, y, BDX, BDY)` every frame, 95 hits on 11 objects, every part's state byte, and the score |
 | `pcsdraw.inc` — the painter, the 1bpp art blit | 589 | every pixel of the table, against the model |
 | `pcsedit.inc` — the editor's **database** operations | 950 | ⭐⭐ **agrees with `pcsedit.py`** over a twelve-edit session: step results, object area and span database (`m6`, in the default bench since 2026-09-24) |
-| `pcsui.inc` — the editor's screen (`pcs 22`) and its event loop (`pcs 23`) | 835 | ⭐ **the kit panel and the 12 × 10 colour picker, every card pixel**, against `pcskit.py` (`k0`). ⭐⭐ **And the editor with a mouse** (`e0`): 22 scripted gestures — the hand, the bin, the pointer, the hammer, the scissors and the brush — each one's record against what the checker works out from the script alone, then the object area, the span database and the whole table picture |
+| `pcsui.inc` — the editor's screen (`pcs 22`) and its event loop (`pcs 23`) | 1,743 | ⭐ **the kit panel and the 12 × 10 colour picker, every card pixel**, against `pcskit.py` (`k0`). ⭐⭐ **And the editor with a mouse** (`e0`): 22 scripted gestures — the hand, the bin, the pointer, the hammer, the scissors and the brush — each one's record against what the checker works out from the script alone, then the object area, the span database and the whole table picture |
 | `pcsfile.inc` — a table is a file on the card | 192 | ⭐ all four `DEMO*.PB` load off `/SD0/DATA` with **byte-identical span databases** |
 | `pcstext.inc` — the original's proportional font | 216 | screenshotted: the glyphs, the spacing, right-aligned numbers, boxes and frames |
 | `pcsin.inc` — mouse, keyboard, cursor | 230 | the cursor is the **card's hardware sprite**; a scripted mouse drives a real game |
 | `pcssnd.inc` — the seven effects on the audio card | 200 | ⚠ **unheard**. The note sequences are the original's tables; nothing gates a sound |
 | `pcsgame.inc` — players, balls, tally, panel | 380 | ⭐ **it plays**: a scripted mouse launches the ball, gravity pulls it down, it bounces, the panel draws |
 
-⭐ **Since 2026-09-24 `pcs` is a 22.8 KB core and three libraries** (`pcsed`, `pcsui`,
+⭐ **Since 2026-09-24 `pcs` is a 23.0 KB core and three libraries** (`pcsed`, `pcsui`,
 `pcsfl`) paged through one 8 KB window (`pcs.md` §5, `pcscore.inc`), so the editor can
 grow without the one-module 32 KB ceiling. The whole gate runs on the paged build.
 
@@ -50,19 +50,25 @@ around it:
 
 | | of the 6502 | note |
 |---|---|---|
-| The tool bar's other eight tools | part of `EDIT.s` | PLAY, the wiring kit, the World, the magnifier, LOAD/SAVE and the rest are recorded when clicked and do nothing yet |
+| The tool bar's other six tools | part of `EDIT.s` | the wiring kit, the World, LOAD/SAVE and the rest are recorded when clicked and do nothing yet. ⭐ **PLAY is built**: the table plays from the editor with the score strip where the kit was, and comes back as it was left (`e1`). ⭐ **MAGN is built** (`e2`, below) |
 | The wiring kit's UI | `WIRE.s`, 1,143 | ⭐ the **evaluator** is already built and gated (`PBWire`, `TURNOFF`); only the screen and the three tools are missing |
 | The World panel — four sliders | part of `EDIT.s` | `wset` already loads and drives the physics; it is not editable |
-| The magnifier — fat-bits paint | part of `EDIT.s` | and the free-hand layer, which the original RLE-compresses on save |
-| Save, and a catalogue | part of `DISK.s` | ⭐ `PFSave` is written; nothing calls it and there is no file picker |
+| Save, and a catalogue | part of `DISK.s` | ⭐ `PFSave` is written, the free-hand layer's trailer with it; nothing calls it, so ⚠ **the trailer's writer is unexercised** — only its reader is gated (`f1`) — and there is no file picker |
 | `desk` integration | — | no icon, no `IcTab` entry, no Applications item |
 | Four-player attract loop | `RUN2.s` | ⚠ **deliberately not ported**: it read the Atari's console START/OPTION/SELECT keys, which this machine does not have |
 
 ### Known open items on work already written
 
-- ⚠ **A gesture made during a repaint is lost** (about a second after each edit): the
-  loop does not sample the mouse while it draws. `e0` spaces its gestures four seconds
-  apart for that reason.
+- ⭐ **The drag is live** (the copy engine, keyed on index 0) and **an edit repaints
+  only its rows**, composed in the margin with no black flash (`pcs.md` §8).
+- ⚠ **A gesture made during a repaint is still lost**: the loop does not sample the
+  mouse while it draws. The repaint is a band of rows now rather than the whole table,
+  but `e0` still spaces its gestures four seconds apart and nothing measures the window.
+- ⚠ **`pcsui` is 7,997 bytes of its 8,192.** The rest of the editor goes in a fourth
+  library.
+- ⭐ **A game repaints two bands of rows and clips the art to them**: 20–30 frames a
+  second on a table built in the editor, up from ~7. ⚠ The bands are wiped on the
+  screen, so a thin dark line shows now and then.
 - ⚠ **`TIMETBL` re-derivation for 59.94 Hz is still unmeasured.** Gravity, flipper sweep
   and the drain delay are all counted in frames and the original busy-waited.
 - ⚠ **Sound is unverified by anything.** A bench cannot hear. The note *sequences* are
@@ -188,3 +194,27 @@ there was four faults in code that was already written, each listed in `history.
 - `EditO` sat inside `PCDump`'s rows.
 - `PEPaint` left the old colour on screen when the brush cleared it to 0.
 - In the editor, the ball was drawn where the last game left it.
+
+## 7. The magnifier and the free-hand layer, 2026-09-24
+
+⭐ **Built and gated, first run green.** `pcsmg`, library 4 (`pcsmag.inc`, 1,606
+bytes), is EDIT.s's MAGNIFY: a 24 × 40 viewer of fat bits read back off the card,
+a box on the table, lines drawn and toggled off with Bresenham, QUIT (`pcs.md` §8).
+What it draws on is a **160 × 240 layer in eight `F$AllRAM` blocks**, paged through
+the library window by the core (`pcs.md` §5) and composed under the parts' art on
+every repaint; a table file carries it in a trailer after the payload.
+
+| leg | what it proved |
+|---|---|
+| `e2` | 15 gestures, every record against `pcsmag.py`; the 109-pixel layer `MgDump` streamed; all 153,600 table bytes with the layer and the box's frame; **all 62,146 viewer pixels** |
+| `f1` | `demo2l.pbt`'s 1,206-pixel trailer loaded — the database identical, 0 pixels different, every layer pixel on the card |
+| `e0` | unchanged, and its (empty) layer now checked too |
+
+⭐ **The viewer's first redraw took about 3 s** — 960 cell fills, and the contact
+sheet caught it half drawn. Painting runs and putting the grid back with one keyed
+copy a row (`pcs.md` §8) made it quick enough that no tile catches it, and `e2`'s
+62,146-pixel comparison held unchanged across the rewrite.
+
+Sizes: core 24,154 bytes of 24,576; `pcsui` 7,962 of 8,192. ⚠ The core is
+**422 bytes from a fourth slot** — which is a slot the process has not got, so the
+next routine that must be resident moves something else into a library.

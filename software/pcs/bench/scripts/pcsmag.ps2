@@ -1,0 +1,87 @@
+# pcsmag.ps2 - the MAGNIFIER at the editor (`pcs 23`, the demo table): fat
+# bits drawn, erased by the brush's toggle, the box moved, QUIT, and a tool
+# that ends it - and left UP at the end, so the bench reads the fat bits and
+# the box off the card as well as the layer MgDump streams (pcsmag.inc).
+#
+# ⚠ Card pixels.  MAGN is the tool column's icon at (560, 250); the viewer is
+# 24 x 40 cells of 8 from (332, 16), so cell (i, j) is (336 + 8i, 20 + 8j) at
+# its middle; QUIT is (336..399, 368..391); the picker's cells are 8 x 8 from
+# (432, 360).  checkpcs.py `ui-mag` models every gesture from these points.
+# ⚠ `origin 0 0`: that is where the pointer is when pcs starts.
+origin 0 0
+gap 300
+
+# 1  MAGN: the panel, and the box at its default (68, 100)
+at 1.000    move to 560 250
++0.300      click left
+
+# 2  a colour: the picker's first cell, white - 32
+at 5.000    move to 436 364
++0.300      click left
+
+# 3  a line of fat bits, cell (2, 5) to cell (20, 30)
+at 9.000    move to 352 60
++0.300      down left
++0.300      move to 420 160
++0.300      move to 496 260
++0.400      up left
+
+# 4  and a flat one along row 35, edge to edge
+at 14.000   move to 336 300
++0.300      down left
++0.300      move to 520 300
++0.400      up left
+
+# 5  ⭐ THE TOGGLE: pressed on a fat bit already this colour, so the line
+#    from (2, 5) to (10, 5) is ERASED - only (2, 5) of it was drawn
+at 19.000   move to 352 60
++0.300      down left
++0.300      move to 416 60
++0.400      up left
+
+# 6  a press on the panel that is none of its controls: a miss
+at 24.000   move to 330 450
++0.300      click left
+
+# 7  the box moved: pressed on the table, let go at world (110, 160)
+at 28.000   move to 200 300
++0.300      down left
++0.300      move to 220 320
++0.400      up left
+
+# 8  a diagonal the length of the viewer in the new box, released BELOW it -
+#    the line ends at the viewer's edge
+at 33.000   move to 336 20
++0.300      down left
++0.300      move to 520 340
++0.400      up left
+
+# 9  QUIT: the kit comes back
+at 38.000   move to 368 380
++0.300      click left
+
+# 10 MAGN again - the box is where it was left - and another colour
+at 42.000   move to 560 250
++0.300      click left
+at 46.000   move to 452 388
++0.300      click left
+
+# 11 a short vertical, cell (5, 5) to (5, 20)
+at 50.000   move to 376 60
++0.300      down left
++0.300      move to 376 180
++0.400      up left
+
+# 12 the hand: a TOOL ends the magnifier and is taken
+at 55.000   move to 560 14
++0.300      click left
+
+# 13 MAGN once more, a last line - and it is left up for the bench to read
+at 59.000   move to 560 250
++0.300      click left
+at 63.000   move to 400 100
++0.300      down left
++0.300      move to 440 60
++0.400      up left
+
+at 68.000   type "q"
