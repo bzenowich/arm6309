@@ -43,6 +43,12 @@
 #       gesture's record against pcsmag.py, the free-hand layer MgDump streams,
 #       the table with the layer composed in, the box, and every fat bit.
 #   f1  ⭐ demo2 with a layer in its file's trailer, loaded and composed.
+#   d0  ⭐⭐ SAVE AND LOAD - `pcs 23 N demo2l.pbt` driven by scripts/pcsdisk.ps2
+#       on its OWN copy of the card: a table edited and SAVEd twice over one
+#       name, another picked off the catalogue and LOADed, a name that is not
+#       there refused, and the saved one LOADed back.  Every record against
+#       pcsdisk.py, the table the session ended on, and ⭐ every `.pbt` read
+#       back out of the card the machine left, byte for byte.
 #   m5  ⭐ BOUNCE rotates back by TTA instead of 32 - TTA, which is the gate on
 #       the TRAJECTORY rather than on the picture.  ⛔ The two are the SAME for
 #       tta 0 and 16, so a ball in a box of flat walls behaves identically and
@@ -58,7 +64,7 @@ ROOT=$(pwd)
 OUT=${OUT:-$(cd "$_here/.." && pwd)/build/pcs}
 FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
-RUNS=${RUNS:-"m0 m4 m6 e0 e1 e2 k0 f0 f1 fX m1 m2 m5"}
+RUNS=${RUNS:-"m0 m4 m6 e0 e1 e2 d0 k0 f0 f1 fX m1 m2 m5"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH
@@ -159,13 +165,16 @@ run() {
 # script ends with `q` well inside it.
 EFRAMES=${EFRAMES:-9000}
 ESECONDS=${ESECONDS:-240}
+# ⭐ A FOURTH ARGUMENT is a table name off the card, and $CARD the image the
+# leg runs on - its own copy, for a leg that writes to it.
 rune() {
-  D="$OUT/$1"; m=$2; script=$3
+  D="$OUT/$1"; m=$2; script=$3; tbl=${4:-}
   rm -rf "$D"; mkdir -p "$D"
-  printf 'chx /sd0/cmds\riniz w5\rpcs %d %d >/w5\recho DONE-arm6309\r' \
-    "$m" "$EFRAMES" > "$D/typed.txt"
+  card=${CARD:-$OUT/sd.img}
+  printf 'chx /sd0/cmds\riniz w5\rpcs %d %d %s>/w5\recho DONE-arm6309\r' \
+    "$m" "$EFRAMES" "${tbl:+$tbl }" > "$D/typed.txt"
   (cd "$D" && SERIAL_IN=typed.txt SERIAL_GATE="02}" SERIAL_TYPE=60 \
-     SERIAL_THINK=700 SERIAL_STOP="$STOP" WILD=1 VIDEO3=1 SDIMG="$OUT/sd.img" \
+     SERIAL_THINK=700 SERIAL_STOP="$STOP" WILD=1 VIDEO3=1 SDIMG="$card" \
      PS2_SCRIPT="$script" PS2_SCRIPT_GATE=PCS-EDIT \
      VRAMDUMP=vram.bin "$OUT/emu" "$ROM" . "$ESECONDS" \
      > /dev/null 2> emu.log) || true
@@ -225,6 +234,9 @@ for r in $RUNS; do
           > software/pcs/bench/scripts/pcsbuild.ps2
         EFRAMES=20000 ESECONDS=340 rune e1 24 "$ROOT/software/pcs/bench/scripts/pcsbuild.ps2" ;;
     e2) ESECONDS=200 rune e2 23 "$ROOT/software/pcs/bench/scripts/pcsmag.ps2" ;;
+    d0) mkdir -p "$OUT/d0.card"; cp "$OUT/sd.img" "$OUT/d0.card/sd.img"
+        CARD="$OUT/d0.card/sd.img" ESECONDS=240 \
+          rune d0 23 "$ROOT/software/pcs/bench/scripts/pcsdisk.ps2" demo2l.pbt ;;
     m7) run m7 7 ;;
   esac
 done
@@ -307,6 +319,10 @@ for r in $RUNS; do
     e2) echo "--- e2 ⭐ THE MAGNIFIER: fat bits drawn and erased, the box, the layer it left ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/e2" ui-mag \
           software/pcs/bench/scripts/pcsmag.ps2 || fail=1 ;;
+    d0) echo "--- d0 ⭐⭐ SAVE AND LOAD: the session, the table it ended on, the card it left ---"
+        PATH="$ROOT/.tools/bin:$PATH" python3 software/pcs/bench/checkpcs.py "$OUT/d0" ui-disk \
+          software/pcs/bench/scripts/pcsdisk.ps2 demo2l.pbt \
+          "$OUT/sd.img" "$OUT/d0.card/sd.img" || fail=1 ;;
     k0) echo "--- k0 ⭐ THE EDITOR'S KIT PANEL, against EDIT.s's DRAWKIT ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/k0" kit || fail=1 ;;
     m5) echo "--- m5 ⛔ MUTATION: BOUNCE rotates back by TTA - this must FAIL ---"

@@ -224,14 +224,20 @@ def edit_session(vram):
 UIREC = 15                  # tool, press x/y, release x/y (16-bit), op[5], answer
 EDL_MISS, EDL_TOOL, EDL_PICK, EDL_BIN = 0, 1, 2, 3
 ED_HAND, ED_PTR, ED_CUT, ED_HAM, ED_BRSH, ED_NTL = 0, 1, 2, 3, 4, 5
-ED_PLAY, ED_MAGN = 8, 9
+ED_PLAY, ED_MAGN, ED_WRLD, ED_DISK = 8, 9, 10, 12
+EDITW = 509                         # modes 23/24: logic[24], wset[4]
+KEYNAMES = {'backspace': 8, 'bksp': 8, 'delete': 0x7F, 'del': 0x7F,
+            'enter': 13, 'return': 13, 'space': 32}
 
 
 def ps2_gestures(path):
     """Every left-button press and its release, in card pixels, out of the
     PS/2 script - the pointer the SCRIPT believes in, which is the one a test
     author means (emu/ps2script.h).  ⚠ Only what moves the pointer or the left
-    button is read; times do not matter here, only order."""
+    button is read; times do not matter here, only order.
+    ⭐ And every key the editor is given, as ('key', byte): `type` a byte a
+    character, `key tap NAME` one byte - except the key that ends PLAY,
+    which the game takes."""
     import shlex
     import pcskit
     _n, px0, py0, pw, ph = pcskit.tools()[ED_PLAY]
@@ -254,7 +260,15 @@ def ps2_gestures(path):
         if not w:
             continue
         if w[0] == 'type':
+            if not play:
+                out.extend(('key', ord(c)) for c in
+                           w[1].encode().decode('unicode_escape'))
             play = False                # ⭐ the key that ends PLAY
+        elif w[:2] == ['key', 'tap']:
+            k = w[2].lower()
+            if not play:
+                out.append(('key', KEYNAMES[k] if k in KEYNAMES else ord(w[2])))
+            play = False
         if play and w[0] in ('down', 'up', 'click'):
             continue                    # ⭐ PLAYING: the buttons are flippers
         if w[0] == 'origin':
@@ -314,14 +328,17 @@ def _op(db, op):
     return pcsedit.run_script(db, [tuple(op)])[0]
 
 
-def ui_model(gestures, db, mag=None):
+def ui_model(gestures, db, mag=None, disk=None):
     """⭐ WHAT EdLoop MUST HAVE DONE, from the script's points alone: the tool,
     the colour, and for every gesture the record it writes - `(tool, px, py,
     rx, ry, op0..op4, answer)` - with each edit applied to `db` as it goes.
 
     ⭐ `mag`, a dict, is the magnifier's state (pcsmag.inc): `up`, the `box`,
     and the free-hand `layer` every plot goes into - left as the session left
-    it, for ui_session to compare with what the machine drew and dumped."""
+    it, for ui_session to compare with what the machine drew and dumped.
+    ⭐ It is also the TABLE's: `db`, `wset` and `layer` are what a DISK LOAD
+    replaces, so the table the session ends with is `mag['db']`.
+    ⭐ `disk` is a pcsdisk.Panel, the card's files in it."""
     import pcskit
     import pcsparts
     import pcsmag
@@ -330,6 +347,11 @@ def ui_model(gestures, db, mag=None):
     mag.setdefault('up', False)
     mag.setdefault('box', None)
     mag.setdefault('layer', pcsmag.Layer())
+    mag.setdefault('wset', list(mkpcs.WSET))
+    mag['db'] = db
+    import pcsdisk
+    if disk is None:
+        disk = pcsdisk.Panel({})
     tools = pcskit.tools()
     boxes = mkpcs.bin_boxes()
     parts = pcsparts.parts()
@@ -339,9 +361,25 @@ def ui_model(gestures, db, mag=None):
     tool, pk = ED_HAND, 0
     recs = []
     sb = lambda v: max(-128, min(127, v)) & 0xFF      # noqa: E731
-    for (px, py, rx, ry) in gestures:
+    for g in gestures:
+        if g[0] == 'key':
+            # ⭐ A KEY IS THE NAME FIELD'S while DISK is up, and otherwise
+            # only `q` means anything: the editor ends.
+            if disk.up:
+                recs.append([tool, 0, 0, 0, 0] + disk.key(g[1]) + [0xFF])
+            elif g[1] in (ord('q'), ord('Q')):
+                break
+            continue
+        px, py, rx, ry = g
+        db = mag['db']
         wx, wy, rwx, rwy = px // 2, py // 2, rx // 2, ry // 2
         op, res, extra = [0] * 5, 0xFF, None
+        # ⭐ DISK, while it is up (pcsdisk.inc's DkAct, through MgAct)
+        if disk.up:
+            r = disk.press(px, py, mag)
+            if r is not None:
+                recs.append([tool, px, py, rx, ry] + r[0] + [r[1]])
+                continue
         # ⭐ THE MAGNIFIER FIRST, while it is up (MgAct): a gesture it takes is
         # one record and nothing else happens.
         if mag['up']:
@@ -404,6 +442,8 @@ def ui_model(gestures, db, mag=None):
                 elif hit == ED_MAGN:
                     mag['up'] = True
                     mag['box'] = mag['box'] or (pcsmag.BX0, pcsmag.BY0)
+                elif hit == ED_DISK:
+                    disk.open()
             elif tool == ED_HAND:
                 b = next((i for i, (x, y, w, h) in enumerate(boxes)
                           if 0 <= wx - x <= w and 0 <= wy - y <= h), None)
@@ -455,12 +495,20 @@ def _uifmt(r):
                 'bin %d let go off the table' % r[7],
                 'magnifier box to (%d, %d)' % (r[7], r[8]),
                 'fat bits: %d in colour %d' % (r[7], r[8]),
-                'magnifier QUIT')[r[6]] if r[6] < 7 else '?'
+                'magnifier QUIT',
+                'key %r, name %d long' % (chr(r[7]), r[8]),
+                'list row %d picked, name %d long' % (r[7], r[8]),
+                'LOAD: pferr %d, %d objects' % (r[7], r[8]),
+                'SAVE: pferr %d, %d listed' % (r[7], r[8]),
+                'DISK QUIT', 'MORE: page at %d' % r[7],
+                )[r[6]] if r[6] < 13 else '?'
+        if r[6] in (9, 10):
+            what += ' refused' if r[10] else ' took'
     return '%-5s (%3d,%3d)->(%3d,%3d)  %s' % (
         t[r[0]] if r[0] < 5 else r[0], r[1], r[2], r[3], r[4], what)
 
 
-def ui_session(vram, script, base=None, magnify=False):
+def ui_session(vram, script, base=None, magnify=False, card=None, start=None):
     """⭐⭐ THE EDITOR, DRIVEN: every gesture EdLoop recorded against the one the
     script made and the edit the model makes of it; then the object area, the
     span database and the picture the session left.
@@ -469,16 +517,29 @@ def ui_session(vram, script, base=None, magnify=False):
     somewhere else - a missed click, a pointer that is not where the script
     believes - makes every later answer a comparison of two different
     sessions, and says so here rather than as a mystery twenty edits on.
+
+    ⭐ `card` is /SD0/DATA as the session found it, name -> bytes, and `start`
+    the table `pcs 23 N name.pbt` loaded: the DISK leg.  The Panel it returns
+    in `disk` holds the files the session must have left behind.
     """
     gest = ps2_gestures(script)
     got = _uirecs(vram)
     if got is None:
         print('FAIL  the gesture stream has no end marker - EdLoop never returned')
         return False
-    db = pcsedit.DB(base() if base else mkpcs.demo_table(),
-                    width=mkpcs.TW, height=mkpcs.TH)
+    import pcsdisk
+    import pcsmag
     mag = {}
-    want = ui_model(gest, db, mag)
+    if start:
+        t = pcsdisk.parse(card[start])
+        db = pcsedit.DB(t.objs, t.logic, width=mkpcs.TW, height=mkpcs.TH)
+        mag['wset'], mag['layer'] = list(t.wset), pcsmag.Layer(t.layer)
+    else:
+        db = pcsedit.DB(base() if base else mkpcs.demo_table(),
+                        width=mkpcs.TW, height=mkpcs.TH)
+    disk = pcsdisk.Panel(card or {})
+    want = ui_model(gest, db, mag, disk)
+    db = mag['db']
     ok = True
     for i in range(max(len(got), len(want))):
         g = got[i] if i < len(got) else None
@@ -511,6 +572,23 @@ def ui_session(vram, script, base=None, magnify=False):
             ('toggled erase', any(k == pcsmag.EDL_PLOT and not c for k, c in mk)),
             ('QUIT', any(k == pcsmag.EDL_MQUIT for k, _ in mk))) if not ok_]
         nref = 1
+    if card is not None:
+        # ⛔ THE DISK PANEL'S OWN COVERAGE: a name typed, a table picked, a
+        # LOAD that took and one that was refused, a SAVE over a name already
+        # saved, and QUIT.
+        dk = [(r[6], r[10]) for r in want if r[5] == 0]
+        saves = [r for r in want if r[5] == 0 and r[6] == pcsdisk.EDL_DSAVE
+                 and not r[10]]
+        missing = [n for n, ok_ in (
+            ('key', any(k == pcsdisk.EDL_KEY for k, _ in dk)),
+            ('list pick', any(k == pcsdisk.EDL_DPICK for k, _ in dk)),
+            ('LOAD', (pcsdisk.EDL_DLOAD, 0) in dk),
+            ('refused LOAD', (pcsdisk.EDL_DLOAD, 1) in dk),
+            ('second SAVE', len(saves) >= 2),
+            ('DISK QUIT', any(k == pcsdisk.EDL_DQUIT for k, _ in dk)))
+            if not ok_]
+        nref = 1
+    ui_session.disk = disk
     if missing:
         print('FAIL  the session never made a %s' % ', '.join(missing))
         return False
@@ -538,11 +616,18 @@ def ui_session(vram, script, base=None, magnify=False):
 
     if not _layer(vram, mag['layer']):
         return False
+    # ⭐ THE TABLE'S WIRING AND ITS WORLD, which nothing on the screen shows
+    wantw = bytes(db.logic) + bytes(mag['wset'])
+    gotw = _stream(vram, EDITW, len(wantw))
+    if gotw != wantw:
+        print('FAIL  logic+wset: got %s' % list(gotw))
+        print('      wanted     %s' % list(wantw))
+        return False
+    print('    logic and wset match: %s, %s' % (list(db.logic[:8]), mag['wset']))
 
     # ⭐ AND THE PICTURE: the last repaint is the whole table, every part at its
     # frame 0, over the free-hand layer.  ⚠ The sprite is composited at scan
     # time and is not in VRAM.
-    import pcsmag
     fb, w, h = mkpcs.render_table(db.pak, db.objs, layer=mag['layer'])
     table = bytes(fb)
     if mag['up']:
@@ -569,6 +654,68 @@ def ui_session(vram, script, base=None, magnify=False):
     print('ok    all %d bytes of the edited table are what the model builds'
           % (w * h))
     return True
+
+
+def card_files(img, tmp):
+    """/SD0/DATA's `.pbt` files off an image, name -> bytes.  ⛔ `os9 copy`
+    of a missing file says `error 216` and EXITS 0, so a file counts only if
+    it was written."""
+    import subprocess
+    lst = subprocess.run(['os9', 'dir', img + ',DATA'], capture_output=True,
+                         text=True, check=True).stdout
+    names = [w for ln in lst.splitlines()[1:] for w in ln.split()
+             if w.lower().endswith('.pbt')]
+    if not names:
+        raise SystemExit('FAIL  no .pbt on %s - `os9 dir` read nothing' % img)
+    out = {}
+    for n in names:
+        f = os.path.join(tmp, n)
+        if os.path.exists(f):
+            os.remove(f)
+        subprocess.run(['os9', 'copy', '%s,DATA/%s' % (img, n), f],
+                       capture_output=True, check=True)
+        if not os.path.isfile(f):
+            raise SystemExit('FAIL  os9 copy wrote no %s' % n)
+        with open(f, 'rb') as fh:
+            out[n.lower()] = fh.read()
+    return out
+
+
+def disk_session(vram, script, start, before, after):
+    """⭐⭐ SAVE AND LOAD: the session against the model, and then the card.
+    Every file the model's panel holds must be on the card after the run
+    byte for byte, and no other `.pbt` may have appeared or changed."""
+    import tempfile
+    tmp = tempfile.mkdtemp()
+    card0 = card_files(before, tmp)
+    if not ui_session(vram, script, card=card0, start=start):
+        return False
+    want = ui_session.disk.files
+    got = card_files(after, tmp)
+    ok = True
+    for n in sorted(set(want) | set(got)):
+        w, g = want.get(n), got.get(n)
+        if w == g:
+            tag = 'saved' if card0.get(n) != w else 'untouched'
+            print('    %-12s %5d bytes, %s' % (n, len(w), tag))
+            continue
+        ok = False
+        if w is None or g is None:
+            print('FAIL  %s is %s the card and %s the model' % (
+                n, 'on' if g else 'not on', 'in' if w else 'not in'))
+        else:
+            i = next((k for k in range(min(len(w), len(g))) if w[k] != g[k]),
+                     min(len(w), len(g)))
+            print('FAIL  %s: %d bytes on the card, %d in the model; first '
+                  'difference at byte %d' % (n, len(g), len(w), i))
+    new = [n for n in want if card0.get(n) != want[n]]
+    if ok and not new:
+        print('FAIL  nothing was saved')
+        return False
+    if ok:
+        print('ok    %d file(s) saved, every byte as PFSave must write them: %s'
+              % (len(new), ', '.join(new)))
+    return ok
 
 
 def _layer(vram, layer):
@@ -625,6 +772,10 @@ def main():
     # ⭐ MODE 23 AGAIN, WITH THE MAGNIFIER: the fat bits, the layer they draw.
     if len(sys.argv) > 3 and sys.argv[2] == 'ui-mag':
         return 0 if ui_session(vram, sys.argv[3], magnify=True) else 1
+    # ⭐ MODE 23 OFF A CARD, WITH DISK: the session, then every file it saved
+    # read back out of the card the machine left, against the model's bytes.
+    if len(sys.argv) > 6 and sys.argv[2] == 'ui-disk':
+        return 0 if disk_session(vram, *sys.argv[3:7]) else 1
     # ⭐ MODE 24: the same, on a NEW table - the backdrop and nothing else.
     if len(sys.argv) > 3 and sys.argv[2] == 'ui-empty':
         return 0 if ui_session(vram, sys.argv[3], mkpcs.empty_table) else 1

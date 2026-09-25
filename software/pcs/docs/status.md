@@ -50,10 +50,10 @@ around it:
 
 | | of the 6502 | note |
 |---|---|---|
-| The tool bar's other six tools | part of `EDIT.s` | the wiring kit, the World, LOAD/SAVE and the rest are recorded when clicked and do nothing yet. ⭐ **PLAY is built**: the table plays from the editor with the score strip where the kit was, and comes back as it was left (`e1`). ⭐ **MAGN is built** (`e2`, below) |
+| The tool bar's other six tools | part of `EDIT.s` | the wiring kit, the World and the rest are recorded when clicked and do nothing yet. ⭐ **PLAY is built**: the table plays from the editor with the score strip where the kit was, and comes back as it was left (`e1`). ⭐ **MAGN is built** (`e2`), and **DISK** (`d0`) |
 | The wiring kit's UI | `WIRE.s`, 1,143 | ⭐ the **evaluator** is already built and gated (`PBWire`, `TURNOFF`); only the screen and the three tools are missing |
 | The World panel — four sliders | part of `EDIT.s` | `wset` already loads and drives the physics; it is not editable |
-| Save, and a catalogue | part of `DISK.s` | ⭐ `PFSave` is written, the free-hand layer's trailer with it; nothing calls it, so ⚠ **the trailer's writer is unexercised** — only its reader is gated (`f1`) — and there is no file picker |
+| Save, and a catalogue | part of `DISK.s` | ⭐ **built** (`d0`): the DISK panel, a catalogue of `/SD0/DATA`'s tables, LOAD, SAVE and a refusal, and every saved file read back off the card byte for byte |
 | `desk` integration | — | no icon, no `IcTab` entry, no Applications item |
 | Four-player attract loop | `RUN2.s` | ⚠ **deliberately not ported**: it read the Atari's console START/OPTION/SELECT keys, which this machine does not have |
 
@@ -64,7 +64,7 @@ around it:
 - ⚠ **A gesture made during a repaint is still lost**: the loop does not sample the
   mouse while it draws. The repaint is a band of rows now rather than the whole table,
   but `e0` still spaces its gestures four seconds apart and nothing measures the window.
-- ⚠ **`pcsui` is 7,962 bytes of its 8,192.** The magnifier went into a library of its
+- ⚠ **`pcsui` is 7,988 bytes of its 8,192.** The magnifier went into a library of its
   own (`pcsmg`) for that reason, and the rest of the editor's tools will too.
 - ⭐ **A game repaints two bands of rows and clips the art to them**: 20–30 frames a
   second on a table built in the editor, up from ~7. ⚠ The bands are wiped on the
@@ -218,3 +218,22 @@ copy a row (`pcs.md` §8) made it quick enough that no tile catches it, and `e2`
 Sizes: core 24,154 bytes of 24,576; `pcsui` 7,962 of 8,192. ⚠ The core is
 **422 bytes from a fourth slot** — which is a slot the process has not got, so the
 next routine that must be resident moves something else into a library.
+
+---
+
+## DISK: save, load and a catalogue (2026-09-24)
+
+The DISK tool opens a panel in the kit's place (`pcsdisk.inc`, in the `pcsfl`
+library): a name field, the `*.pbt` tables on `/SD0/DATA` sorted fourteen to a
+page, and LOAD, SAVE, QUIT and MORE (`pcs.md` §8).
+
+| leg | what it proved |
+|---|---|
+| `d0` | 44 records (keys, a pick, two SAVEs, a LOAD taken, one refused with `PF.ENoF`, one after it that brought back the saved table) against `pcsdisk.py`; the final table's 37 objects, 790 span records, 1,220 layer pixels and `logic`/`wset`; and **every `.pbt` on the card afterwards**, byte for byte: `mytbl.pbt` as the model wrote it, the five others untouched |
+| `e0`, `e1`, `e2` | unchanged, and `logic`/`wset` off `EditW` now checked in each: zeros and the built-in `wset` |
+
+⛔ **`PFSave` had two defects, and neither had ever run**: a payload length summed
+×256, and a carry left by a compare, taken as a write error on the first layer
+pixel (`history.md`). The first `d0` run found both.
+
+Sizes: core 24,195; `pcsfl` 3,925; `pcsui` 7,988.

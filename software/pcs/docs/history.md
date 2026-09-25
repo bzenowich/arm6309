@@ -273,3 +273,29 @@ the layer **a window slot of its own**, and `pcs` has none free (§5: seven slot
 data, three core, one library window): `F$MapBlk` would have answered with an address
 other than the one wanted, or failed, and the layer would silently not exist. It pages
 through the **library window** instead, by core code that puts the caller's library back.
+
+## `pcs.md` §8 — "`pcs` cannot save" (2026-09-24)
+
+Superseded by the DISK panel (`pcsdisk.inc`, §8) and the `d0` leg. The paragraph
+said:
+
+> ⚠ **Still open**: `pcs` cannot **save** — `PFSave` is written, trailer and
+> all, and nothing in the editor calls it.
+
+⛔ **And `PFSave` had never run correctly.** Its payload length was summed with
+`lda ,x+ / clrb / addd`, which adds each record's length **times 256**, so the
+first SAVE the panel made asked `I$Write` for tens of kilobytes out of the data
+area and was refused with `PF.EWrt` — after the file had been created and its
+header written, so the card then held a `mytbl.pbt` whose header claimed a payload
+longer than the object area, and loading it was refused with `PF.EBig`. The first
+`d0` run caught both, one record each, on the first SAVE and on the LOAD of what it
+had written. Nothing had called `PFSave` before, so nothing had seen it.
+
+⛔ **And under it, a second one**, which the first had hidden. With the length
+right, the SAVE still said `PF.EWrt`, and the card held the header, the payload
+and a trailer whose count said 1,220 pixels and which carried none. After a
+pixel was buffered, `psY@` pulled X and branched on carry — and when the buffer
+was not yet full, the carry was the one `cmpa #LY.Buf` had just left, set
+whenever `lyk` < `LY.Buf`. So the first pixel of every layer was a write error.
+A table with no layer saved correctly throughout, which is the only kind anything
+had tried.

@@ -1362,13 +1362,15 @@ PBT_MAGIC = b'PCS1'
 PBT_ROWS = 192                      # ⚠ what the ORIGINAL authored them for
 
 
-def table_file(logic, wset, objs, layer=()):
+def table_file(logic, wset, objs, layer=(), rows=PBT_ROWS):
     """⭐ `layer` is the free-hand drawing's (y, x, colour) triples, written
     after the payload as pcsmag.trailer() - a section a reader that stops at
-    PF.Len never sees, and that a table with no drawing does not have."""
+    PF.Len never sees, and that a table with no drawing does not have.
+    ⚠ `rows` is 192 for a table the original authored and 240 for one this
+    port SAVED (pcsfile.inc's PFSave writes PC.TH)."""
     import pcsmag
     payload = bytes(logic) + bytes(wset) + serialise(objs)
-    return (PBT_MAGIC + bytes([PBT_ROWS, objs and len(objs) or 0])
+    return (PBT_MAGIC + bytes([rows, objs and len(objs) or 0])
             + bytes([len(payload) >> 8, len(payload) & 0xFF]) + payload
             + pcsmag.trailer(list(layer)))
 

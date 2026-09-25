@@ -1,0 +1,93 @@
+# pcsdisk.ps2 - SAVE and LOAD at the editor (`pcs 23 N demo2l.pbt`, a table
+# with a free-hand layer): a part added and a line drawn, the table SAVEd,
+# parts deleted and SAVEd again over the same name - a shorter file, so the
+# old one must have been deleted first - a different table picked off the
+# catalogue and LOADed, a LOAD of a name that is not there REFUSED, and the
+# saved table LOADed back (pcsdisk.inc).
+#
+# ⚠ Card pixels.  DISK is the tool column's icon at (564, 336); the name
+# field is (332, 16, 192, 24), the catalogue's rows are 16 high from y 56,
+# LOAD / SAVE / QUIT are 60 x 24 at x 332 / 398 / 464, y 296, and MORE is
+# below LOAD at y 328.  checkpcs.py `ui-disk` models every gesture and key
+# from these points, through pcsdisk.py.
+origin 0 0
+gap 300
+
+# 1  a part out of the first bin, let go on the table at world (60, 200)
+at 1.000    move to 348 70
++0.300      down left
++0.300      move to 200 330
++0.300      move to 120 400
++0.400      up left
+
+# 2  MAGN, a line of fat bits into the layer, QUIT
+at 6.000    move to 564 250
++0.300      click left
+at 10.000   move to 352 60
++0.300      down left
++0.300      move to 420 160
++0.400      up left
+at 14.000   move to 368 380
++0.300      click left
+
+# 3  DISK, the name, SAVE
+at 19.000   move to 564 336
++0.300      click left
+at 23.000   type "mytbl"
+at 26.000   move to 428 308
++0.300      click left
+
+# 4  QUIT, and two parts dragged off the table: the one just added, and
+#    demo2's object 1
+at 31.000   move to 494 308
++0.300      click left
+at 35.000   move to 124 404
++0.300      down left
++0.300      move to 300 404
++0.300      move to 400 404
++0.400      up left
+at 40.000   move to 214 320
++0.300      down left
++0.300      move to 300 320
++0.300      move to 400 320
++0.400      up left
+
+# 5  DISK again, and SAVE over the same name: a shorter file
+at 45.000   move to 564 336
++0.300      click left
+at 49.000   move to 428 308
++0.300      click left
+
+# 6  demo1, picked off the catalogue's first row, and LOADed
+at 54.000   move to 400 64
++0.300      click left
+at 57.000   move to 362 308
++0.300      click left
+
+# 7  a name that is not on the card: REFUSED, and demo1 stays
+at 63.000   key tap backspace
++0.300      key tap backspace
++0.300      key tap backspace
++0.300      key tap backspace
++0.300      key tap backspace
+at 66.000   type "nosuch"
+at 69.000   move to 362 308
++0.300      click left
+
+# 8  and the saved table back
+at 73.000   key tap backspace
++0.300      key tap backspace
++0.300      key tap backspace
++0.300      key tap backspace
++0.300      key tap backspace
++0.300      key tap backspace
+at 76.000   type "mytbl"
+at 79.000   move to 362 308
++0.300      click left
+
+# 9  MORE (one page: it wraps), QUIT, and the editor ends
+at 85.000   move to 362 340
++0.300      click left
+at 88.000   move to 494 308
++0.300      click left
+at 92.000   type "q"
