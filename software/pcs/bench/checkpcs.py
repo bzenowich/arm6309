@@ -225,7 +225,7 @@ UIREC = 15                  # tool, press x/y, release x/y (16-bit), op[5], answ
 EDL_MISS, EDL_TOOL, EDL_PICK, EDL_BIN = 0, 1, 2, 3
 ED_HAND, ED_PTR, ED_CUT, ED_HAM, ED_BRSH, ED_NTL = 0, 1, 2, 3, 4, 5
 ED_PLAY, ED_MAGN, ED_WRLD, ED_DISK = 8, 9, 10, 12
-EDITW = 509                         # modes 23/24: logic[24], wset[4]
+EDITW = 509                         # modes 23/24: logic[24], wset[4], uqk
 KEYNAMES = {'backspace': 8, 'bksp': 8, 'delete': 0x7F, 'del': 0x7F,
             'enter': 13, 'return': 13, 'space': 32}
 
@@ -508,7 +508,8 @@ def _uifmt(r):
         t[r[0]] if r[0] < 5 else r[0], r[1], r[2], r[3], r[4], what)
 
 
-def ui_session(vram, script, base=None, magnify=False, card=None, start=None):
+def ui_session(vram, script, base=None, magnify=False, card=None, start=None,
+               minq=0):
     """⭐⭐ THE EDITOR, DRIVEN: every gesture EdLoop recorded against the one the
     script made and the edit the model makes of it; then the object area, the
     span database and the picture the session left.
@@ -521,6 +522,12 @@ def ui_session(vram, script, base=None, magnify=False, card=None, start=None):
     ⭐ `card` is /SD0/DATA as the session found it, name -> bytes, and `start`
     the table `pcs 23 N name.pbt` loaded: the DISK leg.  The Panel it returns
     in `disk` holds the files the session must have left behind.
+
+    ⭐ `minq` is how many mouse samples the session must have taken off the
+    queue UISamp fills during a repaint (pcsin.inc): the close-gesture legs,
+    whose gestures only land if the queue carried them.  ⛔ A leg that asks for
+    it and gets 0 is a leg that proved nothing about the queue, however well
+    its records match.
     """
     gest = ps2_gestures(script)
     got = _uirecs(vram)
@@ -624,6 +631,13 @@ def ui_session(vram, script, base=None, magnify=False, card=None, start=None):
         print('      wanted     %s' % list(wantw))
         return False
     print('    logic and wset match: %s, %s' % (list(db.logic[:8]), mag['wset']))
+    qk = _stream(vram, EDITW, len(wantw) + 2)[-2:]
+    queued = qk[0] << 8 | qk[1]
+    print('    %d mouse samples came off the queue a repaint held' % queued)
+    if queued < minq:
+        print('FAIL  the queue carried %d samples and this leg needs %d: its '
+              'gestures were never made during a repaint' % (queued, minq))
+        return False
 
     # ⭐ AND THE PICTURE: the last repaint is the whole table, every part at its
     # frame 0, over the free-hand layer.  ⚠ The sprite is composited at scan
@@ -767,11 +781,12 @@ def main():
         return 0 if edit_session(vram) else 1
 
     # ⭐ MODE 23: the editor with a mouse, against the PS/2 script that drove it.
+    minq = int(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[2] in ("ui", "ui-mag") else 0
     if len(sys.argv) > 3 and sys.argv[2] == 'ui':
-        return 0 if ui_session(vram, sys.argv[3]) else 1
+        return 0 if ui_session(vram, sys.argv[3], minq=minq) else 1
     # ⭐ MODE 23 AGAIN, WITH THE MAGNIFIER: the fat bits, the layer they draw.
     if len(sys.argv) > 3 and sys.argv[2] == 'ui-mag':
-        return 0 if ui_session(vram, sys.argv[3], magnify=True) else 1
+        return 0 if ui_session(vram, sys.argv[3], magnify=True, minq=minq) else 1
     # ⭐ MODE 23 OFF A CARD, WITH DISK: the session, then every file it saved
     # read back out of the card the machine left, against the model's bytes.
     if len(sys.argv) > 6 and sys.argv[2] == 'ui-disk':

@@ -42,6 +42,14 @@
 #   e2  ⭐ THE MAGNIFIER - `pcs 23` driven by scripts/pcsmag.ps2: every
 #       gesture's record against pcsmag.py, the free-hand layer MgDump streams,
 #       the table with the layer composed in, the box, and every fat bit.
+#   c0  ⭐ e0 AND e2 AGAIN, GESTURE AFTER GESTURE - their scripts with every
+#   c2    `at` pulled in to 0.3 of its time, so each gesture starts while the
+#       repaint of the last one is still running, and the press lands in it.
+#       The same checks as e0 and e2 - every record, the table, the layer - and
+#       ⛔ a minimum on the samples that came off pcsin.inc's mouse queue, so a
+#       leg that happened to fall between repaints cannot pass as this one.
+#   cX  ⛔ c0's script on `pcs 25`, which is mode 23 with the queue switched
+#       off - REQUIRED to fail, or c0 would be passing for some other reason.
 #   f1  ⭐ demo2 with a layer in its file's trailer, loaded and composed.
 #   d0  ⭐⭐ SAVE AND LOAD - `pcs 23 N demo2l.pbt` driven by scripts/pcsdisk.ps2
 #       on its OWN copy of the card: a table edited and SAVEd twice over one
@@ -64,7 +72,7 @@ ROOT=$(pwd)
 OUT=${OUT:-$(cd "$_here/.." && pwd)/build/pcs}
 FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
-RUNS=${RUNS:-"m0 m4 m6 e0 e1 e2 d0 k0 f0 f1 fX m1 m2 m5"}
+RUNS=${RUNS:-"m0 m4 m6 e0 e1 e2 c0 c2 cX d0 k0 f0 f1 fX m1 m2 m5"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH
@@ -217,6 +225,15 @@ runf() {
   return 0
 }
 
+# ⭐ A SCRIPT WITH ITS GESTURES PULLED TOGETHER: every `at T` becomes
+# 1 + (T - 1) * 0.3, and the `+` steps inside a gesture are left alone - so a
+# drag is still a drag, and the next one starts about when this one's repaint
+# does.
+fast() {
+  awk '$1 == "at" { $2 = sprintf("%.3f", 1 + ($2 - 1) * 0.3) } { print }' \
+    "$ROOT/software/pcs/bench/scripts/$1"
+}
+
 for r in $RUNS; do
   case "$r" in
     m0) run m0 0 ;;
@@ -234,6 +251,12 @@ for r in $RUNS; do
           > software/pcs/bench/scripts/pcsbuild.ps2
         EFRAMES=20000 ESECONDS=340 rune e1 24 "$ROOT/software/pcs/bench/scripts/pcsbuild.ps2" ;;
     e2) ESECONDS=200 rune e2 23 "$ROOT/software/pcs/bench/scripts/pcsmag.ps2" ;;
+    c0) fast pcsedit.ps2 > "$OUT/c0.ps2"
+        ESECONDS=120 rune c0 23 "$OUT/c0.ps2" ;;
+    c2) fast pcsmag.ps2 > "$OUT/c2.ps2"
+        ESECONDS=120 rune c2 23 "$OUT/c2.ps2" ;;
+    cX) fast pcsedit.ps2 > "$OUT/cX.ps2"
+        ESECONDS=120 rune cX 25 "$OUT/cX.ps2" ;;
     d0) mkdir -p "$OUT/d0.card"; cp "$OUT/sd.img" "$OUT/d0.card/sd.img"
         CARD="$OUT/d0.card/sd.img" ESECONDS=240 \
           rune d0 23 "$ROOT/software/pcs/bench/scripts/pcsdisk.ps2" demo2l.pbt ;;
@@ -319,6 +342,23 @@ for r in $RUNS; do
     e2) echo "--- e2 ⭐ THE MAGNIFIER: fat bits drawn and erased, the box, the layer it left ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/e2" ui-mag \
           software/pcs/bench/scripts/pcsmag.ps2 || fail=1 ;;
+    c0) echo "--- c0 ⭐ e0's session, gesture after gesture: the mouse queue carried them ---"
+        python3 software/pcs/bench/checkpcs.py "$OUT/c0" ui "$OUT/c0.ps2" 4 || fail=1 ;;
+    c2) echo "--- c2 ⭐ e2's session, gesture after gesture: the mouse queue carried them ---"
+        python3 software/pcs/bench/checkpcs.py "$OUT/c2" ui-mag "$OUT/c2.ps2" 4 || fail=1 ;;
+    cX) echo "--- cX ⛔ c0's session with the queue OFF (pcs 25) - this must be REJECTED ---"
+        # ⚠ The checker must have RUN and read the recording: a crash or a
+        # missing dump is also a nonzero exit, and proves nothing.
+        if python3 software/pcs/bench/checkpcs.py "$OUT/cX" ui "$OUT/cX.ps2" \
+             > "$OUT/cX/check.log" 2>&1; then
+          echo "FAIL  an editor with no mouse queue kept every gesture"; fail=1
+        elif grep -q "Traceback" "$OUT/cX/check.log" \
+             || ! grep -q "is not the one the script makes" "$OUT/cX/check.log"; then
+          tail -5 "$OUT/cX/check.log"; echo "FAIL  the cX check failed for the wrong reason"; fail=1
+        else
+          grep FAIL "$OUT/cX/check.log" | head -3 | sed 's/^/      /'
+          echo "ok    ⛔ with the queue off, a gesture made during a repaint is lost"
+        fi ;;
     d0) echo "--- d0 ⭐⭐ SAVE AND LOAD: the session, the table it ended on, the card it left ---"
         PATH="$ROOT/.tools/bin:$PATH" python3 software/pcs/bench/checkpcs.py "$OUT/d0" ui-disk \
           software/pcs/bench/scripts/pcsdisk.ps2 demo2l.pbt \

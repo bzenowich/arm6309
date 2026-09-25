@@ -27,8 +27,8 @@ checkers).
 | `pcssnd.inc` — the seven effects on the audio card | 200 | ⚠ **unheard**. The note sequences are the original's tables; nothing gates a sound |
 | `pcsgame.inc` — players, balls, tally, panel | 380 | ⭐ **it plays**: a scripted mouse launches the ball, gravity pulls it down, it bounces, the panel draws |
 
-⭐ **Since 2026-09-24 `pcs` is a 23.0 KB core and three libraries** (`pcsed`, `pcsui`,
-`pcsfl`) paged through one 8 KB window (`pcs.md` §5, `pcscore.inc`), so the editor can
+⭐ **Since 2026-09-24 `pcs` is a 24.3 KB core and four libraries** (`pcsed`, `pcsui`,
+`pcsfl`, `pcsmg`) paged through one 8 KB window (`pcs.md` §5, `pcscore.inc`), so the editor can
 grow without the one-module 32 KB ceiling. The whole gate runs on the paged build.
 
 **The two decisions the whole port rests on**, both holding:
@@ -61,11 +61,12 @@ around it:
 
 - ⭐ **The drag is live** (the copy engine, keyed on index 0) and **an edit repaints
   only its rows**, composed in the margin with no black flash (`pcs.md` §8).
-- ⚠ **A gesture made during a repaint is still lost**: the loop does not sample the
-  mouse while it draws. The repaint is a band of rows now rather than the whole table,
-  but `e0` still spaces its gestures four seconds apart and nothing measures the window.
-- ⚠ **`pcsui` is 7,988 bytes of its 8,192.** The magnifier went into a library of its
-  own (`pcsmg`) for that reason, and the rest of the editor's tools will too.
+- ⭐ **A gesture made during a repaint is kept** (§8 below): `c0` and `c2` run
+  `e0`'s and `e2`'s scripts at 0.3 of their spacing, and `cX` is required to fail
+  with the queue off.
+- ⭐ **The core must fit three 8 KB slots, and the build says so.** Past 24,573 bytes
+  there is no room to map a library; `pcs.asm` now refuses to assemble. The picker and
+  mode 3's text screen are in `pcsmg`.
 - ⭐ **A game repaints two bands of rows and clips the art to them**: 20–30 frames a
   second on a table built in the editor, up from ~7. ⚠ The bands are wiped on the
   screen, so a thin dark line shows now and then.
@@ -236,4 +237,28 @@ page, and LOAD, SAVE, QUIT and MORE (`pcs.md` §8).
 ×256, and a carry left by a compare, taken as a write error on the first layer
 pixel (`history.md`). The first `d0` run found both.
 
-Sizes: core 24,195; `pcsfl` 3,925; `pcsui` 7,988.
+Sizes: core 24,195; `pcsfl` 3,925; `pcsui` 7,988 (as of that commit).
+
+## Responsiveness: the mouse queue and a kit that is a copy (2026-09-24)
+
+Both measured from PC traces weighted by dots (`software/emu/test/pchist.py`, which now
+takes `Module=listing` pairs and names local labels `Global/local@`):
+
+| | before | now | where the rest goes |
+|---|---|---|---|
+| magnifier QUIT, release to idle | 0.7 s | **0.32 s** | the kit panel ~0.05 s; the table under the box repainted with its layer |
+| PLAY, `q` to idle | 1.1 s | **0.90 s** | `PERoll`'s copy back, then the whole table in `RpRows`'s two bands (0.7 s) |
+
+- ⭐ **The mouse queue** (`pcsin.inc`): while `EdLoop` runs, the left button's changes
+  are queued with the pointer, eight deep, sampled at most once a frame in `PCWait` and
+  once a scanline in `PKSweep`, and `UIPoll` takes from the queue first. ⛔ The first
+  version sampled only in `PCWait`, and `c0` lost a 0.3 s click in the 0.4 s an edit's
+  scan conversion spends with no VRAM access.
+- ⭐ **The kit is drawn once** into the margin below row 320 (`KitBin`), and each redraw
+  after that is two copy-engine rectangles. The picker streams a cell row and doubles it
+  by copies, and `PTBox` copy-doubles its first rows.
+- ⭐ **Legs**: `c0` and `c2` (`e0`'s and `e2`'s scripts at 0.3 of their spacing: 17 and 5
+  samples off the queue) and ⛔ `cX` (`c0` on `pcs 25`, the queue off), which is required
+  to fail on the records and does.
+
+Sizes: core 24,344 (of 24,573); `pcsed` 3,576; `pcsui` 7,601; `pcsfl` 3,947; `pcsmg` 2,544.

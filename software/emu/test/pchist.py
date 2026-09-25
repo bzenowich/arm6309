@@ -3,6 +3,7 @@
 
     TRACE_AT=26.9 TRACE=600000 ./emu arm6309_rom.bin . 40 2>trace.log
     python3 pchist.py trace.log coarm.lst tbox.lst
+    python3 pchist.py trace.log pcs=LST/pcs.lst pcsui=LST/pcsui.lst
 
 ⛔ TIME, NOT INSTRUCTIONS.  An instruction count answers "where does the CPU
 go"; on this machine that is a different question from "where does the time
@@ -48,6 +49,7 @@ def labels(path, name):
     """(addr, label, file) for every line of the listing that emitted bytes
     and whose source begins with a label in column 1."""
     out = []
+    glob = "?"
     for ln in open(path, errors="replace"):
         m = LST.match(ln.rstrip("\n"))
         if not m:
@@ -57,7 +59,14 @@ def labels(path, name):
             continue
         lab = re.match(r"^([A-Za-z_][A-Za-z0-9_.$@]*)", text[SRCCOL:])
         if lab:
-            out.append((int(addr, 16), lab.group(1), src.split("/")[-1]))
+            # ⚠ A LOCAL LABEL IS NAMED BY ITS ROUTINE: `f1@` is in a dozen
+            # of them, and alone it names none.
+            name = lab.group(1)
+            if name.endswith("@"):
+                name = "%s/%s" % (glob, name)
+            else:
+                glob = name
+            out.append((int(addr, 16), name, src.split("/")[-1]))
     out.sort()
     return out
 
@@ -75,9 +84,17 @@ def resolve(tab, off):
     return tab[lo - 1][1], tab[lo - 1][2]
 
 
-def main(trace, colst, tblst, lo=None, hi=None):
-    co = labels(colst, "CoArm")
-    tb = labels(tblst, "tbox")
+def main(trace, colst=None, tblst=None, *mods):
+    """⭐ `Module=listing` arguments, as many as wanted, resolve any other
+    OS-9 module's PCs the way CoArm's are - `pcs=LST/pcs.lst pcsui=...` -
+    since module_of() gives the offset from each one's own header."""
+    extra = dict(a.split("=", 1) for a in (colst, tblst) + mods
+                 if a and "=" in a)
+    colst = colst if colst and "=" not in colst else None
+    tblst = tblst if tblst and "=" not in tblst else None
+    co = labels(colst, "CoArm") if colst else []
+    tb = labels(tblst, "tbox") if tblst else []
+    ex = dict((k, labels(v, k)) for k, v in extra.items())
     hist = collections.Counter()
     n = 0
     # \u26a0 TIME-WEIGHTED.  Each instruction is charged the DOTS between its
@@ -103,7 +120,11 @@ def main(trace, colst, tblst, lo=None, hi=None):
         # subtracting $A000 resolved every one of them to "?" while still
         # attributing the time, which reads as "17.5% in a routine I cannot
         # name" rather than as a broken lookup.
-        if 0xA000 <= pc < 0xC000:
+        mod = tail.split("+$")[0]
+        if "+$" in tail and mod in ex:
+            r, src = resolve(ex[mod], int(tail.split("+$")[1], 16))
+            hist["%-7s %-18s %s" % (mod, r, src)] += cost
+        elif tb and 0xA000 <= pc < 0xC000:
             r, src = resolve(tb, pc)
             hist["tbox    %-12s %s" % (r, src)] += cost
         elif "+$" in tail and tail.startswith("CoArm"):

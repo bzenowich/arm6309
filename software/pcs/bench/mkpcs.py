@@ -734,15 +734,16 @@ def _fcb(out, data, per=16, indent=' ' * 20):
         out.append('%sfcb       %s' % (indent, ','.join('$%02X' % b for b in data[i:i + per])))
 
 
-# ⭐ WHICH MODULE CARRIES WHICH DATA.  pcs is a resident core and three
+# ⭐ WHICH MODULE CARRIES WHICH DATA.  pcs is a resident core and four
 # libraries paged through one window (pcs.md "The module is a core and
 # libraries"); each assembles this same file with PCSLIB set to its number -
 # 0, undefined, is the core - and gets the equates and ONLY its own data.
 PCSLIB_OF = {
     'PCTmpl': 1, 'PCTType': 1, 'PCTLen': 1, 'PCEdit': 1,          # pcsed
     'PCBox': 2, 'PCKit': 2, 'PCKDbl': 2, 'PCIcon': 2,             # pcsui
-    'PCPickF': 2, 'PCTool': 2, 'PCTSz': 2,
+    'PCTool': 2, 'PCTSz': 2,
     'PCDemo': 3, 'PCTest': 3, 'PCEmpty': 3,                       # pcsfl
+    'PCPickF': 4,                                                 # pcsmg: the picker
 }
 
 

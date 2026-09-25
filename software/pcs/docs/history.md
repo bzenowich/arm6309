@@ -299,3 +299,41 @@ was not yet full, the carry was the one `cmpa #LY.Buf` had just left, set
 whenever `lyk` < `LY.Buf`. So the first pixel of every layer was a write error.
 A table with no layer saved correctly throughout, which is the only kind anything
 had tried.
+
+## `pcs.md` §4, §5 and §8 — "a click can be missed", "the margin is shared", and a gesture "still lost" during a repaint (2026-09-24)
+
+Superseded by the mouse queue (`pcsin.inc`'s `UISamp`/`UIPop`), the kit cache
+(`KitBin`) and the `c0`/`c2`/`cX` legs. §4 said:
+
+> | ⚠ **A click can be missed** | a polled loop that repaints samples the button once a pass, so the mouse is sampled **inside** the repaint loop |
+> | ⚠ **The margin is shared** | the ROM toolbox's glyph strike sits at column 640, rows 320–472. Our stores stay above row 320 |
+
+The first row described a remedy that had not been built: nothing sampled the mouse
+inside any loop. The second was a precaution written on 2026-09-23. The strike is
+per screen and is dropped whenever `CG.SGen` changes (`ca_scr.asm`), and `pcs` owns
+its screen and draws no window text through the toolbox, so the rows below 320 were
+free all along. The kit cache is the first thing to use them.
+
+§5 listed `pcsui`'s exports as `KitDraw`, `IconDraw`, `PickDraw`, and the core as
+22.8 KB. The picker moved to `pcsmg` when `pcsui` reached 7,988 bytes.
+
+§8 said:
+
+> ⚠ **A press and release that both fall inside a repaint are still lost**, because
+> the loop does not sample the mouse while it draws; the repaint is now a band of rows
+> rather than the table, so the window is shorter, and nothing measures it.
+
+⛔ **The first queue sampled only in `PCWait`, and `c0` lost a click anyway.** The
+lost press lasted 0.30 s, from 41.758 s to 42.061 s of machine time, while the
+editor rebuilt the span database after a refused vertex drag. That is ~0.4 s of
+`PKEd6`/`PKMerge`/`PKSw3`/`PKAppend` with no VRAM access, so it never reached
+`PCWait`. A PC trace answered this in one run. `PKSweep` now samples once per
+scanline.
+
+⛔ **And the core crossed into a fourth slot on the same change.** At 24,594 bytes
+`pcs` needed a fourth 8 KB slot, `LibInit`'s `F$Load` found no room to map a
+library, and every leg printed `PCS-NOLIB` and exited `$E9`, which is also
+`PKDispX`'s progress code and so pointed at the scan converter. `TxTest` moved to
+`pcsmg`, and `pcs.asm` now refuses to assemble past three slots. ⚠ **The libraries'
+own `ifgt *-8192` guards had never worked**: each emitted an `fcc` string, which is
+bytes and not an error. They use `error` now.
