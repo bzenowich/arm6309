@@ -328,7 +328,7 @@ def _op(db, op):
     return pcsedit.run_script(db, [tuple(op)])[0]
 
 
-def ui_model(gestures, db, mag=None, disk=None):
+def ui_model(gestures, db, mag=None, disk=None, world=None):
     """⭐ WHAT EdLoop MUST HAVE DONE, from the script's points alone: the tool,
     the colour, and for every gesture the record it writes - `(tool, px, py,
     rx, ry, op0..op4, answer)` - with each edit applied to `db` as it goes.
@@ -338,8 +338,10 @@ def ui_model(gestures, db, mag=None, disk=None):
     it, for ui_session to compare with what the machine drew and dumped.
     ⭐ It is also the TABLE's: `db`, `wset` and `layer` are what a DISK LOAD
     replaces, so the table the session ends with is `mag['db']`.
-    ⭐ `disk` is a pcsdisk.Panel, the card's files in it."""
+    ⭐ `disk` is a pcsdisk.Panel, the card's files in it; `world` a
+    pcsworld.Panel, whose sliders edit `mag['wset']`."""
     import pcskit
+    import pcsworld
     import pcsparts
     import pcsmag
     if mag is None:
@@ -352,6 +354,8 @@ def ui_model(gestures, db, mag=None, disk=None):
     import pcsdisk
     if disk is None:
         disk = pcsdisk.Panel({})
+    if world is None:
+        world = pcsworld.Panel()
     tools = pcskit.tools()
     boxes = mkpcs.bin_boxes()
     parts = pcsparts.parts()
@@ -377,6 +381,12 @@ def ui_model(gestures, db, mag=None, disk=None):
         # ⭐ DISK, while it is up (pcsdisk.inc's DkAct, through MgAct)
         if disk.up:
             r = disk.press(px, py, mag)
+            if r is not None:
+                recs.append([tool, px, py, rx, ry] + r[0] + [r[1]])
+                continue
+        # ⭐ WORLD, while it is up (pcsworld.inc's WoAct, through MgAct)
+        if world.up:
+            r = world.press(px, py, rx, ry, mag['wset'])
             if r is not None:
                 recs.append([tool, px, py, rx, ry] + r[0] + [r[1]])
                 continue
@@ -444,6 +454,8 @@ def ui_model(gestures, db, mag=None, disk=None):
                     mag['box'] = mag['box'] or (pcsmag.BX0, pcsmag.BY0)
                 elif hit == ED_DISK:
                     disk.open()
+                elif hit == ED_WRLD:
+                    world.open()
             elif tool == ED_HAND:
                 b = next((i for i, (x, y, w, h) in enumerate(boxes)
                           if 0 <= wx - x <= w and 0 <= wy - y <= h), None)
@@ -501,7 +513,11 @@ def _uifmt(r):
                 'LOAD: pferr %d, %d objects' % (r[7], r[8]),
                 'SAVE: pferr %d, %d listed' % (r[7], r[8]),
                 'DISK QUIT', 'MORE: page at %d' % r[7],
-                )[r[6]] if r[6] < 13 else '?'
+                'WORLD: %s %d, was %d' % (
+                    ('gravity', 'speed', 'kick', 'elasticity', '?')[min(r[7], 4)],
+                    r[8], r[9]),
+                'WORLD QUIT',
+                )[r[6]] if r[6] < 15 else '?'
         if r[6] in (9, 10):
             what += ' refused' if r[10] else ' took'
     return '%-5s (%3d,%3d)->(%3d,%3d)  %s' % (
@@ -509,7 +525,7 @@ def _uifmt(r):
 
 
 def ui_session(vram, script, base=None, magnify=False, card=None, start=None,
-               minq=0):
+               minq=0, world=False):
     """⭐⭐ THE EDITOR, DRIVEN: every gesture EdLoop recorded against the one the
     script made and the edit the model makes of it; then the object area, the
     span database and the picture the session left.
@@ -528,6 +544,9 @@ def ui_session(vram, script, base=None, magnify=False, card=None, start=None,
     whose gestures only land if the queue carried them.  ⛔ A leg that asks for
     it and gets 0 is a leg that proved nothing about the queue, however well
     its records match.
+
+    ⭐ `world`: the WORLD leg - every slider moved, to both ends, a miss and
+    QUIT; and, if the panel was left up, every knob position read off the card.
     """
     gest = ps2_gestures(script)
     got = _uirecs(vram)
@@ -544,8 +563,10 @@ def ui_session(vram, script, base=None, magnify=False, card=None, start=None,
     else:
         db = pcsedit.DB(base() if base else mkpcs.demo_table(),
                         width=mkpcs.TW, height=mkpcs.TH)
+    import pcsworld
     disk = pcsdisk.Panel(card or {})
-    want = ui_model(gest, db, mag, disk)
+    wp = pcsworld.Panel()
+    want = ui_model(gest, db, mag, disk, wp)
     db = mag['db']
     ok = True
     for i in range(max(len(got), len(want))):
@@ -595,6 +616,21 @@ def ui_session(vram, script, base=None, magnify=False, card=None, start=None,
             ('DISK QUIT', any(k == pcsdisk.EDL_DQUIT for k, _ in dk)))
             if not ok_]
         nref = 1
+    if world:
+        # ⛔ THE WORLD PANEL'S OWN COVERAGE: each of the four sliders moved,
+        # a level 0 and a level 7 reached, a press that missed, and QUIT.
+        ws = [r[7:10] for r in want
+              if r[5] == 0 and r[6] == pcsworld.EDL_WSET]
+        missing = [n for n, ok_ in (
+            [('%s moved' % pcsworld.NAMES[i],
+              any(s_ == i and a != b for s_, a, b in ws)) for i in range(4)] +
+            [('level 0', any(a == 0 for _, a, _b in ws)),
+             ('level 7', any(a == 7 for _, a, _b in ws)),
+             ('miss', any(r[5:10] == [0] * 5 and r[1] < pcsworld.TOOLX
+                          and r[1] >= mkpcs.TW * 2 for r in want)),
+             ('WORLD QUIT', any(r[5] == 0 and r[6] == pcsworld.EDL_WQUIT
+                                for r in want))]) if not ok_]
+        nref = 1
     ui_session.disk = disk
     if missing:
         print('FAIL  the session never made a %s' % ', '.join(missing))
@@ -637,6 +673,32 @@ def ui_session(vram, script, base=None, magnify=False, card=None, start=None,
     if queued < minq:
         print('FAIL  the queue carried %d samples and this leg needs %d: its '
               'gestures were never made during a repaint' % (queued, minq))
+        return False
+
+    if world and wp.up:
+        # ⭐ Still up: every level's knob box on every track is the knob iff
+        # it is the level wset holds - the knob moved, and the old one erased.
+        import pcsmag
+        nb = 0
+        for i in range(4):
+            for lv in range(8):
+                x, y, kw, kh = pcsworld.knob(i, lv)
+                c = pcsmag.PCC_HILITE if lv == mag['wset'][i] else pcsmag.PCC_PANEL
+                for yy in range(y, y + kh):
+                    for xx in range(x, x + kw):
+                        if vram[yy * STRIDE + xx] != c:
+                            nb += 1
+                            if nb == 1:
+                                print('FAIL  %s level %d at card (%d, %d): got %d,'
+                                      ' wanted %d' % (pcsworld.NAMES[i], lv, xx,
+                                                      yy, vram[yy * STRIDE + xx], c))
+        if nb:
+            print('FAIL  %d knob pixels differ' % nb)
+            return False
+        print('ok    the four knobs are at %s, and no other level shows one'
+              % mag['wset'])
+    elif world:
+        print('FAIL  the WORLD leg must end with the panel up, to read its knobs')
         return False
 
     # ⭐ AND THE PICTURE: the last repaint is the whole table, every part at its
@@ -787,6 +849,9 @@ def main():
     # ⭐ MODE 23 AGAIN, WITH THE MAGNIFIER: the fat bits, the layer they draw.
     if len(sys.argv) > 3 and sys.argv[2] == 'ui-mag':
         return 0 if ui_session(vram, sys.argv[3], magnify=True, minq=minq) else 1
+    # ⭐ MODE 23 WITH WORLD: the sliders, the wset they leave, the knobs.
+    if len(sys.argv) > 3 and sys.argv[2] == 'ui-world':
+        return 0 if ui_session(vram, sys.argv[3], world=True) else 1
     # ⭐ MODE 23 OFF A CARD, WITH DISK: the session, then every file it saved
     # read back out of the card the machine left, against the model's bytes.
     if len(sys.argv) > 6 and sys.argv[2] == 'ui-disk':

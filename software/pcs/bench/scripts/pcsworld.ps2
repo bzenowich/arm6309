@@ -1,0 +1,64 @@
+# pcsworld.ps2 - WORLD at the editor (`pcs 23`, the demo table, wset
+# 5 3 3 4): each of the four sliders dragged somewhere new - one past the
+# bottom (7), one past the top (0), two in between - a press that misses,
+# QUIT, WORLD again and one more slide from beside its track, and the panel
+# left UP so the bench reads every knob off the card (pcsworld.inc).
+#
+# ⚠ Card pixels.  WORLD is the tool column's icon at (564, 278).  The tracks
+# are 28 wide from x 354 (GRAVITY, KICK) and 458 (SPEED, ELASTICITY), 136
+# tall from y 48 and 264, and take a press 12 either side; a level is 16
+# rows from the track's top + 4.  QUIT is (398..457, 432..455).
+# checkpcs.py `ui-world` models every gesture from these points.
+# ⚠ `origin 0 0`: that is where the pointer is when pcs starts.
+origin 0 0
+gap 300
+
+# 1  WORLD: the panel
+at 1.000    move to 564 278
++0.300      click left
+
+# 2  GRAVITY past the bottom: 5 -> 7
+at 5.000    move to 368 120
++0.300      down left
++0.300      move to 368 200
++0.300      move to 368 300
++0.400      up left
+
+# 3  SPEED past the top: 3 -> 0
+at 9.000    move to 472 100
++0.300      down left
++0.300      move to 472 40
++0.300      move to 472 4
++0.400      up left
+
+# 4  KICK: down to 6 and back up to 2 before the release - 3 -> 2
+at 13.000   move to 368 330
++0.300      down left
++0.300      move to 368 380
++0.300      move to 368 310
++0.400      up left
+
+# 5  ELASTICITY, released wide of its track: the level is the release's y alone
+at 17.000   move to 472 280
++0.300      down left
++0.300      move to 500 330
++0.300      move to 600 362
++0.400      up left
+
+# 6  a press on the panel that is nothing: a miss
+at 21.000   move to 330 470
++0.300      click left
+
+# 7  QUIT
+at 25.000   move to 420 444
++0.300      click left
+
+# 8  WORLD again, GRAVITY from just beside its frame: 7 -> 4
+at 29.000   move to 564 278
++0.300      click left
+at 33.000   move to 345 100
++0.300      down left
++0.300      move to 345 125
++0.400      up left
+
+at 38.000   type "q"

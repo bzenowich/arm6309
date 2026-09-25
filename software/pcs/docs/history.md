@@ -337,3 +337,17 @@ library, and every leg printed `PCS-NOLIB` and exited `$E9`, which is also
 `pcsmg`, and `pcs.asm` now refuses to assemble past three slots. ⚠ **The libraries'
 own `ifgt *-8192` guards had never worked**: each emitted an `fcc` string, which is
 bytes and not an error. They use `error` now.
+
+## `pcs.md` §8 — "the World panel not written"; `status.md` — "`wset` … is not editable" (2026-09-24)
+
+Superseded by the WORLD panel (`pcsworld.inc`, in `pcsmg`), gated by `w0`. §8's
+open-items bullet said:
+
+> - ⚠ **Not written**: the World panel, the tool bar's other five tools, the
+>   wiring kit's UI, and `desk` integration.
+
+and `status.md`'s table row:
+
+> | The World panel — four sliders | part of `EDIT.s` | `wset` already loads and drives the physics; it is not editable |
+
+`w0`'s first run was green.

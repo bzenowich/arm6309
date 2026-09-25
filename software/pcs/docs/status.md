@@ -50,9 +50,9 @@ around it:
 
 | | of the 6502 | note |
 |---|---|---|
-| The tool bar's other six tools | part of `EDIT.s` | the wiring kit, the World and the rest are recorded when clicked and do nothing yet. ⭐ **PLAY is built**: the table plays from the editor with the score strip where the kit was, and comes back as it was left (`e1`). ⭐ **MAGN is built** (`e2`), and **DISK** (`d0`) |
+| The tool bar's other tools | part of `EDIT.s` | the wiring kit and the rest are recorded when clicked and do nothing yet. ⭐ **PLAY is built**: the table plays from the editor with the score strip where the kit was, and comes back as it was left (`e1`). ⭐ **MAGN is built** (`e2`), **DISK** (`d0`) and **WORLD** (`w0`) |
 | The wiring kit's UI | `WIRE.s`, 1,143 | ⭐ the **evaluator** is already built and gated (`PBWire`, `TURNOFF`); only the screen and the three tools are missing |
-| The World panel — four sliders | part of `EDIT.s` | `wset` already loads and drives the physics; it is not editable |
+| The World panel — four sliders | part of `EDIT.s` | ⭐ **built** (`w0`): gravity, speed, kick and elasticity dragged live, DOSLIDE's level rule, every knob read off the card |
 | Save, and a catalogue | part of `DISK.s` | ⭐ **built** (`d0`): the DISK panel, a catalogue of `/SD0/DATA`'s tables, LOAD, SAVE and a refusal, and every saved file read back off the card byte for byte |
 | `desk` integration | — | no icon, no `IcTab` entry, no Applications item |
 | Four-player attract loop | `RUN2.s` | ⚠ **deliberately not ported**: it read the Atari's console START/OPTION/SELECT keys, which this machine does not have |
@@ -262,3 +262,18 @@ takes `Module=listing` pairs and names local labels `Global/local@`):
   to fail on the records and does.
 
 Sizes: core 24,344 (of 24,573); `pcsed` 3,576; `pcsui` 7,601; `pcsfl` 3,947; `pcsmg` 2,544.
+
+## WORLD: the four sliders (2026-09-24)
+
+The WORLD tool opens `EDIT.s`'s four sliders in the kit's place (`pcsworld.inc`, in
+the `pcsmg` library): gravity, speed, kick and elasticity. Each has eight levels,
+and the knob follows the pointer while the button is down (`pcs.md` §8).
+
+| leg | what it proved |
+|---|---|
+| `w0` | 9 records against `pcsworld.py`: each slider moved (gravity to 7 past the bottom, speed to 0 past the top, kick down and back up, elasticity released wide of its track), a miss, QUIT, and a second gravity slide from beside the frame; `wset` off `EditW` (`[4, 0, 2, 5]`); and **all 32 knob boxes** read off the card, the knob at each track's level and nowhere else. First run green |
+
+⛔ **The knob check was run against a model offset by one level**, to prove it can
+fail, and it failed on 1,920 pixels.
+
+Sizes: core 24,351 (of 24,573); `pcsed` 3,580; `pcsui` 7,616; `pcsfl` 3,951; `pcsmg` 3,260.

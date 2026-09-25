@@ -50,6 +50,10 @@
 #       leg that happened to fall between repaints cannot pass as this one.
 #   cX  ⛔ c0's script on `pcs 25`, which is mode 23 with the queue switched
 #       off - REQUIRED to fail, or c0 would be passing for some other reason.
+#   w0  ⭐ WORLD - `pcs 23` driven by scripts/pcsworld.ps2: every slider
+#       dragged (past the top, past the bottom, and between), a miss, QUIT and
+#       the panel again; every record against pcsworld.py, the wset EditW
+#       dumps, and the panel left up so every knob position is read off the card.
 #   f1  ⭐ demo2 with a layer in its file's trailer, loaded and composed.
 #   d0  ⭐⭐ SAVE AND LOAD - `pcs 23 N demo2l.pbt` driven by scripts/pcsdisk.ps2
 #       on its OWN copy of the card: a table edited and SAVEd twice over one
@@ -72,7 +76,7 @@ ROOT=$(pwd)
 OUT=${OUT:-$(cd "$_here/.." && pwd)/build/pcs}
 FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
-RUNS=${RUNS:-"m0 m4 m6 e0 e1 e2 c0 c2 cX d0 k0 f0 f1 fX m1 m2 m5"}
+RUNS=${RUNS:-"m0 m4 m6 e0 e1 e2 w0 c0 c2 cX d0 k0 f0 f1 fX m1 m2 m5"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH
@@ -251,6 +255,7 @@ for r in $RUNS; do
           > software/pcs/bench/scripts/pcsbuild.ps2
         EFRAMES=20000 ESECONDS=340 rune e1 24 "$ROOT/software/pcs/bench/scripts/pcsbuild.ps2" ;;
     e2) ESECONDS=200 rune e2 23 "$ROOT/software/pcs/bench/scripts/pcsmag.ps2" ;;
+    w0) ESECONDS=120 rune w0 23 "$ROOT/software/pcs/bench/scripts/pcsworld.ps2" ;;
     c0) fast pcsedit.ps2 > "$OUT/c0.ps2"
         ESECONDS=120 rune c0 23 "$OUT/c0.ps2" ;;
     c2) fast pcsmag.ps2 > "$OUT/c2.ps2"
@@ -342,6 +347,9 @@ for r in $RUNS; do
     e2) echo "--- e2 ⭐ THE MAGNIFIER: fat bits drawn and erased, the box, the layer it left ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/e2" ui-mag \
           software/pcs/bench/scripts/pcsmag.ps2 || fail=1 ;;
+    w0) echo "--- w0 ⭐ WORLD: four sliders, the wset they leave, every knob ---"
+        python3 software/pcs/bench/checkpcs.py "$OUT/w0" ui-world \
+          software/pcs/bench/scripts/pcsworld.ps2 || fail=1 ;;
     c0) echo "--- c0 ⭐ e0's session, gesture after gesture: the mouse queue carried them ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/c0" ui "$OUT/c0.ps2" 4 || fail=1 ;;
     c2) echo "--- c2 ⭐ e2's session, gesture after gesture: the mouse queue carried them ---"
