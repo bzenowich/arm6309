@@ -64,8 +64,8 @@ around it:
 - ⚠ **A gesture made during a repaint is still lost**: the loop does not sample the
   mouse while it draws. The repaint is a band of rows now rather than the whole table,
   but `e0` still spaces its gestures four seconds apart and nothing measures the window.
-- ⚠ **`pcsui` is 7,997 bytes of its 8,192.** The rest of the editor goes in a fourth
-  library.
+- ⚠ **`pcsui` is 7,962 bytes of its 8,192.** The magnifier went into a library of its
+  own (`pcsmg`) for that reason, and the rest of the editor's tools will too.
 - ⭐ **A game repaints two bands of rows and clips the art to them**: 20–30 frames a
   second on a table built in the editor, up from ~7. ⚠ The bands are wiped on the
   screen, so a thin dark line shows now and then.

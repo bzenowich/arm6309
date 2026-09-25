@@ -569,6 +569,6 @@ the answer.
   ⚠ And the module **still carries** up to `PCS_BUDGET` (8 KB, 7 tables) for the
   built-in modes the bench's mutation legs use. That is the last of the old
   arrangement, and it goes when `desk` gains a table picker.
-- ⚠ **Not written**: the World panel, the tool bar's other seven tools, the
+- ⚠ **Not written**: the World panel, the tool bar's other six tools, the
   wiring kit's UI, save, and `desk` integration. `RUN2.s`'s four-player game loop, the
   bonus tally and multiball are step 3c.
