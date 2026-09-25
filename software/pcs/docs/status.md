@@ -67,10 +67,12 @@ around it:
 - ⭐ **The core must fit three 8 KB slots, and the build says so.** Past 24,573 bytes
   there is no room to map a library; `pcs.asm` now refuses to assemble. The picker and
   mode 3's text screen are in `pcsmg`.
-- ⭐ **A game repaints four bands of rows, composed in the margin**, with a column-wise
-  `PCBlit`: 35-40 frames a second on Astro Blast, and no wiped band on the screen.
-- ⚠ **`TIMETBL` re-derivation for 59.94 Hz is still unmeasured.** Gravity, flipper sweep
-  and the drain delay are all counted in frames and the original busy-waited.
+- ⭐ **A game repaints what changed since the last repaint** (`PBDiff`), as four
+  rectangles composed in the margin — only their columns — with a column-wise `PCBlit`.
+  No wiped band on the screen, and after a whole ball the table is bit-identical to the
+  table at rest.
+- ⚠ **A game dips below 300 ticks a second while the flippers work**: ~290 on average,
+  229 at the worst (`pcs.md` §5b, §8 for what a flipper repaint still spends).
 - ⚠ **Sound is unverified by anything.** A bench cannot hear. The note *sequences* are
   the original's; the per-note *duration* is a proportional approximation and says so.
 
@@ -114,14 +116,14 @@ pcs 20 <frames> demo1.pbt >/w5      # ⭐ PLAY IT, with a mouse
 pcs 21 <frames> demo1.pbt >/w5      # ... and with the ball traced to the console
 ```
 
-⭐ **The mouse is the joystick, and the mapping is the original's.** `RUN2.s` reads
-`PDL0` from `STKY` — the integrated cursor Y — and both triggers as `BUTN0`/`BUTN1`:
+⭐ **The mouse buttons are the triggers, and the mapping is the original's.** `RUN2.s`
+reads both triggers as `BUTN0`/`BUTN1`:
 
 | | |
 |---|---|
 | left button | left flipper, **and** the plunger release (`RUN.s:217` reads `BUTN0` for both, exactly as trigger 0 did) |
 | right button | right flipper |
-| pointer Y | the plunger's pull — further down is harder |
+| left button, held | the plunger's pull — full in about a second, and the release is the shot |
 
 ⚠ **The keyboard cannot hold a flipper.** `SS.Ready` + `I$Read` gives one byte and no
 key-up, so a keyed flipper would flap once and drop. That is why the buttons carry the
@@ -299,3 +301,48 @@ things:
 
 `PCDump` moved into the `pcsfl` library to keep the core under its limit.
 Sizes: core 24,540 (of 24,573); `pcsed` 3,576; `pcsui` 7,608; `pcsfl` 4,139; `pcsmg` 3,264.
+
+## Gravity, the tick rate and the plunger (2026-09-25)
+
+⛔ **The game ran one tick a frame, and the original ran ~300 a second.** Gravity is a
+per-tick mask (`GRAVTBL`, 1/256 row/tick² at the default 5) and `RNMove` is exact, so the
+ball fell ~70x too gently in rows/s² — and every `TIME`-masked animation and the launch
+ran in slow motion with it. The rate was measured off `reference/pcs.mp4` by tracking the
+ball (~415 rows/s², so ~300 ticks/s; `pcs.md` §5b).
+
+- ⭐ **`PGPace` owes ticks by the VBL counter**, `PCTICKTBL` (8.8 ticks a VBL a speed,
+  written by `mkpcs.py`), and `PGTurn` runs that many `PBTick`s and one `PBPnt`. `PBStep`
+  is `PBDm0` + `PBTick` + `PBPnt`, so the bench's one-tick-a-step `Play` is unchanged.
+- ⭐ **The walk skips a part in six instructions**, in registers, before `PBCur`: it had
+  been a third of the machine at 300 walks a second.
+- ⭐ **The plunger is held and let go** (`pfire`, `pgpull`): launch `BDY` = pull / 4, as
+  `LAUNCHHIT` always read it. `pcsplay.ps2` and `mkpcsastro.py` hold for a second and let
+  go instead of pressing — ⚠ the Astro demo's 14-second hold through the landing fired
+  on the press and does nothing now.
+- Measured in mode 20 on `demo2`: 300–313 ticks/s resting, 185–240 at the launch,
+  113–150 with the flippers busy.
+
+`PGTrace`, `PGTally` and `PGZero` moved to `pcsfl` (`pcsdump.inc`) to make room.
+Sizes: core 24,551 (of 24,573); `pcsfl` 4,395.
+
+## The flipper frame (2026-09-25)
+
+The tick rate left the repaint as the limit: 113–150 ticks/s with the flippers working.
+
+- ⛔ **The damage was the ball's whole path.** It was taken every tick, and at ~30 ticks
+  a repaint that was every row the ball had crossed — bands up to 77 rows for a picture
+  drawn twice. ⭐ `PBDiff` compares each part with what the screen shows (`dwst`/`dwtp`/
+  `dwx`, by run-chain slot) at the repaint and damages where it was drawn and where it
+  is; the tick walk carries no damage code at all.
+- ⭐ **A band has columns.** A part's rectangle is its template's widest frame across
+  (`PBDmP`), bands union them, and the wipe, `PCSpn`, `PBArt` and the copy back stop at
+  the window: a ball band is ten columns, not 160.
+- Measured in mode 20 on `demo2`: 229–341 ticks/s through the launch and the flippers
+  (mostly ~290; was 113–150), flipper repaints 118–142 ms, the median repaint 27 ms.
+  Diffing alone gave 188–300.
+- ⚠ Checked by eye as well as by bench: the frame after a whole ball, against the frame
+  at rest, differs only where the mouse pointer is.
+
+`PTNum` moved into `pcsmg` (`pcspick.inc`, its only caller) and the dead `PCEdges` was
+deleted, to make room. Sizes: core 24,505 (of 24,573); `pcsmg` 3,368; data $5E35 of
+three 8 KB blocks.

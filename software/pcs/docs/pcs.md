@@ -30,14 +30,17 @@ each patched into the code as a self-modifying immediate:
 
 ```
 GRAVTBL HEX FF7F3F1F0F070301     gravity — a MASK: apply -1 to BDY when (tick & mask)==0
-TIMETBL HEX 302018100C080401     speed   — the sub-steps a frame
+TIMETBL HEX 302018100C080401     speed   — the WAIT between ticks, so the TICK RATE
 KICKTBL HEX 04080C1018202838     kick
 ELASTLO HEX 80400000C0804000     elasticity — eight ENTRY POINTS into one response
 ELASTHI HEX 8383838382828282       table, which is how one table gives eight curves
 ```
 
 Gravity is not an acceleration constant at all — it is *how often* you subtract one from
-`BDY`, terminal velocity clamped at `$D1`. Position is pixels plus an 8-bit accumulator.
+`BDY`, terminal velocity clamped at `$D1`. ⚠ **Every one of these is counted in TICKS**, one
+pass of `PLAY`'s object walk, and a tick is not a frame (§5b's last paragraph): at the
+default gravity 5 the ball gains 1/256 row a tick², so how hard it falls is set by how
+many ticks a second the machine runs. Position is pixels plus an 8-bit accumulator.
 Every coordinate in the program is a **single byte** (table x 0–159, y 0–239 here).
 
 **So the simulation, the database and the file format stay in the original's units, and the
@@ -200,7 +203,7 @@ is an icon and is redrawn too.
 
 ⭐ **`pcs` is a resident core and four libraries** (`pcscore.inc`, 2026-09-24). A process
 here has seven 8 KB slots (the eighth is the kernel's), and one module had filled them.
-The **core** (24.3 KB, three slots — ⛔ `pcs.asm` refuses to assemble past them, because a core in a fourth slot leaves no room to map a library and every run says `PCS-NOLIB`) keeps what the frame loop calls sixty times a second:
+The **core** (24.5 KB, three slots — ⛔ `pcs.asm` refuses to assemble past them, because a core in a fourth slot leaves no room to map a library and every run says `PCS-NOLIB`) keeps what the frame loop calls sixty times a second:
 the simulator, the scan converter, the drawing primitives, the game. The **libraries**
 are modules of their own, each under 8 KB, paged through **one window slot**:
 
@@ -255,7 +258,7 @@ did. `PFSave` writes the section in row order.
 
 ### 5a. The simulator
 
-**The ball** is a 5 × 5 disc; `BDX`/`BDY` are signed bytes in **1/32 px per frame**, clamped
+**The ball** is a 5 × 5 disc; `BDX`/`BDY` are signed bytes in **1/32 px per tick**, clamped
 to ±63; `BXACC`/`BYACC` are the sub-pixel accumulators. **`BDY` positive is up-screen.**
 Motion is one pixel at a time, Y then X, and *the step is only committed when the probe says
 clear* — so the ball never overlaps geometry.
@@ -328,9 +331,42 @@ A bit-exact gate means the *model* must have them too, so this is an explicit li
 | sleeper stride 22 vs 23 bytes copied (`RUN2.s:416`/`917`) | ⛔ **fix** — adjacent extra balls corrupt each other |
 | saved tables hold **absolute 6502 addresses** in `L[0..1]` and `L[10..15]` | ⛔ **re-key by part type id**; the vectors are rebuilt on load. ⛔ The type list is **append-only**: inserting one renumbers every table ever written |
 
-⚠ **And the frame rate.** The original is a busy-wait (`WAIT`, `TIMETBL`), not VBL-locked,
-and gravity, flipper sweep, animation rates and the drain delay are all counted in *frames*.
-We lock to the card's 59.94 Hz VBL and `wtime` is recorded rather than spun.
+⭐⭐ **And the tick rate, which is not the frame rate.** The original is a busy-wait:
+`PLAY` reads the paddle, calls `WAIT(TIMETBL[speed])` and walks the objects, as fast as
+that lets it — no VBL anywhere. Gravity, the flipper sweep, every part's `TIME` mask, the
+launch and the drain delay are all counted in those passes, **ticks**. Measured off
+`reference/pcs.mp4` (the Apple II session; the ball tracked frame by frame through
+20:20–24:40) the ball falls at ~700 video px/s², ~415 rows/s² at 1.68 px a row; at
+1/256 row/tick² that is **~300 ticks a second** at speed 3, and the fastest falls put a
+floor of ~210 under it.
+
+So a game (`PGTurn`, `pcsgame.inc`) is **paced off the card's VBL counter**:
+`PCTICKTBL` (`mkpcs.py`'s `tick_rates`, from the Apple's `WAIT` cost
+`(26+27A+5A²)/2` at 1.0227 MHz plus a ~2,540-cycle pass fitted to put speed 3 on 300)
+gives each speed's ticks per VBL in 8.8 — 114, 184, 237, **300**, 333, 363, 386 and 398
+ticks a second — and each pass runs `PBTick` as many times as the VBLs gone owe, then
+repaints once over the damage all of them left (`PBPnt`). A pass may claim at most
+`PG.MaxV` = 8 VBLs, so a machine that falls further behind slows the game rather than
+jumping it. ⚠ **The bench's `Play` (mode 4) still runs one tick a step**, which is what
+`pcsobj.py`'s trajectory is compared against; the pacing is the game's alone.
+
+⭐ **A tick takes no damage; the repaint asks what changed** (`PBDiff`, §8). Damage taken
+every tick was the union of every position the ball passed through between two repaints,
+and at ~30 ticks a repaint that was a 77-row band for a picture drawn twice.
+
+⚠ **Measured on the host emulator in mode 20 on `demo2`** (2026-09-25): 300–313 ticks a
+second with the ball on the plunger, and **229–341 through the launch and while the
+flippers work**, mostly ~290. A flipper repaint is 118–142 ms and the median repaint
+27 ms. The object walk is six instructions a part that does not run (`PBTick`); the rest
+is the repaint.
+
+⭐ **The plunger is held and let go**, as in the Apple II session. The left button down
+pulls the spring — `PG.Pull` = 3 into `PDL0` a VBL, full at 191 in about a second — and
+letting go sets `pfire` for `PG.Fire` passes: `LAUNCHHIT` (`RUN.s:217`) gives a ball on the
+plunger `BDY = PDL0 >> 2`, up to 47, and `LAUNCHRUN` lets the spring's picture back. So the
+launch speed is proportional to how long the button was held. Under `pbauto` `pfire` is
+`BTN0` and nothing else changed. ⚠ `BTN0` is also the left flipper, as the Atari's trigger
+0 was, so working that flipper pulls the plunger too; it fires only a ball that is on it.
 
 ## 6. Where it lives
 
@@ -432,28 +468,37 @@ the answer.
 
 ## 8. Open
 
-- ⭐ **The animation's repaint is built.** A part whose state byte or whose art's top row
-  changed damages a row range; at the end of the frame those rows are **erased**, repainted
-  from the span database and every picture over them put back. ⛔ The erase is not optional
-  and not obvious: a library part's polygon is unfilled, `PCFill` refuses colour 0, and the
+- ⭐ **The animation's repaint is built.** A part whose picture is not the one on the
+  screen damages a rectangle; at the end of the pass it is **erased**, repainted from the
+  span database and every picture over it put back. ⛔ The erase is not optional and not
+  obvious: a library part's polygon is unfilled, `PCFill` refuses colour 0, and the
   backdrop paints its *complement* — so a repaint never writes the open playfield at all,
   and the previous frame stays underneath.
-  ⭐ **The damage is four bands of rows, and each is composed in the margin.** A
-  frame's damage widens a band it touches, else takes an empty one, else widens the
-  last (`PBDmR`). The ball damages only its own seven rows; any other part, from 2 rows
-  above its top to the height of **the tallest frame of its own template** below it
-  (`PBDmg`, off `PCPIdx`/`PCFrm`), so a flipper's band is its sweep and not a fixed 20
-  rows. Each band is composed off-screen at columns 640..1023 in chunks of at most 160
-  world rows (`PBRepB`: wipe, paint, and only that band's rows of every picture), then
-  copied onto the table by the copy engine in one rectangle - so a repaint never shows a
-  wiped band.
+  ⭐ **The damage is what changed since the last repaint, not since the last tick**
+  (`PBDiff`). The screen's version of every part — its state byte, its picture's top row
+  and its left column (the ball's are `Y1`/`X1`), by run-chain slot in `dwst`/`dwtp`/`dwx` —
+  is compared at the repaint, and a part that differs damages where it **was drawn** and
+  where it **is**. `PBPlay2` takes the record for the table as keyed. One tick a repaint
+  (the bench's `Play`) finds exactly the damage the tick made.
+  ⭐ **The damage is four rectangles, and each is composed in the margin.** A part's
+  rectangle is its top row down the height of **the tallest frame of its own template**,
+  and its left column across **the widest**, plus a column either side (`PBDmP`, off
+  `PCPIdx`/`PCFrm`) — the ball's is seven rows by ten columns. A rectangle widens a band
+  whose rows it touches, else takes an empty one, else widens the last (`PBDmR`). Each band
+  is composed off-screen at columns 640..1023 in chunks of at most 160 world rows
+  (`PBRepB`), then copied onto the table by the copy engine in one rectangle, so a
+  repaint never shows a wiped band. ⭐ **Only the band's columns** (`pcxl`..`pcxr`): the
+  wipe, the spans (`PCSpn` clips), the pictures (`PBArt` skips one outside) and the copy
+  back all stop at the window. A picture half in it is blitted whole, and what lands
+  outside is margin that is never copied.
   ⭐ **`PCBlit` works down the columns**: it culls a picture wholly outside
   `pcclo`/`pcchi` before touching the card, clips the top and bottom by arithmetic, and
   sends each byte-column as one pointer and `bh` `VDATA` stores under `WADV` 01 (next
   row, same column). ⭐ `PCIsB` reads the part's kind out of `objkind`, a table
   `PKColrs` fills when a table is keyed, instead of walking the object area per picture.
-  ⭐ Together: a ball-only frame ~30 ms and a flipper frame 90-130 ms, 35-40 frames a
-  second over a traced window of Astro Blast (2026-09-24).
+  ⭐ Together (2026-09-25, `demo2`): a ball-only repaint ~8–27 ms and a flipper repaint
+  118–142 ms. After a whole ball of play the table is bit-identical to the table at rest,
+  but for the mouse pointer.
 - ⛔ **Every exit puts the card's write state back** (`Bye`): `WADV` 00 and `CTRL`'s
   WMODE bits as `Claim` found them, before the claim is released. PLAY ends on `WADV`
   01, and the toolbox and CoArm assume 00 - a desk repainting over it drew its whole
@@ -462,7 +507,11 @@ the answer.
 - ⚠ **Whether a VRAM pointer's auto-increment carries out of a row** is an open question
   about the card or the emulator's model of it. The bench's streams reposition at every row
   boundary, so they do not depend on the answer — but `graphics.md` §19 should settle it.
-- ⚠ **`TIMETBL` re-derivation is an unmeasured number** until the program runs at frame rate.
+- ⚠ **A game dips below its 300 ticks a second while the flippers work** (§5b): ~290 on
+  average, 229 at the worst. A flipper repaint is 118–142 ms, of which the span walk
+  (`PCRow`, `PCSpn`, `PCIsB`, `PCFill`) is ~30 % — it walks every record on a row whatever
+  the window — and resolving every part's picture per band before rejecting it (`PBArtI`,
+  `PBCur`, `PBArt`) ~20 %.
 - ⭐⭐ **The editor's database operations agree with the model** (`m6`, in the default
   bench). The twelve-edit session (two parts out of the bin, a drag, a vertex moved, one
   pasted and cut again, three paints, a delete, and two edits that must be refused)

@@ -425,3 +425,77 @@ under `WADV` 01, quitting from PLAY handed `desk` a card that drew its repaint a
 columns - found on the Astro Blast demo's contact sheet, not by any bench. The pin leg
 quit from the editor, which ends on `WADV` 00, and passed with the defect in; it plays
 first now, and a mutant `Bye` fails it on two claims.
+
+## `pcs.md` §1, §5a, §5b and §8 — one tick a frame, and a plunger set by the pointer (2026-09-25)
+
+Replaced by the tick rate paced off the VBL counter and the held plunger (`pcs.md` §5b).
+The game ran one `PBStep` a VBL-locked frame at 35–40 frames a second, where the original
+ran ~300 ticks a second, so gravity (a per-tick mask) was about **8x too weak in ticks and
+~70x in rows/s²**, and every animation rate and the launch with it. Found by the user
+("the gravity should accelerate the ball significantly more"), who suspected a factor
+of 2 from the 1 MHz / 2 MHz clocks; the gravity table and `RNMove` were exact, and the
+factor was the tick rate. The plunger's pull had been the pointer's Y and it fired on the
+press, so holding the button did nothing.
+
+§1's table said:
+
+> `TIMETBL HEX 302018100C080401     speed   — the sub-steps a frame`
+
+§5a said `BDX`/`BDY` were in "1/32 px per frame". §5b ended:
+
+> ⚠ **And the frame rate.** The original is a busy-wait (`WAIT`, `TIMETBL`), not VBL-locked,
+> and gravity, flipper sweep, animation rates and the drain delay are all counted in *frames*.
+> We lock to the card's 59.94 Hz VBL and `wtime` is recorded rather than spun.
+
+§8 carried:
+
+> - ⚠ **`TIMETBL` re-derivation is an unmeasured number** until the program runs at frame rate.
+
+
+## `pcs.md` §5b and §8 — damage taken every tick, and bands the table's width (2026-09-25)
+
+Replaced the same day by `PBDiff` (the damage is what changed since the last repaint)
+and a column window on every band (`pcxl`..`pcxr`). Once a game ran ~300 ticks a second
+and repainted ~10 times, damage taken per tick was the union of every place the ball had
+been between two repaints — bands up to 77 rows — and each band was repainted across all
+160 columns for a ball ten wide. §5b said:
+
+> ⚠ **Measured on the host emulator in mode 20 on `demo2`** (2026-09-25): 300–313 ticks a
+> second with the ball on the plunger, 185–240 through the launch, and **113–150 while the
+> flippers work** — a flipper's repaint is 90–130 ms, so the game runs slow in exactly the
+> moments that are busiest. The object walk is six instructions a part that does not run
+> (`PBTick`); the rest is the repaint.
+
+and §8's open item:
+
+> - ⚠ **A game reaches its 300 ticks a second only while the repaint is cheap** (§5b): 113–150
+>   with the flippers working. The flipper frame's repaint is what is left to buy.
+
+§8's description of the repaint said:
+
+> - ⭐ **The animation's repaint is built.** A part whose state byte or whose art's top row
+> changed damages a row range; at the end of the frame those rows are **erased**, repainted
+> from the span database and every picture over them put back. ⛔ The erase is not optional
+> and not obvious: a library part's polygon is unfilled, `PCFill` refuses colour 0, and the
+> backdrop paints its *complement* — so a repaint never writes the open playfield at all,
+> and the previous frame stays underneath.
+> ⭐ **The damage is four bands of rows, and each is composed in the margin.** A
+> frame's damage widens a band it touches, else takes an empty one, else widens the
+> last (`PBDmR`). The ball damages only its own seven rows; any other part, from 2 rows
+> above its top to the height of **the tallest frame of its own template** below it
+> (`PBDmg`, off `PCPIdx`/`PCFrm`), so a flipper's band is its sweep and not a fixed 20
+> rows. Each band is composed off-screen at columns 640..1023 in chunks of at most 160
+> world rows (`PBRepB`: wipe, paint, and only that band's rows of every picture), then
+> copied onto the table by the copy engine in one rectangle - so a repaint never shows a
+> wiped band.
+> ⭐ **`PCBlit` works down the columns**: it culls a picture wholly outside
+> `pcclo`/`pcchi` before touching the card, clips the top and bottom by arithmetic, and
+> sends each byte-column as one pointer and `bh` `VDATA` stores under `WADV` 01 (next
+> row, same column). ⭐ `PCIsB` reads the part's kind out of `objkind`, a table
+> `PKColrs` fills when a table is keyed, instead of walking the object area per picture.
+> ⭐ Together: a ball-only frame ~30 ms and a flipper frame 90-130 ms, 35-40 frames a
+> second over a traced window of Astro Blast (2026-09-24).
+
+Measured between the two changes (damage by diff, bands still full width): 188–300
+ticks/s, flipper repaints 150–240 ms, ball bands 7–27 rows. With the window: 229–341,
+118–142 ms.

@@ -120,6 +120,30 @@ def physics_tables():
     return t
 
 
+def tick_rates(timetbl):
+    """⭐ TICKS PER VBL, 8.8, for each SPEED level - what PGPace adds a VBL.
+
+    The original's loop is its object walk plus `WAIT(TIMETBL[speed])`, the
+    Apple II monitor's $FCA8, which costs (26 + 27A + 5A^2) / 2 cycles at
+    1.0227 MHz.  The walk itself is TICK_BASE cycles, fitted so that speed 3
+    (A = $10, the shipped tables' setting) gives TICKS_S3 a second - which is
+    what reference/pcs.mp4 shows: the ball falls at ~400 rows/s^2 at gravity 5,
+    and gravity 5 is one unit of BDY every 8 ticks, 1/256 row/tick^2, so
+    sqrt(256 * 400) = ~320 ticks/s; the top speeds seen falling put it above
+    ~210 (terminal velocity is 47/32 row/tick).  pcs.md 5b has the measurement.
+    ⚠ A MEASUREMENT, NOT A TRANSCRIPTION: TIMETBL is verbatim, this is not."""
+    clock, vbl = 1022727.0, 59.94
+    base = clock / TICKS_S3 - (26 + 27 * 0x10 + 5 * 0x10 * 0x10) / 2.0
+    out = []
+    for a in timetbl:
+        cyc = base + (26 + 27 * a + 5 * a * a) / 2.0
+        out.append(int(round(clock / cyc / vbl * 256)))
+    return out
+
+
+TICKS_S3 = 300          # ticks a second at SPEED 3, off reference/pcs.mp4
+
+
 def check_tables(t):
     """Cross-checks that cost nothing and would have caught a misread."""
     bad = []
@@ -1245,6 +1269,14 @@ def emit(path):
         w('')
         w('PC%-16s equ       *         %d bytes' % (name[:16], len(t[name])))
         _fcb(o, t[name])
+    w('')
+    w('* ⭐ TICKS PER VBL, 8.8, per SPEED level (mkpcs.py tick_rates): the rate')
+    w('* the original\'s TIMETBL busy-wait ran its loop at, ~%d/s at speed 3.'
+      % TICKS_S3)
+    w('* ⚠ MEASURED off reference/pcs.mp4, not transcribed; PGPace reads it.')
+    w('PCTICKTBL          equ       *         16 bytes')
+    for v in tick_rates(t['TIMETBL']):
+        w('                    fdb       $%04X' % v)
     w('')
     # ⭐ THE ELASTICITY SLIDER AS AN INDEX, NOT AN ADDRESS.  ELASTLO/ELASTHI
     # are the ADDRESSES of cosine tables on the Atari, which say nothing on a

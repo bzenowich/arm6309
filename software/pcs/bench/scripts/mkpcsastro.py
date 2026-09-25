@@ -15,8 +15,8 @@ The session software/pcs/video/run-astro.sh records:
   5  the brush, yellow, and the new bumper painted
   6  WORLD: KICK up one level, 3 to 4 (gravity left at the table's 4), and
      QUIT
-  7  PLAY for about twenty seconds: the button held through the ball's
-     landing on the plunger, which launches it, then both flippers, `q` back to
+  7  PLAY for about twenty seconds: the ball lands on the plunger, the
+     button is held to pull the spring and let go to launch, then both flippers, `q` back to
      the editor, `q` to the desktop, and `q` to end it (the recording
      stops at the shell's DONE)
 
@@ -52,15 +52,14 @@ DK_ROW0, DK_LOAD, DK_QUIT = (400, 64), (362, 308), (494, 308)
 # (72..90) by 162..177, both hit solid by SELECTPOLY
 FLIPPERS = ((58, 170), (84, 170))
 BUMPER = ('BMP1', 96, 96)                   # its corner, in world units
-# ⭐ THE BUTTON IS DOWN BEFORE THE BALL LANDS AND STAYS DOWN PAST IT.  The ball
-# starts at the top of the lane and falls onto the plunger 346 frames later
-# at Astro Blast's gravity 4 (pcsobj.py; 249 at gravity 5), and LAUNCHHIT fires only on that contact with the
-# button held; a press while it is still falling does nothing, and one after
-# it has landed catches it bouncing and throws it short of the GATE.  Held
-# through the landing, the model launches it past the gate every time.
-# ⚠ Seconds, so it depends on the play loop's rate: ~30 frames a second with
-# only the ball moving (2026-09-24), and 346 frames is ~11.5 s of it.
-LAUNCH_HOLD = 14.0
+# ⭐ WAIT FOR THE LANDING, THEN PULL AND LET GO (pcsgame.inc PGInput).  The
+# ball starts at the top of the lane and falls onto the plunger 346 ticks later
+# at Astro Blast's gravity 4 (pcsobj.py) - ~1.2 s at the ~300 ticks a second a
+# game runs (pcs.md 5a) - and the shot is the RELEASE: holding the left button
+# pulls the spring, full in about a second, and LAUNCHHIT sets BDY from the
+# pull when it is let go with the ball on the plunger.
+LAND_WAIT = 3.0
+LAUNCH_HOLD = 1.3
 
 out = []
 t = 0.0
@@ -170,15 +169,15 @@ def main():
     click(pcsworld.QX + pcsworld.QW // 2, pcsworld.QY + pcsworld.QH // 2,
           pause=2.5)
 
-    line('# 7  PLAY: the plunger pulled and the button held until the ball')
-    line('#    has landed on it, then the flippers')
+    line('# 7  PLAY: the ball lands on the plunger, the spring is pulled all')
+    line('#    the way and let go, then the flippers')
     click(*TOOL['hand'], pause=3.0)
     click(*TOOL['play'], pause=1.5)
-    at(t + 0.3, 'move to %d %d' % tuple(pos))
-    glide(300, 476, 0.4)                  # the whole pull: pdl0 saturates at 382
-    line('+0.100    down left')
+    at(t + LAND_WAIT, 'down left')
     line('+%.3f   up left' % LAUNCH_HOLD)
-    for k in range(8):
+    # ⭐ 32 taps, ~16 s: with the ball at the original's speed the launch is
+    # over in a second, and the twenty seconds of PLAY are the flippers'
+    for k in range(32):
         b = ('right', 'left')[k % 2]
         at(t + 0.5, 'down %s' % b)
         line('+0.250    up %s' % b)

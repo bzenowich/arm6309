@@ -1,8 +1,9 @@
 # pcsplay.ps2 - a ball launched and the flippers worked.
 #
-# ⭐ THE MOUSE IS THE JOYSTICK (pcsgame.inc): the pointer's Y is the plunger's
-# pull, the left button launches AND works the left flipper, the right button
-# works the right flipper.  That is the Atari's own mapping - RUN.s:217 reads
+# ⭐ THE MOUSE BUTTONS ARE THE TRIGGERS (pcsgame.inc): holding the left button
+# pulls the plunger (full in about a second) and letting go is the shot, and
+# the same button works the left flipper; the right button works the right
+# flipper.  That is the Atari's own mapping - RUN.s:217 reads
 # BUTN0 for the launch and FLIPRUN reads it for the flipper - not an invention.
 #
 # ⚠ `down`/`up` and not `click`: a flipper is LEVEL-sensitive (RUN.s:243, one
@@ -11,9 +12,9 @@
 origin 320 240
 gap 120
 
-at 2.000    move to 160 440     # the plunger, most of the way down = nearly full
-+1.000      down left           # pull
-+0.400      up left             # ... and let go: LAUNCHHIT reads PDL0 >> 2
+at 2.000    move to 160 440
++1.000      down left           # pull - a second held is a full spring
++1.200      up left             # ... and let go: LAUNCHHIT reads PDL0 >> 2
 +2.000      down left           # left flipper
 +0.300      up left
 +0.400      down right          # right flipper

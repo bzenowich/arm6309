@@ -258,8 +258,8 @@ at 96.494   move to 368 338
 +0.070    move to 422 433
 +0.070    move to 428 444
 +0.300    click left
-# 7  PLAY: the plunger pulled and the button held until the ball
-#    has landed on it, then the flippers
+# 7  PLAY: the ball lands on the plunger, the spring is pulled all
+#    the way and let go, then the flippers
 at 100.494  move to 428 444
 +0.070    move to 441 401
 +0.070    move to 454 358
@@ -284,19 +284,36 @@ at 102.994  move to 560 14
 +0.070    move to 560 147
 +0.070    move to 560 162
 +0.300    click left
-at 104.294  move to 560 162
-+0.040    move to 534 193
-+0.040    move to 508 224
-+0.040    move to 482 256
-+0.040    move to 456 287
-+0.040    move to 430 319
-+0.040    move to 404 350
-+0.040    move to 378 381
-+0.040    move to 352 413
-+0.040    move to 326 444
-+0.040    move to 300 476
-+0.100    down left
-+14.000   up left
+at 106.994  down left
++1.300   up left
+at 108.794  down right
++0.250    up right
+at 109.544  down left
++0.250    up left
+at 110.294  down right
++0.250    up right
+at 111.044  down left
++0.250    up left
+at 111.794  down right
++0.250    up right
+at 112.544  down left
++0.250    up left
+at 113.294  down right
++0.250    up right
+at 114.044  down left
++0.250    up left
+at 114.794  down right
++0.250    up right
+at 115.544  down left
++0.250    up left
+at 116.294  down right
++0.250    up right
+at 117.044  down left
++0.250    up left
+at 117.794  down right
++0.250    up right
+at 118.544  down left
++0.250    up left
 at 119.294  down right
 +0.250    up right
 at 120.044  down left
@@ -313,6 +330,26 @@ at 123.794  down right
 +0.250    up right
 at 124.544  down left
 +0.250    up left
-at 125.794  type "q"
-at 131.794  type "q"
-at 151.794  key tap q
+at 125.294  down right
++0.250    up right
+at 126.044  down left
++0.250    up left
+at 126.794  down right
++0.250    up right
+at 127.544  down left
++0.250    up left
+at 128.294  down right
++0.250    up right
+at 129.044  down left
++0.250    up left
+at 129.794  down right
++0.250    up right
+at 130.544  down left
++0.250    up left
+at 131.294  down right
++0.250    up right
+at 132.044  down left
++0.250    up left
+at 133.294  type "q"
+at 139.294  type "q"
+at 159.294  key tap q
