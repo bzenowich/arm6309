@@ -262,6 +262,25 @@ def icon_world():
     return im
 
 
+def icon_pcs():
+    """⭐ `pcs`'s (2026-09-24): Pinball Construction Set, so a table AND a tool.
+
+    A small table - walls, a bumper, the ball and two flippers - with the
+    editor's hammer across its right side, because what this program does that
+    a pinball game does not is let you build the table."""
+    im, d = canvas()
+    d.rectangle([1, 2, 21, 30], fill=(120, 120, 130))             # the walls
+    d.rectangle([3, 4, 19, 30], fill=(16, 22, 64))                # the playfield
+    d.ellipse([5, 6, 12, 13], fill=(230, 60, 60), outline=(255, 170, 170))  # a bumper
+    d.ellipse([12, 14, 16, 18], fill=(245, 245, 255))             # the ball
+    d.line([(4, 23), (9, 27)], fill=(250, 214, 50), width=3)      # the flippers
+    d.line([(18, 23), (13, 27)], fill=(250, 214, 50), width=3)
+    d.line([(17, 12), (30, 28)], fill=(150, 95, 45), width=4)     # the hammer's handle
+    d.polygon([(12, 10), (20, 3), (25, 8), (17, 15)],
+              fill=(215, 220, 230), outline=(70, 75, 90))         # ... and its head
+    return im
+
+
 def icon_leaf():
     im, d = canvas(16)
     d.polygon([(2, 14), (5, 6), (12, 2), (14, 3), (11, 10), (4, 14)], fill=(40, 90, 200))

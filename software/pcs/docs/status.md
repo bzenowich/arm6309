@@ -50,11 +50,11 @@ around it:
 
 | | of the 6502 | note |
 |---|---|---|
-| The tool bar's other tools | part of `EDIT.s` | the wiring kit and the rest are recorded when clicked and do nothing yet. ⭐ **PLAY is built**: the table plays from the editor with the score strip where the kit was, and comes back as it was left (`e1`). ⭐ **MAGN is built** (`e2`), **DISK** (`d0`) and **WORLD** (`w0`) |
+| The tool bar's WIRE | part of `EDIT.s` | recorded when clicked, and does nothing yet. ⭐ **The three paint pots are gone** from the column (2026-09-24): the picker chooses the colour. ⭐ **PLAY is built**: the table plays from the editor with the score strip where the kit was, and comes back as it was left (`e1`). ⭐ **MAGN is built** (`e2`), **DISK** (`d0`) and **WORLD** (`w0`) |
 | The wiring kit's UI | `WIRE.s`, 1,143 | ⭐ the **evaluator** is already built and gated (`PBWire`, `TURNOFF`); only the screen and the three tools are missing |
 | The World panel — four sliders | part of `EDIT.s` | ⭐ **built** (`w0`): gravity, speed, kick and elasticity dragged live, DOSLIDE's level rule, every knob read off the card |
 | Save, and a catalogue | part of `DISK.s` | ⭐ **built** (`d0`): the DISK panel, a catalogue of `/SD0/DATA`'s tables, LOAD, SAVE and a refusal, and every saved file read back off the card byte for byte |
-| `desk` integration | — | no icon, no `IcTab` entry, no Applications item |
+| `desk` integration | — | ⭐ **built** (2026-09-24): a Pinball icon and Applications item fork `pcs`, which with no arguments is the editor on `demo2.pbt` until `q` |
 | Four-player attract loop | `RUN2.s` | ⚠ **deliberately not ported**: it read the Atari's console START/OPTION/SELECT keys, which this machine does not have |
 
 ### Known open items on work already written
@@ -67,9 +67,8 @@ around it:
 - ⭐ **The core must fit three 8 KB slots, and the build says so.** Past 24,573 bytes
   there is no room to map a library; `pcs.asm` now refuses to assemble. The picker and
   mode 3's text screen are in `pcsmg`.
-- ⭐ **A game repaints two bands of rows and clips the art to them**: 20–30 frames a
-  second on a table built in the editor, up from ~7. ⚠ The bands are wiped on the
-  screen, so a thin dark line shows now and then.
+- ⭐ **A game repaints four bands of rows, composed in the margin**, with a column-wise
+  `PCBlit`: 35-40 frames a second on Astro Blast, and no wiped band on the screen.
 - ⚠ **`TIMETBL` re-derivation for 59.94 Hz is still unmeasured.** Gravity, flipper sweep
   and the drain delay are all counted in frames and the original busy-waited.
 - ⚠ **Sound is unverified by anything.** A bench cannot hear. The note *sequences* are
@@ -277,3 +276,24 @@ and the knob follows the pointer while the button is down (`pcs.md` §8).
 fail, and it failed on 1,920 pixels.
 
 Sizes: core 24,351 (of 24,573); `pcsed` 3,580; `pcsui` 7,616; `pcsfl` 3,951; `pcsmg` 3,260.
+
+## Play speed, and the Astro Blast demo (2026-09-24)
+
+`software/pcs/video/run-astro.sh` records the desktop's Pinball icon, Astro Blast
+LOADed through DISK, both flippers painted light blue, a pop bumper out of the bin
+painted yellow, GRAVITY 5, and about sixteen seconds of play. Making it found three
+things:
+
+- ⭐ **The repaint flashed** in 93 play frames: the bands were wiped on the screen. They
+  are composed in the margin and copied now, four of them, with the reach taken from the
+  part's own template - 1 or 2 flash frames left.
+- ⭐ **Play ran at ~9 frames a second** on this table (flipper frames ~450 ms). `PCBlit`
+  culls, runs down columns, and `PCIsB` reads `objkind`: 35-40 a second.
+- ⛔ **Quitting from PLAY broke the desktop** (`WADV` left at 01). `Bye` restores it;
+  `run-v3desk.sh`'s pin leg now plays, compares the whole desktop after with before
+  (99.8 %), and fails on a mutant `Bye`.
+- ⚠ The launch is a held button: the plunger fires only on the ball's landing with the
+  button down, so the script holds it 10.5 s from the start of play.
+
+`PCDump` moved into the `pcsfl` library to keep the core under its limit.
+Sizes: core 24,540 (of 24,573); `pcsed` 3,576; `pcsui` 7,608; `pcsfl` 4,139; `pcsmg` 3,264.

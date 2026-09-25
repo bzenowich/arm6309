@@ -223,6 +223,6 @@ goes well.
 
 ⚠ **And the gate is the existing benches, not a new one.** `run-v3files.sh` is
 65 claims that draw a window, list a directory and read the glyphs off the
-pixels; `run-v3desk.sh` is 48 that drive a menu. Between them they exercise the
+pixels; `run-v3desk.sh` is 59 that drive a menu. Between them they exercise the
 row layer, the console, the pointer, the toolbox and the screen switch — which
 is most of the cut.

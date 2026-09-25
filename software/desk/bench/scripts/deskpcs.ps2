@@ -1,0 +1,38 @@
+# deskpcs.ps2 - the Pinball icon: select, open, `q`, and the desktop back.
+#
+# ⭐ THE ICON IS THE ONLY WAY A PERSON STARTS pcs, so this leg is what says
+# the arrangement works end to end: desk's IcTab entry forks `pcs` with a
+# bare CR, pcs takes that as a person (the editor on BareT, no frame
+# budget), and `q` on the window's keyboard hands the machine back.
+#
+# ⚠ The icon's art is at desk.asm's IcTab 568,394; the press is +32,+16
+# into it, the same offset files.ps2 uses on the disk icon.  A click selects
+# and a click on the selection opens (desk.asm's header), ten seconds apart
+# so the second is never lost to the first's repaint.
+# ⭐ AND A SPELL OF PLAY BEFORE THE QUIT.  PLAY's frames leave the card's WADV
+# at 01 (next row, same column), and a pcs that quit without putting it back
+# handed the desktop a screen it drew as columns squeezed into the left of
+# the frame (2026-09-24).  The editor alone ends on WADV 00, so a leg that
+# never plays cannot see it.  pcs reads the same absolute pointer desk left
+# (pcsin.inc's Pt.AcX/Pt.AcY), so the PLAY tool is clicked at 560,162.
+# ⛔ The two `q`s are absolute and MEASURED (2026-09-24, from the gate):
+# C1 at 12 s, pcs's screen up at ~26 s, the first `q` at 70, the desktop's
+# menu bar back at ~82 - so the second `q` at 130 reaches desk and not a
+# child still tearing down.  A key sent early is read by whoever owns the
+# window then.
+origin 320 240
+gap 120
+
+at 2.000    move to 600 410
++0.700      click left      # C0: selects Pinball
++0.500      move to 500 300
+at 12.000   move to 600 410
++0.700      click left      # C1: ⭐ forks pcs
++0.500      move to 500 300
+
+at 44.000   move to 500 300
++0.700      move to 560 162
++0.300      click left      # the PLAY tool
+at 56.000   key tap q       # the game back to the editor
+at 70.000   key tap q       # pcs's editor: quit
+at 130.000  key tap q       # the desktop, back: quit it too

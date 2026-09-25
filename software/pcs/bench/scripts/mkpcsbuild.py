@@ -38,7 +38,7 @@ NAMES = [p.name for p in PARTS]
 
 # the tool column (card pixels, the icon's middle) and the picker
 TOOL = {'hand': (560, 14), 'pointer': (560, 40), 'brush': (560, 116),
-        'play': (560, 222)}
+        'play': (560, 162)}
 PICK = (432, 360)
 
 out = []

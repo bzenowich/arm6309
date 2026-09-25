@@ -77,6 +77,11 @@ KEY_SECONDS=${KEY_SECONDS:-40}
 # has to be the keystroke.  desk polls at a few hundred iterations a second,
 # so 60,000 is minutes of machine time inside a forty-second run.
 KEYTICKS=${KEYTICKS:-60000}
+# ⭐ THE PINBALL ICON: select, open, PLAY, `q` twice to pcs, `q` to the desktop.  The
+# same unreachable bound, so DESK-BYE is the second key.
+# ⚠ The script is timed from DESK-READY, which is ~28 s into the run, so
+# its last key at 130 is ~158 s of machine.
+PIN_SECONDS=${PIN_SECONDS:-200}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 [ -n "$DESKASM" ] || DESKASM="$NITROS9DIR/level2/arm6309/cmds/desk.asm"
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
@@ -134,6 +139,7 @@ if [ -z "$NORUN" ]; then
   run click desk.ps2     "$TICKS"     "$SECONDS_OF_MACHINE"
   run idle  deskidle.ps2 "$IDLETICKS" "$IDLE_SECONDS"
   run key   deskkey.ps2  "$KEYTICKS"  "$KEY_SECONDS"
+  run pin   deskpcs.ps2  "$KEYTICKS"  "$PIN_SECONDS"
 fi
 # ⚠ NORUN=1 re-reads the claims from the last run's files.  For working on
 # the claims, never for reporting a pass.
@@ -168,6 +174,7 @@ sed -n '1,/^clicks=/p' "$OUT/click/desk.txt" | sed 's/^/      /'
 grep -E '^(C|H|restore|paintafter|mg)' "$OUT/click/desk.txt" | sed 's/^/      /'
 echo "      idle: $(grep '^frames=' "$OUT/idle/desk.txt")"
 echo "      key:  $(grep '^frames=' "$OUT/key/desk.txt")"
+echo "      pin:  $(grep '^away=' "$OUT/pin/desk.txt")"
 echo
 
 # --- 0. the machine, the card, and the program ----------------------------
@@ -261,6 +268,36 @@ claim "⛔ and the desktop STAYED PUT under it: the pull-down's rectangle held o
   test "$(get key dropcrcs)" = 1
 claim "⛔ ...and no menu came down and nothing was highlighted either" \
   test "$(get key open)$(get key hiany)" = 00
+
+# --- 8a. ⭐ the Pinball icon ----------------------------------------------
+# desk.asm's IcTab forks `pcs` with a bare CR, which pcs takes as a person:
+# the editor on the demo table, no frame budget, until `q`.  The console
+# lines are pcs's own (its stderr is desk's), and the pixels say the screen
+# really changed hands and came back.
+# ⚠ ORDER, not presence: each line is looked for after the one before it.
+# ⚠ over the WHOLE console as one line: pcs ends its lines in CR, desk
+# does not, so the two programs' lines are split differently
+after() { tr '\n' ' ' < "$OUT/$1/console.txt" | awk -v a="$2" -v b="$3" '{
+            i = index($0, a); if (i && index(substr($0, i), b)) f = 1 }
+          END { exit !f }'; }
+claim "⭐ the first click on Pinball only SELECTED it: the desktop kept the screen until the second ($(field pin C1 t) s)" \
+  gt "$(get pin away0)" "$(field pin C1 t)"
+claim "⭐ THE PINBALL ICON FORKED pcs: the console names it"   has pin 'DESK-RUN Pinball'
+claim "⭐ AND pcs CAME UP AS A PERSON'S EDITOR: its own PCS-EDIT, after the launch" \
+  after pin 'DESK-RUN Pinball' 'PCS-EDIT'
+claim "   and never said it had no mouse, no file or an error" \
+  nohas pin 'PCS-NOMOUSE\|PCS-NOFILE\|PCS-ERR\|PCS-NOLIB'
+claim "⭐ and q ENDED IT CLEANLY: PCS-RAN, after the editor"   after pin 'PCS-EDIT' 'PCS-RAN'
+claim "⭐ the screen was pcs's, not the desktop's, for $(get pin away) frames ($(get pin away0) s to $(get pin away1) s)" \
+  test "$(get pin away)" -ge 100
+claim "⭐ AND q HANDED IT BACK: the menu bar is drawn again at $(get pin awayback) s" \
+  gt "$(get pin awayback)" "$(get pin away1)"
+claim "   and the desktop was LIVE again - the second q ended it, and the shell ran on" \
+  after pin 'PCS-RAN' 'DESK-BYE'
+claim "⛔ and the desktop it handed back is the one it left: $(get pin backsame) % of the screen pixel for pixel" \
+  python3 -c "import sys; sys.exit(not float('$(get pin backsame)') >= 99.0)"
+claim "   ...to the next command"                             has pin 'DONE-arm6309'
+claim "   no crash anywhere in it"                            nohas pin '![0-9A-F][0-9A-F]'
 
 # --- 9. ⛔ THE NEGATIVE CONTROL -------------------------------------------
 # The same ROM, the same card, the same program - and a mouse that walks the

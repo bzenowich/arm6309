@@ -386,7 +386,7 @@ at 114.448  move to 262 300
 at 116.748  move to 560 14
 +0.300    click left
 # the play
-at 119.048  move to 560 222
+at 119.048  move to 560 162
 +0.300    click left
 at 119.848  move to 300 150
 +0.057    move to 300 169
@@ -450,7 +450,7 @@ at 141.546  move to 124 192
 at 146.148  move to 560 14
 +0.300    click left
 # the play
-at 148.448  move to 560 222
+at 148.448  move to 560 162
 +0.300    click left
 at 149.248  move to 300 150
 +0.057    move to 300 169

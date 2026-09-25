@@ -5,7 +5,7 @@
 # catalogue and LOADed, a LOAD of a name that is not there REFUSED, and the
 # saved table LOADed back (pcsdisk.inc).
 #
-# ⚠ Card pixels.  DISK is the tool column's icon at (564, 336); the name
+# ⚠ Card pixels.  DISK is the tool column's icon at (564, 276); the name
 # field is (332, 16, 192, 24), the catalogue's rows are 16 high from y 56,
 # LOAD / SAVE / QUIT are 60 x 24 at x 332 / 398 / 464, y 296, and MORE is
 # below LOAD at y 328.  checkpcs.py `ui-disk` models every gesture and key
@@ -21,7 +21,7 @@ at 1.000    move to 348 70
 +0.400      up left
 
 # 2  MAGN, a line of fat bits into the layer, QUIT
-at 6.000    move to 564 250
+at 6.000    move to 564 190
 +0.300      click left
 at 10.000   move to 352 60
 +0.300      down left
@@ -31,7 +31,7 @@ at 14.000   move to 368 380
 +0.300      click left
 
 # 3  DISK, the name, SAVE
-at 19.000   move to 564 336
+at 19.000   move to 564 276
 +0.300      click left
 at 23.000   type "mytbl"
 at 26.000   move to 428 308
@@ -53,7 +53,7 @@ at 40.000   move to 214 320
 +0.400      up left
 
 # 5  DISK again, and SAVE over the same name: a shorter file
-at 45.000   move to 564 336
+at 45.000   move to 564 276
 +0.300      click left
 at 49.000   move to 428 308
 +0.300      click left

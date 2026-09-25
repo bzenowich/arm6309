@@ -4,7 +4,7 @@
 # QUIT, WORLD again and one more slide from beside its track, and the panel
 # left UP so the bench reads every knob off the card (pcsworld.inc).
 #
-# ⚠ Card pixels.  WORLD is the tool column's icon at (564, 278).  The tracks
+# ⚠ Card pixels.  WORLD is the tool column's icon at (564, 218).  The tracks
 # are 28 wide from x 354 (GRAVITY, KICK) and 458 (SPEED, ELASTICITY), 136
 # tall from y 48 and 264, and take a press 12 either side; a level is 16
 # rows from the track's top + 4.  QUIT is (398..457, 432..455).
@@ -14,7 +14,7 @@ origin 0 0
 gap 300
 
 # 1  WORLD: the panel
-at 1.000    move to 564 278
+at 1.000    move to 564 218
 +0.300      click left
 
 # 2  GRAVITY past the bottom: 5 -> 7
@@ -54,7 +54,7 @@ at 25.000   move to 420 444
 +0.300      click left
 
 # 8  WORLD again, GRAVITY from just beside its frame: 7 -> 4
-at 29.000   move to 564 278
+at 29.000   move to 564 218
 +0.300      click left
 at 33.000   move to 345 100
 +0.300      down left

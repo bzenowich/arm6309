@@ -3,7 +3,7 @@
 # that ends it - and left UP at the end, so the bench reads the fat bits and
 # the box off the card as well as the layer MgDump streams (pcsmag.inc).
 #
-# ⚠ Card pixels.  MAGN is the tool column's icon at (560, 250); the viewer is
+# ⚠ Card pixels.  MAGN is the tool column's icon at (560, 190); the viewer is
 # 24 x 40 cells of 8 from (332, 16), so cell (i, j) is (336 + 8i, 20 + 8j) at
 # its middle; QUIT is (336..399, 368..391); the picker's cells are 8 x 8 from
 # (432, 360).  checkpcs.py `ui-mag` models every gesture from these points.
@@ -12,7 +12,7 @@ origin 0 0
 gap 300
 
 # 1  MAGN: the panel, and the box at its default (68, 100)
-at 1.000    move to 560 250
+at 1.000    move to 560 190
 +0.300      click left
 
 # 2  a colour: the picker's first cell, white - 32
@@ -61,7 +61,7 @@ at 38.000   move to 368 380
 +0.300      click left
 
 # 10 MAGN again - the box is where it was left - and another colour
-at 42.000   move to 560 250
+at 42.000   move to 560 190
 +0.300      click left
 at 46.000   move to 452 388
 +0.300      click left
@@ -77,7 +77,7 @@ at 55.000   move to 560 14
 +0.300      click left
 
 # 13 MAGN once more, a last line - and it is left up for the bench to read
-at 59.000   move to 560 250
+at 59.000   move to 560 190
 +0.300      click left
 at 63.000   move to 400 100
 +0.300      down left

@@ -351,3 +351,77 @@ and `status.md`'s table row:
 > | The World panel — four sliders | part of `EDIT.s` | `wset` already loads and drives the physics; it is not editable |
 
 `w0`'s first run was green.
+
+## `pcs.md` §5 and §8 — "`CMDMENU`'s rectangles unchanged", and "`desk` integration not written" (2026-09-24)
+
+Superseded when the three paint pots left the tool column and `pcs` went on the
+desktop. §5 said:
+
+> ⛔ **Each is centred in its tool's `CMDMENU` rectangle, which
+> is unchanged**, so the hit test is the original's and only the picture is finer.
+
+The pots' rectangles (WHITE, GREEN, VIOLET: world rows 64–93) had never been drawn —
+the picker replaced them — but they were still hit rectangles and tools 5–7, so a
+press in the gap between BRUSH and PLAY was recorded as a tool that did nothing. They
+are gone; PLAY, MAGN, WORLD, WIRE and DISK moved up 30 world rows (60 card rows) and
+became tools 5–9 (`ED.Play` 8 → 5, `ED.Magn` 9 → 6, `ED.Wrld` 10 → 7, `ED.Disk`
+12 → 9), and every script's clicks on them moved with them.
+
+§8's open-items bullet said:
+
+> - ⚠ **Not written**: the tool bar's other four tools, the
+>   wiring kit's UI, and `desk` integration.
+
+and `status.md`'s rows:
+
+> | The tool bar's other tools | part of `EDIT.s` | the wiring kit and the rest are recorded when clicked and do nothing yet. …
+
+> | `desk` integration | — | no icon, no `IcTab` entry, no Applications item |
+
+## `pcs.md` §4 and §8 — "a library part cannot be painted" (2026-09-24)
+
+Superseded when the brush started colouring a library part's art, so that
+Astro Blast's flippers could be painted light blue and a new bumper yellow. §8's
+brush bullet ended at *"painting a colour an object already has clears it to 0"*.
+`PEPaint`'s header and `pcsedit.paint`'s docstring said:
+
+> ⛔ A LIBRARY PART CANNOT BE PAINTED - `CMP #<LIBOBJ / BEQ PAINTO4` returns
+> without touching it, because its picture is its art and its polygon is the
+> invisible collision shape.
+
+That was the 6502's rule and the port kept it. The original's art was 1bpp,
+so there was nothing to colour. `WM.Sprite` draws the art in any palette
+entry, so the port now keeps the part's colour in `FILLCOLOR` and gives it to
+the art (`artcolr`, `PBArt`) and never to the polygon (`objcolr` stays 0). Every
+shipped table's library parts carry Apple `FILLCOLOR` 16, which `FROM_APPLE`
+maps to 0, so every existing table still looks the way it did.
+
+## pcs.md §8 - the damage bands, as they stood until 2026-09-24
+
+Replaced by four bands composed in the margin, a reach taken from the part's own
+template, and a column-wise `PCBlit` with an early cull (`pcs.md` §8). The repaint on
+the screen showed as a flash of wiped rows in 93 of the Astro Blast demo's play frames;
+after the change, 1 or 2. Frame rate went from ~9 to 35-40 frames a second over the same
+traced window (flipper frames ~450 ms to 90-130 ms).
+
+  ⭐ **The damage is two bands of rows, and the art is clipped to them.** A frame's
+  damage merges into whichever band it touches (within 4 rows), or into the empty one,
+  or else into the nearer; the two merge if they come to touch. The ball damages only
+  its own seven rows; any other part, its rows from 2 above to 20 below its top. So a
+  flipper sweeping at the bottom and a ball at the top repaint two short bands and not
+  the table between them. Each band is wiped, painted, and has **only its own rows** of
+  every picture blitted back (`pcclo`/`pcchi`). ⭐ That took a game on a table built in
+  the editor from ~7 to 20–30 frames a second; `PCBlit` of whole pictures had been a
+  third of the time.
+  ⚠ **The repaint is on the screen**, so a wiped band can show for part of a frame (a
+  thin dark line, now and then, on the demo's sheet). The editor's margin composition
+  (`RpRows`) is the fix if it matters.
+
+## pcs.md §8 - `Bye` did not restore the card (until 2026-09-24)
+
+`Bye` released `SS.Excl` and sent `DWEnd` with the card's `WADV` and WMODE as the last
+drawing left them. Harmless while `PCBlit` ran along rows; once it ran down columns
+under `WADV` 01, quitting from PLAY handed `desk` a card that drew its repaint as
+columns - found on the Astro Blast demo's contact sheet, not by any bench. The pin leg
+quit from the editor, which ends on `WADV` 00, and passed with the defect in; it plays
+first now, and a mutant `Bye` fails it on two claims.

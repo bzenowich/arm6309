@@ -224,7 +224,7 @@ def edit_session(vram):
 UIREC = 15                  # tool, press x/y, release x/y (16-bit), op[5], answer
 EDL_MISS, EDL_TOOL, EDL_PICK, EDL_BIN = 0, 1, 2, 3
 ED_HAND, ED_PTR, ED_CUT, ED_HAM, ED_BRSH, ED_NTL = 0, 1, 2, 3, 4, 5
-ED_PLAY, ED_MAGN, ED_WRLD, ED_DISK = 8, 9, 10, 12
+ED_PLAY, ED_MAGN, ED_WRLD, ED_DISK = 5, 6, 7, 9
 EDITW = 509                         # modes 23/24: logic[24], wset[4], uqk
 KEYNAMES = {'backspace': 8, 'bksp': 8, 'delete': 0x7F, 'del': 0x7F,
             'enter': 13, 'return': 13, 'space': 32}

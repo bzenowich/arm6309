@@ -41,11 +41,17 @@ KX, KW, KH = 160, 160, 192      # KITB: x 160..319, y 0..191 (EDIT.s:1378)
 
 # ⭐ CMDMENU (EDIT.s:1166) pairs each tool's hit rectangle with its handler, in
 # this order - and the order IS the menu's, so the index is the tool.
+# ⛔ LESS ITS THREE PAINT POTS, WHITE, GREEN and VIOLET (removed 2026-09-24):
+# the picker chooses the colour, so the pots were rectangles with nothing
+# drawn in them that did nothing when pressed.  The tools under them move up
+# into the room they took (POTROWS), keeping CMDMENU's gap above PLAY.
 TOOLS = ('HAND', 'POINTER', 'SCISSOR', 'HAMMER', 'BRUSH',
-         'WHITE', 'GREEN', 'VIOLET', 'PLAY', 'MAGN', 'WORLD', 'WIRE', 'DISK')
+         'PLAY', 'MAGN', 'WORLD', 'WIRE', 'DISK')
 
 # The pots, which the picker replaces and which are therefore not drawn.
 POTS = ('WHITEPAINT', 'GREENPAINT', 'VIOLETPAINT')
+# ... and their three tool rectangles, gone from the column (TOOLS)
+POTTOOLS = ('WHITE', 'GREEN', 'VIOLET')
 
 # ⭐ The picker, in CARD pixels from the panel's left edge: 12 x 10 cells of
 # 8 x 8, centred across the panel and starting just under the tool column,
@@ -148,7 +154,16 @@ def frame_colour(i):
 
 
 def tools():
-    return [(n,) + rect(n + 'B') for n in TOOLS]
+    """CMDMENU's rectangles less the pots', the tools after them moved up by
+    the rows the pots took."""
+    pots = [rect(n + 'B') for n in POTTOOLS]
+    top = min(y for _, y, _, _ in pots)
+    rows = max(y + h for _, y, _, h in pots) - top
+    out = []
+    for n in TOOLS:
+        x, y, w, h = rect(n + 'B')
+        out.append((n, x, y - rows if y > top else y, w, h))
+    return out
 
 
 def bin_boxes():
@@ -267,9 +282,9 @@ def selftest():
     for m in bad:
         print('FAIL  %s' % m)
     if not bad:
-        print('ok    the kit: %d ink pixels, 13 tools each inside its own\n'
+        print('ok    the kit: %d ink pixels, %d tools each inside its own\n'
               '      rectangle in TOOLB\'s column, 43 bin boxes, and the 12 x 10\n'
-              '      picker under them' % n)
+              '      picker under them' % (n, len(tl)))
     return not bad
 
 

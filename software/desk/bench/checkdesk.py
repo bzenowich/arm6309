@@ -40,6 +40,10 @@ Output, one fact a line, for the shell to make claims from:
                             which click Paint followed, how many separate
                             times it was on the card, and when the desktop
                             had repainted itself afterwards
+    away=<n> away0=<s> away1=<s> awayback=<s>
+                            the same for any child: the frames after the
+                            first click with no menu bar, and the first
+                            frame with one again after the last of them
     mg=<ok|bad> mgoff=<dx,dy>   the script's pointer and the machine's,
                             compared packet by packet and at the end
 
@@ -239,6 +243,8 @@ def main():
     prev = None
     paint_t = []
     bar_t = []
+    away_t = []
+    prebar = postbar = None
     basetime = targets[0][1] if targets else 1e9
     dropcrcs = set()
     itab, frame, desk, panel, sel = C["itab"], C["frame"], C["desk"], C["panel"], C["sel"]
@@ -254,6 +260,12 @@ def main():
                 and (px[G("RULEY") + 7, 250:600] == desk).all()):
             barok += 1
             bar_t.append(t)
+            if not clicks or t < clicks[0][0]:
+                prebar = px
+            elif away_t:
+                postbar = px
+        elif clicks and t > clicks[0][0]:
+            away_t.append(t)
         ink = px[2:G("BARH") - 2, 4:max(x["tx"] + x["tw"] for x in menus)]
         if int(((ink != itab) & (ink != sel)).sum()) >= 30:
             barink += 1
@@ -339,6 +351,25 @@ def main():
     back = next((t for t in bar_t if t > p1), -1) if paint_t else -1
     print("paintafter=%d paintruns=%d paint0=%.3f paint1=%.3f deskback=%.3f"
           % (after, runs, p0, p1, back))
+    # ⭐ AND THE SAME QUESTION FOR ANY CHILD, not only Paint's white page:
+    # the frames after the first click in which the menu bar is NOT drawn,
+    # and the first frame after the last of them in which it is again.
+    # `away` counts them; a launch that never took the screen reads 0.
+    a0 = away_t[0] if away_t else -1
+    a1 = away_t[-1] if away_t else -1
+    aback = next((t for t in bar_t if t > a1), -1) if away_t else -1
+    print("away=%d away0=%.3f away1=%.3f awayback=%.3f"
+          % (len(away_t), a0, a1, aback))
+    # ⛔ A MENU BAR IS NOT A DESKTOP.  The bar is sampled at 250..600; a child
+    # that left the card's WADV at 01 got a desk that drew its whole screen as
+    # columns squeezed into the left of the frame, around the child's own
+    # leftovers (2026-09-24).  So the last desktop after the child is compared
+    # with the last one before the first click, pixel for pixel: the pointer
+    # and a selected icon are what may differ, and that is well under 1 %.
+    same = -1.0
+    if prebar is not None and postbar is not None:
+        same = 100.0 * float((prebar == postbar).mean())
+    print("backsame=%.2f" % same)
     g, off = mg_agree(ppath) if os.path.exists(ppath) else (None, (0, 0))
     print("mg=%s mgoff=%d,%d" % ("na" if g is None else ("ok" if g else "bad"), off[0], off[1]))
     return 0

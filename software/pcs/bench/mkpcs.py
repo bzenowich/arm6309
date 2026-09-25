@@ -302,7 +302,8 @@ def _Lg(L, j):
 def render_table(pak, objs, parts=None, layer=None):
     """⭐ THE TABLE AS THE CARD SHOWS IT: the span database painted at 2x, the
     free-hand layer over it (pcsmag.Layer, pcsdraw.inc's LyRow), and then every
-    library part's current frame blitted over both in UI_PART.
+    library part's current frame blitted over both - in its own FILLCOLOR if
+    the brush gave it one, else UI_PART.
 
     ⛔ THE ART IS ALREADY DOUBLED.  `art()` doubles each frame's bits on the way
     into the blob, so a frame of `h` rows by `w` bytes covers `w*8` CARD columns
@@ -321,7 +322,10 @@ def render_table(pak, objs, parts=None, layer=None):
     """
     import pcsobj
     import pcspak as K
-    world = K.render(pak, [o.fillcolor for o in objs], TW, TH)
+    # ⭐ A LIBRARY PART'S FILLCOLOR IS ITS ART'S (pcsedit.paint): its polygon
+    # is drawn in 0, which is nothing, and its picture below in the colour.
+    world = K.render(pak, [0 if o.objid == K.LIBOBJ else o.fillcolor
+                           for o in objs], TW, TH)
     s = SCALE
     w, h = TW * s, TH * s
     fb = bytearray(w * h)
@@ -385,6 +389,7 @@ def render_table(pak, objs, parts=None, layer=None):
         else:
             col = L[pcsobj.L_PX] * s
             row0 = L[pcsobj.L_VERT] * s
+        ink = o.fillcolor or pcspal.UI_PART
         for r in range(fh):
             yy = row0 + r
             if not 0 <= yy < h:
@@ -398,7 +403,7 @@ def render_table(pak, objs, parts=None, layer=None):
                     if byte & (0x80 >> bit):
                         xx = col + b * 8 + bit
                         if 0 <= xx < w:
-                            fb[yy * w + xx] = pcspal.UI_PART
+                            fb[yy * w + xx] = ink
     return fb, w, h
 
 

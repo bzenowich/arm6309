@@ -19,7 +19,7 @@ several readings here were confirmed.
 
 Here it is a NitrOS-9 Level 2 program on **640 × 480 chunky 8 bpp** (`VMODE` 11) with a
 256-entry LUT, a copy engine, a span writer, one hardware sprite and a PS/2 mouse, forked
-from `desk` like `pinball`, `monster` and `tilescroll`.
+from `desk`'s **Pinball** icon like `monster` and `tilescroll` from theirs (§8).
 
 ---
 
@@ -138,7 +138,7 @@ this is a port slip in the *original*; it is reproduced, written as one constant
 | Off | Size | Field |
 |---|---|---|
 | 0 | 1 | `OBJID` — `1` POLYGON, `2` BPOLYGON (the complement/backdrop, always object 0), `3` LIBOBJ |
-| 1 | 1 | `FILLCOLOR` — ⭐ a palette index; `0` = unfilled but **solid** |
+| 1 | 1 | `FILLCOLOR` — ⭐ a palette index; `0` = unfilled but **solid**. ⭐ On a `LIBOBJ` it is the colour of the part's **art**, and `0` is `UI_PART` — its polygon is always drawn as unfilled |
 | 2 | 1 | `VRTXCOUNT` — 3…63 |
 | 3 | n | X coords, 1 byte each |
 | 3+n | n | Y coords |
@@ -186,8 +186,15 @@ editor starts on white (cell 0), the original's `COLOR = $FF`.
 
 **The tool icons are redrawn** (`pcsicons.py`, 2026-09-24) at the card's own resolution,
 white on a **black** panel: the original's were drawn for one Atari hi-res pixel a world
-unit and came out doubled. ⛔ **Each is centred in its tool's `CMDMENU` rectangle, which
-is unchanged**, so the hit test is the original's and only the picture is finer. The bin's
+unit and came out doubled. Each is centred in its tool's `CMDMENU` rectangle, so the
+picture and the hit test are the same rectangle.
+
+**The tool column is `CMDMENU`'s less its three paint pots** (`pcskit.TOOLS`): HAND,
+POINTER, SCISSOR, HAMMER, BRUSH, then PLAY, MAGN, WORLD, WIRE and DISK, and the index
+in that list is the tool (`ED.*`). The pots — WHITE, GREEN, VIOLET — chose the colour,
+which is the picker's job here, so they are gone from the column, and the five tools
+under them sit 30 world rows higher, in the room they took; `CMDMENU`'s gap above PLAY
+is kept. The bin's
 parts keep their own art, because it is also what the table shows; the bin's polygon entry
 is an icon and is redrawn too.
 
@@ -431,18 +438,27 @@ the answer.
   and not obvious: a library part's polygon is unfilled, `PCFill` refuses colour 0, and the
   backdrop paints its *complement* — so a repaint never writes the open playfield at all,
   and the previous frame stays underneath.
-  ⭐ **The damage is two bands of rows, and the art is clipped to them.** A frame's
-  damage merges into whichever band it touches (within 4 rows), or into the empty one,
-  or else into the nearer; the two merge if they come to touch. The ball damages only
-  its own seven rows; any other part, its rows from 2 above to 20 below its top. So a
-  flipper sweeping at the bottom and a ball at the top repaint two short bands and not
-  the table between them. Each band is wiped, painted, and has **only its own rows** of
-  every picture blitted back (`pcclo`/`pcchi`). ⭐ That took a game on a table built in
-  the editor from ~7 to 20–30 frames a second; `PCBlit` of whole pictures had been a
-  third of the time.
-  ⚠ **The repaint is on the screen**, so a wiped band can show for part of a frame (a
-  thin dark line, now and then, on the demo's sheet). The editor's margin composition
-  (`RpRows`) is the fix if it matters.
+  ⭐ **The damage is four bands of rows, and each is composed in the margin.** A
+  frame's damage widens a band it touches, else takes an empty one, else widens the
+  last (`PBDmR`). The ball damages only its own seven rows; any other part, from 2 rows
+  above its top to the height of **the tallest frame of its own template** below it
+  (`PBDmg`, off `PCPIdx`/`PCFrm`), so a flipper's band is its sweep and not a fixed 20
+  rows. Each band is composed off-screen at columns 640..1023 in chunks of at most 160
+  world rows (`PBRepB`: wipe, paint, and only that band's rows of every picture), then
+  copied onto the table by the copy engine in one rectangle - so a repaint never shows a
+  wiped band.
+  ⭐ **`PCBlit` works down the columns**: it culls a picture wholly outside
+  `pcclo`/`pcchi` before touching the card, clips the top and bottom by arithmetic, and
+  sends each byte-column as one pointer and `bh` `VDATA` stores under `WADV` 01 (next
+  row, same column). ⭐ `PCIsB` reads the part's kind out of `objkind`, a table
+  `PKColrs` fills when a table is keyed, instead of walking the object area per picture.
+  ⭐ Together: a ball-only frame ~30 ms and a flipper frame 90-130 ms, 35-40 frames a
+  second over a traced window of Astro Blast (2026-09-24).
+- ⛔ **Every exit puts the card's write state back** (`Bye`): `WADV` 00 and `CTRL`'s
+  WMODE bits as `Claim` found them, before the claim is released. PLAY ends on `WADV`
+  01, and the toolbox and CoArm assume 00 - a desk repainting over it drew its whole
+  screen as columns squeezed into the left of the frame. `run-v3desk.sh`'s `pin` leg
+  plays before it quits and compares the desktop it gets back with the one it left.
 - ⚠ **Whether a VRAM pointer's auto-increment carries out of a row** is an open question
   about the card or the emulator's model of it. The bench's streams reposition at every row
   boundary, so they do not depend on the answer — but `graphics.md` §19 should settle it.
@@ -472,7 +488,14 @@ the answer.
     is **two edits**: the new vertex is found again by where it is, because `ALIGNPOLY`
     may have rotated the polygon, and then dragged to the release. The **brush** paints
     what `SELECTPOLY` finds, or the backdrop on a miss, with the picker's colour; painting
-    a colour an object already has clears it to 0.
+    a colour an object already has clears it to 0. ⭐ **A library part takes the brush
+    too, and it is its art that changes colour**: the original's `PAINTOBJ` returns
+    without touching one (`CMP #<LIBOBJ / BEQ PAINTO4`) because a 1bpp picture had
+    nothing to take a colour, while `WM.Sprite` draws the art in any palette entry. So
+    the part's `FILLCOLOR` is its picture's — `PKColrs` gives it to `artcolr` for
+    `PBArt` and keeps `objcolr` at 0, so the collision polygon stays invisible — and
+    `0` is `UI_PART`, which is what every shipped table's parts hold. Nothing the
+    simulation reads changes.
   - **on the picker**: the colour.
   - **on a tool**: the first five (hand, pointer, scissors, hammer, brush) become the
     tool; **PLAY** plays the table, **MAGN** opens the magnifier and **DISK** the DISK
@@ -628,6 +651,11 @@ the answer.
     before) and writes one byte of `wset`, which `RNWrld` turns into the
     physics when PLAY starts and SAVE writes to the file. **QUIT**
     (`EDL.WQuit`) or any tool ends the panel; anything else on it is a miss.
-- ⚠ **Not written**: the tool bar's other four tools, the
-  wiring kit's UI, and `desk` integration. `RUN2.s`'s four-player game loop, the
+- ⭐ **`pcs` WITH NO ARGUMENTS IS THE EDITOR, FOR A PERSON**, and it is what
+  `desk`'s Pinball icon and Applications item fork (`F$Fork` hands it a bare
+  CR): mode 23 on `demo2.pbt` — or the built-in table if the card has none —
+  with **no frame budget**, so it runs until `q`, and with the bench's VRAM
+  streams off (`bare`, `PCEmit`). ⛔ The streams are off because a session with
+  no end would write its gesture records past `EditR`'s eleven rows.
+- ⚠ **Not written**: WIRE's tool (the wiring kit's UI). `RUN2.s`'s four-player game loop, the
   bonus tally and multiball are step 3c.

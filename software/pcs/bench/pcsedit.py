@@ -237,9 +237,13 @@ class DB(object):
 
     # ── PAINTOBJ (EDIT.s:1132) ─────────────────────────────────────────
     def paint(self, i, colour):
-        """⛔ A LIBRARY PART CANNOT BE PAINTED - `CMP #<LIBOBJ / BEQ PAINTO4`
-        returns without touching it, because its picture is its art and its
-        polygon is the invisible collision shape.
+        """⭐ A LIBRARY PART IS PAINTED TOO, AND IT IS ITS ART THAT TAKES THE
+        COLOUR.  The original returns without touching one (`CMP #<LIBOBJ /
+        BEQ PAINTO4`), because its 1bpp picture had nothing to take a colour;
+        here the art is drawn in any palette entry, so the part's FILLCOLOR is
+        its picture's (mkpcs.render_table) and never its polygon's, which
+        stays the invisible collision shape.  Nothing the simulation reads
+        changes.
 
         ⭐ AND PAINTING WITH THE COLOUR IT ALREADY HAS CLEARS IT: `CMP
         FILLCOLOR / BNE *+4 / LDA #0`.  The brush is a toggle, and 0 is
@@ -251,8 +255,6 @@ class DB(object):
         that trick only works while a colour is three bits wide.
         """
         o = self.objs[i]
-        if o.objid == K.LIBOBJ:
-            return o.fillcolor
         o.fillcolor = 0 if colour == o.fillcolor else colour
         self.rescan()
         return o.fillcolor
@@ -441,13 +443,15 @@ def selftest():
     # ⭐ the same colour twice clears it to unfilled
     if db.paint(1, was + 1) != 0:
         bad.append('painting the same colour twice did not clear it')
-    # ⛔ and a library part refuses
+    # ⭐ and a library part takes it too - the same toggle - and its spans
+    # do not move: the colour is its art's, not its polygon's
     db = fresh()
     lib = next(i for i, o in enumerate(db.objs) if o.objid == K.LIBOBJ)
-    c = db.objs[lib].fillcolor
-    db.paint(lib, 9)
-    if db.objs[lib].fillcolor != c:
-        bad.append('a library part was painted')
+    spans = repr(db.pak.rows)
+    if db.paint(lib, 9) != 9 or db.paint(lib, 9) != 0:
+        bad.append('a library part did not take the brush as a toggle')
+    if repr(db.pak.rows) != spans:
+        bad.append('painting a library part moved its spans')
 
     # -- 8  ⛔ AN EDIT THE DATABASE REFUSES IS UNDONE ENTIRELY --------------
     # ⭐ ALIGNPOLY's precondition is the one a script can reach: a triangle
@@ -480,7 +484,7 @@ def selftest():
               "      carries the part's art and stops at the table edge, a\n"
               '      vertex move survives ALIGNPOLY rotating the list, paste\n'
               '      and cut are inverses, cutting a triangle deletes the\n'
-              '      object, paint toggles and refuses a library part, and an\n'
+              '      object, paint toggles - on a library part too - and an\n'
               '      edit the converter refuses leaves no trace.')
     return not bad
 

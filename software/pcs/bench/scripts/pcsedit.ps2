@@ -120,7 +120,7 @@ at 75.000   move to 168 126
 #     and the brush is still the tool when the kit comes back.  ⭐ The table
 #     has to come back exactly as it was: the checker's final picture and
 #     object area are taken after this.
-at 79.000   move to 560 220
+at 79.000   move to 560 160
 +0.300      click left
 at 85.000   type "q"
 

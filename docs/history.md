@@ -2057,3 +2057,22 @@ icon would work on a clone, is archived in `software/archive/paint/ansi-original
 > cut preferred the import whenever it was present, which would have shipped two different
 > pictures under one name.
 > world with the hero in the middle of it, where `zelda` is a grid of rooms. ⚠ It is the
+
+## `pcs` on the desktop: the Pinball icon and menu item (2026-09-24)
+
+`IcTab`'s sixth cell and a seventh Applications item fork `pcs`, which with no
+arguments is now the editor (`software/pcs/docs/pcs.md` §8). Its art is new,
+`mkshow.py`'s `icon_pcs`, appended to `ICON_NAMES` as number 20; `pinball`'s number
+16 stays unused.
+
+### `boot-and-desktop.md` §3.4.1, as it stood until 2026-09-24
+
+> `IcTab` carries **Monster, BBS, ANSI Art, Stardew and Explore** in a column at
+> x 568, …; `NICON` is 11, and the Applications menu carries the same names. Their
+> art — `monster`, `farm`, `world` — was **appended** …
+
+> ⚠ **The column's pitch is 72 and not 80** since 2026-09-23, which is what made six of
+> them fit; there are five. … At 72 the column runs 34..369.
+
+(`NICON` was in fact 10 in `desk.asm` while the spec said 11; it is 11 now.) §0,
+§3's table and §3.2 listed the applications without Pinball.

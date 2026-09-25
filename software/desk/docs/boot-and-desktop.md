@@ -31,7 +31,7 @@ really on the card, and since 2026-09-22 **its windows move**.
 > question mark and never reaches a prompt.
 > `software/nitros9/run-sdboot.sh` boots all three card states from reset.
 > ⭐ **THE APPLICATIONS ARE ICONS (2026-09-22)** — Monster, BBS, ANSI Art,
-> Stardew and Explore, §3.4.1; the BBS and the art became programs to do it, and
+> Stardew, Explore and Pinball, §3.4.1; the BBS and the art became programs to do it, and
 > the art itself had to be written rather than imported.
 > ⭐ **§3's MILESTONE 4's WINDOW MOVE IS BUILT (2026-09-22)** — the manager's
 > tab is grabbable and the card moves the window, one `SS.Copy` a step;
@@ -52,7 +52,7 @@ really on the card, and since 2026-09-22 **its windows move**.
 | loads the OS from the disk | `boot.asm` §10b reads block 0 before there is an OS; `boot_sd` reads `OS9Boot` off the card, and ⛔ **since 2026-09-22 there is no fallback** | ⭐ **built 2026-09-21** — §2, `sdcard.md` §9.5 |
 | a desktop | `desk` — a menu bar, an event loop on the PS/2 mouse, icons on the Haiku desktop | ⭐ **built 2026-09-20** — §3 milestone 1. ⭐ The icons became clickable 2026-09-21 |
 | a file manager | `desk`'s Tracker window, listing a real directory through `v3dir.inc` — the reader `v3trk` has always used | ⭐ **built 2026-09-21** — §3 milestone 3 |
-| an application menu | `desk`'s **Applications** menu forks `v3paint`, `monster`, `stardew`, `v3bbs`, `v3art` and `tilescroll` off `/SD0/CMDS` | ⭐ **built 2026-09-20** — §3 milestone 2. ⭐ **All of them are desktop ICONS too since 2026-09-22** — §3.4.1 |
+| an application menu | `desk`'s **Applications** menu forks `v3paint`, `monster`, `stardew`, `v3bbs`, `v3art`, `tilescroll` and `pcs` off `/SD0/CMDS` | ⭐ **built 2026-09-20** — §3 milestone 2. ⭐ **All of them are desktop ICONS too since 2026-09-22** — §3.4.1 |
 | a window you drag by its title bar | `desk`'s tab grab, and **the copy engine moves the pixels** — the CPU never touches one | ⭐ **built 2026-09-22** — §3.7 |
 
 ---
@@ -254,7 +254,7 @@ put-character.
 ### 3.2 The menu bar, and what the bench reads
 
 Two titles — **Desk** (About, Quit) and **Applications** (Paint, Monsterland, Stardew,
-BBS, ANSI Art and Explore) — in an 18-pixel bar of `C.ITab` with one row of `C.Frame` under it.
+BBS, ANSI Art, Explore and Pinball) — in an 18-pixel bar of `C.ITab` with one row of `C.Frame` under it.
 A pull-down is a `tbox` bevel; an item is highlighted by repainting its rectangle in
 `C.Sel` and its label in the `sel` ramp, and unhighlighted by repainting it in `C.Panel`.
 
@@ -320,18 +320,24 @@ the owner's choice; the project's own piece that filled the gap for two days is 
 
 ### 3.4.1 ⭐ The applications are ICONS — built 2026-09-22
 
-`IcTab` carries **Monster, BBS, ANSI Art, Stardew and Explore** in a column at
-x 568, between the file manager's home position (which ends at 380) and the screen's
-edge; `NICON` is 11, and the Applications menu carries the same names. Their
-art — `monster`, `farm`, `world` — was **appended** to `mktbox.py`'s
+`IcTab` carries **Monster, BBS, ANSI Art, Stardew, Explore and Pinball** in a column
+at x 568, between the file manager's home position (which ends at 380) and the
+screen's edge; `NICON` is 11, and the Applications menu carries the same names. Their
+art — `monster`, `farm`, `world`, `pcs` — was **appended** to `mktbox.py`'s
 `ICON_NAMES`, because this table names art by number and an insertion repaints every
 icon after it with its neighbour's picture, silently. ⚠ Art number 16 is `pinball`'s,
 whose program was retired; it stays in `ICON_NAMES` so that nothing after it is renumbered.
 
-⚠ **The column's pitch is 72 and not 80** since 2026-09-23, which is what made six of
-them fit; there are five. An icon's cell is `GEO.ICONY+14` = 48 tall (the 32 × 32 art and its label),
-so a sixth at 80 would start at 434 and end at **482** — two rows past `GEO.SCRH`. At
-72 the column runs 34..369.
+⚠ **The column's pitch is 72 and not 80**, which is what makes six of them fit. An
+icon's cell is `GEO.ICONY+14` = 48 tall (the 32 × 32 art and its label), so a sixth at
+80 would start at 434 and end at **482** — two rows past `GEO.SCRH`. At 72 the column
+runs 34..441 and clears the bottom by 39.
+
+⭐ **Pinball is `pcs`** (`software/pcs/docs/pcs.md`), Bill Budge's Pinball
+Construction Set, and its art (`mkshow.py`'s `icon_pcs`, number 20) is a small table
+with the editor's hammer across it. `A.Run` forks it with an empty command line, and
+**`pcs` with no arguments is the editor for a person**: `demo2.pbt` off the card (the
+built-in table if the card has none), no frame budget, and `q` to come back here.
 
 ⭐ **Explore is `tilescroll`** (`software/tilescroll/docs/scrolling.md`): a camera roaming a 4096 × 2048
 world with the hero in the middle of it. ⚠ It is the
@@ -891,7 +897,7 @@ Everything in §3 is an application and belongs on the card.
       strike~~ — **DONE 2026-09-22, and the strike is what shipped.** `Text` (call 0)
       takes it when the call is opaque and every glyph is inside the clip, and composes
       otherwise, so nothing had to change in `desk`. **6.7× on a forty-character line**,
-      gated by `run-v3text.sh` (29), `run-v3desk.sh` (48) and `run-v3files.sh` (65).
+      gated by `run-v3text.sh` (29), `run-v3desk.sh` (59) and `run-v3files.sh` (65).
       ⛔ **Two things the build taught that the estimate could not**: the cache must hold
       **one strike per (font, ramp)** — a list whose selected row is a different ramp from
       the other eleven would otherwise rebuild three times a repaint, at ~556 ms a build,

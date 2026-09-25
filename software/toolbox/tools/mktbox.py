@@ -300,10 +300,11 @@ def icon_term():
 # so inserting here renumbers every icon after the insertion and repaints the
 # desktop with its neighbours' pictures - silently, because a number is always
 # a valid number.  The three at the end went on 2026-09-22 with the desktop's
-# applications (arm6309 software/desk/docs/boot-and-desktop.md §3).
+# applications (arm6309 software/desk/docs/boot-and-desktop.md §3), and `pcs`'s
+# on 2026-09-24.
 ICON_NAMES = ["home", "disk", "files", "trash", "paint", "bbs", "game", "image", "doc",
               "folder16", "image16", "doc16", "leaf", "app16", "term", "folder",
-              "pinball", "monster", "farm", "world"]
+              "pinball", "monster", "farm", "world", "pcs"]
 
 
 def build_icons():
@@ -322,7 +323,7 @@ def build_icons():
         "folder16": M.icon_folder(16), "image16": M.icon_image(16), "doc16": M.icon_doc(16),
         "leaf": M.icon_leaf(), "app16": icon_app16(), "term": icon_term(), "folder": M.icon_folder(),
         "pinball": M.icon_pinball(), "monster": M.icon_monster(), "farm": M.icon_farm(),
-        "world": M.icon_world(),
+        "world": M.icon_world(), "pcs": M.icon_pcs(),
     }
     icons = []
     for n in ICON_NAMES:
