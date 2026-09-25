@@ -10,8 +10,8 @@
 # `desk`, and bench/scripts/pcsastro.ps2 (mkpcsastro.py writes it) driving it:
 # the Pinball icon opened, Astro Blast LOADed off the card through DISK, both
 # flippers painted light blue, a round bumper out of the bin painted yellow,
-# GRAVITY set to 5 on the WORLD panel, fifteen seconds of PLAY, and `q` back
-# to the desktop.
+# KICK raised one level on the WORLD panel, about twenty seconds of PLAY, and
+# `q` back to the desktop.
 #
 # ⭐ SHEET FIRST, as run-video.sh: `SHEET=1` keeps the recording, and the video
 # is encoded from exactly the run the sheet was made from.  FRESH=1 records again.

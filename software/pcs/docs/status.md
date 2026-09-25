@@ -281,7 +281,8 @@ Sizes: core 24,351 (of 24,573); `pcsed` 3,580; `pcsui` 7,616; `pcsfl` 3,951; `pc
 
 `software/pcs/video/run-astro.sh` records the desktop's Pinball icon, Astro Blast
 LOADed through DISK, both flippers painted light blue, a pop bumper out of the bin
-painted yellow, GRAVITY 5, and about sixteen seconds of play. Making it found three
+painted yellow, KICK raised from 3 to 4 (gravity left at the table's 4), and
+about twenty seconds of play. Making it found three
 things:
 
 - ⭐ **The repaint flashed** in 93 play frames: the bands were wiped on the screen. They
@@ -293,7 +294,8 @@ things:
   `run-v3desk.sh`'s pin leg now plays, compares the whole desktop after with before
   (99.8 %), and fails on a mutant `Bye`.
 - ⚠ The launch is a held button: the plunger fires only on the ball's landing with the
-  button down, so the script holds it 10.5 s from the start of play.
+  button down, so the script holds it 14 s from the start of play - the model
+  lands the ball at frame 346 at gravity 4 (249 at gravity 5).
 
 `PCDump` moved into the `pcsfl` library to keep the core under its limit.
 Sizes: core 24,540 (of 24,573); `pcsed` 3,576; `pcsui` 7,608; `pcsfl` 4,139; `pcsmg` 3,264.
