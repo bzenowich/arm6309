@@ -394,7 +394,7 @@ static void print_usage(const char *prog)
             "  -h, --help         Show this help message\n"
             "\n"
             "Interactive Shortcuts:\n"
-            "  F12, Ctrl+Alt      Toggle mouse capture (grab/release cursor)\n"
+            "  F12, Ctrl+Alt+G    Toggle mouse capture (grab/release cursor)\n"
             "  F3                 Toggle Turbo mode (100%% 2 MHz vs unthrottled)\n"
             "  F5                 CPU Reset\n"
             "  Shift+F5           Coldboot Reset (runs POST)\n"
@@ -558,7 +558,7 @@ int main(int argc, char **argv)
     int stat_frames = 0;
 
     fprintf(stderr, "\n=== arm6309 running ===\n");
-    fprintf(stderr, "Press F12 or Ctrl+Alt to release mouse capture.\n");
+    fprintf(stderr, "Press F12 or Ctrl+Alt+G to release mouse capture.\n");
     fprintf(stderr, "Press F3 for Turbo mode, F5 to reset, F11 for fullscreen.\n");
     fprintf(stderr, "You can type directly into this terminal for NitrOS-9 serial shell.\n\n");
 
@@ -590,17 +590,17 @@ int main(int argc, char **argv)
 
             case SDL_KEYDOWN:
                 if (ev.key.keysym.scancode == SDL_SCANCODE_F12 ||
-                    ((ev.key.keysym.mod & KMOD_CTRL) && (ev.key.keysym.mod & KMOD_ALT))) {
+                    ((ev.key.keysym.mod & KMOD_CTRL) && (ev.key.keysym.mod & KMOD_ALT) && ev.key.keysym.scancode == SDL_SCANCODE_G)) {
                     mouse_grabbed = !mouse_grabbed;
                     SDL_SetRelativeMouseMode(mouse_grabbed ? SDL_TRUE : SDL_FALSE);
                     break;
                 }
-                if (ev.key.keysym.scancode == SDL_SCANCODE_F3) {
+                if (ev.key.keysym.scancode == SDL_SCANCODE_F3 && !(ev.key.keysym.mod & (KMOD_CTRL | KMOD_ALT))) {
                     turbo = !turbo;
                     fprintf(stderr, "\nemu: %s\n", turbo ? "TURBO MODE ON" : "Real-time 2.098 MHz ON");
                     break;
                 }
-                if (ev.key.keysym.scancode == SDL_SCANCODE_F5) {
+                if (ev.key.keysym.scancode == SDL_SCANCODE_F5 && !(ev.key.keysym.mod & (KMOD_CTRL | KMOD_ALT))) {
                     if (ev.key.keysym.mod & KMOD_SHIFT) {
                         fprintf(stderr, "\nemu: Coldboot Reset\n");
                         init_machine(rom_path, sd_path, 1, force_6809, simms);
@@ -610,14 +610,14 @@ int main(int argc, char **argv)
                     }
                     break;
                 }
-                if (ev.key.keysym.scancode == SDL_SCANCODE_F8) {
+                if (ev.key.keysym.scancode == SDL_SCANCODE_F8 && !(ev.key.keysym.mod & (KMOD_CTRL | KMOD_ALT))) {
                     m->card.ctrl ^= ACTRL_LED;
                     int led_on = (m->card.ctrl & ACTRL_LED) != 0;
                     render_set_filter(&sdl_render, led_on, 0);
                     fprintf(stderr, "\nemu: Audio LED Filter %s\n", led_on ? "ON (3.3 kHz Sallen-Key low-pass)" : "OFF");
                     break;
                 }
-                if (ev.key.keysym.scancode == SDL_SCANCODE_F10) {
+                if (ev.key.keysym.scancode == SDL_SCANCODE_F10 && !(ev.key.keysym.mod & (KMOD_CTRL | KMOD_ALT))) {
                     SDL_Surface *ss = SDL_CreateRGBSurfaceWithFormat(0, 640, 480, 16, SDL_PIXELFORMAT_RGB565);
                     if (ss) {
                         memcpy(ss->pixels, m->cur, 640 * 480 * 2);
@@ -627,7 +627,7 @@ int main(int argc, char **argv)
                     }
                     break;
                 }
-                if (ev.key.keysym.scancode == SDL_SCANCODE_F11) {
+                if (ev.key.keysym.scancode == SDL_SCANCODE_F11 && !(ev.key.keysym.mod & (KMOD_CTRL | KMOD_ALT))) {
                     Uint32 flags = SDL_GetWindowFlags(window);
                     SDL_SetWindowFullscreen(window, (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
                     break;

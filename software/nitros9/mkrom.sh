@@ -88,6 +88,9 @@ cp software/tilescroll/bench/tilescroll.bnk "$DATADIR/" \
 if ls software/pcs/bench/pcstbl/*.pbt >/dev/null 2>&1; then
   cp software/pcs/bench/pcstbl/*.pbt "$DATADIR/"
 fi
+if ls software/tracker/build/mod/*.mod >/dev/null 2>&1; then
+  cp software/tracker/build/mod/*.mod "$DATADIR/"
+fi
 
 # (the tile-mode overworld's tiles/world/sprites/frames .bin files went with
 # `overworld`, 2026-09-23, and its terrain model mkgame.py with `zelda`,
