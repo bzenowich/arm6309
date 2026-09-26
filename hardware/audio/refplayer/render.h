@@ -53,9 +53,12 @@ typedef struct {
     uint32_t clipped;
     int      write_failed;
     double   last_l, last_r;   /* most recent emitted frame, for tests */
+    void   (*sample_cb)(int16_t l, int16_t r, void *user);
+    void    *cb_user;
 } render_t;
 
 int  render_open(render_t *r, const char *path, int out_rate, long cc_rate);
+void render_set_callback(render_t *r, void (*cb)(int16_t l, int16_t r, void *user), void *user);
 void render_set_filter(render_t *r, int led_on, int bypass);
 /* One colour clock of card output. Emits a WAV frame when one is due. */
 void render_push(render_t *r, int l, int r_in);

@@ -54,8 +54,20 @@ for m in $MODL; do
   [ -f "$REC/modules_$m" ] || { echo "FAIL  no $REC/modules_$m"; exit 1; }
   cp "$REC/modules_$m" "$W/mods/$m"
 done
-# ⚠ /DD IS THE CARD now, so this is where the shell starts looking.
-printf 'chx /dd/cmds\r' > "$W/startup"
+# ⭐ STARTUP SCRIPT:
+# 1. Environment override if STARTUP is specified as a valid file.
+# 2. Otherwise software/nitros9/startup if present and card includes desk.
+# 3. Otherwise $NITROS9DIR/level2/arm6309/startup if present.
+# 4. Fallback to basic 'chx /dd/cmds\r'.
+if [ -n "$STARTUP" ] && [ -f "$STARTUP" ]; then
+  tr -d '\r' < "$STARTUP" | tr '\n' '\r' > "$W/startup"
+elif [ -f "$ROOT/software/nitros9/startup" ] && { [ $# -eq 0 ] || echo "$*" | grep -qw "desk"; }; then
+  tr -d '\r' < "$ROOT/software/nitros9/startup" | tr '\n' '\r' > "$W/startup"
+elif [ -f "$NITROS9DIR/level2/arm6309/startup" ]; then
+  tr -d '\r' < "$NITROS9DIR/level2/arm6309/startup" | tr '\n' '\r' > "$W/startup"
+else
+  printf 'chx /dd/cmds\r' > "$W/startup"
+fi
 
 # ⭐ BOOT= IS OVERRIDABLE, and `BOOT=` (set and EMPTY) is how a bench asks for
 # a card that carries the whole system and is deliberately NOT bootable -

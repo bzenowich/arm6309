@@ -84,6 +84,12 @@ void render_set_filter(render_t *r, int led_on, int bypass)
     r->bypass = bypass;
 }
 
+void render_set_callback(render_t *r, void (*cb)(int16_t l, int16_t r, void *user), void *user)
+{
+    r->sample_cb = cb;
+    r->cb_user = user;
+}
+
 /* ------------------------------------------------------------- the chain -- */
 
 static void emit(render_t *r, double l, double u)
@@ -124,6 +130,9 @@ static void emit(render_t *r, double l, double u)
             uint8_t f[4] = { (uint8_t)(il & 0xFF), (uint8_t)((il >> 8) & 0xFF),
                              (uint8_t)(ir & 0xFF), (uint8_t)((ir >> 8) & 0xFF) };
             if (fwrite(f, 1, 4, r->wav) != 4) { r->write_failed = 1; }
+        }
+        if (r->sample_cb) {
+            r->sample_cb((int16_t)il, (int16_t)ir, r->cb_user);
         }
         r->frames++;
     }

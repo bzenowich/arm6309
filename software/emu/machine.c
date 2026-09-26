@@ -558,7 +558,13 @@ static void list_run(void)
 static void audio_catchup(void)
 {
     uint64_t want = m->cpu.cycles * 3546895ULL / 2097917ULL;
-    while (m->card.cc < want) card_step(&m->card);
+    while (m->card.cc < want) {
+        card_step(&m->card);
+#ifdef SDL_APP
+        extern void sdl_audio_step(void);
+        sdl_audio_step();
+#endif
+    }
 }
 
 static uint8_t audio_read(uint8_t r)
@@ -1066,7 +1072,7 @@ static void uart_write(uint8_t r, uint8_t v)
         if (m->tx_n == 0) m->tx_next = m->cpu.cycles + uart_bit_cycles();
         if (m->tx_n < 17) m->tx_n++;
         m->thre_int = 0;
-        fputc(v, m->ser_out);
+        if (m->ser_out) fputc(v, m->ser_out);
         if (m->ser_times) fprintf(m->ser_times, "%llu %02X\n", (unsigned long long)(m->dots * DOT_PS), v);
         {
             int was = ser_gate.open;
@@ -1645,22 +1651,24 @@ static void emit_frame(void)
     uint16_t camk = ram16(m->mk_camk), herok = ram16(m->mk_herok), missed = ram16(m->mk_missed);
     uint16_t ck1 = ram16(m->mk_ck), ph1 = ram16(m->mk_ph);
     uint64_t t = m->frame_t;
-    fputc('F', m->frames);
-    fwrite(&m->frame_n, 4, 1, m->frames);
-    fwrite(&t, 8, 1, m->frames);
-    uint16_t hdr[] = {(uint16_t)w, (uint16_t)h, camk, herok, missed};
-    fwrite(hdr, 2, 5, m->frames);
-    uint8_t b3[] = {m->progress, (uint8_t)(m->ctrl & 3), rep};
-    fwrite(b3, 1, 3, m->frames);
-    uint16_t ck[] = {m->ck0, ck1, m->ph0, ph1};
-    fwrite(ck, 2, 4, m->frames);
-    fputc(m->lrun1, m->frames);
-    if (rep == 0) {
-        fwrite(m->cur, 2, (size_t)w * h, m->frames);
-    } else if (rep == 2) {
-        fwrite(bitmap, 1, (size_t)nrows, m->frames);
-        for (int y = 0; y < h; y++)
-            if (bitmap[y >> 3] & (1 << (y & 7))) fwrite(m->cur + (size_t)y * 640, 2, 640, m->frames);
+    if (m->frames) {
+        fputc('F', m->frames);
+        fwrite(&m->frame_n, 4, 1, m->frames);
+        fwrite(&t, 8, 1, m->frames);
+        uint16_t hdr[] = {(uint16_t)w, (uint16_t)h, camk, herok, missed};
+        fwrite(hdr, 2, 5, m->frames);
+        uint8_t b3[] = {m->progress, (uint8_t)(m->ctrl & 3), rep};
+        fwrite(b3, 1, 3, m->frames);
+        uint16_t ck[] = {m->ck0, ck1, m->ph0, ph1};
+        fwrite(ck, 2, 4, m->frames);
+        fputc(m->lrun1, m->frames);
+        if (rep == 0) {
+            fwrite(m->cur, 2, (size_t)w * h, m->frames);
+        } else if (rep == 2) {
+            fwrite(bitmap, 1, (size_t)nrows, m->frames);
+            for (int y = 0; y < h; y++)
+                if (bitmap[y >> 3] & (1 << (y & 7))) fwrite(m->cur + (size_t)y * 640, 2, 640, m->frames);
+        }
     }
     memcpy(m->prv, m->cur, (size_t)w * h * 2);
     m->prv_w = w; m->prv_h = h; m->have_prev = 1;
@@ -1689,7 +1697,13 @@ static void raster(void)
             m->irq_line_due = -1;
         }
         int armed = 0;
-        if (m->line >= vlines()) { m->line = 0; m->m0 = m->ctrl & 1; armed = m->lgo; }
+        if (m->line >= vlines()) {
+            m->line = 0; m->m0 = m->ctrl & 1; armed = m->lgo;
+#ifdef SDL_APP
+            extern volatile int sdl_frame_ready;
+            sdl_frame_ready = 1;
+#endif
+        }
         if (m->lrun && m->lwait) { m->lwait = 0; list_run(); }
         /* after the WAIT release: an armed list starts inside line 0, as a GO
          * written there would, and its first WAIT is line 1's (10.3.2) */
@@ -1701,6 +1715,7 @@ static void raster(void)
     }
 }
 
+#ifndef SDL_APP
 int main(int argc, char **argv)
 {
     /* ⭐ PS2_SCRIPT_DUMP=file: parse the script, write the traffic it WOULD
@@ -2031,3 +2046,4 @@ int main(int argc, char **argv)
             m->frame_n, m->progress, (double)m->dots * DOT_PS / 1e12, m->list_violations, m->span_violations);
     return m->list_violations || m->span_violations ? 1 : 0;
 }
+#endif
