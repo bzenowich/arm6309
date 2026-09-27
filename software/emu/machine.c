@@ -112,6 +112,11 @@ static void gate_feed(gate_t *g, uint8_t v)
     else g->match = ((char)v == g->s[0]) ? 1 : 0;
 }
 static gate_t ser_gate, kbd_gate, mouse_gate, scr_gate;
+#ifdef TIMING_HOOKS
+static void (*timing_hook_sd_read)(long block) = NULL;
+static void (*timing_hook_uart_tx)(uint8_t c) = NULL;
+static void (*timing_hook_wr)(uint16_t a, uint8_t v) = NULL;
+#endif
 #include "../../hardware/cpu/sim/cpu6809.h"   /* the core lives with the CPU since 2026-09-24 */
 #include "card.h"                   /* hardware/audio/refplayer: the audio card, register level */
 
@@ -697,6 +702,9 @@ static struct {
 
 static void sd_block_read(long b, uint8_t *dst)
 {
+#ifdef TIMING_HOOKS
+    if (timing_hook_sd_read) timing_hook_sd_read(b);
+#endif
     memset(dst, 0, 512);
     if (!sd.img) return;
     if (fseek(sd.img, b * 512L, SEEK_SET) != 0) return;
@@ -1072,6 +1080,9 @@ static void uart_write(uint8_t r, uint8_t v)
         if (m->tx_n == 0) m->tx_next = m->cpu.cycles + uart_bit_cycles();
         if (m->tx_n < 17) m->tx_n++;
         m->thre_int = 0;
+#ifdef TIMING_HOOKS
+        if (timing_hook_uart_tx) timing_hook_uart_tx(v);
+#endif
         if (m->ser_out) fputc(v, m->ser_out);
         if (m->ser_times) fprintf(m->ser_times, "%llu %02X\n", (unsigned long long)(m->dots * DOT_PS), v);
         {
@@ -1481,6 +1492,9 @@ static uint8_t rd(void *ctx, uint16_t a)
 static void wr(void *ctx, uint16_t a, uint8_t v)
 {
     (void)ctx;
+#ifdef TIMING_HOOKS
+    if (timing_hook_wr) timing_hook_wr(a, v);
+#endif
     /* ⭐ WATCH=addr[,addr...]: every write to one of those logical addresses,
      * with the PC and the task that made it.  For finding who smashes a system
      * global - the trace shows instructions, not their effects. */

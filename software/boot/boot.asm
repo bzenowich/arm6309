@@ -1419,6 +1419,12 @@ R_PIDXL EQU     $0E
 R_PIDXH EQU     $0F
 R_PDATL EQU     $10
 R_PDATH EQU     $11
+R_CPTR0 EQU     $12
+R_CPTR1 EQU     $13
+R_CPTR2 EQU     $14
+R_CWID  EQU     $15
+R_CHEI  EQU     $16
+R_CCTRL EQU     $17
 VGBASE  EQU     $10             VG.Base's offset in the VG handed to tbox
 
 * tbox's function numbers (tbox.asm TbTab)
@@ -2175,7 +2181,7 @@ tbvec   lbra    tbrow           0  TV.Fill    A = a colour: CG.RN at (RY, RX)
         lbra    tbpset          12 TV.PalSet  B = an entry, CG.Tmp = RGB565
         lbra    tbpshw          15 TV.PalShw  (nothing: see below)
         lbra    tbdisp          18 TV.IsDisp  (nothing: see below)
-        lbra    tbnocp          21 TV.Copy    ⛔ refused: there is no engine here
+        lbra    tbcopy          21 TV.Copy    ⭐ the copy engine
         lbra    tbnocp          24 TV.CopyN   ⛔ and no list of them either
 
 *------------------------------------------------------------------------------
@@ -2338,6 +2344,53 @@ tbpset  pshs    cc,a,b,u
 tbpshw  rts
 tbdisp  orcc    #$04            Z: the screen is displayed
         rts
+
+*------------------------------------------------------------------------------
+* tbcopy - TV.Copy in boot: copy CG.RN x CG.FH from (CG.CpSX, CG.CpSY) to (CG.RX, CG.RY)
+*------------------------------------------------------------------------------
+tbcopy  pshs    cc,a,b,x,u
+        ldu     VGBASE,y
+        lbsr    idlespn
+        lbsr    tbaddr          WPTR from CG_RX, CG_RY
+        ldd     COG+$2F73       CG.CpSX
+        stb     R_CPTR0,u
+        pshs    a
+        ldd     COG+CG_TTOP
+        addd    COG+$2F71       CG.CpSY
+        anda    #$01
+        lslb
+        rola
+        lslb
+        rola
+        orb     ,s+
+        stb     R_CPTR1,u
+        sta     R_CPTR2,u
+        ldd     COG+CG_RN       the width, ten bits
+
+        stb     R_CWID,u
+        anda    #3
+        lsla
+        lsla
+        lsla
+        pshs    a
+        ldd     COG+CG_FH       the height, nine bits
+        stb     R_CHEI,u
+        anda    #1
+        lsla
+        lsla
+        lsla
+        lsla
+        lsla
+        ora     ,s+
+        ora     #$01            CC.Go
+        sta     R_CCTRL,u
+        ldb     #$10
+        lbsr    vwait0          poll CBUSY
+        puls    cc,a,b,x,u
+        andcc   #$FE            carry clear: success
+        rts
+
+
 * ⭐ THE COPY ENGINE, REFUSED -- and refusing is a documented answer, not a
 * stub.  tbox.asm's TV.Copy says "carry set if it could not" and TV.CopyN says
 * "carry back means COMPOSE THE WHOLE STRING", so a row layer that cannot copy
