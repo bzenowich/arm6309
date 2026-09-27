@@ -247,15 +247,16 @@ def main():
     prebar = postbar = None
     basetime = targets[0][1] if targets else 1e9
     dropcrcs = set()
-    itab, frame, desk, panel, sel = C["itab"], C["frame"], C["desk"], C["panel"], C["sel"]
+    itab, frame, desk, panel, sel, white = C["itab"], C["frame"], C["desk"], C["panel"], C["sel"], C["white"]
     for meta, px in fr.read(fpath):
         n += 1
         t = meta["t"]
         if px is None or px.shape != (G("SCRH"), G("SCRW")):
             continue
-        # ⭐ the menu bar, as pixels: its own grey across the width the titles
+        # ⭐ the menu bar, as pixels: its grey/white across the width the titles
         # do not reach, one row of frame under it, and the desktop below that
-        if ((px[G("BARH") // 2, 250:600] == itab).all()
+        bar_col = px[G("BARH") // 2, 250:600]
+        if (((bar_col == itab).all() or (bar_col == white).all())
                 and (px[G("RULEY"), 250:600] == frame).all()
                 and (px[G("RULEY") + 7, 250:600] == desk).all()):
             barok += 1
@@ -270,7 +271,7 @@ def main():
         if int(((ink != itab) & (ink != sel)).sum()) >= 30:
             barink += 1
         rect = px[dy:dy + dh, dx:dx + dw]
-        if float((rect == panel).mean()) > 0.40:
+        if float((rect == panel).mean()) > 0.40 or float((rect == white).mean()) > 0.40:
             nopen += 1
         if t >= basetime:
             # ⛔ the negative control's whole claim: how many DIFFERENT
@@ -296,7 +297,7 @@ def main():
     def state(r):
         if r is None:
             return "na"
-        return "open" if float((r == panel).mean()) > 0.40 else "shut"
+        return "open" if (float((r == panel).mean()) > 0.40 or float((r == white).mean()) > 0.40) else "shut"
 
     def hiset(r):
         if r is None:

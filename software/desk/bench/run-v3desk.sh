@@ -91,7 +91,8 @@ mkdir -p "$OUT"
 [ -f "$DESKASM" ] || { echo "FAIL  no $DESKASM (../nitros9 on its arm6309 branch?)"; exit 1; }
 
 if [ -z "$NOBUILD" ]; then
-  sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-v3desk.log" 2>&1 || {
+  printf 'chx /dd/cmds\r' > "$OUT/bench_startup"
+  STARTUP="$OUT/bench_startup" sh software/nitros9/mkrom.sh "$OUT" > "$OUT/mkrom-v3desk.log" 2>&1 || {
     tail -20 "$OUT/mkrom-v3desk.log"; echo "FAIL  the ROM did not build"; exit 1; }
 fi
 ROM="$OUT/arm6309_rom.bin"
