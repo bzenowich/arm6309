@@ -1,1 +1,4 @@
-chx /dd/cmds; vconsole &; iniz w3; desk /w3
+chx /dd/cmds
+iniz w3
+vconsole &
+desk /w3

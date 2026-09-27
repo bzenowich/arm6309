@@ -447,8 +447,8 @@ int main(int argc, char **argv)
 
     if (!rom_path) {
         static const char *rom_candidates[] = {
-            "software/desk/build/v3desk/arm6309_rom.bin",
             "software/nitros9/build/rom/arm6309_rom.bin",
+            "software/desk/build/v3desk/arm6309_rom.bin",
             "software/desk/build/v3move/arm6309_rom.bin",
             "software/boot/boot.bin",
             NULL
@@ -457,8 +457,8 @@ int main(int argc, char **argv)
     }
     if (!sd_path) {
         static const char *sd_candidates[] = {
-            "software/desk/build/v3desk/system.img",
             "software/nitros9/build/rom/system.img",
+            "software/desk/build/v3desk/system.img",
             "software/desk/build/v3move/system.img",
             NULL
         };
