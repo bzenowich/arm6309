@@ -23,10 +23,11 @@ _here=$(cd "$(dirname "$0")" && pwd)   # before any cd: $0 may be relative
 set -e
 cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
-OUT=${1:-$(cd "$_here/." && pwd)/build/rom}
+OUT=${1:-$_here/build/rom}
+mkdir -p "$OUT"
+OUT=$(cd "$OUT" && pwd)
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 export PATH="$ROOT/.tools/bin:$PATH"
-mkdir -p "$OUT"
 
 [ -n "$NITROS9DIR" ] && [ -d "$NITROS9DIR/recipes/arm6309" ] || {
   echo "FAIL  no NitrOS-9 tree with recipes/arm6309 (set NITROS9DIR; branch arm6309)"; exit 1; }
@@ -90,6 +91,9 @@ if ls software/pcs/bench/pcstbl/*.pbt >/dev/null 2>&1; then
 fi
 if ls software/tracker/build/mod/*.mod >/dev/null 2>&1; then
   cp software/tracker/build/mod/*.mod "$DATADIR/"
+fi
+if ls software/tracker/reference/*.mod >/dev/null 2>&1; then
+  cp software/tracker/reference/*.mod "$DATADIR/"
 fi
 
 # (the tile-mode overworld's tiles/world/sprites/frames .bin files went with
