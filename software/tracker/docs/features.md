@@ -16,7 +16,7 @@ It serves as the specification checklist for designing **Tracker** on the **arm6
 | **Period Reference Clock** | 3.546895 MHz (PAL color clock) | 3.546895 MHz (PAL color clock) — **100% bit-exact tuning** |
 | **Tempo Timer** | CIA-B Timer A (clocked at 709.379 kHz) | On-card 16-bit timer @ 709.379 kHz — **exact CIA tempo** |
 | **Replayer Interrupt** | Level 6 / Level 4 Audio Interrupt | CPU `/FIRQ` interrupt (~2.7% CPU overhead @ 2.098 MHz) |
-| **Scheduling Priority** | AmigaOS Task Priority (+20 or custom) | NitrOS-9 Priority 250 (`F$SPrior`) — prioritized over desktop/games |
+| **Scheduling Priority** | AmigaOS Task Priority (+20 or custom) | NitrOS-9 Priority 135 (`F$SPrior`) with `F$Sleep 2` yielding — prioritized without CPU starvation |
 | **Analogue Filter** | Switchable RC + 2nd-order Sallen-Key ("LED filter") | On-card hardware Sallen-Key low-pass filter (`ACTRL_LED`) |
 | **Screen Resolution** | 320 × 256 @ 50 Hz (PAL) or 320 × 200 (NTSC), 4/8 bpp | **640 × 480 @ 60 Hz 16-bit RGB565** (Video3 Card) |
 | **Storage / Filesystem** | OFS/FFS on 3.5" 880 KB floppies (`df0:`) or HDD | SDHC SPI controller on `/sd0` (RBF hierarchical filesystem) |
@@ -252,7 +252,7 @@ We divide development into four progressive tiers:
 * FIRQ-driven 50 Hz/BPM timer replayer implementing all Protracker effects (`0`–`F`, `E0`–`EF`).
 * Null-loop target (`$80 $80`) initialization at card RAM `$00000`.
 * Standalone CLI player command: `modplay <file.mod>`.
-* **Elevated Process Priority**: Set NitrOS-9 priority to 250 (`F$SPrior`) upon start so playback is never preempted by desktop clicking, window drags, or games.
+* **Balanced Scheduling & Sleep Yielding**: Set NitrOS-9 priority to 135 (`F$SPrior`) and yield CPU on the sleep queue (`F$Sleep 2`) between audio ticks so playback is glitch-free while desktop clicking, window drags, and virtual consoles remain fully responsive.
 * Optimized terminal output: Refresh status display only on row boundary (`tick == 0`) or user action to eliminate serial/SCF latency.
 
 ### Tier 2: Core Haiku Tracker Interface & Pattern Editor
@@ -262,7 +262,7 @@ We divide development into four progressive tiers:
 * Transport controls (Play Song, Play Pattern, Stop, Record).
 * Song position list editor (Pos, SongLen, Patt index).
 * Hardware LED filter indicator (showing state of `ACTRL_LED`). No scope/VU meter overhead.
-* **Elevated Application Priority**: Tracker process initializes with priority 250 so interactive audio playback remains stutter-free even while multi-tasking.
+* **Balanced Application Priority**: Tracker process initializes with priority 135 and yields via `F$Sleep 2` between ticks so interactive audio playback remains stutter-free even while multi-tasking.
 
 ### Tier 3: Editing Tools & File Operations
 * Track and Pattern editing: Transpose, Copy, Paste, Clear, Quantize.
