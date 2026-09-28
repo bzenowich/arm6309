@@ -1,0 +1,16 @@
+# pcspaddle.ps2 - verify keyboard paddle controls (Left/Right Shift, Z/M).
+#
+# Holds and taps Left Shift, Right Shift, Z, and M, then taps Q to exit cleanly.
+at 0.500    key press lshift
++1.000      key release lshift
++0.500      key press rshift
++1.000      key release rshift
++0.500      key press lshift
++0.150      key release lshift
++0.500      key press rshift
++0.150      key release rshift
++0.500      key press z
++1.000      key release z
++0.500      key press m
++1.000      key release m
++0.500      key tap q

@@ -65,6 +65,9 @@
 #       the TRAJECTORY rather than on the picture.  ⛔ The two are the SAME for
 #       tta 0 and 16, so a ball in a box of flat walls behaves identically and
 #       only a slope tells them apart - which is why the test table has one.
+#   p0  ⭐ THE KEYBOARD PADDLES - `pcs 21`, driven by scripts/pcspaddle.ps2:
+#       Left Shift and Right Shift make/break, partial tap and sustained hold,
+#       plus Z/M backwards-compatibility and Q to quit.
 # All three are REQUIRED to be rejected.
 #
 # ⚠ Needs ../nitros9 on its arm6309 branch, so it is in no aggregate.
@@ -76,7 +79,7 @@ ROOT=$(pwd)
 OUT=${OUT:-$(cd "$_here/.." && pwd)/build/pcs}
 FRAMES=${FRAMES:-30}
 SECONDS_OF_MACHINE=${SECONDS_OF_MACHINE:-90}
-RUNS=${RUNS:-"m0 m4 m6 e0 e1 e2 w0 c0 c2 cX d0 k0 f0 f1 fX m1 m2 m5"}
+RUNS=${RUNS:-"m0 m4 m6 e0 e1 e2 w0 c0 c2 cX d0 k0 f0 f1 fX m1 m2 m5 p0"}
 NITROS9DIR=${NITROS9DIR:-$(cd "$ROOT/../nitros9" 2>/dev/null && pwd)}
 TOOLS=${TOOLS:-$ROOT/.tools/bin}
 PATH="$TOOLS:$PATH"; export PATH
@@ -203,6 +206,31 @@ rune() {
   return 0
 }
 
+# ⭐ MODE 21: PLAY IT with PS2_SCRIPT, gated on PCS-PLAY
+runp() {
+  D="$OUT/$1"; m=$2; script=$3; tbl=${4:-}
+  rm -rf "$D"; mkdir -p "$D"
+  card=${CARD:-$OUT/sd.img}
+  printf 'chx /sd0/cmds\riniz w5\rpcs %d 3000 %s>/w5\recho DONE-arm6309\r' \
+    "$m" "${tbl:+$tbl }" > "$D/typed.txt"
+  (cd "$D" && SERIAL_IN=typed.txt SERIAL_GATE="02}" SERIAL_TYPE=60 \
+     SERIAL_THINK=700 SERIAL_STOP="DONE-arm6309" WILD=1 VIDEO3=1 SDIMG="$card" \
+     PS2_SCRIPT="$script" PS2_SCRIPT_GATE=PCS-PLAY \
+     VRAMDUMP=vram.bin "$OUT/emu" "$ROM" . "${ESECONDS:-40}" \
+     > /dev/null 2> emu.log) || true
+  tr -d '\000' < "$D/serial.out" | tr -d '\r' > "$D/console.txt"
+  sed 's/\x1b\[[0-9;]*m//g' "$D/emu.log" > "$D/emu.txt"
+  grep -q "SERIAL_STOP seen" "$D/emu.txt" || {
+    echo "FAIL  $1 did not finish"; tail -5 "$D/emu.txt"; fail=1; }
+  if grep -q '^FAIL\|^WILD' "$D/emu.txt"; then
+    echo "FAIL  $1: the emulator objected"; grep -m4 '^FAIL\|^WILD' "$D/emu.txt"
+    fail=1; fi
+  for t in PCS-PLAY PCS-RAN; do
+    grep -q "$t" "$D/console.txt" || { echo "FAIL  $1: pcs never said $t"; fail=1; }
+  done
+  return 0
+}
+
 # ⭐ A TABLE OFF THE CARD, which is where tables live (pcsfile.inc).  `run`
 # builds `pcs <mode> <frames>`; this one appends a bare table NAME, which
 # `Build` takes in preference to anything in the module.
@@ -265,6 +293,7 @@ for r in $RUNS; do
     d0) mkdir -p "$OUT/d0.card"; cp "$OUT/sd.img" "$OUT/d0.card/sd.img"
         CARD="$OUT/d0.card/sd.img" ESECONDS=240 \
           rune d0 23 "$ROOT/software/pcs/bench/scripts/pcsdisk.ps2" demo2l.pbt ;;
+    p0) runp p0 21 "$ROOT/software/pcs/bench/scripts/pcspaddle.ps2" demo2.pbt ;;
     m7) run m7 7 ;;
   esac
 done
@@ -373,6 +402,8 @@ for r in $RUNS; do
           "$OUT/sd.img" "$OUT/d0.card/sd.img" || fail=1 ;;
     k0) echo "--- k0 ⭐ THE EDITOR'S KIT PANEL, against EDIT.s's DRAWKIT ---"
         python3 software/pcs/bench/checkpcs.py "$OUT/k0" kit || fail=1 ;;
+    p0) echo "--- p0 ⭐ KEYBOARD PADDLES: Left/Right Shift & Z/M hold and tap ---"
+        python3 software/pcs/bench/checkpaddle.py "$OUT/p0" || fail=1 ;;
     m5) echo "--- m5 ⛔ MUTATION: BOUNCE rotates back by TTA - this must FAIL ---"
         mutation m5 "every bounce mirrored" ball || fail=1 ;;
     m2) echo "--- m2 ⛔ MUTATION: the B-polygon paints its records - this must FAIL ---"

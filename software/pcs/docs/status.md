@@ -125,9 +125,11 @@ reads both triggers as `BUTN0`/`BUTN1`:
 | right button | right flipper |
 | left button, held | the plunger's pull — full in about a second, and the release is the shot |
 
-⚠ **The keyboard cannot hold a flipper.** `SS.Ready` + `I$Read` gives one byte and no
-key-up, so a keyed flipper would flap once and drop. That is why the buttons carry the
-flippers.
+⭐ **Keyboard paddles with key-up:** Left Shift (or 'z') drives the left flipper, and
+Right Shift (or 'm') drives the right flipper. The PS/2 driver (`kbdarm.asm`) delivers
+key make ($01, $02) and break ($81, $82) events, allowing flippers to be held up for
+sustained holds, released immediately, or tapped quickly for partial-scale strokes.
+Both flippers are controlled independently.
 
 ⛔ **The tables are not in this repository.** They are shipped game data, not the MIT
 sources, and `software/pcs/reference/pcs-source/README.md`'s rule is that the right to redistribute is the
