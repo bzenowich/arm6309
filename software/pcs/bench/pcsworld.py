@@ -37,15 +37,16 @@ def hit(px, py):
 
 
 def level(i, y):
-    """WoLvl: DOSLIDE's rule - 0 above the first level, 7 past the last."""
+    """WoLvl: 7 above the first level, 0 past the last."""
     dy = y - TRACKS[i][1] - 4
-    return 0 if dy < 0 else min(dy // ST, 7)
+    slot = 0 if dy < 0 else min(dy // ST, 7)
+    return 7 - slot
 
 
 def knob(i, lvl):
     """The knob's box, (x, y, w, h), at level `lvl` on track i (WoBox)."""
     x, y = TRACKS[i][0], TRACKS[i][1]
-    return (x + (TW - KW) // 2, y + 4 + ST * lvl, KW, KH)
+    return (x + (TW - KW) // 2, y + 4 + ST * (7 - lvl), KW, KH)
 
 
 class Panel(object):
@@ -73,14 +74,14 @@ class Panel(object):
 
 def _selftest():
     assert [level(0, y) for y in (0, 48, 51, 52, 67, 68, 163, 164, 400)] == \
-        [0, 0, 0, 0, 0, 1, 6, 7, 7]
+        [7, 7, 7, 7, 7, 6, 1, 0, 0]
     assert hit(354 - 12, 48) == 0 and hit(354 - 13, 48) is None
     assert hit(354 + 28 + 11, 48 + TH - 1) == 0 and hit(354 + 40, 48) is None
     assert hit(460, 300) == 3 and hit(460, 264 + TH) is None
     p, w = Panel(), [1, 2, 3, 4]
     p.open()
-    assert p.press(360, 60, 360, 1000, w) == ([0, 13, 0, 7, 1], 0) and w[0] == 7
-    assert p.press(460, 300, 999, 0, w) == ([0, 13, 3, 0, 4], 0) and w[3] == 0
+    assert p.press(360, 60, 360, 1000, w) == ([0, 13, 0, 0, 1], 0) and w[0] == 0
+    assert p.press(460, 300, 999, 0, w) == ([0, 13, 3, 7, 4], 0) and w[3] == 7
     assert p.press(330, 470, 330, 470, w) == ([0] * 5, 0xFF) and p.up
     assert p.press(400, 440, 400, 440, w) == ([0, 14, 0, 0, 0], 0xFF)
     assert not p.up

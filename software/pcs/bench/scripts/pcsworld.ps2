@@ -1,6 +1,6 @@
 # pcsworld.ps2 - WORLD at the editor (`pcs 23`, the demo table, wset
 # 5 3 3 4): each of the four sliders dragged somewhere new - one past the
-# bottom (7), one past the top (0), two in between - a press that misses,
+# bottom (0), one past the top (7), two in between - a press that misses,
 # QUIT, WORLD again and one more slide from beside its track, and the panel
 # left UP so the bench reads every knob off the card (pcsworld.inc).
 #
@@ -17,21 +17,21 @@ gap 300
 at 1.000    move to 564 218
 +0.300      click left
 
-# 2  GRAVITY past the bottom: 5 -> 7
+# 2  GRAVITY past the bottom: 5 -> 0
 at 5.000    move to 368 120
 +0.300      down left
 +0.300      move to 368 200
 +0.300      move to 368 300
 +0.400      up left
 
-# 3  SPEED past the top: 3 -> 0
+# 3  SPEED past the top: 3 -> 7
 at 9.000    move to 472 100
 +0.300      down left
 +0.300      move to 472 40
 +0.300      move to 472 4
 +0.400      up left
 
-# 4  KICK: down to 6 and back up to 2 before the release - 3 -> 2
+# 4  KICK: down to 0 and back up to 5 before the release - 3 -> 5
 at 13.000   move to 368 330
 +0.300      down left
 +0.300      move to 368 380
@@ -53,7 +53,7 @@ at 21.000   move to 330 470
 at 25.000   move to 420 444
 +0.300      click left
 
-# 8  WORLD again, GRAVITY from just beside its frame: 7 -> 4
+# 8  WORLD again, GRAVITY from just beside its frame: 0 -> 3
 at 29.000   move to 564 218
 +0.300      click left
 at 33.000   move to 345 100
