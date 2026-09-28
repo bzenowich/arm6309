@@ -25,9 +25,15 @@ const BOARD = new Set([
   ...[...Array(8).keys()].flatMap((b) => [`D${b}`, `PA${b}`, `PB${b}`]),
 ])
 
+/* ⭐ THE BROADCAST HAS TWO OWNERS since 2026-09-28: v3host, and v3walk while
+ * it runs (plan §6.4). Each gets its own net and the board resolves them, the
+ * way it resolves FBA - so a fight between the two is a failed claim. */
+const SHARED = new Set(["REGWR", "RA0", "RA1", "RA2", "RA3", "RA4", "WSTB", "CPURF",
+  "RFA1", "RFA2", "RFA3", "RFA4"])
 /* the two address-bus owners get a net each; the board resolves FBA */
 const net = (part: string, n: string) =>
-  /^FBA\d+$/.test(n) ? `${({ v3scan: "scan", v3ptr: "ptr", v3dot: "dot" } as Record<string, string>)[part]}_${n}` : n
+  /^FBA\d+$/.test(n) ? `${({ v3scan: "scan", v3ptr: "ptr", v3dot: "dot" } as Record<string, string>)[part]}_${n}`
+  : SHARED.has(n) && (part === "v3host" || part === "v3walk") ? `${part.slice(2)}_${n}` : n
 
 const wrap = (head: string, items: string[], sep: string, end: string) => {
   const out: string[] = []
@@ -66,7 +72,7 @@ export const portmap = (parts: [string, string, Part][]): string => {
     BEGIN,
     wrap("  wire ", wires, ", ", ";"),
     "",
-    "  // ---- the five parts: generated port maps --------------------------------",
+    "  // ---- the six parts: generated port maps ---------------------------------",
     ...insts,
   ].join("\n") + "\n"
 }

@@ -71,19 +71,20 @@ ZWLDW, ZWLDH = 128, 64
 # the keyed actor bank: one 32-row strip beside the tile bank is not possible
 # (the bank rotates), so it goes in the 32 rows the vertical stream keeps
 # ⚠ ... which it cannot either.  The art rides in the BANK, as tiles: the
-# last bank column is art rather than terrain, and it rotates with the rest.
-ZART0 = ZNTILE - 16           # the last column of the bank is the actors
-ZNART = 16
+# last TWO bank columns are the walker's 32 shape cells (walkcast.py), one to
+# a 32 x 32 cell, and they rotate with the rest.  26 hold art; 31 is the
+# walker's null and is never drawn.
+ZART0 = ZNTILE - 32           # the last two columns of the bank are the actors
+ZNART = 32
 # ⭐ AND THE SAVE-BEHIND SCRATCH IS BANK TILES TOO.  There is nowhere else: by
 # construction every ring byte is either on screen or about to be, and the bank
 # is the only thing that moves out of the way as the camera travels.  The
-# tileset uses 61 of the 144 slots and the art 16, so column 6 is free - and an
-# actor is exactly one 32 x 32 tile, which is what makes this fit at all.
-# ⚠ A strip that rotates carries its scratch with it, and `TileSrc` looks the
-# position up live, so a save and the restore that follows it a frame later
-# survive the strip moving in between.
+# tileset uses 61 of the 144 slots and the art 32, so column 6 is free - one
+# 32 x 32 cell for each of the walker's sixteen slots, and no actor is bigger.
+# ⚠ A strip that rotates carries its scratch with it, and the program rewrites
+# the walker's SAVE and SHAPE pointers when one does (tilescroll.asm `WFix`).
 ZSCR0 = 96
-ZMXAC = 8
+ZMXAC = 16
 
 KEY = 0x00                    # the copy engine's colour key is index 0
 
@@ -360,25 +361,22 @@ def bank(tiles):
 # 16 x 16 art pixels and this mode's pixels are SQUARE, so they double in both
 # axes rather than one.
 def art_bank():
+    """⭐ Since the sprite walker (2026-09-28) the shapes are their own sizes -
+    walkcast.py's seven kinds - and each sits in the top-left of its cell."""
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-    import cast as Z
-    shapes = Z.hero_art()
-    for name, pal, rows in Z.CAST:
-        lut = {k: Z.c332(*v) for k, v in pal.items()}
-        a = np.full((16, 16), KEY, np.uint8)
-        for r, row in enumerate(rows):
-            for c, ch in enumerate(row):
-                if ch in lut:
-                    a[r, c] = lut[ch]
-        shapes.append(a)
-    assert len(shapes) == ZNART, len(shapes)
-    out = []
-    for a in shapes:
-        big = np.repeat(np.repeat(a, 2, axis=0), 2, axis=1)
-        assert big.shape == (ZTILE, ZTILE)
-        assert (big == KEY).any(), "a shape with no transparent pixel"
-        out.append(big)
+    import walkcast as W
+    out = W.cells()
+    assert len(out) == ZNART, len(out)
+    for c in out:
+        assert c.shape == (ZTILE, ZTILE)
     return out
+
+
+def kinds():
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    import walkcast as W
+    _, first = W.shapes()
+    return [(n, w, h, s0, sp, st, k) for (n, w, h, sp, st, k), s0 in zip(W.KINDS, first)]
 
 
 DAT = """\
@@ -410,12 +408,28 @@ ZWLDH               equ       {ZWLDH}
 ZWXMSK              equ       ZWLDW-1
 ZWYMSK              equ       ZWLDH-1
 
-ZART0               equ       {ZART0}      the bank's last column is the actors
+ZART0               equ       {ZART0}      the bank's last two columns are the shapes
 ZNART               equ       {ZNART}
+ZARC                equ       ZART0/ZBROW   ... logical bank columns ZARC, ZARC+1
 ZSCR0               equ       {ZSCR0}       ... and column 6 is their scratch
-ZMXAC               equ       {ZMXAC}
-ZNHERO              equ       {ZNHERO}        art tiles 0..7 are the hero's
+ZSCC                equ       ZSCR0/ZBROW
+ZMXAC               equ       {ZMXAC}       the walker's sixteen slots
+ZNHERO              equ       {ZNHERO}        shapes 0..7 are the hero's
 ZKEY                equ       ${KEY:02X}
+
+* ⭐ THE KINDS (walkcast.py): eight bytes each -
+*   width, height, first shape, animation speed, step (0.8), kind, 0, 0
+* kind 0 is the hero, 1 walks the ground, 2 flies to the top of the view.
+ZNKIND              equ       {NKIND}
+K.W                 equ       0
+K.H                 equ       1
+K.S0                equ       2
+K.AN                equ       3
+K.STP               equ       4
+K.KND               equ       5
+K.Size              equ       8
+KindTab
+{KINDS}
 
 * ⚠ THE STREAMING BUDGET IS THE SCENE'S: copies a frame each job may take.
 HJOBN               equ       2
@@ -455,7 +469,10 @@ def main(cmds):
         ZSLOTS=ZSLOTS, ZVSLOT=ZVSLOT, ZTSLOT=ZTSLOT, ZBCOL=ZBCOL,
         ZBROW=ZBROW, ZNTILE=ZNTILE, ZVBAND=ZVBAND, ZWLDW=ZWLDW, ZWLDH=ZWLDH,
         ZART0=ZART0, ZNART=ZNART, ZSCR0=ZSCR0, ZMXAC=ZMXAC, ZNHERO=8,
-        KEY=KEY, ZBK0=ZTSLOT - 1,
+        KEY=KEY, ZBK0=ZTSLOT - 1, NKIND=len(kinds()),
+        KINDS="\n".join("                    fcb       %d,%d,%d,%d,$%02X,%d,0,0    %s"
+                         % (w, h, s0, sp, st, k, n)
+                         for (n, w, h, s0, sp, st, k) in kinds()),
         MAP="\n".join("* row %d\n%s" % (y, fcb(m[y])) for y in range(ZWLDH))))
     print("ok    %s/tilescroll.bnk: %d terrain + %d art of %d slots, %d x %d bytes"
           % (d, len(tiles), len(art), ZNTILE, b.shape[1], b.shape[0]))

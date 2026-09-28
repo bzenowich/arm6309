@@ -27,7 +27,7 @@ module v3host (
     input  wire HLOAD,
     input  wire RETIRE,
     input  wire GRD,
-    input  wire D6,
+    input  wire WALK,
     input  wire CEOR,
     input  wire CHLAST,
     input  wire GCPY,
@@ -40,8 +40,6 @@ module v3host (
     output wire RA3,
     output wire RA4,
     output wire LDPDATH,
-    output wire LDIRQACK,
-    output wire LDCTRL,
     output wire PDQ,
     output wire PDGO,
     output wire PPEND,
@@ -72,12 +70,6 @@ module v3host (
     output wire RDREQ,
     output wire CARDBUSY,
     output wire WAITN,
-    output wire IRQPEND,
-    output wire VBLQ,
-    output wire VBLRISE,
-    output wire IRQACK,
-    output wire IRQEN,
-    output wire IRQN,
     output wire VSTATOE,
     output wire RDBKOE,
     output wire CTICK,
@@ -99,8 +91,19 @@ module v3host (
     output wire RFA3,
     output wire RFA4,
     output wire CPURF,
+    output wire REGWR_OE,
+    output wire RA0_OE,
+    output wire RA1_OE,
+    output wire RA2_OE,
+    output wire RA3_OE,
+    output wire RA4_OE,
+    output wire WSTB_OE,
     output wire WAITN_OE,
-    output wire IRQN_OE
+    output wire RFA1_OE,
+    output wire RFA2_OE,
+    output wire RFA3_OE,
+    output wire RFA4_OE,
+    output wire CPURF_OE
 );
 
   reg  r_PDQ;
@@ -112,9 +115,6 @@ module v3host (
   reg  r_WPQ;
   reg  r_RDVALID;
   reg  r_RPQ;
-  reg  r_IRQPEND;
-  reg  r_VBLQ;
-  reg  r_IRQEN;
   reg  r_CPH;
   reg  r_CRLD;
   reg  r_RP1;
@@ -131,9 +131,6 @@ module v3host (
   assign WPQ = r_WPQ;
   assign RDVALID = r_RDVALID;
   assign RPQ = r_RPQ;
-  assign IRQPEND = r_IRQPEND;
-  assign VBLQ = r_VBLQ;
-  assign IRQEN = r_IRQEN;
   assign CPH = r_CPH;
   assign CRLD = r_CRLD;
   assign RP1 = r_RP1;
@@ -143,7 +140,7 @@ module v3host (
 
   // EXTERNAL
   assign REGWR =
-         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
+         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & ~WALK);
   // EXTERNAL
   assign RA0 =
          (A0);
@@ -161,13 +158,7 @@ module v3host (
          (A4);
   // buried
   assign LDPDATH =
-         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & A4 & ~A3 & ~A2 & ~A1 & A0);
-  // buried
-  assign LDIRQACK =
-         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & ~A4 & A3 & A2 & ~A1 & A0);
-  // buried
-  assign LDCTRL =
-         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & ~A4 & ~A3 & ~A2 & ~A1 & ~A0);
+         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & ~WALK & A4 & ~A3 & ~A2 & ~A1 & A0);
   // buried
   assign PDGO =
          (LDPDATH & ~PDQ);
@@ -198,13 +189,13 @@ module v3host (
          | (VDSEL);
   // EXTERNAL
   assign WSTBV =
-         (VPORT & ~RW & E & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
+         (VPORT & ~RW & E & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & ~WALK);
   // EXTERNAL
   assign WSTART =
          (WPQ & ~WSTBV);
   // EXTERNAL
   assign WSTB =
-         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
+         (IOSEL & A6 & A5 & WRCYC & ~SPANBUSY & ~CBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & ~WALK);
   // buried
   assign RDCKP =
          (GRD & ~RDVALID);
@@ -213,7 +204,8 @@ module v3host (
          (WSTB)
          | (RETIRE)
          | (RSTART)
-         | (CSTEP);
+         | (CSTEP)
+         | (WALK);
   // buried
   assign WRCYC =
          (~RW & E);
@@ -236,8 +228,8 @@ module v3host (
          (VPORT & RW);
   // EXTERNAL
   assign RDREQ =
-         (~RDVALID & ~E & ~WPQ & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4)
-         | (~RDVALID & E & RW & VPORT & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
+         (~RDVALID & ~E & ~WPQ & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & ~WALK)
+         | (~RDVALID & E & RW & VPORT & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4 & ~WALK);
   // buried
   assign CARDBUSY =
          (SPANBUSY)
@@ -245,18 +237,10 @@ module v3host (
          | (RP1)
          | (RP2)
          | (RP3)
-         | (RP4);
+         | (RP4)
+         | (WALK);
   // EXTERNAL
   assign WAITN =
-         1'b0;
-  // buried
-  assign VBLRISE =
-         (VBLANK & ~VBLQ);
-  // buried
-  assign IRQACK =
-         (LDIRQACK);
-  // EXTERNAL
-  assign IRQN =
          1'b0;
   // EXTERNAL
   assign VSTATOE =
@@ -322,14 +306,58 @@ module v3host (
   assign CPURF =
          (IOSEL & A6 & A5 & E & ~SPANBUSY & ~RP1 & ~RP2 & ~RP3 & ~RP4);
 
+  // REGWR is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign REGWR_OE =
+         (~WALK);
+  // RA0 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign RA0_OE =
+         (~WALK);
+  // RA1 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign RA1_OE =
+         (~WALK);
+  // RA2 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign RA2_OE =
+         (~WALK);
+  // RA3 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign RA3_OE =
+         (~WALK);
+  // RA4 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign RA4_OE =
+         (~WALK);
+  // WSTB is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign WSTB_OE =
+         (~WALK);
   // WAITN is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
   assign WAITN_OE =
-         (VPORT & E & CARDBUSY | IOSEL & A6 & A5 & ~RW & E & CARDBUSY | VPORT & E & RW & ~RDVALID);
-  // IRQN is open drain: the data is a constant and the
+         (VPORT & E & CARDBUSY | IOSEL & A6 & A5 & ~RW & E & CARDBUSY | VPORT & E & RW & ~RDVALID | IOSEL & A6 & A5 & RW & E & WALK & A4 | IOSEL & A6 & A5 & RW & E & WALK & ~A3 | IOSEL & A6 & A5 & RW & E & WALK & ~A2 | IOSEL & A6 & A5 & RW & E & WALK & A1 | IOSEL & A6 & A5 & RW & E & WALK & ~A0);
+  // RFA1 is open drain: the data is a constant and the
   // condition rides on the output enable (graphics.md 12.1).
-  assign IRQN_OE =
-         (IRQPEND & IRQEN);
+  assign RFA1_OE =
+         (~WALK | RP1 | RP2 | RP3 | RP4);
+  // RFA2 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign RFA2_OE =
+         (~WALK | RP1 | RP2 | RP3 | RP4);
+  // RFA3 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign RFA3_OE =
+         (~WALK | RP1 | RP2 | RP3 | RP4);
+  // RFA4 is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign RFA4_OE =
+         (~WALK | RP1 | RP2 | RP3 | RP4);
+  // CPURF is open drain: the data is a constant and the
+  // condition rides on the output enable (graphics.md 12.1).
+  assign CPURF_OE =
+         (~WALK);
 
   always @(posedge CLK25) begin
       r_PDQ <=
@@ -353,14 +381,6 @@ module v3host (
          | (RDVALID & ~RDINV);
       r_RPQ <=
          (VPORT & RW & E);
-      r_IRQPEND <=
-         (VBLRISE)
-         | (IRQPEND & ~IRQACK);
-      r_VBLQ <=
-         (VBLANK);
-      r_IRQEN <=
-         (LDCTRL & D6)
-         | (IRQEN & ~LDCTRL);
       r_CPH <=
          (CBUSY & CTICK & ~CPH)
          | (CBUSY & ~CTICK & CPH);

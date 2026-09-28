@@ -1,6 +1,6 @@
 /* The common shape of an arm6309 peripheral card.
  *
- * 100 mm high and 120, 180 or 240 mm long - Apple II proportions, with the
+ * 100 mm high and 120, 180, 240 or 300 mm long - Apple II proportions, with the
  * 2 x 36 fingers of tools/lib/slot.ts along the bottom rear edge and the card's
  * connectors on the back.
  *
@@ -24,9 +24,10 @@
 import type { ReactNode } from "react"
 import { CardEdge } from "./SlotConnector"
 
-/** The three lengths a card may take. tools/place/parts.ts is the other half of
- *  this rule and place.check.ts asserts each card takes the shortest. */
-export const LENGTHS = [120, 180, 240] as const
+/** The four lengths a card may take. tools/place/parts.ts is the other half of
+ *  this rule and place.check.ts asserts each card takes the shortest. 300 since
+ *  2026-09-28: video3 with its fifth CPLD (video3/docs/plan.md §13.5). */
+export const LENGTHS = [120, 180, 240, 300] as const
 export type CardLength = (typeof LENGTHS)[number]
 export const CARD_HEIGHT_MM = 100
 

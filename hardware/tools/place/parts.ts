@@ -57,8 +57,10 @@ export interface CardSpec {
   parts: Part[]
 }
 
-/** The three lengths a card may take. 100 mm high throughout. */
-export const LENGTHS = [120, 180, 240] as const
+/** The four lengths a card may take. 100 mm high throughout. ⭐ 300 since
+ *  2026-09-28, for video3's fifth CPLD (plan §6.4, §13.5) - and only because
+ *  the packer says 240 no longer holds it. */
+export const LENGTHS = [120, 180, 240, 300] as const
 export const BOARD_H = 100
 export const FINGER_W = 91.4
 export const FINGER_H = 11
@@ -71,21 +73,23 @@ export const CARDS: Record<string, CardSpec> = {
    * hardware/video3/docs/plan.md §13, derived part by part from §0-§9 rather than by
    * diffing `video`. The programmable logic is the partition's, fitted:
    * four ATF1508AS (partition.md) and the v3lane GAL22V10. What check:place
-   * answers is whether all of it places - and at 45 ICs it does, on 24 cm,
-   * the longest board there is: a plan §13.5 ceiling, not headroom.
+   * answers is whether all of it places. ⭐ At 46 ICs, since v3walk (plan
+   * §6.4) made the CPLDs five, it does NOT place on 24 cm - five packages
+   * fall off - and the card is 30 cm, the one length only it takes.
    *
    * ⚠ NO BOARD FILE YET. There is no cards/video3.circuit.tsx, so the
    * icBudget tie below skips it and check:netlist has nothing to read
    * (plan §15 step 8). tools/gal/reach.check.ts's `checkInputs` is on for exactly
    * that reason. */
   video3: {
-    title: "Video3", length: 240, ics: 45, source: "hardware/video3/docs/plan.md 13.1",
-    note: "character + bitmap + tile, copyrect, one 16x16 sprite - four ATF1508AS and a GAL22V10, all fitted, with a keyed copy",
+    title: "Video3", length: 300, ics: 46, source: "hardware/video3/docs/plan.md 13.1",
+    note: "character + bitmap + tile, copyrect, one 16x16 sprite, a sprite walker - five ATF1508AS and a GAL22V10, all fitted, with a keyed copy",
     rear: [{ w: 53, h: 17, label: "DE-15 VGA", kind: "conn" },
            { w: 53, h: 20, label: "analogue drive + R-2R", kind: "analog" }],
     parts: [
-      /* the four CPLDs, all fitted (gal/cpld/v3*.fit) - partition.md */
-      pkg(33, 33, "ATF1508AS", "pld", 4, "1508"),
+      /* the five CPLDs, all fitted (video3/logic/cpld/v3*.fit) - partition.md.
+       * ⭐ The fifth is v3walk, the sprite walker (plan §6.4), 2026-09-28. */
+      pkg(33, 33, "ATF1508AS", "pld", 5, "1508"),
       /* ⭐ v3lane and the four lane '245s, 2026-09-19: the framebuffer is 32
        * bits and every other VRAM byte path on the card is 8, and nothing
        * joined them - no byte enables, no lane decode, no transceiver

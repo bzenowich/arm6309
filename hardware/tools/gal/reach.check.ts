@@ -49,6 +49,7 @@ import { v3dot } from "../../video3/logic/v3dot.cpld"
 import { v3scan } from "../../video3/logic/v3scan.cpld"
 import { v3ptr } from "../../video3/logic/v3ptr.cpld"
 import { v3host } from "../../video3/logic/v3host.cpld"
+import { v3walk } from "../../video3/logic/v3walk.cpld"
 import { v3laneDesign } from "../../video3/logic/v3lane.jedec"
 import { sdbusDesign } from "../../storage/logic/sdbus.jedec"
 import { sdengDesign } from "../../storage/logic/sdeng.jedec"
@@ -109,7 +110,8 @@ const CARDS: Card[] = [
   {
     name: "video3",
     parts: [part("v3dot", v3dot), part("v3scan", v3scan),
-      part("v3ptr", v3ptr), part("v3host", v3host), part("v3lane", v3laneDesign)],
+      part("v3ptr", v3ptr), part("v3host", v3host), part("v3walk", v3walk),
+      part("v3lane", v3laneDesign)],
     boards: ["../../video3/sim/video3_card.v"],
     checkInputs: true,
   },

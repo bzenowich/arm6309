@@ -14,8 +14,10 @@ appears only in the fitter's stdout, never in the `.fit`**: `fit1508.sh` require
 sentence, which is the only thing standing between a failed fit and a *convincing*
 `.fit` left over from the last one. `CLAUDE.md`'s trap list has both.
 
-⭐ **All four CPLDs take the register broadcast** (`RA4..RA0` + `REGWR`) and decode their
-own offsets from `regmap.ts`, which is the single table plan §10 specifies.
+⭐ **All five CPLDs take the register broadcast** (`RA4..RA0` + `REGWR`) and decode their
+own offsets from `regmap.ts`, which is the single table plan §10 specifies. ⭐ **`v3walk`
+also drives it**, while `WALK` is high and `v3host` has let go (plan §6.4), so it observes
+the broadcast on separate inputs (`SREGWR`, `SRA4..SRA0`).
 
 | | cells | I/O | cascades | |
 |---|---|---|---|---|
@@ -26,8 +28,9 @@ own offsets from `regmap.ts`, which is the single table plan §10 specifies.
 | **`v3ptr`** | **124 / 128** | 58 / 64 | **3** | ⭐ the build — ascending copies only |
 | `v3ptr_rows` | — | — | — | ⛔ row direction: **`INTERNAL ERROR`** |
 | `v3ptr_both` | — | — | — | ⛔ both directions: **`INTERNAL ERROR`** |
-| **`v3host`** | **58 / 128** | ⛔ **64 / 64** | **0** | ⭐ the build — the broadcast |
-| `v3host_st` | 51 / 128 | ⛔ **64 / 64** | 0 | one load strobe per register — **replaced** |
+| **`v3host`** | **52 / 128** | 61 / 64 | **0** | ⭐ the build — the broadcast, let go of while `WALK` |
+| ⭐ **`v3walk`** | **111 / 128** | 55 / 64 | 10, each a single hop | ⭐ the build — the sprite walker (plan §6.4) and the VBL interrupt |
+| `v3host_st`, 2026-09-16 | 51 / 128 | ⛔ **64 / 64** | 0 | one load strobe per register — **replaced**, and a fit of a term list that still held the VBL interrupt |
 
 ⛔ **Keep a rejected variant's fit, do not overwrite it.** The three `v3ptr` rows are the
 evidence for plan §6.2's decision, and the first write-up quoted a figure after the run
@@ -58,14 +61,15 @@ fit only when it fits.**
 
 ## `v3lane` — the one GAL
 
-`v3lane.jedec.ts` is a `GAL22V10`, 10 of 10 macrocells and 10 inputs: the four lane
-`'245`s' `/OE`, the four byte enables, `PWOE` and `RFOE` (`partition.md` §2.5). Like every
+`v3lane.jedec.ts` is a `GAL22V10`, 10 of 10 macrocells and 12 inputs: the four lane
+`'245`s' `/OE`, the four byte enables — none for a keyed copy write, armed by `WMODE` 11 or
+the walker's `WKEY` — `PWOE` and `RFOE` (`partition.md` §2.5). Like every
 GAL here it ships with a CUPL reference, `video3/logic/cupl/v3lane.cupl.jed`, and
 
 ```sh
 bun run video3/logic/v3lane.check.ts     # part of make -C hardware check
 ```
 
-writes `v3lane.jed`, `.doc` and `.pld` and sweeps all 1,024 inputs — the fuse map
+writes `v3lane.jed`, `.doc` and `.pld` and sweeps all 4,096 inputs — the fuse map
 against a model written from the board's rules, then against CUPL's compile of the
 `.pld`.

@@ -51,7 +51,7 @@ for tb in $TBS; do
     # ⭐ video3 as a card: the four parts and the board around them. Every
     # buried cell is left unconnected on purpose - a cell is not a net until
     # it leaves its package - so PINMISSING is the design, not a slip.
-    v3card)    SRC="-Wno-PINMISSING $V3/video3_card.v $V3/v3dot.v $V3/v3scan.v $V3/v3ptr.v $V3/v3host.v $V3/v3lane.v"; TBD=$V3 ;;
+    v3card)    SRC="-Wno-PINMISSING $V3/video3_card.v $V3/v3dot.v $V3/v3scan.v $V3/v3ptr.v $V3/v3host.v $V3/v3walk.v $V3/v3lane.v"; TBD=$V3 ;;
     # ⭐ video3 as a MACHINE: a 6809E in the socket, the motherboard under it
     # and the card in the slot, running software/boot/v3boot's fixture ROM. Asked
     # for by name - it is not in the default TBS. ⚠ About 40 s: 5 s of
@@ -72,7 +72,7 @@ for tb in $TBS; do
       W="$W -Wno-BLKSEQ -Wno-SYNCASYNCNET -Wno-MULTIDRIVEN -Wno-LATCH"
       W="$W -Wno-UNSIGNED -Wno-CMPCONST --timescale 1ns/1ps"
       SRC="$W $H/tools/sim/machine3.v $MB/mainboard.v $MB/clkdec.v $MB/mmu.v $MB/u9.v $MB/u10.v"
-      SRC="$SRC $V3/video3_card.v $V3/v3dot.v $V3/v3scan.v $V3/v3ptr.v $V3/v3host.v $V3/v3lane.v"
+      SRC="$SRC $V3/video3_card.v $V3/v3dot.v $V3/v3scan.v $V3/v3ptr.v $V3/v3host.v $V3/v3walk.v $V3/v3lane.v"
       # ⚠ NAMED THOUGH v3machine LEAVES THE SLOT EMPTY (machine3.v STORAGE = 0,
       # so the card is in a dead generate branch): Verilator resolves an
       # instantiated module by searching the current directory, and a file it

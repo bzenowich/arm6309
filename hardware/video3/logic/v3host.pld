@@ -42,7 +42,7 @@ PIN = VBLANK ;
 PIN = HLOAD ;
 PIN = RETIRE ;
 PIN = GRD ;
-PIN = D6 ;
+PIN = WALK ;
 PIN = CEOR ;
 PIN = CHLAST ;
 PIN = GCPY ;
@@ -69,8 +69,6 @@ PIN = !PWCK ;
 PIN = !RDOE ;
 PIN = RDREQ ;
 PIN = !WAITN ;
-PIN = IRQPEND ;
-PIN = !IRQN ;
 PIN = !VSTATOE ;
 PIN = !RDBKOE ;
 PIN = CRDSEL ;
@@ -100,26 +98,28 @@ PINNODE = PS3 ;
 PINNODE = WPQ ;
 PINNODE = RDVALID ;
 PINNODE = RPQ ;
-PINNODE = VBLQ ;
-PINNODE = IRQEN ;
 PINNODE = CPH ;
 PINNODE = CRLD ;
 
 /* Combinational internals are left undeclared - CUPL substitutes them:
- * LDPDATH, LDIRQACK, LDCTRL, PDGO, VDSEL, VPORT, RDCKP, RDINV, WRCYC
- * RSTART, CARDBUSY, VBLRISE, IRQACK, CTICK
+ * LDPDATH, PDGO, VDSEL, VPORT, RDCKP, RDINV, WRCYC, RSTART, CARDBUSY
+ * CTICK
  */
 
 /* --- equations ---------------------------------------------------- */
-REGWR = IOSEL & A6 & A5 & WRCYC & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 ;
+REGWR = IOSEL & A6 & A5 & WRCYC & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !WALK ;
+REGWR.oe = !WALK ;
 RA0 = A0 ;
+RA0.oe = !WALK ;
 RA1 = A1 ;
+RA1.oe = !WALK ;
 RA2 = A2 ;
+RA2.oe = !WALK ;
 RA3 = A3 ;
+RA3.oe = !WALK ;
 RA4 = A4 ;
-LDPDATH = IOSEL & A6 & A5 & WRCYC & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 & A4 & !A3 & !A2 & !A1 & A0 ;
-LDIRQACK = IOSEL & A6 & A5 & WRCYC & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !A4 & A3 & A2 & !A1 & A0 ;
-LDCTRL = IOSEL & A6 & A5 & WRCYC & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !A4 & !A3 & !A2 & !A1 & !A0 ;
+RA4.oe = !WALK ;
+LDPDATH = IOSEL & A6 & A5 & WRCYC & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !WALK & A4 & !A3 & !A2 & !A1 & A0 ;
 PDQ.d = LDPDATH ;
 PDGO = LDPDATH & !PDQ ;
 PPEND.d = PDGO & !VBLANK
@@ -142,17 +142,19 @@ PIDXCE = PS3 ;
 VDSEL = IOSEL & A6 & A5 & !A4 & A3 & A2 & !A1 & !A0 ;
 VPORT = !IOSEL & !IOPGH & A19 & !A20
         # VDSEL ;
-WSTBV = VPORT & !RW & E & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 ;
+WSTBV = VPORT & !RW & E & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !WALK ;
 WPQ.d = WSTBV ;
 WSTART = WPQ & !WSTBV ;
-WSTB = IOSEL & A6 & A5 & WRCYC & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 ;
+WSTB = IOSEL & A6 & A5 & WRCYC & !SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !WALK ;
+WSTB.oe = !WALK ;
 RDCKP = GRD & !RDVALID ;
 RDVALID.d = RDCKP
             # RDVALID & !RDINV ;
 RDINV = WSTB
         # RETIRE
         # RSTART
-        # CSTEP ;
+        # CSTEP
+        # WALK ;
 WRCYC = !RW & E ;
 RPQ.d = VPORT & RW & E ;
 RSTART = RPQ & !E ;
@@ -162,25 +164,24 @@ RDCK = RDCKP ;
 PWCK = WSTBV
        # CTICK & !CPH ;
 RDOE = VPORT & RW ;
-RDREQ = !RDVALID & !E & !WPQ & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4
-        # !RDVALID & E & RW & VPORT & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 ;
+RDREQ = !RDVALID & !E & !WPQ & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !WALK
+        # !RDVALID & E & RW & VPORT & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !WALK ;
 CARDBUSY = SPANBUSY
            # CBUSY
            # RP1
            # RP2
            # RP3
-           # RP4 ;
+           # RP4
+           # WALK ;
 WAITN = 'b'1 ;
-WAITN.oe = VPORT & E & CARDBUSY # IOSEL & A6 & A5 & !RW & E & CARDBUSY # VPORT & E & RW & !RDVALID ;
-IRQPEND.d = VBLRISE
-            # IRQPEND & !IRQACK ;
-VBLQ.d = VBLANK ;
-VBLRISE = VBLANK & !VBLQ ;
-IRQACK = LDIRQACK ;
-IRQEN.d = LDCTRL & D6
-          # IRQEN & !LDCTRL ;
-IRQN = 'b'1 ;
-IRQN.oe = IRQPEND & IRQEN ;
+WAITN.oe = VPORT & E & CARDBUSY
+           # IOSEL & A6 & A5 & !RW & E & CARDBUSY
+           # VPORT & E & RW & !RDVALID
+           # IOSEL & A6 & A5 & RW & E & WALK & A4
+           # IOSEL & A6 & A5 & RW & E & WALK & !A3
+           # IOSEL & A6 & A5 & RW & E & WALK & !A2
+           # IOSEL & A6 & A5 & RW & E & WALK & A1
+           # IOSEL & A6 & A5 & RW & E & WALK & !A0 ;
 VSTATOE = IOSEL & A6 & A5 & !A4 & A3 & A2 & !A1 & A0 & RW & E ;
 RDBKOE = IOSEL & A6 & A5 & RW & E & A4
          # IOSEL & A6 & A5 & RW & E & !A3
@@ -209,22 +210,27 @@ RFA1 = IOSEL & A6 & A5 & E & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & A1
        # SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4
        # RP3
        # RP4 ;
+RFA1.oe = !WALK # RP1 # RP2 # RP3 # RP4 ;
 RFA2 = IOSEL & A6 & A5 & E & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & A2
        # !IOSEL & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4
        # !A6 & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4
        # !A5 & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4
        # !E & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4
        # SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 ;
+RFA2.oe = !WALK # RP1 # RP2 # RP3 # RP4 ;
 RFA3 = IOSEL & A6 & A5 & E & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & A3
        # RP1
        # RP2 ;
+RFA3.oe = !WALK # RP1 # RP2 # RP3 # RP4 ;
 RFA4 = IOSEL & A6 & A5 & E & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & A4
        # RP3
        # RP4 ;
+RFA4.oe = !WALK # RP1 # RP2 # RP3 # RP4 ;
 CPURF = IOSEL & A6 & A5 & E & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 ;
+CPURF.oe = !WALK ;
 
 /* One clock for every register: the card is one slot-walked datapath
  * referred to its own oscillator (3.1), so there is only one. */
-[PDQ,PPEND,PS0,PS1,PS2,PS3,WPQ,RDVALID,RPQ,IRQPEND,VBLQ].ck = CLK25 ;
-[IRQEN,CPH,CRLD,RP1,RP2,RP3,RP4].ck = CLK25 ;
+[PDQ,PPEND,PS0,PS1,PS2,PS3,WPQ,RDVALID,RPQ,CPH,CRLD,RP1,RP2].ck = CLK25 ;
+[RP3,RP4].ck = CLK25 ;
 

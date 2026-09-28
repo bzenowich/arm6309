@@ -18,8 +18,9 @@ the specific mistake to avoid.
 | `v3dot` | 121/128 | 63/64 | 5 |
 | `v3scan` | 112/128 | 63/64 | 3 |
 | `v3ptr` | 124/128 | 58/64 | 3 |
-| `v3host` | 58/128 | 64/64 | 0 |
-| `v3lane` (GAL22V10) | 10/10 macrocells | 10 inputs | — |
+| `v3host` | 52/128 | 61/64 | 0 |
+| `v3walk` | 111/128 | 55/64 | 10 |
+| `v3lane` (GAL22V10) | 10/10 macrocells | 12 inputs | — |
 
 ⛔ **`v3ptr` is where most of this queue lands, and it is the part that refuses.**
 Seven of its eight logic blocks sit at 39 of the fitter's 40 inputs and Nodes+FB is
@@ -29,8 +30,9 @@ else out. **Every entry below that touches it needs a fit before it is a plan**,
 CLAUDE.md's ninth trap applies — a refusal is not a result until a second file name
 refuses it too.
 
-⛔ **And the board is full**: 45 ICs, placing on 24 cm, which `plan.md` §13.5 says is
-the longest board there is. A new package has to displace one.
+⛔ **And the board is the longest there is**: 46 ICs on 30 cm since the sprite walker's
+fifth CPLD (§12.5, `plan.md` §13.5), and no card length is longer. A new package has to
+place on 30 cm or displace one.
 
 ---
 
@@ -52,6 +54,7 @@ Ordered by measured value against measured cost, not by how interesting it is.
 | 9a | ⭐⭐ **A ROOM, so the actor count is data** (§11.1) — **BUILT 2026-09-22** | the last 2.5 % and the 17-second loading screen with it. A scene that lets the player roam cannot bound what it has to draw; one that freezes, slides and re-places can, and the budget becomes a derivation against the top wall's thickness |
 | 9b | ⭐⭐ **A CAMERA THAT ROAMS A WORLD OF ANY SIZE** (`docs/scrolling.md`) — **BUILT 2026-09-23** | the other answer to §11.1's problem. The ring is 1024 × 512 and the view 640 × 480, so 384 × 512 of VRAM is never on screen **and it moves with the camera**: the tile bank lives there and rotates through it one 32-column strip at a time. A 4096 × 2048 world for 147,456 bytes off the card, 0.57 ms a frame at two pixels, and the gate is all 524,288 bytes of the ring against the invariant |
 | 10 | more hardware sprites (§6), a programmable key (§5) | ⛔ both blocked by pins and board space, and §7.1 removed the reason to want the first |
+| 11 | ⭐ **The Streaming Sprite Walker** (§12) — **BUILT 2026-09-28**, as `v3walk` (§12.5) | the CPU fills a table with a `TFM` and writes one command; the card runs restore, save and keyed draw for every slot at **~25 dots (≈1 µs) of overhead a copy** against ~87 µs of CPU setup a rectangle. ⭐ With the armed GO and the null shape (§12.6), `tilescroll`'s seven-actor walk starts on line 480 every frame and ends by 517, with 0 torn lines |
 
 ---
 
@@ -590,3 +593,158 @@ position* (1 means the pass fits in a frame; 2 means it does not), and *the
 partial rate by screen-row band* (clustered at the top = the overhang;
 clustered mid-screen = the pass is starting late). The second is what named
 finding 2.
+
+---
+
+## 12. ⭐ The Streaming Sprite Walker — 6309 `TFM` burst and implicit indexing
+
+**A proposal for high-throughput actor blitting without the save-behind CPU tax.**
+
+### 12.1 The Problem: The CPU Setup Bottleneck and VBLANK Overhang
+
+In `monster` and `zelda` (§7.1, §11), dynamic actors are rendered as keyed blits. Even though the hardware blitter moves 256 bytes in **63.2 µs** (4.05 MB/s), the 6309 CPU spends **~87 µs per rectangle** computing 19-bit VRAM addresses and writing 9 memory-mapped registers (`WPTR`, `CPTR`, `CWIDTH`, `CHEIGHT`, `CCTRL`). 
+
+For 10 actors doing 2 copies each (terrain restore + keyed draw):
+* The CPU spends $20 \times 87\text{ µs} = \mathbf{1.74\text{ ms}}$ just setting up blitter registers.
+* Because the CPU computes parameters between blits, the blitter constantly idles, stretching the pass to **~2.8 ms**.
+* Because 2.8 ms exceeds the **1.43 ms vertical blanking interval** (`VMODE 01`), the blit pass overruns by ~1.37 ms, causing **severe raster tearing across the top 40 scanlines** (§11).
+
+### 12.2 The Proposed Architecture: Streaming Walker on Spare Port `+$1D`
+
+The 6309's `TFM` (Transfer Memory) instruction moves blocks at **3 cycles per byte** (1.43 µs/byte at 2.0979 MHz). Instead of writing 9 registers per blit, the CPU streams a compact array of sprite descriptors to a single auto-advancing register port (using spare register `+$1D` from `plan.md` §10).
+
+#### 1. Zero-Cost Implicit Parameters & Pre-Loaded Dimensions
+* **Implicit Sprite Index:** The stream order defines the sprite slot ($0, 1, 2, \dots, N-1$). The CPU never transmits a sprite slot index.
+* **Pre-Loaded Sprite Dimensions (`CWIDTH` / `CHEIGHT` per slot):**
+  Rather than hardwiring 16 × 16 for all sprites (which prevents 8 × 8 bullets, 8 × 16 items, or 32 × 32 / 64 × 64 bosses), each of the card's sprite slots maintains its dimensions in a small pre-loaded configuration table on the card:
+  - Loaded once during scene/level initialization, or when an actor is spawned into a slot.
+  - Stays constant across frames while the actor is alive.
+  - **Zero per-frame bus cost:** The per-frame `TFM` stream transmits zero width/height bytes.
+* **Universal Keyed Transparency (`WMODE = 11`):**
+  For the actor draw pass, `WMODE` is **always assumed to be 11 (keyed transparency on index 0)**. In 2D game rendering, every dynamic sprite requires transparency to move across playfield backgrounds. True black pixels in the actor artwork are assigned a non-zero dark palette index (e.g. index 1 or 255), keeping index 0 strictly as the transparent mask.
+  - *Internal State Machine Note:* If the hardware walker also sequences the terrain restore pass, the restore copy is automatically executed as `WMODE = 00` (opaque overwrite) to restore all background pixels, immediately followed by the sprite draw in `WMODE = 11` (keyed transparency). Software never needs to send `WMODE`.
+
+#### 2. Full 640 × 480 Support: The 24-Bit (3-Byte) Packed Stream
+To support the full 640 × 480 resolution and the 1024 × 512 VRAM torus, coordinates require:
+* $X$: 10 bits ($0..1023$, covering 640 visible columns and 384 margin columns)
+* $Y$: 9 bits ($0..511$, covering 480 visible scanlines and the full 512-row torus)
+* $\text{ShapeID}$: 5 bits ($0..31$, providing 32 distinct 16 × 16 sprite frames)
+$$\text{Total Bits} = 10 + 9 + 5 = \mathbf{24\text{ bits = exactly 3 bytes!}}$$
+
+By organizing the 24 bits into a zero-waste 3-byte record, the CPU transmits full 640 × 480 coordinates and 32 shapes with zero unused bits:
+* **Byte 0:** $X[7:0]$ (lower 8 bits of $X$, byte-aligned — no shift needed)
+* **Byte 1:** $Y[7:0]$ (lower 8 bits of $Y$, byte-aligned — no shift needed)
+* **Byte 2:** Shared high bits and Shape ID:
+  * Bit 0: $Y[8]$ (the 9th bit of $Y$ — directly from $Y_{\text{high}}$ bit 0, no shift!)
+  * Bits 2..1: $X[9:8]$ (the 10th and 9th bits of $X$ — shifted left by 1)
+  * Bits 7..3: $\text{ShapeID}[4:0]$ (5 bits — shifted left by 3, or stored pre-shifted in the actor table)
+
+#### 3. Packing CPU Cost vs. Transfer Savings
+Does packing into 24 bits cost more CPU time than it saves in transfer bandwidth?
+* **The CPU Packing Arithmetic:**
+  In 6309 native mode, because Byte 0 ($X_{\text{low}}$) and Byte 1 ($Y_{\text{low}}$) are already byte-aligned, only Byte 2 requires bit combination:
+  ```assembly
+  ; Inline packing during actor update (X = actor struct, U = stream buffer)
+  LDD   ACT_X,X         ; 5 cycles: A = X_hi (0..3), B = X_lo
+  STB   ,U+             ; 5 cycles: Store Byte 0 (X_lo)
+  LDF   ACT_Y+1,X       ; 4 cycles: F = Y_lo
+  STF   ,U+             ; 5 cycles: Store Byte 1 (Y_lo)
+  LSLA                  ; 1 cycle:  A = X_hi << 1 (bits 2..1)
+  ORA   ACT_Y,X         ; 4 cycles: A |= Y_hi (bit 0, no shift needed!)
+  LDB   ACT_SHAPE,X     ; 4 cycles: B = Shape (0..31)
+  ASLB; ASLB; ASLB      ; 3 cycles: B = Shape << 3 (bits 7..3)
+  ADDR  B,A             ; 2 cycles: A = (Shape << 3) | (X_hi << 1) | Y_hi
+  STA   ,U+             ; 5 cycles: Store Byte 2
+  ```
+  Packing takes **~38 cycles $\approx$ 18.1 µs per sprite**.
+  For 10 sprites: $10 \times 18.1\text{ µs} = \mathbf{181\text{ µs}}$.
+* **Transfer Savings:**
+  Streaming 10 sprites at 3 bytes (30 bytes total) takes:
+  $$6 \text{ cycles setup} + (30 \text{ bytes} \times 3 \text{ cycles/byte}) = 96 \text{ cycles} \approx \mathbf{45.7\text{ µs}}$$
+  If unpacked (requiring a 4th byte for Shape, or 40 bytes total), transfer takes **60.0 µs**. 
+* **The Verdict:** The 24-bit packing costs only ~18 µs of CPU instructions per sprite (which runs naturally inline with game physics when $X$ and $Y$ are already loaded in registers), while achieving:
+  1. Full 640 × 480 / 512-row vertical range without dropping the upper screen lines.
+  2. 32 distinct sprite frames (ample for an 8-frame hero walk cycle plus three 8-frame enemy types).
+  3. A 30-byte stream that transmits in **45.7 µs** via `TFM`.
+
+#### 4. Hardware Unpacking: Pure Bus Wiring
+The hardware walker receives the 3-byte stream into a 3-byte FIFO / shift buffer. Because the VRAM ring has a 1024-byte pitch ($2^{10}$), converting the unpacked bits into the 19-bit VRAM destination address and 19-bit sprite bank source address requires **zero adders, multipliers, or shift registers in silicon**:
+$$\text{WPTR}[18:10] = \{ \text{Byte2}[0], \text{Byte1}[7:0] \} \quad (Y\text{ address, 9 bits})$$
+$$\text{WPTR}[9:0] = \{ \text{Byte2}[2:1], \text{Byte0}[7:0] \} \quad (X\text{ address, 10 bits})$$
+$$\text{CPTR}[15:8] = \text{Byte2}[7:3] \quad (\text{Shape offset in 256-byte steps, 5 bits})$$
+$$\text{CPTR}[18:16] = \text{SPRITE\_BANK}[2:0]$$
+The unpacking is **100% hardwired pin routing** between the input latches and the address bus.
+
+### 12.3 What it Buys: Measured Frame Budget & Tearing Elimination
+
+| Metric | Current Register Pumping | 6309 `TFM` Streaming Walker |
+|---|---|---|
+| **CPU Time (10 sprites, 20 copies)** | **1,740 µs** (~87 µs / rectangle) | **~179 µs** (119 µs actor physics + 60 µs `TFM`) |
+| **Total Blitter Pass Duration** | **~2,800 µs** (stalled between CPU writes) | **1,264 µs** (blitter runs uninterrupted at 4.05 MB/s) |
+| **Relation to VBLANK (1,430 µs)** | ⛔ **Overhangs by 1,370 µs** (tears top 40 scanlines) | ⭐ **Finishes inside VBLANK** (1.26 ms < 1.43 ms) |
+| **Top-of-Screen Tearing** | ⛔ Present on rows 0–40 | ⭐ **100% eliminated** |
+| **Net CPU Frame Headroom Gained** | Baseline | **+1.56 ms per frame** (~11% of the entire frame!) |
+
+### 12.4 Silicon Feasibility on `video3`
+
+* **Registers:** Uses spare registers `+$1D` (stream FIFO port) and `+$1E` (sprite count trigger).
+* **State Machine:** A 4-state sequencer (`IDLE`, `LOAD_SRC`, `LOAD_DST`, `WAIT_BLIT`) requiring ~16–20 macrocells.
+* **CPLD Partitioning:**
+  * `v3host` has **70 macrocells spare**, but **0 pins spare** (64/64).
+  * `v3ptr` has pins, but is at **124/128 macrocells** (only 4 spare).
+  * *Resolution:* The sequencer and stream register reside in `v3host`, decoding writes to `+$1D`. It reuses existing internal bus control lines (`LANE`, `DIR`, `PWOE`) to trigger `v3ptr`'s `CCTRL` `GO` strobe, requiring zero new external pins.
+
+### 12.5 ⭐ BUILT 2026-09-28 — `v3walk`, and where it departs from §12.1–12.4
+
+§12.1–12.4 are the proposal as written; `plan.md` §6.4 is the design as built, and
+`hardware/video3/logic/v3walk.cpld.ts`'s header is its authoritative description. What
+held: the 24-bit stream record is §12.2's exactly, per-slot dimensions are pre-loaded and
+cost no per-frame bytes, the draw is keyed on index 0, and a record becomes a pointer by
+lane wiring with **no adder** (§12.2 item 4). What moved, and why:
+
+| | proposed | built | why |
+|---|---|---|---|
+| **where the stream goes** | a 3-byte FIFO behind `+$1D`, one frame's records walked as they arrive | ⭐ **tables in the register file**: `SWCMD` at `+$1E` SELECTs a table and first slot, and a `TFM` to `SWDAT` at `+$1D` writes consecutive three-byte rows | the register file is a 32 KB part of which the CPU registers use 32 bytes. `v3walk` drives `RFA13..RFA5` as a page `{table, slot, byte}`, so the dimensions, the save pointers, 32 shape pointers and **two banks** of stream records all live there for the price of nine address pins |
+| **the restore** | a terrain restore — the background redrawn from a source the CPU names | ⭐ **save-behind**: per slot, RESTORE (last frame's save rectangle back over last frame's position, read from the other bank), SAVE (the background under this frame's position), DRAW (keyed) | the walker does all three itself, so the game needs no terrain source for its actors at all; two banks mean last frame's positions survive this frame's stream |
+| **overlap** | not addressed | ⭐ **LIFO**: the restore pass runs slots *n*−1 down to 0, then save and draw 0 up to *n*−1 | undoing the draws in reverse leaves the terrain exact however actors overlap. `v3card_tb` checks it with overlapping positions |
+| **the part** | the sequencer on `v3host` (§12.4), reusing its bus controls, "zero new external pins" | ⭐ **a fifth `ATF1508AS`, `v3walk`** | `v3host` was at 64/64 I/O, and the walker needs `IDB` both ways (8 in, 8 out), the page (9 out) and the broadcast. ⭐ **The VBL interrupt moved to `v3walk`** — `IRQPEND`, `IRQEN` (`CTRL` b6), the ack and the open-drain `/IRQ` — which freed the `v3host` pin that `WALK` takes |
+| **how it loads the engine** | trigger `v3ptr`'s `GO` over `LANE`, `DIR`, `PWOE` | ⭐ **it masquerades as the CPU**: while `WALK` it drives `REGWR`, `RA4..RA0`, `WSTB`, `CPURF` and `RFA4..RFA1`, and `v3host` tri-states them | every part already takes its registers off the broadcast, so `v3ptr` (124/128 cells), `v3dot` and the column reload cannot tell a walker load from a store — and `v3ptr` is not touched. A copy is three groups of six dots (`WPTR`, `CPTR`, then `CWIDTH`/`CHEIGHT`/`CCTRL`, whose write is `GO`), then a wait for `!CBUSY` and the reload walk |
+| **keying** | `WMODE` 11 for the draw, 00 for the restore | ⭐ **`WKEY`**, a new `v3lane` input (pin 13): the skip is `KEY & GCPY & (WM1 & WM0 # WKEY)` | the restores and saves must be opaque in the same walk, so the key is armed per copy rather than per mode |
+| **slots and shapes** | 16 × 16 sprites, a slot per stream position | **16 slots, 32 shapes**, each slot its own `CWIDTH`/`CHEIGHT`/`CCTRL` | different-sized sprites in one walk; `v3card_tb` runs 8 × 6, 12 × 4 and 5 × 7 together, one crossing column 1023 |
+
+⭐ **Measured: ~25 dots, about 1 µs, of walker overhead a copy** (`v3card_tb`'s `walk`
+group) — against §12.1's ~87 µs of CPU setup a rectangle. ⚠ §12.3's frame budget is
+arithmetic; what a program measures is §12.6's.
+
+⚠ **The contract, which the host emulator enforces**: `WMODE` is not 11 while a walk runs
+(the key would catch the restores and saves too), and `WADV` b2 is clear. During a walk
+`v3host` holds `/WAIT` on every card access except a `VSTAT` read, and `VSTAT` b2 is `WALK`
+— polling it is how software waits for the walk.
+
+**The fits** (`video3/logic/cpld/*.fit`): `v3walk` **111/128 cells, 55/64 I/O, 63 flip-flops,
+10 cascades** — every one a single hop, and with §12.6's armed GO and null shape in it; `v3host` **52/128 cells, 61/64 I/O, 0 cascades**.
+`v3dot`, `v3scan` and `v3ptr` did not change.
+
+**The board**: 46 ICs, and the fifth PLCC-84 does not place on 24 cm — five packages fall
+off — so the card is **30 cm, 178.5 of 270.3 cm², 66 %**, and 300 mm joined the card
+lengths for it (`plan.md` §13.5).
+
+### 12.6 ⭐ BUILT 2026-09-28 — the armed GO and the null shape, and a program on them
+
+Two follow-ons, in `v3walk` itself (`plan.md` §6.4 is the design):
+
+| | what | what it buys |
+|---|---|---|
+| **the armed GO** | `SELECT` of table 7 arms the next GO; the GO is latched and **starts itself at the next rise of `VBLANK`**, on a falling `E`. Until then no `SWCMD`/`SWDAT` write, no copy, span or `VDATA` access; every other register is free and not held | the CPU need not be in the blank. **Measured 4 dots** from the edge to the walk in `v3card_tb` |
+| **shape 31 = no shape** | at `J1` of a record's reformat group, `NUL` steps the walker as a finished copy would | a hidden actor costs **3 dots** in the restore pass and **12** in save-and-draw, not three copies, and keeps its slot |
+
+Refitted at **111/128 cells, 55/64 I/O, 63 flip-flops, 10 cascades** (was 113, 54, 59, 24):
+one more input (`E`), four more registers, and the command load folded into one comb.
+
+**`tilescroll` on them** (`software/tilescroll/docs/scrolling.md` §8,
+`walker.md`): the frame's CPU-only work (the camera, the creatures' logic) runs under the
+walk, the records are built in RAM and sent with one `TFM`, and an actor off screen is a
+null record. Its default cast of seven — sizes 8 × 8 to 24 × 16 — **starts every one of
+1,201 walks on line 480** and ends by line 504 at the median and 517 at the worst, with
+**0 torn lines**; thirteen creatures overrun in half the frames and tear 82 lines in 18
+frames, all in lines 0–13.

@@ -61,7 +61,8 @@ module video3_card (
     output wire        IDB_FIGHT,  // two drivers on the internal data bus
     output wire        IDB_FLOAT,  // IDB sampled with nothing driving it
     output wire        LANE_FLOAT, // a byte written from a lane nothing drives
-    output wire        RANK_FIGHT  // a chip's two fetch ranks both on, or neither
+    output wire        RANK_FIGHT, // a chip's two fetch ranks both on, or neither
+    output wire        BCAST_FIGHT // a broadcast net with v3host AND v3walk on it, or neither
 );
 
   wire D0, D1, D2, D3, D4, D5, D6, D7;
@@ -78,24 +79,33 @@ module video3_card (
        LDPIDXH, LDPIDXL, LOE0, LOE1, LOE2, LOE3, LUTWE, MODE0, MODE1, MRQ, MUXSEL0,
        MUXSEL1, OEA0, OEA1, OEA2, OEB0, OEB1, OEB2, OMR, PALTURN, PBUSY, PIDXCE, PIDXOE,
        PIXOE, PWCK, PWOE, RA0, RA1, RA2, RA3, RA4, RCPY, RDBKOE, RDCK, RDOE, RDREQ, REGWR,
-       RETIRE, RFA0, RFA1, RFA2, RFA3, RFA4, RFOE, ROWADV, RP1, RP2, RP3, RP4, SPANBUSY,
-       SPARE, SPRA0, SPRA0_OE, SPRA1, SPRA1_OE, SPRLD, SPRSH, SQ0, SQ1, UB0, UB1, VBLANK,
-       VSTATOE, VWE, WAITN, WAITN_OE, WM0, WM1, WROWADV, WSTART, WSTB, WSTBV, WSTEP,
-       dot_FBA2, dot_FBA2_OE, dot_FBA3, dot_FBA3_OE, dot_FBA4, dot_FBA4_OE, dot_FBA5,
-       dot_FBA5_OE, ptr_FBA10, ptr_FBA10_OE, ptr_FBA11, ptr_FBA11_OE, ptr_FBA12,
-       ptr_FBA12_OE, ptr_FBA13, ptr_FBA13_OE, ptr_FBA14, ptr_FBA14_OE, ptr_FBA15,
-       ptr_FBA15_OE, ptr_FBA16, ptr_FBA16_OE, ptr_FBA17, ptr_FBA17_OE, ptr_FBA18,
-       ptr_FBA18_OE, ptr_FBA2, ptr_FBA2_OE, ptr_FBA3, ptr_FBA3_OE, ptr_FBA4, ptr_FBA4_OE,
-       ptr_FBA5, ptr_FBA5_OE, ptr_FBA6, ptr_FBA6_OE, ptr_FBA7, ptr_FBA7_OE, ptr_FBA8,
-       ptr_FBA8_OE, ptr_FBA9, ptr_FBA9_OE, scan_FBA10, scan_FBA10_OE, scan_FBA11,
+       RETIRE, RFA0, RFA10, RFA11, RFA12, RFA13, RFA5, RFA6, RFA7, RFA8, RFA9, RFOE,
+       ROWADV, RP1, RP2, RP3, RP4, SPANBUSY, SPARE, SPRA0, SPRA0_OE, SPRA1, SPRA1_OE,
+       SPRLD, SPRSH, SQ0, SQ1, SRA0, SRA1, SRA2, SRA3, SRA4, SREGWR, UB0, UB1, VBLANK,
+       VSTATOE, VWE, WAITN, WAITN_OE, WALK, WD0, WD0_OE, WD1, WD1_OE, WD2, WD2_OE, WD3,
+       WD3_OE, WD4, WD4_OE, WD5, WD5_OE, WD6, WD6_OE, WD7, WD7_OE, WKEY, WM0, WM1, WROWADV,
+       WSTART, WSTBV, WSTEP, dot_FBA2, dot_FBA2_OE, dot_FBA3, dot_FBA3_OE, dot_FBA4,
+       dot_FBA4_OE, dot_FBA5, dot_FBA5_OE, host_CPURF, host_CPURF_OE, host_RA0,
+       host_RA0_OE, host_RA1, host_RA1_OE, host_RA2, host_RA2_OE, host_RA3, host_RA3_OE,
+       host_RA4, host_RA4_OE, host_REGWR, host_REGWR_OE, host_RFA1, host_RFA1_OE,
+       host_RFA2, host_RFA2_OE, host_RFA3, host_RFA3_OE, host_RFA4, host_RFA4_OE,
+       host_WSTB, host_WSTB_OE, ptr_FBA10, ptr_FBA10_OE, ptr_FBA11, ptr_FBA11_OE,
+       ptr_FBA12, ptr_FBA12_OE, ptr_FBA13, ptr_FBA13_OE, ptr_FBA14, ptr_FBA14_OE,
+       ptr_FBA15, ptr_FBA15_OE, ptr_FBA16, ptr_FBA16_OE, ptr_FBA17, ptr_FBA17_OE,
+       ptr_FBA18, ptr_FBA18_OE, ptr_FBA2, ptr_FBA2_OE, ptr_FBA3, ptr_FBA3_OE, ptr_FBA4,
+       ptr_FBA4_OE, ptr_FBA5, ptr_FBA5_OE, ptr_FBA6, ptr_FBA6_OE, ptr_FBA7, ptr_FBA7_OE,
+       ptr_FBA8, ptr_FBA8_OE, ptr_FBA9, ptr_FBA9_OE, scan_FBA10, scan_FBA10_OE, scan_FBA11,
        scan_FBA11_OE, scan_FBA12, scan_FBA12_OE, scan_FBA13, scan_FBA13_OE, scan_FBA14,
        scan_FBA14_OE, scan_FBA15, scan_FBA15_OE, scan_FBA16, scan_FBA16_OE, scan_FBA17,
        scan_FBA17_OE, scan_FBA18, scan_FBA18_OE, scan_FBA2, scan_FBA2_OE, scan_FBA3,
        scan_FBA3_OE, scan_FBA4, scan_FBA4_OE, scan_FBA5, scan_FBA5_OE, scan_FBA6,
        scan_FBA6_OE, scan_FBA7, scan_FBA7_OE, scan_FBA8, scan_FBA8_OE, scan_FBA9,
-       scan_FBA9_OE;
+       scan_FBA9_OE, walk_CPURF, walk_CPURF_OE, walk_RA0, walk_RA0_OE, walk_RA1,
+       walk_RA1_OE, walk_RA2, walk_RA2_OE, walk_RA3, walk_RA3_OE, walk_RA4, walk_RA4_OE,
+       walk_REGWR, walk_REGWR_OE, walk_RFA1, walk_RFA1_OE, walk_RFA2, walk_RFA2_OE,
+       walk_RFA3, walk_RFA3_OE, walk_RFA4, walk_RFA4_OE, walk_WSTB, walk_WSTB_OE;
 
-  // ---- the five parts: generated port maps --------------------------------
+  // ---- the six parts: generated port maps ---------------------------------
   v3dot u_dot (
     .CLK25(CLK25), .RESET(RESET), .D0(D0), .D1(D1), .D2(D2), .D3(D3), .D4(D4), .D5(D5),
     .D6(D6), .D7(D7), .REGWR(REGWR), .RA0(RA0), .RA1(RA1), .RA2(RA2), .RA3(RA3), .RA4(RA4),
@@ -157,27 +167,71 @@ module video3_card (
     .CLK25(CLK25), .RESET(RESET), .IOSEL(IOSEL), .IOPGH(IOPGH), .A0(A0), .A1(A1), .A2(A2),
     .A3(A3), .A4(A4), .A5(A5), .A6(A6), .A19(A19), .A20(A20), .E(E), .RW(RW),
     .SPANBUSY(SPANBUSY), .CBUSY(CBUSY), .VBLANK(VBLANK), .HLOAD(HLOAD), .RETIRE(RETIRE),
-    .GRD(GRD), .D6(D6), .CEOR(CEOR), .CHLAST(CHLAST), .GCPY(GCPY), .DP0(DP0),
-    .WROWADV(WROWADV), .REGWR(REGWR), .RA0(RA0), .RA1(RA1), .RA2(RA2), .RA3(RA3), .RA4(RA4),
-    .PALTURN(PALTURN), .PBUSY(PBUSY), .LUTWE(LUTWE), .PIDXCE(PIDXCE), .WSTBV(WSTBV),
-    .WSTART(WSTART), .WSTB(WSTB), .WSTEP(WSTEP), .RDCK(RDCK), .PWCK(PWCK), .RDOE(RDOE),
-    .RDREQ(RDREQ), .WAITN(WAITN), .WAITN_OE(WAITN_OE), .IRQPEND(IRQPEND), .IRQN(IRQN),
-    .IRQN_OE(IRQN_OE), .VSTATOE(VSTATOE), .RDBKOE(RDBKOE), .CRDSEL(CRDSEL), .DIR(DIR),
+    .GRD(GRD), .WALK(WALK), .CEOR(CEOR), .CHLAST(CHLAST), .GCPY(GCPY), .DP0(DP0),
+    .WROWADV(WROWADV), .REGWR(host_REGWR), .REGWR_OE(host_REGWR_OE), .RA0(host_RA0),
+    .RA0_OE(host_RA0_OE), .RA1(host_RA1), .RA1_OE(host_RA1_OE), .RA2(host_RA2),
+    .RA2_OE(host_RA2_OE), .RA3(host_RA3), .RA3_OE(host_RA3_OE), .RA4(host_RA4),
+    .RA4_OE(host_RA4_OE), .PALTURN(PALTURN), .PBUSY(PBUSY), .LUTWE(LUTWE), .PIDXCE(PIDXCE),
+    .WSTBV(WSTBV), .WSTART(WSTART), .WSTB(host_WSTB), .WSTB_OE(host_WSTB_OE), .WSTEP(WSTEP),
+    .RDCK(RDCK), .PWCK(PWCK), .RDOE(RDOE), .RDREQ(RDREQ), .WAITN(WAITN),
+    .WAITN_OE(WAITN_OE), .VSTATOE(VSTATOE), .RDBKOE(RDBKOE), .CRDSEL(CRDSEL), .DIR(DIR),
     .CSTEP(CSTEP), .CROWADV(CROWADV), .CWLOAD(CWLOAD), .CDONE(CDONE), .RCPY(RCPY),
-    .RP1(RP1), .RP2(RP2), .RP3(RP3), .RP4(RP4), .RFA1(RFA1), .RFA2(RFA2), .RFA3(RFA3),
-    .RFA4(RFA4), .CPURF(CPURF)
+    .RP1(RP1), .RP2(RP2), .RP3(RP3), .RP4(RP4), .RFA1(host_RFA1), .RFA1_OE(host_RFA1_OE),
+    .RFA2(host_RFA2), .RFA2_OE(host_RFA2_OE), .RFA3(host_RFA3), .RFA3_OE(host_RFA3_OE),
+    .RFA4(host_RFA4), .RFA4_OE(host_RFA4_OE), .CPURF(host_CPURF), .CPURF_OE(host_CPURF_OE)
+  );
+
+  v3walk u_walk (
+    .CLK25(CLK25), .RESET(RESET), .SREGWR(SREGWR), .SRA0(SRA0), .SRA1(SRA1), .SRA2(SRA2),
+    .SRA3(SRA3), .SRA4(SRA4), .D0(D0), .D1(D1), .D2(D2), .D3(D3), .D4(D4), .D5(D5), .D6(D6),
+    .D7(D7), .CBUSY(CBUSY), .RP1(RP1), .RP2(RP2), .RP3(RP3), .RP4(RP4), .VBLANK(VBLANK),
+    .E(E), .IRQPEND(IRQPEND), .IRQN(IRQN), .IRQN_OE(IRQN_OE), .WALK(WALK),
+    .REGWR(walk_REGWR), .REGWR_OE(walk_REGWR_OE), .RA0(walk_RA0), .RA0_OE(walk_RA0_OE),
+    .RA1(walk_RA1), .RA1_OE(walk_RA1_OE), .RA2(walk_RA2), .RA2_OE(walk_RA2_OE),
+    .RA3(walk_RA3), .RA3_OE(walk_RA3_OE), .RA4(walk_RA4), .RA4_OE(walk_RA4_OE),
+    .WSTB(walk_WSTB), .WSTB_OE(walk_WSTB_OE), .CPURF(walk_CPURF), .CPURF_OE(walk_CPURF_OE),
+    .RFA1(walk_RFA1), .RFA1_OE(walk_RFA1_OE), .RFA2(walk_RFA2), .RFA2_OE(walk_RFA2_OE),
+    .RFA3(walk_RFA3), .RFA3_OE(walk_RFA3_OE), .RFA4(walk_RFA4), .RFA4_OE(walk_RFA4_OE),
+    .RFA5(RFA5), .RFA6(RFA6), .RFA7(RFA7), .RFA8(RFA8), .RFA9(RFA9), .RFA10(RFA10),
+    .RFA11(RFA11), .RFA12(RFA12), .RFA13(RFA13), .WD0(WD0), .WD0_OE(WD0_OE), .WD1(WD1),
+    .WD1_OE(WD1_OE), .WD2(WD2), .WD2_OE(WD2_OE), .WD3(WD3), .WD3_OE(WD3_OE), .WD4(WD4),
+    .WD4_OE(WD4_OE), .WD5(WD5), .WD5_OE(WD5_OE), .WD6(WD6), .WD6_OE(WD6_OE), .WD7(WD7),
+    .WD7_OE(WD7_OE), .WKEY(WKEY)
   );
 
   v3lane u_lane (
     .LANE0(LANE0), .LANE1(LANE1), .CRDSEL(CRDSEL), .GRD(GRD), .GCPY(GCPY), .GSPN(GSPN),
-    .WM0(WM0), .WM1(WM1), .VWE(VWE), .WSTBV(WSTBV), .KEY(KEY), .LOE0(LOE0), .LOE1(LOE1),
-    .LOE2(LOE2), .LOE3(LOE3), .LB0(LB0), .UB0(UB0), .LB1(LB1), .UB1(UB1), .PWOE(PWOE),
-    .RFOE(RFOE)
+    .WM0(WM0), .WM1(WM1), .VWE(VWE), .WSTBV(WSTBV), .KEY(KEY), .WKEY(WKEY), .LOE0(LOE0),
+    .LOE1(LOE1), .LOE2(LOE2), .LOE3(LOE3), .LB0(LB0), .UB0(UB0), .LB1(LB1), .UB1(UB1),
+    .PWOE(PWOE), .RFOE(RFOE)
   );
 
   // ======================================================================
   // THE BOARD
   // ======================================================================
+
+  // ---- the broadcast: two owners, one at a time (plan §6.4) ----------------
+  // REGWR, RA4..RA0, WSTB and CPURF are v3host's until WALK and v3walk's while
+  // it; RFA4..RFA1 are v3host's too while its column reload walk (RP1..RP4)
+  // runs. Every consumer reads the resolved net, and v3walk watches its own
+  // outputs on SREGWR and SRA4..SRA0. Both drivers on a bit, or neither, is a
+  // fight: these nets have no pull, so a float is as wrong as a collision.
+  wire [11:0] bc_host = {host_REGWR, host_RA4, host_RA3, host_RA2, host_RA1, host_RA0,
+                         host_WSTB, host_CPURF, host_RFA4, host_RFA3, host_RFA2, host_RFA1};
+  wire [11:0] bc_hoe  = {host_REGWR_OE, host_RA4_OE, host_RA3_OE, host_RA2_OE, host_RA1_OE,
+                         host_RA0_OE, host_WSTB_OE, host_CPURF_OE, host_RFA4_OE,
+                         host_RFA3_OE, host_RFA2_OE, host_RFA1_OE};
+  wire [11:0] bc_walk = {walk_REGWR, walk_RA4, walk_RA3, walk_RA2, walk_RA1, walk_RA0,
+                         walk_WSTB, walk_CPURF, walk_RFA4, walk_RFA3, walk_RFA2, walk_RFA1};
+  wire [11:0] bc_woe  = {walk_REGWR_OE, walk_RA4_OE, walk_RA3_OE, walk_RA2_OE, walk_RA1_OE,
+                         walk_RA0_OE, walk_WSTB_OE, walk_CPURF_OE, walk_RFA4_OE,
+                         walk_RFA3_OE, walk_RFA2_OE, walk_RFA1_OE};
+  wire WSTB, RFA1, RFA2, RFA3, RFA4;
+  assign {REGWR, RA4, RA3, RA2, RA1, RA0, WSTB, CPURF, RFA4, RFA3, RFA2, RFA1} =
+         (bc_hoe & bc_host) | (bc_woe & bc_walk);
+  assign BCAST_FIGHT = |((bc_hoe & bc_woe) | (~bc_hoe & ~bc_woe));
+  assign SREGWR = REGWR;
+  assign {SRA4, SRA3, SRA2, SRA1, SRA0} = {RA4, RA3, RA2, RA1, RA0};
 
   // ---- the framebuffer's address: three parts, per-bit enables --------------
   // v3scan (the display half, the map and the sprite's base), v3ptr (a byte
@@ -218,6 +272,8 @@ module video3_card (
   //   the register file  RFOE (v3lane), and never while WSTB writes it
   //   the posted-write '574's Q   PWOE (v3lane)
   //   a lane '245     its LOE with DIR low (v3host): the prefetch, the copy's read
+  //   v3walk          WD7..WD0 on a walker write dot, when WSTB has the file's
+  //                   outputs off (plan §6.4)
   // The CPLDs' D inputs, the file's I/O, vread's D, the '574's D and the
   // palette latches all read it.
   wire [3:0] loe = {LOE3, LOE2, LOE1, LOE0};
@@ -226,10 +282,14 @@ module video3_card (
   wire drv_rf   = RFOE & ~WSTB;
   wire drv_pw   = PWOE;
   wire drv_lane = (|loe) & ~DIR;
-  wire [2:0] n_idb = {2'd0, drv_host} + {2'd0, drv_rf} + {2'd0, drv_pw} + {2'd0, drv_lane};
+  wire [7:0] wd    = {WD7, WD6, WD5, WD4, WD3, WD2, WD1, WD0};
+  wire [7:0] wd_oe = {WD7_OE, WD6_OE, WD5_OE, WD4_OE, WD3_OE, WD2_OE, WD1_OE, WD0_OE};
+  wire drv_walk = |wd_oe;
+  wire [2:0] n_idb = {2'd0, drv_host} + {2'd0, drv_rf} + {2'd0, drv_pw} + {2'd0, drv_lane}
+                   + {2'd0, drv_walk};
   wire [7:0] rf_out, pw_q;
   wire [7:0] IDB = drv_host ? DIN : drv_pw ? pw_q : drv_lane ? lane_rd[lane_n]
-                 : drv_rf ? rf_out : 8'h00;
+                 : drv_walk ? wd : drv_rf ? rf_out : 8'h00;
   assign {D7, D6, D5, D4, D3, D2, D1, D0} = IDB;
   assign IDB_FIGHT = n_idb > 3'd1;
   // A float is only a defect when something SAMPLES the bus: the file's write,
@@ -249,11 +309,13 @@ module video3_card (
   // has room for exactly one of them (check:place).
   assign KEY = ~|IDB;
 
-  // ---- the register file: 32 bytes of the 32K x 8 (plan §5) --------------
-  // /WE is WSTB; the address is RFA - bit 0 is v3ptr's, because §5 makes it
-  // the span-mask bit, and bits 4..1 are v3host's with the reload walk.
-  wire [4:0] rfa = {RFA4, RFA3, RFA2, RFA1, RFA0};
-  reg  [7:0] rf [0:31];
+  // ---- the register file: the 32K x 8 (plan §5, §6.4) --------------------
+  // /WE is WSTB; RFA4..RFA0 is the offset - bit 0 is v3ptr's, because §5 makes
+  // it the span-mask bit, and bits 4..1 are the broadcast's owner's. RFA13..RFA5
+  // is v3walk's PAGE, zero except on a table access; RFA14 is tied low.
+  wire [14:0] rfa = {1'b0, RFA13, RFA12, RFA11, RFA10, RFA9, RFA8, RFA7, RFA6, RFA5,
+                     RFA4, RFA3, RFA2, RFA1, RFA0};
+  reg  [7:0] rf [0:32767];
   assign rf_out = rf[rfa];
   always @(posedge CLK25) if (WSTB) rf[rfa] <= IDB;
 
@@ -375,7 +437,7 @@ module video3_card (
   assign RGB = OMR ? rgb_q : 16'h0000;
 
   // ---- D7..D0: the host '245 outbound, the VSTAT '244 and vread ------------
-  wire [7:0] vstat = {SPANBUSY, VBLANK, HBLANK, CBUSY, 2'b00, PBUSY, IRQPEND};
+  wire [7:0] vstat = {SPANBUSY, VBLANK, HBLANK, CBUSY, 1'b0, WALK, PBUSY, IRQPEND};
   wire drv_rdbk = RDBKOE & RW;
   assign DOE  = drv_rdbk | VSTATOE | RDOE;
   assign DOUT = VSTATOE ? vstat : RDOE ? vread : IDB;
@@ -399,7 +461,7 @@ module video3_card (
     peek_lut = lut[a[15:0]];
   endfunction
   function automatic logic [7:0] peek_rf(input int a);
-    peek_rf = rf[a[4:0]];
+    peek_rf = rf[a[14:0]];
   endfunction
   // verilator lint_on UNUSEDSIGNAL
 

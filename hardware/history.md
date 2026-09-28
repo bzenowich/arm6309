@@ -8,6 +8,22 @@ kept verbatim or lightly trimmed, because the archive is the record.
 
 ---
 
+## `README.md` — the card format gained 300 mm (2026-09-28)
+
+The Card format row said:
+
+> | **Card format** | **100 mm high × 120, 180 or 240 mm long** — Apple II proportions, per card | …
+
+`video3`'s fifth `ATF1508AS` (`v3walk`, the sprite walker — `video3/docs/plan.md` §6.4)
+made the card 46 ICs, which the packer refuses on 240 mm: the four sprite `'165`s and the
+`'4078` fall off, though the courtyard (178.5 cm²) is inside the 210.3 cm² placeable. So
+`tools/place/parts.ts` and `tools/lib/Card.tsx` gained a fourth length, 300 mm, and
+`place.check.ts` asserts video3 takes it as its shortest. Until that day `video3/docs/plan.md`
+§13.5 had said *"the ceiling is four PLCC-84s, and 240 mm is the longest board there is"*;
+its record is `video3/docs/history.md`, 2026-09-28.
+
+---
+
 ## `vctrl` 53 → 56 of 64 I/O — the list writes `HSCROLL[1:0]` on both parts (2026-09-13)
 
 `hardware/archive/video/docs/graphics.md` §19 item 49: a display-list `MOVE` to `HSCROLL` wrote `vsup`'s copy

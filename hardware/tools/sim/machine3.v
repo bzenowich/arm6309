@@ -112,6 +112,7 @@ module machine3 #(
     output wire        IDB_FLOAT,
     output wire        LANE_FLOAT,
     output wire        RANK_FIGHT,
+    output wire        BCAST_FIGHT,
 
     // ---- the audio card, when AUDIO: what its four AD7528 pairs are given
     output wire [7:0]  DACSAMP0, DACSAMP1, DACSAMP2, DACSAMP3,
@@ -182,7 +183,7 @@ module machine3 #(
       .RGB(RGB), .HSYNC(HSYNC), .VSYNC(VSYNC), .BLANK(BLANK),
       .FBA_FIGHT(FBA_FIGHT), .DBUS_FIGHT(DBUS_FIGHT), .LUTA_FIGHT(LUTA_FIGHT),
       .IDB_FIGHT(IDB_FIGHT), .IDB_FLOAT(IDB_FLOAT), .LANE_FLOAT(LANE_FLOAT),
-      .RANK_FIGHT(RANK_FIGHT)
+      .RANK_FIGHT(RANK_FIGHT), .BCAST_FIGHT(BCAST_FIGHT)
   );
 
   // ---- the serial card's UART ----------------------------------------------

@@ -291,7 +291,8 @@ PDHW = WPDH
 PPEND.d = WPDH
           # PPEND & !PS0 ;
 PS0.d = LWPDH
-        # PPEND & !WPDH & HLOAD & !PS0 & !PS1 & !PS2 & !PS3 ;
+        # PPEND & !WPDH & HLOAD & !PS0 & !PS1 & !PS2 & !PS3
+        # PPEND & !WPDH & VBLANK & !PS0 & !PS1 & !PS2 & !PS3 ;
 PS1.d = PS0 & !PDHW ;
 PS2.d = PS1 ;
 PS3.d = PS2 ;

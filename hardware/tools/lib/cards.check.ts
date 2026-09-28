@@ -89,8 +89,8 @@ for (const f of cardFiles) {
    * carries the packing that justifies the number and place.check.ts asserts
    * it is the shortest that works. */
   const len = src.match(/length=\{(\d+)\}/)
-  check(len !== null && [120, 180, 240].includes(Number(len[1])),
-    `${f} declares a 12, 18 or 24 cm length`, len ? len[1] : "none")
+  check(len !== null && [120, 180, 240, 300].includes(Number(len[1])),
+    `${f} declares a 12, 18, 24 or 30 cm length`, len ? len[1] : "none")
 }
 const windowCards = new Set(WINDOWS.filter((w) => w.status !== "free").map((w) => w.card))
 for (const f of cardFiles) {

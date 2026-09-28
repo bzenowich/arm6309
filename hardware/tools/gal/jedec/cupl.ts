@@ -274,7 +274,15 @@ export const toCupl = (m: Merged): string => {
     } else {
       out.push(`${lhs} = ${c.terms.join("\n${pad}# ".replace("${pad}", " ".repeat(lhs.length + 3)))} ;`)
     }
-    if (c.oe) out.push(`${c.name}.oe = ${c.oe} ;`)
+    /* ⚠ CUPL's lexer refuses a line past 256 characters ("line exceeds maximum
+     * length"), and an enable can be a whole sum - v3host's WAITN is one since
+     * 2026-09-28. Wrapped at its `#` like the terms, and only when long, so no
+     * short enable's .pld changes text. */
+    if (c.oe) {
+      const oe = `${c.name}.oe = ${c.oe} ;`
+      out.push(oe.length <= 120 ? oe
+        : oe.split(" # ").join("\n" + " ".repeat(c.name.length + 6) + "# "))
+    }
   }
   const regs = m.cells.filter((c) => c.registered).map((c) => c.name)
   if (m.clock && regs.length) {

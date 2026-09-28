@@ -3,9 +3,9 @@
 ## Character mode with attributes, bitmap mode with a span writer, and nothing that draws itself
 
 **DRAFT, 2026-09-16.** ⭐ **The logic is fitted and simulated; nothing is timed, drawn
-or costed.** Four `ATF1508AS` and a `GAL22V10` hold it (`partition.md`, §14 item 4),
-`v3card_tb` runs the five of them as a card in every mode (§15.4), and
-`make -C hardware place` places the 44-IC list on 24 cm (§13.5). ⚠ **There is no timing
+or costed.** Five `ATF1508AS` and a `GAL22V10` hold it (`partition.md`, §14 item 4),
+`v3card_tb` runs the six of them as a card in every mode and through the sprite walker
+(§6.4, §15.4), and `make -C hardware place` places the 46-IC list on 30 cm (§13.5). ⚠ **There is no timing
 analysis (§14 item 1), no board file and no power budget (§14 item 13)**, so it is still
 a specification to be attacked rather than a build. Every number is either inherited from
 [`hardware/archive/video/docs/graphics.md`](../../archive/video/docs/graphics.md) with its section cited, a fit or
@@ -261,7 +261,7 @@ never `74AHC`) applies to them exactly as to the rest.
 |---|---|---|
 | Framebuffer | **2 × `AS6C8016`** 512K×16, 55 ns | `graphics.md` §2.1: a 72 ns access does not fit twice into a 39.72 ns dot's slot, so the interleave is a cliff and not a slope. §14.2.2: `A1` selects the part, `A0` drives `/LB`//`UB`, and seventeen address bits are generated — unchanged here |
 | Palette LUT | **1 × `IS61C6416AL-12`** 64K×16 | §3 now uses **all** of it. On `video/` this part was bought for width and 99.6 % idle |
-| Register file | 1 × 32K×8, 20 ns | §5 and §7.2's column shadows — 32 bytes, addressed by `RFA4..RFA0` |
+| Register file | 1 × 32K×8, 20 ns | §5 and §7.2's column shadows — **page 0**, 32 bytes, addressed by `RFA4..RFA0` — ⭐ **and §6.4's walker tables** in the pages above it, which `v3walk` addresses on `RFA13..RFA5`. `RFA14` is tied low |
 
 **Address map of the 512 KB**, and ⚠ **this is a proposal, not a constraint** — every
 base is a register:
@@ -385,6 +385,114 @@ item 6 records that the fitter priced it out.
 this engine replaces — and `video-copyrect.md` §2 records that those five are one
 capability class with no software substitute.
 
+### 6.4 ⭐ The sprite walker — `v3walk`
+
+**One register write runs a frame's whole actor pass.** `v3walk`, the card's fifth
+`ATF1508AS` (`hardware/video3/logic/v3walk.cpld.ts`, whose header is the authoritative
+description), loads the copy engine's nine registers itself out of tables in the register
+file, so the CPU pays for a table write and a command instead of nine stores and the
+address arithmetic behind them — the ~87 µs a rectangle that `optimizations.md` §12.1
+measured. It is §12's proposal as built, and §12.5 there records where the build departs
+from it and why.
+
+**Per slot, per frame, up to three copies:**
+
+| | destination (`WPTR`) | source (`CPTR`) | |
+|---|---|---|---|
+| **RESTORE** | last frame's position — the stream record in the **other** bank | the slot's save rectangle | opaque |
+| **SAVE** | the slot's save rectangle | this frame's position — the record in this frame's bank | opaque |
+| **DRAW** | this frame's position | the shape the record names | ⭐ **keyed on index 0** |
+
+⭐ **The order is LIFO, and it is what makes overlap correct.** The restore pass runs slots
+*n*−1 down to 0, then the save-and-draw pass 0 up to *n*−1. Every actor is restored every
+frame, so undoing the draws in reverse leaves the terrain exactly as it was however the
+rectangles overlap — the save-behind is exact, and no terrain copy is needed.
+
+**The tables are in the register file**, which is a 32 KB part of which the CPU registers
+use 32 bytes. `v3walk` drives `RFA13..RFA5` as a **page**, `{T[2:0], SLOT[3:0], BYTE[1:0]}`,
+and every table byte sits at offset `+$1D` of its page; page 0 is the CPU's registers, and
+every other register access — the span's `WFG`/`WBG`, the column reload, the CPU's own —
+sees page 0 exactly as before. 16 slots and 32 shapes, each slot with its own width and
+height, so a walk mixes sprite sizes freely:
+
+| T | table | three bytes a slot |
+|---|---|---|
+| 0 | — | never a table: page 0 is the CPU registers |
+| 1 | **stream, bank A** | `X[7:0]`, `Y[7:0]`, `{SHAPE[4:0], X[9:8], Y[8]}` — exactly `optimizations.md` §12.2's 24-bit record |
+| 2 | **stream, bank B** | the same. Two banks, so last frame's positions survive this frame's stream and the restore needs no copy of them |
+| 3 | **DIM** | `CWIDTH`, `CHEIGHT`, the `CCTRL` image — b0 is forced, so the last load of every copy is `GO` |
+| 4 | **SAVE** | a `CPTR`-layout pointer to the slot's save-behind rectangle |
+| 5, 6 | **SHAPE** 0–15, 16–31 | a `CPTR`-layout pointer for each shape |
+
+**Two registers** (§10): `+$1D` **`SWDAT`**, the table port, which auto-advances byte 0, 1,
+2 and then the slot, so a table is written as consecutive three-byte rows — a `TFM` — and
+`+$1E` **`SWCMD`**:
+
+| `SWCMD` | |
+|---|---|
+| D7 = 1 — **SELECT** | D6..D3 the first slot, D2..D0 the table; the byte counter goes to 0. ⭐ **Table 7 is ARM**: no table, it arms the next GO |
+| D7 = 0 — **GO** | D3..D0 = *n* − 1 slots; D4 **NR**, no restore pass (the first frame); D5 **RO**, restore only (the wipe); D6 **CB**, the bank this frame's stream is in — the restore reads the other. Unarmed, the walk starts when the write ends; ⭐ **armed, it starts at the next rise of `VBLANK`** |
+
+⭐ **The armed GO** (`optimizations.md` §12's first hardware follow-on). `SELECT 7` then `GO`
+latches the command in `CMD` and sets `PEND`; `RDY` rises on the `VBLANK` edge (`VBLANK &
+!VBLQ`) and `START` fires on the next falling `E`, so the walk begins **within a bus cycle
+of the blank** — measured **4 dots** after the rise in `v3card_tb` — instead of whenever
+the CPU next polls for it. The CPU writes its stream, arms, and goes back to its own work.
+⚠ **The contract while a GO is pending:** no `SWCMD` or `SWDAT` write (a `SREGWR` while
+`PEND` is refused by `CMDLD`, and the emulator reports it), no copy `GO`, no span, and no
+`VDATA` access — the walk will take the engine at the blank, and a copy started before it
+would be running when it does. Every other register (the scrolls, `CTRL`, `WFG`/`WBG`) is
+free, and none is held by `/WAIT`, since the walk has not begun.
+
+⭐ **Shape 31 is "no shape".** A record whose `SHAPE` is 31 is skipped by every copy that
+reads it: at `J1` of the group that reformats the record, `NUL` (`SHAPE` = 31 in the B
+latch) steps the walker exactly as a finished copy would, without loading `CCTRL`. A null
+in SAVE steps into DRAW, whose `G0` reads the same record and steps again. So an actor that
+is off-screen or parked costs **3 dots in the restore pass and 12 in save-and-draw** rather
+than three copies of its rectangle, and the slot keeps its place in the LIFO order —
+restoring a null record restores nothing, which is right, because nothing was drawn.
+
+⭐ **It masquerades as the CPU.** Every part on the card takes its registers off the
+broadcast (`REGWR`, `RA4..RA0`, `IDB`) and writes the file's shadow on `WSTB`, so while
+`WALK` is high `v3walk` drives those nets itself — `REGWR`, `RA4..RA0`, `WSTB`, `CPURF` and
+`RFA4..RFA1` — and `v3host` tri-states its copies (`RFA4..RFA1` stay `v3host`'s while its
+column-reload walk `RP1..RP4` runs). `v3ptr`, `v3dot` and the column reload cannot tell a
+walker load from a CPU store, so **no part's decode changes and `v3ptr`, the part with no
+room, is not touched**. A copy is three groups of six dots — a read dot from the table's
+page, a write dot driving `IDB` on `WD7..WD0` and writing the page-0 shadow:
+
+| group | loads |
+|---|---|
+| G0 | `WPTR`, `+$08`..`+$0A` |
+| G1 | `CPTR`, `+$12`..`+$14` |
+| G2 | `CWIDTH`, `CHEIGHT`, `CCTRL`, `+$15`..`+$17` — and the `CCTRL` write is `GO` |
+
+then waits for `!CBUSY` and for the reload walk after the copy's last row. ⭐ **A stream
+record becomes a pointer by lane wiring alone** — `+$08` = `X[7:0]`, `+$09` =
+`{Y[5:0], X[9:8]}`, `+$0A` = `Y[8:6]` — so there is no adder, as `optimizations.md` §12.2 said there need not be.
+The shape number is the record's byte 2, latched in DRAW's G0 and used as the slot of G1's
+page. **Measured in `v3card_tb`: ~25 dots, about 1 µs, of walker overhead a copy.**
+
+**Keying.** A DRAW asserts `WKEY` into `v3lane` (pin 13), whose key-skip is
+`KEY & GCPY & (WM1 & WM0 # WKEY)`; RESTORE and SAVE are opaque. So a walk needs no `WMODE`
+of its own.
+
+⚠ **The contract, which the host emulator enforces:** `WMODE` is not 11 while a walk runs
+(the key would catch the restores and saves too), and `WADV` b2 is clear.
+
+**The CPU during a walk.** `v3host` holds `/WAIT` on any card access **except a `VSTAT`
+read**, because the file's address is the walker's and any other offset would read a table
+byte; `VSTAT` is a `'244` of live bits and b2 is `WALK`, so polling it is how software waits
+for the walk. The read prefetch (`RDREQ`) is suppressed while `WALK`, and `WALK` invalidates
+it, since the walker reloads `WPTR`.
+
+⭐ **Why a fifth part and not `v3host`.** The walker needs `IDB` both ways (8 in, 8 out),
+the page (9 outputs) and the broadcast, and `v3host` had no pin to spare. **The VBL
+interrupt moved to `v3walk` to pay for `WALK`'s pin on `v3host`** (§9). Fitted:
+`v3walk` **111/128 cells, 55/64 I/O**, 63 flip-flops, 10 cascades — every one a single hop;
+`v3host` **52/128 cells, 61/64 I/O**, 0 cascades (§14 item 4). The package is why the card is
+30 cm (§13.5).
+
 ## 7. The mouse sprite — 16×16, bitmap mode only
 
 | | |
@@ -492,8 +600,11 @@ the map the framebuffer's stride.
 `graphics.md` §12.1's VBL interrupt, **required**: it is NitrOS-9's system tick, and
 the tick's length follows `VMODE[0]` (70.086 Hz or 59.940 Hz). Open-drain `/IRQ`
 through a product-term output enable, the pending flag set by an edge, `VSTAT` b0
-read (`v3host`'s `IRQPEND`, onto the `VSTAT` `'244`) and any write to `VSTAT` clearing
-it. The enable, `CTRL` b6, is held on `v3host` beside `/IRQ`.
+read (`v3walk`'s `IRQPEND`, onto the `VSTAT` `'244`) and any write to `VSTAT` clearing
+it. The enable, `CTRL` b6, is held on `v3walk` beside `/IRQ`, decoded off the register
+broadcast like everything else it takes. ⭐ **It is on `v3walk` because moving it there
+freed the three `v3host` pins (`D6` in, `/IRQ` and `IRQPEND` out) that paid for `WALK`**
+(§6.4) — the interrupt is the same three macrocells on whichever part holds them.
 
 ⛔ **§12.2's raster-compare interrupt is not on this card** — it never was; it is two
 GPIO pins and a timer in the CPU module, and `HSYNC`/`VSYNC` still reach the backplane
@@ -514,7 +625,7 @@ for it.
 | `+$08`–`$0A` | `WPTR` | 19 bits, auto-increment. **Copyrect's destination** |
 | `+$0B` | `WADV` | b1..0: 00 continue, 01 next row same column, 10 by the stride. ⭐ **b2: `WPTR` steps by TWO**, which is what makes §2.2's cell two stores — ⚠ every advance of `WPTR` steps by two while it is set, a span's retires and a `VDATA` read's post-increment included |
 | `+$0C` | `VDATA` | the VRAM byte at `WPTR`, read or write, post-increment |
-| `+$0D` | `VSTAT` | b7 `SPANBUSY`, b6 `VBLANK`, b5 `HBLANK`, b4 `CBUSY`, b1 `PBUSY`, b0 IRQ pending. **Read through a `'244`** — live macrocells have no register-file path (§12.1's reason) |
+| `+$0D` | `VSTAT` | b7 `SPANBUSY`, b6 `VBLANK`, b5 `HBLANK`, b4 `CBUSY`, b2 `WALK` (§6.4), b1 `PBUSY`, b0 IRQ pending (`v3walk`'s `IRQPEND`). ⭐ **The one register a walk does not hold off**. **Read through a `'244`** — live macrocells have no register-file path (§12.1's reason) |
 | `+$0E`–`$0F` | `PIDX` | **16 bits** — the whole LUT. Auto-increments after `PDATH` |
 | `+$10` | `PDATL` | `GGGBBBBB` |
 | `+$11` | `PDATH` | `RRRRRGGG`; the write posts the commit to the next `HLOAD` |
@@ -527,12 +638,13 @@ for it.
 | `+$1A` | `SPRX` | b7..0 |
 | `+$1B` | `SPRY` | b7..0 |
 | `+$1C` | `SPRH` | b1..0 `SPRX[9:8]`, b2 `SPRY[8]`, b7 sprite enable |
-| `+$1D` | — | ⭐ **spare**, like `+$1F`: a register-file byte that reads back what was written and has no function. The sprite shape is in VRAM (§7) |
-| `+$1E` | — | ⭐ **spare**, the same |
-| `+$1F` | `FCNT` | ⭐ **spare — no logic reads or writes it**, and a byte of the register file like the others, so it reads back what was written. **The VBL service keeps the low byte of its frame count there**, which is how a process holding the screen sees a frame end for the price of one read where asking the driver is a ~1.4 ms system call (`overworld`'s hero — `demo-report.md` §10) |
+| `+$1D` | `SWDAT` | ⭐ **the sprite walker's table port** (§6.4): a write lands at the table byte the pointer names, and the pointer advances byte 0, 1, 2, then the slot — so a `TFM` writes consecutive slots' records |
+| `+$1E` | `SWCMD` | ⭐ **the sprite walker's command** (§6.4): D7 = 1 is SELECT (D6..D3 first slot, D2..D0 table); D7 = 0 is GO (D3..D0 *n* − 1, D4 NR, D5 RO, D6 CB), and the walk starts when the write ends — or, after a SELECT of table 7, at the next rise of `VBLANK` |
+| `+$1F` | `FCNT` | ⭐ **spare, the only one — no logic reads or writes it**, and a byte of the register file like the others, so it reads back what was written. **The VBL service keeps the low byte of its frame count there**, which is how a process holding the screen sees a frame end for the price of one read where asking the driver is a ~1.4 ms system call (`overworld`'s hero — `demo-report.md` §10) |
 
-⚠ **`+$1F` assumes the register file decodes all 32 offsets**, which is what a 32-byte
-file addressed by `RA4..RA0` does and what the emulator's model does. Nothing in the
+⚠ **`+$1F` assumes the register file decodes all 32 offsets of page 0**, which is what the
+file addressed by `RA4..RA0`, with `v3walk`'s page lines low, does and what the emulator's
+model does. Nothing in the
 design reads the byte, so no fit and no equation depends on it; if a future revision
 gives `+$1F` a function, the driver loses a convenience and not a feature.
 
@@ -563,7 +675,7 @@ bit 0 (§5).
 | Cell addressing by concatenation | §6.4.1 | **Required**, ⚠ **widened**: six-bit row, four-byte cell (§2.5) |
 | Map fetch pipelined one cell ahead, two-stage `MAP`/`MAPQ` | §6.4.9 | **Required**, ⚠ **widened** — the code keeps two stages and the attribute takes three (§2.5), all in `v3scan` |
 | `VSCROLL` and the row counter's `VLOAD`/`ROWADV` | §8.1 | **Required** — §8 |
-| VBL interrupt, three macrocells, open-drain | §12.1 | **Required** — the NitrOS-9 tick |
+| VBL interrupt, three macrocells, open-drain | §12.1 | **Required** — the NitrOS-9 tick. On `v3walk` (§9) |
 | `VSTAT` through a `'244` | §12.1 | **Required** — live macrocells have no register-file path |
 | Posted palette commit, `PBUSY` | §13.1 | **Required** — a commit in the picture otherwise snows |
 | 256×16 RGB565 LUT | §9 | **Required**, ⚠ **and now fully addressed** (§3) |
@@ -579,6 +691,7 @@ bit 0 (§5).
 | `SPANLEN` as its own part (`vlen`) | §14.1 | ⭐ **Absorbed** — `SPANLEN` is `v3ptr`'s `NSL7..NSL0`, `vlen`'s complement-and-count-up idiom, on the part that already takes the internal bus |
 | `rfa`, the register-file address GAL | §10.1.6.3 | ⭐ **Absorbed** — `RFA4..RFA1` are `v3host`'s (the decode and §7.2's reload walk), `RFA0` is `v3ptr`'s (the mask bit) |
 | ⭐ **Byte lanes: four `'245`s and a lane decode** | §14.2.2 | **New** — `video/` puts the CPU byte on all four lanes and selects with `/LB`//`UB`; video3 has four 8-bit sources and a copy that reads a lane, so each lane gets a transceiver to the internal bus and `v3lane` decodes their enables and the byte enables (§13.1) |
+| ⭐ **The sprite walker, `v3walk`** | — | **New** — §6.4. A fifth `ATF1508AS` that loads the copy engine from tables in the register file, and the VBL interrupt's home |
 
 ---
 
@@ -599,7 +712,7 @@ bit 0 (§5).
 list.** `video/`'s BOM (`hardware/tools/place/parts.ts`) is quoted only as the *reference
 implementation of a mechanism* — where a row says "as `video/`", the mechanism is the
 same and the reason is restated. The list places (§13.5); ⚠ **nothing here is drawn or
-costed in current** (§14 item 13). The programmable logic is `partition.md`'s — four
+costed in current** (§14 item 13). The programmable logic is `partition.md`'s — five
 `ATF1508AS` and the `v3lane` `GAL22V10` — and is counted in §13.5, not here.
 
 ### 13.1 Required, and why
@@ -608,7 +721,7 @@ costed in current** (§14 item 13). The programmable logic is `partition.md`'s �
 |---|---|---|
 | **`AS6C8016` 512K×16** | **2** | §2.3. A 72 ns access does not fit twice into a 158.9 ns slot, so the interleave is a cliff and not a slope (`graphics.md` §2.1) — and 640×480×8bpp needs 307,200 bytes. Two ×16 parts give four bytes an access and seventeen address bits |
 | **`IS61C6416AL-12` 64K×16** | **1** | §3. ⭐ **And video3 is the first design that needs the whole part**: `video/` bought 64K words for *width* and wrote 256 of them; here A15..A8 carry the attribute |
-| **32K×8 register file** | **1** | §5. ⛔ **It cannot be macrocells**: the span-mask bit *is* this SRAM's address bit 0, which is what makes per-pixel colour selection free. It also holds `SPANLEN` and `WPTR`'s and `CPTR`'s column shadows |
+| **32K×8 register file** | **1** | §5. ⛔ **It cannot be macrocells**: the span-mask bit *is* this SRAM's address bit 0, which is what makes per-pixel colour selection free. It also holds `SPANLEN` and `WPTR`'s and `CPTR`'s column shadows, and ⭐ **§6.4's walker tables**, in the pages `v3walk` addresses |
 | **R-2R ladders, 5/6/5 bits + 3 buffers** | 3 + 3 | §9.1. RGB565 out of the output register. **Not ICs**, counted on their own line as in `video/` |
 | `74AHCT574` fetch latches | **8** | §2.3 and §8.1. Four hold one access's 32 bits; the second four are `graphics.md` §8.2's — **one-pixel** `HSCROLL` needs two fetch groups live at once, because a four-byte fetch group is four pixels. ⚠ **§13.3 trade 2** |
 | `74AHCT153` 4:1 mux | **4** | §2.3. One of the four latched bytes per dot. ⚠ 0 if the tri-state turnaround closes at 39.72 ns — `graphics.md` §19 item 2, unchanged here |
@@ -627,7 +740,7 @@ costed in current** (§14 item 13). The programmable logic is `partition.md`'s �
 | `74HC244` fan-out | **1** | §9 and `graphics.md` §12.2 — `HSYNC`/`VSYNC` to a backplane pin at TTL, plus clock fan-out |
 | ⭐ `74HC4078` colour key | **1** | [`keyed-copy.md`](keyed-copy.md) §0, built 2026-09-19. An 8-input NOR on the card's internal data bus: the byte the copy is about to write is on IDB for the whole write access, so the compare needs no pipeline register, and `v3lane` drops that write's byte enable. ⚠ The key is **fixed at index 0** — a `'688` against a key register is a 20-pin part and pushes a sprite `'165` off the board |
 
-**Discrete total: 40**, against `video/`'s 30, **plus five programmable parts — 45 ICs**
+**Discrete total: 40**, against `video/`'s 30, **plus six programmable parts — 46 ICs**
 (§13.5). The one new datapath is the four lane `'245`s; §13.3 trade 1 made the copy
 engine byte-granular, so it needs no latch of its own.
 
@@ -694,7 +807,7 @@ broadcast. A `'138` cannot decode them: +$0E/+$0F and +$10/+$11 differ in all of
 
    ⭐ **It is kept anyway, and the reason is asymmetry rather than need.** §13.3 trade 1
    returned the four packages this trade used to be the payer for, so the board places at
-   **45 ICs, 78 %** with everything (§13.5) — the cost is affordable *now*, and the
+   **46 ICs on 30 cm, 66 %** with everything (§13.5) — the cost is affordable *now*, and the
    capability is **unrecoverable later**. Nothing on this card can substitute: there is
    one 16 × 16 sprite and it is bitmap-only, and copyrect is 31.6 ms a screen, twice a
    frame. ⭐ And the rank select is per chip, as `graphics.md` §8.2 has it — `v3dot`'s
@@ -737,26 +850,27 @@ broadcast. A `'138` cannot decode them: +$0E/+$0F and +$10/+$11 differ in all of
 
 ### 13.5 ⭐ What the board says — measured, not estimated
 
-`hardware/tools/place/parts.ts` carries video3 as an **alternate** (a design that is not in
-the machine's slot population since 2026-09-20, when `video` was archived and video3
-took `$FF60`), and `make -C hardware place` places it through the same skyline packer that
-measures every other card. **The card is 45 ICs**: four `ATF1508AS` in PLCC-84, the
-`v3lane` `GAL22V10` in DIP-24, and §13.1's 40 discrete packages.
+`hardware/tools/place/parts.ts` carries video3 as one of the machine's cards (it took
+`$FF60` on 2026-09-20, when `video` was archived), and `make -C hardware place` places it
+through the same skyline packer that measures every other card. **The card is 46 ICs**:
+five `ATF1508AS` in PLCC-84, the `v3lane` `GAL22V10` in DIP-24, and §13.1's 40 discrete
+packages.
 
-| | ICs | courtyard | 240 mm |
-|---|---|---|---|
-| `video`, the built card | 33 | 124.4 cm² | places, 59 % |
-| ⭐ **video3 as built** — four `ATF1508AS` + `v3lane` + 39 | **44** | 163.9 cm² | **places, 78 %** — `check:place` asserts it, and that 24 cm is the shortest length that holds it |
-| video3 without `v3lane` and the lane `'245`s | 39 | 149.1 cm² | places, 71 % — the card that could not move a byte (§14 item 18) |
-| video3 with a fifth `ATF1508AS` | 45 | 176.5 cm² | ⛔ **does not place** |
-| video3 with a fifth `ATF1508AS` **instead of** `v3lane` | 44 | 173.1 cm² | ⛔ **does not place** |
+| | ICs | courtyard | 240 mm | 300 mm |
+|---|---|---|---|---|
+| `video`, the archived card | 33 | 124.4 cm² | places, 59 % | |
+| ⭐ **video3 as built** — five `ATF1508AS` + `v3lane` + 40 | **46** | 178.5 cm² | ⛔ **does not place** — the four sprite `'165`s and the `'4078` fall off | **places, 66 %** — `check:place` asserts it, and that 30 cm is the shortest length that holds it |
+| video3 without `v3walk` | 45 | 165.9 cm² | places, 79 % | |
 
-⛔ **THE CEILING IS FOUR PLCC-84s, and 240 mm is the longest board there is.** A
-PLCC-84 is 33 × 33 mm, so a fifth one is worth three DIP-20s of skyline and the board
-refuses it — even in place of the GAL, at the same IC count. **What the ceiling limits
-is PLCC-84 area, not programmable parts**: `v3lane` is a DIP-24 and places beside four
-`'245`s. That is a constraint on §14 item 4 that no amount of prose would have produced,
-and it is the reason this list exists as a file rather than as a table in this document.
+⭐ **30 cm is the longest card length, and video3 is the only card that takes it.** A
+PLCC-84 is 33 × 33 mm, worth three DIP-20s of skyline, and at 24 cm the fifth one refuses
+the board **by skyline, not by area** — 178.5 cm² of courtyard against 210.3 cm² placeable,
+and still five packages over the edge. `hardware/tools/place/parts.ts` and
+`hardware/tools/lib/Card.tsx` carry the lengths 120, 180, 240 and 300 mm, and 300 exists
+for this card alone. **What limits the board is PLCC-84 area, not programmable parts**:
+`v3lane` is a DIP-24 and places beside four `'245`s. That is a constraint on §14 item 4
+that no amount of prose would have produced, and it is the reason this list exists as a
+file rather than as a table in this document.
 
 **The trades of §13.3 against it:**
 
@@ -775,7 +889,7 @@ and it is the reason this list exists as a file rather than as a table in this d
    packages, and they pay for the sprite's four `'165` — `partition.md` §5 risk 3's
    escape, which `v3dot` requires. Risk 2's escape, `MAP`/`MAPQ` in four `'574`, was not
    needed: `v3scan` holds the map word in silicon (§13.4). `make -C hardware place` places
-   the card as built, **45 ICs** (§13.5), so the package budget does not gate the
+   the card as built, **46 ICs** on 30 cm (§13.5), so the package budget does not gate the
    macrocell budget.
 1. ⛔ **§3's timing claim has not been analysed.** *"Sixteen address lines settling
    together cost what eight do"* is the card's load-bearing assumption, and everything
@@ -797,17 +911,18 @@ and it is the reason this list exists as a file rather than as a table in this d
    result), so five is *at* the budget and a sixth source is where cascading starts.
    ⛔ **This is a number to design against and then check, not a limit inherited from
    anywhere** — see item 4.
-4. ⭐ **The partition is [`partition.md`](partition.md): four `ATF1508AS` and one
-   `GAL22V10`**, and §13.5 says four PLCC-84s is the most that places — **so video3 is at
-   its ceiling**. **ALL FIVE ARE FITTED:**
+4. ⭐ **The partition is [`partition.md`](partition.md): five `ATF1508AS` and one
+   `GAL22V10`**, and §13.5 says the fifth PLCC-84 is what makes the card 30 cm — the
+   longest card length there is. **ALL SIX ARE FITTED:**
 
    | | cells | I/O | cascades | |
    |---|---|---|---|---|
    | `v3dot` | 121/128 | 63/64 | ⚠ **5** | the raster, the dot path, the sprite, the arbiter, the palette's load strobes |
    | `v3scan` | 112/128 | 63/64 | 3 | the scan and cell addresses, the map word, the attribute onto the LUT |
    | `v3ptr` | **124/128** | 58/64 | 3 | the pointers, the span writer, the copy's decodes, the lane, `VWE`, the step |
-   | `v3host` | 58/128 | ⛔ **64/64** | 0 | the backplane, the registers, the palette commit, the copy's phase machine, the reload walk |
-   | `v3lane` | a `GAL22V10`: 10 of 10 macrocells, 10 inputs | | | the lane `'245`s' enables, the byte enables, `PWOE`, `RFOE` — with a CUPL reference and `video3/logic/v3lane.check.ts` in `make -C hardware check` |
+   | `v3host` | 52/128 | 61/64 | 0 | the backplane, the registers, the palette commit, the copy's phase machine, the reload walk |
+   | ⭐ `v3walk` | 111/128 | 55/64 | 10, each a single hop | §6.4's sprite walker, and the VBL interrupt (§9) |
+   | `v3lane` | a `GAL22V10`: 10 of 10 macrocells, 12 inputs | | | the lane `'245`s' enables, the byte enables, `PWOE`, `RFOE`, the colour key's skip — with a CUPL reference and `video3/logic/v3lane.check.ts` in `make -C hardware check` |
 
    `v3scan_mq` — the same part with the map word in four `'574` — is the discrete
    alternative, and its fit is of the 2026-09-16 term list (`partition.md` §2.2). ⚠ It
@@ -870,8 +985,8 @@ and it is the reason this list exists as a file rather than as a table in this d
     `RCPY` and the lane `'245`s' `DIR`. ⚠ **Both sequencers on `v3ptr` does not
     fit**, and not for cells: the refusal is LAB grouping, with Nodes+FB already over
     125 % on one — so `partition.md` §2.3's "~10 macrocells for the span and copy
-    sequencers" does not describe this part, and §4's "a fifth part for the copy
-    engine — it does not place" closes the other way out.
+    sequencers" does not describe this part, and §4's rejection of a fifth part for the
+    copy engine closes the other way out.
 
     ⭐ **The tick is a literal, not a macrocell.** Both sequencers need the spare window's
     *last* dot, because the arbiter is pure combinational grant logic and a step on every
@@ -921,7 +1036,7 @@ and it is the reason this list exists as a file rather than as a table in this d
     `CLAUDE.md`: a change in cascades is a timing change even when the cell count is flat.
     Nothing on this card has been timed (item 1), so it is recorded rather than assessed.
 
-    ⛔ **`v3host` is 64/64 — full — and `v3ptr` has six cells**, with Nodes+FB at 133 % and
+    ⛔ **`v3host` has three pins and `v3ptr` four cells**, with Nodes+FB at 133 % and
     seven of its eight LABs at 39 of 40 inputs — the card's ceiling, and `partition.md`
     §7.1's point that the binding constraint is pins. `keyed-copy.md` §7.2's keyed compare
     wants **eight** pins on whichever part gates the write strobe. That part is now
@@ -939,7 +1054,7 @@ and it is the reason this list exists as a file rather than as a table in this d
 
 13. ⛔ **THERE IS NO POWER BUDGET, and §13 measures packages and never watts.**
     `graphics.md` §14.1 costs `video/` at **~0.6–0.95 A** from its datasheets; video3 has
-    four `ATF1508AS` and a `GAL22V10` where `video/` has three CPLDs, 39 discrete
+    five `ATF1508AS` and a `GAL22V10` where `video/` has three CPLDs, 40 discrete
     packages where it has 30 — the sprite's four `'165` among them at dot rate — and
     **not one of them has been costed in current.** ⚠ The dot path is where it would
     bite: §14.1's figure has ~15 AHCT packages switching at 25.175 MHz at 9–22 mA each.
@@ -1017,16 +1132,16 @@ Each step gates the next, and the first two are **done**.
 
 | | | |
 |---|---|---|
-| ✅ 1 | **The parts list**, as an *alternate* in `hardware/tools/place/parts.ts` | `make -C hardware place` — §13.5. It found the ceiling of four PLCC-84s, and an arithmetic error in this document |
+| ✅ 1 | **The parts list**, in `hardware/tools/place/parts.ts` | `make -C hardware place` — §13.5. It measures what each PLCC-84 costs in board length — the fifth is why the card is 30 cm — and it found an arithmetic error in this document |
 | ✅ 2 | **The dot path and access budget as arithmetic** | `make -C hardware/video3 timing` (`hardware/video3/logic/timing.check.ts`) — the half of §14 item 1 that does not need a board |
 | ✅ 2b | **A functional model in the host emulator**, beside `video/`'s and selected by `VIDEO3=1` | `sh hardware/video3/bench/run-v3.sh` — **character mode, tile mode, the copy engine and the sprite, all pixel-exact** against `tools/v3model.py`, which renders from §2.2/§2.4/§2.5/§3/§6/§7/§8.1 and shares only *data* with the ROM. Mutation-tested. **This is where the driver gets written.** ⚠ It cannot see the cadence (§14 item 8) |
 | ✅ 2c | **The control-line census** — [`signals.md`](signals.md) | what the lines are and what generates them, block by block. It is the input to the partition, and it surfaced three things: the LUT address bus now has masters on **both** halves, the attribute's clock must not be mode-dependent, and the copy engine is the only requester wanting **two** spare accesses |
 | 3 | **The dot path as a schematic**, and nothing else yet | it is settled by §3 and §13, it does **not** depend on the partition, and it is what §14 item 1's *other* half needs. ⛔ Drawing the rest first would encode a partition that does not exist |
-| ✅ 4a | **The partition** — [`partition.md`](partition.md) | **four `ATF1508AS` and the `v3lane` `GAL22V10`**, and §13.5 says four PLCC-84s is the most that places. ⛔ **So video3 is exactly at its ceiling**: there is no fifth PLCC-84, and no room for a feature that needs one |
-| 4b | **Term lists, then a pin census from them, then a fit** | ⭐ term lists and fits for all five parts (§14 item 4); ⚠ the pin census from them is not written — `partition.md` §6 |
+| ✅ 4a | **The partition** — [`partition.md`](partition.md) | **five `ATF1508AS` and the `v3lane` `GAL22V10`**; the fifth, `v3walk` (§6.4), places only on the 30 cm board (§13.5) |
+| 4b | **Term lists, then a pin census from them, then a fit** | ⭐ term lists and fits for all six parts (§14 item 4); ⚠ the pin census from them is not written — `partition.md` §6 |
 | ✅ 5 | **`reach` and `census` from the first term list, not retrofitted** | they are the pair that caught `ACTRL` b3 unbuilt for two days and `design-review2`'s eleven blocks described as fitted with nothing behind them. ⭐ `check:reach` covers video3 and counts `video3_card.v` as its board; `check:pins` holds every pin to the discrete part it drives |
 | 6 | **A cadence check** — §14 item 8 | five requesters, one spare access a slot |
-| 7 | **Verilator** — §15.1 | ⭐ **started**: `v3dot_tb` (17 claims) and `v3card_tb` (57) run in `make -C hardware sim`, and the card bench is §15.4. `v3machine_tb` is not built |
+| 7 | **Verilator** — §15.1 | ⭐ **started**: `v3dot_tb` (17 claims) and `v3card_tb` (95) run in `make -C hardware sim`, and the card bench is §15.4. `v3machine_tb` is not built |
 | 8 | **The board file and `check:netlist`** | and `tools/lib/netlist.check.ts`'s *reachability* form: ⚠ "a stub check is not the fix — U1B's `DQ` pins were never dangling, they were on a net with three other parts and connected to the wrong one" |
 
 ### 15.1 ⭐ Verilator — and the one lesson that decides how it is built
@@ -1055,7 +1170,7 @@ their own.
 | `v3char_tb` | the whole card | ⭐ **covered by `v3card_tb`**: character mode at 80 × 60 and 80 × 25, every pixel `{attribute, glyph pixel}`, and a copy under it. ⚠ Not 80 × 30 or 80 × 50, and not a CP437 font — the bench's glyphs are arithmetic |
 | `v3copy_tb` | the whole card | §6: every width class, an overlapping scroll staged through scratch, and **that a copy under a span waits**. `v3card_tb` has two copies, one in bitmap mode and one under character mode |
 | `v3sprite_tb` | the whole card | ⭐ **covered by `v3card_tb`** at three positions — (101, 37), (3, 0) and (618, 190), both families — and **off** in character mode. ⚠ Not every X phase: `run-v3sprite.sh` does that on the emulator |
-| ⭐ **`v3card_tb`** — **built, §15.4** | **the five parts and the board around them**, `video3_card.v`, driven by a 6809E bus model that honours `/WAIT` | the seams between parts and packages: the register file, the palette path, both sequencers, the reload, the picture in all three modes with both scrolls and the sprite, and the bus fights and floats no single part can see |
+| ⭐ **`v3card_tb`** — **built, §15.4** | **the six parts and the board around them**, `video3_card.v`, driven by a 6809E bus model that honours `/WAIT` | the seams between parts and packages: the register file, the palette path, both sequencers, the reload, the picture in all three modes with both scrolls and the sprite, and the bus fights and floats no single part can see |
 | ⭐ **`v3machine_tb`** | **`mc6809e` + the motherboard + video3 + the audio card** | §15.2 — and it is the only one that can be believed |
 
 ⚠ **`v3dot_tb` is the exception to "top down"**, and deliberately: §14 item 1 gates the
@@ -1115,8 +1230,8 @@ character-mode attribute bug before any RTL exists.**
 
 ### 15.4 ⭐ `v3card_tb` — the card as a card, and what it found
 
-`hardware/video3/sim/video3_card.v` is the five parts — `v3dot`, `v3scan`, `v3ptr`,
-`v3host` and `v3lane` — wired to the discrete parts of §13.1: the two framebuffer parts
+`hardware/video3/sim/video3_card.v` is the six parts — `v3dot`, `v3scan`, `v3ptr`,
+`v3host`, `v3walk` and `v3lane` — wired to the discrete parts of §13.1: the two framebuffer parts
 and their four lane `'245`s, the register file, the fetch ranks, the `'153`, the index
 `'574`, the four sprite `'165`s, the LUT and its `'273`s, the `PIDX`/`PDAT` latches, the
 posted-write and `vread` `'574`s, the `VSTAT` `'244` and the host `'245`. ⭐ **Every net
@@ -1126,12 +1241,15 @@ so a buried cell cannot become a net by being mentioned, and the hand-written bo
 reaches into no part outside the benches' back doors. ⭐ **The buses are resolved, not
 chosen**: the internal data bus, the framebuffer address, each byte lane and the LUT's
 high address byte are nets with explicit drivers, and every dot counts how many drive —
-two is a fight, a sample with none is a float. `check:reach` counts the file as video3's
-board.
+two is a fight, a sample with none is a float. ⭐ **The register broadcast is resolved the
+same way**: `REGWR`, `RA4..RA0`, `WSTB`, `CPURF` and `RFA4..RFA1` are `v3host`'s or
+`v3walk`'s (§6.4), and `BCAST_FIGHT` is both on one of them, or neither. The register file
+is modelled at its full 32 KB, because the walker's tables are in it. `check:reach` counts
+the file as video3's board.
 
 `v3card_tb` drives it one 6809E bus cycle at a time, **stretching E-high while `/WAIT` is
 asserted** with `clkdec`'s semantics, and a bound turns a hang into a failure. It runs in
-`make -C hardware sim` as `v3card` — **66 claims, 0 failed** (the suite: 378, 0 failed):
+`make -C hardware sim` as `v3card` — **105 claims** (the suite: 351, 0 failed):
 
 | | |
 |---|---|
@@ -1146,7 +1264,8 @@ asserted** with `clkdec`'s semantics, and a bound turns a hang into a failure. I
 | character mode | `VMODE` 11 (80 × 60), then `VMODE` 00 (80 × 25) **on two consecutive frames**, with `HSCROLL`, `VSCROLL` and the sprite all set: every pixel `{attribute, glyph pixel}` of its own cell |
 | a copy under character mode | 13 × 5 lands byte for byte in **exactly 130 accesses** — two a byte, beside the map's one a cell (§14 item 8) |
 | tile mode | `HSCROLL` 13, 6 and 16 — **both cell phases** (`HSCROLL[2]` 1 and 0) and fine scrolls 1, 2 and 0 — with `VSCROLL` 11, 0 and 500: every pixel its scrolled cell's tile, `ATTR` zero |
-| the board | `v3scan`, `v3ptr` and `v3dot` never two on the address bus; never two drivers on D7..D0; never two masters on the LUT address; **never two drivers on the internal bus, and never a sample of it undriven; no byte written from a lane nothing drives; each chip's fetch ranks exactly one on**; and `/WAIT` always released |
+| ⭐ the sprite walker (`walk`) | §6.4 end to end: three slots of three sizes — 8 × 6, 12 × 4 and 5 × 7, one crossing column 1023 — with shapes from both shape tables and overlapping positions, over frames that are NR, full, and RO — ⭐ **and then again with null records** (slot 1 in one bank, slot 0 in the other) **behind an armed GO**, which must not start until `VBLANK` rises, must not hold `WFG`/`CTRL` writes while pending, and must start within 16 dots of the rise. **All 512 KB of VRAM is compared against a model after every walk**, and the wipe restores the terrain exactly. `VSTAT` b2 reads `WALK` during a walk, and a register read during one is held by `/WAIT` until it ends |
+| the board | `v3scan`, `v3ptr` and `v3dot` never two on the address bus; **never both or neither of `v3host` and `v3walk` on a broadcast net**; never two drivers on D7..D0; never two masters on the LUT address; **never two drivers on the internal bus, and never a sample of it undriven; no byte written from a lane nothing drives; each chip's fetch ranks exactly one on**; and `/WAIT` always released |
 
 ⛔ **It found the defects below, every one of which had fitted** — the first fourteen in
 bitmap mode, the rest when character mode, tile mode, the sprite, the fine scroll and a

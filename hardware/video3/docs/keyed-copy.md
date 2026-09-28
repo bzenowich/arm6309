@@ -23,9 +23,9 @@ engine's rate (~349 µs for a 16 × 16 sprite) where software costs **a pass a c
 |---|---|
 | the compare | **one 74HC4078**, an 8-input NOR on the card's internal data bus. The byte about to be written is on IDB for the whole write access — the posted-write `'574` drives it — so the compare has the access to settle in and needs **no pipeline register** |
 | the skip | **`v3lane`'s byte enables**: a keyed write enables no byte, so the SRAM writes nothing |
-| what arms it | ⭐ **`WMODE` 11.** Sprite mode already means "transparent" to the span writer, so it means the same to the copy engine; any other `WMODE` copies index 0 like any other byte |
+| what arms it | ⭐ **`WMODE` 11.** Sprite mode already means "transparent" to the span writer, so it means the same to the copy engine; any other `WMODE` copies index 0 like any other byte. ⭐ **And the sprite walker's `WKEY`** (`plan.md` §6.4), which keys its draw copies and not its restores or saves — `v3lane`'s skip is `KEY & GCPY & (WM1 & WM0 # WKEY)` |
 | the key's value | ⛔ **fixed at index 0**, not a register |
-| the cost | **+1 DIP-14** (45 ICs, still places on 24 cm), one input pin on `v3lane`, and four of its byte-enable terms. ⭐ **`v3ptr` is untouched** |
+| the cost | **+1 DIP-14** (it placed at 45 ICs on 24 cm; the card is 46 ICs on 30 cm since the walker, `plan.md` §13.5), one input pin on `v3lane`, and four of its byte-enable terms. ⭐ **`v3ptr` is untouched** |
 
 ⛔ **THREE OF THIS DOCUMENT'S CONCLUSIONS WERE WRONG, and the fitter and the packer
 said so:**
@@ -57,7 +57,7 @@ From `demo-report.md` §10.5, which stands:
   write (`PWOE`), crossing the internal bus both times, so a compare simply **gates
   the write access** — `VWE`, which is `v3ptr`'s.
 - ⛔ **No part has room for the 8-pin form.** `v3ptr` has **6 macrocells and 7
-  pins spare**, `v3host` **none** (§7's table), so the compare is one pin and a
+  pins spare**, `v3host` **none** (§7's table, 2026-09-19), so the compare is one pin and a
   `'688` comparator, plus a `CCTRL` bit and a term.
 - ⛔ **It needs a fit, and the part has form here.** `v3ptr_rows` and
   `v3ptr_both` went from 3 cascades to 19–21 and filled the part. `CLAUDE.md`:
@@ -327,7 +327,7 @@ machine on `v3host` (`plan.md` §14 item 14; `history.md` has the steps).
       pins into whichever part gates the write strobe, and **there is no part
       on this card with eight spare pins**: `v3dot` has one pin and 7 cells,
       `v3scan` one pin, `v3ptr` — which makes `VWE`, the write strobe — 7 pins and
-      6 cells, and `v3host` **none**. ⭐ So §7.2's **`74HC688` — one pin** — is not
+      6 cells, and `v3host` **none** (2026-09-19). ⭐ So §7.2's **`74HC688` — one pin** — is not
       the cheaper-by-a-package option.
       It is the only version of this feature that fits anywhere.
       ⭐ **The good half of the news stands**: the key is a term on a write
@@ -464,7 +464,7 @@ found nothing, and concluded from the absence instead of from `git ls-files`.
 So these are real numbers out of the real `.fit` files, not `partition.md`'s
 estimates:
 
-| part | logic cells | I/O pins | cascades | foldback |
+| part, 2026-09-19 | logic cells | I/O pins | cascades | foldback |
 |---|---|---|---|---|
 | `v3dot` | **121/128** — 7 spare | 63/64 — one spare | ⚠ 5 | 39/128 |
 | `v3host` | 58/128 — 70 spare | ⛔ **64/64** — **no** pin spare | 0 | 0 |
@@ -475,9 +475,10 @@ estimates:
 zero, and its Nodes+FB is at 133 % with seven of eight LABs at 39 of 40 inputs — a
 part that refuses additions on grouping before it runs out of cells.
 
-⛔ **The room is cells on `v3host`, and it has no pins.** Pins are the binding
-constraint (`partition.md` §7.1), and the only part with more than one spare is
-`v3ptr` — which does gate the write strobe (`VWE`), and has seven.
+⛔ **The room was cells on `v3host`, and it had no pins** — on 2026-09-19; `plan.md` §14
+item 4 has the parts' figures now, since the VBL interrupt moved to `v3walk`. Pins
+are the binding constraint (`partition.md` §7.1), and the only part that then had more
+than one spare was `v3ptr` — which does gate the write strobe (`VWE`), and had seven.
 
 ### 7.1 ⛔ MEASURED, AND IT REVERSES THIS SECTION'S RECOMMENDATION
 

@@ -43,8 +43,8 @@ export const REGS = {
   LDSPRX:   0x1a, // SPRX
   LDSPRY:   0x1b, // SPRY
   LDSPRH:   0x1c, // SPRH - SPRX[9:8], SPRY[8], enable
-  LDSPRIX:  0x1d, // SPRIDX
-  LDSPRDA:  0x1e, // SPRDAT
+  LDSWDAT:  0x1d, // SWDAT - the sprite walker's table port (v3walk, plan §6.4)
+  LDSWCMD:  0x1e, // SWCMD - SELECT a table, or GO
   /*        0x1f    reserved */
 } as const
 

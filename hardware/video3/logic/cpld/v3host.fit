@@ -1,4 +1,4 @@
-Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Sat Sep 19 23:27:05 2026
+Atmel ATF1508AS Fitter Version 1.8.7.8 ,running Mon Sep 28 14:45:18 2026
 
 
 fit1508 v3host.tt2 -device P1508C84 -preassign ignore -JTAG off
@@ -48,9 +48,6 @@ fit1508 v3host.tt2 -device P1508C84 -preassign ignore -JTAG off
  ITD2 = ON
  Fast_inlatch = off
  *******************************
-Info: v3host uses 95% of the pins available in device PLCC84
-  If you wish to have more pins available for future logic changes
-  Atmel  recommends using a larger device
 ---------------------------------------------------------
  Fitter_Pass 1, Preassign = IGNORE, LOGIC_DOUBLING : OFF 
  ... 
@@ -69,146 +66,143 @@ Performing global pin assignments ...
 Final global control pins assignment (if applicable)...
 -------------------------------------------------------
 CLK25 assigned to pin  83
+WALK assigned to pin  84
 
 
 
 Performing input pin pre-assignments ...
 ------------------------------------
 CLK25 assigned to pin  83
+WALK assigned to pin  84
 WAITN.OE equation needs patching.
 1 control eqution need patching
 
 Attempt to place floating signals ...
 ------------------------------------
-VBLQ is placed at feedback node 601 (MC 1)
 PDQ is placed at feedback node 602 (MC 2)
-CPURF is placed at pin 12 (MC 3)
-PS0 is placed at feedback node 604 (MC 4)
-VSTATOE is placed at pin 11 (MC 5)
+VSTATOE is placed at pin 12 (MC 3)
+RPQ is placed at feedback node 604 (MC 4)
+REGWR is placed at pin 11 (MC 5)
 WSTB is placed at pin 10 (MC 6)
-PPEND is placed at feedback node 607 (MC 7)
-REGWR is placed at pin 9 (MC 8)
-XXL_143 is placed at feedback node 609 (MC 9)
-XXL_142 is placed at feedback node 610 (MC 10)
-RFA4 is placed at pin 8 (MC 11)
-XXL_141 is placed at feedback node 612 (MC 12)
+PS0 is placed at feedback node 607 (MC 7)
+RDOE is placed at pin 9 (MC 8)
+PPEND is placed at feedback node 609 (MC 9)
+XXL_164 is placed at feedback node 610 (MC 10)
+WSTBV is placed at pin 8 (MC 11)
+XXL_163 is placed at feedback node 612 (MC 12)
 RFA3 is placed at pin 6 (MC 13)
-RFA1 is placed at pin 5 (MC 14)
-IRQEN is placed at feedback node 615 (MC 15)
-RFA2 is placed at pin 4 (MC 16)
-RA2 is placed at pin 22 (MC 17)
-RA0 is placed at pin 21 (MC 19)
-RP1 is placed at pin 20 (MC 21)
-RCPY is placed at pin 18 (MC 24)
-RDOE is placed at pin 17 (MC 25)
-WSTBV is placed at pin 16 (MC 27)
-RPQ is placed at feedback node 628 (MC 28)
-RDREQ is placed at pin 15 (MC 29)
-XXL_144 is placed at feedback node 630 (MC 30)
-XXL_145 is placed at feedback node 631 (MC 31)
-IRQPEND is placed at pin 14 (MC 32)
-CWLOAD is placed at pin 31 (MC 35)
-RDCK is placed at pin 30 (MC 37)
-CRDSEL is placed at pin 29 (MC 38)
-WPQ is placed at feedback node 639 (MC 39)
-CSTEP is placed at pin 28 (MC 40)
-CPH is placed at feedback node 641 (MC 41)
-RDVALID is placed at feedback node 642 (MC 42)
-WSTART is placed at pin 27 (MC 43)
-XXL_146 is placed at feedback node 644 (MC 44)
-WSTEP is placed at pin 25 (MC 45)
-PWCK is placed at pin 24 (MC 46)
-WAITN.OE is placed at feedback node 647 (MC 47)
-RDBKOE is placed at pin 23 (MC 48)
-DIR is placed at pin 41 (MC 49)
-CDONE is placed at pin 40 (MC 51)
-RP3 is placed at pin 39 (MC 53)
+RFA4 is placed at pin 5 (MC 14)
+Com_Ctrl_162 is placed at foldback expander node 314 (MC 14)
+XXL_165 is placed at feedback node 615 (MC 15)
+RFA1 is placed at pin 4 (MC 16)
+RA1 is placed at pin 22 (MC 17)
+RA3 is placed at pin 21 (MC 19)
+RA2 is placed at pin 20 (MC 21)
+RP4 is placed at pin 18 (MC 24)
+RP2 is placed at pin 17 (MC 25)
+WSTART is placed at pin 16 (MC 27)
+WPQ is placed at feedback node 628 (MC 28)
+CPURF is placed at pin 15 (MC 29)
+WAITN.OE is placed at feedback node 630 (MC 30)
+XXL_166 is placed at feedback node 631 (MC 31)
+RDREQ is placed at pin 14 (MC 32)
+RCPY is placed at pin 31 (MC 35)
+RP1 is placed at pin 30 (MC 37)
+CROWADV is placed at pin 29 (MC 38)
+DIR is placed at pin 28 (MC 40)
+CRLD is placed at feedback node 642 (MC 42)
+RDCK is placed at pin 27 (MC 43)
+RDVALID is placed at feedback node 644 (MC 44)
+RDBKOE is placed at pin 25 (MC 45)
+RFA2 is placed at pin 24 (MC 46)
+CPH is placed at feedback node 647 (MC 47)
+WSTEP is placed at pin 23 (MC 48)
+Com_Ctrl_162 is placed at foldback expander node 348 (MC 48)
+CWLOAD is placed at pin 41 (MC 49)
+RP3 is placed at pin 40 (MC 51)
+CSTEP is placed at pin 39 (MC 53)
 PIDXCE is placed at pin 37 (MC 56)
 LUTWE is placed at pin 36 (MC 57)
 PALTURN is placed at pin 35 (MC 59)
-PS1 is placed at feedback node 660 (MC 60)
 PBUSY is placed at pin 34 (MC 61)
-PS2 is placed at feedback node 662 (MC 62)
-CRLD is placed at feedback node 663 (MC 63)
-IRQN is placed at pin 33 (MC 64)
-A1 is placed at pin 44 (MC 65)
-RA4 is placed at pin 45 (MC 67)
-RP4 is placed at pin 46 (MC 69)
-RP2 is placed at pin 48 (MC 72)
-RA1 is placed at pin 49 (MC 73)
-RA3 is placed at pin 50 (MC 75)
-CROWADV is placed at pin 51 (MC 77)
+PS1 is placed at feedback node 662 (MC 62)
+PS2 is placed at feedback node 663 (MC 63)
+PWCK is placed at pin 33 (MC 64)
+CBUSY is placed at pin 44 (MC 65)
+A5 is placed at pin 45 (MC 67)
+E is placed at pin 46 (MC 69)
+RA0 is placed at pin 48 (MC 72)
+RA4 is placed at pin 49 (MC 73)
+CDONE is placed at pin 50 (MC 75)
+CRDSEL is placed at pin 51 (MC 77)
 WAITN is placed at pin 52 (MC 80)
-A3 is placed at pin 54 (MC 83)
-A4 is placed at pin 55 (MC 85)
-A2 is placed at pin 56 (MC 86)
-A5 is placed at pin 57 (MC 88)
-A6 is placed at pin 58 (MC 91)
-E is placed at pin 60 (MC 93)
-IOSEL is placed at pin 61 (MC 94)
-CBUSY is placed at pin 62 (MC 96)
-RW is placed at pin 63 (MC 97)
-SPANBUSY is placed at pin 64 (MC 99)
-A0 is placed at pin 65 (MC 101)
-VBLANK is placed at pin 67 (MC 104)
-GRD is placed at pin 68 (MC 105)
-D6 is placed at pin 69 (MC 107)
+A4 is placed at pin 54 (MC 83)
+A0 is placed at pin 55 (MC 85)
+A1 is placed at pin 56 (MC 86)
+A6 is placed at pin 57 (MC 88)
+IOSEL is placed at pin 58 (MC 91)
+SPANBUSY is placed at pin 60 (MC 93)
+A3 is placed at pin 61 (MC 94)
+RW is placed at pin 62 (MC 96)
+A19 is placed at pin 63 (MC 97)
+A20 is placed at pin 64 (MC 99)
+IOPGH is placed at pin 65 (MC 101)
+A2 is placed at pin 67 (MC 104)
+GCPY is placed at pin 68 (MC 105)
+DP0 is placed at pin 69 (MC 107)
 HLOAD is placed at pin 70 (MC 109)
-A19 is placed at pin 71 (MC 112)
-A20 is placed at pin 73 (MC 115)
-IOPGH is placed at pin 74 (MC 117)
+VBLANK is placed at pin 71 (MC 112)
+GRD is placed at pin 73 (MC 115)
+CEOR is placed at pin 74 (MC 117)
 WROWADV is placed at pin 75 (MC 118)
-DP0 is placed at pin 76 (MC 120)
-GCPY is placed at pin 77 (MC 123)
-RETIRE is placed at pin 79 (MC 125)
-CHLAST is placed at pin 80 (MC 126)
-CEOR is placed at pin 81 (MC 128)
+RETIRE is placed at pin 76 (MC 120)
+CHLAST is placed at pin 77 (MC 123)
 
                                                                                     
                                                                                     
                                                                                     
                                                                                     
-                     V                                       W                      
-                     S                             C R       R                      
-                     T    R                  C     H E       O                      
-                     A W  E R   R R R        L   C L T   G   W                      
-                     T S  G F G F F F V      K G E A I V C D A                      
-                     O T  W A N A A A C      2 N O S R C P P D                      
-                     E B  R 4 D 3 1 2 C      5 D R T E C Y 0 V                      
+                                                             W                      
+                                                         C R R                      
+                     R      W                C           H E O                      
+                     E W  R S   R R R      W L           L T W                      
+                     G S  D T G F F F V    A K G       V A I A                      
+                     W T  O B N A A A C    L 2 N       C S R D                      
+                     R B  E V D 3 4 1 C    K 5 D       C T E V                      
                     -------------------------------------------                     
                    / 11   9   7   5   3   1  83  81  79  77  75 \                  
                   /    10   8   6   4   2  84  82  80  78  76    \                 
-           CPURF | 12                    (*)                   74 | IOPGH           
-             VCC | 13                                          73 | A20             
-         IRQPEND | 14                                          72 | GND             
-           RDREQ | 15                                          71 | A19             
-           WSTBV | 16                                          70 | HLOAD           
-            RDOE | 17                                          69 | D6              
-            RCPY | 18                                          68 | GRD             
-             GND | 19                                          67 | VBLANK          
-             RP1 | 20                                          66 | VCC             
-             RA0 | 21                                          65 | A0              
-             RA2 | 22                 ATF1508                  64 | SPANBUSY        
-          RDBKOE | 23               84-Lead PLCC               63 | RW              
-            PWCK | 24                                          62 | CBUSY           
-           WSTEP | 25                                          61 | IOSEL           
-             VCC | 26                                          60 | E               
-          WSTART | 27                                          59 | GND             
-           CSTEP | 28                                          58 | A6              
-          CRDSEL | 29                                          57 | A5              
-            RDCK | 30                                          56 | A2              
-          CWLOAD | 31                                          55 | A4              
-             GND | 32                                          54 | A3              
+         VSTATOE | 12                    (*)                   74 | CEOR            
+             VCC | 13                                          73 | GRD             
+           RDREQ | 14                                          72 | GND             
+           CPURF | 15                                          71 | VBLANK          
+          WSTART | 16                                          70 | HLOAD           
+             RP2 | 17                                          69 | DP0             
+             RP4 | 18                                          68 | GCPY            
+             GND | 19                                          67 | A2              
+             RA2 | 20                                          66 | VCC             
+             RA3 | 21                                          65 | IOPGH           
+             RA1 | 22                 ATF1508                  64 | A20             
+           WSTEP | 23               84-Lead PLCC               63 | A19             
+            RFA2 | 24                                          62 | RW              
+          RDBKOE | 25                                          61 | A3              
+             VCC | 26                                          60 | SPANBUSY        
+            RDCK | 27                                          59 | GND             
+             DIR | 28                                          58 | IOSEL           
+         CROWADV | 29                                          57 | A6              
+             RP1 | 30                                          56 | A1              
+            RCPY | 31                                          55 | A0              
+             GND | 32                                          54 | A4              
                   \     34  36  38  40  42  44  46  48  50  52   /                 
                    \  33  35  37  39  41  43  45  47  49  51  53/                  
               	    --------------------------------------------                     
-                      I P P L P V R C D G V A R R G R R R C W V                     
-                      R B A U I C P D I N C 1 A P N P A A R A C                     
-                      Q U L T D C 3 O R D C   4 4 D 2 1 3 O I C                     
-                      N S T W X     N                     W T                       
-                        Y U E C     E                     A N                       
-                          R   E                           D                         
-                          N                               V                         
+                      P P P L P V C R C G V C A E G R R C C W V                     
+                      W B A U I C S P W N C B 5   N A A D R A C                     
+                      C U L T D C T 3 L D C U     D 0 4 O D I C                     
+                      K S T W X   E   O     S           N S T                       
+                        Y U E C   P   A     Y           E E N                       
+                          R   E       D                   L                         
+                          N                                                         
 
 
 
@@ -222,162 +216,157 @@ Universal-Interconnect-Multiplexer assignments
 ------------------------------------------------
 FanIn assignment for block A [25]
 {
-A2,A0,A3,A6,A4,A5,A1,
+A1,A4,A5,A20,A6,A0,A19,A3,A2,
 CBUSY,
-D6,
 E,
 HLOAD,
-IOSEL,IRQEN,
-PPEND,PDQ,
-RP4,RP1,RP3,RP2,RW,
+IOPGH,IOSEL,
+PDQ,PPEND,
+RP1,RP4,RW,RP3,RDVALID,RP2,
 SPANBUSY,
 VBLANK,
-XXL_141,XXL_142,XXL_143,
+WALK,
 }
 Multiplexer assignment for block A
-CBUSY			(MC19	P)   : MUX 0		Ref (F96p)
-A2			(MC14	P)   : MUX 1		Ref (F86p)
-E			(MC17	P)   : MUX 4		Ref (F93p)
-SPANBUSY		(MC21	P)   : MUX 5		Ref (G99p)
-A0			(MC22	P)   : MUX 7		Ref (G101p)
-PPEND			(MC2	FB)  : MUX 8		Ref (A7fb)
-RP4			(MC9	P)   : MUX 9		Ref (E69p)
+RP1			(MC5	P)   : MUX 1		Ref (C37p)
+RP4			(MC3	P)   : MUX 3		Ref (B24p)
+RW			(MC19	P)   : MUX 4		Ref (F96p)
+HLOAD			(MC24	P)   : MUX 6		Ref (G109p)
+IOPGH			(MC22	P)   : MUX 9		Ref (G101p)
 PDQ			(MC1	FB)  : MUX 10		Ref (A2fb)
-RP1			(MC7	P)   : MUX 11		Ref (B21p)
-A3			(MC12	P)   : MUX 13		Ref (F83p)
-VBLANK			(MC23	P)   : MUX 15		Ref (G104p)
-A6			(MC16	P)   : MUX 16		Ref (F91p)
-RP3			(MC8	P)   : MUX 17		Ref (D53p)
-RP2			(MC10	P)   : MUX 19		Ref (E72p)
-XXL_141			(MC5	FB)  : MUX 21		Ref (A12fb)
-HLOAD			(MC25	P)   : MUX 22		Ref (G109p)
-RW			(MC20	P)   : MUX 25		Ref (G97p)
-XXL_142			(MC4	FB)  : MUX 27		Ref (A10fb)
-D6			(MC24	P)   : MUX 28		Ref (G107p)
-A4			(MC13	P)   : MUX 31		Ref (F85p)
-XXL_143			(MC3	FB)  : MUX 33		Ref (A9fb)
-IOSEL			(MC18	P)   : MUX 34		Ref (F94p)
-A5			(MC15	P)   : MUX 35		Ref (F88p)
-IRQEN			(MC6	FB)  : MUX 37		Ref (A15fb)
-A1			(MC11	P)   : MUX 39		Ref (E65p)
+A1			(MC14	P)   : MUX 11		Ref (F86p)
+VBLANK			(MC25	P)   : MUX 12		Ref (G112p)
+A4			(MC12	P)   : MUX 13		Ref (F83p)
+A5			(MC9	P)   : MUX 15		Ref (E67p)
+IOSEL			(MC16	P)   : MUX 16		Ref (F91p)
+PPEND			(MC2	FB)  : MUX 17		Ref (A9fb)
+A20			(MC21	P)   : MUX 19		Ref (G99p)
+A6			(MC15	P)   : MUX 21		Ref (F88p)
+A0			(MC13	P)   : MUX 23		Ref (F85p)
+A19			(MC20	P)   : MUX 25		Ref (G97p)
+SPANBUSY		(MC17	P)   : MUX 26		Ref (F93p)
+RP3			(MC7	P)   : MUX 27		Ref (D51p)
+RDVALID			(MC6	FB)  : MUX 29		Ref (C44fb)
+RP2			(MC4	P)   : MUX 30		Ref (B25p)
+CBUSY			(MC8	P)   : MUX 31		Ref (E65p)
+E			(MC10	P)   : MUX 33		Ref (E69p)
+A3			(MC18	P)   : MUX 34		Ref (F94p)
+A2			(MC23	P)   : MUX 35		Ref (G104p)
+WALK			(MC11	FB)  : MUX 37		Ref (OE1)
 
 FanIn assignment for block B [25]
 {
-A2,A6,A20,A19,A3,A0,A4,A5,A1,
-CBUSY,
+A20,A19,A3,A2,A6,A1,A4,A0,A5,
 E,
-IOPGH,IRQPEND,IOSEL,
-RP2,RP4,RP1,RP3,RW,RDVALID,
+IOSEL,IOPGH,
+RP1,RP4,RW,RP3,RP2,RDVALID,
 SPANBUSY,
-VBLQ,VBLANK,
-WPQ,WROWADV,
+WSTB,WSTBV,WPQ,WALK,
+XXL_165,XXL_164,
 }
 Multiplexer assignment for block B
-A2			(MC12	P)   : MUX 1		Ref (F86p)
-VBLQ			(MC1	FB)  : MUX 2		Ref (A1fb)
-IOPGH			(MC24	P)   : MUX 3		Ref (H117p)
-CBUSY			(MC17	P)   : MUX 4		Ref (F96p)
-SPANBUSY		(MC19	P)   : MUX 5		Ref (G99p)
-A6			(MC14	P)   : MUX 6		Ref (F91p)
-RP2			(MC8	P)   : MUX 7		Ref (E72p)
-IRQPEND			(MC3	P)   : MUX 8		Ref (B32p)
-RP4			(MC7	P)   : MUX 9		Ref (E69p)
-WPQ			(MC4	FB)  : MUX 10		Ref (C39fb)
-RP1			(MC2	P)   : MUX 11		Ref (B21p)
-A20			(MC23	P)   : MUX 13		Ref (H115p)
-A19			(MC22	P)   : MUX 14		Ref (G112p)
-VBLANK			(MC21	P)   : MUX 15		Ref (G104p)
-RP3			(MC6	P)   : MUX 17		Ref (D53p)
-A3			(MC10	P)   : MUX 21		Ref (F83p)
-IOSEL			(MC16	P)   : MUX 22		Ref (F94p)
-A0			(MC20	P)   : MUX 23		Ref (G101p)
-WROWADV			(MC25	P)   : MUX 25		Ref (H118p)
-E			(MC15	P)   : MUX 26		Ref (F93p)
-RW			(MC18	P)   : MUX 27		Ref (G97p)
-A4			(MC11	P)   : MUX 31		Ref (F85p)
-RDVALID			(MC5	FB)  : MUX 33		Ref (C42fb)
-A5			(MC13	P)   : MUX 35		Ref (F88p)
-A1			(MC9	P)   : MUX 39		Ref (E65p)
+RP1			(MC8	P)   : MUX 1		Ref (C37p)
+RP4			(MC5	P)   : MUX 3		Ref (B24p)
+RW			(MC21	P)   : MUX 4		Ref (F96p)
+A20			(MC23	P)   : MUX 5		Ref (G99p)
+IOSEL			(MC18	P)   : MUX 6		Ref (F91p)
+A19			(MC22	P)   : MUX 7		Ref (G97p)
+WSTB			(MC1	P)   : MUX 9		Ref (A6p)
+WSTBV			(MC3	P)   : MUX 10		Ref (A11p)
+E			(MC12	P)   : MUX 11		Ref (E69p)
+SPANBUSY		(MC19	P)   : MUX 12		Ref (F93p)
+RP3			(MC10	P)   : MUX 13		Ref (D51p)
+A3			(MC20	P)   : MUX 14		Ref (F94p)
+A2			(MC25	P)   : MUX 15		Ref (G104p)
+RP2			(MC6	P)   : MUX 16		Ref (B25p)
+A6			(MC17	P)   : MUX 17		Ref (F88p)
+A1			(MC16	P)   : MUX 19		Ref (F86p)
+A4			(MC14	P)   : MUX 21		Ref (F83p)
+IOPGH			(MC24	P)   : MUX 23		Ref (G101p)
+XXL_165			(MC4	FB)  : MUX 25		Ref (A15fb)
+WPQ			(MC7	FB)  : MUX 27		Ref (B28fb)
+XXL_164			(MC2	FB)  : MUX 29		Ref (A10fb)
+A0			(MC15	P)   : MUX 31		Ref (F85p)
+A5			(MC11	P)   : MUX 33		Ref (E67p)
+WALK			(MC13	FB)  : MUX 37		Ref (OE1)
+RDVALID			(MC9	FB)  : MUX 39		Ref (C44fb)
 
 FanIn assignment for block C [25]
 {
-A6,A2,A4,A3,A5,A1,
-CSTEP,CPH,CBUSY,CROWADV,
+A5,
+CRLD,CRDSEL,CROWADV,CEOR,CSTEP,CPH,CBUSY,
 DP0,
 E,
-GRD,GCPY,
-IOSEL,
-RETIRE,RW,RPQ,RDVALID,
-WSTBV,WSTB,WPQ,
-XXL_145,XXL_144,XXL_146,
+GCPY,GRD,
+RP1,RP4,RDVALID,RP3,RP2,RETIRE,RPQ,
+WSTB,WSTBV,WROWADV,WALK,
+XXL_163,XXL_166,
 }
 Multiplexer assignment for block C
-WSTBV			(MC2	P)   : MUX 0		Ref (B27p)
-DP0			(MC23	P)   : MUX 1		Ref (H120p)
-GRD			(MC22	P)   : MUX 2		Ref (G105p)
-CSTEP			(MC7	P)   : MUX 3		Ref (C40p)
-A6			(MC17	P)   : MUX 6		Ref (F91p)
-WSTB			(MC1	P)   : MUX 9		Ref (A6p)
-WPQ			(MC6	FB)  : MUX 10		Ref (C39fb)
-A2			(MC15	P)   : MUX 11		Ref (F86p)
-E			(MC18	P)   : MUX 12		Ref (F93p)
-A4			(MC14	P)   : MUX 13		Ref (F85p)
-IOSEL			(MC19	P)   : MUX 14		Ref (F94p)
-CPH			(MC8	FB)  : MUX 15		Ref (C41fb)
-XXL_145			(MC5	FB)  : MUX 17		Ref (B31fb)
-RETIRE			(MC25	P)   : MUX 18		Ref (H125p)
-XXL_144			(MC4	FB)  : MUX 19		Ref (B30fb)
-CBUSY			(MC20	P)   : MUX 20		Ref (F96p)
-A3			(MC13	P)   : MUX 21		Ref (F83p)
-RW			(MC21	P)   : MUX 25		Ref (G97p)
-RPQ			(MC3	FB)  : MUX 27		Ref (B28fb)
-XXL_146			(MC10	FB)  : MUX 29		Ref (C44fb)
-GCPY			(MC24	P)   : MUX 32		Ref (H123p)
-RDVALID			(MC9	FB)  : MUX 33		Ref (C42fb)
-CROWADV			(MC11	P)   : MUX 34		Ref (E77p)
-A5			(MC16	P)   : MUX 35		Ref (F88p)
-A1			(MC12	P)   : MUX 39		Ref (E65p)
+RP1			(MC8	P)   : MUX 1		Ref (C37p)
+GCPY			(MC20	P)   : MUX 2		Ref (G105p)
+RP4			(MC5	P)   : MUX 3		Ref (B24p)
+XXL_163			(MC4	FB)  : MUX 5		Ref (A12fb)
+DP0			(MC21	P)   : MUX 6		Ref (G107p)
+RDVALID			(MC11	FB)  : MUX 7		Ref (C44fb)
+WSTB			(MC2	P)   : MUX 9		Ref (A6p)
+WSTBV			(MC3	P)   : MUX 10		Ref (A11p)
+WROWADV			(MC24	P)   : MUX 11		Ref (H118p)
+RP3			(MC13	P)   : MUX 13		Ref (D51p)
+RP2			(MC6	P)   : MUX 14		Ref (B25p)
+CRLD			(MC10	FB)  : MUX 15		Ref (C42fb)
+CRDSEL			(MC15	P)   : MUX 16		Ref (E77p)
+CROWADV			(MC9	P)   : MUX 17		Ref (C38p)
+RETIRE			(MC25	P)   : MUX 19		Ref (H120p)
+RPQ			(MC1	FB)  : MUX 20		Ref (A4fb)
+CEOR			(MC23	P)   : MUX 21		Ref (H117p)
+CSTEP			(MC14	P)   : MUX 25		Ref (D53p)
+GRD			(MC22	P)   : MUX 27		Ref (H115p)
+A5			(MC17	P)   : MUX 29		Ref (E67p)
+XXL_166			(MC7	FB)  : MUX 31		Ref (B31fb)
+E			(MC18	P)   : MUX 33		Ref (E69p)
+WALK			(MC19	FB)  : MUX 35		Ref (OE1)
+CPH			(MC12	FB)  : MUX 37		Ref (C47fb)
+CBUSY			(MC16	P)   : MUX 39		Ref (E65p)
 
-FanIn assignment for block D [14]
+FanIn assignment for block D [13]
 {
-CROWADV,CRLD,CHLAST,CRDSEL,
-GRD,
-IRQPEND,IRQEN,
-PS2,PS0,PPEND,PS1,PIDXCE,
-RP2,RP4,
+CPH,CRLD,CROWADV,CBUSY,
+DP0,
+GCPY,
+PS0,PS1,PS2,PIDXCE,PPEND,
+RP2,
+WSTBV,
 }
 Multiplexer assignment for block D
-CROWADV			(MC12	P)   : MUX 0		Ref (E77p)
-PS2			(MC8	FB)  : MUX 1		Ref (D62fb)
-GRD			(MC13	P)   : MUX 2		Ref (G105p)
-CRLD			(MC9	FB)  : MUX 5		Ref (D63fb)
-CHLAST			(MC14	P)   : MUX 6		Ref (H126p)
-RP2			(MC11	P)   : MUX 7		Ref (E72p)
-IRQPEND			(MC4	P)   : MUX 8		Ref (B32p)
-PS0			(MC1	FB)  : MUX 14		Ref (A4fb)
-CRDSEL			(MC5	P)   : MUX 17		Ref (C38p)
-PPEND			(MC2	FB)  : MUX 20		Ref (A7fb)
-RP4			(MC10	P)   : MUX 23		Ref (E69p)
-PS1			(MC7	FB)  : MUX 25		Ref (D60fb)
-PIDXCE			(MC6	P)   : MUX 35		Ref (D56p)
-IRQEN			(MC3	FB)  : MUX 37		Ref (A15fb)
+PS0			(MC1	FB)  : MUX 0		Ref (A7fb)
+PS1			(MC9	FB)  : MUX 1		Ref (D62fb)
+DP0			(MC13	P)   : MUX 6		Ref (G107p)
+GCPY			(MC12	P)   : MUX 8		Ref (G105p)
+PS2			(MC10	FB)  : MUX 9		Ref (D63fb)
+CPH			(MC7	FB)  : MUX 11		Ref (C47fb)
+RP2			(MC4	P)   : MUX 14		Ref (B25p)
+PIDXCE			(MC8	P)   : MUX 15		Ref (D56p)
+PPEND			(MC2	FB)  : MUX 17		Ref (A9fb)
+CRLD			(MC6	FB)  : MUX 23		Ref (C42fb)
+WSTBV			(MC3	P)   : MUX 24		Ref (A11p)
+CROWADV			(MC5	P)   : MUX 25		Ref (C38p)
+CBUSY			(MC11	P)   : MUX 31		Ref (E65p)
 
-FanIn assignment for block E [8]
+FanIn assignment for block E [7]
 {
-A1,A3,A4,
-CEOR,CSTEP,
-RP3,RP1,
+A0,A4,
+CROWADV,CHLAST,CBUSY,CPH,
 WAITN.OE,
 }
 Multiplexer assignment for block E
-CEOR			(MC8	P)   : MUX 0		Ref (H128p)
-A1			(MC5	P)   : MUX 7		Ref (E65p)
-CSTEP			(MC2	P)   : MUX 11		Ref (C40p)
-WAITN.OE		(MC3	FB)  : MUX 15		Ref (C47fb)
-RP3			(MC4	P)   : MUX 17		Ref (D53p)
-A3			(MC6	P)   : MUX 21		Ref (F83p)
-A4			(MC7	P)   : MUX 31		Ref (F85p)
-RP1			(MC1	P)   : MUX 33		Ref (B21p)
+A0			(MC6	P)   : MUX 5		Ref (F85p)
+CROWADV			(MC2	P)   : MUX 7		Ref (C38p)
+CHLAST			(MC7	P)   : MUX 8		Ref (H123p)
+CBUSY			(MC4	P)   : MUX 13		Ref (E65p)
+WAITN.OE		(MC1	FB)  : MUX 19		Ref (B30fb)
+A4			(MC5	P)   : MUX 27		Ref (F83p)
+CPH			(MC3	FB)  : MUX 37		Ref (C47fb)
 
 Creating JEDEC file v3host.jed ...
 
@@ -385,212 +374,199 @@ PLCC84 programmed logic:
 -----------------------------------
 CPURF = (A5 & A6 & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !SPANBUSY);
 
-CPH.D = ((CBUSY & CPH.Q & !DP0)
-	# (CBUSY & CPH.Q & !GCPY)
-	# (CBUSY & !CPH.Q & DP0 & GCPY));
-
-CRDSEL = (CBUSY & !CPH.Q);
+CPH.D = ((CBUSY & !CPH.Q & GCPY & DP0)
+	# (CBUSY & CPH.Q & !DP0)
+	# (CBUSY & CPH.Q & !GCPY));
 
 CSTEP = (CPH.Q & DP0 & GCPY);
 
-IRQEN.D = ((!E & IRQEN.Q)
-	# (!A0 & !A1 & !A2 & !A3 & !A4 & A5 & A6 & !CBUSY & D6 & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY)
-	# XXL_141
-	# XXL_142
-	# XXL_143);
-
-IRQN = 0;
-
-LUTWE = !PS1.Q;
-
-!IRQPEND.D = ((!IRQPEND.Q & VBLQ.Q)
-	# (!VBLANK & A0 & !A1 & A2 & A3 & !A4 & A5 & A6 & !CBUSY & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY)
-	# (VBLQ.Q & A0 & !A1 & A2 & A3 & !A4 & A5 & A6 & !CBUSY & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY)
-	# (!IRQPEND.Q & !VBLANK));
-
-PDQ.D = (A0 & !A1 & !A2 & !A3 & A4 & A5 & A6 & !CBUSY & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY);
+CRDSEL = (CBUSY & !CPH.Q);
 
 !PALTURN = (!PS0.Q & !PS1.Q & !PS2.Q);
 
+LUTWE = !PS1.Q;
+
 !PBUSY = (!PPEND.Q & !PS0.Q & !PS1.Q & !PS2.Q & !PIDXCE.Q);
 
-PS0.D = ((A0 & !A1 & !A2 & !A3 & A4 & A5 & A6 & !CBUSY & E & !IOSEL & !PDQ.Q & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY & VBLANK)
-	# (HLOAD & PPEND.Q));
+PDQ.D = (A0 & !A1 & !A2 & !A3 & A4 & A5 & A6 & !CBUSY & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY & !WALK);
 
 PPEND.D = ((!HLOAD & PPEND.Q)
-	# (A0 & !A1 & !A2 & !A3 & A4 & A5 & A6 & !CBUSY & E & !IOSEL & !PDQ.Q & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY & !VBLANK));
+	# (A0 & !A1 & !A2 & !A3 & A4 & A5 & A6 & !CBUSY & E & !IOSEL & !PDQ.Q & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY & !VBLANK & !WALK));
 
 PS1.D = PS0.Q;
 
-PIDXCE.D = PS2.Q;
-
-RA0 = A0;
+PS0.D = ((A0 & !A1 & !A2 & !A3 & A4 & A5 & A6 & !CBUSY & E & !IOSEL & !PDQ.Q & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY & VBLANK & !WALK)
+	# (HLOAD & PPEND.Q));
 
 PS2.D = PS1.Q;
 
-RA3 = A3;
+RA0 = A0;
 
-RA4 = A4;
+PIDXCE.D = PS2.Q;
 
 RA1 = A1;
 
+RA3 = A3;
+
 RA2 = A2;
+
+RA4 = A4;
+
+!RDOE = ((IOSEL & RW & A19 & !A20 & !IOPGH)
+	# (!IOSEL & RW & !A0 & !A1 & A2 & A3 & !A4 & A5 & A6));
 
 RCPY = (CBUSY & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q);
 
-RDREQ = ((E & !RDVALID.Q & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !SPANBUSY & A19 & !A20 & !IOPGH & IOSEL & RW)
-	# (E & !RDVALID.Q & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !SPANBUSY & !IOSEL & RW & !A0 & !A1 & A2 & A3 & !A4 & A5 & A6)
-	# (!E & !RDVALID.Q & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !SPANBUSY & !WPQ.Q));
-
 !RDCK = (GRD & !RDVALID.Q);
 
-!RDOE = ((IOSEL & RW & A19 & !A20 & !IOPGH)
-	# (!A0 & !A1 & A2 & A3 & !A4 & A5 & A6 & !IOSEL & RW));
+RFA1 = (RP4.Q
+	# (!RP1.Q & !RP2.Q & A1 & A5 & A6 & E & !IOSEL)
+	# (!RP1.Q & !RP2.Q & SPANBUSY)
+	# RP3.Q);
 
-!RFA2 = (RP2.Q
-	# RP3.Q
-	# RP4.Q
-	# (!A2 & A5 & A6 & E & !IOSEL & !SPANBUSY)
-	# RP1.Q);
+RDREQ = ((!E & !RDVALID.Q & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !SPANBUSY & !WALK & !WPQ.Q)
+	# (E & !RDVALID.Q & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !SPANBUSY & !WALK & IOSEL & RW & A19 & !A20 & !IOPGH)
+	# (E & !RDVALID.Q & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !SPANBUSY & !WALK & !IOSEL & RW & !A0 & !A1 & A2 & A3 & !A4 & A5 & A6));
 
-REGWR = (A5 & A6 & !CBUSY & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY);
+REGWR = (A5 & A6 & !CBUSY & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY & !WALK);
 
 RFA3 = (RP1.Q
 	# RP2.Q
 	# (A3 & A5 & A6 & E & !IOSEL & !RP3.Q & !RP4.Q & !SPANBUSY));
 
-RFA1 = ((!RP1.Q & !RP2.Q & SPANBUSY)
-	# RP3.Q
+!RFA2 = XXL_163;
+
+RFA4 = (RP3.Q
 	# RP4.Q
-	# (A1 & A5 & A6 & E & !IOSEL & !RP1.Q & !RP2.Q));
+	# (A4 & A5 & A6 & E & !IOSEL & !RP1.Q & !RP2.Q & !SPANBUSY));
 
 RP1.D = (!RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & WROWADV);
 
-RFA4 = (RP4.Q
-	# (A4 & A5 & A6 & E & !IOSEL & !RP1.Q & !RP2.Q & !SPANBUSY)
-	# RP3.Q);
+RP2.D = RP1.Q;
 
 RP4.D = RP3.Q;
-
-RP2.D = RP1.Q;
 
 RP3.D = (CRLD.Q & RP2.Q);
 
 RPQ.D = ((E & IOSEL & RW & A19 & !A20 & !IOPGH)
-	# (!A0 & !A1 & A2 & A3 & !A4 & A5 & A6 & E & !IOSEL & RW));
+	# (E & !IOSEL & RW & !A0 & !A1 & A2 & A3 & !A4 & A5 & A6));
 
 !VSTATOE = (A0 & !A1 & A2 & A3 & !A4 & A5 & A6 & E & !IOSEL & RW);
 
-VBLQ.D = VBLANK;
-
 WAITN = 0;
 
-!WSTB = (A5 & A6 & !CBUSY & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY);
+WSTBV = ((!CBUSY & E & IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY & !WALK & A19 & !A20 & !IOPGH)
+	# (!CBUSY & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY & !WALK & !A0 & !A1 & A2 & A3 & !A4 & A5 & A6));
 
-WSTBV = ((!CBUSY & E & IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY & A19 & !A20 & !IOPGH)
-	# (!A0 & !A1 & A2 & A3 & !A4 & A5 & A6 & !CBUSY & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY));
+!WSTB = (A5 & A6 & !CBUSY & E & !IOSEL & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY & !WALK);
 
 CROWADV = (CEOR & CSTEP);
 
-DIR = (!CRDSEL & !GRD);
+RDBKOE = (XXL_166
+	# (!WSTBV & !A5 & !WSTB.PIN));
 
-RDVALID.D = ((RDVALID.Q & !CSTEP & E & !RETIRE & WSTB)
-	# (RDVALID.Q & !CSTEP & !RETIRE & WSTB & !RPQ.Q)
-	# (GRD & !RDVALID.Q));
+DIR = (!CRDSEL & !GRD);
 
 !PWCK = (WSTBV
 	# (!CPH.Q & DP0 & GCPY));
 
-RDBKOE = ((!WSTBV & !A4 & A3 & A2 & !A1 & WSTB)
-	# XXL_146);
+WSTART = (WPQ.Q & !WSTBV);
+
+RDVALID.D = ((!RDVALID.Q & GRD)
+	# (RDVALID.Q & !CSTEP & !RETIRE & !WALK & !WSTB.PIN & E)
+	# (RDVALID.Q & !CSTEP & !RETIRE & !WALK & !WSTB.PIN & !RPQ.Q));
 
 WPQ.D = WSTBV;
-
-WSTART = (WPQ.Q & !WSTBV);
 
 WSTEP = ((!E & RPQ.Q)
 	# CSTEP);
 
-CDONE = (CHLAST & CROWADV);
-
 CRLD.D = ((CRLD.Q & !RP4.Q)
 	# CROWADV);
 
+CDONE = (CHLAST & CROWADV);
+
 !CWLOAD = (!CROWADV & CBUSY);
 
-XXL_141 = ((IOSEL & IRQEN.Q)
-	# (!A6 & IRQEN.Q)
-	# (!A5 & IRQEN.Q)
-	# (SPANBUSY & IRQEN.Q)
-	# (CBUSY & IRQEN.Q));
+!Com_Ctrl_162 = (!RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & WALK);
 
-XXL_142 = ((RP1.Q & IRQEN.Q)
-	# (RP2.Q & IRQEN.Q)
-	# (RP3.Q & IRQEN.Q)
-	# (RP4.Q & IRQEN.Q)
-	# (A4 & IRQEN.Q));
+XXL_163 = (RP4.Q
+	# (!A2 & A5 & A6 & E & !IOSEL & !SPANBUSY)
+	# RP1.Q
+	# RP2.Q
+	# RP3.Q);
 
-XXL_143 = ((A3 & IRQEN.Q)
-	# (A2 & IRQEN.Q)
-	# (A1 & IRQEN.Q)
-	# (A0 & IRQEN.Q)
-	# (RW & IRQEN.Q));
-
-XXL_144 = ((!A5 & !IOSEL)
-	# (!IOSEL & !A6)
-	# (IOSEL & !A19)
+XXL_164 = ((IOSEL & !A19)
 	# (IOSEL & A20)
-	# (IOSEL & IOPGH));
+	# (IOSEL & IOPGH)
+	# (!IOSEL & !A2 & RW & !WALK)
+	# (!IOSEL & !A6));
 
-XXL_145 = ((!CBUSY & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !RW & !SPANBUSY)
-	# (!CBUSY & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !SPANBUSY & RDVALID.Q)
-	# (!IOSEL & RW & A0)
-	# (!IOSEL & RW & A1)
-	# (!IOSEL & RW & !A2));
+XXL_165 = ((!IOSEL & RW & !WALK & !A3)
+	# (!IOSEL & RW & !WALK & A1)
+	# (!RW & !WALK & !CBUSY & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !SPANBUSY)
+	# (!WALK & !CBUSY & !RP1.Q & !RP2.Q & !RP3.Q & !RP4.Q & !SPANBUSY & RDVALID.Q)
+	# (!IOSEL & RW & !WALK & A4));
 
-XXL_146 = ((!WSTBV & !A5 & WSTB)
-	# (!WSTBV & !A6 & WSTB)
-	# (!WSTBV & !E & WSTB)
-	# (!WSTBV & IOSEL & WSTB)
-	# (!WSTBV & !RW & WSTB));
+XXL_166 = ((!WSTBV & !WSTB.PIN & !E)
+	# (!WSTBV & !WSTB.PIN & IOSEL)
+	# (!WSTBV & !WSTB.PIN & !RW)
+	# (!WSTBV & !WSTB.PIN & !A4 & A3 & A2 & !A1)
+	# (!WSTBV & !WSTB.PIN & !A6));
+
+CPURF.OE = !WALK;
 
 CPH.C = CLK25;
 
-IRQEN.C = CLK25;
-
-IRQN.OE = (IRQEN.Q & IRQPEND.Q);
-
-IRQPEND.C = CLK25;
-
 PDQ.C = CLK25;
-
-PS0.C = CLK25;
 
 PPEND.C = CLK25;
 
 PS1.C = CLK25;
 
-PIDXCE.C = CLK25;
+PS0.C = CLK25;
 
 PS2.C = CLK25;
 
+RA0.OE = !WALK;
+
+PIDXCE.C = CLK25;
+
+RA1.OE = !WALK;
+
+RA3.OE = !WALK;
+
+RA2.OE = !WALK;
+
+RA4.OE = !WALK;
+
+RFA1.OE = Com_Ctrl_162;
+
+REGWR.OE = !WALK;
+
+RFA3.OE = Com_Ctrl_162;
+
+RFA2.OE = Com_Ctrl_162;
+
+RFA4.OE = Com_Ctrl_162;
+
 RP1.C = CLK25;
 
-RP4.C = CLK25;
-
 RP2.C = CLK25;
+
+RP4.C = CLK25;
 
 RP3.C = CLK25;
 
 RPQ.C = CLK25;
 
-VBLQ.C = CLK25;
+!WAITN.OE = (!E
+	# (!IOSEL & !A5)
+	# XXL_164
+	# XXL_165
+	# (!IOSEL & A2 & RW & !A4 & A3 & !A1 & A0));
 
-!WAITN.OE = ((!IOSEL & RW & !A3)
-	# (!IOSEL & RW & A4)
-	# !E
-	# XXL_144
-	# XXL_145);
+WSTB.OE = !WALK;
 
 RDVALID.C = CLK25;
 
@@ -601,90 +577,86 @@ CRLD.C = CLK25;
 
 PLCC84 Pin/Node Placement:
 ------------------------------------
-Pin 4  = RFA2; /* MC 16 */
-Pin 5  = RFA1; /* MC 14 */
+Pin 4  = RFA1; /* MC 16 */
+Pin 5  = RFA4; /* MC 14 */
 Pin 6  = RFA3; /* MC 13 */
-Pin 8  = RFA4; /* MC 11 */
-Pin 9  = REGWR; /* MC 8 */
+Pin 8  = WSTBV; /* MC 11 */
+Pin 9  = RDOE; /* MC 8 */
 Pin 10 = WSTB; /* MC  6 */
-Pin 11 = VSTATOE; /* MC  5 */
-Pin 12 = CPURF; /* MC  3 */
-Pin 14 = IRQPEND; /* MC 32 */ 
-Pin 15 = RDREQ; /* MC 29 */ 
-Pin 16 = WSTBV; /* MC 27 */ 
-Pin 17 = RDOE; /* MC 25 */ 
-Pin 18 = RCPY; /* MC 24 */ 
-Pin 20 = RP1; /* MC 21 */ 
-Pin 21 = RA0; /* MC 19 */ 
-Pin 22 = RA2; /* MC 17 */ 
-Pin 23 = RDBKOE; /* MC 48 */ 
-Pin 24 = PWCK; /* MC 46 */ 
-Pin 25 = WSTEP; /* MC 45 */ 
-Pin 27 = WSTART; /* MC 43 */ 
-Pin 28 = CSTEP; /* MC 40 */ 
-Pin 29 = CRDSEL; /* MC 38 */ 
-Pin 30 = RDCK; /* MC 37 */ 
-Pin 31 = CWLOAD; /* MC 35 */ 
-Pin 33 = IRQN; /* MC 64 */ 
+Pin 11 = REGWR; /* MC  5 */
+Pin 12 = VSTATOE; /* MC  3 */
+Pin 14 = RDREQ; /* MC 32 */ 
+Pin 15 = CPURF; /* MC 29 */ 
+Pin 16 = WSTART; /* MC 27 */ 
+Pin 17 = RP2; /* MC 25 */ 
+Pin 18 = RP4; /* MC 24 */ 
+Pin 20 = RA2; /* MC 21 */ 
+Pin 21 = RA3; /* MC 19 */ 
+Pin 22 = RA1; /* MC 17 */ 
+Pin 23 = WSTEP; /* MC 48 */ 
+Pin 24 = RFA2; /* MC 46 */ 
+Pin 25 = RDBKOE; /* MC 45 */ 
+Pin 27 = RDCK; /* MC 43 */ 
+Pin 28 = DIR; /* MC 40 */ 
+Pin 29 = CROWADV; /* MC 38 */ 
+Pin 30 = RP1; /* MC 37 */ 
+Pin 31 = RCPY; /* MC 35 */ 
+Pin 33 = PWCK; /* MC 64 */ 
 Pin 34 = PBUSY; /* MC 61 */ 
 Pin 35 = PALTURN; /* MC 59 */ 
 Pin 36 = LUTWE; /* MC 57 */ 
 Pin 37 = PIDXCE; /* MC 56 */ 
-Pin 39 = RP3; /* MC 53 */ 
-Pin 40 = CDONE; /* MC 51 */ 
-Pin 41 = DIR; /* MC 49 */ 
-Pin 44 = A1; /* MC 65 */ 
-Pin 45 = RA4; /* MC 67 */ 
-Pin 46 = RP4; /* MC 69 */ 
-Pin 48 = RP2; /* MC 72 */ 
-Pin 49 = RA1; /* MC 73 */ 
-Pin 50 = RA3; /* MC 75 */ 
-Pin 51 = CROWADV; /* MC 77 */ 
+Pin 39 = CSTEP; /* MC 53 */ 
+Pin 40 = RP3; /* MC 51 */ 
+Pin 41 = CWLOAD; /* MC 49 */ 
+Pin 44 = CBUSY; /* MC 65 */ 
+Pin 45 = A5; /* MC 67 */ 
+Pin 46 = E; /* MC 69 */ 
+Pin 48 = RA0; /* MC 72 */ 
+Pin 49 = RA4; /* MC 73 */ 
+Pin 50 = CDONE; /* MC 75 */ 
+Pin 51 = CRDSEL; /* MC 77 */ 
 Pin 52 = WAITN; /* MC 80 */ 
-Pin 54 = A3; /* MC 83 */ 
-Pin 55 = A4; /* MC 85 */ 
-Pin 56 = A2; /* MC 86 */ 
-Pin 57 = A5; /* MC 88 */ 
-Pin 58 = A6; /* MC 91 */ 
-Pin 60 = E; /* MC 93 */ 
-Pin 61 = IOSEL; /* MC 94 */ 
-Pin 62 = CBUSY; /* MC 96 */ 
-Pin 63 = RW; /* MC 97 */ 
-Pin 64 = SPANBUSY; /* MC 99 */ 
-Pin 65 = A0; /* MC 101 */ 
-Pin 67 = VBLANK; /* MC 104 */ 
-Pin 68 = GRD; /* MC 105 */ 
-Pin 69 = D6; /* MC 107 */ 
+Pin 54 = A4; /* MC 83 */ 
+Pin 55 = A0; /* MC 85 */ 
+Pin 56 = A1; /* MC 86 */ 
+Pin 57 = A6; /* MC 88 */ 
+Pin 58 = IOSEL; /* MC 91 */ 
+Pin 60 = SPANBUSY; /* MC 93 */ 
+Pin 61 = A3; /* MC 94 */ 
+Pin 62 = RW; /* MC 96 */ 
+Pin 63 = A19; /* MC 97 */ 
+Pin 64 = A20; /* MC 99 */ 
+Pin 65 = IOPGH; /* MC 101 */ 
+Pin 67 = A2; /* MC 104 */ 
+Pin 68 = GCPY; /* MC 105 */ 
+Pin 69 = DP0; /* MC 107 */ 
 Pin 70 = HLOAD; /* MC 109 */ 
-Pin 71 = A19; /* MC 112 */ 
-Pin 73 = A20; /* MC 115 */ 
-Pin 74 = IOPGH; /* MC 117 */ 
+Pin 71 = VBLANK; /* MC 112 */ 
+Pin 73 = GRD; /* MC 115 */ 
+Pin 74 = CEOR; /* MC 117 */ 
 Pin 75 = WROWADV; /* MC 118 */ 
-Pin 76 = DP0; /* MC 120 */ 
-Pin 77 = GCPY; /* MC 123 */ 
-Pin 79 = RETIRE; /* MC 125 */ 
-Pin 80 = CHLAST; /* MC 126 */ 
-Pin 81 = CEOR; /* MC 128 */ 
+Pin 76 = RETIRE; /* MC 120 */ 
+Pin 77 = CHLAST; /* MC 123 */ 
 Pin 83 = CLK25;
-PINNODE 601 = VBLQ; /* MC 1 Feedback */
+Pin 84 = WALK;
+PINNODE 314 = Com_Ctrl_162; /* MC 14 Foldback */
+PINNODE 348 = Com_Ctrl_162; /* MC 48 Foldback */
 PINNODE 602 = PDQ; /* MC 2 Feedback */
-PINNODE 604 = PS0; /* MC 4 Feedback */
-PINNODE 607 = PPEND; /* MC 7 Feedback */
-PINNODE 609 = XXL_143; /* MC 9 Feedback */
-PINNODE 610 = XXL_142; /* MC 10 Feedback */
-PINNODE 612 = XXL_141; /* MC 12 Feedback */
-PINNODE 615 = IRQEN; /* MC 15 Feedback */
-PINNODE 628 = RPQ; /* MC 28 Feedback */
-PINNODE 630 = XXL_144; /* MC 30 Feedback */
-PINNODE 631 = XXL_145; /* MC 31 Feedback */
-PINNODE 639 = WPQ; /* MC 39 Feedback */
-PINNODE 641 = CPH; /* MC 41 Feedback */
-PINNODE 642 = RDVALID; /* MC 42 Feedback */
-PINNODE 644 = XXL_146; /* MC 44 Feedback */
-PINNODE 647 = WAITN.OE; /* MC 47 Feedback */
-PINNODE 660 = PS1; /* MC 60 Feedback */
-PINNODE 662 = PS2; /* MC 62 Feedback */
-PINNODE 663 = CRLD; /* MC 63 Feedback */
+PINNODE 604 = RPQ; /* MC 4 Feedback */
+PINNODE 607 = PS0; /* MC 7 Feedback */
+PINNODE 609 = PPEND; /* MC 9 Feedback */
+PINNODE 610 = XXL_164; /* MC 10 Feedback */
+PINNODE 612 = XXL_163; /* MC 12 Feedback */
+PINNODE 615 = XXL_165; /* MC 15 Feedback */
+PINNODE 628 = WPQ; /* MC 28 Feedback */
+PINNODE 630 = WAITN.OE; /* MC 30 Feedback */
+PINNODE 631 = XXL_166; /* MC 31 Feedback */
+PINNODE 642 = CRLD; /* MC 42 Feedback */
+PINNODE 644 = RDVALID; /* MC 44 Feedback */
+PINNODE 647 = CPH; /* MC 47 Feedback */
+PINNODE 662 = PS1; /* MC 62 Feedback */
+PINNODE 663 = PS2; /* MC 63 Feedback */
 
 ** Resource Usage **
 
@@ -703,160 +675,160 @@ DCERP Field = Summary of Allocations.
 
 For input only = INPUT.
 
-MCell Pin# Oe   PinDrive  DCERP  FBDrive  DCERP  Foldback  CascadeOut     TotPT output_slew
-MC1   0         --               VBLQ     Dg---  --        --             1     slow
-MC2   0         --               PDQ      Dg---  --        --             1     slow
-MC3   12   on   CPURF     C----  --              --        --             1     slow
-MC4   0         --               PS0      Dg---  --        --             2     slow
-MC5   11   on   VSTATOE   C----  --              --        --             1     slow
-MC6   10   on   WSTB      C----  --              --        --             1     slow
-MC7   0         --               PPEND    Dg---  --        --             2     slow
-MC8   9    on   REGWR     C----  --              --        --             1     slow
-MC9   0         --               XXL_143  C----  NA        --             5     slow
-MC10  0         --               XXL_142  C----  NA        --             5     slow
-MC11  8    on   RFA4      C----  --              --        --             3     slow
-MC12  0         --               XXL_141  C----  NA        --             5     slow
-MC13  6    on   RFA3      C----  --              --        --             3     slow
-MC14  5    on   RFA1      C----  --              --        --             4     slow
-MC15  0         --               IRQEN    Dg---  NA        --             5     slow
-MC16  4    on   RFA2      C----  --              NA        --             5     slow
-MC17  22   on   RA2       C----  --              --        --             1     slow
-MC18  0         --               --              --        --             0     slow
-MC19  21   on   RA0       C----  --              --        --             1     slow
-MC20  0         --               --              --        --             0     slow
-MC21  20   on   RP1       Dg---  --              --        --             1     slow
-MC22  0         --               --              --        --             0     slow
-MC23  0         --               --              --        --             0     slow
-MC24  18   on   RCPY      C----  --              --        --             1     slow
-MC25  17   on   RDOE      C----  --              --        --             2     slow
-MC26  0         --               --              --        --             0     slow
-MC27  16   on   WSTBV     C----  --              --        --             2     slow
-MC28  0         --               RPQ      Dg---  --        --             2     slow
-MC29  15   on   RDREQ     C----  --              --        --             3     slow
-MC30  0         --               XXL_144  C----  NA        --             5     slow
-MC31  0         --               XXL_145  C----  NA        --             5     slow
-MC32  14   on   IRQPEND   Dg---  --              --        --             4     slow
-MC33  0         --               --              --        --             0     slow
-MC34  0         --               --              --        --             0     slow
-MC35  31   on   CWLOAD    C----  --              --        --             1     slow
-MC36  0         --               --              --        --             0     slow
-MC37  30   on   RDCK      C----  --              --        --             1     slow
-MC38  29   on   CRDSEL    C----  --              --        --             1     slow
-MC39  0         --               WPQ      Dg---  --        --             1     slow
-MC40  28   on   CSTEP     C----  --              --        --             1     slow
-MC41  0         --               CPH      Dg---  --        --             3     slow
-MC42  0         --               RDVALID  Dg---  --        --             3     slow
-MC43  27   on   WSTART    C----  --              --        --             1     slow
-MC44  0         --               XXL_146  C----  NA        --             5     slow
-MC45  25   on   WSTEP     C----  --              --        --             2     slow
-MC46  24   on   PWCK      C----  --              --        --             2     slow
-MC47  0         --               WAITN.OE C----  NA        --             5     slow
-MC48  23   on   RDBKOE    C----  --              --        --             2     slow
-MC49  41   on   DIR       C----  --              --        --             1     slow
-MC50  0         --               --              --        --             0     slow
-MC51  40   on   CDONE     C----  --              --        --             1     slow
-MC52  0         --               --              --        --             0     slow
-MC53  39   on   RP3       Dg---  --              --        --             1     slow
-MC54  0         --               --              --        --             0     slow
-MC55  0         --               --              --        --             0     slow
-MC56  37   on   PIDXCE    Dg---  --              --        --             1     slow
-MC57  36   on   LUTWE     C----  --              --        --             1     slow
-MC58  0         --               --              --        --             0     slow
-MC59  35   on   PALTURN   C----  --              --        --             1     slow
-MC60  0         --               PS1      Dg---  --        --             1     slow
-MC61  34   on   PBUSY     C----  --              --        --             1     slow
-MC62  0         --               PS2      Dg---  --        --             1     slow
-MC63  0         --               CRLD     Dg---  --        --             2     slow
-MC64  33   PT   IRQN      C----  --              --        --             1     slow
-MC65  44   --   A1        INPUT  --              --        --             0     slow
-MC66  0         --               --              --        --             0     slow
-MC67  45   on   RA4       C----  --              --        --             1     slow
-MC68  0         --               --              --        --             0     slow
-MC69  46   on   RP4       Dg---  --              --        --             1     slow
-MC70  0         --               --              --        --             0     slow
-MC71  0         --               --              --        --             0     slow
-MC72  48   on   RP2       Dg---  --              --        --             1     slow
-MC73  49   on   RA1       C----  --              --        --             1     slow
-MC74  0         --               --              --        --             0     slow
-MC75  50   on   RA3       C----  --              --        --             1     slow
-MC76  0         --               --              --        --             0     slow
-MC77  51   on   CROWADV   C----  --              --        --             1     slow
-MC78  0         --               --              --        --             0     slow
-MC79  0         --               --              --        --             0     slow
-MC80  52   PT   WAITN     C----  --              --        --             1     slow
-MC81  0         --               --              --        --             0     slow
-MC82  0         --               --              --        --             0     slow
-MC83  54   --   A3        INPUT  --              --        --             0     slow
-MC84  0         --               --              --        --             0     slow
-MC85  55   --   A4        INPUT  --              --        --             0     slow
-MC86  56   --   A2        INPUT  --              --        --             0     slow
-MC87  0         --               --              --        --             0     slow
-MC88  57   --   A5        INPUT  --              --        --             0     slow
-MC89  0         --               --              --        --             0     slow
-MC90  0         --               --              --        --             0     slow
-MC91  58   --   A6        INPUT  --              --        --             0     slow
-MC92  0         --               --              --        --             0     slow
-MC93  60   --   E         INPUT  --              --        --             0     slow
-MC94  61   --   IOSEL     INPUT  --              --        --             0     slow
-MC95  0         --               --              --        --             0     slow
-MC96  62   --   CBUSY     INPUT  --              --        --             0     slow
-MC97  63   --   RW        INPUT  --              --        --             0     slow
-MC98  0         --               --              --        --             0     slow
-MC99  64   --   SPANBUSY  INPUT  --              --        --             0     slow
-MC100 0         --               --              --        --             0     slow
-MC101 65   --   A0        INPUT  --              --        --             0     slow
-MC102 0         --               --              --        --             0     slow
-MC103 0         --               --              --        --             0     slow
-MC104 67   --   VBLANK    INPUT  --              --        --             0     slow
-MC105 68   --   GRD       INPUT  --              --        --             0     slow
-MC106 0         --               --              --        --             0     slow
-MC107 69   --   D6        INPUT  --              --        --             0     slow
-MC108 0         --               --              --        --             0     slow
-MC109 70   --   HLOAD     INPUT  --              --        --             0     slow
-MC110 0         --               --              --        --             0     slow
-MC111 0         --               --              --        --             0     slow
-MC112 71   --   A19       INPUT  --              --        --             0     slow
-MC113 0         --               --              --        --             0     slow
-MC114 0         --               --              --        --             0     slow
-MC115 73   --   A20       INPUT  --              --        --             0     slow
-MC116 0         --               --              --        --             0     slow
-MC117 74   --   IOPGH     INPUT  --              --        --             0     slow
-MC118 75   --   WROWADV   INPUT  --              --        --             0     slow
-MC119 0         --               --              --        --             0     slow
-MC120 76   --   DP0       INPUT  --              --        --             0     slow
-MC121 0         --               --              --        --             0     slow
-MC122 0         --               --              --        --             0     slow
-MC123 77   --   GCPY      INPUT  --              --        --             0     slow
-MC124 0         --               --              --        --             0     slow
-MC125 79   --   RETIRE    INPUT  --              --        --             0     slow
-MC126 80   --   CHLAST    INPUT  --              --        --             0     slow
-MC127 0         --               --              --        --             0     slow
-MC128 81   --   CEOR      INPUT  --              --        --             0     slow
-MC0   2         --               --              --        --             0     slow
-MC0   1         --               --              --        --             0     slow
-MC0   84        --               --              --        --             0     slow
-MC0   83        CLK25     INPUT  --              --        --             0     slow
+MCell Pin# Oe   PinDrive  DCERP  FBDrive  DCERP  Foldback     CascadeOut     TotPT output_slew
+MC1   0         --               --              --           --             0     slow
+MC2   0         --               PDQ      Dg---  --           --             1     slow
+MC3   12   on   VSTATOE   C----  --              --           --             1     slow
+MC4   0         --               RPQ      Dg---  --           --             2     slow
+MC5   11   OE0  REGWR     C----  --              --           --             1     slow
+MC6   10   OE0  WSTB      C----  --              --           --             1     slow
+MC7   0         --               PS0      Dg---  --           --             2     slow
+MC8   9    on   RDOE      C----  --              --           --             2     slow
+MC9   0         --               PPEND    Dg---  --           --             2     slow
+MC10  0         --               XXL_164  C----  NA           --             5     slow
+MC11  8    on   WSTBV     C----  --              --           --             2     slow
+MC12  0         --               XXL_163  C----  NA           --             5     slow
+MC13  6    PT   RFA3      C----  --              --           --             4     slow
+MC14  5    PT   RFA4      C----  --              Com_Ctrl_162 --             5     slow
+MC15  0         --               XXL_165  C----  NA           --             5     slow
+MC16  4    PT   RFA1      C----  --              NA           --             5     slow
+MC17  22   OE0  RA1       C----  --              --           --             1     slow
+MC18  0         --               --              --           --             0     slow
+MC19  21   OE0  RA3       C----  --              --           --             1     slow
+MC20  0         --               --              --           --             0     slow
+MC21  20   OE0  RA2       C----  --              --           --             1     slow
+MC22  0         --               --              --           --             0     slow
+MC23  0         --               --              --           --             0     slow
+MC24  18   on   RP4       Dg---  --              --           --             1     slow
+MC25  17   on   RP2       Dg---  --              --           --             1     slow
+MC26  0         --               --              --           --             0     slow
+MC27  16   on   WSTART    C----  --              --           --             1     slow
+MC28  0         --               WPQ      Dg---  --           --             1     slow
+MC29  15   OE0  CPURF     C----  --              --           --             1     slow
+MC30  0         --               WAITN.OE C----  NA           --             5     slow
+MC31  0         --               XXL_166  C----  NA           --             5     slow
+MC32  14   on   RDREQ     C----  --              --           --             3     slow
+MC33  0         --               --              --           --             0     slow
+MC34  0         --               --              --           --             0     slow
+MC35  31   on   RCPY      C----  --              --           --             1     slow
+MC36  0         --               --              --           --             0     slow
+MC37  30   on   RP1       Dg---  --              --           --             1     slow
+MC38  29   on   CROWADV   C----  --              --           --             1     slow
+MC39  0         --               --              --           --             0     slow
+MC40  28   on   DIR       C----  --              --           --             1     slow
+MC41  0         --               --              --           --             0     slow
+MC42  0         --               CRLD     Dg---  --           --             2     slow
+MC43  27   on   RDCK      C----  --              --           --             1     slow
+MC44  0         --               RDVALID  Dg---  --           --             3     slow
+MC45  25   on   RDBKOE    C----  --              --           --             2     slow
+MC46  24   PT   RFA2      C----  --              --           --             2     slow
+MC47  0         --               CPH      Dg---  --           --             3     slow
+MC48  23   on   WSTEP     C----  --              Com_Ctrl_162 --             3     slow
+MC49  41   on   CWLOAD    C----  --              --           --             1     slow
+MC50  0         --               --              --           --             0     slow
+MC51  40   on   RP3       Dg---  --              --           --             1     slow
+MC52  0         --               --              --           --             0     slow
+MC53  39   on   CSTEP     C----  --              --           --             1     slow
+MC54  0         --               --              --           --             0     slow
+MC55  0         --               --              --           --             0     slow
+MC56  37   on   PIDXCE    Dg---  --              --           --             1     slow
+MC57  36   on   LUTWE     C----  --              --           --             1     slow
+MC58  0         --               --              --           --             0     slow
+MC59  35   on   PALTURN   C----  --              --           --             1     slow
+MC60  0         --               --              --           --             0     slow
+MC61  34   on   PBUSY     C----  --              --           --             1     slow
+MC62  0         --               PS1      Dg---  --           --             1     slow
+MC63  0         --               PS2      Dg---  --           --             1     slow
+MC64  33   on   PWCK      C----  --              --           --             2     slow
+MC65  44   --   CBUSY     INPUT  --              --           --             0     slow
+MC66  0         --               --              --           --             0     slow
+MC67  45   --   A5        INPUT  --              --           --             0     slow
+MC68  0         --               --              --           --             0     slow
+MC69  46   --   E         INPUT  --              --           --             0     slow
+MC70  0         --               --              --           --             0     slow
+MC71  0         --               --              --           --             0     slow
+MC72  48   OE0  RA0       C----  --              --           --             1     slow
+MC73  49   OE0  RA4       C----  --              --           --             1     slow
+MC74  0         --               --              --           --             0     slow
+MC75  50   on   CDONE     C----  --              --           --             1     slow
+MC76  0         --               --              --           --             0     slow
+MC77  51   on   CRDSEL    C----  --              --           --             1     slow
+MC78  0         --               --              --           --             0     slow
+MC79  0         --               --              --           --             0     slow
+MC80  52   PT   WAITN     C----  --              --           --             1     slow
+MC81  0         --               --              --           --             0     slow
+MC82  0         --               --              --           --             0     slow
+MC83  54   --   A4        INPUT  --              --           --             0     slow
+MC84  0         --               --              --           --             0     slow
+MC85  55   --   A0        INPUT  --              --           --             0     slow
+MC86  56   --   A1        INPUT  --              --           --             0     slow
+MC87  0         --               --              --           --             0     slow
+MC88  57   --   A6        INPUT  --              --           --             0     slow
+MC89  0         --               --              --           --             0     slow
+MC90  0         --               --              --           --             0     slow
+MC91  58   --   IOSEL     INPUT  --              --           --             0     slow
+MC92  0         --               --              --           --             0     slow
+MC93  60   --   SPANBUSY  INPUT  --              --           --             0     slow
+MC94  61   --   A3        INPUT  --              --           --             0     slow
+MC95  0         --               --              --           --             0     slow
+MC96  62   --   RW        INPUT  --              --           --             0     slow
+MC97  63   --   A19       INPUT  --              --           --             0     slow
+MC98  0         --               --              --           --             0     slow
+MC99  64   --   A20       INPUT  --              --           --             0     slow
+MC100 0         --               --              --           --             0     slow
+MC101 65   --   IOPGH     INPUT  --              --           --             0     slow
+MC102 0         --               --              --           --             0     slow
+MC103 0         --               --              --           --             0     slow
+MC104 67   --   A2        INPUT  --              --           --             0     slow
+MC105 68   --   GCPY      INPUT  --              --           --             0     slow
+MC106 0         --               --              --           --             0     slow
+MC107 69   --   DP0       INPUT  --              --           --             0     slow
+MC108 0         --               --              --           --             0     slow
+MC109 70   --   HLOAD     INPUT  --              --           --             0     slow
+MC110 0         --               --              --           --             0     slow
+MC111 0         --               --              --           --             0     slow
+MC112 71   --   VBLANK    INPUT  --              --           --             0     slow
+MC113 0         --               --              --           --             0     slow
+MC114 0         --               --              --           --             0     slow
+MC115 73   --   GRD       INPUT  --              --           --             0     slow
+MC116 0         --               --              --           --             0     slow
+MC117 74   --   CEOR      INPUT  --              --           --             0     slow
+MC118 75   --   WROWADV   INPUT  --              --           --             0     slow
+MC119 0         --               --              --           --             0     slow
+MC120 76   --   RETIRE    INPUT  --              --           --             0     slow
+MC121 0         --               --              --           --             0     slow
+MC122 0         --               --              --           --             0     slow
+MC123 77   --   CHLAST    INPUT  --              --           --             0     slow
+MC124 0         --               --              --           --             0     slow
+MC125 79        --               --              --           --             0     slow
+MC126 80        --               --              --           --             0     slow
+MC127 0         --               --              --           --             0     slow
+MC128 81        --               --              --           --             0     slow
+MC0   2         --               --              --           --             0     slow
+MC0   1         --               --              --           --             0     slow
+MC0   84        WALK      INPUT  --              --           --             0     slow
+MC0   83        CLK25     INPUT  --              --           --             0     slow
 
 Logic Array Block	Logic Cells	I/O Pins	Foldbacks	TotalPT		FanIN	Cascades
-A: LC1	- LC16		16/16(100%)	8/16(50%)	0/16(0%)	45/80(56%)	(25)	0
-B: LC17	- LC32		11/16(68%)	8/16(50%)	0/16(0%)	27/80(33%)	(25)	0
-C: LC33	- LC48		13/16(81%)	8/16(50%)	0/16(0%)	28/80(35%)	(25)	0
-D: LC49	- LC64		11/16(68%)	8/16(50%)	0/16(0%)	12/80(15%)	(14)	0
-E: LC65	- LC80		7/16(43%)	8/16(50%)	0/16(0%)	7/80(8%)	(8)	0
+A: LC1	- LC16		15/16(93%)	8/16(50%)	1/16(6%)	43/80(53%)	(25)	0
+B: LC17	- LC32		11/16(68%)	8/16(50%)	0/16(0%)	21/80(26%)	(25)	0
+C: LC33	- LC48		11/16(68%)	8/16(50%)	1/16(6%)	20/80(25%)	(25)	0
+D: LC49	- LC64		10/16(62%)	8/16(50%)	0/16(0%)	11/80(13%)	(13)	0
+E: LC65	- LC80		5/16(31%)	8/16(50%)	0/16(0%)	5/80(6%)	(7)	0
 F: LC81	- LC96		0/16(0%)	8/16(50%)	0/16(0%)	0/80(0%)	(0)	0
 G: LC97	- LC112		0/16(0%)	8/16(50%)	0/16(0%)	0/80(0%)	(0)	0
-H: LC113- LC128		0/16(0%)	8/16(50%)	0/16(0%)	0/80(0%)	(0)	0
+H: LC113- LC128		0/16(0%)	5/16(31%)	0/16(0%)	0/80(0%)	(0)	0
 
-Total dedicated input used:	1/4 	(25%)
-Total I/O pins used		64/64 	(100%)
-Total Logic cells used 		58/128 	(45%)
-Total Flip-Flop used 		18/128 	(14%)
-Total Foldback logic used 	0/128 	(0%)
-Total Nodes+FB/MCells 		58/128 	(45%)
+Total dedicated input used:	2/4 	(50%)
+Total I/O pins used		61/64 	(95%)
+Total Logic cells used 		52/128 	(40%)
+Total Flip-Flop used 		15/128 	(11%)
+Total Foldback logic used 	2/128 	(1%)
+Total Nodes+FB/MCells 		54/128 	(42%)
 Total cascade used 		0
 Total input pins 		26
-Total output pins 		39
-Total Pts 			119
+Total output pins 		37
+Total Pts 			100
 Creating pla file v3host.tt3 with 0 inputs 0 outputs, 0 pins 0 nodes and 0 pterms...
 
 ----------------  End fitter, Design FITS

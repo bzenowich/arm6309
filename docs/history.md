@@ -12,6 +12,43 @@ The review that produced most of the 2026-09-04 amendments is
 
 ---
 
+## machine.md §0, §5 item 5 and §8 — video3 gained a fifth CPLD, and the card became 30 cm (2026-09-28)
+
+`video3` gained `v3walk`, a fifth `ATF1508AS` that runs a frame's actor copies from
+tables in the register file (`hardware/video3/docs/plan.md` §6.4,
+`hardware/video3/optimizations.md` §12.5). The card went from 45 to 46 ICs, and the fifth
+PLCC-84 does not place on 240 mm — five packages fall off — so 300 mm joined the card
+lengths for it (`hardware/tools/place/parts.ts`, `hardware/tools/lib/Card.tsx`). The
+video card's own record is `hardware/video3/docs/history.md`, 2026-09-28.
+
+**machine.md §0 — the Video3 row — said:**
+
+> **45 ICs on a 240 mm board**, the programmable logic being **4 × `ATF1508AS` PLCC-84 and
+> a `GAL22V10`, all five fitted**
+
+**machine.md §0 — the Total silicon row — said:**
+
+> **133 ICs** — **114 on cards** (video3 45, audio 35, I/O 14, storage 8, net 12, …)
+
+**machine.md §5 item 5 — the card format row — said:**
+
+> | **Card format** | **100 mm high × 120, 180 or 240 mm long**, per card — …
+
+**machine.md §8 — the power table — said:**
+
+> | 5 V | **video card** (`video3`) | **45** — 4 CPLDs, a GAL, 3 SRAMs | … `video3` is twelve
+> packages larger with a fourth CPLD, so that number is a **floor** …
+
+> … at 45 packages and four CPLDs it will not be smaller …
+
+> | **45** | **35** | 11 | 3 | **8** | **12** | **114** | **19** | **133** |
+
+Now 46 ICs on 300 mm with five `ATF1508AS`; 134 ICs, 115 on cards. The root `README.md`'s
+card row moved the same way ("**45 ICs** on a 24 cm board — 4 `ATF1508AS` and a
+`GAL22V10`, all five fitted").
+
+---
+
 ## boot-and-desktop.md §3.5 and §3.7 — milestone 4's window move was unbuilt, and then built twice (2026-09-22)
 
 §3.7 is the present design. This records both what §3.5 said while the move did not

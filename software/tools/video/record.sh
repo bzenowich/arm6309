@@ -19,6 +19,10 @@
 #   CARD_DATA files a program reads off /SD0/DATA that the general card does not
 #             carry (stardew's 480 KB picture), and CARD_DEMOS the programs: with
 #             these a card of its own is built, OUT/sd.img, as the program's bench does
+#   CARD_DEMOS alone builds that card too, with the general card's data.  ⛔ And a
+#             card of its own boots to a SHELL: the general card's startup runs
+#             `vconsole` and `desk`, which never print the "02}" GATE waits for,
+#             so nothing typed arrives.  STARTUP (a file) overrides it
 #   EMUENV    anything else for the emulator, e.g. "MARKS=1104"
 #
 # ⚠ It needs ../nitros9 on its arm6309 branch (NITROS9DIR=...) to build the
@@ -47,10 +51,14 @@ if [ -z "$NOBUILD" ]; then
 fi
 [ -f "$ROMDIR/arm6309_rom.bin" ] && [ -f "$ROMDIR/system.img" ] || {
   echo "FAIL  no ROM and card in $ROMDIR"; exit 1; }
-if [ -n "$CARD_DATA" ]; then
-  D="$OUT/carddata"; rm -rf "$D"; mkdir -p "$D"
-  for f in $CARD_DATA; do cp "$f" "$D/" || { echo "FAIL  no $f"; exit 1; }; done
-  OUT="$ROMDIR" DATA="$D" sh "$ROOT/software/nitros9/mksyscard.sh" "$OUT/sd.img" ${CARD_DEMOS:?CARD_DATA needs CARD_DEMOS} \
+if [ -n "$CARD_DATA" ] || [ -n "$CARD_DEMOS" ]; then
+  D="$ROMDIR/data"
+  if [ -n "$CARD_DATA" ]; then
+    D="$OUT/carddata"; rm -rf "$D"; mkdir -p "$D"
+    for f in $CARD_DATA; do cp "$f" "$D/" || { echo "FAIL  no $f"; exit 1; }; done
+  fi
+  [ -n "$STARTUP" ] || { STARTUP="$OUT/startup"; printf 'chx /dd/cmds\r' > "$STARTUP"; }
+  STARTUP="$STARTUP" OUT="$ROMDIR" DATA="$D" sh "$ROOT/software/nitros9/mksyscard.sh" "$OUT/sd.img" ${CARD_DEMOS:?CARD_DATA needs CARD_DEMOS} \
     > "$OUT/card.log" 2>&1 || { tail -8 "$OUT/card.log"; echo "FAIL  the card did not build"; exit 1; }
   SDIMG="$OUT/sd.img"
 fi

@@ -6,8 +6,10 @@
 #   make -C software/tilescroll video    the H.264 file OF THAT SAME RUN -> video/${NAME}.mp4
 #
 # `tilescroll 0 1200 $ACTORS` - 1,200 frames of the camera walking its eight-leg path with
-# ACTORS creatures (default 5 -> tilescroll-actors.mp4; ACTORS=0 is the engine alone ->
-# tilescroll-demo.mp4).  The clip of 2026-09-23 was made from this command.
+# ACTORS creatures (default 6, one of each kind -> tilescroll-actors.mp4; ACTORS=0 is the
+# engine alone -> tilescroll-demo.mp4; ACTORS=13 is the bench's s1 leg, which overruns the
+# blank in about half its frames and tears lines 0-13 in a few -> tilescroll-tear.mp4).  Every actor is drawn by the
+# card's sprite walker, one store a frame (docs/scrolling.md §8).
 #
 # ⭐ SHEET FIRST, ALWAYS.  A demo is reviewed from its contact sheet and the
 # video is made only once the sheet is approved - so `sheet` keeps the
@@ -28,13 +30,14 @@ set -e
 H=$(cd "$_here/.." && pwd)
 R=$(cd "$H/../.." && pwd)
 V="$R/software/tools/video"
-ACTORS=${ACTORS:-5}
+ACTORS=${ACTORS:-6}
 NAME=tilescroll-actors; [ "$ACTORS" -gt 0 ] || NAME=tilescroll-demo
-OUT=${OUT:-$H/build/video}
+[ "$ACTORS" -le 6 ] || NAME=tilescroll-tear
+OUT=${OUT:-$H/build/video}; [ "$NAME" != tilescroll-tear ] || OUT=$OUT-tear
 MP4=${MP4:-$_here/${NAME}.mp4}
 CLIP="--scene \"tilescroll 0 1200 $ACTORS\""
 if [ -n "$SHEET" ] || [ -n "$FRESH" ] || [ ! -f "$OUT/frames.bin" ] || [ ! -f "$OUT/sheet.png" ]; then
-  LINES="chx /sd0/cmds\\riniz w5\\rtilescroll 0 1200 $ACTORS >/w5\\recho DONE-arm6309\\r" SECS=150 \
+  CARD_DATA="$H/bench/tilescroll.bnk" CARD_DEMOS=tilescroll LINES="chx /sd0/cmds\\riniz w5\\rtilescroll 0 1200 $ACTORS >/w5\\recho DONE-arm6309\\r" SECS=150 \
     sh "$V/record.sh" "$OUT"
 else
   echo "      encoding the run build/video/sheet.png was made from (FRESH=1 records again)"

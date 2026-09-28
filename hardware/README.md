@@ -49,7 +49,7 @@ closed record of them since 2026-09-08.
 | | Decision | Why |
 |---|---|---|
 | **Connector** | **72-pin 0.1" card edge, 2 × 36** | 45 signals + 2 audio returns need more than colormin's 50 pins. A 100 mm Eurocard edge at 0.1" pitch holds 39 positions; 36 leaves 8.6 mm for the notch and mechanical margin, so **the card format sizes the connector**. ⚠ **That premise expired on 2026-09-08** — see below. |
-| **Card format** | **100 mm high × 120, 180 or 240 mm long** — Apple II proportions, per card | [`place/`](tools/place/) drew the boards: the video card does not fit a 100 × 160 mm Eurocard (134.4 cm² of courtyard against 133.4 cm² of placeable area), and three of the five cards fit 12 cm — so the length is per-card and `place.check.ts` asserts each takes the shortest that works. |
+| **Card format** | **100 mm high × 120, 180, 240 or 300 mm long** — Apple II proportions, per card | [`place/`](tools/place/) drew the boards: the video card does not fit a 100 × 160 mm Eurocard (134.4 cm² of courtyard against 133.4 cm² of placeable area), and three of the five cards fit 12 cm — so the length is per-card and `place.check.ts` asserts each takes the shortest that works. ⭐ **300 mm is `video3`'s alone**: its fifth `ATF1508AS`, the sprite walker, does not place on 240 mm (`video3/docs/plan.md` §13.5). |
 | **CPU siting** | **A 40-pin DIP socket on the motherboard** | The module is the drop-in board [`hardware/cpu/`](cpu/) already builds for the CoCo 3, plugged in — **one hardware SKU serving both machines literally**, not by recompilation. Its own `'541`/`'245` level buffers ride with it (`plan.md` §2.6), so the motherboard adds no buffering. |
 
 **Slot count is six, and that is a guess** — five specified cards (PS/2 and serial share
@@ -162,7 +162,7 @@ make -C hardware check          # 641 claims: every GAL and CPLD design against 
                        #   model, the live ones against Atmel's own CUPL, the
                        #   slot pinout, the $FF map, each card's decode, and
                        #   the documentation's own numbers.  ~60 s
-make -C hardware sim    # 320 claims: the DESIGNS, run under Verilator rather
+make -C hardware sim    # 351 claims: the DESIGNS, run under Verilator rather
                        #   than their equations - the audio card, the
                        #   motherboard, storage and video3, as a card and as a
                        #   machine.  ~4 min

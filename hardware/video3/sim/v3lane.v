@@ -17,6 +17,7 @@ module v3lane (
     input  wire VWE,
     input  wire WSTBV,
     input  wire KEY,
+    input  wire WKEY,
     output wire LOE0,
     output wire LOE1,
     output wire LOE2,
@@ -54,43 +55,43 @@ module v3lane (
   // EXTERNAL
   assign LB0 =
          (~VWE & ~KEY)
-         | (~VWE & ~WM1)
-         | (~VWE & ~WM0)
          | (~VWE & ~GCPY)
+         | (~VWE & ~WM1 & ~WKEY)
+         | (~VWE & ~WM0 & ~WKEY)
          | (~LANE1 & ~LANE0 & ~KEY)
-         | (~LANE1 & ~LANE0 & ~WM1)
-         | (~LANE1 & ~LANE0 & ~WM0)
-         | (~LANE1 & ~LANE0 & ~GCPY);
+         | (~LANE1 & ~LANE0 & ~GCPY)
+         | (~LANE1 & ~LANE0 & ~WM1 & ~WKEY)
+         | (~LANE1 & ~LANE0 & ~WM0 & ~WKEY);
   // EXTERNAL
   assign UB0 =
          (~VWE & ~KEY)
-         | (~VWE & ~WM1)
-         | (~VWE & ~WM0)
          | (~VWE & ~GCPY)
+         | (~VWE & ~WM1 & ~WKEY)
+         | (~VWE & ~WM0 & ~WKEY)
          | (~LANE1 & LANE0 & ~KEY)
-         | (~LANE1 & LANE0 & ~WM1)
-         | (~LANE1 & LANE0 & ~WM0)
-         | (~LANE1 & LANE0 & ~GCPY);
+         | (~LANE1 & LANE0 & ~GCPY)
+         | (~LANE1 & LANE0 & ~WM1 & ~WKEY)
+         | (~LANE1 & LANE0 & ~WM0 & ~WKEY);
   // EXTERNAL
   assign LB1 =
          (~VWE & ~KEY)
-         | (~VWE & ~WM1)
-         | (~VWE & ~WM0)
          | (~VWE & ~GCPY)
+         | (~VWE & ~WM1 & ~WKEY)
+         | (~VWE & ~WM0 & ~WKEY)
          | (LANE1 & ~LANE0 & ~KEY)
-         | (LANE1 & ~LANE0 & ~WM1)
-         | (LANE1 & ~LANE0 & ~WM0)
-         | (LANE1 & ~LANE0 & ~GCPY);
+         | (LANE1 & ~LANE0 & ~GCPY)
+         | (LANE1 & ~LANE0 & ~WM1 & ~WKEY)
+         | (LANE1 & ~LANE0 & ~WM0 & ~WKEY);
   // EXTERNAL
   assign UB1 =
          (~VWE & ~KEY)
-         | (~VWE & ~WM1)
-         | (~VWE & ~WM0)
          | (~VWE & ~GCPY)
+         | (~VWE & ~WM1 & ~WKEY)
+         | (~VWE & ~WM0 & ~WKEY)
          | (LANE1 & LANE0 & ~KEY)
-         | (LANE1 & LANE0 & ~WM1)
-         | (LANE1 & LANE0 & ~WM0)
-         | (LANE1 & LANE0 & ~GCPY);
+         | (LANE1 & LANE0 & ~GCPY)
+         | (LANE1 & LANE0 & ~WM1 & ~WKEY)
+         | (LANE1 & LANE0 & ~WM0 & ~WKEY);
   // EXTERNAL
   assign PWOE =
          (GSPN & ~WM1 & ~WM0)

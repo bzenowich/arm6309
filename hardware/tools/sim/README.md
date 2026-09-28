@@ -2,7 +2,7 @@
 
 `make -C hardware sim` from `hardware/`. It regenerates the Verilog and runs the six
 testbenches in `run.sh`'s default `TBS` — `audio`, `mainboard`, `storage`, `v3dot`,
-`v3card`, `v3machine` — and reports **320 claims, 0 failed**. ⚠ `run.sh` exits 0
+`v3card`, `v3machine` — and reports **351 claims, 0 failed**. ⚠ `run.sh` exits 0
 whether a claim failed or not, so **the count is what decides the status**; read the
 `FAIL` lines.
 

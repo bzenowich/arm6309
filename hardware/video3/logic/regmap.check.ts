@@ -38,6 +38,7 @@ import { v3dot } from "./v3dot.cpld"
 import { v3host } from "./v3host.cpld"
 import { v3ptr } from "./v3ptr.cpld"
 import { v3scan } from "./v3scan.cpld"
+import { v3walk } from "./v3walk.cpld"
 
 let failures = 0
 const check = (ok: boolean, claim: string, detail = "") => {
@@ -46,13 +47,14 @@ const check = (ok: boolean, claim: string, detail = "") => {
 }
 
 /* ⭐ THE LIVE PARTS, and they are the ones video3/sim/video3_card.v
- * instantiates: v3dot, v3scan, v3ptr, v3host (+ the v3lane GAL, which sees no
- * register offsets). The `_st`, `_si`, `_mq`, `_copy`, `_none`, `_span`, `_rows`
+ * instantiates: v3dot, v3scan, v3ptr, v3host, v3walk (+ the v3lane GAL, which
+ * sees no register offsets). The `_st`, `_si`, `_mq`, `_copy`, `_none`, `_span`, `_rows`
  * and `_both` .pld files beside them are PARTITION VARIANTS - v3host.cpld.ts
  * emits "v3host_st" under DECODE === "strobes" - and two of them still carry
  * LDSPRIX/LDSPRDA from before the sprite shape moved to VRAM. Counting a
- * variant's decode as a use is how +$1D and +$1E would look occupied. */
-const LIVE = { v3dot, v3host, v3ptr, v3scan }
+ * variant's decode as a use is how +$1D and +$1E would look occupied - they
+ * are v3walk's SWDAT and SWCMD since 2026-09-28. */
+const LIVE = { v3dot, v3host, v3ptr, v3scan, v3walk }
 
 /* Which live parts declare a cell named after each load strobe. */
 const decodedBy = (r: RegName): string[] =>
@@ -83,8 +85,6 @@ const PORTS: Record<number, string> = {
 /* ⛔ The spare list. Each needs a reason, and an entry that stops being spare
  * fails too. plan.md §10 is the specification these must agree with. */
 const SPARE: Record<number, string> = {
-  0x1d: "spare since 2026-09-19 - the sprite shape moved to VRAM (plan §7)",
-  0x1e: "spare, the same",
   0x1f: "spare in HARDWARE; the VBL service parks its frame count here (FCNT)",
 }
 
@@ -142,15 +142,16 @@ for (const off of Object.keys(SPARE).map(Number)) {
     parts.length ? `now decoded by ${parts.join(", ")}` : "")
 }
 
-/* ⚠ The two strobe names regmap.ts still declares that nothing decodes. Naming
- * them is not a failure - the offsets are genuinely free - but a name that
- * outlives its logic is how "+$1D is taken" gets believed. */
+/* ⚠ A strobe name regmap.ts declares that nothing decodes. There were two
+ * (LDSPRIX/LDSPRDA, after the sprite shape moved to VRAM) until v3walk took
+ * +$1D and +$1E on 2026-09-28; a name that outlives its logic is how "+$1D is
+ * taken" gets believed. */
 const orphans = Object.entries(REGS)
   .filter(([n]) => decodedBy(n as RegName).length === 0)
   .filter(([, o]) => !RFA_READS[o] && !PORTS[o])
   .map(([n, o]) => `${n} (+$${o.toString(16)})`)
-check(orphans.length === 2 && orphans.every((o) => /LDSPRIX|LDSPRDA/.test(o)),
-  "the only load strobes regmap.ts declares and no live part decodes are LDSPRIX and LDSPRDA",
+check(orphans.length === 0,
+  "every load strobe regmap.ts declares is decoded by a live part",
   orphans.join(", "))
 
 console.log(`\n${rows.length} offsets, ${rows.filter(r => r.how !== "SPARE").length} used, ` +

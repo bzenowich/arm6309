@@ -35,7 +35,7 @@ module v3card_tb;
   wire  DOE, WAIT_OE, IRQ_OE;
   wire  [15:0] RGB;
   wire  HSYNC, VSYNC, BLANK, FBA_FIGHT, DBUS_FIGHT, LUTA_FIGHT;
-  wire  IDB_FIGHT, IDB_FLOAT, LANE_FLOAT, RANK_FIGHT;
+  wire  IDB_FIGHT, IDB_FLOAT, LANE_FLOAT, RANK_FIGHT, BCAST_FIGHT;
 
   video3_card dut (.*);
 
@@ -48,7 +48,7 @@ module v3card_tb;
 
   // ---- fights: counted every dot, from reset to the end -------------------
   int fba_fights = 0, dbus_fights = 0, luta_fights = 0;
-  int idb_fights = 0, idb_floats = 0, lane_floats = 0, rank_fights = 0;
+  int idb_fights = 0, idb_floats = 0, lane_floats = 0, rank_fights = 0, bcast_fights = 0;
   always @(posedge CLK25) if (!RESET) begin
     if (FBA_FIGHT)  fba_fights  <= fba_fights + 1;
     if (DBUS_FIGHT) dbus_fights <= dbus_fights + 1;
@@ -57,6 +57,7 @@ module v3card_tb;
     if (IDB_FLOAT)  idb_floats  <= idb_floats + 1;
     if (LANE_FLOAT) lane_floats <= lane_floats + 1;
     if (RANK_FIGHT) rank_fights <= rank_fights + 1;
+    if (BCAST_FIGHT) bcast_fights <= bcast_fights + 1;
   end
 
   // ---- what the copy engine's time goes on --------------------------------
@@ -179,6 +180,38 @@ module v3card_tb;
   logic [7:0] q;
   int bad;
 
+  // the walker's model (the "walk" group): a VRAM shadow and a copy on it,
+  // row stride 1024 and the column wrapping in ten bits as the engine's does
+  logic [7:0] wv [0:524287];
+  int walk_dots, copies, sdots;
+  bit cb_was = 0, wmeas = 0;
+  always @(posedge CLK25) if (wmeas) begin
+    if (dut.WALK) walk_dots <= walk_dots + 1;
+    if (dut.CBUSY) sdots <= sdots + 1;
+    if (dut.CBUSY && !cb_was) copies <= copies + 1;
+    cb_was <= dut.CBUSY;
+  end
+  // ⭐ where the armed GO's walk starts, against VBLANK's rise (plan §6.4)
+  int dotn = 0, vbl_rise = -1, walk_rise = -1;
+  bit vbl_was = 0, walk_was = 0;
+  always @(posedge CLK25) begin
+    dotn <= dotn + 1;
+    if (dut.VBLANK && !vbl_was) vbl_rise <= dotn;
+    if (dut.WALK && !walk_was) walk_rise <= dotn;
+    vbl_was <= dut.VBLANK; walk_was <= dut.WALK;
+  end
+  logic [7:0] wv0 [0:524287];
+  task automatic wcopy(input int src, input int dst, input int w, input int h, input bit keyed);
+    for (int r = 0; r < h; r++)
+      for (int c = 0; c < w; c++) begin
+        int sa, da; logic [7:0] b;
+        sa = ((src >> 10) + r) * 1024 + (((src & 1023) + c) & 1023);
+        da = ((dst >> 10) + r) * 1024 + (((dst & 1023) + c) & 1023);
+        b = wv[sa[18:0]];
+        if (!(keyed && b == 8'h00)) wv[da[18:0]] = b;
+      end
+  endtask
+
   // ---- a frame, as the connector sees it ------------------------------------
   // OMR is the '273s' /MR - "this pixel may show" - so a line is the run of
   // dots it is asserted for, and a pixel whose LUT entry is zero still counts.
@@ -225,8 +258,8 @@ module v3card_tb;
   endfunction
 
   // `+ONLY=a,b` runs the named scenario groups alone - a debug loop, never a
-  // claim count (run.sh's TBARGS). Groups: palette direct span copy bitmap
-  // sprite char tile.
+  // claim count (run.sh's TBARGS). Groups: palette direct span copy walk
+  // bitmap sprite char tile.
   string only = "";
   function automatic bit run_group(input string g);
     if (only == "") return 1;
@@ -572,6 +605,192 @@ module v3card_tb;
         if (dut.peek(19'h38000 + r * 1024 + c) !== dut.peek(19'h30000 + r * 1024 + c)) bad++;
     ok(bad == 0, $sformatf("and outside sprite WMODE the same copy lands the key bytes too (%0d of 72 wrong)", bad));
 
+    if (run_group("walk")) begin
+    // ============================== the sprite walker (plan §6.4, v3walk)
+    // ⭐ THE WALK IS CHECKED AGAINST A MODEL OF ITSELF, RUN HERE: every copy it
+    // should make, in the order it should make them, applied to a shadow of
+    // VRAM - and then all 512 KB compared. Three slots of three sizes, one of
+    // them five bytes wide so every lane is misaligned somewhere, three shapes
+    // over two shape tables, and positions that OVERLAP in the second frame so
+    // the LIFO order is what makes the terrain come back.
+    // Frame 1 is NR (save and draw only), frame 2 the full walk from the other
+    // bank, frame 3 RO (the wipe) - after which the terrain must be exactly
+    // what it was before frame 1.
+    begin
+      int cw [0:2], ch [0:2], shp [0:2], sx [0:2][0:1], sy [0:2][0:1];
+      int shp_at [0:31], save_at [0:2];
+      logic [7:0] st;
+      cw = '{8, 12, 5};  ch = '{6, 4, 7};
+      shp = '{3, 17, 9};                                 // 17 is in T6
+      // bank 0 (frame 1) and bank 1 (frame 2): slots 0 and 1 overlap in
+      // frame 2, and slot 2 overlaps its own frame-1 rectangle
+      sx[0] = '{300, 306}; sy[0] = '{100, 103};
+      sx[1] = '{340, 310}; sy[1] = '{101, 104};
+      sx[2] = '{1021, 1019}; sy[2] = '{120, 122};      // ⚠ across column 1023
+      for (int k = 0; k < 32; k++) shp_at[k] = 19'h60000 + (k / 8) * 16 * 1024 + (k % 8) * 32;
+      for (int k = 0; k < 3; k++) save_at[k] = 19'h70000 + k * 64;
+      // the terrain, the shapes (a hollow box of ink, the key inside) and a
+      // save area that starts as garbage
+      for (int r = 96; r < 136; r++)
+        for (int c = 0; c < 1024; c++) dut.poke(r * 1024 + c, 8'h01 + ((r * 5 + c * 3) % 250));
+      for (int k = 0; k < 3; k++) begin
+        for (int r = 0; r < 16; r++)
+          for (int c = 0; c < 32; c++) dut.poke(shp_at[shp[k]] + r * 1024 + c, 8'h00);
+        for (int r = 0; r < ch[k]; r++)
+          for (int c = 0; c < cw[k]; c++)
+            if (r == 0 || r == ch[k] - 1 || c == 0 || c == cw[k] - 1 || (r + c) % 3 == 0)
+              dut.poke(shp_at[shp[k]] + r * 1024 + c, 8'hC0 + k * 16 + r);
+        for (int r = 0; r < 8; r++)
+          for (int c = 0; c < 16; c++) dut.poke(save_at[k] + r * 1024 + c, 8'hEE);
+      end
+      for (int a = 0; a < 524288; a++) wv[a] = dut.peek(a);
+      for (int a = 0; a < 524288; a++) wv0[a] = wv[a];
+
+      wr(CTRL, 8'h80);                                   // WMODE 00 - the contract
+      wr(WADV, 8'h00);                                   // and b2 clear
+      // the tables: SELECT (b7, slot << 3, table) and then three bytes a slot
+      wr(5'h1E, 8'h80 | 3);                              // DIM, from slot 0
+      for (int k = 0; k < 3; k++) begin wr(5'h1D, cw[k]); wr(5'h1D, ch[k]); wr(5'h1D, 8'h01); end
+      wr(5'h1E, 8'h80 | 4);                              // SAVE
+      for (int k = 0; k < 3; k++) begin
+        wr(5'h1D, save_at[k][7:0]); wr(5'h1D, save_at[k][15:8]); wr(5'h1D, save_at[k][18:16]);
+      end
+      for (int t = 0; t < 2; t++) begin                  // SHAPE 0-15, 16-31
+        wr(5'h1E, 8'h80 | (5 + t));
+        for (int k = 0; k < 16; k++) begin
+          wr(5'h1D, shp_at[t * 16 + k][7:0]); wr(5'h1D, shp_at[t * 16 + k][15:8]);
+          wr(5'h1D, shp_at[t * 16 + k][18:16]);
+        end
+      end
+      for (int b = 0; b < 2; b++) begin                  // STREAM A and B
+        wr(5'h1E, 8'h80 | (1 + b));
+        for (int k = 0; k < 3; k++) begin
+          wr(5'h1D, sx[k][b] & 8'hFF); wr(5'h1D, sy[k][b] & 8'hFF);
+          wr(5'h1D, (shp[k] << 3) | ((sx[k][b] >> 8) << 1) | (sy[k][b] >> 8));
+        end
+      end
+      ok(dut.peek_rf(15'h1D | (4 << 11) | (1 << 7) | (1 << 5)) == save_at[1][15:8],
+         "a table byte lands at +$1D of its page: SAVE, slot 1, byte 1");
+
+      for (int f = 0; f < 3; f++) begin
+        int cur, old;
+        cur = f == 1 ? 1 : 0; old = 1 - cur;
+        // the model: restore n-1..0 from the OTHER bank, then save and draw 0..n-1
+        if (f > 0)
+          for (int k = 2; k >= 0; k--) wcopy(save_at[k], sy[k][old] * 1024 + sx[k][old], cw[k], ch[k], 0);
+        if (f < 2)
+          for (int k = 0; k < 3; k++) begin
+            wcopy(sy[k][cur] * 1024 + sx[k][cur], save_at[k], cw[k], ch[k], 0);
+            wcopy(shp_at[shp[k]], sy[k][cur] * 1024 + sx[k][cur], cw[k], ch[k], 1);
+          end
+        copies = 0; walk_dots = 0; sdots = 0; wmeas = 1;
+        // GO: n - 1 = 2; frame 1 NR, frame 3 RO; CB = this frame's bank
+        wr(5'h1E, (f == 0 ? 8'h10 : f == 2 ? 8'h20 : 8'h00) | (cur << 6) | 8'h02);
+        // ⭐ VSTAT answers during a walk without /WAIT, with b2 set
+        rd(VSTAT, st);
+        ok(st[2], $sformatf("frame %0d: VSTAT b2 is WALK, read while it runs", f));
+        if (f == 2) begin
+          // ⭐ any other access waits for the walk: WPTR0's shadow read back
+          // holds the last copy's destination - the restore of slot 0
+          int w0;
+          w0 = max_wait; max_wait = 0;
+          rd(WPTR0, q);
+          ok(!dut.WALK && max_wait > 200,
+             $sformatf("a register read during a walk is held by /WAIT until it ends (%0d dots)", max_wait));
+          ok(q == (sx[0][old] & 8'hFF),
+             $sformatf("and returns the file's shadow the walk left: WPTR0 %02h, want %02h", q, sx[0][old] & 8'hFF));
+          if (w0 > max_wait) max_wait = w0;
+        end
+        for (int n = 0; n < 200000 && (dut.WALK || n < 4); n++) @(posedge CLK25);
+        dots(2); wmeas = 0;
+        ok(!dut.WALK, $sformatf("frame %0d: the walk ends (%0d dots)", f, walk_dots));
+        ok(copies == (f == 0 ? 6 : f == 1 ? 9 : 3),
+           $sformatf("frame %0d: %0d copies, want %0d", f, copies, f == 0 ? 6 : f == 1 ? 9 : 3));
+        bad = 0;
+        for (int a = 0; a < 524288; a++) if (dut.peek(a) !== wv[a]) begin
+          if (bad < 4) $display("      frame %0d: VRAM %05h got %02h want %02h", f, a, dut.peek(a), wv[a]);
+          bad++;
+        end
+        ok(bad == 0, $sformatf("frame %0d (%s): all 512 KB are the model's - restores LIFO, saves, keyed draws (%0d wrong)",
+                               f, f == 0 ? "NR" : f == 1 ? "full" : "RO", bad));
+        $display("      frame %0d: walk %0d dots, engine busy %0d, loads and waits %0d over %0d copies (%0d a copy)",
+                 f, walk_dots, sdots, walk_dots - sdots, copies, copies ? (walk_dots - sdots) / copies : 0);
+        ok(copies > 0 && (walk_dots - sdots) / copies < 40,
+           $sformatf("frame %0d: the walker's own cost is under 40 dots a copy", f));
+      end
+      bad = 0;
+      for (int a = 0; a < 524288; a++)
+        if ((a < save_at[0] || a >= save_at[0] + 8 * 1024) && dut.peek(a) !== wv0[a]) bad++;
+      ok(bad == 0, $sformatf("after the wipe the terrain is exactly what it was before frame 0 (%0d wrong)", bad));
+
+      // ⭐ SHAPE 31 IS NO SHAPE, AND AN ARMED GO WAITS FOR THE BLANK. Three
+      // more frames on the same tables: slot 1 is null in bank 0 and slot 0 in
+      // bank 1, so frame A saves and draws two slots, frame B restores two and
+      // draws two, and the wipe C restores two - every null skipped in
+      // whichever pass reads it. Frame A's GO is ARMED (SELECT of table 7): it
+      // must not start at the write, must survive the register writes of the
+      // rest of a frame, and must start at the first E fall after VBLANK rises.
+      for (int b = 0; b < 2; b++) begin
+        wr(5'h1E, 8'h80 | (1 + b));
+        for (int k = 0; k < 3; k++) begin
+          wr(5'h1D, sx[k][b] & 8'hFF); wr(5'h1D, sy[k][b] & 8'hFF);
+          wr(5'h1D, ((k == 1 - b ? 31 : shp[k]) << 3) | ((sx[k][b] >> 8) << 1) | (sy[k][b] >> 8));
+        end
+      end
+      for (int f = 0; f < 3; f++) begin
+        int cur, old, want, npoll, lag;
+        cur = f == 1 ? 1 : 0; old = 1 - cur;
+        want = 0;
+        if (f > 0)
+          for (int k = 2; k >= 0; k--)
+            if (k != 1 - old) begin
+              wcopy(save_at[k], sy[k][old] * 1024 + sx[k][old], cw[k], ch[k], 0); want++;
+            end
+        if (f < 2)
+          for (int k = 0; k < 3; k++)
+            if (k != 1 - cur) begin
+              wcopy(sy[k][cur] * 1024 + sx[k][cur], save_at[k], cw[k], ch[k], 0);
+              wcopy(shp_at[shp[k]], sy[k][cur] * 1024 + sx[k][cur], cw[k], ch[k], 1); want += 2;
+            end
+        copies = 0; walk_dots = 0; sdots = 0; wmeas = 1;
+        if (f == 0) begin
+          // armed, and written just AFTER a blank began so it has to wait a frame
+          for (int n = 0; n < 900000 && !dut.VBLANK; n++) @(posedge CLK25);
+          wr(5'h1E, 8'h87);                              // ARM
+          wr(5'h1E, 8'h10 | 8'h02);                      // GO NR, bank 0, n = 3
+          dots(64);
+          ok(!dut.WALK, "an armed GO written in the blank does not start the walk");
+          // ⭐ the rest of a frame's register writes, not held: CMD keeps the GO
+          max_wait = 0;
+          wr(WFG, 8'hA7); wr(WBG, 8'hFF); wr(CTRL, 8'h80);
+          ok(max_wait == 0, $sformatf("and the CPU's register writes while it waits are not held (%0d dots)", max_wait));
+          npoll = 0;
+          do begin rd(VSTAT, st); npoll++; end while (!dut.WALK && npoll < 40000);
+          dots(2); lag = walk_rise - vbl_rise;
+          ok(dut.WALK && vbl_rise > 0 && lag >= 0 && lag < 16,
+             $sformatf("it starts %0d dots after VBLANK rises, on the next E fall (%0d polls)", lag, npoll));
+        end else
+          wr(5'h1E, (f == 2 ? 8'h20 : 8'h00) | (cur << 6) | 8'h02);
+        for (int n = 0; n < 200000 && (dut.WALK || n < 4); n++) @(posedge CLK25);
+        dots(2); wmeas = 0;
+        ok(!dut.WALK && copies == want,
+           $sformatf("null frame %s: %0d copies, want %0d - SHAPE 31 skips its copies", f == 0 ? "A" : f == 1 ? "B" : "C", copies, want));
+        bad = 0;
+        for (int a = 0; a < 524288; a++) if (dut.peek(a) !== wv[a]) begin
+          if (bad < 4) $display("      null frame %0d: VRAM %05h got %02h want %02h", f, a, dut.peek(a), wv[a]);
+          bad++;
+        end
+        ok(bad == 0, $sformatf("null frame %s: all 512 KB are the model's (%0d wrong)", f == 0 ? "A" : f == 1 ? "B" : "C", bad));
+        $display("      null frame %0d: walk %0d dots, engine busy %0d, loads, waits and skips %0d over %0d copies",
+                 f, walk_dots, sdots, walk_dots - sdots, copies);
+      end
+      bad = 0;
+      for (int a = 0; a < 524288; a++)
+        if ((a < save_at[0] || a >= save_at[0] + 8 * 1024) && dut.peek(a) !== wv0[a]) bad++;
+      ok(bad == 0, $sformatf("and after the null frames' wipe the terrain is what it was (%0d wrong)", bad));
+    end
+    end
+
     // ========================================================== the picture
     // Every LUT entry is its own address from here on (see capture above), so
     // a pixel IS the LUT address the card formed.
@@ -804,6 +1023,7 @@ module v3card_tb;
     ok(idb_floats == 0, $sformatf("and nothing ever samples it undriven (%0d dots)", idb_floats));
     ok(lane_floats == 0, $sformatf("no byte is written from a lane nothing drives (%0d dots)", lane_floats));
     ok(rank_fights == 0, $sformatf("each chip's two fetch ranks: exactly one on, always (%0d dots)", rank_fights));
+    ok(bcast_fights == 0, $sformatf("the broadcast: exactly one of v3host and v3walk on each net, always (%0d dots)", bcast_fights));
     ok(max_wait < 4000, $sformatf("/WAIT always released (longest %0d dots)", max_wait));
     $display("\n%0d claims, %0d failed", passes + fails, fails);
     $finish;

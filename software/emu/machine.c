@@ -161,6 +161,24 @@ typedef struct {
      * SPRIDX/SPRDAT) are spare register-file bytes, like FCNT at +$1F. */
     uint8_t sprx_lo, spry_lo, sprh;
     long v3_violations;
+    /* ⭐ THE SPRITE WALKER (plan §6.4, hardware/video3/logic/v3walk.cpld.ts):
+     * tables in the register file's pages, a copy list built at GO, and each
+     * ROW of each copy applied at the dot the card would write it - so a walk
+     * that runs out of vertical blanking tears on the frames this model
+     * writes exactly where the card would. */
+    uint8_t wtab[8][16][3];      /* [table][slot][byte]: page {T, SLOT, BYTE} +$1D */
+    uint8_t wsel_t, wsel_s, wsel_b;
+    /* ⭐ ARM (a SELECT of table 7) makes the next GO wait for VBLANK's rise */
+    int warm, wpend; uint8_t wpend_v;
+    struct wcopy { uint32_t src, dst; uint16_t w, h, rows; uint8_t keyed; double t0, per_row; } wq[48];
+    int wq_n, wq_i;
+    uint64_t walk_until, walk_go;
+    long walk_violations, walks, walk_torn_frames, walk_torn_lines;
+    double wrow_last[512];       /* dots: the walk's last scheduled write to a VRAM row */
+    int wf_walks, wf_torn, wf_top, wf_bot, wf_start_line, wf_end_line, wframe;
+    int wf_dtop;                 /* the topmost line a keyed draw showed on, or -1 */
+    FILE *walklog;
+    char outdir[512];
 
     int irq_pending;
     int irq_line_due;            /* the line /IRQ reaches the CPU on, or -1 */
@@ -281,8 +299,11 @@ static void span_end(void)
     }
 }
 
+static void stall_for_walk(void);
+
 static void vram_write(uint8_t v)
 {
+    stall_for_walk();
     stall_for_span();
     /* ⛔ WMODE IS IN DIFFERENT BITS ON THE TWO CARDS - b4..3 on video/ and
      * b5..4 on video3, where b3..2 became the MODE field (plan §10).  Reading
@@ -313,6 +334,7 @@ static void vram_write(uint8_t v)
 
 static uint8_t vram_read(void)
 {
+    stall_for_walk();
     stall_for_span();
     uint8_t v = m->vram[m->wptr];
     wstep();
@@ -410,9 +432,184 @@ static void v3_copy(void)
     m->copy_until = m->dots + DOTS_PER_E + (uint64_t)w * h * COPY_PS / DOT_PS;
 }
 
+/* ---- the sprite walker (plan §6.4) ------------------------------------
+ *
+ * ⭐ TIMED FROM v3card_tb, not estimated: the engine takes COPY_PS a byte and
+ * 17 dots at every row end (the column reload's walk), and the walker's loads
+ * and waits cost 25 dots a copy - which reproduces the bench's engine-busy
+ * counts (2,200, 3,304 and 1,102 dots) to a dot or two. */
+#define WALK_ROW_DOTS   17.0
+#define WALK_LOAD_DOTS  20.0     /* GO to the first byte: 18 dots of loads and 2 of filler */
+#define WALK_TAIL_DOTS  5.0      /* the last row's reload, and STEPQ */
+/* ⭐ SHAPE 31 IS NO SHAPE: a restore abandoned at its record's J1 costs 3 dots,
+ * and a save-and-draw 12 (SAVE's plain G0 is paid before its G1 sees the null,
+ * then DRAW's G0 reads the same record) - v3card_tb's null frames, to a dot */
+#define WALK_NUL_SHAPE  31
+#define WALK_NUL_R_DOTS 3.0
+#define WALK_NUL_SD_DOTS 12.0
+
+static void raster(void);
+
+static void wrow(struct wcopy *c, uint32_t r)
+{
+    uint32_t sr = ((c->src >> 10) + r) & 511, dr = ((c->dst >> 10) + r) & 511;
+    uint32_t sc = c->src & 1023, dc = c->dst & 1023;
+    for (uint32_t x = 0; x < c->w; x++) {
+        uint8_t b = m->vram[(sr << 10) | ((sc + x) & 1023)];
+        if (c->keyed && b == 0) continue;
+        m->vram[(dr << 10) | ((dc + x) & 1023)] = b;
+    }
+}
+
+/* apply every row that has completed by dot t */
+static void v3_walk_pump(double t)
+{
+    while (m->wq_i < m->wq_n) {
+        struct wcopy *c = &m->wq[m->wq_i];
+        while (c->rows < c->h && c->t0 + (c->rows + 1) * c->per_row <= t) wrow(c, c->rows++);
+        if (c->rows < c->h) return;
+        m->wq_i++;
+        if (m->wq_i == m->wq_n) m->wf_end_line = m->line;
+    }
+}
+
+static void stall_for_walk(void)
+{
+    /* a while, not an if: an armed GO can start inside the raster() below */
+    while (m->walk_until > m->dots) {
+        uint64_t e = (m->walk_until - m->dots + DOTS_PER_E - 1) / DOTS_PER_E;
+        m->cpu.cycles += e;
+        m->dots += e * DOTS_PER_E;
+        raster();                 /* the lines that go by while the CPU is held */
+    }
+    v3_walk_pump((double)m->dots);
+}
+
+static uint32_t wptr3(const uint8_t *b) { return b[0] | ((uint32_t)b[1] << 8) | ((uint32_t)(b[2] & 7) << 16); }
+static uint32_t wrec(int bank, int s, int *shape)
+{
+    const uint8_t *b = m->wtab[1 + bank][s];
+    if (shape) *shape = b[2] >> 3;
+    return ((uint32_t)(b[1] | ((b[2] & 1) << 8)) << 10) | (b[0] | (((b[2] >> 1) & 3) << 8));
+}
+
+static void walk_add(double *t, uint32_t src, uint32_t dst, int s, int keyed)
+{
+    const uint8_t *d = m->wtab[3][s];
+    struct wcopy *c = &m->wq[m->wq_n++];
+    c->src = src & 0x7FFFF; c->dst = dst & 0x7FFFF;
+    c->w = (uint16_t)(d[0] | ((d[2] & 0x18) << 5));
+    c->h = (uint16_t)(d[1] | ((d[2] & 0x20) << 3));
+    c->keyed = (uint8_t)keyed; c->rows = 0;
+    c->per_row = c->w * (double)COPY_PS / DOT_PS + WALK_ROW_DOTS;
+    c->t0 = *t + WALK_LOAD_DOTS;
+    for (uint32_t r = 0; r < c->h; r++) {
+        uint32_t dr = ((c->dst >> 10) + r) & 511;
+        double at = c->t0 + (r + 1) * c->per_row;
+        if (at > m->wrow_last[dr]) m->wrow_last[dr] = at;
+    }
+    *t = c->t0 + c->h * c->per_row + WALK_TAIL_DOTS;
+    /* what the file's page-0 shadow holds when it is over: the last load */
+    m->cptr = c->src; m->wptr = c->dst; m->cwidth = c->w; m->cheight = c->h; m->cctrl = d[2] | 1;
+}
+
+/* start a walk at dot `at`: the end of the GO write's E, or - for an armed GO
+ * - the first E fall after VBLANK's rise */
+static void v3_walk_go(uint8_t v, uint64_t at)
+{
+    double t = (double)at;
+    int n = (v & 15) + 1, nr = (v & 0x10) != 0, ro = (v & 0x20) != 0, cb = (v >> 6) & 1;
+    double now_s = (double)at * DOT_PS / 1e12;
+    /* ⚠ THE CONTRACT (v3walk.cpld.ts's header): the key would catch the
+     * restores and saves, a b2 step would walk every destination by two, and a
+     * copy still running would have its registers loaded under it */
+    if (V3_WMODE(m) == 3 && ++m->walk_violations <= 8)
+        fprintf(stderr, "FAIL  %.3f s: a walk with WMODE 11 - the restores and saves would be keyed (PC $%04X)\n", now_s, m->cpu.pc);
+    if ((m->wadv & 4) && ++m->walk_violations <= 8)
+        fprintf(stderr, "FAIL  %.3f s: a walk with WADV b2 set (PC $%04X)\n", now_s, m->cpu.pc);
+    if (m->copy_until > at && ++m->walk_violations <= 8)
+        fprintf(stderr, "FAIL  %.3f s: a walk started under a running copy (PC $%04X)\n", now_s, m->cpu.pc);
+    for (int i = 0; i < 512; i++) m->wrow_last[i] = 0;
+    m->wq_n = m->wq_i = 0;
+    if (!nr)
+        for (int s = n - 1; s >= 0; s--) {
+            int shape; uint32_t old = wrec(!cb, s, &shape);
+            if (shape == WALK_NUL_SHAPE) t += WALK_NUL_R_DOTS;
+            else walk_add(&t, wptr3(m->wtab[4][s]), old, s, 0);
+        }
+    if (!ro)
+        for (int s = 0; s < n; s++) {
+            int shape; uint32_t pos = wrec(cb, s, &shape);
+            if (shape == WALK_NUL_SHAPE) { t += WALK_NUL_SD_DOTS; continue; }
+            walk_add(&t, pos, wptr3(m->wtab[4][s]), s, 0);
+            walk_add(&t, wptr3(m->wtab[5 + (shape >> 4)][shape & 15]), pos, s, 1);
+        }
+    m->walk_go = at;
+    m->walk_until = m->copy_until = (uint64_t)t + 1;
+    m->walks++; m->wf_walks++;
+    if (m->wf_walks == 1) m->wf_start_line = m->line;
+    m->regfile[0x08] = (uint8_t)m->wptr; m->regfile[0x09] = (uint8_t)(m->wptr >> 8);
+    m->regfile[0x0A] = (uint8_t)(m->wptr >> 16); m->wp0 = (uint8_t)m->wptr; m->wp1 = (uint8_t)(m->wptr >> 8);
+    m->regfile[0x12] = (uint8_t)m->cptr; m->regfile[0x13] = (uint8_t)(m->cptr >> 8);
+    m->regfile[0x14] = (uint8_t)(m->cptr >> 16);
+    m->regfile[0x15] = (uint8_t)m->cwidth; m->regfile[0x16] = (uint8_t)m->cheight;
+    m->regfile[0x17] = m->cctrl;
+}
+
+/* the tearing measure, per displayed line: a line the raster shows while the
+ * walk still has a write to make to it shows neither last frame's actors nor
+ * this frame's, but a mixture - that is a tear */
+static void v3_walk_line(int y, uint32_t ry, uint32_t hs)
+{
+    v3_walk_pump((double)m->line_start);
+    if (m->wq_i < m->wq_n && m->wrow_last[ry] > (double)m->line_start) {
+        if (!m->wf_torn || y < m->wf_top) m->wf_top = y;
+        if (!m->wf_torn || y > m->wf_bot) m->wf_bot = y;
+        m->wf_torn++;
+    }
+    /* ⭐ and the topmost line a KEYED draw of this walk shows on: the claim
+     * that the actors really are up where the beam arrives first, without
+     * which "no tearing" could just mean "nothing up there to tear" */
+    if (m->wf_walks && (m->wf_dtop < 0 || y < m->wf_dtop))
+        for (int i = 0; i < m->wq_n; i++) {
+            const struct wcopy *c = &m->wq[i];
+            if (!c->keyed || ((ry - (c->dst >> 10)) & 511) >= c->h) continue;
+            if ((((c->dst & 1023) - hs) & 1023) < 640 ||
+                (((hs - (c->dst & 1023)) & 1023) < c->w)) { m->wf_dtop = y; break; }
+        }
+}
+
+/* one line of walk.txt a frame that had a walk in it */
+static void v3_walk_frame(void)
+{
+    if (!m->wf_walks) { m->wframe++; return; }
+    if (!m->walklog && m->outdir[0]) {
+        char path[600];
+        snprintf(path, sizeof path, "%s/walk.txt", m->outdir);
+        m->walklog = fopen(path, "w");
+    }
+    if (m->walklog)
+        fprintf(m->walklog, "frame %d walks %d start_line %d end_line %d torn %d top %d bottom %d draw_top %d\n",
+                m->wframe, m->wf_walks, m->wf_start_line, m->wq_i < m->wq_n ? -1 : m->wf_end_line,
+                m->wf_torn, m->wf_torn ? m->wf_top : -1, m->wf_torn ? m->wf_bot : -1, m->wf_dtop);
+    if (m->wf_torn) { m->walk_torn_frames++; m->walk_torn_lines += m->wf_torn; }
+    m->wf_walks = m->wf_torn = 0;
+    m->wf_dtop = -1;
+    m->wframe++;
+}
+
 static void v3_video_write(uint8_t r, uint8_t v)
 {
-    if (r != 0x0C) m->regfile[r & 31] = v;
+    /* ⭐ every card write waits for a walk - v3host's CARDBUSY has WALK in it */
+    stall_for_walk();
+    /* ⚠ AN ARMED GO's CONTRACT: until it starts, CMD holds it, so no SWCMD or
+     * SWDAT write, and nothing that starts a copy or a span */
+    if (m->wpend && (r == 0x0C || r == 0x1D || r == 0x1E || (r == 0x17 && (v & 1)))
+        && ++m->walk_violations <= 8)
+        fprintf(stderr, "FAIL  %.3f s: register +$%02X written while an armed GO waits for the blank (PC $%04X)\n",
+                (double)m->dots * DOT_PS / 1e12, r, m->cpu.pc);
+    /* +$1D writes the TABLE's page, not page 0 */
+    if (r != 0x0C && r != 0x1D) m->regfile[r & 31] = v;
     switch (r) {
     case 0x00: m->ctrl = v; break;
     case 0x01: m->vs_lo = v; break;
@@ -448,8 +645,18 @@ static void v3_video_write(uint8_t r, uint8_t v)
     case 0x1A: m->sprx_lo = v; break;
     case 0x1B: m->spry_lo = v; break;
     case 0x1C: m->sprh = v; break;
-    /* 0x1D, 0x1E: spare since 2026-09-19 - the shape moved to VRAM. They
-     * read back from regfile and do nothing. */
+    /* ⭐ the walker (plan §6.4): +$1D the table port, +$1E SELECT or GO */
+    case 0x1D:
+        m->wtab[m->wsel_t][m->wsel_s][m->wsel_b] = v;
+        if (++m->wsel_b == 3) { m->wsel_b = 0; m->wsel_s = (m->wsel_s + 1) & 15; }
+        break;
+    case 0x1E:
+        if (v & 0x80) {
+            m->wsel_t = v & 7; m->wsel_s = (v >> 3) & 15; m->wsel_b = 0;
+            if ((v & 7) == 7) m->warm = 1;
+        } else if (m->warm) { m->warm = 0; m->wpend = 1; m->wpend_v = v; }
+        else v3_walk_go(v, m->dots + DOTS_PER_E / 2);
+        break;
     default: break;
     }
 }
@@ -458,6 +665,12 @@ static int in_vblank(void);
 
 static uint8_t v3_video_read(uint8_t r)
 {
+    /* a VSTAT read is the one card access a walk does not hold */
+    if (r != 0x0D) stall_for_walk();
+    else v3_walk_pump((double)m->dots);
+    if (m->wpend && r == 0x0C && ++m->walk_violations <= 8)
+        fprintf(stderr, "FAIL  %.3f s: a VDATA read while an armed GO waits for the blank (PC $%04X)\n",
+                (double)m->dots * DOT_PS / 1e12, m->cpu.pc);
     switch (r) {
     case 0x0C: return vram_read();
     case 0x0D: {
@@ -467,6 +680,7 @@ static uint8_t v3_video_read(uint8_t r)
          * exactly this bit, so until it moved they had never once spun. */
         return (uint8_t)((m->busy_until > m->dots ? 0x80 : 0) | (in_vblank() ? 0x40 : 0)
                          | (col >= 640 ? 0x20 : 0) | (m->copy_until > m->dots ? 0x10 : 0)
+                         | (m->walk_until > m->dots ? 0x04 : 0)
                          | (m->irq_pending ? 1 : 0));
     }
     default: return m->regfile[r & 31];
@@ -1561,6 +1775,9 @@ static int active_lines(void) { return m->m0 ? 480 : 400; }
 static int in_vblank(void) { return m->line >= active_lines(); }
 
 static void v3_render_line(int y);
+static void v3_walk_line(int y, uint32_t ry, uint32_t hs);
+static void v3_walk_frame(void);
+static void v3_walk_pump(double t);
 
 static void render_line(int y)
 {
@@ -1620,6 +1837,7 @@ static void v3_render_line(int y)
         return;
     }
     uint32_t ry = (m->vs_frame + py) & 511;
+    v3_walk_line(y, ry, hs);
     if (mode == 2) {                    /* tile: one map byte in lane 0 of a four-byte cell, ATTR is zero */
         for (int x = 0; x < 640; x++) {
             uint32_t cx = (hs + x) & 1023;
@@ -1705,6 +1923,10 @@ static void raster(void)
             m->irq_line_due = act + (m->m0 ? 10 : 12);
             if (m->frame_active) emit_frame();
             m->frame_active = 0;
+            if (m->v3) v3_walk_frame();
+            /* ⭐ an armed GO starts at the first E fall after the rise:
+             * v3card_tb measured 4 dots, and half an E is the average */
+            if (m->v3 && m->wpend) { m->wpend = 0; v3_walk_go(m->wpend_v, m->line_start + DOTS_PER_E / 2); }
         }
         if (m->line == m->irq_line_due) {
             if (m->ctrl & 0x40) m->irq_pending = 1;
@@ -1722,6 +1944,7 @@ static void raster(void)
         /* after the WAIT release: an armed list starts inside line 0, as a GO
          * written there would, and its first WAIT is line 1's (10.3.2) */
         if (armed) { m->lgo = 0; m->lrun = 1; m->lwait = 0; list_run(); }
+        if (m->wq_i < m->wq_n) v3_walk_pump((double)m->line_start);
         if (m->line < act) {
             if (m->line == 0) m->frame_active = (m->ctrl & 0x80) != 0;
             if (m->frame_active) render_line(m->line);
@@ -1754,6 +1977,8 @@ int main(int argc, char **argv)
     snprintf(path, sizeof path, "%s/serial.out", argv[2]);
     m->ser_out = fopen(path, "wb");
     if (!m->frames || !m->trace || !m->ser_out) { fprintf(stderr, "FAIL  cannot write in %s\n", argv[2]); return 1; }
+    snprintf(m->outdir, sizeof m->outdir, "%s", argv[2]);
+    m->wf_dtop = -1;
     /* the frame words: demo.asm's and gui.asm's by default; MARKS=addr (hex, task 0's
      * logical map) reads them as five words there - checkpoint, raster phase, camera
      * record, hero record, missed flips - and writes OUTDIR/marks.txt: VBLANK's
@@ -1986,6 +2211,13 @@ int main(int argc, char **argv)
         /* $E0-$EF are errors (boot.asm's $E1-$E3); $FF is boot.asm's "done", which
          * a reboot back through the boot ROM reaches on its way to page 1 */
         if ((m->progress & 0xF0) == 0xE0) { fprintf(stderr, "FAIL  the ROM reported $%02X\n", m->progress); break; }
+    }
+    /* a walk still running at exit is finished, as the card would finish it */
+    v3_walk_pump(1e300);
+    if (m->walks) {
+        fprintf(stderr, "      walker: %ld walks, %ld torn frames, %ld torn lines, %ld contract violations\n",
+                m->walks, m->walk_torn_frames, m->walk_torn_lines, m->walk_violations);
+        if (m->walklog) fclose(m->walklog);
     }
     fclose(m->frames);
     fclose(m->trace);

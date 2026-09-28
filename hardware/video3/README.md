@@ -4,9 +4,9 @@
 (`../archive/README.md`, `../docs/history.md`). [`docs/plan.md`](docs/plan.md) is the
 specification, and still a **DRAFT**: it describes the card the checks build, and
 §14 lists what would refute each load-bearing claim. ⭐ The logic is
-**fitted** — four `ATF1508AS` and a `GAL22V10` ([`docs/partition.md`](docs/partition.md))
-— the parts list **places** at 45 ICs on 24 cm, and `v3card_tb` **simulates** the card in
-bitmap, character and tile mode with the sprite and a copy (plan §15.4). ⚠ Nothing is
+**fitted** — five `ATF1508AS` and a `GAL22V10` ([`docs/partition.md`](docs/partition.md))
+— the parts list **places** at 46 ICs on 30 cm, and `v3card_tb` **simulates** the card in
+bitmap, character and tile mode with the sprite, a copy and the sprite walker (plan §15.4). ⚠ Nothing is
 timed, drawn or costed in current; §14 of the plan lists what would refute each
 load-bearing claim and §15 is the order the rest would have to be done in.
 
@@ -20,6 +20,7 @@ item 4.
 | **Bitmap mode** | 640×200 / 240 / 400 / 480 chunky 8bpp, the span writer, **full copyrect** |
 | **Tile mode** | 8×8 8bpp tiles, as `hardware/archive/video/docs/graphics.md` §6.4.2 |
 | **One 16×16 sprite** | the mouse pointer, bitmap mode only, its shape in VRAM |
+| ⭐ **A sprite walker** | up to 16 software sprites a frame, each its own size — restore, save-behind and keyed draw, loaded into the copy engine by the card from tables the CPU fills with a `TFM` (plan §6.4) |
 | **Scrolling** | `VSCROLL` and `HSCROLL`, **one pixel at a time**, **bitmap and tile only** — character mode scrolls by copying (plan §8.2), so it has no ring and no runway defect |
 | ⛔ **No display list** | and so nothing per-scanline: no raster bars, no sine warp, no `SS.Raster` |
 
@@ -34,7 +35,7 @@ refuse. ⚠ That claim is §14 item 1 and its timing is not yet analysed.
 
 | | |
 |---|---|
-| [`docs/partition.md`](docs/partition.md) | which part holds what — **four `ATF1508AS` and a `GAL22V10`, and the board allows no fifth PLCC-84** |
+| [`docs/partition.md`](docs/partition.md) | which part holds what — **five `ATF1508AS` and a `GAL22V10`, and the fifth PLCC-84 is why the card is 30 cm** |
 | [`docs/signals.md`](docs/signals.md) | the control lines and their inputs — the census a partition needs |
 | [`../archive/video/docs/graphics.md`](../archive/video/docs/graphics.md) | the fitted card video3 borrows from, component by component (plan §11) |
 | [`../docs/video-options.md`](../../docs/video-options.md) | how `video/`, `video2/` and the VIC-II derivative compare |

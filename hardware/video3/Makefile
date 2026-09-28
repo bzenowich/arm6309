@@ -15,7 +15,7 @@ sim: ## v3dot, v3card and v3machine under Verilator - ~4 min
 bench: ## the four exercisers on the host emulator, and SS.CopyN - ~2 min
 	sh bench/run-v3.sh
 	sh bench/run-v3copyn.sh
-fit: ## fit the four CPLDs (needs the Wine prefix; one fit at a time - it takes a while)
-	cd $(HW) && for p in v3dot v3scan v3ptr v3host; do sh tools/gal/prjbureau/fit1508.sh video3/logic/$$p.pld || exit 1; done
+fit: ## fit the five CPLDs (needs the Wine prefix; one fit at a time - it takes a while)
+	cd $(HW) && for p in v3dot v3scan v3ptr v3host v3walk; do sh tools/gal/prjbureau/fit1508.sh video3/logic/$$p.pld || exit 1; done
 cupl: ## recompile v3lane's reference JEDEC with Atmel's CUPL
 	cd $(HW) && sh tools/gal/prjbureau/cupl-reference.sh video3/logic/v3lane.pld

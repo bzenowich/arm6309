@@ -7,6 +7,357 @@ Superseded claims from [`plan.md`](plan.md), [`signals.md`](signals.md), [`stard
 `CLAUDE.md`'s rule: **specs describe only the present design**, and a superseded
 utilisation figure is a number `check:docs` cannot distinguish from a live one.
 
+## `plan.md` §6.4 — the armed GO and the null shape (2026-09-28)
+
+`optimizations.md` §12's first two hardware follow-ons were built into `v3walk` the same
+day it was fitted. Until then `plan.md` §6.4's `SWCMD` table said of GO only *"The walk
+starts when the write ends"*, SELECT had seven tables of which 7 was unused, and every
+record was three copies whatever its shape — so `tilescroll` parked an actor it had no use
+for by pointing its record at the slot's own save rectangle, which still cost the three
+copies of it. Now SELECT 7 arms the next GO to start at the rise of `VBLANK`, and shape 31
+is skipped. The fit moved from **113/128 cells, 54/64 I/O, 59 flip-flops, 24 cascades** to
+**111/128, 55/64, 63, 10** — one more input (`E`), four more registers (`ARM`, `PEND`,
+`RDY`, `EQ`), and the command register's load folded into one comb (`CMDLD`), which is
+where the cascades went. `partition.md` §2.6's register estimate read *"the table pointer
+— table, slot, byte — and the command byte (`SWCMD`) | ~16"*.
+`optimizations.md` §12.5 said *"⚠ §12.3's frame budget is still arithmetic: no program
+drives the walker yet, so the tearing and headroom figures there are not measurements"*,
+and its §0 row 11 ended *"⚠ The frame-level win of §12.3 is arithmetic, not yet measured on
+a program"*; `tilescroll` measures it now (`optimizations.md` §12.6).
+`v3card_tb` gained the null-and-armed block (slot 1 null in one bank, slot 0 in the
+other, behind an armed GO) and went from **95 to 105 claims**; the suite from **341 to 351**
+(`plan.md` §15, `CLAUDE.md`, `hardware/README.md`, `hardware/tools/sim/README.md`).
+
+## The sprite walker — a fifth CPLD, the VBL interrupt moved, and a 30 cm card (2026-09-28)
+
+`v3walk`, a fifth `ATF1508AS`, was built and fitted: `optimizations.md` §12's Streaming
+Sprite Walker in a modified form (`optimizations.md` §12.5 has how and why it departs from
+the proposal; `plan.md` §6.4 is the design). Three things moved with it, and every
+statement below was true until that day:
+
+- **The VBL interrupt left `v3host`.** `IRQPEND`, `IRQEN` (`CTRL` b6), the ack and the
+  open-drain `/IRQ` moved to `v3walk`, which is what paid for `WALK`'s pin on a `v3host`
+  that was at 64/64 I/O. `v3host` refitted at **52/128 cells, 61/64 I/O**, 0 cascades
+  (was 58/128, 64/64). `v3walk` fitted at 113/128 cells, 54/64 I/O, 59 flip-flops,
+  24 cascades.
+- **`+$1D` and `+$1E` stopped being spare** — they are `SWDAT` and `SWCMD`; `+$1F` is the
+  only spare offset. `VSTAT` b2 is `WALK`.
+- **The card went from 45 to 46 ICs and does not place on 24 cm** — the four sprite
+  `'165`s and the `'4078` fall off — so 300 mm joined the card lengths
+  (`hardware/tools/place/parts.ts`, `hardware/tools/lib/Card.tsx`) and video3 is
+  **30 cm, 178.5 of 270.3 cm², 66 %**. The same list with four `ATF1508AS` places on
+  24 cm at 165.9 cm², 79 % (measured the same day with the packer).
+- `v3lane` gained `WKEY` (pin 13), so it has **12 inputs** and its check sweeps 4,096.
+
+### `plan.md` header
+
+> or costed.** Four `ATF1508AS` and a `GAL22V10` hold it (`partition.md`, §14 item 4),
+> `v3card_tb` runs the five of them as a card in every mode (§15.4), and
+> `make -C hardware place` places the 44-IC list on 24 cm (§13.5).
+
+⚠ "44-IC" was already stale — the `'4078` had made it 45 on 2026-09-19.
+
+### `plan.md` §4 and §13.1 — the register file
+
+> | Register file | 1 × 32K×8, 20 ns | §5 and §7.2's column shadows — 32 bytes, addressed by `RFA4..RFA0` |
+
+> | **32K×8 register file** | **1** | §5. ⛔ **It cannot be macrocells**: … It also holds `SPANLEN` and `WPTR`'s and `CPTR`'s column shadows |
+
+`RFA14..RFA5` were tied low. `v3walk` drives `RFA13..RFA5` as the tables' page; `RFA14`
+is still tied low.
+
+### `plan.md` §9 — the interrupt's home
+
+> through a product-term output enable, the pending flag set by an edge, `VSTAT` b0
+> read (`v3host`'s `IRQPEND`, onto the `VSTAT` `'244`) and any write to `VSTAT` clearing
+> it. The enable, `CTRL` b6, is held on `v3host` beside `/IRQ`.
+
+### `plan.md` §10 — the register map
+
+> | `+$0D` | `VSTAT` | b7 `SPANBUSY`, b6 `VBLANK`, b5 `HBLANK`, b4 `CBUSY`, b1 `PBUSY`, b0 IRQ pending. …
+> | `+$1D` | — | ⭐ **spare**, like `+$1F`: a register-file byte that reads back what was written and has no function. The sprite shape is in VRAM (§7) |
+> | `+$1E` | — | ⭐ **spare**, the same |
+> | `+$1F` | `FCNT` | ⭐ **spare — no logic reads or writes it**, …
+
+> ⚠ **`+$1F` assumes the register file decodes all 32 offsets**, which is what a 32-byte
+> file addressed by `RA4..RA0` does and what the emulator's model does.
+
+### `plan.md` §11, §13, §13.1, §13.3 trade 2
+
+> | VBL interrupt, three macrocells, open-drain | §12.1 | **Required** — the NitrOS-9 tick |
+
+> costed in current** (§14 item 13). The programmable logic is `partition.md`'s — four
+> `ATF1508AS` and the `v3lane` `GAL22V10` — and is counted in §13.5, not here.
+
+> **Discrete total: 40**, against `video/`'s 30, **plus five programmable parts — 45 ICs**
+
+> returned the four packages this trade used to be the payer for, so the board places at
+> **45 ICs, 78 %** with everything (§13.5)
+
+### `plan.md` §13.5 — "the ceiling is four PLCC-84s"
+
+> `hardware/tools/place/parts.ts` carries video3 as an **alternate** (a design that is not in
+> the machine's slot population since 2026-09-20, when `video` was archived and video3
+> took `$FF60`), and `make -C hardware place` places it through the same skyline packer that
+> measures every other card. **The card is 45 ICs**: four `ATF1508AS` in PLCC-84, the
+> `v3lane` `GAL22V10` in DIP-24, and §13.1's 40 discrete packages.
+>
+> | | ICs | courtyard | 240 mm |
+> |---|---|---|---|
+> | `video`, the built card | 33 | 124.4 cm² | places, 59 % |
+> | ⭐ **video3 as built** — four `ATF1508AS` + `v3lane` + 39 | **44** | 163.9 cm² | **places, 78 %** — `check:place` asserts it, and that 24 cm is the shortest length that holds it |
+> | video3 without `v3lane` and the lane `'245`s | 39 | 149.1 cm² | places, 71 % — the card that could not move a byte (§14 item 18) |
+> | video3 with a fifth `ATF1508AS` | 45 | 176.5 cm² | ⛔ **does not place** |
+> | video3 with a fifth `ATF1508AS` **instead of** `v3lane` | 44 | 173.1 cm² | ⛔ **does not place** |
+>
+> ⛔ **THE CEILING IS FOUR PLCC-84s, and 240 mm is the longest board there is.** A
+> PLCC-84 is 33 × 33 mm, so a fifth one is worth three DIP-20s of skyline and the board
+> refuses it — even in place of the GAL, at the same IC count. **What the ceiling limits
+> is PLCC-84 area, not programmable parts**: `v3lane` is a DIP-24 and places beside four
+> `'245`s. That is a constraint on §14 item 4 that no amount of prose would have produced,
+> and it is the reason this list exists as a file rather than as a table in this document.
+
+What replaced it: the fifth PLCC-84 was wanted, the ceiling was a property of the
+longest length the parts list offered, and a 300 mm length was added. The rows above
+were measured before the `'4078`; they are not re-measured.
+
+### `plan.md` §14 items 0, 4, 13 and 14
+
+> the card as built, **45 ICs** (§13.5), so the package budget does not gate the
+
+> 4. ⭐ **The partition is [`partition.md`](partition.md): four `ATF1508AS` and one
+>    `GAL22V10`**, and §13.5 says four PLCC-84s is the most that places — **so video3 is at
+>    its ceiling**. **ALL FIVE ARE FITTED:**
+>    …
+>    | `v3host` | 58/128 | ⛔ **64/64** | 0 | the backplane, the registers, the palette commit, the copy's phase machine, the reload walk |
+>    | `v3lane` | a `GAL22V10`: 10 of 10 macrocells, 10 inputs | | | the lane `'245`s' enables, the byte enables, `PWOE`, `RFOE` — … |
+
+> sequencers" does not describe this part, and §4's "a fifth part for the copy
+> engine — it does not place" closes the other way out.
+
+> ⛔ **`v3host` is 64/64 — full — and `v3ptr` has six cells**, with Nodes+FB at 133 % and
+
+(⚠ "six cells" was already wrong against `v3ptr`'s 124/128; it says four now.)
+
+> four `ATF1508AS` and a `GAL22V10` where `video/` has three CPLDs, 39 discrete
+
+### `plan.md` §15 and §15.4
+
+> | ✅ 1 | **The parts list**, as an *alternate* in `hardware/tools/place/parts.ts` | `make -C hardware place` — §13.5. It found the ceiling of four PLCC-84s, and an arithmetic error in this document |
+
+> | ✅ 4a | **The partition** — [`partition.md`](partition.md) | **four `ATF1508AS` and the `v3lane` `GAL22V10`**, and §13.5 says four PLCC-84s is the most that places. ⛔ **So video3 is exactly at its ceiling**: there is no fifth PLCC-84, and no room for a feature that needs one |
+> | 4b | … | ⭐ term lists and fits for all five parts (§14 item 4); … |
+
+> `hardware/video3/sim/video3_card.v` is the five parts — `v3dot`, `v3scan`, `v3ptr`,
+> `v3host` and `v3lane` — wired to …
+
+> `make -C hardware sim` as `v3card` — **66 claims, 0 failed** (the suite: 378, 0 failed):
+
+`v3card_tb` is 95 claims with the `walk` group; the suite total beside it is not restated here.
+`video3_card.v` resolves the broadcast nets and gained `BCAST_FIGHT`, and its register
+file model is the full 32 KB.
+
+### `partition.md` — the figures, §0, §2.4, §2.5, §3, §4, §5, §8, §6
+
+> > ⭐ **ALL FIVE PARTS ARE FITTED** — the four `ATF1508AS` …
+
+> decode the offsets it cares about. **All four CPLDs are wired that way**, … read by all four designs
+
+> | `v3host` | 58 / 128 | ⛔ **64 / 64** | 0 | the backplane, the decode, the palette commit, the copy's phase machine, the reload walk, `IRQEN`, the lane `DIR` |
+> | `v3lane` | a `GAL22V10`, 10 of 10 macrocells, 10 inputs | | | the lanes and the internal bus's drivers |
+
+> 80 % utilisation. What it bought for certain is **22 pins on `v3host`** — spent since on
+> the copy's phase machine, the reload walk, `IRQEN`, `PWCK`, `IRQPEND` and `DIR`.
+
+§0:
+
+> **Four `ATF1508AS` and one `GAL22V10`**, and `plan.md` §13.5 measured that **four
+> PLCC-84s is the most that places on a 240 mm board** — a fifth does not place even in the
+> GAL's stead. The ceiling is PLCC-84 area; `v3lane` is a DIP-24.
+>
+> ⛔ **So video3 is exactly at its ceiling.** There is no fifth PLCC-84, which means there
+> is no room for a feature that needs one — and the partition below has no slack to give a
+> later change. That is the single most important consequence of this document, and it
+> should be read before anything is added to plan §0.
+
+> | **`v3host`** | 58 / 128, FITTED | ⛔ **64 / 64, FITTED** | the backplane, the registers, the palette commit, the copy's phase machine, the reload walk |
+> | **`v3lane`** | `GAL22V10`, 10 of 10, FITTED | 10 inputs | … |
+>
+> ⚠ **`v3host` is pin-bound, not cell-bound** — under half full of macrocells and every pin
+> taken, because it is the part the backplane lands on.
+
+§2.1: `CTRL`'s row said *"(b6, the IRQ enable, is `v3host`'s)"*. §2.4:
+
+> | `/WAIT`, `/IRQ`, the `'245` and `'244` controls | ~5 |
+>
+> It also holds the copy's phase machine, §7.2's reload walk and `RFA4..RFA1`, `IRQEN`, the lane
+> `'245`s' `DIR`, `PWCK` and `IRQPEND` (plan §14 item 14). The backplane is 27 signals on
+> its own (`signals.md` §2.1). ⭐ **It takes one bit of `IDB`**, `D6`, for `IRQEN` — every
+> other register it touches is a discrete latch or counter that loads from the bus itself,
+> so `v3host` only strobes them.
+
+§2.5:
+
+> A `GAL22V10`, purely combinational, ten inputs (`LANE1:0`, `CRDSEL`, the three grants,
+> `WM1:0`, `/VWE`, `WSTBV`) and all ten macrocells: …
+> … No CPLD had ten pins to give it — `v3host` is full — and the logic is what the board
+> lacked, not what a part could not hold (plan §15.4, defect 24).
+
+§3:
+
+> | `IDB[7:0]` — the card's internal data bus | 8 | `v3dot`, `v3scan` and `v3ptr`; `v3host` takes `D6` alone. …
+
+§4, §5 and §8:
+
+> | **A fifth PLCC-84 for the copy engine** | ⛔ **it does not place** (plan §13.5) |
+
+> 1. ⛔ **There is no fifth PLCC-84.** §0. Any later feature needing one is a card revision.
+
+> ⛔ **The board is full, and `make -C hardware place`'s packer says so.** plan §13.5 has the
+> measurements: the card as built is **45 ICs — four `ATF1508AS`, `v3lane` and 40 discrete
+> — and places on 24 cm at 78 %**; a fifth PLCC-84 does not place, even in `v3lane`'s
+> stead.
+
+§6: *"five term lists, five fits"*, *"`hardware/gal/video3/v3{dot,scan,ptr,host}.cpld.ts`"*
+and *"all four CPLDs decode it"*.
+
+### `signals.md` header and §1.9
+
+> > **how many programmable parts, and what goes in each** — and plan §13.5 bounds the answer
+> > at four PLCC-84s, because a fifth does not place on a 240 mm board.
+
+> | `/IRQ` | 1 | open-drain, VBL |
+
+> | `RFWE`, `RFOE`, `RFA[4:0]` | 7 | the register file — … `RFA[4:1]` are `v3host`'s, `RFOE` is `v3lane`'s |
+
+### `keyed-copy.md` §0 and §7
+
+> | what arms it | ⭐ **`WMODE` 11.** Sprite mode already means "transparent" to the span writer, so it means the same to the copy engine; any other `WMODE` copies index 0 like any other byte |
+> | the cost | **+1 DIP-14** (45 ICs, still places on 24 cm), one input pin on `v3lane`, and four of its byte-enable terms. …
+
+> ⛔ **The room is cells on `v3host`, and it has no pins.** Pins are the binding
+> constraint (`partition.md` §7.1), and the only part with more than one spare is
+> `v3ptr` — which does gate the write strobe (`VWE`), and has seven.
+
+§7's utilisation table (`v3host` 58/128, 64/64) is kept as the 2026-09-19 pricing it was,
+with the date in its header.
+
+### `optimizations.md` — the starting state and the priority list
+
+> | `v3host` | 58/128 | 64/64 | 0 |
+> | `v3lane` (GAL22V10) | 10/10 macrocells | 10 inputs | — |
+
+> ⛔ **And the board is full**: 45 ICs, placing on 24 cm, which `plan.md` §13.5 says is
+> the longest board there is. A new package has to displace one.
+
+> | 11 | **The Streaming Sprite Walker** (§12) | 6309 `TFM` streams 10 sprites in **45–60 µs**, blitter finishes in **1.26 ms** inside VBLANK, eliminating top-of-screen tearing |
+
+§12.1–12.4 are unchanged: they are the proposal as written, and §12.5 is what was built.
+
+### `hardware/video3/README.md` and `hardware/video3/logic/README.md`
+
+> **fitted** — four `ATF1508AS` and a `GAL22V10` ([`docs/partition.md`](docs/partition.md))
+> — the parts list **places** at 45 ICs on 24 cm, and `v3card_tb` **simulates** the card in
+> bitmap, character and tile mode with the sprite and a copy (plan §15.4).
+
+> | [`docs/partition.md`](docs/partition.md) | which part holds what — **four `ATF1508AS` and a `GAL22V10`, and the board allows no fifth PLCC-84** |
+
+> ⭐ **All four CPLDs take the register broadcast** (`RA4..RA0` + `REGWR`) and decode their
+> own offsets from `regmap.ts`, which is the single table plan §10 specifies.
+
+> | **`v3host`** | **58 / 128** | ⛔ **64 / 64** | **0** | ⭐ the build — the broadcast |
+
+> `v3lane.jedec.ts` is a `GAL22V10`, 10 of 10 macrocells and 10 inputs: … sweeps all 1,024 inputs
+
+(⚠ the 10 inputs and 1,024 were already stale — `KEY` had made it 11 and 2,048.)
+
+### `software/toolbox/docs/proportional-font.md` §5.5 and §7 — the two free bytes
+
+The toolbox's §5.5 found `+$1D` and `+$1E` free and proposed a `CWIDTH`+`GO` alias
+at `+$1D`; the walker took both, so the alias has no address, `regmap.check.ts`
+counts 31 used and 1 spare, and §7's budget is the refitted one. §5.5 as it stood:
+
+> ### 5.5 ⭐ The 32-byte window has two free bytes — verified, and it is the cheap version
+>
+> ⭐ **CHECKED, 2026-09-21, and it is now a gate**: `video3/logic/regmap.check.ts`
+> (`make -C hardware check`) walks all 32 offsets and requires each to be *decoded by a live
+> part*, *read by the register file's own address generator*, or *a dedicated port*.
+> **29 used, 3 spare.** The full table is the check's own output.
+>
+> ⛔ **"It reads back" is not evidence, which is why the check asks a different
+> question.** Every offset but `+$0C` and `+$0D` reads back from the 32-byte file,
+> because the file is RAM and `RDBKOE` puts it on the bus — `boot.asm` uses `+$13`
+> as its card-probe scratch for exactly that reason. A byte that reads back what was
+> written and is decoded by nothing is the `ACTRL` b3 defect wearing an address.
+>
+> Three ways an offset earns its place, and all three are in use:
+>
+> | | offsets |
+> |---|---|
+> | a **load strobe** decoded by a live part | 22 of them — `LDCTRL` by `v3dot` *and* `v3host`, `LDHSL` by `v3dot` *and* `v3scan`, the rest singly |
+> | ⭐ the **register file's address generator reads it** — no strobe at all | `+$05` `SPANLEN` (where `RFA` parks when idle), `+$06`/`+$07` `WFG`/`WBG` (where it points through a span, `RFA0` being the mask bit), and `+$08`, `+$09`, `+$12`, `+$13` (the four-state walk that restores the two columns) |
+> | a **dedicated port**, not a file byte | `+$0C` `VDATA`, `+$0D` `VSTAT`/`LDIRQACK` |
+>
+> ⚠ **And the spare count is three, not two.** `+$1F` is spare in *hardware* too —
+> nothing decodes or reads it — but the VBL service parks its frame count there
+> (`plan.md` §10), so **two are free for silicon: `+$1D` and `+$1E`.**
+>
+> ⛔ **The trap this check exists for is already in the tree.** `regmap.ts:46-47`
+> still declares `LDSPRIX` and `LDSPRDA` at those two offsets, and
+> `video3/logic/v3dot_si.pld` and `v3host_st.pld` *do* decode them — with real
+> sequencer logic behind them. Those are **partition variants**, not the board:
+> `video3_card.v` instantiates the bare `v3dot`, `v3scan`, `v3ptr`, `v3host` and
+> `v3lane`, and `v3host.cpld.ts` emits `"v3host_st"` only under
+> `DECODE === "strobes"`. **Counting a variant's decode as a use is exactly how
+> "`+$1D` is taken" would get believed**, so the check reads the live designs only
+> and names the two orphaned strobes as a claim of its own.
+>
+> ⭐ **Two bytes is exactly enough for the cheapest useful change**: alias `CWIDTH`
+> at `+$1D` such that **a write there is `CWIDTH` and `GO` together**. A strike
+> glyph then costs **5 bytes and one fewer store** (`CCTRL` disappears from the
+> loop; `CHEIGHT` stays because the hardware counts it down).
+>
+> ⚠ **The cost is one CELL, not one term, and on this part that matters.**
+> `decodeCells()` makes each strobe an internal node — a macrocell with a single
+> product term — so `LDCWGO` would take one of `v3ptr`'s four spare cells, and
+> `GOQ`'s term list gains it. `v3ptr` is **124/128 with 3 cascades**, and its
+> Nodes+FB is over 130 % with seven of eight LABs at 39 of 40 inputs: a part that
+> refuses additions on grouping before it runs out of cells. **That is a fit and
+> not an assumption**, read out of the new `.fit` against those numbers, and
+> CLAUDE.md's ninth trap applies — a refusal is not a result until a second file
+> name refuses it too.
+>
+> ⚠ Two bytes is **not** enough to make the nine contiguous, so §5.4's re-order and
+> this are alternatives at different prices, not steps of one plan.
+>
+> ---
+
+§7's budget and the head of its list:
+
+>
+> | part | cells | I/O pins | cascades |
+> |---|---|---|---|
+> | `v3dot` | 121/128 | 63/64 | 5 |
+> | `v3scan` | 112/128 | 63/64 | 3 |
+> | `v3ptr` | ⛔ **124/128** | 58/64 | 3, **133 % Nodes+FB** |
+> | `v3host` | ⭐ **58/128 — 70 spare** | ⛔ **64/64 — none** | 0 |
+>
+> ⭐ **Every item below is decode and sequencing, so every one of them needs zero
+> new pins** — which is the constraint that killed the programmable key and the
+> extra sprites. The room is on `v3host`. ⛔ The parts that own the copy registers'
+> decode are `v3ptr`'s, and `v3ptr` is the part that refuses.
+>
+> | | what it buys | cost | |
+> |---|---|---|---|
+> | 1 | ⭐ **`CWIDTH`+`GO` alias at `+$1D`** (§5.5) | 6 bytes → 5, one store a glyph | one decode term on `v3ptr` | ⚠ needs a fit |
+> | 2 | ⭐ **`CHEIGHT` sticky** — a holding register beside the counter, the way `CWIDTH` already has one (`CWLOAD = CROWADV # !CBUSY`, `v3ptr.cpld.ts:242`) | 5 bytes → 4; and it removes a **real trap** — the emulator models `CHEIGHT` as sticky and the hardware does not, so code written against `machine.c` runs 512-row copies on silicon | 8 macrocells on `v3ptr` | ⛔ **`v3ptr` has 4 cells.** Would have to move to `v3host`, which has the cells and no pins — and the decode broadcast (`REGWR + RA4..RA0`) is exactly how it would get there |
+> | 3 | ⭐⭐ **A shadowed `GO`** — one spare set of `CPTR`/`WPTR`/`CWIDTH`/`CHEIGHT`, written while the current copy runs, consumed at retire | ⭐ **the only change worth 2×** (§6) | ~40 macrocells on `v3host` of 70 spare, no pins. ⚠ And the mechanism half-exists: the register file is RAM and the **column-reload walk `RP1..RP4` already reads shadows out of it** (`v3host.cpld.ts:307-314`) | ⚠ 40 of 70 is not a small ask; and `WAITN`'s second term has to learn the difference |
+> | 4 | **`WPTR` auto-advance by `CWIDTH`** — a pen | 4 bytes → 2 | an adder on `WPTR` | ⛔ worth little once §6 is understood, and `v3ptr` refuses adders |
+> | 5 | ⛔ **the hardware descriptor walker** | concurrency and persistent lists | `v3host`'s cells | ⛔ `keyed-copy.md` §4.1: the CPU spends **91.6 µs** building a VRAM descriptor against **~33 µs** writing the registers it replaces. For 27 µs of glyph, it is a loss |
+>
+
+---
+
 ## `pcs.md` §9 — moved (2026-09-24)
 
 `pcs`'s history is [`software/pcs/docs/history.md`](../../../software/pcs/docs/history.md)

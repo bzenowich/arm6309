@@ -123,7 +123,7 @@ module machine_tb;
   wire [24:0] pa;
   wire n_iosel, n_iopage_bp, wait_asserted, card_drives;
   wire bus_conflict, pa_conflict;
-  wire FBA_FIGHT, DBUS_FIGHT, LUTA_FIGHT, IDB_FIGHT, IDB_FLOAT, LANE_FLOAT, RANK_FIGHT;
+  wire FBA_FIGHT, DBUS_FIGHT, LUTA_FIGHT, IDB_FIGHT, IDB_FLOAT, LANE_FLOAT, RANK_FIGHT, BCAST_FIGHT;
 
   // SERIAL: the TL16C550C console at $FF38. Only +scenario=nitros9 addresses
   // it; boot.asm never does, so the seven boot runs are the machine they were.
@@ -174,7 +174,7 @@ module machine_tb;
   // ⭐ AND THE SEVEN THE CARD REPORTS ITSELF, which no single part of it can
   // see (video3_card.v). machine.v's card had one of these; this one has
   // seven, so they are counted rather than latched.
-  int n_fba = 0, n_dbus = 0, n_luta = 0, n_idbf = 0, n_idbz = 0, n_lane = 0, n_rank = 0;
+  int n_fba = 0, n_dbus = 0, n_luta = 0, n_idbf = 0, n_idbz = 0, n_lane = 0, n_rank = 0, n_bcast = 0;
   always @(posedge CLK25) begin
     if (bus_conflict)      saw_bus_conflict = 1;
     if (pa_conflict)       saw_pa_conflict  = 1;
@@ -186,6 +186,7 @@ module machine_tb;
       if (IDB_FLOAT)  n_idbz++;
       if (LANE_FLOAT) n_lane++;
       if (RANK_FIGHT) n_rank++;
+      if (BCAST_FIGHT) n_bcast++;
     end
   end
 
@@ -1846,6 +1847,7 @@ module machine_tb;
     ok(n_idbz == 0, $sformatf("and nothing ever sampled it undriven (%0d dots)", n_idbz));
     ok(n_lane == 0, $sformatf("no byte was written from a lane nothing drives (%0d dots)", n_lane));
     ok(n_rank == 0, $sformatf("each chip's two fetch ranks: exactly one on, always (%0d dots)", n_rank));
+    ok(n_bcast == 0, $sformatf("the broadcast: exactly one of v3host and v3walk on each net, always (%0d dots)", n_bcast));
     ok(omr_mismatch == 0,
        $sformatf("⭐ and the dot that shows is exactly the connector's BLANK two dots late, for the whole run - which is what makes the capture above a function of the four signals that leave the card (%0d dots disagree)",
                  omr_mismatch));

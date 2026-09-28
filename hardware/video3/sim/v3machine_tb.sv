@@ -83,7 +83,7 @@ module v3machine_tb;
   wire [24:0] pa;
   wire n_iosel, n_iopage_bp, wait_asserted, irq_asserted, card_drives;
   wire bus_conflict, pa_conflict;
-  wire FBA_FIGHT, DBUS_FIGHT, LUTA_FIGHT, IDB_FIGHT, IDB_FLOAT, LANE_FLOAT, RANK_FIGHT;
+  wire FBA_FIGHT, DBUS_FIGHT, LUTA_FIGHT, IDB_FIGHT, IDB_FLOAT, LANE_FLOAT, RANK_FIGHT, BCAST_FIGHT;
 
   /* ⚠ THE OTHER TWO SLOTS, DECLARED AND LEFT EMPTY. machine3.v grew machine.v's
    * audio card and TL16C550C on 2026-09-20, when machine_tb moved onto it with
@@ -154,7 +154,7 @@ module v3machine_tb;
   // that ORs its drivers cannot see a bus fight, so machine3.v and
   // video3_card.v do not OR them and this counts what they report.
   int n_bus_conflict = 0, n_pa_conflict = 0;
-  int n_fba = 0, n_dbus = 0, n_luta = 0, n_idbf = 0, n_idbz = 0, n_lane = 0, n_rank = 0;
+  int n_fba = 0, n_dbus = 0, n_luta = 0, n_idbf = 0, n_idbz = 0, n_lane = 0, n_rank = 0, n_bcast = 0;
   always @(posedge CLK25) if (n_reset) begin
     if (bus_conflict) n_bus_conflict++;
     if (pa_conflict)  n_pa_conflict++;
@@ -165,6 +165,7 @@ module v3machine_tb;
     if (IDB_FLOAT)  n_idbz++;
     if (LANE_FLOAT) n_lane++;
     if (RANK_FIGHT) n_rank++;
+    if (BCAST_FIGHT) n_bcast++;
   end
 
   // ---- /WAIT, measured in the CPU's own cycles ----------------------------
@@ -633,6 +634,7 @@ module v3machine_tb;
     ok(n_idbz == 0, $sformatf("and nothing ever sampled it undriven (%0d dots)", n_idbz));
     ok(n_lane == 0, $sformatf("no byte was written from a lane nothing drives (%0d dots)", n_lane));
     ok(n_rank == 0, $sformatf("each chip's two fetch ranks: exactly one on, always (%0d dots)", n_rank));
+    ok(n_bcast == 0, $sformatf("the broadcast: exactly one of v3host and v3walk on each net, always (%0d dots)", n_bcast));
     ok(!wait_asserted && max_ehi < 4000,
        $sformatf("/WAIT was always released - the longest E-high in the run was %0d dots", max_ehi));
 

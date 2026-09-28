@@ -47,6 +47,7 @@ import { v3dot } from "../../video3/logic/v3dot.cpld"
 import { v3scan } from "../../video3/logic/v3scan.cpld"
 import { v3ptr } from "../../video3/logic/v3ptr.cpld"
 import { v3host } from "../../video3/logic/v3host.cpld"
+import { v3walk } from "../../video3/logic/v3walk.cpld"
 import { v3laneDesign } from "../../video3/logic/v3lane.jedec"
 import { sdbusDesign } from "../../storage/logic/sdbus.jedec"
 import { sdengDesign } from "../../storage/logic/sdeng.jedec"
@@ -103,7 +104,8 @@ const PARTS: Part[] = [
    * ⚠ Rule 3 does not reach this card: CONSUMERS needs a drawn board and
    * plan.md §15 step 8 owes one. */
   cpld("video3", v3dot), cpld("video3", v3scan),
-  cpld("video3", v3ptr), cpld("video3", v3host), gal("video3", v3laneDesign),
+  cpld("video3", v3ptr), cpld("video3", v3host), cpld("video3", v3walk),
+  gal("video3", v3laneDesign),
   /* ⭐ STORAGE, 2026-09-20. Eight ICs, two of them these; every pin below
    * that leaves the package drives a discrete part this card really has, so
    * unlike video3 rule 3 DOES reach it. */
@@ -148,7 +150,9 @@ for (const part of PARTS) {
 for (const must of ["clkdec.WAIT",
   "audio.IOSEL", "audio.FIRQ", "u9.IOPAGE_BP", "aseq.RESET",
   /* ⭐ and video3's three, which is what adding the card was for */
-  "v3host.IOSEL", "v3host.WAITN", "v3host.IRQN"]) {
+  "v3host.IOSEL", "v3host.WAITN",
+  /* ⭐ /IRQ moved to v3walk on 2026-09-28 (plan §6.4), with its RESET */
+  "v3walk.IRQN", "v3walk.RESET"]) {
   check(bpHits.includes(must), `and ${must} is one of the ${bpHits.length} backplane pins checked`)
 }
 
@@ -222,6 +226,7 @@ const CONSUMERS: Consumer[] = [
   { part: "v3dot", pin: "OMR", drives: "74AHCT273 /MR (output pair) - asserted is 'the pixel shows', /MR high", low: false, where: "plan.md 9.2" },
   { part: "v3ptr", pin: "VWE", drives: "AS6C8016 /WE (both parts)", low: true, where: "plan.md 4" },
   { part: "v3host", pin: "WSTB", drives: "register-file SRAM /WE", low: true, where: "plan.md 5" },
+  { part: "v3walk", pin: "WSTB", drives: "register-file SRAM /WE, while WALK", low: true, where: "plan.md 6.4" },
   { part: "v3host", pin: "RDBKOE", drives: "74HCT245 /OE (host - both directions)", low: true, where: "plan.md 13.1" },
   { part: "v3host", pin: "VSTATOE", drives: "74HC244 /1G /2G (VSTAT)", low: true, where: "plan.md 10" },
   { part: "v3host", pin: "RDOE", drives: "74HCT574 /OE (vread)", low: true, where: "plan.md 11" },

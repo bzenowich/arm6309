@@ -22,6 +22,7 @@ PIN 8 = WM1 ;
 PIN 9 = !VWE ;
 PIN 10 = WSTBV ;
 PIN 11 = KEY ;
+PIN 13 = WKEY ;
 
 PIN 14 = !LOE0 ;
 PIN 23 = !LOE1 ;
@@ -47,37 +48,37 @@ LOE3 = GRD & LANE1 & LANE0
          # GCPY & LANE1 & LANE0
          # GSPN & LANE1 & LANE0 ;
 LB0 = !VWE & !KEY
-        # !VWE & !WM1
-        # !VWE & !WM0
         # !VWE & !GCPY
+        # !VWE & !WM1 & !WKEY
+        # !VWE & !WM0 & !WKEY
         # !LANE1 & !LANE0 & !KEY
-        # !LANE1 & !LANE0 & !WM1
-        # !LANE1 & !LANE0 & !WM0
-        # !LANE1 & !LANE0 & !GCPY ;
+        # !LANE1 & !LANE0 & !GCPY
+        # !LANE1 & !LANE0 & !WM1 & !WKEY
+        # !LANE1 & !LANE0 & !WM0 & !WKEY ;
 UB0 = !VWE & !KEY
-        # !VWE & !WM1
-        # !VWE & !WM0
         # !VWE & !GCPY
+        # !VWE & !WM1 & !WKEY
+        # !VWE & !WM0 & !WKEY
         # !LANE1 & LANE0 & !KEY
-        # !LANE1 & LANE0 & !WM1
-        # !LANE1 & LANE0 & !WM0
-        # !LANE1 & LANE0 & !GCPY ;
+        # !LANE1 & LANE0 & !GCPY
+        # !LANE1 & LANE0 & !WM1 & !WKEY
+        # !LANE1 & LANE0 & !WM0 & !WKEY ;
 LB1 = !VWE & !KEY
-        # !VWE & !WM1
-        # !VWE & !WM0
         # !VWE & !GCPY
+        # !VWE & !WM1 & !WKEY
+        # !VWE & !WM0 & !WKEY
         # LANE1 & !LANE0 & !KEY
-        # LANE1 & !LANE0 & !WM1
-        # LANE1 & !LANE0 & !WM0
-        # LANE1 & !LANE0 & !GCPY ;
+        # LANE1 & !LANE0 & !GCPY
+        # LANE1 & !LANE0 & !WM1 & !WKEY
+        # LANE1 & !LANE0 & !WM0 & !WKEY ;
 UB1 = !VWE & !KEY
-        # !VWE & !WM1
-        # !VWE & !WM0
         # !VWE & !GCPY
+        # !VWE & !WM1 & !WKEY
+        # !VWE & !WM0 & !WKEY
         # LANE1 & LANE0 & !KEY
-        # LANE1 & LANE0 & !WM1
-        # LANE1 & LANE0 & !WM0
-        # LANE1 & LANE0 & !GCPY ;
+        # LANE1 & LANE0 & !GCPY
+        # LANE1 & LANE0 & !WM1 & !WKEY
+        # LANE1 & LANE0 & !WM0 & !WKEY ;
 PWOE = GSPN & !WM1 & !WM0
          # GCPY & !CRDSEL ;
 RFOE = !GRD & !GCPY & !WSTBV & !GSPN

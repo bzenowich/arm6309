@@ -61,6 +61,10 @@ export const v3laneDesign: Design = {
     { name: "VWE", pin: 9, activeLow: true }, { name: "WSTBV", pin: 10 },
     /* the 74HC4078's answer: the byte on IDB is zero, the copy's key */
     { name: "KEY", pin: 11 },
+    /* ⭐ the sprite walker's DRAW copy (plan.md §6.4): v3walk arms the key for
+     * its own draws and never for its restores or saves, so a walk needs no
+     * WMODE of its own - and WMODE must not be 11 while one runs */
+    { name: "WKEY", pin: 13 },
   ],
   cells: [
     /* the four lane transceivers' /OE: this access's lane, during its grant.
@@ -90,11 +94,14 @@ export const v3laneDesign: Design = {
      * byte. ⛔ It is HERE and not on v3ptr - the part that gates VWE and would
      * have been the obvious home - because v3ptr refused it twice, with a cell
      * and with none: 124/128, every LAB at 39 of 40 inputs. This part had two
-     * spare inputs and WMODE already on them. */
+     * spare inputs and WMODE already on them.
+     * ⭐ WKEY ARMS IT TOO: the sprite walker's draw copy (plan §6.4). Its
+     * restores and saves are opaque, which is why the walker cannot simply
+     * set WMODE 11 - so the skip is KEY & GCPY & (WM1 & WM0 # WKEY). */
     ...[0, 1, 2, 3].map((l, i) => ({
       pin: [16, 21, 17, 20][i], name: LANE_NAMES[l], assertedLow: true, s0: 0 as const,
       terms: ["!VWE", ...lane(l)].flatMap((t) =>
-        ["!KEY", "!WM1", "!WM0", "!GCPY"].map((n) => `${t} & ${n}`)),
+        ["!KEY", "!GCPY", "!WM1 & !WKEY", "!WM0 & !WKEY"].map((n) => `${t} & ${n}`)),
     })),
     /* the posted-write '574's /OE: a direct-mode span's byte (the CPU's), or
      * the copy's write access (the byte its read access left there) */

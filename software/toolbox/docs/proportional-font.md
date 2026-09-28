@@ -491,12 +491,12 @@ is not a result: **it needs a fit, read out of the new `.fit` against `v3ptr`'s
 existing 3 cascades**, and CLAUDE.md's ninth trap applies — a refusal is not a
 result until a second file name refuses it too.
 
-### 5.5 ⭐ The 32-byte window has two free bytes — verified, and it is the cheap version
+### 5.5 ⛔ The 32-byte window has no free byte — the two this section found are the sprite walker's
 
 ⭐ **CHECKED, 2026-09-21, and it is now a gate**: `video3/logic/regmap.check.ts`
 (`make -C hardware check`) walks all 32 offsets and requires each to be *decoded by a live
 part*, *read by the register file's own address generator*, or *a dedicated port*.
-**29 used, 3 spare.** The full table is the check's own output.
+**31 used, 1 spare.** The full table is the check's own output.
 
 ⛔ **"It reads back" is not evidence, which is why the check asks a different
 question.** Every offset but `+$0C` and `+$0D` reads back from the 32-byte file,
@@ -512,24 +512,21 @@ Three ways an offset earns its place, and all three are in use:
 | ⭐ the **register file's address generator reads it** — no strobe at all | `+$05` `SPANLEN` (where `RFA` parks when idle), `+$06`/`+$07` `WFG`/`WBG` (where it points through a span, `RFA0` being the mask bit), and `+$08`, `+$09`, `+$12`, `+$13` (the four-state walk that restores the two columns) |
 | a **dedicated port**, not a file byte | `+$0C` `VDATA`, `+$0D` `VSTAT`/`LDIRQACK` |
 
-⚠ **And the spare count is three, not two.** `+$1F` is spare in *hardware* too —
-nothing decodes or reads it — but the VBL service parks its frame count there
-(`plan.md` §10), so **two are free for silicon: `+$1D` and `+$1E`.**
+⚠ **And the one spare is not free.** `+$1F` is spare in *hardware* — nothing
+decodes or reads it — but the VBL service parks its frame count there
+(`plan.md` §10). `+$1D` and `+$1E` are `v3walk`'s `SWDAT` and `SWCMD`, the sprite
+walker's table port and command (`plan.md` §6.4), so **no offset is free for
+silicon.**
 
-⛔ **The trap this check exists for is already in the tree.** `regmap.ts:46-47`
-still declares `LDSPRIX` and `LDSPRDA` at those two offsets, and
-`video3/logic/v3dot_si.pld` and `v3host_st.pld` *do* decode them — with real
-sequencer logic behind them. Those are **partition variants**, not the board:
-`video3_card.v` instantiates the bare `v3dot`, `v3scan`, `v3ptr`, `v3host` and
-`v3lane`, and `v3host.cpld.ts` emits `"v3host_st"` only under
-`DECODE === "strobes"`. **Counting a variant's decode as a use is exactly how
-"`+$1D` is taken" would get believed**, so the check reads the live designs only
-and names the two orphaned strobes as a claim of its own.
+⛔ **The check reads the live designs only.** The partition variants
+(`video3/logic/v3dot_si.pld`, `v3host_st.pld`) are not the board — `video3_card.v`
+instantiates `v3dot`, `v3scan`, `v3ptr`, `v3host`, `v3walk` and `v3lane` — and
+counting a variant's decode as a use is how an offset gets believed taken.
 
-⭐ **Two bytes is exactly enough for the cheapest useful change**: alias `CWIDTH`
-at `+$1D` such that **a write there is `CWIDTH` and `GO` together**. A strike
-glyph then costs **5 bytes and one fewer store** (`CCTRL` disappears from the
-loop; `CHEIGHT` stays because the hardware counts it down).
+⛔ **So the cheapest useful change has no address.** A `CWIDTH` alias whose write
+is also `GO` would cost a strike glyph **5 bytes and one fewer store** (`CCTRL`
+leaves the loop; `CHEIGHT` stays because the hardware counts it down), and there
+is no offset left to put it at.
 
 ⚠ **The cost is one CELL, not one term, and on this part that matters.**
 `decodeCells()` makes each strobe an internal node — a macrocell with a single
@@ -541,8 +538,8 @@ not an assumption**, read out of the new `.fit` against those numbers, and
 CLAUDE.md's ninth trap applies — a refusal is not a result until a second file
 name refuses it too.
 
-⚠ Two bytes is **not** enough to make the nine contiguous, so §5.4's re-order and
-this are alternatives at different prices, not steps of one plan.
+⚠ The alias does not make the nine contiguous either, so §5.4's re-order and it
+are alternatives at different prices, not steps of one plan.
 
 ---
 
@@ -938,7 +935,8 @@ The budget, which decides what is askable (`optimizations.md`, `keyed-copy.md`
 | `v3dot` | 121/128 | 63/64 | 5 |
 | `v3scan` | 112/128 | 63/64 | 3 |
 | `v3ptr` | ⛔ **124/128** | 58/64 | 3, **133 % Nodes+FB** |
-| `v3host` | ⭐ **58/128 — 70 spare** | ⛔ **64/64 — none** | 0 |
+| `v3host` | ⭐ **52/128 — 76 spare** | ⛔ **61/64 — three** | 0 |
+| `v3walk` | 111/128 | 55/64 | 10 — the sprite walker and the VBL interrupt (`plan.md` §6.4) |
 
 ⭐ **Every item below is decode and sequencing, so every one of them needs zero
 new pins** — which is the constraint that killed the programmable key and the
@@ -947,11 +945,11 @@ decode are `v3ptr`'s, and `v3ptr` is the part that refuses.
 
 | | what it buys | cost | |
 |---|---|---|---|
-| 1 | ⭐ **`CWIDTH`+`GO` alias at `+$1D`** (§5.5) | 6 bytes → 5, one store a glyph | one decode term on `v3ptr` | ⚠ needs a fit |
-| 2 | ⭐ **`CHEIGHT` sticky** — a holding register beside the counter, the way `CWIDTH` already has one (`CWLOAD = CROWADV # !CBUSY`, `v3ptr.cpld.ts:242`) | 5 bytes → 4; and it removes a **real trap** — the emulator models `CHEIGHT` as sticky and the hardware does not, so code written against `machine.c` runs 512-row copies on silicon | 8 macrocells on `v3ptr` | ⛔ **`v3ptr` has 4 cells.** Would have to move to `v3host`, which has the cells and no pins — and the decode broadcast (`REGWR + RA4..RA0`) is exactly how it would get there |
-| 3 | ⭐⭐ **A shadowed `GO`** — one spare set of `CPTR`/`WPTR`/`CWIDTH`/`CHEIGHT`, written while the current copy runs, consumed at retire | ⭐ **the only change worth 2×** (§6) | ~40 macrocells on `v3host` of 70 spare, no pins. ⚠ And the mechanism half-exists: the register file is RAM and the **column-reload walk `RP1..RP4` already reads shadows out of it** (`v3host.cpld.ts:307-314`) | ⚠ 40 of 70 is not a small ask; and `WAITN`'s second term has to learn the difference |
+| 1 | **`CWIDTH`+`GO` alias** (§5.5) | 6 bytes → 5, one store a glyph | one decode term on `v3ptr` | ⛔ **no offset is free** — `+$1D`/`+$1E` are the walker's (§5.5) |
+| 2 | ⭐ **`CHEIGHT` sticky** — a holding register beside the counter, the way `CWIDTH` already has one (`CWLOAD = CROWADV # !CBUSY`, `v3ptr.cpld.ts:242`) | 5 bytes → 4; and it removes a **real trap** — the emulator models `CHEIGHT` as sticky and the hardware does not, so code written against `machine.c` runs 512-row copies on silicon | 8 macrocells on `v3ptr` | ⛔ **`v3ptr` has 4 cells.** Would have to move to `v3host`, which has the cells and three pins — and the decode broadcast (`REGWR + RA4..RA0`) is exactly how it would get there |
+| 3 | ⭐⭐ **A shadowed `GO`** — one spare set of `CPTR`/`WPTR`/`CWIDTH`/`CHEIGHT`, written while the current copy runs, consumed at retire | ⭐ **the only change worth 2×** (§6) | ~40 macrocells on `v3host` of 76 spare, no pins. ⚠ And the mechanism half-exists: the register file is RAM and the **column-reload walk `RP1..RP4` already reads shadows out of it** (`v3host.cpld.ts:307-314`) | ⚠ 40 of 76 is not a small ask; and `WAITN`'s second term has to learn the difference |
 | 4 | **`WPTR` auto-advance by `CWIDTH`** — a pen | 4 bytes → 2 | an adder on `WPTR` | ⛔ worth little once §6 is understood, and `v3ptr` refuses adders |
-| 5 | ⛔ **the hardware descriptor walker** | concurrency and persistent lists | `v3host`'s cells | ⛔ `keyed-copy.md` §4.1: the CPU spends **91.6 µs** building a VRAM descriptor against **~33 µs** writing the registers it replaces. For 27 µs of glyph, it is a loss |
+| 5 | ⛔ **the hardware descriptor walker** — ⭐ built for *sprites* as `v3walk`, a fifth CPLD (`plan.md` §6.4); nothing walks glyphs | concurrency and persistent lists | `v3host`'s cells | ⛔ `keyed-copy.md` §4.1: the CPU spends **91.6 µs** building a VRAM descriptor against **~33 µs** writing the registers it replaces. For 27 µs of glyph, it is a loss |
 
 ⭐ **The honest ranking: build nothing** — and ⛔ **the re-measure §6.1 asked
 for has happened, so the ranking above is stale in one specific way.** Item 3, "the

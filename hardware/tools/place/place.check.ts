@@ -32,7 +32,7 @@ const here = new URL(".", import.meta.url).pathname
 /* -- every card takes one of the three lengths --------------------------- */
 for (const [key, c] of Object.entries(CARDS)) {
   check((LENGTHS as readonly number[]).includes(c.length),
-    `${key} is 12, 18 or 24 cm`, `${c.length} mm`)
+    `${key} is 12, 18, 24 or 30 cm`, `${c.length} mm`)
 }
 
 /* -- every package lands, and the skyline stays on the board -------------- */
@@ -100,7 +100,7 @@ for (const [key, c] of [...Object.entries(CARDS), ...Object.entries(ALTERNATES)]
  * works. */
 for (const [key, c] of Object.entries(ALTERNATES)) {
   check((LENGTHS as readonly number[]).includes(c.length),
-    `${key} (alternate) is 12, 18 or 24 cm`, `${c.length} mm`)
+    `${key} (alternate) is 12, 18, 24 or 30 cm`, `${c.length} mm`)
   const r = pack(c)
   check(r.over.length === 0, `${key} (alternate): every package places on ${c.length / 10} cm`,
     r.over.join(", "))
@@ -184,7 +184,7 @@ for (const [key, c] of Object.entries(CARDS)) {
 }
 
 console.log(`\n      ${Object.keys(CARDS).length} cards, ${area.toFixed(0)} cm² of board.` +
-  ` Cut to the longest they would be ${((LENGTHS[2] * BOARD_H) / 100) * Object.keys(CARDS).length} cm².`)
+  ` Cut to the longest they would be ${((LENGTHS[LENGTHS.length - 1] * BOARD_H) / 100) * Object.keys(CARDS).length} cm².`)
 
 console.log(failures === 0 ? "\nplacement OK" : `\n${failures} failure(s)`)
 process.exit(failures === 0 ? 0 : 1)

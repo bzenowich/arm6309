@@ -9,8 +9,8 @@ plumbing, derived block by block from plan §3–§10 and §13.
 > term lists in `hardware/video3/logic/` are the authority wherever they differ, and each
 > row below names the part that produces the line where the partition has settled it.
 > What this document is for is the question plan §14 item 4 could not answer without it:
-> **how many programmable parts, and what goes in each** — and plan §13.5 bounds the answer
-> at four PLCC-84s, because a fifth does not place on a 240 mm board.
+> **how many programmable parts, and what goes in each** — and plan §13.5 prices the answer
+> in board length: five PLCC-84s make the card 30 cm, the longest card length there is.
 
 ---
 
@@ -118,10 +118,11 @@ video3 adds a copy engine.
 | | n | |
 |---|---|---|
 | `/WAIT` | 1 | open-drain, and the OE idiom spends the macrocell's one OE term |
-| `/IRQ` | 1 | open-drain, VBL |
+| `/IRQ` | 1 | open-drain, VBL — `v3walk`'s, with `IRQPEND` and `IRQEN` (plan §9) |
 | `VSTATOE` | 1 | the `'244` that puts live macrocells on `D0`–`D7` |
 | `RDCK`, `RDOE`, `RDVALID` | 3 | the `vread` `'574` and its prefetch validity |
-| `RFWE`, `RFOE`, `RFA[4:0]` | 7 | the register file — ⭐ **`RFA[0]` is the span-mask bit** (`v3ptr`), which is what makes per-pixel colour selection free; `RFA[4:1]` are `v3host`'s, `RFOE` is `v3lane`'s |
+| `RFWE`, `RFOE`, `RFA[4:0]` | 7 | the register file — ⭐ **`RFA[0]` is the span-mask bit** (`v3ptr`), which is what makes per-pixel colour selection free; `RFA[4:1]` are `v3host`'s (`v3walk`'s during a walk, outside the reload walk), `RFOE` is `v3lane`'s. ⭐ **`RFA[13:5]` are `v3walk`'s table page** (plan §6.4) — zero, so page 0, for every access but the walker's and a `SWDAT` write; `RFA14` is tied low |
+| ⭐ `WALK`, `WKEY` | 2 | `v3walk`: the walk is running — `v3host` lets go of the broadcast and holds `/WAIT`, and `VSTAT` b2 reads it — and the draw copy is keyed (`v3lane`) |
 | `RDBKOE`, `RDBKDIR` | 2 | the read-back `'245` |
 | `HSYNC`, `VSYNC`, `BLANK` | 3 | the connector, **and the backplane** — `graphics.md` §12.2 needs both syncs at a slot pin for the CPU module's line compare |
 

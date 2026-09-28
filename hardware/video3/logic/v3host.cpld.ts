@@ -84,14 +84,18 @@ const RELOAD = (process.env.V3_RELOAD ?? "on") === "on" && COPYHOST
  * CPU VRAM access while CBUSY exactly as it does while SPANBUSY"). ⚠ !BUSY
  * is the complement of an OR, so it is ONE product term - no intermediate
  * blows up the way access.jedec.ts warns. */
-const BUSY = "!SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4"
+/* ⭐ AND WALK: while v3walk runs (plan §6.4) the broadcast, WSTB, CPURF and
+ * the file's address are its, so the CPU waits exactly as it waits on a copy. */
+const BUSY = "!SPANBUSY & !CBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !WALK"
 const WRQ = `${REGSEL} & WRCYC & ${BUSY}`
 const WR = (r: RegName) => hostTerm(r, WRQ)
 
 /* every offset, for the "strobes" variant */
 const ALL_REGS = Object.keys(REGS) as RegName[]
 /* the ones this part acts on ITSELF, whichever way the offsets travel */
-const MINE: RegName[] = ["LDPDATH", "LDIRQACK", "LDCTRL"]
+/* ⚠ LDIRQACK and LDCTRL (b6, IRQEN) were here until 2026-09-28: the VBL
+ * interrupt moved to v3walk, which decodes them off the broadcast */
+const MINE: RegName[] = ["LDPDATH"]
 
 /* -- the palette commit: graphics.md §13.1 response 3 ---------------------
  *
@@ -162,7 +166,8 @@ const port: Cell[] = [
    * its own". */
   reg("WPQ", ["WSTBV"]),
   comb("WSTART", ["WPQ & !WSTBV"]),
-  comb("WSTB", [WRQ]),
+  /* ⭐ tri-stated while WALK: v3walk writes the file's page-0 shadows */
+  comb("WSTB", [WRQ], "!WALK"),
   /* ⛔ THE PREFETCH'S CLOCK AND THE LATCH'S CLOCK ARE NOT THE SAME SIGNAL.
    * The vread '574 has one clock pin and two users now: §11's prefetch, and
    * the copy engine's READ access, which §6 says lands its byte in vread
@@ -173,7 +178,8 @@ const port: Cell[] = [
    * is the pin, and a copy step invalidates like any other WPTR move. */
   comb("RDCKP", ["GRD & !RDVALID"]),
   reg("RDVALID", ["RDCKP", "RDVALID & !RDINV"]),
-  comb("RDINV", ["WSTB", "RETIRE", "RSTART", "CSTEP"]),
+  /* ⭐ and WALK: the walker reloads WPTR under a valid prefetch */
+  comb("RDINV", ["WSTB", "RETIRE", "RSTART", "CSTEP", "WALK"]),
   /* -- ⭐ §11's READ PREFETCH AND THE REGISTER WRITE CYCLE, ported from
    * vsup.parts.ts. ⛔ All four were INPUTS that nothing produced, which meant
    * the card could not be written to (WRCYC qualifies every register write),
@@ -214,26 +220,21 @@ const port: Cell[] = [
    * IDB when SPANLEN was loaded. (A prefetch during a span is wasted anyway:
    * every retire moves WPTR.) E-low is six dots, so a free spare window
    * always comes. */
-  comb("RDREQ", ["!RDVALID & !E & !WPQ & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4",
-                 "!RDVALID & E & RW & VPORT & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4"]),
+  /* ⭐ and not while the walker runs: IDB is its, a read dot is the file's */
+  comb("RDREQ", ["!RDVALID & !E & !WPQ & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !WALK",
+                 "!RDVALID & E & RW & VPORT & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4 & !WALK"]),
   /* ⭐ open-drain, §1.9's idiom: the value is a constant 0 and the condition
    * rides on the output enable. ACTIVE-LOW, like /WAIT on the slot - audio's
    * FIRQ and vctrl's WAIT are declared the same way. */
-  comb("CARDBUSY", ["SPANBUSY", "CBUSY", "RP1", "RP2", "RP3", "RP4"]),
-  comb("WAITN", [], `VPORT & E & CARDBUSY # ${REGSEL} & !RW & E & CARDBUSY # VPORT & E & RW & !RDVALID`, true),
-  reg("IRQPEND", ["VBLRISE", "IRQPEND & !IRQACK"]),
-  reg("VBLQ", ["VBLANK"]),
-  comb("VBLRISE", ["VBLANK & !VBLQ"]),
-  comb("IRQACK", ["LDIRQACK"]),
-  /* ⛔ CTRL b6, AND IT WAS AN INPUT NOTHING PRODUCED - so the VBL interrupt
-   * could never be enabled. ⚠ It costs this part its FIRST data-bus pin, and
-   * the header's "IT NEEDS NO INTERNAL DATA BUS" is now one bit less true:
-   * every other register it touches is a discrete latch that loads from IDB
-   * itself, and this one is a macrocell here because /IRQ is. ⭐ v3ptr has the
-   * whole bus and decodes WMODE the same way, and it was tried there first -
-   * the fitter refused it at 125/128. */
-  reg("IRQEN", ["LDCTRL & D6", "IRQEN & !LDCTRL"]),
-  comb("IRQN", [], "IRQPEND & IRQEN", true),      /* open-drain /IRQ, likewise */
+  comb("CARDBUSY", ["SPANBUSY", "CBUSY", "RP1", "RP2", "RP3", "RP4", "WALK"]),
+  /* ⭐ A REGISTER READ WAITS ON THE WALKER TOO, bar VSTAT: the file's address
+   * is the walker's, so any other offset would read a table byte. VSTAT is a
+   * '244 of live bits, and polling b2 is how software waits for the walk. */
+  comb("WAITN", [], `VPORT & E & CARDBUSY # ${REGSEL} & !RW & E & CARDBUSY # VPORT & E & RW & !RDVALID` +
+    ["A4", "!A3", "!A2", "A1", "!A0"].map((l) => ` # ${REGSEL} & RW & E & WALK & ${l}`).join(""), true),
+  /* ⚠ THE VBL INTERRUPT - IRQPEND, IRQEN and the open-drain /IRQ - moved to
+   * v3walk on 2026-09-28: its three pins (D6 in, IRQN and IRQPEND out) are
+   * what paid for WALK's on a part at 64/64 I/O. */
   /* VSTAT is read through a '244 (graphics.md §12.1): SPANBUSY, CBUSY and
    * PBUSY are live macrocells and the register file has no path to them. */
   comb("VSTATOE", [`${REGSEL} & !A4 & A3 & A2 & !A1 & A0 & RW & E`]),
@@ -339,13 +340,14 @@ const rf: Cell[] = (() => {
     3: ["RP1", "RP2"],
     4: ["RP3", "RP4"],
   }
+  /* ⭐ the walker has the file while WALK, bar the reload walk it waits on */
   return [1, 2, 3, 4].map((n) =>
-    comb(`RFA${n}`, [`${CPU} & A${n}`, ...extra[n]]))
+    comb(`RFA${n}`, [`${CPU} & A${n}`, ...extra[n]], "!WALK # RP1 # RP2 # RP3 # RP4"))
 })()
 /* ⭐ and the same claim for v3ptr's RFA0, which could only see REGWR - a
  * WRITE - so every register READ took bit 0 from the idle term and returned
  * the odd register beside the one asked for. */
-const cpurf = comb("CPURF", [`${REGSEL} & E & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4`])
+const cpurf = comb("CPURF", [`${REGSEL} & E & !SPANBUSY & !RP1 & !RP2 & !RP3 & !RP4`], "!WALK")
 
 export const v3host: Merged = {
   name: DECODE === "strobes" ? "v3host_st" : "v3host",
@@ -369,7 +371,9 @@ export const v3host: Merged = {
     /* the raster, from v3dot */
     { name: "VBLANK" }, { name: "HLOAD" },
     /* the read path's own signals */
-    { name: "RETIRE" }, { name: "GRD" }, { name: "D6" },
+    { name: "RETIRE" }, { name: "GRD" },
+    /* ⭐ the sprite walker is running (v3walk): the broadcast is its */
+    { name: "WALK" },
     ...(COPYHOST ? [{ name: "CEOR" }, { name: "CHLAST" },
                     { name: "GCPY" }, { name: "DP0" }] : []),
     ...(RELOAD ? [{ name: "WROWADV" }] : []),
@@ -382,8 +386,8 @@ export const v3host: Merged = {
       : /* ⭐ the broadcast: the offset and one qualifier, decoded at each
          * receiver.  Six pins carry all 30 offsets - and, unlike a strobe per
          * register, it can carry an offset a receiver invents later. */
-        [comb("REGWR", [WRQ]),
-         ...[0, 1, 2, 3, 4].map((b) => comb(`RA${b}`, [`A${b}`]))]),
+        [comb("REGWR", [WRQ], "!WALK"),
+         ...[0, 1, 2, 3, 4].map((b) => comb(`RA${b}`, [`A${b}`], "!WALK"))]),
     /* the two this part acts on itself are decoded here either way */
     ...(DECODE === "strobes" ? [] : MINE.map((r) => comb(r, [WR(r)]))),
     ...palette,
@@ -397,13 +401,13 @@ export const v3host: Merged = {
       ? ALL_REGS
       : ["REGWR", "RA0", "RA1", "RA2", "RA3", "RA4"]),
     "PALTURN", "PBUSY", "LUTWE", "PIDXCE",
-    "WSTBV", "WSTB", "RDOE", "RDREQ", "WAITN", "IRQN", "VSTATOE", "RDBKOE",
+    "WSTBV", "WSTB", "RDOE", "RDREQ", "WAITN", "VSTATOE", "RDBKOE",
     /* ⚠ VDSEL, VPORT, RDVALID and WRCYC used to leave here too, and the pin
      * map showed nothing on the board read any of them - four pins on the
      * card's pin wall, which is what WSTART and CPURF are paid for with. */
     "WSTEP", "RDCK", "WSTART",
-    /* ⭐ the posted-write '574's clock (v3lane's GAP_6), and VSTAT b0 */
-    "PWCK", "IRQPEND",
+    /* ⭐ the posted-write '574's clock (v3lane's GAP_6) */
+    "PWCK",
     ...(RELOAD ? ["CPURF"] : []),
     /* the copy engine's, when the phase machine lives here */
     ...(COPYHOST ? ["CRDSEL", "CSTEP", "CROWADV", "CWLOAD", "CDONE", "RCPY", "DIR"] : []),

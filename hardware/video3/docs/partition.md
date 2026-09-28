@@ -4,7 +4,7 @@
 [`signals.md`](signals.md)'s census. This is plan §15 step 4's first half: a partition
 comes before term lists, and how many parts video3 takes is an *output* of it.
 
-> ⭐ **ALL FIVE PARTS ARE FITTED** — the four `ATF1508AS` (`hardware/video3/logic/*.cpld.ts`,
+> ⭐ **ALL SIX PARTS ARE FITTED** — the five `ATF1508AS` (`hardware/video3/logic/*.cpld.ts`,
 > `<card>/logic/cpld/*.fit`) and the `v3lane` `GAL22V10` (`v3lane.jedec.ts`, with a CUPL reference
 > and `v3lane.check.ts`). Numbers below that are *not* marked FITTED are still bits of
 > state plus an estimate of the combinational logic around them. An `ATF1508AS` in
@@ -18,8 +18,8 @@ step in it ([`history.md`](history.md) has the figures). §2.4's estimate was 19
 per-register load strobe is a pin, and video3 has 30 of them.**
 
 §3's answer was already in this document: broadcast `RA4..RA0` + `REGWR` and let each part
-decode the offsets it cares about. **All four CPLDs are wired that way**,
-and the offsets live in one shared table, `hardware/video3/logic/regmap.ts`, read by all four
+decode the offsets it cares about. **All five CPLDs are wired that way**,
+and the offsets live in one shared table, `hardware/video3/logic/regmap.ts`, read by all five
 designs — a private copy per part is exactly the drift this card cannot afford, because a
 decode that disagrees with the spec fits perfectly well and answers the wrong address.
 
@@ -29,18 +29,19 @@ a number `check:docs` cannot tell from a live one:
 
 | | cells | I/O | cascades | |
 |---|---|---|---|---|
-| `v3host` | 58 / 128 | ⛔ **64 / 64** | 0 | the backplane, the decode, the palette commit, the copy's phase machine, the reload walk, `IRQEN`, the lane `DIR` |
+| `v3host` | 52 / 128 | 61 / 64 | 0 | the backplane, the decode, the palette commit, the copy's phase machine, the reload walk, the lane `DIR` |
+| ⭐ `v3walk` | 111 / 128 | 55 / 64 | 10, each a single hop | the sprite walker (plan §6.4) and the VBL interrupt — `IRQEN`, `IRQPEND`, `/IRQ` |
 | `v3scan` | 112 / 128 | 63 / 64 | 3 | the map word in silicon |
 | `v3ptr` | **124 / 128** | 58 / 64 | 3 | Nodes+FB 132 % |
 | `v3dot` | **121 / 128** | 63 / 64 | ⚠ **5** | |
-| `v3lane` | a `GAL22V10`, 10 of 10 macrocells, 10 inputs | | | the lanes and the internal bus's drivers |
+| `v3lane` | a `GAL22V10`, 10 of 10 macrocells, 12 inputs | | | the lanes and the internal bus's drivers |
 | `v3scan_mq` | 107 / 128 | 46 / 64 | ⚠ **41** | ⚠ a fit of the 2026-09-16 term list, not refitted since — §2.2 |
 
 ⚠ **What the broadcast bought is arithmetic, not the fitter's deltas.** The expectation
 was ~6 cells of decode each against an unchanged pin count; the same six-cell edit made
 `v3scan` 14 cells cheaper and `v3scan_mq` 25 dearer, which is placement heuristics above
 80 % utilisation. What it bought for certain is **22 pins on `v3host`** — spent since on
-the copy's phase machine, the reload walk, `IRQEN`, `PWCK`, `IRQPEND` and `DIR`.
+the copy's phase machine, the reload walk, `PWCK`, `DIR` and `WALK`.
 
 ⛔ **And it bought something the strobe wiring could not express at any price.** A strobe per
 *register* cannot load a register **wider than the bus**, and v3ptr has six of them — `WPTR`
@@ -95,25 +96,27 @@ defect 15).
 
 ## 0. The answer, and the thing it runs into
 
-**Four `ATF1508AS` and one `GAL22V10`**, and `plan.md` §13.5 measured that **four
-PLCC-84s is the most that places on a 240 mm board** — a fifth does not place even in the
-GAL's stead. The ceiling is PLCC-84 area; `v3lane` is a DIP-24.
+**Five `ATF1508AS` and one `GAL22V10`**, and `plan.md` §13.5 measured what the fifth
+PLCC-84 costs: **the card is 30 cm**, the longest card length there is, because at 24 cm
+the fifth pushes five packages off the board. The limit is PLCC-84 area; `v3lane` is a
+DIP-24.
 
-⛔ **So video3 is exactly at its ceiling.** There is no fifth PLCC-84, which means there
-is no room for a feature that needs one — and the partition below has no slack to give a
-later change. That is the single most important consequence of this document, and it
-should be read before anything is added to plan §0.
+⛔ **Whether a sixth PLCC-84 places has not been measured**, and the parts that draw the
+picture have little slack to give a later change — `v3ptr` and `v3dot` are within seven
+cells of full, and `v3dot` and `v3scan` are one pin from it. That is the single most important
+consequence of this document, and it should be read before anything is added to plan §0.
 
 | | Cells | I/O | What it is |
 |---|---|---|---|
 | **`v3dot`** | **121 / 128, FITTED** | 63 / 64, FITTED | the raster, the dot path, the sprite, the arbiter, the palette's load strobes, `WMODE` |
 | **`v3scan`** | **112 / 128, FITTED** | 63 / 64, FITTED | the scan and cell addresses, the map word, the attribute onto the LUT |
 | **`v3ptr`** | ⭐ **124 / 128, FITTED** | 58 / 64, FITTED | `WPTR`, `CPTR`, the span writer, the copy's counters and decodes, the lane, `VWE`, `WADV` b2's step |
-| **`v3host`** | 58 / 128, FITTED | ⛔ **64 / 64, FITTED** | the backplane, the registers, the palette commit, the copy's phase machine, the reload walk |
-| **`v3lane`** | `GAL22V10`, 10 of 10, FITTED | 10 inputs | the lane `'245`s' enables, the byte enables, `PWOE`, `RFOE` |
+| **`v3host`** | 52 / 128, FITTED | 61 / 64, FITTED | the backplane, the registers, the palette commit, the copy's phase machine, the reload walk |
+| ⭐ **`v3walk`** | **111 / 128, FITTED** | 55 / 64, FITTED | the sprite walker — its tables' page, the copy loads, the broadcast while `WALK` — and the VBL interrupt (plan §6.4, §9) |
+| **`v3lane`** | `GAL22V10`, 10 of 10, FITTED | 12 inputs | the lane `'245`s' enables, the byte enables, `PWOE`, `RFOE` |
 
-⚠ **`v3host` is pin-bound, not cell-bound** — under half full of macrocells and every pin
-taken, because it is the part the backplane lands on. **It is not cells that stop
+⚠ **`v3host` is pin-bound, not cell-bound** — under half full of macrocells and three pins
+free, because it is the part the backplane lands on. **It is not cells that stop
 it merging** — §7 has the arithmetic, and it is pins every time.
 
 > ⚠ **Corrected 2026-09-16**: an earlier draft put `v3host` at ~40 cells by counting
@@ -158,7 +161,7 @@ grant that decides it is one signal from one place (§3), not an agreement betwe
 |---|---|
 | dot counter, line counter | ~20 |
 | `M0`, the frame-end family latch | 1 |
-| ⭐ **`CTRL`** — `VMODE`, `MODE`, `WMODE`, display enable (b6, the IRQ enable, is `v3host`'s) | 7 |
+| ⭐ **`CTRL`** — `VMODE`, `MODE`, `WMODE`, display enable (b6, the IRQ enable, is `v3walk`'s) | 7 |
 | `HSCROLL[2:0]`, duplicated — the fine scroll and tile mode's cell phase | 3 |
 | the sprite: `SPRX`, `SPRY`, `SPRH`, the two position counters, `SHQ`/`SVQ`, the row `SR`, `SPRA1..0` — the shift registers are four `'165` | ~50 |
 | the map request `MRQ` and its window `MWIN`, `ACTIVE`, `DBLHOLD`, `OMR`'s two-register delay | ~6 |
@@ -225,27 +228,48 @@ locations, not macrocells (§7.2's trick, and the reason a second pointer is aff
 | the register decode, `VSTAT` assembly | ~10 |
 | `PPEND`, `PS0`–`PS3` — ⚠ **not `PIDX`, which is discrete** | 5 |
 | `RDVALID` and the prefetch | ~4 |
-| `/WAIT`, `/IRQ`, the `'245` and `'244` controls | ~5 |
+| `/WAIT`, the `'245` and `'244` controls | ~4 |
 
-It also holds the copy's phase machine, §7.2's reload walk and `RFA4..RFA1`, `IRQEN`, the lane
-`'245`s' `DIR`, `PWCK` and `IRQPEND` (plan §14 item 14). The backplane is 27 signals on
-its own (`signals.md` §2.1). ⭐ **It takes one bit of `IDB`**, `D6`, for `IRQEN` — every
-other register it touches is a discrete latch or counter that loads from the bus itself,
-so `v3host` only strobes them.
+It also holds the copy's phase machine, §7.2's reload walk and `RFA4..RFA1`, the lane
+`'245`s' `DIR` and `PWCK` (plan §14 item 14). The backplane is 27 signals on its own
+(`signals.md` §2.1). ⭐ **It takes no bit of `IDB`**: every register it touches is a
+discrete latch or counter that loads from the bus itself, so `v3host` only strobes them,
+and `CTRL` b6 is `v3walk`'s (§2.6). ⭐ **While `WALK` is high it lets go of the broadcast** —
+`REGWR`, `RA4..RA0`, `WSTB`, `CPURF` and, outside its own reload walk, `RFA4..RFA1` — and
+holds `/WAIT` on every card access except a `VSTAT` read (plan §6.4).
 
 ### 2.5 `v3lane` — the byte lanes and the internal bus's drivers
 
-A `GAL22V10`, purely combinational, ten inputs (`LANE1:0`, `CRDSEL`, the three grants,
-`WM1:0`, `/VWE`, `WSTBV`) and all ten macrocells: the four lane `'245`s' `/OE` (this
-access's lane, during its grant), the four byte enables (all four for a read, the lane
-alone for a write), `PWOE` (a direct-mode span's byte or the copy's write) and `RFOE` (the
+A `GAL22V10`, purely combinational, twelve inputs (`LANE1:0`, `CRDSEL`, the three grants,
+`WM1:0`, `/VWE`, `WSTBV`, the colour key's `KEY` and the walker's `WKEY`) and all ten
+macrocells: the four lane `'245`s' `/OE` (this access's lane, during its grant), the four
+byte enables (all four for a read, the lane alone for a write, none for a keyed copy
+write), `PWOE` (a direct-mode span's byte or the copy's write) and `RFOE` (the
 register file, unless a lane read, the `'574` or a posted CPU write has the bus).
 
 ⭐ **It is §7.1's worst shape and it earns its place anyway**, because it relieves no
 CPLD: every output is an enable of a discrete part and every input is already on the
-board, so its pins are its data the way a `'574`'s are. No CPLD had ten pins to give it
-— `v3host` is full — and the logic is what the board lacked, not what a part could not
-hold (plan §15.4, defect 24).
+board, so its pins are its data the way a `'574`'s are. No CPLD had ten pins to give it,
+and the logic is what the board lacked, not what a part could not hold (plan §15.4,
+defect 24).
+
+### 2.6 `v3walk` — the sprite walker and the VBL interrupt
+
+| Holds | bits |
+|---|---|
+| the table pointer — table, slot, byte — and the command byte (`SWCMD`), and the armed GO (`ARM`, `PEND`, `RDY`, `EQ`) | ~20 |
+| the walk: the dot and group sequencer, the pass, the kind, the slot | ~20 |
+| two eight-bit latches — `L`, every table read; `B`, a stream record's byte 2 | 16 |
+| `IRQPEND`, `IRQEN`, `VBLQ` | 3 |
+| **plus** the page (`RFA13..RFA5`), the broadcast while `WALK`, `WD7..WD0`, `WKEY` | combinational |
+
+⭐ **It is a fifth part because nothing else had the pins.** The walker needs `IDB` both
+ways (eight in, eight out on `WD7..WD0`), the page (nine outputs) and the broadcast;
+`v3host` had none spare and `v3ptr` four cells. ⭐ **It takes the VBL interrupt with it** —
+`IRQEN` (`CTRL` b6, off the broadcast and `D6`), `IRQPEND` onto the `VSTAT` `'244`, and
+the open-drain `/IRQ` — which is what paid for `WALK`'s pin on `v3host`. ⭐ It takes `E` as well, so an armed GO starts on a bus-cycle boundary at the rise of `VBLANK` (plan §6.4). It observes the
+broadcast on separate inputs (`SREGWR`, `SRA4..SRA0`) because its own outputs drive the
+same nets. Plan §6.4 is the design.
 
 ---
 
@@ -253,8 +277,9 @@ hold (plan §15.4, defect 24).
 
 | | pins each | |
 |---|---|---|
-| `IDB[7:0]` — the card's internal data bus | 8 | `v3dot`, `v3scan` and `v3ptr`; `v3host` takes `D6` alone. The host `'245` bridges it to the backplane and the four lane `'245`s to the framebuffer; the register file, the `'573`s, `vread`'s input and the posted-write `'574` sit on it |
-| `A4`–`A0` + `REGWR` | 6 | every part decodes **its own** register offsets. ⭐ Cheaper than `v3host` emitting 24 individual strobes |
+| `IDB[7:0]` — the card's internal data bus | 8 | `v3dot`, `v3scan` and `v3ptr`, and `v3walk` both ways (`WD7..WD0` out); `v3host` takes none. The host `'245` bridges it to the backplane and the four lane `'245`s to the framebuffer; the register file, the `'573`s, `vread`'s input and the posted-write `'574` sit on it |
+| `A4`–`A0` + `REGWR` | 6 | every part decodes **its own** register offsets. ⭐ Cheaper than `v3host` emitting 24 individual strobes. `v3host` drives them, and `v3walk` while `WALK` (plan §6.4) |
+| ⭐ `WALK`, `WKEY` | 2 | `v3walk` → `v3host` (let go of the broadcast, hold `/WAIT`) and → `v3lane` (key the draw copy) |
 | `VA[16:0]` | 17 | `v3scan` and `v3ptr`, tri-stated |
 | the cadence — `DP1:0`, `SPARE`, `MRQ`, `HLOAD`, `ROWADV`, `VBLANK` | 7 | `v3dot` → `v3scan`, `v3ptr`, `v3host`. ⭐ Each receiver makes its own ticks from the dot phase and `MRQ` — `v3scan`'s `FETCH`, `GMAP`, `MAPLD` and `MCADV` are terms, not pins |
 | requests / grants — map, copy, span, prefetch | 4 + 4 | in and out of `v3dot`; the map's request is `v3dot`'s own `MRQ` |
@@ -290,13 +315,14 @@ The shape is in VRAM (plan §7) and nothing crosses a part to read it.
 | **`CTRL` on `v3host`** | six bits out instead of three; and `MODE` is consumed at dot rate |
 | **The sprite on `v3ptr`** | `SPRA[1:0]` drives LUT `A9..A8` and `SPRHIT` needs the dot counter — both are `v3dot`'s |
 | **The sprite shape in the register file** | `RFA4..RFA0` reaches 32 bytes and the shape is 64; reading it needed a sixth and seventh address bit, an arbiter against the span writer's colour reads and four `'165` load strobes — about fifteen pins. ⭐ In VRAM it is one spare access bitmap mode has free, and the `'165`s load off the lanes, so it needs neither `v3dot` on `PB` nor anything on the internal bus |
-| **A fifth PLCC-84 for the copy engine** | ⛔ **it does not place** (plan §13.5) |
+| **A fifth PLCC-84 for the copy engine** | the copy engine fits split across `v3ptr` and `v3host` (plan §14 item 14), and a PLCC-84 costs the board 6 cm (plan §13.5). The card's one fifth part is the walker, which no split could hold (§2.6) |
 
 ---
 
 ## 5. Risks, in the order they would bite
 
-1. ⛔ **There is no fifth PLCC-84.** §0. Any later feature needing one is a card revision.
+1. ⛔ **The card is 30 cm, the longest card length.** §0. Whether a sixth PLCC-84 places
+   has not been measured; any later feature needing one starts there.
 2. ⚠ **`v3scan` holds the map pipeline in silicon, and its escape is not taken.** It fits
    at 112/128 cells and 63/64 I/O with the attribute's three stages in it; the discrete
    variant (§0) has not followed the design, and the board's packages went to the lane
@@ -352,10 +378,10 @@ Two moves take logic out of silicon without adding a pin:
 | **`MAP`/`MAPQ` → 4 × `'574`** | cells on `v3scan`, and neither map byte enters it | 4 packages | ⚠ **not taken** — §5 risk 2 |
 | **the sprite's shift registers → `'165`** | **−32 cells and −2 pins** on `v3dot`. The serial outputs come back to `v3dot` as `SQ0`/`SQ1` and are re-registered onto LUT `A9..A8` | **4 packages** — two cascaded a plane, because a 16×16 row is 32 bits | ⭐ **taken, and mandatory**: without them `v3dot` does not fit |
 
-⛔ **The board is full, and `make -C hardware place`'s packer says so.** plan §13.5 has the
-measurements: the card as built is **45 ICs — four `ATF1508AS`, `v3lane` and 40 discrete
-— and places on 24 cm at 78 %**; a fifth PLCC-84 does not place, even in `v3lane`'s
-stead. Relief in silicon has to be paid for in packages, and only plan §13.3's trades had
+⛔ **The board is the longest there is, and `make -C hardware place`'s packer measures it.**
+plan §13.5 has the measurements: the card as built is **46 ICs — five `ATF1508AS`,
+`v3lane` and 40 discrete — and places on 30 cm at 66 %**; at 24 cm the fifth PLCC-84
+pushes five packages off. Relief in silicon has to be paid for in packages, and only plan §13.3's trades had
 any to give:
 
 - **Trade 3** went the other way — the `'153` mux stays, because the tri-state bus must
@@ -378,9 +404,9 @@ at all.
 
 ## 6. What to do with it
 
-Steps 1, 3 and 5 are **done** — five term lists, five fits, and the variants between them.
+Steps 1, 3 and 5 are **done** — six term lists, six fits, and the variants between them.
 
-1. ✅ **Term lists per part** — `hardware/gal/video3/v3{dot,scan,ptr,host}.cpld.ts` and
+1. ✅ **Term lists per part** — `hardware/video3/logic/v3{dot,scan,ptr,host,walk}.cpld.ts` and
    `v3lane.jedec.ts`.
 2. ⭐ **A pin census from the term lists, not from this document** —
    `graphics.md` §10.1.2's `npm run census` is the precedent, and it is what turns §3's
@@ -392,7 +418,7 @@ Steps 1, 3 and 5 are **done** — five term lists, five fits, and the variants b
    quoted from a `.fit` the next variant had already overwritten.
 4. **`reach` and `census` from the first term list, not retrofitted** (plan §15 step 5).
    ⭐ `check:reach` covers video3, with `video3_card.v` as its board and `v3lane` a part.
-5. ✅ **Adopt the broadcast** — all four CPLDs decode it, offsets in
+5. ✅ **Adopt the broadcast** — all five CPLDs decode it, offsets in
    `video3/logic/regmap.ts`.
 6. ⚠ **`v3scan_mq`'s 41 cascades are unexplained**, and moot unless it is refitted: the
    build is the silicon variant (§5 risk 2).
