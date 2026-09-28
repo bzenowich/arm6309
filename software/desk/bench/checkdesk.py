@@ -271,7 +271,7 @@ def main():
         if int(((ink != itab) & (ink != sel)).sum()) >= 30:
             barink += 1
         rect = px[dy:dy + dh, dx:dx + dw]
-        if float((rect == panel).mean()) > 0.40 or float((rect == white).mean()) > 0.40:
+        if t >= basetime and (float((rect == panel).mean()) > 0.40 or float((rect == white).mean()) > 0.40):
             nopen += 1
         if t >= basetime:
             # ⛔ the negative control's whole claim: how many DIFFERENT
